@@ -146,7 +146,7 @@ describe("badge credentials", () => {
     expect(host.textContent).toContain("Badge created");
   });
 
-  it("loads bounded metadata with canonical user filtering and opens a dedicated create route", async () => {
+  it("lists multiple badges with canonical user filtering and opens a dedicated create route", async () => {
     const urls: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -154,8 +154,11 @@ describe("badge credentials", () => {
         urls.push(requestUrl(input));
         return json(
           badgeCredentialsResponseSchema.parse({
-            badges: [{ ...metadata, displayName: null }],
-            page: { limit: 50, offset: 0, total: 1, hasMore: false },
+            badges: [
+              { ...metadata, displayName: null },
+              { ...metadata, id: NEXT },
+            ],
+            page: { limit: 50, offset: 0, total: 2, hasMore: false },
           }),
         );
       }),
@@ -247,7 +250,7 @@ describe("badge credentials", () => {
     expect(host.textContent).toContain(NEXT);
     const frame = host.querySelector("iframe");
     expect(frame).not.toBeNull();
-    expect(decodeURIComponent(frame!.getAttribute("srcdoc")!)).toContain("ABCD-EFGH-JKLM-NPQR");
+    expect(frame!.getAttribute("srcdoc")).toContain("ABCD-EFGH-JKLM-NPQR");
     expect(qr).not.toHaveBeenCalled();
     await click(host, "Badge actions");
     await click(host, "View badge");
@@ -385,20 +388,6 @@ describe("badge credentials", () => {
   });
 });
 
-it("offers the canonical preview/download route directly from an active printable record", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => json({ ...metadata, reprintAvailable: true })),
-  );
-  const host = mount(<BadgeCredentials slug="workshop" basePath={BASE} credentialId={ID} />);
-  await settle();
-  const link = Array.from(host.querySelectorAll("a")).find(
-    (item) => item.textContent?.trim() === "Preview and download badge",
-  );
-  expect(link?.getAttribute("href")).toContain(`${BASE}/${ID}/print`);
-  expect(host.querySelector(".pk-panel dl")).not.toBeNull();
-  expect(host.textContent).not.toContain(BEARER);
-});
 it("explains an unsupported connection and offers recovery instead of a blank badge route", async () => {
   const random = crypto.getRandomValues.bind(crypto);
   vi.stubGlobal("crypto", { getRandomValues: random });

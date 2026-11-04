@@ -69,6 +69,15 @@ describe("generic PKIC complete event badge", () => {
     expect(template.frontHtml).not.toContain("{{sponsors:event-1}}");
     expect(template.backHtml).toContain("{{sponsors:event-1}}");
   });
+  it("keeps the shared current-event Agenda and Q&A redirects on the default back", () => {
+    const compiled = compileBadgeTemplate(createGenericBadgeTemplate(input));
+    const back = compiled.renderSide("back", badge);
+    expect(back).toContain("Agenda");
+    expect(back).toContain("pkic.org/pqcc");
+    expect(back).toContain("Q&amp;A");
+    expect(back).toContain("pkic.org/ask");
+    expect(back).toContain("pkic.org/join");
+  });
   it("prints the scanner's manual-entry badge code as text beside the QR on both sides", () => {
     const credential = "ABCDEFGHJKLMNPQR";
     const code = formatBadgeCredential(credential);

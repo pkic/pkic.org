@@ -12,7 +12,7 @@ import { eventResourceCoreSchema } from "./schemas/event-management";
 import { utcInstantSchema } from "./schemas/api-common";
 import { timeZoneSchema } from "./schemas/event-series";
 
-export const GENERIC_BADGE_LAYOUT_VERSION = "pqc-without-cityscape-v1";
+export const GENERIC_BADGE_LAYOUT_VERSION = "pqc-without-cityscape-v2";
 export const genericBadgeTemplateInputSchema = z
   .object({
     eventName: eventResourceCoreSchema.shape.name,
@@ -26,7 +26,7 @@ export const genericBadgeTemplateInputSchema = z
   .strict();
 export type GenericBadgeTemplateInput = z.input<typeof genericBadgeTemplateInputSchema>;
 
-/** The production PQC design is the event default, without Amsterdam-specific artwork or conference links. */
+/** The production PQC design is the event default, without Amsterdam-specific artwork. */
 export function createGenericBadgeTemplate(input: GenericBadgeTemplateInput): EventBadgeTemplate {
   const parsed = genericBadgeTemplateInputSchema.parse(input);
   const template = createPqcConferenceBadgeTemplate({
@@ -45,7 +45,7 @@ export function createGenericBadgeTemplate(input: GenericBadgeTemplateInput): Ev
       roboto_latin_ext: BADGE_GENERIC_BRAND_ASSETS.roboto_latin_ext,
       ...BADGE_DEFAULT_FONT_ASSETS,
     },
-    links: { agenda: "", questions: "", join: PQC_CONFERENCE_BADGE_LINKS.join },
+    links: { ...PQC_CONFERENCE_BADGE_LINKS },
   });
   // Keep caller-owned sponsor slot keys stable when reusing the shared design.
   const keys = new Map(template.sponsorGroups.map((group, index) => [group.key, parsed.sponsorGroups[index].key]));
