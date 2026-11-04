@@ -56,8 +56,28 @@ describe("application validation coverage", () => {
       const steps = entry.value.get("steps");
       if (isSeq(steps)) commands.push(...steps.items.filter(isMap).map((step) => String(step.get("run"))));
     }
-    for (const suite of ["unit", "frontend", "tools"]) expect(commands).toContain(`pnpm run test:${suite} --bail=1`);
+    for (const suite of ["unit", "tools"]) expect(commands).toContain(`pnpm run test:${suite} --bail=1`);
+    expect(commands).toContain("pnpm run test:frontend --shard=${{ matrix.shard }} --bail=1");
     expect(commands).toContain("pnpm run test:e2e:ci");
+  });
+
+  it("partitions frontend coverage with setup headroom and runs tooling once", () => {
+    const job = workflow.getIn(["jobs", "frontend-tools"]);
+    if (!isMap(job)) throw new Error("Expected frontend validation job");
+    expect(job.getIn(["strategy", "fail-fast"])).toBe(true);
+    expect(job.get("continue-on-error")).toBeUndefined();
+    const shards = job.getIn(["strategy", "matrix", "shard"]);
+    if (!isSeq(shards)) throw new Error("Expected frontend partitions");
+    expect(shards.items.map(String)).toEqual(["1/2", "2/2"]);
+    const steps = job.get("steps");
+    if (!isSeq(steps)) throw new Error("Expected frontend test steps");
+    const frontend = steps.items.filter(isMap).find((step) => step.get("name") === "Run frontend component tests");
+    expect(frontend?.get("timeout-minutes")).toBe(10);
+    expect(job.get("timeout-minutes")).toBe(20);
+    expect(frontend?.get("run")).toBe("pnpm run test:frontend --shard=${{ matrix.shard }} --bail=1");
+    const tooling = steps.items.filter(isMap).find((step) => step.get("name") === "Run tooling tests");
+    expect(tooling?.get("if")).toBe("matrix.shard == '1/2'");
+    expect(tooling?.get("run")).toBe("pnpm run test:tools --bail=1");
   });
 
   it("uses a preinstalled browser image matching the locked Playwright version", () => {

@@ -85,10 +85,14 @@ jobs:
         run: pnpm run test:unit --bail=1
 
   frontend-tools:
-    name: Frontend and tooling checks
+    name: Frontend and tooling checks (${{ matrix.shard }})
     needs: preflight
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: ["1/2", "2/2"]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -97,10 +101,11 @@ jobs:
       - uses: ./.github/actions/setup-validation
 
       - name: Run frontend component tests
-        timeout-minutes: 5
-        run: pnpm run test:frontend --bail=1
+        timeout-minutes: 10
+        run: pnpm run test:frontend --shard=${{ matrix.shard }} --bail=1
 
       - name: Run tooling tests
+        if: matrix.shard == '1/2'
         timeout-minutes: 5
         run: pnpm run test:tools --bail=1
 
