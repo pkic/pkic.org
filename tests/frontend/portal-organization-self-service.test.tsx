@@ -118,6 +118,7 @@ describe("portal organization self-service", () => {
                 pendingSecondaryContact: null,
                 pendingSecondaryContactUserId: null,
                 pendingReview: null,
+                rejectedReview: null,
               },
             });
           }
@@ -203,6 +204,8 @@ describe("portal organization self-service", () => {
       ),
     );
     await settle();
+
+    await beginRecordEdit(container, "Member page content actions", "Review submission");
 
     const withdrawButton = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Withdraw submission",

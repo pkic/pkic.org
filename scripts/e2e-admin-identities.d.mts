@@ -47,6 +47,7 @@ export const E2E_ADMIN_SCOPES: readonly [
   "portal-group-leadership",
   "public-members-signed-in",
   "portal-organizations",
+  "portal-organization-revisions",
   "portal-user-create",
   "portal-users-role-management",
   "portal-user-headshot",

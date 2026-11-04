@@ -49,6 +49,8 @@ interface OrgSummaryRow {
   slogan: string | null;
   logo_r2_key: string | null;
   member_since: string | null;
+  member_id: string | null;
+  member_status: string | null;
   membership_category: string | null;
   created_at: string;
   updated_at: string;
@@ -62,6 +64,7 @@ interface OrgSummaryRow {
 
 const ORG_SUMMARY_SELECT = `
   SELECT o.id, o.name, o.slug, o.website, o.description, o.slogan, o.logo_r2_key, m.member_since,
+         m.id AS member_id, m.status AS member_status,
          o.created_at, o.updated_at,
          mca.category_code AS membership_category,
          (SELECT COUNT(*) FROM identities identity
@@ -89,13 +92,14 @@ function toOrgSummary(row: OrgSummaryRow) {
        when a record has none — an organization created before the slug was
        minted at creation still answers on its id, and nothing in the portal
        said so (#15). */
-    publicProfileHref: memberProfileHref({ id: row.id, slug: row.slug }),
+    publicProfileHref: row.member_status === "active" ? memberProfileHref({ id: row.id, slug: row.slug }) : null,
     ...toOrganizationSummaryContent(row),
     membershipCategory: row.membership_category,
     // Falls back to the row's own creation time for organizations created
     // before consolidated migration 0035 added this column (or via a path that never set
     // it) — matches the same fallback members-directory.ts/member-self-service.ts use.
-    memberSince: row.member_since ?? row.created_at,
+    // An organization that has never been a member has no membership date at all.
+    memberSince: row.member_id ? (row.member_since ?? row.created_at) : null,
     activeIdentityCount: row.active_identity_count,
     primaryContactName: primaryContactName || null,
     primaryContactEmail: row.primary_contact_email,
@@ -207,6 +211,7 @@ export async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<O
   return first<OrgDetailRow>(
     db,
     `SELECT o.id, o.name, o.slug, o.website, o.description, o.slogan, o.logo_r2_key, m.member_since,
+            m.id AS member_id, m.status AS member_status,
             o.created_at, o.updated_at,
             mca.category_code AS membership_category,
             o.content_markdown, o.blog_url, o.blog_feed_url, o.press_url, o.press_feed_url, o.careers_url,

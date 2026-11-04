@@ -268,19 +268,25 @@ export function OrganizationMembershipCard(props: OrganizationCardProps) {
               : [
                   { term: "Category", value: categories.label(organization.membershipCategory) || "Not a member" },
                   // A calendar date, not an instant: the contract is `z.iso.date()`.
-                  { term: "Member since", value: fmtDate(organization.memberSince) },
-                  {
-                    // The address the public actually sees. Staff could not
-                    // tell whether a record had a readable one or was still
-                    // answering on its id (#15), and the page is one click
-                    // away rather than a URL to assemble by hand.
-                    term: "Member page",
-                    value: (
-                      <ExternalLink class="pk-break" href={organization.publicProfileHref} external>
-                        {organization.publicProfileHref}
-                      </ExternalLink>
-                    ),
-                  },
+                  ...(organization.memberSince
+                    ? [{ term: "Member since", value: fmtDate(organization.memberSince) }]
+                    : []),
+                  ...(organization.publicProfileHref
+                    ? [
+                        {
+                          // The address the public actually sees. Staff could not
+                          // tell whether a record had a readable one or was still
+                          // answering on its id (#15), and the page is one click
+                          // away rather than a URL to assemble by hand.
+                          term: "Member page",
+                          value: (
+                            <ExternalLink class="pk-break" href={organization.publicProfileHref} external>
+                              {organization.publicProfileHref}
+                            </ExternalLink>
+                          ),
+                        },
+                      ]
+                    : []),
                   created,
                 ]
           }

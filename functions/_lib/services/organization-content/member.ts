@@ -17,6 +17,7 @@ import {
   CONTENT_REVIEW_FIELDS,
   REVIEW_COLUMNS,
   fetchPendingReview,
+  fetchProfileReviews,
   isPendingReviewUniqueConflict,
   isStaleContentReviewTransition,
   prepareReviewTransitionGuard,
@@ -49,8 +50,8 @@ export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMem
   );
   if (!row) throw new AppError(404, "NOT_FOUND", "Organization not found");
 
-  const [pendingReview, holders, nomination] = await Promise.all([
-    fetchPendingReview(db, member.organizationId),
+  const [{ pendingReview, rejectedReview }, holders, nomination] = await Promise.all([
+    fetchProfileReviews(db, member.organizationId),
     resolveRepresentativeRoleHolders(db, member.memberId),
     first<{ nominated_user_id: string }>(
       db,
@@ -80,6 +81,7 @@ export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMem
     pendingSecondaryContact: contact(pendingSecondaryContactUserId),
     pendingSecondaryContactUserId,
     pendingReview: pendingReview ? toReviewSummary(pendingReview) : null,
+    rejectedReview: rejectedReview ? toReviewSummary(rejectedReview) : null,
   };
 }
 

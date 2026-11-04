@@ -54,6 +54,7 @@ function organization(overrides: Record<string, unknown> = {}) {
     pendingSecondaryContact: null,
     pendingSecondaryContactUserId: null,
     pendingReview: null,
+    rejectedReview: null,
     website: null,
     description: null,
     slogan: null,

@@ -1,25 +1,12 @@
-/**
- * What an organization contact may change about their organization's public
- * content, and what the page says while a change is waiting on review.
- *
- * This is a submission, not an edit: nothing here writes the organization's
- * profile directly. A contact proposes a change, staff accept or refuse it,
- * and until they do the form is replaced by the pending submission and the
- * option to withdraw it — which is why the banner and the form live together
- * rather than beside each other on the page.
- *
- * It left `MyOrganization.tsx` because that file is the organization's whole
- * page — logo, governance, representatives, sponsorship, submission history —
- * and reviewing content is one responsibility among those rather than part of
- * the page's own work.
- */
+/** Organization content proposals and their dedicated edit/review dialog. */
 import { MarkdownEditor } from "../../../components/markdown-editor/MarkdownInput";
 import { useMemo, useState } from "preact/hooks";
 import { ApiClientError, deleteJson, postJson } from "../../../shared/api-client";
 import { confirmAction } from "../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Markdown } from "../../../ui/Markdown";
-import { EditActions } from "../../../ui/EditActions";
+import { Dialog } from "../../../ui/Dialog";
+import { Menu, type MenuItem } from "../../../ui/Menu";
 import { useContractForm } from "../../../hooks/useContractForm";
 import { Alert } from "../../../ui/Alert";
 import { Button } from "../../../ui/Button";
@@ -42,7 +29,7 @@ import {
   organizationContentReviewCreateResponseSchema,
 } from "../../../../shared/schemas/organization-self-service";
 
-function PendingReviewBanner({
+function PendingSubmission({
   review,
   organizationId,
   onWithdrawn,
@@ -93,14 +80,43 @@ function PendingReviewBanner({
 
 type EditableField = (typeof ORGANIZATION_URL_FIELD_ORDER)[number] | "slogan" | "description" | "contentMarkdown";
 
+/** What a refused submission proposed, laid over the live values, so a revision starts from it. */
+function revisionDraft(
+  live: Record<EditableField, string>,
+  liveLinks: string[],
+  revising: MyOrganizationReview | null,
+): { form: Record<EditableField, string>; links: string[] } {
+  if (!revising) return { form: live, links: liveLinks };
+  const form = { ...live };
+  for (const key of Object.keys(live) as EditableField[]) {
+    const proposed = revising.proposedChanges[key];
+    if (typeof proposed === "string") form[key] = proposed;
+    else if (proposed === null) form[key] = "";
+  }
+  const proposedLinks = revising.proposedChanges.links;
+  const links =
+    Array.isArray(proposedLinks) && proposedLinks.every((link) => typeof link === "string") ? proposedLinks : liveLinks;
+  return { form, links };
+}
+
+function RejectedReviewNote({ review }: { review: MyOrganizationReview }) {
+  return (
+    <Alert tone="warn" title={`Your submission from ${fmt(review.submittedAt)} was not approved.`}>
+      {review.reviewerNote && <p>{review.reviewerNote}</p>}
+    </Alert>
+  );
+}
+
 function ContentEditForm({
   organizationId,
   org,
   reload,
   onCancel,
+  revising,
 }: {
   organizationId: string;
   org: MyOrganizationProfile;
+  revising: MyOrganizationReview | null;
   reload: () => Promise<void>;
   onCancel: () => void;
 }) {
@@ -119,8 +135,10 @@ function ContentEditForm({
     [org],
   );
   const initialLinks = useMemo(() => [...org.links], [org]);
-  const [form, setForm] = useState(initial);
-  const [links, setLinks] = useState<string[]>(initialLinks);
+  // Changes are measured against the live profile; a refused submission only seeds what is typed.
+  const draft = useMemo(() => revisionDraft(initial, initialLinks, revising), [initial, initialLinks, revising]);
+  const [form, setForm] = useState(draft.form);
+  const [links, setLinks] = useState<string[]>(draft.links);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -167,8 +185,11 @@ function ContentEditForm({
 
   return (
     <form noValidate {...validation.handlers} onSubmit={(e) => void handleSubmit(e)} class="pk-stack">
+      {revising && <RejectedReviewNote review={revising} />}
       <p class="pk-muted pk-small">
-        Changes are queued for staff review — your organization's public page won't update until they're approved.
+        {revising
+          ? "The form starts from your last submission. Revise it and submit again; your organization's public page won't update until staff approve it."
+          : "Changes are queued for staff review — your organization's public page won't update until they're approved."}
       </p>
       <Field label="Slogan" {...validation.of("slogan")}>
         {(control) => (
@@ -259,40 +280,75 @@ export function ContentEditorCard({
   org: MyOrganizationProfile;
   reload: () => Promise<void>;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [view, setView] = useState<"edit" | "revise" | "review" | null>(null);
+  const close = () => setView(null);
+  const items: MenuItem[] = org.pendingReview
+    ? [
+        {
+          id: "review",
+          label: "Review submission",
+          onSelect: () => setView("review"),
+        },
+      ]
+    : [
+        { id: "edit", label: "Edit settings", onSelect: () => setView("edit") },
+        ...(org.rejectedReview
+          ? [
+              {
+                id: "revise",
+                label: "Revise submission",
+                onSelect: () => setView("revise"),
+              },
+            ]
+          : []),
+      ];
+  async function complete(): Promise<void> {
+    await reload();
+    close();
+  }
   return (
     <Panel aria-label="Member page content">
-      <PanelHeader title="Member page content">
-        {!editing && !org.pendingReview && (
-          <EditActions
-            label="Member page content actions"
-            editing={false}
-            saving={false}
-            onEdit={() => setEditing(true)}
-            onCancel={() => setEditing(false)}
-          />
-        )}
-      </PanelHeader>
+      <PanelHeader
+        title="Member page content"
+        menu={<Menu label="Member page content actions" align="end" items={items} />}
+      />
       <PanelBody>
-        {org.pendingReview ? (
-          <PendingReviewBanner review={org.pendingReview} organizationId={organizationId} onWithdrawn={reload} />
-        ) : editing ? (
-          <ContentEditForm
-            key={organizationId}
-            organizationId={organizationId}
-            org={org}
-            reload={async () => {
-              await reload();
-              setEditing(false);
-            }}
-            onCancel={() => setEditing(false)}
-          />
-        ) : org.contentMarkdown ? (
+        {org.contentMarkdown ? (
           <Markdown markdown={org.contentMarkdown} />
         ) : (
           <p class="pk-muted">No member page content yet.</p>
         )}
       </PanelBody>
+      {view && (
+        <Dialog
+          open
+          title={
+            view === "review"
+              ? "Review submission"
+              : view === "revise"
+                ? "Revise submission"
+                : "Edit member page content"
+          }
+          closeLabel="Close member page content"
+          viewer
+          confirmLabel="Close"
+          onConfirm={close}
+          onCancel={close}
+        >
+          {view === "review" && org.pendingReview ? (
+            <PendingSubmission review={org.pendingReview} organizationId={organizationId} onWithdrawn={complete} />
+          ) : (
+            <ContentEditForm
+              key={`${organizationId}:${view}`}
+              organizationId={organizationId}
+              org={org}
+              revising={view === "revise" ? org.rejectedReview : null}
+              reload={complete}
+              onCancel={close}
+            />
+          )}
+        </Dialog>
+      )}
     </Panel>
   );
 }
