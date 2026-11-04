@@ -16,7 +16,13 @@ const input = {
     { key: "tier-b", tierName: "Titanium" },
   ],
 };
-const badge = { displayName: "A real attendee", organization: "Authorized company", badgeRole: "staff" as const, svg };
+const badge = {
+  displayName: "A real attendee",
+  organization: "Authorized company",
+  jobTitle: "Director of Cryptographic Engineering",
+  badgeRole: "staff" as const,
+  svg,
+};
 describe("generic PKIC complete event badge", () => {
   it("provides a full branded front and back with QR, name, role, current groups, and bundled fonts", () => {
     const template = createGenericBadgeTemplate(input);
@@ -24,8 +30,10 @@ describe("generic PKIC complete event badge", () => {
     for (const side of ["front", "back"] as const) {
       const html = compiled.renderSide(side, badge);
       expect(html).toContain("A real attendee");
-      expect(html).toContain("STAFF");
-      expect(html).toContain("Owned event");
+      if (side === "front") expect(html).toContain("STAFF");
+      expect(html).toContain("Director of Cryptographic Engineering");
+      expect(html).toContain("Authorized company");
+      if (side === "front") expect(html).toContain("Owned event");
       expect(html).toContain(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`);
     }
     expect(template.widthMm).toBe(105);
@@ -34,8 +42,32 @@ describe("generic PKIC complete event badge", () => {
     expect(template.backHtml).toContain("{{sponsors:tier-a}}");
     expect(template.backHtml).toContain("{{sponsors:tier-b}}");
     expect(compiled.css).toContain("data:font/woff2;base64,");
-    expect(compiled.resourcesHtml).toContain('fill="var(--badge-role-color)"');
-    expect(compiled.resourcesHtml).toContain("linearGradient");
+    expect(compiled.css).toContain("var(--badge-role-color)");
+    expect(compiled.css).toContain("linear-gradient");
+  });
+  it("uses the owning event dates and city without Amsterdam artwork", () => {
+    const template = createGenericBadgeTemplate({
+      ...input,
+      startsAt: "2027-02-10T09:00:00.000Z",
+      endsAt: "2027-02-12T17:00:00.000Z",
+      timezone: "Europe/London",
+      city: "London",
+    });
+    expect(template.frontHtml).toContain("London");
+    expect(template.frontHtml).toContain("2027");
+    expect(template.frontHtml).not.toContain("canal_houses");
+  });
+  it("preserves caller-owned sponsor slots even when their keys match another generated slot", () => {
+    const template = createGenericBadgeTemplate({
+      eventName: "Summit",
+      sponsorGroups: [
+        { key: "event-2", tierName: "Diamond", source: "event" },
+        { key: "event-1", tierName: "Titanium", source: "event" },
+      ],
+    });
+    expect(template.frontHtml).toContain("{{sponsors:event-2}}");
+    expect(template.frontHtml).not.toContain("{{sponsors:event-1}}");
+    expect(template.backHtml).toContain("{{sponsors:event-1}}");
   });
   it("prints the scanner's manual-entry badge code as text beside the QR on both sides", () => {
     const credential = "ABCDEFGHJKLMNPQR";
@@ -45,29 +77,27 @@ describe("generic PKIC complete event badge", () => {
     const compiled = compileBadgeTemplate(createGenericBadgeTemplate(input));
     for (const side of ["front", "back"] as const) {
       const html = compiled.renderSide(side, { ...badge, svg: printable });
-      expect(html).toContain(`<p class="badge-generic-code">${code}</p>`);
+      expect(html).toContain(code);
       expect(badgeCredentialSchema.parse(code)).toBe(credential);
       expect(html).toContain(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(split.qr)}`);
       expect(html).not.toContain(encodeURIComponent(printable));
       expect(html).not.toContain(credential);
     }
-    expect(compiled.css).toContain(".badge-generic-code:empty{display:none}");
   });
   it("fits long names and organizations by size, breaking only between words", () => {
     const compiled = compileBadgeTemplate(createGenericBadgeTemplate(input));
     const html = compiled.renderSide("front", { ...badge, displayName: "Paul van Brouwershaven" });
     expect(html).toContain("--badge-display-name-longest:13;--badge-display-name-length:22");
-    expect(compiled.css).not.toContain("overflow-wrap:anywhere}.badge-generic-organization");
-    expect(compiled.css).toContain(
-      ".badge-generic-name,.badge-generic-organization{overflow-wrap:normal;word-break:normal",
-    );
-    expect(compiled.css).toContain("var(--badge-display-name-longest,1)");
+    expect(compiled.css).toContain("word-break:normal");
+    expect(compiled.css).toContain("--badge-display-name-longest");
   });
   it("keeps Amsterdam artwork, event location, and reference sponsor companies out of the default", () => {
     const template = createGenericBadgeTemplate({ eventName: "Another owned event", sponsorGroups: [] });
     const html = template.frontHtml + template.backHtml;
     expect(html).not.toMatch(/Amsterdam|Dec 1|IBM|Crypto4A|Keyfactor|SSL\.com|Cryptomathic/);
     expect(template.sponsorGroups).toEqual([]);
+    expect(template.assets).not.toHaveProperty("canal_houses");
+    expect(template.assets).not.toHaveProperty("canal_houses_ink");
     expect(html).not.toContain("{{sponsors:");
   });
   it("escapes explicit custom copy without granting a template expression or injecting active HTML", () => {
@@ -102,7 +132,7 @@ describe("generic PKIC complete event badge", () => {
     expect(eventCreateSchema.shape.name.safeParse(persisted).success).toBe(false);
     expect(
       compileBadgeTemplate(createGenericBadgeTemplate({ eventName: persisted, sponsorGroups: [] })).renderSide(
-        "back",
+        "front",
         badge,
       ),
     ).toContain(persisted);

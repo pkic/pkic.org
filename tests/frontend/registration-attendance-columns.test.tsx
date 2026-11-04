@@ -78,8 +78,8 @@ it("counts only matching in-person days when date, type and waitlist filters are
   expect(view.querySelectorAll('[role="img"]')).toHaveLength(1);
   expect(badge.textContent).toBe("5");
   expect(badge.getAttribute("aria-label")).toContain("In person: 5 days total");
-  expect(badge.getAttribute("title")).toContain(formatDayAndMonth("2026-12-05"));
-  expect(badge.getAttribute("title")).not.toContain(formatDayAndMonth("2026-12-07"));
+  expect(badge.getAttribute("aria-label")).toContain(formatDayAndMonth("2026-12-05"));
+  expect(badge.getAttribute("aria-label")).not.toContain(formatDayAndMonth("2026-12-07"));
   expect(badge.querySelector(".pk-badge__fill rect")?.getAttribute("width")).toBe("100%");
 });
 it("shows a completely light fill for the selected waiting day", () => {
@@ -87,7 +87,7 @@ it("shows a completely light fill for the selected waiting day", () => {
   const badge = view.querySelector('[role="img"]')!;
   expect(badge.textContent).toBe("1");
   expect(badge.getAttribute("aria-label")).toContain("1 day total; 0 not waitlisted; 1 of these is waitlisted");
-  expect(badge.getAttribute("title")).toContain(`${formatDayAndMonth("2026-12-07")} (waiting)`);
+  expect(badge.getAttribute("aria-label")).toContain(`${formatDayAndMonth("2026-12-07")} (waiting)`);
   expect(badge.querySelector(".pk-badge__fill rect")?.getAttribute("width")).toBe("0%");
   expect(badge.querySelector(".pk-badge__fill > rect:last-of-type")?.getAttribute("width")).toBe("100%");
 });

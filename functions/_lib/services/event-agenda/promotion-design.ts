@@ -1,3 +1,4 @@
+import { persistedUtcInstant } from "../../utils/time";
 import { eventPlaceSummary } from "../../../../assets/shared/event-place";
 import { svgLogoDimensions } from "../../utils/svg-logo";
 import { eventPromotionDesignFromSettings } from "../../../../assets/shared/schemas/event-promotion-design";
@@ -48,6 +49,12 @@ export function preparePromotionDesign(db: DatabaseLike, selection: EventReadSel
             event.settings_json,
             populations.event,
             populations.consortium,
+            {
+              startsAt: persistedUtcInstant(event.starts_at),
+              endsAt: persistedUtcInstant(event.ends_at),
+              timezone: event.timezone,
+              city: event.city,
+            },
           )
         : event.updated_at;
       return {

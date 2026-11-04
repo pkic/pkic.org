@@ -6,9 +6,10 @@ import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./sel
 import { encodeBoundedCsv } from "../../csv";
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, StatementLike } from "../../types";
 import { formatCustomAnswerValue } from "../../utils/custom-answer-display";
-import { writeAuditLog } from "../audit";
+import { prepareStateGuard, isStateGuardFailure } from "../../db/authorization-guard";
+import { prepareAuditLog, writeAuditLog } from "../audit";
 import { resolveEventFormResponses, type EventFormResponse, type EventFormResolutionEvent } from "../forms";
 import type { FormFieldDefinition } from "../forms";
 import { sponsorConsentSql } from "../event-participation/sponsor-consent";
@@ -17,6 +18,7 @@ import { PERSONAL_EMAIL_ADDRESS_LABEL } from "../../../../assets/shared/email-fi
 
 interface ExportRow {
   id: string;
+  user_id: string;
   status: string;
   source_type: string | null;
   created_at: string;
@@ -73,12 +75,12 @@ export async function buildRegistrationCsv(
   event: EventFormResolutionEvent,
   limits: { maxRows: number; maxBytes: number },
   query?: GroupEventRegistrationExportQuery,
-): Promise<{ csv: string; recordCount: number }> {
+): Promise<{ csv: string; recordCount: number; releaseGuards?: StatementLike[] }> {
   const population = registrationPopulationFilter(event.id, query ?? {});
   const selected = query?.ids ? buildD1JsonMembershipFilter("r.id", query.ids) : null;
   const rows = await all<ExportRow>(
     db,
-    `SELECT r.id, r.status, r.source_type, r.created_at,
+    `SELECT r.id, r.user_id, r.status, r.source_type, r.created_at,
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
             ${REGISTRATION_ORGANIZATION_SQL} AS organization,
@@ -86,6 +88,7 @@ export async function buildRegistrationCsv(
             ${sponsorConsentSql("r")} AS sponsor_consent,
             r.custom_answers_json, r.form_placement_id
      ${population.fromSql}
+       ${query?.audience === "sponsor" ? `AND ${sponsorConsentSql("r")}` : ""}
        ${query ? "" : "AND r.status IN ('registered', 'pending_email_confirmation')"}
        ${selected ? `AND ${selected.sql}` : ""}
      ORDER BY r.status ASC, r.created_at ASC
@@ -94,6 +97,34 @@ export async function buildRegistrationCsv(
   );
   if (rows.length > limits.maxRows) {
     throw new AppError(413, "CSV_EXPORT_ROW_LIMIT_EXCEEDED", `CSV export is limited to ${limits.maxRows} records`);
+  }
+
+  if (query?.audience === "sponsor") {
+    // Sponsor files deliberately omit organizer-only answers and registration metadata.
+    return {
+      csv: encodeBoundedCsv(
+        [
+          ["Name", "Email", "Organization", "Job title"],
+          ...rows.map((row) => [row.display_name, row.user_email, row.organization, row.job_title]),
+        ],
+        limits.maxBytes,
+      ),
+      recordCount: rows.length,
+      releaseGuards: Array.from({ length: Math.ceil(rows.length / 500) }, (_, index) =>
+        prepareStateGuard(db, {
+          sql: `SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM json_each(?) expected
+            LEFT JOIN registrations r ON r.id=json_extract(expected.value,'$.id')
+              AND r.user_id=json_extract(expected.value,'$.userId') AND r.event_id=?
+            WHERE r.id IS NULL OR NOT ${sponsorConsentSql("r")})`,
+          bindings: [
+            JSON.stringify(
+              rows.slice(index * 500, (index + 1) * 500).map((row) => ({ id: row.id, userId: row.user_id })),
+            ),
+            event.id,
+          ],
+        }),
+      ),
+    };
   }
 
   const [responseByRegistration, dayStates] = await Promise.all([
@@ -173,6 +204,22 @@ export async function buildRegistrationCsvWithAudit(
   query?: GroupEventRegistrationExportQuery,
 ): Promise<{ csv: string; recordCount: number }> {
   const result = await buildRegistrationCsv(db, event, limits, query);
+  if (query?.audience === "sponsor") {
+    try {
+      await db.batch([
+        ...(result.releaseGuards ?? []),
+        prepareAuditLog(db, "admin", actorUserId, "admin_registration_export", "event", event.id, {
+          recordCount: result.recordCount,
+          audience: "sponsor",
+        }),
+      ]);
+    } catch (error) {
+      if (isStateGuardFailure(error))
+        throw new AppError(409, "SPONSOR_CONSENT_CHANGED", "Sponsor sharing consent changed. Download the list again.");
+      throw error;
+    }
+    return { csv: result.csv, recordCount: result.recordCount };
+  }
   await writeAuditLog(db, "admin", actorUserId, "admin_registration_export", "event", event.id, {
     recordCount: result.recordCount,
   });

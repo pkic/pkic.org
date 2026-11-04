@@ -123,15 +123,18 @@ describe("group event registrations roster", () => {
       />,
     );
     await settle();
-    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Registration actions"]');
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Print matching attendees"]');
     expect(trigger).not.toBeNull();
     await act(async () => trigger!.click());
-    await act(async () => menuItemNamed(container, "Print matching badges, labels or printing CSV…")!.click());
-    expect(onPrint).toHaveBeenCalledWith({
-      kind: "filtered",
-      endpoint: `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/registrations/badges/population`,
-      filters: {},
-    });
+    await act(async () => menuItemNamed(container, "Print labels")!.click());
+    expect(onPrint).toHaveBeenCalledWith(
+      {
+        kind: "filtered",
+        endpoint: `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/registrations/badges/population`,
+        filters: {},
+      },
+      "labels",
+    );
     expect(container.querySelector("caption")?.textContent).toBe("Registrations");
     expect(container.textContent).not.toContain("Print all matching attendee badges");
   });
@@ -146,7 +149,7 @@ describe("group event registrations roster", () => {
     );
     // Organization joins the row; job title stays hidden by default.
     // Attendance combines type and waitlist summaries in one column.
-    expect(headers).toEqual(["Attendee", "Organization", "Status", "Attendance", "Registered"]);
+    expect(headers).toEqual(["Attendee", "Organization", "Consent", "Status", "Attendance", "Registered"]);
     for (const header of headers) expect(header).not.toBe("");
   });
 

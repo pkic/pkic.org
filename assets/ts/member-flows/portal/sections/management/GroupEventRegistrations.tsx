@@ -1,6 +1,9 @@
 import { RegistrationSinceDialog } from "../../../../components/event-registrations/RegistrationSinceDialog";
 import { registrationRosterExportUrl } from "../../../../components/event-registrations/registration-roster-export";
-import { DownloadAction } from "../../../../ui/DownloadAction";
+import { RegistrationOutputActions } from "../../../../components/event-registrations/RegistrationOutputActions";
+import type { BadgePrintAction } from "../../../../../shared/schemas/event-badge-printing";
+import { countryName, countryOptions, isCountryCode } from "../../../../../shared/countries";
+import { IconCheckmark } from "../../../../ui/MediaIcons";
 /**
  * The attendee roster for one group event.
  *
@@ -13,7 +16,7 @@ import { DownloadAction } from "../../../../ui/DownloadAction";
  * two waitlisted, and nothing at all about the waitlist.
  */
 import { useRef, useState } from "preact/hooks";
-import { PersonCell } from "../../../../ui/PersonCell";
+import { registrationPersonColumn } from "../../../../components/event-registrations/registration-person-column";
 import { RowActions } from "../../../../ui/RowActions";
 import {
   EVENT_REGISTRATION_STATUSES,
@@ -27,7 +30,6 @@ import { Badge } from "../../../../components/Badge";
 import { registrationAttendanceColumns } from "../../../../components/event-registrations/registration-attendance-columns";
 import { RegistrationTotals } from "../../../../components/event-registrations/RegistrationTotals";
 import { RegistrationRosterActions } from "../../../../components/event-registrations/RegistrationRosterActions";
-import { Button } from "../../../../ui/Button";
 import { BulkBar } from "../../../../ui/BulkBar";
 import { useCollectionSelection } from "../../../../hooks/useCollectionSelection";
 import {
@@ -60,9 +62,9 @@ export function GroupEventRegistrations({
   canManage?: boolean;
   eventSlug?: string;
   badgesPath?: string;
-  onPrint?: (scope: BadgePrintScope) => void;
+  onPrint?: (scope: BadgePrintScope, action?: BadgePrintAction) => void;
 }) {
-  const startPrinting = (scope: BadgePrintScope) => onPrint?.(scope);
+  const startPrinting = (scope: BadgePrintScope, action: BadgePrintAction = "preview") => onPrint?.(scope, action);
   const selection = useCollectionSelection<EventAttendanceRegistrationSummary>({
     rowKey: (row) => row.id,
     rowLabel: (row) => row.display_name ?? row.user_email ?? "attendee",
@@ -92,6 +94,7 @@ export function GroupEventRegistrations({
       {stats && <RegistrationTotals stats={stats} />}
       <ApiDataTable
         caption="Registrations"
+        alwaysShowColumnControls
         urlState="registrations"
         endpoint={registrationEndpoint}
         responseSchema={eventAttendanceRegistrationsListResponseSchema}
@@ -109,18 +112,20 @@ export function GroupEventRegistrations({
         bulkBar={
           canManage ? (
             <BulkBar count={selection.selected.size} total={selection.total} onClear={selection.clear}>
-              {eventSlug && onPrint && (
-                <Button onClick={() => startPrinting({ kind: "selected", rows: selection.selectedRows })}>
-                  Print selected badges or labels
-                </Button>
-              )}
-              {selection.selectedRows.length > 0 && (
-                <DownloadAction
-                  label="Download selected attendee list (CSV)"
-                  href={selectedExportUrl ?? ""}
-                  disabled={selectedExportUrl === null}
-                />
-              )}
+              <RegistrationOutputActions
+                scope="selected"
+                onPrint={
+                  eventSlug && onPrint
+                    ? (action) => startPrinting({ kind: "selected", rows: selection.selectedRows }, action)
+                    : undefined
+                }
+                attendeeUrl={selectedExportUrl}
+                sponsorUrl={registrationRosterExportUrl(
+                  `${registrationEndpoint}/exports`,
+                  { ...query, audience: "sponsor" },
+                  selection.selectedRows.map((row) => row.id),
+                )}
+              />
             </BulkBar>
           ) : undefined
         }
@@ -132,11 +137,19 @@ export function GroupEventRegistrations({
                   promotionsEndpoint={`${registrationEndpoint}/promotions`}
                   exportsEndpoint={registrationRosterExportUrl(`${registrationEndpoint}/exports`, query)}
                   exportMatchesFilters
+                  sponsorExportUrl={registrationRosterExportUrl(`${registrationEndpoint}/exports`, {
+                    ...query,
+                    audience: "sponsor",
+                  })}
                   onPromoted={() => tableRef.current?.reload()}
                   notify={toast}
                   onPrintAllMatching={
                     eventSlug && onPrint
-                      ? () => startPrinting(filteredBadgePrintScope(`${registrationEndpoint}/badges/population`, query))
+                      ? (action) =>
+                          startPrinting(
+                            filteredBadgePrintScope(`${registrationEndpoint}/badges/population`, query),
+                            action,
+                          )
                       : undefined
                   }
                 />
@@ -147,35 +160,7 @@ export function GroupEventRegistrations({
         searchPlaceholder="name, email, or organization"
         initialSort="-created_at"
         columns={[
-          {
-            header: "Attendee",
-            cell: (registration) => (
-              <PersonCell
-                name={registration.display_name ?? registration.user_email ?? "—"}
-                avatarSrc={registration.headshot_url ?? undefined}
-                size="sm"
-              />
-            ),
-            width: "primary",
-            sort: { asc: "display_name", desc: "-display_name" },
-            // The role band each attendee's badge prints, so a print run can
-            // take one role at a time. It narrows the attendees themselves,
-            // so it is offered from their column.
-            ...(canManage && badgesPath
-              ? {
-                  filter: {
-                    param: "badge_role",
-                    options: [
-                      { value: "", label: "All badge roles" },
-                      ...badgeDisplayRoleSchema.options.map((role) => ({
-                        value: role,
-                        label: BADGE_DISPLAY_ROLE_LABELS[role],
-                      })),
-                    ],
-                  },
-                }
-              : {}),
-          },
+          registrationPersonColumn<EventAttendanceRegistrationSummary>(),
           {
             header: "Organization",
             cell: (r) => (
@@ -188,7 +173,52 @@ export function GroupEventRegistrations({
             ),
             className: "pk-small",
           },
-          { header: "Job title", cell: (r) => r.job_title ?? "—", className: "pk-small", defaultHidden: true },
+          {
+            header: "Job title",
+            cell: (r) => r.job_title ?? "—",
+            className: "pk-small",
+            defaultHidden: true,
+            filter: { param: "job_title", text: { placeholder: "e.g. security architect" } },
+          },
+          {
+            header: "Country",
+            cell: (r) => (r.country ? (isCountryCode(r.country) ? countryName(r.country) : r.country) : "—"),
+            defaultHidden: true,
+            filter: { param: "country", options: [{ value: "", label: "All countries" }, ...countryOptions()] },
+          },
+          {
+            header: "Attendee type",
+            cell: (r) => BADGE_DISPLAY_ROLE_LABELS[r.badge_role],
+            defaultHidden: true,
+            filter: {
+              param: "badge_role",
+              options: [
+                { value: "", label: "All attendee types" },
+                ...badgeDisplayRoleSchema.options.map((value) => ({ value, label: BADGE_DISPLAY_ROLE_LABELS[value] })),
+              ],
+            },
+          },
+          {
+            header: "Consent",
+            width: "fit",
+            cell: (r) => (
+              <span
+                title={r.sponsor_consent ? "Consented to sponsor sharing" : "No sponsor sharing consent"}
+                aria-label={r.sponsor_consent ? "Consented to sponsor sharing" : "No sponsor sharing consent"}
+              >
+                {r.sponsor_consent ? <IconCheckmark aria-hidden="true" /> : "—"}
+              </span>
+            ),
+            filter: {
+              param: "consent",
+              label: "Sponsor consent",
+              options: [
+                { value: "", label: "Any sponsor consent" },
+                { value: "true", label: "Consented" },
+                { value: "false", label: "Not consented" },
+              ],
+            },
+          },
           {
             header: "Status",
             cell: (registration) => <Badge status={registration.status} />,
@@ -235,9 +265,23 @@ export function GroupEventRegistrations({
                     <RowActions
                       subject={registration.display_name ?? registration.user_email ?? "this attendee"}
                       actions={[
+                        ...(onPrint
+                          ? [
+                              {
+                                id: "print-label",
+                                label: "Print label",
+                                onSelect: () => startPrinting({ kind: "selected", rows: [registration] }, "labels"),
+                              },
+                              {
+                                id: "print-badge",
+                                label: "Print badge",
+                                onSelect: () => startPrinting({ kind: "selected", rows: [registration] }, "badges"),
+                              },
+                            ]
+                          : []),
                         {
                           id: "badges",
-                          label: "Manage badges",
+                          label: "View badges",
                           href: usePortalHashLocation.hrefs(
                             `${badgesPath}?userId=${encodeURIComponent(registration.user_id)}`,
                           ),

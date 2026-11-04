@@ -275,17 +275,19 @@ export function useColumnControls<T>(
       { id: `card-sort-${String(index)}`, label: `Sort by ${headLabel(column.header)}`, onSelect: () => {}, children },
     ];
   });
-  const filterMenu: MenuItem[] = visibleColumns.flatMap(({ column, index }) => {
-    const name = headLabel(column.header);
-    const narrowed = columnFilters(column).some((filter) => Boolean(filters[filter.param]));
-    return filterItems(column, `card-${String(index)}`, `Filter by ${name}`).map((item) =>
-      item.id.endsWith("-filter-text")
-        ? { ...item, label: narrowed ? `Edit the ${name} filter…` : `Filter by ${name}…` }
-        : item.id.endsWith("-filter-clear")
-          ? { ...item, label: `Clear the ${name} filter` }
-          : item,
-    );
-  });
+  const filterMenu: MenuItem[] = columns
+    .map((column, index) => ({ column, index }))
+    .flatMap(({ column, index }) => {
+      const name = headLabel(column.header);
+      const narrowed = columnFilters(column).some((filter) => Boolean(filters[filter.param]));
+      return filterItems(column, `card-${String(index)}`, `Filter by ${name}`).map((item) =>
+        item.id.endsWith("-filter-text")
+          ? { ...item, label: narrowed ? `Edit the ${name} filter…` : `Filter by ${name}…` }
+          : item.id.endsWith("-filter-clear")
+            ? { ...item, label: `Clear the ${name} filter` }
+            : item,
+      );
+    });
   const cardMenuItems = [
     ...sortMenu,
     ...filterMenu.map((item, position) =>

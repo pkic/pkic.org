@@ -1,3 +1,6 @@
+import { registrationBadgeDisplayRoleSql } from "./badge-role";
+import { sponsorConsentSql } from "../event-participation/sponsor-consent";
+import { REGISTRATION_COUNTRY_SQL } from "./registration-country";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import {
   eventAttendanceRegistrationSummarySchema,
@@ -30,6 +33,8 @@ interface AttendanceRegistrationRow {
   organization_name: string | null;
   verified_addresses: string | null;
   job_title: string | null;
+  sponsor_consent: number;
+  country: string | null;
 }
 
 export interface EventAttendanceRegistrationsListResult {
@@ -49,6 +54,7 @@ export function buildEventAttendanceRegistrationsPageQuery(eventId: string, para
     source: {
       selectSql: `SELECT r.id, r.user_id, r.status, r.created_at, r.updated_at,
                          u.email AS user_email,
+                         ${registrationBadgeDisplayRoleSql("r")} AS badge_role, ${sponsorConsentSql("r")} AS sponsor_consent, ${REGISTRATION_COUNTRY_SQL} AS country,
                          COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
                          u.headshot_r2_key AS headshot_r2_key,
                          ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
@@ -83,6 +89,7 @@ export async function listEventAttendanceRegistrations(
     registrations: rows.map((row) =>
       eventAttendanceRegistrationSummarySchema.parse({
         ...row,
+        sponsor_consent: Boolean(row.sponsor_consent),
         organization_name: contactAffiliation(row.user_email, row.organization_name).organization,
         personal_email: contactAffiliation(row.user_email, row.organization_name).personalEmail,
         waitlist_handled_last: waitlistHandledLast(

@@ -1,4 +1,4 @@
-import { ButtonLink } from "../../../../../../ui/Button";
+import type { BadgePrintAction } from "../../../../../../../shared/schemas/event-badge-printing";
 import { Panel, PanelBody } from "../../../../../../ui/Panel";
 import { lazy, Suspense } from "preact/compat";
 import { RegistrationBadgePrinting } from "../../../../../../components/event-badges/RegistrationBadgePrinting";
@@ -53,10 +53,11 @@ export function BadgeCredentials({
   userId?: string;
   eventId?: string;
   groupId?: string;
-  printRequest?: { scope: BadgePrintScope; session: PortalSession | null } | null;
+  printRequest?: { action?: BadgePrintAction; scope: BadgePrintScope; session: PortalSession | null } | null;
   onPrintClose?: () => void;
 }) {
   const [, navigate] = usePortalHashLocation();
+  const [soleBadge, setSoleBadge] = useState<{ slug: string; userId: string; id: string } | null>(null);
   const printSession = printRequest?.session;
   const printContextCurrent = useCallback(
     () =>
@@ -68,22 +69,23 @@ export function BadgeCredentials({
       ),
     [printSession],
   );
-  if (printRequest && eventId && onPrintClose)
+  const requestedUser = databaseIdSchema.safeParse(
+    new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("userId"),
+  );
+  const scopedUserId = userId ?? (requestedUser.success ? requestedUser.data : undefined);
+  if (printRequest && !scopedUserId && eventId && onPrintClose)
     return printContextCurrent() ? (
       <RegistrationBadgePrinting
         slug={slug}
         eventId={eventId}
         scope={printRequest.scope}
+        action={printRequest.action}
         isCurrent={printContextCurrent}
         onBack={onPrintClose}
       />
     ) : (
       <ErrorAlert error="Sign in again before printing these badges." />
     );
-  const requestedUser = databaseIdSchema.safeParse(
-    new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("userId"),
-  );
-  const scopedUserId = userId ?? (requestedUser.success ? requestedUser.data : undefined);
   const scopeQuery = scopedUserId ? `?userId=${encodeURIComponent(scopedUserId)}` : "";
   const recordPath = (id: string) => `${basePath}/${encodeURIComponent(id)}`;
   if (credentialId === "design")
@@ -121,18 +123,24 @@ export function BadgeCredentials({
         basePath={basePath}
       />
     );
+  if (scopedUserId && soleBadge?.userId === scopedUserId && soleBadge.slug === slug)
+    return <BadgeCredentialRecord slug={slug} credentialId={soleBadge.id} replacing={false} basePath={basePath} />;
   return (
     <ApiDataTable
-      caption="Badge credentials"
+      caption="Attendee badges"
       endpoint={`/api/v1/events/${encodeURIComponent(slug)}/badges`}
       responseSchema={badgeCredentialsResponseSchema}
+      onData={(data) => {
+        if (scopedUserId && data.page.total === 1 && data.badges[0])
+          setSoleBadge({ slug, userId: scopedUserId, id: data.badges[0].id });
+      }}
       resolve={(data) => data.badges}
       resolvePage={(data) => data.page}
       params={scopedUserId ? { userId: scopedUserId } : undefined}
       urlState="badges"
       paginate
       initialSort="-createdAt"
-      searchPlaceholder="name or credential reference"
+      searchPlaceholder="Attendee name"
       toolbar={() => (
         <>
           <Menu
@@ -188,7 +196,7 @@ export function BadgeCredentials({
             <RowActions
               subject={badge.displayName ?? badge.id}
               actions={[
-                { id: "record", label: "View credential", onSelect: () => navigate(recordPath(badge.id)) },
+                { id: "record", label: "View badge", onSelect: () => navigate(recordPath(badge.id)) },
                 {
                   id: "print",
                   label: "Reprint badge",
@@ -260,7 +268,7 @@ function BadgeCredentialRecord({
   return (
     <div class="pk-stack">
       <PageHeader
-        title="Badge credential"
+        title="Attendee badge"
         description={badge.displayName ?? "Attendee name unavailable"}
         context={<Badge status={badge.status} />}
         actions={
@@ -291,23 +299,9 @@ function BadgeCredentialRecord({
           />
         }
       />
-      <Panel>
-        <PanelBody>
-          <DescriptionList
-            items={[
-              { term: "Attendee", value: badge.displayName ?? "Attendee name unavailable" },
-              { term: "Credential reference", value: badge.id },
-              { term: "Issued", value: formatDateTime(badge.createdAt) },
-              { term: "Valid until", value: formatDateTime(badge.expiresAt) },
-              { term: "Revoked", value: formatDateTime(badge.revokedAt) },
-            ]}
-          />
-        </PanelBody>
-      </Panel>
+
       {badge.status === "active" && badge.reprintAvailable && (
-        <ButtonLink href={usePortalHashLocation.hrefs(`${path}/print`)} variant="primary">
-          Preview and download badge
-        </ButtonLink>
+        <BadgeCredentialPrint slug={slug} credentialId={credentialId} onBack={() => navigate(basePath)} overview />
       )}
       <p>
         {badge.reprintAvailable
@@ -315,6 +309,22 @@ function BadgeCredentialRecord({
           : "Reprinting is unavailable for this credential. You can print a previously saved file."}{" "}
         Explicit replacement creates a new code and revokes only this credential.
       </p>
+      <details>
+        <summary>Badge details</summary>
+        <Panel>
+          <PanelBody>
+            <DescriptionList
+              items={[
+                { term: "Attendee", value: badge.displayName ?? "Attendee name unavailable" },
+                { term: "Credential reference", value: badge.id },
+                { term: "Issued", value: formatDateTime(badge.createdAt) },
+                { term: "Valid until", value: formatDateTime(badge.expiresAt) },
+                { term: "Revoked", value: formatDateTime(badge.revokedAt) },
+              ]}
+            />
+          </PanelBody>
+        </Panel>
+      </details>
       {(error || record.error) && <ErrorAlert error={error || record.error} />}
     </div>
   );

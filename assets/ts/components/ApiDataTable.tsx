@@ -30,6 +30,8 @@ export interface ApiTableActions {
 }
 
 export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, "data" | "currentSort" | "onSort"> {
+  /** Keep column filters available on desktop even for hidden columns. */
+  alwaysShowColumnControls?: boolean;
   endpoint: string;
   resolve: (data: Response) => T[];
   responseSchema: z.ZodType<Response>;
@@ -137,6 +139,7 @@ export function ApiDataTable<T, Response = unknown>({
   clearDataOnReload = false,
   retainDataOnError = true,
   renderItems,
+  alwaysShowColumnControls = false,
   framed = true,
   toolbarClass,
   compactToolbarActions,
@@ -248,8 +251,12 @@ export function ApiDataTable<T, Response = unknown>({
     onFilterChange: applyFilter,
   });
   const cardMenu =
-    (renderItems || narrowLayout !== "columns") && columnControls.cardMenuLabel ? (
-      <ColumnCardMenu controls={columnControls} caption={caption} alwaysVisible={Boolean(renderItems)} />
+    (alwaysShowColumnControls || renderItems || narrowLayout !== "columns") && columnControls.cardMenuLabel ? (
+      <ColumnCardMenu
+        controls={columnControls}
+        caption={caption}
+        alwaysVisible={alwaysShowColumnControls || Boolean(renderItems)}
+      />
     ) : null;
 
   const query = {

@@ -164,6 +164,24 @@ describe("Event-owned authenticated badge print metadata and branding", () => {
     expect(fresh.template!.frontHtml).toContain("Renamed local conference");
     expect(fresh.revision).not.toBe(captured.revision);
   });
+  it("uses current event dates and city and rejects release after either changes", async () => {
+    await env.DB.prepare(
+      "UPDATE events SET settings_json='{}',city='London',starts_at='2027-02-10T09:00:00.000Z',ends_at='2027-02-12T17:00:00.000Z',timezone='Europe/London' WHERE id=?",
+    )
+      .bind(fixture.eventId)
+      .run();
+    const captured = await context();
+    expect(captured.template!.frontHtml).toContain("London");
+    expect(captured.template!.frontHtml).toContain("2027");
+    expect(captured.template!.assets).not.toHaveProperty("canal_houses");
+    expect((await print(captured.revision)).status).toBe(200);
+    await env.DB.prepare("UPDATE events SET city='Paris' WHERE id=?").bind(fixture.eventId).run();
+    expect((await print(captured.revision)).status).toBe(409);
+    const moved = await context();
+    expect(moved.template!.frontHtml).toContain("Paris");
+    await env.DB.prepare("UPDATE events SET ends_at='2027-02-13T17:00:00.000Z' WHERE id=?").bind(fixture.eventId).run();
+    expect((await print(moved.revision)).status).toBe(409);
+  });
   it("refuses a canonical persisted event title that cannot fit the generic template without print effects", async () => {
     const captured = await context();
     const eventName = eventResourceCoreSchema.shape.name.parse("Persisted event " + "x".repeat(40000));

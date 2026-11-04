@@ -12,7 +12,11 @@ import {
   type BadgeSponsorSource,
   type BadgeTemplateSponsorGroup,
 } from "../../../../assets/shared/schemas/event-badge-template";
-import { createGenericBadgeTemplate } from "../../../../assets/shared/badge-generic-template";
+import {
+  createGenericBadgeTemplate,
+  GENERIC_BADGE_LAYOUT_VERSION,
+} from "../../../../assets/shared/badge-generic-template";
+import { persistedUtcInstant } from "../../utils/time";
 import { first } from "../../db/queries";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
@@ -39,12 +43,21 @@ export async function prepareBadgePrintingBasis(
   eventId: string,
   sponsorGroups?: z.infer<typeof badgeTemplateSponsorGroupSchema>[],
 ) {
-  const event = await first<{ name: string; settings_json: string }>(
-    db,
-    "SELECT name,settings_json FROM events WHERE id=?",
-    [eventId],
-  );
+  const event = await first<{
+    name: string;
+    settings_json: string;
+    starts_at: string | null;
+    ends_at: string | null;
+    timezone: string;
+    city: string | null;
+  }>(db, "SELECT name,settings_json,starts_at,ends_at,timezone,city FROM events WHERE id=?", [eventId]);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event unavailable.");
+  const display = {
+    startsAt: persistedUtcInstant(event.starts_at),
+    endsAt: persistedUtcInstant(event.ends_at),
+    timezone: event.timezone,
+    city: event.city,
+  };
   const rawSettings = parseJsonSafe<unknown>(event.settings_json, {});
   const settings =
     rawSettings && typeof rawSettings === "object" && !Array.isArray(rawSettings)
@@ -59,7 +72,7 @@ export async function prepareBadgePrintingBasis(
     );
   const override = sponsorGroups
     ? {
-        ...(parsed.data ?? createGenericBadgeTemplate({ eventName: event.name, sponsorGroups: [] })),
+        ...(parsed.data ?? createGenericBadgeTemplate({ ...display, eventName: event.name, sponsorGroups: [] })),
         sponsorGroups: sponsorGroups.map((group) => badgeTemplateSponsorGroupSchema.parse(group)),
       }
     : parsed.data;
@@ -107,7 +120,7 @@ export async function prepareBadgePrintingBasis(
       ),
     );
     try {
-      template = createGenericBadgeTemplate({ eventName: event.name, sponsorGroups });
+      template = createGenericBadgeTemplate({ ...display, eventName: event.name, sponsorGroups });
     } catch (error) {
       if (!(error instanceof ZodError)) throw error;
       throw new AppError(
@@ -123,6 +136,7 @@ export async function prepareBadgePrintingBasis(
     event.settings_json,
     populations.event,
     populations.consortium,
+    display,
   );
   return {
     revision,
@@ -130,8 +144,16 @@ export async function prepareBadgePrintingBasis(
     populations,
     guards: [
       prepareAuthorizationGuard(db, {
-        sql: "SELECT 1 FROM events WHERE id=? AND name=? AND settings_json=?",
-        bindings: [eventId, event.name, event.settings_json],
+        sql: "SELECT 1 FROM events WHERE id=? AND name=? AND settings_json=? AND starts_at IS ? AND ends_at IS ? AND timezone=? AND city IS ?",
+        bindings: [
+          eventId,
+          event.name,
+          event.settings_json,
+          event.starts_at,
+          event.ends_at,
+          event.timezone,
+          event.city,
+        ],
       }),
       eventPopulation.guard,
       ...(consortiumPopulation ? [consortiumPopulation.guard] : []),
@@ -264,10 +286,13 @@ export function badgePrintingBasisRevision(
   settings: string,
   sponsors: readonly BrandingRow[],
   consortiumSponsors: readonly BrandingRow[],
+  display?: { startsAt: string | null; endsAt: string | null; timezone: string; city: string | null },
 ) {
   return sha256Hex(
     JSON.stringify({
       eventId,
+      defaultLayout: GENERIC_BADGE_LAYOUT_VERSION,
+      display,
       eventName,
       settings,
       sponsors: sponsors.map((row) => JSON.parse(row.source_json)),

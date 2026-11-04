@@ -45,9 +45,9 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 
 ## Tooltip (`tooltip`)
 
-- Use: the native `title` attribute, identical to the control's `aria-label`. There is no custom tooltip component; do not build one.
+- Use native `title` for a short icon-control label. Use the shared `Tooltip` for structured descriptions such as attendance dates: accessible on hover, focus and tap; Escape and outside press dismiss it. Keep the trigger named and use `aria-describedby` for the description.
 - Shape and placement: the browser's own, on hover. Every icon-only control has one. Truncated table cells get the full value as `title` (handled by `DataTable`).
-- Dismissal and keyboard: the browser's. Never put essential information only in a tooltip.
+- Dismissal and keyboard: native titles follow the browser; structured tooltips must remain hoverable and dismiss with Escape. Never put essential information only in a tooltip.
 
 ## Toast (`toast`)
 

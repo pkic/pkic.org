@@ -30,6 +30,7 @@ export const groupEventRegistrationPromotionsCreateRouteSchema = {
 export const groupEventRegistrationExportQuerySchema = eventAttendanceRegistrationsQuerySchema
   .omit({ limit: true, offset: true, sort: true })
   .extend({
+    audience: z.enum(["organizer", "sponsor"]).optional(),
     ids: z
       .string()
       .max(MAX_PAGE_LIMIT * 37)

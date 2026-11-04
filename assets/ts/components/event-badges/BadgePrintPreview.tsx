@@ -1,3 +1,4 @@
+import type { BadgePrintAction } from "../../../shared/schemas/event-badge-printing";
 import { formatNumber } from "../../../shared/format-number";
 import { useMeasuredWidth } from "../../hooks/useMeasuredWidth";
 import { badgePrintPageDimensions } from "../../../shared/schemas/badge-print-layout";
@@ -27,11 +28,15 @@ import "./BadgePrintPreview.css";
 
 export function BadgePrintPreview({
   badges,
+  action = "preview",
+  initialDesign = "name_qr",
   beforeRelease,
   printing,
   loadPrintingContext,
 }: {
   badges: readonly PrintableBadgePrint[];
+  action?: BadgePrintAction;
+  initialDesign?: BadgePrintDesign;
   printing: BadgePrintingContext;
   loadPrintingContext?: () => Promise<BadgePrintingContext>;
   /** Reprints recheck live metadata before releasing any private print file. */
@@ -40,8 +45,12 @@ export function BadgePrintPreview({
   const { element, width: availableWidth } = useMeasuredWidth();
   const [completePrinting, setCompletePrinting] = useState<BadgePrintingContext | null>(null);
   const context = completePrinting ?? printing;
-  const [layout, setLayout] = useState<BadgePrintLayout>(() => badgePrintPreset("brother_dk_1208"));
-  const [design, setDesign] = useState<BadgePrintDesign>("name_qr");
+  const [layout, setLayout] = useState<BadgePrintLayout>(() =>
+    initialDesign === "event_badge" && printing.template
+      ? { ...badgeFaceLayout(printing.template.widthMm, printing.template.heightMm), sides: "front_back" }
+      : badgePrintPreset("brother_dk_1208"),
+  );
+  const [design, setDesign] = useState<BadgePrintDesign>(initialDesign);
   const [tab, setTab] = useHashQueryParam("printView", "preview");
   const [error, setError] = useState("");
   const archiveBuilding = useRef(false);
@@ -120,6 +129,23 @@ export function BadgePrintPreview({
       if (live.current) setBusy(false);
     }
   }
+  const started = useRef(false);
+  const performed = useRef(false);
+  useEffect(() => {
+    if (action !== "badges" || started.current) return;
+    started.current = true;
+    void useFullBadge(false);
+  }, [action]);
+  useEffect(() => {
+    if (action === "preview" || performed.current || busy) return;
+    if (action === "label_csv") {
+      performed.current = true;
+      void release(() => downloadBadgeArtifact(badgePrintCsv(badges), "text/csv;charset=utf-8", "attendee-labels.csv"));
+    } else if (ready && (action !== "badges" || design === "event_badge")) {
+      performed.current = true;
+      void release(() => frame.current?.contentWindow?.print());
+    }
+  }, [action, ready, busy, design]);
   async function downloadSvgArchive() {
     if (archiveBuilding.current || checking.current) return;
     const owned = badges;

@@ -75,7 +75,14 @@ async function setup(status = "registered", dayCount = 2) {
   document.body.append(host);
   await act(async () =>
     render(
-      <GroupEventRegistrations groupId={GROUP_ID} eventId={EVENT_ID} eventSlug="workshop" canManage onPrint={print} />,
+      <GroupEventRegistrations
+        groupId={GROUP_ID}
+        eventId={EVENT_ID}
+        eventSlug="workshop"
+        badgesPath={`/groups/${GROUP_ID}/events/${EVENT_ID}/registrations/badges`}
+        canManage
+        onPrint={print}
+      />,
       host!,
     ),
   );
@@ -107,15 +114,15 @@ it("sends multi-day matching, attendance and waitlist from headers into the list
   };
   expect(queries.at(-1)).toMatchObject(expected);
   expect(location.hash).toContain("registrations.f.day_dates");
-  const download = container.querySelector<HTMLAnchorElement>('a[aria-label="Download matching attendee list (CSV)"]')!;
+  const download = container.querySelector<HTMLAnchorElement>('a[aria-label="Download matching attendee data (CSV)"]')!;
   expect(
     groupEventRegistrationExportQuerySchema.parse(Object.fromEntries(new URL(download.href).searchParams)),
   ).toMatchObject(expected);
   await act(async () =>
-    container.querySelector<HTMLButtonElement>('button[aria-label="Registration actions"]')!.click(),
+    container.querySelector<HTMLButtonElement>('button[aria-label="Print matching attendees"]')!.click(),
   );
-  const action = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) =>
-    item.textContent?.includes("Print matching"),
+  const action = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+    (item) => item.textContent?.trim() === "Print labels",
   )!;
   await act(async () => action.click());
   const scope = print.mock.calls.at(-1)![0];
@@ -128,13 +135,15 @@ it("clears a selected attendee when a header filter changes, preventing an old s
   expect(checkbox).not.toBeNull();
   await act(async () => checkbox.click());
   await settle();
-  const selected = container.querySelector<HTMLAnchorElement>('a[aria-label="Download selected attendee list (CSV)"]')!;
+  const selected = container.querySelector<HTMLAnchorElement>(
+    '.pk-bulk-bar a[aria-label="Download selected attendee data (CSV)"]',
+  )!;
   const selectedScope = groupEventRegistrationExportQuerySchema.parse(
     Object.fromEntries(new URL(selected.href).searchParams),
   );
   expect(selectedScope.ids).toEqual([registrationList().registrations[0]!.id]);
   await dayChoice(container, formatDayAndMonth("2026-09-01"));
-  expect(container.querySelector('a[aria-label="Download selected attendee list (CSV)"]')).toBeNull();
+  expect(container.querySelector('.pk-bulk-bar a[aria-label="Download selected attendee data (CSV)"]')).toBeNull();
   expect(container.querySelector<HTMLInputElement>('input[aria-label="Select Group Member"]')?.checked).toBe(false);
 });
 it("removes one selected day without clearing another and resets all days explicitly", async () => {
@@ -153,13 +162,19 @@ it("allows a selected cancelled registration into printing and CSV without chang
   await settle();
   await act(async () => container.querySelector<HTMLInputElement>('input[aria-label="Select Group Member"]')!.click());
   await settle();
-  const action = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
-    button.textContent?.includes("Print selected badges"),
+  const trigger = container.querySelector<HTMLButtonElement>(
+    '.pk-bulk-bar button[aria-label="Print selected attendees"]',
+  )!;
+  await act(async () => trigger.click());
+  const action = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+    (button) => button.textContent?.trim() === "Print labels",
   )!;
   expect(action.disabled).toBe(false);
   await act(async () => action.click());
   expect(print.mock.calls.at(-1)?.[0]).toMatchObject({ kind: "selected", rows: [{ status: "cancelled" }] });
-  const csv = container.querySelector<HTMLAnchorElement>('a[aria-label="Download selected attendee list (CSV)"]')!;
+  const csv = container.querySelector<HTMLAnchorElement>(
+    '.pk-bulk-bar a[aria-label="Download selected attendee data (CSV)"]',
+  )!;
   expect(
     groupEventRegistrationExportQuerySchema.parse(Object.fromEntries(new URL(csv.href).searchParams)),
   ).toMatchObject({ status: "cancelled", ids: [registrationList().registrations[0]!.id] });
@@ -169,10 +184,77 @@ it("supports seven individually selected days without expanding every row into a
   const { container, queries } = await setup("registered", 7);
   const summary = container.querySelector('[role="img"][aria-label^="At the venue: 7 days total"]');
   expect(summary).not.toBeNull();
-  expect(summary?.getAttribute("title")).toContain(formatDayAndMonth("2026-09-07"));
+  expect(summary?.getAttribute("aria-label")).toContain(formatDayAndMonth("2026-09-07"));
   for (let day = 1; day <= 7; day++)
     await dayChoice(container, formatDayAndMonth(`2026-09-${String(day).padStart(2, "0")}`));
   await dayChoice(container, "All selected days");
   expect(queries.at(-1)?.day_dates?.split(",")).toHaveLength(7);
   expect(queries.at(-1)?.day_match).toBe("all");
+});
+
+it("offers country, job title and attendee type filters without revealing their columns", async () => {
+  const { container, queries, print } = await setup();
+  async function menu(label: string) {
+    const item = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"], [role="menuitemradio"]')].find(
+      (button) => button.textContent?.trim().startsWith(label),
+    );
+    expect(item, label).toBeDefined();
+    await act(() => item!.click());
+  }
+  async function open() {
+    await act(() =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="Sort and filter registrations"]')!.click(),
+    );
+  }
+  await open();
+  await menu("Filter by Attendee type");
+  await menu("Staff");
+  await settle();
+  expect(queries.at(-1)?.badge_role).toBe("staff");
+  await open();
+  await menu("Filter by Country");
+  await menu("Netherlands");
+  await settle();
+  expect(queries.at(-1)?.country).toBe("NL");
+  await open();
+  await menu("Filter by Job title");
+  const input = container.querySelector<HTMLInputElement>('input[placeholder="e.g. security architect"]')!;
+  await act(() => {
+    input.value = "architect";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await vi.waitFor(() => expect(queries.at(-1)?.job_title).toBe("architect"));
+  const headers = [...container.querySelectorAll("thead th")].map((cell) => cell.textContent);
+  expect(headers).not.toContain("Country");
+  expect(headers).not.toContain("Job title");
+  expect(headers).not.toContain("Attendee type");
+  await act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Print matching attendees"]')!.click());
+  await menu("Download label CSV");
+  expect(print.mock.calls.at(-1)?.[1]).toBe("label_csv");
+  expect(print.mock.calls.at(-1)?.[0]).toMatchObject({
+    kind: "filtered",
+    filters: { country: "NL", job_title: "architect", badge_role: "staff" },
+  });
+});
+
+it("keeps row printing in the ellipsis menu and starts the chosen output directly", async () => {
+  const { container, print } = await setup();
+  const trigger = () => container.querySelector<HTMLButtonElement>('button[aria-label="Actions for Group Member"]')!;
+  expect(container.querySelector('tbody button[title="Print label"], tbody button[title="Print badge"]')).toBeNull();
+  for (const [label, action] of [
+    ["Print label", "labels"],
+    ["Print badge", "badges"],
+  ] as const) {
+    await act(() => trigger().click());
+    const item = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (button) => button.textContent?.trim() === label,
+    )!;
+    expect(item).toBeDefined();
+    await act(() => item.click());
+    expect(print.mock.calls.at(-1)?.[1]).toBe(action);
+    expect(print.mock.calls.at(-1)?.[0]).toMatchObject({
+      kind: "selected",
+      rows: [{ id: registrationList().registrations[0]!.id }],
+    });
+  }
 });

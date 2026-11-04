@@ -5,7 +5,7 @@ import type { Column } from "../../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { FilterSelect } from "../../../../../components/FilterSelect";
 import { Tabs } from "../../../../../components/Tabs";
-import { PersonCell } from "../../../../../ui/PersonCell";
+import { registrationPersonColumn } from "../../../../../components/event-registrations/registration-person-column";
 import { attendanceTypeLabel } from "../../../../../shared/attendance";
 import { fmt, fmtDate, toast } from "../../../ui";
 import type { Registration, RegistrationAttendanceChange } from "../types";
@@ -77,15 +77,7 @@ export function RegistrationsList({
   const tableRef = useRef<ApiTableActions | null>(null);
 
   const columns: Array<Column<Registration>> = [
-    {
-      // The same face-then-name cell every roster uses (#90).
-      header: "Attendee",
-      cell: (r) => (
-        <PersonCell name={r.display_name ?? r.user_email ?? "—"} avatarSrc={r.headshot_url ?? undefined} size="sm" />
-      ),
-      width: "primary",
-      sort: { asc: "display_name", desc: "-display_name" },
-    },
+    registrationPersonColumn<Registration>(),
     // Who they represent and what they do, as the account states it (#119).
     // The title is there for the reader who wants it, hidden by default so
     // the row keeps its width for the days.

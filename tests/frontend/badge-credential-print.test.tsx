@@ -113,16 +113,48 @@ afterEach(async () => {
 });
 
 describe("authorized badge reprinting", () => {
-  it("opens the dedicated print view from the selected active record without retrieving a code", async () => {
-    const fetch = vi.fn(async () => json(metadata));
-    vi.stubGlobal("fetch", fetch);
-    await mount(<BadgeCredentials slug="workshop" basePath={BASE} credentialId={ID} />);
-    expect(host.querySelector("img,iframe")).toBeNull();
-    await click("Record actions");
-    await click("Reprint badge");
-    expect(navigate).toHaveBeenCalledWith(`${BASE}/${ID}/print`);
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
+  it.each(["record", "scoped"])(
+    "loads %s attendee artwork without an extra preview click or a stale print request",
+    async (view) => {
+      const artwork = {
+        ...printing,
+        template: createGenericBadgeTemplate({ eventName: "Synthetic conference", sponsorGroups: [] }),
+      };
+      const bodies: unknown[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          if (init?.method === "POST") {
+            bodies.push(JSON.parse(String(init.body)));
+            return json(printable);
+          }
+          if (path(input) === "/api/v1/events/workshop/badges")
+            return json({ badges: [metadata], page: { total: 1, limit: 20, offset: 0, hasMore: false } });
+          return json(path(input).endsWith("/printing") ? artwork : metadata);
+        }),
+      );
+      await mount(
+        view === "record" ? (
+          <BadgeCredentials slug="workshop" basePath={BASE} credentialId={ID} />
+        ) : (
+          <BadgeCredentials
+            slug="workshop"
+            basePath={BASE}
+            userId={metadata.userId}
+            eventId={metadata.eventId}
+            onPrintClose={vi.fn()}
+            printRequest={{ scope: { kind: "selected", rows: [] }, session: null }}
+          />
+        ),
+      );
+      await rendered(() => expect(host.querySelector('iframe[title="Attendee label"]')).not.toBeNull());
+      expect(badgeLabelRequestSchema.parse(bodies[0])).toMatchObject({ source: "badge", badgeId: ID });
+      expect(host.textContent).not.toContain("Preview and download badge");
+      expect(button("Print label")).toBeDefined();
+      await rendered(() => expect(host.querySelector('iframe[title="Badge front"]')).not.toBeNull());
+      expect(host.querySelector('iframe[title="Badge back"]')).not.toBeNull();
+    },
+  );
 
   it("prepares the same credential through the canonical request, rechecks release, and never offers a raw-code CSV", async () => {
     const bodies: unknown[] = [];

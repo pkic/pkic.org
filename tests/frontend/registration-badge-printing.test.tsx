@@ -1,3 +1,4 @@
+import type { BadgePrintAction } from "../../assets/shared/schemas/event-badge-printing";
 // @vitest-environment jsdom
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -199,7 +200,11 @@ function batchResponse(body: BadgeLabelBatchRequest) {
     }),
   };
 }
-async function mountPrinting(rows: BadgePrintPopulationRow[], isCurrent = () => true) {
+async function mountPrinting(
+  rows: BadgePrintPopulationRow[],
+  isCurrent = () => true,
+  action: BadgePrintAction = "preview",
+) {
   const host = document.createElement("div");
   document.body.append(host);
   mounted.push(host);
@@ -209,6 +214,7 @@ async function mountPrinting(rows: BadgePrintPopulationRow[], isCurrent = () => 
         slug="workshop"
         eventId={eventId}
         scope={{ kind: "selected", rows }}
+        action={action}
         isCurrent={isCurrent}
         onBack={vi.fn()}
       />,
@@ -473,3 +479,33 @@ it("includes explicitly selected pending and cancelled registrations without cha
   expect(result).toEqual(rows);
   expect(result.map((item) => item.status)).toEqual(["pending_email_confirmation", "cancelled"]);
 });
+
+it.each([true, false])(
+  "downloads label CSV directly only while the live print context remains valid: %s",
+  async (authorized) => {
+    let reads = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+        const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
+        reads++;
+        if (reads > 1 && !authorized)
+          return json({ error: { code: "FORBIDDEN", message: "Print access changed" } }, 403);
+        return json(batchResponse(body));
+      }),
+    );
+    const host = await mountPrinting([row(1)], () => true, "label_csv");
+    await vi.waitFor(() => expect(reads).toBe(2));
+    if (authorized) {
+      await vi.waitFor(() => expect(downloadBadgeArtifact).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(downloadBadgeArtifact).mock.calls[0]).toEqual([
+        expect.stringContaining("ABCDEFGH"),
+        "text/csv;charset=utf-8",
+        "attendee-labels.csv",
+      ]);
+    } else {
+      await vi.waitFor(() => expect(host.querySelector("iframe")).toBeNull());
+      expect(downloadBadgeArtifact).not.toHaveBeenCalled();
+    }
+  },
+);

@@ -130,7 +130,10 @@ export const GroupEventRegistrationExportGet = openApiRoute(
       getCsvExportLimits(c.env),
       data.query,
     );
-    return csvResponse(result.csv, `${context.event.slug}-attendees.csv`);
+    return csvResponse(
+      result.csv,
+      `${context.event.slug}-${data.query.audience === "sponsor" ? "sponsor-attendees" : "attendees"}.csv`,
+    );
   },
 );
 

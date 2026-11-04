@@ -1,3 +1,4 @@
+import { RegistrationOutputActions } from "../../components/event-registrations/RegistrationOutputActions";
 import { useState } from "preact/hooks";
 import { LEGACY_ATTENDANCE_ACCESS } from "../../../shared/event-attendance-access";
 import { attendanceTypeLabel } from "../../shared/attendance";
@@ -45,7 +46,12 @@ export function AttendeeHeaderFiltersPreview() {
   return (
     <div class="pk-table-list" data-density="compact">
       <div class="pk-toolbar">
-        <ColumnCardMenu controls={controls} caption="Attendees" />
+        <ColumnCardMenu controls={controls} caption="Attendees" alwaysVisible />
+        <RegistrationOutputActions
+          attendeeUrl="/example-attendees.csv"
+          sponsorUrl="/example-consenting-attendees.csv"
+          onPrint={() => {}}
+        />
       </div>
       <DataTable
         caption="Attendees"
