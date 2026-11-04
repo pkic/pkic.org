@@ -18,7 +18,7 @@ test("phone scanner guides staff through venue, search, offline entry and diagno
   context,
 }, testInfo) => {
   await context.clearPermissions();
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-fast-scanner-idle"));
   await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/scanner");
   const entrance = page.getByRole("button", { name: "Venue entrance Check people in", exact: true });

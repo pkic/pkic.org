@@ -10,9 +10,14 @@ import {
 const fixture = createEventScannerFixture();
 beforeEach(() => fixture.setup());
 function get(path: string, authenticated = true) {
-  return callApi(env, `/api/v1/events/scan-test/scans/attendees${path}`, {
-    headers: authenticated ? { authorization: `Bearer ${fixture.token}` } : {},
-  });
+  return callApi(
+    env,
+    `/api/v1/events/scan-test/scans/attendees${path}`,
+    {
+      headers: authenticated ? { authorization: `Bearer ${fixture.token}` } : {},
+    },
+    { maxRoundTrips: 1 },
+  );
 }
 describe("scanner attendee lookup through the mounted router", () => {
   it("searches registered identities and resolves only a selected active badge without creating another", async () => {
@@ -67,6 +72,21 @@ describe("scanner attendee lookup through the mounted router", () => {
       .bind(fixture.eventId, fixture.userId)
       .run();
     expect((await get(`/${fixture.userId}/badge`)).status).toBe(409);
+  });
+  it("withholds badge codes when capture closes or the staff session is revoked", async () => {
+    await env.DB.prepare(
+      "INSERT INTO event_evidence_retention_state(event_id,capture_closed_at) VALUES(?,?) ON CONFLICT(event_id) DO UPDATE SET capture_closed_at=excluded.capture_closed_at",
+    )
+      .bind(fixture.eventId, new Date().toISOString())
+      .run();
+    const closed = await get(`/${fixture.userId}/badge`);
+    expect(closed.status).toBe(409);
+    expect(await closed.text()).not.toContain(fixture.badgeId);
+    await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?")
+      .bind(new Date().toISOString(), fixture.operatorId)
+      .run();
+    expect((await get("?q=example")).status).toBe(401);
+    expect((await get(`/${fixture.userId}/badge`)).status).toBe(401);
   });
   it("keeps search and selected-badge access event-scoped for a scan-only staff member", async () => {
     await env.DB.prepare("DELETE FROM user_roles WHERE user_id=?").bind(fixture.operatorId).run();

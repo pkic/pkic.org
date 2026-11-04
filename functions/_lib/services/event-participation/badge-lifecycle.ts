@@ -47,9 +47,9 @@ const ACTIVE_REPRINTABLE_BADGE_SQL = `FROM event_badge_credentials badge WHERE $
 
 /** Newest active badge whose sealed print credential lets the holder or an organizer recover the same QR. */
 export async function findActiveReprintableBadge(db: DatabaseLike, eventId: string, userId: string) {
-  return first<{ id: string; expires_at: string; credential_hash: string; print_credential_json: string }>(
+  return first<{ id: string; expires_at: string }>(
     db,
-    `SELECT id,expires_at,credential_hash,print_credential_json ${ACTIVE_REPRINTABLE_BADGE_SQL} ORDER BY created_at DESC,id DESC LIMIT 1`,
+    `SELECT id,expires_at ${ACTIVE_REPRINTABLE_BADGE_SQL} ORDER BY created_at DESC,id DESC LIMIT 1`,
     [eventId, userId, nowIso()],
   );
 }
