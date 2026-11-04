@@ -68,12 +68,7 @@ import { App } from "../../assets/ts/member-flows/portal/App";
 import { rememberedActingIdentityId } from "../../assets/ts/member-flows/portal/acting-identity";
 import { myActiveIdentitySwitchSchema } from "../../assets/shared/schemas/me";
 import { memoryStorage } from "./helpers/browser-storage";
-import {
-  portalProfileFixture,
-  portalSessionFixture,
-  organizationActingIdentityFixture,
-  individualActingIdentityFixture,
-} from "../helpers/portal-session";
+import { portalIdentityChoiceFixtures, portalProfileFixture, portalSessionFixture } from "../helpers/portal-session";
 import { userAuthVerifySchema, userAuthRequestSchema } from "../../assets/shared/schemas/user-auth";
 import { scannerTransportUnavailable } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context";
 let host: HTMLElement;
@@ -425,11 +420,13 @@ it("does not let an initial pending session response overwrite a new same-tab li
   expect(window.location.hash).toBe("#/groups/synthetic");
 });
 
+const { organization: ALPHA_IDENTITY, individual: INDIVIDUAL_IDENTITY } = portalIdentityChoiceFixtures;
+
 /** A person holding two identities; the server answers the session and the active-identity endpoint. */
 function serveSeveralIdentities() {
   const base = {
     ...portalSessionFixture({ pendingIdentityCount: 1 }),
-    actingIdentities: [organizationActingIdentityFixture, individualActingIdentityFixture],
+    actingIdentities: [ALPHA_IDENTITY, INDIVIDUAL_IDENTITY],
   };
   const state = { session: { ...base, actingIdentityId: null as string | null }, selections: [] as string[] };
   fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -466,9 +463,9 @@ it("asks a person with several identities which one to continue as, then remembe
     [...card().querySelectorAll("button")].find((button) => button.textContent?.includes("Personal"))!.click();
   });
   await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
-  expect(server.selections).toEqual([individualActingIdentityFixture.id]);
-  expect(portalSession.value?.actingIdentityId).toBe(individualActingIdentityFixture.id);
-  expect(rememberedActingIdentityId(portalSession.value!.identity.id)).toBe(individualActingIdentityFixture.id);
+  expect(server.selections).toEqual([INDIVIDUAL_IDENTITY.id]);
+  expect(portalSession.value?.actingIdentityId).toBe(INDIVIDUAL_IDENTITY.id);
+  expect(rememberedActingIdentityId(portalSession.value!.identity.id)).toBe(INDIVIDUAL_IDENTITY.id);
 });
 
 it("offers the identity choices as named buttons with no accessibility defects", async () => {
@@ -505,7 +502,7 @@ it("continues silently as the identity remembered on this device while it is sti
   await mount();
   await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
   expect(host.textContent).not.toContain("Choose how you take part");
-  expect(server.selections).toEqual([organizationActingIdentityFixture.id]);
+  expect(server.selections).toEqual([ALPHA_IDENTITY.id]);
 });
 
 it("asks again when the identity remembered on this device is no longer held", async () => {

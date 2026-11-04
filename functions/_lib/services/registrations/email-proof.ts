@@ -33,6 +33,7 @@ import {
 } from "../../auth/capability-links";
 import { checkEmailDomainMx } from "../../email/mx-check";
 import { prepareQueueEmailStatement } from "../../email/outbox-queue";
+import { requireDeliverableTemplate } from "../../email/templates";
 import { emailPlainText } from "../../email/plain-text";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
@@ -127,6 +128,7 @@ export async function startRegistrationEmailProof(
     ref: entry.referralCode,
     source: entry.sourceType,
   })}#verify=${encodeURIComponent(token)}`;
+  await requireDeliverableTemplate(db, "registration_email_verify");
   const email = prepareQueueEmailStatement(db, {
     eventId: input.event.id,
     templateKey: "registration_email_verify",

@@ -170,6 +170,18 @@ describe("registration verifies the email address first", () => {
     ).toMatchObject({ alreadyRegistered: true, manageUrl: expect.any(String) });
   });
 
+  it("refuses to promise a link when the verification template is not configured", async () => {
+    await env.DB.prepare("DELETE FROM email_template_versions WHERE template_key = 'registration_email_verify'").run();
+
+    const response = await post("/proof", registrationEmailProofStartSchema.parse({ email: "casey@example.test" }));
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: { code: "EMAIL_TEMPLATE_UNAVAILABLE" } });
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email = 'casey@example.test'")).toEqual(
+      [],
+    );
+  });
+
   it("returns the verified address, a known person's names and whether the domain needs an organization", async () => {
     await insertUser(env.DB, "known@new-org.example");
     const response = await post("/proof/verify", { token: tokenOf(await emailedLink("known@new-org.example")) });

@@ -1,3 +1,4 @@
+import type { EmailDayAttendance, EmailDayWaitlist } from "../../../assets/shared/schemas/email-template-data";
 /**
  * Human-readable labels for registration attendance type values.
  */
@@ -16,7 +17,7 @@ export const STATUS_LABELS: Record<string, string> = {
   pending_email_confirmation: "Pending confirmation",
 };
 
-type DayWaitlistEmailEntry = { dayDate: string; status: string };
+type DayWaitlistEmailEntry = EmailDayWaitlist;
 
 export function hasActiveDayWaitlist(dayWaitlist: DayWaitlistEmailEntry[] = []): boolean {
   return dayWaitlist.some((entry) => entry.status === "waiting" || entry.status === "offered");
@@ -63,14 +64,7 @@ export function buildAttendanceEmailData(
   dayWaitlist: DayWaitlistEmailEntry[] = [],
 ): {
   attendanceLabel: string;
-  dayAttendance: Array<{
-    dayLabel: string;
-    attendanceLabel: string;
-    statusLabel: string;
-    waitlistStatus: string;
-    isWaitlisted: boolean;
-    isWaitlistOffer: boolean;
-  }>;
+  dayAttendance: EmailDayAttendance[];
 } {
   const waitlistByDay = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry.status]));
 

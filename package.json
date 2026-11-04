@@ -68,6 +68,7 @@
     "migrate": "node scripts/apply-d1-migrations.mjs",
     "backup": "node scripts/backup-d1.mjs",
     "seed": "node scripts/seed.mjs",
+    "check:email-templates": "node scripts/seed-email-templates.mjs --check",
     "build:astro": "node --experimental-strip-types scripts/prepare-public.mjs && astro build --config astro.config.mjs",
     "check:astro": "astro check --tsconfig tsconfig.astro.json",
     "test:e2e:astro": "PKIC_PUBLICATION_SNAPSHOT=tests/fixtures/site-publication.json pnpm run build:astro && playwright test --config playwright.astro.config.ts",

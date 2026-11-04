@@ -239,6 +239,23 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   });
   expect(invitationCreated.status()).toBe(200);
   await audience.selectOption("attendee_invitations");
+  const message = communications.getByRole("textbox", { name: "Message", exact: true });
+  await message.fill("Hello {{firstName}}. Unknown: {{doesNotExist}}");
+  const refusedPreview = page.waitForResponse(
+    (response) => response.url().endsWith("/email/campaigns/previews") && response.request().method() === "POST",
+  );
+  await communications.getByRole("button", { name: "Preview Email" }).click();
+  expect((await refusedPreview).status()).toBe(422);
+  await expect(message).toHaveAttribute("aria-invalid", "true");
+  await expect(communications.getByText("Unknown or unclosed: {{doesNotExist}}", { exact: true })).toBeVisible();
+  await expect(communications.getByRole("button", { name: "Send Email", exact: true })).toBeDisabled();
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await message.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: test.info().outputPath(`campaign-unknown-variable-${width}.png`) });
+  }
+  await page.setViewportSize(wideViewport);
+  await message.fill("Hello {{firstName}}. See {{eventUrl}}.");
   await communications.getByRole("button", { name: "Preview Email" }).click();
   await expect(communications.getByText("1 recipients", { exact: true })).toBeVisible();
   const preview = communications.getByTitle("Rendered campaign email preview", { exact: true });
@@ -441,7 +458,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   expect(groupEventDaysResponseSchema.parse(configuration.days.body).days).toEqual([
     expect.objectContaining({
       date: "2027-06-10",
-      attendanceOptions: [{ value: "in_person", label: "In person", capacity: 40 }],
+      attendanceOptions: [expect.objectContaining({ value: "in_person", label: "In person", capacity: 40 })],
     }),
   ]);
   expect(configuration.registrationSettings.status, JSON.stringify(configuration.registrationSettings.body)).toBe(200);

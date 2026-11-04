@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES } from "../../scripts/lib/transactional-email-default-templates.mjs";
 
 interface TableNameRow {
   name: string;
@@ -376,10 +377,33 @@ async function clearTestGroups(): Promise<void> {
 }
 
 /**
- * Clears all domain data from the test database while preserving the schema
- * and the D1 migration tracking table.  Call inside `beforeEach` in test files
- * that create multiple independent DB scenarios.
+ * The operational templates every deployed database is seeded with. Flows that
+ * refuse to promise an email they cannot render (verification links) need them,
+ * so each test starts from a correctly seeded database, as production should be.
  */
+async function seedTransactionalEmailTemplates(): Promise<void> {
+  const createdAt = new Date(0).toISOString();
+  await env.DB.batch(
+    DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES.map((template) =>
+      env.DB.prepare(
+        `INSERT INTO email_template_versions (
+           id, template_key, version, subject_template, body, content_type, message_type, r2_object_key,
+           checksum_sha256, status, created_by_user_id, created_at
+         ) VALUES (?, ?, 1, ?, ?, ?, ?, NULL, '', 'active', NULL, ?)`,
+      ).bind(
+        crypto.randomUUID(),
+        template.key,
+        template.subjectTemplate,
+        template.content,
+        template.contentType,
+        template.messageType,
+        createdAt,
+      ),
+    ),
+  );
+}
+
+/** Clears domain data while preserving migrations and restoring the configured baseline. */
 export async function resetDb(): Promise<void> {
   const retentionTriggers = await suspendRetentionTriggers();
   try {
@@ -414,6 +438,7 @@ export async function resetDb(): Promise<void> {
         SELECT code, label, description, display_order, is_voting, is_individual, requires_university_email, 0, '1970-01-01T00:00:00.000Z' FROM _test_membership_category_baseline`),
     ]);
     await restoreWorkflowBaseline();
+    await seedTransactionalEmailTemplates();
   } finally {
     for (const sql of retentionTriggers) await env.DB.prepare(sql).run();
   }

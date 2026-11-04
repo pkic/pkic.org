@@ -20,6 +20,7 @@ import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/au
 import { AppError } from "../errors";
 import { randomToken } from "../utils/crypto";
 import { prepareQueueEmailStatement } from "../email/outbox-queue";
+import { requireDeliverableTemplate } from "../email/templates";
 import { emailPlainText } from "../email/plain-text";
 import { getRequiredTerms, type EventRecord } from "./events";
 import { prepareActiveTermsSnapshotGuard, validateRequiredConsents } from "./consent";
@@ -182,6 +183,7 @@ export async function startEventProposalProof(
   const verificationUrl = input.body.speakerProposalId
     ? `${speakerParticipationPageUrl(input.appBaseUrl, input.event, input.body.speakerProposalId)}?verify=${verificationToken}`
     : `${context?.kind === "speaker" ? speakerManagePageUrl(input.appBaseUrl, input.event, "") : proposalPageUrl(input.appBaseUrl, input.event)}#verify=${verificationToken}`;
+  if (!invitationMailbox) await requireDeliverableTemplate(db, "event_proposal_verify");
   const email = invitationMailbox
     ? null
     : prepareQueueEmailStatement(db, {

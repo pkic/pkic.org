@@ -1,6 +1,6 @@
 import { eventEmailCampaignPreviewInputSchema } from "../../../../assets/shared/schemas/event-email-campaigns";
 import { all, first } from "../../db/queries";
-import { resolveTemplate } from "../../email/templates";
+import { loadEmailRenderBundle } from "../../email/partials";
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { getEventById } from "../events";
@@ -46,8 +46,10 @@ export async function dispatchEventEmailCampaignPage(
     maxRecipients: limit,
     recipientEmails: emails.map((row) => row.email),
   });
-  const template = !input.bodyContent && input.templateKey ? await resolveTemplate(db, input.templateKey) : null;
-  assertCampaignBroadcastSafety(input, recipients, template);
+  const templateKey = !input.bodyContent ? input.templateKey : undefined;
+  const renderBundle = await loadEmailRenderBundle(db, templateKey ? [templateKey] : []);
+  const template = templateKey ? renderBundle.templates.get(templateKey)! : null;
+  assertCampaignBroadcastSafety(input, recipients, template, { partials: renderBundle.partials });
   const condition = {
     sql: "SELECT 1 FROM event_email_campaigns WHERE id = ? AND status = 'queued' AND cursor_email = ?",
     bindings: [campaign.id, campaign.cursor_email],
@@ -59,6 +61,7 @@ export async function dispatchEventEmailCampaignPage(
     input,
     {
       template,
+      partials: renderBundle.partials,
       messageType: input.messageType ?? template?.messageType ?? "promotional",
       recipients,
     },
