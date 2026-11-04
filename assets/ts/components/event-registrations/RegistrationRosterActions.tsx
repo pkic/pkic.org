@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import { eventRegistrationPromotionsResponseSchema } from "../../../shared/schemas/event-registrations";
 import { postJson } from "../../shared/api-client";
-import { RegistrationOutputActions } from "./RegistrationOutputActions";
+import { registrationOutputMenuItems } from "./RegistrationOutputActions";
 import type { BadgePrintAction } from "../../../shared/schemas/event-badge-printing";
 import { Menu } from "../../ui/Menu";
 
@@ -9,7 +9,6 @@ export function RegistrationRosterActions({
   promotionsEndpoint,
   exportsEndpoint,
   sponsorExportUrl,
-  exportMatchesFilters = false,
   onPromoted,
   notify,
   onPrintAllMatching,
@@ -17,8 +16,6 @@ export function RegistrationRosterActions({
   promotionsEndpoint: string;
   exportsEndpoint: string | null;
   sponsorExportUrl?: string | null;
-  exportHasStatusFilter?: boolean;
-  exportMatchesFilters?: boolean;
   onPromoted: () => void | Promise<void>;
   notify: (message: string, kind: "success" | "error") => void;
   onPrintAllMatching?: (action: BadgePrintAction) => void;
@@ -39,25 +36,23 @@ export function RegistrationRosterActions({
   }
 
   return (
-    <>
-      <Menu
-        label="Registration actions"
-        align="end"
-        items={[
-          {
-            id: "waitlist-promotions",
-            label: promoting ? "Running promotions…" : "Run waitlist promotions",
-            disabled: promoting,
-            onSelect: () => void runWaitlistPromotions(),
-          },
-        ]}
-      />
-      <RegistrationOutputActions
-        scope={exportMatchesFilters ? "matching" : undefined}
-        attendeeUrl={exportsEndpoint}
-        sponsorUrl={sponsorExportUrl ?? null}
-        onPrint={onPrintAllMatching}
-      />
-    </>
+    <Menu
+      label="Registration actions"
+      align="end"
+      items={[
+        ...registrationOutputMenuItems({
+          attendeeUrl: exportsEndpoint,
+          sponsorUrl: sponsorExportUrl ?? null,
+          onPrint: onPrintAllMatching,
+        }),
+        {
+          id: "waitlist-promotions",
+          label: promoting ? "Running promotions…" : "Run waitlist promotions",
+          separatorBefore: true,
+          disabled: promoting,
+          onSelect: () => void runWaitlistPromotions(),
+        },
+      ]}
+    />
   );
 }

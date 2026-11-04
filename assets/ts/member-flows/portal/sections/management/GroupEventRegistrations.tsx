@@ -1,6 +1,9 @@
 import { RegistrationSinceDialog } from "../../../../components/event-registrations/RegistrationSinceDialog";
 import { registrationRosterExportUrl } from "../../../../components/event-registrations/registration-roster-export";
-import { RegistrationOutputActions } from "../../../../components/event-registrations/RegistrationOutputActions";
+import {
+  RegistrationOutputActions,
+  registrationOutputMenuItems,
+} from "../../../../components/event-registrations/RegistrationOutputActions";
 import type { BadgePrintAction } from "../../../../../shared/schemas/event-badge-printing";
 import { countryName, countryOptions, isCountryCode } from "../../../../../shared/countries";
 import { IconCheckmark } from "../../../../ui/MediaIcons";
@@ -94,7 +97,7 @@ export function GroupEventRegistrations({
       {stats && <RegistrationTotals stats={stats} />}
       <ApiDataTable
         caption="Registrations"
-        alwaysShowColumnControls
+        tableOptionsFilters
         urlState="registrations"
         endpoint={registrationEndpoint}
         responseSchema={eventAttendanceRegistrationsListResponseSchema}
@@ -136,7 +139,6 @@ export function GroupEventRegistrations({
                 <RegistrationRosterActions
                   promotionsEndpoint={`${registrationEndpoint}/promotions`}
                   exportsEndpoint={registrationRosterExportUrl(`${registrationEndpoint}/exports`, query)}
-                  exportMatchesFilters
                   sponsorExportUrl={registrationRosterExportUrl(`${registrationEndpoint}/exports`, {
                     ...query,
                     audience: "sponsor",
@@ -265,23 +267,23 @@ export function GroupEventRegistrations({
                     <RowActions
                       subject={registration.display_name ?? registration.user_email ?? "this attendee"}
                       actions={[
-                        ...(onPrint
-                          ? [
-                              {
-                                id: "print-label",
-                                label: "Print label",
-                                onSelect: () => startPrinting({ kind: "selected", rows: [registration] }, "labels"),
-                              },
-                              {
-                                id: "print-badge",
-                                label: "Print badge",
-                                onSelect: () => startPrinting({ kind: "selected", rows: [registration] }, "badges"),
-                              },
-                            ]
-                          : []),
+                        ...registrationOutputMenuItems({
+                          onPrint: onPrint
+                            ? (action) => startPrinting({ kind: "selected", rows: [registration] }, action)
+                            : undefined,
+                          attendeeUrl: registrationRosterExportUrl(`${registrationEndpoint}/exports`, query, [
+                            registration.id,
+                          ]),
+                          sponsorUrl: registrationRosterExportUrl(
+                            `${registrationEndpoint}/exports`,
+                            { ...query, audience: "sponsor" },
+                            [registration.id],
+                          ),
+                        }),
                         {
                           id: "badges",
                           label: "View badges",
+                          separatorBefore: true,
                           href: usePortalHashLocation.hrefs(
                             `${badgesPath}?userId=${encodeURIComponent(registration.user_id)}`,
                           ),

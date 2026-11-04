@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { menuPath } from "./helpers/menu-path";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
@@ -114,16 +115,18 @@ it("sends multi-day matching, attendance and waitlist from headers into the list
   };
   expect(queries.at(-1)).toMatchObject(expected);
   expect(location.hash).toContain("registrations.f.day_dates");
-  const download = container.querySelector<HTMLAnchorElement>('a[aria-label="Download matching attendee data (CSV)"]')!;
+  const download = (await menuPath(container, "Registration actions", [
+    "Download",
+    "CSV",
+    "Attendees",
+  ])) as HTMLAnchorElement;
   expect(
     groupEventRegistrationExportQuerySchema.parse(Object.fromEntries(new URL(download.href).searchParams)),
   ).toMatchObject(expected);
-  await act(async () =>
-    container.querySelector<HTMLButtonElement>('button[aria-label="Print matching attendees"]')!.click(),
-  );
-  const action = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-    (item) => item.textContent?.trim() === "Print labels",
-  )!;
+  await act(() => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+  const action = await menuPath(container, "Registration actions", ["Print", "Labels"]);
   await act(async () => action.click());
   const scope = print.mock.calls.at(-1)![0];
   expect(scope.kind).toBe("filtered");
@@ -135,15 +138,17 @@ it("clears a selected attendee when a header filter changes, preventing an old s
   expect(checkbox).not.toBeNull();
   await act(async () => checkbox.click());
   await settle();
-  const selected = container.querySelector<HTMLAnchorElement>(
-    '.pk-bulk-bar a[aria-label="Download selected attendee data (CSV)"]',
-  )!;
+  const selected = (await menuPath(container.querySelector(".pk-bulk-bar")!, "Actions for selected attendees", [
+    "Download",
+    "CSV",
+    "Attendees",
+  ])) as HTMLAnchorElement;
   const selectedScope = groupEventRegistrationExportQuerySchema.parse(
     Object.fromEntries(new URL(selected.href).searchParams),
   );
   expect(selectedScope.ids).toEqual([registrationList().registrations[0]!.id]);
   await dayChoice(container, formatDayAndMonth("2026-09-01"));
-  expect(container.querySelector('.pk-bulk-bar a[aria-label="Download selected attendee data (CSV)"]')).toBeNull();
+  expect(container.querySelector(".pk-bulk-bar")).toBeNull();
   expect(container.querySelector<HTMLInputElement>('input[aria-label="Select Group Member"]')?.checked).toBe(false);
 });
 it("removes one selected day without clearing another and resets all days explicitly", async () => {
@@ -162,19 +167,18 @@ it("allows a selected cancelled registration into printing and CSV without chang
   await settle();
   await act(async () => container.querySelector<HTMLInputElement>('input[aria-label="Select Group Member"]')!.click());
   await settle();
-  const trigger = container.querySelector<HTMLButtonElement>(
-    '.pk-bulk-bar button[aria-label="Print selected attendees"]',
-  )!;
-  await act(async () => trigger.click());
-  const action = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-    (button) => button.textContent?.trim() === "Print labels",
-  )!;
+  const action = (await menuPath(container.querySelector(".pk-bulk-bar")!, "Actions for selected attendees", [
+    "Print",
+    "Labels",
+  ])) as HTMLButtonElement;
   expect(action.disabled).toBe(false);
   await act(async () => action.click());
   expect(print.mock.calls.at(-1)?.[0]).toMatchObject({ kind: "selected", rows: [{ status: "cancelled" }] });
-  const csv = container.querySelector<HTMLAnchorElement>(
-    '.pk-bulk-bar a[aria-label="Download selected attendee data (CSV)"]',
-  )!;
+  const csv = (await menuPath(container.querySelector(".pk-bulk-bar")!, "Actions for selected attendees", [
+    "Download",
+    "CSV",
+    "Attendees",
+  ])) as HTMLAnchorElement;
   expect(
     groupEventRegistrationExportQuerySchema.parse(Object.fromEntries(new URL(csv.href).searchParams)),
   ).toMatchObject({ status: "cancelled", ids: [registrationList().registrations[0]!.id] });
@@ -202,22 +206,23 @@ it("offers country, job title and attendee type filters without revealing their 
     await act(() => item!.click());
   }
   async function open() {
-    await act(() =>
-      container.querySelector<HTMLButtonElement>('button[aria-label="Sort and filter registrations"]')!.click(),
-    );
+    await act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Table options"]')!.click());
   }
   await open();
-  await menu("Filter by Attendee type");
+  await menu("Filter");
+  await menu("Attendee type");
   await menu("Staff");
   await settle();
   expect(queries.at(-1)?.badge_role).toBe("staff");
   await open();
-  await menu("Filter by Country");
+  await menu("Filter");
+  await menu("Country");
   await menu("Netherlands");
   await settle();
   expect(queries.at(-1)?.country).toBe("NL");
   await open();
-  await menu("Filter by Job title");
+  await menu("Filter");
+  await menu("Job title");
   const input = container.querySelector<HTMLInputElement>('input[placeholder="e.g. security architect"]')!;
   await act(() => {
     input.value = "architect";
@@ -228,8 +233,8 @@ it("offers country, job title and attendee type filters without revealing their 
   expect(headers).not.toContain("Country");
   expect(headers).not.toContain("Job title");
   expect(headers).not.toContain("Attendee type");
-  await act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Print matching attendees"]')!.click());
-  await menu("Download label CSV");
+  const labels = await menuPath(container, "Registration actions", ["Download", "CSV", "Labels"]);
+  await act(() => labels.click());
   expect(print.mock.calls.at(-1)?.[1]).toBe("label_csv");
   expect(print.mock.calls.at(-1)?.[0]).toMatchObject({
     kind: "filtered",
@@ -239,17 +244,12 @@ it("offers country, job title and attendee type filters without revealing their 
 
 it("keeps row printing in the ellipsis menu and starts the chosen output directly", async () => {
   const { container, print } = await setup();
-  const trigger = () => container.querySelector<HTMLButtonElement>('button[aria-label="Actions for Group Member"]')!;
   expect(container.querySelector('tbody button[title="Print label"], tbody button[title="Print badge"]')).toBeNull();
   for (const [label, action] of [
-    ["Print label", "labels"],
-    ["Print badge", "badges"],
+    ["Labels", "labels"],
+    ["Badges", "badges"],
   ] as const) {
-    await act(() => trigger().click());
-    const item = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (button) => button.textContent?.trim() === label,
-    )!;
-    expect(item).toBeDefined();
+    const item = await menuPath(container, "Actions for Group Member", ["Print", label]);
     await act(() => item.click());
     expect(print.mock.calls.at(-1)?.[1]).toBe(action);
     expect(print.mock.calls.at(-1)?.[0]).toMatchObject({

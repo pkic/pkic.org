@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { menuPath } from "./helpers/menu-path";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, it, expect, vi } from "vitest";
@@ -78,7 +79,11 @@ it("applies a local start time through the shared contract and includes that UTC
     Object.fromEntries(new URLSearchParams(requests.at(-1)!.search)),
   );
   expect(query.created_since).toBe(dateTimeLocalToIso("2026-11-01T00:00", viewerTimeZone()));
-  const link = container.querySelector<HTMLAnchorElement>('a[aria-label="Download matching attendee list (CSV)"]')!;
+  const link = (await menuPath(container, "Registration actions", [
+    "Download",
+    "CSV",
+    "Attendees",
+  ])) as HTMLAnchorElement;
   const exported = groupEventRegistrationExportQuerySchema.parse(Object.fromEntries(new URL(link.href).searchParams));
   expect(exported.created_since).toBe(query.created_since);
   expect(location.hash).toContain("registrations.f.created_since");
@@ -92,11 +97,9 @@ it("keeps the roster available and disables CSV export for an invalid restored f
   );
   const container = mount(<GroupEventRegistrations groupId={GROUP_ID} eventId={EVENT_ID} canManage />);
   await settle();
-  const download = container.querySelector<HTMLButtonElement>(
-    'button[aria-label="Download matching attendee list (CSV)"]',
-  );
-  expect(download?.disabled).toBe(true);
-  expect(container.querySelector('a[aria-label="Download matching attendee list (CSV)"]')).toBeNull();
+  const download = await menuPath(container, "Registration actions", ["Download", "CSV", "Attendees"]);
+  expect((download as HTMLButtonElement).disabled).toBe(true);
+  expect(download.getAttribute("href")).toBeNull();
   expect(container.querySelector('input[type="search"]')).not.toBeNull();
 });
 
@@ -107,10 +110,11 @@ it.each(["", "registered", "cancelled"])(
     installApi(false);
     const container = mount(<GroupEventRegistrations groupId={GROUP_ID} eventId={EVENT_ID} canManage />);
     await settle();
-    const label = "Download matching attendee list (CSV)";
-    const download = container.querySelector<HTMLAnchorElement>(`a[aria-label="${label}"]`)!;
-    expect(download).not.toBeNull();
-    expect(download.title).toBe(label);
+    const download = (await menuPath(container, "Registration actions", [
+      "Download",
+      "CSV",
+      "Attendees",
+    ])) as HTMLAnchorElement;
     const scope = groupEventRegistrationExportQuerySchema.parse(
       Object.fromEntries(new URL(download.href).searchParams),
     );

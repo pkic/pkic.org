@@ -106,6 +106,7 @@
     "hast-util-to-html": "^9.0.5",
     "hast-util-to-text": "^4.0.2",
     "hono": "^4.13.7",
+    "html-to-image": "^1.11.13",
     "ical.js": "^2.2.1",
     "marked": "^17.0.6",
     "mdast-util-to-hast": "^13.2.1",

@@ -132,7 +132,7 @@ export function BadgePrintPreview({
   const started = useRef(false);
   const performed = useRef(false);
   useEffect(() => {
-    if (action !== "badges" || started.current) return;
+    if ((action !== "badges" && action !== "badge_pdf") || started.current) return;
     started.current = true;
     void useFullBadge(false);
   }, [action]);
@@ -141,11 +141,43 @@ export function BadgePrintPreview({
     if (action === "label_csv") {
       performed.current = true;
       void release(() => downloadBadgeArtifact(badgePrintCsv(badges), "text/csv;charset=utf-8", "attendee-labels.csv"));
-    } else if (ready && (action !== "badges" || design === "event_badge")) {
+    } else if (ready && ((action !== "badges" && action !== "badge_pdf") || design === "event_badge")) {
       performed.current = true;
-      void release(() => frame.current?.contentWindow?.print());
+      if (action === "label_pdf" || action === "badge_pdf") void downloadPdf();
+      else void release(() => frame.current?.contentWindow?.print());
     }
   }, [action, ready, busy, design]);
+  async function downloadPdf() {
+    if (archiveBuilding.current || checking.current || !frame.current?.contentDocument) return;
+    const owned = badges;
+    archiveBuilding.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const { badgePrintPdf } = await import("./badge-print-pdf");
+      const document = frame.current.contentDocument;
+      if (!document) throw new Error("The print document is unavailable.");
+      const file = await badgePrintPdf(
+        document,
+        badgePrintPageDimensions(layout.page),
+        () => live.current && owner.current === owned,
+        html,
+      );
+      await release(() => {
+        if (owner.current === owned)
+          downloadBadgeArtifact(
+            file,
+            "application/pdf",
+            design === "event_badge" ? "attendee-badges.pdf" : "attendee-labels.pdf",
+          );
+      });
+    } catch (cause) {
+      if (live.current) setError(cause instanceof Error ? cause.message : "Could not prepare the PDF.");
+    } finally {
+      archiveBuilding.current = false;
+      if (live.current) setBusy(false);
+    }
+  }
   async function downloadSvgArchive() {
     if (archiveBuilding.current || checking.current) return;
     const owned = badges;

@@ -14,7 +14,7 @@ export interface SplitButtonProps {
   /** When omitted, the entire control opens the choices. */
   defaultAction?:
     | { label: string; onSelect: () => void; href?: never; disabled?: boolean; loading?: boolean }
-    | { label: string; href: string; onSelect?: never; disabled?: never; loading?: never };
+    | { label: string; href: string; onSelect?: never; disabled?: boolean; loading?: never };
 }
 
 export function SplitButton({
@@ -26,7 +26,7 @@ export function SplitButton({
 }: SplitButtonProps) {
   return (
     <div class={`pk-split-button pk-split-button--${variant}`}>
-      {defaultAction && "href" in defaultAction && defaultAction.href ? (
+      {defaultAction && "href" in defaultAction && defaultAction.href && !defaultAction.disabled ? (
         <ButtonLink
           variant={variant}
           icon

@@ -1,13 +1,14 @@
 import type { RefObject } from "preact";
 import { useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { MenuItem } from "./Menu";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { usePopupPlacement } from "./popup-placement";
 
-/** Each submenu keeps its parent visible and owns its keyboard focus. */
+/** Desktop submenus adjoin their parent; phone submenus replace it and provide Back navigation. */
 export function MenuLevel({
   id,
   label,
-  items,
+  items: suppliedItems,
   heading,
   anchorRef,
   align = "start",
@@ -27,6 +28,16 @@ export function MenuLevel({
   close: (returnFocus: boolean) => void;
   back?: () => void;
 }) {
+  const compact = useMediaQuery("(max-width: 40rem)");
+  const items: readonly MenuItem[] =
+    compact && back
+      ? [
+          { id: "menu-back", label: "Back", icon: <span aria-hidden="true">‹</span>, onSelect: back, keepOpen: true },
+          ...suppliedItems,
+        ]
+      : suppliedItems;
+  const parentBounds = compact && back ? anchorRef.current?.closest('[role="menu"]')?.getBoundingClientRect() : null;
+  const compactPoint = parentBounds ? { x: parentBounds.left, y: parentBounds.top - 4 } : anchorPoint;
   const childId = useId();
   const popupRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | HTMLAnchorElement | null)[]>([]);
@@ -42,10 +53,16 @@ export function MenuLevel({
     anchorRef,
     popupRef,
     align,
-    side: back ? "right" : "bottom",
+    side:
+      back && !compact
+        ? (anchorRef.current?.getBoundingClientRect().left ?? 0) > window.innerWidth / 2
+          ? "left"
+          : "right"
+        : "bottom",
+    spacing: back && !compact ? { gap: 4, crossAxis: -4 } : undefined,
     revision,
     topLayer: true,
-    anchorPoint,
+    anchorPoint: compactPoint,
   });
   useLayoutEffect(() => {
     if (childItem) return;
@@ -115,7 +132,22 @@ export function MenuLevel({
     }
   }
   return (
-    <div ref={popupRef} id={id} role="menu" tabIndex={-1} aria-label={label} class="pk-menu__popup" onKeyDown={keyDown}>
+    <div
+      ref={popupRef}
+      id={id}
+      role="menu"
+      tabIndex={-1}
+      aria-label={label}
+      class={[
+        "pk-menu__popup",
+        compact ? "pk-menu__popup--compact" : "",
+        compact && childItem ? "pk-menu__popup--drilled" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onKeyDown={keyDown}
+    >
+      {compact && back && <div class="pk-menu__heading">{label}</div>}
       {heading && <p class="pk-menu__heading">{heading}</p>}
       {items.map((item, index) => {
         const shared = {

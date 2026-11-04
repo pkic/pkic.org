@@ -1,53 +1,48 @@
-import { Menu } from "../../ui/Menu";
-import { DownloadAction } from "../../ui/DownloadAction";
+import { Menu, type MenuItem } from "../../ui/Menu";
 import type { BadgePrintAction } from "../../../shared/schemas/event-badge-printing";
 
-/** The same explicit output choices for the matching roster and an optional row selection. */
-export function RegistrationOutputActions({
-  onPrint,
-  scope,
-  attendeeUrl,
-  sponsorUrl,
-}: {
+type OutputOptions = {
   onPrint?: (action: BadgePrintAction) => void;
   scope?: "matching" | "selected";
   attendeeUrl: string | null;
   sponsorUrl: string | null;
-}) {
+};
+
+/** Shared output hierarchy for the roster, selected rows, and component examples. */
+export function registrationOutputMenuItems({ onPrint, attendeeUrl, sponsorUrl }: OutputOptions): MenuItem[] {
+  const output = (id: BadgePrintAction, label: string): MenuItem => ({
+    id,
+    label,
+    disabled: !onPrint || !attendeeUrl,
+    onSelect: () => onPrint?.(id),
+  });
+  return [
+    { id: "print", label: "Print", children: [output("labels", "Labels"), output("badges", "Badges")] },
+    {
+      id: "download",
+      label: "Download",
+      children: [
+        {
+          id: "csv",
+          label: "CSV",
+          children: [
+            output("label_csv", "Labels"),
+            { id: "attendee-csv", label: "Attendees", href: attendeeUrl ?? "", disabled: !attendeeUrl },
+            { id: "consent-csv", label: "Attendees with consent", href: sponsorUrl ?? "", disabled: !sponsorUrl },
+          ],
+        },
+        { id: "pdf", label: "PDF", children: [output("badge_pdf", "Badges"), output("label_pdf", "Labels")] },
+      ],
+    },
+  ];
+}
+
+export function RegistrationOutputActions(props: OutputOptions) {
   return (
-    <>
-      {onPrint && (
-        <Menu
-          label={`Print ${scope ? `${scope} ` : ""}attendees`}
-          align="end"
-          items={[
-            { id: "labels", label: "Print labels", onSelect: () => onPrint("labels"), disabled: !attendeeUrl },
-            {
-              id: "label-csv",
-              label: "Download label CSV",
-              onSelect: () => onPrint("label_csv"),
-              disabled: !attendeeUrl,
-            },
-            { id: "badges", label: "Print badges", onSelect: () => onPrint("badges"), disabled: !attendeeUrl },
-          ]}
-        >
-          Print
-        </Menu>
-      )}
-      <DownloadAction
-        label={`Download ${scope ? `${scope} ` : ""}attendee data (CSV)`}
-        menuLabel="Attendee data downloads"
-        disabled={!attendeeUrl}
-        options={[
-          { id: "attendees", label: "Attendee data (CSV)", href: attendeeUrl ?? "", disabled: !attendeeUrl },
-          {
-            id: "sponsors",
-            label: "Sponsor attendee data (consenting attendees only)",
-            href: sponsorUrl ?? "",
-            disabled: !sponsorUrl,
-          },
-        ]}
-      />
-    </>
+    <Menu
+      label={`Actions for ${props.scope ?? "matching"} attendees`}
+      align="end"
+      items={registrationOutputMenuItems(props)}
+    />
   );
 }

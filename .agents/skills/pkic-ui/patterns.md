@@ -22,7 +22,7 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 
 - Use: `assets/ts/ui/Menu.tsx` (`MenuItem`: `danger`, `disabled`, `checked`, `multiple`, `keepOpen`, `separatorBefore`, `children` for a submenu). Row ends: `RowActions`. Create command: `SplitButton`.
 - Shape: the ellipsis trigger is square and as tall as a text button beside it at either density (`variant="icon"`) or labeled trigger (`variant="plain"`); a vertical list of text items. Disabled items stay visible. Destructive items last, after a separator, in the danger tone.
-- Placement: below the trigger; `align="end"` at a row or panel end; submenus open to the right and flip left.
+- Placement: below the trigger; `align="end"` at a row or panel end. Desktop submenus adjoin their parent panel, keep the active parent highlighted, and open toward available viewport space. On phones, show one panel at a time with a Back item and the current submenu heading.
 - Dismissal: Escape (focus back to the trigger; in a submenu one level back), outside click, Tab, or selecting an item (unless `keepOpen`).
 - Keyboard: Enter/Space/ArrowDown open on the first item, ArrowUp on the last; arrows wrap and skip disabled items; Home/End; ArrowRight opens a submenu, ArrowLeft returns.
 

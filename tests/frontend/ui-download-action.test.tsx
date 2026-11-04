@@ -109,6 +109,36 @@ describe("DownloadAction", () => {
     ]);
   });
 
+  it.each(["option", "control", "busy"])(
+    "blocks an unavailable URL split download when %s disables it",
+    async (state) => {
+      const host = await mount(
+        <DownloadAction
+          label="Download roster (CSV)"
+          menuLabel="Roster downloads"
+          disabled={state === "control"}
+          busy={state === "busy"}
+          options={[
+            { id: "roster", label: "Attendee data", href: "/roster", disabled: state === "option" },
+            { id: "sponsor", label: "Sponsor data", href: "/sponsors" },
+          ]}
+        />,
+      );
+      expect(host.querySelector('a[aria-label="Download roster (CSV)"]')).toBeNull();
+      expect(host.querySelector<HTMLButtonElement>('button[aria-label="Download roster (CSV)"]')?.disabled).toBe(true);
+      await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Roster downloads"]')!.click());
+      const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (item) => item.textContent === "Attendee data",
+      );
+      expect(item?.getAttribute("aria-disabled")).toBe("true");
+      const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+      await act(() => {
+        item!.dispatchEvent(click);
+      });
+      expect(click.defaultPrevented).toBe(true);
+    },
+  );
+
   it("runs a generated option from the split button", async () => {
     const first = vi.fn();
     const second = vi.fn();

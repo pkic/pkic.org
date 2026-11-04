@@ -11,7 +11,7 @@
  */
 import { StrokeIcon } from "../ui/MediaIcons";
 import { useState } from "preact/hooks";
-import type { MenuItem } from "../ui/Menu";
+import { Menu, type MenuItem } from "../ui/Menu";
 import { SplitButton } from "../ui/SplitButton";
 import type { Column, ColumnFilter, HeadCell } from "./Table";
 import type { AppliedFilterChip } from "./table-filter-strip";
@@ -50,6 +50,8 @@ export interface ColumnControls<T> {
   chips: AppliedFilterChip[];
   /** Sorting and filtering for the record-card layout, as one menu. */
   cardMenuItems: MenuItem[];
+  filterMenuItems: MenuItem[];
+  sortMenuItems: MenuItem[];
   /** Whether the list offers sorting, filtering, or both — names the card menu. */
   cardMenuLabel: string | null;
 }
@@ -313,6 +315,8 @@ export function useColumnControls<T>(
     columnsMenu,
     chips,
     cardMenuItems,
+    filterMenuItems: filterMenu,
+    sortMenuItems: sortMenu,
     cardMenuLabel,
   };
 }
@@ -348,5 +352,44 @@ export function ColumnCardMenu<T>({
         items={controls.cardMenuItems}
       />
     </span>
+  );
+}
+
+/** One table-options menu also exposes filters for columns that are hidden. */
+export function TableOptionsMenu<T>({ controls }: { controls: ColumnControls<T> }) {
+  return (
+    <Menu
+      label="Table options"
+      align="end"
+      items={[
+        { id: "columns", label: "Columns", children: controls.columnsMenu },
+        ...(controls.filterMenuItems.length
+          ? [
+              {
+                id: "filters",
+                label: "Filter",
+                children: controls.filterMenuItems.map((item) => ({
+                  ...item,
+                  label: item.label.replace(/^Filter by /, ""),
+                })),
+              },
+            ]
+          : []),
+        ...(controls.sortMenuItems.length
+          ? [
+              {
+                id: "sort",
+                label: "Sort",
+                children: controls.sortMenuItems.map((item) => ({
+                  ...item,
+                  label: item.label.replace(/^Sort by /, ""),
+                })),
+              },
+            ]
+          : []),
+      ]}
+    >
+      <span class="pk-table__head-glyph pk-table__head-glyph--columns" aria-hidden="true" />
+    </Menu>
   );
 }

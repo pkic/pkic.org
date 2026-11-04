@@ -10,6 +10,7 @@
  * in words, that the waitlist filter reaches the query, and that the record
  * page sends the same canonical group requests the expansion did.
  */
+import { menuPath } from "./helpers/menu-path";
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -123,10 +124,8 @@ describe("group event registrations roster", () => {
       />,
     );
     await settle();
-    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Print matching attendees"]');
-    expect(trigger).not.toBeNull();
-    await act(async () => trigger!.click());
-    await act(async () => menuItemNamed(container, "Print labels")!.click());
+    const action = await menuPath(container, "Registration actions", ["Print", "Labels"]);
+    await act(() => action.click());
     expect(onPrint).toHaveBeenCalledWith(
       {
         kind: "filtered",

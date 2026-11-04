@@ -18,6 +18,11 @@
 import type { RefObject } from "preact";
 import { useCallback, useEffect, useLayoutEffect } from "preact/hooks";
 
+export interface PopupSpacing {
+  gap?: number;
+  crossAxis?: number;
+}
+
 export interface PopupPosition {
   top: number;
   left: number;
@@ -28,9 +33,11 @@ export function measurePopupPosition(
   anchor: DOMRect,
   popup: DOMRect,
   align: "start" | "end" = "start",
-  side: "bottom" | "top" | "right" = "bottom",
+  side: "bottom" | "top" | "right" | "left" = "bottom",
+  spacing?: PopupSpacing,
 ): PopupPosition {
-  const gap = side === "right" ? 8 : 4;
+  const horizontal = side === "right" || side === "left";
+  const gap = spacing?.gap ?? (horizontal ? 8 : 4);
   const margin = 8;
   const viewport = window.visualViewport;
   const viewportTop = viewport?.offsetTop ?? 0;
@@ -43,31 +50,34 @@ export function measurePopupPosition(
   const above = anchor.top - gap - popup.height;
   const below = anchor.bottom + gap;
   // A popup that prefers the top opens above its anchor, as a reaction bar does, and drops below only without room.
-  const top =
-    side === "right"
-      ? anchor.top
-      : side === "top"
-        ? fitsAbove || !fitsBelow
-          ? above
-          : below
-        : !fitsBelow && fitsAbove
-          ? above
-          : below;
+  const top = horizontal
+    ? anchor.top + (spacing?.crossAxis ?? 0)
+    : side === "top"
+      ? fitsAbove || !fitsBelow
+        ? above
+        : below
+      : !fitsBelow && fitsAbove
+        ? above
+        : below;
 
   const preferred =
-    side === "right"
-      ? anchor.right + gap + popup.width <= viewportRight - margin
-        ? anchor.right + gap
-        : anchor.left - gap - popup.width
-      : align === "end"
-        ? anchor.right - popup.width
-        : anchor.left;
+    side === "left"
+      ? anchor.left - gap - popup.width >= viewportLeft + margin
+        ? anchor.left - gap - popup.width
+        : anchor.right + gap
+      : side === "right"
+        ? anchor.right + gap + popup.width <= viewportRight - margin
+          ? anchor.right + gap
+          : anchor.left - gap - popup.width
+        : align === "end"
+          ? anchor.right - popup.width
+          : anchor.left;
   const left = Math.max(viewportLeft + margin, Math.min(preferred, viewportRight - popup.width - margin));
 
   return {
     top: Math.max(viewportTop + margin, Math.min(top, viewportBottom - popup.height - margin)),
     left,
-    minWidth: side === "right" ? 0 : anchor.width,
+    minWidth: horizontal ? 0 : anchor.width,
   };
 }
 
@@ -119,12 +129,14 @@ export function usePopupPlacement({
   side = "bottom",
   topLayer = false,
   anchorPoint,
+  spacing,
 }: {
   open: boolean;
   anchorRef: RefObject<HTMLElement>;
   popupRef: RefObject<HTMLElement>;
   align?: "start" | "end";
-  side?: "bottom" | "top" | "right";
+  spacing?: PopupSpacing;
+  side?: "bottom" | "top" | "right" | "left";
   /** Changes whenever the popup's measured size can have changed. */
   revision?: string | number;
   /**
@@ -137,14 +149,19 @@ export function usePopupPlacement({
   /** A pointer or caret position for a context menu, using the same viewport placement policy. */
   anchorPoint?: { x: number; y: number } | null;
 }): void {
+  const gap = spacing?.gap;
+  const crossAxis = spacing?.crossAxis;
   const place = useCallback((): void => {
     const anchor = anchorRef.current;
     const popup = popupRef.current;
     if ((!anchor && !anchorPoint) || !popup) return;
     const anchorRect = anchorPoint ? new DOMRect(anchorPoint.x, anchorPoint.y, 0, 0) : anchor!.getBoundingClientRect();
-    popup.style.setProperty("min-width", `${side === "right" ? 0 : anchorRect.width}px`);
-    applyPopupPosition(popup, measurePopupPosition(anchorRect, popup.getBoundingClientRect(), align, side));
-  }, [align, anchorRef, popupRef, side, anchorPoint]);
+    popup.style.setProperty("min-width", `${side === "right" || side === "left" ? 0 : anchorRect.width}px`);
+    applyPopupPosition(
+      popup,
+      measurePopupPosition(anchorRect, popup.getBoundingClientRect(), align, side, { gap, crossAxis }),
+    );
+  }, [align, anchorRef, popupRef, side, anchorPoint, gap, crossAxis]);
 
   useLayoutEffect(() => {
     if (!open) return;

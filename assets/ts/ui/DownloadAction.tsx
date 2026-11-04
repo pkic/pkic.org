@@ -82,7 +82,7 @@ export function DownloadAction(props: DownloadActionProps) {
     const [first] = props.options;
     const items: MenuItem[] = props.options.map((option) =>
       option.href !== undefined
-        ? { id: option.id, label: option.label, href: option.href, disabled: option.disabled }
+        ? { id: option.id, label: option.label, href: option.href, disabled: option.disabled || busy || props.disabled }
         : {
             id: option.id,
             label: option.label,
@@ -98,7 +98,7 @@ export function DownloadAction(props: DownloadActionProps) {
         items={items}
         defaultAction={
           first.href !== undefined
-            ? { label: props.label, href: first.href }
+            ? { label: props.label, href: first.href, disabled: first.disabled || props.disabled || busy }
             : {
                 label: props.label,
                 onSelect: () => void run(first.onDownload),
