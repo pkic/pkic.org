@@ -1,3 +1,4 @@
+import type { BadgePrintAction } from "../../../shared/schemas/event-badge-printing";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { BADGE_LABEL_PRINTING_CONTEXT } from "../../../shared/badge-label-policy";
@@ -22,12 +23,14 @@ export function RegistrationBadgePrinting({
   slug,
   eventId,
   scope,
+  action = "preview",
   isCurrent,
   onBack,
 }: {
   slug: string;
   eventId: string;
   scope: BadgePrintScope;
+  action?: BadgePrintAction;
   isCurrent: () => boolean;
   onBack: () => void;
 }) {
@@ -170,6 +173,7 @@ export function RegistrationBadgePrinting({
       {printed.length > 0 && (
         <BadgePrintPreview
           badges={printed}
+          action={action}
           printing={BADGE_LABEL_PRINTING_CONTEXT}
           beforeRelease={beforeRelease}
           loadPrintingContext={() => getJson(`${endpoint}/printing`, badgePrintingResponseSchema)}

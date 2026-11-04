@@ -7,6 +7,7 @@ import { usePortalHashLocation } from "../../hash-location";
 import { hasEventAgendaPermission } from "../events/event-agenda-access";
 import { portalSession } from "../../state";
 import type { PortalSession } from "../../types";
+import type { BadgePrintAction } from "../../../../../shared/schemas/event-badge-printing";
 import type { BadgePrintScope } from "../../../../components/event-badges/badge-print-population";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
 import { EVENT_PROFILE_LABELS } from "../../../../../shared/schemas/event-series";
@@ -123,9 +124,13 @@ export function GroupEventWorkspace({
   }, [tab, detailId, detailTab, groupId, event.id, navigate]);
   const [badgePrint, setBadgePrint] = useState<{
     scope: BadgePrintScope;
+    action?: BadgePrintAction;
     session: PortalSession | null;
     eventId: string;
   } | null>(null);
+  useEffect(() => {
+    if (tab !== "registrations" || detailId !== "badges") setBadgePrint(null);
+  }, [tab, detailId, event.id]);
   const canManage = event.capabilities.includes("manage");
   const canRegister = event.registrationPolicy !== "no_registration" && event.capabilities.includes("register");
   const canFinalizeProposals = event.proposalAccess?.canFinalize === true;
@@ -256,7 +261,10 @@ export function GroupEventWorkspace({
                             eventId={event.id}
                             groupId={groupId}
                             printRequest={badgePrint?.eventId === event.id ? badgePrint : null}
-                            onPrintClose={() => setBadgePrint(null)}
+                            onPrintClose={() => {
+                              setBadgePrint(null);
+                              navigate(tabPath("registrations"));
+                            }}
                           />
                         </Suspense>
                       ) : detailId === "badges" ? (
@@ -270,8 +278,8 @@ export function GroupEventWorkspace({
                       eventSlug={event.slug}
                       badgesPath={`${tabPath("registrations")}/badges`}
                       canManage={canManage}
-                      onPrint={(scope) => {
-                        setBadgePrint({ scope, session: portalSession.value, eventId: event.id });
+                      onPrint={(scope, action) => {
+                        setBadgePrint({ scope, action, session: portalSession.value, eventId: event.id });
                         navigate(`${tabPath("registrations")}/badges`);
                       }}
                     />

@@ -55,13 +55,24 @@ describe("DownloadAction", () => {
     expect(host.querySelector("a")!.hasAttribute("download")).toBe(false);
   });
 
-  it("renders an unavailable URL download as a disabled button rather than a live link", async () => {
-    const host = await mount(<DownloadAction label="Download roster (CSV)" href="/roster" disabled />);
-    expect(host.querySelector("a")).toBeNull();
-    const button = host.querySelector("button")!;
-    expect(button.disabled).toBe(true);
-    expect(button.getAttribute("aria-label")).toBe("Download roster (CSV)");
-  });
+  it.each(["disabled", "busy"])(
+    "renders a %s URL download as a disabled button rather than a live link",
+    async (state) => {
+      const host = await mount(
+        <DownloadAction
+          label="Download roster (CSV)"
+          href="/roster"
+          disabled={state === "disabled"}
+          busy={state === "busy"}
+        />,
+      );
+      expect(host.querySelector("a")).toBeNull();
+      const button = host.querySelector("button")!;
+      if (state === "busy") expect(button.getAttribute("aria-disabled")).toBe("true");
+      else expect(button.disabled).toBe(true);
+      expect(button.getAttribute("aria-label")).toBe("Download roster (CSV)");
+    },
+  );
 
   it("stays busy while a generated download is built and keeps its accessible name", async () => {
     let finish!: () => void;
@@ -109,6 +120,42 @@ describe("DownloadAction", () => {
     ]);
   });
 
+  it.each(["option", "control", "busy"])(
+    "blocks an unavailable URL split download when %s disables it",
+    async (state) => {
+      const host = await mount(
+        <DownloadAction
+          label="Download roster (CSV)"
+          menuLabel="Roster downloads"
+          disabled={state === "control"}
+          busy={state === "busy"}
+          options={[
+            { id: "roster", label: "Attendee data", href: "/roster", disabled: state === "option" },
+            { id: "sponsor", label: "Sponsor data", href: "/sponsors" },
+          ]}
+        />,
+      );
+      expect(host.querySelector('a[aria-label="Download roster (CSV)"]')).toBeNull();
+      expect(host.querySelector<HTMLButtonElement>('button[aria-label="Download roster (CSV)"]')?.disabled).toBe(true);
+      const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="Roster downloads"]')!;
+      expect(trigger.disabled).toBe(false);
+      await act(() => trigger.click());
+      const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (item) => item.textContent === "Attendee data",
+      );
+      expect(item).toBeInstanceOf(HTMLButtonElement);
+      expect((item as HTMLButtonElement).disabled).toBe(true);
+      expect(item?.hasAttribute("href")).toBe(false);
+      expect(host.querySelector('a[href="/roster"]')).toBeNull();
+      if (state !== "option") expect(document.activeElement).toBe(document.querySelector('[role="menu"]'));
+      await act(() => {
+        document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      });
+      expect(document.querySelector('[role="menu"]')).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+    },
+  );
+
   it("runs a generated option from the split button", async () => {
     const first = vi.fn();
     const second = vi.fn();
@@ -132,4 +179,60 @@ describe("DownloadAction", () => {
     );
     expect(second).toHaveBeenCalledOnce();
   });
+});
+
+it.each([true, false])("preserves existing focus across a busy URL transition (focused: %s)", async (focused) => {
+  const host = await mount(<DownloadAction label="Download roster" href="/roster" busy />);
+  const old = host.querySelector("button")!;
+  if (focused) await act(() => old.focus());
+  await act(() => render(<DownloadAction label="Download roster" href="/roster" />, host));
+  const link = host.querySelector("a")!;
+  expect(document.activeElement === link).toBe(focused);
+});
+
+it("keeps the menu trigger focused while an asynchronous selected download is pending", async () => {
+  let finish!: () => void;
+  const host = await mount(
+    <DownloadAction
+      label="Download"
+      menuLabel="Download choices"
+      options={[
+        {
+          id: "file",
+          label: "Build file",
+          onDownload: () =>
+            new Promise<void>((resolve) => {
+              finish = resolve;
+            }),
+        },
+        { id: "other", label: "Other file", href: "/other" },
+      ]}
+    />,
+  );
+  const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="Download choices"]')!;
+  await act(() => trigger.click());
+  const item = document.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+  await act(() => item.click());
+  expect(document.activeElement).toBe(trigger);
+  expect(trigger.disabled).toBe(false);
+  await act(() => trigger.click());
+  expect(document.activeElement).toBe(document.querySelector('[role="menu"]'));
+  await act(() => {
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+  expect(document.activeElement).toBe(trigger);
+  await act(async () => finish());
+  expect(document.activeElement).toBe(trigger);
+});
+
+it("moves a focused primary URL action to the menu when busy disables its replacement", async () => {
+  const options = [
+    { id: "one", label: "One", href: "/one" },
+    { id: "two", label: "Two", href: "/two" },
+  ] as const;
+  const host = await mount(<DownloadAction label="Download one" menuLabel="Files" options={options} />);
+  await act(() => host.querySelector("a")!.focus());
+  await act(() => render(<DownloadAction label="Download one" menuLabel="Files" options={options} busy />, host));
+  expect(document.activeElement).toBe(host.querySelector('button[aria-label="Files"]'));
+  expect(host.querySelector('button[aria-label="Files"]')?.hasAttribute("disabled")).toBe(false);
 });

@@ -14,23 +14,28 @@ export function registrationAttendanceColumns<Row extends { days: RegistrationDa
   days: readonly Pick<EventDay, "date" | "label" | "attendanceOptions">[],
   filters: Readonly<Record<string, string>> = {},
 ): Column<Row>[] {
-  const options = new Map(
-    days.flatMap((day) => day.attendanceOptions.map((option) => [option.value, option] as const)),
-  );
+  const options = new Map<string, EventDay["attendanceOptions"][number]>();
+  for (const day of days)
+    for (const option of day.attendanceOptions) {
+      const previous = options.get(option.value);
+      options.set(option.value, previous ? { ...option, ...previous, icon: previous.icon ?? option.icon } : option);
+    }
   const colors = ["blue", "teal", "purple"] as const;
   const typeColors = new Map([...options.keys()].map((type, i) => [type, colors[i % colors.length]]));
   const selectedDates = filters.day_dates ? new Set(filters.day_dates.split(",")) : null;
   // Summarize only this row's day details; list membership is always filtered by D1.
   const matchingDays = (row: Row) =>
-    row.days.filter((day) => {
-      const waiting = day.waitlistStatus === "waiting" || day.waitlistStatus === "offered";
-      return (
-        day.attendanceType !== "not_attending" &&
-        (!selectedDates || selectedDates.has(day.dayDate)) &&
-        (!filters.attendance_type || day.attendanceType === filters.attendance_type) &&
-        (!filters.waitlisted || waiting === (filters.waitlisted === "true"))
-      );
-    });
+    row.days
+      .filter((day) => {
+        const waiting = day.waitlistStatus === "waiting" || day.waitlistStatus === "offered";
+        return (
+          day.attendanceType !== "not_attending" &&
+          (!selectedDates || selectedDates.has(day.dayDate)) &&
+          (!filters.attendance_type || day.attendanceType === filters.attendance_type) &&
+          (!filters.waitlisted || waiting === (filters.waitlisted === "true"))
+        );
+      })
+      .sort((a, b) => a.dayDate.localeCompare(b.dayDate));
   return [
     {
       header: "Attendance",
@@ -63,6 +68,27 @@ export function registrationAttendanceColumns<Row extends { days: RegistrationDa
                     )
                   }
                   label={label}
+                  tooltip={
+                    <div class="pk-stack pk-stack--tight">
+                      <strong>{name}</strong>
+                      <span>
+                        {formatNumber(total - waiting.length)} not waitlisted · {formatNumber(waiting.length)}{" "}
+                        waitlisted
+                      </span>
+                      {attending.map((day) => (
+                        <span key={day.dayDate}>
+                          {formatDayAndMonth(day.dayDate)} ·{" "}
+                          {day.waitlistStatus === "waiting"
+                            ? "Waitlisted"
+                            : day.waitlistStatus === "offered"
+                              ? "Place offered"
+                              : day.waitlistStatus === "expired"
+                                ? "Offer expired"
+                                : "Not waitlisted"}
+                        </span>
+                      ))}
+                    </div>
+                  }
                   count={total}
                   color={typeColors.get(type)}
                   fillFraction={(total - waiting.length) / total}

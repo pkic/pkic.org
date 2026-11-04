@@ -11,7 +11,7 @@
  */
 import { StrokeIcon } from "../ui/MediaIcons";
 import { useState } from "preact/hooks";
-import type { MenuItem } from "../ui/Menu";
+import { Menu, type MenuItem } from "../ui/Menu";
 import { SplitButton } from "../ui/SplitButton";
 import type { Column, ColumnFilter, HeadCell } from "./Table";
 import type { AppliedFilterChip } from "./table-filter-strip";
@@ -50,6 +50,8 @@ export interface ColumnControls<T> {
   chips: AppliedFilterChip[];
   /** Sorting and filtering for the record-card layout, as one menu. */
   cardMenuItems: MenuItem[];
+  filterMenuItems: MenuItem[];
+  sortMenuItems: MenuItem[];
   /** Whether the list offers sorting, filtering, or both — names the card menu. */
   cardMenuLabel: string | null;
 }
@@ -264,7 +266,8 @@ export function useColumnControls<T>(
   }
 
   // The record cards' one menu: a submenu per sortable column, then one per
-  // filterable column. Hidden columns stay out of it, as they are out of the cards.
+  // filterable column. Hidden columns stay out of the cards, but their filters
+  // remain available from this menu; sorting stays limited to visible columns.
   const visibleColumns = columns
     .map((column, index) => ({ column, index }))
     .filter(({ column }) => !hidden.has(headLabel(column.header)) && headLabel(column.header).trim().length > 0);
@@ -275,17 +278,19 @@ export function useColumnControls<T>(
       { id: `card-sort-${String(index)}`, label: `Sort by ${headLabel(column.header)}`, onSelect: () => {}, children },
     ];
   });
-  const filterMenu: MenuItem[] = visibleColumns.flatMap(({ column, index }) => {
-    const name = headLabel(column.header);
-    const narrowed = columnFilters(column).some((filter) => Boolean(filters[filter.param]));
-    return filterItems(column, `card-${String(index)}`, `Filter by ${name}`).map((item) =>
-      item.id.endsWith("-filter-text")
-        ? { ...item, label: narrowed ? `Edit the ${name} filter…` : `Filter by ${name}…` }
-        : item.id.endsWith("-filter-clear")
-          ? { ...item, label: `Clear the ${name} filter` }
-          : item,
-    );
-  });
+  const filterMenu: MenuItem[] = columns
+    .map((column, index) => ({ column, index }))
+    .flatMap(({ column, index }) => {
+      const name = headLabel(column.header);
+      const narrowed = columnFilters(column).some((filter) => Boolean(filters[filter.param]));
+      return filterItems(column, `card-${String(index)}`, `Filter by ${name}`).map((item) =>
+        item.id.endsWith("-filter-text")
+          ? { ...item, label: narrowed ? `Edit the ${name} filter…` : `Filter by ${name}…` }
+          : item.id.endsWith("-filter-clear")
+            ? { ...item, label: `Clear the ${name} filter` }
+            : item,
+      );
+    });
   const cardMenuItems = [
     ...sortMenu,
     ...filterMenu.map((item, position) =>
@@ -311,6 +316,8 @@ export function useColumnControls<T>(
     columnsMenu,
     chips,
     cardMenuItems,
+    filterMenuItems: filterMenu,
+    sortMenuItems: sortMenu,
     cardMenuLabel,
   };
 }
@@ -346,5 +353,44 @@ export function ColumnCardMenu<T>({
         items={controls.cardMenuItems}
       />
     </span>
+  );
+}
+
+/** One table-options menu also exposes filters for columns that are hidden. */
+export function TableOptionsMenu<T>({ controls }: { controls: ColumnControls<T> }) {
+  return (
+    <Menu
+      label="Table options"
+      align="end"
+      items={[
+        { id: "columns", label: "Columns", children: controls.columnsMenu },
+        ...(controls.filterMenuItems.length
+          ? [
+              {
+                id: "filters",
+                label: "Filter",
+                children: controls.filterMenuItems.map((item) => ({
+                  ...item,
+                  label: item.label.replace(/^Filter by /, ""),
+                })),
+              },
+            ]
+          : []),
+        ...(controls.sortMenuItems.length
+          ? [
+              {
+                id: "sort",
+                label: "Sort",
+                children: controls.sortMenuItems.map((item) => ({
+                  ...item,
+                  label: item.label.replace(/^Sort by /, ""),
+                })),
+              },
+            ]
+          : []),
+      ]}
+    >
+      <span class="pk-table__head-glyph pk-table__head-glyph--columns" aria-hidden="true" />
+    </Menu>
   );
 }

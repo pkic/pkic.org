@@ -1,13 +1,14 @@
 import type { RefObject } from "preact";
-import { useId, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { MenuItem } from "./Menu";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { usePopupPlacement } from "./popup-placement";
 
-/** Each submenu keeps its parent visible and owns its keyboard focus. */
+/** Desktop submenus adjoin their parent; phone submenus replace it and provide Back navigation. */
 export function MenuLevel({
   id,
   label,
-  items,
+  items: suppliedItems,
   heading,
   anchorRef,
   align = "start",
@@ -15,6 +16,7 @@ export function MenuLevel({
   anchorPoint,
   close,
   back,
+  beforePlace,
 }: {
   id: string;
   label: string;
@@ -26,7 +28,20 @@ export function MenuLevel({
   anchorPoint?: { x: number; y: number } | null;
   close: (returnFocus: boolean) => void;
   back?: () => void;
+  beforePlace?: () => void;
 }) {
+  const compact = useMediaQuery("(max-width: 40rem)");
+  const items: readonly MenuItem[] =
+    compact && back
+      ? [
+          { id: "menu-back", label: "Back", icon: <span aria-hidden="true">‹</span>, onSelect: back, keepOpen: true },
+          ...suppliedItems,
+        ]
+      : suppliedItems;
+  const compactPoint = useCallback(() => {
+    const bounds = anchorRef.current?.closest('[role="menu"]')?.getBoundingClientRect();
+    return bounds ? { x: bounds.left, y: bounds.top - 4 } : null;
+  }, [anchorRef]);
   const childId = useId();
   const popupRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | HTMLAnchorElement | null)[]>([]);
@@ -37,19 +52,30 @@ export function MenuLevel({
   const [child, setChild] = useState<string | null>(null);
   const childItem = items.find((item) => item.id === child && !item.disabled);
   const revision = items.map((item) => `${item.id}:${Boolean(item.disabled)}`).join("|");
-  usePopupPlacement({
+  const place = usePopupPlacement({
     open: true,
     anchorRef,
     popupRef,
     align,
-    side: back ? "right" : "bottom",
+    side:
+      back && !compact
+        ? (anchorRef.current?.getBoundingClientRect().left ?? 0) > window.innerWidth / 2
+          ? "left"
+          : "right"
+        : "bottom",
+    spacing: back && !compact ? { gap: 4, crossAxis: -4 } : undefined,
     revision,
     topLayer: true,
-    anchorPoint,
+    anchorPoint: compact && back ? compactPoint : anchorPoint,
+    beforePlace,
   });
   useLayoutEffect(() => {
     if (childItem) return;
     const currentReachable = reachableKey ? reachableKey.split(",").map(Number) : [];
+    if (!currentReachable.length) {
+      popupRef.current?.focus({ preventScroll: true });
+      return;
+    }
     if (!currentReachable.includes(active)) {
       setActive(currentReachable[0] ?? -1);
       return;
@@ -115,7 +141,22 @@ export function MenuLevel({
     }
   }
   return (
-    <div ref={popupRef} id={id} role="menu" tabIndex={-1} aria-label={label} class="pk-menu__popup" onKeyDown={keyDown}>
+    <div
+      ref={popupRef}
+      id={id}
+      role="menu"
+      tabIndex={-1}
+      aria-label={label}
+      class={[
+        "pk-menu__popup",
+        compact ? "pk-menu__popup--compact" : "",
+        compact && childItem ? "pk-menu__popup--drilled" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onKeyDown={keyDown}
+    >
+      {compact && back && <div class="pk-menu__heading">{label}</div>}
       {heading && <p class="pk-menu__heading">{heading}</p>}
       {items.map((item, index) => {
         const shared = {
@@ -157,16 +198,8 @@ export function MenuLevel({
             {item.children && <span aria-hidden="true"> ›</span>}
           </>
         );
-        return item.href ? (
-          <a
-            {...shared}
-            href={item.href}
-            aria-disabled={item.disabled ? "true" : undefined}
-            onClick={(event) => {
-              if (item.disabled) event.preventDefault();
-              else close(false);
-            }}
-          >
+        return item.href && !item.disabled ? (
+          <a {...shared} href={item.href} onClick={() => close(false)}>
             {content}
           </a>
         ) : (
@@ -183,6 +216,7 @@ export function MenuLevel({
           anchorRef={childAnchor}
           close={close}
           back={() => setChild(null)}
+          beforePlace={place}
         />
       )}
     </div>

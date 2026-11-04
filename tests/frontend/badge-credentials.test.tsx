@@ -89,6 +89,7 @@ beforeEach(() => {
   savePortalSession(portalSessionFixture({ member: true }));
   viewer.timeZone = "UTC";
   navigate.mockReset();
+  history.replaceState({}, "", "/");
   qr.mockClear();
   vi.mocked(confirmAction).mockClear();
 });
@@ -146,7 +147,7 @@ describe("badge credentials", () => {
     expect(host.textContent).toContain("Badge created");
   });
 
-  it("loads bounded metadata with canonical user filtering and opens a dedicated create route", async () => {
+  it("lists multiple badges with canonical user filtering and opens a dedicated create route", async () => {
     const urls: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -154,8 +155,11 @@ describe("badge credentials", () => {
         urls.push(requestUrl(input));
         return json(
           badgeCredentialsResponseSchema.parse({
-            badges: [{ ...metadata, displayName: null }],
-            page: { limit: 50, offset: 0, total: 1, hasMore: false },
+            badges: [
+              { ...metadata, displayName: null },
+              { ...metadata, id: NEXT },
+            ],
+            page: { limit: 50, offset: 0, total: 2, hasMore: false },
           }),
         );
       }),
@@ -172,6 +176,64 @@ describe("badge credentials", () => {
     expect(host.querySelector("img")).toBeNull();
     await click(host, "Create badge");
     expect(navigate).toHaveBeenCalledWith(`${BASE}/new?userId=${USER}`);
+  });
+
+  it.each(["badges.q=Sam", "badges.f.status=active"])(
+    "keeps a narrowed single match in its list with Create badge available: %s",
+    async (filter) => {
+      history.replaceState({}, "", `/#${BASE}?userId=${USER}&${filter}`);
+      const queries: Array<ReturnType<typeof badgeCredentialsQuerySchema.parse>> = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL) => {
+          queries.push(badgeCredentialsQuerySchema.parse(Object.fromEntries(requestUrl(input).searchParams)));
+          return json({ badges: [metadata], page: { limit: 50, offset: 0, total: 1, hasMore: false } });
+        }),
+      );
+      const host = mount(<BadgeCredentials slug="workshop" basePath={BASE} userId={USER} />);
+      await settle();
+      expect(queries[0]).toMatchObject(filter.includes("status") ? { status: "active" } : { q: "Sam" });
+      expect(navigate).not.toHaveBeenCalled();
+      expect(host.querySelector("table")).not.toBeNull();
+      await click(host, "Create badge");
+      expect(navigate).toHaveBeenCalledWith(`${BASE}/new?userId=${USER}`);
+    },
+  );
+
+  it("opens a sole badge at its real route and reloads the list after returning from a record", async () => {
+    let badges = [metadata];
+    const listQueries: Array<ReturnType<typeof badgeCredentialsQuerySchema.parse>> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (!url.pathname.endsWith("/badges")) return json(metadata);
+        listQueries.push(badgeCredentialsQuerySchema.parse(Object.fromEntries(url.searchParams)));
+        return json({ badges, page: { limit: 50, offset: 0, total: badges.length, hasMore: false } });
+      }),
+    );
+    const host = mount(<BadgeCredentials slug="workshop" basePath={BASE} userId={USER} />);
+    await settle();
+    expect(navigate).toHaveBeenCalledWith(`${BASE}/${ID}`, { replace: true });
+    await act(() => render(<BadgeCredentials slug="workshop" basePath={BASE} credentialId={ID} />, host));
+    await settle();
+    await click(host, "Record actions");
+    await click(host, "Back to badges");
+    expect(navigate).toHaveBeenLastCalledWith(BASE);
+    badges = [metadata, { ...metadata, id: NEXT }];
+    navigate.mockClear();
+    await act(() => render(<BadgeCredentials slug="workshop" basePath={BASE} />, host));
+    await settle();
+    expect(listQueries.at(-1)?.userId).toBeUndefined();
+    expect(host.querySelector("table")).not.toBeNull();
+    expect(host.textContent).toContain("Create badge");
+    await click(host, "Badge collection actions");
+    expect(host.textContent).toContain("Badge design");
+    await act(() => render(<BadgeCredentials slug="workshop" basePath={BASE} userId={USER} />, host));
+    await settle();
+    expect(listQueries.at(-1)?.userId).toBe(USER);
+    expect(host.querySelectorAll("tbody tr")).toHaveLength(2);
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it("reloads a selected metadata record without exposing a printable credential", async () => {
@@ -247,7 +309,7 @@ describe("badge credentials", () => {
     expect(host.textContent).toContain(NEXT);
     const frame = host.querySelector("iframe");
     expect(frame).not.toBeNull();
-    expect(decodeURIComponent(frame!.getAttribute("srcdoc")!)).toContain("ABCD-EFGH-JKLM-NPQR");
+    expect(frame!.getAttribute("srcdoc")).toContain("ABCD-EFGH-JKLM-NPQR");
     expect(qr).not.toHaveBeenCalled();
     await click(host, "Badge actions");
     await click(host, "View badge");
@@ -385,20 +447,6 @@ describe("badge credentials", () => {
   });
 });
 
-it("offers the canonical preview/download route directly from an active printable record", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => json({ ...metadata, reprintAvailable: true })),
-  );
-  const host = mount(<BadgeCredentials slug="workshop" basePath={BASE} credentialId={ID} />);
-  await settle();
-  const link = Array.from(host.querySelectorAll("a")).find(
-    (item) => item.textContent?.trim() === "Preview and download badge",
-  );
-  expect(link?.getAttribute("href")).toContain(`${BASE}/${ID}/print`);
-  expect(host.querySelector(".pk-panel dl")).not.toBeNull();
-  expect(host.textContent).not.toContain(BEARER);
-});
 it("explains an unsupported connection and offers recovery instead of a blank badge route", async () => {
   const random = crypto.getRandomValues.bind(crypto);
   vi.stubGlobal("crypto", { getRandomValues: random });

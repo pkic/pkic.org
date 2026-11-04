@@ -33,7 +33,13 @@ import {
   type SortDirection,
 } from "../ui/DataTable";
 import { Menu, type MenuItem } from "../ui/Menu";
-import { columnFilters, headLabel, useColumnControls, type ColumnControls } from "./table-column-controls";
+import {
+  TableOptionsMenu,
+  columnFilters,
+  headLabel,
+  useColumnControls,
+  type ColumnControls,
+} from "./table-column-controls";
 import type { FilterOption } from "./FilterSelect";
 import { AppliedFilterChips, ColumnTextFilterRow } from "./table-filter-strip";
 import "../ui/Content.css";
@@ -239,6 +245,7 @@ export interface DataTableProps<T> {
    * the record-card sort menu. Omit for a bare table.
    */
   controls?: ColumnControls<T>;
+  tableOptionsFilters?: boolean;
 }
 
 export function DataTable<T>({
@@ -259,6 +266,7 @@ export function DataTable<T>({
   selection,
   filters = {},
   onFilterChange,
+  tableOptionsFilters = false,
   controls: sharedControls,
 }: DataTableProps<T>) {
   // A list with a toolbar holds its column state there, so the toolbar's
@@ -369,7 +377,9 @@ export function DataTable<T>({
         // Hidden columns come back from one place: a menu at the end of the
         // head that lists every column the reader may hide.
         headerEnd={
-          columnsMenu.length > 0 ? (
+          tableOptionsFilters ? (
+            <TableOptionsMenu controls={controls} />
+          ) : columnsMenu.length > 0 ? (
             <Menu label="Choose columns" heading="Columns" items={columnsMenu} align="end">
               <span class="pk-table__head-glyph pk-table__head-glyph--columns" aria-hidden="true" />
             </Menu>

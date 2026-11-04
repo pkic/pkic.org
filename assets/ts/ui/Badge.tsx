@@ -12,12 +12,14 @@ import { formatNumber } from "../../shared/format-number";
 
 import { progressClass, type Tone, type ToneProps } from "./tone";
 import "./Badge.css";
+import { Tooltip } from "./Tooltip";
 
 export type BadgeTone = Tone;
 
 export interface BadgeProps extends ToneProps {
   /** Accessible name and hover label for a symbolic badge. */
   label?: string;
+  nativeTooltip?: boolean;
   /** Categorical color, independent of workflow status tones. */
   color?: "blue" | "teal" | "purple";
   /** Solid proportion, from zero to one; the remainder uses light stripes. */
@@ -35,6 +37,7 @@ export interface BadgeProps extends ToneProps {
 
 export function Badge({
   tone = "neutral",
+  nativeTooltip = true,
   progress,
   progressStyle,
   dot = true,
@@ -61,7 +64,7 @@ export function Badge({
       class={classes}
       role={label ? "img" : undefined}
       aria-label={label}
-      title={label ?? description}
+      title={nativeTooltip ? (label ?? description) : undefined}
       data-color={color}
       data-filled={fillFraction !== undefined ? "true" : undefined}
     >
@@ -84,6 +87,7 @@ export function Badge({
 
 /** A compact, named symbol with an optional count and proportional fill. */
 export function IconBadge({
+  tooltip,
   icon,
   label,
   tone = "neutral",
@@ -91,6 +95,7 @@ export function IconBadge({
   color,
   fillFraction,
 }: {
+  tooltip?: ComponentChildren;
   icon: ComponentChildren;
   label: string;
   tone?: BadgeTone;
@@ -98,10 +103,17 @@ export function IconBadge({
   color?: BadgeProps["color"];
   fillFraction?: number;
 }) {
-  return (
-    <Badge tone={tone} dot={false} label={label} color={color} fillFraction={fillFraction}>
+  const badge = (
+    <Badge nativeTooltip={!tooltip} tone={tone} dot={false} label={label} color={color} fillFraction={fillFraction}>
       {icon}
       {count !== undefined && <span aria-hidden="true">{formatNumber(count)}</span>}
     </Badge>
+  );
+  return tooltip ? (
+    <Tooltip label={label} content={tooltip}>
+      {badge}
+    </Tooltip>
+  ) : (
+    badge
   );
 }

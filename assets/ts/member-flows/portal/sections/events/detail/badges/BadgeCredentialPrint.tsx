@@ -1,3 +1,4 @@
+import { BadgeArtworkOverview } from "../../../../../../components/event-badges/BadgeArtworkOverview";
 import { verifyBadgeLabelArtifact } from "../../../../../../components/event-badges/badge-print-context";
 import { BADGE_LABEL_PRINTING_CONTEXT } from "../../../../../../../shared/badge-label-policy";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
@@ -22,7 +23,12 @@ import { useSessionExpiry } from "../../../../use-session-expiry";
 import type { z } from "zod";
 
 /** Route and session changes discard the private artifact; metadata never restores it. */
-export function BadgeCredentialPrint(props: { slug: string; credentialId: string; onBack: () => void }) {
+export function BadgeCredentialPrint(props: {
+  slug: string;
+  credentialId: string;
+  overview?: boolean;
+  onBack: () => void;
+}) {
   useSessionExpiry();
   if (typeof crypto.randomUUID !== "function")
     return (
@@ -40,11 +46,13 @@ function SessionBadgePrint({
   credentialId,
   onBack,
   session,
+  overview = false,
 }: {
   slug: string;
   credentialId: string;
   onBack: () => void;
   session: PortalSession;
+  overview?: boolean;
 }) {
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/badges/${encodeURIComponent(credentialId)}`;
   const requestScope = useMemo(() => ({ endpoint, session, controller: new AbortController() }), [endpoint, session]);
@@ -61,6 +69,10 @@ function SessionBadgePrint({
   const [error, setError] = useState("");
   const running = useRef<AbortController | null>(null);
   const print = artifact?.owner === request ? artifact.print : null;
+  const badges = useMemo(
+    () => (print ? [{ ...print, displayName: print.displayName ?? "Attendee name unavailable" }] : []),
+    [print],
+  );
   useEffect(() => {
     setArtifact(null);
     setError("");
@@ -152,20 +164,24 @@ function SessionBadgePrint({
   const available = record.data.status === "active" && record.data.reprintAvailable;
   return (
     <div class="pk-stack">
-      <PageHeader
-        title="Reprint badge"
-        description={record.data.displayName ?? "Attendee name unavailable"}
-        actions={<Button onClick={onBack}>Back to credential</Button>}
-      />
+      {!overview && (
+        <PageHeader
+          title="Reprint badge"
+          description={record.data.displayName ?? "Attendee name unavailable"}
+          actions={<Button onClick={onBack}>Back to credential</Button>}
+        />
+      )}
       <p>Reprinting keeps this credential and its expiry unchanged. Keep downloaded print files private.</p>
       {!available ? (
         <p>
           Reprinting is unavailable for this credential. You can print a previously saved file or replace the
           credential.
         </p>
+      ) : print && overview ? (
+        <BadgeArtworkOverview slug={slug} badge={badges[0]} beforeRelease={beforeRelease} />
       ) : print ? (
         <BadgePrintPreview
-          badges={[{ ...print, displayName: print.displayName ?? "Attendee name unavailable" }]}
+          badges={badges}
           printing={artifact!.printing}
           beforeRelease={beforeRelease}
           loadPrintingContext={() =>

@@ -76,6 +76,16 @@ describe("private event HTML badge compiler", () => {
     ).not.toContain("Event &amp; Co");
     expect(compileBadgeTemplate(template()).renderSide("front", badge)).not.toContain("badge-template-sponsor-logos");
   });
+  it("exposes each rendered group's actual sponsor count for bounded layout spacing", () => {
+    const sponsors = Array.from({ length: 4 }, (_, index) => ({
+      id: `20000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      name: `Sponsor ${index + 1}`,
+      svg,
+    }));
+    const compiled = compileBadgeTemplate(template(), [{ key: "front", tierName: "Diamond", sponsors }]);
+    expect(compiled.renderSide("front", badge)).toContain("--badge-sponsor-count:4");
+    expect(compiled.renderSide("back", badge)).not.toContain("--badge-sponsor-count:");
+  });
   it("reflects sponsor changes in newly rendered badges without retaining original company artwork", () => {
     const output = (name: string) =>
       compileBadgeTemplate(template(), [

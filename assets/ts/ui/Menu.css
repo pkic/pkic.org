@@ -72,6 +72,15 @@
    * In the top layer the popup is a manual popover: drop the popover's centered inset and margin so the
    * placement's viewport coordinates hold, and keep the page's ink rather than the system text color.
    */
+  .pk-menu__popup--compact {
+    width: min(16rem, calc(100vw - 1rem));
+    visibility: visible;
+  }
+
+  .pk-menu__popup--drilled {
+    visibility: hidden;
+  }
+
   .pk-menu__popup[popover] {
     inset: auto;
     margin: 0;
@@ -94,7 +103,8 @@
    * The combobox highlight: focus stays on the input, so the active option
    * carries the same surface a hovered menu item gets.
    */
-  .pk-menu__item--active {
+  .pk-menu__item--active,
+  .pk-menu__item[aria-expanded="true"] {
     background: var(--pk-surface-sunk);
   }
 

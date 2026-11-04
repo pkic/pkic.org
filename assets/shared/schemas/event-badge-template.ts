@@ -14,6 +14,7 @@ export const BADGE_TEMPLATE_SPONSOR_LOGO_MAX_BYTES = 1024 * 1024;
 export const BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_BYTES = 4 * 1024 * 1024;
 export const BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT = 40;
 export const BADGE_TEMPLATE_SPONSOR_GROUPS_MAX_COUNT = 8;
+export const badgeTemplateCustomTextSchema = z.string().max(500);
 export const badgePrintDesignSchema = z.enum(["event_badge", "name_qr"]);
 export type BadgePrintDesign = z.infer<typeof badgePrintDesignSchema>;
 export const badgeTemplateKeySchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);

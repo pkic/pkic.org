@@ -9,9 +9,15 @@ import { groupEventParamsSchema } from "./group-events";
 import { requiresSession } from "./route-contract";
 import { jsonErrorResponse } from "./api-common";
 
+export const badgePrintActionSchema = z.enum(["preview", "labels", "badges", "label_csv", "label_pdf", "badge_pdf"]);
+export type BadgePrintAction = z.infer<typeof badgePrintActionSchema>;
+
 export const eventBadgePrintPopulationQuerySchema = eventAttendanceRegistrationsQuerySchema
   .pick({
     q: true,
+    consent: true,
+    job_title: true,
+    country: true,
     status: true,
     waitlisted: true,
     attendance_type: true,

@@ -1,5 +1,6 @@
 /** A collection's create command, with optional direct action and more choices. */
 import type { ComponentChildren } from "preact";
+import { useLayoutEffect, useRef } from "preact/hooks";
 import type { MenuItem } from "./Menu";
 import { IconPlus } from "../components/icons";
 import { Button, ButtonLink, type ButtonVariant } from "./Button";
@@ -14,7 +15,7 @@ export interface SplitButtonProps {
   /** When omitted, the entire control opens the choices. */
   defaultAction?:
     | { label: string; onSelect: () => void; href?: never; disabled?: boolean; loading?: boolean }
-    | { label: string; href: string; onSelect?: never; disabled?: never; loading?: never };
+    | { label: string; href: string; onSelect?: never; disabled?: boolean; loading?: never };
 }
 
 export function SplitButton({
@@ -24,9 +25,15 @@ export function SplitButton({
   icon = <IconPlus />,
   variant = "primary",
 }: SplitButtonProps) {
+  const root = useRef<HTMLDivElement>(null);
+  const wasFocused = Boolean(root.current?.contains(document.activeElement));
+  useLayoutEffect(() => {
+    if (wasFocused && !root.current?.contains(document.activeElement))
+      root.current?.querySelector<HTMLElement>("a,button:not(:disabled)")?.focus({ preventScroll: true });
+  });
   return (
-    <div class={`pk-split-button pk-split-button--${variant}`}>
-      {defaultAction && "href" in defaultAction && defaultAction.href ? (
+    <div ref={root} class={`pk-split-button pk-split-button--${variant}`}>
+      {defaultAction && "href" in defaultAction && defaultAction.href && !defaultAction.disabled ? (
         <ButtonLink
           variant={variant}
           icon

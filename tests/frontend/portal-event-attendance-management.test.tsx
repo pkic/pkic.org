@@ -10,6 +10,7 @@
  * in words, that the waitlist filter reaches the query, and that the record
  * page sends the same canonical group requests the expansion did.
  */
+import { menuPath } from "./helpers/menu-path";
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -123,15 +124,16 @@ describe("group event registrations roster", () => {
       />,
     );
     await settle();
-    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Registration actions"]');
-    expect(trigger).not.toBeNull();
-    await act(async () => trigger!.click());
-    await act(async () => menuItemNamed(container, "Print matching badges, labels or printing CSV…")!.click());
-    expect(onPrint).toHaveBeenCalledWith({
-      kind: "filtered",
-      endpoint: `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/registrations/badges/population`,
-      filters: {},
-    });
+    const action = await menuPath(container, "Registration actions", ["Print", "Labels"]);
+    await act(() => action.click());
+    expect(onPrint).toHaveBeenCalledWith(
+      {
+        kind: "filtered",
+        endpoint: `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/registrations/badges/population`,
+        filters: {},
+      },
+      "labels",
+    );
     expect(container.querySelector("caption")?.textContent).toBe("Registrations");
     expect(container.textContent).not.toContain("Print all matching attendee badges");
   });
@@ -146,7 +148,7 @@ describe("group event registrations roster", () => {
     );
     // Organization joins the row; job title stays hidden by default.
     // Attendance combines type and waitlist summaries in one column.
-    expect(headers).toEqual(["Attendee", "Organization", "Status", "Attendance", "Registered"]);
+    expect(headers).toEqual(["Attendee", "Organization", "Consent", "Status", "Attendance", "Registered"]);
     for (const header of headers) expect(header).not.toBe("");
   });
 

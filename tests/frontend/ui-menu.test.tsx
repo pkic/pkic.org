@@ -27,6 +27,7 @@ function mount(node: ComponentChildren): HTMLElement {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
     container.remove();
@@ -59,6 +60,26 @@ function press(element: Element, key: string) {
 }
 
 describe("Menu", () => {
+  it("renders disabled destinations as inert buttons while keeping enabled destinations as links", () => {
+    const container = mount(
+      <Menu
+        label="Downloads"
+        items={[
+          { id: "blocked", label: "Unavailable export", href: "/private-export", disabled: true },
+          { id: "available", label: "Available export", href: "/available-export" },
+        ]}
+      />,
+    );
+    void act(() => trigger(container).click());
+    const [disabled, enabled] = container.querySelectorAll('[role="menuitem"]');
+    expect(disabled).toBeInstanceOf(HTMLButtonElement);
+    expect((disabled as HTMLButtonElement).disabled).toBe(true);
+    expect(disabled.hasAttribute("href")).toBe(false);
+    expect(enabled).toBeInstanceOf(HTMLAnchorElement);
+    expect(enabled.getAttribute("href")).toBe("/available-export");
+    expect(document.activeElement).toBe(enabled);
+  });
+
   it("keeps paginated choices open and moves focus when the next page is shorter", () => {
     const next = vi.fn();
     const container = mount(
@@ -446,4 +467,80 @@ it("does not open a disabled menu through either activation path", async () => {
     handle.current!.openAt({ x: 20, y: 30 }, root);
   });
   expect(root.querySelector('[role="menu"]')).toBeNull();
+});
+
+it("keeps compact submenus in one drilldown and returns through Back without closing the root", async () => {
+  vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  const selected = vi.fn();
+  const container = mount(
+    <Menu
+      label="Outputs"
+      items={[
+        {
+          id: "download",
+          label: "Download",
+          children: [
+            { id: "csv", label: "CSV", children: [{ id: "attendees", label: "Attendees", onSelect: selected }] },
+          ],
+        },
+      ]}
+    />,
+  );
+  const choose = async (name: string, root: ParentNode = container) => {
+    const item = [...root.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (button) => button.textContent?.replace(/^\s*‹\s*|\s*›$/g, "").trim() === name,
+    );
+    expect(item, name).toBeDefined();
+    await act(() => item!.click());
+  };
+  await act(() => trigger(container).click());
+  await choose("Download");
+  await choose("CSV");
+  const csv = container.querySelector('[role="menu"][aria-label="CSV"]')!;
+  await choose("Back", csv);
+  expect(container.querySelector('[role="menu"][aria-label="CSV"]')).toBeNull();
+  expect(container.querySelector('[role="menu"][aria-label="Download"]')).not.toBeNull();
+  expect(selected).not.toHaveBeenCalled();
+  await choose("CSV");
+  await choose("Attendees");
+  expect(selected).toHaveBeenCalledOnce();
+  expect(container.querySelector('[role="menu"]')).toBeNull();
+  vi.unstubAllGlobals();
+});
+
+it("repositions a compact submenu with its parent during scrolling and returns without a jump", async () => {
+  vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  let anchorTop = 100;
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    if (this.classList.contains("pk-menu__trigger")) return new DOMRect(20, anchorTop, 28, 28);
+    return new DOMRect(Number.parseFloat(this.style.left) || 20, Number.parseFloat(this.style.top) || 0, 200, 120);
+  });
+  const container = mount(
+    <Menu
+      label="Outputs"
+      items={[
+        {
+          id: "download",
+          label: "Download",
+          children: [{ id: "file", label: "Attendees", onSelect: vi.fn() }],
+        },
+      ]}
+    />,
+  );
+  await act(() => trigger(container).click());
+  await act(() => menuItems(container)[0].click());
+  const parent = container.querySelector<HTMLElement>('[role="menu"][aria-label="Outputs"]')!;
+  const child = container.querySelector<HTMLElement>('[role="menu"][aria-label="Download"]')!;
+  expect(parent.style.top).toBe("132px");
+  expect(child.style.top).toBe(parent.style.top);
+  anchorTop = 40;
+  await act(() => {
+    window.dispatchEvent(new Event("scroll"));
+  });
+  expect(parent.style.top).toBe("72px");
+  expect(child.style.top).toBe(parent.style.top);
+  const back = child.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+  await act(() => back.click());
+  expect(container.querySelector('[role="menu"][aria-label="Download"]')).toBeNull();
+  expect(parent.style.top).toBe("72px");
 });

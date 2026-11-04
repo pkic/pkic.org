@@ -430,12 +430,12 @@ describe("group event attendee management", () => {
     };
     const listedRegistration = listBody.registrations.find((registration) => registration.id === registrationId);
     expect(listedRegistration).toBeDefined();
+    expect(listedRegistration?.sponsor_consent).toBe(false);
     for (const privateField of [
       "custom_answers_json",
       "referral_code",
       "rsvp_events_json",
       "has_bounced",
-      "sponsor_consent",
       "attendanceChangeHistory",
       "lastAttendanceChange",
     ]) {

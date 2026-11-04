@@ -1,3 +1,7 @@
+import {
+  BADGE_DEFAULT_FONT_ASSETS,
+  BADGE_DEFAULT_FONT_PROVENANCE,
+} from "../../assets/shared/badge-default-template-fonts";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -11,7 +15,7 @@ import { BADGE_GENERIC_FONT_LICENSE } from "../../assets/shared/badge-generic-fo
 
 describe("canonical public badge artwork snapshot provenance", () => {
   it("requires regeneration whenever an authoritative mark or bundled font changes", () => {
-    for (const source of Object.values(BADGE_GENERIC_BRAND_PROVENANCE)) {
+    for (const source of Object.values({ ...BADGE_GENERIC_BRAND_PROVENANCE, ...BADGE_DEFAULT_FONT_PROVENANCE })) {
       const bytes = readFileSync(resolve(process.cwd(), source.path));
       expect(createHash("sha256").update(bytes).digest("hex"), source.path).toBe(source.sha256);
     }
@@ -21,9 +25,17 @@ describe("canonical public badge artwork snapshot provenance", () => {
       const original = readFileSync(resolve(process.cwd(), BADGE_GENERIC_BRAND_PROVENANCE[key].path));
       expect(Buffer.from(BADGE_GENERIC_BRAND_ASSETS[key].base64, "base64")).toEqual(original);
     }
-    expect(BADGE_GENERIC_FONT_LICENSE).toBe(
-      readFileSync(resolve(process.cwd(), "static/fonts/Roboto-OFL.txt"), "utf8"),
-    );
+    for (const [key, source] of Object.entries(BADGE_DEFAULT_FONT_PROVENANCE)) {
+      expect(
+        Buffer.from(BADGE_DEFAULT_FONT_ASSETS[key as keyof typeof BADGE_DEFAULT_FONT_ASSETS].base64, "base64"),
+      ).toEqual(readFileSync(resolve(process.cwd(), source.path)));
+    }
+    for (const path of [
+      "static/fonts/Roboto-OFL.txt",
+      "static/fonts/RobotoMono-LICENSE.txt",
+      "static/fonts/BarokahSignature-LICENSE.txt",
+    ])
+      expect(BADGE_GENERIC_FONT_LICENSE).toContain(readFileSync(resolve(process.cwd(), path), "utf8"));
   });
   it("keeps the authored mark path geometry while replacing its fixed fill classes with local attributes", () => {
     const original = readFileSync(resolve(process.cwd(), BADGE_GENERIC_BRAND_PROVENANCE.mark.path), "utf8");

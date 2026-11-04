@@ -31,6 +31,7 @@ export async function badgeFaceBadge(): Promise<PrintableBadgePrint> {
     firstName: "Femke",
     lastName: "de Vries",
     organization: "Ministry of the Interior",
+    jobTitle: "Senior Cryptography Policy Adviser",
     badgeRole: "speaker",
     svg: composeBadgePrintSvg(
       await QRCode.toString(BADGE_FACE_CREDENTIAL, { type: "svg", errorCorrectionLevel: "M", margin: 4 }),

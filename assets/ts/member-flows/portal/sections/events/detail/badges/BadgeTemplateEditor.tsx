@@ -183,7 +183,7 @@ function DesignForm({
   }
   const compiled = template ? compileBadgeTemplate(template, branding) : null;
   const preview = compiled
-    ? `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${BADGE_PRINT_CONTENT_SECURITY_POLICY}"><style>body{margin:0}${compiled.css}</style></head><body>${compiled.resourcesHtml}${compiled.renderSide(view === "back" ? "back" : "front", { displayName: "Name preview", organization: "Organization preview", badgeRole: "attendee", svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="1" y="1" width="98" height="98" fill="none" stroke="black"/><text x="10" y="50">QR position</text></svg>' })}</body></html>`
+    ? `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${BADGE_PRINT_CONTENT_SECURITY_POLICY}"><style>body{margin:0}${compiled.css}</style></head><body>${compiled.resourcesHtml}${compiled.renderSide(view === "back" ? "back" : "front", { displayName: "Alex Example", firstName: "Alex", lastName: "Example", jobTitle: "Director of Cryptographic Engineering", organization: "Example Trust Systems", badgeRole: "speaker", svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="1" y="1" width="98" height="98" fill="none" stroke="black"/><text x="10" y="50">QR position</text></svg>' })}</body></html>`
     : "";
   const previewDocument = badgePrintPreviewDocument(preview);
   return (

@@ -5,7 +5,8 @@ import type { Column } from "../../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { FilterSelect } from "../../../../../components/FilterSelect";
 import { Tabs } from "../../../../../components/Tabs";
-import { PersonCell } from "../../../../../ui/PersonCell";
+import { SponsorConsentCell } from "../../../../../components/event-registrations/SponsorConsentCell";
+import { registrationPersonColumn } from "../../../../../components/event-registrations/registration-person-column";
 import { attendanceTypeLabel } from "../../../../../shared/attendance";
 import { fmt, fmtDate, toast } from "../../../ui";
 import type { Registration, RegistrationAttendanceChange } from "../types";
@@ -71,21 +72,14 @@ export function RegistrationsList({
 }) {
   // Not a column filter: the attendance-change view is seeded by the route
   // (`…/registrations/left-in-person`), reshapes the columns and the empty
-  // sentence, and the table does not report its filters back to the page.
+  // sentence. Export availability also follows the table's complete query.
   const [attendanceChangeFilter, setAttendanceChangeFilter] = useState(initialAttendanceChange);
+  const [query, setQuery] = useState<Readonly<Record<string, string>> | null>(null);
   const [stats, setStats] = useState<RegistrationStats | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
 
   const columns: Array<Column<Registration>> = [
-    {
-      // The same face-then-name cell every roster uses (#90).
-      header: "Attendee",
-      cell: (r) => (
-        <PersonCell name={r.display_name ?? r.user_email ?? "—"} avatarSrc={r.headshot_url ?? undefined} size="sm" />
-      ),
-      width: "primary",
-      sort: { asc: "display_name", desc: "-display_name" },
-    },
+    registrationPersonColumn<Registration>(),
     // Who they represent and what they do, as the account states it (#119).
     // The title is there for the reader who wants it, hidden by default so
     // the row keeps its width for the days.
@@ -183,34 +177,7 @@ export function RegistrationsList({
       ? [
           {
             header: "Consent",
-            /*
-             * A green tick with a `title` was the whole signal: color, which
-             * not every reader can separate, plus a tooltip a screen reader
-             * and a touch device never surface. The mark stays as the visual
-             * and the word goes beside it, hidden, so the cell is announced
-             * as "Consented" rather than as a tick.
-             */
-            cell: (r: Registration) =>
-              r.sponsor_consent === true ? (
-                <>
-                  <span aria-hidden="true">✓</span>
-                  <span class="pk-sr-only">Consented to share with sponsors</span>
-                </>
-              ) : r.sponsor_consent === false ? (
-                <>
-                  <span class="pk-muted" aria-hidden="true">
-                    —
-                  </span>
-                  <span class="pk-sr-only">No sponsor consent</span>
-                </>
-              ) : (
-                <>
-                  <span class="pk-muted" aria-hidden="true">
-                    —
-                  </span>
-                  <span class="pk-sr-only">Not asked</span>
-                </>
-              ),
+            cell: (r: Registration) => <SponsorConsentCell consent={r.sponsor_consent} />,
             className: "pk-center",
             width: "fit" as const,
             filter: {
@@ -259,6 +226,7 @@ export function RegistrationsList({
         resolvePage={(data) => data.page}
         onData={(data) => setStats(data.stats)}
         paginate
+        onQueryChange={setQuery}
         searchPlaceholder="Search name / email…"
         params={attendanceChangeFilter ? { attendance_change: attendanceChangeFilter } : {}}
         actionsRef={tableRef}
@@ -288,7 +256,13 @@ export function RegistrationsList({
                   />
                   <RegistrationRosterActions
                     promotionsEndpoint={eventRegistrationPromotionsPath(slug)}
-                    exportsEndpoint={eventRegistrationExportsPath(slug)}
+                    exportsEndpoint={
+                      query &&
+                      !attendanceChangeFilter &&
+                      !Object.entries(query).some(([key, value]) => value && !["limit", "offset", "sort"].includes(key))
+                        ? eventRegistrationExportsPath(slug)
+                        : null
+                    }
                     onPromoted={() => tableRef.current?.reload()}
                     notify={toast}
                   />

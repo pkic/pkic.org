@@ -1,3 +1,6 @@
+import { sponsorConsentSql } from "../event-participation/sponsor-consent";
+import { REGISTRATION_COUNTRY_SQL } from "./registration-country";
+import { REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { dayWaitlistStatusSql } from "./day-waitlist-policy";
 import { REGISTRATION_ORGANIZATION_SQL } from "./selected-identity";
@@ -11,11 +14,32 @@ export function registrationPopulationFilter(
   eventId: string,
   params: Pick<
     EventAttendanceRegistrationsQuery,
-    "q" | "status" | "waitlisted" | "attendance_type" | "day_dates" | "day_match" | "badge_role" | "created_since"
+    | "consent"
+    | "job_title"
+    | "country"
+    | "q"
+    | "status"
+    | "waitlisted"
+    | "attendance_type"
+    | "day_dates"
+    | "day_match"
+    | "badge_role"
+    | "created_since"
   >,
 ) {
   const conditions = ["r.event_id = ?"];
   const bindings: unknown[] = [eventId];
+  if (params.consent)
+    conditions.push(params.consent === "true" ? sponsorConsentSql("r") : `NOT ${sponsorConsentSql("r")}`);
+  if (params.job_title) {
+    const title = buildD1TextSearchFilter(params.job_title, [REGISTRATION_JOB_TITLE_SQL]);
+    conditions.push(title.sql);
+    bindings.push(...title.bindings);
+  }
+  if (params.country) {
+    conditions.push(`${REGISTRATION_COUNTRY_SQL} = ?`);
+    bindings.push(params.country);
+  }
   if (params.status) {
     conditions.push("r.status = ?");
     bindings.push(params.status);

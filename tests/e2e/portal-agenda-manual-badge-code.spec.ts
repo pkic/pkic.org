@@ -1,3 +1,5 @@
+import { createGenericBadgeTemplate } from "../../assets/shared/badge-generic-template";
+import { compileBadgeTemplate } from "../../assets/shared/badge-template-render";
 import { scannerOfflineContextSchema } from "../../assets/shared/schemas/event-scanner-offline-context";
 import { SCAN_STORAGE_VERSION } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage";
 import { writeFile } from "node:fs/promises";
@@ -487,5 +489,55 @@ test("the protected printed short code works through manual offline capture and 
     );
   } finally {
     await page.context().setOffline(false);
+  }
+});
+
+test("default badges keep all lead sponsors inside both printed faces", async ({ page }, testInfo) => {
+  for (const count of [1, 4, 40]) {
+    const group = { key: "lead", source: "event" as const, tierName: "Diamond" };
+    const template = createGenericBadgeTemplate({ eventName: "Example conference", sponsorGroups: [group] });
+    const sponsors = Array.from({ length: count }, (_, index) => ({
+      id: `20000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      name: `Lead sponsor ${index + 1}`,
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 100"><path d="M0 0H280V100H0Z" fill="#198754"/></svg>',
+    }));
+    const compiled = compileBadgeTemplate(template, [{ ...group, sponsors }]);
+    const attendee = {
+      displayName: "Alex Example",
+      organization: "Example Trust",
+      badgeRole: "speaker" as const,
+      svg: sponsors[0].svg,
+    };
+    await page.setContent(
+      `<html><head><style>body{margin:0;display:flex;gap:16px}${compiled.css}</style></head><body>${compiled.resourcesHtml}${compiled.renderSide("front", attendee)}${compiled.renderSide("back", attendee)}</body></html>`,
+    );
+    await page.evaluate(() => document.fonts.ready);
+    for (const media of ["screen", "print"] as const) {
+      await page.emulateMedia({ media });
+      for (const side of ["front", "back"]) {
+        const geometry = await page.locator(`.pqc-${side}`).evaluate((badge) => {
+          const bounds = badge.getBoundingClientRect();
+          return [...badge.querySelectorAll('[role="img"][aria-label^="Lead sponsor "]')].map((logo) => {
+            const rect = logo.getBoundingClientRect();
+            return {
+              width: rect.width,
+              height: rect.height,
+              left: rect.left - bounds.left,
+              right: bounds.right - rect.right,
+              top: rect.top - bounds.top,
+              bottom: bounds.bottom - rect.bottom,
+            };
+          });
+        });
+        expect(geometry, `${count} lead sponsors on ${side} in ${media}`).toHaveLength(count);
+        for (const logo of geometry) {
+          expect(logo.width).toBeGreaterThan(0);
+          expect(logo.height).toBeGreaterThan(0);
+          for (const inset of [logo.left, logo.right, logo.top, logo.bottom])
+            expect(inset).toBeGreaterThanOrEqual(-0.1);
+        }
+      }
+    }
+    if (count === 4) await page.screenshot({ path: testInfo.outputPath("multiple-lead-sponsors.png") });
   }
 });

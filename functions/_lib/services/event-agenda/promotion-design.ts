@@ -8,7 +8,11 @@ import { batchFirst, batchRows } from "../../db/pagination";
 import type { D1StatementResult } from "../../types";
 import { AppError } from "../../errors";
 import { prepareConfiguredSponsorBranding } from "./sponsors";
-import { badgePrintingBasisRevision, getBadgePrintingContext } from "../event-participation/badge-print-branding";
+import {
+  badgeEventInstant,
+  badgePrintingBasisRevision,
+  getBadgePrintingContext,
+} from "../event-participation/badge-print-branding";
 import { parseJsonSafe } from "../../utils/json";
 import { bytesToBase64 } from "../../../../assets/shared/base64";
 
@@ -48,6 +52,12 @@ export function preparePromotionDesign(db: DatabaseLike, selection: EventReadSel
             event.settings_json,
             populations.event,
             populations.consortium,
+            {
+              startsAt: badgeEventInstant(event.starts_at),
+              endsAt: badgeEventInstant(event.ends_at),
+              timezone: event.timezone,
+              city: event.city,
+            },
           )
         : event.updated_at;
       return {

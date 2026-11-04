@@ -20,7 +20,7 @@ import { ErrorAlert } from "./ErrorAlert";
 import { Spinner } from "./Spinner";
 import { ADMIN_LIST_PAGE_SIZE_DEFAULT, Pager } from "./Pager";
 import { DataTable, type DataTableProps } from "./Table";
-import { ColumnCardMenu, useColumnControls } from "./table-column-controls";
+import { ColumnCardMenu, TableOptionsMenu, useColumnControls } from "./table-column-controls";
 import { IconRefresh } from "./icons";
 
 export interface ApiTableActions {
@@ -30,6 +30,8 @@ export interface ApiTableActions {
 }
 
 export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, "data" | "currentSort" | "onSort"> {
+  /** Keep column filters available on desktop even for hidden columns. */
+  tableOptionsFilters?: boolean;
   endpoint: string;
   resolve: (data: Response) => T[];
   responseSchema: z.ZodType<Response>;
@@ -137,6 +139,7 @@ export function ApiDataTable<T, Response = unknown>({
   clearDataOnReload = false,
   retainDataOnError = true,
   renderItems,
+  tableOptionsFilters = false,
   framed = true,
   toolbarClass,
   compactToolbarActions,
@@ -247,10 +250,13 @@ export function ApiDataTable<T, Response = unknown>({
     filters,
     onFilterChange: applyFilter,
   });
-  const cardMenu =
-    (renderItems || narrowLayout !== "columns") && columnControls.cardMenuLabel ? (
-      <ColumnCardMenu controls={columnControls} caption={caption} alwaysVisible={Boolean(renderItems)} />
-    ) : null;
+  const cardMenu = tableOptionsFilters ? (
+    <span class="pk-table-list__card-menu">
+      <TableOptionsMenu controls={columnControls} />
+    </span>
+  ) : (renderItems || narrowLayout !== "columns") && columnControls.cardMenuLabel ? (
+    <ColumnCardMenu controls={columnControls} caption={caption} alwaysVisible={Boolean(renderItems)} />
+  ) : null;
 
   const query = {
     ...filters,
@@ -399,6 +405,7 @@ export function ApiDataTable<T, Response = unknown>({
               filters={filters}
               onFilterChange={applyFilter}
               controls={columnControls}
+              tableOptionsFilters={tableOptionsFilters}
             />
           )}
           {paginate && !collection.loading && <Pager {...pagerProps} />}

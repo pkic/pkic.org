@@ -12,7 +12,7 @@
  *     first option and the caret lists every option.
  */
 
-import { useState } from "preact/hooks";
+import { useRef, useState, useLayoutEffect } from "preact/hooks";
 
 import type { MenuItem } from "./Menu";
 import { Button, ButtonLink, type ButtonSize } from "./Button";
@@ -64,6 +64,11 @@ export type DownloadActionProps = DownloadActionBase &
   );
 
 export function DownloadAction(props: DownloadActionProps) {
+  const control = useRef<HTMLSpanElement>(null);
+  const wasFocused = Boolean(control.current?.contains(document.activeElement));
+  useLayoutEffect(() => {
+    if (wasFocused) control.current?.querySelector<HTMLElement>("a,button")?.focus({ preventScroll: true });
+  });
   const [pending, setPending] = useState(false);
   const busy = Boolean(props.busy) || pending;
 
@@ -82,7 +87,7 @@ export function DownloadAction(props: DownloadActionProps) {
     const [first] = props.options;
     const items: MenuItem[] = props.options.map((option) =>
       option.href !== undefined
-        ? { id: option.id, label: option.label, href: option.href, disabled: option.disabled }
+        ? { id: option.id, label: option.label, href: option.href, disabled: option.disabled || busy || props.disabled }
         : {
             id: option.id,
             label: option.label,
@@ -98,7 +103,7 @@ export function DownloadAction(props: DownloadActionProps) {
         items={items}
         defaultAction={
           first.href !== undefined
-            ? { label: props.label, href: first.href }
+            ? { label: props.label, href: first.href, disabled: first.disabled || props.disabled || busy }
             : {
                 label: props.label,
                 onSelect: () => void run(first.onDownload),
@@ -110,37 +115,41 @@ export function DownloadAction(props: DownloadActionProps) {
     );
   }
 
-  if (props.href !== undefined && !props.disabled) {
+  if (props.href !== undefined && !props.disabled && !busy) {
     return (
-      <ButtonLink
-        variant="secondary"
-        size={props.size}
-        icon
-        href={props.href}
-        // `true` would become the literal file name "true" through the DOM property.
-        download={props.filename === true ? "" : props.filename}
-        aria-label={props.label}
-        title={props.label}
-      >
-        <IconDownload />
-      </ButtonLink>
+      <span ref={control}>
+        <ButtonLink
+          variant="secondary"
+          size={props.size}
+          icon
+          href={props.href}
+          // `true` would become the literal file name "true" through the DOM property.
+          download={props.filename === true ? "" : props.filename}
+          aria-label={props.label}
+          title={props.label}
+        >
+          <IconDownload />
+        </ButtonLink>
+      </span>
     );
   }
 
   // A link cannot be disabled, so an unavailable file is a disabled button.
   const { onDownload } = props;
   return (
-    <Button
-      variant="secondary"
-      size={props.size}
-      icon
-      aria-label={props.label}
-      title={props.label}
-      disabled={props.disabled}
-      loading={busy}
-      onClick={onDownload ? () => void run(onDownload) : undefined}
-    >
-      {!busy && <IconDownload />}
-    </Button>
+    <span ref={control}>
+      <Button
+        variant="secondary"
+        size={props.size}
+        icon
+        aria-label={props.label}
+        title={props.label}
+        disabled={props.disabled}
+        loading={busy}
+        onClick={onDownload ? () => void run(onDownload) : undefined}
+      >
+        {!busy && <IconDownload />}
+      </Button>
+    </span>
   );
 }

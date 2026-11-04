@@ -111,6 +111,12 @@ const config = {
               includeDependenciesRecursively: false,
               test: /node_modules[\\/]@tiptap[\\/]markdown[\\/]/,
             },
+            // PDF generation is loaded only on download; cache its engine in bounded chunks.
+            {
+              name: "pdf-engine",
+              test: /node_modules[\\/](pdf-lib|@pdf-lib|pako)[\\/]/,
+              maxSize: 100 * 1024,
+            },
             {
               name: "vendor",
               test: /node_modules[\\/]zod[\\/]/,

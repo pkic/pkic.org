@@ -25,13 +25,18 @@ describe("event attendance registration D1 query plans", () => {
         const [pagePlan, countPlan] = await Promise.all([
           env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)
             .bind(...bindings, query.limit, query.offset)
-            .all<{ detail: string }>(),
+            .all<{ parent: number; detail: string }>(),
           env.DB.prepare(`EXPLAIN QUERY PLAN ${countSql}`)
             .bind(...countBindings)
-            .all<{ detail: string }>(),
+            .all<{ parent: number; detail: string }>(),
         ]);
         for (const plan of [pagePlan, countPlan]) {
-          const details = plan.results.map((row) => row.detail).join("\n");
+          // The canonical participant-role view also calls its registration alias `r`.
+          // Assert the pagination source itself, rather than mistaking that nested view for it.
+          const details = plan.results
+            .filter((row) => row.parent === 0)
+            .map((row) => row.detail)
+            .join("\n");
           expect(details).toMatch(/idx_registrations_event_status(?:_created)?/);
           expect(details).not.toContain("SCAN r");
         }

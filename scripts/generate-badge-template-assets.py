@@ -91,11 +91,33 @@ def generate_font_css() -> str:
 
 
 def generate_font_license() -> str:
-    license_text = (ROOT / "static/fonts/Roboto-OFL.txt").read_text()
+    license_text = "\n\n".join((ROOT / relative).read_text() for relative in ("static/fonts/Roboto-OFL.txt", "static/fonts/RobotoMono-LICENSE.txt", "static/fonts/BarokahSignature-LICENSE.txt"))
     return "\n".join([
-        "/** Generated from static/fonts/Roboto-OFL.txt by scripts/generate-badge-template-assets.py. */",
+        "/** Generated from bundled badge font licenses by scripts/generate-badge-template-assets.py. */",
         "/** Roboto 3.015 (2026); embedded font metadata names the Roboto Project Authors and OFL URL. */",
         "export const BADGE_GENERIC_FONT_LICENSE = " + json.dumps(license_text) + ";",
+        "",
+    ])
+
+
+DEFAULT_BADGE_FONTS = {
+    "roboto_mono_latin": "static/fonts/RobotoMono-latin.woff2",
+    "roboto_mono_latin_ext": "static/fonts/RobotoMono-latin-ext.woff2",
+    "barokah_signature": "static/fonts/BarokahSignature.woff2",
+}
+
+
+def generate_default_fonts() -> str:
+    assets, provenance = {}, {}
+    for key, relative in DEFAULT_BADGE_FONTS.items():
+        raw = (ROOT / relative).read_bytes()
+        assets[key] = {"mime": "font/woff2", "base64": base64.b64encode(raw).decode()}
+        provenance[key] = {"path": relative, "sha256": hashlib.sha256(raw).hexdigest()}
+    return "\n".join([
+        "/** Generated from canonical badge fonts by scripts/generate-badge-template-assets.py. */",
+        'import type { EventBadgeTemplate } from "./schemas/event-badge-template";',
+        "export const BADGE_DEFAULT_FONT_ASSETS = " + json.dumps(assets, indent=2) + " as const satisfies EventBadgeTemplate[\"assets\"];",
+        "export const BADGE_DEFAULT_FONT_PROVENANCE = " + json.dumps(provenance, indent=2) + " as const;",
         "",
     ])
 
@@ -106,6 +128,7 @@ if __name__ == "__main__":
         ("assets/shared/badge-generic-font-css.ts", generate_font_css()),
         ("assets/shared/badge-generic-font-license.ts", generate_font_license()),
         ("assets/shared/badge-pqc-template-assets.ts", generate_pqc()),
+        ("assets/shared/badge-default-template-fonts.ts", generate_default_fonts()),
     ):
         destination = ROOT / relative
         destination.write_text(content)

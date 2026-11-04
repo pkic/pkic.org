@@ -52,6 +52,16 @@ describe("event registration CSV export", () => {
     } as unknown as ExecutionContext);
   }
 
+  it("includes every status in the unfiltered organizer roster", async () => {
+    await seedRegistration("cancelled@example.test", "Cancelled");
+    await env.DB.prepare("UPDATE registrations SET status='cancelled' WHERE event_id=?").bind(eventId).run();
+    await seedRegistration("registered@example.test", "Registered");
+    const response = await exportCsv();
+    expect(response.status).toBe(200);
+    const csv = await response.text();
+    expect(csv).toContain("cancelled@example.test");
+    expect(csv).toContain("registered@example.test");
+  });
   it("exports each day's configured attendance label rather than a registration summary", async () => {
     await seedRegistration("mixed@example.test", "Mixed");
     const [registration] = await queryAll<{ id: string }>(

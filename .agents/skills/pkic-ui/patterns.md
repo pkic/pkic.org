@@ -22,7 +22,7 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 
 - Use: `assets/ts/ui/Menu.tsx` (`MenuItem`: `danger`, `disabled`, `checked`, `multiple`, `keepOpen`, `separatorBefore`, `children` for a submenu). Row ends: `RowActions`. Create command: `SplitButton`.
 - Shape: the ellipsis trigger is square and as tall as a text button beside it at either density (`variant="icon"`) or labeled trigger (`variant="plain"`); a vertical list of text items. Disabled items stay visible. Destructive items last, after a separator, in the danger tone.
-- Placement: below the trigger; `align="end"` at a row or panel end; submenus open to the right and flip left.
+- Placement: below the trigger; `align="end"` at a row or panel end. Desktop submenus adjoin their parent panel, keep the active parent highlighted, and open toward available viewport space. On phones, show one panel at a time with a Back item and the current submenu heading.
 - Dismissal: Escape (focus back to the trigger; in a submenu one level back), outside click, Tab, or selecting an item (unless `keepOpen`).
 - Keyboard: Enter/Space/ArrowDown open on the first item, ArrowUp on the last; arrows wrap and skip disabled items; Home/End; ArrowRight opens a submenu, ArrowLeft returns.
 
@@ -45,9 +45,9 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 
 ## Tooltip (`tooltip`)
 
-- Use: the native `title` attribute, identical to the control's `aria-label`. There is no custom tooltip component; do not build one.
+- Use native `title` for a short icon-control label. Use the shared `Tooltip` for structured descriptions such as attendance dates: accessible on hover, focus and tap; Escape and outside press dismiss it. Keep the trigger named and use `aria-describedby` for the description.
 - Shape and placement: the browser's own, on hover. Every icon-only control has one. Truncated table cells get the full value as `title` (handled by `DataTable`).
-- Dismissal and keyboard: the browser's. Never put essential information only in a tooltip.
+- Dismissal and keyboard: native titles follow the browser; structured tooltips must remain hoverable and dismiss with Escape. ArrowDown from the trigger focuses the help for keyboard scrolling; Escape returns focus to the trigger. Never put essential information only in a tooltip.
 
 ## Toast (`toast`)
 

@@ -1,3 +1,4 @@
+import { TooltipPreview } from "./TooltipPreview";
 import { ServerSelectPreview } from "./ServerSelectPreview";
 import { RegistrationFieldsPreview } from "./RegistrationFieldsPreview";
 import { VerifiedOrganizationPreview, ProposalIdentityPreview } from "./VerifiedOrganizationPreview";
@@ -422,14 +423,8 @@ export const patternSections: PreviewSection[] = [
   {
     id: "tooltip",
     title: "Tooltip",
-    note: "Native title on icon-only controls, paired with the same accessible name. No custom tooltip component.",
-    render: () => (
-      <div class="pk-preview__shelf">
-        <Button icon aria-label="Add a speaker" title="Add a speaker">
-          <IconPlus />
-        </Button>
-      </div>
-    ),
+    note: "Short icon labels use native titles. Structured help is available on hover, focus and tap, without clipping inside a table.",
+    render: () => <TooltipPreview />,
   },
   {
     id: "input-group",

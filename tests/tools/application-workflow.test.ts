@@ -56,8 +56,32 @@ describe("application validation coverage", () => {
       const steps = entry.value.get("steps");
       if (isSeq(steps)) commands.push(...steps.items.filter(isMap).map((step) => String(step.get("run"))));
     }
-    for (const suite of ["unit", "frontend", "tools"]) expect(commands).toContain(`pnpm run test:${suite} --bail=1`);
+    for (const suite of ["unit", "tools"]) expect(commands).toContain(`pnpm run test:${suite} --bail=1`);
+    for (const shard of ["1/2", "2/2"]) expect(commands).toContain(`pnpm run test:frontend --shard=${shard} --bail=1`);
     expect(commands).toContain("pnpm run test:e2e:ci");
+  });
+
+  it("partitions frontend coverage with setup headroom and runs tooling once", () => {
+    let toolingCount = 0;
+    for (const shard of [1, 2]) {
+      const job = workflow.getIn(["jobs", `frontend-tools-${shard}`]);
+      if (!isMap(job)) throw new Error("Expected frontend validation job");
+      expect(job.get("strategy")).toBeUndefined();
+      expect(job.get("continue-on-error")).toBeUndefined();
+      const steps = job.get("steps");
+      if (!isSeq(steps)) throw new Error("Expected frontend test steps");
+      const frontend = steps.items.filter(isMap).find((step) => step.get("name") === "Run frontend component tests");
+      expect(frontend?.get("timeout-minutes")).toBe(10);
+      expect(job.get("timeout-minutes")).toBe(20);
+      expect(frontend?.get("run")).toBe(`pnpm run test:frontend --shard=${shard}/2 --bail=1`);
+      const tooling = steps.items.filter(isMap).find((step) => step.get("name") === "Run tooling tests");
+      if (tooling) {
+        toolingCount++;
+        expect(tooling.get("if")).toBeUndefined();
+        expect(tooling.get("run")).toBe("pnpm run test:tools --bail=1");
+      }
+    }
+    expect(toolingCount).toBe(1);
   });
 
   it("uses a preinstalled browser image matching the locked Playwright version", () => {
@@ -76,15 +100,18 @@ describe("application validation coverage", () => {
     expect(String(workflow.getIn(["jobs", "application", "if"]))).toBe("always()");
     expect(workflow.getIn(["jobs", "application", "name"])).toBe("Application checks (fail-fast sequence)");
     expect(workflow.getIn(["jobs", "application", "continue-on-error"])).toBeUndefined();
-    expect(jobNames.sort()).toEqual(["browser", "frontend-tools", "preflight", "worker"]);
+    expect(jobNames.sort()).toEqual(["browser", "frontend-tools-1", "frontend-tools-2", "preflight", "worker"]);
     expect(aggregate().status).toBe(0);
   });
 
-  it.each(["preflight", "frontend-tools", "browser", "worker"])("rejects a failed %s job", (job) => {
-    expect(aggregate({ [job]: "failure" }).status).toBe(1);
-  });
+  it.each(["preflight", "frontend-tools-1", "frontend-tools-2", "browser", "worker"])(
+    "rejects a failed %s job",
+    (job) => {
+      expect(aggregate({ [job]: "failure" }).status).toBe(1);
+    },
+  );
 
   it.each(["cancelled", "skipped"])("rejects a %s required job", (result) => {
-    expect(aggregate({ worker: result }).status).toBe(1);
+    for (const job of jobNames) expect(aggregate({ [job]: result }).status).toBe(1);
   });
 });

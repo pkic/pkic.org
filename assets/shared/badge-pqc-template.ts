@@ -1,5 +1,6 @@
 import { pqcBadgeDotGridSvg } from "./badge-pqc-dot-grid";
 import { z } from "zod";
+import { eventResourceCoreSchema } from "./schemas/event-management";
 import { constants } from "../design/tokens";
 import { BADGE_GENERIC_FONT_CSS } from "./badge-generic-font-css";
 import { BADGE_PQC_ARTWORK_ASSETS } from "./badge-pqc-template-assets";
@@ -11,6 +12,7 @@ import {
   badgeSponsorSourceSchema,
   type BadgeSponsorSource,
   badgeTemplateAssetSchema,
+  badgeTemplateCustomTextSchema,
   badgeTemplateSponsorGroupSchema,
   eventBadgeTemplateSchema,
   type EventBadgeTemplate,
@@ -26,8 +28,7 @@ export const PQC_CONFERENCE_BADGE_LINKS = {
 /**
  * The site's own font files, which the badge embeds so it prints identically everywhere: Roboto for text, Roboto Mono
  * for labels and codes, and Barokah Signature (Alifinart Studio, https://www.behance.net/alifinart) for the city line.
- * Callers supply the bytes (the browser loads these URLs on demand) so the font payload never ships inside a script
- * bundle. Provenance and licenses are in static/fonts/BadgeDesign-PROVENANCE.md.
+ * Callers supply the bytes; the editor loads these URLs on demand rather than bundling the font payload. Provenance and licenses are in static/fonts/BadgeDesign-PROVENANCE.md.
  */
 export const PQC_CONFERENCE_BADGE_FONT_URLS = {
   roboto_latin: "/fonts/Roboto-latin.woff2",
@@ -47,7 +48,9 @@ export const PQC_CONFERENCE_BADGE_SPONSOR_GROUPS = [
 const printedLine = (max: number) => z.string().trim().max(max);
 export const pqcConferenceBadgeTemplateInputSchema = z
   .object({
-    title: printedLine(160).min(1),
+    title: eventResourceCoreSchema.shape.name.trim().min(1),
+    cityscape: z.boolean().default(true),
+    customTextOverlay: badgeTemplateCustomTextSchema.optional(),
     dates: printedLine(80),
     city: printedLine(80),
     /** The lead tier prints on both sides; the second tier prints on the back, as designed. */
@@ -125,7 +128,7 @@ function tiles(asset: string, count: number, className: string): string {
 function opticalLogo(areaPx: number, maxHeightPx: number, maxWidthPx: number): string {
   const aspect = "var(--badge-logo-aspect,2.8)";
   const height = `min(${mm(maxHeightPx)},calc(sqrt(${areaPx * 0.0625} / ${aspect}) * 1mm),calc(${mm(maxWidthPx)} / ${aspect}))`;
-  return `flex:0 0 auto;height:${height};width:calc(${height} * ${aspect})`;
+  return `flex:0 1 auto;height:${height};width:calc(${height} * ${aspect})`;
 }
 
 /** The front role band and the back footer share one height, so their top edges line up across both sides. */
@@ -187,7 +190,7 @@ ${PQC_FONT_FACE_CSS}
 .pqc-badge .badge-template-sponsor-logo{max-width:none;max-height:none;min-width:0}
 .pqc-front-sponsors{padding:0 ${mm(32)} ${mm(20)}}.pqc-front-sponsors:empty,.pqc-back-lead:empty,.pqc-back-tier:empty{display:none}
 .pqc-front-sponsors .badge-template-sponsors{align-items:flex-start;gap:4mm}.pqc-front-sponsors .badge-template-sponsor-tier{font-size:2.1mm}
-.pqc-front-sponsors .badge-template-sponsor-logos{flex-wrap:nowrap;justify-content:flex-start;gap:${mm(24)};width:100%}
+.pqc-front-sponsors .badge-template-sponsor-logos{flex-wrap:nowrap;justify-content:flex-start;gap:min(${mm(24)},calc(50% / var(--badge-sponsor-count,1)));width:100%}
 .pqc-front-sponsors .badge-template-sponsor-logo{${opticalLogo(5200, 40, 150)}}
 .pqc-role{flex:0 0 ${BAR_MM}mm;height:${BAR_MM}mm;display:flex;align-items:center;padding:0 ${mm(32)};background:var(--badge-role-color);color:var(--badge-role-text);${mono};font-size:${mm(20)};font-weight:600;letter-spacing:0.18em;text-transform:uppercase}
 .pqc-back-body{flex:1;min-height:0;display:flex;flex-direction:column;padding:12.5mm ${mm(32)} 9.5mm}
@@ -205,7 +208,7 @@ ${PQC_FONT_FACE_CSS}
 .pqc-back-sponsors .badge-template-sponsors{align-items:stretch;gap:4.5mm}
 .pqc-back-sponsors .badge-template-sponsor-tier{display:flex;align-items:center;gap:${mm(10)};font-size:2mm}
 .pqc-back-sponsors .badge-template-sponsor-tier::before,.pqc-back-sponsors .badge-template-sponsor-tier::after{content:"";flex:1;height:0.25mm;background:${c["pqc-rule"]}}
-.pqc-back-lead .badge-template-sponsor-logos{flex-wrap:nowrap;gap:${mm(28)}}.pqc-back-lead .badge-template-sponsor-logo{${opticalLogo(5200, 44, 160)}}
+.pqc-back-lead .badge-template-sponsor-logos{flex-wrap:nowrap;gap:min(${mm(28)},calc(50% / var(--badge-sponsor-count,1)));width:100%}.pqc-back-lead .badge-template-sponsor-logo{${opticalLogo(5200, 44, 160)}}
 .pqc-back-tier .badge-template-sponsor-logos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:${mm(14)} ${mm(24)}}.pqc-back-tier .badge-template-sponsor-logo{justify-self:center;${opticalLogo(1500, 26, 120)}}
 .pqc-back-canal{position:relative;flex:0 0 ${CANAL_MM}mm;margin:-${CANAL_MM}mm 0 -${CANAL_FOOT_MM}mm;display:flex;overflow:hidden;opacity:0.16}.pqc-back-canal-tile{flex:0 0 auto;width:${mm((28 * 457) / 326)};height:${CANAL_MM}mm}
 .pqc-back-footer{flex:0 0 ${BAR_MM}mm;height:${BAR_MM}mm;display:flex;align-items:center;justify-content:space-between;padding:0 ${mm(32)};background:${c["pqc-ink"]}}
@@ -220,7 +223,7 @@ ${PQC_FONT_FACE_CSS}
  */
 export function createPqcConferenceBadgeTemplate(input: PqcConferenceBadgeTemplateInput): EventBadgeTemplate {
   const parsed = pqcConferenceBadgeTemplateInputSchema.parse(input);
-  const { title, dates, city, fonts, links } = parsed;
+  const { title, dates, city, fonts, links, cityscape, customTextOverlay } = parsed;
   const sponsorGroups = parsed.sponsorGroups.map((group, index) => ({
     key: `${group.source}-${index + 1}`,
     source: group.source,
@@ -229,9 +232,11 @@ export function createPqcConferenceBadgeTemplate(input: PqcConferenceBadgeTempla
   }));
   const slot = (index: number) => (sponsorGroups[index] ? `{{sponsors:${sponsorGroups[index].key}}}` : "");
   const line = (value: string, className: string) => (value ? `<p class="${className}">${text(value)}</p>` : "");
-  const field = `<div class="pqc-field"><img src="asset:dot_grid" alt="" class="pqc-dots"/><img src="asset:mark" alt="" class="pqc-mark"/>${tiles("canal_houses", 4, "pqc-canal")}<img src="asset:logo_white" alt="PKI Consortium" class="pqc-logo"/><div class="pqc-event">${line(title, "pqc-title")}${line(dates, "pqc-dates")}${line(city, "pqc-city")}</div></div>`;
+  const field = `<div class="pqc-field"><img src="asset:dot_grid" alt="" class="pqc-dots"/><img src="asset:mark" alt="" class="pqc-mark"/>${cityscape ? tiles("canal_houses", 4, "pqc-canal") : ""}<img src="asset:logo_white" alt="PKI Consortium" class="pqc-logo"/><div class="pqc-event">${line(title, "pqc-title")}${line(dates, "pqc-dates")}${line(city, "pqc-city")}</div></div>`;
+  const note = customTextOverlay?.trim() ? line(customTextOverlay, "pqc-note") : "";
   const person =
-    '<div class="pqc-person"><div class="pqc-names"><p class="pqc-first">{{firstName}}</p><p class="pqc-last">{{lastName}}</p><p class="pqc-display">{{displayName}}</p><p class="pqc-job">{{jobTitle}}</p><p class="pqc-org">{{organization}}</p></div><div class="pqc-qr-column"><div class="pqc-qr">{{qrImage}}</div><span class="pqc-code">{{badgeCode}}</span></div></div>';
+    '<div class="pqc-person"><div class="pqc-names"><p class="pqc-first">{{firstName}}</p><p class="pqc-last">{{lastName}}</p><p class="pqc-display">{{displayName}}</p><p class="pqc-job">{{jobTitle}}</p><p class="pqc-org">{{organization}}</p></div><div class="pqc-qr-column"><div class="pqc-qr">{{qrImage}}</div><span class="pqc-code">{{badgeCode}}</span></div></div>' +
+    note;
   const backLinks = `<span class="pqc-key">ID</span><span class="pqc-value pqc-id">{{badgeCode}}</span>${[
     ["Agenda", links.agenda],
     ["Q&A", links.questions],
@@ -251,14 +256,20 @@ export function createPqcConferenceBadgeTemplate(input: PqcConferenceBadgeTempla
     widthMm: 105,
     heightMm: 148,
     frontHtml: `<div class="pqc-badge pqc-front">${field}<div class="pqc-stripe"></div>${person}<div class="pqc-front-sponsors">${slot(0)}</div><div class="pqc-role">{{badgeRole}}</div></div>`,
-    backHtml: `<div class="pqc-badge pqc-back"><div class="pqc-stripe"></div><div class="pqc-back-body"><div class="pqc-back-person"><p class="pqc-back-name">{{displayName}}</p><p class="pqc-back-meta"><strong class="pqc-back-job">{{jobTitle}}</strong><span class="pqc-back-org">{{organization}}</span></p></div>${backDetails}${backSponsors}</div>${tiles("canal_houses_ink", 11, "pqc-back-canal")}${footer}</div>`,
-    css: css(),
+    backHtml: `<div class="pqc-badge pqc-back"><div class="pqc-stripe"></div><div class="pqc-back-body"><div class="pqc-back-person"><p class="pqc-back-name">{{displayName}}</p><p class="pqc-back-meta"><strong class="pqc-back-job">{{jobTitle}}</strong><span class="pqc-back-org">{{organization}}</span></p></div>${backDetails}${note}${backSponsors}</div>${cityscape ? tiles("canal_houses_ink", 11, "pqc-back-canal") : ""}${footer}</div>`,
+    css:
+      css() +
+      `.pqc-note{font-size:8pt;line-height:1.2;white-space:pre-wrap;overflow-wrap:anywhere}.pqc-front .pqc-note{padding:0 ${mm(32)} ${mm(8)}}`,
     assets: {
       ...fonts,
       logo_white: BADGE_PQC_ARTWORK_ASSETS.logo_white,
       mark: BADGE_PQC_ARTWORK_ASSETS.mark,
-      canal_houses: BADGE_PQC_ARTWORK_ASSETS.canal_houses,
-      canal_houses_ink: badgeTemplateVectorAsset(inkCanalHouses()),
+      ...(cityscape
+        ? {
+            canal_houses: BADGE_PQC_ARTWORK_ASSETS.canal_houses,
+            canal_houses_ink: badgeTemplateVectorAsset(inkCanalHouses()),
+          }
+        : {}),
       dot_grid: badgeTemplateVectorAsset(pqcBadgeDotGridSvg()),
     },
     sponsorGroups,
@@ -281,7 +292,8 @@ export function pqcConferenceBadgeTemplateForEvent(
   fonts: PqcConferenceBadgeTemplateInput["fonts"],
 ): EventBadgeTemplate {
   return createPqcConferenceBadgeTemplate({
-    title: event.name.trim().slice(0, 160),
+    title: event.name.trim(),
+    cityscape: false,
     dates: event.startsAt ? formatDateRange(event.startsAt, event.endsAt, event.timezone) : "",
     city: event.city?.trim() ?? "",
     sponsorGroups: [

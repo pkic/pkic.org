@@ -15,6 +15,7 @@ import {
   registrationBadgeResponseSchema,
 } from "../assets/shared/schemas/participant-roles";
 import { sanitizeSvgLogo, SVG_LOGO_LIVE_TEXT_MESSAGE } from "../functions/_lib/utils/svg-logo";
+import { getBadgePrintingContext } from "../functions/_lib/services/event-participation/badge-print-branding";
 import { hashBadgeCredential } from "../functions/_lib/services/event-participation/badge-hash";
 import type { DatabaseLike, Env } from "../functions/_lib/types";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
@@ -164,24 +165,79 @@ describe("Event-owned authenticated badge print metadata and branding", () => {
     expect(fresh.template!.frontHtml).toContain("Renamed local conference");
     expect(fresh.revision).not.toBe(captured.revision);
   });
-  it("refuses a canonical persisted event title that cannot fit the generic template without print effects", async () => {
-    const captured = await context();
-    const eventName = eventResourceCoreSchema.shape.name.parse("Persisted event " + "x".repeat(40000));
-    await env.DB.prepare("UPDATE events SET name=?,settings_json='{}' WHERE id=?")
-      .bind(eventName, fixture.eventId)
+  it("uses current event dates and city and rejects release after either changes", async () => {
+    await env.DB.prepare(
+      "UPDATE events SET settings_json='{}',city='London',starts_at='2027-02-10T09:00:00.000Z',ends_at='2027-02-12T17:00:00.000Z',timezone='Europe/London' WHERE id=?",
+    )
+      .bind(fixture.eventId)
       .run();
-    const before = await printAudits();
-    const responses = [
-      { response: await request(`${base}/printing`), contract: badgePrintingRouteSchema.responses["422"] },
-      { response: await print(captured.revision), contract: badgePrintRouteSchema.responses["422"] },
-    ];
-    for (const { response, contract } of responses) {
-      expect(response.status).toBe(422);
-      const refusal = contract.content["application/json"].schema.parse(await response.json());
-      expect(refusal).toMatchObject({ error: { code: "BADGE_TEMPLATE_INVALID" } });
-      expect(JSON.stringify(refusal)).not.toContain(eventName);
-    }
-    expect(await printAudits()).toEqual(before);
+    const captured = await context();
+    expect(captured.template!.frontHtml).toContain("London");
+    expect(captured.template!.frontHtml).toContain("2027");
+    expect(captured.template!.assets).not.toHaveProperty("canal_houses");
+    expect((await print(captured.revision)).status).toBe(200);
+    await env.DB.prepare("UPDATE events SET city='Paris' WHERE id=?").bind(fixture.eventId).run();
+    expect((await print(captured.revision)).status).toBe(409);
+    const moved = await context();
+    expect(moved.template!.frontHtml).toContain("Paris");
+    await env.DB.prepare("UPDATE events SET ends_at='2027-02-13T17:00:00.000Z' WHERE id=?").bind(fixture.eventId).run();
+    expect((await print(moved.revision)).status).toBe(409);
+  });
+  it.each([
+    {
+      column: "name",
+      value: eventResourceCoreSchema.shape.name.parse("Persisted event " + "x".repeat(40000)),
+      field: "event name",
+    },
+    { column: "city", value: "x".repeat(81), field: "event city" },
+    { column: "timezone", value: "Not/AZone", field: "event time zone" },
+    { column: "starts_at", value: "invalid-start", field: "event start date" },
+    { column: "ends_at", value: "invalid-end", field: "event end date" },
+  ] as const)(
+    "names invalid stored $column details consistently without print effects",
+    async ({ column, value, field }) => {
+      const captured = await context();
+      await env.DB.prepare(`UPDATE events SET ${column}=?,settings_json='{}' WHERE id=?`)
+        .bind(value, fixture.eventId)
+        .run();
+      const before = await printAudits();
+      const responses = [
+        { response: await request(`${base}/printing`), contract: badgePrintingRouteSchema.responses["422"] },
+        { response: await print(captured.revision), contract: badgePrintRouteSchema.responses["422"] },
+      ];
+      for (const { response, contract } of responses) {
+        expect(response.status).toBe(422);
+        const refusal = contract.content["application/json"].schema.parse(await response.json());
+        expect(refusal).toMatchObject({ error: { code: "BADGE_TEMPLATE_INVALID" } });
+        expect(refusal.error.message).toContain(field);
+        expect(JSON.stringify(refusal)).not.toContain(value);
+      }
+      await expect(getBadgePrintingContext(env.DB, env, fixture.eventId, [])).rejects.toMatchObject({
+        status: 422,
+        code: "BADGE_TEMPLATE_INVALID",
+        message: expect.stringContaining(field),
+      });
+      expect(await printAudits()).toEqual(before);
+    },
+  );
+  it("normalizes legacy offset dates and keeps saved templates independent of malformed event dates", async () => {
+    await env.DB.prepare(
+      "UPDATE events SET starts_at='2027-02-11T09:00:00+01:00',ends_at='2027-02-12T18:00:00+01:00',settings_json='{}' WHERE id=?",
+    )
+      .bind(fixture.eventId)
+      .run();
+    const normalized = await context();
+    expect(normalized.template).not.toBeNull();
+    await env.DB.prepare(
+      "UPDATE events SET starts_at='2027-02-11T08:00:00.000Z',ends_at='2027-02-12T17:00:00.000Z' WHERE id=?",
+    )
+      .bind(fixture.eventId)
+      .run();
+    expect((await context()).revision).toBe(normalized.revision);
+    await env.DB.prepare("UPDATE events SET starts_at='invalid',ends_at='invalid',settings_json=? WHERE id=?")
+      .bind(JSON.stringify({ badgeTemplate: template }), fixture.eventId)
+      .run();
+    expect((await context()).template).toEqual(template);
   });
   it("keeps explicit uploaded templates as overrides and uses self-contained generic artwork without a bucket", async () => {
     expect((await context()).template).toEqual(template);

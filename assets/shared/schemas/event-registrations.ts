@@ -1,3 +1,4 @@
+import { countryCodeSchema } from "../countries";
 import { z } from "zod";
 import { successResponseSchema, utcInstantSchema } from "./api-common";
 import { eventAttendanceTypeValueSchema, eventDayDateSchema, eventSummarySchema } from "./event-read-models";
@@ -145,8 +146,11 @@ export const eventAttendanceRegistrationsQuerySchema = eventRegistrationsQuerySc
     sort: true,
     status: true,
     waitlisted: true,
+    consent: true,
   })
   .extend({
+    job_title: z.string().trim().min(1).max(200).optional(),
+    country: countryCodeSchema.optional(),
     /** Match an attendance option selected on at least one day. */
     attendance_type: eventAttendanceTypeValueSchema.optional(),
     day_dates: registrationDayDatesQuerySchema.optional(),
@@ -159,7 +163,7 @@ export type EventAttendanceRegistrationsQuery = z.infer<typeof eventAttendanceRe
 
 /**
  * Least-privilege attendee list used by selected-group attendance managers.
- * Referral, form-answer, RSVP payload, delivery, and sponsor-consent fields
+ * Referral, form-answer, RSVP payload, and delivery fields
  * deliberately remain exclusive to the full administrator read model above.
  */
 export const eventAttendanceRegistrationSummarySchema = registrationRecordContextSchema
@@ -174,6 +178,9 @@ export const eventAttendanceRegistrationSummarySchema = registrationRecordContex
     /** Waiting for a day while holding no verified work address: handled after every other entry. */
     waitlist_handled_last: z.boolean(),
     job_title: z.string().nullable(),
+    country: z.string().nullable().default(null),
+    sponsor_consent: z.boolean().default(false),
+    badge_role: badgeDisplayRoleSchema.default("attendee"),
     status: eventRegistrationStatusSchema,
     days: z.array(registrationDayStateSchema),
   });

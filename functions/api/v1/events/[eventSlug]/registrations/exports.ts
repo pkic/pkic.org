@@ -17,6 +17,7 @@ async function handleEventRegistrationExport(
     { id: event.id, source_mode: event.source_mode ?? null },
     actor.id,
     getCsvExportLimits(c.env),
+    {},
   );
   return csvResponse(result.csv, `${event.slug}-attendees.csv`);
 }
