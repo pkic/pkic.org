@@ -1,5 +1,9 @@
 import type { Context, Hono, Next } from "hono";
-import { requireUserBackedAdminFromRequest } from "../../../../_lib/auth/admin";
+import {
+  prepareUserBackedAdminFromRequest,
+  withPreparedRequestAdmin,
+  requireUserBackedAdminFromRequest,
+} from "../../../../_lib/auth/admin";
 import { requestDb, type RequestDbContext } from "../../../../_lib/db/context";
 
 async function requireEventManagementIdentity(c: Context<RequestDbContext>, next: Next) {
@@ -9,7 +13,12 @@ async function requireEventManagementIdentity(c: Context<RequestDbContext>, next
 
 /** Register management identity checks after the public form placement route. */
 export function registerEventManagementAuthentication(app: Hono<RequestDbContext>): void {
-  app.use("/settings", requireEventManagementIdentity);
+  app.use("/settings", async (c, next) => {
+    const read = await prepareUserBackedAdminFromRequest(requestDb(c), c.req.raw, c.env);
+    if (!read) await requireUserBackedAdminFromRequest(requestDb(c), c.req.raw, c.env);
+    else c.env = withPreparedRequestAdmin(c.env, c.req.raw, read);
+    await next();
+  });
   app.use("/agenda/transfers", requireEventManagementIdentity);
   app.use("/agenda/transfers/*", requireEventManagementIdentity);
   app.use("/agenda/occurrences/filters", requireEventManagementIdentity);

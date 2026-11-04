@@ -35,7 +35,7 @@ import { grantResourceToGroup } from "../functions/_lib/services/resource-grants
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery, mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import { seedPersona } from "./personas/seed";
@@ -1121,11 +1121,15 @@ describe("group event management routes", () => {
     const created = await createGroupEvent(fixture);
     await expect(
       updateGroupManagedEventSettings(
-        mutateBeforeNextBatch(env.DB, async () => {
-          await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE user_id = ?")
-            .bind(fixture.ownerLeader.id)
-            .run();
-        }),
+        mutateBeforeMatchingQuery(
+          env.DB,
+          (sql) => sql.includes("INSERT INTO event_resource_management_guards"),
+          async () => {
+            await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE user_id = ?")
+              .bind(fixture.ownerLeader.id)
+              .run();
+          },
+        ),
         fixture.ownerLeader,
         fixture.ownerGroupId,
         created.id,
@@ -1144,15 +1148,19 @@ describe("group event management routes", () => {
       .run();
     await expect(
       updateGroupManagedEventSettings(
-        mutateBeforeNextBatch(env.DB, async () => {
-          await env.DB.prepare(
-            `INSERT INTO event_series
+        mutateBeforeMatchingQuery(
+          env.DB,
+          (sql) => sql.includes("INSERT INTO event_resource_management_guards"),
+          async () => {
+            await env.DB.prepare(
+              `INSERT INTO event_series
                (id, event_id, starts_at, recurrence_rule, timezone, duration_minutes, active, created_at, updated_at)
              VALUES (?, ?, ?, 'FREQ=WEEKLY', 'UTC', 60, 1, datetime('now'), datetime('now'))`,
-          )
-            .bind(crypto.randomUUID(), created.id, "2027-04-12T08:00:00.000Z")
-            .run();
-        }),
+            )
+              .bind(crypto.randomUUID(), created.id, "2027-04-12T08:00:00.000Z")
+              .run();
+          },
+        ),
         fixture.ownerLeader,
         fixture.ownerGroupId,
         created.id,

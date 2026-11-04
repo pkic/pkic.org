@@ -5,6 +5,7 @@ import {
   type AuthorizationEvidence,
 } from "../../db/authorization-guard";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
+import { sqlValue } from "../../db/sql-value";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
@@ -44,6 +45,7 @@ function groupAuthorizationEvidence(
   requestedGroups: RequestedGroupsEvidence,
   permission: string,
   mode: GroupManagementAuthorizationMode,
+  memberSelection?: AuthorizationEvidence,
 ): AuthorizationEvidence {
   if (actor.scopeRestricted && actor.scopes?.includes(permission) !== true) {
     return deniedAuthorizationEvidence();
@@ -83,6 +85,7 @@ function groupAuthorizationEvidence(
     return deniedAuthorizationEvidence();
   }
 
+  const selectedMember = sqlValue(memberSelection ?? actor.memberId ?? null);
   const contextualRolePredicate =
     mode === "effective"
       ? `(actor_role.context_type = 'group' AND EXISTS (
@@ -138,7 +141,7 @@ function groupAuthorizationEvidence(
                     AND (
                       actor_role.member_id IS NULL
                       OR (
-                      actor_role.member_id = ?
+                      actor_role.member_id = ${selectedMember.sql}
                         AND actor_role.identity_id IS NOT NULL
                         AND actor_role.context_type = 'group'
                         AND EXISTS (
@@ -170,7 +173,7 @@ function groupAuthorizationEvidence(
                )
              )
            LIMIT 1`,
-    bindings: [...requestedGroups.bindings, actor.id, permission, actor.memberId ?? null, permission],
+    bindings: [...requestedGroups.bindings, actor.id, permission, ...selectedMember.bindings, permission],
   };
 }
 
@@ -207,12 +210,14 @@ export function groupManagementAuthorizationEvidence(
 export function groupManagementCandidateAuthorizationEvidence(
   actor: AuthAdmin,
   groupIdExpression = "g.id",
+  memberSelection?: AuthorizationEvidence,
 ): AuthorizationEvidence {
   return groupAuthorizationEvidence(
     actor,
     { sql: `SELECT ${groupIdExpression}`, bindings: [] },
     "groups:write",
     "effective",
+    memberSelection,
   );
 }
 

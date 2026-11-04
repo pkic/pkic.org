@@ -1,8 +1,11 @@
+import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
+import type { DatabaseLike } from "../functions/_lib/types";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { seedPersona } from "./personas/seed";
 import { groupEventDetailResponseSchema } from "../assets/shared/schemas/group-events";
 import { eventManagementDetailResponseSchema } from "../assets/shared/schemas/event-management";
 import { seedEventAndAdmin } from "./helpers/context";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMcpSession } from "./helpers/auth";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { isReadOnlySql } from "../functions/_lib/db/read-only-sql";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -86,17 +89,22 @@ async function groupProposalCall(groupManaged = false) {
     ? await seedPersona(env.DB, "groupLead", { groupId })
     : await seedPersona(env.DB, "eventOrganizer", { eventId });
   const token = await createAdminSession(env.DB, organizer.userId, "group-form-call-organizer");
-  const save = (settings: object, expectedUpdatedAt = updatedAt) =>
+  const save = (
+    settings: object,
+    expectedUpdatedAt = updatedAt,
+    db: DatabaseLike = env.DB,
+    authorizationToken = token,
+  ) =>
     callApi(
-      env,
+      { ...env, DB: db },
       groupManaged ? `/api/v1/groups/${groupId}/events/${eventId}/settings` : "/api/v1/events/group-form-call/settings",
       {
         method: "PATCH",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        headers: { authorization: `Bearer ${authorizationToken}`, "content-type": "application/json" },
         body: JSON.stringify({ expectedUpdatedAt, ...settings }),
       },
     );
-  return { eventId, otherEventId, formId, placementId, groupId, updatedAt, token, save };
+  return { eventId, otherEventId, formId, placementId, groupId, updatedAt, token, organizer, save };
 }
 
 beforeEach(async () => {
@@ -111,7 +119,18 @@ describe("event call for proposals", () => {
       const definition = await getActiveFormById(env.DB, fixture.formId);
       expect(definition?.fields).toHaveLength(1);
       const closesAt = at(-1);
-      const response = await fixture.save({ proposalSubmissionWindow: { opensAt: null, closesAt } });
+      const profile = profileD1Flow(env.DB, { measurePayloadBytes: true });
+      const response = await fixture.save(
+        { proposalSubmissionWindow: { opensAt: null, closesAt } },
+        fixture.updatedAt,
+        profile.db,
+      );
+      // The complete mounted request includes live auth, preflight, atomic writes, and response projection.
+      // Two phases remain because the canonical JavaScript planner consumes the preflight snapshot.
+      expect(profile.summary().roundTrips).toBe(2);
+      expect(profile.summary().queries.every((query) => query.operation === "batch")).toBe(true);
+      expect(profile.summary().queries[0].sql).not.toMatch(/INSERT INTO|UPDATE events|DELETE FROM/);
+      expect(profile.summary().queries[1].sql).toContain("UPDATE events");
       expect(response.status).toBe(200);
       const responseSchema = groupManaged ? groupEventDetailResponseSchema : eventManagementDetailResponseSchema;
       const { event } = responseSchema.parse(await response.json());
@@ -141,6 +160,161 @@ describe("event call for proposals", () => {
       expect((await readEventProposalCall(env.DB, fixture.eventId)).open).toBe(true);
     },
   );
+
+  it.each([false, true])(
+    "saves general settings and returns their new revision in two complete request batches (group: %s)",
+    async (groupManaged) => {
+      const fixture = await groupProposalCall(groupManaged);
+      const profile = profileD1Flow(env.DB);
+      const response = await fixture.save({ name: "Updated event" }, fixture.updatedAt, profile.db);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ event: { id: fixture.eventId, name: "Updated event" } });
+      expect(profile.summary().roundTrips).toBe(2);
+    },
+  );
+
+  it.each([false, true])("refuses invalid settings credentials without D1 (group: %s)", async (groupManaged) => {
+    const fixture = await groupProposalCall(groupManaged);
+    const path = groupManaged
+      ? `/api/v1/groups/${fixture.groupId}/events/${fixture.eventId}/settings`
+      : "/api/v1/events/group-form-call/settings";
+    for (const token of [null, "invalid"]) {
+      const response = await callApi(
+        env,
+        path,
+        {
+          method: "PATCH",
+          headers: token ? { authorization: `Bearer ${token}` } : {},
+          body: JSON.stringify({ expectedUpdatedAt: fixture.updatedAt, name: "Denied" }),
+        },
+        { maxRoundTrips: 0 },
+      );
+      expect(response.status).toBe(401);
+    }
+  });
+
+  it.each(
+    [false, true].flatMap((groupManaged) =>
+      ["session", "permission", "placement"].map((changed) => ({ groupManaged, changed })),
+    ),
+  )(
+    "rolls back settings, audit, and form windows when $changed changes before commit (group: $groupManaged)",
+    async ({ groupManaged, changed }) => {
+      const fixture = await groupProposalCall(groupManaged);
+      const profile = profileD1Flow(
+        mutateBeforeMatchingQuery(
+          env.DB,
+          (sql) => /UPDATE events\s+SET/.test(sql),
+          async () => {
+            if (changed === "session") {
+              await env.DB.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ?")
+                .bind(new Date().toISOString(), fixture.organizer.userId)
+                .run();
+            } else if (changed === "permission") {
+              await env.DB.batch([
+                env.DB.prepare("UPDATE user_roles SET revoked_at = ? WHERE user_id = ?").bind(
+                  new Date().toISOString(),
+                  fixture.organizer.userId,
+                ),
+                env.DB.prepare("UPDATE permission_grants SET revoked_at = ? WHERE user_id = ?").bind(
+                  new Date().toISOString(),
+                  fixture.organizer.userId,
+                ),
+              ]);
+            } else {
+              await env.DB.prepare("UPDATE form_placements SET updated_at = ? WHERE id = ?")
+                .bind(at(-2), fixture.placementId)
+                .run();
+            }
+          },
+        ),
+      );
+      const response = await fixture.save(
+        { name: "Denied", proposalSubmissionWindow: { opensAt: null, closesAt: at(-1) } },
+        fixture.updatedAt,
+        profile.db,
+      );
+      expect(response.status).toBe(409);
+      expect(profile.summary().roundTrips).toBe(2);
+      expect((await readEventProposalCall(env.DB, fixture.eventId)).open).toBe(true);
+      expect(
+        await env.DB.prepare("SELECT updated_at, name FROM events WHERE id = ?").bind(fixture.eventId).first(),
+      ).toEqual({ updated_at: fixture.updatedAt, name: "group-form-call event" });
+      expect(
+        await env.DB.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE entity_id = ?")
+          .bind(fixture.eventId)
+          .first(),
+      ).toEqual({ count: 0 });
+    },
+  );
+
+  it("uses the selected membership when resolving group leadership in the preflight batch", async () => {
+    const fixture = await groupProposalCall(true);
+    const otherMember = await seedOrganizationAggregate(env.DB, await insertOrganization(env.DB));
+    const otherIdentity = await addRepresentative(env.DB, otherMember, fixture.organizer.userId);
+    for (const identityId of [otherIdentity, undefined]) {
+      const token = await createAdminSession(
+        env.DB,
+        fixture.organizer.userId,
+        crypto.randomUUID(),
+        env.INTERNAL_SIGNING_SECRET,
+        identityId,
+      );
+      const profile = profileD1Flow(env.DB);
+      const response = await fixture.save({ name: "Wrong membership" }, fixture.updatedAt, profile.db, token);
+      expect(response.status).toBe(403);
+      expect(profile.summary().roundTrips).toBe(1);
+    }
+    const token = await createAdminSession(
+      env.DB,
+      fixture.organizer.userId,
+      crypto.randomUUID(),
+      env.INTERNAL_SIGNING_SECRET,
+      fixture.organizer.capacities[0].identityId,
+    );
+    const profile = profileD1Flow(env.DB);
+    expect((await fixture.save({ name: "Selected membership" }, fixture.updatedAt, profile.db, token)).status).toBe(
+      200,
+    );
+    expect(profile.summary().roundTrips).toBe(2);
+  });
+
+  it.each([true, false])(
+    "retains delegated write scope ceilings during the combined settings preflight (permitted: %s)",
+    async (permitted) => {
+      const fixture = await groupProposalCall();
+      const token = await createMcpSession(
+        env.DB,
+        { id: fixture.organizer.userId, email: fixture.organizer.email },
+        crypto.randomUUID(),
+        permitted ? ["events:write"] : ["events:read"],
+      );
+      const profile = profileD1Flow(env.DB);
+      const response = await callApi({ ...env, DB: profile.db }, "/api/v1/events/group-form-call/settings", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "x-pkic-machine-auth": "mcp" },
+        body: JSON.stringify({ expectedUpdatedAt: fixture.updatedAt, name: "Delegated save" }),
+      });
+      expect(response.status).toBe(permitted ? 200 : 403);
+      expect(profile.summary().roundTrips).toBe(permitted ? 2 : 1);
+    },
+  );
+
+  it("refuses an unrelated event before decoding its form configuration", async () => {
+    const fixture = await groupProposalCall(true);
+    const response = await callApi(
+      env,
+      `/api/v1/groups/${fixture.groupId}/events/${fixture.otherEventId}/settings`,
+      {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${fixture.token}` },
+        body: JSON.stringify({ expectedUpdatedAt: fixture.updatedAt, proposalFormKey: "unavailable" }),
+      },
+      { maxRoundTrips: 1 },
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: { code: "RESOURCE_CAPABILITY_REQUIRED" } });
+  });
 
   it.each([null, "another-proposal-form"])(
     "keeps changing a group-owned form selection in group management (%s)",

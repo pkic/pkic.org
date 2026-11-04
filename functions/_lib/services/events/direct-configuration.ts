@@ -10,6 +10,16 @@ interface DirectEventStateRow {
 
 /** Direct event routes never write group-owned or meeting-series-owned resources. */
 export async function requireDirectEventConfiguration(db: DatabaseLike, event: EventRecord): Promise<void> {
+  assertDirectEventConfiguration(event, null);
+  const state = await first<DirectEventStateRow>(
+    db,
+    "SELECT id AS series_id FROM event_series WHERE event_id = ? LIMIT 1",
+    [event.id],
+  );
+  assertDirectEventConfiguration(event, state?.series_id ?? null);
+}
+
+export function assertDirectEventConfiguration(event: EventRecord, seriesId: string | null): void {
   if (event.owner_group_id || event.source_mode === "portal") {
     throw new AppError(
       409,
@@ -17,12 +27,7 @@ export async function requireDirectEventConfiguration(db: DatabaseLike, event: E
       "Group-owned events must be configured through their owning group",
     );
   }
-  const state = await first<DirectEventStateRow>(
-    db,
-    "SELECT id AS series_id FROM event_series WHERE event_id = ? LIMIT 1",
-    [event.id],
-  );
-  if (event.profile_key === "meeting" || event.profile_key === "board_meeting" || state?.series_id) {
+  if (event.profile_key === "meeting" || event.profile_key === "board_meeting" || seriesId) {
     throw new AppError(
       409,
       "EVENT_MANAGED_BY_MEETING_SERIES",

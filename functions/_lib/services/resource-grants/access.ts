@@ -1,3 +1,4 @@
+import { sqlValue, type SqlId } from "../../db/sql-value";
 import { hasPermission } from "../../auth/permissions";
 import {
   guardAuthorizedDatabase,
@@ -181,11 +182,12 @@ export function guardGroupResourceViewerDatabase<K extends ResourceGrantKind>(
 
 /** Proves that a resource is still owned by or shared with one managed group. */
 export function groupResourceContextAuthorizationEvidence<K extends ResourceGrantKind>(
-  groupId: string,
+  groupId: SqlId,
   kind: K,
   resourceId: string,
   capability: ResourceGrantCapability<K>,
 ): AuthorizationEvidence {
+  const group = sqlValue(groupId);
   const definition = getResourceGrantDefinition(kind);
   const accepted = resourceGrantCapabilitiesFor(definition, capability).filter((candidate) =>
     isManagerResourceCapability(definition, candidate),
@@ -202,14 +204,14 @@ export function groupResourceContextAuthorizationEvidence<K extends ResourceGran
   return {
     sql: `SELECT 1
             FROM ${definition.resourceTable} resource
-            JOIN groups context_group ON context_group.id = ? AND context_group.active = 1
+            JOIN groups context_group ON context_group.id = ${group.sql} AND context_group.active = 1
            WHERE resource.id = ?
              AND (
                resource.${definition.ownerGroupColumn} = context_group.id
                OR ${sharedAccess}
              )
            LIMIT 1`,
-    bindings: [groupId, resourceId, ...accepted],
+    bindings: [...group.bindings, resourceId, ...accepted],
   };
 }
 

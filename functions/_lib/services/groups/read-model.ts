@@ -15,12 +15,12 @@ import {
   GROUP_PARTICIPANT_SORT_COLUMNS,
   GROUP_SORT_COLUMNS,
 } from "../../../../assets/shared/schemas/groups";
-import { queryPage, type OffsetPageQuery } from "../../db/pagination";
+import { batchFirst, queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { all, first } from "../../db/queries";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
-import type { DatabaseLike, AuthAdmin } from "../../types";
+import type { DatabaseLike, AuthAdmin, D1StatementResult } from "../../types";
 import {
   ACTIVE_USER_CAPACITIES_CTE,
   activeParentGroupMembershipPredicate,
@@ -243,26 +243,51 @@ export async function readAuthenticatedGroupContext(
   viewer: { userId: string; admin?: AuthAdmin },
   canReadAll: boolean,
 ) {
-  const visibility = buildGroupVisibilityFilter({ userId: viewer.userId, canReadAll });
+  const read = prepareAuthenticatedGroupContext(db, idOrSlug, viewer, canReadAll);
+  return read.decode((await db.batch([read.statement]))[0]);
+}
+
+export function prepareAuthenticatedGroupContext(
+  db: DatabaseLike,
+  idOrSlug: string,
+  viewer: { userId: string; admin?: AuthAdmin },
+  canReadAll: boolean | AuthorizationEvidence,
+  memberSelection?: AuthorizationEvidence,
+) {
+  const visibility = buildGroupVisibilityFilter({ userId: viewer.userId, canReadAll: canReadAll === true });
+  const globalRead = typeof canReadAll === "object" ? canReadAll : null;
   const member = groupMembershipCandidateAuthorizationEvidence(viewer.userId);
   const manager = viewer.admin
-    ? groupManagementCandidateAuthorizationEvidence(viewer.admin)
+    ? groupManagementCandidateAuthorizationEvidence(viewer.admin, "g.id", memberSelection)
     : { sql: "SELECT 1 WHERE 0", bindings: [] };
-  const row = await first<GroupRow & { visible: number; participant: number; manager: number }>(
-    db,
-    `${GROUP_SELECT}, (g.active=1 AND (${visibility?.sql ?? "1"})) AS visible,
+  const statement = db
+    .prepare(
+      `${GROUP_SELECT}, (g.active=1 AND (${globalRead ? `EXISTS(${globalRead.sql}) OR ` : ""}${visibility?.sql ?? "1"})) AS visible,
      EXISTS(${member.sql}) AS participant, EXISTS(${manager.sql}) AS manager
      ${GROUP_FROM} WHERE g.id=? OR g.slug=?`,
-    [...(visibility?.bindings ?? []), ...member.bindings, ...manager.bindings, idOrSlug, idOrSlug],
-  );
-  return row
-    ? {
-        group: mapGroup(row),
-        visible: row.visible === 1,
-        participant: row.participant === 1,
-        manager: row.manager === 1,
-      }
-    : null;
+    )
+    .bind(
+      ...(globalRead?.bindings ?? []),
+      ...(visibility?.bindings ?? []),
+      ...member.bindings,
+      ...manager.bindings,
+      idOrSlug,
+      idOrSlug,
+    );
+  return {
+    statement,
+    decode(result: D1StatementResult) {
+      const row = batchFirst<GroupRow & { visible: number; participant: number; manager: number }>(result);
+      return row
+        ? {
+            group: mapGroup(row),
+            visible: row.visible === 1,
+            participant: row.participant === 1,
+            manager: row.manager === 1,
+          }
+        : null;
+    },
+  };
 }
 
 interface MembershipRow {
