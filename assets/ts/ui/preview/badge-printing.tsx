@@ -10,6 +10,7 @@ import { loadBadgeTemplateFonts } from "../../components/event-badges/badge-temp
 import type { BadgePrintingContext } from "../../../shared/schemas/route-contracts-event-badges";
 import { BADGE_LABEL_PRINTING_CONTEXT } from "../../../shared/badge-label-policy";
 import { BadgePrintPreview } from "../../components/event-badges/BadgePrintPreview";
+import { Alert } from "../Alert";
 import type { PreviewSection } from "./PreviewShell";
 
 const group = { key: "lead", source: "event" as const, tierName: "Diamond" };
@@ -28,6 +29,7 @@ const sampleBranding = {
 };
 
 function BadgeExample() {
+  const [error, setError] = useState("");
   const [svg, setSvg] = useState("");
   const [printing, setPrinting] = useState<BadgePrintingContext>(BADGE_LABEL_PRINTING_CONTEXT);
   useEffect(() => {
@@ -35,28 +37,34 @@ function BadgeExample() {
     void Promise.all([
       QRCode.toString("ABCDEFGHJKLMNPQR", { type: "svg", errorCorrectionLevel: "M", margin: 4 }),
       loadBadgeTemplateFonts(PQC_CONFERENCE_BADGE_FONT_URLS),
-    ]).then(([qr, fonts]) => {
-      if (!active) return;
-      const template = createPqcConferenceBadgeTemplate({
-        title: "Example conference",
-        dates: "",
-        city: "",
-        cityscape: false,
-        sponsorGroups: [{ source: group.source, tierName: group.tierName }],
-        fonts,
-        links: PQC_CONFERENCE_BADGE_LINKS,
+    ])
+      .then(([qr, fonts]) => {
+        if (!active) return;
+        const template = createPqcConferenceBadgeTemplate({
+          title: "Example conference",
+          dates: "",
+          city: "",
+          cityscape: false,
+          sponsorGroups: [{ source: group.source, tierName: group.tierName }],
+          fonts,
+          links: PQC_CONFERENCE_BADGE_LINKS,
+        });
+        setPrinting({
+          ...sampleBranding,
+          template,
+          branding: [{ ...sampleBranding.branding[0], key: template.sponsorGroups[0].key }],
+        });
+        setSvg(composeBadgePrintSvg(qr, "ABCDEFGHJKLMNPQR"));
+      })
+      .catch((cause: unknown) => {
+        if (active)
+          setError(cause instanceof Error ? cause.message : "Could not load the badge preview. Reload to try again.");
       });
-      setPrinting({
-        ...sampleBranding,
-        template,
-        branding: [{ ...sampleBranding.branding[0], key: template.sponsorGroups[0].key }],
-      });
-      setSvg(composeBadgePrintSvg(qr, "ABCDEFGHJKLMNPQR"));
-    });
     return () => {
       active = false;
     };
   }, []);
+  if (error) return <Alert tone="danger">{error}</Alert>;
   if (!svg) return null;
   return (
     <BadgePrintPreview

@@ -84,15 +84,11 @@ jobs:
         timeout-minutes: 2
         run: pnpm run test:unit --bail=1
 
-  frontend-tools:
-    name: Frontend and tooling checks (${{ matrix.shard }})
+  frontend-tools-1:
+    name: Frontend and tooling checks (1/2)
     needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: true
-      matrix:
-        shard: ["1/2", "2/2"]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -102,12 +98,27 @@ jobs:
 
       - name: Run frontend component tests
         timeout-minutes: 10
-        run: pnpm run test:frontend --shard=${{ matrix.shard }} --bail=1
+        run: pnpm run test:frontend --shard=1/2 --bail=1
 
       - name: Run tooling tests
-        if: matrix.shard == '1/2'
         timeout-minutes: 5
         run: pnpm run test:tools --bail=1
+
+  frontend-tools-2:
+    name: Frontend and tooling checks (2/2)
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: ./.github/actions/setup-validation
+
+      - name: Run frontend component tests
+        timeout-minutes: 10
+        run: pnpm run test:frontend --shard=2/2 --bail=1
 
   browser:
     name: Critical browser journeys
@@ -224,7 +235,7 @@ jobs:
   application:
     # Preserve the existing required-check name during the job split.
     name: Application checks (fail-fast sequence)
-    needs: [preflight, frontend-tools, browser, worker]
+    needs: [preflight, frontend-tools-1, frontend-tools-2, browser, worker]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 1
