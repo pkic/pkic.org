@@ -1,3 +1,5 @@
+import { runGoogleGroupsSyncPass } from "../functions/_lib/services/membership/scheduled-jobs";
+import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import { completeGoogleGroupsDirectoryEffect } from "../functions/_lib/services/google-groups/sync-queue";
 /**
  * google-groups-sync.test.ts
@@ -482,7 +484,7 @@ describe("Google Groups sync", () => {
       "SELECT idempotency_key, payload_json FROM email_outbox WHERE template_key = 'mailing-list-enrolled'",
     );
     expect(outbox).toHaveLength(1);
-    expect(outbox[0].idempotency_key).toMatch(new RegExp(`^google-groups:enrollment:[^:]+:${userId}$`));
+    expect(outbox[0].idempotency_key).toMatch(new RegExp(`^google-groups:enrollment:${userId}:[a-f0-9]{64}$`));
     expect(JSON.parse(outbox[0].payload_json)).toMatchObject({ lists: ["pqc@lists.pkic.org"] });
 
     expect(await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10)).toMatchObject({ processed: 0 });
@@ -563,44 +565,160 @@ describe("Google Groups sync", () => {
     ).toHaveLength(1);
   });
 
-  it("keeps a newly completed sync pass out of an earlier grouped enrollment email", async () => {
-    const userId = await insertUser("gg-interleaved-notification@example.test");
-    for (const googleGroupEmail of ["interleaved-a-1@lists.pkic.org", "interleaved-a-2@lists.pkic.org"]) {
+  it("sends one enrollment email after a person's additions settle across several bounded passes", async () => {
+    const userId = await insertUser("gg-across-passes@example.test");
+    const lists = ["batch-a@lists.pkic.org", "batch-b@lists.pkic.org", "batch-c@lists.pkic.org"];
+    for (const googleGroupEmail of lists)
       await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail, action: "add_to_list" });
-    }
     stubGoogleFetch(200);
     const serviceAccountEnv = await fakeServiceAccountEnv();
-    await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10);
-
-    // A later invocation gets a different stable pass identity. This models a
-    // new successful add arriving between two concurrent drain selections.
-    await enqueueGoogleGroupsSync(env.DB, {
+    for (let index = 0; index < lists.length; index++) {
+      await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 1);
+      if (index === lists.length - 1)
+        await env.DB.prepare("UPDATE users SET first_name='Current',last_name='Name' WHERE id=?").bind(userId).run();
+      expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(
+        index === lists.length - 1 ? lists.length : 0,
+      );
+    }
+    const outbox = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key='mailing-list-enrolled'",
+    );
+    expect(outbox).toHaveLength(1);
+    expect(JSON.parse(outbox[0].payload_json)).toMatchObject({ lists, memberName: "Current Name" });
+    expect(
+      await queryAll(env.DB, "SELECT recipient_email,member_name FROM google_groups_enrollment_notification_intents"),
+    ).toEqual(lists.map(() => ({ recipient_email: "", member_name: "" })));
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(0);
+  });
+  it("drains the initial backlog on subsequent cron ticks instead of waiting another 15 minutes", async () => {
+    const userId = await insertUser("gg-backlog@example.test");
+    for (let i = 0; i < 26; i++)
+      await enqueueGoogleGroupsSync(env.DB, {
+        userId,
+        googleGroupEmail: `backlog-${i}@lists.pkic.org`,
+        action: "add_to_list",
+      });
+    await env.DB.prepare("UPDATE scheduled_jobs SET wake_requested=0 WHERE job_key='google_groups_sync'").run();
+    stubGoogleFetch(200);
+    const serviceAccountEnv = await fakeServiceAccountEnv();
+    const budgeted = createD1QueryBudgetedDatabase(env.DB, 900);
+    expect(
+      await runGoogleGroupsSyncPass(
+        budgeted.db,
+        { ...env, ...serviceAccountEnv, DB: budgeted.db },
+        25,
+        budgeted.budget,
+      ),
+    ).toMatchObject({ processed: 24, succeeded: 24, failed: 0 });
+    expect(
+      await env.DB.prepare("SELECT wake_requested FROM scheduled_jobs WHERE job_key='google_groups_sync'").first(
+        "wake_requested",
+      ),
+    ).toBe(1);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='mailing-list-enrolled'"),
+    ).toHaveLength(0);
+    await runGoogleGroupsSyncPass(env.DB, { ...env, ...serviceAccountEnv });
+    const outbox = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key='mailing-list-enrolled'",
+    );
+    expect(outbox).toHaveLength(1);
+    expect(JSON.parse(outbox[0].payload_json).lists).toHaveLength(26);
+  });
+  it("retries a stale notification selection without sending overlapping list summaries", async () => {
+    const userId = await insertUser("gg-notice-race@example.test");
+    const serviceAccountEnv = await fakeServiceAccountEnv();
+    stubGoogleFetch(200);
+    await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail: "race-a@lists.pkic.org", action: "add_to_list" });
+    await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv);
+    let injected = false;
+    const db = {
+      prepare: env.DB.prepare.bind(env.DB),
+      batch: async (statements: Parameters<typeof env.DB.batch>[0]) => {
+        if (!injected) {
+          injected = true;
+          await enqueueGoogleGroupsSync(env.DB, {
+            userId,
+            googleGroupEmail: "race-b@lists.pkic.org",
+            action: "add_to_list",
+          });
+          await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv);
+        }
+        return env.DB.batch(statements);
+      },
+    };
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(db, 10)).toBe(0);
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(2);
+    const outbox = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key='mailing-list-enrolled'",
+    );
+    expect(outbox).toHaveLength(1);
+    expect(JSON.parse(outbox[0].payload_json).lists).toEqual(["race-a@lists.pkic.org", "race-b@lists.pkic.org"]);
+  });
+  it("keeps the replacement worker's notification when a stale same-generation add returns idempotently", async () => {
+    const userId = await insertUser("gg-stale-notice@example.test");
+    const id = await enqueueGoogleGroupsSync(env.DB, {
       userId,
-      googleGroupEmail: "interleaved-b@lists.pkic.org",
+      googleGroupEmail: "stale-notice@lists.pkic.org",
       action: "add_to_list",
     });
-    stubGoogleFetch(200);
-    await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10);
-
-    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 1)).toBe(2);
-    const firstOutbox = await queryAll<{ idempotency_key: string; payload_json: string }>(
-      env.DB,
-      "SELECT idempotency_key, payload_json FROM email_outbox WHERE template_key = 'mailing-list-enrolled' ORDER BY created_at",
-    );
-    expect(firstOutbox).toHaveLength(1);
-    expect(JSON.parse(firstOutbox[0].payload_json).lists).toEqual([
-      "interleaved-a-1@lists.pkic.org",
-      "interleaved-a-2@lists.pkic.org",
-    ]);
-
-    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 1)).toBe(1);
-    const allOutbox = await queryAll<{ idempotency_key: string; payload_json: string }>(
-      env.DB,
-      "SELECT idempotency_key, payload_json FROM email_outbox WHERE template_key = 'mailing-list-enrolled' ORDER BY created_at",
-    );
-    expect(allOutbox).toHaveLength(2);
-    expect(new Set(allOutbox.map((row) => row.idempotency_key)).size).toBe(2);
-    expect(JSON.parse(allOutbox[1].payload_json).lists).toEqual(["interleaved-b@lists.pkic.org"]);
+    const serviceAccountEnv = await fakeServiceAccountEnv();
+    const paused = stubGoogleFetchWithFirstDirectoryCallPaused(409);
+    const stale = processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 1);
+    await paused.directoryStarted;
+    await env.DB.prepare("UPDATE google_groups_sync_queue SET lease_expires_at='2026-01-01T00:00:00.000Z' WHERE id=?")
+      .bind(id)
+      .run();
+    await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 1);
+    paused.releaseDirectory();
+    await stale;
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(1);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='mailing-list-enrolled'"),
+    ).toHaveLength(1);
+  });
+  it("does not announce an addition when the provider reports an existing membership", async () => {
+    const userId = await insertUser("gg-existing@example.test");
+    await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: "existing@lists.pkic.org",
+      action: "add_to_list",
+    });
+    stubGoogleFetch(409);
+    expect(await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv())).toMatchObject({ succeeded: 1 });
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(0);
+    expect(await queryAll(env.DB, "SELECT queue_id FROM google_groups_enrollment_notification_intents")).toEqual([]);
+  });
+  it("applies verified additional addresses with no delivery through the same queued add/delete", async () => {
+    const userId = await insertUser("gg-primary@example.test");
+    await env.DB.prepare(
+      "INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at) VALUES ('gg-alias',?,'gg-alias@example.test','gg-alias@example.test',?,?)",
+    )
+      .bind(userId, new Date().toISOString(), new Date().toISOString())
+      .run();
+    const serviceAccountEnv = await fakeServiceAccountEnv();
+    for (const action of ["add_to_list", "remove_from_list"] as const) {
+      await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail: "aliases@lists.pkic.org", action });
+      const fetch = stubGoogleFetch(200);
+      expect(await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv)).toMatchObject({ succeeded: 1, failed: 0 });
+      const calls = fetch.mock.calls;
+      if (action === "add_to_list")
+        expect(
+          calls.some(
+            ([, init]) =>
+              init?.method === "POST" &&
+              String(init.body).includes("gg-alias@example.test") &&
+              JSON.parse(String(init.body)).delivery_settings === "NONE",
+          ),
+        ).toBe(true);
+      else
+        expect(
+          calls.some(([url, init]) => String(url).includes("gg-alias%40example.test") && init?.method === "DELETE"),
+        ).toBe(true);
+    }
   });
 
   it("rolls queue completion and notification intent back together when the outbox insert fails", async () => {

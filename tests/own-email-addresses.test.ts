@@ -1,3 +1,4 @@
+import { enqueueGoogleGroupsSync } from "../functions/_lib/services/google-groups";
 /**
  * A signed-in person manages their own email addresses: add one, prove it
  * through the emailed link, make a verified one primary, and remove one no
@@ -480,6 +481,22 @@ describe("a person's own email addresses", () => {
 
   it("resends and verifies an existing unverified address without creating another row", async () => {
     const account = await signedIn("legacy@owner.example");
+    const listEmail = "verification@lists.example.test",
+      observedAt = nowIso();
+    const original = await enqueueGoogleGroupsSync(env.DB, {
+      userId: account.userId,
+      googleGroupEmail: listEmail,
+      action: "add_to_list",
+    });
+    await env.DB.batch([
+      env.DB.prepare("UPDATE google_groups_sync_queue SET status='completed',processed_at=? WHERE id=?").bind(
+        observedAt,
+        original,
+      ),
+      env.DB.prepare(
+        "INSERT INTO google_groups_observed_membership(user_id,google_group_email,confirmed_subscribed_at,last_observed_present_at) VALUES (?,?,?,?)",
+      ).bind(account.userId, listEmail, observedAt, observedAt),
+    ]);
     const id = crypto.randomUUID(),
       email = "legacy@work.example";
     await env.DB.prepare("INSERT INTO user_emails(id,user_id,email,normalized_email,created_at) VALUES(?,?,?,?,?)")
@@ -496,6 +513,20 @@ describe("a person's own email addresses", () => {
         [account.userId, email],
       ),
     ).toEqual([{ id }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT status FROM google_groups_sync_queue WHERE user_id=? AND google_group_email=? ORDER BY generation",
+        [account.userId, listEmail],
+      ),
+    ).toEqual([{ status: "completed" }, { status: "pending" }]);
+    expect(
+      await env.DB.prepare(
+        "SELECT confirmed_subscribed_at FROM google_groups_observed_membership WHERE user_id=? AND google_group_email=?",
+      )
+        .bind(account.userId, listEmail)
+        .first("confirmed_subscribed_at"),
+    ).toBe(observedAt);
   });
 
   it("does not attach a mailbox to another account when its owner opens that account's verification link", async () => {

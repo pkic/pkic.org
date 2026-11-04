@@ -1,5 +1,4 @@
 import { createGoogleGroupsDeliveryProvider } from "../../functions/_lib/services/google-groups/directory-client";
-import { MAX_DELIVERY_INSPECTIONS } from "../../functions/_lib/services/mailing-list-subscriptions/delivery-provider";
 import { reconcileMailingListDeliveries } from "../../functions/_lib/services/mailing-list-subscriptions/reconcile-delivery-lists";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import type { DatabaseLike, StatementLike } from "../../functions/_lib/db/types";
@@ -61,27 +60,21 @@ export async function runMailingListFullDryRun(databasePath: string, env: Config
     sqlite.exec("BEGIN");
     const provider = await createGoogleGroupsDeliveryProvider(env, true);
     const report = await reconcileMailingListDeliveries(googleGroupsReadOnlyDatabase(sqlite), provider, {
-      limit: MAX_DELIVERY_INSPECTIONS,
+      limit: Number.MAX_SAFE_INTEGER,
       dryRun: true,
     });
     const entries = report.groups.flatMap((group) => group.entries);
     return {
       scope: "full_reconciliation",
-      windowLimit: MAX_DELIVERY_INSPECTIONS,
       snapshotAt: new Date().toISOString(),
       groups: report.groups,
       failed: 0,
       skippedUnconfigured: false,
       summary: Object.fromEntries(
-        [
-          "subscribe",
-          "unsubscribe",
-          "disable_delivery",
-          "enable_delivery",
-          "protected",
-          "unchanged",
-          "unsubscribed",
-        ].map((action) => [action, entries.filter((entry) => entry.action === action).length]),
+        ["subscribe", "unsubscribe", "protected", "unchanged", "unsubscribed"].map((action) => [
+          action,
+          entries.filter((entry) => entry.action === action).length,
+        ]),
       ),
     };
   } finally {

@@ -1,9 +1,8 @@
 import type { MailingListDeliveryAddress } from "./delivery-addresses";
-import {
-  MAX_DELIVERY_INSPECTIONS,
-  type MailingListDeliveryChange,
-  type MailingListDeliveryMember,
-  type MailingListDeliveryProvider,
+import type {
+  MailingListDeliveryChange,
+  MailingListDeliveryMember,
+  MailingListDeliveryProvider,
 } from "./delivery-provider";
 
 export interface MailingListDeliveryPlanEntry {
@@ -12,10 +11,9 @@ export interface MailingListDeliveryPlanEntry {
   userId?: string;
   action: MailingListDeliveryChange["action"] | "unchanged" | "protected" | "unsubscribed";
   alias: boolean;
-  delivery?: "all" | "none";
+  delivery?: "none";
 }
 
-/** Plan primary and alias delivery separately, preserving protected members and observed departures. */
 export function planMailingListDelivery(
   addresses: MailingListDeliveryAddress[],
   members: MailingListDeliveryMember[],
@@ -29,22 +27,20 @@ export function planMailingListDelivery(
     const base = {
       email,
       alias,
-      delivery: target?.noDelivery ? ("none" as const) : ("all" as const),
+      ...(target?.noDelivery ? { delivery: "none" as const } : {}),
       ...(target ? { userId: target.userId, primaryEmail: target.primaryEmail } : {}),
     };
     if (member?.protected) return { ...base, action: "protected" };
     const left = target?.confirmedSubscribed && !actual.has(target.primaryEmail);
     if (left && !alias) return { ...base, action: "unsubscribed" };
     if (!target || left) return { ...base, action: member ? "unsubscribe" : "unchanged" };
-    if (!member) return { ...base, action: "subscribe" };
-    if (target.noDelivery && member.delivery === "all") return { ...base, action: "disable_delivery" };
-    if (target.restoreDelivery && !target.noDelivery && member.delivery === "none")
-      return { ...base, action: "enable_delivery" };
+    // Primary additions belong to the durable queue, which also owns their notification.
+    if (!member) return { ...base, action: alias ? "subscribe" : "unchanged" };
     return { ...base, action: "unchanged" };
   });
 }
 
-/** A complete roster establishes absence; only the cursor window receives detailed reads or writes. */
+/** Durable desired subscriptions and the existing scheduled job own convergence/retries. */
 export async function reconcileMailingListDelivery(
   provider: MailingListDeliveryProvider,
   listEmail: string,
@@ -52,73 +48,44 @@ export async function reconcileMailingListDelivery(
   options: {
     limit: number;
     dryRun: boolean;
-    afterEmail?: string;
     canApply?: () => Promise<boolean>;
     recordUnsubscribe?: (userId: string) => Promise<boolean | void>;
     recordPresence?: (addresses: MailingListDeliveryAddress[]) => Promise<number | void>;
   },
 ) {
-  const limit = Math.max(0, Math.min(MAX_DELIVERY_INSPECTIONS, Math.floor(options.limit)));
-  if (!limit) return { entries: [], changed: 0, nextEmail: options.afterEmail ?? "", hasMore: true };
   const listing = await provider.listMembers(listEmail);
   if (!listing.complete) throw new Error("Incomplete mailing-list roster; reconciliation stopped");
-  const emails = [...new Set([...addresses.map((row) => row.email), ...listing.members.map((row) => row.email)])]
-    .sort()
-    .filter((email) => email > (options.afterEmail ?? ""));
-  const window = new Set(emails.slice(0, limit));
+  const entries = planMailingListDelivery(addresses, listing.members);
   const present = new Set(listing.members.map((member) => member.email));
-  const details = await provider.readDelivery(
-    listEmail,
-    addresses
-      .filter((row) => window.has(row.email) && present.has(row.email) && (row.noDelivery || row.restoreDelivery))
-      .map((row) => row.email),
-  );
-  const inspected = new Map(details.map((member) => [member.email, member]));
-  const entries = planMailingListDelivery(
-    addresses,
-    listing.members.map((member) => inspected.get(member.email) ?? member),
-  ).filter((entry) => window.has(entry.email));
   let changed = 0;
-  if (!options.dryRun && options.recordPresence && (!options.canApply || (await options.canApply()))) {
-    changed +=
-      (await options.recordPresence(
-        addresses.filter(
-          (address) =>
-            window.has(address.email) &&
-            address.email === address.primaryEmail &&
-            !address.noDelivery &&
-            !address.confirmedSubscribed &&
-            present.has(address.email),
-        ),
-      )) ?? 0;
-  }
-  // Establish primaries before dependent aliases within this window.
+  const baselines = addresses
+    .filter(
+      (address) => address.email === address.primaryEmail && !address.confirmedSubscribed && present.has(address.email),
+    )
+    .slice(0, options.limit);
+  if (!options.dryRun && options.recordPresence) changed += (await options.recordPresence(baselines)) ?? 0;
+  let used = changed;
   const ordered = [...entries].sort((a, b) => Number(a.alias) - Number(b.alias));
   for (const entry of ordered) {
     if (entry.action === "unchanged" || entry.action === "protected") continue;
-    if (changed >= limit) break;
-    if (!options.dryRun && options.canApply && !(await options.canApply()))
-      return { entries, changed, nextEmail: options.afterEmail ?? "", hasMore: true };
+    if (used >= options.limit) break;
+    if (!options.dryRun && options.canApply && !(await options.canApply())) break;
     if (entry.action === "unsubscribed") {
+      used++;
       if (!options.dryRun && entry.userId && (await options.recordUnsubscribe?.(entry.userId))) changed++;
-    } else {
+    } else if (entry.action === "subscribe" || entry.action === "unsubscribe") {
       if (entry.alias && entry.action !== "unsubscribe" && !present.has(entry.primaryEmail!)) continue;
+      used++;
       if (!options.dryRun) {
         const applied = await provider.applyChange(listEmail, {
           email: entry.email,
-          action: entry.action,
-          ...(entry.action === "enable_delivery"
-            ? { delivery: "all" as const }
-            : entry.action !== "unsubscribe" && entry.delivery === "none"
-              ? { delivery: "none" as const }
-              : {}),
+          action: entry.action as MailingListDeliveryChange["action"],
+          ...(entry.delivery ? { delivery: entry.delivery } : {}),
         });
-        if (applied) {
-          changed++;
-          if (entry.action === "subscribe") present.add(entry.email);
-        }
+        if (applied) changed++;
       }
+      if (entry.action === "subscribe") present.add(entry.email);
     }
   }
-  return { entries, changed, nextEmail: emails.slice(0, limit).at(-1) ?? "", hasMore: emails.length > limit };
+  return { entries, changed, used };
 }

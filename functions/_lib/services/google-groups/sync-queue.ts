@@ -248,11 +248,13 @@ export async function failGoogleGroupsSyncClaimForMissingUser(
 export async function completeGoogleGroupsDirectoryEffect(
   db: DatabaseLike,
   claim: ClaimedGoogleGroupsSyncRow,
-  notificationStatements: StatementLike[] = [],
+  beforeCompletionStatements: StatementLike[] = [],
   appliedDelivery?: "all" | "none",
 ): Promise<{ finalizedClaim: boolean; fulfilledCurrentDesiredState: boolean }> {
   const at = nowIso();
+  const offset = beforeCompletionStatements.length;
   const results = await db.batch([
+    ...beforeCompletionStatements,
     db
       .prepare(
         `UPDATE google_groups_sync_queue
@@ -291,14 +293,13 @@ export async function completeGoogleGroupsDirectoryEffect(
           WHERE desired.user_id = ? AND desired.google_group_email = ?`,
       )
       .bind(claim.user_id, claim.google_group_email),
-    ...notificationStatements,
   ]);
-  const finalizedClaim = (results[0]?.meta?.changes ?? 0) === 1;
+  const finalizedClaim = (results[offset]?.meta?.changes ?? 0) === 1;
   const reconciledCurrentDesiredState =
-    (results[1]?.meta?.changes ?? 0) === 1 &&
-    (results[2]?.results?.[0] as { desired_action?: unknown; status?: unknown } | undefined)?.desired_action ===
-      claim.action &&
-    (results[2]?.results?.[0] as { status?: unknown } | undefined)?.status === "completed";
+    (results[offset + 1]?.meta?.changes ?? 0) === 1 &&
+    (results[offset + 2]?.results?.[0] as { desired_action?: unknown; status?: unknown } | undefined)
+      ?.desired_action === claim.action &&
+    (results[offset + 2]?.results?.[0] as { status?: unknown } | undefined)?.status === "completed";
   return {
     finalizedClaim,
     fulfilledCurrentDesiredState: finalizedClaim || reconciledCurrentDesiredState,

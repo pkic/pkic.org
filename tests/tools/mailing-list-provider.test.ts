@@ -43,7 +43,7 @@ describe("mailing-list provider adapter", () => {
   it("updates existing alias delivery without changing the member role", async () => {
     const fetch = google({ role: "MEMBER", type: "USER", delivery_settings: "ALL_MAIL" }),
       provider = await createGoogleGroupsDeliveryProvider(env, false, fetch);
-    await provider.applyChange(list, { email: "alias@example.test", action: "disable_delivery" });
+    await provider.applyChange(list, { email: "alias@example.test", action: "subscribe", delivery: "none" });
     expect(JSON.parse(String(fetch.mock.calls.find(([, request]) => request?.method === "PATCH")![1]?.body))).toEqual({
       delivery_settings: "NONE",
     });
@@ -123,43 +123,11 @@ it.each([
         memberEmail: "protected@example.test",
         delivery,
       });
-      if (current === expected) await expect(change).resolves.toBeUndefined();
+      if (current === expected) await expect(change).resolves.toBe(false);
       else await expect(change).rejects.toThrow("delivery update unavailable for protected member");
       expect(fetch.mock.calls.some(([, request]) => ["PUT", "PATCH", "DELETE"].includes(request?.method ?? ""))).toBe(
         false,
       );
     }
   }
-});
-
-it("reads per-member delivery for restoration targets because list responses omit that field", async () => {
-  const fetch = vi.fn(async (url: string | URL | Request) => {
-    if (String(url).includes("oauth2.googleapis.com")) return Response.json({ access_token: "synthetic" });
-    if (String(url).includes("/members?"))
-      return Response.json({ members: [{ email: "person@example.test", role: "MEMBER", type: "USER" }] });
-    return Response.json({ email: "person@example.test", role: "MEMBER", type: "USER", delivery_settings: "NONE" });
-  });
-  const provider = await createGoogleGroupsDeliveryProvider(env, false, fetch);
-  expect(await provider.readDelivery(list, ["person@example.test"])).toMatchObject([{ delivery: "none" }]);
-});
-it("keeps unchecked delivery unknown and reports idempotent actions without counting a write", async () => {
-  const fetch = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
-    if (String(url).includes("oauth2.googleapis.com")) return Response.json({ access_token: "synthetic" });
-    const member = { email: "person@example.test", role: "MEMBER", type: "USER", delivery_settings: "NONE" };
-    return Response.json(String(url).includes("/members?") ? { members: [member] } : member);
-  });
-  const provider = await createGoogleGroupsDeliveryProvider(env, false, fetch);
-  expect((await provider.listMembers(list)).members[0].delivery).toBe("unknown");
-  await expect(provider.applyChange(list, { email: "person@example.test", action: "disable_delivery" })).resolves.toBe(
-    false,
-  );
-  expect(
-    fetch.mock.calls.filter(([url]) => String(url).includes("/members")).every(([, request]) => !request?.method),
-  ).toBe(true);
-  await expect(
-    provider.readDelivery(
-      list,
-      Array.from({ length: 26 }, (_, i) => `person${i}@example.test`),
-    ),
-  ).rejects.toThrow("bounded window");
 });

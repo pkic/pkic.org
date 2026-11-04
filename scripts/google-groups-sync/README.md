@@ -29,40 +29,37 @@ pnpm exec node scripts/google-groups-sync-dry-run.mjs \
 
 The JSON report includes email addresses: share only synthetic output in issues. This is a bounded snapshot of work due at invocation, not a promise about a later live run; desired state may change. There is no apply flag. Running live sync remains a separate operation.
 
-## Full reconciliation
+## Membership reconciliation
 
-Pass `--mode full` to inspect the next reconciliation window: at most 25
-addresses on one enabled, active mailing list. A complete provider roster
-establishes membership and absence; detailed delivery reads and actions are
-limited to the window. The durable cursor rotates through addresses and lists,
-including windows that need no changes. The dry run reads that same cursor
-without advancing it. The report includes `subscribe`, `unsubscribe`,
-`disable_delivery`, `enable_delivery`, `unchanged`, `protected`, and `unsubscribed` outcomes.
-The CLI uses the same provider-neutral planner as the live scheduled job and
-never changes memberships, queue rows, or observations.
+Pass `--mode full` to compare enabled mailing lists' complete provider rosters
+with current subscriptions and verified additional addresses. The report
+includes `subscribe`, `unsubscribe`, `unchanged`, `protected`, and `unsubscribed`
+outcomes. It uses the same membership planner as the scheduled job and writes
+neither provider nor database state.
 
-Primary addresses receive ordinary membership. Verified additional addresses
-inherit membership while their primary is subscribed, with email delivery
-disabled. This does not restrict posting. Owners, managers, non-user members,
-and unrecognized privilege levels are protected by the Google adapter.
-Previously confirmed primary addresses now absent are treated as unsubscribes;
-full sync does not re-enroll them or retain their dependent aliases.
+The durable queue owns primary additions and delivery changes. An add applies
+the requested delivery setting and adds verified additional addresses with
+email delivery off; a delete removes those memberships. Address verification
+and primary-address changes enqueue the same work. The membership audit removes
+obsolete addresses and fills missing additional memberships after their primary
+is present. It never infers delivery settings from roster responses, which do
+not contain them. Protected provider roles remain protected.
 
-A new additional address is added only after its primary address is present.
-If both are missing and the additional address sorts into an earlier window,
-that address is skipped until the cursor completes a sweep and revisits it.
-This can delay its membership by one full reconciliation rotation across the
-enabled lists. A rotation may require multiple scheduled invocations because
-both the address windows and the shared work budget are bounded.
+Queued work receives priority: with the default 25-item budget, up to 24 queue
+items run before the remaining budget is used for membership auditing. While
+due queue work remains, the job requests another run on the next cron tick
+instead of waiting for its 15-minute idle interval. Each invocation remains
+bounded by its work and database query budgets.
 
-The existing scheduled job shares its bounded work budget between queued
-changes and full reconciliation. Existing durable subscriptions and the job's
-lease/retry mechanism provide recovery. Migration 0040 adds only the durable
-reconciliation cursor; it must be applied separately to each target before
-deploying this code. No additional work queue is introduced. Changing an
-account's primary email queues its current subscription work atomically. Full reconciliation removes an obsolete address, or retains it
-without delivery when it remains a verified additional address. Verification
-and removal of additional addresses wake the existing job.
+Enrollment notices wait until a person's current add work has settled, then
+combine their successful additions across processing batches into one email.
+An already-existing membership does not generate a new addition notice on a
+first attempt. Notification intents reference the user; names and destination
+addresses are read from the current user record when the email is prepared.
+The existing outbox owns delivery and retries.
+
+No reconciliation cursor, new table, database migration, or object-storage
+checkpoint is required.
 
 ```sh
 pnpm exec node scripts/google-groups-sync-dry-run.mjs \
