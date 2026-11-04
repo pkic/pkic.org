@@ -1,4 +1,4 @@
-import { prepareJobWake } from "./scheduled-jobs/dispatcher";
+import { prepareMailingListAddressSync } from "./mailing-list-subscriptions/queue-email-change";
 /**
  * Proving that a person receives mail at an address they added.
  *
@@ -375,7 +375,7 @@ export async function verifyOwnEmailAddress(
         )
         .bind(at, address.id, userId),
       ...(joined?.statements ?? []),
-      prepareJobWake(db, "google_groups_sync"),
+      ...prepareMailingListAddressSync(db, userId, at),
     ],
   });
   const [joinedOrganization, offer] = await Promise.all([

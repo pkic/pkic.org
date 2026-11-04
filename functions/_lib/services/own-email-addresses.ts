@@ -1,6 +1,8 @@
 import { refuseIneligibleWorkEmail } from "../email-domains/work-email-screen";
-import { prepareJobWake } from "./scheduled-jobs/dispatcher";
-import { prepareMailingListEmailChange } from "./mailing-list-subscriptions/queue-email-change";
+import {
+  prepareMailingListAddressSync,
+  prepareMailingListEmailChange,
+} from "./mailing-list-subscriptions/queue-email-change";
 import { setOwnEmailSignInPermission } from "./own-email-sign-in";
 import { refuseRemovingLastSignInMethod } from "../auth/sign-in-methods";
 /**
@@ -336,7 +338,7 @@ export async function removeOwnEmailAddress(
         { emailId: input.emailId, email: address.email },
         at,
       ),
-      prepareJobWake(db, "google_groups_sync"),
+      ...prepareMailingListAddressSync(db, input.userId, at),
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {

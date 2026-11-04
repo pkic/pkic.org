@@ -1,13 +1,16 @@
 import type { MailingListPreferenceMutation } from "./types";
+import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { first } from "../../db/queries";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
-import type { DatabaseLike, StatementLike } from "../../types";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
 import { buildEnqueueGoogleGroupsSyncStatement } from "../google-groups/sync-queue";
 import { canMemberAccessGroupResource, prepareMemberGroupResourceAuthorizationGuard } from "../resource-grants/access";
 import { getEffectiveMailingListSubscription, resolveGroupId } from "./read-model";
+import { requireManagedGroupMailingList, groupMailingListWriteGuards } from "../mailing-list-management/authorization";
+import { isGoogleGroupsSuppressed } from "../google-groups/observe-membership";
 import { EFFECTIVE_SUBSCRIPTION_CTE } from "./projection";
 
 /** Persist one member preference and enqueue its provider-state transition atomically. */
@@ -17,32 +20,76 @@ export async function setMailingListPreference(
   groupIdOrSlug: string,
   listId: string,
   preference: MailingListPreferenceMutation,
+  actor?: AuthAdmin,
 ) {
   const groupId = await resolveGroupId(db, groupIdOrSlug);
-  const canView = await canMemberAccessGroupResource(db, userId, "mailingList", listId, "view", groupId);
+  if (actor) await requireManagedGroupMailingList(db, actor, groupId, listId);
+  const requiresMembership = preference === "subscribed" || preference === "archive_only";
+  const user = await first(
+    db,
+    "SELECT id FROM users WHERE id = ? AND active = 1 AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL",
+    [userId],
+  );
+  if (!user) throw new AppError(404, "USER_NOT_FOUND", "Active user not found");
+  const canView = actor || (await canMemberAccessGroupResource(db, userId, "mailingList", listId, "view", groupId));
   if (!canView) {
     throw new AppError(404, "MAILING_LIST_NOT_FOUND", "Mailing list is not available through this group");
   }
   if (
-    preference === "subscribed" &&
+    !actor &&
+    requiresMembership &&
     !(await canMemberAccessGroupResource(db, userId, "mailingList", listId, "subscribe", groupId))
   ) {
     throw new AppError(403, "MAILING_LIST_SUBSCRIPTION_INELIGIBLE", "The caller cannot subscribe through this group");
   }
   const current = await getEffectiveMailingListSubscription(db, userId, listId);
-  if (preference === "subscribed" && !current.eligible) {
+  const synchronization = await first<{ desired_action: string; status: string; last_error: string | null }>(
+    db,
+    `SELECT desired.desired_action, queue.status, queue.last_error FROM google_groups_membership_desired_state desired
+     JOIN google_groups_sync_queue queue ON queue.user_id = desired.user_id AND queue.google_group_email = desired.google_group_email AND queue.generation = desired.generation
+     WHERE desired.user_id = ? AND desired.google_group_email = ?`,
+    [userId, current.mailingList.email],
+  );
+  const needsRetry = synchronization?.status === "failed" || Boolean(synchronization?.last_error);
+  const restoresDelivery =
+    preference === "inherit" &&
+    current.eligible &&
+    current.defaultSubscribed &&
+    (current.preference === "archive_only" || (needsRetry && synchronization?.desired_action === "restore_delivery"));
+  if ((requiresMembership || restoresDelivery) && !current.eligible) {
     throw new AppError(403, "MAILING_LIST_SUBSCRIPTION_INELIGIBLE", "The caller is not eligible for this mailing list");
   }
+  const managedUnsubscribe = Boolean(actor && preference === "unsubscribed");
+  if (managedUnsubscribe && !current.eligible) {
+    throw new AppError(404, "USER_NOT_FOUND", "User is not in the mailing-list population");
+  }
   const storedPreference = preference === "inherit" ? null : preference;
-  if (current.preference === storedPreference) return current;
+  if (
+    current.preference === storedPreference &&
+    !needsRetry &&
+    (!requiresMembership || !(await isGoogleGroupsSuppressed(db, userId, current.mailingList.email)))
+  )
+    return current;
 
   const at = nowIso();
   const statements: StatementLike[] = [
-    prepareMemberGroupResourceAuthorizationGuard(db, userId, groupId, "mailingList", listId, "view"),
+    ...(actor
+      ? groupMailingListWriteGuards(db, actor, groupId, listId)
+      : [prepareMemberGroupResourceAuthorizationGuard(db, userId, groupId, "mailingList", listId, "view")]),
+    prepareAuthorizationGuard(db, {
+      sql: "SELECT 1 FROM mailing_lists WHERE id = ? AND active = 1 AND archived_at IS NULL",
+      bindings: [listId],
+    }),
+    prepareAuthorizationGuard(db, {
+      sql: "SELECT 1 FROM users WHERE id = ? AND active = 1 AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL",
+      bindings: [userId],
+    }),
   ];
-  if (preference === "subscribed") {
+  if (requiresMembership || restoresDelivery || managedUnsubscribe) {
     statements.push(
-      prepareMemberGroupResourceAuthorizationGuard(db, userId, groupId, "mailingList", listId, "subscribe"),
+      ...(!actor
+        ? [prepareMemberGroupResourceAuthorizationGuard(db, userId, groupId, "mailingList", listId, "subscribe")]
+        : []),
       prepareAuthorizationGuard(db, {
         sql: `${EFFECTIVE_SUBSCRIPTION_CTE}
               SELECT 1 FROM effective_subscriptions WHERE id = ? AND eligible = 1`,
@@ -62,7 +109,7 @@ export async function setMailingListPreference(
              updated_by_user_id = excluded.updated_by_user_id,
              updated_at = excluded.updated_at`,
         )
-        .bind(listId, userId, storedPreference, userId, at, at),
+        .bind(listId, userId, storedPreference, actor ? adminDatabaseUserId(actor) : userId, at, at),
     );
   } else {
     statements.push(
@@ -72,39 +119,46 @@ export async function setMailingListPreference(
     );
   }
 
-  const effectiveSubscribed =
-    storedPreference === "subscribed"
+  if (requiresMembership || restoresDelivery) {
+    statements.push(
+      db
+        .prepare(`UPDATE google_groups_observed_membership
+      SET suppressed = 0, unsubscribed_at = NULL, unsubscribe_source = NULL,
+          confirmed_subscribed_at = NULL, updated_at = ?
+      WHERE user_id = ? AND google_group_email = ?`)
+        .bind(at, userId, current.mailingList.email),
+    );
+  }
+
+  const effectiveMembership =
+    storedPreference === "subscribed" || storedPreference === "archive_only"
       ? true
       : storedPreference === "unsubscribed"
         ? false
         : current.eligible && current.defaultSubscribed;
-  const desiredAction = effectiveSubscribed ? "add_to_list" : "remove_from_list";
-  const desired = await first<{ desired_action: string }>(
-    db,
-    `SELECT desired_action FROM google_groups_membership_desired_state
-      WHERE user_id = ? AND google_group_email = ?`,
-    [userId, current.mailingList.email],
+  const desiredAction = effectiveMembership
+    ? restoresDelivery
+      ? "restore_delivery"
+      : "add_to_list"
+    : "remove_from_list";
+  statements.push(
+    buildEnqueueGoogleGroupsSyncStatement(db, {
+      userId,
+      googleGroupEmail: current.mailingList.email,
+      action: desiredAction,
+      idempotencyKey: `mailing-list-preference:${listId}:${userId}:${preference}:${at}`,
+    }).statement,
   );
-  if ((desired === null && effectiveSubscribed) || (desired !== null && desired.desired_action !== desiredAction)) {
-    statements.push(
-      buildEnqueueGoogleGroupsSyncStatement(db, {
-        userId,
-        googleGroupEmail: current.mailingList.email,
-        action: desiredAction,
-        idempotencyKey: `mailing-list-preference:${listId}:${userId}:${preference}:${at}`,
-      }).statement,
-    );
-  }
   statements.push(
     prepareScopedAuditLog(
       db,
       { type: "group", id: groupId },
-      "member",
-      userId,
+      actor ? "admin" : "member",
+      actor?.id ?? userId,
       "mailing_list_preference_changed",
       "mailing_list",
       listId,
-      { from: current.preference, to: storedPreference },
+      { userId, from: current.preference, to: storedPreference },
       at,
     ),
   );

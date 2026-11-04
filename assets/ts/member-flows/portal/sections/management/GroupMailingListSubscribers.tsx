@@ -1,4 +1,5 @@
-import { useCallback } from "preact/hooks";
+import { MailingListSubscriberActions } from "./MailingListSubscriberActions";
+import { useCallback, useRef } from "preact/hooks";
 import type { CollectionLoader } from "../../../../hooks/useServerCollection";
 import { getJson } from "../../../../shared/api-client";
 import {
@@ -6,9 +7,8 @@ import {
   type MailingListSubscriber,
   type MailingListSubscribersResponse,
 } from "../../../../../shared/schemas/mailing-lists";
-import { ApiDataTable } from "../../../../components/ApiDataTable";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { EmptyState } from "../../../../ui/EmptyState";
-import { Badge } from "../../../../ui/Badge";
 import { PersonCell } from "../../../../ui/PersonCell";
 
 /** The person, named the way the rest of the portal names people: their name, with the address under it. */
@@ -25,9 +25,25 @@ function personName(subscriber: MailingListSubscriber): string {
  */
 function standingReason(subscriber: MailingListSubscriber): string {
   if (!subscriber.eligible) return "Not eligible for this list";
-  if (subscriber.preference === "subscribed") return "Asked to be subscribed";
-  if (subscriber.preference === "unsubscribed") return "Asked to be unsubscribed";
+  if (subscriber.suppressed) return "Unsubscribed outside the portal";
+  if (subscriber.synchronizationError) return "The mailing list could not apply this preference";
+  if (subscriber.synchronizationStatus === "pending" || subscriber.synchronizationStatus === "processing")
+    return "Waiting for the mailing list to apply this preference";
+  if (subscriber.preference === "subscribed") return "Subscription preference";
+  if (subscriber.preference === "archive_only") return "Email delivery off";
+  if (subscriber.preference === "unsubscribed") return "Unsubscription preference";
   return subscriber.defaultSubscribed ? "List default" : "Not subscribed by default";
+}
+
+/** Report unresolved delivery work before showing the requested subscription as applied. */
+function deliveryStatus(subscriber: MailingListSubscriber): string {
+  if (subscriber.suppressed) return "Not subscribed";
+  if (subscriber.synchronizationError || subscriber.synchronizationStatus === "failed")
+    return "Email delivery update failed";
+  if (subscriber.synchronizationStatus === "pending" || subscriber.synchronizationStatus === "processing")
+    return "Email delivery update pending";
+  if (subscriber.eligible && subscriber.preference === "archive_only") return "Email delivery off";
+  return subscriber.subscribed ? "Subscribed" : "Not subscribed";
 }
 
 /**
@@ -42,12 +58,15 @@ export function GroupMailingListSubscribers({
   listId,
   onData,
   onLoadStart,
+  disabled = false,
 }: {
   groupId: string;
   listId: string;
   onData: (response: MailingListSubscribersResponse) => void;
   onLoadStart: () => void;
+  disabled?: boolean;
 }) {
+  const actions = useRef<ApiTableActions | null>(null);
   const load = useCallback<CollectionLoader>(
     (url, signal, schema) => {
       onLoadStart();
@@ -57,6 +76,7 @@ export function GroupMailingListSubscribers({
   );
   return (
     <ApiDataTable
+      actionsRef={actions}
       urlState="mailing-subscribers"
       load={load}
       onData={onData}
@@ -85,11 +105,7 @@ export function GroupMailingListSubscribers({
           header: "Receives mail",
           // The word carries it: a reader who cannot separate the hues still
           // reads "Subscribed" or "Not subscribed".
-          cell: (subscriber) => (
-            <Badge tone={subscriber.subscribed ? "ok" : "neutral"}>
-              {subscriber.subscribed ? "Subscribed" : "Not subscribed"}
-            </Badge>
-          ),
+          cell: deliveryStatus,
           width: "fit",
           sort: { asc: "subscribed", desc: "-subscribed" },
           filter: {
@@ -102,6 +118,21 @@ export function GroupMailingListSubscribers({
           },
         },
         { header: "Because", cell: standingReason },
+        {
+          header: "Actions",
+          width: "fit",
+          cell: (subscriber) => (
+            <MailingListSubscriberActions
+              groupId={groupId}
+              listId={listId}
+              subscriber={subscriber}
+              disabled={disabled}
+              onChanged={async () => {
+                await actions.current?.reload();
+              }}
+            />
+          ),
+        },
       ]}
       rowKey={(subscriber) => subscriber.user.id}
       empty={

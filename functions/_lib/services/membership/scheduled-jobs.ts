@@ -7,6 +7,8 @@ import {
 } from "../mailing-list-subscriptions/reconcile-delivery-lists";
 import { hasD1QueryCapacity, type D1QueryBudget } from "../../db/query-budget";
 import { drainGoogleGroupsEnrollmentNotificationIntents, processGoogleGroupsSyncQueue } from "../google-groups";
+import { listPendingGoogleGroupsSync } from "../google-groups/sync-queue";
+import { requestJobWake } from "../scheduled-jobs/dispatcher";
 import { logInfo } from "../../logging";
 import type { DatabaseLike, Env } from "../../types";
 
@@ -15,7 +17,7 @@ const GOOGLE_GROUPS_SYNC_RESERVE_HEADROOM_STATEMENTS = 20 + 3 * MAX_RECONCILED_M
 
 /**
  * The queue processor plus durable notification drain has a conservative
- * upper bound of 3 + 16N D1 statements for N claimed rows: due-list,
+ * upper bound of 3 + 18N D1 statements for N claimed rows: due-list,
  * re-list-and-claim batch, actionable-claim load, recipient/calendar reads,
  * five-statement completion batches, and a bounded three-statement-per-user
  * enrollment drain, plus a check of previously confirmed subscriptions.
@@ -24,7 +26,7 @@ const GOOGLE_GROUPS_SYNC_RESERVE_HEADROOM_STATEMENTS = 20 + 3 * MAX_RECONCILED_M
  * the durable desired-state queue admits at most one completed add per row.
  */
 function googleGroupsSyncReserveStatements(limit: number): number {
-  return 3 + 16 * limit + GOOGLE_GROUPS_SYNC_RESERVE_HEADROOM_STATEMENTS;
+  return 3 + 18 * limit + GOOGLE_GROUPS_SYNC_RESERVE_HEADROOM_STATEMENTS;
 }
 
 export async function runGoogleGroupsSyncPass(
@@ -44,8 +46,10 @@ export async function runGoogleGroupsSyncPass(
   if (boundedLimit === 0 || !hasD1QueryCapacity(d1QueryBudget, reserveStatements)) {
     return { processed: 0, succeeded: 0, failed: 0, skippedUnconfigured: false, deferredForBudget: boundedLimit > 0 };
   }
-  const result = await processGoogleGroupsSyncQueue(db, env, Math.max(1, Math.floor(boundedLimit / 2)));
+  const result = await processGoogleGroupsSyncQueue(db, env, Math.max(1, boundedLimit - 1));
   await drainGoogleGroupsEnrollmentNotificationIntents(db, boundedLimit);
+  if (result.processed > 0 && (await listPendingGoogleGroupsSync(db, 1)).length)
+    await requestJobWake(db, "google_groups_sync");
   let reconciled = 0;
   if (isGoogleGroupsSyncConfigured(env) && result.processed < boundedLimit) {
     const provider = await createGoogleGroupsDeliveryProvider(env);

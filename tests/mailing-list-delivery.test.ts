@@ -30,9 +30,12 @@ async function subscriber() {
   return member.userId;
 }
 function provider(members: MailingListDeliveryMember[]): MailingListDeliveryProvider {
-  return { listMembers: vi.fn(async () => ({ members, complete: true })), applyChange: vi.fn(async () => {}) };
+  return {
+    listMembers: vi.fn(async () => ({ members, complete: true })),
+    applyChange: vi.fn(async () => true),
+  };
 }
-const ordinary = (email: string): MailingListDeliveryMember => ({ email, protected: false, delivery: "all" });
+const ordinary = (email: string): MailingListDeliveryMember => ({ email, protected: false });
 async function alias(userId: string, verified = true) {
   await env.DB.prepare(
     "INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at) VALUES ('alias',?,'archive@example.test','archive@example.test',?,?)",
@@ -62,7 +65,11 @@ describe("provider-neutral mailing-list delivery", () => {
   it("removes stale ordinary members, protects privileged entries and gives aliases no delivery", async () => {
     const userId = await subscriber();
     await alias(userId);
-    const delivery = provider([ordinary("stale@example.test"), { ...ordinary("owner@example.test"), protected: true }]);
+    const delivery = provider([
+      ordinary("primary@example.test"),
+      ordinary("stale@example.test"),
+      { ...ordinary("owner@example.test"), protected: true },
+    ]);
     const report = await reconcileMailingListDelivery(
       delivery,
       listEmail,
@@ -115,7 +122,9 @@ describe("provider-neutral mailing-list delivery", () => {
       email: "primary@example.test",
       action: "unsubscribe",
     });
-    expect(delivery.applyChange).toHaveBeenCalledWith(listEmail, { email: "new@example.test", action: "subscribe" });
+    expect(vi.mocked(delivery.applyChange).mock.calls.some(([, change]) => change.email === "new@example.test")).toBe(
+      false,
+    );
   });
   it("retains a verified old primary as an alias after an actual address swap", async () => {
     const userId = await subscriber();
@@ -127,11 +136,8 @@ describe("provider-neutral mailing-list delivery", () => {
       limit: 25,
       dryRun: false,
     });
-    expect(delivery.applyChange).toHaveBeenCalledWith(listEmail, {
-      email: "primary@example.test",
-      action: "disable_delivery",
-      delivery: "none",
-    });
+    // The durable email-change intent owns delivery; roster inspection must not infer it.
+    expect(delivery.applyChange).not.toHaveBeenCalled();
     expect(
       await env.DB.prepare("SELECT wake_requested FROM scheduled_jobs WHERE job_key='google_groups_sync'").first(
         "wake_requested",
@@ -166,7 +172,7 @@ describe("provider-neutral mailing-list delivery", () => {
     );
     expect(delivery.applyChange).not.toHaveBeenCalled();
   });
-  it("bounds writes and rechecks pause only for actual changes", async () => {
+  it("bounds writes and rechecks pause before changes", async () => {
     const members = Array.from({ length: 50 }, (_, i) => ordinary(`member${i}@example.test`));
     const delivery = provider(members),
       canApply = vi.fn(async () => true);
@@ -190,4 +196,23 @@ describe("provider-neutral mailing-list delivery", () => {
     ).not.toBeNull();
     expect(delivery.applyChange).not.toHaveBeenCalled();
   });
+});
+
+it("keeps archive-only primaries and aliases with no delivery, then removes both on unsubscribe", async () => {
+  await resetDb();
+  const userId = await subscriber();
+  await alias(userId);
+  await env.DB.prepare("UPDATE mailing_list_subscription_preferences SET preference = 'archive_only' WHERE user_id = ?")
+    .bind(userId)
+    .run();
+  const addresses = await listMailingListDeliveryAddresses(env.DB, listEmail);
+  expect(addresses).toHaveLength(2);
+  expect(addresses.every((address) => address.noDelivery === 1)).toBe(true);
+  const delivery = provider([ordinary("primary@example.test"), ordinary("archive@example.test")]);
+  await reconcileMailingListDelivery(delivery, listEmail, addresses, { limit: 25, dryRun: false });
+  expect(delivery.applyChange).not.toHaveBeenCalled();
+  await env.DB.prepare("UPDATE mailing_list_subscription_preferences SET preference = 'unsubscribed' WHERE user_id = ?")
+    .bind(userId)
+    .run();
+  expect(await listMailingListDeliveryAddresses(env.DB, listEmail)).toEqual([]);
 });

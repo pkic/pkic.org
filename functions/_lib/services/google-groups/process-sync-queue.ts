@@ -1,5 +1,7 @@
-import { first } from "../../db/queries";
-import { recordProviderAbsence } from "./observe-membership";
+import { OWN_EMAIL_ADDRESS_LIMIT } from "../../../../assets/shared/schemas/own-email-addresses";
+import { googleGroupsDeliverySql } from "./delivery-policy";
+import { all, first } from "../../db/queries";
+import { recordProviderAbsence, recordProviderPresences } from "./observe-membership";
 import { isMailingListSyncEnabled } from "./mailing-list-policy";
 import { isGoogleGroupsSuppressed } from "./observe-membership";
 import { supersedeSuppressedGoogleGroupsAdd } from "./sync-queue";
@@ -105,7 +107,7 @@ export async function processGoogleGroupsSyncQueue(
     // A person who left this group on the provider side must not be re-added
     // by any queued work. Only an explicit resubscribe clears suppression.
     if (
-      claim.action === "add_to_list" &&
+      claim.action !== "remove_from_list" &&
       (await isGoogleGroupsSuppressed(db, claim.user_id, claim.google_group_email))
     ) {
       if (liveClaim) await supersedeSuppressedGoogleGroupsAdd(db, liveClaim);
@@ -114,22 +116,24 @@ export async function processGoogleGroupsSyncQueue(
     }
 
     if (!(await isMailingListSyncEnabled(db, claim.google_group_email))) continue;
+    let membershipWasAbsent = false;
     try {
-      if (claim.action === "add_to_list") {
+      if (claim.action !== "remove_from_list") {
         const confirmed = await first(
           db,
           `SELECT 1 FROM google_groups_observed_membership
           WHERE user_id = ? AND google_group_email = ? AND confirmed_subscribed_at IS NOT NULL`,
           [claim.user_id, claim.google_group_email],
         );
-        if (confirmed) {
+        if (confirmed || claim.action === "add_to_list") {
           let listing = memberships.get(claim.google_group_email);
           if (!listing) {
             listing = await directoryClient.listMembers(claim.google_group_email);
             memberships.set(claim.google_group_email, listing);
           }
           if (!listing.complete) throw new Error("Incomplete provider membership listing; queued addition stopped");
-          if (!listing.emails.includes(memberEmail.toLowerCase())) {
+          membershipWasAbsent = !listing.emails.includes(memberEmail.toLowerCase());
+          if (confirmed && membershipWasAbsent) {
             if (!dryRun) await recordProviderAbsence(db, claim.user_id, claim.google_group_email);
             if (liveClaim) await supersedeSuppressedGoogleGroupsAdd(db, liveClaim);
             suppressed++;
@@ -137,26 +141,49 @@ export async function processGoogleGroupsSyncQueue(
           }
         }
       }
+      const projection = await first<{ delivery: "all" | "none" | null }>(
+        db,
+        `WITH input(action,user_id,email) AS (VALUES (?,?,?))
+         SELECT ${googleGroupsDeliverySql("input.action", "input.user_id", "input.email")} AS delivery FROM input`,
+        [claim.action, claim.user_id, claim.google_group_email],
+      );
+      const delivery = projection?.delivery ?? undefined;
+      // Delivery belongs to this same durable intent, including verified additional addresses.
+      const aliases = await all<{ email: string }>(
+        db,
+        "SELECT lower(email) AS email FROM user_emails WHERE user_id = ? AND verified_at IS NOT NULL AND lower(email) != lower(?) ORDER BY id LIMIT ?",
+        [claim.user_id, memberEmail, OWN_EMAIL_ADDRESS_LIMIT + 1],
+      );
+      if (aliases.length > OWN_EMAIL_ADDRESS_LIMIT) throw new Error("Verified addresses exceed the account limit");
+      const notificationStatements =
+        liveClaim && membershipWasAbsent
+          ? prepareGoogleGroupsSyncNotificationStatements(db, liveClaim, syncPassId)
+          : [];
+      if (notificationStatements.length) await db.batch(notificationStatements);
       await directoryClient.applyMembership({
         action: claim.action,
         googleGroupEmail: claim.google_group_email,
         memberEmail,
+        ...(delivery ? { delivery } : {}),
       });
+      for (const alias of aliases) {
+        await directoryClient.applyMembership({
+          action: claim.action === "remove_from_list" ? "remove_from_list" : "add_to_list",
+          googleGroupEmail: claim.google_group_email,
+          memberEmail: alias.email,
+          ...(claim.action === "remove_from_list" ? {} : { delivery: "none" as const }),
+        });
+      }
       if (!liveClaim) {
         succeeded++;
         continue;
       }
-      const notificationStatements = await prepareGoogleGroupsSyncNotificationStatements(
-        db,
-        liveClaim,
-        memberEmail,
-        syncPassId,
-      );
-      const completion = await completeGoogleGroupsDirectoryEffect(db, liveClaim, notificationStatements);
+      const completion = await completeGoogleGroupsDirectoryEffect(db, liveClaim, [], delivery);
       if (!completion.finalizedClaim && !completion.fulfilledCurrentDesiredState) continue;
 
       succeeded++;
-      if (claim.action === "add_to_list" && completion.fulfilledCurrentDesiredState) {
+      if (claim.action !== "remove_from_list" && completion.fulfilledCurrentDesiredState) {
+        await recordProviderPresences(db, claim.google_group_email, [{ userId: claim.user_id, email: memberEmail }]);
         (completedAddsByUser[claim.user_id] ??= []).push(claim.google_group_email);
       }
     } catch (error) {

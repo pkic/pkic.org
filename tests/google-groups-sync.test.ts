@@ -1,3 +1,8 @@
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { fakeServiceAccountEnv } from "./helpers/google-groups";
+import { runGoogleGroupsSyncPass } from "../functions/_lib/services/membership/scheduled-jobs";
+import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
+import { completeGoogleGroupsDirectoryEffect } from "../functions/_lib/services/google-groups/sync-queue";
 /**
  * google-groups-sync.test.ts
  *
@@ -31,32 +36,7 @@ async function insertUser(email: string): Promise<string> {
   return id;
 }
 
-/** A real (not mocked) RSA keypair, PEM-wrapped, so getServiceAccountAccessToken's
- * Web Crypto JWT signing runs for real — only the two outbound `fetch` calls
- * (OAuth token exchange, Directory API) are mocked. */
-async function fakeServiceAccountEnv(): Promise<{
-  GOOGLE_SERVICE_ACCOUNT_EMAIL: string;
-  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: string;
-  GOOGLE_WORKSPACE_ADMIN_EMAIL: string;
-}> {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
-    true,
-    ["sign", "verify"],
-  );
-  const pkcs8 = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
-  let binary = "";
-  for (const byte of new Uint8Array(pkcs8)) binary += String.fromCharCode(byte);
-  const base64 = btoa(binary);
-  const pem = `-----BEGIN PRIVATE KEY-----\n${base64.match(/.{1,64}/g)!.join("\n")}\n-----END PRIVATE KEY-----`;
-  return {
-    GOOGLE_SERVICE_ACCOUNT_EMAIL: "sa@project.iam.gserviceaccount.com",
-    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: pem,
-    GOOGLE_WORKSPACE_ADMIN_EMAIL: "admin@pkic.org",
-  };
-}
-
-function stubGoogleFetch(directoryApiStatus: number): ReturnType<typeof vi.fn> {
+function stubGoogleFetch(directoryApiStatus: number, members: string[] = []): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
     if (url === "https://oauth2.googleapis.com/token") {
       return Promise.resolve(
@@ -66,8 +46,13 @@ function stubGoogleFetch(directoryApiStatus: number): ReturnType<typeof vi.fn> {
         }),
       );
     }
-    if (!init?.method && directoryApiStatus >= 200 && directoryApiStatus < 300)
+    if (url.includes("/members?"))
+      return Promise.resolve(
+        Response.json({ members: members.map((email) => ({ email, role: "MEMBER", type: "USER" })) }),
+      );
+    if (!init?.method && (directoryApiStatus === 409 || (directoryApiStatus >= 200 && directoryApiStatus < 300)))
       return Promise.resolve(Response.json({ role: "MEMBER", type: "USER" }));
+    if (init?.method === "PUT" && directoryApiStatus === 409) return Promise.resolve(Response.json({}));
     return Promise.resolve(new Response(null, { status: directoryApiStatus }));
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -96,13 +81,13 @@ function stubGoogleFetchWithFirstDirectoryCallPaused(firstDirectoryStatus = 200)
       });
     }
     if (!init?.method) return Response.json({ role: "MEMBER", type: "USER" });
-    directoryCalls++;
-    if (directoryCalls === 1) {
+    const callNumber = ++directoryCalls;
+    if (callNumber === 1) {
       notifyDirectoryStarted();
       await directoryGate;
     }
     return new Response(null, {
-      status: directoryCalls === 1 ? firstDirectoryStatus : init?.method === "DELETE" ? 204 : 200,
+      status: callNumber === 1 ? firstDirectoryStatus : init?.method === "DELETE" ? 204 : 200,
     });
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -134,13 +119,14 @@ function stubGoogleFetchWithTwoDirectoryCallsPaused(): {
   let directoryCalls = 0;
   vi.stubGlobal(
     "fetch",
-    vi.fn().mockImplementation(async (url: string) => {
+    vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === "https://oauth2.googleapis.com/token") {
         return new Response(JSON.stringify({ access_token: "fake-access-token" }), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
       }
+      if (!init?.method) return Response.json({ members: [] });
       directoryCalls++;
       if (directoryCalls === 1) {
         notifyFirstDirectoryStarted();
@@ -187,10 +173,108 @@ describe("Google Groups sync", () => {
     releaseDirectory();
     const result = await processing;
     expect(result.succeeded).toBe(1);
-    expect(fetchMock.mock.calls.filter(([url]) => url !== "https://oauth2.googleapis.com/token")).toHaveLength(1);
+    expect(
+      fetchMock.mock.calls.filter(([url, init]) => String(url).includes("/members") && init?.method === "POST"),
+    ).toHaveLength(1);
     expect(await listPendingGoogleGroupsSync(env.DB)).toHaveLength(0);
   });
 
+  it.each([
+    { preference: null, existing: "DIGEST", expected: "DIGEST" },
+    { preference: null, existing: "NONE", expected: "NONE" },
+    { preference: "subscribed", existing: "NONE", expected: "ALL_MAIL" },
+    { preference: "archive_only", existing: "ALL_MAIL", expected: "NONE" },
+  ])(
+    "preserves delivery unless explicitly selected: $preference / $existing",
+    async ({ preference, existing, expected }) => {
+      const [list] = await queryAll<{ id: string; email: string }>(
+        env.DB,
+        "SELECT id, email FROM mailing_lists WHERE active = 1 LIMIT 1",
+      );
+      const userId = await insertUser(`delivery-${crypto.randomUUID()}@example.test`);
+      const at = new Date().toISOString();
+      if (preference) {
+        await env.DB.prepare(`INSERT INTO mailing_list_subscription_preferences
+        (mailing_list_id, user_id, preference, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
+          .bind(list.id, userId, preference, at, at)
+          .run();
+      }
+      await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail: list.email, action: "add_to_list" });
+      let delivery = existing;
+      const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === "https://oauth2.googleapis.com/token") return Response.json({ access_token: "synthetic-token" });
+        if (init?.method === "POST") return new Response(null, { status: 409 });
+        if (init?.method === "PUT") {
+          delivery = JSON.parse(String(init.body)).delivery_settings;
+          return Response.json({});
+        }
+        return Response.json({ role: "MEMBER", type: "USER", delivery_settings: delivery });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      expect(await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv())).toMatchObject({
+        succeeded: 1,
+        failed: 0,
+      });
+      expect(delivery).toBe(expected);
+      if (!preference) {
+        expect(fetchMock.mock.calls.some(([, request]) => request?.method === "PUT")).toBe(false);
+        const addition = fetchMock.mock.calls.find(
+          ([url, request]) => url.includes("/members") && request?.method === "POST",
+        )!;
+        expect(JSON.parse(String(addition[1]?.body))).not.toHaveProperty("delivery_settings");
+      }
+    },
+  );
+
+  it("does not let a stale no-mail result complete a newer all-mail generation", async () => {
+    const [list] = await queryAll<{ id: string; email: string }>(env.DB, "SELECT id, email FROM mailing_lists LIMIT 1");
+    const userId = await insertUser(`delivery-race-${crypto.randomUUID()}@example.test`);
+    const at = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO mailing_list_subscription_preferences(mailing_list_id,user_id,preference,created_at,updated_at) VALUES (?,?,'archive_only',?,?)",
+    )
+      .bind(list.id, userId, at, at)
+      .run();
+    await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail: list.email, action: "add_to_list" });
+    const [oldClaim] = await claimPendingGoogleGroupsSyncRows(env.DB, 1);
+    await env.DB.prepare(
+      "UPDATE mailing_list_subscription_preferences SET preference='subscribed' WHERE mailing_list_id=? AND user_id=?",
+    )
+      .bind(list.id, userId)
+      .run();
+    const latest = await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: list.email,
+      action: "add_to_list",
+    });
+    const [newClaim] = await claimPendingGoogleGroupsSyncRows(env.DB, 1);
+    await completeGoogleGroupsDirectoryEffect(env.DB, newClaim, [], "all");
+    expect(await completeGoogleGroupsDirectoryEffect(env.DB, oldClaim, [], "none")).toMatchObject({
+      fulfilledCurrentDesiredState: false,
+    });
+    expect(
+      await env.DB.prepare("SELECT status FROM google_groups_sync_queue WHERE id=?").bind(latest).first(),
+    ).toMatchObject({ status: "pending" });
+  });
+
+  it("restores all-mail delivery through its durable action without a stored preference", async () => {
+    const userId = await insertUser(`restore-${crypto.randomUUID()}@example.test`);
+    const id = await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: "restore@example.test",
+      action: "restore_delivery",
+    });
+    const fetch = stubGoogleFetch(409);
+    expect(await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv())).toMatchObject({
+      succeeded: 1,
+      failed: 0,
+    });
+    const write = fetch.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(JSON.parse(String(write?.[1]?.body))).toEqual({ delivery_settings: "ALL_MAIL" });
+    expect(
+      await env.DB.prepare("SELECT status FROM google_groups_sync_queue WHERE id=?").bind(id).first(),
+    ).toMatchObject({ status: "completed" });
+  });
   it("enqueues a pending sync row", async () => {
     const userId = await insertUser("gg-enqueue@example.test");
     const id = await enqueueGoogleGroupsSync(env.DB, {
@@ -340,6 +424,12 @@ describe("Google Groups sync", () => {
             }),
           );
         }
+        if (url.includes("/members?"))
+          return Promise.resolve(
+            Response.json({
+              members: [{ email: "gg-provider-idempotency@example.test", role: "MEMBER", type: "USER" }],
+            }),
+          );
         return Promise.resolve(new Response(null, { status: init?.method === "POST" ? 409 : 404 }));
       }),
     );
@@ -384,7 +474,7 @@ describe("Google Groups sync", () => {
       "SELECT idempotency_key, payload_json FROM email_outbox WHERE template_key = 'mailing-list-enrolled'",
     );
     expect(outbox).toHaveLength(1);
-    expect(outbox[0].idempotency_key).toMatch(new RegExp(`^google-groups:enrollment:[^:]+:${userId}$`));
+    expect(outbox[0].idempotency_key).toMatch(new RegExp(`^google-groups:enrollment:${userId}:[a-f0-9]{64}$`));
     expect(JSON.parse(outbox[0].payload_json)).toMatchObject({ lists: ["pqc@lists.pkic.org"] });
 
     expect(await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10)).toMatchObject({ processed: 0 });
@@ -465,47 +555,204 @@ describe("Google Groups sync", () => {
     ).toHaveLength(1);
   });
 
-  it("keeps a newly completed sync pass out of an earlier grouped enrollment email", async () => {
-    const userId = await insertUser("gg-interleaved-notification@example.test");
-    for (const googleGroupEmail of ["interleaved-a-1@lists.pkic.org", "interleaved-a-2@lists.pkic.org"]) {
+  it("sends one enrollment email after a person's additions settle across several bounded passes", async () => {
+    const userId = await insertUser("gg-across-passes@example.test");
+    const lists = ["batch-a@lists.pkic.org", "batch-b@lists.pkic.org", "batch-c@lists.pkic.org"];
+    for (const googleGroupEmail of lists)
       await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail, action: "add_to_list" });
-    }
     stubGoogleFetch(200);
     const serviceAccountEnv = await fakeServiceAccountEnv();
-    await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10);
-
-    // A later invocation gets a different stable pass identity. This models a
-    // new successful add arriving between two concurrent drain selections.
-    await enqueueGoogleGroupsSync(env.DB, {
+    for (let index = 0; index < lists.length; index++) {
+      await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 1);
+      if (index === lists.length - 1)
+        await env.DB.prepare("UPDATE users SET first_name='Current',last_name='Name' WHERE id=?").bind(userId).run();
+      expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(
+        index === lists.length - 1 ? lists.length : 0,
+      );
+    }
+    const outbox = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key='mailing-list-enrolled'",
+    );
+    expect(outbox).toHaveLength(1);
+    expect(JSON.parse(outbox[0].payload_json)).toMatchObject({ lists, memberName: "Current Name" });
+    expect(
+      await queryAll(env.DB, "SELECT recipient_email,member_name FROM google_groups_enrollment_notification_intents"),
+    ).toEqual(lists.map(() => ({ recipient_email: "", member_name: "" })));
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(0);
+  });
+  it("drains the initial backlog on subsequent cron ticks instead of waiting another 15 minutes", async () => {
+    const userId = await insertUser("gg-backlog@example.test");
+    for (let i = 0; i < 26; i++)
+      await enqueueGoogleGroupsSync(env.DB, {
+        userId,
+        googleGroupEmail: `backlog-${i}@lists.pkic.org`,
+        action: "add_to_list",
+      });
+    await env.DB.prepare("UPDATE scheduled_jobs SET wake_requested=0 WHERE job_key='google_groups_sync'").run();
+    stubGoogleFetch(200);
+    const serviceAccountEnv = await fakeServiceAccountEnv();
+    const flow = profileD1Flow(env.DB, { measurePayloadBytes: true });
+    const budgeted = createD1QueryBudgetedDatabase(flow.db, 900);
+    expect(
+      await runGoogleGroupsSyncPass(
+        budgeted.db,
+        { ...env, ...serviceAccountEnv, DB: budgeted.db },
+        25,
+        budgeted.budget,
+      ),
+    ).toMatchObject({ processed: 24, succeeded: 24, failed: 0 });
+    const profile = flow.summary();
+    const maxRequestBytes = Math.max(...profile.queries.map((query) => query.requestBytes ?? 0));
+    const maxResultBytes = Math.max(...profile.queries.map((query) => query.resultBytes ?? 0));
+    expect(profile.roundTrips).toBeLessThanOrEqual(250);
+    expect(profile.statements).toBeLessThanOrEqual(900);
+    expect(maxRequestBytes).toBeLessThan(64 * 1024);
+    expect(maxResultBytes).toBeLessThan(128 * 1024);
+    console.info("google-groups-backlog-profile", {
+      roundTrips: profile.roundTrips,
+      statements: profile.statements,
+      maxRequestBytes,
+      maxResultBytes,
+    });
+    expect(
+      await env.DB.prepare("SELECT wake_requested FROM scheduled_jobs WHERE job_key='google_groups_sync'").first(
+        "wake_requested",
+      ),
+    ).toBe(1);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='mailing-list-enrolled'"),
+    ).toHaveLength(0);
+    await runGoogleGroupsSyncPass(env.DB, { ...env, ...serviceAccountEnv });
+    const outbox = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key='mailing-list-enrolled'",
+    );
+    expect(outbox).toHaveLength(1);
+    expect(JSON.parse(outbox[0].payload_json).lists).toHaveLength(26);
+  });
+  it("retries a stale notification selection without sending overlapping list summaries", async () => {
+    const userId = await insertUser("gg-notice-race@example.test");
+    const serviceAccountEnv = await fakeServiceAccountEnv();
+    stubGoogleFetch(200);
+    await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail: "race-a@lists.pkic.org", action: "add_to_list" });
+    await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv);
+    let injected = false;
+    const db = {
+      prepare: env.DB.prepare.bind(env.DB),
+      batch: async (statements: Parameters<typeof env.DB.batch>[0]) => {
+        if (!injected) {
+          injected = true;
+          await enqueueGoogleGroupsSync(env.DB, {
+            userId,
+            googleGroupEmail: "race-b@lists.pkic.org",
+            action: "add_to_list",
+          });
+          await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv);
+        }
+        return env.DB.batch(statements);
+      },
+    };
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(db, 10)).toBe(0);
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(2);
+    const outbox = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key='mailing-list-enrolled'",
+    );
+    expect(outbox).toHaveLength(1);
+    expect(JSON.parse(outbox[0].payload_json).lists).toEqual(["race-a@lists.pkic.org", "race-b@lists.pkic.org"]);
+  });
+  it("keeps the replacement worker's notification when a stale same-generation add returns idempotently", async () => {
+    const userId = await insertUser("gg-stale-notice@example.test");
+    const id = await enqueueGoogleGroupsSync(env.DB, {
       userId,
-      googleGroupEmail: "interleaved-b@lists.pkic.org",
+      googleGroupEmail: "stale-notice@lists.pkic.org",
       action: "add_to_list",
     });
-    stubGoogleFetch(200);
-    await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10);
-
-    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 1)).toBe(2);
-    const firstOutbox = await queryAll<{ idempotency_key: string; payload_json: string }>(
-      env.DB,
-      "SELECT idempotency_key, payload_json FROM email_outbox WHERE template_key = 'mailing-list-enrolled' ORDER BY created_at",
+    const serviceAccountEnv = await fakeServiceAccountEnv();
+    const paused = stubGoogleFetchWithFirstDirectoryCallPaused(409);
+    const stale = processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 1);
+    await paused.directoryStarted;
+    await env.DB.prepare("UPDATE google_groups_sync_queue SET lease_expires_at='2026-01-01T00:00:00.000Z' WHERE id=?")
+      .bind(id)
+      .run();
+    await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 1);
+    paused.releaseDirectory();
+    await stale;
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(1);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='mailing-list-enrolled'"),
+    ).toHaveLength(1);
+  });
+  it("does not announce an addition when the provider reports an existing membership", async () => {
+    const userId = await insertUser("gg-existing@example.test");
+    await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: "existing@lists.pkic.org",
+      action: "add_to_list",
+    });
+    stubGoogleFetch(409, ["gg-existing@example.test"]);
+    expect(await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv())).toMatchObject({ succeeded: 1 });
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(0);
+    expect(await queryAll(env.DB, "SELECT queue_id FROM google_groups_enrollment_notification_intents")).toEqual([]);
+  });
+  it("does not turn a transient retry into a new-member notice for an existing member", async () => {
+    const email = "gg-existing-retry@example.test",
+      userId = await insertUser(email);
+    const id = await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: "existing-retry@lists.pkic.org",
+      action: "add_to_list",
+    });
+    let additions = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.includes("oauth2.googleapis.com")) return Response.json({ access_token: "synthetic-token" });
+        if (url.includes("/members?")) return Response.json({ members: [{ email, role: "MEMBER", type: "USER" }] });
+        if (init?.method === "POST") return new Response(null, { status: ++additions === 1 ? 500 : 409 });
+        return Response.json({ role: "MEMBER", type: "USER" });
+      }),
     );
-    expect(firstOutbox).toHaveLength(1);
-    expect(JSON.parse(firstOutbox[0].payload_json).lists).toEqual([
-      "interleaved-a-1@lists.pkic.org",
-      "interleaved-a-2@lists.pkic.org",
-    ]);
-
-    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 1)).toBe(1);
-    const allOutbox = await queryAll<{ idempotency_key: string; payload_json: string }>(
-      env.DB,
-      "SELECT idempotency_key, payload_json FROM email_outbox WHERE template_key = 'mailing-list-enrolled' ORDER BY created_at",
-    );
-    expect(allOutbox).toHaveLength(2);
-    expect(new Set(allOutbox.map((row) => row.idempotency_key)).size).toBe(2);
-    expect(JSON.parse(allOutbox[1].payload_json).lists).toEqual(["interleaved-b@lists.pkic.org"]);
+    const serviceAccountEnv = await fakeServiceAccountEnv();
+    expect(await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv)).toMatchObject({ failed: 1 });
+    await env.DB.prepare("UPDATE google_groups_sync_queue SET next_attempt_at=? WHERE id=?")
+      .bind(new Date().toISOString(), id)
+      .run();
+    expect(await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv)).toMatchObject({ succeeded: 1 });
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(0);
+    expect(await queryAll(env.DB, "SELECT queue_id FROM google_groups_enrollment_notification_intents")).toEqual([]);
+  });
+  it("applies verified additional addresses with no delivery through the same queued add/delete", async () => {
+    const userId = await insertUser("gg-primary@example.test");
+    await env.DB.prepare(
+      "INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at) VALUES ('gg-alias',?,'gg-alias@example.test','gg-alias@example.test',?,?)",
+    )
+      .bind(userId, new Date().toISOString(), new Date().toISOString())
+      .run();
+    const serviceAccountEnv = await fakeServiceAccountEnv();
+    for (const action of ["add_to_list", "remove_from_list"] as const) {
+      await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail: "aliases@lists.pkic.org", action });
+      const fetch = stubGoogleFetch(200);
+      expect(await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv)).toMatchObject({ succeeded: 1, failed: 0 });
+      const calls = fetch.mock.calls;
+      if (action === "add_to_list")
+        expect(
+          calls.some(
+            ([, init]) =>
+              init?.method === "POST" &&
+              String(init.body).includes("gg-alias@example.test") &&
+              JSON.parse(String(init.body)).delivery_settings === "NONE",
+          ),
+        ).toBe(true);
+      else
+        expect(
+          calls.some(([url, init]) => String(url).includes("gg-alias%40example.test") && init?.method === "DELETE"),
+        ).toBe(true);
+    }
   });
 
-  it("rolls queue completion and notification intent back together when the outbox insert fails", async () => {
+  it("persists notification intent before the provider effect and activates it only on completion", async () => {
     const userId = await insertUser("gg-atomic-notification@example.test");
     const queueId = await enqueueGoogleGroupsSync(env.DB, {
       userId,
@@ -726,7 +973,9 @@ describe("Google Groups sync", () => {
 
     // The Directory API "add member" endpoint was called exactly once per
     // row, not twice for any row — the direct symptom of the old race.
-    const addMemberCalls = fetchMock.mock.calls.filter(([url]) => typeof url === "string" && url.includes("/members"));
+    const addMemberCalls = fetchMock.mock.calls.filter(
+      ([url, init]) => typeof url === "string" && url.includes("/members") && init?.method === "POST",
+    );
     expect(addMemberCalls).toHaveLength(queueIds.length);
   });
 
@@ -920,13 +1169,16 @@ describe("Google Groups sync", () => {
     await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail: group, action: "remove_from_list" });
     await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail: group, action: "add_to_list" });
     releaseDirectory();
-    expect(await firstRun).toMatchObject({ processed: 1, succeeded: 1 });
-    expect(await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10)).toMatchObject({ processed: 0 });
+    expect(await firstRun).toMatchObject({ processed: 1, succeeded: 0 });
+    expect(await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10)).toMatchObject({
+      processed: 1,
+      succeeded: 1,
+    });
 
     const methods = fetchMock.mock.calls
-      .filter(([url]) => typeof url === "string" && url.includes("/members"))
+      .filter(([url, init]) => typeof url === "string" && url.includes("/members") && Boolean(init?.method))
       .map(([, init]) => (init as RequestInit | undefined)?.method);
-    expect(methods).toEqual(["POST"]);
+    expect(methods).toEqual(["POST", "POST"]);
     expect(
       await queryAll<{ action: string; status: string }>(
         env.DB,

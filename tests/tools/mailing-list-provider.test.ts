@@ -1,6 +1,9 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { createGoogleGroupsDeliveryProvider } from "../../functions/_lib/services/google-groups/directory-client";
+import {
+  createGoogleGroupsDirectoryClient,
+  createGoogleGroupsDeliveryProvider,
+} from "../../functions/_lib/services/google-groups/directory-client";
 const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const env = {
   GOOGLE_SERVICE_ACCOUNT_EMAIL: "reader@example.test",
@@ -8,11 +11,12 @@ const env = {
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
 };
 const list = "group@example.test";
-function google(member: object | null) {
+function google(member: object | null, addStatus = 200) {
   return vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     if (String(url) === "https://oauth2.googleapis.com/token")
       return Response.json({ access_token: "synthetic-token" });
     if (!init?.method) return member ? Response.json(member) : new Response(null, { status: 404 });
+    if (init.method === "POST" && addStatus === 409) return new Response(null, { status: 409 });
     return Response.json({});
   });
 }
@@ -39,7 +43,7 @@ describe("mailing-list provider adapter", () => {
   it("updates existing alias delivery without changing the member role", async () => {
     const fetch = google({ role: "MEMBER", type: "USER", delivery_settings: "ALL_MAIL" }),
       provider = await createGoogleGroupsDeliveryProvider(env, false, fetch);
-    await provider.applyChange(list, { email: "alias@example.test", action: "disable_delivery" });
+    await provider.applyChange(list, { email: "alias@example.test", action: "subscribe", delivery: "none" });
     expect(JSON.parse(String(fetch.mock.calls.find(([, request]) => request?.method === "PATCH")![1]?.body))).toEqual({
       delivery_settings: "NONE",
     });
@@ -73,9 +77,65 @@ describe("mailing-list provider adapter", () => {
       const change = provider.applyChange(list, { email, action: "subscribe" });
       if (state === "absent") await change;
       else await expect(change).rejects.toThrow();
+      const queued = await createGoogleGroupsDirectoryClient(env, fetch);
+      const removal = queued.applyMembership({
+        action: "remove_from_list",
+        googleGroupEmail: list,
+        memberEmail: email,
+      });
+      if (state === "absent") await expect(removal).resolves.toBeUndefined();
+      else await expect(removal).rejects.toThrow();
       expect(
         fetch.mock.calls.filter(([url, request]) => String(url).includes("/members") && request?.method === "POST"),
       ).toHaveLength(state === "absent" ? 1 : 0);
     },
   );
+});
+
+it.each(["none", "all"] as const)("applies queued %s delivery to existing ordinary members", async (delivery) => {
+  const fetch = google({ role: "MEMBER", type: "USER", delivery_settings: delivery === "none" ? "ALL_MAIL" : "NONE" });
+  fetch.mockImplementation(async (url, init) => {
+    if (String(url) === "https://oauth2.googleapis.com/token")
+      return Response.json({ access_token: "synthetic-token" });
+    if (init?.method === "POST") return new Response(null, { status: 409 });
+    if (!init?.method) return Response.json({ role: "MEMBER", type: "USER" });
+    return Response.json({});
+  });
+  const client = await createGoogleGroupsDirectoryClient(env, fetch);
+  await client.applyMembership({
+    action: "add_to_list",
+    googleGroupEmail: list,
+    memberEmail: "person@example.test",
+    delivery,
+  });
+  expect(JSON.parse(String(fetch.mock.calls.find(([, request]) => request?.method === "PUT")![1]?.body))).toEqual({
+    delivery_settings: delivery === "none" ? "NONE" : "ALL_MAIL",
+  });
+  expect(fetch.mock.calls.some(([, request]) => request?.method === "DELETE")).toBe(false);
+});
+
+it.each([
+  { role: "OWNER", type: "USER" },
+  { role: "MANAGER", type: "USER" },
+  { role: "MEMBER", type: "GROUP" },
+  { role: "UNKNOWN", type: "USER" },
+])("reports protected delivery mismatches for $role / $type without modifying privileges", async ({ role, type }) => {
+  for (const delivery of ["all", "none"] as const) {
+    const expected = delivery === "all" ? "ALL_MAIL" : "NONE";
+    for (const current of ["ALL_MAIL", "NONE"]) {
+      const fetch = google({ role, type, delivery_settings: current }, 409);
+      const client = await createGoogleGroupsDirectoryClient(env, fetch);
+      const change = client.applyMembership({
+        action: "add_to_list",
+        googleGroupEmail: list,
+        memberEmail: "protected@example.test",
+        delivery,
+      });
+      if (current === expected) await expect(change).resolves.toBeUndefined();
+      else await expect(change).rejects.toThrow("delivery update unavailable for protected member");
+      expect(fetch.mock.calls.some(([, request]) => ["PUT", "PATCH", "DELETE"].includes(request?.method ?? ""))).toBe(
+        false,
+      );
+    }
+  }
 });

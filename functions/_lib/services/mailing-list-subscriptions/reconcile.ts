@@ -3,7 +3,7 @@ import { nowIso } from "../../utils/time";
 import { ALL_ACTIVE_USER_CAPACITIES_CTE } from "../membership/capacity-query";
 import {
   EFFECTIVE_SUBSCRIPTION_CTE,
-  EFFECTIVE_SUBSCRIPTION_VALUE_SQL,
+  EFFECTIVE_MEMBERSHIP_VALUE_SQL,
   mailingListDefaultSubscribedSql,
   mailingListEligibilitySql,
 } from "./projection";
@@ -18,7 +18,7 @@ export function prepareReconcileMailingListSubscriptionsStatement(
     .prepare(
       `${EFFECTIVE_SUBSCRIPTION_CTE},
        desired_subscriptions AS (
-         SELECT id, email, ${EFFECTIVE_SUBSCRIPTION_VALUE_SQL} AS effective_subscribed
+         SELECT id, email, ${EFFECTIVE_MEMBERSHIP_VALUE_SQL} AS effective_subscribed
            FROM effective_subscriptions
        )
        INSERT INTO google_groups_sync_queue
@@ -33,7 +33,7 @@ export function prepareReconcileMailingListSubscriptionsStatement(
          LEFT JOIN google_groups_membership_desired_state desired
            ON desired.user_id = ? AND desired.google_group_email = subscription.email
         WHERE (desired.desired_action IS NULL AND subscription.effective_subscribed = 1)
-           OR desired.desired_action != CASE
+           OR (CASE WHEN desired.desired_action = 'restore_delivery' THEN 'add_to_list' ELSE desired.desired_action END) != CASE
                 WHEN subscription.effective_subscribed = 1 THEN 'add_to_list'
                 ELSE 'remove_from_list'
               END
@@ -73,10 +73,8 @@ export function prepareReconcileGroupMailingListSubscriptionsStatement(
        ),
        effective_subscriptions AS (
          SELECT user_id, list_id, email, CASE
-           WHEN active = 0 OR archived_at IS NOT NULL OR eligible = 0 THEN 0
-           WHEN preference = 'subscribed' THEN 1
-           WHEN preference = 'unsubscribed' THEN 0
-           ELSE default_subscribed
+           WHEN active = 0 OR archived_at IS NOT NULL THEN 0
+           ELSE ${EFFECTIVE_MEMBERSHIP_VALUE_SQL}
          END AS subscribed
            FROM projected
        )
@@ -94,7 +92,7 @@ export function prepareReconcileGroupMailingListSubscriptionsStatement(
            ON desired.user_id = subscription.user_id
           AND desired.google_group_email = subscription.email
         WHERE (desired.desired_action IS NULL AND subscription.subscribed = 1)
-           OR desired.desired_action != CASE
+           OR (CASE WHEN desired.desired_action = 'restore_delivery' THEN 'add_to_list' ELSE desired.desired_action END) != CASE
                 WHEN subscription.subscribed = 1 THEN 'add_to_list'
                 ELSE 'remove_from_list'
               END
@@ -132,10 +130,8 @@ export function prepareReconcileMailingListStatement(db: DatabaseLike, listId: s
        ),
        effective AS (
          SELECT user_id, list_id, email, CASE
-           WHEN active = 0 OR archived_at IS NOT NULL OR eligible = 0 THEN 0
-           WHEN preference = 'subscribed' THEN 1
-           WHEN preference = 'unsubscribed' THEN 0
-           ELSE default_subscribed
+           WHEN active = 0 OR archived_at IS NOT NULL THEN 0
+           ELSE ${EFFECTIVE_MEMBERSHIP_VALUE_SQL}
          END AS subscribed
          FROM projected
        )
@@ -153,7 +149,7 @@ export function prepareReconcileMailingListStatement(db: DatabaseLike, listId: s
            ON desired.user_id = subscription.user_id
           AND desired.google_group_email = subscription.email
         WHERE (desired.desired_action IS NULL AND subscription.subscribed = 1)
-           OR desired.desired_action != CASE
+           OR (CASE WHEN desired.desired_action = 'restore_delivery' THEN 'add_to_list' ELSE desired.desired_action END) != CASE
                 WHEN subscription.subscribed = 1 THEN 'add_to_list'
                 ELSE 'remove_from_list'
               END

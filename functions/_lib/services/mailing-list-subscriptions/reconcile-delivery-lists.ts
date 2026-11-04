@@ -14,8 +14,8 @@ export async function reconcileMailingListDeliveries(
     limit: number;
     dryRun: boolean;
     canApply?: (listEmail: string) => Promise<boolean>;
-    recordUnsubscribe?: (userId: string, listEmail: string) => Promise<unknown>;
-    recordPresence?: (addresses: MailingListDeliveryAddress[], listEmail: string) => Promise<unknown>;
+    recordUnsubscribe?: (userId: string, listEmail: string) => Promise<boolean | void>;
+    recordPresence?: (addresses: MailingListDeliveryAddress[], listEmail: string) => Promise<number | void>;
   },
 ) {
   const lists = await all<{ email: string }>(
@@ -30,11 +30,12 @@ export async function reconcileMailingListDeliveries(
     throw new Error("Mailing-list reconciliation exceeds its bounded list limit");
   const groups = [];
   let changed = 0;
+  let used = 0;
   for (const list of lists) {
-    if (!options.dryRun && changed >= options.limit) break;
+    if (used >= options.limit) break;
     const addresses = await listMailingListDeliveryAddresses(db, list.email);
     const result = await reconcileMailingListDelivery(provider, list.email, addresses, {
-      limit: options.limit - changed,
+      limit: options.limit - used,
       dryRun: options.dryRun,
       canApply: options.canApply ? () => options.canApply!(list.email) : undefined,
       recordPresence: options.recordPresence
@@ -46,6 +47,7 @@ export async function reconcileMailingListDeliveries(
     });
     groups.push({ email: list.email, entries: result.entries });
     changed += result.changed;
+    used += result.used;
   }
   return { groups, changed };
 }

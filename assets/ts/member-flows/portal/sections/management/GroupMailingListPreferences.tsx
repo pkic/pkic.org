@@ -18,6 +18,7 @@ import { putJson } from "../../../../shared/api-client";
 const PREFERENCE_LABELS: Record<MailingListPreferenceSelection, string> = {
   inherit: "Use group default",
   subscribed: "Subscribed",
+  archive_only: "Email delivery off",
   unsubscribed: "Unsubscribed",
 };
 
@@ -116,7 +117,12 @@ export function GroupMailingListPreferences({ groupId }: { groupId: string }) {
           },
           {
             header: "Effective status",
-            cell: (subscription) => (subscription.effectiveSubscribed ? "Subscribed" : "Not subscribed"),
+            cell: (subscription) =>
+              subscription.eligible && subscription.preference === "archive_only"
+                ? "Email delivery off"
+                : subscription.effectiveSubscribed
+                  ? "Subscribed"
+                  : "Not subscribed",
           },
           {
             header: "Preference",

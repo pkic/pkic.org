@@ -59,7 +59,7 @@ export async function observeGoogleGroupsMembership(
          FROM google_groups_membership_desired_state desired
          JOIN users ON users.id = desired.user_id
         WHERE desired.google_group_email = ?
-          AND desired.desired_action = 'add_to_list'
+          AND desired.desired_action IN ('add_to_list', 'restore_delivery')
         UNION
        SELECT observed.user_id AS user_id, lower(users.email) AS email
          FROM google_groups_observed_membership observed
@@ -178,8 +178,8 @@ export async function recordProviderPresences(
 ) {
   const at = new Date().toISOString();
   const chunks = chunkJsonRows(addresses.slice(0, 500));
-  if (!chunks.length) return;
-  await db.batch(
+  if (!chunks.length) return 0;
+  const results = await db.batch(
     chunks.map((chunk) =>
       db
         .prepare(`INSERT INTO google_groups_observed_membership
@@ -194,4 +194,5 @@ export async function recordProviderPresences(
         .bind(listEmail, at, at, at, chunk.json),
     ),
   );
+  return results.reduce((total, result) => total + (result.meta?.changes ?? 0), 0);
 }

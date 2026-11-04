@@ -71,7 +71,7 @@ export async function runMailingListFullDryRun(databasePath: string, env: Config
       failed: 0,
       skippedUnconfigured: false,
       summary: Object.fromEntries(
-        ["subscribe", "unsubscribe", "disable_delivery", "protected", "unchanged", "unsubscribed"].map((action) => [
+        ["subscribe", "unsubscribe", "protected", "unchanged", "unsubscribed"].map((action) => [
           action,
           entries.filter((entry) => entry.action === action).length,
         ]),

@@ -1,3 +1,9 @@
+import {
+  groupMailingListSubscriptionsRouteSchema,
+  groupMailingListPreferenceRouteSchema,
+  groupMailingListSubscribersRouteSchema,
+  groupMailingListSubscriberUpdateRouteSchema,
+} from "../assets/shared/schemas/mailing-lists";
 import { administratorGrants } from "./helpers/administrator";
 import { describe, expect, it } from "vitest";
 import { type AuthScope } from "../functions/_lib/auth/scopes";
@@ -325,4 +331,18 @@ describe("MCP scope delegation", () => {
 
     expect(grantedMcpOauthScopes(actor, requested)).toEqual(requested);
   });
+});
+
+it("exposes self-service and managed mailing-list subscriptions through MCP", () => {
+  const paths = {
+    "/api/v1/groups/{groupId}/mailing-lists": { get: groupMailingListSubscriptionsRouteSchema },
+    "/api/v1/groups/{groupId}/mailing-lists/{listId}/subscription": { put: groupMailingListPreferenceRouteSchema },
+    "/api/v1/groups/{groupId}/mailing-lists/{listId}/subscribers": { get: groupMailingListSubscribersRouteSchema },
+    "/api/v1/groups/{groupId}/mailing-lists/{listId}/subscribers/{userId}": {
+      put: groupMailingListSubscriberUpdateRouteSchema,
+    },
+  };
+  const exposed = filterOpenApiSpecForMcp({ paths });
+  expect(Object.keys(exposed.paths)).toEqual(Object.keys(paths));
+  expect(exposed.paths[Object.keys(paths)[3]!].put[MCP_EXTENSION]).toMatchObject({ expose: true, readonly: false });
 });

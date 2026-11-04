@@ -1,4 +1,4 @@
-import type { MailingListDeliveryProvider } from "../mailing-list-subscriptions/delivery-provider";
+import { type MailingListDeliveryProvider } from "../mailing-list-subscriptions/delivery-provider";
 import type {
   ConfiguredGoogleServiceAccountEnv,
   GoogleGroupsDirectoryClient,
@@ -89,32 +89,55 @@ async function getServiceAccountAccessToken(
   return readAccessToken(await response.json());
 }
 
+/** Apply membership idempotently; refuse protected delivery changes that the adapter cannot fulfill. */
 async function callDirectoryApi(
   fetchImpl: typeof fetch,
   accessToken: string,
   action: GoogleGroupsSyncAction,
   googleGroupEmail: string,
   memberEmail: string,
+  delivery?: "all" | "none",
 ): Promise<void> {
   const membersUrl = `${GOOGLE_DIRECTORY_GROUPS_URL}/${encodeURIComponent(googleGroupEmail)}/members`;
-  if (action === "add_to_list") {
+  if (action !== "remove_from_list") {
+    if (action === "restore_delivery") delivery = "all";
     const response = await fetchImpl(membersUrl, {
       method: "POST",
       headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
-      body: JSON.stringify({ email: memberEmail, role: "MEMBER" }),
+      body: JSON.stringify({
+        email: memberEmail,
+        role: "MEMBER",
+        ...(delivery ? { delivery_settings: delivery === "none" ? "NONE" : "ALL_MAIL" } : {}),
+      }),
     });
     // Membership application is idempotent: an existing member is already in the desired state.
     if (!response.ok && response.status !== 409) {
       throw new Error(`Directory API add-member failed: HTTP ${response.status}`);
     }
+    if (delivery && response.status === 409) {
+      const existing = await readDirectoryMember(fetchImpl, accessToken, googleGroupEmail, memberEmail);
+      if (!existing) throw new Error("Membership changed while applying delivery; retry current state");
+      if (isProtectedDirectoryMember(existing)) {
+        const expectedDelivery = delivery === "none" ? "NONE" : "ALL_MAIL";
+        if (existing.delivery_settings !== expectedDelivery) {
+          throw new Error("Directory API delivery update unavailable for protected member");
+        }
+        return;
+      }
+      const updated = await fetchImpl(`${membersUrl}/${encodeURIComponent(memberEmail)}`, {
+        method: "PUT",
+        headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ delivery_settings: delivery === "none" ? "NONE" : "ALL_MAIL" }),
+      });
+      if (!updated.ok) throw new Error(`Directory API delivery update failed: HTTP ${updated.status}`);
+    }
     return;
   }
 
   const memberUrl = `${membersUrl}/${encodeURIComponent(memberEmail)}`;
-  const membership = await fetchImpl(memberUrl, { headers: { authorization: `Bearer ${accessToken}` } });
-  if (membership.status === 404) return;
-  if (!membership.ok) throw new Error(`Directory API member read failed: HTTP ${membership.status}`);
-  if (isProtectedDirectoryMember((await membership.json()) as DirectoryMemberRow)) return;
+  const membership = await readDirectoryMember(fetchImpl, accessToken, googleGroupEmail, memberEmail);
+  if (!membership) return;
+  if (isProtectedDirectoryMember(membership)) throw new Error("Directory API removal unavailable for protected member");
   const response = await fetchImpl(memberUrl, {
     method: "DELETE",
     headers: { authorization: `Bearer ${accessToken}` },
@@ -123,6 +146,7 @@ async function callDirectoryApi(
   if (!response.ok && response.status !== 404) {
     throw new Error(`Directory API remove-member failed: HTTP ${response.status}`);
   }
+  return;
 }
 
 interface DirectoryMemberRow {
@@ -181,14 +205,15 @@ async function listDirectoryMembers(
   return { emails, members, complete: false };
 }
 
+/** Bind authenticated membership operations and complete roster reads to one provider session. */
 export async function createGoogleGroupsDirectoryClient(
   env: ConfiguredGoogleServiceAccountEnv,
   fetchImpl: typeof fetch = fetch,
 ): Promise<GoogleGroupsDirectoryClient> {
   const accessToken = await getServiceAccountAccessToken(env, fetchImpl);
   return {
-    applyMembership: ({ action, googleGroupEmail, memberEmail }) =>
-      callDirectoryApi(fetchImpl, accessToken, action, googleGroupEmail, memberEmail),
+    applyMembership: ({ action, googleGroupEmail, memberEmail, delivery }) =>
+      callDirectoryApi(fetchImpl, accessToken, action, googleGroupEmail, memberEmail, delivery),
     listMembers: (googleGroupEmail, maxPages = 25) =>
       listDirectoryMembers(fetchImpl, accessToken, googleGroupEmail, maxPages),
   };
@@ -202,20 +227,44 @@ export async function createGoogleGroupsDryRunDirectoryClient(
 ): Promise<GoogleGroupsDirectoryClient> {
   const accessToken = await getServiceAccountAccessToken(env, fetchImpl, GOOGLE_GROUPS_READONLY_SCOPES);
   const listings = new Map<string, Promise<{ emails: string[]; complete: boolean }>>();
+  function readMembers(group: string, maxPages = 25) {
+    const existing = listings.get(group);
+    if (existing) return existing;
+    const listing = listDirectoryMembers(fetchImpl, accessToken, group, maxPages);
+    listings.set(group, listing);
+    return listing;
+  }
   return {
-    listMembers: (group, maxPages = 25) => listDirectoryMembers(fetchImpl, accessToken, group, maxPages),
+    listMembers: readMembers,
     async applyMembership(operation) {
-      let listing = listings.get(operation.googleGroupEmail);
-      if (!listing) {
-        listing = listDirectoryMembers(fetchImpl, accessToken, operation.googleGroupEmail, 25);
-        listings.set(operation.googleGroupEmail, listing);
-      }
-      const members = await listing;
+      const members = await readMembers(operation.googleGroupEmail);
       if (!members.complete) throw new Error("Incomplete Google Group membership listing; no plan recorded");
       // Record intent even if already satisfied: the live adapter applies it idempotently.
       operations.push({ ...operation });
     },
   };
+}
+
+/** Google may return memberKey/400 for an absent address; prove absence before treating it idempotently. */
+async function readDirectoryMember(
+  fetchImpl: typeof fetch,
+  token: string,
+  listEmail: string,
+  email: string,
+): Promise<DirectoryMemberRow | null> {
+  const response = await fetchImpl(
+    `${GOOGLE_DIRECTORY_GROUPS_URL}/${encodeURIComponent(listEmail)}/members/${encodeURIComponent(email)}`,
+    { headers: { authorization: `Bearer ${token}` } },
+  );
+  if (response.ok) return (await response.json()) as DirectoryMemberRow;
+  if (response.status === 404) return null;
+  const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+  if (response.status !== 400 || body?.error?.message !== "Missing required field: memberKey")
+    throw new Error(`Provider member read failed: HTTP ${response.status}`);
+  const roster = await listDirectoryMembers(fetchImpl, token, listEmail, 25);
+  if (!roster.complete || roster.emails.includes(email.toLowerCase()))
+    throw new Error("Provider member lookup failed; complete roster did not confirm absence");
+  return null;
 }
 
 /** Google roles and delivery flags stay inside the provider adapter. */
@@ -238,7 +287,6 @@ export async function createGoogleGroupsDeliveryProvider(
         members: listing.members.map((member) => ({
           email: String(member.email).toLowerCase(),
           protected: isProtectedDirectoryMember(member),
-          delivery: member.delivery_settings === "NONE" ? ("none" as const) : ("all" as const),
         })),
       };
     },
@@ -246,26 +294,13 @@ export async function createGoogleGroupsDeliveryProvider(
       if (readOnly) throw new Error("Dry run cannot change provider memberships");
       const collection = `${GOOGLE_DIRECTORY_GROUPS_URL}/${encodeURIComponent(listEmail)}/members`;
       const memberUrl = `${collection}/${encodeURIComponent(change.email)}`;
-      const response = await fetchImpl(memberUrl, { headers });
-      let current: DirectoryMemberRow | null;
-      if (response.ok) current = (await response.json()) as DirectoryMemberRow;
-      else if (response.status === 404) current = null;
-      else {
-        const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
-        if (response.status !== 400 || body?.error?.message !== "Missing required field: memberKey")
-          throw new Error(`Provider member read failed: HTTP ${response.status}`);
-        // Google can reject an email lookup for a non-member with this 400 rather
-        // than 404. Establish absence independently before allowing an addition.
-        const roster = await listDirectoryMembers(fetchImpl, token, listEmail, 25);
-        if (!roster.complete || roster.emails.includes(change.email.toLowerCase()))
-          throw new Error("Provider member lookup failed; complete roster did not confirm absence");
-        current = null;
-      }
-      if (current && isProtectedDirectoryMember(current)) return;
+      const current = await readDirectoryMember(fetchImpl, token, listEmail, change.email);
+      if (current && isProtectedDirectoryMember(current)) return false;
       if (change.action === "unsubscribe") {
-        if (!current) return;
+        if (!current) return false;
         const removed = await fetchImpl(memberUrl, { method: "DELETE", headers });
         if (!removed.ok && removed.status !== 404) throw new Error(`Provider removal failed: HTTP ${removed.status}`);
+        return removed.ok;
       } else if (!current && change.action === "subscribe") {
         const added = await fetchImpl(collection, {
           method: "POST",
@@ -279,18 +314,17 @@ export async function createGoogleGroupsDeliveryProvider(
         if (!added.ok && added.status !== 409) throw new Error(`Provider addition failed: HTTP ${added.status}`);
         if (added.status === 409 && change.delivery === "none")
           throw new Error("Membership changed; retry alias delivery with fresh state");
-      } else if (
-        current &&
-        (change.action === "disable_delivery" || change.delivery === "none") &&
-        current.delivery_settings !== "NONE"
-      ) {
+        return added.ok;
+      } else if (current && change.delivery === "none" && current.delivery_settings !== "NONE") {
         const updated = await fetchImpl(memberUrl, {
           method: "PATCH",
           headers,
           body: JSON.stringify({ delivery_settings: "NONE" }),
         });
         if (!updated.ok) throw new Error(`Provider delivery update failed: HTTP ${updated.status}`);
+        return true;
       }
+      return false;
     },
   };
 }

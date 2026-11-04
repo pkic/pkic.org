@@ -11,6 +11,7 @@ export interface MailingListDeliveryPlanEntry {
   userId?: string;
   action: MailingListDeliveryChange["action"] | "unchanged" | "protected" | "unsubscribed";
   alias: boolean;
+  delivery?: "none";
 }
 
 export function planMailingListDelivery(
@@ -22,14 +23,19 @@ export function planMailingListDelivery(
   return [...new Set([...expected.keys(), ...actual.keys()])].sort().map((email) => {
     const target = expected.get(email),
       member = actual.get(email);
-    const alias = Boolean(target?.noDelivery);
-    const base = { email, alias, ...(target ? { userId: target.userId, primaryEmail: target.primaryEmail } : {}) };
+    const alias = Boolean(target && target.email !== target.primaryEmail);
+    const base = {
+      email,
+      alias,
+      ...(target?.noDelivery ? { delivery: "none" as const } : {}),
+      ...(target ? { userId: target.userId, primaryEmail: target.primaryEmail } : {}),
+    };
     if (member?.protected) return { ...base, action: "protected" };
     const left = target?.confirmedSubscribed && !actual.has(target.primaryEmail);
     if (left && !alias) return { ...base, action: "unsubscribed" };
     if (!target || left) return { ...base, action: member ? "unsubscribe" : "unchanged" };
-    if (!member) return { ...base, action: "subscribe" };
-    if (alias && member.delivery !== "none") return { ...base, action: "disable_delivery" };
+    // Primary additions belong to the durable queue, which also owns their notification.
+    if (!member) return { ...base, action: alias ? "subscribe" : "unchanged" };
     return { ...base, action: "unchanged" };
   });
 }
@@ -43,40 +49,43 @@ export async function reconcileMailingListDelivery(
     limit: number;
     dryRun: boolean;
     canApply?: () => Promise<boolean>;
-    recordUnsubscribe?: (userId: string) => Promise<unknown>;
-    recordPresence?: (addresses: MailingListDeliveryAddress[]) => Promise<unknown>;
+    recordUnsubscribe?: (userId: string) => Promise<boolean | void>;
+    recordPresence?: (addresses: MailingListDeliveryAddress[]) => Promise<number | void>;
   },
 ) {
   const listing = await provider.listMembers(listEmail);
   if (!listing.complete) throw new Error("Incomplete mailing-list roster; reconciliation stopped");
   const entries = planMailingListDelivery(addresses, listing.members);
   const present = new Set(listing.members.map((member) => member.email));
-  if (!options.dryRun && options.recordPresence) {
-    await options.recordPresence(
-      addresses.filter((address) => !address.noDelivery && !address.confirmedSubscribed && present.has(address.email)),
-    );
-  }
   let changed = 0;
+  const baselines = addresses
+    .filter(
+      (address) => address.email === address.primaryEmail && !address.confirmedSubscribed && present.has(address.email),
+    )
+    .slice(0, options.limit);
+  if (!options.dryRun && options.recordPresence) changed += (await options.recordPresence(baselines)) ?? 0;
+  let used = changed;
   const ordered = [...entries].sort((a, b) => Number(a.alias) - Number(b.alias));
   for (const entry of ordered) {
     if (entry.action === "unchanged" || entry.action === "protected") continue;
-    if (changed >= options.limit) break;
+    if (used >= options.limit) break;
     if (!options.dryRun && options.canApply && !(await options.canApply())) break;
     if (entry.action === "unsubscribed") {
-      if (!options.dryRun && entry.userId) await options.recordUnsubscribe?.(entry.userId);
-      changed++;
-    } else if (["subscribe", "unsubscribe", "disable_delivery"].includes(entry.action)) {
+      used++;
+      if (!options.dryRun && entry.userId && (await options.recordUnsubscribe?.(entry.userId))) changed++;
+    } else if (entry.action === "subscribe" || entry.action === "unsubscribe") {
       if (entry.alias && entry.action !== "unsubscribe" && !present.has(entry.primaryEmail!)) continue;
+      used++;
       if (!options.dryRun) {
-        await provider.applyChange(listEmail, {
+        const applied = await provider.applyChange(listEmail, {
           email: entry.email,
           action: entry.action as MailingListDeliveryChange["action"],
-          ...(entry.alias ? { delivery: "none" as const } : {}),
+          ...(entry.delivery ? { delivery: entry.delivery } : {}),
         });
+        if (applied) changed++;
       }
       if (entry.action === "subscribe") present.add(entry.email);
-      changed++;
     }
   }
-  return { entries, changed };
+  return { entries, changed, used };
 }

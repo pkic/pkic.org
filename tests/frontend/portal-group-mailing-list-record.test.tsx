@@ -10,8 +10,13 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { beginRecordEdit } from "./helpers/record-edit";
+import { mailingListSubscriberFixture } from "./helpers/mailing-list-fixture";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mailingListLifecycleTransitionSchema, type MailingList } from "../../assets/shared/schemas/mailing-lists";
+import {
+  mailingListLifecycleTransitionSchema,
+  mailingListPreferenceMutationSchema,
+  type MailingList,
+} from "../../assets/shared/schemas/mailing-lists";
 import { mailingListSyncUpdateSchema } from "../../assets/shared/schemas/mailing-list-sync";
 import { BreadcrumbScope } from "../../assets/ts/ui/BreadcrumbScope";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
@@ -52,20 +57,7 @@ const activeList: MailingList = {
   updatedAt: "2026-08-01T00:00:00.000Z",
 };
 
-const subscriber = {
-  user: {
-    id: "b0000000-0000-4000-8000-000000000001",
-    email: "ada@example.test",
-    first_name: "Ada",
-    last_name: "Lovelace",
-    organization_name: "Analytical Engines",
-    headshotUrl: "/api/v1/users/example/headshots/portrait.png",
-  },
-  eligible: true,
-  defaultSubscribed: true,
-  preference: null,
-  subscribed: true,
-};
+const subscriber = mailingListSubscriberFixture();
 
 const mounted: HTMLElement[] = [];
 
@@ -517,3 +509,78 @@ describe("group mailing-list record", () => {
     expect(container.querySelector(".pk-profile-header__title")?.textContent).toBe(activeList.label);
   });
 });
+
+it.each(["Turn off email delivery", "Unsubscribe"])(
+  "confirms %s for the selected person and reloads the roster",
+  async (label) => {
+    const preference = label === "Unsubscribe" ? "unsubscribed" : "archive_only";
+    const calls = stubApi(activeList, () =>
+      json({
+        success: true,
+        subscription: {
+          mailingList: activeList,
+          eligible: true,
+          defaultSubscribed: true,
+          preference,
+          effectiveSubscribed: false,
+        },
+      }),
+    );
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <GroupMailingListRecord groupId={GROUP_ID} listId={LIST_ID} onLeave={() => {}} />
+      </>,
+    );
+    await settle();
+    await settle();
+    await act(() => buttonNamed(container, "Actions for Ada Lovelace").click());
+    await settle();
+    await act(() => {
+      const item = [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (node) => node.textContent?.trim() === label,
+      )!;
+      item.click();
+    });
+    await settle();
+    expect(calls.filter((call) => call.method === "PUT")).toHaveLength(0);
+    await act(() => buttonNamed(document, label).click());
+    await settle();
+    const put = calls.find((call) => call.method === "PUT")!;
+    expect(mailingListPreferenceMutationSchema.parse(put.body)).toEqual({ preference });
+    expect(put.url.pathname).toBe(
+      `/api/v1/groups/${GROUP_ID}/mailing-lists/${LIST_ID}/subscribers/${subscriber.user.id}`,
+    );
+    expect(calls.filter((call) => call.method === "GET" && call.url.pathname.endsWith("/subscribers")).length).toBe(2);
+  },
+);
+
+it.each(["pending", "failed"] as const)(
+  "shows %s delivery updates instead of claiming email is off",
+  async (status) => {
+    stubApi(activeList, undefined, () =>
+      json({
+        subscribers: [
+          {
+            ...subscriber,
+            preference: "archive_only",
+            subscribed: false,
+            synchronizationStatus: status,
+            synchronizationError: status === "failed" ? "Protected member" : null,
+          },
+        ],
+        representation: { people: { count: 0 }, organizations: { count: 0 } },
+        page: PAGE,
+      }),
+    );
+    const container = mount(<GroupMailingListRecord groupId={GROUP_ID} listId={LIST_ID} onLeave={() => {}} />);
+    await settle();
+    await settle();
+    expect(container.textContent).toContain(
+      status === "failed" ? "Email delivery update failed" : "Email delivery update pending",
+    );
+    expect(
+      [...container.querySelectorAll("td")].some((cell) => cell.textContent?.trim() === "Email delivery off"),
+    ).toBe(false);
+  },
+);

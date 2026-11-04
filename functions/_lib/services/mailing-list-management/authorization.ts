@@ -2,7 +2,7 @@ import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { prepareGroupManagementAuthorizationGuard } from "../groups/governance";
-import { prepareGroupResourceContextAuthorizationGuard, requireGroupResourceAccess } from "../resource-grants";
+import { prepareGroupResourceContextAuthorizationGuard, requireGroupResourceAccess } from "../resource-grants/access";
 import type { AuditScope } from "../audit";
 
 /** What a list write commits under: the guards it races against, and whose audit trail it belongs to. */

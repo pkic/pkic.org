@@ -77,6 +77,13 @@ export const EFFECTIVE_SUBSCRIPTION_CTE = `${ACTIVE_USER_CAPACITIES_CTE},
 export const EFFECTIVE_SUBSCRIPTION_VALUE_SQL = `CASE
   WHEN eligible = 0 THEN 0
   WHEN preference = 'subscribed' THEN 1
-  WHEN preference = 'unsubscribed' THEN 0
+  WHEN preference IN ('unsubscribed', 'archive_only') THEN 0
   ELSE default_subscribed
+END`;
+
+/** Membership includes archive-only readers; email subscription excludes them. */
+export const EFFECTIVE_MEMBERSHIP_VALUE_SQL = `CASE
+  WHEN eligible = 0 THEN 0
+  WHEN preference = 'archive_only' THEN 1
+  ELSE ${EFFECTIVE_SUBSCRIPTION_VALUE_SQL}
 END`;
