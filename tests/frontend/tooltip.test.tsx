@@ -104,10 +104,16 @@ it("keeps hovered help readable after focus leaves and closes after the pointer 
   const trigger = host.querySelector("button")!;
   await act(() => trigger.focus());
   const popup = document.querySelector('[role="tooltip"]')!;
-  await act(() => popup.dispatchEvent(new Event("pointerenter")));
+  await act(() => {
+    popup.dispatchEvent(new Event("pointerenter"));
+  });
   await act(() => trigger.blur());
   expect(document.querySelector('[role="tooltip"]')).toBe(popup);
-  await act(() => popup.dispatchEvent(new Event("pointerleave")));
-  await act(() => vi.advanceTimersByTime(200));
+  await act(() => {
+    popup.dispatchEvent(new Event("pointerleave"));
+  });
+  await act(() => {
+    vi.advanceTimersByTime(200);
+  });
   expect(document.querySelector('[role="tooltip"]')).toBeNull();
 });
