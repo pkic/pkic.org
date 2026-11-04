@@ -117,3 +117,36 @@ it("keeps hovered help readable after focus leaves and closes after the pointer 
   });
   expect(document.querySelector('[role="tooltip"]')).toBeNull();
 });
+
+it("allows keyboard focus into scrollable help and closes after focus leaves both controls", async () => {
+  host = document.createElement("div");
+  document.body.append(host);
+  await act(() =>
+    render(
+      <Tooltip label="Help" content="Long help">
+        ?
+      </Tooltip>,
+      host!,
+    ),
+  );
+  const trigger = host.querySelector("button")!;
+  await act(() => trigger.focus());
+  const popup = document.querySelector<HTMLElement>('[role="tooltip"]')!;
+  expect(popup.tabIndex).toBe(0);
+  await act(() => {
+    trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  });
+  expect(document.activeElement).toBe(popup);
+  expect(document.querySelector('[role="tooltip"]')).toBe(popup);
+  await act(() => {
+    popup.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+  expect(document.activeElement).toBe(trigger);
+  expect(document.querySelector('[role="tooltip"]')).toBeNull();
+  await act(() => trigger.click());
+  await act(() => {
+    trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  });
+  await act(() => document.querySelector<HTMLElement>('[role="tooltip"]')!.blur());
+  expect(document.querySelector('[role="tooltip"]')).toBeNull();
+});

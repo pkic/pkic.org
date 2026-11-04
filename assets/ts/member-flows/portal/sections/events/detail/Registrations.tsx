@@ -72,8 +72,9 @@ export function RegistrationsList({
 }) {
   // Not a column filter: the attendance-change view is seeded by the route
   // (`…/registrations/left-in-person`), reshapes the columns and the empty
-  // sentence, and the table does not report its filters back to the page.
+  // sentence. Export availability also follows the table's complete query.
   const [attendanceChangeFilter, setAttendanceChangeFilter] = useState(initialAttendanceChange);
+  const [query, setQuery] = useState<Readonly<Record<string, string>> | null>(null);
   const [stats, setStats] = useState<RegistrationStats | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
 
@@ -225,6 +226,7 @@ export function RegistrationsList({
         resolvePage={(data) => data.page}
         onData={(data) => setStats(data.stats)}
         paginate
+        onQueryChange={setQuery}
         searchPlaceholder="Search name / email…"
         params={attendanceChangeFilter ? { attendance_change: attendanceChangeFilter } : {}}
         actionsRef={tableRef}
@@ -254,7 +256,13 @@ export function RegistrationsList({
                   />
                   <RegistrationRosterActions
                     promotionsEndpoint={eventRegistrationPromotionsPath(slug)}
-                    exportsEndpoint={eventRegistrationExportsPath(slug)}
+                    exportsEndpoint={
+                      query &&
+                      !attendanceChangeFilter &&
+                      !Object.entries(query).some(([key, value]) => value && !["limit", "offset", "sort"].includes(key))
+                        ? eventRegistrationExportsPath(slug)
+                        : null
+                    }
                     onPromoted={() => tableRef.current?.reload()}
                     notify={toast}
                   />

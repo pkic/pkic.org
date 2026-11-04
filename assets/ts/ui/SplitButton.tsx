@@ -53,7 +53,7 @@ export function SplitButton({
           </Button>
         )
       )}
-      <Menu label={label} align="end" variant="plain" items={items} disabled={items.every((item) => item.disabled)}>
+      <Menu label={label} align="end" variant="plain" items={items}>
         <span class="pk-split-button__menu-content" aria-hidden="true">
           {!defaultAction && icon}
           <span class="pk-split-button__caret" />

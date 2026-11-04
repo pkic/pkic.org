@@ -35,6 +35,8 @@ export async function badgePrintPdf(
   await document.fonts.ready;
   const sheets = [...document.querySelectorAll<HTMLElement>(".badge-print-sheet")];
   if (!sheets.length) throw new Error("No print pages are available.");
+  if (sheets.length > 200)
+    throw new Error("This selection is too large for one PDF. Narrow the selection or use the HTML print file.");
   const fontCss = (canonicalHtml.match(/@font-face\s*\{[^}]*\}/g) ?? []).join("\n");
   const pdf = await PDFDocument.create();
   pdf.setTitle("Attendee print file");

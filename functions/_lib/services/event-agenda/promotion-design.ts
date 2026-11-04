@@ -1,4 +1,3 @@
-import { persistedUtcInstant } from "../../utils/time";
 import { eventPlaceSummary } from "../../../../assets/shared/event-place";
 import { svgLogoDimensions } from "../../utils/svg-logo";
 import { eventPromotionDesignFromSettings } from "../../../../assets/shared/schemas/event-promotion-design";
@@ -9,7 +8,11 @@ import { batchFirst, batchRows } from "../../db/pagination";
 import type { D1StatementResult } from "../../types";
 import { AppError } from "../../errors";
 import { prepareConfiguredSponsorBranding } from "./sponsors";
-import { badgePrintingBasisRevision, getBadgePrintingContext } from "../event-participation/badge-print-branding";
+import {
+  badgeEventInstant,
+  badgePrintingBasisRevision,
+  getBadgePrintingContext,
+} from "../event-participation/badge-print-branding";
 import { parseJsonSafe } from "../../utils/json";
 import { bytesToBase64 } from "../../../../assets/shared/base64";
 
@@ -50,8 +53,8 @@ export function preparePromotionDesign(db: DatabaseLike, selection: EventReadSel
             populations.event,
             populations.consortium,
             {
-              startsAt: persistedUtcInstant(event.starts_at),
-              endsAt: persistedUtcInstant(event.ends_at),
+              startsAt: badgeEventInstant(event.starts_at),
+              endsAt: badgeEventInstant(event.ends_at),
               timezone: event.timezone,
               city: event.city,
             },

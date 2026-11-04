@@ -26,7 +26,7 @@ export function Tooltip({
   };
   const hide = () => {
     clearTimeout(closing.current);
-    if (document.activeElement === trigger.current) return;
+    if (document.activeElement === trigger.current || popup.current?.contains(document.activeElement)) return;
     closing.current = setTimeout(() => setOpen(false), 150);
   };
   useEffect(() => () => clearTimeout(closing.current), []);
@@ -37,7 +37,10 @@ export function Tooltip({
       return;
     }
     const dismiss = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        if (popup.current?.contains(document.activeElement)) trigger.current?.focus();
+        setOpen(false);
+      }
     };
     const outside = (event: PointerEvent) => {
       if (!trigger.current?.contains(event.target as Node) && !popup.current?.contains(event.target as Node))
@@ -68,9 +71,15 @@ export function Tooltip({
         class="pk-tooltip__trigger"
         aria-label={label}
         aria-describedby={open ? id : undefined}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            popup.current?.focus();
+          }
+        }}
         onFocus={show}
-        onBlur={() => {
-          if (!hovered.current.size) setOpen(false);
+        onBlur={(event) => {
+          if (!hovered.current.size && !popup.current?.contains(event.relatedTarget as Node | null)) setOpen(false);
         }}
         onClick={(event) => {
           event.stopPropagation();
@@ -85,6 +94,16 @@ export function Tooltip({
             ref={popup}
             id={id}
             role="tooltip"
+            tabIndex={0}
+            onFocus={show}
+            onBlur={(event) => {
+              if (
+                !hovered.current.size &&
+                event.relatedTarget !== trigger.current &&
+                !popup.current?.contains(event.relatedTarget as Node | null)
+              )
+                setOpen(false);
+            }}
             class="pk-tooltip__content"
             onPointerEnter={() => {
               hovered.current.add("popup");

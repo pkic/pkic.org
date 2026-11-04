@@ -138,12 +138,8 @@ describe("DownloadAction", () => {
       expect(host.querySelector('a[aria-label="Download roster (CSV)"]')).toBeNull();
       expect(host.querySelector<HTMLButtonElement>('button[aria-label="Download roster (CSV)"]')?.disabled).toBe(true);
       const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="Roster downloads"]')!;
-      expect(trigger.disabled).toBe(state !== "option");
+      expect(trigger.disabled).toBe(false);
       await act(() => trigger.click());
-      if (state !== "option") {
-        expect(document.querySelector('[role="menu"]')).toBeNull();
-        return;
-      }
       const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
         (item) => item.textContent === "Attendee data",
       );
@@ -151,6 +147,12 @@ describe("DownloadAction", () => {
       expect((item as HTMLButtonElement).disabled).toBe(true);
       expect(item?.hasAttribute("href")).toBe(false);
       expect(host.querySelector('a[href="/roster"]')).toBeNull();
+      if (state !== "option") expect(document.activeElement).toBe(document.querySelector('[role="menu"]'));
+      await act(() => {
+        document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      });
+      expect(document.querySelector('[role="menu"]')).toBeNull();
+      expect(document.activeElement).toBe(trigger);
     },
   );
 
@@ -177,4 +179,48 @@ describe("DownloadAction", () => {
     );
     expect(second).toHaveBeenCalledOnce();
   });
+});
+
+it.each([true, false])("preserves existing focus across a busy URL transition (focused: %s)", async (focused) => {
+  const host = await mount(<DownloadAction label="Download roster" href="/roster" busy />);
+  const old = host.querySelector("button")!;
+  if (focused) await act(() => old.focus());
+  await act(() => render(<DownloadAction label="Download roster" href="/roster" />, host));
+  const link = host.querySelector("a")!;
+  expect(document.activeElement === link).toBe(focused);
+});
+
+it("keeps the menu trigger focused while an asynchronous selected download is pending", async () => {
+  let finish!: () => void;
+  const host = await mount(
+    <DownloadAction
+      label="Download"
+      menuLabel="Download choices"
+      options={[
+        {
+          id: "file",
+          label: "Build file",
+          onDownload: () =>
+            new Promise<void>((resolve) => {
+              finish = resolve;
+            }),
+        },
+        { id: "other", label: "Other file", href: "/other" },
+      ]}
+    />,
+  );
+  const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="Download choices"]')!;
+  await act(() => trigger.click());
+  const item = document.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+  await act(() => item.click());
+  expect(document.activeElement).toBe(trigger);
+  expect(trigger.disabled).toBe(false);
+  await act(() => trigger.click());
+  expect(document.activeElement).toBe(document.querySelector('[role="menu"]'));
+  await act(() => {
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+  expect(document.activeElement).toBe(trigger);
+  await act(async () => finish());
+  expect(document.activeElement).toBe(trigger);
 });

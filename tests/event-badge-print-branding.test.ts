@@ -191,6 +191,8 @@ describe("Event-owned authenticated badge print metadata and branding", () => {
     },
     { column: "city", value: "x".repeat(81), field: "event city" },
     { column: "timezone", value: "Not/AZone", field: "event time zone" },
+    { column: "starts_at", value: "invalid-start", field: "event start date" },
+    { column: "ends_at", value: "invalid-end", field: "event end date" },
   ] as const)(
     "names invalid stored $column details consistently without print effects",
     async ({ column, value, field }) => {
@@ -218,6 +220,25 @@ describe("Event-owned authenticated badge print metadata and branding", () => {
       expect(await printAudits()).toEqual(before);
     },
   );
+  it("normalizes legacy offset dates and keeps saved templates independent of malformed event dates", async () => {
+    await env.DB.prepare(
+      "UPDATE events SET starts_at='2027-02-11T09:00:00+01:00',ends_at='2027-02-12T18:00:00+01:00',settings_json='{}' WHERE id=?",
+    )
+      .bind(fixture.eventId)
+      .run();
+    const normalized = await context();
+    expect(normalized.template).not.toBeNull();
+    await env.DB.prepare(
+      "UPDATE events SET starts_at='2027-02-11T08:00:00.000Z',ends_at='2027-02-12T17:00:00.000Z' WHERE id=?",
+    )
+      .bind(fixture.eventId)
+      .run();
+    expect((await context()).revision).toBe(normalized.revision);
+    await env.DB.prepare("UPDATE events SET starts_at='invalid',ends_at='invalid',settings_json=? WHERE id=?")
+      .bind(JSON.stringify({ badgeTemplate: template }), fixture.eventId)
+      .run();
+    expect((await context()).template).toEqual(template);
+  });
   it("keeps explicit uploaded templates as overrides and uses self-contained generic artwork without a bucket", async () => {
     expect((await context()).template).toEqual(template);
     await env.DB.prepare("UPDATE events SET settings_json='{}' WHERE id=?").bind(fixture.eventId).run();

@@ -61,3 +61,11 @@ it("refuses an empty document instead of releasing a blank PDF", async () => {
   );
   expect(toCanvas).not.toHaveBeenCalled();
 });
+
+it("rejects oversized PDF selections before capturing any sheet", async () => {
+  frame.contentDocument!.body.innerHTML = '<section class="badge-print-sheet"></section>'.repeat(201);
+  await expect(badgePrintPdf(frame.contentDocument!, { widthMm: 105, heightMm: 148 }, () => true)).rejects.toThrow(
+    "HTML print file",
+  );
+  expect(toCanvas).not.toHaveBeenCalled();
+});

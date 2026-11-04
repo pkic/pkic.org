@@ -72,6 +72,10 @@ export function MenuLevel({
   useLayoutEffect(() => {
     if (childItem) return;
     const currentReachable = reachableKey ? reachableKey.split(",").map(Number) : [];
+    if (!currentReachable.length) {
+      popupRef.current?.focus({ preventScroll: true });
+      return;
+    }
     if (!currentReachable.includes(active)) {
       setActive(currentReachable[0] ?? -1);
       return;

@@ -20,6 +20,7 @@ import {
 } from "../../assets/shared/schemas/event-registrations";
 import { Registrations } from "../../assets/ts/member-flows/portal/sections/events/detail/Registrations";
 import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
+import { menuPath } from "./helpers/menu-path";
 import { tabNames } from "./helpers/tabs";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
@@ -114,6 +115,27 @@ afterEach(() => {
 });
 
 describe("event registrations list", () => {
+  it("does not offer a full-roster CSV under a filtered legacy registration list", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(listPage([registration()]))),
+    );
+    const page = mount(<Registrations slug="pqc-2026" />);
+    await settle();
+    await settle();
+    const csv = await menuPath(page, "Registration actions", ["Download", "CSV", "Attendees"]);
+    expect(csv.getAttribute("href")).toContain("/exports");
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await chooseColumnFilter(page, "Status", "Registered");
+    await settle();
+    await settle();
+    const unavailable = await menuPath(page, "Registration actions", ["Download", "CSV", "Attendees"]);
+    expect(unavailable).toBeInstanceOf(HTMLButtonElement);
+    expect((unavailable as HTMLButtonElement).disabled).toBe(true);
+    expect(unavailable.hasAttribute("href")).toBe(false);
+  });
   it("keeps status, email delivery and consent in their columns, and names the one view control left in the toolbar", async () => {
     vi.stubGlobal(
       "fetch",

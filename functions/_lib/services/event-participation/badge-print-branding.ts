@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 import { ZodError } from "zod";
 import {
   eventBadgeTemplateSchema,
@@ -37,6 +37,16 @@ function sourceTier(row: BrandingRow, source: BadgeSponsorSource): string | null
   return source === "consortium" ? row.tier : row.event_tier;
 }
 
+/** Normalize legacy offset instants; retain malformed values for default-template validation. */
+export function badgeEventInstant(value: string | null): string | null {
+  try {
+    return persistedUtcInstant(value);
+  } catch {
+    const offset = z.iso.datetime({ offset: true }).safeParse(value);
+    return offset.success ? new Date(offset.data).toISOString() : value;
+  }
+}
+
 /** Both automatic layouts and caller-selected sponsor groups share actionable validation errors. */
 async function genericTemplateForPrinting(input: GenericBadgeTemplateInput) {
   try {
@@ -51,6 +61,8 @@ async function genericTemplateForPrinting(input: GenericBadgeTemplateInput) {
       backHtml: "event name",
       city: "event city",
       timezone: "event time zone",
+      startsAt: "event start date",
+      endsAt: "event end date",
     };
     const field = fields[String(error.issues[0]?.path[0])] ?? "event badge details";
     throw new AppError(
@@ -77,8 +89,8 @@ export async function prepareBadgePrintingBasis(
   }>(db, "SELECT name,settings_json,starts_at,ends_at,timezone,city FROM events WHERE id=?", [eventId]);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event unavailable.");
   const display = {
-    startsAt: persistedUtcInstant(event.starts_at),
-    endsAt: persistedUtcInstant(event.ends_at),
+    startsAt: badgeEventInstant(event.starts_at),
+    endsAt: badgeEventInstant(event.ends_at),
     timezone: event.timezone,
     city: event.city,
   };

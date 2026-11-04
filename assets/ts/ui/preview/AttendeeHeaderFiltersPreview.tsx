@@ -113,7 +113,6 @@ export function AttendeeHeaderFiltersPreview() {
         <RegistrationOutputActions
           attendeeUrl="/example-attendees.csv"
           sponsorUrl="/example-consenting-attendees.csv"
-          onPrint={() => {}}
         />
         <span class="pk-table-list__card-menu">
           <TableOptionsMenu controls={controls} />
@@ -122,7 +121,24 @@ export function AttendeeHeaderFiltersPreview() {
       <DataTable
         caption="Attendees"
         columns={columns}
-        data={rows.filter((row) => `${row.name} ${row.organization}`.toLowerCase().includes(search.toLowerCase()))}
+        data={rows.filter((row) => {
+          if (!`${row.name} ${row.organization}`.toLowerCase().includes(search.toLowerCase())) return false;
+          if (filters.consent && row.consent !== (filters.consent === "true")) return false;
+          if (filters.country && row.country !== filters.country) return false;
+          if (filters.badge_role && row.role !== filters.badge_role) return false;
+          if (filters.job_title && !row.jobTitle.toLowerCase().includes(filters.job_title.toLowerCase())) return false;
+          const dates = filters.day_dates?.split(",");
+          const matches = row.days.filter((day) => {
+            const waiting = day.waitlistStatus === "waiting" || day.waitlistStatus === "offered";
+            return (
+              day.attendanceType !== "not_attending" &&
+              (!dates || dates.includes(day.dayDate)) &&
+              (!filters.attendance_type || day.attendanceType === filters.attendance_type) &&
+              (!filters.waitlisted || waiting === (filters.waitlisted === "true"))
+            );
+          });
+          return dates && filters.day_match === "all" ? matches.length === dates.length : matches.length > 0;
+        })}
         rowKey={(row) => row.name}
         filters={filters}
         onFilterChange={onFilterChange}
