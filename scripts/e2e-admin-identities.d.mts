@@ -1,6 +1,5 @@
 export const E2E_ADMIN_SCOPES: readonly [
   "default",
-  "portal-waitlist-admission",
   "representation-onboarding",
   "portal-agenda-fast-scanner-idle",
   "portal-agenda-fast-scanner-burst",
@@ -44,6 +43,7 @@ export const E2E_ADMIN_SCOPES: readonly [
   "portal-event-attendee-management",
   "portal-event-proposals",
   "portal-analytics",
+  "portal-waitlist-admission",
   "portal-leadership",
   "portal-group-leadership",
   "public-members-signed-in",
