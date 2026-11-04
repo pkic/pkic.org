@@ -22,15 +22,29 @@ describe("generic MCP API helpers", () => {
   it("includes generated API operations without duplicating their request contracts", () => {
     const spec = openapi.schema;
     const filtered = filterOpenApiSpecForMcp(spec);
-    const paths = filtered.paths as Record<
+    const paths = spec.paths as Record<
       string,
-      Record<string, { requestBody?: unknown; "x-pkic-mcp"?: { expose?: boolean } }>
+      Record<
+        string,
+        {
+          requestBody?: { content?: Record<string, unknown> };
+          responses?: Record<string, { content?: Record<string, unknown> }>;
+          "x-pkic-mcp"?: { expose?: boolean };
+        }
+      >
     >;
     for (const [path, item] of Object.entries(paths)) {
       if (!path.startsWith("/api/v1/")) continue;
       for (const method of ["get", "post", "put", "patch", "delete"] as const) {
         const operation = item[method];
         if (!operation || operation["x-pkic-mcp"]?.expose === false) continue;
+        const mediaTypes = [
+          ...Object.keys(operation.requestBody?.content ?? {}),
+          ...Object.entries(operation.responses ?? {}).flatMap(([status, response]) =>
+            /^2\d\d$/.test(status) ? Object.keys(response.content ?? {}) : [],
+          ),
+        ];
+        if (mediaTypes.some((type) => type !== "application/json" && !type.endsWith("+json"))) continue;
         expect(filtered.paths[path]?.[method], `${method} ${path}`).toBeDefined();
         expect(filtered.paths[path][method].requestBody).toEqual(
           (spec.paths as Record<string, Record<string, { requestBody?: unknown }>>)[path][method].requestBody,

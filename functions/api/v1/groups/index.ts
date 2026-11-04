@@ -1,11 +1,15 @@
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
-import { anyPermissionAuthorizationEvidenceForResource } from "../../../_lib/auth/permissions";
 import { resolveOptionalGroupViewer } from "../../../_lib/auth/group-access";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 import { AppError } from "../../../_lib/errors";
 import { json } from "../../../_lib/http";
 import { openApiRoute } from "../../../_lib/openapi/route";
-import { createGroup, groupManagementCandidateAuthorizationEvidence, listGroups } from "../../../_lib/services/groups";
+import {
+  createGroup,
+  groupManagementCandidateAuthorizationEvidence,
+  groupReadCandidateAuthorizationEvidence,
+  listGroups,
+} from "../../../_lib/services/groups";
 import {
   groupCreateRouteSchema,
   groupsListRouteSchema,
@@ -27,10 +31,7 @@ export const GroupsList = openApiRoute(groupsListRouteSchema, async (c: AdminCon
       data.query.manageable && viewer.kind === "user" && viewer.staff
         ? groupManagementCandidateAuthorizationEvidence(viewer.staff)
         : viewer.kind === "user" && viewer.staff?.scopeRestricted
-          ? anyPermissionAuthorizationEvidenceForResource(viewer.staff, ["groups:read", "groups:write"], {
-              type: "group",
-              idSql: "g.id",
-            })
+          ? groupReadCandidateAuthorizationEvidence(viewer.staff)
           : undefined,
   });
   return json(

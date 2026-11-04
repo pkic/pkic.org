@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import { createMcpOauthTestClient } from "./helpers/mcp-oauth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { groupEventCreateSchema } from "../assets/shared/schemas/group-events";
@@ -9,7 +10,7 @@ import { verifyUserSessionToken } from "../functions/_lib/auth/user-session-toke
 import { signMcpSessionToken } from "../functions/_lib/auth/mcp-session";
 import { requireUserBackedAdminFromRequest } from "../functions/_lib/auth/admin";
 import { updateGroupManagedEventSettings } from "../functions/_lib/services/events/group-management";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 
 const env = { ...workerEnv, INTERNAL_SIGNING_SECRET: "synthetic-oauth-test-signing-secret-32-plus" };
 const { call, callTool, authorize, initialize } = createMcpOauthTestClient(env);
@@ -116,6 +117,9 @@ describe("group event operations through delegated MCP", () => {
     )
       .bind(crypto.randomUUID(), fixture.userId, new Date().toISOString())
       .run();
+    await env.DB.prepare("UPDATE groups SET parent_group_id=?, governance_inheritance_mode='inherited' WHERE id=?")
+      .bind(fixture.approved, fixture.other)
+      .run();
     expect((await mcpCreate(grant.access_token, fixture.approved)).event).toBeDefined();
     expect((await mcpCreate(grant.access_token, fixture.other)).error.code).toBe("GROUP_PERMISSION_REQUIRED");
     const listed = value(
@@ -131,6 +135,40 @@ describe("group event operations through delegated MCP", () => {
       .run();
     expect((await initialize(grant.access_token)).status).toBe(401);
   });
+
+  it.each(["groups:read", "groups:write"] as const)(
+    "preserves inherited child visibility within %s consent",
+    async (permission) => {
+      const fixture = await groupFixture();
+      await env.DB.prepare("UPDATE groups SET parent_group_id=?, governance_inheritance_mode='inherited' WHERE id=?")
+        .bind(fixture.approved, fixture.other)
+        .run();
+      await env.DB.prepare("DELETE FROM user_roles WHERE user_id=?").bind(fixture.userId).run();
+      const leadership = await grantGroupLeadershipCapacity(env.DB, fixture.approved, fixture.userId);
+      const leaderToken = await createAdminSession(
+        env.DB,
+        fixture.userId,
+        crypto.randomUUID(),
+        env.INTERNAL_SIGNING_SECRET,
+        leadership.identityId,
+      );
+      const grantId = crypto.randomUUID();
+      await env.DB.prepare(
+        "INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,created_at) VALUES (?,?,?,'group',?,?)",
+      )
+        .bind(grantId, fixture.userId, permission, fixture.other, new Date().toISOString())
+        .run();
+      const grant = await authorize(leaderToken, [permission], leadership.identityId);
+      await env.DB.prepare("DELETE FROM permission_grants WHERE id=?").bind(grantId).run();
+      const detail = value(
+        await callTool(grant.access_token, "request", { method: "GET", path: `/api/v1/groups/${fixture.other}` }),
+      );
+      expect(detail.error).toBeUndefined();
+      expect(detail.group.id).toBe(fixture.other);
+      const listed = value(await callTool(grant.access_token, "request", { method: "GET", path: "/api/v1/groups" }));
+      expect(listed.groups.map((group: { id: string }) => group.id)).toContain(fixture.other);
+    },
+  );
 
   it.each(["authorization", "expiry", "session", "permission"])(
     "rolls back an event update when %s changes before commit",
@@ -155,24 +193,28 @@ describe("group event operations through delegated MCP", () => {
         }),
         env,
       );
-      const guarded = mutateBeforeNextBatch(env.DB, async () => {
-        if (reason === "authorization")
-          await env.DB.prepare("UPDATE oauth_authorizations SET status='revoked' WHERE id=?")
-            .bind(grant.authorizationId)
-            .run();
-        if (reason === "expiry")
-          await env.DB.prepare("UPDATE oauth_authorizations SET expires_at='2000-01-01T00:00:00.000Z' WHERE id=?")
-            .bind(grant.authorizationId)
-            .run();
-        if (reason === "session")
-          await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE id=?")
-            .bind(new Date().toISOString(), verified.claims.sid)
-            .run();
-        if (reason === "permission")
-          await env.DB.prepare(
-            "DELETE FROM role_permissions WHERE role_id='role-admin' AND permission='groups:write'",
-          ).run();
-      });
+      const guarded = mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => sql.includes("INSERT INTO event_resource_management_guards"),
+        async () => {
+          if (reason === "authorization")
+            await env.DB.prepare("UPDATE oauth_authorizations SET status='revoked' WHERE id=?")
+              .bind(grant.authorizationId)
+              .run();
+          if (reason === "expiry")
+            await env.DB.prepare("UPDATE oauth_authorizations SET expires_at='2000-01-01T00:00:00.000Z' WHERE id=?")
+              .bind(grant.authorizationId)
+              .run();
+          if (reason === "session")
+            await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE id=?")
+              .bind(new Date().toISOString(), verified.claims.sid)
+              .run();
+          if (reason === "permission")
+            await env.DB.prepare(
+              "DELETE FROM role_permissions WHERE role_id='role-admin' AND permission='groups:write'",
+            ).run();
+        },
+      );
       await expect(
         updateGroupManagedEventSettings(
           guarded,

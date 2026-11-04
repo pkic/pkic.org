@@ -29,6 +29,7 @@ export function createMcpOauthTestClient(env: Env) {
     userToken?: string,
     client?: { clientId: string; redirectUri: string },
     selectedScopes?: readonly AuthScope[],
+    actingIdentityId: string | null = null,
   ) {
     const [user] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [
       "admin@pkic.org",
@@ -65,10 +66,10 @@ export function createMcpOauthTestClient(env: Env) {
         action: "approve",
         return_to: returnTo,
         scopes: selectedScopes ?? ["forms:read", "organizations:read", "users:read"],
-        actingIdentityId: null,
+        actingIdentityId,
       }),
     });
-    expect(approval.status).toBe(202);
+    expect(approval.status, await approval.clone().text()).toBe(202);
     const { authorizationId } = (await approval.json()) as { authorizationId: string };
     const completed = await call(`/api/v1/auth/oauth/authorizations/${authorizationId}/completion`, {
       headers: { cookie: `pkic_session=${session}` },
@@ -100,8 +101,12 @@ export function createMcpOauthTestClient(env: Env) {
     });
   }
 
-  async function authorize(userToken?: string, selectedScopes?: readonly AuthScope[]) {
-    const grant = await createAuthorization(userToken, undefined, selectedScopes);
+  async function authorize(
+    userToken?: string,
+    selectedScopes?: readonly AuthScope[],
+    actingIdentityId: string | null = null,
+  ) {
+    const grant = await createAuthorization(userToken, undefined, selectedScopes, actingIdentityId);
     const tokens = await redeemCode(grant);
     expect(tokens.status).toBe(200);
     return {

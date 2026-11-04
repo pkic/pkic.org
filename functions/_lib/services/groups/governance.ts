@@ -263,6 +263,20 @@ export function groupManagementCandidateAuthorizationEvidence(
   );
 }
 
+/** Applies effective read or management permission to a candidate group row. */
+export function groupReadCandidateAuthorizationEvidence(
+  actor: AuthAdmin,
+  groupIdExpression = "g.id",
+): AuthorizationEvidence {
+  const alternatives = ["groups:read", "groups:write"].map((permission) =>
+    groupAuthorizationEvidence(actor, { sql: `SELECT ${groupIdExpression}`, bindings: [] }, permission, "effective"),
+  );
+  return {
+    sql: alternatives.map((evidence) => `SELECT 1 FROM (${evidence.sql})`).join(" UNION ALL "),
+    bindings: alternatives.flatMap((evidence) => [...evidence.bindings]),
+  };
+}
+
 /** Read-only consumers keep the canonical group policy in their replica transaction. */
 export function guardGroupManagementDatabase(db: DatabaseLike, actor: AuthAdmin, groupIds: readonly string[]) {
   return guardAuthorizedDatabase(

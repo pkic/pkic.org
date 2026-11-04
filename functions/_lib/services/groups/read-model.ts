@@ -1,6 +1,6 @@
 import { GROUP_SELECT, GROUP_FROM, mapGroup, type GroupRow } from "./group-projection";
 import { groupMembershipCandidateAuthorizationEvidence } from "./access";
-import { groupManagementCandidateAuthorizationEvidence } from "./governance";
+import { groupManagementCandidateAuthorizationEvidence, groupReadCandidateAuthorizationEvidence } from "./governance";
 import { identityJobTitleSql } from "../identities/affiliation-projection";
 import { seatLeadershipJoinSql } from "./seat-leadership";
 import type {
@@ -260,13 +260,17 @@ export function prepareAuthenticatedGroupContext(
   const manager = viewer.admin
     ? groupManagementCandidateAuthorizationEvidence(viewer.admin, "g.id", memberSelection)
     : { sql: "SELECT 1 WHERE 0", bindings: [] };
+  const delegatedRead = viewer.admin?.scopeRestricted
+    ? groupReadCandidateAuthorizationEvidence(viewer.admin)
+    : { sql: "SELECT 1", bindings: [] };
   const statement = db
     .prepare(
-      `${GROUP_SELECT}, (g.active=1 AND (${globalRead ? `EXISTS(${globalRead.sql}) OR ` : ""}${visibility?.sql ?? "1"})) AS visible,
+      `${GROUP_SELECT}, EXISTS(${delegatedRead.sql}) AS delegated_authorized, (g.active=1 AND (${globalRead ? `EXISTS(${globalRead.sql}) OR ` : ""}${visibility?.sql ?? "1"})) AS visible,
      EXISTS(${member.sql}) AS participant, EXISTS(${manager.sql}) AS manager
      ${GROUP_FROM} WHERE g.id=? OR g.slug=?`,
     )
     .bind(
+      ...delegatedRead.bindings,
       ...(globalRead?.bindings ?? []),
       ...(visibility?.bindings ?? []),
       ...member.bindings,
@@ -277,10 +281,13 @@ export function prepareAuthenticatedGroupContext(
   return {
     statement,
     decode(result: D1StatementResult) {
-      const row = batchFirst<GroupRow & { visible: number; participant: number; manager: number }>(result);
+      const row = batchFirst<
+        GroupRow & { visible: number; participant: number; manager: number; delegated_authorized: number }
+      >(result);
       return row
         ? {
             group: mapGroup(row),
+            delegatedAuthorized: row.delegated_authorized === 1,
             visible: row.visible === 1,
             participant: row.participant === 1,
             manager: row.manager === 1,
