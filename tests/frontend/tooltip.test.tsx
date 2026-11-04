@@ -88,3 +88,26 @@ it.each(["focus", "tap"] as const)("cancels a pending hover close when %s reopen
   }
   expect(document.querySelector('[role="tooltip"]')).toBeNull();
 });
+
+it("keeps hovered help readable after focus leaves and closes after the pointer leaves", async () => {
+  vi.useFakeTimers();
+  host = document.createElement("div");
+  document.body.append(host);
+  await act(() =>
+    render(
+      <Tooltip label="Help" content="Long attendance help">
+        ?
+      </Tooltip>,
+      host!,
+    ),
+  );
+  const trigger = host.querySelector("button")!;
+  await act(() => trigger.focus());
+  const popup = document.querySelector('[role="tooltip"]')!;
+  await act(() => popup.dispatchEvent(new Event("pointerenter")));
+  await act(() => trigger.blur());
+  expect(document.querySelector('[role="tooltip"]')).toBe(popup);
+  await act(() => popup.dispatchEvent(new Event("pointerleave")));
+  await act(() => vi.advanceTimersByTime(200));
+  expect(document.querySelector('[role="tooltip"]')).toBeNull();
+});

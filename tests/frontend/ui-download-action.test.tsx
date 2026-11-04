@@ -137,7 +137,13 @@ describe("DownloadAction", () => {
       );
       expect(host.querySelector('a[aria-label="Download roster (CSV)"]')).toBeNull();
       expect(host.querySelector<HTMLButtonElement>('button[aria-label="Download roster (CSV)"]')?.disabled).toBe(true);
-      await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Roster downloads"]')!.click());
+      const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="Roster downloads"]')!;
+      expect(trigger.disabled).toBe(state !== "option");
+      await act(() => trigger.click());
+      if (state !== "option") {
+        expect(document.querySelector('[role="menu"]')).toBeNull();
+        return;
+      }
       const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
         (item) => item.textContent === "Attendee data",
       );

@@ -257,7 +257,9 @@ export function createPqcConferenceBadgeTemplate(input: PqcConferenceBadgeTempla
     heightMm: 148,
     frontHtml: `<div class="pqc-badge pqc-front">${field}<div class="pqc-stripe"></div>${person}<div class="pqc-front-sponsors">${slot(0)}</div><div class="pqc-role">{{badgeRole}}</div></div>`,
     backHtml: `<div class="pqc-badge pqc-back"><div class="pqc-stripe"></div><div class="pqc-back-body"><div class="pqc-back-person"><p class="pqc-back-name">{{displayName}}</p><p class="pqc-back-meta"><strong class="pqc-back-job">{{jobTitle}}</strong><span class="pqc-back-org">{{organization}}</span></p></div>${backDetails}${note}${backSponsors}</div>${cityscape ? tiles("canal_houses_ink", 11, "pqc-back-canal") : ""}${footer}</div>`,
-    css: css() + ".pqc-note{font-size:8pt;line-height:1.2;white-space:pre-wrap;overflow-wrap:anywhere}",
+    css:
+      css() +
+      `.pqc-note{font-size:8pt;line-height:1.2;white-space:pre-wrap;overflow-wrap:anywhere}.pqc-front .pqc-note{padding:0 ${mm(32)} ${mm(8)}}`,
     assets: {
       ...fonts,
       logo_white: BADGE_PQC_ARTWORK_ASSETS.logo_white,

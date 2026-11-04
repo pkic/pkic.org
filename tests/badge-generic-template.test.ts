@@ -119,6 +119,7 @@ describe("generic PKIC complete event badge", () => {
     expect(html).toContain("Owner&#39;s &amp; &lt;event&gt;");
     expect(html).toContain("&lt;script&gt;alert(&quot;copy&quot;)&lt;/script&gt;");
     expect(html).not.toContain("<script>");
+    expect(template.css).toMatch(/\.pqc-front \.pqc-note\{padding:0 [^}]+}/);
     const literal = compileBadgeTemplate(
       createGenericBadgeTemplate({
         ...input,

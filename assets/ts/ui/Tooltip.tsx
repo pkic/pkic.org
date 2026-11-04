@@ -18,6 +18,7 @@ export function Tooltip({
   const trigger = useRef<HTMLButtonElement>(null);
   const popup = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const hovered = useRef(new Set<string>());
   const closing = useRef<ReturnType<typeof setTimeout>>();
   const show = () => {
     clearTimeout(closing.current);
@@ -31,7 +32,10 @@ export function Tooltip({
   useEffect(() => () => clearTimeout(closing.current), []);
   usePopupPlacement({ open, anchorRef: trigger, popupRef: popup, side: "top" });
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      hovered.current.delete("popup");
+      return;
+    }
     const dismiss = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
@@ -47,7 +51,17 @@ export function Tooltip({
     };
   }, [open]);
   return (
-    <span class="pk-tooltip" onPointerEnter={show} onPointerLeave={hide}>
+    <span
+      class="pk-tooltip"
+      onPointerEnter={() => {
+        hovered.current.add("trigger");
+        show();
+      }}
+      onPointerLeave={() => {
+        hovered.current.delete("trigger");
+        hide();
+      }}
+    >
       <button
         ref={trigger}
         type="button"
@@ -55,7 +69,9 @@ export function Tooltip({
         aria-label={label}
         aria-describedby={open ? id : undefined}
         onFocus={show}
-        onBlur={() => setOpen(false)}
+        onBlur={() => {
+          if (!hovered.current.size) setOpen(false);
+        }}
         onClick={(event) => {
           event.stopPropagation();
           show();
@@ -70,8 +86,14 @@ export function Tooltip({
             id={id}
             role="tooltip"
             class="pk-tooltip__content"
-            onPointerEnter={show}
-            onPointerLeave={hide}
+            onPointerEnter={() => {
+              hovered.current.add("popup");
+              show();
+            }}
+            onPointerLeave={() => {
+              hovered.current.delete("popup");
+              hide();
+            }}
           >
             {content}
           </div>,
