@@ -27,7 +27,7 @@ async function settle() {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 }
-async function setup(status = "registered", dayCount = 2) {
+async function setup(status = "registered", dayCount = 2, withEventSlug = true) {
   const queries: Array<ReturnType<typeof eventAttendanceRegistrationsQuerySchema.parse>> = [];
   const print = vi.fn();
   const days = groupEventDaysResponseSchema.parse({
@@ -79,7 +79,7 @@ async function setup(status = "registered", dayCount = 2) {
       <GroupEventRegistrations
         groupId={GROUP_ID}
         eventId={EVENT_ID}
-        eventSlug="workshop"
+        eventSlug={withEventSlug ? "workshop" : undefined}
         badgesPath={`/groups/${GROUP_ID}/events/${EVENT_ID}/registrations/badges`}
         canManage
         onPrint={print}
@@ -257,4 +257,18 @@ it("keeps row printing in the ellipsis menu and starts the chosen output directl
       rows: [{ id: registrationList().registrations[0]!.id }],
     });
   }
+});
+
+it("omits printing in both row and roster menus when the event slug is unavailable", async () => {
+  const { container, print } = await setup("registered", 2, false);
+  for (const label of ["Registration actions", "Actions for Group Member"]) {
+    const attendee = await menuPath(container, label, ["Download", "CSV", "Attendees"]);
+    expect(attendee.getAttribute("href")).toContain("/exports");
+    const choices = [...container.querySelectorAll('[role="menuitem"]')].map((item) =>
+      item.textContent?.replace(/\s*›$/, "").trim(),
+    );
+    expect(choices).not.toContain("Print");
+    expect(choices).not.toContain("PDF");
+  }
+  expect(print).not.toHaveBeenCalled();
 });

@@ -358,6 +358,23 @@ async function managedRoster(f: Awaited<ReturnType<typeof fixture>>) {
     );
 }
 
+it.each(["registered", "pending_email_confirmation", "cancelled"])(
+  "exports selected %s attendees with current sponsor consent and excludes them after withdrawal",
+  async (status) => {
+    const f = await fixture();
+    const get = await managedRoster(f);
+    await env.DB.prepare("UPDATE registrations SET status=? WHERE id=?").bind(status, f.registrationId).run();
+    const url = `/exports?audience=sponsor&ids=${f.registrationId}`;
+    const permitted = await get(url);
+    expect(permitted.status).toBe(200);
+    expect(await permitted.text()).toContain("sharing@synthetic.example");
+    expect((await withdraw(f.path)).status).toBe(200);
+    const withdrawn = await get(url);
+    expect(withdrawn.status).toBe(200);
+    expect(await withdrawn.text()).not.toContain("sharing@synthetic.example");
+  },
+);
+
 it.each(["missing", "withdrawn", "outdated", "another_attendee", "inactive_term"])(
   "sponsor CSV excludes %s consent even for explicit selection",
   async (caseName) => {
@@ -401,7 +418,7 @@ it.each(["missing", "withdrawn", "outdated", "another_attendee", "inactive_term"
     const response = await get(url);
     expect(response.status).toBe(200);
     expect(await response.text()).not.toContain("sharing@synthetic.example");
-    expect((await get(url, false)).status).not.toBe(200);
+    expect((await get(url, false)).status).toBe(401);
     const list = eventAttendanceRegistrationsListResponseSchema.parse(await (await get("?consent=false")).json());
     expect(list.registrations.map((row) => row.id)).toContain(f.registrationId);
     expect(list.registrations[0].sponsor_consent).toBe(false);

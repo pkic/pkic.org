@@ -5,6 +5,7 @@ import type { Column } from "../../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { FilterSelect } from "../../../../../components/FilterSelect";
 import { Tabs } from "../../../../../components/Tabs";
+import { SponsorConsentCell } from "../../../../../components/event-registrations/SponsorConsentCell";
 import { registrationPersonColumn } from "../../../../../components/event-registrations/registration-person-column";
 import { attendanceTypeLabel } from "../../../../../shared/attendance";
 import { fmt, fmtDate, toast } from "../../../ui";
@@ -175,34 +176,7 @@ export function RegistrationsList({
       ? [
           {
             header: "Consent",
-            /*
-             * A green tick with a `title` was the whole signal: color, which
-             * not every reader can separate, plus a tooltip a screen reader
-             * and a touch device never surface. The mark stays as the visual
-             * and the word goes beside it, hidden, so the cell is announced
-             * as "Consented" rather than as a tick.
-             */
-            cell: (r: Registration) =>
-              r.sponsor_consent === true ? (
-                <>
-                  <span aria-hidden="true">✓</span>
-                  <span class="pk-sr-only">Consented to share with sponsors</span>
-                </>
-              ) : r.sponsor_consent === false ? (
-                <>
-                  <span class="pk-muted" aria-hidden="true">
-                    —
-                  </span>
-                  <span class="pk-sr-only">No sponsor consent</span>
-                </>
-              ) : (
-                <>
-                  <span class="pk-muted" aria-hidden="true">
-                    —
-                  </span>
-                  <span class="pk-sr-only">Not asked</span>
-                </>
-              ),
+            cell: (r: Registration) => <SponsorConsentCell consent={r.sponsor_consent} />,
             className: "pk-center",
             width: "fit" as const,
             filter: {

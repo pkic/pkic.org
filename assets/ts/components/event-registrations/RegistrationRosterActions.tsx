@@ -42,7 +42,7 @@ export function RegistrationRosterActions({
       items={[
         ...registrationOutputMenuItems({
           attendeeUrl: exportsEndpoint,
-          sponsorUrl: sponsorExportUrl ?? null,
+          sponsorUrl: sponsorExportUrl,
           onPrint: onPrintAllMatching,
         }),
         {

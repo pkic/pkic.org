@@ -52,11 +52,11 @@ export function Tooltip({
         class="pk-tooltip__trigger"
         aria-label={label}
         aria-describedby={open ? id : undefined}
-        onFocus={() => setOpen(true)}
+        onFocus={show}
         onBlur={() => setOpen(false)}
         onClick={(event) => {
           event.stopPropagation();
-          setOpen(true);
+          show();
         }}
       >
         {children}

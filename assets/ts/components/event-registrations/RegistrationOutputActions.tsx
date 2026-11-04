@@ -5,7 +5,8 @@ type OutputOptions = {
   onPrint?: (action: BadgePrintAction) => void;
   scope?: "matching" | "selected";
   attendeeUrl: string | null;
-  sponsorUrl: string | null;
+  /** Undefined means unsupported; null keeps a supported export disabled for an invalid scope. */
+  sponsorUrl?: string | null;
 };
 
 /** Shared output hierarchy for the roster, selected rows, and component examples. */
@@ -17,7 +18,9 @@ export function registrationOutputMenuItems({ onPrint, attendeeUrl, sponsorUrl }
     onSelect: () => onPrint?.(id),
   });
   return [
-    { id: "print", label: "Print", children: [output("labels", "Labels"), output("badges", "Badges")] },
+    ...(onPrint
+      ? [{ id: "print", label: "Print", children: [output("labels", "Labels"), output("badges", "Badges")] }]
+      : []),
     {
       id: "download",
       label: "Download",
@@ -26,12 +29,16 @@ export function registrationOutputMenuItems({ onPrint, attendeeUrl, sponsorUrl }
           id: "csv",
           label: "CSV",
           children: [
-            output("label_csv", "Labels"),
+            ...(onPrint ? [output("label_csv", "Labels")] : []),
             { id: "attendee-csv", label: "Attendees", href: attendeeUrl ?? "", disabled: !attendeeUrl },
-            { id: "consent-csv", label: "Attendees with consent", href: sponsorUrl ?? "", disabled: !sponsorUrl },
+            ...(sponsorUrl !== undefined
+              ? [{ id: "consent-csv", label: "Attendees with consent", href: sponsorUrl ?? "", disabled: !sponsorUrl }]
+              : []),
           ],
         },
-        { id: "pdf", label: "PDF", children: [output("badge_pdf", "Badges"), output("label_pdf", "Labels")] },
+        ...(onPrint
+          ? [{ id: "pdf", label: "PDF", children: [output("badge_pdf", "Badges"), output("label_pdf", "Labels")] }]
+          : []),
       ],
     },
   ];

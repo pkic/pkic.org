@@ -1,3 +1,4 @@
+import { SponsorConsentCell } from "../../components/event-registrations/SponsorConsentCell";
 import { CollectionToolbar } from "../../components/CollectionToolbar";
 import { RegistrationOutputActions } from "../../components/event-registrations/RegistrationOutputActions";
 import { useState } from "preact/hooks";
@@ -83,7 +84,7 @@ export function AttendeeHeaderFiltersPreview() {
     },
     {
       header: "Consent",
-      cell: (row: (typeof rows)[number]) => (row.consent ? "✓" : "—"),
+      cell: (row: (typeof rows)[number]) => <SponsorConsentCell consent={row.consent} />,
       filter: {
         param: "consent",
         options: [
