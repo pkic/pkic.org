@@ -1,7 +1,8 @@
 import { TooltipPreview } from "./TooltipPreview";
+import { proposalSections } from "./sections-proposals";
 import { ServerSelectPreview } from "./ServerSelectPreview";
 import { RegistrationFieldsPreview } from "./RegistrationFieldsPreview";
-import { VerifiedOrganizationPreview, ProposalIdentityPreview } from "./VerifiedOrganizationPreview";
+import { VerifiedOrganizationPreview } from "./VerifiedOrganizationPreview";
 import { ContentVersionNoticePreview } from "./ContentVersionNoticePreview";
 import { ModelNavigationPreview } from "./ModelNavigationPreview";
 import { contentContributionPreview } from "./ContentContributionPreview";
@@ -299,12 +300,7 @@ export const patternSections: PreviewSection[] = [
     note: "One chooser for registration, identities, and speaker affiliations.",
     render: () => <VerifiedOrganizationPreview />,
   },
-  {
-    id: "proposal-identity",
-    title: "Proposal identity",
-    note: "The actual public proposal identity step embeds the shared verified-domain chooser.",
-    render: () => <ProposalIdentityPreview />,
-  },
+  ...proposalSections,
   {
     id: "server-select",
     title: "Server identity picker",

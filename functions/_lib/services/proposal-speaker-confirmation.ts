@@ -41,6 +41,7 @@ import {
 import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/schemas/proposal-status";
 import { ownedIdentityAtEvidence } from "./identities/selection";
 import { ownedIdentityEmailEvidence } from "./identities/owned-email";
+import { prepareConfirmedSpeakerAgendaAddition } from "./event-agenda/confirmed-speaker-addition";
 
 export async function confirmSpeakerParticipation(
   db: DatabaseLike,
@@ -149,6 +150,14 @@ async function confirmParticipation(
   const effectiveExpiry = effectiveProposalSpeakerInviteExpirySql("ps", "e");
   const databaseNow = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
   const rosterRevision = await getProposalSpeakerRosterRevision(db, proposal.id);
+  // A speaker who confirms after placement joins every session their proposal was placed in, in this same batch.
+  const agendaAddition = await prepareConfirmedSpeakerAgendaAddition(db, {
+    eventId: proposal.event_id,
+    proposalId: proposal.id,
+    speaker: { userId: speaker.user_id, proposalRole: speaker.role },
+    actor: manager ? { type: "admin", id: manager.id } : { type: "user", id: speaker.user_id },
+    at: now,
+  });
   try {
     await db.batch([
       confirmation.kind === "manager"
@@ -254,8 +263,15 @@ async function confirmParticipation(
         status: proposalParticipantStatus(proposal.status, "confirmed"),
         sourceRevisionAdvance: 1,
       })),
+      ...agendaAddition,
     ]);
   } catch (error) {
+    if (error instanceof Error && error.message.includes("AGENDA_REVISION_CHANGED"))
+      throw new AppError(
+        409,
+        "PROPOSAL_SPEAKER_CONFLICT",
+        "The agenda changed while the confirmation was processed. Try again.",
+      );
     if (
       manager &&
       isAuthorizationGuardFailure(error) &&

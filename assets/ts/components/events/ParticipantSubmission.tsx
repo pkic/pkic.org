@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import { PROPOSAL_COMMITTEE_NOTES_COPY } from "../../../shared/proposal-committee-notes-copy";
+import { PROPOSAL_REVISION_COPY } from "../../../shared/proposal-revision-copy";
 import {
   proposalAccessPatchSchema,
   proposalAccessPatchResponseSchema,
@@ -115,6 +116,7 @@ export function ParticipantSubmission({
       </div>
     );
   const editable = isProposalSelfServiceEditableStatus(proposal.status);
+  const revision = proposal.revision_request;
   function stopEditing() {
     setTitle(proposal.title);
     setAbstract(proposal.abstract);
@@ -184,6 +186,23 @@ export function ParticipantSubmission({
               available.
             </Alert>
           )}
+          {revision && (
+            <Alert tone="warn" title={PROPOSAL_REVISION_COPY.title}>
+              <p class="pk-prose-block">{revision.note ?? PROPOSAL_REVISION_COPY.noNote}</p>
+              <p class="pk-small">{PROPOSAL_REVISION_COPY.draftHelp}</p>
+              {!editing && (
+                <div class="pk-cluster">
+                  <Button
+                    variant="primary"
+                    loading={busy}
+                    onClick={() => void save({ status: "resubmitted" }, PROPOSAL_REVISION_COPY.resubmitted)}
+                  >
+                    {PROPOSAL_REVISION_COPY.resubmit}
+                  </Button>
+                </div>
+              )}
+            </Alert>
+          )}
           {error && <Alert tone="danger">{error}</Alert>}
           {message && <Alert tone="ok">{message}</Alert>}
           {editable && editing ? (
@@ -197,7 +216,9 @@ export function ParticipantSubmission({
                   setError(checked.formMessage ?? "");
                   return;
                 }
-                void save(checked.data, "Proposal updated.");
+                const resubmit = (event as SubmitEvent).submitter?.getAttribute("value") === "resubmitted";
+                if (resubmit) void save({ ...checked.data, status: "resubmitted" }, PROPOSAL_REVISION_COPY.resubmitted);
+                else void save(checked.data, revision ? PROPOSAL_REVISION_COPY.saved : "Proposal updated.");
               }}
             >
               <fieldset class="pk-fieldset pk-stack" disabled={busy}>
@@ -275,9 +296,14 @@ export function ParticipantSubmission({
                   </div>
                 )}
                 <div class="pk-cluster">
-                  <Button type="submit" variant="primary" loading={busy}>
-                    Save proposal
+                  <Button type="submit" variant={revision ? "secondary" : "primary"} loading={busy}>
+                    {revision ? PROPOSAL_REVISION_COPY.save : "Save proposal"}
                   </Button>
+                  {revision && (
+                    <Button type="submit" name="status" value="resubmitted" variant="primary" loading={busy}>
+                      {PROPOSAL_REVISION_COPY.resubmit}
+                    </Button>
+                  )}
                   <Button type="button" onClick={stopEditing}>
                     Discard changes
                   </Button>

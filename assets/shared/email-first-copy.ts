@@ -186,6 +186,27 @@ export const ADDRESS_IN_USE_COPY = {
   action: "Sign in",
 } as const;
 
+/**
+ * A confirmed address the secretariat must look at before it can continue:
+ * nothing was submitted, and each reason says what the person can do now.
+ */
+export const PROOF_SUPPORT_COPY = {
+  organization_domain_review: {
+    title: "We need to confirm your organization",
+    body: (email: string) =>
+      `Nothing was submitted. The domain of ${email} is not yet connected to a single organization, and the secretariat confirms that before anyone takes part on its behalf.`,
+    next: "Continue with a personal email to take part as an individual now, or ask the secretariat to confirm your organization.",
+  },
+  address_review: {
+    title: "We need to check this email address",
+    body: (email: string) =>
+      `Nothing was submitted. The secretariat needs to check ${email} before it can be used here.`,
+    next: "Ask the secretariat to help you continue, or use a different email address.",
+  },
+  personalAction: "Use a personal email",
+  contactAction: "Email the secretariat",
+} as const;
+
 /** Where a person adds and verifies another email address of their own. */
 export const ACCOUNT_EMAIL_ADDRESSES_HREF = "/portal/#/users/current/emails/new";
 

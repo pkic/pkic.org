@@ -1,3 +1,8 @@
+import {
+  serializeProposalRevisionDraft,
+  withProposalRevisionDraft,
+  type ProposalRevisionDraft,
+} from "./proposal-revision-draft";
 import { AppError } from "../errors";
 import { first } from "../db/queries";
 import { batchFirst } from "../db/pagination";
@@ -50,11 +55,19 @@ export interface ProposalRecord {
   presentation_deadline?: string | null;
   /** Private to reviewers and organizers; never published. */
   committee_notes?: string | null;
+  /** The proposer's unsubmitted revision; never shown to reviewers. */
+  revision_draft_json?: string | null;
+  /** Computed from the current review decision, never persisted on the proposal. */
+  revision_request_json?: string | null;
 }
 
 export const PROPOSAL_COLUMNS = `id, event_id, proposer_user_id, status, proposal_type, title, abstract,
   details_json, form_placement_id, referral_code, manage_link_secret, review_round, submitted_at, updated_at, withdrawn_at,
-  presentation_deadline, committee_notes`;
+  presentation_deadline, committee_notes, revision_draft_json,
+  (SELECT json_object('note', decision_note, 'decided_at', decided_at) FROM proposal_decisions
+   WHERE proposal_id=session_proposals.id AND review_round=session_proposals.review_round
+     AND final_status='needs-work' AND session_proposals.status='needs-work'
+   ORDER BY decision_sequence DESC LIMIT 1) AS revision_request_json`;
 
 export interface ProposalListRecord extends ProposalRecord {
   proposer_email: string;
@@ -248,6 +261,7 @@ export async function updateProposalByManageToken(
     title?: string;
     abstract?: string;
     detailsJson?: string | null;
+    resubmit?: boolean;
     signingSecret: string;
   },
 ): Promise<ProposalRecord> {
@@ -258,6 +272,7 @@ export async function updateProposalByManageToken(
     title: payload.title,
     abstract: payload.abstract,
     detailsJson: payload.detailsJson,
+    resubmit: payload.resubmit,
   });
 }
 
@@ -274,6 +289,8 @@ export async function updateProposalForVerifiedOwner(
     formRevisionGuard?: StatementLike | null;
     formPlacementId?: string | null;
     formSubmissionStatements?: StatementLike[];
+    /** Hands a proposal sent back for changes to its next review round; other saves keep a draft. */
+    resubmit?: boolean;
   },
 ): Promise<ProposalRecord> {
   if (payload.committeeNotes !== undefined && !isProposalCommitteeNotesEditableStatus(proposal.status))
@@ -285,6 +302,8 @@ export async function updateProposalForVerifiedOwner(
   if (!isProposalSelfServiceEditableStatus(proposal.status)) {
     throw new AppError(409, "PROPOSAL_NOT_EDITABLE", "This proposal can no longer be changed");
   }
+  if (payload.resubmit && proposal.status !== "needs-work")
+    throw new AppError(409, "PROPOSAL_NOT_AWAITING_REVISION", "This proposal is not waiting for your changes.");
 
   const now = nowIso();
   if (payload.action === "withdraw") {
@@ -298,7 +317,7 @@ export async function updateProposalForVerifiedOwner(
         db
           .prepare(
             `UPDATE session_proposals
-           SET status = 'withdrawn', withdrawn_at = ?, updated_at = ?
+           SET status = 'withdrawn', withdrawn_at = ?, updated_at = ?, revision_draft_json = NULL
            WHERE id = ? AND status = ? AND review_round = ? AND updated_at = ? AND deleted_at IS NULL`,
           )
           .bind(now, now, proposal.id, proposal.status, proposal.review_round, proposal.updated_at),
@@ -352,29 +371,25 @@ export async function updateProposalForVerifiedOwner(
     return withdrawn;
   }
 
+  const current = withProposalRevisionDraft(proposal);
   const content = {
-    proposalType: payload.proposalType ?? proposal.proposal_type,
-    title: payload.title ?? proposal.title,
-    abstract: payload.abstract ?? proposal.abstract,
-    detailsJson: payload.detailsJson !== undefined ? payload.detailsJson : proposal.details_json,
+    proposalType: payload.proposalType ?? current.proposal_type,
+    title: payload.title ?? current.title,
+    abstract: payload.abstract ?? current.abstract,
+    detailsJson: payload.detailsJson !== undefined ? payload.detailsJson : current.details_json,
   };
-  // Only a change to what is reviewed resubmits a proposal; private notes for the committee do not.
-  const resubmits =
-    proposal.status === "needs-work" &&
-    (content.proposalType !== proposal.proposal_type ||
-      content.title !== proposal.title ||
-      content.abstract !== proposal.abstract ||
-      content.detailsJson !== proposal.details_json);
+  // Saving keeps a revision as a draft; only the proposer's explicit resubmission starts the next round.
+  const resubmits = proposal.status === "needs-work" && payload.resubmit === true;
   const next = {
     ...content,
     committeeNotes:
-      payload.committeeNotes !== undefined
-        ? payload.committeeNotes?.trim() || null
-        : (proposal.committee_notes ?? null),
-    formPlacementId: payload.detailsJson !== undefined ? (payload.formPlacementId ?? null) : proposal.form_placement_id,
+      payload.committeeNotes !== undefined ? payload.committeeNotes?.trim() || null : (current.committee_notes ?? null),
+    formPlacementId: payload.detailsJson !== undefined ? (payload.formPlacementId ?? null) : current.form_placement_id,
     status: resubmits ? "resubmitted" : proposal.status,
     reviewRound: resubmits ? proposal.review_round + 1 : proposal.review_round,
   };
+  if (proposal.status === "needs-work" && !resubmits) return saveProposalRevisionDraft(db, proposal, next, now);
+
   const changes: Record<string, { from: unknown; to: unknown }> = {};
   for (const [key, from, to] of [
     ["proposalType", proposal.proposal_type, next.proposalType],
@@ -405,7 +420,7 @@ export async function updateProposalForVerifiedOwner(
         .prepare(
           `UPDATE session_proposals
          SET proposal_type = ?, title = ?, abstract = ?, details_json = ?, form_placement_id = ?,
-             status = ?, review_round = ?, updated_at = ?, committee_notes = ?
+             status = ?, review_round = ?, updated_at = ?, committee_notes = ?, revision_draft_json = NULL
          WHERE id = ? AND proposal_type = ? AND title = ? AND abstract = ? AND details_json IS ? AND committee_notes IS ?
            AND status = ? AND review_round = ? AND updated_at = ? AND deleted_at IS NULL
            AND (? = 0 OR EXISTS (
@@ -480,6 +495,58 @@ export async function updateProposalForVerifiedOwner(
   const saved = batchFirst<ProposalRecord>(selected);
   if (!saved) throw new AppError(500, "PROPOSAL_UPDATE_FAILED", "Unable to load the updated proposal");
   return saved;
+}
+
+/** Keeps a revision out of the reviewed columns until the proposer resubmits it. */
+async function saveProposalRevisionDraft(
+  db: DatabaseLike,
+  proposal: ProposalRecord,
+  next: ProposalRevisionDraft,
+  now: string,
+): Promise<ProposalRecord> {
+  const draft = serializeProposalRevisionDraft(next);
+  const current = withProposalRevisionDraft(proposal);
+  const saved = serializeProposalRevisionDraft({
+    proposalType: current.proposal_type,
+    title: current.title,
+    abstract: current.abstract,
+    detailsJson: current.details_json,
+    formPlacementId: current.form_placement_id,
+    committeeNotes: current.committee_notes ?? null,
+  });
+  if (draft === saved) return proposal;
+
+  let results;
+  try {
+    results = await db.batch([
+      db
+        .prepare(
+          `UPDATE session_proposals SET revision_draft_json = ?, updated_at = ?
+           WHERE id = ? AND status = 'needs-work' AND review_round = ? AND updated_at = ? AND deleted_at IS NULL`,
+        )
+        .bind(draft, now, proposal.id, proposal.review_round, proposal.updated_at),
+      // The audit trail is readable by reviewers, so it records that a draft was saved and not what it says.
+      prepareAuditLogAfterOneChange(
+        db,
+        "user",
+        proposal.proposer_user_id,
+        "proposal_revision_draft_saved",
+        "proposal",
+        proposal.id,
+        {},
+        now,
+      ),
+      db.prepare(`SELECT ${PROPOSAL_COLUMNS} FROM session_proposals WHERE id = ?`).bind(proposal.id),
+    ]);
+  } catch (error) {
+    if (isAuditChangeGuardFailure(error)) {
+      throw new AppError(409, "PROPOSAL_EDIT_CONFLICT", "Proposal changed while the update was processed");
+    }
+    throw error;
+  }
+  const record = batchFirst<ProposalRecord>(results.at(-1)!);
+  if (!record) throw new AppError(500, "PROPOSAL_UPDATE_FAILED", "Unable to load the updated proposal");
+  return record;
 }
 
 export async function finalizeProposalDecision(

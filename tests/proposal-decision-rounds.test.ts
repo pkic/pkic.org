@@ -1,7 +1,7 @@
 import { grantAdministrator, administratorGrants } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "./helpers/app";
+import { callApi } from "./helpers/app";
 import type { DatabaseLike } from "../functions/_lib/types";
 import {
   createProposal,
@@ -14,10 +14,15 @@ import {
   remindProposalSpeakerByProposer,
   sendProposalSpeakerReminders,
 } from "../functions/_lib/services/proposal-reminders";
+import { getProposalDetailData } from "../functions/_lib/services/proposal-detail";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
+import {
+  proposalAccessPatchResponseSchema,
+  proposalAccessReadResponseSchema,
+} from "../assets/shared/schemas/proposal-management";
 
 function decisionActor(id: string) {
   return { identityType: "user" as const, id, email: "admin@pkic.org", role: "user", grants: administratorGrants };
@@ -32,11 +37,7 @@ interface SeededDecisionWorkflow {
 }
 
 function callApp(path: string, init: RequestInit = {}): Promise<Response> {
-  return app.fetch(
-    new Request(`https://app.test${path}`, init),
-    env as any,
-    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
-  );
+  return callApi(env, path, init);
 }
 
 async function callAdmin(path: string, token: string, method = "GET", body?: unknown): Promise<Response> {
@@ -224,7 +225,7 @@ describe("proposal decision review rounds", () => {
     const resubmit = await callApp(`/api/v1/proposals/access/${encodeURIComponent(seeded.manageToken)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title: "A revised proposal for the second review round" }),
+      body: JSON.stringify({ status: "resubmitted", title: "A revised proposal for the second review round" }),
     });
     expect(resubmit.status).toBe(200);
     const [resubmitted] = await queryAll<{ status: string; review_round: number }>(
@@ -368,6 +369,67 @@ describe("proposal decision review rounds", () => {
     },
   );
 
+  it("keeps a revision as a draft with the committee's note until the proposer resubmits", async () => {
+    const seeded = await seedDecisionWorkflow();
+    await recordProposalDecision(env.DB, {
+      proposalId: seeded.proposalId,
+      actor: decisionActor(seeded.adminId),
+      finalStatus: "needs-work",
+      decisionNote: "Narrow the scope to one migration story.",
+      minReviewsRequired: 0,
+    });
+    const path = `/api/v1/proposals/access/${encodeURIComponent(seeded.manageToken)}`;
+    const patch = (body: unknown) =>
+      callApp(path, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const read = await callApp(path);
+    expect(proposalAccessReadResponseSchema.parse(await read.json()).proposal.revision_request).toMatchObject({
+      note: "Narrow the scope to one migration story.",
+    });
+
+    const draft = await patch({ title: "A narrower draft that is not ready yet", committeeNotes: "Draft note" });
+    expect(draft.status).toBe(200);
+    const drafted = proposalAccessPatchResponseSchema.parse(await draft.json()).proposal;
+    expect(drafted).toMatchObject({ status: "needs-work", title: "A narrower draft that is not ready yet" });
+    expect(drafted.revision_request?.note).toBe("Narrow the scope to one migration story.");
+    const [afterDraft] = await queryAll<{ status: string; review_round: number }>(
+      env.DB,
+      "SELECT status, review_round FROM session_proposals WHERE id = ?",
+      [seeded.proposalId],
+    );
+    expect(afterDraft).toEqual({ status: "needs-work", review_round: 1 });
+
+    const reviewedTitle = "A proposal that needs two review rounds";
+    const readAsReviewer = async () => {
+      const detail = await getProposalDetailData(env.DB, seeded.proposalId);
+      return detail?.proposal;
+    };
+    expect(await readAsReviewer()).toMatchObject({ title: reviewedTitle, committee_notes: null });
+    const reread = await callApp(path);
+    expect(proposalAccessReadResponseSchema.parse(await reread.json()).proposal.title).toBe(
+      "A narrower draft that is not ready yet",
+    );
+    const audit = await queryAll<{ details_json: string | null }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE entity_id = ? AND action = 'proposal_revision_draft_saved'",
+      [seeded.proposalId],
+    );
+    expect(audit).toHaveLength(1);
+    expect(JSON.stringify(audit)).not.toContain("narrower draft");
+
+    const resubmitted = await patch({ status: "resubmitted" });
+    expect(resubmitted.status).toBe(200);
+    const proposal = proposalAccessPatchResponseSchema.parse(await resubmitted.json()).proposal;
+    expect(proposal).toMatchObject({ status: "resubmitted", revision_request: null });
+    expect(await readAsReviewer()).toMatchObject({
+      title: "A narrower draft that is not ready yet",
+      committee_notes: "Draft note",
+    });
+
+    const again = await patch({ status: "resubmitted" });
+    expect(again.status).toBe(409);
+    expect(await again.json()).toMatchObject({ error: { code: "PROPOSAL_NOT_AWAITING_REVISION" } });
+  });
+
   it("rolls back resubmission, decision release, and audit together", async () => {
     const seeded = await seedDecisionWorkflow();
     await recordProposalDecision(env.DB, {
@@ -387,7 +449,7 @@ describe("proposal decision review rounds", () => {
     const response = await callApp(`/api/v1/proposals/access/${encodeURIComponent(seeded.manageToken)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title: "This must roll back" }),
+      body: JSON.stringify({ status: "resubmitted", title: "This must roll back" }),
     });
     expect(response.status).toBe(500);
     const [proposal] = await queryAll<{ status: string; review_round: number; title: string }>(
@@ -522,6 +584,7 @@ describe("proposal decision review rounds", () => {
         manageToken: seeded.manageToken,
         action: "update",
         title: "A losing resubmission",
+        resubmit: true,
         signingSecret: env.INTERNAL_SIGNING_SECRET!,
       }),
     ).rejects.toMatchObject({ code: "PROPOSAL_EDIT_CONFLICT" });

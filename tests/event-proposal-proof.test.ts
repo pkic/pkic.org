@@ -5,6 +5,7 @@ import { prepareProposalProof } from "./helpers/proposal-proof";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import { seedMemberApplication } from "./helpers/member-applications";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { proposalCreateSchema } from "../assets/shared/schemas/proposal-management";
 import { eventProposalProofVerifyResponseSchema } from "../assets/shared/schemas/event-proposal-proof";
@@ -175,6 +176,22 @@ describe("event proposal mailbox proof", () => {
       [],
     );
     expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toHaveLength(0);
+  });
+
+  it("names an organization domain under review so the proposer can choose a next step", async () => {
+    await seedEventAndAdmin(env.DB);
+    await seedMemberApplication({ applicantEmail: "pending@held-domain.example" });
+    const response = await request("/proof/verify", { token: await start("dana@held-domain.example") });
+    expect(response.status).toBe(200);
+    expect(eventProposalProofVerifyResponseSchema.parse(await response.json())).toEqual({
+      status: "support_required",
+      email: "dana@held-domain.example",
+      applicantKind: "organization",
+      reason: "organization_domain_review",
+    });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", ["dana@held-domain.example"]),
+    ).toEqual([]);
   });
 
   it("reuses a known person's names without duplicate input and limits the proof catalog to its owner", async () => {

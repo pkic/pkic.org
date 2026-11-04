@@ -162,7 +162,7 @@ describe("proposer self-service by proposal state", () => {
       expect(await edited.json()).toMatchObject({ proposal: { committee_notes: "Happy to run this as a workshop." } });
       // Private notes are not what is reviewed: they leave the status and review round alone.
       expect(await notesOf(proposalId)).toEqual({
-        committee_notes: "Happy to run this as a workshop.",
+        committee_notes: status === "needs-work" ? null : "Happy to run this as a workshop.",
         status: before!.status,
         review_round: before!.review_round,
       });
