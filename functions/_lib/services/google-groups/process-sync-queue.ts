@@ -116,6 +116,7 @@ export async function processGoogleGroupsSyncQueue(
     }
 
     if (!(await isMailingListSyncEnabled(db, claim.google_group_email))) continue;
+    let membershipWasAbsent = false;
     try {
       if (claim.action !== "remove_from_list") {
         const confirmed = await first(
@@ -124,14 +125,15 @@ export async function processGoogleGroupsSyncQueue(
           WHERE user_id = ? AND google_group_email = ? AND confirmed_subscribed_at IS NOT NULL`,
           [claim.user_id, claim.google_group_email],
         );
-        if (confirmed) {
+        if (confirmed || claim.action === "add_to_list") {
           let listing = memberships.get(claim.google_group_email);
           if (!listing) {
             listing = await directoryClient.listMembers(claim.google_group_email);
             memberships.set(claim.google_group_email, listing);
           }
           if (!listing.complete) throw new Error("Incomplete provider membership listing; queued addition stopped");
-          if (!listing.emails.includes(memberEmail.toLowerCase())) {
+          membershipWasAbsent = !listing.emails.includes(memberEmail.toLowerCase());
+          if (confirmed && membershipWasAbsent) {
             if (!dryRun) await recordProviderAbsence(db, claim.user_id, claim.google_group_email);
             if (liveClaim) await supersedeSuppressedGoogleGroupsAdd(db, liveClaim);
             suppressed++;
@@ -153,11 +155,12 @@ export async function processGoogleGroupsSyncQueue(
         [claim.user_id, memberEmail, OWN_EMAIL_ADDRESS_LIMIT + 1],
       );
       if (aliases.length > OWN_EMAIL_ADDRESS_LIMIT) throw new Error("Verified addresses exceed the account limit");
-      const notificationStatements = liveClaim
-        ? prepareGoogleGroupsSyncNotificationStatements(db, liveClaim, syncPassId)
-        : [];
+      const notificationStatements =
+        liveClaim && membershipWasAbsent
+          ? prepareGoogleGroupsSyncNotificationStatements(db, liveClaim, syncPassId)
+          : [];
       if (notificationStatements.length) await db.batch(notificationStatements);
-      const primaryAdded = await directoryClient.applyMembership({
+      await directoryClient.applyMembership({
         action: claim.action,
         googleGroupEmail: claim.google_group_email,
         memberEmail,
@@ -175,20 +178,7 @@ export async function processGoogleGroupsSyncQueue(
         succeeded++;
         continue;
       }
-      // A first-attempt idempotent add did not enroll this person. Retain the
-      // intent after a retry, when a previous provider success may have raced a failure.
-      const completionStatements =
-        !primaryAdded && claim.attempts === 0
-          ? [
-              db
-                .prepare(
-                  `DELETE FROM google_groups_enrollment_notification_intents WHERE queue_id=? AND queued_outbox_id IS NULL
-                   AND EXISTS(SELECT 1 FROM google_groups_sync_queue queue WHERE queue.id=? AND queue.status='processing' AND queue.processing_token=?)`,
-                )
-                .bind(claim.id, claim.id, claim.processing_token),
-            ]
-          : [];
-      const completion = await completeGoogleGroupsDirectoryEffect(db, liveClaim, completionStatements, delivery);
+      const completion = await completeGoogleGroupsDirectoryEffect(db, liveClaim, [], delivery);
       if (!completion.finalizedClaim && !completion.fulfilledCurrentDesiredState) continue;
 
       succeeded++;

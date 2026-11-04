@@ -47,8 +47,7 @@ export type ConfiguredGoogleServiceAccountEnv = {
 };
 
 export interface GoogleGroupsDirectoryClient {
-  /** True only when the primary membership was newly added. */
-  applyMembership(params: GoogleGroupsMembershipOperation): Promise<boolean>;
+  applyMembership(params: GoogleGroupsMembershipOperation): Promise<void>;
   /**
    * The provider's actual membership for one group. `complete` is false when
    * pagination was truncated, in which case absence must not be treated as an

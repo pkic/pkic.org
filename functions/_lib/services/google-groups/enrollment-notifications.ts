@@ -7,17 +7,18 @@ import { sha256Hex } from "../../utils/crypto";
 import { nowIso } from "../../utils/time";
 
 const COMPLETED_ENROLLMENT_INTENT_SQL = `EXISTS (
-  SELECT 1 FROM google_groups_sync_queue source
-  JOIN google_groups_membership_desired_state target ON target.user_id=source.user_id
-    AND target.google_group_email=source.google_group_email AND target.desired_action != 'remove_from_list'
-  WHERE source.id=intent.queue_id AND source.status='completed'
+  SELECT 1 FROM google_groups_membership_desired_state target
+  JOIN google_groups_sync_queue current ON current.user_id=target.user_id
+    AND current.google_group_email=target.google_group_email AND current.generation=target.generation
+  WHERE target.user_id=intent.user_id AND target.google_group_email=intent.google_group_email
+    AND target.desired_action != 'remove_from_list' AND current.status='completed'
 )`;
 function pendingUserAddsSql(userId: string) {
   return `EXISTS (
     SELECT 1 FROM google_groups_membership_desired_state desired
     JOIN google_groups_sync_queue queue ON queue.user_id=desired.user_id
       AND queue.google_group_email=desired.google_group_email AND queue.generation=desired.generation
-    WHERE desired.user_id=${userId} AND desired.desired_action='add_to_list'
+    WHERE desired.user_id=${userId} AND desired.desired_action != 'remove_from_list'
       AND queue.status IN ('pending','processing')
   )`;
 }

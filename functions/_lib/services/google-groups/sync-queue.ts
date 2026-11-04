@@ -248,13 +248,11 @@ export async function failGoogleGroupsSyncClaimForMissingUser(
 export async function completeGoogleGroupsDirectoryEffect(
   db: DatabaseLike,
   claim: ClaimedGoogleGroupsSyncRow,
-  beforeCompletionStatements: StatementLike[] = [],
+  notificationStatements: StatementLike[] = [],
   appliedDelivery?: "all" | "none",
 ): Promise<{ finalizedClaim: boolean; fulfilledCurrentDesiredState: boolean }> {
   const at = nowIso();
-  const offset = beforeCompletionStatements.length;
   const results = await db.batch([
-    ...beforeCompletionStatements,
     db
       .prepare(
         `UPDATE google_groups_sync_queue
@@ -266,7 +264,7 @@ export async function completeGoogleGroupsDirectoryEffect(
     db
       .prepare(
         `WITH current_operation AS (
-          SELECT queue.id, (queue.action = ? AND (
+          SELECT queue.id, (queue.id = ? AND queue.action = ? AND (
             ${googleGroupsDeliverySql("queue.action", "queue.user_id", "queue.google_group_email")}
           ) IS ?) AS matches
           FROM google_groups_sync_queue queue JOIN google_groups_membership_desired_state desired
@@ -285,7 +283,7 @@ export async function completeGoogleGroupsDirectoryEffect(
           AND (((SELECT matches FROM current_operation WHERE id = desired_queue.id) AND status IN ('pending', 'failed'))
             OR (NOT (SELECT matches FROM current_operation WHERE id = desired_queue.id) AND status IN ('completed', 'failed')))`,
       )
-      .bind(claim.action, appliedDelivery ?? null, claim.user_id, claim.google_group_email, at, at),
+      .bind(claim.id, claim.action, appliedDelivery ?? null, claim.user_id, claim.google_group_email, at, at),
     db
       .prepare(
         `SELECT desired.desired_action, queue.status FROM google_groups_membership_desired_state desired
@@ -293,13 +291,33 @@ export async function completeGoogleGroupsDirectoryEffect(
           WHERE desired.user_id = ? AND desired.google_group_email = ?`,
       )
       .bind(claim.user_id, claim.google_group_email),
+    // An older request may have written after a newer worker started. Reapply
+    // through the canonical queue rather than completing or rewriting that worker's lease.
+    db
+      .prepare(`INSERT OR IGNORE INTO google_groups_sync_queue
+      (id,user_id,action,google_group_email,idempotency_key,status,attempts,next_attempt_at,created_at)
+      SELECT ?,desired.user_id,desired.desired_action,desired.google_group_email,?,'pending',0,?,?
+      FROM google_groups_membership_desired_state desired
+      JOIN google_groups_sync_queue current ON current.user_id=desired.user_id
+        AND current.google_group_email=desired.google_group_email AND current.generation=desired.generation
+      WHERE desired.user_id=? AND desired.google_group_email=? AND current.id!=? AND current.status='processing'`)
+      .bind(
+        uuid(),
+        `google-groups:stale-effect:${claim.id}:${claim.processing_token}`,
+        at,
+        at,
+        claim.user_id,
+        claim.google_group_email,
+        claim.id,
+      ),
+    ...notificationStatements,
   ]);
-  const finalizedClaim = (results[offset]?.meta?.changes ?? 0) === 1;
+  const finalizedClaim = (results[0]?.meta?.changes ?? 0) === 1;
   const reconciledCurrentDesiredState =
-    (results[offset + 1]?.meta?.changes ?? 0) === 1 &&
-    (results[offset + 2]?.results?.[0] as { desired_action?: unknown; status?: unknown } | undefined)
-      ?.desired_action === claim.action &&
-    (results[offset + 2]?.results?.[0] as { status?: unknown } | undefined)?.status === "completed";
+    (results[1]?.meta?.changes ?? 0) === 1 &&
+    (results[2]?.results?.[0] as { desired_action?: unknown; status?: unknown } | undefined)?.desired_action ===
+      claim.action &&
+    (results[2]?.results?.[0] as { status?: unknown } | undefined)?.status === "completed";
   return {
     finalizedClaim,
     fulfilledCurrentDesiredState: finalizedClaim || reconciledCurrentDesiredState,

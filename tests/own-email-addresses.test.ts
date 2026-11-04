@@ -486,7 +486,7 @@ describe("a person's own email addresses", () => {
     const original = await enqueueGoogleGroupsSync(env.DB, {
       userId: account.userId,
       googleGroupEmail: listEmail,
-      action: "add_to_list",
+      action: "restore_delivery",
     });
     await env.DB.batch([
       env.DB.prepare("UPDATE google_groups_sync_queue SET status='completed',processed_at=? WHERE id=?").bind(
@@ -516,10 +516,13 @@ describe("a person's own email addresses", () => {
     expect(
       await queryAll(
         env.DB,
-        "SELECT status FROM google_groups_sync_queue WHERE user_id=? AND google_group_email=? ORDER BY generation",
+        "SELECT action,status FROM google_groups_sync_queue WHERE user_id=? AND google_group_email=? ORDER BY generation",
         [account.userId, listEmail],
       ),
-    ).toEqual([{ status: "completed" }, { status: "pending" }]);
+    ).toEqual([
+      { action: "restore_delivery", status: "completed" },
+      { action: "add_to_list", status: "pending" },
+    ]);
     expect(
       await env.DB.prepare(
         "SELECT confirmed_subscribed_at FROM google_groups_observed_membership WHERE user_id=? AND google_group_email=?",

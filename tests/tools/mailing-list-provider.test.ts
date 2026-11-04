@@ -77,6 +77,14 @@ describe("mailing-list provider adapter", () => {
       const change = provider.applyChange(list, { email, action: "subscribe" });
       if (state === "absent") await change;
       else await expect(change).rejects.toThrow();
+      const queued = await createGoogleGroupsDirectoryClient(env, fetch);
+      const removal = queued.applyMembership({
+        action: "remove_from_list",
+        googleGroupEmail: list,
+        memberEmail: email,
+      });
+      if (state === "absent") await expect(removal).resolves.toBeUndefined();
+      else await expect(removal).rejects.toThrow();
       expect(
         fetch.mock.calls.filter(([url, request]) => String(url).includes("/members") && request?.method === "POST"),
       ).toHaveLength(state === "absent" ? 1 : 0);
@@ -123,7 +131,7 @@ it.each([
         memberEmail: "protected@example.test",
         delivery,
       });
-      if (current === expected) await expect(change).resolves.toBe(false);
+      if (current === expected) await expect(change).resolves.toBeUndefined();
       else await expect(change).rejects.toThrow("delivery update unavailable for protected member");
       expect(fetch.mock.calls.some(([, request]) => ["PUT", "PATCH", "DELETE"].includes(request?.method ?? ""))).toBe(
         false,

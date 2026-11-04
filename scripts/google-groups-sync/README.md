@@ -53,8 +53,8 @@ bounded by its work and database query budgets.
 
 Enrollment notices wait until a person's current add work has settled, then
 combine their successful additions across processing batches into one email.
-An already-existing membership does not generate a new addition notice on a
-first attempt. Notification intents reference the user; names and destination
+An addition notice is prepared only when the pre-sync roster confirms that
+membership is missing. Retries preserve that same intent. Notification intents reference the user; names and destination
 addresses are read from the current user record when the email is prepared.
 The existing outbox owns delivery and retries.
 

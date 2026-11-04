@@ -1,3 +1,5 @@
+import { profileD1Flow } from "./helpers/d1-flow-profile";
+import { fakeServiceAccountEnv } from "./helpers/google-groups";
 import { runGoogleGroupsSyncPass } from "../functions/_lib/services/membership/scheduled-jobs";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import { completeGoogleGroupsDirectoryEffect } from "../functions/_lib/services/google-groups/sync-queue";
@@ -34,32 +36,7 @@ async function insertUser(email: string): Promise<string> {
   return id;
 }
 
-/** A real (not mocked) RSA keypair, PEM-wrapped, so getServiceAccountAccessToken's
- * Web Crypto JWT signing runs for real — only the two outbound `fetch` calls
- * (OAuth token exchange, Directory API) are mocked. */
-async function fakeServiceAccountEnv(): Promise<{
-  GOOGLE_SERVICE_ACCOUNT_EMAIL: string;
-  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: string;
-  GOOGLE_WORKSPACE_ADMIN_EMAIL: string;
-}> {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
-    true,
-    ["sign", "verify"],
-  );
-  const pkcs8 = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
-  let binary = "";
-  for (const byte of new Uint8Array(pkcs8)) binary += String.fromCharCode(byte);
-  const base64 = btoa(binary);
-  const pem = `-----BEGIN PRIVATE KEY-----\n${base64.match(/.{1,64}/g)!.join("\n")}\n-----END PRIVATE KEY-----`;
-  return {
-    GOOGLE_SERVICE_ACCOUNT_EMAIL: "sa@project.iam.gserviceaccount.com",
-    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: pem,
-    GOOGLE_WORKSPACE_ADMIN_EMAIL: "admin@pkic.org",
-  };
-}
-
-function stubGoogleFetch(directoryApiStatus: number): ReturnType<typeof vi.fn> {
+function stubGoogleFetch(directoryApiStatus: number, members: string[] = []): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
     if (url === "https://oauth2.googleapis.com/token") {
       return Promise.resolve(
@@ -69,6 +46,10 @@ function stubGoogleFetch(directoryApiStatus: number): ReturnType<typeof vi.fn> {
         }),
       );
     }
+    if (url.includes("/members?"))
+      return Promise.resolve(
+        Response.json({ members: members.map((email) => ({ email, role: "MEMBER", type: "USER" })) }),
+      );
     if (!init?.method && (directoryApiStatus === 409 || (directoryApiStatus >= 200 && directoryApiStatus < 300)))
       return Promise.resolve(Response.json({ role: "MEMBER", type: "USER" }));
     if (init?.method === "PUT" && directoryApiStatus === 409) return Promise.resolve(Response.json({}));
@@ -100,13 +81,13 @@ function stubGoogleFetchWithFirstDirectoryCallPaused(firstDirectoryStatus = 200)
       });
     }
     if (!init?.method) return Response.json({ role: "MEMBER", type: "USER" });
-    directoryCalls++;
-    if (directoryCalls === 1) {
+    const callNumber = ++directoryCalls;
+    if (callNumber === 1) {
       notifyDirectoryStarted();
       await directoryGate;
     }
     return new Response(null, {
-      status: directoryCalls === 1 ? firstDirectoryStatus : init?.method === "DELETE" ? 204 : 200,
+      status: callNumber === 1 ? firstDirectoryStatus : init?.method === "DELETE" ? 204 : 200,
     });
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -138,13 +119,14 @@ function stubGoogleFetchWithTwoDirectoryCallsPaused(): {
   let directoryCalls = 0;
   vi.stubGlobal(
     "fetch",
-    vi.fn().mockImplementation(async (url: string) => {
+    vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === "https://oauth2.googleapis.com/token") {
         return new Response(JSON.stringify({ access_token: "fake-access-token" }), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
       }
+      if (!init?.method) return Response.json({ members: [] });
       directoryCalls++;
       if (directoryCalls === 1) {
         notifyFirstDirectoryStarted();
@@ -191,7 +173,9 @@ describe("Google Groups sync", () => {
     releaseDirectory();
     const result = await processing;
     expect(result.succeeded).toBe(1);
-    expect(fetchMock.mock.calls.filter(([url]) => url !== "https://oauth2.googleapis.com/token")).toHaveLength(1);
+    expect(
+      fetchMock.mock.calls.filter(([url, init]) => String(url).includes("/members") && init?.method === "POST"),
+    ).toHaveLength(1);
     expect(await listPendingGoogleGroupsSync(env.DB)).toHaveLength(0);
   });
 
@@ -440,6 +424,12 @@ describe("Google Groups sync", () => {
             }),
           );
         }
+        if (url.includes("/members?"))
+          return Promise.resolve(
+            Response.json({
+              members: [{ email: "gg-provider-idempotency@example.test", role: "MEMBER", type: "USER" }],
+            }),
+          );
         return Promise.resolve(new Response(null, { status: init?.method === "POST" ? 409 : 404 }));
       }),
     );
@@ -602,7 +592,8 @@ describe("Google Groups sync", () => {
     await env.DB.prepare("UPDATE scheduled_jobs SET wake_requested=0 WHERE job_key='google_groups_sync'").run();
     stubGoogleFetch(200);
     const serviceAccountEnv = await fakeServiceAccountEnv();
-    const budgeted = createD1QueryBudgetedDatabase(env.DB, 900);
+    const flow = profileD1Flow(env.DB, { measurePayloadBytes: true });
+    const budgeted = createD1QueryBudgetedDatabase(flow.db, 900);
     expect(
       await runGoogleGroupsSyncPass(
         budgeted.db,
@@ -611,6 +602,19 @@ describe("Google Groups sync", () => {
         budgeted.budget,
       ),
     ).toMatchObject({ processed: 24, succeeded: 24, failed: 0 });
+    const profile = flow.summary();
+    const maxRequestBytes = Math.max(...profile.queries.map((query) => query.requestBytes ?? 0));
+    const maxResultBytes = Math.max(...profile.queries.map((query) => query.resultBytes ?? 0));
+    expect(profile.roundTrips).toBeLessThanOrEqual(250);
+    expect(profile.statements).toBeLessThanOrEqual(900);
+    expect(maxRequestBytes).toBeLessThan(64 * 1024);
+    expect(maxResultBytes).toBeLessThan(128 * 1024);
+    console.info("google-groups-backlog-profile", {
+      roundTrips: profile.roundTrips,
+      statements: profile.statements,
+      maxRequestBytes,
+      maxResultBytes,
+    });
     expect(
       await env.DB.prepare("SELECT wake_requested FROM scheduled_jobs WHERE job_key='google_groups_sync'").first(
         "wake_requested",
@@ -687,8 +691,35 @@ describe("Google Groups sync", () => {
       googleGroupEmail: "existing@lists.pkic.org",
       action: "add_to_list",
     });
-    stubGoogleFetch(409);
+    stubGoogleFetch(409, ["gg-existing@example.test"]);
     expect(await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv())).toMatchObject({ succeeded: 1 });
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(0);
+    expect(await queryAll(env.DB, "SELECT queue_id FROM google_groups_enrollment_notification_intents")).toEqual([]);
+  });
+  it("does not turn a transient retry into a new-member notice for an existing member", async () => {
+    const email = "gg-existing-retry@example.test",
+      userId = await insertUser(email);
+    const id = await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: "existing-retry@lists.pkic.org",
+      action: "add_to_list",
+    });
+    let additions = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.includes("oauth2.googleapis.com")) return Response.json({ access_token: "synthetic-token" });
+        if (url.includes("/members?")) return Response.json({ members: [{ email, role: "MEMBER", type: "USER" }] });
+        if (init?.method === "POST") return new Response(null, { status: ++additions === 1 ? 500 : 409 });
+        return Response.json({ role: "MEMBER", type: "USER" });
+      }),
+    );
+    const serviceAccountEnv = await fakeServiceAccountEnv();
+    expect(await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv)).toMatchObject({ failed: 1 });
+    await env.DB.prepare("UPDATE google_groups_sync_queue SET next_attempt_at=? WHERE id=?")
+      .bind(new Date().toISOString(), id)
+      .run();
+    expect(await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv)).toMatchObject({ succeeded: 1 });
     expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(0);
     expect(await queryAll(env.DB, "SELECT queue_id FROM google_groups_enrollment_notification_intents")).toEqual([]);
   });
@@ -721,7 +752,7 @@ describe("Google Groups sync", () => {
     }
   });
 
-  it("rolls queue completion and notification intent back together when the outbox insert fails", async () => {
+  it("persists notification intent before the provider effect and activates it only on completion", async () => {
     const userId = await insertUser("gg-atomic-notification@example.test");
     const queueId = await enqueueGoogleGroupsSync(env.DB, {
       userId,
@@ -942,7 +973,9 @@ describe("Google Groups sync", () => {
 
     // The Directory API "add member" endpoint was called exactly once per
     // row, not twice for any row — the direct symptom of the old race.
-    const addMemberCalls = fetchMock.mock.calls.filter(([url]) => typeof url === "string" && url.includes("/members"));
+    const addMemberCalls = fetchMock.mock.calls.filter(
+      ([url, init]) => typeof url === "string" && url.includes("/members") && init?.method === "POST",
+    );
     expect(addMemberCalls).toHaveLength(queueIds.length);
   });
 
@@ -1136,13 +1169,16 @@ describe("Google Groups sync", () => {
     await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail: group, action: "remove_from_list" });
     await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail: group, action: "add_to_list" });
     releaseDirectory();
-    expect(await firstRun).toMatchObject({ processed: 1, succeeded: 1 });
-    expect(await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10)).toMatchObject({ processed: 0 });
+    expect(await firstRun).toMatchObject({ processed: 1, succeeded: 0 });
+    expect(await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10)).toMatchObject({
+      processed: 1,
+      succeeded: 1,
+    });
 
     const methods = fetchMock.mock.calls
-      .filter(([url]) => typeof url === "string" && url.includes("/members"))
+      .filter(([url, init]) => typeof url === "string" && url.includes("/members") && Boolean(init?.method))
       .map(([, init]) => (init as RequestInit | undefined)?.method);
-    expect(methods).toEqual(["POST"]);
+    expect(methods).toEqual(["POST", "POST"]);
     expect(
       await queryAll<{ action: string; status: string }>(
         env.DB,
