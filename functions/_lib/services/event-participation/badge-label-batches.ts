@@ -49,14 +49,14 @@ const latestBadge = `(SELECT b.id FROM event_badge_credentials b WHERE ${activeR
 // Printing follows explicit roster selection, regardless of registration status; scanning enforces admission.
 // A single JSON parameter handles 1000 selections without a 1000-placeholder IN clause.
 const selectionSql = `SELECT r.id AS registrationId,r.user_id AS userId,${latestBadge} AS badgeId
-  FROM registrations r JOIN users u ON u.id=r.user_id WHERE r.event_id=? AND u.active=1
+  FROM registrations r JOIN users u ON u.id=r.user_id WHERE r.event_id=?
   AND r.id IN (SELECT value FROM json_each(?))`;
 const projection = `SELECT ${badgePrintMetadataColumns},credential.id,
   credential.credential_hash AS credentialHash,credential.print_credential_json AS envelope,
   credential.created_at AS createdAt,credential.expires_at AS expiresAt,
   CASE WHEN ${canDisplayBadgeContact} THEN ${personNameSql("u")} ELSE NULL END AS displayName,
   ${registrationBadgeDisplayRoleSql("r")} AS badgeRole
-  ${badgePrintMetadataFrom} WHERE credential.event_id=? AND u.active=1
+  ${badgePrintMetadataFrom} WHERE credential.event_id=?
   AND credential.revoked_at IS NULL AND credential.expires_at>${currentTime}
   AND credential.print_credential_json IS NOT NULL
   AND credential.id IN (SELECT json_extract(value,'$.badgeId') FROM json_each(?))`;
@@ -189,7 +189,7 @@ export async function prepareBadgeLabelBatch(
             SELECT 1 FROM json_each(?) expected LEFT JOIN registrations r
             ON r.id=json_extract(expected.value,'$.registrationId') AND r.event_id=?
             LEFT JOIN users u ON u.id=r.user_id
-            WHERE r.id IS NULL OR NOT (u.active=1) OR u.id IS NULL OR r.user_id!=json_extract(expected.value,'$.userId')
+            WHERE r.id IS NULL OR u.id IS NULL OR r.user_id!=json_extract(expected.value,'$.userId')
             OR ${latestBadge} IS NOT json_extract(expected.value,'$.badgeId'))`,
           bindings: [eventId, event.ends_at, additions.length, expiresAt, JSON.stringify(selected), eventId],
         }),
