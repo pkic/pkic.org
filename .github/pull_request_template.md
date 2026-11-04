@@ -1,8 +1,12 @@
 <!-- Usually under 150 words. Replace prompts with short bullets; link longer evidence. -->
 
+## Goal
+
+<!-- In plain English, what should this change achieve, and why does it matter? -->
+
 ## Change
 
-<!-- Problem and resulting behavior. -->
+<!-- How does the PR achieve the goal? -->
 
 ## Evidence
 

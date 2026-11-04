@@ -14,9 +14,9 @@ import type { DatabaseLike, StatementLike } from "../types";
 /**
  * Revokes one of the owner's passkeys. A passkey that is the account's last
  * way to sign in is refused unless the owner confirms: a compromised passkey
- * must be revocable even then. That confirmed removal signs out every other
- * session, which a stolen passkey may have opened, and keeps the caller's so
- * its owner can add a new passkey. Whether it was the last way is decided
+ * must be revocable even then. Removal signs out every other session, which
+ * a stolen passkey may have opened, and keeps the caller's so its owner can
+ * add a new passkey. Whether it was the last way is decided
  * inside the batch, so a concurrent change cannot misrecord it.
  */
 export async function revokePasskey(
@@ -59,7 +59,17 @@ export async function revokePasskey(
     await db.batch([
       prepareAuthorizationGuard(db, remains),
       revoke,
-      prepareAuditLog(db, actor.kind, actor.id, "passkey_removed", "passkey_credential", passkeyId, {}, at),
+      prepareSignOutOtherSessions(db, actor, passkeyId, at),
+      prepareAuditLog(
+        db,
+        actor.kind,
+        actor.id,
+        "passkey_removed",
+        "passkey_credential",
+        passkeyId,
+        { otherSessionsSignedOut: true },
+        at,
+      ),
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) throw lastSignInMethodError(LAST_PASSKEY_MESSAGE);
@@ -69,8 +79,7 @@ export async function revokePasskey(
 
 /**
  * Runs after the revoke in the same batch. Each effect holds only when this
- * revoke won (the row carries its instant); the last-way effects hold only
- * when no other way to sign in remains.
+ * revoke won (the row carries its instant).
  */
 function prepareConfirmedRevokeEffects(
   db: DatabaseLike,
@@ -87,19 +96,24 @@ function prepareConfirmedRevokeEffects(
       action: "passkey_removed",
       entityType: "passkey_credential",
       entityId: passkeyId,
-      details: lastSignInMethod ? { lastSignInMethod: true, otherSessionsSignedOut: true } : {},
+      details: { ...(lastSignInMethod ? { lastSignInMethod: true } : {}), otherSessionsSignedOut: true },
       conditionSql: `SELECT 1 WHERE ${won} AND ${lastSignInMethod ? "NOT " : ""}EXISTS (${remains.sql})`,
       conditionBindings: [passkeyId, at, ...remains.bindings],
       createdAt: at,
     });
-  return [
-    db
-      .prepare(
-        `UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND id <> ? AND revoked_at IS NULL
-          AND ${won} AND NOT EXISTS (${remains.sql})`,
-      )
-      .bind(at, actor.id, actor.sessionId, passkeyId, at, ...remains.bindings),
-    audit(false),
-    audit(true),
-  ];
+  return [prepareSignOutOtherSessions(db, actor, passkeyId, at), audit(false), audit(true)];
+}
+
+function prepareSignOutOtherSessions(
+  db: DatabaseLike,
+  actor: { id: string; sessionId: string },
+  passkeyId: string,
+  at: string,
+): StatementLike {
+  return db
+    .prepare(
+      `UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND id <> ? AND revoked_at IS NULL
+        AND EXISTS (SELECT 1 FROM passkey_credentials won WHERE won.id = ? AND won.revoked_at = ?)`,
+    )
+    .bind(at, actor.id, actor.sessionId, passkeyId, at);
 }
