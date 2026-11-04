@@ -13,6 +13,7 @@ import {
   pendingReview,
   rejectedReview,
 } from "./helpers/organization-self-service";
+import { beginRecordEdit } from "./helpers/record-edit";
 import { controlFor as labeledControl } from "./helpers/labeled-control";
 let container: HTMLDivElement;
 beforeEach(() => {
@@ -37,9 +38,14 @@ describe("organization content revisions", () => {
       vi.fn(async (_input, init) => {
         const body = JSON.parse(init.body);
         submissions.push(body);
-        return new Response(JSON.stringify({ review: { ...pendingReview(), proposedChanges: body } }), {
-          headers: { "content-type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({
+            review: { ...pendingReview(), proposedChanges: body },
+          }),
+          {
+            headers: { "content-type": "application/json" },
+          },
+        );
       }),
     );
 
@@ -54,12 +60,9 @@ describe("organization content revisions", () => {
       ),
     );
     await settle();
-    expect(container.textContent).toContain("Please drop the superlatives.");
-
-    const revise = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent === "Revise submission",
-    );
-    await act(() => revise!.click());
+    expect(container.querySelector("dialog")).toBeNull();
+    expect(container.textContent).not.toContain("Please drop the superlatives.");
+    await beginRecordEdit(container, "Member page content actions", "Revise submission");
     await settle();
     expect((labeledControl(container, "Slogan") as HTMLInputElement).value).toBe("Rejected slogan");
     expect((labeledControl(container, "Blog URL") as HTMLInputElement).value).toBe("https://blog.example.test");
@@ -80,5 +83,54 @@ describe("organization content revisions", () => {
       blogUrl: "https://blog.example.test",
       links: ["https://x.example.test"],
     });
+  });
+  it("starts ordinary edits from current staff-corrected content despite an older rejection", async () => {
+    const submissions: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input, init) => {
+        const body = organizationContentReviewCreateSchema.parse(JSON.parse(init.body));
+        submissions.push(body);
+        return new Response(
+          JSON.stringify({
+            review: { ...pendingReview(), proposedChanges: body },
+          }),
+          {
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }),
+    );
+    const rejected = rejectedReview();
+    rejected.proposedChanges.slogan = "Outdated rejected slogan";
+    const org = organizationMemberProfileSchema.parse(
+      organizationProfile({
+        slogan: "Staff-corrected slogan",
+        blogUrl: "https://current.example.test",
+        links: ["https://current.example.test/profile"],
+        rejectedReview: rejected,
+      }),
+    );
+    void act(() =>
+      render(<ContentEditorCard organizationId={organizationId} org={org} reload={async () => {}} />, container),
+    );
+    await beginRecordEdit(container, "Member page content actions", "Revise submission");
+    expect((labeledControl(container, "Slogan") as HTMLInputElement).value).toBe("Outdated rejected slogan");
+    const cancel = [...container.querySelectorAll("button")].find((button) => button.textContent === "Cancel");
+    await act(() => cancel!.click());
+    await beginRecordEdit(container, "Member page content actions");
+    expect((labeledControl(container, "Slogan") as HTMLInputElement).value).toBe("Staff-corrected slogan");
+    expect(container.querySelector("form")?.textContent).not.toContain(rejected.reviewerNote);
+    const blog = labeledControl(container, "Blog URL") as HTMLInputElement;
+    expect(blog.value).toBe("https://current.example.test");
+    blog.value = "https://new.example.test/blog";
+    await act(() => {
+      blog.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      blog.closest("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+    expect(submissions).toEqual([{ blogUrl: "https://new.example.test/blog" }]);
   });
 });

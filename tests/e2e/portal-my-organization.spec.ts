@@ -111,7 +111,9 @@ test("an organization contact submits a logo and content changes for review, the
   const editorPanel = page
     .locator("section")
     .filter({ has: page.getByRole("heading", { name: "Member page content" }) });
-  await expect(editorPanel.getByText("A content change is pending staff review", { exact: false })).toBeVisible();
+  await editorPanel.getByRole("button", { name: "Member page content actions" }).click();
+  await page.getByRole("menuitem", { name: "Review submission" }).click();
+  await expect(page.getByRole("dialog", { name: "Review submission", exact: true })).toBeVisible();
   await expect(editorPanel.getByRole("listitem").filter({ hasText: "Logo: a new logo" })).toBeVisible();
   // The pending review occupies the editor slot, so the form itself is gone
   // until the submission is decided or withdrawn.
@@ -122,7 +124,7 @@ test("an organization contact submits a logo and content changes for review, the
       /\/content\/reviews\/[^/]+$/.test(new URL(response.url()).pathname) && response.request().method() === "DELETE",
   );
   await editorPanel.getByRole("button", { name: "Withdraw submission" }).click();
-  await acceptConfirmDialog(page, "Withdraw submission");
+  await acceptConfirmDialog(page, "Withdraw submission", "Withdraw this pending submission?");
   expect((await logoWithdrawn).status()).toBe(200);
   await expect(page.locator(".my-toast", { hasText: "Submission withdrawn" })).toBeVisible({ timeout: 15_000 });
   await expect(editorPanel.getByLabel("Slogan")).toHaveCount(0);
@@ -145,6 +147,8 @@ test("an organization contact submits a logo and content changes for review, the
   expect((await contentSubmitted).status()).toBe(200);
   await expect(page.locator(".my-toast", { hasText: "Submitted for staff review" })).toBeVisible({ timeout: 15_000 });
 
+  await editorPanel.getByRole("button", { name: "Member page content actions" }).click();
+  await page.getByRole("menuitem", { name: "Review submission" }).click();
   await expect(editorPanel.getByText("Slogan:", { exact: false })).toBeVisible();
   await expect(editorPanel.getByText("A slogan awaiting review")).toBeVisible();
   await expect(editorPanel.getByText("Website:", { exact: false })).toBeVisible();
@@ -155,7 +159,7 @@ test("an organization contact submits a logo and content changes for review, the
       /\/content\/reviews\/[^/]+$/.test(new URL(response.url()).pathname) && response.request().method() === "DELETE",
   );
   await editorPanel.getByRole("button", { name: "Withdraw submission" }).click();
-  await acceptConfirmDialog(page, "Withdraw submission");
+  await acceptConfirmDialog(page, "Withdraw submission", "Withdraw this pending submission?");
   expect((await contentWithdrawn).status()).toBe(200);
   await expect(editorPanel.getByLabel("Slogan")).toHaveCount(0);
   await editorPanel.getByRole("button", { name: "Member page content actions" }).click();
@@ -497,9 +501,12 @@ test("organization profiles show real membership details and preserve rejected r
   await page.context().clearCookies();
   await signInToPortal(page, email);
   await page.goto(recordUrl);
-  await expect(editor.getByText(note, { exact: true })).toBeVisible();
+  await expect(editor.getByText(note, { exact: true })).toHaveCount(0);
   await capture("rejected");
-  await editor.getByRole("button", { name: "Revise submission" }).click();
+  await editor.getByRole("button", { name: "Member page content actions" }).click();
+  await page.getByRole("menuitem", { name: "Revise submission" }).click();
+  const revisionDialog = page.getByRole("dialog", { name: "Revise submission", exact: true });
+  await expect(revisionDialog.getByText(note, { exact: true })).toBeVisible();
   await expect(editor.getByLabel("Slogan", { exact: true })).toHaveValue(proposed);
   await expect(editor.getByRole("textbox", { name: "Long-form content (Markdown)", exact: true })).toHaveText(
     "Content retained through revision.",
@@ -524,7 +531,7 @@ test("organization profiles show real membership details and preserve rejected r
   await page.context().clearCookies();
   await signInToPortal(page, email);
   await page.goto(recordUrl);
-  await expect(editor.getByRole("button", { name: "Revise submission" })).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(editor.getByText(note, { exact: true })).toHaveCount(0);
   await editor.getByRole("button", { name: "Member page content actions" }).click();
   await page.getByRole("menuitem", { name: "Edit settings" }).click();
