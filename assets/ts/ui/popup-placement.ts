@@ -130,6 +130,7 @@ export function usePopupPlacement({
   topLayer = false,
   anchorPoint,
   spacing,
+  beforePlace,
 }: {
   open: boolean;
   anchorRef: RefObject<HTMLElement>;
@@ -147,21 +148,25 @@ export function usePopupPlacement({
    */
   topLayer?: boolean;
   /** A pointer or caret position for a context menu, using the same viewport placement policy. */
-  anchorPoint?: { x: number; y: number } | null;
-}): void {
+  anchorPoint?: { x: number; y: number } | (() => { x: number; y: number } | null) | null;
+  /** Position an anchored parent before measuring its child, regardless of event-listener order. */
+  beforePlace?: () => void;
+}): () => void {
   const gap = spacing?.gap;
   const crossAxis = spacing?.crossAxis;
   const place = useCallback((): void => {
+    beforePlace?.();
     const anchor = anchorRef.current;
     const popup = popupRef.current;
-    if ((!anchor && !anchorPoint) || !popup) return;
-    const anchorRect = anchorPoint ? new DOMRect(anchorPoint.x, anchorPoint.y, 0, 0) : anchor!.getBoundingClientRect();
+    const point = typeof anchorPoint === "function" ? anchorPoint() : anchorPoint;
+    if ((!anchor && !point) || !popup) return;
+    const anchorRect = point ? new DOMRect(point.x, point.y, 0, 0) : anchor!.getBoundingClientRect();
     popup.style.setProperty("min-width", `${side === "right" || side === "left" ? 0 : anchorRect.width}px`);
     applyPopupPosition(
       popup,
       measurePopupPosition(anchorRect, popup.getBoundingClientRect(), align, side, { gap, crossAxis }),
     );
-  }, [align, anchorRef, popupRef, side, anchorPoint, gap, crossAxis]);
+  }, [align, anchorRef, popupRef, side, anchorPoint, gap, crossAxis, beforePlace]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -222,4 +227,5 @@ export function usePopupPlacement({
       viewport?.removeEventListener("scroll", place);
     };
   }, [open, place]);
+  return place;
 }

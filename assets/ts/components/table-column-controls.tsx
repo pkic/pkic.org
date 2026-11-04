@@ -266,7 +266,8 @@ export function useColumnControls<T>(
   }
 
   // The record cards' one menu: a submenu per sortable column, then one per
-  // filterable column. Hidden columns stay out of it, as they are out of the cards.
+  // filterable column. Hidden columns stay out of the cards, but their filters
+  // remain available from this menu; sorting stays limited to visible columns.
   const visibleColumns = columns
     .map((column, index) => ({ column, index }))
     .filter(({ column }) => !hidden.has(headLabel(column.header)) && headLabel(column.header).trim().length > 0);

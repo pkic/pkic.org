@@ -13,9 +13,9 @@ import {
   type BadgeTemplateSponsorGroup,
 } from "../../../../assets/shared/schemas/event-badge-template";
 import {
-  createGenericBadgeTemplate,
   GENERIC_BADGE_LAYOUT_VERSION,
-} from "../../../../assets/shared/badge-generic-template";
+  type GenericBadgeTemplateInput,
+} from "../../../../assets/shared/badge-generic-template-policy";
 import { persistedUtcInstant } from "../../utils/time";
 import { first } from "../../db/queries";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
@@ -35,6 +35,30 @@ type BrandingRow = Awaited<ReturnType<typeof prepareAgendaSponsorTierRead>>["row
 /** The tier a row holds within one source's population. */
 function sourceTier(row: BrandingRow, source: BadgeSponsorSource): string | null {
   return source === "consortium" ? row.tier : row.event_tier;
+}
+
+/** Both automatic layouts and caller-selected sponsor groups share actionable validation errors. */
+async function genericTemplateForPrinting(input: GenericBadgeTemplateInput) {
+  try {
+    const { createGenericBadgeTemplate } = await import("../../../../assets/shared/badge-generic-template");
+    return createGenericBadgeTemplate(input);
+  } catch (error) {
+    if (!(error instanceof ZodError)) throw error;
+    const fields: Record<string, string> = {
+      eventName: "event name",
+      title: "event name",
+      frontHtml: "event name",
+      backHtml: "event name",
+      city: "event city",
+      timezone: "event time zone",
+    };
+    const field = fields[String(error.issues[0]?.path[0])] ?? "event badge details";
+    throw new AppError(
+      422,
+      "BADGE_TEMPLATE_INVALID",
+      `The ${field} is invalid for the default badge design. Update it in event settings or configure a badge template before printing.`,
+    );
+  }
 }
 
 /** Cheap database basis is rechecked for each badge; artwork is loaded once per document. */
@@ -72,7 +96,8 @@ export async function prepareBadgePrintingBasis(
     );
   const override = sponsorGroups
     ? {
-        ...(parsed.data ?? createGenericBadgeTemplate({ ...display, eventName: event.name, sponsorGroups: [] })),
+        ...(parsed.data ??
+          (await genericTemplateForPrinting({ ...display, eventName: event.name, sponsorGroups: [] }))),
         sponsorGroups: sponsorGroups.map((group) => badgeTemplateSponsorGroupSchema.parse(group)),
       }
     : parsed.data;
@@ -119,16 +144,7 @@ export async function prepareBadgePrintingBasis(
         }),
       ),
     );
-    try {
-      template = createGenericBadgeTemplate({ ...display, eventName: event.name, sponsorGroups });
-    } catch (error) {
-      if (!(error instanceof ZodError)) throw error;
-      throw new AppError(
-        422,
-        "BADGE_TEMPLATE_INVALID",
-        "The event name cannot fit the generic badge template. Update the event name or configure a badge template before printing.",
-      );
-    }
+    template = await genericTemplateForPrinting({ ...display, eventName: event.name, sponsorGroups });
   }
   const revision = await badgePrintingBasisRevision(
     eventId,

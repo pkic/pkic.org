@@ -15,6 +15,7 @@ import {
   registrationBadgeResponseSchema,
 } from "../assets/shared/schemas/participant-roles";
 import { sanitizeSvgLogo, SVG_LOGO_LIVE_TEXT_MESSAGE } from "../functions/_lib/utils/svg-logo";
+import { getBadgePrintingContext } from "../functions/_lib/services/event-participation/badge-print-branding";
 import { hashBadgeCredential } from "../functions/_lib/services/event-participation/badge-hash";
 import type { DatabaseLike, Env } from "../functions/_lib/types";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
@@ -182,25 +183,41 @@ describe("Event-owned authenticated badge print metadata and branding", () => {
     await env.DB.prepare("UPDATE events SET ends_at='2027-02-13T17:00:00.000Z' WHERE id=?").bind(fixture.eventId).run();
     expect((await print(moved.revision)).status).toBe(409);
   });
-  it("refuses a canonical persisted event title that cannot fit the generic template without print effects", async () => {
-    const captured = await context();
-    const eventName = eventResourceCoreSchema.shape.name.parse("Persisted event " + "x".repeat(40000));
-    await env.DB.prepare("UPDATE events SET name=?,settings_json='{}' WHERE id=?")
-      .bind(eventName, fixture.eventId)
-      .run();
-    const before = await printAudits();
-    const responses = [
-      { response: await request(`${base}/printing`), contract: badgePrintingRouteSchema.responses["422"] },
-      { response: await print(captured.revision), contract: badgePrintRouteSchema.responses["422"] },
-    ];
-    for (const { response, contract } of responses) {
-      expect(response.status).toBe(422);
-      const refusal = contract.content["application/json"].schema.parse(await response.json());
-      expect(refusal).toMatchObject({ error: { code: "BADGE_TEMPLATE_INVALID" } });
-      expect(JSON.stringify(refusal)).not.toContain(eventName);
-    }
-    expect(await printAudits()).toEqual(before);
-  });
+  it.each([
+    {
+      column: "name",
+      value: eventResourceCoreSchema.shape.name.parse("Persisted event " + "x".repeat(40000)),
+      field: "event name",
+    },
+    { column: "city", value: "x".repeat(81), field: "event city" },
+    { column: "timezone", value: "Not/AZone", field: "event time zone" },
+  ] as const)(
+    "names invalid stored $column details consistently without print effects",
+    async ({ column, value, field }) => {
+      const captured = await context();
+      await env.DB.prepare(`UPDATE events SET ${column}=?,settings_json='{}' WHERE id=?`)
+        .bind(value, fixture.eventId)
+        .run();
+      const before = await printAudits();
+      const responses = [
+        { response: await request(`${base}/printing`), contract: badgePrintingRouteSchema.responses["422"] },
+        { response: await print(captured.revision), contract: badgePrintRouteSchema.responses["422"] },
+      ];
+      for (const { response, contract } of responses) {
+        expect(response.status).toBe(422);
+        const refusal = contract.content["application/json"].schema.parse(await response.json());
+        expect(refusal).toMatchObject({ error: { code: "BADGE_TEMPLATE_INVALID" } });
+        expect(refusal.error.message).toContain(field);
+        expect(JSON.stringify(refusal)).not.toContain(value);
+      }
+      await expect(getBadgePrintingContext(env.DB, env, fixture.eventId, [])).rejects.toMatchObject({
+        status: 422,
+        code: "BADGE_TEMPLATE_INVALID",
+        message: expect.stringContaining(field),
+      });
+      expect(await printAudits()).toEqual(before);
+    },
+  );
   it("keeps explicit uploaded templates as overrides and uses self-contained generic artwork without a bucket", async () => {
     expect((await context()).template).toEqual(template);
     await env.DB.prepare("UPDATE events SET settings_json='{}' WHERE id=?").bind(fixture.eventId).run();

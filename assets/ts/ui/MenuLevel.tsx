@@ -1,5 +1,5 @@
 import type { RefObject } from "preact";
-import { useId, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { MenuItem } from "./Menu";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { usePopupPlacement } from "./popup-placement";
@@ -16,6 +16,7 @@ export function MenuLevel({
   anchorPoint,
   close,
   back,
+  beforePlace,
 }: {
   id: string;
   label: string;
@@ -27,6 +28,7 @@ export function MenuLevel({
   anchorPoint?: { x: number; y: number } | null;
   close: (returnFocus: boolean) => void;
   back?: () => void;
+  beforePlace?: () => void;
 }) {
   const compact = useMediaQuery("(max-width: 40rem)");
   const items: readonly MenuItem[] =
@@ -36,8 +38,10 @@ export function MenuLevel({
           ...suppliedItems,
         ]
       : suppliedItems;
-  const parentBounds = compact && back ? anchorRef.current?.closest('[role="menu"]')?.getBoundingClientRect() : null;
-  const compactPoint = parentBounds ? { x: parentBounds.left, y: parentBounds.top - 4 } : anchorPoint;
+  const compactPoint = useCallback(() => {
+    const bounds = anchorRef.current?.closest('[role="menu"]')?.getBoundingClientRect();
+    return bounds ? { x: bounds.left, y: bounds.top - 4 } : null;
+  }, [anchorRef]);
   const childId = useId();
   const popupRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | HTMLAnchorElement | null)[]>([]);
@@ -48,7 +52,7 @@ export function MenuLevel({
   const [child, setChild] = useState<string | null>(null);
   const childItem = items.find((item) => item.id === child && !item.disabled);
   const revision = items.map((item) => `${item.id}:${Boolean(item.disabled)}`).join("|");
-  usePopupPlacement({
+  const place = usePopupPlacement({
     open: true,
     anchorRef,
     popupRef,
@@ -62,7 +66,8 @@ export function MenuLevel({
     spacing: back && !compact ? { gap: 4, crossAxis: -4 } : undefined,
     revision,
     topLayer: true,
-    anchorPoint: compactPoint,
+    anchorPoint: compact && back ? compactPoint : anchorPoint,
+    beforePlace,
   });
   useLayoutEffect(() => {
     if (childItem) return;
@@ -207,6 +212,7 @@ export function MenuLevel({
           anchorRef={childAnchor}
           close={close}
           back={() => setChild(null)}
+          beforePlace={place}
         />
       )}
     </div>

@@ -507,3 +507,40 @@ it("keeps compact submenus in one drilldown and returns through Back without clo
   expect(container.querySelector('[role="menu"]')).toBeNull();
   vi.unstubAllGlobals();
 });
+
+it("repositions a compact submenu with its parent during scrolling and returns without a jump", async () => {
+  vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  let anchorTop = 100;
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    if (this.classList.contains("pk-menu__trigger")) return new DOMRect(20, anchorTop, 28, 28);
+    return new DOMRect(Number.parseFloat(this.style.left) || 20, Number.parseFloat(this.style.top) || 0, 200, 120);
+  });
+  const container = mount(
+    <Menu
+      label="Outputs"
+      items={[
+        {
+          id: "download",
+          label: "Download",
+          children: [{ id: "file", label: "Attendees", onSelect: vi.fn() }],
+        },
+      ]}
+    />,
+  );
+  await act(() => trigger(container).click());
+  await act(() => menuItems(container)[0].click());
+  const parent = container.querySelector<HTMLElement>('[role="menu"][aria-label="Outputs"]')!;
+  const child = container.querySelector<HTMLElement>('[role="menu"][aria-label="Download"]')!;
+  expect(parent.style.top).toBe("132px");
+  expect(child.style.top).toBe(parent.style.top);
+  anchorTop = 40;
+  await act(() => {
+    window.dispatchEvent(new Event("scroll"));
+  });
+  expect(parent.style.top).toBe("72px");
+  expect(child.style.top).toBe(parent.style.top);
+  const back = child.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+  await act(() => back.click());
+  expect(container.querySelector('[role="menu"][aria-label="Download"]')).toBeNull();
+  expect(parent.style.top).toBe("72px");
+});

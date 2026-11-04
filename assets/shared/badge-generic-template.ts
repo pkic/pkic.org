@@ -1,30 +1,9 @@
-import { z } from "zod";
 import { BADGE_GENERIC_BRAND_ASSETS } from "./badge-generic-template-assets";
 import { BADGE_DEFAULT_FONT_ASSETS } from "./badge-default-template-fonts";
 import { createPqcConferenceBadgeTemplate, PQC_CONFERENCE_BADGE_LINKS } from "./badge-pqc-template";
 import { formatDateRange } from "./format-date";
-import {
-  badgeTemplateCustomTextSchema,
-  eventBadgeTemplateSchema,
-  type EventBadgeTemplate,
-} from "./schemas/event-badge-template";
-import { eventResourceCoreSchema } from "./schemas/event-management";
-import { utcInstantSchema } from "./schemas/api-common";
-import { timeZoneSchema } from "./schemas/event-series";
-
-export const GENERIC_BADGE_LAYOUT_VERSION = "pqc-without-cityscape-v2";
-export const genericBadgeTemplateInputSchema = z
-  .object({
-    eventName: eventResourceCoreSchema.shape.name,
-    customTextOverlay: badgeTemplateCustomTextSchema.optional(),
-    sponsorGroups: eventBadgeTemplateSchema.shape.sponsorGroups,
-    startsAt: utcInstantSchema.nullable().optional(),
-    endsAt: utcInstantSchema.nullable().optional(),
-    timezone: timeZoneSchema.default("UTC"),
-    city: z.string().nullable().optional(),
-  })
-  .strict();
-export type GenericBadgeTemplateInput = z.input<typeof genericBadgeTemplateInputSchema>;
+import type { EventBadgeTemplate } from "./schemas/event-badge-template";
+import { genericBadgeTemplateInputSchema, type GenericBadgeTemplateInput } from "./badge-generic-template-policy";
 
 /** The production PQC design is the event default, without Amsterdam-specific artwork. */
 export function createGenericBadgeTemplate(input: GenericBadgeTemplateInput): EventBadgeTemplate {
