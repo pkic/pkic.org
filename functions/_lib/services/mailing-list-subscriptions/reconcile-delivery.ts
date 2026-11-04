@@ -1,8 +1,9 @@
 import type { MailingListDeliveryAddress } from "./delivery-addresses";
-import type {
-  MailingListDeliveryChange,
-  MailingListDeliveryMember,
-  MailingListDeliveryProvider,
+import {
+  MAX_DELIVERY_INSPECTIONS,
+  type MailingListDeliveryChange,
+  type MailingListDeliveryMember,
+  type MailingListDeliveryProvider,
 } from "./delivery-provider";
 
 export interface MailingListDeliveryPlanEntry {
@@ -36,14 +37,14 @@ export function planMailingListDelivery(
     if (left && !alias) return { ...base, action: "unsubscribed" };
     if (!target || left) return { ...base, action: member ? "unsubscribe" : "unchanged" };
     if (!member) return { ...base, action: "subscribe" };
-    if (target.noDelivery && member.delivery !== "none") return { ...base, action: "disable_delivery" };
+    if (target.noDelivery && member.delivery === "all") return { ...base, action: "disable_delivery" };
     if (target.restoreDelivery && !target.noDelivery && member.delivery === "none")
       return { ...base, action: "enable_delivery" };
     return { ...base, action: "unchanged" };
   });
 }
 
-/** Durable desired subscriptions and the existing scheduled job own convergence/retries. */
+/** A complete roster establishes absence; only the cursor window receives detailed reads or writes. */
 export async function reconcileMailingListDelivery(
   provider: MailingListDeliveryProvider,
   listEmail: string,
@@ -51,51 +52,73 @@ export async function reconcileMailingListDelivery(
   options: {
     limit: number;
     dryRun: boolean;
+    afterEmail?: string;
     canApply?: () => Promise<boolean>;
-    recordUnsubscribe?: (userId: string) => Promise<unknown>;
-    recordPresence?: (addresses: MailingListDeliveryAddress[]) => Promise<unknown>;
+    recordUnsubscribe?: (userId: string) => Promise<boolean | void>;
+    recordPresence?: (addresses: MailingListDeliveryAddress[]) => Promise<number | void>;
   },
 ) {
-  const listing = await provider.listMembers(
+  const limit = Math.max(0, Math.min(MAX_DELIVERY_INSPECTIONS, Math.floor(options.limit)));
+  if (!limit) return { entries: [], changed: 0, nextEmail: options.afterEmail ?? "", hasMore: true };
+  const listing = await provider.listMembers(listEmail);
+  if (!listing.complete) throw new Error("Incomplete mailing-list roster; reconciliation stopped");
+  const emails = [...new Set([...addresses.map((row) => row.email), ...listing.members.map((row) => row.email)])]
+    .sort()
+    .filter((email) => email > (options.afterEmail ?? ""));
+  const window = new Set(emails.slice(0, limit));
+  const present = new Set(listing.members.map((member) => member.email));
+  const details = await provider.readDelivery(
     listEmail,
     addresses
-      .filter((address) => address.restoreDelivery)
-      .slice(0, Math.min(options.limit, 25))
-      .map((address) => address.email),
+      .filter((row) => window.has(row.email) && present.has(row.email) && (row.noDelivery || row.restoreDelivery))
+      .map((row) => row.email),
   );
-  if (!listing.complete) throw new Error("Incomplete mailing-list roster; reconciliation stopped");
-  const entries = planMailingListDelivery(addresses, listing.members);
-  const present = new Set(listing.members.map((member) => member.email));
-  if (!options.dryRun && options.recordPresence) {
-    await options.recordPresence(
-      addresses.filter((address) => !address.noDelivery && !address.confirmedSubscribed && present.has(address.email)),
-    );
-  }
+  const inspected = new Map(details.map((member) => [member.email, member]));
+  const entries = planMailingListDelivery(
+    addresses,
+    listing.members.map((member) => inspected.get(member.email) ?? member),
+  ).filter((entry) => window.has(entry.email));
   let changed = 0;
+  if (!options.dryRun && options.recordPresence && (!options.canApply || (await options.canApply()))) {
+    changed +=
+      (await options.recordPresence(
+        addresses.filter(
+          (address) =>
+            window.has(address.email) &&
+            address.email === address.primaryEmail &&
+            !address.noDelivery &&
+            !address.confirmedSubscribed &&
+            present.has(address.email),
+        ),
+      )) ?? 0;
+  }
+  // Establish primaries before dependent aliases within this window.
   const ordered = [...entries].sort((a, b) => Number(a.alias) - Number(b.alias));
   for (const entry of ordered) {
     if (entry.action === "unchanged" || entry.action === "protected") continue;
-    if (changed >= options.limit) break;
-    if (!options.dryRun && options.canApply && !(await options.canApply())) break;
+    if (changed >= limit) break;
+    if (!options.dryRun && options.canApply && !(await options.canApply()))
+      return { entries, changed, nextEmail: options.afterEmail ?? "", hasMore: true };
     if (entry.action === "unsubscribed") {
-      if (!options.dryRun && entry.userId) await options.recordUnsubscribe?.(entry.userId);
-      changed++;
-    } else if (["subscribe", "unsubscribe", "disable_delivery", "enable_delivery"].includes(entry.action)) {
+      if (!options.dryRun && entry.userId && (await options.recordUnsubscribe?.(entry.userId))) changed++;
+    } else {
       if (entry.alias && entry.action !== "unsubscribe" && !present.has(entry.primaryEmail!)) continue;
       if (!options.dryRun) {
-        await provider.applyChange(listEmail, {
+        const applied = await provider.applyChange(listEmail, {
           email: entry.email,
-          action: entry.action as MailingListDeliveryChange["action"],
+          action: entry.action,
           ...(entry.action === "enable_delivery"
             ? { delivery: "all" as const }
             : entry.action !== "unsubscribe" && entry.delivery === "none"
               ? { delivery: "none" as const }
               : {}),
         });
+        if (applied) {
+          changed++;
+          if (entry.action === "subscribe") present.add(entry.email);
+        }
       }
-      if (entry.action === "subscribe") present.add(entry.email);
-      changed++;
     }
   }
-  return { entries, changed };
+  return { entries, changed, nextEmail: emails.slice(0, limit).at(-1) ?? "", hasMore: emails.length > limit };
 }

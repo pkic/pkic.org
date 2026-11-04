@@ -31,10 +31,13 @@ The JSON report includes email addresses: share only synthetic output in issues.
 
 ## Full reconciliation
 
-Pass `--mode full` to compare each enabled, active mailing list's complete
-provider roster with current effective subscriptions and verified additional
-email addresses. The report includes `subscribe`, `unsubscribe`,
-`disable_delivery`, `unchanged`, `protected`, and `unsubscribed` outcomes.
+Pass `--mode full` to inspect the next reconciliation window: at most 25
+addresses on one enabled, active mailing list. A complete provider roster
+establishes membership and absence; detailed delivery reads and actions are
+limited to the window. The durable cursor rotates through addresses and lists,
+including windows that need no changes. The dry run reads that same cursor
+without advancing it. The report includes `subscribe`, `unsubscribe`,
+`disable_delivery`, `enable_delivery`, `unchanged`, `protected`, and `unsubscribed` outcomes.
 The CLI uses the same provider-neutral planner as the live scheduled job and
 never changes memberships, queue rows, or observations.
 
@@ -47,9 +50,10 @@ full sync does not re-enroll them or retain their dependent aliases.
 
 The existing scheduled job shares its bounded work budget between queued
 changes and full reconciliation. Existing durable subscriptions and the job's
-lease/retry mechanism provide recovery; no additional queue, table, or migration
-is required. Changing an account's primary email queues its current subscription
-work atomically. Full reconciliation removes an obsolete address, or retains it
+lease/retry mechanism provide recovery. Migration 0040 adds only the durable
+reconciliation cursor; it must be applied separately to each target before
+deploying this code. No additional work queue is introduced. Changing an
+account's primary email queues its current subscription work atomically. Full reconciliation removes an obsolete address, or retains it
 without delivery when it remains a verified additional address. Verification
 and removal of additional addresses wake the existing job.
 

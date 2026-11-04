@@ -128,7 +128,8 @@ describe("Google Groups dry run", () => {
     const before = readFileSync(path);
     const report = await runMailingListFullDryRun(path, credentials);
     expect(report.scope).toBe("full_reconciliation");
-    expect(report.groups.length).toBeGreaterThan(1);
+    expect(report.groups).toHaveLength(1);
+    expect(report.windowLimit).toBe(25);
     expect(
       report.groups.every((group) =>
         group.entries.some((entry) => entry.email === "remove@example.test" && entry.action === "unsubscribe"),

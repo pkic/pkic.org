@@ -30,7 +30,11 @@ async function subscriber() {
   return member.userId;
 }
 function provider(members: MailingListDeliveryMember[]): MailingListDeliveryProvider {
-  return { listMembers: vi.fn(async () => ({ members, complete: true })), applyChange: vi.fn(async () => {}) };
+  return {
+    listMembers: vi.fn(async () => ({ members, complete: true })),
+    readDelivery: vi.fn(async (_list, emails) => members.filter((row) => emails.includes(row.email))),
+    applyChange: vi.fn(async () => true),
+  };
 }
 const ordinary = (email: string): MailingListDeliveryMember => ({ email, protected: false, delivery: "all" });
 async function alias(userId: string, verified = true) {
@@ -166,7 +170,7 @@ describe("provider-neutral mailing-list delivery", () => {
     );
     expect(delivery.applyChange).not.toHaveBeenCalled();
   });
-  it("bounds writes and rechecks pause only for actual changes", async () => {
+  it("bounds writes and rechecks pause before changes", async () => {
     const members = Array.from({ length: 50 }, (_, i) => ordinary(`member${i}@example.test`));
     const delivery = provider(members),
       canApply = vi.fn(async () => true);

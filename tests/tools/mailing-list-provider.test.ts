@@ -140,5 +140,26 @@ it("reads per-member delivery for restoration targets because list responses omi
     return Response.json({ email: "person@example.test", role: "MEMBER", type: "USER", delivery_settings: "NONE" });
   });
   const provider = await createGoogleGroupsDeliveryProvider(env, false, fetch);
-  expect((await provider.listMembers(list, ["person@example.test"])).members).toMatchObject([{ delivery: "none" }]);
+  expect(await provider.readDelivery(list, ["person@example.test"])).toMatchObject([{ delivery: "none" }]);
+});
+it("keeps unchecked delivery unknown and reports idempotent actions without counting a write", async () => {
+  const fetch = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
+    if (String(url).includes("oauth2.googleapis.com")) return Response.json({ access_token: "synthetic" });
+    const member = { email: "person@example.test", role: "MEMBER", type: "USER", delivery_settings: "NONE" };
+    return Response.json(String(url).includes("/members?") ? { members: [member] } : member);
+  });
+  const provider = await createGoogleGroupsDeliveryProvider(env, false, fetch);
+  expect((await provider.listMembers(list)).members[0].delivery).toBe("unknown");
+  await expect(provider.applyChange(list, { email: "person@example.test", action: "disable_delivery" })).resolves.toBe(
+    false,
+  );
+  expect(
+    fetch.mock.calls.filter(([url]) => String(url).includes("/members")).every(([, request]) => !request?.method),
+  ).toBe(true);
+  await expect(
+    provider.readDelivery(
+      list,
+      Array.from({ length: 26 }, (_, i) => `person${i}@example.test`),
+    ),
+  ).rejects.toThrow("bounded window");
 });

@@ -178,8 +178,8 @@ export async function recordProviderPresences(
 ) {
   const at = new Date().toISOString();
   const chunks = chunkJsonRows(addresses.slice(0, 500));
-  if (!chunks.length) return;
-  await db.batch(
+  if (!chunks.length) return 0;
+  const results = await db.batch(
     chunks.map((chunk) =>
       db
         .prepare(`INSERT INTO google_groups_observed_membership
@@ -194,4 +194,5 @@ export async function recordProviderPresences(
         .bind(listEmail, at, at, at, chunk.json),
     ),
   );
+  return results.reduce((total, result) => total + (result.meta?.changes ?? 0), 0);
 }

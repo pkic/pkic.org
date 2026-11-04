@@ -1,4 +1,7 @@
-import type { MailingListDeliveryProvider } from "../mailing-list-subscriptions/delivery-provider";
+import {
+  MAX_DELIVERY_INSPECTIONS,
+  type MailingListDeliveryProvider,
+} from "../mailing-list-subscriptions/delivery-provider";
 import type {
   ConfiguredGoogleServiceAccountEnv,
   GoogleGroupsDirectoryClient,
@@ -260,31 +263,41 @@ export async function createGoogleGroupsDeliveryProvider(
   );
   const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
   return {
-    async listMembers(listEmail, deliveryEmails = []) {
+    async listMembers(listEmail) {
       const listing = await listDirectoryMembers(fetchImpl, token, listEmail, 25);
-      for (const email of deliveryEmails.slice(0, 25)) {
-        const member = listing.members.find(
-          (row) => typeof row.email === "string" && row.email.toLowerCase() === email.toLowerCase(),
-        );
-        if (!member) continue;
-        const response = await fetchImpl(
-          `${GOOGLE_DIRECTORY_GROUPS_URL}/${encodeURIComponent(listEmail)}/members/${encodeURIComponent(email)}`,
-          { headers },
-        );
-        if (!response.ok) throw new Error(`Provider delivery read failed: HTTP ${response.status}`);
-        const details = (await response.json()) as DirectoryMemberRow;
-        member.delivery_settings = details.delivery_settings;
-        member.role = details.role;
-        member.type = details.type;
-      }
       return {
         complete: listing.complete,
         members: listing.members.map((member) => ({
           email: String(member.email).toLowerCase(),
           protected: isProtectedDirectoryMember(member),
-          delivery: member.delivery_settings === "NONE" ? ("none" as const) : ("all" as const),
+          // Directory list responses do not establish delivery settings.
+          delivery: "unknown" as const,
         })),
       };
+    },
+    async readDelivery(listEmail, emails) {
+      if (emails.length > MAX_DELIVERY_INSPECTIONS) throw new Error("Delivery inspection exceeds its bounded window");
+      const members = [];
+      for (const email of emails) {
+        const response = await fetchImpl(
+          `${GOOGLE_DIRECTORY_GROUPS_URL}/${encodeURIComponent(listEmail)}/members/${encodeURIComponent(email)}`,
+          { headers },
+        );
+        if (response.status === 404) continue;
+        if (!response.ok) throw new Error(`Provider delivery read failed: HTTP ${response.status}`);
+        const member = (await response.json()) as DirectoryMemberRow;
+        members.push({
+          email,
+          protected: isProtectedDirectoryMember(member),
+          delivery:
+            member.delivery_settings === "NONE"
+              ? ("none" as const)
+              : typeof member.delivery_settings === "string"
+                ? ("all" as const)
+                : ("unknown" as const),
+        });
+      }
+      return members;
     },
     async applyChange(listEmail, change) {
       if (readOnly) throw new Error("Dry run cannot change provider memberships");
@@ -305,11 +318,12 @@ export async function createGoogleGroupsDeliveryProvider(
           throw new Error("Provider member lookup failed; complete roster did not confirm absence");
         current = null;
       }
-      if (current && isProtectedDirectoryMember(current)) return;
+      if (current && isProtectedDirectoryMember(current)) return false;
       if (change.action === "unsubscribe") {
-        if (!current) return;
+        if (!current) return false;
         const removed = await fetchImpl(memberUrl, { method: "DELETE", headers });
         if (!removed.ok && removed.status !== 404) throw new Error(`Provider removal failed: HTTP ${removed.status}`);
+        return removed.ok;
       } else if (!current && change.action === "subscribe") {
         const added = await fetchImpl(collection, {
           method: "POST",
@@ -323,6 +337,7 @@ export async function createGoogleGroupsDeliveryProvider(
         if (!added.ok && added.status !== 409) throw new Error(`Provider addition failed: HTTP ${added.status}`);
         if (added.status === 409 && change.delivery === "none")
           throw new Error("Membership changed; retry alias delivery with fresh state");
+        return added.ok;
       } else if (
         current &&
         (change.action === "disable_delivery" || change.action === "enable_delivery" || change.delivery === "none") &&
@@ -334,7 +349,9 @@ export async function createGoogleGroupsDeliveryProvider(
           body: JSON.stringify({ delivery_settings: change.action === "enable_delivery" ? "ALL_MAIL" : "NONE" }),
         });
         if (!updated.ok) throw new Error(`Provider delivery update failed: HTTP ${updated.status}`);
+        return true;
       }
+      return false;
     },
   };
 }
