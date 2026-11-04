@@ -110,10 +110,7 @@ export function AttendeeHeaderFiltersPreview() {
           label: "Search attendees",
         }}
       >
-        <RegistrationOutputActions
-          attendeeUrl="/example-attendees.csv"
-          sponsorUrl="/example-consenting-attendees.csv"
-        />
+        <RegistrationOutputActions attendeeUrl={null} sponsorUrl={null} />
         <span class="pk-table-list__card-menu">
           <TableOptionsMenu controls={controls} />
         </span>
@@ -127,7 +124,7 @@ export function AttendeeHeaderFiltersPreview() {
           if (filters.country && row.country !== filters.country) return false;
           if (filters.badge_role && row.role !== filters.badge_role) return false;
           if (filters.job_title && !row.jobTitle.toLowerCase().includes(filters.job_title.toLowerCase())) return false;
-          const dates = filters.day_dates?.split(",");
+          const dates = filters.day_dates ? filters.day_dates.split(",") : null;
           const matches = row.days.filter((day) => {
             const waiting = day.waitlistStatus === "waiting" || day.waitlistStatus === "offered";
             return (

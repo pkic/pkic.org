@@ -17,6 +17,7 @@ export function TooltipPreview() {
               <span>2 not waitlisted · 1 waitlisted</span>
               <span>December 1 · Not waitlisted</span>
               <span>December 2 · Waitlisted</span>
+              <span>December 3 · Not waitlisted</span>
             </div>
           }
         >

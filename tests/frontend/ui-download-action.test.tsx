@@ -224,3 +224,15 @@ it("keeps the menu trigger focused while an asynchronous selected download is pe
   await act(async () => finish());
   expect(document.activeElement).toBe(trigger);
 });
+
+it("moves a focused primary URL action to the menu when busy disables its replacement", async () => {
+  const options = [
+    { id: "one", label: "One", href: "/one" },
+    { id: "two", label: "Two", href: "/two" },
+  ] as const;
+  const host = await mount(<DownloadAction label="Download one" menuLabel="Files" options={options} />);
+  await act(() => host.querySelector("a")!.focus());
+  await act(() => render(<DownloadAction label="Download one" menuLabel="Files" options={options} busy />, host));
+  expect(document.activeElement).toBe(host.querySelector('button[aria-label="Files"]'));
+  expect(host.querySelector('button[aria-label="Files"]')?.hasAttribute("disabled")).toBe(false);
+});
