@@ -5,7 +5,7 @@ import { seedPersona } from "./personas/seed";
 import { groupEventDetailResponseSchema } from "../assets/shared/schemas/group-events";
 import { eventManagementDetailResponseSchema } from "../assets/shared/schemas/event-management";
 import { seedEventAndAdmin } from "./helpers/context";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMcpSession } from "./helpers/auth";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { isReadOnlySql } from "../functions/_lib/db/read-only-sql";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -278,6 +278,27 @@ describe("event call for proposals", () => {
     );
     expect(profile.summary().roundTrips).toBe(2);
   });
+
+  it.each([true, false])(
+    "retains delegated write scope ceilings during the combined settings preflight (permitted: %s)",
+    async (permitted) => {
+      const fixture = await groupProposalCall();
+      const token = await createMcpSession(
+        env.DB,
+        { id: fixture.organizer.userId, email: fixture.organizer.email },
+        crypto.randomUUID(),
+        permitted ? ["events:write"] : ["events:read"],
+      );
+      const profile = profileD1Flow(env.DB);
+      const response = await callApi({ ...env, DB: profile.db }, "/api/v1/events/group-form-call/settings", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "x-pkic-machine-auth": "mcp" },
+        body: JSON.stringify({ expectedUpdatedAt: fixture.updatedAt, name: "Delegated save" }),
+      });
+      expect(response.status).toBe(permitted ? 200 : 403);
+      expect(profile.summary().roundTrips).toBe(permitted ? 2 : 1);
+    },
+  );
 
   it("refuses an unrelated event before decoding its form configuration", async () => {
     const fixture = await groupProposalCall(true);
