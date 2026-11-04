@@ -119,7 +119,7 @@ export async function createRegistrationEvent(
 
 /** A fresh public event keeps the state journey independent from other agenda tests. */
 export async function prepareParticipationStates(staff: Page) {
-  const { slug, eventId } = await createRegistrationEvent(staff, "participation-states");
+  const { slug, eventId, ownerGroupId } = await createRegistrationEvent(staff, "participation-states");
   const base = `/api/v1/events/${slug}/agenda`;
   let agenda = agendaSnapshotSchema.parse(await (await staff.request.get(base)).json());
   const roomResponse = await staff.request.post(`${base}/rooms`, {
@@ -166,7 +166,7 @@ export async function prepareParticipationStates(staff: Page) {
   expect(agenda.publishedRevision).toBe(agenda.revision);
   if (!agenda.publicAgendaPath) throw new Error("Approved public agenda path missing");
   const release = await publishE2eSite(staff, agenda.publicAgendaPath);
-  return { slug, eventId, base, agenda, room, release, closedAt };
+  return { slug, eventId, ownerGroupId, base, agenda, room, release, closedAt };
 }
 
 /**

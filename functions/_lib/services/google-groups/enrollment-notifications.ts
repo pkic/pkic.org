@@ -3,6 +3,7 @@ import { all } from "../../db/queries";
 import { chunkJsonRows } from "../../db/json-bulk";
 import { prepareBulkQueueEmailChunkStatements, type BulkEmailQueueRow } from "../../email/outbox";
 import type { DatabaseLike, StatementLike } from "../../types";
+import { sha256Hex } from "../../utils/crypto";
 import { nowIso } from "../../utils/time";
 import { outboxIdForOperation } from "../../email/outbox-queue";
 
