@@ -1,3 +1,6 @@
+import { seedPersona } from "./personas/seed";
+import { groupEventDetailResponseSchema } from "../assets/shared/schemas/group-events";
+import { eventManagementDetailResponseSchema } from "../assets/shared/schemas/event-management";
 import { seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
@@ -51,11 +54,113 @@ async function placeProposalForm(eventId: string, window: { opensAt?: string; cl
   ]);
 }
 
+async function groupProposalCall(groupManaged = false) {
+  const eventId = await insertEvent({ slug: "group-form-call" });
+  const otherEventId = await insertEvent({ slug: "other-group-form-call" });
+  const groupId = "20000000-0000-4000-8000-000000000001";
+  const formId = crypto.randomUUID();
+  const placementId = crypto.randomUUID();
+  const updatedAt = at(-10);
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO forms(id,key,scope_type,scope_ref,purpose,status,title,created_at,updated_at) VALUES (?, 'group-proposals', 'community', ?, 'proposal_submission', 'active', 'Group proposals', ?, ?)",
+    ).bind(formId, groupId, updatedAt, updatedAt),
+    ...[eventId, otherEventId].map((id) =>
+      env.DB.prepare(
+        "INSERT INTO form_placements(id,form_id,owner_group_id,context_type,context_ref,audience,active,created_at,updated_at) VALUES (?, ?, ?, 'event', ?, 'speaker', 1, ?, ?)",
+      ).bind(id === eventId ? placementId : crypto.randomUUID(), formId, groupId, id, updatedAt, updatedAt),
+    ),
+    env.DB.prepare("UPDATE events SET updated_at=?, owner_group_id=?, source_mode=? WHERE id=?").bind(
+      updatedAt,
+      groupManaged ? groupId : null,
+      "integration",
+      eventId,
+    ),
+  ]);
+  const organizer = groupManaged
+    ? await seedPersona(env.DB, "groupLead", { groupId })
+    : await seedPersona(env.DB, "eventOrganizer", { eventId });
+  const token = await createAdminSession(env.DB, organizer.userId, "group-form-call-organizer");
+  const save = (settings: object, expectedUpdatedAt = updatedAt) =>
+    callApi(
+      env,
+      groupManaged ? `/api/v1/groups/${groupId}/events/${eventId}/settings` : "/api/v1/events/group-form-call/settings",
+      {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ expectedUpdatedAt, ...settings }),
+      },
+    );
+  return { eventId, otherEventId, formId, placementId, groupId, updatedAt, token, save };
+}
+
 beforeEach(async () => {
   await resetDb();
 });
 
 describe("event call for proposals", () => {
+  it.each([false, true])(
+    "lets the manager close and reopen a group-owned form for this event only (group context: %s)",
+    async (groupManaged) => {
+      const fixture = await groupProposalCall(groupManaged);
+      const closesAt = at(-1);
+      const response = await fixture.save({ proposalSubmissionWindow: { opensAt: null, closesAt } });
+      expect(response.status).toBe(200);
+      const responseSchema = groupManaged ? groupEventDetailResponseSchema : eventManagementDetailResponseSchema;
+      const { event } = responseSchema.parse(await response.json());
+      expect((await readEventProposalCall(env.DB, fixture.eventId)).open).toBe(false);
+      expect((await readEventProposalCall(env.DB, fixture.otherEventId)).open).toBe(true);
+      expect(
+        await env.DB.prepare("SELECT owner_group_id, form_id, closes_at FROM form_placements WHERE id=?")
+          .bind(fixture.placementId)
+          .first(),
+      ).toEqual({ owner_group_id: fixture.groupId, form_id: fixture.formId, closes_at: closesAt });
+      expect(
+        await env.DB.prepare("SELECT scope_type, scope_ref, updated_at FROM forms WHERE id=?")
+          .bind(fixture.formId)
+          .first(),
+      ).toEqual({ scope_type: "community", scope_ref: fixture.groupId, updated_at: fixture.updatedAt });
+
+      const reopened = await fixture.save(
+        { proposalFormKey: "group-proposals", proposalSubmissionWindow: { opensAt: null, closesAt: null } },
+        event.updatedAt,
+      );
+      expect(reopened.status).toBe(200);
+      expect((await readEventProposalCall(env.DB, fixture.eventId)).open).toBe(true);
+      const stale = await fixture.save({ proposalSubmissionWindow: { opensAt: null, closesAt } });
+      expect(stale.status).toBe(409);
+      expect((await readEventProposalCall(env.DB, fixture.eventId)).open).toBe(true);
+    },
+  );
+
+  it.each([null, "another-proposal-form"])(
+    "keeps changing a group-owned form selection in group management (%s)",
+    async (proposalFormKey) => {
+      const fixture = await groupProposalCall();
+      const response = await fixture.save({ proposalFormKey });
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ error: { code: "EVENT_MANAGED_BY_GROUP" } });
+      expect((await readEventProposalCall(env.DB, fixture.eventId)).open).toBe(true);
+    },
+  );
+
+  it("rejects deadline changes without event write permission or with an invalid window", async () => {
+    const fixture = await groupProposalCall();
+    const forbidden = await callApi(env, "/api/v1/events/other-group-form-call/settings", {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${fixture.token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        expectedUpdatedAt: fixture.updatedAt,
+        proposalSubmissionWindow: { opensAt: null, closesAt: at(-1) },
+      }),
+    });
+    expect(forbidden.status).toBe(403);
+    const invalid = await fixture.save({ proposalSubmissionWindow: { opensAt: at(2), closesAt: at(1) } });
+    expect(invalid.status).toBe(400);
+    expect((await readEventProposalCall(env.DB, fixture.eventId)).open).toBe(true);
+    expect((await readEventProposalCall(env.DB, fixture.otherEventId)).open).toBe(true);
+  });
+
   it("is open only while a placed proposal form's window is open on a public, unfinished event", async () => {
     const open = await insertEvent({ slug: "open-call" });
     const closesAt = at(7);
