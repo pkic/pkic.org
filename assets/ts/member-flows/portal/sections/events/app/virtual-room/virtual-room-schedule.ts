@@ -70,6 +70,23 @@ export function chooseLocation(
   return known(requested.room) ?? known(sessionRoom) ?? locations[0]?.id ?? null;
 }
 
+/**
+ * The session a reader followed a link to, when it is not on at `now`: it has ended or has not started,
+ * so the room is showing something else. Null when it is on, or when no session was asked for.
+ */
+export function requestedSessionNotice(
+  agenda: Pick<AgendaSnapshot, "occurrences"> | null,
+  sessionId: string | null,
+  now: number,
+): { session: RoomSession; state: "ended" | "upcoming" } | null {
+  const session = sessionId ? agenda?.occurrences.find((occurrence) => occurrence.id === sessionId) : undefined;
+  if (!session?.startAt || !session.endAt) return null;
+  const instant = new Date(now).toISOString();
+  if (instant >= session.endAt) return { session: session as RoomSession, state: "ended" };
+  if (instant < session.startAt) return { session: session as RoomSession, state: "upcoming" };
+  return null;
+}
+
 /** The credited people of a session, as one line. */
 export function sessionSpeakerLine(session: Pick<AgendaOccurrence, "speakers">): string {
   return session.speakers.map((speaker) => speaker.displayName).join(", ");

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { agendaOccurrenceMedia, agendaOccurrenceRequiredEquipment } from "../../assets/shared/event-agenda-media";
+import {
+  agendaOccurrenceMedia,
+  agendaOccurrenceRequiredEquipment,
+  nextOnlineJoinBoundary,
+  sessionOnlineJoinOpen,
+} from "../../assets/shared/event-agenda-media";
 import { withinAgendaEventWindow } from "../../assets/shared/event-agenda-event-window";
 import { agendaSessionContent } from "../../assets/shared/public-agenda-content";
 import {
@@ -44,6 +49,38 @@ const snapshot = agendaSnapshotSchema.parse({
 });
 const inherits = snapshot.occurrences[0]!;
 const variant = (patch: Partial<AgendaOccurrence>) => ({ ...inherits, ...patch });
+
+describe("session online join window", () => {
+  const start = "2026-12-01T09:00:00.000Z";
+  const end = "2026-12-01T10:00:00.000Z";
+  it.each([
+    ["2026-12-01T08:44:59.999Z", false],
+    ["2026-12-01T08:45:00.000Z", true],
+    ["2026-12-01T09:00:00.000Z", true],
+    ["2026-12-01T09:59:59.999Z", true],
+    ["2026-12-01T10:00:00.000Z", false],
+  ])("offers joining at %s only inside the window", (now, open) => {
+    expect(sessionOnlineJoinOpen(start, end, Date.parse(now))).toBe(open);
+  });
+  it("schedules the next opening or closing, with no further wake after the end", () => {
+    expect(nextOnlineJoinBoundary(start, end, Date.parse("2026-12-01T08:00:00.000Z"))).toBe(
+      Date.parse("2026-12-01T08:45:00.000Z"),
+    );
+    expect(nextOnlineJoinBoundary(start, end, Date.parse("2026-12-01T08:45:00.000Z"))).toBe(Date.parse(end));
+    expect(nextOnlineJoinBoundary(start, end, Date.parse(end))).toBeNull();
+  });
+  it("does not offer joining for missing, invalid, or reversed session times", () => {
+    for (const [from, until] of [
+      [null, end],
+      [start, null],
+      ["invalid", end],
+      [end, start],
+      [start, start],
+    ]) {
+      expect(sessionOnlineJoinOpen(from, until, Date.parse(start))).toBe(false);
+    }
+  });
+});
 
 describe("session media follow the primary location", () => {
   it("inherits planned media and the virtual-room link while the session has no plan", () => {

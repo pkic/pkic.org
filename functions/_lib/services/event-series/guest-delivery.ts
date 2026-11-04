@@ -2,6 +2,7 @@ import { queuedCapabilityTokenBoundToSecret } from "../../auth/capability-links"
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import type { DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
+import { emailInstant } from "../../email/plain-text";
 
 const MAX_INVITATION_CAPABILITY_TTL_SECONDS = 30 * 24 * 60 * 60;
 
@@ -14,6 +15,8 @@ interface GuestInvitationDeliveryInput {
   guestName: string;
   eventName: string;
   startsAt: string;
+  /** The series' IANA zone: the email states the meeting's time on the clock it was agreed in. */
+  timezone: string;
   occurrenceId: string;
   appBaseUrl: string;
   personalUrl?: string;
@@ -44,7 +47,7 @@ export async function prepareMeetingGuestInvitationDelivery(db: DatabaseLike, in
     data: {
       guestName: input.guestName,
       eventName: input.eventName,
-      startsAt: input.startsAt,
+      startsAt: emailInstant(input.startsAt, input.timezone),
       invitationUrl,
     },
     capabilityLinkValues: [invitationUrl],

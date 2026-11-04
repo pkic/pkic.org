@@ -199,36 +199,21 @@ export function formatTenure(
 
 /**
  * An instant in the viewer's own locale and zone, or an em dash.
- * `seconds` widens the time for audit trails; `zoneName` names the viewer's
- * zone (used where a page shows a converted-to-local time next to UTC
- * source text, so the reader knows whose clock is shown).
+ * `seconds` widens the time for audit trails. The viewer's zone is always named.
  */
 export function formatDateTime(
   value: string | null | undefined,
-  options: { seconds?: boolean; zoneName?: boolean; fullDate?: boolean } = {},
+  options: { seconds?: boolean; fullDate?: boolean } = {},
 ): string {
   if (!value) return EMPTY;
   const date = toDate(value);
   if (!date) return EMPTY;
-  if (options.zoneName) {
-    // dateStyle/timeStyle cannot be combined with timeZoneName, so the
-    // zone-labeled variant spells out equivalent component options.
-    return date.toLocaleString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      ...(options.seconds ? { second: "2-digit" as const } : {}),
-      timeZoneName: "short",
-    });
-  }
   /*
    * The month by name and the 24-hour clock, the way every other date in the
-   * app reads ("Oct 7, 2026, 10:27" in an en-US browser). The short date style
-   * wrote "10/7/26, 10:27 AM" in management lists beside "Oct 11, 2026" and an
-   * agenda on the 24-hour clock, and a numeric date reads month-first or
-   * day-first depending on who is looking.
+   * app reads ("Oct 7, 2026, 10:27 CEST" in an en-US browser). The zone is
+   * always named: the same instant reads differently to staff in different
+   * zones, and an unlabeled time is read as the event's or the reader's at
+   * random.
    */
   return date.toLocaleString(undefined, {
     ...(options.fullDate ? { weekday: "long" as const } : {}),
@@ -239,6 +224,7 @@ export function formatDateTime(
     minute: "2-digit",
     ...(options.seconds ? { second: "2-digit" as const } : {}),
     hourCycle: "h23",
+    timeZoneName: "short",
   });
 }
 
@@ -440,7 +426,7 @@ export function isLocalTimeFormat(value: string | null | undefined): value is Lo
 
 export function formatLocalTime(value: string, format: LocalTimeFormat, until?: string | null): string {
   if (format === "weekday") return formatWeekday(value);
-  if (format === "date-time") return formatDateTime(value, { zoneName: true });
+  if (format === "date-time") return formatDateTime(value);
   if (format === "time") return formatTimeOfDay(value);
   return until ? formatDateRange(value, until) : formatCalendarDate(value);
 }

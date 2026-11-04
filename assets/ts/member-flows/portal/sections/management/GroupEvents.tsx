@@ -14,8 +14,8 @@ import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { usePortalHashLocation } from "../../hash-location";
-import { fmt } from "../../ui";
-
+import { formatDateTimeInZone } from "../../../../../shared/format-date";
+import { eventClock } from "../../../../../shared/event-clock";
 import { EventScopeToggle, eventScopeActions, useEventScope } from "../events/EventScopeToggle";
 import { lazy, Suspense } from "preact/compat";
 const loadEventWorkspace = () =>
@@ -186,7 +186,7 @@ export function GroupEvents({
             header: past ? "Date" : "Next",
             cell: (event) =>
               event.nextOccurrenceAt || event.startsAt
-                ? fmt(event.nextOccurrenceAt ?? event.startsAt)
+                ? formatDateTimeInZone(event.nextOccurrenceAt ?? event.startsAt, eventClock(event))
                 : "Not scheduled",
             width: "fit",
             sort: {

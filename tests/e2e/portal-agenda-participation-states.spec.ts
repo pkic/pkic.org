@@ -13,6 +13,145 @@ import { signInToPortal } from "./helpers/portal-auth";
 import { prepareParticipationStates, registerStateAttendee } from "./helpers/participation-state-fixture";
 import { ownDomainEmail } from "./helpers/registration";
 import { sessionAdmissionNote } from "../../assets/shared/event-participation-link";
+import { createRegistrationEvent } from "./helpers/participation-state-fixture";
+import {
+  agendaOccurrenceCreateSchema,
+  agendaRoomCreateSchema,
+  agendaRevisionSchema,
+  agendaSnapshotSchema,
+} from "../../assets/shared/schemas/event-agenda";
+import { locationLiveStreamUpdateSchema } from "../../assets/shared/schemas/event-live-stream";
+import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
+import {
+  organizationCreateSchema,
+  organizationCreateResponseSchema,
+} from "../../assets/shared/schemas/organization-management";
+import { identityCreateSchema, identityMutationResponseSchema } from "../../assets/shared/schemas/identity";
+
+test("session stream joining follows its window and old links explain the requested session", async ({
+  page,
+}, info) => {
+  await signInAsE2eStaff(page, e2eAdminEmail("session-timing"));
+  const now = Date.now();
+  await page.clock.install({ time: now });
+  const event = await createRegistrationEvent(
+    page,
+    "session-timing",
+    [-1, 0, 1].map((offset) => ({
+      date: new Date(now + offset * 86_400_000).toISOString().slice(0, 10),
+      startTime: "00:00",
+      endTime: "23:55",
+    })),
+  );
+  const base = `/api/v1/events/${event.slug}/agenda`;
+  let agenda = agendaSnapshotSchema.parse(await (await page.request.get(base)).json());
+  const roomResponse = await page.request.post(`${base}/rooms`, {
+    data: agendaRoomCreateSchema.parse({
+      expectedRevision: agenda.revision,
+      name: "Timing test hall",
+      capacity: 120,
+      equipment: ["live_streaming"],
+    }),
+  });
+  expect(roomResponse.status(), await roomResponse.text()).toBe(200);
+  agenda = agendaSnapshotSchema.parse(await roomResponse.json());
+  const roomId = agenda.rooms[0]!.id;
+  const stream = await page.request.put(`${base}/rooms/${roomId}/stream`, {
+    data: locationLiveStreamUpdateSchema.parse({ videoId: "dQw4w9WgXcQ", days: [] }),
+  });
+  expect(stream.status(), await stream.text()).toBe(200);
+  const sessions = [];
+  for (const [title, start, end] of [
+    ["Ended timing session", -60, -30],
+    ["Current timing session", -5, 5],
+    ["Future timing session", 30, 35],
+  ] as const) {
+    const response = await page.request.post(`${base}/occurrences`, {
+      data: agendaOccurrenceCreateSchema.parse({
+        expectedRevision: agenda.revision,
+        title,
+        description: "Synthetic session for online joining boundary verification.",
+        startAt: new Date(now + start * 60_000).toISOString(),
+        endAt: new Date(now + end * 60_000).toISOString(),
+        roomId,
+        admissionPolicy: "preference",
+        accessPolicy: "open",
+        speakerUserIds: [],
+      }),
+    });
+    expect(response.status(), await response.text()).toBe(200);
+    agenda = agendaSnapshotSchema.parse(await response.json());
+    sessions.push(agenda.occurrences.find((session) => session.title === title)!);
+  }
+  const published = await page.request.post(`${base}/publications`, {
+    data: agendaRevisionSchema.parse({ expectedRevision: agenda.revision }),
+  });
+  expect(published.status(), await published.text()).toBe(200);
+  const actor = userAuthSessionResponseSchema.parse(await (await page.request.get("/api/v1/auth/session")).json());
+  const organization = await page.request.post("/api/v1/organizations", {
+    data: organizationCreateSchema.parse({ name: `Synthetic Timing Services ${crypto.randomUUID().slice(0, 8)}` }),
+  });
+  expect(organization.status(), await organization.text()).toBe(201);
+  const organizationId = organizationCreateResponseSchema.parse(await organization.json()).organization.id;
+  const represented = await page.request.post(`/api/v1/organizations/${organizationId}/identities`, {
+    data: identityCreateSchema.parse({
+      userReference: "existing_user",
+      userId: actor.identity.id,
+      jobTitle: "Timing test attendee",
+      activation: { mode: "immediate", reason: "Synthetic timing regression fixture" },
+    }),
+  });
+  expect(represented.status(), await represented.text()).toBe(201);
+  const identityId = identityMutationResponseSchema.parse(await represented.json()).identityId;
+  await registerStateAttendee(page, event, e2eAdminEmail("session-timing"), { staticRelease: false, identityId });
+  // Keep the test independent of a third-party video player's network and consent behavior.
+  await page.route("https://www.youtube-nocookie.com/**", (route) =>
+    route.fulfill({ contentType: "text/html", body: "<p>Synthetic stream player</p>" }),
+  );
+  const capture = async (name: string) => {
+    for (const [width, height, device] of [
+      [1280, 900, "desktop"],
+      [375, 812, "phone"],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await page.screenshot({ path: info.outputPath(`${name}-${device}.png`), fullPage: true });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+  };
+  for (const session of sessions) {
+    await page.goto(`/portal/#/events/${event.slug}/agenda?session=${session.id}`);
+    const dialog = page.getByRole("dialog", { name: session.title, exact: true });
+    await expect(dialog).toBeVisible();
+    const join = dialog.getByRole("link", { name: "Join online", exact: true });
+    if (session.title === "Current timing session") {
+      await expect(join).toBeVisible();
+      await capture("join-online-current");
+      await join.click();
+      await expect(page.getByText("Current timing session", { exact: true }).first()).toBeVisible();
+    } else await expect(join).toBeHidden();
+  }
+  for (const session of [sessions[0]!, sessions[2]!]) {
+    await page.goto(`/portal/#/events/${event.slug}/virtual?room=${roomId}&session=${session.id}`);
+    const notice = page.getByRole("status").filter({ hasText: session.title });
+    await expect(notice).toContainText(session === sessions[0] ? "has ended" : "starts");
+    await expect(notice).toContainText("Timing test hall");
+    await capture(session === sessions[0] ? "room-ended-link" : "room-future-link");
+  }
+  await page.goto(`/portal/#/events/${event.slug}/agenda?session=${sessions[2]!.id}`);
+  const future = page.getByRole("dialog", { name: sessions[2]!.title, exact: true });
+  await expect(future).toBeVisible();
+  await expect(future.getByRole("link", { name: "Join online", exact: true })).toBeHidden();
+  await page.clock.fastForward(15 * 60_000 + 1000);
+  const joinFuture = future.getByRole("link", { name: "Join online", exact: true });
+  await expect(joinFuture).toBeVisible();
+  await joinFuture.click();
+  const notice = page.getByRole("status").filter({ hasText: sessions[2]!.title });
+  await expect(notice).toContainText("starts");
+  await page.clock.fastForward(15 * 60_000);
+  await expect(notice).toBeHidden();
+  await page.clock.fastForward(5 * 60_000);
+  await expect(notice).toContainText("has ended");
+});
 
 type Fixture = Awaited<ReturnType<typeof prepareParticipationStates>>;
 type Occurrence = Fixture["agenda"]["occurrences"][number];

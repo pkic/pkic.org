@@ -183,6 +183,21 @@ it("derives upcoming/live strips from the existing timer and refuses unknown end
   vi.advanceTimersByTime(30 * 60_000);
   expect(status.hidden).toBe(true);
 });
+it("offers the public stream join in the lead-in and removes it when the session ends", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime("2026-12-01T08:44:00.000Z");
+  const source = days();
+  source[0]!.slots[0]!.sessions[0]!.onlineAccessUrl = "/portal/#/events/example/virtual?session=first";
+  const root = mount(source);
+  dispose = initializeAgendaSessionMedia(root);
+  const joins = [...root.querySelectorAll<HTMLElement>("[data-agenda-media-during]")];
+  expect(joins.length).toBeGreaterThan(0);
+  expect(joins.every((join) => join.hidden)).toBe(true);
+  vi.advanceTimersByTime(60_000);
+  expect(joins.every((join) => !join.hidden)).toBe(true);
+  vi.advanceTimersByTime(45 * 60_000);
+  expect(joins.every((join) => join.hidden)).toBe(true);
+});
 it("opens the speaker's profile over the session on a normal button click and closes back to its trigger without opening or closing the session", () => {
   const root = mount();
   const parent = root.querySelector<HTMLDialogElement>("dialog.session-modal")!;

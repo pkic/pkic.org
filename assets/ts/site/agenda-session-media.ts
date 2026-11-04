@@ -1,6 +1,7 @@
 import { formatNumber } from "../../shared/format-number";
 import { formatClockInZone } from "../../shared/format-date";
 import { agendaZoneAbbreviation } from "../../shared/agenda-time-display";
+import { sessionOnlineJoinOpen } from "../../shared/event-agenda-media";
 
 /** Stop media when a shared session dialog closes or its recording becomes unavailable. */
 export function pauseAgendaSessionMedia(root: HTMLElement): void {
@@ -58,8 +59,9 @@ export function initializeAgendaSessionMedia(root: HTMLElement): () => void {
       card.querySelectorAll<HTMLElement>("[data-agenda-media-before]").forEach((element) => {
         element.hidden = !before;
       });
+      const joinOpen = sessionOnlineJoinOpen(card.dataset.agendaMediaStart, card.dataset.agendaMediaEnd, now);
       card.querySelectorAll<HTMLElement>("[data-agenda-media-during]").forEach((element) => {
-        element.hidden = !during;
+        element.hidden = !joinOpen;
       });
       const livePlanVisible = before || (during && !card.querySelector("[data-agenda-media-during]"));
       card.querySelectorAll<HTMLElement>("[data-agenda-media-live-plan]").forEach((element) => {

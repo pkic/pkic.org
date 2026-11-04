@@ -145,8 +145,8 @@ describe("friendly date formatting", () => {
     expect(formatMonthYear(null)).toBe("—");
   });
 
-  it("widens a date-time to seconds for audit trails and can name the viewer's zone", () => {
-    // The month by name and the 24-hour clock, as every other date in the app reads.
+  it("widens a date-time to seconds for audit trails and always names the viewer's zone", () => {
+    // The month by name, the 24-hour clock and the zone, as every other date in the app reads.
     expect(formatDateTime("2026-12-01T08:00:00.000Z")).toBe(
       new Date("2026-12-01T08:00:00.000Z").toLocaleString(undefined, {
         year: "numeric",
@@ -155,6 +155,7 @@ describe("friendly date formatting", () => {
         hour: "2-digit",
         minute: "2-digit",
         hourCycle: "h23",
+        timeZoneName: "short",
       }),
     );
     expect(formatDateTime("2026-12-01T20:00:00.000Z")).not.toMatch(/AM|PM/);
@@ -168,11 +169,8 @@ describe("friendly date formatting", () => {
         hour: "2-digit",
         minute: "2-digit",
         hourCycle: "h23",
+        timeZoneName: "short",
       }),
-    );
-    // The zone-labeled variant tells the reader whose clock is shown.
-    expect(formatDateTime("2026-12-01T08:00:00.000Z", { zoneName: true })).not.toBe(
-      formatDateTime("2026-12-01T08:00:00.000Z"),
     );
     expect(formatDateTime(null)).toBe("—");
     expect(formatDateTime("nonsense")).toBe("—");
@@ -194,7 +192,7 @@ describe("friendly date formatting", () => {
       formatCalendarDate("2026-09-04");
       formatMonthYear("2026-09-04");
       formatDateTime("2026-12-01T08:00:00.000Z", { seconds: true });
-      formatDateTime("2026-12-01T08:00:00.000Z", { zoneName: true });
+      formatDateTime("2026-12-01T08:00:00.000Z");
       formatDateTimeInZone("2026-12-01T08:00:00.000Z", "Europe/Amsterdam");
       expect(spy.mock.calls.length).toBeGreaterThanOrEqual(6);
       for (const call of spy.mock.calls) expect(call[0]).toBeUndefined();

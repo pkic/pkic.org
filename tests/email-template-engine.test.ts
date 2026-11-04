@@ -1,5 +1,6 @@
 import { analyzeTemplateReferences } from "../functions/_lib/email/template-references";
 import { describe, it, expect } from "vitest";
+import { emailInstant } from "../functions/_lib/email/plain-text";
 import {
   EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS,
   compileSimpleTemplate,
@@ -17,6 +18,23 @@ function expectRenderLimit(action: () => unknown): void {
   }
   expect(thrown).toMatchObject({ code: "EMAIL_TEMPLATE_RENDER_LIMIT_EXCEEDED", status: 422 });
 }
+
+describe("meeting email clock", () => {
+  it.each([
+    ["2026-03-28T08:00:00.000Z", "09:00"],
+    ["2026-03-29T07:00:00.000Z", "09:00"],
+  ])("renders the named meeting clock across daylight saving for %s", async (instant, time) => {
+    const data = JSON.parse(JSON.stringify({ startsAt: emailInstant(instant, "Europe/Amsterdam") }));
+    for (const mode of ["markdown", "html", "text"] as const) {
+      const result = await renderEmail("Meeting: {{startsAt}}", data, "{{{body_html}}}", mode);
+      expect(result.text).toContain(`${time} Amsterdam time`);
+      expect(result.text).not.toContain(instant);
+      expect(result.html).not.toContain("[object Object]");
+    }
+    expect(renderSubject("Meeting: {{startsAt}}", "Meeting", data)).toContain(`${time} Amsterdam time`);
+    expect(data.startsAt).toEqual(emailInstant(instant, "Europe/Amsterdam"));
+  });
+});
 
 describe("email template engine (compileSimpleTemplate)", () => {
   it("finds long unresolved loop tokens and deduplicates them across rendered outputs", () => {

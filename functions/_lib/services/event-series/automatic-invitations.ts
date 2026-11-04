@@ -5,7 +5,7 @@ import {
   outboundMeetingLocation,
 } from "../../../../assets/shared/meeting-calendar-policy";
 import { prepareBulkQueueEmailChunkStatements, processPendingOutboxBackground } from "../../email/outbox";
-import { emailPlainText } from "../../email/plain-text";
+import { emailInstant, emailPlainText } from "../../email/plain-text";
 import { all, first } from "../../db/queries";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { hasD1QueryCapacity, type D1QueryBudget } from "../../db/query-budget";
@@ -138,6 +138,8 @@ export async function runAutomaticMeetingInvitations(
     sequence: Math.max(series.calendar_revision, row.previous_sequence + 1),
   }));
   const definition = prepareSeriesCalendarDefinition(series, now, occurrences);
+  // Email text names each time on the series' own clock when it is rendered; the payload keeps the instants.
+  const inSeriesZone = (instant: string) => emailInstant(instant, series.timezone);
   const outbox = prepareBulkQueueEmailChunkStatements(
     db,
     deliveries.map((row) => ({
@@ -159,19 +161,20 @@ export async function runAutomaticMeetingInvitations(
           ? occurrences
               .filter((item) => item.updated_at >= row.previous_notice_at!)
               .map((item) => ({
-                startsAt: item.starts_at,
-                endsAt: item.ends_at,
+                startsAt: inSeriesZone(item.starts_at),
+                endsAt: inSeriesZone(item.ends_at),
                 cancelled: item.status === "cancelled",
                 location: emailPlainText(outboundMeetingLocation(item.location) ?? ""),
                 moved: item.starts_at !== item.recurrence_id,
-                originalStartsAt: item.recurrence_id,
+                originalStartsAt: inSeriesZone(item.recurrence_id),
               }))
           : [],
         cancelled: row.cancelled === 1,
         eventName: emailPlainText(series.event_name),
-        startsAt:
+        startsAt: inSeriesZone(
           occurrences.find((item) => item.status === "scheduled" && item.starts_at > now)?.starts_at ??
-          series.starts_at,
+            series.starts_at,
+        ),
         joinUrl: joinUrlFor(row),
       },
       capabilityLinkValues: [joinUrlFor(row)],

@@ -209,7 +209,7 @@ function MeetingsPanel() {
               <div class="pk-cluster">
                 <span class="pk-small">
                   {now >= Date.parse(meeting.nextStartsAt) ? "Happening now" : "Next"} (your time):{" "}
-                  {formatDateTime(meeting.nextStartsAt, { zoneName: true })}
+                  {formatDateTime(meeting.nextStartsAt)}
                 </span>
                 {formatRelativeDays(meeting.nextStartsAt) && (
                   <span class="pk-small pk-push">({formatRelativeDays(meeting.nextStartsAt)})</span>

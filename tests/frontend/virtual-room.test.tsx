@@ -226,6 +226,26 @@ describe("virtual room", () => {
     expect(chooseLocation(streams.locations, program.agenda, { room: "unknown", session: null })).toBe(HALL);
   });
 
+  it("says a linked session has ended, or when it starts, above what the room is showing now", async () => {
+    vi.setSystemTime(new Date("2027-01-20T10:30:00.000Z"));
+    hashLocation.current = `/events/summit/virtual?room=${HALL}&session=${KEYNOTE}`;
+    await open();
+    expect(host.querySelector(".pk-alert")?.textContent).toContain("Opening keynote has ended");
+    expect(nowPlaying()).toContain("Migration panel");
+    render(null, host);
+
+    vi.setSystemTime(new Date("2027-01-20T09:30:00.000Z"));
+    hashLocation.current = `/events/summit/virtual?room=${HALL}&session=${PANEL}`;
+    await open();
+    expect(host.querySelector(".pk-alert")?.textContent).toContain("Migration panel starts");
+    expect(host.querySelector(".pk-alert")?.textContent).toContain("Main hall");
+    render(null, host);
+
+    hashLocation.current = `/events/summit/virtual?room=${HALL}&session=${KEYNOTE}`;
+    await open();
+    expect(host.querySelector(".pk-alert")).toBeNull();
+  });
+
   it("opens a planned room before a stream is configured, counts down, and shows disabled interaction controls", async () => {
     waiting = true;
     vi.setSystemTime(new Date("2027-01-19T09:00:00.000Z"));

@@ -173,7 +173,11 @@ export async function registerStateAttendee(
   page: Page,
   fixture: Awaited<ReturnType<typeof createRegistrationEvent>>,
   email: string,
-  { staticRelease = true, organization }: { staticRelease?: boolean; organization?: string } = {},
+  {
+    staticRelease = true,
+    organization,
+    identityId,
+  }: { staticRelease?: boolean; organization?: string; identityId?: string } = {},
 ) {
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
   const placementResponse = await page.request.get(
@@ -182,7 +186,7 @@ export async function registerStateAttendee(
   expect(placementResponse.status()).toBe(200);
   const placement = eventFormsResponseSchema.parse(await placementResponse.json());
   expect(placement.event.id).toBe(fixture.eventId);
-  expect(placement.eventDays).toHaveLength(1);
+  expect(placement.eventDays.length).toBeGreaterThan(0);
   const answers: z.infer<typeof registrationCreateSchema>["customAnswers"] = {};
   const knownAnswers: Record<string, string> = {
     country: "US",
@@ -195,9 +199,9 @@ export async function registerStateAttendee(
   const submitted = await page.request.post(`/api/v1/events/${fixture.slug}/registrations`, {
     data: registrationCreateSchema.parse({
       email,
+      identityId,
       firstName: "Synthetic",
       lastName: "Attendee",
-      attendanceType: "in_person",
       dayAttendance: placement.eventDays.map((day) => ({ dayDate: day.dayDate, attendanceType: "in_person" })),
       customAnswers: answers,
       consents: placement.requiredTerms.map(({ termKey, version }) => ({ termKey, version })),

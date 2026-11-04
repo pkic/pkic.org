@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { agendaTimeZones } from "../../../../../../../shared/agenda-time-display";
 import { eventVirtualRoomRoute } from "../../../../../../../shared/event-participation-link";
-import { formatTimeRangeInZone } from "../../../../../../../shared/format-date";
+import { formatDateTimeInZone, formatTimeRangeInZone } from "../../../../../../../shared/format-date";
 import { locationStreamOn, virtualRoomResponseSchema } from "../../../../../../../shared/schemas/event-live-stream";
 import { personalAgendaProgramResponseSchema } from "../../../../../../../shared/schemas/event-personal-agenda";
 import { instantToCalendarDate, viewerTimeZone } from "../../../../../../../shared/timezone";
@@ -20,13 +20,20 @@ import { Spinner } from "../../../../../../components/Spinner";
 import { useBoundaryClock } from "../../../../../../hooks/useBoundaryClock";
 import { useData } from "../../../../../../hooks/useData";
 import { getJson } from "../../../../../../shared/api-client";
+import { Alert } from "../../../../../../ui/Alert";
 import { EmptyState } from "../../../../../../ui/EmptyState";
 import { Tabs } from "../../../../../../ui/Tabs";
 import { useSponsorDisplay } from "../../../../../sponsors-wall-data";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { VirtualRoomPanels } from "./VirtualRoomPanels";
 import { VirtualRoomNowPlaying, VirtualRoomPlayer } from "./VirtualRoomPlayer";
-import { chooseLocation, locationSessions, nextRoomBoundary, roomMoment } from "./virtual-room-schedule";
+import {
+  chooseLocation,
+  locationSessions,
+  nextRoomBoundary,
+  requestedSessionNotice,
+  roomMoment,
+} from "./virtual-room-schedule";
 import "../EventApp.css";
 import "./VirtualRoom.css";
 
@@ -87,8 +94,22 @@ export function VirtualRoom({ slug, eventName }: { slug: string; eventName: stri
   const moment = roomMoment(sessions, now);
   const viewerZone = agendaTimeZones(timeZone, viewerTimeZone(), "remote").primary.zone;
   const formatTime = (startAt: string, endAt: string) => formatTimeRangeInZone(startAt, endAt, viewerZone);
+  const requested = requestedSessionNotice(agenda, query.get("session"), now);
   return (
     <div class="pk-virtual-room">
+      {requested && (
+        <Alert
+          title={
+            requested.state === "ended"
+              ? `${requested.session.title} has ended`
+              : `${requested.session.title} starts ${formatDateTimeInZone(requested.session.startAt, viewerZone)}`
+          }
+        >
+          {requested.state === "ended"
+            ? `Below is what is on in ${room.name} now.`
+            : `Until then, below is what is on in ${room.name}.`}
+        </Alert>
+      )}
       {locations.length > 1 && (
         <Tabs
           class="pk-virtual-room__locations"
