@@ -22,6 +22,7 @@ export function ScannerLocationSelect({
   params,
   timeZone,
   disabled = false,
+  allowEmpty = true,
 }: {
   slug: string;
   targetId: string | null;
@@ -36,6 +37,7 @@ export function ScannerLocationSelect({
   /** The event's clock the session times are on. */
   timeZone?: ClockZone;
   disabled?: boolean;
+  allowEmpty?: boolean;
   onTimeZone?: (clock: ClockZone) => void;
 }) {
   return (
@@ -47,10 +49,10 @@ export function ScannerLocationSelect({
             searchLabel="Session"
             value={targetId}
             selectedLabel={label}
-            placeholder="Event entrance"
-            searchPlaceholder="Event entrance"
+            placeholder="Choose a session"
+            searchPlaceholder="Search sessions"
             disabled={disabled}
-            allowEmpty
+            allowEmpty={allowEmpty}
             onChange={onTarget}
             catalog={{
               endpoint: `/api/v1/events/${encodeURIComponent(slug)}/scans/targets`,

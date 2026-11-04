@@ -91,11 +91,14 @@ export function ScannerRecentScans({
   return (
     <section class="pk-stack pk-stack--snug" aria-label="Recent scans">
       <div class="pk-cluster pk-cluster--between">
-        <SectionHeading level={3}>Recent scans</SectionHeading>
+        <SectionHeading level={3}>Recent scans on this device</SectionHeading>
         {loadedScope === scope && queuedCount > 0 && (
           <span class="pk-small pk-muted">{formatNumber(queuedCount)} pending sync</span>
         )}
       </div>
+      <p class="pk-muted">
+        Only scans made in this browser for this event and your account appear here. Scans save automatically.
+      </p>
       {error && <Alert tone="warn">{error}</Alert>}
       {loading && rows.length === 0 && <p role="status">Loading recent scans…</p>}
       {rows.length > 0 && (

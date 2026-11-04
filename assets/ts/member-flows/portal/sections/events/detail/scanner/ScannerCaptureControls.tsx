@@ -1,5 +1,5 @@
 import type { ComponentChildren, ComponentProps } from "preact";
-import type { FieldPresentation } from "../../../../../../hooks/useContractForm";
+import type { ContractForm, FieldPresentation } from "../../../../../../hooks/useContractForm";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { Button } from "../../../../../../ui/Button";
 import { Checkbox } from "../../../../../../ui/Checkbox";
@@ -20,20 +20,27 @@ export function ScannerDiagnostics({
   pacing,
   preparation,
   unverifiedStart,
+  sound,
+  syncStatus,
 }: {
   session: ComponentProps<typeof ScannerSessionControls>;
   pacing: ComponentProps<typeof ScannerPacing>;
   preparation: ComponentProps<typeof ScannerPreparationStatus>;
   unverifiedStart?: () => void;
+  sound?: ComponentChildren;
+  syncStatus?: ComponentChildren;
 }) {
   return (
     <section aria-label="Recovery and diagnostics" class="pk-stack">
+      {syncStatus}
       <div class="pk-stack pk-stack--snug">
         <SectionHeading level={3}>Scanner session</SectionHeading>
         <ScannerSessionControls {...session} />
       </div>
       <div class="pk-stack pk-stack--snug">
         <SectionHeading level={3}>Feedback</SectionHeading>
+        <p class="pk-muted">These preferences save automatically in this browser.</p>
+        {sound}
         <ScannerPacing {...pacing} />
         {unverifiedStart && (
           <div class="pk-cluster">
@@ -90,17 +97,16 @@ export function ScannerCaptureControls({
         </Alert>
       ) : (
         <>
-          <ScannerSetup {...setup} />
-          <ScannerModeSelect {...mode} />
+          <ScannerSetup {...setup} allowedActions={mode.allowedActions} onAction={mode.onAction} onStart={start} />
         </>
       )}
       <div class="pk-cluster">
-        {mode.allowedActions?.includes(mode.action) && (
+        {(collector || mode.action === "lead") && mode.allowedActions?.includes(mode.action) && (
           <Button type="button" variant="primary" disabled={!canStart} onClick={start}>
             Start scanning
           </Button>
         )}
-        {children}
+        {(collector || mode.action === "lead") && children}
       </div>
       {preparing && <p role="status">Preparing scanner for this session…</p>}
       {cameraError && <p role="status">{cameraError}</p>}
@@ -119,8 +125,10 @@ export function ScannerManualControls({
   onClose,
   consent,
   inline = false,
+  handlers,
 }: {
   inline?: boolean;
+  handlers?: ContractForm<unknown>["handlers"];
   action: EventScanRequest["action"];
   busy: boolean;
   ready: boolean;
@@ -153,6 +161,7 @@ export function ScannerManualControls({
       <form
         class="pk-stack"
         noValidate
+        {...handlers}
         onSubmit={(event) => {
           event.preventDefault();
           onCapture();
@@ -172,7 +181,7 @@ export function ScannerManualControls({
   return (
     <>
       <Button type="button" variant="secondary" onClick={onOpen}>
-        Manual entry
+        Find attendee or badge
       </Button>
       <Dialog
         open={open}

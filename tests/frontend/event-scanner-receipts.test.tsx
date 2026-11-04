@@ -9,6 +9,36 @@ import {
   type EventScanRequest,
 } from "../../assets/shared/schemas/event-participation-scanning";
 describe("scanner foreground receipt and drain lifecycle", () => {
+  it("retains the last result after scanning resumes and updates it from a late server receipt", async () => {
+    const worker = new EventTarget();
+    vi.stubGlobal("navigator", { serviceWorker: worker, onLine: false });
+    await mount(true, ["attendance"]);
+    mocks.persist.mockImplementation(async (scan) => ({
+      scan: eventScanCaptureIntentSchema.parse(scan),
+      local: { outcome: "eligible", reason: "eligible", message: "Saved on this device" },
+    }));
+    await submit();
+    const scan = eventScanCaptureIntentSchema.parse(mocks.persist.mock.calls[0]![0]);
+    await vi.waitFor(() =>
+      expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Use a reader or paste a code"),
+    );
+    expect(host.querySelector(".pk-fast-scanner__last")?.textContent).toContain("scan saved on device");
+    await act(async () => {
+      worker.dispatchEvent(
+        new MessageEvent("message", {
+          data: eventScanResponseSchema.parse({
+            operationId: scan.operationId,
+            outcome: "denied",
+            reason: "revoked_badge",
+            recorded: true,
+            attendanceRecorded: false,
+          }),
+        }),
+      );
+    });
+    expect(host.querySelector(".pk-fast-scanner__last")?.textContent).toContain("Badge not valid");
+    expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Use a reader or paste a code");
+  });
   it.each([false, true])(
     "replaces provisional helper text with a matching foreground receipt (continuous=%s)",
     async (continuous) => {
@@ -60,7 +90,7 @@ describe("scanner foreground receipt and drain lifecycle", () => {
         await act(async () => {});
         expect(upload).toBeDefined();
       });
-      const feedback = host.querySelector(continuous ? ".pk-fast-scanner" : ".pk-event-scanner")!;
+      const feedback = host.querySelector(".pk-fast-scanner")!;
       expect(feedback.textContent).toContain("upload pending");
       await act(async () => {
         await upload!();

@@ -45,7 +45,15 @@ export function FastScannerView({
   onExceptionConfirm,
   onOperatorPause,
   preparation,
+  lastResult,
+  connectionStatus,
+  soundLabel,
+  onSound,
 }: {
+  lastResult?: EventScanResponse | null;
+  connectionStatus?: ComponentChildren;
+  soundLabel?: string;
+  onSound?: () => void;
   canRecordAttendance?: boolean;
   context: string;
   mode?: EventScanRequest["action"];
@@ -154,6 +162,7 @@ export function FastScannerView({
       <span class="pk-fast-scanner__tone pk-fast-scanner__tone--attention" aria-hidden="true" />
       <div class="pk-fast-scanner__stage" aria-hidden={operatorOpen ? true : undefined}>
         <img class="pk-fast-scanner__brand" src="/img/logo.svg" alt="PKI Consortium" width="1256" height="324" />
+        {connectionStatus}
         <p class="pk-fast-scanner__context">
           {context} · {scannerActionLabel(mode)}
         </p>
@@ -189,6 +198,9 @@ export function FastScannerView({
         )}
         {manualEntry && <div class="pk-fast-scanner__manual">{manualEntry}</div>}
         {recentScans && <div class="pk-fast-scanner__manual">{recentScans}</div>}
+        {!manualEntry && !recentScans && lastResult && (
+          <p class="pk-fast-scanner__last">Last scan: {scanFeedbackLabel(lastResult, mode)}</p>
+        )}
         <div class="pk-fast-scanner__actions">
           {cameraActive && !manualEntry && !recentScans && (
             <Button variant="secondary" onClick={onPreview}>
@@ -202,7 +214,7 @@ export function FastScannerView({
           )}
           {onManual && !manualEntry && !recentScans && (
             <Button variant="secondary" onClick={onManual}>
-              Manual entry
+              Find attendee or badge
             </Button>
           )}
           {onRecentScans && !recentScans && (
@@ -215,8 +227,13 @@ export function FastScannerView({
               Return to scanning
             </Button>
           )}
+          {onSound && (
+            <Button variant="secondary" onClick={onSound}>
+              {soundLabel}
+            </Button>
+          )}
           <Button variant="secondary" onClick={onExit}>
-            Exit
+            Close scanner
           </Button>
         </div>
         <div class="pk-fast-scanner__next">
@@ -367,7 +384,7 @@ export function FastScannerView({
             <Button variant="secondary" onClick={() => setOperatorOpen(false)}>
               Return to scanning
             </Button>
-            <Button onClick={onExit}>Exit</Button>
+            <Button onClick={onExit}>Close scanner</Button>
           </div>
         </HeadingOutline>
       </section>

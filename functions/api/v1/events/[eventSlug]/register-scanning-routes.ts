@@ -1,4 +1,5 @@
 import { ScannerFailureCreate } from "./scanner-failures";
+import { ScannerAttendeesGet, ScannerAttendeeBadgeGet } from "./scanner-attendees";
 import { EventScanCreate, ScannerTargetsGet } from "./scans";
 import { ScannerSuggestionsGet } from "./scanner-suggestions";
 import { OfflineEligibilityGet } from "./offline-eligibility";
@@ -18,6 +19,8 @@ export function registerScanningRoutes(openapi: ScanningRouter): void {
   openapi.get("/scanner/devices/sessions/:epochId", ScannerDeviceStatusGet);
   openapi.post("/scanner/devices/sessions/:epochId/closing", ScannerDeviceClosingPost);
   openapi.get("/scans/targets", ScannerTargetsGet);
+  openapi.get("/scans/attendees", ScannerAttendeesGet);
+  openapi.get("/scans/attendees/:userId/badge", ScannerAttendeeBadgeGet);
   openapi.get("/scans/suggestions", ScannerSuggestionsGet);
   openapi.get("/offline-eligibility", OfflineEligibilityGet);
 }

@@ -110,6 +110,8 @@ function hasValue(control: Control): boolean {
 export interface ContractFormOptions {
   /** Reveal a refused control behind a tab or disclosure before the hook focuses it. */
   revealField?: (name: string) => void;
+  /** Hybrid lookup fields can contain search text until a choice is made; show their contract errors on submit. */
+  deferUntilSubmit?: readonly string[];
   /**
    * A composer that sends on content (a chat message, a question): a field
    * the reader left empty says nothing, because empty is the resting state,
@@ -130,7 +132,7 @@ export function useContractForm<Schema extends z.ZodType>(
   body: unknown,
   options: ContractFormOptions = {},
 ): ContractForm<z.output<Schema>> {
-  const { fieldOf, quietWhenEmpty = false, revealField } = options;
+  const { fieldOf, quietWhenEmpty = false, revealField, deferUntilSubmit = [] } = options;
   const [touched, setTouched] = useState<Record<string, Touch>>({});
   const [refused, setRefused] = useState<Record<string, string>>({});
   const [showAll, setShowAll] = useState(false);
@@ -179,7 +181,7 @@ export function useContractForm<Schema extends z.ZodType>(
     // A server refusal shows whether or not the reader touched the field;
     // the contract's own verdict waits until they have.
     const quiet = quietWhenEmpty && !showAll && touched[name]?.hasValue !== true;
-    const seen = !quiet && (showAll || name in touched);
+    const seen = !quiet && (showAll || (!deferUntilSubmit.includes(name) && name in touched));
     const message = refused[name] ?? (seen ? issues[name] : undefined);
     if (message) return { state: "invalid", message };
     return seen && touched[name]?.hasValue ? { state: "ok" } : {};

@@ -1,4 +1,36 @@
 @layer components {
+  .pk-scanner-destinations .pk-action-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--pk-4);
+    max-width: 60rem;
+  }
+  .pk-scanner-destinations .pk-action-tile {
+    min-block-size: 10rem;
+    gap: var(--pk-2);
+  }
+  .pk-scanner-destinations .pk-action-tile__label {
+    font-size: var(--pk-text-lg);
+  }
+  .pk-scanner-destinations .pk-action-tile__icon svg {
+    width: var(--pk-7);
+    height: var(--pk-7);
+  }
+  .pk-scanner-connection {
+    font-size: var(--pk-text-sm);
+    margin-block: var(--pk-2) var(--pk-4);
+  }
+  @media (max-width: 40rem) {
+    .pk-scanner-destinations .pk-action-tiles {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--pk-3);
+    }
+    .pk-scanner-destinations .pk-action-tile {
+      min-block-size: 9rem;
+    }
+    .pk-scanner-destinations .pk-action-tile__label {
+      font-size: var(--pk-text-md);
+    }
+  }
   .pk-event-scanner {
     padding: var(--pk-6);
     border-radius: var(--pk-radius-lg);

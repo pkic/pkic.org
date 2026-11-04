@@ -1,3 +1,5 @@
+import { badgeCredentialSchema } from "../../../../assets/shared/schemas/badge-credential";
+import { hashBadgeCredential } from "./badge-hash";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { registrationJobTitleSql, registrationOrganizationSql } from "../registrations/selected-identity";
@@ -18,8 +20,15 @@ export async function badgeAttendees(db: DatabaseLike, eventId: string, raw: unk
   const search = query.q?.trim()
     ? buildD1TextSearchFilter(query.q, [name, "u.email", registrationOrganizationSql("reg")])
     : null;
-  const from = `FROM registrations reg JOIN users u ON u.id=reg.user_id WHERE reg.event_id=? AND ${badgeAttendeeEligibilitySql("reg", "u")} ${search ? `AND ${search.sql}` : ""}`;
-  const bindings = [eventId, ...(search?.bindings ?? [])];
+  const parsedBadge = badgeCredentialSchema.safeParse(query.q);
+  const badgeHash = parsedBadge.success ? await hashBadgeCredential(parsedBadge.data) : null;
+  const searchSql = search
+    ? badgeHash
+      ? `(${search.sql} OR EXISTS(SELECT 1 FROM event_badge_credentials badge WHERE badge.event_id=reg.event_id AND badge.user_id=u.id AND badge.credential_hash=? AND badge.revoked_at IS NULL AND badge.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')))`
+      : search.sql
+    : "";
+  const from = `FROM registrations reg JOIN users u ON u.id=reg.user_id WHERE reg.event_id=? AND ${badgeAttendeeEligibilitySql("reg", "u")} ${searchSql ? `AND ${searchSql}` : ""}`;
+  const bindings = [eventId, ...(search?.bindings ?? []), ...(badgeHash && search ? [badgeHash] : [])];
   const count = await first<{ total: number }>(db, `SELECT COUNT(*) AS total ${from}`, bindings);
   const users = await all<{
     id: string;
