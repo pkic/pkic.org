@@ -191,3 +191,27 @@ describe("provider-neutral mailing-list delivery", () => {
     expect(delivery.applyChange).not.toHaveBeenCalled();
   });
 });
+
+it("keeps archive-only primaries and aliases with no delivery, then removes both on unsubscribe", async () => {
+  await resetDb();
+  const userId = await subscriber();
+  await alias(userId);
+  await env.DB.prepare("UPDATE mailing_list_subscription_preferences SET preference = 'archive_only' WHERE user_id = ?")
+    .bind(userId)
+    .run();
+  const addresses = await listMailingListDeliveryAddresses(env.DB, listEmail);
+  expect(addresses).toHaveLength(2);
+  expect(addresses.every((address) => address.noDelivery === 1)).toBe(true);
+  const delivery = provider([ordinary("primary@example.test"), ordinary("archive@example.test")]);
+  await reconcileMailingListDelivery(delivery, listEmail, addresses, { limit: 25, dryRun: false });
+  for (const email of ["primary@example.test", "archive@example.test"])
+    expect(delivery.applyChange).toHaveBeenCalledWith(listEmail, {
+      email,
+      action: "disable_delivery",
+      delivery: "none",
+    });
+  await env.DB.prepare("UPDATE mailing_list_subscription_preferences SET preference = 'unsubscribed' WHERE user_id = ?")
+    .bind(userId)
+    .run();
+  expect(await listMailingListDeliveryAddresses(env.DB, listEmail)).toEqual([]);
+});

@@ -1,6 +1,9 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { createGoogleGroupsDeliveryProvider } from "../../functions/_lib/services/google-groups/directory-client";
+import {
+  createGoogleGroupsDirectoryClient,
+  createGoogleGroupsDeliveryProvider,
+} from "../../functions/_lib/services/google-groups/directory-client";
 const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const env = {
   GOOGLE_SERVICE_ACCOUNT_EMAIL: "reader@example.test",
@@ -78,4 +81,26 @@ describe("mailing-list provider adapter", () => {
       ).toHaveLength(state === "absent" ? 1 : 0);
     },
   );
+});
+
+it.each(["none", "all"] as const)("applies queued %s delivery to existing ordinary members", async (delivery) => {
+  const fetch = google({ role: "MEMBER", type: "USER", delivery_settings: delivery === "none" ? "ALL_MAIL" : "NONE" });
+  fetch.mockImplementation(async (url, init) => {
+    if (String(url) === "https://oauth2.googleapis.com/token")
+      return Response.json({ access_token: "synthetic-token" });
+    if (init?.method === "POST") return new Response(null, { status: 409 });
+    if (!init?.method) return Response.json({ role: "MEMBER", type: "USER" });
+    return Response.json({});
+  });
+  const client = await createGoogleGroupsDirectoryClient(env, fetch);
+  await client.applyMembership({
+    action: "add_to_list",
+    googleGroupEmail: list,
+    memberEmail: "person@example.test",
+    delivery,
+  });
+  expect(JSON.parse(String(fetch.mock.calls.find(([, request]) => request?.method === "PUT")![1]?.body))).toEqual({
+    delivery_settings: delivery === "none" ? "NONE" : "ALL_MAIL",
+  });
+  expect(fetch.mock.calls.some(([, request]) => request?.method === "DELETE")).toBe(false);
 });

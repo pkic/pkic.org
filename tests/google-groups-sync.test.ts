@@ -66,8 +66,9 @@ function stubGoogleFetch(directoryApiStatus: number): ReturnType<typeof vi.fn> {
         }),
       );
     }
-    if (!init?.method && directoryApiStatus >= 200 && directoryApiStatus < 300)
+    if (!init?.method && (directoryApiStatus === 409 || (directoryApiStatus >= 200 && directoryApiStatus < 300)))
       return Promise.resolve(Response.json({ role: "MEMBER", type: "USER" }));
+    if (init?.method === "PUT" && directoryApiStatus === 409) return Promise.resolve(Response.json({}));
     return Promise.resolve(new Response(null, { status: directoryApiStatus }));
   });
   vi.stubGlobal("fetch", fetchMock);

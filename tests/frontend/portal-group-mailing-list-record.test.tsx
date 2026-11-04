@@ -517,3 +517,49 @@ describe("group mailing-list record", () => {
     expect(container.querySelector(".pk-profile-header__title")?.textContent).toBe(activeList.label);
   });
 });
+
+it.each(["Allow archive access only", "Unsubscribe"])(
+  "confirms %s for the selected person and reloads the roster",
+  async (label) => {
+    const preference = label === "Unsubscribe" ? "unsubscribed" : "archive_only";
+    const calls = stubApi(activeList, () =>
+      json({
+        success: true,
+        subscription: {
+          mailingList: activeList,
+          eligible: true,
+          defaultSubscribed: true,
+          preference,
+          effectiveSubscribed: false,
+        },
+      }),
+    );
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <GroupMailingListRecord groupId={GROUP_ID} listId={LIST_ID} onLeave={() => {}} />
+      </>,
+    );
+    await settle();
+    await settle();
+    await act(() => buttonNamed(container, "Actions for Ada Lovelace").click());
+    await settle();
+    await act(() => {
+      const item = [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (node) => node.textContent?.trim() === label,
+      )!;
+      item.click();
+    });
+    await settle();
+    expect(calls.filter((call) => call.method === "PUT")).toHaveLength(0);
+    await act(() => buttonNamed(document, label).click());
+    await settle();
+    expect(calls.find((call) => call.method === "PUT")).toMatchObject({
+      body: { preference },
+      url: expect.objectContaining({
+        pathname: `/api/v1/groups/${GROUP_ID}/mailing-lists/${LIST_ID}/subscribers/${subscriber.user.id}`,
+      }),
+    });
+    expect(calls.filter((call) => call.method === "GET" && call.url.pathname.endsWith("/subscribers")).length).toBe(2);
+  },
+);

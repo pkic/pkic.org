@@ -1,4 +1,5 @@
-import { useCallback } from "preact/hooks";
+import { MailingListSubscriberActions } from "./MailingListSubscriberActions";
+import { useCallback, useRef } from "preact/hooks";
 import type { CollectionLoader } from "../../../../hooks/useServerCollection";
 import { getJson } from "../../../../shared/api-client";
 import {
@@ -6,9 +7,8 @@ import {
   type MailingListSubscriber,
   type MailingListSubscribersResponse,
 } from "../../../../../shared/schemas/mailing-lists";
-import { ApiDataTable } from "../../../../components/ApiDataTable";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { EmptyState } from "../../../../ui/EmptyState";
-import { Badge } from "../../../../ui/Badge";
 import { PersonCell } from "../../../../ui/PersonCell";
 
 /** The person, named the way the rest of the portal names people: their name, with the address under it. */
@@ -25,8 +25,9 @@ function personName(subscriber: MailingListSubscriber): string {
  */
 function standingReason(subscriber: MailingListSubscriber): string {
   if (!subscriber.eligible) return "Not eligible for this list";
-  if (subscriber.preference === "subscribed") return "Asked to be subscribed";
-  if (subscriber.preference === "unsubscribed") return "Asked to be unsubscribed";
+  if (subscriber.preference === "subscribed") return "Subscription preference";
+  if (subscriber.preference === "archive_only") return "Archive access only";
+  if (subscriber.preference === "unsubscribed") return "Unsubscription preference";
   return subscriber.defaultSubscribed ? "List default" : "Not subscribed by default";
 }
 
@@ -42,12 +43,15 @@ export function GroupMailingListSubscribers({
   listId,
   onData,
   onLoadStart,
+  disabled = false,
 }: {
   groupId: string;
   listId: string;
   onData: (response: MailingListSubscribersResponse) => void;
   onLoadStart: () => void;
+  disabled?: boolean;
 }) {
+  const actions = useRef<ApiTableActions | null>(null);
   const load = useCallback<CollectionLoader>(
     (url, signal, schema) => {
       onLoadStart();
@@ -57,6 +61,7 @@ export function GroupMailingListSubscribers({
   );
   return (
     <ApiDataTable
+      actionsRef={actions}
       urlState="mailing-subscribers"
       load={load}
       onData={onData}
@@ -86,9 +91,13 @@ export function GroupMailingListSubscribers({
           // The word carries it: a reader who cannot separate the hues still
           // reads "Subscribed" or "Not subscribed".
           cell: (subscriber) => (
-            <Badge tone={subscriber.subscribed ? "ok" : "neutral"}>
-              {subscriber.subscribed ? "Subscribed" : "Not subscribed"}
-            </Badge>
+            <span>
+              {subscriber.eligible && subscriber.preference === "archive_only"
+                ? "Archive access only"
+                : subscriber.subscribed
+                  ? "Subscribed"
+                  : "Not subscribed"}
+            </span>
           ),
           width: "fit",
           sort: { asc: "subscribed", desc: "-subscribed" },
@@ -102,6 +111,21 @@ export function GroupMailingListSubscribers({
           },
         },
         { header: "Because", cell: standingReason },
+        {
+          header: "Actions",
+          width: "fit",
+          cell: (subscriber) => (
+            <MailingListSubscriberActions
+              groupId={groupId}
+              listId={listId}
+              subscriber={subscriber}
+              disabled={disabled}
+              onChanged={async () => {
+                await actions.current?.reload();
+              }}
+            />
+          ),
+        },
       ]}
       rowKey={(subscriber) => subscriber.user.id}
       empty={

@@ -493,3 +493,100 @@ describe("group mailing-list management routes", () => {
     await transitionGroupMailingList(env.DB, staff, group.id, created.id, { transition: "archive" });
   });
 });
+
+describe("mailing-list subscriber actions", () => {
+  it("lets the chair change delivery, keeps archive membership, and audits the target", async () => {
+    const admin = await actor(`subscriber-admin-${crypto.randomUUID()}@example.test`, "admin");
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Subscriber actions",
+      visibility: "public",
+    });
+    const chair = await seedPersona(env.DB, "groupLead", { groupId: group.id });
+    const person = await seedPersona(env.DB, "groupLead", { groupId: group.id });
+    const list = await createGroupMailingList(env.DB, admin, group.id, {
+      email: `subscribers-${crypto.randomUUID()}@lists.example.test`,
+      label: "Discussion",
+      purpose: "group",
+      subscriptionDefault: "group_members",
+    });
+    const endpoint = `/api/v1/groups/${group.id}/mailing-lists/${list.id}/subscribers/${person.userId}`;
+    await env.DB.prepare(`INSERT INTO google_groups_observed_membership(user_id, google_group_email, confirmed_subscribed_at, unsubscribed_at, unsubscribe_source, suppressed)
+      VALUES (?, ?, '2026-11-01T00:00:00.000Z', '2026-11-02T00:00:00.000Z', 'provider_absence', 1)`)
+      .bind(person.userId, list.email)
+      .run();
+    for (const preference of ["archive_only", "subscribed", "unsubscribed", "inherit"] as const) {
+      const response = await jsonRequest(endpoint, "PUT", { preference }, chair.token!);
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(await response.json()).toMatchObject({
+        subscription: {
+          eligible: true,
+          preference: preference === "inherit" ? null : preference,
+          effectiveSubscribed: preference === "subscribed" || preference === "inherit",
+        },
+      });
+      expect(
+        await env.DB.prepare(
+          "SELECT suppressed FROM google_groups_observed_membership WHERE user_id = ? AND google_group_email = ?",
+        )
+          .bind(person.userId, list.email)
+          .first(),
+      ).toMatchObject({ suppressed: 0 });
+      const desired = await env.DB.prepare(
+        "SELECT desired_action FROM google_groups_membership_desired_state WHERE user_id = ? AND google_group_email = ?",
+      )
+        .bind(person.userId, list.email)
+        .first<{ desired_action: string }>();
+      expect(desired?.desired_action).toBe(preference === "unsubscribed" ? "remove_from_list" : "add_to_list");
+      if (preference !== "inherit") {
+        expect(
+          await env.DB.prepare(
+            "SELECT updated_by_user_id FROM mailing_list_subscription_preferences WHERE user_id = ? AND mailing_list_id = ?",
+          )
+            .bind(person.userId, list.id)
+            .first(),
+        ).toMatchObject({ updated_by_user_id: chair.userId });
+      }
+    }
+    const selfEndpoint = `/api/v1/groups/${group.id}/mailing-lists/${list.id}/subscription`;
+    expect((await jsonRequest(selfEndpoint, "PUT", { preference: "archive_only" }, person.token!)).status).toBe(200);
+  });
+
+  it("rejects a nonmanager, a chair from another group, and ineligible archive access", async () => {
+    const admin = await actor(`subscriber-auth-${crypto.randomUUID()}@example.test`, "admin");
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Subscriber permissions",
+      visibility: "public",
+    });
+    const otherGroup = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Other group",
+      visibility: "public",
+    });
+    const chair = await seedPersona(env.DB, "groupLead", { groupId: group.id });
+    const otherChair = await seedPersona(env.DB, "groupLead", { groupId: otherGroup.id });
+    const outsider = await insertUser(env.DB, `subscriber-outsider-${crypto.randomUUID()}@example.test`);
+    const list = await createGroupMailingList(env.DB, admin, group.id, {
+      email: `private-${crypto.randomUUID()}@lists.example.test`,
+      label: "Discussion",
+      purpose: "group",
+    });
+    const endpoint = `/api/v1/groups/${group.id}/mailing-lists/${list.id}/subscribers/${outsider}`;
+    expect((await jsonRequest(endpoint, "PUT", { preference: "archive_only" }, otherChair.token!)).status).toBe(403);
+    expect((await jsonRequest(endpoint, "PUT", { preference: "archive_only" }, chair.token!)).status).toBe(403);
+    const userToken = await token(outsider);
+    expect((await jsonRequest(endpoint, "PUT", { preference: "unsubscribed" }, userToken)).status).toBe(401);
+    expect((await jsonRequest(endpoint, "PUT", { preference: "invalid" }, chair.token!)).status).toBe(400);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM mailing_list_subscription_preferences WHERE mailing_list_id = ?",
+      )
+        .bind(list.id)
+        .first(),
+    ).toMatchObject({ count: 0 });
+    expect((await jsonRequest(endpoint, "PUT", { preference: "unsubscribed" }, await token(admin.id))).status).toBe(
+      200,
+    );
+  });
+});

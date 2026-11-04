@@ -14,7 +14,7 @@ import { buildLiveAccessibleGroupResourceIdsCte } from "../resource-grants/acces
 import { EFFECTIVE_SUBSCRIPTION_CTE, EFFECTIVE_SUBSCRIPTION_VALUE_SQL } from "./projection";
 
 interface EffectiveSubscriptionRow extends MailingListRow {
-  preference: "subscribed" | "unsubscribed" | null;
+  preference: import("../../../../assets/shared/schemas/mailing-lists").MailingListPreferenceSelection | null;
   eligible: number;
   default_subscribed: number;
   effective_subscribed: number;

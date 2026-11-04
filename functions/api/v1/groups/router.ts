@@ -36,7 +36,10 @@ import {
   GroupMailingListPreferenceUpdate,
   GroupMailingListUpdate,
 } from "./[groupId]/mailing-lists/[listId]";
-import { GroupMailingListSubscribersList } from "./[groupId]/mailing-lists/[listId]/subscribers";
+import {
+  GroupMailingListSubscriberUpdate,
+  GroupMailingListSubscribersList,
+} from "./[groupId]/mailing-lists/[listId]/subscribers";
 import { GroupMailingListTransitionPost } from "./[groupId]/mailing-lists/[listId]/transitions";
 import { GroupMailingListManagementList } from "./[groupId]/mailing-lists/management";
 import { GroupAutomaticEnrollmentPreference } from "./[groupId]/automatic-enrollment";
@@ -158,6 +161,7 @@ openapi.get("/:groupId/mailing-lists", GroupMailingListSubscriptions);
 openapi.get("/:groupId/mailing-lists/management", GroupMailingListManagementList);
 openapi.post("/:groupId/mailing-lists", GroupMailingListCreate);
 openapi.put("/:groupId/mailing-lists/:listId/subscription", GroupMailingListPreferenceUpdate);
+openapi.put("/:groupId/mailing-lists/:listId/subscribers/:userId", GroupMailingListSubscriberUpdate);
 openapi.get("/:groupId/mailing-lists/:listId/subscribers", GroupMailingListSubscribersList);
 openapi.post("/:groupId/mailing-lists/:listId/transitions", GroupMailingListTransitionPost);
 openapi.get("/:groupId/mailing-lists/:listId", GroupMailingListGet);

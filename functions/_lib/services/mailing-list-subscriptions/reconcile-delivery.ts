@@ -11,6 +11,7 @@ export interface MailingListDeliveryPlanEntry {
   userId?: string;
   action: MailingListDeliveryChange["action"] | "unchanged" | "protected" | "unsubscribed";
   alias: boolean;
+  delivery?: "all" | "none";
 }
 
 export function planMailingListDelivery(
@@ -22,14 +23,19 @@ export function planMailingListDelivery(
   return [...new Set([...expected.keys(), ...actual.keys()])].sort().map((email) => {
     const target = expected.get(email),
       member = actual.get(email);
-    const alias = Boolean(target?.noDelivery);
-    const base = { email, alias, ...(target ? { userId: target.userId, primaryEmail: target.primaryEmail } : {}) };
+    const alias = Boolean(target && target.email !== target.primaryEmail);
+    const base = {
+      email,
+      alias,
+      delivery: target?.noDelivery ? ("none" as const) : ("all" as const),
+      ...(target ? { userId: target.userId, primaryEmail: target.primaryEmail } : {}),
+    };
     if (member?.protected) return { ...base, action: "protected" };
     const left = target?.confirmedSubscribed && !actual.has(target.primaryEmail);
     if (left && !alias) return { ...base, action: "unsubscribed" };
     if (!target || left) return { ...base, action: member ? "unsubscribe" : "unchanged" };
     if (!member) return { ...base, action: "subscribe" };
-    if (alias && member.delivery !== "none") return { ...base, action: "disable_delivery" };
+    if (target.noDelivery && member.delivery !== "none") return { ...base, action: "disable_delivery" };
     return { ...base, action: "unchanged" };
   });
 }
@@ -71,7 +77,7 @@ export async function reconcileMailingListDelivery(
         await provider.applyChange(listEmail, {
           email: entry.email,
           action: entry.action as MailingListDeliveryChange["action"],
-          ...(entry.alias ? { delivery: "none" as const } : {}),
+          ...(entry.action !== "unsubscribe" && entry.delivery === "none" ? { delivery: "none" as const } : {}),
         });
       }
       if (entry.action === "subscribe") present.add(entry.email);

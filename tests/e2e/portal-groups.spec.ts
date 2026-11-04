@@ -21,6 +21,7 @@
  * @covers groups.8.6
  * @covers groups.8.7
  */
+import { mailingListResponseSchema } from "../../assets/shared/schemas/mailing-lists";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { openRow, runRowAction } from "./helpers/data-table";
@@ -448,5 +449,63 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     // rest of the path.
     await page.goto("/portal/#/groups/pqc/overview");
     await expect(page).toHaveURL(new RegExp(`/portal/#/groups/${PQC_GROUP_ID}/overview$`), { timeout: 10_000 });
+  });
+
+  test("a manager changes mailing-list delivery through each person's actions menu", async ({ page }) => {
+    const suffix = uniqueSuffix();
+    const email = `list-member-${suffix}@example.test`,
+      name = `Mailing Member ${suffix}`;
+    await gotoAsAdmin(page);
+    const person = await approveMemberThroughReview(page, { email, name, organizationName: `Mailing Org ${suffix}` });
+    const created = await page.evaluate(
+      async ({ groupId, suffix }) => {
+        const response = await fetch(`/api/v1/groups/${groupId}/mailing-lists`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            email: `actions-${suffix}@lists.example.test`,
+            label: `Delivery actions ${suffix}`,
+            purpose: "custom",
+            subscriptionDefault: "none",
+          }),
+        });
+        return { status: response.status, body: await response.json() };
+      },
+      { groupId: PQC_GROUP_ID, suffix },
+    );
+    expect(created.status).toBe(201);
+    const { mailingList } = mailingListResponseSchema.parse(created.body);
+    await page.goto(`/portal/#/groups/${PQC_GROUP_ID}/mailing-lists/${mailingList.id}`);
+    await page.getByPlaceholder("Search subscribers…").fill(email);
+    const row = page.getByRole("row").filter({ hasText: name });
+    await expect(row).toBeVisible();
+    const endpoint = `/api/v1/groups/${PQC_GROUP_ID}/mailing-lists/${mailingList.id}/subscribers/${person.userId}`;
+    for (const [label, status] of [
+      ["Allow archive access only", "Archive access only"],
+      ["Unsubscribe", "Not subscribed"],
+      ["Subscribe", "Subscribed"],
+      ["Use group default", "Not subscribed"],
+    ]) {
+      await row.getByRole("button", { name: `Actions for ${name}`, exact: true }).click();
+      await page.getByRole("menuitem", { name: label, exact: true }).click();
+      const saved = page.waitForResponse(
+        (response) => new URL(response.url()).pathname === endpoint && response.request().method() === "PUT",
+      );
+      await acceptConfirmDialog(page, label);
+      expect((await saved).status()).toBe(200);
+      await expect(row.getByText(status, { exact: true }).first()).toBeVisible();
+      if (label === "Allow archive access only") {
+        await page.reload();
+        await expect(row.getByText(status, { exact: true }).first()).toBeVisible();
+        await row.getByRole("button", { name: `Actions for ${name}`, exact: true }).click();
+        await page.screenshot({ path: test.info().outputPath("subscriber-actions-desktop.png") });
+        await page.keyboard.press("Escape");
+        await page.setViewportSize({ width: 375, height: 812 });
+        await page.getByRole("button", { name: `Actions for ${name}`, exact: true }).click();
+        await page.screenshot({ path: test.info().outputPath("subscriber-actions-phone.png") });
+        await page.keyboard.press("Escape");
+        await page.setViewportSize({ width: 1280, height: 900 });
+      }
+    }
   });
 });

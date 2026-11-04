@@ -176,6 +176,7 @@ export function GroupMailingListRecord({
                     key={list.id}
                     groupId={groupId}
                     listId={list.id}
+                    disabled={!list.active || list.archivedAt !== null}
                     onData={receiveSubscribers}
                     onLoadStart={clearRepresentation}
                   />

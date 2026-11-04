@@ -42,9 +42,9 @@ export const MAILING_LIST_MODERATION_POLICY_LABELS = {
 /**
  * What a member may choose for one list. `inherit` is not a stored preference
  * but the absence of one: it hands the list back to the group's own default,
- * which is why a subscription row only ever holds the other two.
+ * while the other choices are stored. Archive-only retains membership without email delivery.
  */
-export const MAILING_LIST_PREFERENCE_SELECTIONS = ["inherit", "subscribed", "unsubscribed"] as const;
+export const MAILING_LIST_PREFERENCE_SELECTIONS = ["inherit", "subscribed", "archive_only", "unsubscribed"] as const;
 export const mailingListPreferenceSelectionSchema = z.enum(MAILING_LIST_PREFERENCE_SELECTIONS);
 export type MailingListPreferenceSelection = z.infer<typeof mailingListPreferenceSelectionSchema>;
 export const mailingListPreferenceSchema = mailingListPreferenceSelectionSchema.exclude(["inherit"]);
@@ -172,6 +172,7 @@ export const groupMailingListManagementRouteSchema = {
 };
 
 export const groupMailingListSubscriptionsRouteSchema = {
+  "x-pkic-mcp": { expose: true, readonly: true },
   ...requiresSession(),
   tags: ["Groups"],
   summary: "List the caller's effective subscriptions for one group",
@@ -185,6 +186,7 @@ export const groupMailingListSubscriptionsRouteSchema = {
 };
 
 export const groupMailingListPreferenceRouteSchema = {
+  "x-pkic-mcp": { expose: true, readonly: false },
   ...requiresSession(),
   tags: ["Groups"],
   summary: "Set or clear the caller's subscription preference",
@@ -287,6 +289,7 @@ export const mailingListSubscribersResponseSchema = paginatedResponseSchema(
 export type MailingListSubscribersResponse = z.infer<typeof mailingListSubscribersResponseSchema>;
 
 export const groupMailingListSubscribersRouteSchema = {
+  "x-pkic-mcp": { expose: true, readonly: true },
   ...requiresSession(),
   tags: ["Groups"],
   summary: "List who receives one group-owned mailing list",
@@ -297,5 +300,29 @@ export const groupMailingListSubscribersRouteSchema = {
       description: "A bounded page of the list's subscribers.",
       content: { "application/json": { schema: mailingListSubscribersResponseSchema } },
     },
+  },
+};
+
+/** A manager changes one user's preference through the same subscription policy. */
+export const groupMailingListSubscriberParamsSchema = groupMailingListParamsSchema.extend({ userId: databaseIdSchema });
+export const groupMailingListSubscriberUpdateRouteSchema = {
+  ...requiresSession(),
+  "x-pkic-mcp": { expose: true, readonly: false },
+  tags: ["Groups"],
+  summary: "Set a user's mailing-list subscription preference",
+  description:
+    "Requires management permission for the group and mailing list. Archive-only retains membership without email delivery. Eligibility still applies.",
+  request: {
+    params: groupMailingListSubscriberParamsSchema,
+    body: { required: true, content: { "application/json": { schema: mailingListPreferenceMutationSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Effective subscription after the manager's change.",
+      content: { "application/json": { schema: mailingListPreferenceMutationResponseSchema } },
+    },
+    "403": { description: "Management permission or subscription eligibility is required." },
+    "404": { description: "The group, list, or user is unavailable." },
+    "409": { description: "Authorization or eligibility changed while saving." },
   },
 };

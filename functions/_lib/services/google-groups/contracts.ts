@@ -59,6 +59,7 @@ export interface GoogleGroupsMembershipOperation {
   action: GoogleGroupsSyncAction;
   googleGroupEmail: string;
   memberEmail: string;
+  delivery?: "all" | "none";
 }
 
 export interface ProcessGoogleGroupsSyncResult {

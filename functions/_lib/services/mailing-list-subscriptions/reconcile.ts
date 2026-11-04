@@ -3,7 +3,7 @@ import { nowIso } from "../../utils/time";
 import { ALL_ACTIVE_USER_CAPACITIES_CTE } from "../membership/capacity-query";
 import {
   EFFECTIVE_SUBSCRIPTION_CTE,
-  EFFECTIVE_SUBSCRIPTION_VALUE_SQL,
+  EFFECTIVE_MEMBERSHIP_VALUE_SQL,
   mailingListDefaultSubscribedSql,
   mailingListEligibilitySql,
 } from "./projection";
@@ -18,7 +18,7 @@ export function prepareReconcileMailingListSubscriptionsStatement(
     .prepare(
       `${EFFECTIVE_SUBSCRIPTION_CTE},
        desired_subscriptions AS (
-         SELECT id, email, ${EFFECTIVE_SUBSCRIPTION_VALUE_SQL} AS effective_subscribed
+         SELECT id, email, ${EFFECTIVE_MEMBERSHIP_VALUE_SQL} AS effective_subscribed
            FROM effective_subscriptions
        )
        INSERT INTO google_groups_sync_queue
@@ -73,10 +73,8 @@ export function prepareReconcileGroupMailingListSubscriptionsStatement(
        ),
        effective_subscriptions AS (
          SELECT user_id, list_id, email, CASE
-           WHEN active = 0 OR archived_at IS NOT NULL OR eligible = 0 THEN 0
-           WHEN preference = 'subscribed' THEN 1
-           WHEN preference = 'unsubscribed' THEN 0
-           ELSE default_subscribed
+           WHEN active = 0 OR archived_at IS NOT NULL THEN 0
+           ELSE ${EFFECTIVE_MEMBERSHIP_VALUE_SQL}
          END AS subscribed
            FROM projected
        )
@@ -132,10 +130,8 @@ export function prepareReconcileMailingListStatement(db: DatabaseLike, listId: s
        ),
        effective AS (
          SELECT user_id, list_id, email, CASE
-           WHEN active = 0 OR archived_at IS NOT NULL OR eligible = 0 THEN 0
-           WHEN preference = 'subscribed' THEN 1
-           WHEN preference = 'unsubscribed' THEN 0
-           ELSE default_subscribed
+           WHEN active = 0 OR archived_at IS NOT NULL THEN 0
+           ELSE ${EFFECTIVE_MEMBERSHIP_VALUE_SQL}
          END AS subscribed
          FROM projected
        )

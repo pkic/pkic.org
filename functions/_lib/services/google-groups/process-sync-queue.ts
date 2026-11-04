@@ -137,10 +137,23 @@ export async function processGoogleGroupsSyncQueue(
           }
         }
       }
+      const preference = await first<{ preference: string | null }>(
+        db,
+        `SELECT preference.preference
+        FROM mailing_lists list LEFT JOIN mailing_list_subscription_preferences preference
+          ON list.id = preference.mailing_list_id AND preference.user_id = ?
+        WHERE list.email = ?`,
+        [claim.user_id, claim.google_group_email],
+      );
       await directoryClient.applyMembership({
         action: claim.action,
         googleGroupEmail: claim.google_group_email,
         memberEmail,
+        ...(preference?.preference === "archive_only"
+          ? { delivery: "none" as const }
+          : preference
+            ? { delivery: "all" as const }
+            : {}),
       });
       if (!liveClaim) {
         succeeded++;

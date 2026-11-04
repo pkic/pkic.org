@@ -26,7 +26,7 @@ interface MailingListSubscriberRow {
   last_name: string | null;
   organization_name: string | null;
   headshot_r2_key: string | null;
-  preference: "subscribed" | "unsubscribed" | null;
+  preference: import("../../../../assets/shared/schemas/mailing-lists").MailingListPreferenceSelection | null;
   eligible: number;
   default_subscribed: number;
   subscribed: number;

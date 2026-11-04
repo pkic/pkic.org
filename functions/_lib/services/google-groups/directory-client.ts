@@ -95,17 +95,35 @@ async function callDirectoryApi(
   action: GoogleGroupsSyncAction,
   googleGroupEmail: string,
   memberEmail: string,
+  delivery?: "all" | "none",
 ): Promise<void> {
   const membersUrl = `${GOOGLE_DIRECTORY_GROUPS_URL}/${encodeURIComponent(googleGroupEmail)}/members`;
   if (action === "add_to_list") {
     const response = await fetchImpl(membersUrl, {
       method: "POST",
       headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
-      body: JSON.stringify({ email: memberEmail, role: "MEMBER" }),
+      body: JSON.stringify({
+        email: memberEmail,
+        role: "MEMBER",
+        ...(delivery ? { delivery_settings: delivery === "none" ? "NONE" : "ALL_MAIL" } : {}),
+      }),
     });
     // Membership application is idempotent: an existing member is already in the desired state.
     if (!response.ok && response.status !== 409) {
       throw new Error(`Directory API add-member failed: HTTP ${response.status}`);
+    }
+    if (delivery && response.status === 409) {
+      const current = await fetchImpl(`${membersUrl}/${encodeURIComponent(memberEmail)}`, {
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+      if (!current.ok) throw new Error(`Directory API member read failed: HTTP ${current.status}`);
+      if (isProtectedDirectoryMember((await current.json()) as DirectoryMemberRow)) return;
+      const updated = await fetchImpl(`${membersUrl}/${encodeURIComponent(memberEmail)}`, {
+        method: "PUT",
+        headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ delivery_settings: delivery === "none" ? "NONE" : "ALL_MAIL" }),
+      });
+      if (!updated.ok) throw new Error(`Directory API delivery update failed: HTTP ${updated.status}`);
     }
     return;
   }
@@ -187,8 +205,8 @@ export async function createGoogleGroupsDirectoryClient(
 ): Promise<GoogleGroupsDirectoryClient> {
   const accessToken = await getServiceAccountAccessToken(env, fetchImpl);
   return {
-    applyMembership: ({ action, googleGroupEmail, memberEmail }) =>
-      callDirectoryApi(fetchImpl, accessToken, action, googleGroupEmail, memberEmail),
+    applyMembership: ({ action, googleGroupEmail, memberEmail, delivery }) =>
+      callDirectoryApi(fetchImpl, accessToken, action, googleGroupEmail, memberEmail, delivery),
     listMembers: (googleGroupEmail, maxPages = 25) =>
       listDirectoryMembers(fetchImpl, accessToken, googleGroupEmail, maxPages),
   };

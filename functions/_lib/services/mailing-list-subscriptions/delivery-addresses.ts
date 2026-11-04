@@ -18,6 +18,7 @@ export async function listMailingListDeliveryAddresses(db: DatabaseLike, listEma
     `${ALL_ACTIVE_USER_CAPACITIES_CTE},
     eligible_subscribers AS (
       SELECT person.id, lower(person.email) AS email,
+        CASE WHEN preference.preference = 'archive_only' THEN 1 ELSE 0 END AS noDelivery,
         EXISTS (SELECT 1 FROM google_groups_observed_membership observed
           WHERE observed.user_id = person.id AND observed.google_group_email = list.email
             AND observed.confirmed_subscribed_at IS NOT NULL) AS confirmedSubscribed
@@ -27,13 +28,13 @@ export async function listMailingListDeliveryAddresses(db: DatabaseLike, listEma
       WHERE person.active = 1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL
         AND list.active = 1 AND list.archived_at IS NULL
         AND ${mailingListEligibilitySql("list", "person.id")}
-        AND CASE WHEN preference.preference = 'subscribed' THEN 1
+        AND CASE WHEN preference.preference IN ('subscribed', 'archive_only') THEN 1
                  WHEN preference.preference = 'unsubscribed' THEN 0
                  ELSE ${mailingListDefaultSubscribedSql("list", "person.id")} END = 1
         AND NOT EXISTS (SELECT 1 FROM google_groups_observed_membership observed
           WHERE observed.user_id = person.id AND observed.google_group_email = list.email AND observed.suppressed = 1)
     ), expected_addresses AS (
-      SELECT id AS userId, email, email AS primaryEmail, 0 AS noDelivery, confirmedSubscribed FROM eligible_subscribers
+      SELECT id AS userId, email, email AS primaryEmail, noDelivery, confirmedSubscribed FROM eligible_subscribers
       UNION ALL
       SELECT subscriber.id, lower(address.email), subscriber.email, 1, subscriber.confirmedSubscribed FROM user_emails address
         JOIN eligible_subscribers subscriber ON subscriber.id = address.user_id
