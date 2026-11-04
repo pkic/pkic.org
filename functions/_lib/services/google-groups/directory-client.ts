@@ -89,6 +89,7 @@ async function getServiceAccountAccessToken(
   return readAccessToken(await response.json());
 }
 
+/** Apply membership idempotently; refuse protected delivery changes that the adapter cannot fulfill. */
 async function callDirectoryApi(
   fetchImpl: typeof fetch,
   accessToken: string,
@@ -117,7 +118,14 @@ async function callDirectoryApi(
         headers: { authorization: `Bearer ${accessToken}` },
       });
       if (!current.ok) throw new Error(`Directory API member read failed: HTTP ${current.status}`);
-      if (isProtectedDirectoryMember((await current.json()) as DirectoryMemberRow)) return;
+      const existing = (await current.json()) as DirectoryMemberRow;
+      if (isProtectedDirectoryMember(existing)) {
+        const expectedDelivery = delivery === "none" ? "NONE" : "ALL_MAIL";
+        if (existing.delivery_settings !== expectedDelivery) {
+          throw new Error("Directory API delivery update unavailable for protected member");
+        }
+        return;
+      }
       const updated = await fetchImpl(`${membersUrl}/${encodeURIComponent(memberEmail)}`, {
         method: "PUT",
         headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
@@ -199,6 +207,7 @@ async function listDirectoryMembers(
   return { emails, members, complete: false };
 }
 
+/** Bind authenticated membership operations and complete roster reads to one provider session. */
 export async function createGoogleGroupsDirectoryClient(
   env: ConfiguredGoogleServiceAccountEnv,
   fetchImpl: typeof fetch = fetch,

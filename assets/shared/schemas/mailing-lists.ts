@@ -42,7 +42,7 @@ export const MAILING_LIST_MODERATION_POLICY_LABELS = {
 /**
  * What a member may choose for one list. `inherit` is not a stored preference
  * but the absence of one: it hands the list back to the group's own default,
- * while the other choices are stored. Archive-only retains membership without email delivery.
+ * while the other choices are stored. `archive_only` retains membership without email delivery.
  */
 export const MAILING_LIST_PREFERENCE_SELECTIONS = ["inherit", "subscribed", "archive_only", "unsubscribed"] as const;
 export const mailingListPreferenceSelectionSchema = z.enum(MAILING_LIST_PREFERENCE_SELECTIONS);
@@ -271,6 +271,7 @@ export const mailingListSubscriberSchema = z.object({
   defaultSubscribed: z.boolean(),
   preference: mailingListPreferenceSchema.nullable(),
   subscribed: z.boolean(),
+  suppressed: z.boolean(),
 });
 export type MailingListSubscriber = z.infer<typeof mailingListSubscriberSchema>;
 
@@ -311,7 +312,7 @@ export const groupMailingListSubscriberUpdateRouteSchema = {
   tags: ["Groups"],
   summary: "Set a user's mailing-list subscription preference",
   description:
-    "Requires management permission for the group and mailing list. Archive-only retains membership without email delivery. Eligibility still applies.",
+    "Requires management permission for the group and mailing list. `archive_only` retains membership without email delivery. Eligibility still applies.",
   request: {
     params: groupMailingListSubscriberParamsSchema,
     body: { required: true, content: { "application/json": { schema: mailingListPreferenceMutationSchema } } },

@@ -30,6 +30,7 @@ interface MailingListSubscriberRow {
   eligible: number;
   default_subscribed: number;
   subscribed: number;
+  suppressed: number;
 }
 
 /**
@@ -120,6 +121,7 @@ export async function listMailingListSubscribers(
                    ORDER BY organization_name COLLATE NOCASE, organization_id
                )) AS organization_name,
                preference.preference AS preference,
+               COALESCE(observed.suppressed, 0) AS suppressed,
                ${mailingListEligibilitySql("list", "person.id")} AS eligible,
                ${mailingListDefaultSubscribedSql("list", "person.id")} AS default_subscribed
           FROM eligible_input candidate
@@ -127,16 +129,18 @@ export async function listMailingListSubscribers(
           JOIN mailing_lists list ON list.id = ?
      LEFT JOIN mailing_list_subscription_preferences preference
             ON preference.mailing_list_id = list.id AND preference.user_id = person.id
+     LEFT JOIN google_groups_observed_membership observed
+            ON observed.user_id = person.id AND observed.google_group_email = list.email
       ),
       roster_state AS (
         SELECT user_id, email, first_name, last_name, headshot_r2_key, organization_name, preference, eligible,
-               default_subscribed, ${EFFECTIVE_SUBSCRIPTION_VALUE_SQL} AS subscribed
+               default_subscribed, suppressed, CASE WHEN suppressed = 1 THEN 0 ELSE ${EFFECTIVE_SUBSCRIPTION_VALUE_SQL} END AS subscribed
           FROM roster
       )`;
   const pageQuery: OffsetPageQuery = {
     sql: `${rosterCte}
       SELECT user_id, email, first_name, last_name, headshot_r2_key, organization_name, preference, eligible,
-             default_subscribed, subscribed
+             default_subscribed, subscribed, suppressed
         FROM roster_state
        ${conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""}`,
     bindings,
@@ -186,6 +190,7 @@ export async function listMailingListSubscribers(
       defaultSubscribed: row.default_subscribed === 1,
       preference: row.preference,
       subscribed: row.subscribed === 1,
+      suppressed: row.suppressed === 1,
     }),
   );
   return {

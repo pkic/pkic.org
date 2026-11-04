@@ -590,3 +590,58 @@ describe("mailing-list subscriber actions", () => {
     );
   });
 });
+
+it.each(["subscribed", "archive_only"] as const)(
+  "lets a chair rejoin a suppressed user with an unchanged %s preference",
+  async (preference) => {
+    const admin = await actor(`rejoin-admin-${crypto.randomUUID()}@example.test`, "admin");
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Rejoin subscriptions",
+      visibility: "public",
+    });
+    const chair = await seedPersona(env.DB, "groupLead", { groupId: group.id });
+    const person = await seedPersona(env.DB, "groupLead", { groupId: group.id });
+    const list = await createGroupMailingList(env.DB, admin, group.id, {
+      email: `rejoin-${crypto.randomUUID()}@lists.example.test`,
+      label: "Rejoin discussion",
+      purpose: "group",
+    });
+    const endpoint = `/api/v1/groups/${group.id}/mailing-lists/${list.id}/subscribers/${person.userId}`;
+    expect((await jsonRequest(endpoint, "PUT", { preference }, chair.token!)).status).toBe(200);
+    await env.DB.prepare(`INSERT INTO google_groups_observed_membership(user_id, google_group_email, confirmed_subscribed_at, unsubscribed_at, unsubscribe_source, suppressed)
+    VALUES (?, ?, '2026-11-01T00:00:00.000Z', '2026-11-02T00:00:00.000Z', 'provider_absence', 1)`)
+      .bind(person.userId, list.email)
+      .run();
+    const readRoster = () =>
+      callApi(
+        env,
+        `/api/v1/groups/${group.id}/mailing-lists/${list.id}/subscribers?q=${encodeURIComponent(person.email)}`,
+        { headers: { authorization: `Bearer ${chair.token!}` } },
+      );
+    expect(await (await readRoster()).json()).toMatchObject({
+      subscribers: [{ preference, subscribed: false, suppressed: true }],
+    });
+    const queued = () =>
+      env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM google_groups_sync_queue WHERE user_id = ? AND google_group_email = ?",
+      )
+        .bind(person.userId, list.email)
+        .first<{ count: number }>();
+    const before = (await queued())!.count;
+    expect((await jsonRequest(endpoint, "PUT", { preference }, chair.token!)).status).toBe(200);
+    expect(
+      await env.DB.prepare(
+        "SELECT suppressed, confirmed_subscribed_at, unsubscribed_at FROM google_groups_observed_membership WHERE user_id = ? AND google_group_email = ?",
+      )
+        .bind(person.userId, list.email)
+        .first(),
+    ).toMatchObject({ suppressed: 0, confirmed_subscribed_at: null, unsubscribed_at: null });
+    expect((await queued())!.count).toBe(before + 1);
+    expect(await (await readRoster()).json()).toMatchObject({
+      subscribers: [{ preference, subscribed: preference === "subscribed", suppressed: false }],
+    });
+    expect((await jsonRequest(endpoint, "PUT", { preference }, chair.token!)).status).toBe(200);
+    expect((await queued())!.count).toBe(before + 1);
+  },
+);

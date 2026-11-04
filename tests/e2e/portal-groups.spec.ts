@@ -481,7 +481,7 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     await expect(row).toBeVisible();
     const endpoint = `/api/v1/groups/${PQC_GROUP_ID}/mailing-lists/${mailingList.id}/subscribers/${person.userId}`;
     for (const [label, status] of [
-      ["Allow archive access only", "Archive access only"],
+      ["Turn off email delivery", "Email delivery off"],
       ["Unsubscribe", "Not subscribed"],
       ["Subscribe", "Subscribed"],
       ["Use group default", "Not subscribed"],
@@ -494,7 +494,7 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
       await acceptConfirmDialog(page, label);
       expect((await saved).status()).toBe(200);
       await expect(row.getByText(status, { exact: true }).first()).toBeVisible();
-      if (label === "Allow archive access only") {
+      if (label === "Turn off email delivery") {
         await page.reload();
         await expect(row.getByText(status, { exact: true }).first()).toBeVisible();
         await row.getByRole("button", { name: `Actions for ${name}`, exact: true }).click();

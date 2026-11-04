@@ -10,6 +10,7 @@ import { buildEnqueueGoogleGroupsSyncStatement } from "../google-groups/sync-que
 import { canMemberAccessGroupResource, prepareMemberGroupResourceAuthorizationGuard } from "../resource-grants/access";
 import { getEffectiveMailingListSubscription, resolveGroupId } from "./read-model";
 import { requireManagedGroupMailingList, groupMailingListWriteGuards } from "../mailing-list-management/authorization";
+import { isGoogleGroupsSuppressed } from "../google-groups/observe-membership";
 import { EFFECTIVE_SUBSCRIPTION_CTE } from "./projection";
 
 /** Persist one member preference and enqueue its provider-state transition atomically. */
@@ -46,7 +47,11 @@ export async function setMailingListPreference(
     throw new AppError(403, "MAILING_LIST_SUBSCRIPTION_INELIGIBLE", "The caller is not eligible for this mailing list");
   }
   const storedPreference = preference === "inherit" ? null : preference;
-  if (current.preference === storedPreference) return current;
+  if (
+    current.preference === storedPreference &&
+    (!requiresMembership || !(await isGoogleGroupsSuppressed(db, userId, current.mailingList.email)))
+  )
+    return current;
 
   const at = nowIso();
   const statements: StatementLike[] = [

@@ -14,6 +14,7 @@ export interface MailingListDeliveryPlanEntry {
   delivery?: "all" | "none";
 }
 
+/** Plan primary and alias delivery separately, preserving protected members and observed departures. */
 export function planMailingListDelivery(
   addresses: MailingListDeliveryAddress[],
   members: MailingListDeliveryMember[],

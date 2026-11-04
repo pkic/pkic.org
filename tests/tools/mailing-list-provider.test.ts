@@ -11,11 +11,12 @@ const env = {
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
 };
 const list = "group@example.test";
-function google(member: object | null) {
+function google(member: object | null, addStatus = 200) {
   return vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     if (String(url) === "https://oauth2.googleapis.com/token")
       return Response.json({ access_token: "synthetic-token" });
     if (!init?.method) return member ? Response.json(member) : new Response(null, { status: 404 });
+    if (init.method === "POST" && addStatus === 409) return new Response(null, { status: 409 });
     return Response.json({});
   });
 }
@@ -103,4 +104,30 @@ it.each(["none", "all"] as const)("applies queued %s delivery to existing ordina
     delivery_settings: delivery === "none" ? "NONE" : "ALL_MAIL",
   });
   expect(fetch.mock.calls.some(([, request]) => request?.method === "DELETE")).toBe(false);
+});
+
+it.each([
+  { role: "OWNER", type: "USER" },
+  { role: "MANAGER", type: "USER" },
+  { role: "MEMBER", type: "GROUP" },
+  { role: "UNKNOWN", type: "USER" },
+])("reports protected delivery mismatches for $role / $type without modifying privileges", async ({ role, type }) => {
+  for (const delivery of ["all", "none"] as const) {
+    const expected = delivery === "all" ? "ALL_MAIL" : "NONE";
+    for (const current of ["ALL_MAIL", "NONE"]) {
+      const fetch = google({ role, type, delivery_settings: current }, 409);
+      const client = await createGoogleGroupsDirectoryClient(env, fetch);
+      const change = client.applyMembership({
+        action: "add_to_list",
+        googleGroupEmail: list,
+        memberEmail: "protected@example.test",
+        delivery,
+      });
+      if (current === expected) await expect(change).resolves.toBeUndefined();
+      else await expect(change).rejects.toThrow("delivery update unavailable for protected member");
+      expect(fetch.mock.calls.some(([, request]) => ["PUT", "PATCH", "DELETE"].includes(request?.method ?? ""))).toBe(
+        false,
+      );
+    }
+  }
 });

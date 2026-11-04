@@ -10,6 +10,7 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { beginRecordEdit } from "./helpers/record-edit";
+import { mailingListSubscriberFixture } from "./helpers/mailing-list-fixture";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   mailingListLifecycleTransitionSchema,
@@ -56,20 +57,7 @@ const activeList: MailingList = {
   updatedAt: "2026-08-01T00:00:00.000Z",
 };
 
-const subscriber = {
-  user: {
-    id: "b0000000-0000-4000-8000-000000000001",
-    email: "ada@example.test",
-    first_name: "Ada",
-    last_name: "Lovelace",
-    organization_name: "Analytical Engines",
-    headshotUrl: "/api/v1/users/example/headshots/portrait.png",
-  },
-  eligible: true,
-  defaultSubscribed: true,
-  preference: null,
-  subscribed: true,
-};
+const subscriber = mailingListSubscriberFixture();
 
 const mounted: HTMLElement[] = [];
 
@@ -522,7 +510,7 @@ describe("group mailing-list record", () => {
   });
 });
 
-it.each(["Allow archive access only", "Unsubscribe"])(
+it.each(["Turn off email delivery", "Unsubscribe"])(
   "confirms %s for the selected person and reloads the roster",
   async (label) => {
     const preference = label === "Unsubscribe" ? "unsubscribed" : "archive_only";

@@ -13,9 +13,9 @@ const ACTIONS = [
   { preference: "subscribed", label: "Subscribe", description: "Receive email from this list." },
   {
     preference: "archive_only",
-    label: "Allow archive access only",
+    label: "Turn off email delivery",
     description:
-      "Keep list membership and archive access without receiving email. Existing posting permissions still apply.",
+      "Keep list membership without receiving email. Archive and posting access still follow the list’s policy.",
   },
   {
     preference: "inherit",
@@ -29,6 +29,7 @@ const ACTIONS = [
   },
 ] as const;
 
+/** Confirm per-person changes and allow an explicit rejoin after an external unsubscribe. */
 export function MailingListSubscriberActions({
   groupId,
   listId,
@@ -46,6 +47,7 @@ export function MailingListSubscriberActions({
   const [error, setError] = useState<Error | null>(null);
   const name =
     [subscriber.user.first_name, subscriber.user.last_name].filter(Boolean).join(" ") || subscriber.user.email;
+  /** Save through the shared contract, then reload the server's effective subscription state. */
   async function change(preference: MailingListPreferenceSelection, label: string, description: string) {
     if (
       !(await confirmAction({
@@ -81,7 +83,8 @@ export function MailingListSubscriberActions({
           disabled:
             disabled ||
             pending ||
-            (subscriber.preference ?? "inherit") === preference ||
+            ((subscriber.preference ?? "inherit") === preference &&
+              !(subscriber.suppressed && (preference === "subscribed" || preference === "archive_only"))) ||
             (!subscriber.eligible && (preference === "subscribed" || preference === "archive_only")),
           danger: preference === "unsubscribed",
           separatorBefore: preference === "unsubscribed",

@@ -25,8 +25,9 @@ function personName(subscriber: MailingListSubscriber): string {
  */
 function standingReason(subscriber: MailingListSubscriber): string {
   if (!subscriber.eligible) return "Not eligible for this list";
+  if (subscriber.suppressed) return "Unsubscribed outside the portal";
   if (subscriber.preference === "subscribed") return "Subscription preference";
-  if (subscriber.preference === "archive_only") return "Archive access only";
+  if (subscriber.preference === "archive_only") return "Email delivery off";
   if (subscriber.preference === "unsubscribed") return "Unsubscription preference";
   return subscriber.defaultSubscribed ? "List default" : "Not subscribed by default";
 }
@@ -92,8 +93,8 @@ export function GroupMailingListSubscribers({
           // reads "Subscribed" or "Not subscribed".
           cell: (subscriber) => (
             <span>
-              {subscriber.eligible && subscriber.preference === "archive_only"
-                ? "Archive access only"
+              {subscriber.eligible && !subscriber.suppressed && subscriber.preference === "archive_only"
+                ? "Email delivery off"
                 : subscriber.subscribed
                   ? "Subscribed"
                   : "Not subscribed"}
