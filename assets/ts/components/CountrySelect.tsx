@@ -31,8 +31,8 @@ export function CountrySelect({ value, onChange, disabled = false, ...control }:
 
   // A reset or a saved event replaces the value from outside; show its name.
   useEffect(() => {
-    if (isCountryCode(value) && labelFor(value) !== text) setText(labelFor(value));
-    if (!value && text) setText("");
+    if (isCountryCode(value)) setText(labelFor(value));
+    else if (!value) setText("");
   }, [value]);
 
   function choose(typed: string) {

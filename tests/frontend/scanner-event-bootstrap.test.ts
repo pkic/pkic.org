@@ -168,11 +168,14 @@ describe("scanner-only in-memory event bootstrap", () => {
     const bootstrap = createScannerEventBootstrap(() => session);
     const abort = new AbortController();
     const loading = bootstrap.load(slug, undefined, abort.signal);
-    const refusal = expect(loading).rejects.toThrow();
-    await vi.waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
-    abort.abort();
-    release(json(canonical));
-    await refusal;
+    await Promise.all([
+      expect(loading).rejects.toThrow(),
+      (async () => {
+        await vi.waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
+        abort.abort();
+        release(json(canonical));
+      })(),
+    ]);
     offline = true;
     await expect(bootstrap.load(slug)).rejects.toThrow("could not reach online services");
   });
@@ -187,12 +190,15 @@ describe("scanner-only in-memory event bootstrap", () => {
     );
     const bootstrap = createScannerEventBootstrap(() => session);
     const loading = bootstrap.load(slug);
-    const refusal = expect(loading).rejects.toThrow("Sign in again");
-    await vi.waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
-    session = { ...session!, sessionId: "10000000-0000-4000-8000-000000000005" };
-    bootstrap.sessionChanged();
-    release(json(canonical));
-    await refusal;
+    await Promise.all([
+      expect(loading).rejects.toThrow("Sign in again"),
+      (async () => {
+        await vi.waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
+        session = { ...session!, sessionId: "10000000-0000-4000-8000-000000000005" };
+        bootstrap.sessionChanged();
+        release(json(canonical));
+      })(),
+    ]);
     offline = true;
     await expect(bootstrap.load(slug)).rejects.toThrow("could not reach online services");
   });

@@ -89,7 +89,7 @@ function CreateTemplate({
         .catch(() => setKeyCheckStatus("idle"));
     }, 400);
     return () => clearTimeout(timer);
-  }, [key]);
+  }, [key, canRead]);
 
   // The catalog's verdict on the key sits beside the contract's. A key the
   // contract refuses is refused first; otherwise a key the catalog already

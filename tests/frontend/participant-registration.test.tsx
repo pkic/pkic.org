@@ -15,90 +15,15 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { eventFormsResponseSchema } from "../../assets/shared/schemas/forms";
 import {
-  registrationManageReadResponseSchema,
   registrationManageSchema,
   type RegistrationManageReadResponse,
 } from "../../assets/shared/schemas/registration";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { ParticipantRegistration } from "../../assets/ts/components/events/ParticipantRegistration";
+import { RegistrationIdentityChange } from "../../assets/ts/components/events/RegistrationIdentityChange";
+import { registrationIdentityChangeSchema } from "../../assets/shared/schemas/registration-identity";
+import { REGISTRATION_ID, ENDPOINT, EVENT, readResponse, FORMS } from "./helpers/participant-registration-fixtures";
 import { confirmationButton, openConfirmation } from "./helpers/confirm-dialog";
-
-const REGISTRATION_ID = "11111111-1111-4111-8111-111111111111";
-const ENDPOINT = `/api/v1/registrations/${REGISTRATION_ID}`;
-const EVENT = { id: "event-1", slug: "pqc-2026", name: "PQC Conference" };
-
-function readResponse(overrides: Partial<RegistrationManageReadResponse> = {}): RegistrationManageReadResponse {
-  return registrationManageReadResponseSchema.parse({
-    success: true,
-    sponsorSharing: { allowed: false, withdrawnAt: null },
-    registration: {
-      id: REGISTRATION_ID,
-      event_id: EVENT.id,
-      status: "registered",
-      cancellation_reason_code: null,
-      attendance_type: "in_person",
-      custom_answers: { dietary: "Vegetarian" },
-      isEmailVerified: true,
-    },
-    identityId: null,
-    event: EVENT,
-    user: {
-      email: "ada@example.test",
-      first_name: "Ada",
-      last_name: "Lovelace",
-      organization_name: "Analytical Engines",
-      job_title: "Engineer",
-    },
-    eventDays: [
-      {
-        dayDate: "2026-12-01",
-        label: "Day 1",
-        inPersonCapacity: 10,
-        sortOrder: 1,
-        attendanceOptions: [
-          { value: "in_person", label: "In person" },
-          { value: "on_demand", label: "On demand" },
-        ],
-      },
-    ],
-    dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person", label: "Day 1" }],
-    dayWaitlist: [],
-    waitlistHandledLast: false,
-    shareUrl: null,
-    headshotUrl: null,
-    ...overrides,
-  });
-}
-
-const FORMS = eventFormsResponseSchema.parse({
-  event: EVENT,
-  registrationPolicy: "optional",
-  purpose: "event_registration",
-  form: {
-    id: "22222222-2222-4222-8222-222222222222",
-    key: "registration",
-    title: "Registration",
-    description: null,
-    fields: [
-      {
-        id: "33333333-3333-4333-8333-333333333333",
-        key: "dietary",
-        label: "Dietary requirements",
-        fieldType: "text",
-        required: false,
-        options: null,
-        optionSource: null,
-        validation: null,
-        sortOrder: 1,
-        updatedAt: "2026-01-01T00:00:00.000Z",
-        archivedAt: null,
-      },
-    ],
-  },
-  requiredTerms: [],
-  allowedSessionTypes: [],
-  eventDays: [],
-});
 
 const mounted: HTMLElement[] = [];
 
@@ -191,6 +116,57 @@ afterEach(() => {
 });
 
 describe("ParticipantRegistration", () => {
+  it("retries a failed refresh without saving the representation twice", async () => {
+    const identity = {
+      id: "00000000-0000-4000-8000-000000000042",
+      organizationId: null,
+      organizationName: null,
+      jobTitle: null,
+    };
+    const fetch = vi.fn(
+      async (_url: string, init?: RequestInit) =>
+        new Response(
+          JSON.stringify(
+            init?.method === "PUT"
+              ? { success: true, identity, badgeVersion: "2026-01-01T00:00:00.000Z" }
+              : {
+                  success: true,
+                  sessionId: "00000000-0000-4000-8000-000000000045",
+                  expiresAt: "2099-12-31T23:59:59.000Z",
+                  idleExpiresAt: "2099-12-31T23:59:59.000Z",
+                  identity: { id: "00000000-0000-4000-8000-000000000041", email: "ada@example.test" },
+                  eventParticipation: true,
+                  actingIdentityId: identity.id,
+                  actingIdentities: [identity],
+                },
+          ),
+          { headers: { "content-type": "application/json" } },
+        ),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const changed = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    await act(() =>
+      render(
+        <RegistrationIdentityChange data={readResponse({ identityId: identity.id })} onChanged={changed} />,
+        container,
+      ),
+    );
+    await click(container.querySelector('button[aria-label="Change representation"]'));
+    await click(button(document, "Save changes"));
+    await vi.waitFor(() => expect(container.textContent).toContain("could not be refreshed"));
+    const writes = fetch.mock.calls.filter(([, init]) => init?.method === "PUT");
+    expect(writes).toHaveLength(1);
+    expect(registrationIdentityChangeSchema.parse(JSON.parse(String(writes[0]![1]?.body)))).toMatchObject({
+      identityId: identity.id,
+    });
+    await click(button(container, "Retry refresh"));
+    expect(changed).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
+    expect(button(container, "Retry refresh")).toBeNull();
+  });
   it("opens read-only, with the registration's details as a description list", async () => {
     installApi();
     const container = await mount();

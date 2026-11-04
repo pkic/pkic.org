@@ -47,7 +47,8 @@ function SessionBadgePrint({
   session: PortalSession;
 }) {
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/badges/${encodeURIComponent(credentialId)}`;
-  const request = useMemo(() => new AbortController(), [endpoint, session]);
+  const requestScope = useMemo(() => ({ endpoint, session, controller: new AbortController() }), [endpoint, session]);
+  const request = requestScope.controller;
   const record = useData(() => getJson(endpoint, badgeCredentialMetadataSchema, { signal: request.signal }), [request]);
   const [operationId] = useState(() => crypto.randomUUID());
   const [artifact, setArtifact] = useState<{
@@ -141,8 +142,10 @@ function SessionBadgePrint({
       return false;
     }
   }
+  const prepareRef = useRef(prepare);
+  prepareRef.current = prepare;
   useEffect(() => {
-    if (record.data?.status === "active" && record.data.reprintAvailable) void prepare();
+    if (record.data?.status === "active" && record.data.reprintAvailable) void prepareRef.current();
   }, [request, record.data]);
   if (record.loading) return <Spinner label="Loading badge credential…" />;
   if (!record.data) return <ErrorAlert error={record.error ?? "Badge credential unavailable."} />;

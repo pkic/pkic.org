@@ -1,3 +1,3 @@
 {
-  "columns": ["role", "first_name", "last_name", "job_title", "organisation", "attendee_id", "qr_content"]
+  "columns": ["role", "first_name", "last_name", "job_title", "organization", "attendee_id", "qr_content"]
 }

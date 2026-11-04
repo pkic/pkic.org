@@ -58,6 +58,7 @@ function MatrixCell({
   selected,
   id,
   threshold,
+  invalid,
   onSelect,
 }: {
   day: EventDay;
@@ -65,6 +66,7 @@ function MatrixCell({
   selected: boolean;
   id: string;
   threshold: number;
+  invalid?: boolean | "true" | "false" | "grammar" | "spelling";
   onSelect: () => void;
 }) {
   const option = row.value === NOT_ATTENDING ? row : day.attendanceOptions.find((option) => option.value === row.value);
@@ -94,6 +96,7 @@ function MatrixCell({
         data-option-label={option.label}
         data-waitlist={waiting ? "" : undefined}
         checked={selected}
+        aria-invalid={invalid}
         onChange={onSelect}
         aria-describedby={waiting ? `${id}-waitlist-${day.dayDate}-${option.value}` : undefined}
         label={
@@ -183,6 +186,7 @@ export function DayAttendancePicker({
       selected={selected[day.dayDate] === option.value}
       id={id}
       threshold={lowCapacityThreshold}
+      invalid={control?.["aria-invalid"]}
       onSelect={() => select(day, option)}
     />
   );
@@ -263,7 +267,6 @@ export function DayAttendancePicker({
       id={control?.id}
       role="group"
       aria-label="Attendance choices"
-      aria-invalid={control?.["aria-invalid"]}
       aria-describedby={control?.["aria-describedby"]}
       tabIndex={control?.["aria-invalid"] ? -1 : undefined}
     >

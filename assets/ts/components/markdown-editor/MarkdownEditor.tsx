@@ -105,6 +105,7 @@ export function MarkdownEditor({
   const [value, setValue] = useState(initialValue);
   const host = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  const initialEditorOptions = useRef({ templateInsertions, label, canvasClass });
   const current = useRef({ value, onChange });
   current.current = { value, onChange };
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -138,18 +139,19 @@ export function MarkdownEditor({
 
   useEffect(() => {
     if (!host.current?.isConnected || !extensions) return;
+    const { templateInsertions: initialTemplateInsertions } = initialEditorOptions.current;
     const instance = new Editor({
       element: host.current,
       injectCSS: false,
-      extensions: [...extensions, ...(templateInsertions ? [TemplateHighlighting] : [])],
+      extensions: [...extensions, ...(initialTemplateInsertions ? [TemplateHighlighting] : [])],
       content: resolveMarkdownShortcodes(current.current.value),
       contentType: "markdown",
       editorProps: {
         attributes: {
-          class: canvasClass,
+          class: initialEditorOptions.current.canvasClass,
           role: "textbox",
           "aria-multiline": "true",
-          "aria-label": label,
+          "aria-label": initialEditorOptions.current.label,
         },
         handleDrop(view, event) {
           const kind = event.dataTransfer?.getData(BLOCK_TRANSFER_TYPE);
@@ -163,7 +165,7 @@ export function MarkdownEditor({
       },
       onUpdate({ editor: updated }) {
         const serialized = plainAmpersands(updated.getMarkdown());
-        const next = templateInsertions ? restoreTemplateMarkdown(serialized) : serialized;
+        const next = initialTemplateInsertions ? restoreTemplateMarkdown(serialized) : serialized;
         setValue(next);
         current.current.onChange(next);
         if (input.current) {
@@ -185,6 +187,12 @@ export function MarkdownEditor({
     };
   }, [extensions]);
 
+  const {
+    id: controlId,
+    required: controlRequired,
+    "aria-invalid": controlInvalid,
+    "aria-describedby": controlDescribedBy,
+  } = control;
   useLayoutEffect(() => {
     if (!editor) return;
     editor.setEditable(!disabled, false);
@@ -193,28 +201,18 @@ export function MarkdownEditor({
         ...editor.options.editorProps,
         attributes: {
           class: canvasClass,
-          id: source ? `${control.id}-visual` : control.id,
+          id: source ? `${controlId}-visual` : controlId,
           role: "textbox",
           "aria-label": label,
           "aria-multiline": "true",
-          "aria-required": control.required ? "true" : "false",
+          "aria-required": controlRequired ? "true" : "false",
           "aria-disabled": String(disabled),
-          "aria-invalid": source ? "false" : (control["aria-invalid"] ?? "false"),
-          "aria-describedby": control["aria-describedby"] ?? "",
+          "aria-invalid": source ? "false" : (controlInvalid ?? "false"),
+          "aria-describedby": controlDescribedBy ?? "",
         },
       },
     });
-  }, [
-    canvasClass,
-    editor,
-    disabled,
-    source,
-    control.id,
-    control.required,
-    control["aria-invalid"],
-    control["aria-describedby"],
-    label,
-  ]);
+  }, [canvasClass, editor, disabled, source, controlId, controlRequired, controlInvalid, controlDescribedBy, label]);
 
   useLayoutEffect(() => {
     if (!editorRef) return;

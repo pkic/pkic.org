@@ -127,6 +127,14 @@ export function Sponsorships({
   detailId?: string;
   onNavigate: (segment?: string) => void;
 }) {
+  const tableRef = useRef<ApiTableActions | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState(readSelectedCompany);
+  useEffect(() => {
+    const sync = () => setSelectedCompany(readSelectedCompany());
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
+
   if (!canRead) {
     return canWrite ? <SponsorshipCreateOnly /> : null;
   }
@@ -146,17 +154,6 @@ export function Sponsorships({
     );
   }
   if (detailId) return <SponsorshipDetailPage detailId={detailId} canRead={canRead} canWrite={canWrite} />;
-
-  const tableRef = useRef<ApiTableActions | null>(null);
-
-  // The stable key and display label live in the address, so a new tab can
-  // render the same bounded company sponsorship query without list-page state.
-  const [selectedCompany, setSelectedCompany] = useState(readSelectedCompany);
-  useEffect(() => {
-    const sync = () => setSelectedCompany(readSelectedCompany());
-    window.addEventListener("hashchange", sync);
-    return () => window.removeEventListener("hashchange", sync);
-  }, []);
 
   // The list contract's two filters live in the columns they narrow: the
   // stage filter on the stages column, the type filter on the count of

@@ -53,7 +53,7 @@ function StaticPersonPreview({
       );
     }
     return () => events.abort();
-  }, [anchor, toggle, preview.hoverProps, preview.toggleProps]);
+  }, [anchor, toggle, preview.anchorRef, preview.hoverProps, preview.toggleProps]);
   return <>{preview.card}</>;
 }
 

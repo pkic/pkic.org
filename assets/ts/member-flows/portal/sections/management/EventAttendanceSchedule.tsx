@@ -143,6 +143,7 @@ function CapacityCell({
         ) : props.phone ? (
           <Checkbox
             role="switch"
+            aria-checked={enabled}
             checked={enabled}
             label={
               <span class="pk-sr-only">

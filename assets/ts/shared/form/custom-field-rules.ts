@@ -28,6 +28,6 @@ export function isFieldVisible(
   });
 }
 
-export function optionsFor(field: FormField): FieldOption[] {
-  return parseFormFieldOptions(field.options).filter((option) => option.active);
+export function optionsFor(options: FormField["options"]): FieldOption[] {
+  return parseFormFieldOptions(options).filter((option) => option.active);
 }

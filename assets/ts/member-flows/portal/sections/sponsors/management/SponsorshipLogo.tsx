@@ -13,7 +13,13 @@ import { PictureTile } from "../../../../../components/PictureTile";
  * sponsor list actually reads (organizations.logo_r2_key,
  * GET /api/v1/members/:id/logo).
  */
-export function SponsorshipLogo({ sponsorship, onChanged }: { sponsorship: Sponsorship; onChanged: () => void }) {
+export function SponsorshipLogo({
+  sponsorship,
+  onChanged,
+}: {
+  sponsorship: Sponsorship;
+  onChanged: () => Promise<void>;
+}) {
   const endpoint = `/api/v1/sponsors/${encodeURIComponent(sponsorship.id)}/logo`;
   const name = sponsorship.nonMemberName ?? "Sponsor";
 

@@ -200,7 +200,16 @@ export function RecordingSourceEditor({
           )}
         </FormSection>
       </form>
-      <form noValidate class="pk-form" {...form.handlers} onSubmit={save}>
+      <form
+        noValidate
+        class="pk-form"
+        {...form.handlers}
+        onSubmit={(event) => {
+          void save(event).catch((error: unknown) =>
+            setError(error instanceof Error ? error.message : "The recording could not be added."),
+          );
+        }}
+      >
         {meeting && (
           <Field label="Recording" {...form.of("recordingId")}>
             {(control) => (

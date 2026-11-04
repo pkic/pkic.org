@@ -107,6 +107,7 @@ export function ProposalDetailPage({
   const [localTab, setLocalTab] = useHashQueryParam("proposalSection", DEFAULT_TAB, DETAIL_TABS);
   const requestedTab: DetailTab = tabHref ? (isDetailTab(tab) ? tab : DEFAULT_TAB) : localTab;
   const [commandError, setCommandError] = useState<string | null>(null);
+  const [rosterRevision, setRosterRevision] = useState(0);
 
   const { data, loading, error, reload } = useData<ProposalResponse>(
     async () => getJson(proposalResourcePath(proposalId), eventProposalDetailResponseSchema),
@@ -213,7 +214,6 @@ export function ProposalDetailPage({
   const speakersPath = tabHref ? tabHref("speakers") : null;
   const invitePath = speakersPath && access.canFinalize ? `${speakersPath}/new` : null;
   const inviting = activeTab === "speakers" && segment === "new" && invitePath !== null;
-  const [rosterRevision, setRosterRevision] = useState(0);
 
   async function handleFlag(action: ProposalFlagAction) {
     const verb = action === "delete" ? "Delete" : action === "spam" ? "Mark as spam" : "Mark as duplicate";

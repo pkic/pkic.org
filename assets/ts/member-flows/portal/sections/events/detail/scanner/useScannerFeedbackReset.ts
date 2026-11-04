@@ -10,9 +10,10 @@ export function useScannerFeedbackReset(
 ) {
   const latest = useRef(reset);
   latest.current = reset;
+  const hasResult = !!result;
   useEffect(() => {
-    if (!enabled || (!result && !failed)) return;
+    if (!enabled || (!hasResult && !failed)) return;
     const timer = window.setTimeout(() => latest.current(), durationMs);
     return () => window.clearTimeout(timer);
-  }, [enabled, result?.operationId, result?.outcome, durationMs, failed]);
+  }, [enabled, hasResult, result?.operationId, result?.outcome, durationMs, failed]);
 }

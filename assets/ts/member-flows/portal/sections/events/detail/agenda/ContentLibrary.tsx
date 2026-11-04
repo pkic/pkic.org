@@ -319,7 +319,9 @@ export function ContentLibrary({
               <form
                 noValidate
                 {...form.handlers}
-                onSubmit={save}
+                onSubmit={(event) => {
+                  void save(event).catch((error: unknown) => setError(form.refuse(error)));
+                }}
                 class="pk-form"
                 aria-label={selected ? "Edit session content" : "New session content"}
               >
@@ -465,7 +467,9 @@ export function ContentLibrary({
               <form
                 noValidate
                 {...copyForm.handlers}
-                onSubmit={copy}
+                onSubmit={(event) => {
+                  void copy(event).catch((error: unknown) => setError(copyForm.refuse(error)));
+                }}
                 class="pk-form"
                 aria-label="Reuse content from another event"
               >

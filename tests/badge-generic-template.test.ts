@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createGenericBadgeTemplate } from "../assets/shared/badge-generic-template";
-import { BADGE_GENERIC_FONT_LICENSE } from "../assets/shared/badge-generic-template-assets";
+import { BADGE_GENERIC_FONT_LICENSE } from "../assets/shared/badge-generic-font-license";
 import { compileBadgeTemplate } from "../assets/shared/badge-template-render";
 import { composeBadgePrintSvg, splitBadgePrintSvg } from "../assets/shared/badge-print-svg";
 import { badgeCredentialSchema, formatBadgeCredential } from "../assets/shared/schemas/badge-credential";

@@ -1,7 +1,7 @@
 import { pqcBadgeDotGridSvg } from "./badge-pqc-dot-grid";
 import { z } from "zod";
 import { constants } from "../design/tokens";
-import { BADGE_GENERIC_FONT_CSS } from "./badge-generic-template-assets";
+import { BADGE_GENERIC_FONT_CSS } from "./badge-generic-font-css";
 import { BADGE_PQC_ARTWORK_ASSETS } from "./badge-pqc-template-assets";
 import { badgeTemplateText as text, badgeTemplateVectorAsset } from "./badge-template-policy";
 import { formatDateRange } from "./format-date";

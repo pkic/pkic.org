@@ -132,7 +132,14 @@ export function OrganizationCreateForm({
       <Panel aria-label="Add organization">
         <PanelHeader title="Add organization" headingLevel={2} />
         <PanelBody>
-          <form noValidate class="pk-form" {...form.handlers} onSubmit={submit}>
+          <form
+            noValidate
+            class="pk-form"
+            {...form.handlers}
+            onSubmit={(event) => {
+              void submit(event).catch((error: unknown) => setError(form.refuse(error)));
+            }}
+          >
             <FormSection title="Details">
               <fieldset class="pk-fieldset" disabled={busy}>
                 <Field label="Organization name" required {...form.of("name")}>

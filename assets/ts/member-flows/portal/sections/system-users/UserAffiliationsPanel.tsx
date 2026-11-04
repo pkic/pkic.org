@@ -275,7 +275,9 @@ export function UserAffiliationsPanel({
         canActivate={canActivateIdentity}
         preferImmediateActivation={correctingOpen}
         onBusy={setBusy}
-        onClose={() => closeAdding()}
+        onClose={() => {
+          void closeAdding().catch(() => toast("Could not close the dialog. Please try again.", "error"));
+        }}
         onCreated={async (identityId) => {
           setCreatedIdentityId(identityId);
           await onChanged();

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
   EVENT_VISIBILITIES,
   EVENT_VISIBILITY_LABELS,
@@ -189,6 +189,7 @@ export function GroupEventEditor({
     isCreate ? groupEventCreateSchema : groupEventSettingsUpdateSchema,
     isCreate ? createPayload(draft, schedule) : scopedSettings,
   );
+  const resetForm = form.reset;
   const profileCatalog = useData(
     () =>
       isCreate
@@ -196,26 +197,32 @@ export function GroupEventEditor({
         : Promise.resolve({ profiles: [] as EventProfileCatalogItem[] }),
     [groupId, isCreate],
   );
-  const availableProfiles = (profileCatalog.data?.profiles ?? []).filter(
-    (profile) => profile.standaloneEligible && standaloneEventProfileKeySchema.safeParse(profile.key).success,
+  const availableProfiles = useMemo(
+    () =>
+      (profileCatalog.data?.profiles ?? []).filter(
+        (profile) => profile.standaloneEligible && standaloneEventProfileKeySchema.safeParse(profile.key).success,
+      ),
+    [profileCatalog.data],
   );
 
   useEffect(() => {
     if (!isCreate || availableProfiles.length === 0) return;
-    if (!availableProfiles.some((profile) => profile.key === draft.profileKey)) {
-      const firstProfile = standaloneEventProfileKeySchema.parse(availableProfiles[0].key);
-      setDraft((current) => ({ ...current, profileKey: firstProfile }));
-    }
-  }, [isCreate, profileCatalog.data]);
+    const firstProfile = standaloneEventProfileKeySchema.parse(availableProfiles[0].key);
+    setDraft((current) =>
+      availableProfiles.some((profile) => profile.key === current.profileKey)
+        ? current
+        : { ...current, profileKey: firstProfile },
+    );
+  }, [isCreate, availableProfiles]);
 
   useEffect(() => {
     if (renderedEventRevision.current === eventRevision) return;
     renderedEventRevision.current = eventRevision;
     setDraft(initialDraft(event));
-    form.reset();
+    resetForm();
     setError(null);
     setStatus("");
-  }, [eventRevision]);
+  }, [eventRevision, event, resetForm]);
 
   function update<Key extends keyof EventDraft>(key: Key, value: EventDraft[Key]): void {
     setDraft((current) => ({ ...current, [key]: value }));

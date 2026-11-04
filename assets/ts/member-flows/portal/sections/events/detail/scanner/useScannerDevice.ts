@@ -32,6 +32,6 @@ export function useScannerDevice(
     return () => {
       active = false;
     };
-  }, [slug, operatorUserId, sponsorId, collector?.epochId, collector?.sessionId]);
+  }, [slug, operatorUserId, sponsorId, collector]);
   return { deviceId, epoch, setEpoch, error, ready: epoch?.state === "open" };
 }

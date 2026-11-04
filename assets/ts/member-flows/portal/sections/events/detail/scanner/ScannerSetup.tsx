@@ -1,5 +1,5 @@
 import type { ComponentProps } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import { ScannerLocationSelect } from "./ScannerLocationSelect";
 import { ScannerTargetPicker } from "./ScannerTargetPicker";
@@ -37,9 +37,13 @@ export function ScannerSetup({
       location.onRoom(suggestion.suggestedRoomId);
     },
   });
+  const timeZone = suggestions.clock?.timeZone;
+  const city = suggestions.clock?.city;
+  const onTimeZone = useRef(location.onTimeZone);
+  onTimeZone.current = location.onTimeZone;
   useEffect(() => {
-    if (suggestions.clock) location.onTimeZone?.(suggestions.clock);
-  }, [suggestions.clock?.timeZone, suggestions.clock?.city]);
+    if (timeZone) onTimeZone.current?.({ timeZone, city: city ?? null });
+  }, [timeZone, city]);
   if (sponsorOnly) return null;
   function close() {
     setOpen(false);

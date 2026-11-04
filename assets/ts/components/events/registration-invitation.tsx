@@ -74,24 +74,29 @@ function InvitationRecovery({
                 noValidate
                 {...contract.handlers}
                 class="pk-stack"
-                onSubmit={async (event) => {
+                onSubmit={(event) => {
                   event.preventDefault();
-                  if (busy) return;
-                  const result = contract.submit();
-                  if (!result.data) {
-                    setError(result.formMessage);
-                    return;
-                  }
-                  setBusy(true);
-                  setError(null);
-                  try {
-                    await postJson(endpoint, result.data, successResponseSchema);
-                    setSent(true);
-                  } catch (cause) {
-                    setError(contract.refuse(cause));
-                  } finally {
+                  void (async () => {
+                    if (busy) return;
+                    const result = contract.submit();
+                    if (!result.data) {
+                      setError(result.formMessage);
+                      return;
+                    }
+                    setBusy(true);
+                    setError(null);
+                    try {
+                      await postJson(endpoint, result.data, successResponseSchema);
+                      setSent(true);
+                    } catch (cause) {
+                      setError(contract.refuse(cause));
+                    } finally {
+                      setBusy(false);
+                    }
+                  })().catch((error: unknown) => {
+                    setError(contract.refuse(error));
                     setBusy(false);
-                  }
+                  });
                 }}
               >
                 <Field label="Email address" {...contract.of("email")}>

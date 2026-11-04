@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { constants, themes } from "../design/tokens";
-import { BADGE_GENERIC_BRAND_ASSETS, BADGE_GENERIC_FONT_CSS } from "./badge-generic-template-assets";
+import { BADGE_GENERIC_BRAND_ASSETS } from "./badge-generic-template-assets";
+import { BADGE_GENERIC_FONT_CSS } from "./badge-generic-font-css";
 import { badgeTemplateText as escape, badgeTemplateVectorAsset as vectorAsset } from "./badge-template-policy";
 import { BADGE_TEXT_FIT_WRAPPING, badgeTextFitFontSize, type BadgeTextFitField } from "./badge-template-text-fit";
 import { eventBadgeTemplateSchema, type EventBadgeTemplate } from "./schemas/event-badge-template";

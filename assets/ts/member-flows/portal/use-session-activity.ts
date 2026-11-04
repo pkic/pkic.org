@@ -14,10 +14,11 @@ export const SESSION_ACTIVITY_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
  */
 export function useSessionActivity(): void {
   const session = portalSession.value;
+  const sessionId = session?.sessionId;
+  const userId = session?.identity.id;
   useEffect(() => {
-    if (!session) return;
-    const sessionId = session.sessionId;
-    const userId = session.identity.id;
+    if (!sessionId || !userId) return;
+    const activeUserId = userId;
 
     let lastRefreshAt = Date.now();
     let refreshPending = false;
@@ -64,7 +65,10 @@ export function useSessionActivity(): void {
     }
 
     function identityChangedInAnotherTab(event: StorageEvent): void {
-      if (event.key === rememberedIdentityKey(userId) || event.key === `portal-identity-changed:${userId}`) {
+      if (
+        event.key === rememberedIdentityKey(activeUserId) ||
+        event.key === `portal-identity-changed:${activeUserId}`
+      ) {
         // Scoped screens must discard data loaded for the previous identity.
         window.location.reload();
       }
@@ -87,5 +91,5 @@ export function useSessionActivity(): void {
       document.removeEventListener("keydown", acknowledgeInteraction);
       document.removeEventListener("visibilitychange", acknowledgeVisiblePage);
     };
-  }, [session?.sessionId, session?.idleExpiresAt, session?.staff?.idleExpiresAt]);
+  }, [sessionId, userId, session?.idleExpiresAt, session?.staff?.idleExpiresAt]);
 }

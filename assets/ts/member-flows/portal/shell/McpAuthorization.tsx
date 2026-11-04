@@ -5,7 +5,7 @@
  * Approval is accepted, then completed in the background; the page waits for
  * the completion and follows its redirect back to the client.
  */
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import type { z } from "zod";
 import {
@@ -120,6 +120,8 @@ function chosenScopes(context: McpOauthContext, selected: ReadonlySet<string>): 
 }
 
 export function McpAuthorization({ onSessionExpired }: { onSessionExpired: () => Promise<unknown> }) {
+  const sessionExpired = useRef(onSessionExpired);
+  sessionExpired.current = onSessionExpired;
   const [authorizationLocation] = useHashLocation();
   const initial = authorizationParameters(authorizationLocation);
   const requestId = initial.get("request") ?? "";
@@ -145,7 +147,9 @@ export function McpAuthorization({ onSessionExpired }: { onSessionExpired: () =>
         if (!cancelled) {
           if (err instanceof ApiClientError && err.status === 401) {
             setContext(null);
-            void onSessionExpired();
+            void sessionExpired.current().catch(() => {
+              if (!cancelled) setError("Could not refresh your session. Please try again.");
+            });
           }
           setError((err as Error).message);
         }
@@ -172,7 +176,7 @@ export function McpAuthorization({ onSessionExpired }: { onSessionExpired: () =>
         setContext(data);
         setReturnTo(data.returnTo);
         setError(null);
-        if (!data.authenticated) await onSessionExpired();
+        if (!data.authenticated) await sessionExpired.current();
       } catch (err) {
         if (!cancelled) setError((err as Error).message);
       } finally {

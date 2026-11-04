@@ -70,11 +70,10 @@ describe("ordinary portal service worker registration", () => {
       .mockResolvedValueOnce({});
     vi.stubGlobal("navigator", { serviceWorker: { register } });
     const { registerPortalServiceWorker } = await capturedRegistrationModule();
-    const refused = expect(registerPortalServiceWorker()).rejects.toThrow(
-      "Portal offline files could not be prepared.",
-    );
-    await vi.advanceTimersByTimeAsync(15_000);
-    await refused;
+    await Promise.all([
+      expect(registerPortalServiceWorker()).rejects.toThrow("Portal offline files could not be prepared."),
+      vi.advanceTimersByTimeAsync(15_000),
+    ]);
     expect(vi.getTimerCount()).toBe(0);
     expect(await registerPortalServiceWorker()).not.toBeNull();
     expect(register).toHaveBeenCalledTimes(2);

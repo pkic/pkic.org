@@ -37,14 +37,17 @@ describe("shared Turnstile challenge", () => {
     await act(async () => {
       pending = requestTurnstileToken(challenge);
     });
-    const refusal = expect(pending!).rejects.toThrow("Verification canceled");
-    expect(button("Continue").disabled).toBe(true);
-    await act(async () => api.options().callback("fresh"));
-    expect(button("Continue").disabled).toBe(false);
-    await act(async () => api.options()["expired-callback"]());
-    expect(button("Continue").disabled).toBe(true);
-    await act(async () => button("Cancel").click());
-    await refusal;
+    await Promise.all([
+      expect(pending!).rejects.toThrow("Verification canceled"),
+      (async () => {
+        expect(button("Continue").disabled).toBe(true);
+        await act(async () => api.options().callback("fresh"));
+        expect(button("Continue").disabled).toBe(false);
+        await act(async () => api.options()["expired-callback"]());
+        expect(button("Continue").disabled).toBe(true);
+        await act(async () => button("Cancel").click());
+      })(),
+    ]);
     expect(api.remove).toHaveBeenCalledWith("widget-id");
     expect(document.querySelector("dialog")).toBeNull();
   });

@@ -73,7 +73,7 @@ vi.mock("wouter/use-hash-location", () => ({
 import { App } from "../../assets/ts/member-flows/portal/App";
 import { scannerTransportUnavailable } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context";
 let host: HTMLElement;
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: ReturnType<typeof vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>>;
 beforeEach(() => {
   mocks.registerWorker.mockReset().mockResolvedValue(null);
   clearAuth();
@@ -86,7 +86,7 @@ beforeEach(() => {
   mocks.recordSession.mockReset();
   mocks.pendingLogout.mockReset().mockResolvedValue(null);
   mocks.activeSession.mockReset().mockResolvedValue(null);
-  fetchMock = vi.fn();
+  fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>();
   vi.stubGlobal("fetch", fetchMock);
   host = document.createElement("div");
   document.body.append(host);

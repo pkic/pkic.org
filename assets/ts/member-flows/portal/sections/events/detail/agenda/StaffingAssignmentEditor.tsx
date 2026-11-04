@@ -95,7 +95,14 @@ export function StaffingAssignmentEditor({
             },
           ]}
         />
-        <form noValidate {...form.handlers} onSubmit={save} class="pk-stack">
+        <form
+          noValidate
+          {...form.handlers}
+          onSubmit={(event) => {
+            void save(event).catch((error: unknown) => setError(form.refuse(error)));
+          }}
+          class="pk-stack"
+        >
           <Field label="Assigned person" {...form.of("assignments")}>
             {(control) => (
               <Select

@@ -4,15 +4,24 @@ import type { ProposalReview } from "../../../../../../../shared/schemas/proposa
 import type { ProposalAccess } from "../../types";
 import { proposalResourcePath } from "./proposal-api";
 
+function reportRefreshError(error: unknown): void {
+  toast(error instanceof Error ? error.message : "Could not refresh proposal reviews.", "error");
+}
+
 /** Portal adapter for shared review and comment resources. */
 export function useProposalSubresources(
   proposalId: string,
-  reloadProposal: () => void,
+  reloadProposal: () => void | Promise<void>,
   access: ProposalAccess | null | undefined,
 ) {
   const proposalBase = proposalResourcePath(proposalId);
   const canReviewPrivateResources = access?.canReview === true;
-  const reviewComments = useProposalReviewComments(proposalBase, reloadProposal, canReviewPrivateResources);
+  const reviewComments = useProposalReviewComments(
+    proposalBase,
+    reloadProposal,
+    canReviewPrivateResources,
+    reportRefreshError,
+  );
   function reviewSaved(review: ProposalReview): void {
     reviewComments.reviewSaved(review);
   }

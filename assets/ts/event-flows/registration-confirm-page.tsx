@@ -9,7 +9,7 @@ import { getJson, postJson, ApiClientError } from "../shared/api-client";
 import { normalizeValidation } from "../shared/form/validation-map";
 import { renderSharePanel } from "../shared/widgets/share-panel";
 import { renderDonationCta } from "../shared/donation/cta";
-import { withLoadingButton } from "../shared/form/submit";
+import { handleSubmitError, withLoadingButton } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
 import { SuccessPanel } from "../components/SuccessPanel";
 import {
@@ -480,60 +480,64 @@ async function main(): Promise<void> {
     );
   }
 
-  boot.form.addEventListener("submit", async (event) => {
+  boot.form.addEventListener("submit", (event) => {
     event.preventDefault();
-    if (organization.validate?.() === false) return;
-    await withLoadingButton(findSubmitButton(boot.form), async () => {
-      try {
-        if (organization.prepare && !(await organization.prepare())) return;
-        const named = organization.read?.();
-        if (named && "refused" in named) return;
-        const result = await postJson(
-          `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-email`,
-          {
-            token,
-            ...(registrationId ? { id: registrationId } : {}),
-            ...(named ? { organization: named.organization } : {}),
-          },
-          registrationConfirmResponseSchema,
-        );
-        // Once confirmed, the invitation to confirm has done its job; only the outcome stays.
-        if (contentEl) contentEl.hidden = true;
-        showConfirmedPanel(
-          boot.root,
-          boot.form,
-          result,
-          firstName,
-          lastName,
-          eventName,
-          email,
-          named?.organization.name ?? organizationName,
-          result.shareUrl,
-          result.manageUrl,
-          result.manageToken,
-          boot.eventSlug,
-        );
-      } catch (error) {
-        const normalized = normalizeValidation(error);
-        if (
-          error instanceof ApiClientError &&
-          (error.code === "CONFIRM_TOKEN_EXPIRED" || error.code === "CONFIRM_TOKEN_INVALID")
-        ) {
-          showExpiredPanel(
+    void (async () => {
+      if (organization.validate?.() === false) return;
+      await withLoadingButton(findSubmitButton(boot.form), async () => {
+        try {
+          if (organization.prepare && !(await organization.prepare())) return;
+          const named = organization.read?.();
+          if (named && "refused" in named) return;
+          const result = await postJson(
+            `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-email`,
+            {
+              token,
+              ...(registrationId ? { id: registrationId } : {}),
+              ...(named ? { organization: named.organization } : {}),
+            },
+            registrationConfirmResponseSchema,
+          );
+          // Once confirmed, the invitation to confirm has done its job; only the outcome stays.
+          if (contentEl) contentEl.hidden = true;
+          showConfirmedPanel(
             boot.root,
             boot.form,
-            boot.apiBase,
-            boot.eventSlug,
-            token,
-            registrationId,
+            result,
             firstName,
+            lastName,
             eventName,
             email,
+            named?.organization.name ?? organizationName,
+            result.shareUrl,
+            result.manageUrl,
+            result.manageToken,
+            boot.eventSlug,
           );
-        } else {
-          setStatus(boot.statusEl, normalized.globalMessage, true);
+        } catch (error) {
+          const normalized = normalizeValidation(error);
+          if (
+            error instanceof ApiClientError &&
+            (error.code === "CONFIRM_TOKEN_EXPIRED" || error.code === "CONFIRM_TOKEN_INVALID")
+          ) {
+            showExpiredPanel(
+              boot.root,
+              boot.form,
+              boot.apiBase,
+              boot.eventSlug,
+              token,
+              registrationId,
+              firstName,
+              eventName,
+              email,
+            );
+          } else {
+            setStatus(boot.statusEl, normalized.globalMessage, true);
+          }
         }
-      }
+      });
+    })().catch((error: unknown) => {
+      handleSubmitError(error, boot.form, boot.statusEl);
     });
   });
 

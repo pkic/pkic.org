@@ -161,12 +161,13 @@ export function EventLiveControlRoom({
       ),
     [slug],
   );
+  const reloadProgram = program.reload;
   useEffect(() => {
     const refresh = setInterval(() => {
-      if (!document.hidden) void program.reload();
+      if (!document.hidden) void reloadProgram();
     }, 30000);
     return () => clearInterval(refresh);
-  }, [program.reload]);
+  }, [reloadProgram]);
   const snapshot = program.data?.agenda;
   const days = useMemo(() => (snapshot ? liveSessionDays(snapshot) : []), [snapshot]);
   const selected = days.flatMap((day) => day.choices).find((choice) => choice.id === occurrenceId);
@@ -184,25 +185,27 @@ export function EventLiveControlRoom({
     ),
   );
   const roomGroups = liveRoomChoices(days, roomId, now);
-  const choose = (id: string, selectedRoom = roomId, mode: "push" | "replace" = "push") => {
-    const [path, query] = sessionPath(id).split("?", 2);
-    const params = splitHash().params;
-    new URLSearchParams(query).forEach((value, key) => params.set(key, value));
-    if (selectedRoom) params.set("room", selectedRoom);
-    writeUrlQuery({ source: "hash", ownerPath, destinationPath: path, params, mode });
-  };
+  const choose = useCallback(
+    (id: string, selectedRoom = roomId, mode: "push" | "replace" = "push") => {
+      const [path, query] = sessionPath(id).split("?", 2);
+      const params = splitHash().params;
+      new URLSearchParams(query).forEach((value, key) => params.set(key, value));
+      if (selectedRoom) params.set("room", selectedRoom);
+      writeUrlQuery({ source: "hash", ownerPath, destinationPath: path, params, mode });
+    },
+    [ownerPath, roomId, sessionPath],
+  );
   const ordered = days.flatMap((day) => day.choices).filter((choice) => choice.roomIds.includes(roomId));
   const index = ordered.findIndex((choice) => choice.id === occurrenceId);
   const previous = index > 0 ? ordered[index - 1] : undefined;
   const next = index >= 0 ? ordered[index + 1] : undefined;
   const draftGroups = liveRoomChoices(days, draftRoom, now);
-  const fallback = useMemo(
-    () => (occurrenceId ? undefined : (defaultLiveSession(days, now, roomId) ?? roomGroups[0]?.choices[0])),
-    [days, occurrenceId, roomId, now],
-  );
+  const fallbackId = occurrenceId
+    ? undefined
+    : (defaultLiveSession(days, now, roomId) ?? roomGroups[0]?.choices[0])?.id;
   useEffect(() => {
-    if (fallback) choose(fallback.id, roomId, "replace");
-  }, [fallback]);
+    if (fallbackId) choose(fallbackId, roomId, "replace");
+  }, [fallbackId, choose, roomId]);
   if (program.loading) return <Spinner label="Loading the approved agenda…" />;
   if (program.error && !program.data) return <ErrorAlert error={program.error} />;
   if (!days.length)

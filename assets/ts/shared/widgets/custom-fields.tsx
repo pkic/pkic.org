@@ -108,9 +108,10 @@ function CustomFieldRow({
   // same slot and through the same field-state module the DOM validators use.
   const state = presentation?.state ?? null;
   const message = presentation?.message ?? "";
+  const hasPresentation = presentation !== undefined;
   useLayoutEffect(() => {
     const row = rowRef.current;
-    if (!row || !presentation) return;
+    if (!row || !hasPresentation) return;
     const slot = row.querySelector<HTMLElement>("[data-field-error]");
     setFieldMessage(slot, message, state ?? "invalid");
     if (!message) applyFieldState(row, state);
@@ -118,7 +119,7 @@ function CustomFieldRow({
       if (state === "invalid") control.setAttribute("aria-invalid", "true");
       else control.removeAttribute("aria-invalid");
     }
-  }, [presentation !== undefined, state, message]);
+  }, [hasPresentation, state, message]);
 
   const widget = <CustomFieldInput field={field} geoHint={geoHint} initialValue={initialValue} />;
   const controlId = `custom-${field.key}`;

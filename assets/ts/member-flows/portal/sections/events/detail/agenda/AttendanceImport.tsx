@@ -172,7 +172,16 @@ export function AttendanceImport({
           </p>
         </PanelBody>
       </Panel>
-      <form noValidate {...form.handlers} onSubmit={prepare} class="pk-stack">
+      <form
+        noValidate
+        {...form.handlers}
+        onSubmit={(event) => {
+          void prepare(event).catch((error: unknown) =>
+            setError(error instanceof Error ? error.message : "Review failed."),
+          );
+        }}
+        class="pk-stack"
+      >
         <Field label="Attendance evidence JSON" {...form.of("evidence")}>
           {(control) => (
             <Textarea
@@ -222,7 +231,14 @@ export function AttendanceImport({
             </Panel>
           )}
           <p>Changing the event timezone or published schedule requires a new review before importing.</p>
-          <Button onClick={apply} loading={busy}>
+          <Button
+            onClick={() => {
+              void apply().catch((error: unknown) =>
+                setError(error instanceof Error ? error.message : "Import failed."),
+              );
+            }}
+            loading={busy}
+          >
             Confirm import of {formatNumber(review.rowCount)} observations
           </Button>
         </div>

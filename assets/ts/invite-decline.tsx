@@ -380,115 +380,124 @@ function boot(): void {
     const formEl = $("[data-decline-form-el]", root!) as HTMLFormElement | null;
     if (!formEl) return;
 
-    formEl.addEventListener("submit", async (e) => {
+    formEl.addEventListener("submit", (e) => {
       e.preventDefault();
+      void (async () => {
+        const errorBanner = $("[data-error-banner]", root!);
+        hide(errorBanner);
 
-      const errorBanner = $("[data-error-banner]", root!);
-      hide(errorBanner);
-
-      // Validate reason
-      const checkedReason = formEl.querySelector<HTMLInputElement>("input[name='reasonCode']:checked");
-      const reasonError = $("[data-reason-error]", root!);
-      if (!checkedReason) {
-        show(reasonError);
-        formEl.querySelector<HTMLElement>("input[name='reasonCode']")?.focus();
-        return;
-      }
-      hide(reasonError);
-
-      const reasonCode = checkedReason.value;
-
-      // Merge topic suggestion into reasonNote if filled
-      const topicInput = ($("[data-topic-input]", root!) as HTMLInputElement | null)?.value.trim() ?? "";
-      let reasonNote = ($("[data-reason-note]", root!) as HTMLTextAreaElement | null)?.value.trim() ?? "";
-      if (topicInput && !reasonNote) {
-        reasonNote = `Topic suggestion: ${topicInput}`;
-      } else if (topicInput && reasonNote) {
-        reasonNote = `${reasonNote}\n\nTopic suggestion: ${topicInput}`;
-      }
-
-      // Validate "other" requires note
-      const noteError = $("[data-note-error]", root!);
-      if (reasonCode === "other" && !reasonNote) {
-        show(noteError);
-        ($("[data-reason-note]", root!) as HTMLElement | null)?.focus();
-        return;
-      }
-      hide(noteError);
-
-      // Collect forwards
-      const forwardRows = root!.querySelectorAll<HTMLElement>("[data-forward-row]");
-      const forwards: DeclinePayload["forwards"] = [];
-      let forwardValid = true;
-      forwardRows.forEach((row) => {
-        const emailEl = row.querySelector<HTMLInputElement>("[data-fw='email']");
-        const email = emailEl?.value.trim() ?? "";
-        if (!email) {
-          forwardValid = false;
-          emailEl?.focus();
-        } else {
-          forwards.push({
-            email,
-            firstName: row.querySelector<HTMLInputElement>("[data-fw='firstName']")?.value.trim() || undefined,
-            lastName: row.querySelector<HTMLInputElement>("[data-fw='lastName']")?.value.trim() || undefined,
-          });
+        // Validate reason
+        const checkedReason = formEl.querySelector<HTMLInputElement>("input[name='reasonCode']:checked");
+        const reasonError = $("[data-reason-error]", root!);
+        if (!checkedReason) {
+          show(reasonError);
+          formEl.querySelector<HTMLElement>("input[name='reasonCode']")?.focus();
+          return;
         }
-      });
+        hide(reasonError);
 
-      if (!forwardValid) {
-        if (errorBanner) {
-          errorBanner.textContent = "Please fill in the email address for each contact, or remove incomplete rows.";
-          show(errorBanner);
+        const reasonCode = checkedReason.value;
+
+        // Merge topic suggestion into reasonNote if filled
+        const topicInput = ($("[data-topic-input]", root!) as HTMLInputElement | null)?.value.trim() ?? "";
+        let reasonNote = ($("[data-reason-note]", root!) as HTMLTextAreaElement | null)?.value.trim() ?? "";
+        if (topicInput && !reasonNote) {
+          reasonNote = `Topic suggestion: ${topicInput}`;
+        } else if (topicInput && reasonNote) {
+          reasonNote = `${reasonNote}\n\nTopic suggestion: ${topicInput}`;
         }
-        return;
-      }
 
-      // NPS score
-      const npsRaw = ($("[data-nps-value]", root!) as HTMLInputElement | null)?.value;
-      const npsScore = npsRaw ? parseInt(npsRaw, 10) : undefined;
+        // Validate "other" requires note
+        const noteError = $("[data-note-error]", root!);
+        if (reasonCode === "other" && !reasonNote) {
+          show(noteError);
+          ($("[data-reason-note]", root!) as HTMLElement | null)?.focus();
+          return;
+        }
+        hide(noteError);
 
-      const payload = inviteDeclineSchema.parse({
-        reasonCode,
-        reasonNote: reasonNote || undefined,
-        unsubscribeFuture: ($("[data-unsubscribe-future]", root!) as HTMLInputElement | null)?.checked || undefined,
-        npsScore: npsScore && npsScore >= 1 && npsScore <= 10 ? npsScore : undefined,
-        forwards: forwards.length > 0 ? forwards : undefined,
-      });
-
-      const submitBtn = $("[data-submit-btn]", root!) as HTMLButtonElement | null;
-      if (submitBtn) setButtonBusy(submitBtn);
-
-      try {
-        const result = await postJson(
-          `${base}/invites/${tok}/decline${inviteIdQuery}`,
-          payload,
-          inviteDeclineResponseSchema,
-        );
-
-        if (result.success) {
-          const forwardedMsg = $("[data-success-forwarded]", root!);
-          if (forwardedMsg && result.forwarded?.length) {
-            forwardedMsg.textContent = `We\u2019ve sent an invitation to ${result.forwarded.join(", ")}. We hope to see them there!`;
+        // Collect forwards
+        const forwardRows = root!.querySelectorAll<HTMLElement>("[data-forward-row]");
+        const forwards: DeclinePayload["forwards"] = [];
+        let forwardValid = true;
+        forwardRows.forEach((row) => {
+          const emailEl = row.querySelector<HTMLInputElement>("[data-fw='email']");
+          const email = emailEl?.value.trim() ?? "";
+          if (!email) {
+            forwardValid = false;
+            emailEl?.focus();
+          } else {
+            forwards.push({
+              email,
+              firstName: row.querySelector<HTMLInputElement>("[data-fw='firstName']")?.value.trim() || undefined,
+              lastName: row.querySelector<HTMLInputElement>("[data-fw='lastName']")?.value.trim() || undefined,
+            });
           }
-          hide(formWrapEl);
-          show(successEl);
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        } else {
-          throw new Error("Submission was not successful");
+        });
+
+        if (!forwardValid) {
+          if (errorBanner) {
+            errorBanner.textContent = "Please fill in the email address for each contact, or remove incomplete rows.";
+            show(errorBanner);
+          }
+          return;
         }
-      } catch (err: unknown) {
-        let msg = "Something went wrong. Please try again.";
-        if (err instanceof ApiClientError && err.code === "INVITE_NOT_ACTIVE") {
-          msg = "This invitation has already been accepted or declined.";
-        } else if (err instanceof Error) {
-          msg = err.message;
+
+        // NPS score
+        const npsRaw = ($("[data-nps-value]", root!) as HTMLInputElement | null)?.value;
+        const npsScore = npsRaw ? parseInt(npsRaw, 10) : undefined;
+
+        const payload = inviteDeclineSchema.parse({
+          reasonCode,
+          reasonNote: reasonNote || undefined,
+          unsubscribeFuture: ($("[data-unsubscribe-future]", root!) as HTMLInputElement | null)?.checked || undefined,
+          npsScore: npsScore && npsScore >= 1 && npsScore <= 10 ? npsScore : undefined,
+          forwards: forwards.length > 0 ? forwards : undefined,
+        });
+
+        const submitBtn = $("[data-submit-btn]", root!) as HTMLButtonElement | null;
+        if (submitBtn) setButtonBusy(submitBtn);
+
+        try {
+          const result = await postJson(
+            `${base}/invites/${tok}/decline${inviteIdQuery}`,
+            payload,
+            inviteDeclineResponseSchema,
+          );
+
+          if (result.success) {
+            const forwardedMsg = $("[data-success-forwarded]", root!);
+            if (forwardedMsg && result.forwarded?.length) {
+              forwardedMsg.textContent = `We\u2019ve sent an invitation to ${result.forwarded.join(", ")}. We hope to see them there!`;
+            }
+            hide(formWrapEl);
+            show(successEl);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          } else {
+            throw new Error("Submission was not successful");
+          }
+        } catch (err: unknown) {
+          let msg = "Something went wrong. Please try again.";
+          if (err instanceof ApiClientError && err.code === "INVITE_NOT_ACTIVE") {
+            msg = "This invitation has already been accepted or declined.";
+          } else if (err instanceof Error) {
+            msg = err.message;
+          }
+          if (errorBanner) {
+            errorBanner.textContent = msg;
+            show(errorBanner);
+          }
+          if (submitBtn) clearButtonBusy(submitBtn);
         }
-        if (errorBanner) {
-          errorBanner.textContent = msg;
-          show(errorBanner);
-        }
+      })().catch((error: unknown) => {
+        const submitBtn = $("[data-submit-btn]", root!) as HTMLButtonElement | null;
         if (submitBtn) clearButtonBusy(submitBtn);
-      }
+        const banner = $("[data-error-banner]", root!);
+        if (banner) {
+          banner.textContent = error instanceof Error ? error.message : "Something went wrong. Please try again.";
+          show(banner);
+        }
+      });
     });
   }
 }

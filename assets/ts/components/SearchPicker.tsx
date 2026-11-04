@@ -123,22 +123,29 @@ export function SearchPicker<Data, Row>({
       setOpen(false);
       return;
     }
-    timerRef.current = window.setTimeout(async () => {
+    timerRef.current = window.setTimeout(() => {
       timerRef.current = null;
       const request = requestGate.current!.start();
-      try {
-        const data = await getJson(buildServerCollectionUrl(endpoint, parameters), responseSchema, {
-          signal: request.signal,
-        });
-        if (!request.isCurrent()) return;
-        setResults(rows(data));
-        setOpen(true);
-      } catch {
+      void (async () => {
+        try {
+          const data = await getJson(buildServerCollectionUrl(endpoint, parameters), responseSchema, {
+            signal: request.signal,
+          });
+          if (!request.isCurrent()) return;
+          setResults(rows(data));
+          setOpen(true);
+        } catch {
+          if (!request.isCurrent()) return;
+          setResults([]);
+          setOpen(false);
+          setError(errorMessage);
+        }
+      })().catch(() => {
         if (!request.isCurrent()) return;
         setResults([]);
         setOpen(false);
         setError(errorMessage);
-      }
+      });
     }, 250);
   }
 

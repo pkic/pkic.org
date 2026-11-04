@@ -244,6 +244,44 @@ describe("the per-field breakdown", () => {
     expect(page.querySelector('button[aria-label="Expand Priority chart"]')).toBeTruthy();
   });
 
+  it("dismisses an expanded chart only for a complete backdrop gesture or Escape", async () => {
+    const page = mount(
+      <FormResponseStats fields={[field({ fieldType: "select", options: null })]} stats={stats} total={4} />,
+    );
+    const expand = () => page.querySelector<HTMLButtonElement>('button[aria-label="Expand Priority chart"]')!.click();
+    const overlay = () => page.querySelector<HTMLElement>('[role="dialog"]');
+    const pointer = (target: Element, type: string, id = 1) => {
+      const event = new Event(type, { bubbles: true });
+      Object.defineProperty(event, "pointerId", { value: id });
+      target.dispatchEvent(event);
+    };
+    await act(expand);
+    const panel = overlay()!.querySelector(".adm-stat-modal")!;
+    await act(() => {
+      pointer(panel, "pointerdown");
+      pointer(overlay()!, "pointerup");
+    });
+    await act(() => {
+      pointer(overlay()!, "pointerdown");
+      pointer(panel, "pointerup");
+    });
+    await act(() => {
+      pointer(overlay()!, "pointerdown", 1);
+      pointer(overlay()!, "pointerup", 2);
+    });
+    expect(overlay()).not.toBeNull();
+    await act(() => {
+      pointer(overlay()!, "pointerdown");
+      pointer(overlay()!, "pointerup");
+    });
+    expect(overlay()).toBeNull();
+    await act(expand);
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(overlay()).toBeNull();
+  });
+
   it("offers every presentation the field rules accept", () => {
     const page = mount(
       <FormResponseStats fields={[field({ fieldType: "select", options: null })]} stats={stats} total={4} />,

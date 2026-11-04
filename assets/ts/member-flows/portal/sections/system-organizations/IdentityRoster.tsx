@@ -71,6 +71,37 @@ async function createIdentity(
   }
 }
 
+function useIdentitySubmission(
+  organizationId: string,
+  form: ContractForm<z.output<typeof identityCreateSchema>>,
+  onAdded: () => Promise<void>,
+  enabled = true,
+) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const inFlight = useRef(false);
+
+  function submit(event: Event) {
+    event.preventDefault();
+    if (!enabled || inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError("");
+    void (async () => {
+      try {
+        if (await createIdentity(organizationId, form, setError)) await onAdded();
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "Could not update identities.");
+      } finally {
+        inFlight.current = false;
+        setBusy(false);
+      }
+    })();
+  }
+
+  return { busy, error, submit };
+}
+
 /** Associate a user the system already knows without re-entering their identity. */
 function LinkExistingUserForm({
   organizationId,
@@ -83,8 +114,6 @@ function LinkExistingUserForm({
 }) {
   const [user, setUser] = useState<PickedUser | null>(null);
   const [jobTitle, setJobTitle] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const form = useContractForm(identityCreateSchema, {
     userReference: "existing_user",
     userId: user?.id,
@@ -93,15 +122,7 @@ function LinkExistingUserForm({
     showOnOrganizationProfile: true,
   });
 
-  async function submit(event: Event) {
-    event.preventDefault();
-    if (!user) return;
-    setBusy(true);
-    setError("");
-    const added = await createIdentity(organizationId, form, setError);
-    setBusy(false);
-    if (added) await onAdded();
-  }
+  const { busy, error, submit } = useIdentitySubmission(organizationId, form, onAdded, !!user);
 
   return (
     <form noValidate class="pk-stack pk-stack--snug" {...form.handlers} onSubmit={submit}>
@@ -147,8 +168,6 @@ function AddIdentityForm({
   const [email, setEmail] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [links, setLinks] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const form = useContractForm(identityCreateSchema, {
     userReference: "email",
     name: name.trim(),
@@ -158,14 +177,7 @@ function AddIdentityForm({
     showOnOrganizationProfile: true,
   });
 
-  async function submit(event: Event) {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    const added = await createIdentity(organizationId, form, setError);
-    setBusy(false);
-    if (added) await onAdded();
-  }
+  const { busy, error, submit } = useIdentitySubmission(organizationId, form, onAdded);
 
   return (
     <form noValidate class="pk-stack pk-stack--snug" {...form.handlers} onSubmit={submit}>

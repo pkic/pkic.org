@@ -38,6 +38,7 @@ export function BottomSheet({
 }) {
   const titleId = `${useId()}-title`;
   const ref = useRef<HTMLDialogElement>(null);
+  const backdropPointer = useRef<number | null>(null);
   const drag = (travel: number) => {
     const dialog = ref.current;
     if (!dialog) return;
@@ -79,8 +80,12 @@ export function BottomSheet({
       class="pk-sheet"
       aria-labelledby={titleId}
       // The dialog box is filled by its panel, so a click on the dialog itself landed on the backdrop.
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+      onPointerDown={(event) => {
+        backdropPointer.current = event.target === event.currentTarget ? event.pointerId : null;
+      }}
+      onPointerUp={(event) => {
+        if (event.target === event.currentTarget && backdropPointer.current === event.pointerId) onClose();
+        backdropPointer.current = null;
       }}
     >
       <div class="pk-sheet__panel">

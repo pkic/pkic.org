@@ -11,7 +11,7 @@ import { renderSharePanel } from "../shared/widgets/share-panel";
 import { eventFormsResponseSchema } from "../../shared/schemas/forms";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { applyFieldErrors, normalizeValidation } from "../shared/form/validation-map";
-import { withLoadingButton } from "../shared/form/submit";
+import { handleSubmitError, withLoadingButton } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
 import {
   authenticatedProposalCreateSchema,
@@ -481,27 +481,29 @@ async function main(): Promise<void> {
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
-  form.addEventListener("submit", async (event) => {
+  form.addEventListener("submit", (event) => {
     event.preventDefault();
-    // `validateBeforeSubmit` marks the form as validated itself; adding the
-    // class here as well was a second owner for the same state. Consent cards
-    // draw their own error from the platform's `invalid` event, which
-    // `syncConsentValidation` triggers, so nothing here depended on the class.
-    syncConsentValidation(form);
-    if (!validateBeforeSubmit(form, statusEl) || (abstractEditor && !abstractEditor.validate())) return;
+    void (async () => {
+      // `validateBeforeSubmit` marks the form as validated itself; adding the
+      // class here as well was a second owner for the same state. Consent cards
+      // draw their own error from the platform's `invalid` event, which
+      // `syncConsentValidation` triggers, so nothing here depended on the class.
+      syncConsentValidation(form);
+      if (!validateBeforeSubmit(form, statusEl) || (abstractEditor && !abstractEditor.validate())) return;
 
-    if (!entry) {
-      setStatus(statusEl, "Confirm your participation details and email before submitting.", true);
-      return;
-    }
-    await withLoadingButton(findSubmitButton(form), async () => {
-      try {
-        const submittedEntry = await prepareProposalEntry(entry!);
-        const isPresenting = isPresentingCheckbox?.checked ?? false;
-        const firstName = submittedEntry.person.firstName ?? "";
+      if (!entry) {
+        setStatus(statusEl, "Confirm your participation details and email before submitting.", true);
+        return;
+      }
+      await withLoadingButton(findSubmitButton(form), async () => {
+        try {
+          const submittedEntry = await prepareProposalEntry(entry!);
+          const isPresenting = isPresentingCheckbox?.checked ?? false;
+          const firstName = submittedEntry.person.firstName ?? "";
 
-        const payload = (submittedEntry.authenticated ? authenticatedProposalCreateSchema : proposalCreateSchema).parse(
-          {
+          const payload = (
+            submittedEntry.authenticated ? authenticatedProposalCreateSchema : proposalCreateSchema
+          ).parse({
             continuationToken: submittedEntry.continuationToken,
             unaffiliatedAttestation: submittedEntry.unaffiliatedAttestation,
             independentCapacity: submittedEntry.independentCapacity,
@@ -525,27 +527,29 @@ async function main(): Promise<void> {
 
             speakers: readAdditionalSpeakers(form),
             consents: readConsentValues(form),
-          },
-        );
+          });
 
-        const result = await postJson(
-          `${apiBase}/events/${eventSlug}/proposals`,
-          payload,
-          proposalCreateResponseSchema,
-          eventPathHeaders,
-        );
+          const result = await postJson(
+            `${apiBase}/events/${eventSlug}/proposals`,
+            payload,
+            proposalCreateResponseSchema,
+            eventPathHeaders,
+          );
 
-        clearReferralSession();
-        showSuccessPanel(boot.root, form, result, firstName, eventName, eventSlug);
-      } catch (error) {
-        await handleFormInviteSubmitError({
-          error,
-          form,
-          apiBase,
-          statusEl,
-          hasInviteToken: Boolean(query.inviteToken),
-        });
-      }
+          clearReferralSession();
+          showSuccessPanel(boot.root, form, result, firstName, eventName, eventSlug);
+        } catch (error) {
+          await handleFormInviteSubmitError({
+            error,
+            form,
+            apiBase,
+            statusEl,
+            hasInviteToken: Boolean(query.inviteToken),
+          });
+        }
+      });
+    })().catch((error: unknown) => {
+      handleSubmitError(error, form, statusEl);
     });
   });
 }

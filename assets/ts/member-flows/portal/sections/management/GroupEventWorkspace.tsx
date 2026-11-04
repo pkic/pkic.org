@@ -120,7 +120,7 @@ export function GroupEventWorkspace({
     const base = `/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}`;
     if (tab === "proposals" && detailId === CALL_SEGMENT) navigate(`${base}/settings/cfp`);
     if (tab === "settings" && detailId === "team" && detailTab === "staffing") navigate(`${base}/settings/team`);
-  }, [tab, detailId, detailTab, groupId, event.id]);
+  }, [tab, detailId, detailTab, groupId, event.id, navigate]);
   const [badgePrint, setBadgePrint] = useState<{
     scope: BadgePrintScope;
     session: PortalSession | null;

@@ -298,6 +298,9 @@ export function useProposalEntryIdentity(
       if (currentGeneration === generation.current) setLoading(false);
     }
   }
+  const verifyCurrent = useRef(verify);
+  verifyCurrent.current = verify;
+  const initialProofToken = initialProof?.token;
   useEffect(() => {
     if (!enabled) return;
     let active = true;
@@ -306,8 +309,8 @@ export function useProposalEntryIdentity(
       const token =
         new URLSearchParams(location.hash.slice(1)).get("verify") ??
         new URL(location.hash.slice(1), location.origin).searchParams.get("verify") ??
-        initialProof?.token;
-      if (!token || (startWithEmailProof && token === initialProof?.token)) return false;
+        initialProofToken;
+      if (!token || (startWithEmailProof && token === initialProofToken)) return false;
       if (proofAttempt.current?.scope === proofScope && proofAttempt.current.token === token) return true;
       clearResolution();
       setPerson(null);
@@ -316,7 +319,7 @@ export function useProposalEntryIdentity(
       setAuthenticated(false);
       // A new representation confirmed for the same person keeps their typed names; anyone else starts afresh.
       if (!proofOwner.current) setNameDrafts({});
-      void verify(token);
+      void verifyCurrent.current(token);
       return true;
     };
     window.addEventListener("hashchange", consumeProof);
@@ -374,7 +377,16 @@ export function useProposalEntryIdentity(
       window.removeEventListener("hashchange", consumeProof);
       setLoading(false);
     };
-  }, [enabled, endpoint, speakerManagementToken, speakerProposalId, expectedSpeakerUserId, startWithEmailProof]);
+  }, [
+    enabled,
+    endpoint,
+    speakerManagementToken,
+    speakerProposalId,
+    expectedSpeakerUserId,
+    startWithEmailProof,
+    initialProofToken,
+    proofScope,
+  ]);
 
   // The person as shown and sent: saved names first, otherwise the names typed here.
   const draftedPerson = useMemo<ParticipationPerson | null>(

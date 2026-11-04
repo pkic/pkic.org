@@ -55,10 +55,12 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
   const camera = useScannerCamera((raw) => {
     if (camera.acceptsFrame(raw) && printing.scan(raw)) camera.stop();
   });
+  const stopCamera = useRef(camera.stop);
+  stopCamera.current = camera.stop;
   useEffect(
     () => () => {
       continuous.current = false;
-      camera.stop();
+      stopCamera.current();
     },
     [],
   );

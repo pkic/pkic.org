@@ -123,7 +123,7 @@ export function useScannerOfflinePreparation(
         });
     }
     return () => controller.abort();
-  }, [slug, action, session, epoch?.epochId, epoch?.state, manifest, prepareCode, retry, route]);
+  }, [slug, action, session, epoch, manifest, prepareCode, retry, route]);
   useEffect(() => {
     if (!prepared) return;
     const timer = window.setInterval(() => tick((value) => value + 1), 1000);

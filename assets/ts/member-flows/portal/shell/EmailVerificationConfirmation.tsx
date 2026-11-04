@@ -44,9 +44,10 @@ export function EmailVerificationConfirmation() {
   const [verified, setVerified] = useState<Verified | null>(null);
 
   useEffect(() => {
-    if (!parsed.success) return;
+    const previewInput = ownEmailAddressVerificationSchema.safeParse({ token });
+    if (!previewInput.success) return;
     let cancelled = false;
-    postJson(`${ENDPOINT}/preview`, parsed.data, ownEmailAddressVerificationPreviewResponseSchema)
+    postJson(`${ENDPOINT}/preview`, previewInput.data, ownEmailAddressVerificationPreviewResponseSchema)
       .then((preview) => {
         if (!cancelled) {
           setEmail(preview.email);

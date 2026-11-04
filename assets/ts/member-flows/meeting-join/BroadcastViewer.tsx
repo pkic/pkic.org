@@ -42,12 +42,15 @@ export function BroadcastViewer({
         checking = false;
       }
     }
-    const timer = window.setInterval(() => void checkAccess(), 30_000);
-    window.addEventListener("focus", checkAccess);
+    const check = () => {
+      void checkAccess();
+    };
+    const timer = window.setInterval(check, 30_000);
+    window.addEventListener("focus", check);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
-      window.removeEventListener("focus", checkAccess);
+      window.removeEventListener("focus", check);
     };
   }, [landing]);
 

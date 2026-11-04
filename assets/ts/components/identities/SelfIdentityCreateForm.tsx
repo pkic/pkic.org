@@ -43,13 +43,13 @@ export function SelfIdentityCreateForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [delivery, setDelivery] = useState<ImmediateEmailDelivery>("sent");
-  useEffect(() => onBusy?.(busy), [busy]);
+  useEffect(() => onBusy?.(busy), [busy, onBusy]);
   useEffect(
     () =>
       onActionLabel?.(
         stage === "email" ? "Continue" : stage === "waiting" ? "Check verification" : "Add representation",
       ),
-    [stage],
+    [stage, onActionLabel],
   );
   const proofForm = useContractForm(identityAffiliationPreviewSchema, {
     phase: "resolve",
@@ -137,21 +137,23 @@ export function SelfIdentityCreateForm({
         noValidate
         class="pk-stack"
         {...proofForm.handlers}
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
-          if (busy) return;
-          const checked = proofForm.submit();
-          if (!checked.data) return setError(checked.formMessage ?? "");
-          setBusy(true);
-          setError("");
-          try {
-            const current = (await ownAddresses()).find((item) => item.email.toLowerCase() === email.toLowerCase());
-            await resolve(current ?? { id: null, email });
-          } catch (cause) {
-            setError(proofForm.refuse(cause));
-          } finally {
-            setBusy(false);
-          }
+          void (async () => {
+            if (busy) return;
+            const checked = proofForm.submit();
+            if (!checked.data) return setError(checked.formMessage ?? "");
+            setBusy(true);
+            setError("");
+            try {
+              const current = (await ownAddresses()).find((item) => item.email.toLowerCase() === email.toLowerCase());
+              await resolve(current ?? { id: null, email });
+            } catch (cause) {
+              setError(proofForm.refuse(cause));
+            } finally {
+              setBusy(false);
+            }
+          })().catch((cause: unknown) => setError(proofForm.refuse(cause)));
         }}
       >
         {delivery === "sent" ? (
@@ -165,25 +167,27 @@ export function SelfIdentityCreateForm({
         <Button
           variant="link"
           loading={busy}
-          onClick={async () => {
-            setBusy(true);
-            setError("");
-            try {
-              const requested = await postJson(
-                OWN_EMAILS_ENDPOINT,
-                ownRepresentationEmailAddSchema.parse({
-                  email,
-                  purpose: "representation",
-                  unaffiliatedAttestation: individual,
-                }),
-                ownEmailVerificationRequestedResponseSchema,
-              );
-              setDelivery(requested.delivery);
-            } catch (cause) {
-              setError(proofForm.refuse(cause));
-            } finally {
-              setBusy(false);
-            }
+          onClick={() => {
+            void (async () => {
+              setBusy(true);
+              setError("");
+              try {
+                const requested = await postJson(
+                  OWN_EMAILS_ENDPOINT,
+                  ownRepresentationEmailAddSchema.parse({
+                    email,
+                    purpose: "representation",
+                    unaffiliatedAttestation: individual,
+                  }),
+                  ownEmailVerificationRequestedResponseSchema,
+                );
+                setDelivery(requested.delivery);
+              } catch (cause) {
+                setError(proofForm.refuse(cause));
+              } finally {
+                setBusy(false);
+              }
+            })().catch((cause: unknown) => setError(proofForm.refuse(cause)));
           }}
         >
           Resend verification email
@@ -203,26 +207,30 @@ export function SelfIdentityCreateForm({
     <form
       noValidate
       class="pk-stack"
-      onSubmit={async (event) => {
+      onSubmit={(event) => {
         event.preventDefault();
-        if (busy) return;
-        setBusy(true);
-        setError("");
-        try {
-          if (!(await details.current.prepare?.())) return;
-          const checked = details.current.read?.();
-          if (!checked || "refused" in checked) return;
-          const result = await postJson(
-            "/api/v1/users/current/identities",
-            currentUserIdentityCreateSchema.parse({ contextToken: checked.contextToken }),
-            identityMutationResponseSchema,
-          );
-          await onCreated(result);
-        } catch (cause) {
-          setError(cause instanceof Error ? cause.message : "Could not add the representation.");
-        } finally {
-          setBusy(false);
-        }
+        void (async () => {
+          if (busy) return;
+          setBusy(true);
+          setError("");
+          try {
+            if (!(await details.current.prepare?.())) return;
+            const checked = details.current.read?.();
+            if (!checked || "refused" in checked) return;
+            const result = await postJson(
+              "/api/v1/users/current/identities",
+              currentUserIdentityCreateSchema.parse({ contextToken: checked.contextToken }),
+              identityMutationResponseSchema,
+            );
+            await onCreated(result);
+          } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "Could not add the representation.");
+          } finally {
+            setBusy(false);
+          }
+        })().catch((cause: unknown) =>
+          setError(cause instanceof Error ? cause.message : "Could not add the representation."),
+        );
       }}
     >
       <DescriptionList items={[{ term: "Verified representation email", value: email }]} />

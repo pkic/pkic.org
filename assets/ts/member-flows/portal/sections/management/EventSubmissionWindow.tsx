@@ -64,8 +64,11 @@ export function useEventSubmissionWindow({
     closesAt: instantFromLocal(draft.closesAt, timeZone),
   });
   useEffect(() => {
-    setDraft(draftFromPlacement());
-  }, [placement.id, placement.opensAt, placement.closesAt]);
+    setDraft({
+      opensAt: localFromInstant(placement.opensAt, timeZone),
+      closesAt: localFromInstant(placement.closesAt, timeZone),
+    });
+  }, [placement.id, placement.opensAt, placement.closesAt, timeZone]);
   function reset() {
     setDraft(draftFromPlacement());
     form.reset();
@@ -101,6 +104,7 @@ export function useEventSubmissionWindow({
     form,
     saving,
     error,
+    setError,
     saved,
     reset,
     save,
@@ -150,7 +154,13 @@ export function EventSubmissionWindow({
   }
   return (
     <Panel aria-label="Submission window">
-      <form noValidate {...editor.form.handlers} onSubmit={save}>
+      <form
+        noValidate
+        {...editor.form.handlers}
+        onSubmit={(event) => {
+          void save(event).catch((error: unknown) => editor.setError(editor.form.refuse(error)));
+        }}
+      >
         <PanelHeader title="Submission window" headingLevel={4}>
           <EditActions
             label="Submission window actions"

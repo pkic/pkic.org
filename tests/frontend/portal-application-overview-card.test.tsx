@@ -183,6 +183,21 @@ describe("membership application overview card", () => {
     expect(onEditingChange).toHaveBeenCalledWith(false);
   });
 
+  it("initializes on opening and preserves edits when the detail object refreshes", async () => {
+    const onSave = vi.fn(async () => undefined);
+    const show = (record: MembershipApplicationDetail, editing: boolean) => (
+      <ApplicationOverviewCard detail={record} categories={CATEGORIES} onSave={onSave} editing={editing} />
+    );
+    const page = mount(show(detail(), false));
+    await act(() => render(show(detail({ applicantName: "Latest applicant" }), true), page));
+    await settle();
+    expect(controlFor(page, "Applicant name").value).toBe("Latest applicant");
+    await typeInto(controlFor(page, "Applicant name"), "Unsaved applicant");
+    await act(() => render(show(detail({ applicantName: "Refreshed applicant" }), true), page));
+    await settle();
+    expect(controlFor(page, "Applicant name").value).toBe("Unsaved applicant");
+  });
+
   it("keeps the editor open and announces the refusal when the save is rejected", async () => {
     const page = mountCard({
       editing: true,

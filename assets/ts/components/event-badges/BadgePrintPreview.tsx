@@ -84,7 +84,7 @@ export function BadgePrintPreview({
       if (live.current) setBusy(false);
     }
   }
-  async function useFullBadge(download: boolean) {
+  async function applyFullBadge(download: boolean) {
     if (checking.current || archiveBuilding.current || !live.current) return;
     const owned = badges;
     checking.current = true;
@@ -163,7 +163,7 @@ export function BadgePrintPreview({
       {tab === "layout" ? (
         <div class="pk-stack">
           {(context.template || loadPrintingContext) && (
-            <Button loading={busy} onClick={() => void useFullBadge(false)}>
+            <Button loading={busy} onClick={() => void applyFullBadge(false)}>
               Use full badge
             </Button>
           )}
@@ -198,7 +198,7 @@ export function BadgePrintPreview({
                     release(() => downloadBadgeArtifact(html, "text/html;charset=utf-8", "attendee-badges.html")),
                 },
                 ...(context.template || loadPrintingContext
-                  ? [{ id: "full-html", label: "Full badge (HTML)", onDownload: () => useFullBadge(true) }]
+                  ? [{ id: "full-html", label: "Full badge (HTML)", onDownload: () => applyFullBadge(true) }]
                   : []),
                 ...(csvAvailable
                   ? [

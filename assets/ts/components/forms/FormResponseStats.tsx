@@ -10,7 +10,7 @@
  * pie, donut and word cloud, so standalone broadcasts never depend on portal styles.
  */
 
-import { useMemo, useEffect, useState } from "preact/hooks";
+import { useMemo, useEffect, useRef, useState } from "preact/hooks";
 import type { FormFieldDefinition } from "../../../shared/schemas/forms";
 import type { FormSubmissionStat } from "../../../shared/schemas/form-management";
 import { VISUALIZATIONS, visualizationSchema, type Visualization } from "../../../shared/schemas/form-field-rules";
@@ -359,6 +359,7 @@ export function FormResponseStats({
   const fieldStats = useMemo(() => mapServerStats(fields, stats), [fields, stats]);
   const [presentationByField, setPresentationByField] = useState<Record<string, VisualizationChoice>>({});
   const [expandedFieldKey, setExpandedFieldKey] = useState<string | null>(null);
+  const backdropPointer = useRef<number | null>(null);
   const displayedStats = useMemo(
     () =>
       fieldStats.map((stat) => {
@@ -426,9 +427,16 @@ export function FormResponseStats({
           role="dialog"
           aria-modal="true"
           aria-label={expandedStat.field.label}
-          onClick={() => setExpandedFieldKey(null)}
+          onPointerDown={(event) => {
+            backdropPointer.current = event.target === event.currentTarget ? event.pointerId : null;
+          }}
+          onPointerUp={(event) => {
+            if (event.target === event.currentTarget && backdropPointer.current === event.pointerId)
+              setExpandedFieldKey(null);
+            backdropPointer.current = null;
+          }}
         >
-          <div class="adm-stat-modal pk-stack" onClick={(event) => event.stopPropagation()}>
+          <div class="adm-stat-modal pk-stack">
             <CloseButton
               class="adm-stat-modal-close"
               label={`Close ${expandedStat.field.label} chart`}

@@ -98,7 +98,11 @@ export function SessionPromotionKit({
             confirmLabel="Approve promotion copy"
             confirmDisabled={busy}
             onConfirm={() => void approve()}
-            onCancel={closeEditing}
+            onCancel={() => {
+              void closeEditing().catch((cause: unknown) =>
+                setError(cause instanceof Error ? cause.message : "Could not close the editor."),
+              );
+            }}
           >
             <form
               noValidate

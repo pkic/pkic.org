@@ -328,11 +328,18 @@ export function ServerSearchSelect<Item, Response>({
                   optionRefs.current[0] = element;
                 }}
                 role="option"
+                tabIndex={-1}
                 aria-selected={!value ? "true" : "false"}
                 data-key=""
                 class={["pk-menu__item", activeIndex === 0 ? "pk-menu__item--active" : null].filter(Boolean).join(" ")}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => choose(0)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    choose(0);
+                  }
+                }}
               >
                 {placeholder}
               </div>
@@ -348,6 +355,7 @@ export function ServerSearchSelect<Item, Response>({
                     optionRefs.current[index] = element;
                   }}
                   role="option"
+                  tabIndex={-1}
                   aria-selected={key === value ? "true" : "false"}
                   data-key={key}
                   class={["pk-menu__item", activeIndex === index ? "pk-menu__item--active" : null]
@@ -355,6 +363,12 @@ export function ServerSearchSelect<Item, Response>({
                     .join(" ")}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => choose(index)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      choose(index);
+                    }
+                  }}
                 >
                   {catalog.itemLabel(item)}
                 </div>

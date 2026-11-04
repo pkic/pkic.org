@@ -244,7 +244,11 @@ describe("event app More sheet", () => {
     expect(sheet.open).toBe(false);
     await act(() => more.click());
     await act(() => {
-      sheet.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      for (const type of ["pointerdown", "pointerup"]) {
+        const event = new Event(type, { bubbles: true });
+        Object.defineProperty(event, "pointerId", { value: 1 });
+        sheet.dispatchEvent(event);
+      }
     });
     expect(sheet.open).toBe(false);
     await act(() => more.click());

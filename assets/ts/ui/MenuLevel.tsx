@@ -32,6 +32,7 @@ export function MenuLevel({
   const itemRefs = useRef<(HTMLButtonElement | HTMLAnchorElement | null)[]>([]);
   const childAnchor = useRef<HTMLElement>(null);
   const reachable = items.flatMap((item, index) => (item.disabled ? [] : [index]));
+  const reachableKey = reachable.join(",");
   const [active, setActive] = useState((initialLast ? reachable.at(-1) : reachable[0]) ?? -1);
   const [child, setChild] = useState<string | null>(null);
   const childItem = items.find((item) => item.id === child && !item.disabled);
@@ -48,8 +49,9 @@ export function MenuLevel({
   });
   useLayoutEffect(() => {
     if (childItem) return;
-    if (!reachable.includes(active)) {
-      setActive(reachable[0] ?? -1);
+    const currentReachable = reachableKey ? reachableKey.split(",").map(Number) : [];
+    if (!currentReachable.includes(active)) {
+      setActive(currentReachable[0] ?? -1);
       return;
     }
     const item = itemRefs.current[active];
@@ -60,7 +62,7 @@ export function MenuLevel({
       if (row.bottom > bounds.bottom) popupRef.current.scrollTop += row.bottom - bounds.bottom;
       else if (row.top < bounds.top) popupRef.current.scrollTop -= bounds.top - row.top;
     }
-  }, [active, revision, childItem]);
+  }, [active, revision, childItem, reachableKey]);
   function select(item: MenuItem, index: number) {
     if (item.disabled) return;
     setActive(index);
@@ -113,7 +115,7 @@ export function MenuLevel({
     }
   }
   return (
-    <div ref={popupRef} id={id} role="menu" aria-label={label} class="pk-menu__popup" onKeyDown={keyDown}>
+    <div ref={popupRef} id={id} role="menu" tabIndex={-1} aria-label={label} class="pk-menu__popup" onKeyDown={keyDown}>
       {heading && <p class="pk-menu__heading">{heading}</p>}
       {items.map((item, index) => {
         const shared = {

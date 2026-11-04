@@ -1,7 +1,7 @@
 import { personNamePatchSchema } from "../../shared/schemas/api-common";
 import type { ComponentChildren } from "preact";
 import { createPortal } from "preact/compat";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { useContractForm } from "../hooks/useContractForm";
 import { useDialogQueryState } from "../hooks/useDialogQueryState";
@@ -45,12 +45,15 @@ export function ParticipationPersonalDetails({
     form.reset();
     showEditing();
   }
+  const showRefusal = useRef<((message: string) => void) | null>(null);
+  showRefusal.current = (message) => {
+    if (!save) return;
+    edit();
+    form.submit();
+    setError(message);
+  };
   useEffect(() => {
-    if (refusal && save) {
-      edit();
-      form.submit();
-      setError(refusal);
-    }
+    if (refusal) showRefusal.current?.(refusal);
   }, [refusal]);
   async function submit(): Promise<void> {
     const checked = form.submit();

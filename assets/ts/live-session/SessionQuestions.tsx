@@ -49,15 +49,16 @@ function AskQuestion({
   const statusId = useId();
   const form = useContractForm(liveQuestionAskSchema, { text, anonymous }, { quietWhenEmpty: true });
   const field = form.of("text");
+  const resetForm = form.reset;
   useEffect(() => {
     if (!pending || result?.operationId !== pending.operationId) return;
     if (result.type === "question.accepted") {
       setText("");
-      form.reset();
+      resetForm();
       setError(null);
     } else setError(result.message);
     setPending(null);
-  }, [pending, result]);
+  }, [pending, result, resetForm]);
   return (
     <form
       class="pk-stack pk-stack--snug"
@@ -118,15 +119,16 @@ function SessionQuestionsRoom({
   createSocket?: LiveSocketFactory;
 }) {
   const room = useLiveRoom({ slug, occurrenceId, createSocket });
+  const send = room.send;
   const [threadId, setThreadId] = useState<string | null>(null);
   const threadVisible = threadId !== null && room.state?.questions.some((question) => question.id === threadId);
   useEffect(() => {
     if (!threadId || !threadVisible || room.status !== "live") return;
-    room.send({ type: "question.answers.watch", questionId: threadId });
+    send({ type: "question.answers.watch", questionId: threadId });
     return () => {
-      room.send({ type: "question.answers.watch", questionId: null });
+      send({ type: "question.answers.watch", questionId: null });
     };
-  }, [threadId, threadVisible, room.status, room.send]);
+  }, [threadId, threadVisible, room.status, send]);
   useEffect(() => {
     setThreadId(null);
   }, [occurrenceId]);

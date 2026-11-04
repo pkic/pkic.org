@@ -50,8 +50,7 @@ export function PasskeySettings({ toastTargetId }: { toastTargetId: string }) {
     void load();
   }, [load]);
 
-  async function handleEnroll(event: Event) {
-    event.preventDefault();
+  async function handleEnroll() {
     setEnrollmentError(null);
     const failure = await enroll(deviceName);
     if (failure) {
@@ -184,7 +183,16 @@ export function PasskeySettings({ toastTargetId }: { toastTargetId: string }) {
       >
         {enrollmentError && <Alert tone="danger">{enrollmentError}</Alert>}
         {passkeysSupported ? (
-          <form onSubmit={handleEnroll}>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleEnroll().catch((reason: unknown) => {
+                setEnrollmentError(
+                  reason instanceof Error ? reason.message : "Could not add the passkey. Please try again.",
+                );
+              });
+            }}
+          >
             {/* Field owns the label pairing; InputGroup keeps the button one control tall beside the input. */}
             <Field label="Device name (optional)">
               {(control) => (

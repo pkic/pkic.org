@@ -75,15 +75,25 @@ def generate() -> str:
         provenance[key] = {"path": relative, "sha256": hashlib.sha256(raw).hexdigest()}
         normalized = normalize_mark(raw.decode()).encode() if key == "mark" else raw
         assets[key] = {"mime": mime, "base64": base64.b64encode(normalized).decode()}
-    license_text = (ROOT / "static/fonts/Roboto-OFL.txt").read_text()
-    font_css = re.sub(r"/\*[\s\S]*?\*/", "", (ROOT / "assets/design/fonts.css").read_text()).strip()
-    font_css = font_css.replace("/fonts/Roboto-latin.woff2", "asset:roboto_latin").replace("/fonts/Roboto-latin-ext.woff2", "asset:roboto_latin_ext")
     return "\n".join([
         "/** Generated from canonical public assets by scripts/generate-badge-template-assets.py. */",
         'import type { EventBadgeTemplate } from "./schemas/event-badge-template";',
         "export const BADGE_GENERIC_BRAND_ASSETS = " + json.dumps(assets, indent=2) + " as const satisfies EventBadgeTemplate[\"assets\"];",
         "export const BADGE_GENERIC_BRAND_PROVENANCE = " + json.dumps(provenance, indent=2) + " as const;",
-        "export const BADGE_GENERIC_FONT_CSS = " + json.dumps(font_css) + ";",
+        "",
+    ])
+
+
+def generate_font_css() -> str:
+    font_css = re.sub(r"/\*[\s\S]*?\*/", "", (ROOT / "assets/design/fonts.css").read_text()).strip()
+    font_css = font_css.replace("/fonts/Roboto-latin.woff2", "asset:roboto_latin").replace("/fonts/Roboto-latin-ext.woff2", "asset:roboto_latin_ext")
+    return '/** Generated from assets/design/fonts.css by scripts/generate-badge-template-assets.py. */\nexport const BADGE_GENERIC_FONT_CSS = ' + json.dumps(font_css) + ';\n'
+
+
+def generate_font_license() -> str:
+    license_text = (ROOT / "static/fonts/Roboto-OFL.txt").read_text()
+    return "\n".join([
+        "/** Generated from static/fonts/Roboto-OFL.txt by scripts/generate-badge-template-assets.py. */",
         "/** Roboto 3.015 (2026); embedded font metadata names the Roboto Project Authors and OFL URL. */",
         "export const BADGE_GENERIC_FONT_LICENSE = " + json.dumps(license_text) + ";",
         "",
@@ -93,6 +103,8 @@ def generate() -> str:
 if __name__ == "__main__":
     for relative, content in (
         ("assets/shared/badge-generic-template-assets.ts", generate()),
+        ("assets/shared/badge-generic-font-css.ts", generate_font_css()),
+        ("assets/shared/badge-generic-font-license.ts", generate_font_license()),
         ("assets/shared/badge-pqc-template-assets.ts", generate_pqc()),
     ):
         destination = ROOT / relative

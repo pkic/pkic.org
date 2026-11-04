@@ -27,6 +27,7 @@ export function useProposalReviewComments(
   proposalApiBase: string,
   reloadProposal: () => void | Promise<void>,
   enabled = true,
+  onError: (error: unknown) => void,
 ) {
   const [reviews, setReviews] = useState<ProposalReview[]>([]);
   const [reviewPage, setReviewPage] = useState<PageInfo | null>(null);
@@ -67,8 +68,8 @@ export function useProposalReviewComments(
   }, [enabled, proposalApiBase]);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    void reload().catch(onError);
+  }, [reload, onError]);
 
   function reviewSaved(review: ProposalReview): void {
     setMyReview(review);
@@ -78,7 +79,7 @@ export function useProposalReviewComments(
         ? previous.map((item, itemIndex) => (itemIndex === index ? review : item))
         : [...previous, review];
     });
-    void Promise.all([reloadProposal(), reload()]);
+    void Promise.all([reloadProposal(), reload()]).catch(onError);
   }
 
   async function addComment(comment: string): Promise<void> {

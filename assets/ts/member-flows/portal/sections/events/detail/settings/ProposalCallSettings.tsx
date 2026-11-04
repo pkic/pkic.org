@@ -67,7 +67,7 @@ export function ProposalCallSettings({
     return () => {
       current = false;
     };
-  }, [event.slug, event.updatedAt]);
+  }, [event.slug, event.updatedAt, setError]);
   function reset() {
     setDraft({
       opensAt: localFromInstant(window?.opensAt ?? null, event.timezone),

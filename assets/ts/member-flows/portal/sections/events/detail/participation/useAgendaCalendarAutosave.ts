@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
   agendaCalendarSettingsSchema,
   type AgendaCalendarSettings,
@@ -19,8 +19,11 @@ export function useAgendaCalendarAutosave(
   const form = useContractForm(agendaCalendarSettingsSchema, settings);
   const [request, setRequest] = useState(0);
   const [saving, setSaving] = useState(false);
+  const latest = useRef({ form, save });
+  latest.current = { form, save };
   useEffect(() => {
     if (request === 0) return;
+    const { form, save } = latest.current;
     const checked = form.submit();
     if (!checked.data) {
       if (checked.formMessage) toast(checked.formMessage, "error");

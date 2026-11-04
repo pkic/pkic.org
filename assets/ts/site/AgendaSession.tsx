@@ -1,3 +1,4 @@
+import { useAgendaCardPress } from "./use-agenda-card-press";
 import { isPersonalAgendaSession } from "./AgendaParticipationControls";
 import { agendaSpeakerSession, type AgendaSpeakerSession } from "./agenda-speaker-sessions";
 import { clockTimeZone, type ClockZone } from "../../shared/event-clock";
@@ -86,7 +87,6 @@ function AgendaSessionDuration({
       class="pk-content-agenda__duration"
       data-agenda-card-control
       onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => event.stopPropagation()}
     >
       {editor?.onDurationChange ? (
         <Menu
@@ -212,6 +212,9 @@ export function AgendaSession({
     if (iframe && !iframe.closest("[hidden]")) iframe.src = iframe.dataset.videoSrc!;
     if (!detail.current?.open) detail.current?.showModal();
   };
+  const { cancel: cancelCardPress, ...cardPress } = useAgendaCardPress(
+    editor ? () => (editor.onOpen ? editor.onOpen() : openDetails()) : undefined,
+  );
   const locationIndex = Math.max(
     0,
     locations.findIndex((location) => location.id === session.locations[0]),
@@ -236,25 +239,12 @@ export function AgendaSession({
         data-agenda-media-start={slot?.startsAt}
         data-agenda-media-end={session.endsAt}
         draggable={Boolean(editor?.onDragStart)}
-        onDragStart={editor?.onDragStart}
+        onDragStart={(event) => {
+          cancelCardPress();
+          editor?.onDragStart?.(event);
+        }}
         onDragEnd={editor?.onDragEnd}
-        onClick={
-          editor
-            ? (event) => {
-                const target = event.target;
-                if (
-                  !(target instanceof Element) ||
-                  target.closest(
-                    "a, button, input, select, textarea, label, summary, dialog, [data-agenda-card-control]",
-                  ) ||
-                  window.getSelection()?.toString()
-                )
-                  return;
-                if (editor.onOpen) editor.onOpen();
-                else openDetails();
-              }
-            : undefined
-        }
+        {...cardPress}
         data-agenda-session={(session.kind === "break" && session.locations.length === 0
           ? locations.map((location) => location.id)
           : session.locations
@@ -275,7 +265,6 @@ export function AgendaSession({
             class="pk-content-agenda__card-header"
             data-agenda-card-control
             onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => event.stopPropagation()}
           >
             {editor.controls}
           </div>
@@ -342,7 +331,6 @@ export function AgendaSession({
             class="pk-content-agenda__card-footer"
             data-agenda-card-control
             onPointerDown={editor ? (event) => event.stopPropagation() : undefined}
-            onClick={editor ? (event) => event.stopPropagation() : undefined}
           >
             <AgendaSessionActions
               session={session}

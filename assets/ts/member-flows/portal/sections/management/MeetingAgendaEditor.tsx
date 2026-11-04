@@ -161,7 +161,15 @@ function AgendaForm({ agenda, endpoint, groupId }: { agenda: MeetingAgenda; endp
         {immutable && (
           <p>This past or approved occurrence is preserved. Update the reusable format or another future draft.</p>
         )}
-        <form noValidate onSubmit={save} class="pk-form">
+        <form
+          noValidate
+          onSubmit={(event) => {
+            void save(event).catch((error: unknown) =>
+              setError(error instanceof Error ? error.message : "Could not save agenda."),
+            );
+          }}
+          class="pk-form"
+        >
           <Field label="Agenda name" {...form.of("name")}>
             {(control) => (
               <TextInput
@@ -348,7 +356,11 @@ function AgendaForm({ agenda, endpoint, groupId }: { agenda: MeetingAgenda; endp
             disabled={
               busy || immutable || snapshot.revision === 0 || items !== snapshot.items || name !== snapshot.name
             }
-            onClick={publish}
+            onClick={() => {
+              void publish().catch((error: unknown) =>
+                setError(error instanceof Error ? error.message : "Could not approve agenda."),
+              );
+            }}
           >
             Approve and freeze this agenda
           </Button>

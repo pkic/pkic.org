@@ -129,7 +129,14 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
 
   if (loading) return <Spinner />;
   return (
-    <form noValidate class="pk" {...form.handlers} onSubmit={submit}>
+    <form
+      noValidate
+      class="pk"
+      {...form.handlers}
+      onSubmit={(event) => {
+        void submit(event).catch((error: unknown) => setError(form.refuse(error)));
+      }}
+    >
       <Panel aria-labelledby={headingId}>
         <PanelHeader id={headingId} title="Membership category eligibility">
           {categories.length > 0 && (

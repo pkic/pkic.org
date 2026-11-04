@@ -5,7 +5,7 @@ import { RegistrationBadgePrinting } from "../../../../../../components/event-ba
 import type { BadgePrintScope } from "../../../../../../components/event-badges/badge-print-population";
 import type { PortalSession } from "../../../../types";
 import { isAuthed, portalSession } from "../../../../state";
-import { useState } from "preact/hooks";
+import { useCallback, useState } from "preact/hooks";
 import {
   badgeCredentialMetadataSchema,
   badgeCredentialsResponseSchema,
@@ -57,13 +57,17 @@ export function BadgeCredentials({
   onPrintClose?: () => void;
 }) {
   const [, navigate] = usePortalHashLocation();
-  const printContextCurrent = () =>
-    Boolean(
-      printRequest?.session &&
-      isAuthed.value &&
-      portalSession.value === printRequest.session &&
-      Math.min(Date.parse(printRequest.session.expiresAt), Date.parse(printRequest.session.idleExpiresAt)) > Date.now(),
-    );
+  const printSession = printRequest?.session;
+  const printContextCurrent = useCallback(
+    () =>
+      Boolean(
+        printSession &&
+        isAuthed.value &&
+        portalSession.value === printSession &&
+        Math.min(Date.parse(printSession.expiresAt), Date.parse(printSession.idleExpiresAt)) > Date.now(),
+      ),
+    [printSession],
+  );
   if (printRequest && eventId && onPrintClose)
     return printContextCurrent() ? (
       <RegistrationBadgePrinting

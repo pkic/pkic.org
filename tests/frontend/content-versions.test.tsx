@@ -64,8 +64,14 @@ describe("shared model tree version navigation", () => {
     expect(popup).not.toContain("wg-version-hint--fallback");
     const fallbackTree = structuredClone(tree);
     fallbackTree.versions!.items[0]!.fallback = true;
-    expect(render(<WorkingGroupSidebarTree tree={fallbackTree} />)).toContain("aria-description=");
-    expect(render(<WorkingGroupSidebarTree tree={fallbackTree} />)).not.toContain(">Overview<");
+    const fallbackRoot = document.createElement("div");
+    fallbackRoot.innerHTML = render(<WorkingGroupSidebarTree tree={fallbackTree} />);
+    const fallbackLink = fallbackRoot.querySelector<HTMLAnchorElement>('a[href="/model/1.1.2/"]')!;
+    const explanation = fallbackLink.querySelector(".pk-sr-only")!;
+    expect(explanation.textContent).toContain("Opens this version’s overview because this page has no equivalent.");
+    expect(explanation.closest('[aria-hidden="true"]')).toBeNull();
+    expect(fallbackLink.getAttribute("aria-current")).toBe("page");
+    expect(fallbackRoot.innerHTML).not.toContain(">Overview<");
     expect(popup).toContain('aria-label="Switch model version"');
   });
   it("shows direct links to the latest release, selected older release, and every draft", () => {

@@ -4,7 +4,7 @@ vi.mock("../../assets/ts/shared/api-client", async (original) => ({ ...(await or
 import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { revokePushDevice } from "../../assets/ts/member-flows/portal/notifications/revokePushDevice";
 import { pushDeviceId, existingPushDeviceId } from "../../assets/ts/member-flows/portal/notifications/push-device";
-let unsubscribe: ReturnType<typeof vi.fn>;
+let unsubscribe: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
 beforeEach(() => {
   const storage = new Map<string, string>();
   vi.stubGlobal("localStorage", {

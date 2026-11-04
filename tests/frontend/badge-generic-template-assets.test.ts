@@ -5,9 +5,9 @@ import { describe, expect, it } from "vitest";
 import {
   BADGE_GENERIC_BRAND_ASSETS,
   BADGE_GENERIC_BRAND_PROVENANCE,
-  BADGE_GENERIC_FONT_CSS,
-  BADGE_GENERIC_FONT_LICENSE,
 } from "../../assets/shared/badge-generic-template-assets";
+import { BADGE_GENERIC_FONT_CSS } from "../../assets/shared/badge-generic-font-css";
+import { BADGE_GENERIC_FONT_LICENSE } from "../../assets/shared/badge-generic-font-license";
 
 describe("canonical public badge artwork snapshot provenance", () => {
   it("requires regeneration whenever an authoritative mark or bundled font changes", () => {

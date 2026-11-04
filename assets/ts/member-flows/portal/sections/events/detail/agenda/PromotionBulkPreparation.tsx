@@ -110,8 +110,16 @@ export function PromotionBulkPreparation({
           description="Prepare a personal kit for each speaker in every published session. Each kit keeps its owner’s referral link and adjustments. Nothing is sent to speakers."
           confirmLabel={batchId ? "Done" : "Prepare all speaker kits"}
           confirmDisabled={busy}
-          onConfirm={() => (batchId ? close() : void start())}
-          onCancel={close}
+          onConfirm={() => {
+            void (batchId ? close() : start()).catch((cause: unknown) =>
+              setError(cause instanceof Error ? cause.message : "Could not prepare speaker kits."),
+            );
+          }}
+          onCancel={() => {
+            void close().catch((cause: unknown) =>
+              setError(cause instanceof Error ? cause.message : "Could not close bulk preparation."),
+            );
+          }}
         >
           {creating && (
             <form

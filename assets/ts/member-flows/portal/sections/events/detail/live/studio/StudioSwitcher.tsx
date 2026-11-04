@@ -94,12 +94,13 @@ export function ProgramUndoToast({
   onUndo: (snapshotId: string) => void;
 }) {
   const [shown, setShown] = useState<string | null>(null);
+  const snapshotId = undo?.snapshotId;
   useEffect(() => {
-    if (!undo) return;
-    setShown(undo.snapshotId);
+    if (!snapshotId) return;
+    setShown(snapshotId);
     const hide = setTimeout(() => setShown(null), PROGRAM_UNDO_MS);
     return () => clearTimeout(hide);
-  }, [undo?.snapshotId]);
+  }, [snapshotId]);
   if (!undo || shown !== undo.snapshotId) return null;
   return (
     <div class="pk-studio__toast">

@@ -72,7 +72,7 @@ import { portalIdentityChoiceFixtures, portalProfileFixture, portalSessionFixtur
 import { userAuthVerifySchema, userAuthRequestSchema } from "../../assets/shared/schemas/user-auth";
 import { scannerTransportUnavailable } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context";
 let host: HTMLElement;
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: ReturnType<typeof vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>>;
 beforeEach(() => {
   mocks.registerWorker.mockReset().mockResolvedValue(null);
   clearAuth();
@@ -89,7 +89,7 @@ beforeEach(() => {
   mocks.renderShell.mockReset();
   mocks.supportsPasskeys.mockReset().mockReturnValue(false);
   mocks.authenticateWithPasskey.mockReset();
-  fetchMock = vi.fn();
+  fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>();
   vi.stubGlobal("fetch", fetchMock);
   host = document.createElement("div");
   document.body.append(host);

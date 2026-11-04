@@ -63,7 +63,7 @@ export function WgChairsWidget({
 
   useEffect(() => {
     if (hasData) onReveal?.();
-  }, [hasData]);
+  }, [hasData, onReveal]);
 
   if (!hasData) return null;
 

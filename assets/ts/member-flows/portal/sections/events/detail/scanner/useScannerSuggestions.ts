@@ -68,21 +68,22 @@ export function useScannerSuggestions({
         if (!controller.signal.aborted && latest.current.scope === scope) setLoading(false);
       });
     return () => controller.abort();
-  }, [slug, operatorUserId, enabled, refresh]);
+  }, [slug, operatorUserId, enabled, refresh, scope]);
   const data = enabled && response?.scope === scope ? response.data : null;
   const suggestions = data ? distinctTargets(data.suggestions) : [];
   useEffect(() => {
     if (!data || !ready || provenance.current.considered) return;
     provenance.current.considered = true;
+    const candidates = distinctTargets(data.suggestions);
     if (
       explicitTarget ||
       provenance.current.manual ||
       latest.current.locked ||
       data.truncated ||
-      suggestions.length !== 1
+      candidates.length !== 1
     )
       return;
-    const candidate = suggestions[0]!;
+    const candidate = candidates[0]!;
     if ((candidate.occurrence.rooms?.length ?? 0) > 1 && !candidate.suggestedRoomId) return;
     latest.current.onChoose(candidate);
   }, [data, ready, locked, explicitTarget]);

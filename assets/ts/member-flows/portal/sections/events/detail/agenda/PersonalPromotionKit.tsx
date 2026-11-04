@@ -3,7 +3,7 @@ import { Alert } from "../../../../../../ui/Alert";
 import { downloadFile } from "../../../../../../shared/download-file";
 import { loadPromotionKit } from "./promotion-kit-client";
 import type { ComponentChildren } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import {
   promotionKitSchema,
@@ -62,9 +62,32 @@ export function PersonalPromotionKit({
       cancelled = true;
     };
   }, [base]);
+  const prepare = useCallback(
+    async (current: Kit) => {
+      try {
+        setKit(
+          await postJson(
+            `${base}/renders`,
+            {
+              fingerprint: current.fingerprint,
+              publishedRevision: current.publishedRevision,
+              compositionRevision: current.compositionRevision,
+            },
+            promotionKitSchema,
+          ),
+        );
+        setError("");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not create your materials.");
+      }
+    },
+    [base],
+  );
   useEffect(() => {
     if (!kit || kit.stale) return;
-    const missing = tiles.some((tile) => [undefined, "obsolete"].includes(status(tile.format)));
+    const missing = tiles.some((tile) =>
+      [undefined, "obsolete"].includes(kit.artifacts.find((item) => item.format === tile.format)?.status),
+    );
     if (missing && !requested.current) {
       requested.current = true;
       void prepare(kit);
@@ -85,25 +108,7 @@ export function PersonalPromotionKit({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [kit, base]);
-  async function prepare(current: Kit) {
-    try {
-      setKit(
-        await postJson(
-          `${base}/renders`,
-          {
-            fingerprint: current.fingerprint,
-            publishedRevision: current.publishedRevision,
-            compositionRevision: current.compositionRevision,
-          },
-          promotionKitSchema,
-        ),
-      );
-      setError("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not create your materials.");
-    }
-  }
+  }, [kit, base, prepare]);
   async function download(format: Format) {
     try {
       const content = await getBlob(artifact(format));
@@ -177,11 +182,17 @@ export function PersonalPromotionKit({
               key={kit.compositionRevision}
               kit={kit}
               base={base}
-              onCancel={closeEditing}
+              onCancel={() => {
+                void closeEditing().catch((cause: unknown) =>
+                  setError(cause instanceof Error ? cause.message : "Could not close the editor."),
+                );
+              }}
               onSaved={(value) => {
                 setKit(value);
                 requested.current = false;
-                void closeEditing();
+                void closeEditing().catch((cause: unknown) =>
+                  setError(cause instanceof Error ? cause.message : "Could not close the editor."),
+                );
               }}
             />
           </div>

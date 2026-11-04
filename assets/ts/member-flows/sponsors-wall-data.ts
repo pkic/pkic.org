@@ -71,17 +71,22 @@ export function useSponsorList(
 } {
   const [sponsors, setSponsors] = useState<PublicSponsor[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { eventSlug, eventName, level, minWeight, limit, sort } = filters;
   useEffect(() => {
     const controller = new AbortController();
     setSponsors(null);
     setError(null);
-    if (filters.limit === 0) {
+    if (limit === 0) {
       setSponsors([]);
       return () => controller.abort();
     }
-    void getJson(`${apiBase}/sponsors?${buildQuery(filters)}`, sponsorsListResponseSchema, {
-      signal: controller.signal,
-    })
+    void getJson(
+      `${apiBase}/sponsors?${buildQuery({ eventSlug, eventName, level, minWeight, limit, sort })}`,
+      sponsorsListResponseSchema,
+      {
+        signal: controller.signal,
+      },
+    )
       .then((response) => setSponsors(response.sponsors))
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
@@ -91,7 +96,7 @@ export function useSponsorList(
         }
       });
     return () => controller.abort();
-  }, [apiBase, filters.eventSlug, filters.eventName, filters.level, filters.minWeight, filters.limit, filters.sort]);
+  }, [apiBase, eventSlug, eventName, level, minWeight, limit, sort]);
   return { sponsors, error };
 }
 

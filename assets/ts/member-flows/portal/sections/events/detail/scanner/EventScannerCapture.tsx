@@ -129,20 +129,22 @@ export function EventScannerCapture({
     slug,
     action,
   );
+  const scannerLifecycle = useRef({ manualPaused, manual, badgeCamera, cooldown });
+  scannerLifecycle.current = { manualPaused, manual, badgeCamera, cooldown };
   useEffect(() => {
     if (!fastMode || !scannerShell.current) return;
     const release = scannerImmersiveLifecycle(
       scannerShell.current,
       () => {
-        manualPaused.current = false;
-        manual.setOpen(false);
+        scannerLifecycle.current.manualPaused.current = false;
+        scannerLifecycle.current.manual.setOpen(false);
         setFastMode(false);
       },
       setScreenAwake,
     );
     return () => {
-      badgeCamera.stop();
-      cooldown.reset();
+      scannerLifecycle.current.badgeCamera.stop();
+      scannerLifecycle.current.cooldown.reset();
       release();
     };
   }, [fastMode]);
@@ -381,8 +383,8 @@ export function EventScannerCapture({
   }
   useEffect(() => {
     if (recentVisible) {
-      badgeCamera.stop();
-      manualPaused.current = true;
+      scannerLifecycle.current.badgeCamera.stop();
+      scannerLifecycle.current.manualPaused.current = true;
     }
   }, [recentVisible]);
   const contextLabel = scannerContextLabel({ action, sponsorName, targetId, targetLabel, roomId, rooms: targetRooms });

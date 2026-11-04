@@ -16,6 +16,8 @@ export function CheckInScanner({ onPoint }: { onPoint: (point: { eventSlug: stri
   const [active, setActive] = useState(false);
   const [problem, setProblem] = useState<"camera" | "not_a_code" | null>(null);
   const handled = useRef(false);
+  const onPointRef = useRef(onPoint);
+  onPointRef.current = onPoint;
   useEffect(() => {
     if (!video.current) return;
     let stop: (() => void) | null = null;
@@ -31,7 +33,7 @@ export function CheckInScanner({ onPoint }: { onPoint: (point: { eventSlug: stri
         }
         handled.current = true;
         stop?.();
-        onPoint(point);
+        onPointRef.current(point);
       },
       setActive,
       (registered) => {

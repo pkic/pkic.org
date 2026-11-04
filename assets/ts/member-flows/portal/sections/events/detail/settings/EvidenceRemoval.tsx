@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import {
   EVIDENCE_PURGE_TABLES,
@@ -83,7 +83,7 @@ export function EvidenceRemoval({ eventId, canRemove }: { eventId: string; canRe
     reviewHash: review?.reviewHash,
     retireCapture: confirmed,
   });
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setBusy(true);
     setMessage("");
     try {
@@ -99,10 +99,10 @@ export function EvidenceRemoval({ eventId, canRemove }: { eventId: string; canRe
     } finally {
       setBusy(false);
     }
-  }
+  }, [endpoint]);
   useEffect(() => {
     void refresh();
-  }, [eventId]);
+  }, [refresh]);
   function secureOperationsAvailable() {
     if (globalThis.isSecureContext && typeof globalThis.crypto?.randomUUID === "function") return true;
     setMessage("Evidence removal requires a secure connection with browser support for secure operation IDs.");
@@ -305,14 +305,27 @@ export function EvidenceRemoval({ eventId, canRemove }: { eventId: string; canRe
               </>
             )}
             {review && run?.reviewRequired && canRemove && (
-              <form noValidate {...resumption.handlers} onSubmit={resume}>
+              <form
+                noValidate
+                {...resumption.handlers}
+                onSubmit={(event) => {
+                  void resume(event).catch((error: unknown) => setMessage(resumption.refuse(error)));
+                }}
+              >
                 <Button type="submit" disabled={busy}>
                   Resume reviewed removal
                 </Button>
               </form>
             )}
             {review && !run && canRemove && (
-              <form noValidate {...form.handlers} onSubmit={start} class="pk-stack">
+              <form
+                noValidate
+                {...form.handlers}
+                onSubmit={(event) => {
+                  void start(event).catch((error: unknown) => setMessage(form.refuse(error)));
+                }}
+                class="pk-stack"
+              >
                 <Field label="Retire event capture" {...form.of("retireCapture")}>
                   {(control) => (
                     <Checkbox

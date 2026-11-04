@@ -162,7 +162,15 @@ export function ResourceSharingEditor({
         <p class="pk-small">
           Share this {resourceLabel} with another managed group. The owning group retains management access.
         </p>
-        <form class="pk-stack" aria-label={`Share this ${resourceLabel}`} onSubmit={addGrant}>
+        <form
+          class="pk-stack"
+          aria-label={`Share this ${resourceLabel}`}
+          onSubmit={(event) => {
+            void addGrant(event).catch((error: unknown) =>
+              setError(error instanceof Error ? error.message : "Could not share this resource."),
+            );
+          }}
+        >
           {/* One `disabled` on the group rather than one per control: the
               group picker is a child component that takes the flag itself, and
               the submit button stays outside so it can keep focus while the

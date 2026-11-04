@@ -23,7 +23,7 @@ import { BadgePrintLayoutEditor } from "../../assets/ts/components/event-badges/
 import { controlFor } from "./helpers/labeled-control";
 import { badgePrintSettingsSchema } from "../../assets/shared/schemas/badge-print-layout";
 import { BadgePrintPreview } from "../../assets/ts/components/event-badges/BadgePrintPreview";
-import { BADGE_GENERIC_FONT_LICENSE } from "../../assets/shared/badge-generic-template-assets";
+import { BADGE_GENERIC_FONT_LICENSE } from "../../assets/shared/badge-generic-font-license";
 import { badgePrintHtml } from "../../assets/ts/components/event-badges/badge-print-artifacts";
 import { badgePrintPreset } from "../../assets/shared/badge-print-layout";
 import { confirmAction } from "../../assets/ts/components/ConfirmDialog";

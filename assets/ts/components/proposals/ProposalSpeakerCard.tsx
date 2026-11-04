@@ -295,33 +295,40 @@ export function ProposalSpeakerCard({
       id: "accept-invitation",
       label: accepting ? "Accepting invitation…" : "Accept on behalf of speaker",
       disabled: accepting,
-      onSelect: async () => {
-        if (
-          !(await confirmAction({
-            title: `Accept the invitation for ${name}?`,
-            body: "Confirm the displayed identity and accept participation and required event terms on this speaker’s behalf. We’ll email them the terms and explain how to contact the PKI Consortium if they disagree.",
-            confirmLabel: "Accept invitation",
-            tone: "primary",
-          }))
-        )
-          return;
-        try {
-          setAccepting(true);
-          await requestJson(
-            endpoints.acceptancePath!(proposalId, speaker.userId),
-            proposalSpeakerAcceptanceResponseSchema,
-            {
-              method: "POST",
-              body: JSON.stringify(proposalSpeakerAcceptanceRequestSchema.parse({})),
-            },
+      onSelect: () => {
+        void (async () => {
+          if (
+            !(await confirmAction({
+              title: `Accept the invitation for ${name}?`,
+              body: "Confirm the displayed identity and accept participation and required event terms on this speaker’s behalf. We’ll email them the terms and explain how to contact the PKI Consortium if they disagree.",
+              confirmLabel: "Accept invitation",
+              tone: "primary",
+            }))
+          )
+            return;
+          try {
+            setAccepting(true);
+            await requestJson(
+              endpoints.acceptancePath!(proposalId, speaker.userId),
+              proposalSpeakerAcceptanceResponseSchema,
+              {
+                method: "POST",
+                body: JSON.stringify(proposalSpeakerAcceptanceRequestSchema.parse({})),
+              },
+            );
+            notify("Speaker invitation accepted", "success");
+            onProfileChanged?.();
+          } catch (error) {
+            notify((error as Error).message, "error");
+          } finally {
+            setAccepting(false);
+          }
+        })().catch((error: unknown) => {
+          notify(
+            error instanceof Error ? error.message : "Could not accept the invitation. Please try again.",
+            "error",
           );
-          notify("Speaker invitation accepted", "success");
-          onProfileChanged?.();
-        } catch (error) {
-          notify((error as Error).message, "error");
-        } finally {
-          setAccepting(false);
-        }
+        });
       },
     });
   }

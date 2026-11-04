@@ -193,7 +193,13 @@ function DesignForm({
         Upload or edit this event’s self-contained HTML design. Front and back artwork, embedded fonts and SVG images
         stay in the reusable template. Names and access codes are filled only when preparing authorized badges.
       </p>
-      <form noValidate {...form.handlers} onSubmit={save}>
+      <form
+        noValidate
+        {...form.handlers}
+        onSubmit={(event) => {
+          void save(event).catch((error: unknown) => setError(form.refuse(error)));
+        }}
+      >
         <Field
           label="HTML template"
           help="A self-contained HTML file with front and back badge sections. Scripts, external resources and active content are not accepted."
@@ -263,23 +269,27 @@ function DesignForm({
           <Button
             type="button"
             disabled={busy}
-            onClick={async () => {
-              setError("");
-              setBusy(true);
-              try {
-                const fonts = await loadBadgeTemplateFonts(PQC_CONFERENCE_BADGE_FONT_URLS);
-                if (!current()) return;
-                // The current design's leading sponsor tiers carry over; the result stays editable before saving.
-                const next = pqcConferenceBadgeTemplateForEvent(event, template?.sponsorGroups ?? [], fonts);
-                setHtml(exportBadgeTemplateHtml(next));
-                setTemplate(next);
-                setSaved(false);
-              } catch (cause) {
-                if (current())
-                  setError(cause instanceof Error ? cause.message : "Could not apply the PQC conference design.");
-              } finally {
-                if (current()) setBusy(false);
-              }
+            onClick={() => {
+              void (async () => {
+                setError("");
+                setBusy(true);
+                try {
+                  const fonts = await loadBadgeTemplateFonts(PQC_CONFERENCE_BADGE_FONT_URLS);
+                  if (!current()) return;
+                  // The current design's leading sponsor tiers carry over; the result stays editable before saving.
+                  const next = pqcConferenceBadgeTemplateForEvent(event, template?.sponsorGroups ?? [], fonts);
+                  setHtml(exportBadgeTemplateHtml(next));
+                  setTemplate(next);
+                  setSaved(false);
+                } catch (cause) {
+                  if (current())
+                    setError(cause instanceof Error ? cause.message : "Could not apply the PQC conference design.");
+                } finally {
+                  if (current()) setBusy(false);
+                }
+              })().catch((cause: unknown) =>
+                setError(cause instanceof Error ? cause.message : "Could not apply the PQC conference design."),
+              );
             }}
           >
             Start from PQC conference design
@@ -321,12 +331,10 @@ function DesignForm({
             title="Badge design preview"
             sandbox="allow-same-origin"
             srcDoc={previewDocument.html}
-            onLoad={async (event) => {
-              try {
-                await applyBadgePrintPreviewStyles(event.currentTarget, previewDocument.css);
-              } catch (cause) {
+            onLoad={(event) => {
+              void applyBadgePrintPreviewStyles(event.currentTarget, previewDocument.css).catch((cause: unknown) => {
                 setError(cause instanceof Error ? cause.message : "Could not display the design preview.");
-              }
+              });
             }}
           />
         </>

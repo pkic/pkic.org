@@ -17,7 +17,7 @@ import {
 } from "../../../../../../../shared/event-agenda-media";
 import { withinAgendaEventWindow } from "../../../../../../../shared/event-agenda-event-window";
 import { useEditorFocus } from "./useEditorFocus";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
   agendaOccurrenceCreateSchema,
   agendaOccurrencePatchSchema,
@@ -226,15 +226,21 @@ export function SessionEditor({
       return null;
     }
   };
-  const heading: SessionEditorHeading = {
-    title,
-    startAt: placed(start),
-    endAt: placed(end),
-    roomId: body.roomId,
-    additionalRoomIds: body.additionalRoomIds,
-  };
+  const startAt = placed(start);
+  const endAt = placed(end);
+  const headingRoomId = body.roomId;
+  const headingAdditionalRoomIds = body.additionalRoomIds;
+  const heading = useMemo<SessionEditorHeading>(
+    () => ({ title, startAt, endAt, roomId: headingRoomId, additionalRoomIds: headingAdditionalRoomIds }),
+    [title, startAt, endAt, headingRoomId, headingAdditionalRoomIds],
+  );
   const headingKey = JSON.stringify(heading);
-  useEffect(() => onHeading?.(heading), [headingKey]);
+  const lastHeading = useRef("");
+  useEffect(() => {
+    if (lastHeading.current === headingKey) return;
+    lastHeading.current = headingKey;
+    onHeading?.(heading);
+  }, [headingKey, heading, onHeading]);
   async function save(event: Event) {
     event.preventDefault();
     if (busy) return;

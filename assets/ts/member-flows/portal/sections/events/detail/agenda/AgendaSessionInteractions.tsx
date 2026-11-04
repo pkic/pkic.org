@@ -92,12 +92,7 @@ export function agendaSessionInteractions({
       : undefined,
     moveControls:
       canEdit && !locked && occurrence.startAt ? (
-        <div
-          class="pk-cluster"
-          data-agenda-card-control
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-        >
+        <div class="pk-cluster" data-agenda-card-control onPointerDown={(event) => event.stopPropagation()}>
           {/* A block across several locations, or an event with one location, has no neighbor to move to. */}
           {movesRooms &&
             ([-1, 1] as const).map((direction) => (
@@ -106,7 +101,10 @@ export function agendaSessionInteractions({
                 icon
                 disabled={locked || busy || !scheduling.canMoveRoom(occurrence.id, direction)}
                 aria-label={`Move ${occurrence.title} ${direction === -1 ? "left" : "right"}`}
-                onClick={() => scheduling.moveRoom(occurrence.id, direction)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  scheduling.moveRoom(occurrence.id, direction);
+                }}
               >
                 {direction === -1 ? "←" : "→"}
               </Button>
@@ -119,7 +117,10 @@ export function agendaSessionInteractions({
                 icon
                 disabled={locked || busy || !scheduling.canMoveAdjacent(occurrence.id, direction)}
                 aria-label={agendaOrderMoveLabel(direction, occurrence.title)}
-                onClick={() => scheduling.moveAdjacent(occurrence.id, direction)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  scheduling.moveAdjacent(occurrence.id, direction);
+                }}
               >
                 {direction === -1 ? "↑" : "↓"}
               </Button>

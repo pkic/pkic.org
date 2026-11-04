@@ -120,6 +120,8 @@ export function LiveChat({
   const [loading, setLoading] = useState(false);
   const firstId = messages[0]?.id;
   const latest = messages.at(-1);
+  const latestId = latest?.id;
+  const latestMine = latest?.mine;
   const anchor = useRef<{ firstId: string | undefined; height: number }>({ firstId, height: 0 });
 
   // Keep the reader's place when earlier messages arrive above, and stay on the latest while following it.
@@ -133,15 +135,15 @@ export function LiveChat({
   });
   useEffect(() => setLoading(false), [firstId]);
   useEffect(() => {
-    if (!following.current && latest && !latest.mine) setUnseen((count) => count + 1);
-  }, [latest?.id]);
+    if (!following.current && latestId && !latestMine) setUnseen((count) => count + 1);
+  }, [latestId, latestMine]);
 
   // A lifted ban brings the chat back from the room.
   const wasBanned = useRef(restriction === "banned");
   useEffect(() => {
     if (wasBanned.current && restriction !== "banned") send({ type: "chat.history", channel, before: null });
     wasBanned.current = restriction === "banned";
-  }, [restriction]);
+  }, [restriction, send, channel]);
 
   if (restriction === "banned")
     return (

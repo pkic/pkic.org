@@ -36,8 +36,9 @@ export function useScannerLocation(
     changed.current();
     setRoom(id);
   }
+  const hasCollector = !!collector;
   useEffect(() => {
-    if (collector || !enabled || !initialId) return;
+    if (hasCollector || !enabled || !initialId) return;
     const controller = new AbortController();
     void (async () => {
       try {
@@ -58,7 +59,7 @@ export function useScannerLocation(
       }
     })();
     return () => controller.abort();
-  }, [slug, initialId, enabled, collector?.epochId]);
+  }, [slug, initialId, enabled, hasCollector]);
   // Lead capture is event-wide. Retain the prior check-in choice for a return to that mode.
   return {
     timeZone,

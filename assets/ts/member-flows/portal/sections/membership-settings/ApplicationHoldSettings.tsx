@@ -86,7 +86,14 @@ function WorkflowForm({ initial, canWrite }: { initial: MembershipSettings; canW
   }
 
   return (
-    <form noValidate {...form.handlers} onSubmit={save} autocomplete="off">
+    <form
+      noValidate
+      {...form.handlers}
+      onSubmit={(event) => {
+        void save(event).catch((error: unknown) => setError(form.refuse(error)));
+      }}
+      autocomplete="off"
+    >
       <Panel>
         <PanelHeader title="On-hold reminders">
           {canWrite && (

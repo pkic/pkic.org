@@ -55,6 +55,11 @@ export function RegistrationIdentityField({
   const [adding, showAdding, closeAdding] = useDialogQueryState("identity");
   const [choosing, showChoosing, closeChoosing] = useDialogQueryState("representation");
   const [draft, setDraft] = useState<SessionActingIdentity | null>(selected);
+  const closeWithError = (close: () => Promise<void>) => {
+    void close().catch((cause: unknown) => {
+      setRefreshError(friendlyErrorMessage(cause instanceof Error ? cause.message : "Could not close the dialog."));
+    });
+  };
   const canChange = identities.some((identity) => identity.id !== selected?.id);
   async function refreshIdentity(identityId: string) {
     const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
@@ -76,6 +81,7 @@ export function RegistrationIdentityField({
   if (presentation === "summary")
     return (
       <>
+        {refreshError && <Alert tone="danger">{refreshError}</Alert>}
         <span class="pk-cluster pk-cluster--nowrap">
           <span>{selected ? identityLabel(selected) : "Participating as an individual"}</span>
           {personalAdvisory && selected?.organizationId == null && (
@@ -114,11 +120,11 @@ export function RegistrationIdentityField({
               closeLabel="Close change representation"
               confirmLabel="Use representation"
               confirmDisabled={!draft || (organizationOnly && !draft.organizationId)}
-              onCancel={closeChoosing}
+              onCancel={() => closeWithError(closeChoosing)}
               onConfirm={() => {
                 setSelected(draft);
                 onSelect?.(draft);
-                void closeChoosing();
+                closeWithError(closeChoosing);
               }}
             >
               <RegistrationIdentityField
@@ -144,6 +150,7 @@ export function RegistrationIdentityField({
     );
   return (
     <div class="pk-stack pk-stack--snug">
+      {refreshError && !editing && <Alert tone="danger">{refreshError}</Alert>}
       <RepresentationSelect
         organizationOnly={organizationOnly}
         value={selected}
@@ -173,26 +180,28 @@ export function RegistrationIdentityField({
             title="Edit representation"
             closeLabel="Close edit representation"
             confirmLabel="Close"
-            onConfirm={closeEditing}
-            onCancel={closeEditing}
+            onConfirm={() => closeWithError(closeEditing)}
+            onCancel={() => closeWithError(closeEditing)}
           >
             <div class="pk-stack" onSubmit={(event) => event.stopPropagation()}>
               {refreshError && <Alert tone="danger">{refreshError}</Alert>}
               <OwnIdentityProfileEditor
                 identityId={selected.id}
-                onCancel={closeEditing}
-                onSaved={async () => {
-                  try {
-                    const identity = await refreshIdentity(selected.id);
-                    onUpdated?.(identity);
-                    await closeEditing();
-                  } catch (cause) {
-                    setRefreshError(
-                      friendlyErrorMessage(
-                        cause instanceof Error ? cause.message : "Could not refresh your representation.",
-                      ),
-                    );
-                  }
+                onCancel={() => closeWithError(closeEditing)}
+                onSaved={() => {
+                  void (async () => {
+                    try {
+                      const identity = await refreshIdentity(selected.id);
+                      onUpdated?.(identity);
+                      await closeEditing();
+                    } catch (cause) {
+                      setRefreshError(
+                        friendlyErrorMessage(
+                          cause instanceof Error ? cause.message : "Could not refresh your representation.",
+                        ),
+                      );
+                    }
+                  })();
                 }}
               />
             </div>
@@ -202,7 +211,7 @@ export function RegistrationIdentityField({
       {userId && (
         <IdentityCreateDialog
           open={adding}
-          onClose={closeAdding}
+          onClose={() => closeWithError(closeAdding)}
           onCreated={async (identityId) => {
             await refreshIdentity(identityId);
           }}

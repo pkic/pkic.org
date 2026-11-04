@@ -171,13 +171,34 @@ export function ApiDataTable<T, Response = unknown>({
   // carries it. A page no longer threads a useState per filter into `params`.
   const [filters, setFilters] = useState<Record<string, string>>(url.initial.filters);
   const restoringUrl = useRef(false);
+  const currentTableState = useRef({
+    search,
+    sort,
+    offset: pager.offset,
+    pageSize: pager.pageSize,
+    filters,
+    openingSort,
+    restore: pager.restore,
+  });
+  currentTableState.current = {
+    search,
+    sort,
+    offset: pager.offset,
+    pageSize: pager.pageSize,
+    filters,
+    openingSort,
+    restore: pager.restore,
+  };
+  const initialUrl = url.initial;
+  const mirrorUrl = url.mirror;
   useEffect(() => {
-    const next = url.initial;
+    const { search, sort, offset, pageSize, filters, openingSort, restore } = currentTableState.current;
+    const next = initialUrl;
     if (
       next.q === search &&
       next.sort === sort &&
-      next.offset === pager.offset &&
-      next.pageSize === pager.pageSize &&
+      next.offset === offset &&
+      next.pageSize === pageSize &&
       JSON.stringify(next.filters) === JSON.stringify(filters)
     )
       return;
@@ -187,16 +208,16 @@ export function ApiDataTable<T, Response = unknown>({
     setPendingSearch(next.q);
     setSort(next.sort);
     setFilters(next.filters);
-    pager.restore(next.pageSize, next.offset);
-  }, [url.initial]);
+    restore(next.pageSize, next.offset);
+  }, [initialUrl]);
   useEffect(() => {
     if (restoringUrl.current) {
       restoringUrl.current = false;
       return;
     }
-    url.mirror({ q: search, sort, offset: pager.offset, pageSize: pager.pageSize, filters });
+    mirrorUrl({ q: search, sort, offset: pager.offset, pageSize: pager.pageSize, filters });
     // url.mirror is stable per namespace; mirroring reacts to state only.
-  }, [search, sort, pager.offset, pager.pageSize, filters]);
+  }, [search, sort, pager.offset, pager.pageSize, filters, mirrorUrl]);
 
   function applySort(nextSort: string) {
     sortFollowsFilters.current = false;
@@ -241,11 +262,13 @@ export function ApiDataTable<T, Response = unknown>({
     ...(sort ? { sort } : {}),
   };
   const queryKey = buildCollectionResetKey(endpoint, query);
+  const currentQuery = useRef(query);
+  currentQuery.current = query;
   const lastQueryKey = useRef<string | null>(null);
   useEffect(() => {
     if (lastQueryKey.current === queryKey) return;
     lastQueryKey.current = queryKey;
-    onQueryChange?.(query);
+    onQueryChange?.(currentQuery.current);
   }, [queryKey, onQueryChange]);
   const collection = useServerCollection({
     endpoint,

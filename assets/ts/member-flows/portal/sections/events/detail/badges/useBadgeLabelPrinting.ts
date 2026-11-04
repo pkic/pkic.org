@@ -37,7 +37,8 @@ export function useBadgeLabelPrinting(
   sides: BadgePrintLayout["sides"],
   resume: () => void,
 ) {
-  const controller = useMemo(() => new AbortController(), [slug, session]);
+  const requestScope = useMemo(() => ({ slug, session, controller: new AbortController() }), [slug, session]);
+  const controller = requestScope.controller;
   const artwork = useRef<Promise<BadgePrintingContext> | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const running = useRef(false);
@@ -53,6 +54,7 @@ export function useBadgeLabelPrinting(
   const latestResume = useRef(resume);
   latestResume.current = resume;
   useEffect(() => {
+    const operations = issueOperations.current;
     running.current = false;
     lastScanned.current = "";
     printed.current = null;
@@ -64,7 +66,7 @@ export function useBadgeLabelPrinting(
       controller.abort();
       artwork.current = null;
       afterPrint.current?.();
-      issueOperations.current.clear();
+      operations.clear();
     };
   }, [controller]);
   useEffect(() => {
@@ -97,12 +99,15 @@ export function useBadgeLabelPrinting(
     artwork.current = pending;
     return pending;
   }
+  const artworkActions = useRef({ current, loadArtwork });
+  artworkActions.current = { current, loadArtwork };
   useEffect(() => {
     let selected = true;
     setError("");
-    if (design === "event_badge" && current())
-      void loadArtwork().catch((cause: unknown) => {
-        if (selected && current()) setError(cause instanceof Error ? cause.message : "Could not load badge artwork.");
+    if (design === "event_badge" && artworkActions.current.current())
+      void artworkActions.current.loadArtwork().catch((cause: unknown) => {
+        if (selected && artworkActions.current.current())
+          setError(cause instanceof Error ? cause.message : "Could not load badge artwork.");
       });
     else artwork.current = null;
     return () => {

@@ -64,5 +64,10 @@ export function useAcceptedProposalPlacement(
     },
     endDrag: () => setSelected((value) => (value?.native && !pending.current ? null : value)),
     place,
+    placeFromEvent: (startAt: string, roomId: string) => {
+      void place(startAt, roomId).catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "Could not place the accepted proposal.");
+      });
+    },
   };
 }
