@@ -3,6 +3,7 @@ import base from "./playwright.config";
 
 /** Routine CI exercises cross-system boundaries; the full suite remains opt-in. */
 const criticalJourneys = [
+  "default badges keep all lead sponsors inside both printed faces",
   "covers unified user sign-in via magic link",
   "an organization contact adds a colleague and can take the access away again",
   "covers proposal submission, speaker invitation, confirmation, and profile updates",
@@ -22,6 +23,7 @@ const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\
 export default defineConfig({
   ...base,
   testMatch: [
+    "portal-agenda-manual-badge-code.spec.ts",
     "browser-rendering.spec.ts",
     "member-colleague-self-service.spec.ts",
     "registration-consent-identity.spec.ts",

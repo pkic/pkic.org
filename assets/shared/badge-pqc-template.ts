@@ -128,7 +128,7 @@ function tiles(asset: string, count: number, className: string): string {
 function opticalLogo(areaPx: number, maxHeightPx: number, maxWidthPx: number): string {
   const aspect = "var(--badge-logo-aspect,2.8)";
   const height = `min(${mm(maxHeightPx)},calc(sqrt(${areaPx * 0.0625} / ${aspect}) * 1mm),calc(${mm(maxWidthPx)} / ${aspect}))`;
-  return `flex:0 0 auto;height:${height};width:calc(${height} * ${aspect})`;
+  return `flex:0 1 auto;height:${height};width:calc(${height} * ${aspect})`;
 }
 
 /** The front role band and the back footer share one height, so their top edges line up across both sides. */
@@ -190,7 +190,7 @@ ${PQC_FONT_FACE_CSS}
 .pqc-badge .badge-template-sponsor-logo{max-width:none;max-height:none;min-width:0}
 .pqc-front-sponsors{padding:0 ${mm(32)} ${mm(20)}}.pqc-front-sponsors:empty,.pqc-back-lead:empty,.pqc-back-tier:empty{display:none}
 .pqc-front-sponsors .badge-template-sponsors{align-items:flex-start;gap:4mm}.pqc-front-sponsors .badge-template-sponsor-tier{font-size:2.1mm}
-.pqc-front-sponsors .badge-template-sponsor-logos{flex-wrap:nowrap;justify-content:flex-start;gap:${mm(24)};width:100%}
+.pqc-front-sponsors .badge-template-sponsor-logos{flex-wrap:nowrap;justify-content:flex-start;gap:min(${mm(24)},calc(50% / var(--badge-sponsor-count,1)));width:100%}
 .pqc-front-sponsors .badge-template-sponsor-logo{${opticalLogo(5200, 40, 150)}}
 .pqc-role{flex:0 0 ${BAR_MM}mm;height:${BAR_MM}mm;display:flex;align-items:center;padding:0 ${mm(32)};background:var(--badge-role-color);color:var(--badge-role-text);${mono};font-size:${mm(20)};font-weight:600;letter-spacing:0.18em;text-transform:uppercase}
 .pqc-back-body{flex:1;min-height:0;display:flex;flex-direction:column;padding:12.5mm ${mm(32)} 9.5mm}
@@ -208,7 +208,7 @@ ${PQC_FONT_FACE_CSS}
 .pqc-back-sponsors .badge-template-sponsors{align-items:stretch;gap:4.5mm}
 .pqc-back-sponsors .badge-template-sponsor-tier{display:flex;align-items:center;gap:${mm(10)};font-size:2mm}
 .pqc-back-sponsors .badge-template-sponsor-tier::before,.pqc-back-sponsors .badge-template-sponsor-tier::after{content:"";flex:1;height:0.25mm;background:${c["pqc-rule"]}}
-.pqc-back-lead .badge-template-sponsor-logos{flex-wrap:nowrap;gap:${mm(28)}}.pqc-back-lead .badge-template-sponsor-logo{${opticalLogo(5200, 44, 160)}}
+.pqc-back-lead .badge-template-sponsor-logos{flex-wrap:nowrap;gap:min(${mm(28)},calc(50% / var(--badge-sponsor-count,1)));width:100%}.pqc-back-lead .badge-template-sponsor-logo{${opticalLogo(5200, 44, 160)}}
 .pqc-back-tier .badge-template-sponsor-logos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:${mm(14)} ${mm(24)}}.pqc-back-tier .badge-template-sponsor-logo{justify-self:center;${opticalLogo(1500, 26, 120)}}
 .pqc-back-canal{position:relative;flex:0 0 ${CANAL_MM}mm;margin:-${CANAL_MM}mm 0 -${CANAL_FOOT_MM}mm;display:flex;overflow:hidden;opacity:0.16}.pqc-back-canal-tile{flex:0 0 auto;width:${mm((28 * 457) / 326)};height:${CANAL_MM}mm}
 .pqc-back-footer{flex:0 0 ${BAR_MM}mm;height:${BAR_MM}mm;display:flex;align-items:center;justify-content:space-between;padding:0 ${mm(32)};background:${c["pqc-ink"]}}

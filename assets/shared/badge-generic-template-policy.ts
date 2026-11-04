@@ -4,7 +4,7 @@ import { eventResourceCoreSchema } from "./schemas/event-management";
 import { utcInstantSchema } from "./schemas/api-common";
 import { timeZoneSchema } from "./schemas/event-series";
 
-export const GENERIC_BADGE_LAYOUT_VERSION = "pqc-without-cityscape-v2";
+export const GENERIC_BADGE_LAYOUT_VERSION = "pqc-without-cityscape-v3";
 export const genericBadgeTemplateInputSchema = z
   .object({
     eventName: eventResourceCoreSchema.shape.name,

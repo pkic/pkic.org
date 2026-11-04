@@ -155,7 +155,8 @@ export function compileBadgeTemplate(input: EventBadgeTemplate, branding: readon
                     badgeSponsorGroupSource(item) === badgeSponsorGroupSource(definition),
                 );
                 if (!group?.sponsors.length) return "";
-                return `<section class="badge-template-sponsors"><span class="badge-template-sponsor-tier">${escape(definition?.label ?? group.tierName)}</span><div class="badge-template-sponsor-logos">${group.sponsors.map((sponsor) => vectorImage(sponsorResources.get(sponsor.svg)!, sponsor.name, "badge-template-sponsor-logo", true)).join("")}</div></section>`;
+                const populationClass = `badge-sponsor-population-${renderedStyleId++}`;
+                return `<style>.${populationClass}{--badge-sponsor-count:${group.sponsors.length}}</style><section class="badge-template-sponsors ${populationClass}"><span class="badge-template-sponsor-tier">${escape(definition?.label ?? group.tierName)}</span><div class="badge-template-sponsor-logos">${group.sponsors.map((sponsor) => vectorImage(sponsorResources.get(sponsor.svg)!, sponsor.name, "badge-template-sponsor-logo", true)).join("")}</div></section>`;
               }
               return node
                 .split(/({{[^{}]*}})/g)
