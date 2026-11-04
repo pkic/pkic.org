@@ -1,10 +1,6 @@
 import type { GroupEventSettingsUpdateInput } from "../../../../assets/shared/schemas/group-events";
-import { createUserBackedAuthAdmin } from "../../auth/admin-identity";
-import { userSessionMemberSelection } from "../../auth/identity-capacities";
+import { prepareUserBackedAdminFromRequest } from "../../auth/admin";
 import { permissionsAuthorizationEvidence } from "../../auth/permissions";
-import { userSessionRequestAuthorizationEvidence } from "../../auth/user-session-evidence";
-import { prepareUserSessionRequest } from "../../auth/user-session-request";
-import { sessionHoldsCapacity } from "../../auth/user-session-result";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { batchFirst } from "../../db/pagination";
 import { AppError } from "../../errors";
@@ -24,19 +20,15 @@ export async function updateGroupEventSettingsFromRequest(
   input: GroupEventSettingsUpdateInput,
   appBaseUrl: string,
 ) {
-  const auth = await prepareUserSessionRequest(db, request, env);
-  const candidate = createUserBackedAuthAdmin({
-    id: auth.claims.sub,
-    email: "",
-    scopes: [],
-    sessionId: auth.claims.sid,
-  });
+  const auth = await prepareUserBackedAdminFromRequest(db, request, env);
+  if (!auth) throw new AppError(401, "AUTH_REQUIRED", "An authenticated management identity is required");
+  const candidate = auth.permissionActor;
   const groupRead = prepareAuthenticatedGroupContext(
     db,
     groupIdOrSlug,
-    { userId: auth.claims.sub, admin: candidate },
+    { userId: auth.subjectId, admin: candidate },
     permissionsAuthorizationEvidence(candidate, [{ permission: "groups:read" }]),
-    userSessionMemberSelection(auth.claims.sub, auth.claims.iid),
+    auth.memberSelection,
   );
   const access = groupResourceContextAuthorizationEvidence(
     { sql: "SELECT id FROM groups WHERE id = ? OR slug = ?", bindings: [groupIdOrSlug, groupIdOrSlug] },
@@ -51,14 +43,12 @@ export async function updateGroupEventSettingsFromRequest(
     db.prepare(`SELECT EXISTS(${access.sql}) AS allowed`).bind(...access.bindings),
     ...settingsRead.statements,
   ]);
-  const session = await auth.decode(results.slice(0, auth.statements.length));
-  if (!sessionHoldsCapacity(session))
-    throw new AppError(401, "AUTH_REQUIRED", "An authenticated portal identity is required");
+  const actor = await auth.decode(results.slice(0, auth.statements.length));
   const group = groupRead.decode(results[auth.statements.length]);
   if (!group || (!group.visible && !group.manager)) {
     throw new AppError(404, "GROUP_NOT_FOUND", "Group not found or not visible");
   }
-  if (!session.staff || !group.manager) {
+  if (!group.manager) {
     throw new AppError(403, "GROUP_MANAGEMENT_REQUIRED", "Effective group management permission is required");
   }
   const settingsResults = results.slice(auth.statements.length + 2);
@@ -70,21 +60,20 @@ export async function updateGroupEventSettingsFromRequest(
   const response = prepareGroupEventRead(
     db,
     {
-      userId: session.identity.id,
-      admin: session.staff,
-      ...(session.member ? { identityId: session.member.identityId } : {}),
+      userId: actor.id,
+      admin: actor,
     },
     group.group.id,
     eventId,
   );
   const saved = await commitGroupEventSettings(
     db,
-    session.staff,
+    actor,
     { groupId: group.group.id, eventId },
     input,
     appBaseUrl,
     snapshot,
-    [prepareAuthorizationGuard(db, userSessionRequestAuthorizationEvidence(auth.claims, true))],
+    [prepareAuthorizationGuard(db, auth.authorizationEvidence)],
     response.statements,
   );
   return response.decode(saved.slice(-response.statements.length));

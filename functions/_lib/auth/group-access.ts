@@ -3,6 +3,7 @@ import type { AuthMember, DatabaseLike, Env, UserBackedAuthAdmin } from "../type
 import { hasPermission } from "./permissions";
 import { resolveUserSessionFromRequest } from "./user-session";
 import { sessionHoldsCapacity } from "./user-session-result";
+import { readAdminCredential, requireUserBackedAdminFromRequest } from "./admin";
 
 export type GroupViewer =
   | { kind: "public"; userId?: undefined; staff?: undefined; member?: undefined; canReadAll: false }
@@ -21,6 +22,14 @@ export async function resolveOptionalGroupViewer(
   env?: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
 ): Promise<GroupViewer> {
   try {
+    if ((await readAdminCredential(request, env)).kind === "mcp") {
+      const staff = await requireUserBackedAdminFromRequest(db, request, env);
+      // Delegation carries selected staff permissions, never implicit membership powers.
+      if (!staff.scopes?.some((scope) => scope === "groups:read" || scope === "groups:write")) {
+        return { kind: "public", canReadAll: false };
+      }
+      return { kind: "user", userId: staff.id, staff, canReadAll: hasPermission(staff, "groups:read") };
+    }
     const session = await resolveUserSessionFromRequest(db, request, {
       INTERNAL_SIGNING_SECRET: env?.INTERNAL_SIGNING_SECRET,
     });

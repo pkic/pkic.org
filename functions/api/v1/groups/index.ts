@@ -1,4 +1,5 @@
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
+import { anyPermissionAuthorizationEvidenceForResource } from "../../../_lib/auth/permissions";
 import { resolveOptionalGroupViewer } from "../../../_lib/auth/group-access";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 import { AppError } from "../../../_lib/errors";
@@ -25,7 +26,12 @@ export const GroupsList = openApiRoute(groupsListRouteSchema, async (c: AdminCon
     requiredAuthorization:
       data.query.manageable && viewer.kind === "user" && viewer.staff
         ? groupManagementCandidateAuthorizationEvidence(viewer.staff)
-        : undefined,
+        : viewer.kind === "user" && viewer.staff?.scopeRestricted
+          ? anyPermissionAuthorizationEvidenceForResource(viewer.staff, ["groups:read", "groups:write"], {
+              type: "group",
+              idSql: "g.id",
+            })
+          : undefined,
   });
   return json(
     groupsListResponseSchema.parse({

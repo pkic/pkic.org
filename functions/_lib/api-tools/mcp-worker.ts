@@ -5,7 +5,13 @@ import { prepareMcpRequestAuthorization } from "./request-authorization";
 import { CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { AppError } from "../errors";
 import { DynamicWorkerExecutor, type Executor, type ExecuteResult } from "@cloudflare/codemode";
-import { openApiMcpServer, type RequestOptions } from "@cloudflare/codemode/mcp";
+import type { RequestOptions } from "@cloudflare/codemode/mcp";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/cfworker";
+import { registerOperationTools } from "./operation-tools";
+import { registerExecuteTools } from "./execute-tools";
+import { registerReadTools } from "./read-tools";
+import type { McpCatalogSource } from "../openapi/mcp-catalog";
 import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { createMcpHandler } from "agents/mcp";
 import { WorkerEntrypoint } from "cloudflare:workers";
@@ -35,7 +41,7 @@ const MCP_TOOL_RESPONSE_MAX_BYTES = 256 * 1024;
 
 interface McpWorkerOptions {
   app: Hono<{ Bindings: Env }>;
-  getMcpOpenApiSchema: (request: Request, env: Env) => Promise<Record<string, unknown>>;
+  getOperationSource: (request: Request, env: Env) => McpCatalogSource;
 }
 
 class MissingWorkerLoaderExecutor implements Executor {
@@ -57,28 +63,26 @@ function apiRequestFromMcp(
   env: Env,
   ctx: ExecutionContext,
   authorizationOverride: string | null | undefined,
-  spec: Record<string, unknown>,
+  source: McpCatalogSource,
   onRequest: (finish: () => Promise<void>) => void,
 ): (options: RequestOptions) => Promise<unknown> {
   const authorization = authorizationOverride ?? request.headers.get("authorization");
 
   return async ({ method, path, query, body, contentType, rawBody }) => {
+    if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\") || path.includes("#"))
+      throw new AppError(400, "MCP_OPERATION_UNAVAILABLE", "Choose an exposed API operation with a relative API path.");
     const url = new URL(path, request.url);
     if (
       url.origin !== new URL(request.url).origin ||
-      !Object.entries(spec.paths && typeof spec.paths === "object" ? spec.paths : {}).some(([template, methods]) => {
+      !(await source.list()).some(({ path: template, method: operationMethod }) => {
         const pattern = template
           .split(/(\{[^}]+\})/u)
           .map((part) => (part.startsWith("{") ? "[^/]+" : part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")))
           .join("");
-        return (
-          Boolean(
-            methods && typeof methods === "object" && (methods as Record<string, unknown>)[method.toLowerCase()],
-          ) && new RegExp(`^${pattern}$`, "u").test(url.pathname)
-        );
+        return operationMethod === method && new RegExp(`^${pattern}$`, "u").test(url.pathname);
       })
     )
-      throw new AppError(400, "MCP_OPERATION_UNAVAILABLE", "Choose an exposed API operation from search.");
+      throw new AppError(400, "MCP_OPERATION_UNAVAILABLE", "Choose an exposed API operation from discover_operations.");
     for (const [key, value] of Object.entries(query ?? {})) {
       if (value !== undefined) {
         url.searchParams.set(key, String(value));
@@ -108,13 +112,26 @@ function apiRequestFromMcp(
     );
     await authority.finish();
     const responseType = response.headers.get("content-type") ?? "";
+    if (responseType && !/json|xml|^text\//i.test(responseType)) {
+      await response.body?.cancel();
+      return {
+        status: response.status,
+        contentType: responseType,
+        error: "This response type requires a binary-capable API client",
+      };
+    }
+    const result = await readBoundedStream(response.body, 2 * 1024 * 1024);
+    if (!result.ok) {
+      return { status: response.status, error: "API response exceeds MCP transport limit; narrow the API query" };
+    }
+    const text = new TextDecoder().decode(result.bytes);
     if (responseType.includes("application/json")) {
-      return response.json();
+      return JSON.parse(text);
     }
 
     return {
       status: response.status,
-      body: await response.text(),
+      body: text,
     };
   };
 }
@@ -130,25 +147,24 @@ function createMcpResponse(options: McpWorkerOptions) {
               .catch(() => null),
           )
         : null;
-    const execution = Boolean(rpc?.success && rpc.data.params.name === "execute");
+    const execution = Boolean(rpc?.success && ["execute", "request", "batch_read"].includes(rpc.data.params.name));
     const authorization = await (execution ? deferredAuthorizationHeaderForMcp : authorizationHeaderForMcp)(
       request,
       env,
       oauthProps,
     );
-    const spec = await options.getMcpOpenApiSchema(request, env);
-    let finish: (() => Promise<void>) | undefined;
-    const server = openApiMcpServer({
-      spec,
-      executor: singleOperationExecutor(mcpExecutor(env)),
-      request: apiRequestFromMcp(options.app, request, env, ctx, authorization, spec, (value) => {
-        finish = value;
-      }),
-      name: "pkic-api",
-      version: "v1",
-      description:
-        "Return exactly one codemode.request(...) operation per execute call. Use separate execute calls for dependent operations. Search and call PKI Consortium API operations exposed for MCP.",
+    const source = options.getOperationSource(request, env);
+    const finishers: Array<() => Promise<void>> = [];
+    const apiRequest = apiRequestFromMcp(options.app, request, env, ctx, authorization, source, (value) => {
+      finishers.push(value);
     });
+    const server = new McpServer(
+      { name: "pkic-api", version: "v1" },
+      { jsonSchemaValidator: new CfWorkerJsonSchemaValidator() },
+    );
+    registerOperationTools(server, source);
+    registerExecuteTools(server, singleOperationExecutor(mcpExecutor(env)), apiRequest);
+    registerReadTools(server, apiRequest);
 
     const response = await createMcpHandler(server, { route: MCP_PATH })(request, env, ctx);
     if (execution) {
@@ -159,8 +175,9 @@ function createMcpResponse(options: McpWorkerOptions) {
         "MCP tool result is too large",
         request.signal,
       );
-      if (finish) await finish();
-      else await authorizationHeaderForMcp(request, env, oauthProps);
+      if (finishers.length) {
+        for (const finish of finishers) await finish();
+      } else await authorizationHeaderForMcp(request, env, oauthProps);
       if (!body.ok) throw new AppError(413, "MCP_TOOL_RESULT_TOO_LARGE", "Return a smaller API result.");
       return new Response(new Uint8Array(body.bytes).buffer, response);
     }

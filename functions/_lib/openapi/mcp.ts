@@ -14,8 +14,7 @@ export interface AuthOperationMetadata {
 
 export interface McpOperationMetadata {
   expose: boolean;
-  scopes?: AuthScope[];
-  scopesAnyOf?: AuthScope[][];
+  reason?: string;
   readonly?: boolean;
 }
 
@@ -99,12 +98,10 @@ function operationAuthMetadata(path: string, method: string, operation: JsonObje
   return undefined;
 }
 
-/** Scoped JSON operations use the same contract as HTTP; transport exceptions remain explicit. */
 function shouldExposeToMcp(path: string, method: string, operation: JsonObject): boolean {
-  const metadata = operation[MCP_EXTENSION] as McpOperationMetadata | undefined;
-  if (metadata?.expose === false) return false;
-  const auth = operationAuthMetadata(path, method, operation);
-  if (!metadata?.expose && !auth?.scopes?.length && !auth?.scopesAnyOf?.length) return false;
+  // This selects transport capabilities, never permissions. The canonical
+  // route still authenticates, validates, and authorizes every request.
+  if (!isApiPath(path) || !MCP_HTTP_METHODS.has(method) || operation[MCP_EXTENSION]?.expose === false) return false;
   const supportsJson = (content: unknown) =>
     !content ||
     (typeof content === "object" &&
@@ -113,6 +110,12 @@ function shouldExposeToMcp(path: string, method: string, operation: JsonObject):
   return Object.entries(operation.responses ?? {}).every(
     ([status, response]) => !/^2\d\d$/.test(status) || supportsJson((response as JsonObject)?.content),
   );
+}
+
+export const MCP_HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
+
+export function isApiPath(path: string): boolean {
+  return path === "/api/v1" || path.startsWith("/api/v1/");
 }
 
 export function decorateOpenApiSpec(spec: JsonObject): JsonObject {
@@ -175,17 +178,21 @@ export function filterOpenApiSpecForMcp(spec: JsonObject): JsonObject {
   for (const [path, pathItem] of Object.entries(decoratedSpec.paths ?? {})) {
     if (!pathItem || typeof pathItem !== "object") continue;
 
-    const filteredPathItem: JsonObject = {};
+    const filteredPathItem: JsonObject = Object.fromEntries(
+      Object.entries(pathItem as JsonObject).filter(([key]) => !HTTP_METHODS.has(key)),
+    );
+    let hasOperation = false;
     for (const [key, value] of Object.entries(pathItem as JsonObject)) {
       if (!HTTP_METHODS.has(key)) continue;
       if (!value || typeof value !== "object") continue;
       if (!shouldExposeToMcp(path, key, value as JsonObject)) continue;
 
       const operation = value as JsonObject;
+      hasOperation = true;
       const mcpMetadata = operation[MCP_EXTENSION] as McpOperationMetadata | undefined;
       const auth = operationAuthMetadata(path, key, operation);
-      const scopesAnyOf = uniqueScopeAlternatives(mcpMetadata?.scopesAnyOf ?? auth?.scopesAnyOf ?? []);
-      const scopes = uniqueScopes(mcpMetadata?.scopes ?? auth?.scopes ?? []);
+      const scopesAnyOf = uniqueScopeAlternatives(auth?.scopesAnyOf ?? []);
+      const scopes = uniqueScopes(auth?.scopes ?? []);
 
       filteredPathItem[key] = {
         ...withRequiredScopesDescription(operation, scopes, scopesAnyOf),
@@ -198,14 +205,22 @@ export function filterOpenApiSpecForMcp(spec: JsonObject): JsonObject {
         ...(scopesAnyOf.length > 0
           ? { "x-pkic-required-scopes-any-of": scopesAnyOf }
           : { "x-pkic-required-scopes": scopes }),
-        security:
-          scopesAnyOf.length > 0
-            ? scopesAnyOf.map((alternative) => ({ McpSession: alternative }))
-            : [{ McpSession: scopes }],
+        ...(Array.isArray(operation.security)
+          ? {
+              security: operation.security.map((requirement: JsonObject) =>
+                Object.fromEntries(
+                  Object.entries(requirement).map(([scheme, value]) => [
+                    scheme === "BearerAuth" ? "McpSession" : scheme,
+                    value,
+                  ]),
+                ),
+              ),
+            }
+          : {}),
       };
     }
 
-    if (Object.keys(filteredPathItem).length > 0) {
+    if (hasOperation) {
       filteredPaths[path] = filteredPathItem;
     }
   }

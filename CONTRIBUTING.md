@@ -407,6 +407,37 @@ This follows [Vite's production load-error handling](https://vite.dev/guide/buil
 and [Cloudflare's standard static-asset validators](https://developers.cloudflare.com/workers/static-assets/headers/).
 Production recovery does not use Vite's development-only HMR hooks.
 
+### MCP API coverage and client helpers
+
+MCP discovers API operations by default from the canonical OpenAPI document
+under `/api/v1/`, for GET, POST, PUT, PATCH, and DELETE. It calls the existing
+HTTP router with the client's delegated credential. Route validation, live
+permissions, group capabilities, and OAuth consent limits remain authoritative.
+MCP metadata cannot replace API scope requirements. A transport exclusion uses
+`x-pkic-mcp: { expose: false, reason: "..." }`; it does not replace authorization.
+
+Use `discover_operations` for paginated summaries filtered by text, method, or
+tag (ten summaries by default), then `inspect_operation` for a selected
+operation's canonical request contract. Response inspection selects one status
+code; full operation details are opt-in. `request` calls one API operation;
+`execute` retains the single-operation safety check without loading any API
+schema into execution. `batch_read` runs up to ten independent GET
+requests, preserving order and individual results or failures. It does not retry,
+write, create a transaction, or automatically fetch subsequent pages. Follow the
+API's pagination contract explicitly. Batch results are limited to 2,000
+characters per request; narrow API queries for larger results.
+
+The build derives a compact discovery index and individual contract assets from
+the canonical OpenAPI document. Production discovery loads only the index;
+inspection loads one contract. Initialization loads neither. API execution
+reads the index to check exposure, never contract schemas.
+Local development can derive these artifacts lazily from the registered routes.
+Only deployment schema metadata is cached; credentials and API results are not.
+The JSON/text response adapter reads at most 2 MiB per call. Binary responses
+require a binary-capable API client, and multipart uploads and browser interaction
+are not provided by these helpers. Exposure documents an operation; it neither
+grants access nor promises compatibility with every API media type.
+
 ### MCP authorization lifetimes
 
 Email-authenticated and existing unmarked sessions retain the current staff

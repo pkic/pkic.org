@@ -74,6 +74,14 @@ export async function getAuthenticatedGroupContext(
   if (!context || (!context.visible && !context.manager))
     throw new AppError(404, "GROUP_NOT_FOUND", "Group not found or not visible");
   const { group, participant, manager } = context;
+  if (
+    viewer.admin?.scopeRestricted &&
+    !["groups:read", "groups:write"].some((permission) =>
+      hasPermission(viewer.admin!, permission, { type: "group", id: group.id }),
+    )
+  ) {
+    throw new AppError(403, "GROUP_PERMISSION_REQUIRED", "The delegated permissions do not cover this group");
+  }
 
   const capabilities: GroupCapability[] = [
     "view",

@@ -26,31 +26,30 @@ const mcpWriteMetadata = {
 };
 
 describe("MCP OpenAPI filtering", () => {
-  it("discovers scoped JSON operations without a second opt-in and excludes binary or explicit exceptions", () => {
-    const scoped = {
-      [AUTH_EXTENSION]: { required: true, scopes: ["agenda:read"] },
-      responses: { 200: { content: { "application/json": {} } } },
-    };
-    const spec = filterOpenApiSpecForMcp({
+  it("preserves shared path parameters and explicit transport exclusions", () => {
+    const parameters = [{ name: "groupId", in: "path", required: true, schema: { type: "string" } }];
+    const filtered = filterOpenApiSpecForMcp({
       paths: {
-        "/scoped": {
-          get: scoped,
-          post: { ...scoped, [AUTH_EXTENSION]: { required: true, scopesAnyOf: [["agenda:write"]] } },
+        "/api/v1/groups/{groupId}/events": {
+          parameters,
+          get: { summary: "List group events", [AUTH_EXTENSION]: { required: true } },
+          post: { summary: "Create group event", [AUTH_EXTENSION]: { required: true } },
+          head: { summary: "Unsupported method" },
         },
-        "/disabled": { get: { ...scoped, [MCP_EXTENSION]: { expose: false } } },
-        "/binary": { get: { ...scoped, responses: { 200: { content: { "application/pdf": {} } } } } },
-        "/upload": { put: { ...scoped, requestBody: { content: { "multipart/form-data": {} } } } },
-        "/public": { get: { responses: scoped.responses } },
-        "/browser-session": { get: { ...scoped, [AUTH_EXTENSION]: { required: true, scopes: [] } } },
+        "/api/v1/browser": {
+          get: { [MCP_EXTENSION]: { expose: false, reason: "Requires browser redirect" } },
+        },
+        "/outside-api": { get: { summary: "Not an API operation" } },
       },
     });
-    expect(Object.keys(spec.paths)).toEqual(["/scoped"]);
-    expect(spec.paths["/scoped"].get.security).toEqual([{ McpSession: ["agenda:read"] }]);
-    expect(spec.paths["/scoped"].post.security).toEqual([{ McpSession: ["agenda:write"] }]);
-    expect(spec.paths["/scoped"].post[MCP_EXTENSION].readonly).toBe(false);
+    expect(filtered.paths["/api/v1/groups/{groupId}/events"].parameters).toEqual(parameters);
+    expect(filtered.paths["/api/v1/groups/{groupId}/events"].post).toBeDefined();
+    expect(filtered.paths["/api/v1/groups/{groupId}/events"].head).toBeUndefined();
+    expect(filtered.paths["/api/v1/browser"]).toBeUndefined();
+    expect(filtered.paths["/outside-api"]).toBeUndefined();
   });
 
-  it("keeps explicitly exposed authenticated operations and adds bearer security", () => {
+  it("exposes API operations by default while keeping canonical security", () => {
     const filtered = filterOpenApiSpecForMcp({
       openapi: "3.1.0",
       info: { title: "PKI Consortium API", version: "v1" },
@@ -82,9 +81,10 @@ describe("MCP OpenAPI filtering", () => {
 
     expect(Object.keys(filtered.paths)).toEqual([
       "/api/v1/events/{eventSlug}/proposals",
+      "/api/v1/proposals/{proposalId}/decisions",
       "/api/v1/proposals/{proposalId}/reviews",
     ]);
-    expect(filtered.paths["/api/v1/proposals/{proposalId}/decisions"]).toBeUndefined();
+    expect(filtered.paths["/api/v1/proposals/{proposalId}/decisions"].post.security).toBeUndefined();
     expect(filtered.paths["/api/v1/proposals/{proposalId}/reviews"].post.security).toEqual([
       { McpSession: ["proposals:score"] },
     ]);
@@ -127,7 +127,7 @@ describe("OpenAPI auth decoration", () => {
     expect(decorated.paths["/api/v1/events/{eventSlug}/terms"].get.security).toBeUndefined();
   });
 
-  it("replaces stale required-scope text when MCP filtering narrows scopes", () => {
+  it("does not let MCP metadata override canonical API scopes", () => {
     const filtered = filterOpenApiSpecForMcp({
       openapi: "3.1.0",
       info: { title: "PKI Consortium API", version: "v1" },
@@ -151,8 +151,11 @@ describe("OpenAPI auth decoration", () => {
     });
 
     expect(filtered.paths["/api/v1/proposals/{proposalId}/reviews"].post.description).toBe(
-      "Existing operation summary.\n\nRequired scopes: `proposals:score`.",
+      "Existing operation summary.\n\nRequired scopes: `proposals:read`, `proposals:score`.",
     );
+    expect(filtered.paths["/api/v1/proposals/{proposalId}/reviews"].post.security).toEqual([
+      { McpSession: ["proposals:read", "proposals:score"] },
+    ]);
   });
 
   it("preserves OR semantics for alternative MCP scopes", () => {
