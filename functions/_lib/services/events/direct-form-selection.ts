@@ -54,14 +54,22 @@ export function prepareDirectEventFormSelectionRead(
       const [currentResult, selectedResult, placementResult] = results;
       const resolved = decodePlacedEventForm(batchRows<PlacedEventFormRow>(currentResult));
       const exact = resolved?.placement ?? null;
-      if (exact?.ownerGroupId)
+      // A group's reusable questions stay group-managed; the already placed
+      // proposal form's submission window belongs to this event.
+      const retainsGroupProposal =
+        purpose === "proposal_submission" &&
+        Boolean(exact?.ownerGroupId) &&
+        resolved?.form.scope_type === "community" &&
+        resolved.form.scope_ref === exact?.ownerGroupId &&
+        (formKey === undefined || formKey === resolved.form.key);
+      if (exact?.ownerGroupId && !retainsGroupProposal)
         throw new AppError(
           409,
           "EVENT_MANAGED_BY_GROUP",
           "Group-owned forms must be configured through their owning group",
         );
       const selected =
-        formKey === undefined
+        formKey === undefined || retainsGroupProposal
           ? resolved && { id: resolved.form.id, updated_at: resolved.form.updated_at }
           : formKey === null
             ? null
@@ -81,13 +89,21 @@ export function prepareDirectEventFormSelectionRead(
       guards.push(
         prepareAuthorizationGuard(db, {
           sql: `SELECT 1 FROM forms WHERE id=? AND status='active' AND purpose=? AND updated_at=?
-      AND (scope_type='global' OR (scope_type='event' AND scope_ref=?))`,
-          bindings: [selected.id, purpose, selected.updated_at, event.id],
+      AND (scope_type='global' OR (scope_type='event' AND scope_ref=?)
+        OR (id=? AND scope_type='community' AND scope_ref=?))`,
+          bindings: [
+            selected.id,
+            purpose,
+            selected.updated_at,
+            event.id,
+            retainsGroupProposal ? selected.id : null,
+            retainsGroupProposal ? exact?.ownerGroupId : null,
+          ],
         }),
       );
       const selectedPlacement =
         exact?.formId === selected.id ? exact : previousSelection.decode(batchRows<FormPlacementRow>(placementResult));
-      if (selectedPlacement?.ownerGroupId)
+      if (selectedPlacement?.ownerGroupId && (!retainsGroupProposal || selectedPlacement.id !== exact?.id))
         throw new AppError(
           409,
           "EVENT_MANAGED_BY_GROUP",

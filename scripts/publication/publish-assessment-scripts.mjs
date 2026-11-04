@@ -6,18 +6,23 @@ import { selfAssessmentReleases } from "../../assets/shared/self-assessment-rele
 
 const MAX_BYTES = 8 * 1024 * 1024;
 
-function verify(bytes, integrity) {
+class AssessmentIntegrityError extends Error {}
+
+function verify(bytes, integrity, source) {
   if (bytes.length > MAX_BYTES || `sha384-${createHash("sha384").update(bytes).digest("base64")}` !== integrity)
-    throw new Error("Assessment dependency failed integrity verification");
+    throw new AssessmentIntegrityError(`Assessment dependency failed integrity verification (${source})`);
   return bytes;
 }
 
 async function readApprovedAsset(url, integrity, cache, download) {
   const cached = resolve(cache, createHash("sha256").update(integrity).digest("hex"));
   try {
-    return verify(await readFile(cached), integrity);
+    return verify(await readFile(cached), integrity, `cached ${url}`);
   } catch (error) {
-    if (error.code !== "ENOENT") throw error;
+    if (error instanceof AssessmentIntegrityError) {
+      // Cache entries are disposable; only verified upstream bytes may replace them.
+      await rm(cached, { force: true });
+    } else if (error.code !== "ENOENT") throw error;
   }
   const response = await download(url, { signal: AbortSignal.timeout(30_000), redirect: "error" });
   if (!response.ok) throw new Error(`Assessment dependency download failed: ${response.status}`);
@@ -28,7 +33,7 @@ async function readApprovedAsset(url, integrity, cache, download) {
     if (length > MAX_BYTES) throw new Error("Assessment dependency exceeds its download limit");
     chunks.push(chunk);
   }
-  const bytes = verify(Buffer.concat(chunks), integrity);
+  const bytes = verify(Buffer.concat(chunks), integrity, `downloaded ${url}`);
   const temporary = `${cached}.${randomUUID()}.tmp`;
   try {
     await writeFile(temporary, bytes);
