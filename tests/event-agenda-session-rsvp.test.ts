@@ -394,8 +394,10 @@ describe("Signed recipient session calendar replies", () => {
     let entry = new ICAL.Component(ICAL.parse(payload.__calendarInvite.inlineContent)).getFirstSubcomponent("vevent")!;
     expect(entry.getFirstPropertyValue("uid")).toBe(oldEntry.getFirstPropertyValue("uid"));
     expect(entry.getFirstPropertyValue("sequence")).toBe(1);
-    const start = new Date(Date.now() + 10800000).toISOString(),
-      end = new Date(Date.now() + 14400000).toISOString();
+    const start = new Date(Date.now() + 27 * 60 * 60_000).toISOString(),
+      end = new Date(Date.now() + 28 * 60 * 60_000).toISOString();
+    // Always exercise a move across UTC midnight with attendance for the new day.
+    await seedSessionAttendanceDays(env.DB, eventId, [start.slice(0, 10)]);
     await alterPublished("startAt", start);
     await alterPublished("endAt", end);
     id = await invite();

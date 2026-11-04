@@ -119,6 +119,7 @@ import {
   EventBadgeGet,
   EventBadgePrint,
   EventBadgeLabel,
+  EventBadgeLabelBatch,
   EventBadgePrintingGet,
 } from "./badges";
 import {
@@ -244,6 +245,7 @@ openapi.get("/badges/attendees", EventBadgeAttendeesGet);
 openapi.get("/badges", EventBadgesGet);
 openapi.get("/badges/printing", EventBadgePrintingGet);
 openapi.post("/badges/labels", EventBadgeLabel);
+openapi.post("/badges/labels/batches", EventBadgeLabelBatch);
 openapi.put("/badges/current", EventBadgeCurrentPut);
 openapi.get("/badges/:badgeId", EventBadgeGet);
 openapi.post("/badges", EventBadgeCreate);

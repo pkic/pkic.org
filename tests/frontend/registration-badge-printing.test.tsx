@@ -6,12 +6,11 @@ import {
   eventBadgePrintPopulationQuerySchema,
   eventBadgePrintPopulationResponseSchema,
 } from "../../assets/shared/schemas/event-badge-printing";
+import { badgePrintingResponseSchema } from "../../assets/shared/schemas/route-contracts-event-badges";
 import {
-  badgeIssueRequestSchema,
-  badgeLabelRequestSchema,
-  badgeCredentialMetadataSchema,
-  badgePrintingResponseSchema,
-} from "../../assets/shared/schemas/route-contracts-event-badges";
+  badgeLabelBatchRequestSchema,
+  type BadgeLabelBatchRequest,
+} from "../../assets/shared/schemas/event-badge-label-batches";
 import { RegistrationBadgePrinting } from "../../assets/ts/components/event-badges/RegistrationBadgePrinting";
 import {
   filteredBadgePrintScope,
@@ -179,137 +178,28 @@ it("keeps the actual management refusal authoritative and never issues a badge",
   expect(fetch).toHaveBeenCalledTimes(1);
 });
 
-it("loads every filtered page before preparing labels, retains successful badges on refusal and retries the same remaining operation", async () => {
-  const bodies: ReturnType<typeof badgeIssueRequestSchema.parse>[] = [];
-  let reads = 0;
-  let refused = false;
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-      const pathname = new URL(String(input), location.origin).pathname;
-      if (pathname.endsWith("/printing")) return json(printing);
-      if (pathname.endsWith("/labels")) {
-        const parsed = badgeLabelRequestSchema.parse(JSON.parse(String(init.body)));
-        expect(parsed.source).toBe("badge");
-        const id = parsed.source === "badge" ? parsed.badgeId : "";
-        const index = Number(id.slice(-12));
-        return json({
-          ...printDetails,
-          id,
-          svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 37 37"><path d="M4 4h1v1H4z"/></svg>',
-          displayName: row(index).display_name,
-          expiresAt: "2026-12-01T00:00:00.000Z",
-        });
-      }
-      if (init.method !== "POST" && !pathname.endsWith("/population")) {
-        const id = pathname.split("/").at(-1)!;
-        const index = Number(id.slice(-12));
-        return json({
-          id,
-          eventId,
-          userId: row(index).user_id,
-          displayName: row(index).display_name,
-          createdAt: "2026-10-07T00:00:00.000Z",
-          expiresAt: "2026-12-01T00:00:00.000Z",
-          revokedAt: null,
-          status: "active",
-          reprintAvailable: true,
-        });
-      }
-      if (init.method !== "POST") {
-        const parsed = query(input);
-        reads++;
-        const index = parsed.cursor ? Number(parsed.cursor.slice(-12)) + 1 : 1;
-        return json(page([row(index)], 3, index < 3 ? row(index).id : null));
-      }
-      expect(reads).toBe(3);
-      const body = badgeIssueRequestSchema.parse(JSON.parse(String(init.body)));
-      expect(body.replaceBadgeId).toBeUndefined();
-      // A print run reprints an attendee's active badge rather than adding a second credential.
-      expect(body.reuseActive).toBe(true);
-      bodies.push(body);
-      const index = Number(body.userId.slice(-12));
-      if (index === 2 && !refused) {
-        refused = true;
-        return json({ error: { code: "BADGE_PERMISSION_CHANGED", message: "Synthetic partial refusal" } }, 409);
-      }
-      return json({
-        result: "issued",
+function batchResponse(body: BadgeLabelBatchRequest) {
+  return {
+    operationId: body.operationId,
+    labels: body.registrationIds.map((id) => {
+      const index = Number(id.slice(-12));
+      return {
         id: `60000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-        credential: ["ABCDEFGHJKLMNPQR", "23456789ABCDEFGH", "JKLMNPQR23456789"][index - 1],
-        expiresAt: "2026-12-01T00:00:00.000Z",
-        replacedBadgeId: null,
-      });
-    }),
-  );
-  const host = document.createElement("div");
-  document.body.append(host);
-  mounted.push(host);
-  const scope = filteredBadgePrintScope(endpoint, { q: "Synthetic", status: "registered" });
-  await act(() =>
-    render(
-      <RegistrationBadgePrinting
-        slug="workshop"
-        eventId={eventId}
-        scope={scope}
-        isCurrent={() => true}
-        onBack={vi.fn()}
-      />,
-      host,
-    ),
-  );
-  await vi.waitFor(() => expect(host.textContent).toContain("Synthetic partial refusal"));
-  expect(host.textContent).toContain("1 of 3 requests completed");
-  expect(host.querySelector("iframe")?.getAttribute("srcdoc")).toContain("Synthetic attendee 1");
-  await click(host, "Retry remaining requests");
-  await vi.waitFor(() => expect(host.textContent).toContain("3 of 3 requests completed"));
-  expect(bodies.map((body) => body.userId)).toEqual([row(1).user_id, row(2).user_id, row(2).user_id, row(3).user_id]);
-  expect(bodies.at(1)!.operationId).toBe(bodies.at(2)!.operationId);
-  expect(reads).toBe(3);
-  expect(confirmAction).not.toHaveBeenCalled();
-  const preview = host.querySelector("iframe")?.getAttribute("srcdoc");
-  for (let index = 1; index <= 3; index++) expect(preview).toContain(`Synthetic attendee ${index}`);
-});
-
-it("automatically prepares 100 selected attendees as 200 labels without loading full artwork", async () => {
-  const rows = Array.from({ length: 100 }, (_, index) => row(index + 1));
-  const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-    const path = new URL(String(input), location.origin).pathname;
-    if (path.endsWith("/printing")) throw new Error("Full artwork must remain lazy");
-    if (path.endsWith("/badges")) {
-      const body = badgeIssueRequestSchema.parse(JSON.parse(String(init.body)));
-      return json({
-        result: "existing",
-        id: body.userId,
-        credential: null,
-        replacedBadgeId: null,
-        expiresAt: "2099-01-01T00:00:00.000Z",
-      });
-    }
-    const label = path.endsWith("/labels") ? badgeLabelRequestSchema.parse(JSON.parse(String(init.body))) : null;
-    const id = label?.source === "badge" ? label.badgeId : path.split("/").at(-1)!;
-    const index = Number(id.slice(-12));
-    if (label)
-      return json({
-        ...printDetails,
-        id,
-        svg: '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1H0z"/></svg>',
+        registrationId: id,
+        userId: row(index).user_id,
+        credential: "ABCDEFGHJKLMNPQR",
         displayName: row(index).display_name,
+        firstName: "Synthetic",
+        lastName: `Attendee ${index}`,
+        organization: null,
+        jobTitle: null,
+        badgeRole: "attendee",
         expiresAt: "2099-01-01T00:00:00.000Z",
-      });
-    return json({
-      id,
-      eventId,
-      userId: id,
-      displayName: row(index).display_name,
-      createdAt: "2026-11-01T00:00:00.000Z",
-      expiresAt: "2099-01-01T00:00:00.000Z",
-      revokedAt: null,
-      status: "active",
-      reprintAvailable: true,
-    });
-  });
-  vi.stubGlobal("fetch", fetch);
+      };
+    }),
+  };
+}
+async function mountPrinting(rows: BadgePrintPopulationRow[], isCurrent = () => true) {
   const host = document.createElement("div");
   document.body.append(host);
   mounted.push(host);
@@ -319,19 +209,110 @@ it("automatically prepares 100 selected attendees as 200 labels without loading 
         slug="workshop"
         eventId={eventId}
         scope={{ kind: "selected", rows }}
+        isCurrent={isCurrent}
+        onBack={vi.fn()}
+      />,
+      host,
+    ),
+  );
+  return host;
+}
+it("resolves the complete filtered selection before requesting QR data together", async () => {
+  let populationReads = 0,
+    batchReads = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      if (String(input).includes("/population")) {
+        populationReads++;
+        const rows = populationReads === 1 ? Array.from({ length: 200 }, (_, index) => row(index + 1)) : [row(201)];
+        return json(page(rows, 201, populationReads === 1 ? row(200).id : null));
+      }
+      expect(populationReads).toBe(2);
+      batchReads++;
+      const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
+      expect(body.registrationIds).toHaveLength(201);
+      return json(batchResponse(body));
+    }),
+  );
+  const host = document.createElement("div");
+  document.body.append(host);
+  mounted.push(host);
+  await act(() =>
+    render(
+      <RegistrationBadgePrinting
+        slug="workshop"
+        eventId={eventId}
+        scope={filteredBadgePrintScope(endpoint, { status: "registered", attendance_type: "in_person" })}
         isCurrent={() => true}
         onBack={vi.fn()}
       />,
       host,
     ),
   );
-  await vi.waitFor(() => expect(host.textContent).toContain("100 of 100 requests completed"));
-  const html = host.querySelector("iframe")?.getAttribute("srcdoc");
-  expect(html?.match(/class="badge-print-sheet"/g)).toHaveLength(200);
-  expect(html).toContain("Synthetic attendee 100");
-  expect(fetch).toHaveBeenCalledTimes(300);
-  expect(confirmAction).not.toHaveBeenCalled();
+  await vi.waitFor(() => expect(host.querySelector("iframe")).not.toBeNull());
+  expect(batchReads).toBe(1);
 });
+it.each([500, 1000, 1001])(
+  "loads %i selected attendees in compact batches and renders HTML without a file download",
+  async (count) => {
+    const bodies: BadgeLabelBatchRequest[] = [];
+    const fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      expect(String(input)).toBe("/api/v1/events/workshop/badges/labels/batches");
+      const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
+      bodies.push(body);
+      return json(batchResponse(body));
+    });
+    vi.stubGlobal("fetch", fetch);
+    const host = await mountPrinting(Array.from({ length: count }, (_, index) => row(index + 1)));
+    await vi.waitFor(() => expect(host.querySelector("iframe")?.srcdoc).toContain("badge-print-sheet"));
+    expect(fetch).toHaveBeenCalledTimes(Math.ceil(count / 1000));
+    expect(bodies.map((body) => body.registrationIds.length)).toEqual(count <= 1000 ? [count] : [1000, 1]);
+    expect(host.querySelector("iframe")?.srcdoc.match(/class="badge-print-sheet"/g)).toHaveLength(count * 2);
+    expect(host.textContent).not.toContain("requests completed");
+    expect(downloadBadgeArtifact).not.toHaveBeenCalled();
+    expect(confirmAction).not.toHaveBeenCalled();
+  },
+);
+it("retries a lost batch response with the same operation and publishes no partial labels", async () => {
+  const bodies: BadgeLabelBatchRequest[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+      const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
+      bodies.push(body);
+      if (bodies.length === 1) throw new Error("Connection lost");
+      return json(batchResponse(body));
+    }),
+  );
+  const host = await mountPrinting([row(1), row(2)]);
+  await vi.waitFor(() => expect(host.textContent).toContain("could not reach online services"));
+  expect(host.querySelector("iframe")).toBeNull();
+  await click(host, "Reload labels");
+  await vi.waitFor(() => expect(host.querySelector("iframe")).not.toBeNull());
+  expect(bodies).toHaveLength(2);
+  expect(bodies[1]).toEqual(bodies[0]);
+});
+it.each(["changed owner", "wrong operation", "duplicate badge", "expired"])(
+  "refuses invalid bulk data: %s",
+  async (failure) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+        const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
+        const response = batchResponse(body);
+        if (failure === "changed owner") response.labels[0].userId = row(3).user_id;
+        if (failure === "wrong operation") response.operationId = crypto.randomUUID();
+        if (failure === "duplicate badge") response.labels[1].id = response.labels[0].id;
+        if (failure === "expired") response.labels[0].expiresAt = "2020-01-01T00:00:00.000Z";
+        return json(response);
+      }),
+    );
+    const host = await mountPrinting([row(1), row(2)]);
+    await vi.waitFor(() => expect(host.textContent).toContain("selected badges changed"));
+    expect(host.querySelector("iframe")).toBeNull();
+  },
+);
 
 it("preserves explicit selected-page scope without loading other attendees", async () => {
   const fetch = vi.fn();
@@ -358,138 +339,31 @@ it("stops a cancelled population read before publishing its metadata", async () 
   expect(progress).not.toHaveBeenCalled();
 });
 
-it.each(["session changed", "revoked"])(
-  "recovers a lost completed response through stable print retries, withholds mixed CSV, and refuses release after %s",
+it.each(["session changed", "revoked", "profile changed"])(
+  "checks the complete batch before release and refuses after %s",
   async (refusal) => {
-    const badgeId = "60000000-0000-4000-8000-000000000002";
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><path id="original-badge" d="M0 0h1v1H0z"/></svg>';
-    const metadata = badgeCredentialMetadataSchema.parse({
-      id: badgeId,
-      eventId,
-      userId: row(2).user_id,
-      displayName: row(2).display_name,
-      createdAt: "2026-10-01T00:00:00.000Z",
-      expiresAt: "2099-01-01T00:00:00.000Z",
-      revokedAt: null,
-      status: "active",
-      reprintAvailable: true,
-    });
-    const issueBodies: ReturnType<typeof badgeIssueRequestSchema.parse>[] = [];
-    const printBodies: ReturnType<typeof badgeLabelRequestSchema.parse>[] = [];
-    let current = true;
-    let revoked = false;
-    let metadataReads = 0;
+    let allowed = true,
+      calls = 0;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-        const path = new URL(String(input), location.origin).pathname;
-        if (path.endsWith("/printing")) return json(printing);
-        const firstId = "60000000-0000-4000-8000-000000000001";
-        const labelBody = path.endsWith("/labels")
-          ? badgeLabelRequestSchema.parse(JSON.parse(String(init.body)))
-          : null;
-        if (labelBody?.source === "badge" && labelBody.badgeId === firstId) {
-          return json({
-            ...printDetails,
-            id: firstId,
-            svg,
-            displayName: row(1).display_name,
-            expiresAt: metadata.expiresAt,
-          });
-        }
-        if (init.method !== "POST" && path.endsWith(firstId))
-          return json({ ...metadata, id: firstId, userId: row(1).user_id, displayName: row(1).display_name });
-        if (init.method !== "POST") {
-          expect(path).toBe(`/api/v1/events/workshop/badges/${badgeId}`);
-          metadataReads++;
-          return json(revoked ? { ...metadata, status: "revoked", revokedAt: "2026-10-07T00:00:00.000Z" } : metadata);
-        }
-        if (path.endsWith("/labels")) {
-          expect(labelBody).toMatchObject({ source: "badge", badgeId });
-          printBodies.push(badgeLabelRequestSchema.parse(JSON.parse(String(init.body))));
-          if (revoked)
-            return json(
-              { error: { code: "BADGE_PRINT_UNAVAILABLE", message: "Badge no longer available for printing." } },
-              409,
-            );
-          if (printBodies.length === 1)
-            return json(
-              { error: { code: "TEMPORARY_UNAVAILABLE", message: "Synthetic print preparation interrupted" } },
-              503,
-            );
-          return json({
-            ...printDetails,
-            id: badgeId,
-            svg,
-            displayName: metadata.displayName,
-            expiresAt: metadata.expiresAt,
-          });
-        }
-        expect(path).toBe("/api/v1/events/workshop/badges");
-        const body = badgeIssueRequestSchema.parse(JSON.parse(String(init.body)));
-        expect(body.replaceBadgeId).toBeUndefined();
-        issueBodies.push(body);
-        if (body.userId === row(1).user_id)
-          return json({
-            result: "issued",
-            id: "60000000-0000-4000-8000-000000000001",
-            credential: "ABCDEFGHJKLMNPQR",
-            expiresAt: metadata.expiresAt,
-            replacedBadgeId: null,
-          });
-        if (issueBodies.filter((request) => request.userId === row(2).user_id).length === 1)
-          throw new TypeError("Committed response was lost");
-        return json({
-          result: "replayed",
-          id: badgeId,
-          credential: null,
-          expiresAt: metadata.expiresAt,
-          replacedBadgeId: null,
-        });
+      vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+        calls++;
+        const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
+        if (calls > 1 && refusal === "revoked")
+          return json({ error: { code: "BADGE_BATCH_CHANGED", message: "Badge unavailable" } }, 409);
+        const response = batchResponse(body);
+        if (calls > 1) response.labels[0].firstName = "Changed";
+        return json(response);
       }),
     );
-    const host = document.createElement("div");
-    document.body.append(host);
-    mounted.push(host);
-    await act(() =>
-      render(
-        <RegistrationBadgePrinting
-          slug="workshop"
-          eventId={eventId}
-          scope={{ kind: "selected", rows: [row(1), row(2)] }}
-          isCurrent={() => current}
-          onBack={vi.fn()}
-        />,
-        host,
-      ),
-    );
-    await vi.waitFor(() => expect(host.textContent).toContain("1 of 2 requests completed"));
-    await click(host, "Retry remaining requests");
-    await vi.waitFor(() => expect(host.textContent).toContain("Synthetic print preparation interrupted"));
-    expect(host.textContent).toContain("1 of 2 requests completed");
-    await click(host, "Retry remaining requests");
-    await vi.waitFor(() => expect(host.textContent).toContain("2 of 2 requests completed"));
-    expect(issueBodies.map((body) => body.userId)).toEqual([row(1).user_id, row(2).user_id, row(2).user_id]);
-    expect(new Set(issueBodies.slice(1).map((body) => body.operationId)).size).toBe(1);
-    expect(printBodies).toHaveLength(2);
-    expect(printBodies[0]).toEqual(printBodies[1]);
-    expect(printBodies[0]?.operationId).not.toBe(issueBodies[1]?.operationId);
-    expect(QR.toString).not.toHaveBeenCalled();
-    expect(metadataReads).toBe(1);
-    expect(host.querySelector("iframe")?.getAttribute("srcdoc")).toContain("original-badge");
+    const host = await mountPrinting([row(1), row(2)], () => allowed);
+    await vi.waitFor(() => expect(host.querySelector("iframe")).not.toBeNull());
+    if (refusal === "session changed") allowed = false;
     await click(host, "Download print files");
-    expect(host.textContent).not.toContain("Printing CSV with QR codes");
-    current = refusal !== "session changed";
-    revoked = refusal === "revoked";
     await click(host, "Reusable HTML print file");
     await vi.waitFor(() => expect(host.querySelector("iframe")).toBeNull());
-    expect(host.textContent).toContain(
-      refusal === "session changed" ? "Sign in again" : "no longer available for printing",
-    );
     expect(downloadBadgeArtifact).not.toHaveBeenCalled();
-    expect(metadataReads).toBe(1);
-    expect(issueBodies).toHaveLength(3);
-    expect(printBodies).toHaveLength(refusal === "revoked" ? 3 : 2);
+    expect(calls).toBe(refusal === "session changed" ? 1 : 2);
   },
 );
 
@@ -507,6 +381,9 @@ it("prints exact canonical front/back sheets and label stock without changing QR
   expect(document.querySelectorAll("div[hidden] pre")).toHaveLength(1);
   expect(document.querySelector("div[hidden] pre")?.textContent).toBe(BADGE_GENERIC_FONT_LICENSE);
   expect(a4).toContain("size:297mm 210mm");
+  expect(badgePrintHtml(badges, badgePrintPreset("brother_dk_1208"), printing, "name_qr")).toContain(
+    "size:38mm 89.8mm",
+  );
   expect(a4.match(/class="badge-print-sheet"/g)).toHaveLength(1);
   expect(a4).toContain('aria-label="Badge front"');
   expect(a4).toContain('aria-label="Badge back"');

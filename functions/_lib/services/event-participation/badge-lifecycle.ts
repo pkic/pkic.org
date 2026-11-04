@@ -39,8 +39,11 @@ function prepareRevocation(db: DatabaseLike, eventId: string, badge: OwnedBadge,
 }
 const receiptKey = (eventId: string, operationId: string) => `badge-issuance:${eventId}:${operationId}`;
 /** One predicate for "this attendee already holds a badge whose print file can be recovered". */
-const ACTIVE_REPRINTABLE_BADGE_SQL = `FROM event_badge_credentials WHERE event_id=? AND user_id=? AND revoked_at IS NULL
-  AND expires_at>? AND print_credential_json IS NOT NULL`;
+export function activeReprintableBadgeWhereSql(alias: string, event: string, user: string, now: string) {
+  return `${alias}.event_id=${event} AND ${alias}.user_id=${user} AND ${alias}.revoked_at IS NULL
+    AND ${alias}.expires_at>${now} AND ${alias}.print_credential_json IS NOT NULL`;
+}
+const ACTIVE_REPRINTABLE_BADGE_SQL = `FROM event_badge_credentials badge WHERE ${activeReprintableBadgeWhereSql("badge", "?", "?", "?")}`;
 
 /** Newest active badge whose sealed print credential lets the holder or an organizer recover the same QR. */
 export async function findActiveReprintableBadge(db: DatabaseLike, eventId: string, userId: string) {

@@ -2,6 +2,7 @@ import { formatNumber } from "../../../shared/format-number";
 import { useMeasuredWidth } from "../../hooks/useMeasuredWidth";
 import { badgePrintPageDimensions } from "../../../shared/schemas/badge-print-layout";
 import { badgeLabelSvg } from "../../../shared/badge-label-svg";
+import { isBrotherDk1208Paper } from "../../../shared/badge-label-policy";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import { BadgeDocumentFrame } from "./BadgeDocumentFrame";
 import type { BadgePrintingContext } from "../../../shared/schemas/route-contracts-event-badges";
@@ -242,7 +243,9 @@ export function BadgePrintPreview({
             />
           </div>
           <p>
-            Print at 100% using the selected stock. Disable browser headers and footers.{" "}
+            {design === "name_qr" && isBrotherDk1208Paper(badgePrintPageDimensions(layout.page))
+              ? "Brother DK-1208: select 38 × 90 mm paper, portrait, 100% scale, and no margins. Turn off headers and footers."
+              : "Print at 100% using the selected stock. Disable browser headers and footers."}{" "}
             {design === "name_qr"
               ? "Use Print layout to change label stock, copies, or switch to full badges."
               : "Use Print layout to change paper, copies, or switch to labels."}
