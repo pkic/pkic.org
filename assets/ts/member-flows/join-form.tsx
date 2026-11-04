@@ -5,8 +5,16 @@
  * renders only the server-authorized application path. The browser never decides whether a person may join for
  * an organization or as an individual.
  */
-import { getJson, postJson } from "../shared/api-client";
-import { renderCustomFields, readCustomFieldValues } from "../shared/widgets/custom-fields";
+import {
+  forgetJoinDraft,
+  hasJoinAnswers,
+  rememberJoinToken,
+  rememberedJoinToken,
+  restoreJoinAnswers,
+  saveJoinAnswers,
+} from "./join-draft";
+import { ApiClientError, getJson, postJson } from "../shared/api-client";
+import { readCustomFieldValues } from "../shared/widgets/custom-fields";
 import { render } from "preact";
 import { useState } from "preact/hooks";
 import { withLoadingButton, focusSubmitError } from "../shared/form/submit";
@@ -14,12 +22,15 @@ import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { replaceFormWithSuccess } from "../shared/form/success-panel";
 import { focusFirstInvalidField, normalizeValidation } from "../shared/form/validation-map";
-import { formatCurrencyAmount } from "../../shared/format-currency";
+import { membershipApplicationFields } from "../../shared/schemas/membership-application-form";
 import {
-  filterApplicationFieldsForApplicantKind,
-  membershipApplicationFields,
-} from "../../shared/schemas/membership-application-form";
-export { filterApplicationFieldsForApplicantKind } from "../../shared/schemas/membership-application-form";
+  applyCategoryUI,
+  configureMembershipLegalFields,
+  filterCategoriesForApplicantKind,
+  renderMembershipCategorySummary,
+  renderMembershipCategories,
+  renderMembershipApplicationQuestions,
+} from "./join-application-fields";
 import type { SessionActingIdentity } from "../../shared/session-acting-identity";
 import { JoinSignedInApplicant, joinRefusalFor, readSignedInApplicant } from "./join-signed-in";
 import type { JoinRefusal, SignedInApplicant } from "./join-signed-in";
@@ -94,170 +105,6 @@ export const applicantNamePartsSchema = z
       context.addIssue({ code: "custom", path: ["applicantName"], message: "Last name is required" });
   });
 
-/** The category catalog is server-provided; this only mirrors its selected presentation state. */
-export function applyCategoryUI(form: HTMLFormElement, category: MembershipCategory | undefined): void {
-  const orgField = form.querySelector<HTMLInputElement>("#organizationName");
-  const orgFieldContainer = form.querySelector<HTMLElement>("[data-organization-name-field]");
-  if (!orgField || !orgFieldContainer) return;
-  const individual = category?.isIndividual ?? false;
-  orgField.required = !individual;
-  orgField.disabled = individual;
-  orgFieldContainer.hidden = individual;
-  if (individual) orgField.value = "";
-}
-
-export function filterCategoriesForApplicantKind(
-  categories: MembershipCategory[],
-  applicantKind: JoinApplicationContext["applicantKind"],
-): MembershipCategory[] {
-  return categories.filter((category) => category.isIndividual === (applicantKind === "individual"));
-}
-
-export function membershipCategoryFeeText(category: MembershipCategory): string | null {
-  if (!category.fee) return null;
-  return `Required fee: ${formatCurrencyAmount(category.fee.amount, category.fee.currency)}. Payment is due within ${category.fee.deadlineDays} days after the payment step opens.`;
-}
-
-function membershipLegalLabel(key: string, configuredLabel: string, applicantKind: JoinApplicantKind): string {
-  if (applicantKind !== "individual") return configuredLabel;
-  if (key === "warranted_authority") {
-    return "I confirm that I am submitting this application for myself and agree to be bound by these terms";
-  }
-  return configuredLabel.replace(/^I and my organization \(if applicable\)/, "I");
-}
-export function renderMembershipCategorySummary(container: HTMLElement, categories: MembershipCategory[]): void {
-  if (categories.length === 0) {
-    container.textContent = "No eligible individual categories are currently available.";
-    return;
-  }
-
-  const list = document.createElement("ul");
-  // The bullet without the browser's 40px indent, so the summary lines up
-  // with the label above it instead of hanging off to the right.
-  list.className = "pk-answer-list";
-  for (const category of categories) {
-    const item = document.createElement("li");
-    const title = document.createElement("strong");
-    title.textContent = `${category.code} — ${category.label}`;
-    item.append(title);
-    if (category.description) {
-      // A block element rather than a span carrying a display utility: the
-      // description is its own line, which is what a div already means.
-      const description = document.createElement("div");
-      description.className = "pk-small";
-      description.textContent = category.description;
-      item.append(description);
-    }
-    const fee = membershipCategoryFeeText(category);
-    if (fee) {
-      const feeSummary = document.createElement("div");
-      feeSummary.className = "pk-small pk-strong";
-      feeSummary.textContent = fee;
-      item.append(feeSummary);
-    }
-    list.append(item);
-  }
-  container.replaceChildren(list);
-}
-
-/**
- * Binds D1 form-field policy to the server-rendered canonical legal documents
- * and removes those fields from the generic custom-question renderer.
- */
-export function configureMembershipLegalFields(
-  form: HTMLFormElement,
-  fields: MembershipApplicationField[],
-  applicantKind: JoinApplicantKind = "organization",
-): MembershipApplicationField[] {
-  const fieldsByKey = new Map(fields.map((field) => [field.key, field]));
-  const configuredKeys = new Set<string>();
-  const entries = form.querySelectorAll<HTMLElement>("[data-membership-legal-field]");
-
-  for (const entry of Array.from(entries)) {
-    const key = entry.dataset.membershipLegalField;
-    const field = key ? fieldsByKey.get(key) : undefined;
-    const input = entry.querySelector<HTMLInputElement>("[data-membership-legal-input]");
-    const label = entry.querySelector<HTMLElement>("[data-membership-legal-label]");
-    const configured = Boolean(key && field?.fieldType === "boolean" && input && label);
-    entry.hidden = !configured;
-    if (input) input.disabled = !configured;
-    if (!configured || !key || !field || !input || !label) continue;
-
-    input.required = field.required;
-    label.textContent = membershipLegalLabel(key, field.label, applicantKind);
-    configuredKeys.add(key);
-  }
-
-  const agreements = form.querySelector<HTMLElement>("[data-membership-legal-agreements]");
-  if (agreements) agreements.hidden = configuredKeys.size === 0;
-
-  return filterApplicationFieldsForApplicantKind(
-    fields.filter((field) => !configuredKeys.has(field.key)),
-    applicantKind,
-  );
-}
-
-/** Start with active participation without replacing an applicant's saved choice. */
-export function renderMembershipApplicationQuestions(
-  container: HTMLElement,
-  fields: MembershipApplicationField[],
-  answers: Record<string, unknown> = {},
-): void {
-  const contribution = fields.find((field) => field.key === "contribution_type");
-  const defaults =
-    contribution?.fieldType === "select" &&
-    contribution.options?.some((option) => option.value === "active" && option.active)
-      ? { contribution_type: "active" }
-      : {};
-  renderCustomFields(container, fields).setValues({ ...defaults, ...answers });
-}
-
-export function renderMembershipCategories(container: HTMLElement, categories: MembershipCategory[]): void {
-  // The gap between the options belongs to the list, not to each option: one
-  // decision here instead of one `mb-2` per radio that can disagree.
-  container.className = "pk-stack pk-stack--snug";
-  container.replaceChildren(
-    ...categories.map((category) => {
-      // All three parts of the check, or the browser draws its own control:
-      // the block on the label, the input class, and the label class.
-      const wrapper = document.createElement("label");
-      wrapper.className = "pk-check";
-      const id = `membership-category-${category.code.toLowerCase()}`;
-      const input = document.createElement("input");
-      input.className = "pk-check__input";
-      input.type = "radio";
-      input.id = id;
-      input.name = "membershipCategory";
-      input.value = category.code;
-      input.required = true;
-      input.dataset.individual = String(category.isIndividual);
-      const label = document.createElement("span");
-      label.className = "pk-check__label";
-      const title = document.createElement("strong");
-      title.textContent = `${category.code} — ${category.label}`;
-      label.append(title);
-      if (category.description) {
-        const description = document.createElement("span");
-        description.className = "pk-check__hint";
-        description.textContent = category.description;
-        label.append(description);
-      }
-      const fee = membershipCategoryFeeText(category);
-      if (fee) {
-        const feeSummary = document.createElement("span");
-        feeSummary.className = "pk-check__hint pk-strong";
-        feeSummary.textContent = fee;
-        label.append(feeSummary);
-      }
-      wrapper.htmlFor = id;
-      wrapper.append(input, label);
-      return wrapper;
-    }),
-  );
-}
-
-// ── Main ──────────────────────────────────────────────────────────────────
-
 function readSelectedCategory(form: HTMLFormElement): string {
   return form.querySelector<HTMLInputElement>('input[name="membershipCategory"]:checked')?.value ?? "";
 }
@@ -325,6 +172,10 @@ async function main(): Promise<void> {
   const accessSection = root.querySelector<HTMLElement>("[data-join-organization-access]");
   const existingMemberSection = root.querySelector<HTMLElement>("[data-join-already-member]");
   const supportSection = root.querySelector<HTMLElement>("[data-join-support-required]");
+  const inProgressSection = root.querySelector<HTMLElement>("[data-join-application-in-progress]");
+  const organizationInProgressSection = root.querySelector<HTMLElement>(
+    "[data-join-organization-application-in-progress]",
+  );
   const individualCategories = root.querySelector<HTMLElement>("[data-join-individual-categories]");
   const verifiedEmail = root.querySelector<HTMLElement>("[data-verified-application-email]");
   const verifiedKind = root.querySelector<HTMLElement>("[data-verified-application-kind]");
@@ -339,7 +190,9 @@ async function main(): Promise<void> {
     !applicationForm ||
     !accessSection ||
     !supportSection ||
-    !existingMemberSection
+    !existingMemberSection ||
+    !inProgressSection ||
+    !organizationInProgressSection
   )
     return;
 
@@ -373,20 +226,29 @@ async function main(): Promise<void> {
   };
 
   const showSection = (section: HTMLElement) => {
-    for (const candidate of [startSection, accessSection, existingMemberSection, supportSection, applicationForm]) {
+    for (const candidate of [
+      startSection,
+      accessSection,
+      existingMemberSection,
+      inProgressSection,
+      organizationInProgressSection,
+      supportSection,
+      applicationForm,
+    ]) {
       candidate.hidden = candidate !== section;
     }
     section.focus();
   };
 
-  const loadApplication = async (applicantKind: JoinApplicantKind) => {
+  /** Resolves whether the application form is on screen, ready for its answers. */
+  const loadApplication = async (applicantKind: JoinApplicantKind): Promise<boolean> => {
     try {
       const definition = await getApplicationDefinition();
       categories = filterCategoriesForApplicantKind(definition.categories, applicantKind);
       if (!categoryContainer || categories.length === 0) {
         showSection(supportSection);
         setStatus(statusEl, "No eligible membership categories are currently available for this path.", true);
-        return;
+        return false;
       }
       renderMembershipCategories(categoryContainer, categories);
       const fields = definition.form?.fields ?? [];
@@ -408,11 +270,35 @@ async function main(): Promise<void> {
       showSection(applicationForm);
       const firstControl = applicationForm.querySelector<HTMLElement>('input[name="membershipCategory"]');
       firstControl?.focus();
+      return true;
     } catch {
       setStatus(statusEl, "Could not load the membership application. Please refresh and try again.", true);
+      return false;
     }
   };
 
+  const renderQuestionsFor = (category: MembershipCategory, answers: Record<string, unknown>) => {
+    if (!customFieldsContainer) return;
+    const eligibleAnswers = { ...answers };
+    const fields = membershipApplicationFields(applicationFields, category, {
+      fromIdentity: Boolean(signedInIdentity),
+    });
+    for (const field of fields) {
+      if (field.optionSource !== "active_working_groups") continue;
+      const eligible = new Set(field.options?.map((option) => option.value));
+      const answer = eligibleAnswers[field.key];
+      if (Array.isArray(answer)) eligibleAnswers[field.key] = answer.filter((value) => eligible.has(String(value)));
+      else if (typeof answer === "string" && !eligible.has(answer)) delete eligibleAnswers[field.key];
+    }
+    renderMembershipApplicationQuestions(customFieldsContainer, fields, eligibleAnswers);
+  };
+
+  let restoringAnswers = false;
+  // Unsent answers are kept for this tab while the path is verified, so a reload does not lose them.
+  for (const type of ["input", "change"])
+    applicationForm.addEventListener(type, () => {
+      if (applicationContext && !restoringAnswers) saveJoinAnswers(applicationForm);
+    });
   const applicationValidation = installJoinApplicationValidation(
     applicationForm,
     () => {
@@ -456,20 +342,7 @@ async function main(): Promise<void> {
     const target = event.target;
     if (!(target instanceof HTMLInputElement) || target.name !== "membershipCategory") return;
     const selected = categories.find((category) => category.code === target.value);
-    if (selected && customFieldsContainer) {
-      const answers = readCustomFieldValues(applicationForm);
-      const fields = membershipApplicationFields(applicationFields, selected, {
-        fromIdentity: Boolean(signedInIdentity),
-      });
-      for (const field of fields) {
-        if (field.optionSource !== "active_working_groups") continue;
-        const eligible = new Set(field.options?.map((option) => option.value));
-        const answer = answers[field.key];
-        if (Array.isArray(answer)) answers[field.key] = answer.filter((value) => eligible.has(value));
-        else if (typeof answer === "string" && !eligible.has(answer)) delete answers[field.key];
-      }
-      renderMembershipApplicationQuestions(customFieldsContainer, fields, answers);
-    }
+    if (selected) renderQuestionsFor(selected, readCustomFieldValues(applicationForm));
     applyCategoryUI(
       applicationForm,
       categories.find((category) => category.code === target.value),
@@ -517,6 +390,7 @@ async function main(): Promise<void> {
           payload,
           memberApplicationCreateResponseSchema,
         );
+        forgetJoinDraft();
         showSuccessPanel(root, applicationForm, result.applicationId, result.manageToken, applicantName);
       } catch (error) {
         applicationValidation.refuse(error);
@@ -528,9 +402,11 @@ async function main(): Promise<void> {
   });
 
   const verifyFromLocation = async () => {
-    const token = new URLSearchParams(window.location.hash.slice(1)).get("verify");
+    const linked = new URLSearchParams(window.location.hash.slice(1)).get("verify");
+    // The link's token leaves the address bar; this tab keeps it so a reload continues the application.
+    if (linked) history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
+    const token = linked ?? rememberedJoinToken();
     if (!token) return;
-    history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
     try {
       const result = await postJson(
         `${API_BASE}/members/join/verify`,
@@ -538,17 +414,60 @@ async function main(): Promise<void> {
         memberJoinVerifyResponseSchema,
       );
       if (result.status === "application_ready") {
+        rememberJoinToken(token);
         applicationContext = result;
-        await loadApplication(result.applicantKind);
-      } else if (result.status === "already_member") {
+        // A failed load leaves the kept answers alone for the next reload.
+        if (!(await loadApplication(result.applicantKind))) return;
+        // The kept draft stands until the next edit: stateful widgets take restored values after this render.
+        restoringAnswers = true;
+        const restored = restoreJoinAnswers(applicationForm, (answers) => {
+          const selected = categories.find((category) => category.code === readSelectedCategory(applicationForm));
+          renderQuestionsFor(selected ?? categories[0], answers);
+        });
+        restoringAnswers = false;
+        if (restored) {
+          setStatus(statusEl, "We restored the answers you entered earlier. Agreements need accepting again.");
+        }
+        return;
+      }
+      forgetJoinDraft();
+      if (result.status === "already_member") {
         showSection(existingMemberSection);
       } else if (result.status === "organization_access_ready") {
         showSection(accessSection);
+      } else if (result.status === "application_in_progress") {
+        const statusLink = inProgressSection.querySelector<HTMLAnchorElement>("[data-join-status-link]");
+        if (statusLink) statusLink.href = result.statusPath;
+        showSection(inProgressSection);
+      } else if (result.status === "organization_application_in_progress") {
+        showSection(organizationInProgressSection);
       } else {
         showSection(supportSection);
       }
-    } catch (_error) {
-      setStatus(statusEl, "This verification link is invalid or has expired. Please start again.", true);
+    } catch (error) {
+      if (!(error instanceof ApiClientError) || ![404, 409, 410].includes(error.status)) {
+        // Retry the newly opened proof after a reload, never a previous applicant's draft.
+        if (linked) rememberJoinToken(linked);
+        showSection(startSection);
+        setStatus(
+          statusEl,
+          hasJoinAnswers()
+            ? "We could not verify your email right now. Your saved answers are still available in this tab. Refresh to try again."
+            : rememberedJoinToken()
+              ? "We could not verify your email right now. Refresh to try again."
+              : "We could not verify your email right now. Open your email link again to try again.",
+          true,
+        );
+        return;
+      }
+      forgetJoinDraft();
+      setStatus(
+        statusEl,
+        linked
+          ? "This verification link is invalid or has expired. Please start again."
+          : "Your email verification has expired, so your answers were not kept. Please start again.",
+        true,
+      );
       showSection(startSection);
     }
   };
@@ -573,7 +492,8 @@ async function main(): Promise<void> {
   };
 
   window.addEventListener("hashchange", () => void verifyFromLocation());
-  if (new URLSearchParams(window.location.hash.slice(1)).has("verify")) {
+  // A verified path kept for this tab continues after a reload, like a fresh verification link.
+  if (new URLSearchParams(window.location.hash.slice(1)).has("verify") || rememberedJoinToken()) {
     await verifyFromLocation();
     return;
   }

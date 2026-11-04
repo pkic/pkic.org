@@ -7,17 +7,16 @@ import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { installLiveValidation, validateBeforeSubmit } from "../../assets/ts/shared/form/validation";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  buildApplicationPayload,
-  applicantNamePartsSchema,
   applyCategoryUI,
   configureMembershipLegalFields,
-  filterApplicationFieldsForApplicantKind,
   filterCategoriesForApplicantKind,
   membershipCategoryFeeText,
   renderMembershipCategorySummary,
   renderMembershipCategories,
   renderMembershipApplicationQuestions,
-} from "../../assets/ts/member-flows/join-form";
+} from "../../assets/ts/member-flows/join-application-fields";
+import { buildApplicationPayload, applicantNamePartsSchema } from "../../assets/ts/member-flows/join-form";
+import { filterApplicationFieldsForApplicantKind } from "../../assets/shared/schemas/membership-application-form";
 import { memberApplicationCreateSchemaForCategory } from "../../assets/shared/schemas/member-applications";
 import type { MemberApplicationFormResponse } from "../../assets/shared/schemas/member-applications";
 

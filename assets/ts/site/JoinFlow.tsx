@@ -1,3 +1,4 @@
+import { CONSORTIUM_CONTACT_HREF } from "../../shared/consortium-contact";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
 import { Checkbox } from "../ui/Checkbox";
@@ -88,6 +89,23 @@ export function JoinFlow({ documents }: { documents: MembershipDocument[] }) {
         </p>
         <ButtonLink variant="primary" href="/portal/">
           Sign in to the member portal
+        </ButtonLink>
+      </section>
+      <section data-join-application-in-progress hidden tabIndex={-1}>
+        <h2>Your application is already in progress</h2>
+        <p>You do not need to apply again. Check its status to see where it stands and what happens next.</p>
+        <ButtonLink variant="primary" href="/application-status/" data-join-status-link>
+          Check application status
+        </ButtonLink>
+      </section>
+      <section data-join-organization-application-in-progress hidden tabIndex={-1}>
+        <h2>An application for your organization is already in progress</h2>
+        <p>
+          Someone at your organization has already applied for membership. Once it is approved, you can take part as one
+          of its representatives with this email address. If you think this is a mistake, contact the secretariat.
+        </p>
+        <ButtonLink href={CONSORTIUM_CONTACT_HREF} external={false}>
+          Email the secretariat
         </ButtonLink>
       </section>
       <section data-join-support-required hidden tabIndex={-1}>
