@@ -158,7 +158,7 @@
     "stylelint-config-recommended-scss": "^17.0.1",
     "svgo": "4.1.0",
     "typescript": "^5.9.3",
-    "vite": "^8.0.16",
+    "vite": "^8.2.4",
     "vitest": "^5.0.4",
     "wrangler": "^4.135.0"
   }
