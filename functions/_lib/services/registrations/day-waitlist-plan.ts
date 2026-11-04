@@ -14,7 +14,7 @@ import {
 } from "./day-waitlist-capacity";
 import type { DayWaitlistLane, EventDayCapacityRow, PlannedDayWaitlistEntry } from "./day-waitlist-types";
 import { prepareRegistrationDayWaitlistRead, type RegistrationDayWaitlistSnapshot } from "./day-waitlist-read";
-import { prepareLapsedDayOfferRequeue } from "./day-waitlist-policy";
+import { LAPSED_OFFER_REASON_CODE, prepareLapsedDayOfferRequeue } from "./day-waitlist-policy";
 import { batchRows } from "../../db/pagination";
 
 function normalizeSelections(selections?: DayAttendanceSelection[]): DayAttendanceSelection[] {
@@ -240,7 +240,10 @@ export function planRegistrationDayWaitlistSync(
     const continuity =
       storedRegistration?.status === "registered" &&
       eventDays.some((other) => other.id !== day.id && selectedByDate.get(other.day_date) === selectedType);
-    const priorityLane: DayWaitlistLane = continuity ? "continuity" : "general";
+    const offerLapsed =
+      existing?.reason_code === LAPSED_OFFER_REASON_CODE ||
+      (existing?.status === "offered" && existingStatus === "expired");
+    const priorityLane: DayWaitlistLane = continuity && !offerLapsed ? "continuity" : "general";
     if (existing && (existingStatus === "waiting" || existingStatus === "expired")) {
       recordDecision("waitlisted", "existing_queue_position");
       if (

@@ -21,10 +21,9 @@ export const LAPSED_OFFER_REASON_CODE = "offer_lapsed";
  *
  * The back of the queue is behind every lane: promotion takes the continuity
  * lane first, so a lapsed continuity offer moves to the general lane, or its
- * holder would be offered the next seat again. Adding each entry's old
- * position to the day's highest position keeps lapsed entries distinct and in
- * their original order behind everyone already waiting. Materializing the tails
- * prevents earlier updates in the same statement from changing that order.
+ * holder would be offered the next seat again. Append consecutive ordinals to
+ * the frozen queue tail, preserving order without multiplying positions on
+ * repeated lapses. Materializing both snapshots prevents update-order effects.
  */
 export function prepareLapsedDayOfferRequeue(
   db: DatabaseLike,
@@ -36,16 +35,19 @@ export function prepareLapsedDayOfferRequeue(
          SELECT event_day_id, MAX(position) AS position FROM event_day_waitlist_entries
          ${eventId ? "WHERE event_id = ?" : ""}
          GROUP BY event_day_id
+       ), lapsed_entries AS MATERIALIZED (
+         SELECT id, event_day_id,
+           ROW_NUMBER() OVER (PARTITION BY event_day_id ORDER BY position, id) AS ordinal
+         FROM event_day_waitlist_entries
+         WHERE status = 'offered' AND offer_expires_at IS NOT NULL AND offer_expires_at <= ?
+           ${eventId ? "AND event_id = ?" : ""}
        )
        UPDATE event_day_waitlist_entries AS w
        SET status = 'waiting', priority_lane = 'general', offer_expires_at = NULL,
            reason_code = '${LAPSED_OFFER_REASON_CODE}', updated_at = ?,
-           position = w.position + (
-             SELECT queue.position FROM queue_tails queue
-             WHERE queue.event_day_id = w.event_day_id
-           )
-       WHERE w.status = 'offered' AND w.offer_expires_at IS NOT NULL AND w.offer_expires_at <= ?
-         ${eventId ? "AND w.event_id = ?" : ""}`,
+           position = (SELECT queue.position FROM queue_tails queue WHERE queue.event_day_id = w.event_day_id)
+             + (SELECT lapsed.ordinal FROM lapsed_entries lapsed WHERE lapsed.id = w.id)
+       WHERE w.id IN (SELECT id FROM lapsed_entries)`,
     )
-    .bind(...(eventId ? [eventId] : []), now, now, ...(eventId ? [eventId] : []));
+    .bind(...(eventId ? [eventId] : []), now, ...(eventId ? [eventId] : []), now);
 }

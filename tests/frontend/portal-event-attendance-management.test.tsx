@@ -36,7 +36,6 @@ import {
   json,
   registrationList,
 } from "./helpers/group-event-attendance-fixtures";
-import { configuredDays } from "./helpers/configured-days";
 import { eventRegistrationSelectedDayAdmitSchema } from "../../assets/shared/schemas/event-registration-detail";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
