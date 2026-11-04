@@ -2,7 +2,7 @@ import { nowIso } from "../../utils/time";
 import { readEventAudienceAccess } from "./scanner-access";
 import type { CountryCode } from "../../../../assets/shared/countries";
 import { fetchEventParticipation } from "./participation";
-import { resolveHeroImageUrl, resolveEventFrontendRoutes } from "../event-presentation";
+import { eventRegistrationPath, resolveHeroImageUrl } from "../event-presentation";
 import {
   EVENT_LIST_SORT_COLUMNS,
   EVENT_MANAGEMENT_LIST_SORT_COLUMNS,
@@ -71,10 +71,7 @@ export function mapEventAudience(
     scannerAccess: access?.scannerAccess,
     sponsorLeadAccess: access?.sponsorLeadAccess ?? false,
     viewer,
-    registrationPath:
-      row.base_path && ["open", "invite_or_open", "public", "optional"].includes(row.registration_mode)
-        ? resolveEventFrontendRoutes(row).registrationPath
-        : null,
+    registrationPath: eventRegistrationPath(row),
   });
 }
 

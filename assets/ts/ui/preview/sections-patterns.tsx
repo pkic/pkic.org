@@ -7,6 +7,7 @@ import { ModelNavigationPreview } from "./ModelNavigationPreview";
 import { contentContributionPreview } from "./ContentContributionPreview";
 import { pictureUploadSection } from "./picture-upload";
 import { contentSections } from "./sections-content";
+import { registrationSections } from "./sections-registration";
 /**
  * Pattern catalog specimens.
  *
@@ -260,6 +261,7 @@ const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://ww
 
 export const patternSections: PreviewSection[] = [
   pictureUploadSection,
+  ...registrationSections,
   {
     id: "choice-controls",
     title: "Choice controls",

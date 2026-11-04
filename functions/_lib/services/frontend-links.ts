@@ -110,6 +110,22 @@ export function proposalManagePageUrl(appBaseUrl: string, event: EventRouteSourc
   });
 }
 
+/**
+ * The attendee's registration in the portal. It opens only after the person
+ * signs in, so it is safe anywhere a link may be seen by others, such as a
+ * calendar entry; the emailed management link is a credential and is not.
+ */
+export function registrationPortalPageUrl(
+  appBaseUrl: string,
+  event: Pick<EventRouteSource, "slug">,
+  registrationId: string,
+): string {
+  return new URL(
+    `/portal/#/events/${encodeURIComponent(event.slug)}/registrations/${encodeURIComponent(registrationId)}`,
+    appBaseUrl,
+  ).toString();
+}
+
 /** The attendee's own agenda in the portal; it resolves live sessions and standing after sign-in. */
 export function myAgendaPageUrl(appBaseUrl: string, event: Pick<EventRouteSource, "slug">): string {
   return new URL(eventMyAgendaPath(event.slug), appBaseUrl).toString();

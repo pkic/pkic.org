@@ -146,12 +146,10 @@ function buildIcsContent(events: CalendarEvent[]): string {
   }
 }
 
-/** Standard calendar reminder alarms — 1 day, 1 hour, 15 minutes, and 5 minutes before each event. */
+/** Standard calendar reminder alarms — 1 day and 1 hour before each event. */
 const STANDARD_ALARMS: CalendarAlarm[] = [
   { action: "display", description: "Reminder", trigger: { hours: 24, before: true } },
   { action: "display", description: "Reminder", trigger: { hours: 1, before: true } },
-  { action: "display", description: "Reminder", trigger: { minutes: 15, before: true } },
-  { action: "display", description: "Reminder", trigger: { minutes: 5, before: true } },
 ];
 
 export interface DayAttendanceEntry {
@@ -182,7 +180,8 @@ export async function buildRegistrationIcs(
   event: Pick<EventRecord, "name" | "slug" | "base_path" | "starts_at" | "ends_at" | "settings_json" | "timezone"> &
     Partial<Pick<EventRecord, "city" | "country">>,
   registrationId: string,
-  manageUrl: string,
+  /** The registration's sign-in page; a calendar entry is shared too widely to carry a management link. */
+  registrationUrl: string,
   dayAttendance: DayAttendanceEntry[] = [],
   appBaseUrl?: string,
   rsvpEmail?: string,
@@ -209,7 +208,7 @@ export async function buildRegistrationIcs(
         const isInPerson =
           eventAttendanceAccessMode({ value: day.attendanceType, accessMode: day.accessMode }) === "physical";
         const location = isInPerson ? (venueAddress ?? undefined) : (virtualUrl ?? undefined);
-        const url = isInPerson ? manageUrl : (virtualUrl ?? manageUrl);
+        const url = isInPerson ? registrationUrl : (virtualUrl ?? registrationUrl);
         const dayLabel = day.label ?? day.dayDate;
         const title = isMultiDay ? `${event.name} – ${dayLabel}` : event.name;
         const eventUid = isMultiDay ? `${registrationId}-${day.dayDate}@pkic.org` : uid;
@@ -224,7 +223,7 @@ export async function buildRegistrationIcs(
         const calEvent: CalendarEvent = {
           uid: eventUid,
           title,
-          description: `Manage your registration at ${manageUrl}`,
+          description: `View your registration at ${registrationUrl}`,
           url,
           location,
           organizerEmail: eventRsvpEmail,

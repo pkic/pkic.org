@@ -1,10 +1,81 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { registrationCreateSchema } from "../../assets/shared/schemas/registration";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
-import { continueRegistrationWithEmail } from "./helpers/registration";
+import { continueRegistrationWithEmail, ownDomainEmail, registerInBrowser } from "./helpers/registration";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { signInToPortal } from "./helpers/portal-auth";
 
 const slug = "pqc-conference-amsterdam-nl";
 const registrationPath = `/events/2026/${slug}/register/`;
+
+test("cancelled attendees can restore registration without stale badge or invitation actions", async ({
+  page,
+}, info) => {
+  const email = ownDomainEmail("cancel-restore");
+  const submitted = await registerInBrowser(page, email, undefined, undefined, {
+    organization: "Synthetic Attendee Services",
+    attendanceLabel: "In-person",
+  });
+  const manageLink = page.getByRole("link", { name: "Manage your registration", exact: true });
+  await expect(manageLink).toBeVisible();
+  const manageUrl = (await manageLink.getAttribute("href"))!;
+  const manageToken = new URL(manageUrl).searchParams.get("token");
+  expect(manageToken).toBeTruthy();
+  await page.goto(manageUrl);
+  await page.getByRole("button", { name: "Cancel my registration…", exact: true }).click();
+  await acceptConfirmDialog(page, "Cancel registration");
+  await expect(page.getByRole("heading", { name: "Registration cancelled", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download badge (PNG)", exact: true })).toBeHidden();
+  await page.reload();
+  await expect(page.getByText("This registration is cancelled", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "My agenda", exact: true })).toBeHidden();
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`cancelled-registration-${device}.png`), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  const reloaded = page.waitForEvent("domcontentloaded");
+  await page.getByRole("button", { name: "Restore registration", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Registration restored", exact: true })).toBeVisible();
+  await reloaded;
+  await expect(page.getByText("This registration is cancelled", { exact: true })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Cancel my registration…", exact: true })).toBeVisible();
+  await signInToPortal(page, email);
+  const calendarResponse = await page.request.get(
+    `/api/v1/events/${slug}/registrations/${submitted.result.registrationId}/calendar.ics`,
+  );
+  expect(calendarResponse.status(), await calendarResponse.text()).toBe(200);
+  const calendar = (await calendarResponse.text()).replace(/\r?\n[ \t]/g, "");
+  expect(calendar).toContain(`/portal/#/events/${slug}/registrations/${submitted.result.registrationId}`);
+  expect(calendar).not.toContain("/register/manage/");
+  expect(calendar).not.toContain(manageToken!);
+  await page.goto(`/portal/#/events/${slug}/ticket`);
+  const ticket = page.frameLocator('iframe[title^="Your badge for "]');
+  await expect(ticket.getByRole("button", { name: "Enlarge check-in code", exact: true })).toBeVisible();
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`attendee-ticket-${device}.png`), fullPage: true });
+  }
+  await ticket.getByRole("button", { name: "Enlarge check-in code", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Check-in code", exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Your check-in QR code", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close check-in code", exact: true }).click();
+  await page.goto("/missing-attendee-page/");
+  await expect(page.getByRole("heading", { name: "Page not found", exact: true })).toBeVisible();
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`neutral-404-${device}.png`), fullPage: true });
+  }
+});
 
 async function captureStep(page: Page, info: TestInfo, step: number, name: string) {
   const panel = page.locator(`[data-step='${step}']`);

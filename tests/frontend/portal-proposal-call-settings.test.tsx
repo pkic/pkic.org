@@ -33,6 +33,7 @@ const event = eventDetailSchema.parse({
   sourceMode: "hugo",
   seriesId: null,
   links: [],
+  registrationPath: null,
   capabilities: ["read", "write"],
   settings: {},
 });

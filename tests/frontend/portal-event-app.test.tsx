@@ -269,6 +269,21 @@ describe("event home", () => {
     expect(manage?.getAttribute("href")).toContain(`/groups/${groupId}/events/${eventId}`);
   });
 
+  it("never sends an organizer's Register action to the event's base page", async () => {
+    const { viewer: _viewer, ...audience } = event();
+    const managed = {
+      ...audience,
+      registrationPolicy: "public",
+      basePath: "/events/summit/",
+      capabilities: ["read"],
+      ownerGroupId: "20000000-0000-4000-8000-000000000003",
+      registrationPath: null,
+    };
+    await act(() => render(<ParticipantEvent event={managed as never} />, host));
+    const links = [...host.querySelectorAll("a")].filter((link) => !link.textContent?.startsWith("Event page"));
+    expect(links.some((link) => link.getAttribute("href") === "/events/summit/")).toBe(false);
+  });
+
   it("offers an attendee no way into management", async () => {
     await act(() => render(<ParticipantEvent event={event()} />, host));
     expect([...host.querySelectorAll("a")].some((link) => link.textContent === "Manage event")).toBe(false);

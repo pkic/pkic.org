@@ -31,6 +31,7 @@ const event = eventDetailSchema.parse({
   sourceMode: "portal",
   seriesId: null,
   links: [],
+  registrationPath: null,
   capabilities: ["read", "write"],
   settings: {},
 });

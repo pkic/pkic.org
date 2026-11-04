@@ -1,8 +1,15 @@
 ---
 import PublicPage from "../layouts/PublicPage.astro";
+import { ButtonLink } from "../../assets/ts/ui/Button";
 ---
 <PublicPage title="Page not found" privatePage>
-  <h1>Page not found</h1>
-  <p>The page is no longer available.</p>
-  <a href="/members/">Browse members</a>
+  <section class="pk pk-section pk-container pk-stack">
+    <h1>Page not found</h1>
+    <p>There is no page at this address. It may not be published yet, or the link may be mistyped. Use the search in the header, or go to one of these pages.</p>
+    <div class="pk-cluster">
+      <ButtonLink href="/" variant="primary">Home</ButtonLink>
+      <ButtonLink href="/events/" variant="secondary">Events</ButtonLink>
+      <ButtonLink href="/members/" variant="secondary">Members</ButtonLink>
+    </div>
+  </section>
 </PublicPage>
