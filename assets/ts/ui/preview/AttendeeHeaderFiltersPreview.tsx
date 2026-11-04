@@ -1,4 +1,6 @@
 import { useState } from "preact/hooks";
+import { LEGACY_ATTENDANCE_ACCESS } from "../../../shared/event-attendance-access";
+import { attendanceTypeLabel } from "../../shared/attendance";
 import { DataTable } from "../../components/Table";
 import { registrationAttendanceColumns } from "../../components/event-registrations/registration-attendance-columns";
 import type { RegistrationDayState } from "../../../shared/schemas/event-registrations";
@@ -8,10 +10,12 @@ import { useColumnControls, ColumnCardMenu } from "../../components/table-column
 const days = Array.from({ length: 7 }, (_, i) => `2026-12-0${i + 1}`).map((date) => ({
   date,
   label: null,
-  attendanceOptions: [
-    { value: "in_person", label: "In person", accessMode: "physical" as const, enabled: true },
-    { value: "virtual", label: "Online", accessMode: "remote" as const, enabled: true },
-  ],
+  attendanceOptions: Object.entries(LEGACY_ATTENDANCE_ACCESS).map(([value, accessMode]) => ({
+    value,
+    label: attendanceTypeLabel(value),
+    accessMode,
+    enabled: true,
+  })),
 }));
 const rows: Array<{ name: string; days: RegistrationDayState[] }> = [
   {
