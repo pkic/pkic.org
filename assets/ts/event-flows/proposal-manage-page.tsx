@@ -188,46 +188,46 @@ async function main(): Promise<void> {
   boot.form.addEventListener("submit", (event) => {
     event.preventDefault();
     void (async () => {
-    // `was-validated` is not set here any more: `validateBeforeSubmit` adds it
-    // in the one case it means anything — a submission that failed — and
-    // setting it up front marked a form the reader had not got wrong yet.
-    if (!validateBeforeSubmit(boot.form, boot.statusEl)) return;
-    const submitter = (event as SubmitEvent).submitter;
-    const resubmit = submitter instanceof HTMLButtonElement && submitter.value === "resubmitted";
+      // `was-validated` is not set here any more: `validateBeforeSubmit` adds it
+      // in the one case it means anything — a submission that failed — and
+      // setting it up front marked a form the reader had not got wrong yet.
+      if (!validateBeforeSubmit(boot.form, boot.statusEl)) return;
+      const submitter = (event as SubmitEvent).submitter;
+      const resubmit = submitter instanceof HTMLButtonElement && submitter.value === "resubmitted";
 
-    await withLoadingButton(
-      submitter instanceof HTMLButtonElement ? submitter : findSubmitButton(boot.form),
-      async () => {
-        try {
-          const awaitingRevision = Boolean(proposalData?.proposal.revision_request);
-          const response = await patchJson(
-            proposalAccessPath(apiBase, manageToken),
-            {
-              ...(resubmit ? { status: "resubmitted" } : {}),
-              proposalType: readField(boot.form, "proposalType"),
-              title: readField(boot.form, "title"),
-              abstract: readField(boot.form, "abstract"),
-              ...(proposalData && isProposalCommitteeNotesEditableStatus(proposalData.proposal.status)
-                ? { committeeNotes: readField(boot.form, "committeeNotes") || null }
-                : {}),
-            },
-            proposalAccessPatchResponseSchema,
-          );
-          if (proposalData) proposalData = { ...proposalData, proposal: response.proposal };
-          showProposalStatus(boot.root, boot.form, response.proposal);
-          setStatus(
-            boot.statusEl,
-            resubmit
-              ? PROPOSAL_REVISION_COPY.resubmitted
-              : awaitingRevision
-                ? PROPOSAL_REVISION_COPY.saved
-                : `Proposal updated. Current status: ${statusLabel(response.proposal.status)}.`,
-          );
-        } catch (error) {
-          handleSubmitError(error, boot.form, boot.statusEl);
-        }
-      },
-    );
+      await withLoadingButton(
+        submitter instanceof HTMLButtonElement ? submitter : findSubmitButton(boot.form),
+        async () => {
+          try {
+            const awaitingRevision = Boolean(proposalData?.proposal.revision_request);
+            const response = await patchJson(
+              proposalAccessPath(apiBase, manageToken),
+              {
+                ...(resubmit ? { status: "resubmitted" } : {}),
+                proposalType: readField(boot.form, "proposalType"),
+                title: readField(boot.form, "title"),
+                abstract: readField(boot.form, "abstract"),
+                ...(proposalData && isProposalCommitteeNotesEditableStatus(proposalData.proposal.status)
+                  ? { committeeNotes: readField(boot.form, "committeeNotes") || null }
+                  : {}),
+              },
+              proposalAccessPatchResponseSchema,
+            );
+            if (proposalData) proposalData = { ...proposalData, proposal: response.proposal };
+            showProposalStatus(boot.root, boot.form, response.proposal);
+            setStatus(
+              boot.statusEl,
+              resubmit
+                ? PROPOSAL_REVISION_COPY.resubmitted
+                : awaitingRevision
+                  ? PROPOSAL_REVISION_COPY.saved
+                  : `Proposal updated. Current status: ${statusLabel(response.proposal.status)}.`,
+            );
+          } catch (error) {
+            handleSubmitError(error, boot.form, boot.statusEl);
+          }
+        },
+      );
     })().catch((error: unknown) => {
       handleSubmitError(error, boot.form, boot.statusEl);
     });
@@ -236,19 +236,19 @@ async function main(): Promise<void> {
   const withdrawButton = boot.form.querySelector<HTMLButtonElement>("[data-action='withdraw']");
   withdrawButton?.addEventListener("click", () => {
     void (async () => {
-    try {
-      const response = await patchJson(
-        proposalAccessPath(apiBase, manageToken),
-        { status: "withdrawn" },
-        proposalAccessPatchResponseSchema,
-      );
-      if (proposalData) proposalData = { ...proposalData, proposal: response.proposal };
-      showProposalStatus(boot.root, boot.form, response.proposal);
-      setStatus(boot.statusEl, `Proposal updated. Current status: ${statusLabel(response.proposal.status)}.`);
-    } catch (error) {
-      const normalized = normalizeValidation(error);
-      setStatus(boot.statusEl, normalized.globalMessage, true);
-    }
+      try {
+        const response = await patchJson(
+          proposalAccessPath(apiBase, manageToken),
+          { status: "withdrawn" },
+          proposalAccessPatchResponseSchema,
+        );
+        if (proposalData) proposalData = { ...proposalData, proposal: response.proposal };
+        showProposalStatus(boot.root, boot.form, response.proposal);
+        setStatus(boot.statusEl, `Proposal updated. Current status: ${statusLabel(response.proposal.status)}.`);
+      } catch (error) {
+        const normalized = normalizeValidation(error);
+        setStatus(boot.statusEl, normalized.globalMessage, true);
+      }
     })().catch((error: unknown) => {
       setStatus(boot.statusEl, normalizeValidation(error).globalMessage, true);
     });
