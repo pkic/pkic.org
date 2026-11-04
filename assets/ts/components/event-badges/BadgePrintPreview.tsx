@@ -129,24 +129,29 @@ export function BadgePrintPreview({
       if (live.current) setBusy(false);
     }
   }
+  // Effects trigger commands once; commands read the latest authorized print context.
+  const commands = useRef({ applyFullBadge, release, downloadPdf });
+  commands.current = { applyFullBadge, release, downloadPdf };
   const started = useRef(false);
   const performed = useRef(false);
   useEffect(() => {
     if ((action !== "badges" && action !== "badge_pdf") || started.current) return;
     started.current = true;
-    void useFullBadge(false);
+    void commands.current.applyFullBadge(false);
   }, [action]);
   useEffect(() => {
     if (action === "preview" || performed.current || busy) return;
     if (action === "label_csv") {
       performed.current = true;
-      void release(() => downloadBadgeArtifact(badgePrintCsv(badges), "text/csv;charset=utf-8", "attendee-labels.csv"));
+      void commands.current.release(() =>
+        downloadBadgeArtifact(badgePrintCsv(badges), "text/csv;charset=utf-8", "attendee-labels.csv"),
+      );
     } else if (ready && ((action !== "badges" && action !== "badge_pdf") || design === "event_badge")) {
       performed.current = true;
-      if (action === "label_pdf" || action === "badge_pdf") void downloadPdf();
-      else void release(() => frame.current?.contentWindow?.print());
+      if (action === "label_pdf" || action === "badge_pdf") void commands.current.downloadPdf();
+      else void commands.current.release(() => frame.current?.contentWindow?.print());
     }
-  }, [action, ready, busy, design]);
+  }, [action, ready, busy, design, badges]);
   async function downloadPdf() {
     if (archiveBuilding.current || checking.current || !frame.current?.contentDocument) return;
     const owned = badges;

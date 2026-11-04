@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useMemo, useState } from "preact/hooks";
 import { useData } from "../../hooks/useData";
 import { getJson } from "../../shared/api-client";
 import { badgePrintingResponseSchema } from "../../../shared/schemas/route-contracts-event-badges";
@@ -23,6 +23,7 @@ export function BadgeArtworkOverview({
   badge: PrintableBadgePrint;
   beforeRelease: () => Promise<boolean>;
 }) {
+  const badges = useMemo(() => [badge], [badge]);
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/badges/printing`;
   const printing = useData(() => getJson(endpoint, badgePrintingResponseSchema), [endpoint]);
   const [output, setOutput] = useState<{ action: BadgePrintAction; id: string } | null>(null);
@@ -61,7 +62,7 @@ export function BadgeArtworkOverview({
       {output && (
         <BadgePrintPreview
           key={output.id}
-          badges={[badge]}
+          badges={badges}
           action={output.action}
           printing={BADGE_LABEL_PRINTING_CONTEXT}
           beforeRelease={beforeRelease}

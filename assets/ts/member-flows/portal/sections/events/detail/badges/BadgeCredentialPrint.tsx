@@ -69,6 +69,10 @@ function SessionBadgePrint({
   const [error, setError] = useState("");
   const running = useRef<AbortController | null>(null);
   const print = artifact?.owner === request ? artifact.print : null;
+  const badges = useMemo(
+    () => (print ? [{ ...print, displayName: print.displayName ?? "Attendee name unavailable" }] : []),
+    [print],
+  );
   useEffect(() => {
     setArtifact(null);
     setError("");
@@ -174,14 +178,10 @@ function SessionBadgePrint({
           credential.
         </p>
       ) : print && overview ? (
-        <BadgeArtworkOverview
-          slug={slug}
-          badge={{ ...print, displayName: print.displayName ?? "Attendee name unavailable" }}
-          beforeRelease={beforeRelease}
-        />
+        <BadgeArtworkOverview slug={slug} badge={badges[0]} beforeRelease={beforeRelease} />
       ) : print ? (
         <BadgePrintPreview
-          badges={[{ ...print, displayName: print.displayName ?? "Attendee name unavailable" }]}
+          badges={badges}
           printing={artifact!.printing}
           beforeRelease={beforeRelease}
           loadPrintingContext={() =>

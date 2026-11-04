@@ -11,6 +11,7 @@ import {
   badgePrintingResponseSchema,
 } from "../../assets/shared/schemas/route-contracts-event-badges";
 import { BadgeCredentials } from "../../assets/ts/member-flows/portal/sections/events/detail/badges/BadgeCredentials";
+import { BadgeArtworkOverview } from "../../assets/ts/components/event-badges/BadgeArtworkOverview";
 import { BadgePrintPreview } from "../../assets/ts/components/event-badges/BadgePrintPreview";
 import {
   downloadBadgeArtifact,
@@ -168,6 +169,39 @@ describe("authorized badge reprinting", () => {
       expect(host.querySelector('iframe[title="Badge back"]')).not.toBeNull();
     },
   );
+
+  it("keeps an in-flight badge artwork load through an unchanged portal rerender", async () => {
+    const artwork = {
+      ...printing,
+      template: createGenericBadgeTemplate({ eventName: "Stable artwork", sponsorGroups: [] }),
+    };
+    let finish!: () => void;
+    let loads = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "POST") return json(printable);
+        if (path(input).endsWith("/printing")) {
+          if (++loads === 1) return json(artwork);
+          return new Promise<Response>((resolve) => {
+            finish = () => resolve(json(artwork));
+          });
+        }
+        return json(metadata);
+      }),
+    );
+    const issued = { ...printable, displayName: "Synthetic Attendee" };
+    const view = () => <BadgeArtworkOverview slug="workshop" badge={issued} beforeRelease={async () => true} />;
+    await mount(view());
+    await rendered(() => expect(host.querySelector('iframe[title="Badge front"]')).not.toBeNull());
+    await click("Print badge");
+    await rendered(() => expect(finish).toBeTypeOf("function"));
+    await mount(view());
+    await act(async () => {
+      finish();
+    });
+    await rendered(() => expect(button("Print badges")).toBeDefined());
+  });
 
   it("prepares the same credential through the canonical request, rechecks release, and never offers a raw-code CSV", async () => {
     const bodies: unknown[] = [];
