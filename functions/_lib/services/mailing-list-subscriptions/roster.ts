@@ -31,6 +31,8 @@ interface MailingListSubscriberRow {
   default_subscribed: number;
   subscribed: number;
   suppressed: number;
+  synchronization_status: import("../../../../assets/shared/schemas/mailing-lists").MailingListSubscriber["synchronizationStatus"];
+  synchronization_error: string | null;
 }
 
 /**
@@ -122,6 +124,7 @@ export async function listMailingListSubscribers(
                )) AS organization_name,
                preference.preference AS preference,
                COALESCE(observed.suppressed, 0) AS suppressed,
+               sync.status AS synchronization_status, sync.last_error AS synchronization_error,
                ${mailingListEligibilitySql("list", "person.id")} AS eligible,
                ${mailingListDefaultSubscribedSql("list", "person.id")} AS default_subscribed
           FROM eligible_input candidate
@@ -131,16 +134,20 @@ export async function listMailingListSubscribers(
             ON preference.mailing_list_id = list.id AND preference.user_id = person.id
      LEFT JOIN google_groups_observed_membership observed
             ON observed.user_id = person.id AND observed.google_group_email = list.email
+     LEFT JOIN google_groups_membership_desired_state desired
+            ON desired.user_id = person.id AND desired.google_group_email = list.email
+     LEFT JOIN google_groups_sync_queue sync
+            ON sync.user_id = desired.user_id AND sync.google_group_email = desired.google_group_email AND sync.generation = desired.generation
       ),
       roster_state AS (
         SELECT user_id, email, first_name, last_name, headshot_r2_key, organization_name, preference, eligible,
-               default_subscribed, suppressed, CASE WHEN suppressed = 1 THEN 0 ELSE ${EFFECTIVE_SUBSCRIPTION_VALUE_SQL} END AS subscribed
+               default_subscribed, suppressed, synchronization_status, synchronization_error, CASE WHEN suppressed = 1 THEN 0 ELSE ${EFFECTIVE_SUBSCRIPTION_VALUE_SQL} END AS subscribed
           FROM roster
       )`;
   const pageQuery: OffsetPageQuery = {
     sql: `${rosterCte}
       SELECT user_id, email, first_name, last_name, headshot_r2_key, organization_name, preference, eligible,
-             default_subscribed, subscribed, suppressed
+             default_subscribed, subscribed, suppressed, synchronization_status, synchronization_error
         FROM roster_state
        ${conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""}`,
     bindings,
@@ -191,6 +198,8 @@ export async function listMailingListSubscribers(
       preference: row.preference,
       subscribed: row.subscribed === 1,
       suppressed: row.suppressed === 1,
+      synchronizationStatus: row.synchronization_status,
+      synchronizationError: row.synchronization_error,
     }),
   );
   return {

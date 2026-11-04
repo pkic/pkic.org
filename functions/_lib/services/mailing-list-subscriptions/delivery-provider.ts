@@ -7,9 +7,12 @@ export interface MailingListDeliveryMember {
 export interface MailingListDeliveryChange {
   email: string;
   delivery?: "all" | "none";
-  action: "subscribe" | "unsubscribe" | "disable_delivery";
+  action: "subscribe" | "unsubscribe" | "disable_delivery" | "enable_delivery";
 }
 export interface MailingListDeliveryProvider {
-  listMembers(listEmail: string): Promise<{ members: MailingListDeliveryMember[]; complete: boolean }>;
+  listMembers(
+    listEmail: string,
+    deliveryEmails?: readonly string[],
+  ): Promise<{ members: MailingListDeliveryMember[]; complete: boolean }>;
   applyChange(listEmail: string, change: MailingListDeliveryChange): Promise<void>;
 }

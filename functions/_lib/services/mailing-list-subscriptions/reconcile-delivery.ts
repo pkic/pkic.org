@@ -37,6 +37,8 @@ export function planMailingListDelivery(
     if (!target || left) return { ...base, action: member ? "unsubscribe" : "unchanged" };
     if (!member) return { ...base, action: "subscribe" };
     if (target.noDelivery && member.delivery !== "none") return { ...base, action: "disable_delivery" };
+    if (target.restoreDelivery && !target.noDelivery && member.delivery === "none")
+      return { ...base, action: "enable_delivery" };
     return { ...base, action: "unchanged" };
   });
 }
@@ -54,7 +56,13 @@ export async function reconcileMailingListDelivery(
     recordPresence?: (addresses: MailingListDeliveryAddress[]) => Promise<unknown>;
   },
 ) {
-  const listing = await provider.listMembers(listEmail);
+  const listing = await provider.listMembers(
+    listEmail,
+    addresses
+      .filter((address) => address.restoreDelivery)
+      .slice(0, Math.min(options.limit, 25))
+      .map((address) => address.email),
+  );
   if (!listing.complete) throw new Error("Incomplete mailing-list roster; reconciliation stopped");
   const entries = planMailingListDelivery(addresses, listing.members);
   const present = new Set(listing.members.map((member) => member.email));
@@ -72,13 +80,17 @@ export async function reconcileMailingListDelivery(
     if (entry.action === "unsubscribed") {
       if (!options.dryRun && entry.userId) await options.recordUnsubscribe?.(entry.userId);
       changed++;
-    } else if (["subscribe", "unsubscribe", "disable_delivery"].includes(entry.action)) {
+    } else if (["subscribe", "unsubscribe", "disable_delivery", "enable_delivery"].includes(entry.action)) {
       if (entry.alias && entry.action !== "unsubscribe" && !present.has(entry.primaryEmail!)) continue;
       if (!options.dryRun) {
         await provider.applyChange(listEmail, {
           email: entry.email,
           action: entry.action as MailingListDeliveryChange["action"],
-          ...(entry.action !== "unsubscribe" && entry.delivery === "none" ? { delivery: "none" as const } : {}),
+          ...(entry.action === "enable_delivery"
+            ? { delivery: "all" as const }
+            : entry.action !== "unsubscribe" && entry.delivery === "none"
+              ? { delivery: "none" as const }
+              : {}),
         });
       }
       if (entry.action === "subscribe") present.add(entry.email);

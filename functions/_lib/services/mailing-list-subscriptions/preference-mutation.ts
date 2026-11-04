@@ -43,12 +43,26 @@ export async function setMailingListPreference(
     throw new AppError(403, "MAILING_LIST_SUBSCRIPTION_INELIGIBLE", "The caller cannot subscribe through this group");
   }
   const current = await getEffectiveMailingListSubscription(db, userId, listId);
-  if (requiresMembership && !current.eligible) {
+  const synchronization = await first<{ desired_action: string; status: string; last_error: string | null }>(
+    db,
+    `SELECT desired.desired_action, queue.status, queue.last_error FROM google_groups_membership_desired_state desired
+     JOIN google_groups_sync_queue queue ON queue.user_id = desired.user_id AND queue.google_group_email = desired.google_group_email AND queue.generation = desired.generation
+     WHERE desired.user_id = ? AND desired.google_group_email = ?`,
+    [userId, current.mailingList.email],
+  );
+  const needsRetry = synchronization?.status === "failed" || Boolean(synchronization?.last_error);
+  const restoresDelivery =
+    preference === "inherit" &&
+    current.eligible &&
+    current.defaultSubscribed &&
+    (current.preference === "archive_only" || (needsRetry && synchronization?.desired_action === "restore_delivery"));
+  if ((requiresMembership || restoresDelivery) && !current.eligible) {
     throw new AppError(403, "MAILING_LIST_SUBSCRIPTION_INELIGIBLE", "The caller is not eligible for this mailing list");
   }
   const storedPreference = preference === "inherit" ? null : preference;
   if (
     current.preference === storedPreference &&
+    !needsRetry &&
     (!requiresMembership || !(await isGoogleGroupsSuppressed(db, userId, current.mailingList.email)))
   )
     return current;
@@ -67,7 +81,7 @@ export async function setMailingListPreference(
       bindings: [userId],
     }),
   ];
-  if (requiresMembership) {
+  if (requiresMembership || restoresDelivery) {
     statements.push(
       ...(!actor
         ? [prepareMemberGroupResourceAuthorizationGuard(db, userId, groupId, "mailingList", listId, "subscribe")]
@@ -101,7 +115,7 @@ export async function setMailingListPreference(
     );
   }
 
-  if (requiresMembership) {
+  if (requiresMembership || restoresDelivery) {
     statements.push(
       db
         .prepare(`UPDATE google_groups_observed_membership
@@ -118,7 +132,11 @@ export async function setMailingListPreference(
       : storedPreference === "unsubscribed"
         ? false
         : current.eligible && current.defaultSubscribed;
-  const desiredAction = effectiveMembership ? "add_to_list" : "remove_from_list";
+  const desiredAction = effectiveMembership
+    ? restoresDelivery
+      ? "restore_delivery"
+      : "add_to_list"
+    : "remove_from_list";
   statements.push(
     buildEnqueueGoogleGroupsSyncStatement(db, {
       userId,

@@ -1,3 +1,4 @@
+import { googleGroupsDeliverySql } from "./delivery-policy";
 import { googleGroupsSyncEnabledSql } from "./mailing-list-policy";
 import { all, first, run } from "../../db/queries";
 import { createDurableJobLease } from "../../jobs/lease";
@@ -243,10 +244,12 @@ export async function failGoogleGroupsSyncClaimForMissingUser(
   return result.changes === 1;
 }
 
+/** Finalize an effect only for matching membership and delivery; preserve leases and repair stale external writes. */
 export async function completeGoogleGroupsDirectoryEffect(
   db: DatabaseLike,
   claim: ClaimedGoogleGroupsSyncRow,
   notificationStatements: StatementLike[] = [],
+  appliedDelivery?: "all" | "none",
 ): Promise<{ finalizedClaim: boolean; fulfilledCurrentDesiredState: boolean }> {
   const at = nowIso();
   const results = await db.batch([
@@ -260,46 +263,32 @@ export async function completeGoogleGroupsDirectoryEffect(
       .bind(at, claim.id, claim.processing_token),
     db
       .prepare(
-        `UPDATE google_groups_sync_queue AS desired_queue
-            SET status = CASE WHEN desired_queue.action = ? THEN 'completed' ELSE 'pending' END,
-                attempts = CASE WHEN desired_queue.action = ? THEN desired_queue.attempts ELSE 0 END,
-                next_attempt_at = CASE WHEN desired_queue.action = ? THEN NULL ELSE ? END,
-                last_error = NULL,
-                processed_at = CASE WHEN desired_queue.action = ? THEN ? ELSE NULL END,
-                processing_token = NULL, lease_expires_at = NULL
-          WHERE desired_queue.user_id = ? AND desired_queue.google_group_email = ?
-            AND desired_queue.generation = (
-              SELECT desired.generation
-                FROM google_groups_membership_desired_state desired
-               WHERE desired.user_id = desired_queue.user_id
-                 AND desired.google_group_email = desired_queue.google_group_email
-                 AND desired.desired_action = desired_queue.action
-            )
-            AND (
-              -- A stale Directory result may safely satisfy a newer desired
-              -- generation only before another worker has claimed it. Never
-              -- clear a live replacement worker's token or lease.
-              (desired_queue.action = ? AND desired_queue.status IN ('pending', 'failed'))
-              OR (desired_queue.action != ? AND desired_queue.status IN ('completed', 'failed'))
-            )`,
+        `WITH current_operation AS (
+          SELECT queue.id, (queue.action = ? AND (
+            ${googleGroupsDeliverySql("queue.action", "queue.user_id", "queue.google_group_email")}
+          ) IS ?) AS matches
+          FROM google_groups_sync_queue queue JOIN google_groups_membership_desired_state desired
+            ON desired.user_id = queue.user_id AND desired.google_group_email = queue.google_group_email
+           AND desired.generation = queue.generation AND desired.desired_action = queue.action
+          WHERE queue.user_id = ? AND queue.google_group_email = ?
+        )
+        UPDATE google_groups_sync_queue AS desired_queue
+        SET status = CASE WHEN (SELECT matches FROM current_operation WHERE id = desired_queue.id) THEN 'completed' ELSE 'pending' END,
+            attempts = CASE WHEN (SELECT matches FROM current_operation WHERE id = desired_queue.id) THEN attempts ELSE 0 END,
+            next_attempt_at = CASE WHEN (SELECT matches FROM current_operation WHERE id = desired_queue.id) THEN NULL ELSE ? END,
+            last_error = NULL,
+            processed_at = CASE WHEN (SELECT matches FROM current_operation WHERE id = desired_queue.id) THEN ? ELSE NULL END,
+            processing_token = NULL, lease_expires_at = NULL
+        WHERE id IN (SELECT id FROM current_operation)
+          AND (((SELECT matches FROM current_operation WHERE id = desired_queue.id) AND status IN ('pending', 'failed'))
+            OR (NOT (SELECT matches FROM current_operation WHERE id = desired_queue.id) AND status IN ('completed', 'failed')))`,
       )
-      .bind(
-        claim.action,
-        claim.action,
-        claim.action,
-        at,
-        claim.action,
-        at,
-        claim.user_id,
-        claim.google_group_email,
-        claim.action,
-        claim.action,
-      ),
+      .bind(claim.action, appliedDelivery ?? null, claim.user_id, claim.google_group_email, at, at),
     db
       .prepare(
-        `SELECT desired_action
-           FROM google_groups_membership_desired_state
-          WHERE user_id = ? AND google_group_email = ?`,
+        `SELECT desired.desired_action, queue.status FROM google_groups_membership_desired_state desired
+          JOIN google_groups_sync_queue queue ON queue.user_id = desired.user_id AND queue.google_group_email = desired.google_group_email AND queue.generation = desired.generation
+          WHERE desired.user_id = ? AND desired.google_group_email = ?`,
       )
       .bind(claim.user_id, claim.google_group_email),
     ...notificationStatements,
@@ -307,7 +296,9 @@ export async function completeGoogleGroupsDirectoryEffect(
   const finalizedClaim = (results[0]?.meta?.changes ?? 0) === 1;
   const reconciledCurrentDesiredState =
     (results[1]?.meta?.changes ?? 0) === 1 &&
-    (results[2]?.results?.[0] as { desired_action?: unknown } | undefined)?.desired_action === claim.action;
+    (results[2]?.results?.[0] as { desired_action?: unknown; status?: unknown } | undefined)?.desired_action ===
+      claim.action &&
+    (results[2]?.results?.[0] as { status?: unknown } | undefined)?.status === "completed";
   return {
     finalizedClaim,
     fulfilledCurrentDesiredState: finalizedClaim || reconciledCurrentDesiredState,

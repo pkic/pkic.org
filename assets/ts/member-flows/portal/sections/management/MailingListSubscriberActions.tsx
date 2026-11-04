@@ -84,6 +84,8 @@ export function MailingListSubscriberActions({
             disabled ||
             pending ||
             ((subscriber.preference ?? "inherit") === preference &&
+              !subscriber.synchronizationError &&
+              subscriber.synchronizationStatus !== "failed" &&
               !(subscriber.suppressed && (preference === "subscribed" || preference === "archive_only"))) ||
             (!subscriber.eligible && (preference === "subscribed" || preference === "archive_only")),
           danger: preference === "unsubscribed",

@@ -33,7 +33,7 @@ export function prepareReconcileMailingListSubscriptionsStatement(
          LEFT JOIN google_groups_membership_desired_state desired
            ON desired.user_id = ? AND desired.google_group_email = subscription.email
         WHERE (desired.desired_action IS NULL AND subscription.effective_subscribed = 1)
-           OR desired.desired_action != CASE
+           OR (CASE WHEN desired.desired_action = 'restore_delivery' THEN 'add_to_list' ELSE desired.desired_action END) != CASE
                 WHEN subscription.effective_subscribed = 1 THEN 'add_to_list'
                 ELSE 'remove_from_list'
               END
@@ -92,7 +92,7 @@ export function prepareReconcileGroupMailingListSubscriptionsStatement(
            ON desired.user_id = subscription.user_id
           AND desired.google_group_email = subscription.email
         WHERE (desired.desired_action IS NULL AND subscription.subscribed = 1)
-           OR desired.desired_action != CASE
+           OR (CASE WHEN desired.desired_action = 'restore_delivery' THEN 'add_to_list' ELSE desired.desired_action END) != CASE
                 WHEN subscription.subscribed = 1 THEN 'add_to_list'
                 ELSE 'remove_from_list'
               END
@@ -149,7 +149,7 @@ export function prepareReconcileMailingListStatement(db: DatabaseLike, listId: s
            ON desired.user_id = subscription.user_id
           AND desired.google_group_email = subscription.email
         WHERE (desired.desired_action IS NULL AND subscription.subscribed = 1)
-           OR desired.desired_action != CASE
+           OR (CASE WHEN desired.desired_action = 'restore_delivery' THEN 'add_to_list' ELSE desired.desired_action END) != CASE
                 WHEN subscription.subscribed = 1 THEN 'add_to_list'
                 ELSE 'remove_from_list'
               END

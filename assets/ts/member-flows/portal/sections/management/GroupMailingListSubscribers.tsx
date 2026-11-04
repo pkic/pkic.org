@@ -26,10 +26,24 @@ function personName(subscriber: MailingListSubscriber): string {
 function standingReason(subscriber: MailingListSubscriber): string {
   if (!subscriber.eligible) return "Not eligible for this list";
   if (subscriber.suppressed) return "Unsubscribed outside the portal";
+  if (subscriber.synchronizationError) return "The mailing list could not apply this preference";
+  if (subscriber.synchronizationStatus === "pending" || subscriber.synchronizationStatus === "processing")
+    return "Waiting for the mailing list to apply this preference";
   if (subscriber.preference === "subscribed") return "Subscription preference";
   if (subscriber.preference === "archive_only") return "Email delivery off";
   if (subscriber.preference === "unsubscribed") return "Unsubscription preference";
   return subscriber.defaultSubscribed ? "List default" : "Not subscribed by default";
+}
+
+/** Report unresolved delivery work before showing the requested subscription as applied. */
+function deliveryStatus(subscriber: MailingListSubscriber): string {
+  if (subscriber.suppressed) return "Not subscribed";
+  if (subscriber.synchronizationError || subscriber.synchronizationStatus === "failed")
+    return "Email delivery update failed";
+  if (subscriber.synchronizationStatus === "pending" || subscriber.synchronizationStatus === "processing")
+    return "Email delivery update pending";
+  if (subscriber.eligible && subscriber.preference === "archive_only") return "Email delivery off";
+  return subscriber.subscribed ? "Subscribed" : "Not subscribed";
 }
 
 /**
@@ -91,15 +105,7 @@ export function GroupMailingListSubscribers({
           header: "Receives mail",
           // The word carries it: a reader who cannot separate the hues still
           // reads "Subscribed" or "Not subscribed".
-          cell: (subscriber) => (
-            <span>
-              {subscriber.eligible && !subscriber.suppressed && subscriber.preference === "archive_only"
-                ? "Email delivery off"
-                : subscriber.subscribed
-                  ? "Subscribed"
-                  : "Not subscribed"}
-            </span>
-          ),
+          cell: deliveryStatus,
           width: "fit",
           sort: { asc: "subscribed", desc: "-subscribed" },
           filter: {

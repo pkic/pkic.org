@@ -99,7 +99,8 @@ async function callDirectoryApi(
   delivery?: "all" | "none",
 ): Promise<void> {
   const membersUrl = `${GOOGLE_DIRECTORY_GROUPS_URL}/${encodeURIComponent(googleGroupEmail)}/members`;
-  if (action === "add_to_list") {
+  if (action !== "remove_from_list") {
+    if (action === "restore_delivery") delivery = "all";
     const response = await fetchImpl(membersUrl, {
       method: "POST",
       headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
@@ -140,7 +141,8 @@ async function callDirectoryApi(
   const membership = await fetchImpl(memberUrl, { headers: { authorization: `Bearer ${accessToken}` } });
   if (membership.status === 404) return;
   if (!membership.ok) throw new Error(`Directory API member read failed: HTTP ${membership.status}`);
-  if (isProtectedDirectoryMember((await membership.json()) as DirectoryMemberRow)) return;
+  if (isProtectedDirectoryMember((await membership.json()) as DirectoryMemberRow))
+    throw new Error("Directory API removal unavailable for protected member");
   const response = await fetchImpl(memberUrl, {
     method: "DELETE",
     headers: { authorization: `Bearer ${accessToken}` },
@@ -258,8 +260,23 @@ export async function createGoogleGroupsDeliveryProvider(
   );
   const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
   return {
-    async listMembers(listEmail) {
+    async listMembers(listEmail, deliveryEmails = []) {
       const listing = await listDirectoryMembers(fetchImpl, token, listEmail, 25);
+      for (const email of deliveryEmails.slice(0, 25)) {
+        const member = listing.members.find(
+          (row) => typeof row.email === "string" && row.email.toLowerCase() === email.toLowerCase(),
+        );
+        if (!member) continue;
+        const response = await fetchImpl(
+          `${GOOGLE_DIRECTORY_GROUPS_URL}/${encodeURIComponent(listEmail)}/members/${encodeURIComponent(email)}`,
+          { headers },
+        );
+        if (!response.ok) throw new Error(`Provider delivery read failed: HTTP ${response.status}`);
+        const details = (await response.json()) as DirectoryMemberRow;
+        member.delivery_settings = details.delivery_settings;
+        member.role = details.role;
+        member.type = details.type;
+      }
       return {
         complete: listing.complete,
         members: listing.members.map((member) => ({
@@ -308,13 +325,13 @@ export async function createGoogleGroupsDeliveryProvider(
           throw new Error("Membership changed; retry alias delivery with fresh state");
       } else if (
         current &&
-        (change.action === "disable_delivery" || change.delivery === "none") &&
-        current.delivery_settings !== "NONE"
+        (change.action === "disable_delivery" || change.action === "enable_delivery" || change.delivery === "none") &&
+        current.delivery_settings !== (change.action === "enable_delivery" ? "ALL_MAIL" : "NONE")
       ) {
         const updated = await fetchImpl(memberUrl, {
           method: "PATCH",
           headers,
-          body: JSON.stringify({ delivery_settings: "NONE" }),
+          body: JSON.stringify({ delivery_settings: change.action === "enable_delivery" ? "ALL_MAIL" : "NONE" }),
         });
         if (!updated.ok) throw new Error(`Provider delivery update failed: HTTP ${updated.status}`);
       }

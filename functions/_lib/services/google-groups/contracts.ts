@@ -1,9 +1,10 @@
 import type { Env } from "../../types";
 
-export const GOOGLE_GROUPS_SYNC_ACTIONS = ["add_to_list", "remove_from_list"] as const;
+export const GOOGLE_GROUPS_SYNC_ACTIONS = ["add_to_list", "remove_from_list", "restore_delivery"] as const;
 export type GoogleGroupsSyncAction = (typeof GOOGLE_GROUPS_SYNC_ACTIONS)[number];
 
-export const GOOGLE_GROUPS_SYNC_STATUSES = ["pending", "processing", "completed", "failed", "superseded"] as const;
+import { GOOGLE_GROUPS_SYNC_STATUSES } from "../../../../assets/shared/schemas/mailing-lists";
+export { GOOGLE_GROUPS_SYNC_STATUSES };
 export type GoogleGroupsSyncStatus = (typeof GOOGLE_GROUPS_SYNC_STATUSES)[number];
 
 export interface GoogleGroupsSyncQueueRow {

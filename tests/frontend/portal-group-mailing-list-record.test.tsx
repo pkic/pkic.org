@@ -554,3 +554,33 @@ it.each(["Turn off email delivery", "Unsubscribe"])(
     expect(calls.filter((call) => call.method === "GET" && call.url.pathname.endsWith("/subscribers")).length).toBe(2);
   },
 );
+
+it.each(["pending", "failed"] as const)(
+  "shows %s delivery updates instead of claiming email is off",
+  async (status) => {
+    stubApi(activeList, undefined, () =>
+      json({
+        subscribers: [
+          {
+            ...subscriber,
+            preference: "archive_only",
+            subscribed: false,
+            synchronizationStatus: status,
+            synchronizationError: status === "failed" ? "Protected member" : null,
+          },
+        ],
+        representation: { people: { count: 0 }, organizations: { count: 0 } },
+        page: PAGE,
+      }),
+    );
+    const container = mount(<GroupMailingListRecord groupId={GROUP_ID} listId={LIST_ID} onLeave={() => {}} />);
+    await settle();
+    await settle();
+    expect(container.textContent).toContain(
+      status === "failed" ? "Email delivery update failed" : "Email delivery update pending",
+    );
+    expect(
+      [...container.querySelectorAll("td")].some((cell) => cell.textContent?.trim() === "Email delivery off"),
+    ).toBe(false);
+  },
+);

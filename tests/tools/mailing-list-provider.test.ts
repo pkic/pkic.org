@@ -131,3 +131,14 @@ it.each([
     }
   }
 });
+
+it("reads per-member delivery for restoration targets because list responses omit that field", async () => {
+  const fetch = vi.fn(async (url: string | URL | Request) => {
+    if (String(url).includes("oauth2.googleapis.com")) return Response.json({ access_token: "synthetic" });
+    if (String(url).includes("/members?"))
+      return Response.json({ members: [{ email: "person@example.test", role: "MEMBER", type: "USER" }] });
+    return Response.json({ email: "person@example.test", role: "MEMBER", type: "USER", delivery_settings: "NONE" });
+  });
+  const provider = await createGoogleGroupsDeliveryProvider(env, false, fetch);
+  expect((await provider.listMembers(list, ["person@example.test"])).members).toMatchObject([{ delivery: "none" }]);
+});

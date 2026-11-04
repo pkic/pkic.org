@@ -265,6 +265,8 @@ export const groupMailingListDeleteRouteSchema = {
  * preference, the list default, and what those add up to — read across the
  * roster of a single list instead of down one member's lists.
  */
+export const GOOGLE_GROUPS_SYNC_STATUSES = ["pending", "processing", "completed", "failed", "superseded"] as const;
+export const mailingListSynchronizationStatusSchema = z.enum(GOOGLE_GROUPS_SYNC_STATUSES);
 export const mailingListSubscriberSchema = z.object({
   user: userCatalogItemSchema.extend({ headshotUrl: httpOrSameOriginUrlSchema.nullable() }),
   eligible: z.boolean(),
@@ -272,6 +274,8 @@ export const mailingListSubscriberSchema = z.object({
   preference: mailingListPreferenceSchema.nullable(),
   subscribed: z.boolean(),
   suppressed: z.boolean(),
+  synchronizationStatus: mailingListSynchronizationStatusSchema.nullable(),
+  synchronizationError: z.string().nullable(),
 });
 export type MailingListSubscriber = z.infer<typeof mailingListSubscriberSchema>;
 

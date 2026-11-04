@@ -1,3 +1,4 @@
+import { googleGroupsDeliverySql } from "./delivery-policy";
 import { first } from "../../db/queries";
 import { recordProviderAbsence } from "./observe-membership";
 import { isMailingListSyncEnabled } from "./mailing-list-policy";
@@ -105,7 +106,7 @@ export async function processGoogleGroupsSyncQueue(
     // A person who left this group on the provider side must not be re-added
     // by any queued work. Only an explicit resubscribe clears suppression.
     if (
-      claim.action === "add_to_list" &&
+      claim.action !== "remove_from_list" &&
       (await isGoogleGroupsSuppressed(db, claim.user_id, claim.google_group_email))
     ) {
       if (liveClaim) await supersedeSuppressedGoogleGroupsAdd(db, liveClaim);
@@ -115,7 +116,7 @@ export async function processGoogleGroupsSyncQueue(
 
     if (!(await isMailingListSyncEnabled(db, claim.google_group_email))) continue;
     try {
-      if (claim.action === "add_to_list") {
+      if (claim.action !== "remove_from_list") {
         const confirmed = await first(
           db,
           `SELECT 1 FROM google_groups_observed_membership
@@ -137,23 +138,18 @@ export async function processGoogleGroupsSyncQueue(
           }
         }
       }
-      const preference = await first<{ preference: string | null }>(
+      const projection = await first<{ delivery: "all" | "none" | null }>(
         db,
-        `SELECT preference.preference
-        FROM mailing_lists list LEFT JOIN mailing_list_subscription_preferences preference
-          ON list.id = preference.mailing_list_id AND preference.user_id = ?
-        WHERE list.email = ?`,
-        [claim.user_id, claim.google_group_email],
+        `WITH input(action,user_id,email) AS (VALUES (?,?,?))
+         SELECT ${googleGroupsDeliverySql("input.action", "input.user_id", "input.email")} AS delivery FROM input`,
+        [claim.action, claim.user_id, claim.google_group_email],
       );
+      const delivery = projection?.delivery ?? undefined;
       await directoryClient.applyMembership({
         action: claim.action,
         googleGroupEmail: claim.google_group_email,
         memberEmail,
-        ...(preference?.preference === "archive_only"
-          ? { delivery: "none" as const }
-          : preference?.preference === "subscribed"
-            ? { delivery: "all" as const }
-            : {}),
+        ...(delivery ? { delivery } : {}),
       });
       if (!liveClaim) {
         succeeded++;
@@ -165,11 +161,11 @@ export async function processGoogleGroupsSyncQueue(
         memberEmail,
         syncPassId,
       );
-      const completion = await completeGoogleGroupsDirectoryEffect(db, liveClaim, notificationStatements);
+      const completion = await completeGoogleGroupsDirectoryEffect(db, liveClaim, notificationStatements, delivery);
       if (!completion.finalizedClaim && !completion.fulfilledCurrentDesiredState) continue;
 
       succeeded++;
-      if (claim.action === "add_to_list" && completion.fulfilledCurrentDesiredState) {
+      if (claim.action !== "remove_from_list" && completion.fulfilledCurrentDesiredState) {
         (completedAddsByUser[claim.user_id] ??= []).push(claim.google_group_email);
       }
     } catch (error) {

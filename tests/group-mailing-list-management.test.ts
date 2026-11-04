@@ -645,3 +645,48 @@ it.each(["subscribed", "archive_only"] as const)(
     expect((await queued())!.count).toBe(before + 1);
   },
 );
+
+it("queues a durable delivery restoration when a no-mail member returns to a subscribed group default", async () => {
+  const admin = await actor(`restore-admin-${crypto.randomUUID()}@example.test`, "admin");
+  const group = await createGroup(env.DB, admin, {
+    typeKey: "working_group",
+    name: "Restore delivery",
+    visibility: "public",
+  });
+  const chair = await seedPersona(env.DB, "groupLead", { groupId: group.id });
+  const person = await seedPersona(env.DB, "groupLead", { groupId: group.id });
+  const list = await createGroupMailingList(env.DB, admin, group.id, {
+    email: `restore-${crypto.randomUUID()}@lists.example.test`,
+    label: "Restore",
+    purpose: "group",
+    subscriptionDefault: "group_members",
+  });
+  const endpoint = `/api/v1/groups/${group.id}/mailing-lists/${list.id}/subscribers/${person.userId}`;
+  expect((await jsonRequest(endpoint, "PUT", { preference: "archive_only" }, chair.token!)).status).toBe(200);
+  expect((await jsonRequest(endpoint, "PUT", { preference: "inherit" }, chair.token!)).status).toBe(200);
+  expect(
+    await env.DB.prepare(
+      "SELECT desired_action FROM google_groups_membership_desired_state WHERE user_id = ? AND google_group_email = ?",
+    )
+      .bind(person.userId, list.email)
+      .first(),
+  ).toMatchObject({ desired_action: "restore_delivery" });
+  const queue = await env.DB.prepare(
+    "SELECT id FROM google_groups_sync_queue WHERE user_id = ? AND google_group_email = ? AND status = 'pending'",
+  )
+    .bind(person.userId, list.email)
+    .first<{ id: string }>();
+  await env.DB.prepare(
+    "UPDATE google_groups_sync_queue SET status = 'failed', last_error = 'Protected member' WHERE id = ?",
+  )
+    .bind(queue!.id)
+    .run();
+  const roster = await callApi(
+    env,
+    `/api/v1/groups/${group.id}/mailing-lists/${list.id}/subscribers?q=${encodeURIComponent(person.email)}`,
+    { headers: { authorization: `Bearer ${chair.token!}` } },
+  );
+  expect(await roster.json()).toMatchObject({
+    subscribers: [{ synchronizationStatus: "failed", synchronizationError: "Protected member" }],
+  });
+});

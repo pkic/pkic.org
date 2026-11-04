@@ -215,3 +215,32 @@ it("keeps archive-only primaries and aliases with no delivery, then removes both
     .run();
   expect(await listMailingListDeliveryAddresses(env.DB, listEmail)).toEqual([]);
 });
+
+it("repairs no-mail delivery for a pending explicit restoration without resetting ordinary defaults", async () => {
+  await resetDb();
+  const userId = await subscriber();
+  await env.DB.prepare("DELETE FROM mailing_list_subscription_preferences WHERE user_id = ?").bind(userId).run();
+  await env.DB.prepare(
+    `INSERT INTO google_groups_sync_queue(id,user_id,google_group_email,action,status,attempts,next_attempt_at,created_at) VALUES ('restore',?,?,'restore_delivery','pending',0,?,?)`,
+  )
+    .bind(userId, listEmail, at, at)
+    .run();
+  await env.DB.prepare("UPDATE mailing_lists SET subscription_default = 'eligible_categories' WHERE email = ?")
+    .bind(listEmail)
+    .run();
+  const addresses = await listMailingListDeliveryAddresses(env.DB, listEmail);
+  expect(addresses.find((row) => row.userId === userId)?.restoreDelivery).toBe(1);
+  const delivery = provider([{ ...ordinary("primary@example.test"), delivery: "none" }]);
+  await reconcileMailingListDelivery(delivery, listEmail, addresses, { limit: 25, dryRun: false });
+  expect(delivery.applyChange).toHaveBeenCalledWith(listEmail, {
+    email: "primary@example.test",
+    action: "enable_delivery",
+    delivery: "all",
+  });
+  expect(
+    planMailingListDelivery(
+      addresses.map((row) => ({ ...row, restoreDelivery: 0 })),
+      [{ ...ordinary("primary@example.test"), delivery: "none" }],
+    )[0]?.action,
+  ).toBe("unchanged");
+});

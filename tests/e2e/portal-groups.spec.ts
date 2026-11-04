@@ -481,10 +481,10 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     await expect(row).toBeVisible();
     const endpoint = `/api/v1/groups/${PQC_GROUP_ID}/mailing-lists/${mailingList.id}/subscribers/${person.userId}`;
     for (const [label, status] of [
-      ["Turn off email delivery", "Email delivery off"],
-      ["Unsubscribe", "Not subscribed"],
-      ["Subscribe", "Subscribed"],
-      ["Use group default", "Not subscribed"],
+      ["Turn off email delivery", "Email delivery update pending"],
+      ["Unsubscribe", "Email delivery update pending"],
+      ["Subscribe", "Email delivery update pending"],
+      ["Use group default", "Email delivery update pending"],
     ]) {
       await row.getByRole("button", { name: `Actions for ${name}`, exact: true }).click();
       await page.getByRole("menuitem", { name: label, exact: true }).click();

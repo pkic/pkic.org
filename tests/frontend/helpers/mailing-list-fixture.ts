@@ -16,6 +16,8 @@ export function mailingListSubscriberFixture(overrides: Partial<MailingListSubsc
     preference: null,
     subscribed: true,
     suppressed: false,
+    synchronizationStatus: null,
+    synchronizationError: null,
     ...overrides,
   };
 }

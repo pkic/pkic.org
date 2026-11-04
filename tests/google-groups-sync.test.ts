@@ -1,3 +1,4 @@
+import { completeGoogleGroupsDirectoryEffect } from "../functions/_lib/services/google-groups/sync-queue";
 /**
  * google-groups-sync.test.ts
  *
@@ -239,6 +240,55 @@ describe("Google Groups sync", () => {
     },
   );
 
+  it("does not let a stale no-mail result complete a newer all-mail generation", async () => {
+    const [list] = await queryAll<{ id: string; email: string }>(env.DB, "SELECT id, email FROM mailing_lists LIMIT 1");
+    const userId = await insertUser(`delivery-race-${crypto.randomUUID()}@example.test`);
+    const at = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO mailing_list_subscription_preferences(mailing_list_id,user_id,preference,created_at,updated_at) VALUES (?,?,'archive_only',?,?)",
+    )
+      .bind(list.id, userId, at, at)
+      .run();
+    await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail: list.email, action: "add_to_list" });
+    const [oldClaim] = await claimPendingGoogleGroupsSyncRows(env.DB, 1);
+    await env.DB.prepare(
+      "UPDATE mailing_list_subscription_preferences SET preference='subscribed' WHERE mailing_list_id=? AND user_id=?",
+    )
+      .bind(list.id, userId)
+      .run();
+    const latest = await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: list.email,
+      action: "add_to_list",
+    });
+    const [newClaim] = await claimPendingGoogleGroupsSyncRows(env.DB, 1);
+    await completeGoogleGroupsDirectoryEffect(env.DB, newClaim, [], "all");
+    expect(await completeGoogleGroupsDirectoryEffect(env.DB, oldClaim, [], "none")).toMatchObject({
+      fulfilledCurrentDesiredState: false,
+    });
+    expect(
+      await env.DB.prepare("SELECT status FROM google_groups_sync_queue WHERE id=?").bind(latest).first(),
+    ).toMatchObject({ status: "pending" });
+  });
+
+  it("restores all-mail delivery through its durable action without a stored preference", async () => {
+    const userId = await insertUser(`restore-${crypto.randomUUID()}@example.test`);
+    const id = await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: "restore@example.test",
+      action: "restore_delivery",
+    });
+    const fetch = stubGoogleFetch(409);
+    expect(await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv())).toMatchObject({
+      succeeded: 1,
+      failed: 0,
+    });
+    const write = fetch.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(JSON.parse(String(write?.[1]?.body))).toEqual({ delivery_settings: "ALL_MAIL" });
+    expect(
+      await env.DB.prepare("SELECT status FROM google_groups_sync_queue WHERE id=?").bind(id).first(),
+    ).toMatchObject({ status: "completed" });
+  });
   it("enqueues a pending sync row", async () => {
     const userId = await insertUser("gg-enqueue@example.test");
     const id = await enqueueGoogleGroupsSync(env.DB, {
