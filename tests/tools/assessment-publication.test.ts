@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { expect, it, vi } from "vitest";
@@ -30,18 +30,44 @@ it("publishes approved SDK bytes and licenses and rebuilds without contacting up
   }
 });
 
-it("rejects changed upstream bytes instead of publishing unverified executable code", async () => {
+it("replaces a corrupt cached dependency only after verifying its downloaded replacement", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "pkic-assessment-"));
   try {
-    await expect(
-      publishAssessmentScripts(resolve(root, "output"), {
-        releases: [release],
-        cache: resolve(root, "cache"),
-        download: async () => new Response("changed bundle"),
-      }),
-    ).rejects.toThrow("integrity verification");
-    await expect(readFile(resolve(root, `output${release.url}`))).rejects.toMatchObject({ code: "ENOENT" });
+    const cache = resolve(root, "cache");
+    const download = vi.fn(async (url: string) => new Response(url.endsWith(".txt") ? license : script));
+    const options = { releases: [release], cache, download };
+    await publishAssessmentScripts(resolve(root, "first"), options);
+    const cachedScript = resolve(cache, createHash("sha256").update(release.integrity).digest("hex"));
+    await writeFile(cachedScript, "corrupt cached bytes");
+    await publishAssessmentScripts(resolve(root, "second"), options);
+    expect(download).toHaveBeenCalledTimes(3);
+    expect(await readFile(cachedScript, "utf8")).toBe(script);
+    expect(await readFile(resolve(root, `second${release.url}`), "utf8")).toBe(script);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+it.each([false, true])(
+  "rejects changed upstream bytes, including after cache corruption (%s)",
+  async (corruptCache) => {
+    const root = await mkdtemp(resolve(tmpdir(), "pkic-assessment-"));
+    try {
+      const cache = resolve(root, "cache");
+      if (corruptCache) {
+        await mkdir(cache);
+        await writeFile(resolve(cache, createHash("sha256").update(release.integrity).digest("hex")), "corrupt cache");
+      }
+      await expect(
+        publishAssessmentScripts(resolve(root, "output"), {
+          releases: [release],
+          cache,
+          download: async () => new Response("changed bundle"),
+        }),
+      ).rejects.toThrow("integrity verification");
+      await expect(readFile(resolve(root, `output${release.url}`))).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
