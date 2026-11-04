@@ -9,6 +9,7 @@ import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
+import { sqlValue, type SqlId } from "../../db/sql-value";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
@@ -349,7 +350,7 @@ export async function listFormPlacements(
 export interface FormPlacementSelector {
   placementId?: string;
   contextType?: FormPlacement["contextType"];
-  contextRef?: string | null;
+  contextRef?: SqlId | null;
   audience?: string;
 }
 
@@ -371,8 +372,9 @@ export function prepareFormPlacementRead(
     bindings.push(selector.placementId);
   }
   if (selector.contextType) {
-    conditions.push("context_type = ?", "context_ref IS ?");
-    bindings.push(selector.contextType, selector.contextRef ?? null);
+    const contextRef = sqlValue(selector.contextRef ?? null);
+    conditions.push("context_type = ?", `context_ref IS ${contextRef.sql}`);
+    bindings.push(selector.contextType, ...contextRef.bindings);
   }
   return {
     statement: db

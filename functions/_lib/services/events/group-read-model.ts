@@ -14,7 +14,7 @@ import { batchFirst, queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, D1StatementResult } from "../../types";
 import {
   effectiveResourceCapabilitiesForContext,
   buildAccessibleGroupResourceIdsCte,
@@ -221,7 +221,7 @@ export async function listGroupEvents(
   return { events: page.rows.map((row) => mapGroupEvent(row, groupId)), total: page.total };
 }
 
-export async function getGroupEvent(db: DatabaseLike, viewer: GroupResourceViewer, groupId: string, eventId: string) {
+export function prepareGroupEventRead(db: DatabaseLike, viewer: GroupResourceViewer, groupId: string, eventId: string) {
   const access = liveGroupResourceContextAccess(viewer, groupId);
   const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", groupId, access, "view");
   const audience = buildEventAudiencePredicate("event", {
@@ -245,15 +245,24 @@ export async function getGroupEvent(db: DatabaseLike, viewer: GroupResourceViewe
     )
     .bind(...accessibleEvents.bindings, groupId, eventId, ...audience.bindings);
   const proposalCallRead = prepareEventProposalCall(db, eventId);
-  const results = await db.batch([eventRead, proposalCallRead.statement]);
-  const row = batchFirst<GroupEventRow>(results[0]);
-  if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "The event is not available through this group");
-  const event = mapGroupEvent(row, groupId);
-  if (!event.capabilities.includes("view")) {
-    throw new AppError(404, "EVENT_NOT_FOUND", "The event is not available through this group");
-  }
-  const proposalAccess = viewer.admin ? await getProposalAccessForEvent(db, event.id, viewer.admin) : null;
-  // The managed event's call for proposals, from the one server definition of "open" that the public event detail uses.
-  const proposalCall = proposalCallRead.decode(batchFirst<EventProposalCallRow>(results[1]));
-  return groupEventDetailResponseSchema.parse({ event: { ...event, proposalAccess, proposalCall } });
+  return {
+    statements: [eventRead, proposalCallRead.statement],
+    async decode(results: D1StatementResult[]) {
+      const row = batchFirst<GroupEventRow>(results[0]);
+      if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "The event is not available through this group");
+      const event = mapGroupEvent(row, groupId);
+      if (!event.capabilities.includes("view")) {
+        throw new AppError(404, "EVENT_NOT_FOUND", "The event is not available through this group");
+      }
+      const proposalAccess = viewer.admin ? await getProposalAccessForEvent(db, event.id, viewer.admin) : null;
+      // The managed event's call for proposals, from the one server definition of "open" that the public event detail uses.
+      const proposalCall = proposalCallRead.decode(batchFirst<EventProposalCallRow>(results[1]));
+      return groupEventDetailResponseSchema.parse({ event: { ...event, proposalAccess, proposalCall } });
+    },
+  };
+}
+
+export async function getGroupEvent(db: DatabaseLike, viewer: GroupResourceViewer, groupId: string, eventId: string) {
+  const read = prepareGroupEventRead(db, viewer, groupId, eventId);
+  return read.decode(await db.batch(read.statements));
 }

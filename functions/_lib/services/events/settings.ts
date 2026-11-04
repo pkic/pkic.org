@@ -1,33 +1,15 @@
 import { prepareSitePublicationRequest } from "../site-publication-requests";
 import { SITE_PUBLICATION_SITE_RESOURCE_ID } from "../../../../assets/shared/schemas/site-publication-requests";
 import { prepareEventSpeakingStanding } from "../member-standing/event-speaking";
-import {
-  isEventCustomSettingKey,
-  type EventManagementCapability,
-  type EventSettingsInput,
-  type EventSettingsUpdateInput,
-} from "../../../../assets/shared/schemas/event-management";
-import { prepareEventFormSettingsRead } from "./direct-form-selection";
+import { isEventCustomSettingKey, type EventSettingsInput } from "../../../../assets/shared/schemas/event-management";
 import { BADGE_TEMPLATE_SETTINGS_MAX_BYTES } from "../../../../assets/shared/schemas/event-badge-template";
-import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
+import type { DatabaseLike, StatementLike } from "../../types";
 import { AppError } from "../../errors";
 import { parseJsonSafe, stringifyJson } from "../../utils/json";
 import { resolveHeroImageSource } from "../../utils/hero-image-url";
 import { nowIso } from "../../utils/time";
-import {
-  isAuditChangeGuardFailure,
-  prepareAuditLog,
-  prepareScopedAuditLogAfterOneChange,
-  type AuditScope,
-} from "../audit";
-import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
-import { getEventBySlug, type EventRecord } from "../events";
-import { getEventDetail } from "./detail";
-import {
-  prepareDirectEventConfigurationGuard,
-  requireDirectEventConfiguration,
-  throwEventConfigurationConflict,
-} from "./direct-configuration";
+import { prepareAuditLog, prepareScopedAuditLogAfterOneChange, type AuditScope } from "../audit";
+import type { EventRecord } from "../events";
 
 function mergeEventSettings(
   existingJson: string,
@@ -282,52 +264,4 @@ export function buildEventSettingsMutationStatements(
     statements.push(...prepareEventSpeakingStanding(db, at, { eventId: event.id }));
   }
   return statements;
-}
-
-export async function updateDirectEventSettings(
-  db: DatabaseLike,
-  input: {
-    eventSlug: string;
-    actor: UserBackedAuthAdmin;
-    settings: EventSettingsUpdateInput;
-    appBaseUrl: string;
-    allowedHeroImageHosts?: string;
-    capabilities: readonly EventManagementCapability[];
-  },
-) {
-  const event = await getEventBySlug(db, input.eventSlug);
-  await requireDirectEventConfiguration(db, event);
-  const { expectedUpdatedAt, ...settings } = input.settings;
-  const context = { type: "event", id: event.id };
-  const updatedAt = nowIso();
-  const formRead = prepareEventFormSettingsRead(db, event, settings, updatedAt);
-  const formStatements = formRead.decode(formRead.statements.length ? await db.batch(formRead.statements) : []);
-  try {
-    await db.batch([
-      ...buildEventSettingsMutationStatements(db, {
-        event,
-        actorId: input.actor.id,
-        settings,
-        appBaseUrl: input.appBaseUrl,
-        allowedHeroImageHosts: input.allowedHeroImageHosts,
-        expectedUpdatedAt,
-        updatedAt,
-        auditScope: context,
-        authorizationGuards: [
-          preparePermissionsAuthorizationGuard(db, input.actor, [{ permission: "events:write", context }]),
-          prepareDirectEventConfigurationGuard(db, event.id),
-        ],
-      }),
-      ...formStatements,
-    ]);
-  } catch (error) {
-    if (isAuditChangeGuardFailure(error)) {
-      throw new AppError(409, "EVENT_CHANGED", "The event changed; reload before saving");
-    }
-    if (error instanceof Error && error.message.includes("UNIQUE constraint failed: events.slug")) {
-      throw new AppError(409, "EVENT_SLUG_EXISTS", "An event with this slug already exists");
-    }
-    throwEventConfigurationConflict(error);
-  }
-  return getEventDetail(db, settings.slug ?? input.eventSlug, input.capabilities);
 }

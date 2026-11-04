@@ -20,23 +20,25 @@ import {
 import { exactEventFlowPlacementGuard } from "./form-placement";
 import type { EventRecord } from "../events";
 import type { EventSettingsUpdateInput } from "../../../../assets/shared/schemas/event-management";
+import { eventReadIdSql, type EventReadSelection } from "./selection";
 
 /** A single preflight snapshot plans the event's explicit selection and window; the caller commits it atomically. */
 export function prepareDirectEventFormSelectionRead(
   db: DatabaseLike,
-  event: Pick<EventRecord, "id">,
+  event: EventReadSelection,
   purpose: EventFormsPurpose,
   at: string,
   formKey?: string | null,
   window?: z.infer<typeof eventProposalSubmissionWindowSchema>,
 ) {
-  const current = placedEventFormSelection(event.id, purpose, { includeClosed: true });
+  const target = eventReadIdSql(event);
+  const current = placedEventFormSelection(event, purpose, { includeClosed: true });
   const previousSelection = prepareFormPlacementRead(
     db,
     { key: formKey ?? "" },
     {
       contextType: "event",
-      contextRef: event.id,
+      contextRef: target,
       audience: defaultFormAudience(purpose),
     },
     false,
@@ -46,11 +48,13 @@ export function prepareDirectEventFormSelectionRead(
       db.prepare(current.sql).bind(...current.bindings),
       db
         .prepare(`SELECT id,updated_at FROM forms WHERE key=? AND purpose=? AND status='active'
-      AND (scope_type='global' OR (scope_type='event' AND scope_ref=?))`)
-        .bind(formKey ?? null, purpose, event.id),
+      AND (scope_type='global' OR (scope_type='event' AND scope_ref=${target.sql}))`)
+        .bind(formKey ?? null, purpose, ...target.bindings),
       previousSelection.statement,
     ],
-    decode(results: D1StatementResult[]): StatementLike[] {
+    decode(results: D1StatementResult[], resolvedEventId?: string): StatementLike[] {
+      const eventId = resolvedEventId ?? (typeof event === "string" ? event : undefined);
+      if (!eventId) throw new Error("A resolved event ID is required to plan form changes");
       const [currentResult, selectedResult, placementResult] = results;
       const resolved = decodePlacedEventForm(batchRows<PlacedEventFormRow>(currentResult));
       const exact = resolved?.placement ?? null;
@@ -80,7 +84,7 @@ export function prepareDirectEventFormSelectionRead(
           purpose === "proposal_submission" ? "PROPOSAL_FORM_REQUIRED" : "REGISTRATION_FORM_REQUIRED",
           "Choose an active form available to this event before configuring its selection or submission window",
         );
-      const guards: StatementLike[] = [exactEventFlowPlacementGuard(db, event.id, purpose, exact?.id ?? null)];
+      const guards: StatementLike[] = [exactEventFlowPlacementGuard(db, eventId, purpose, exact?.id ?? null)];
       if (exact) guards.push(prepareFormPlacementSnapshotGuard(db, exact));
       if (!selected)
         return exact
@@ -95,7 +99,7 @@ export function prepareDirectEventFormSelectionRead(
             selected.id,
             purpose,
             selected.updated_at,
-            event.id,
+            eventId,
             retainsGroupProposal ? selected.id : null,
             retainsGroupProposal ? exact?.ownerGroupId : null,
           ],
@@ -129,7 +133,7 @@ export function prepareDirectEventFormSelectionRead(
           {
             ownerGroupId: null,
             contextType: "event",
-            contextRef: event.id,
+            contextRef: eventId,
             audience: defaultFormAudience(purpose),
             active: true,
             ...effectiveWindow,
@@ -144,7 +148,7 @@ export function prepareDirectEventFormSelectionRead(
 /** Share selection planning across direct and group-authorized event settings commits. */
 export function prepareEventFormSettingsRead(
   db: DatabaseLike,
-  event: Pick<EventRecord, "id">,
+  event: EventReadSelection,
   settings: Pick<EventSettingsUpdateInput, "registrationFormKey" | "proposalFormKey" | "proposalSubmissionWindow">,
   at: string,
 ) {
@@ -167,10 +171,10 @@ export function prepareEventFormSettingsRead(
   ];
   return {
     statements: reads.flatMap((read) => read.statements),
-    decode(results: D1StatementResult[]): StatementLike[] {
+    decode(results: D1StatementResult[], eventId?: string): StatementLike[] {
       let offset = 0;
       return reads.flatMap((read) => {
-        const planned = read.decode(results.slice(offset, offset + read.statements.length));
+        const planned = read.decode(results.slice(offset, offset + read.statements.length), eventId);
         offset += read.statements.length;
         return planned;
       });
@@ -187,6 +191,6 @@ export async function prepareDirectEventFormSelection(
   formKey?: string | null,
   window?: z.infer<typeof eventProposalSubmissionWindowSchema>,
 ): Promise<StatementLike[]> {
-  const read = prepareDirectEventFormSelectionRead(db, event, purpose, at, formKey, window);
+  const read = prepareDirectEventFormSelectionRead(db, event.id, purpose, at, formKey, window);
   return read.decode(await db.batch(read.statements));
 }

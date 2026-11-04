@@ -3,7 +3,12 @@ import type {
   GroupEventCreateInput,
   GroupEventSettingsUpdateInput,
 } from "../../../../assets/shared/schemas/group-events";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
+import {
+  isAuthorizationGuardFailure,
+  isStateGuardFailure,
+  prepareAuthorizationGuard,
+  prepareStateGuard,
+} from "../../db/authorization-guard";
 import { isAuditChangeGuardFailure, prepareScopedAuditLog } from "../audit";
 import { getGroup, prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "../groups";
 import {
@@ -20,10 +25,11 @@ import {
   listEventAttendanceRegistrations,
   type EventAttendanceRegistrationsListResult,
 } from "../registrations/event-attendance-registrations";
-import type { AuthAdmin, DatabaseLike } from "../../types";
+import type { AuthAdmin, DatabaseLike, D1StatementResult, StatementLike } from "../../types";
 import { AppError } from "../../errors";
 import { buildEventSettingsMutationStatements } from "./settings";
 import {
+  type EventResourceManagementContext,
   commitEventResourceManagementBatch,
   guardEventResourceManagementDatabase,
   requireEventResourceManagementContext,
@@ -113,43 +119,70 @@ export async function updateGroupManagedEventSettings(
   input: GroupEventSettingsUpdateInput,
   appBaseUrl: string,
 ): Promise<void> {
-  const at = nowIso();
-  const formRead = prepareEventFormSettingsRead(db, { id: eventId }, input, at);
-  const snapshot = formRead.statements.length
-    ? await db.batch([prepareEventById(db, eventId), ...formRead.statements])
-    : null;
-  const event = snapshot ? batchFirst<EventRecord>(snapshot[0]) : await getEventById(db, eventId);
-  if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
+  const read = prepareGroupEventSettingsRead(db, eventId, input);
+  const results = await db.batch(read.statements);
+  const event = read.decodeEvent(results[0]);
   const context = await requireEventResourceManagementContext(db, actor, groupIdOrSlug, event.id, "manage");
-  if (event.source_mode === "portal" && formRead.statements.length) {
-    throw new AppError(
-      409,
-      "EVENT_FORM_PLACEMENT_REQUIRED",
-      "Configure portal event forms through the event form settings",
-    );
-  }
-  const formStatements = formRead.decode(snapshot?.slice(1) ?? []);
-  const seriesManaged = await db
-    .prepare(
-      `SELECT 1
-         FROM events event
-         LEFT JOIN event_series series ON series.event_id = event.id
-        WHERE event.id = ?
-          AND (event.profile_key IN ('meeting', 'board_meeting') OR series.id IS NOT NULL)`,
-    )
-    .bind(event.id)
-    .first();
-  if (seriesManaged) {
-    throw new AppError(
-      409,
-      "EVENT_MANAGED_BY_MEETING_SERIES",
-      "Meeting events must be updated through their meeting series",
-    );
-  }
+  const snapshot = read.decode(results);
+  await commitGroupEventSettings(db, actor, context, input, appBaseUrl, snapshot);
+}
+
+/** One resource snapshot plans form and settings changes for both authorized entry points. */
+export function prepareGroupEventSettingsRead(db: DatabaseLike, eventId: string, input: GroupEventSettingsUpdateInput) {
+  const at = nowIso();
+  const formRead = prepareEventFormSettingsRead(db, eventId, input, at);
+  const decodeEvent = (result: D1StatementResult) => {
+    const event = batchFirst<EventRecord>(result);
+    if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
+    return event;
+  };
+  return {
+    decodeEvent,
+    statements: [
+      prepareEventById(db, eventId),
+      db.prepare("SELECT id FROM event_series WHERE event_id = ? LIMIT 1").bind(eventId),
+      ...formRead.statements,
+    ],
+    decode(results: D1StatementResult[]) {
+      const event = decodeEvent(results[0]);
+      if (event.source_mode === "portal" && formRead.statements.length) {
+        throw new AppError(
+          409,
+          "EVENT_FORM_PLACEMENT_REQUIRED",
+          "Configure portal event forms through the event form settings",
+        );
+      }
+      const formStatements = formRead.decode(results.slice(2));
+      if (event.profile_key === "meeting" || event.profile_key === "board_meeting" || batchFirst(results[1])) {
+        throw new AppError(
+          409,
+          "EVENT_MANAGED_BY_MEETING_SERIES",
+          "Meeting events must be updated through their meeting series",
+        );
+      }
+      return { at, event, formStatements };
+    },
+  };
+}
+
+/** Commit the planned transition and optional response in the same guarded transaction. */
+export async function commitGroupEventSettings(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  context: EventResourceManagementContext,
+  input: GroupEventSettingsUpdateInput,
+  appBaseUrl: string,
+  snapshot: ReturnType<ReturnType<typeof prepareGroupEventSettingsRead>["decode"]>,
+  authorizationGuards: StatementLike[] = [],
+  responseStatements: StatementLike[] = [],
+) {
+  const { event, at, formStatements } = snapshot;
   const { expectedUpdatedAt, links, ...settings } = input;
   try {
-    await commitEventResourceManagementBatch(db, actor, context, "manage", [
-      prepareAuthorizationGuard(db, {
+    return await commitEventResourceManagementBatch(db, actor, context, "manage", [
+      ...authorizationGuards,
+      prepareGroupManagementAuthorizationGuard(db, actor, [context.groupId]),
+      prepareStateGuard(db, {
         sql: `SELECT 1
                   FROM events guarded_event
                  WHERE guarded_event.id = ?
@@ -175,9 +208,17 @@ export async function updateGroupManagedEventSettings(
         appBaseUrl,
       }),
       ...formStatements,
+      ...responseStatements,
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "EVENT_MANAGEMENT_CONTEXT_CHANGED",
+        "Event-management authority or form placement changed before the update was saved",
+      );
+    }
+    if (isStateGuardFailure(error)) {
       throw new AppError(
         409,
         "EVENT_MANAGED_BY_MEETING_SERIES",
