@@ -8,6 +8,7 @@ import {
 } from "./event-configuration";
 import {
   eventDetailResponseSchema,
+  eventDetailQuerySchema,
   eventManagementDetailResponseSchema,
   eventSettingsUpdateSchema,
   eventsListQuerySchema,
@@ -33,14 +34,15 @@ export const eventDetailRouteSchema = {
   tags: ["Events"],
   summary: "Get an event",
   description:
-    "Returns only the event fields visible to the caller. Management configuration is included only with exact event read permission.",
-  request: { params: eventSlugParamsSchema },
+    "Returns only the event fields visible to the caller. Management configuration requires exact event read permission or live management authority for the event through the selected group.",
+  request: { params: eventSlugParamsSchema, query: eventDetailQuerySchema },
   responses: {
     "200": {
       description: "Event details and current optimistic revision.",
       content: { "application/json": { schema: eventDetailResponseSchema } },
     },
     "401": jsonErrorResponse("The supplied user session is invalid."),
+    "403": jsonErrorResponse("The selected group does not grant event-management authority."),
     "404": jsonErrorResponse("Event not found or not visible to this caller."),
   },
   "x-pkic-auth": { required: false },

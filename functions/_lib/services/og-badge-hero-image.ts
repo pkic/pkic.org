@@ -11,11 +11,13 @@ import {
   type ValidatedRasterImage,
 } from "../utils/image-format";
 import { resolveHeroImageSource } from "../utils/hero-image-url";
+import { currentEventHeroImage } from "./events/hero-image";
 
 export { resolveHeroImageSource } from "../utils/hero-image-url";
 
 type StaticAssetEnv = Pick<Env, "ASSETS" | "ASSETS_PUBLIC">;
-type HeroImageEnv = Pick<Env, "ASSETS" | "ASSETS_PUBLIC" | "HERO_IMAGE_ALLOWED_HOSTS" | "IMAGES">;
+type HeroImageEnv = Pick<Env, "ASSETS" | "ASSETS_PUBLIC" | "HERO_IMAGE_ALLOWED_HOSTS" | "IMAGES"> &
+  Partial<Pick<Env, "DB" | "ASSETS_BUCKET">>;
 
 function getAssetBinding(env: StaticAssetEnv): Env["ASSETS"] | undefined {
   return env.ASSETS ?? env.ASSETS_PUBLIC;
@@ -94,7 +96,14 @@ export async function fetchHeroImage(
     const signal = AbortSignal.timeout(timeoutMs);
     let response: Response;
     if (source.assetPath) {
-      response = await fetchStaticAsset(env, origin, source.assetPath, signal);
+      const uploaded = /^\/api\/v1\/events\/([^/]+)\/images\/([0-9a-f-]{36}\.(?:jpg|png|webp))$/.exec(source.assetPath);
+      response =
+        uploaded && env.DB
+          ? await currentEventHeroImage(env.DB, env, decodeURIComponent(uploaded[1]), uploaded[2], {
+              width: "1200",
+              origin,
+            })
+          : await fetchStaticAsset(env, origin, source.assetPath, signal);
       if (!response.ok) return null;
     } else {
       const requestInit: RequestInit = { signal, redirect: "manual" };

@@ -15,13 +15,15 @@
  * already written; it was only ever named after one of the two things it is
  * for. Both now use it, and the noun and the shape are the caller's.
  */
+import type { JSX } from "preact";
+import type { FieldControlProps } from "../ui/Field";
 import { useId, useRef } from "preact/hooks";
 import { Avatar, AvatarStanding, type AvatarStatus } from "../ui/Avatar";
 import { IconPencil } from "../ui/MediaIcons";
 import { usePictureCommands, type PictureCommandOptions } from "./usePictureCommands";
 import "./PictureTile.css";
 
-export interface PictureTileProps extends Omit<PictureCommandOptions, "noun"> {
+interface PictureTileAppearance {
   /**
    * Whose picture this is. Its initials stand in while there is no picture,
    * and the controls carry it so a page holding several tiles still says
@@ -46,7 +48,12 @@ export interface PictureTileProps extends Omit<PictureCommandOptions, "noun"> {
    * `round` is a person. A face in a square reads as a logo, and every other
    * surface in the portal already draws people round.
    */
-  shape?: "square" | "round";
+  shape?: "square" | "round" | "landscape";
+  /** Form-owned selection state and accessible field feedback. */
+  control?: FieldControlProps;
+  inputName?: string;
+  onImageLoad?: JSX.GenericEventHandler<HTMLImageElement>;
+  onImageError?: JSX.GenericEventHandler<HTMLImageElement>;
   /** What the file rule is, announced with the control. */
   hint?: string;
   /**
@@ -61,27 +68,97 @@ export interface PictureTileProps extends Omit<PictureCommandOptions, "noun"> {
   size?: "default" | "mark";
 }
 
-export function PictureTile(props: PictureTileProps) {
+export interface PictureTileProps extends PictureTileAppearance, Omit<PictureCommandOptions, "noun"> {
+  selection?: never;
+}
+
+export interface PictureTileSelectionProps extends PictureTileAppearance {
+  /** Selects a draft image; the enclosing form owns saving and validation. */
+  selection: { onSelectFile: (file: File) => void; onRemove?: () => void };
+}
+
+export function PictureTile(props: PictureTileProps | PictureTileSelectionProps) {
+  if (props.selection)
+    return (
+      <PictureTileView
+        {...props}
+        busy={false}
+        attempt={0}
+        onSelectFile={props.selection.onSelectFile}
+        onRemove={props.selection.onRemove}
+      />
+    );
+  return <StoredPictureTile {...props} />;
+}
+
+function StoredPictureTile(props: PictureTileProps) {
+  const commands = usePictureCommands({ ...props, noun: props.noun ?? "logo" });
+  return (
+    <PictureTileView
+      {...props}
+      busy={commands.busy}
+      attempt={commands.attempt}
+      onSelectFile={(file) => {
+        void commands.upload(file);
+      }}
+      onRemove={
+        commands.remove
+          ? () => {
+              void commands.remove?.();
+            }
+          : undefined
+      }
+    />
+  );
+}
+
+interface PictureTileViewProps extends PictureTileAppearance {
+  busy: boolean;
+  attempt: number;
+  onSelectFile: (file: File) => void;
+  onRemove?: () => void;
+}
+
+function PictureTileView(props: PictureTileViewProps) {
   const hintId = useId();
   const noun = props.noun ?? "logo";
-  const { busy, attempt, upload, remove, removeLabel } = usePictureCommands({ ...props, noun });
+  const { busy, attempt } = props;
+  const remove = props.onRemove;
+  const removeLabel = `Remove ${noun}`;
   const inputRef = useRef<HTMLInputElement>(null);
   const label = props.imageUrl ? `Change ${noun}` : `Upload ${noun}`;
 
-  const picture = (
-    <Avatar
-      key={props.imageUrl ?? "missing"}
-      name={props.name}
-      src={props.imageUrl ?? undefined}
-      shape={props.shape ?? "square"}
-      class="pk-picture-tile__avatar"
-      original
-    />
-  );
+  const picture =
+    props.shape === "landscape" ? (
+      props.imageUrl ? (
+        <img
+          src={props.imageUrl}
+          alt={props.alt}
+          class="pk-picture-tile__image"
+          onLoad={props.onImageLoad}
+          onError={props.onImageError}
+        />
+      ) : (
+        <span>{label}</span>
+      )
+    ) : (
+      <Avatar
+        key={props.imageUrl ?? "missing"}
+        name={props.name}
+        src={props.imageUrl ?? undefined}
+        shape={props.shape ?? "square"}
+        class="pk-picture-tile__avatar"
+        original
+      />
+    );
 
   const sizing =
     (props.size === "mark" ? " pk-picture-tile--mark" : "") +
-    (props.shape === "round" ? " pk-picture-tile--round" : "");
+    (props.shape === "round"
+      ? " pk-picture-tile--round"
+      : props.shape === "landscape"
+        ? " pk-picture-tile--landscape"
+        : "");
 
   const withStanding = (picture: preact.ComponentChildren) =>
     props.status ? <AvatarStanding status={props.status}>{picture}</AvatarStanding> : picture;
@@ -105,8 +182,11 @@ export function PictureTile(props: PictureTileProps) {
         <button
           type="button"
           class="pk-picture-tile__control"
+          {...props.control}
           aria-label={`${label} of ${props.name}`}
-          aria-describedby={props.hint ? hintId : undefined}
+          aria-describedby={
+            [props.control?.["aria-describedby"], props.hint ? hintId : null].filter(Boolean).join(" ") || undefined
+          }
           disabled={busy}
           onClick={() => inputRef.current?.click()}
         >
@@ -125,12 +205,14 @@ export function PictureTile(props: PictureTileProps) {
         ref={inputRef}
         class="pk-picture-tile__input"
         type="file"
+        name={props.inputName}
         accept={props.accept ?? "image/jpeg,image/png,image/webp"}
         tabIndex={-1}
         aria-hidden="true"
         onChange={(event) => {
           const file = (event.target as HTMLInputElement).files?.[0];
-          if (file) void upload(file);
+          event.currentTarget.value = "";
+          if (file) props.onSelectFile(file);
         }}
       />
       {/* The file rule is announced with the control, not drawn under the
@@ -147,7 +229,7 @@ export function PictureTile(props: PictureTileProps) {
           aria-label={`${removeLabel} of ${props.name}`}
           title={removeLabel}
           disabled={busy}
-          onClick={() => void remove()}
+          onClick={remove}
         >
           <span aria-hidden="true">×</span>
         </button>

@@ -52,9 +52,9 @@ export async function readBoundedImageMultipartFormData(request: Request, maxFil
 /** Reads and validates both declared MIME type and file signature before R2 storage. */
 export async function readValidatedUploadedImage(
   request: Request,
-  label: "Headshot" | "Logo",
+  label: "Headshot" | "Logo" | "Hero image",
   maxBytes = STANDARD_HEADSHOT_MAX_BYTES,
-): Promise<{ buffer: ArrayBuffer; contentType: string }> {
+): Promise<{ buffer: ArrayBuffer; contentType: string; width: number; height: number }> {
   let uploaded: { buffer: ArrayBuffer; contentType: string };
   try {
     uploaded = await readUploadedImage(request, maxBytes);
@@ -81,7 +81,12 @@ export async function readValidatedUploadedImage(
   if (uploaded.contentType !== "application/octet-stream" && uploaded.contentType !== detectedContentType) {
     throw new AppError(415, "INVALID_FILE_TYPE", "The uploaded file does not match its declared image type.");
   }
-  return { buffer: uploaded.buffer, contentType: detectedContentType };
+  return {
+    buffer: uploaded.buffer,
+    contentType: detectedContentType,
+    width: validation.image.width,
+    height: validation.image.height,
+  };
 }
 
 /** Validates an image already extracted from multipart form data. */
@@ -137,7 +142,7 @@ export async function putUploadedImage(
   bucket: R2Bucket,
   key: string,
   image: { buffer: ArrayBuffer; contentType: string },
-  label: "headshot" | "logo",
+  label: "headshot" | "logo" | "hero image",
   customMetadata?: Record<string, string>,
 ): Promise<void> {
   try {

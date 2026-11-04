@@ -13,7 +13,7 @@ import {
   eventVisibilitySchema,
   timeZoneSchema,
 } from "./event-series";
-import { groupIdSchema } from "./groups";
+import { groupIdSchema, groupReferenceSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
@@ -310,6 +310,8 @@ export const eventDetailSchema = eventResourceCoreSchema.extend({
   capabilities: z.array(eventManagementCapabilitySchema).max(3),
 });
 export type EventDetail = z.infer<typeof eventDetailSchema>;
+/** The selected group supplies its existing resource-management authority. */
+export const eventDetailQuerySchema = z.object({ groupId: groupReferenceSchema.optional() });
 export const eventManagementDetailResponseSchema = z.object({ event: eventDetailSchema });
 export const eventDetailResponseSchema = z.object({ event: z.union([eventDetailSchema, eventAudienceDetailSchema]) });
 

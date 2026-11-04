@@ -62,3 +62,22 @@ it("preserves vectors, animations, and external sources without adding picture m
   expect(vector).not.toContain("<picture");
   expect(await renderImage({ src: "/animated.gif" })).toBe('<img src="/animated.gif"/>');
 });
+
+it.each([false, true])(
+  "renders responsive uploaded heroes with the prerender resolver installed: %s",
+  async (prerender) => {
+    if (prerender) configureSiteImages(async () => null);
+    const src = "/api/v1/events/synthetic-conference/images/00000000-0000-4000-8000-000000000001.png";
+    const dom = new JSDOM(await renderImage({ src, alt: "Conference", width: 600, height: 315 }));
+    try {
+      const image = dom.window.document.querySelector("img")!;
+      expect(image.getAttribute("src")).toBe(`${src}?width=600`);
+      expect(image.srcset).toBe([600, 1200, 1920].map((width) => `${src}?width=${width} ${width}w`).join(", "));
+      expect([image.width, image.height]).toEqual([600, 315]);
+      expect(image.alt).toBe("Conference");
+      expect(image.getAttribute("loading")).toBe("lazy");
+    } finally {
+      dom.window.close();
+    }
+  },
+);

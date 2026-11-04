@@ -30,6 +30,12 @@ import { EventScheduleFields } from "../../../../../../components/EventScheduleF
 import { EventPlaceFields } from "../../../../../../components/EventPlaceFields";
 import { EventFormLinkSelect } from "./EventFormLinkSelect";
 import { SessionTypeEditor } from "./SessionTypeEditor";
+import { EventHeroImageField } from "./EventHeroImageField";
+import {
+  eventHeroImageFormSchema,
+  eventHeroImageSaveSchema,
+} from "../../../../../../../shared/schemas/event-hero-image";
+import { uploadFile } from "../../../../../../shared/file-upload";
 import "../../../../../../ui/Content.css";
 
 type FormLinkPurpose = "event_registration" | "proposal_submission";
@@ -93,6 +99,8 @@ export function GeneralTab({
   const [endsAt, setEndsAt] = useState(toLocalDateTime(event.endsAt, event.timezone ?? "UTC"));
   const [venue, setVenue] = useState(event.venue ?? "");
   const [heroImageUrl, setHeroImageUrl] = useState(event.heroImageUrl ?? "");
+  const [heroDimensions, setHeroDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [heroFile, setHeroFile] = useState<File | null>(null);
   const [city, setCity] = useState(event.city ?? "");
   const [country, setCountry] = useState<string>(event.country ?? "");
   const [sessionTypes, setSessionTypes] = useState(event.sessionTypes ?? [{ label: "", requiresPresentation: true }]);
@@ -171,7 +179,17 @@ export function GeneralTab({
   // Blank draft rows are omitted from the request; validation names follow the sent array.
   const sessionTypeDurationPath = (index: number) =>
     `sessionTypes.${sessionTypes.slice(0, index).filter((type) => type.label.trim() || type.name?.trim()).length}.durationMinutes`;
-  const form = useContractForm(groupTarget ? groupEventSettingsUpdateSchema : eventSettingsUpdateSchema, body);
+  const form = useContractForm(
+    heroFile ? eventHeroImageFormSchema : groupTarget ? groupEventSettingsUpdateSchema : eventSettingsUpdateSchema,
+    heroFile
+      ? {
+          ...body,
+          file: heroFile,
+          dimensions: heroDimensions,
+          ...(groupTarget ? { groupId: groupTarget.groupId } : {}),
+        }
+      : body,
+  );
   async function handleSubmit(submitEvent: Event): Promise<void> {
     submitEvent.preventDefault();
     if (!canWrite || !editing || saving) return;
@@ -197,7 +215,20 @@ export function GeneralTab({
       )
         return;
       const settings = { ...checked.data, ...(changingSlug ? { confirmSlugChange: true } : {}) };
-      if (groupTarget) {
+      if (heroFile) {
+        const query = eventHeroImageSaveSchema.parse({
+          ...settings,
+          ...(groupTarget ? { groupId: groupTarget.groupId } : {}),
+        });
+        const params = new URLSearchParams(Object.entries(query).map(([key, value]) => [key, String(value)]));
+        const response = await uploadFile(
+          `/api/v1/events/${encodeURIComponent(event.slug)}/images/hero?${params}`,
+          heroFile,
+          eventManagementDetailResponseSchema,
+        );
+        if (groupTarget) await groupTarget.onSaved(response.event.slug);
+        else onUpdated(response.event);
+      } else if (groupTarget) {
         const response = await patchJson(
           `/api/v1/groups/${encodeURIComponent(groupTarget.groupId)}/events/${encodeURIComponent(groupTarget.eventId)}/settings`,
           settings,
@@ -231,6 +262,8 @@ export function GeneralTab({
     setEndsAt(toLocalDateTime(event.endsAt, event.timezone ?? "UTC"));
     setVenue(event.venue ?? "");
     setHeroImageUrl(event.heroImageUrl ?? "");
+    setHeroFile(null);
+    setHeroDimensions(null);
     setCity(event.city ?? "");
     setCountry(event.country ?? "");
     setSessionTypes(event.sessionTypes ?? [{ label: "", requiresPresentation: true }]);
@@ -389,19 +422,17 @@ export function GeneralTab({
                   </>
                 )}
                 {section === "general" && (
-                  <div class="pk-grid">
-                    <Field {...form.of("heroImageUrl")} label="Hero image URL">
-                      {(control) => (
-                        <TextInput
-                          {...control}
-                          name="heroImageUrl"
-                          value={heroImageUrl}
-                          placeholder="/events/2026/my-event/hero.png"
-                          onInput={(inputEvent) => setHeroImageUrl((inputEvent.target as HTMLInputElement).value)}
-                        />
-                      )}
-                    </Field>
-                  </div>
+                  <EventHeroImageField
+                    file={heroFile}
+                    image={heroImageUrl}
+                    onFileChange={(file) => {
+                      setHeroDimensions(null);
+                      setHeroFile(file);
+                    }}
+                    onDimensions={setHeroDimensions}
+                    onImageChange={setHeroImageUrl}
+                    fieldFor={form.of}
+                  />
                 )}
               </PanelBody>
             </Panel>

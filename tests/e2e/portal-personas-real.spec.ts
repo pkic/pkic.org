@@ -1,3 +1,4 @@
+import sharp from "sharp";
 /**
  * @covers authority.9.1
  * @covers authority.9.4
@@ -181,6 +182,59 @@ test("real Worker/D1 sessions resolve member, inherited, local-only, staff, and 
   // grants management on the inherited child without duplicating a role.
   await assertGroupCapabilities(memberPage, stringProperty(parent, "id"), ["view", "participate", "manage"]);
   await assertGroupCapabilities(memberPage, stringProperty(inheritedChild, "id"), ["view", "participate", "manage"]);
+  // A group chair must be able to load and save private event settings without global event permissions.
+  const createdEvent = recordProperty(
+    await jsonResponse(adminPage.request, "POST", `/api/v1/groups/${stringProperty(parent, "id")}/events`, {
+      slug: `chair-private-conference-${stamp}`,
+      name: "Chair private conference",
+      timezone: "UTC",
+      profileKey: "conference",
+      registrationPolicy: "no_registration",
+      visibility: "invitation_only",
+    }),
+    "event",
+  );
+  await memberPage.goto(
+    `/portal/#/groups/${stringProperty(parent, "id")}/events/${stringProperty(createdEvent, "id")}/settings`,
+  );
+  await expect(memberPage.getByRole("heading", { name: "Event details", exact: true })).toBeVisible();
+  await memberPage.getByRole("button", { name: "Event settings actions", exact: true }).click();
+  await memberPage.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
+  await memberPage.getByLabel("Event name", { exact: false }).fill("Chair updated the conference");
+  await memberPage.setViewportSize({ width: 1280, height: 900 });
+  await memberPage.screenshot({ path: test.info().outputPath("chair-event-settings-desktop.png"), fullPage: true });
+  await memberPage.setViewportSize({ width: 375, height: 812 });
+  await memberPage.screenshot({ path: test.info().outputPath("chair-event-settings-phone.png"), fullPage: true });
+  const imageBuffer = await sharp({ create: { width: 1200, height: 630, channels: 3, background: "#0c4b38" } })
+    .png()
+    .toBuffer();
+  const chooseHero = memberPage.waitForEvent("filechooser");
+  await memberPage.getByRole("button", { name: "Upload hero image of this event", exact: true }).click();
+  await (await chooseHero).setFiles({ name: "synthetic-conference.png", mimeType: "image/png", buffer: imageBuffer });
+  await expect(memberPage.getByAltText("Event hero preview")).toBeVisible();
+  await expect
+    .poll(() =>
+      memberPage.getByAltText("Event hero preview").evaluate((image) => (image as HTMLImageElement).naturalWidth),
+    )
+    .toBe(1200);
+  const saved = memberPage.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.endsWith(`/events/${stringProperty(createdEvent, "slug")}/images/hero`),
+  );
+  await memberPage.getByRole("button", { name: "Save changes", exact: true }).click();
+  expect((await saved).status()).toBe(200);
+  await memberPage.reload();
+  await expect(memberPage.getByRole("heading", { name: "Chair updated the conference", exact: true })).toBeVisible();
+  await expect(memberPage.getByRole("heading", { name: "Event details", exact: true })).toBeVisible();
+  await memberPage.setViewportSize({ width: 1280, height: 900 });
+  await memberPage.getByRole("button", { name: "Event settings actions", exact: true }).click();
+  await memberPage.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
+  const persistedHero = memberPage.getByAltText("Event hero preview");
+  await expect(persistedHero).toHaveAttribute("src", /\/api\/v1\/events\/.+\/images\/.+\.png$/);
+  await expect.poll(() => persistedHero.evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBe(1200);
+  await memberPage.getByRole("button", { name: "Cancel", exact: true }).click();
+
   await openGroupAndReadNavigation(memberPage, stringProperty(parent, "id"), PARENT_NAME);
   await expect(groupNavigation(memberPage, PARENT_NAME).getByRole("link", { name: "Settings" })).toBeVisible();
   await openGroupAndReadNavigation(memberPage, stringProperty(inheritedChild, "id"), INHERITED_CHILD_NAME);

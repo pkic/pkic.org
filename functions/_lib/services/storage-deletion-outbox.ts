@@ -1,6 +1,6 @@
 import { all, first, run } from "../db/queries";
 import { logError } from "../logging";
-import type { DatabaseLike, Env, StatementLike } from "../types";
+import type { DatabaseLike, Env, StatementLike, D1StatementResult } from "../types";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { createDurableJobLease } from "../jobs/lease";
@@ -173,12 +173,12 @@ export async function withStorageUploadCompensation(input: {
   upload: () => Promise<unknown>;
   prepareCommitStatements: () => StatementLike[];
   gracePeriodMs?: number;
-}): Promise<void> {
+}): Promise<D1StatementResult[]> {
   await registerStorageUploadCompensation(input.db, input.objectKey, input.bucketName, input.gracePeriodMs);
 
   try {
     await input.upload();
-    await input.db.batch([
+    return await input.db.batch([
       ...input.prepareCommitStatements(),
       prepareStorageUploadCommitGuard(input.db, input.objectKey, input.bucketName),
     ]);

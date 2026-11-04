@@ -1,3 +1,5 @@
+import { eventHeroImageKey } from "../../utils/event-hero-image";
+import { prepareStorageDeletion } from "../storage-deletion-outbox";
 import { prepareSitePublicationRequest } from "../site-publication-requests";
 import { SITE_PUBLICATION_SITE_RESOURCE_ID } from "../../../../assets/shared/schemas/site-publication-requests";
 import { prepareEventSpeakingStanding } from "../member-standing/event-speaking";
@@ -108,6 +110,20 @@ export function buildEventSettingsMutationStatements(
     input.appBaseUrl,
     input.allowedHeroImageHosts,
   );
+  const previousHero = parseJsonSafe<Record<string, unknown>>(event.settings_json, {}).heroImageUrl;
+  // Keep platform-owned image links attached when the event address changes.
+  if (input.settings.slug && eventHeroImageKey(event.id, event.slug, mergedSettings.heroImageUrl)) {
+    mergedSettings.heroImageUrl = String(mergedSettings.heroImageUrl).replace(
+      /^\/api\/v1\/events\/[^/]+\/images\//,
+      `/api/v1/events/${encodeURIComponent(input.settings.slug)}/images/`,
+    );
+  }
+  const previousHeroKey = eventHeroImageKey(event.id, event.slug, previousHero);
+  const nextHeroKey = eventHeroImageKey(event.id, input.settings.slug ?? event.slug, mergedSettings.heroImageUrl);
+  const heroCleanup =
+    previousHeroKey && previousHeroKey !== nextHeroKey
+      ? prepareStorageDeletion(db, previousHeroKey, at, "assets")
+      : null;
   const settingsJson = stringifyJson(mergedSettings);
   if (
     (input.settings.badgeTemplate !== undefined ||
@@ -263,5 +279,6 @@ export function buildEventSettingsMutationStatements(
   if (input.settings.endsAt !== undefined) {
     statements.push(...prepareEventSpeakingStanding(db, at, { eventId: event.id }));
   }
+  if (heroCleanup) statements.push(heroCleanup);
   return statements;
 }
