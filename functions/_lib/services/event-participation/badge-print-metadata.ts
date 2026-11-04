@@ -10,14 +10,16 @@ import {
 } from "../registrations/badge-role";
 import { eventContactAccessSql } from "./evidence-retention";
 
-const canDisplay = `u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL AND ${eventContactAccessSql("credential.event_id")}`;
-const projection = `SELECT r.id AS registrationId,credential.user_id AS userId,r.registration_identity_id AS selectedIdentityId,
+export const canDisplayBadgeContact = `u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL AND ${eventContactAccessSql("credential.event_id")}`;
+const canDisplay = canDisplayBadgeContact;
+export const badgePrintMetadataColumns = `r.id AS registrationId,credential.user_id AS userId,r.registration_identity_id AS selectedIdentityId,
   CASE WHEN ${canDisplay} THEN COALESCE(u.preferred_name,u.first_name) ELSE NULL END AS firstName,
   CASE WHEN ${canDisplay} THEN u.last_name ELSE NULL END AS lastName,
   CASE WHEN ${canDisplay} THEN ${REGISTRATION_ORGANIZATION_SQL} ELSE NULL END AS organization,
-  CASE WHEN ${canDisplay} THEN ${REGISTRATION_JOB_TITLE_SQL} ELSE NULL END AS jobTitle
-  FROM event_badge_credentials credential JOIN registrations r ON r.event_id=credential.event_id AND r.user_id=credential.user_id
-  JOIN users u ON u.id=credential.user_id WHERE credential.event_id=? AND credential.id=?`;
+  CASE WHEN ${canDisplay} THEN ${REGISTRATION_JOB_TITLE_SQL} ELSE NULL END AS jobTitle`;
+export const badgePrintMetadataFrom = `FROM event_badge_credentials credential JOIN registrations r ON r.event_id=credential.event_id AND r.user_id=credential.user_id
+  JOIN users u ON u.id=credential.user_id`;
+const projection = `SELECT ${badgePrintMetadataColumns} ${badgePrintMetadataFrom} WHERE credential.event_id=? AND credential.id=?`;
 interface PrintMetadataRow {
   registrationId: string;
   userId: string;

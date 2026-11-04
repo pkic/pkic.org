@@ -150,7 +150,7 @@ describe("authorized badge reprinting", () => {
     await rendered(() => expect(downloadBadgeArtifact).toHaveBeenCalledTimes(1));
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(downloadBadgeArtifact).toHaveBeenCalledExactlyOnceWith(
-      badgeLabelSvg(printable),
+      badgeLabelSvg(printable, 38, 89.8),
       "image/svg+xml",
       "attendee-badge-label.svg",
     );

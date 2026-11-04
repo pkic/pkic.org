@@ -1,4 +1,6 @@
 import { prepareBadgeLabel } from "../../../../_lib/services/event-participation/badge-label-print";
+import { prepareBadgeLabelBatch } from "../../../../_lib/services/event-participation/badge-label-batches";
+import { badgeLabelBatchRouteSchema } from "../../../../../assets/shared/schemas/event-badge-label-batches";
 import {
   badgeIssueRouteSchema,
   badgeLabelRouteSchema,
@@ -69,6 +71,10 @@ export const EventBadgePrint = openApiRoute(badgePrintRouteSchema, async (c: Adm
 export const EventBadgeLabel = openApiRoute(badgeLabelRouteSchema, async (c: AdminContext, data) => {
   const { db, event, actor } = await badgeManagementContext(c, data.params.eventSlug);
   return json(await prepareBadgeLabel(db, c.env, event.id, actor.id, data.body));
+});
+export const EventBadgeLabelBatch = openApiRoute(badgeLabelBatchRouteSchema, async (c: AdminContext, data) => {
+  const { db, event, actor } = await badgeManagementContext(c, data.params.eventSlug);
+  return json(await prepareBadgeLabelBatch(db, c.env, event.id, actor.id, data.body));
 });
 async function badgeManagementContext(c: AdminContext, slug: string) {
   markResponseSensitive(c);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BROTHER_DK_1208_PAPER } from "./badge-label-policy";
 import {
   badgePrintLayoutSchema,
   badgePrintPageDimensions,
@@ -63,7 +64,7 @@ function sheet(
 export const BADGE_PRINT_PRESETS = [
   {
     id: "brother_dk_1208",
-    label: "Brother DK-1208 — two 90.3 × 38 mm labels",
+    label: "Brother DK-1208 — two 38 × 90 mm portrait labels",
     sourceUrl: "https://www.brother-usa.com/product-support/QL820NWB",
   },
   { id: "a6", label: "A6 badge — separate front/back pages", sourceUrl: null },
@@ -140,7 +141,20 @@ export function badgePrintPreset(id: BadgePrintPresetId): BadgePrintLayout {
       );
     case "brother_dk_1208":
       return {
-        ...sheet({ size: "custom", orientation: "landscape", widthMm: 90.3, heightMm: 38 }, 90.3, 38, 1, 1, 0, 0),
+        ...sheet(
+          {
+            size: "custom",
+            orientation: "portrait",
+            widthMm: BROTHER_DK_1208_PAPER.widthMm,
+            heightMm: BROTHER_DK_1208_PAPER.heightMm,
+          },
+          BROTHER_DK_1208_PAPER.widthMm,
+          BROTHER_DK_1208_PAPER.heightMm,
+          1,
+          1,
+          0,
+          0,
+        ),
         sides: "front_back",
       };
     case "label_100_50":

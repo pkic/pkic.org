@@ -106,7 +106,6 @@ afterEach(async () => {
 async function mount() {
   await act(async () => render(<App />, host));
 }
-
 function pendingResponse() {
   let resolve!: (response: Response) => void;
   const promise = new Promise<Response>((settle) => {
@@ -114,14 +113,12 @@ function pendingResponse() {
   });
   return { promise, resolve };
 }
-
 function card() {
   const node = host.querySelector<HTMLElement>(".pk-login__card");
   expect(node).not.toBeNull();
   expect(host.querySelector(".pk-login__backdrop")).not.toBeNull();
   return node!;
 }
-
 function refusal(status: number, message: string) {
   return Response.json({ error: { code: "AUTH_REQUIRED", message } }, { status });
 }

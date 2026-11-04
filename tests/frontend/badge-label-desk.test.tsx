@@ -127,7 +127,7 @@ describe("badge printing desk", () => {
     await settle(() => expect(pages()).toBe(2));
     expect(badgeLabelRequestSchema.parse(bodies[0])).toMatchObject({ source: "scan", credential: "ABCDEFGHJKLMNPQR" });
     const frame = await openDialog();
-    expect(frame.srcdoc).toContain("@page{size:90.3mm 38mm;margin:0}");
+    expect(frame.srcdoc).toContain("@page{size:38mm 89.8mm;margin:0}");
     expect(frame.srcdoc).not.toContain("105mm 148mm");
     await act(async () => {
       frame.contentWindow!.dispatchEvent(new Event("afterprint"));
@@ -220,7 +220,7 @@ describe("badge printing desk", () => {
     await click("Labels");
     await click("Print labels again");
     await settle(() => expect(pages()).toBe(4));
-    expect(host.querySelector("iframe")?.srcdoc).toContain("@page{size:90.3mm 38mm;margin:0}");
+    expect(host.querySelector("iframe")?.srcdoc).toContain("@page{size:38mm 89.8mm;margin:0}");
     expect(host.querySelector("iframe")?.srcdoc).not.toContain("Synthetic full badge");
     expect(artworkReads).toBe(1);
   });

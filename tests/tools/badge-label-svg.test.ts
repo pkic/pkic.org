@@ -7,6 +7,47 @@ import { composeBadgePrintSvg } from "../../assets/shared/badge-print-svg";
 import { badgePrintPages, badgePrintPreset } from "../../assets/shared/badge-print-layout";
 
 describe("Brother attendee labels", () => {
+  it("rotates complete artwork into the native roll page and keeps readable QR ink inside the printer margins", async () => {
+    const credential = "ABCDEFGHJKLMNPQR";
+    const label = badgeLabelSvg(
+      {
+        svg: composeBadgePrintSvg(await QRCode.toString(credential, { type: "svg", margin: 4 }), credential),
+        displayName: "Synthetic Attendee",
+        firstName: "Synthetic",
+        lastName: "Attendee",
+        jobTitle: "Cryptography Policy Adviser",
+        organization: "Example Research Lab",
+      },
+      38,
+      89.8,
+    );
+    expect(label).toContain('width="38mm" height="89.8mm" viewBox="0 0 38 89.8"');
+    expect(label).toContain("rotate(90)");
+    const { data, info } = await sharp(Buffer.from(label), { density: 300 })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    expect(jsQR(new Uint8ClampedArray(data), info.width, info.height)?.data).toBe(credential);
+    let minimumX = info.width,
+      minimumY = info.height,
+      maximumX = 0,
+      maximumY = 0;
+    for (let y = 0; y < info.height; y++)
+      for (let x = 0; x < info.width; x++) {
+        const pixel = (y * info.width + x) * info.channels;
+        if (data[pixel] < 100 && data[pixel + 1] < 100 && data[pixel + 2] < 100) {
+          minimumX = Math.min(minimumX, x);
+          maximumX = Math.max(maximumX, x);
+          minimumY = Math.min(minimumY, y);
+          maximumY = Math.max(maximumY, y);
+        }
+      }
+    expect((minimumX / info.width) * 38).toBeGreaterThanOrEqual(1.5);
+    expect(((info.width - maximumX) / info.width) * 38).toBeGreaterThanOrEqual(1.5);
+    expect((minimumY / info.height) * 89.8).toBeGreaterThanOrEqual(3);
+    expect(((info.height - maximumY) / info.height) * 89.8).toBeGreaterThanOrEqual(3);
+  });
+
   it("prints two actual-size labels per attendee, with a decodable original code and live profile details", async () => {
     const credential = "ABCDEFGHJKLMNPQR";
     const svg = badgeLabelSvg({
@@ -29,7 +70,7 @@ describe("Brother attendee labels", () => {
     const pages = [...badgePrintPages(2, badgePrintPreset("brother_dk_1208"))];
     expect(pages).toHaveLength(4);
     expect(pages.map((page) => page.slots[0].itemIndex)).toEqual([0, 0, 1, 1]);
-    expect(pages.every((page) => page.widthMm === 90.3 && page.heightMm === 38 && page.slots.length === 1)).toBe(true);
+    expect(pages.every((page) => page.widthMm === 38 && page.heightMm === 89.8 && page.slots.length === 1)).toBe(true);
   });
 
   it("keeps long and non-ASCII names as complete text, escapes markup, and handles missing fields", () => {
