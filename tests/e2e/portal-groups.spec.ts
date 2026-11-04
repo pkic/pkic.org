@@ -477,6 +477,7 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     const { mailingList } = mailingListResponseSchema.parse(created.body);
     await page.goto(`/portal/#/groups/${PQC_GROUP_ID}/mailing-lists/${mailingList.id}`);
     await page.getByPlaceholder("Search subscribers…").fill(email);
+    await page.getByPlaceholder("Search subscribers…").press("Enter");
     const row = page.getByRole("row").filter({ hasText: name });
     await expect(row).toBeVisible();
     const endpoint = `/api/v1/groups/${PQC_GROUP_ID}/mailing-lists/${mailingList.id}/subscribers/${person.userId}`;

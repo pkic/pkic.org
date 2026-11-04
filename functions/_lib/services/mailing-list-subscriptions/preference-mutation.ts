@@ -59,6 +59,10 @@ export async function setMailingListPreference(
   if ((requiresMembership || restoresDelivery) && !current.eligible) {
     throw new AppError(403, "MAILING_LIST_SUBSCRIPTION_INELIGIBLE", "The caller is not eligible for this mailing list");
   }
+  const managedUnsubscribe = Boolean(actor && preference === "unsubscribed");
+  if (managedUnsubscribe && !current.eligible) {
+    throw new AppError(404, "USER_NOT_FOUND", "User is not in the mailing-list population");
+  }
   const storedPreference = preference === "inherit" ? null : preference;
   if (
     current.preference === storedPreference &&
@@ -81,7 +85,7 @@ export async function setMailingListPreference(
       bindings: [userId],
     }),
   ];
-  if (requiresMembership || restoresDelivery) {
+  if (requiresMembership || restoresDelivery || managedUnsubscribe) {
     statements.push(
       ...(!actor
         ? [prepareMemberGroupResourceAuthorizationGuard(db, userId, groupId, "mailingList", listId, "subscribe")]

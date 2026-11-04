@@ -552,7 +552,7 @@ describe("mailing-list subscriber actions", () => {
     expect((await jsonRequest(selfEndpoint, "PUT", { preference: "archive_only" }, person.token!)).status).toBe(200);
   });
 
-  it("rejects a nonmanager, a chair from another group, and ineligible archive access", async () => {
+  it("rejects unauthorized subscriber changes and prevents managers from adding an ineligible user to the roster", async () => {
     const admin = await actor(`subscriber-auth-${crypto.randomUUID()}@example.test`, "admin");
     const group = await createGroup(env.DB, admin, {
       typeKey: "working_group",
@@ -585,9 +585,46 @@ describe("mailing-list subscriber actions", () => {
         .bind(list.id)
         .first(),
     ).toMatchObject({ count: 0 });
-    expect((await jsonRequest(endpoint, "PUT", { preference: "unsubscribed" }, await token(admin.id))).status).toBe(
-      200,
-    );
+    for (const managerToken of [chair.token!, await token(admin.id)]) {
+      const response = await jsonRequest(endpoint, "PUT", { preference: "unsubscribed" }, managerToken);
+      expect(response.status).toBe(404);
+      expect(await response.json()).toMatchObject({ error: { code: "USER_NOT_FOUND" } });
+    }
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM mailing_list_subscription_preferences WHERE mailing_list_id = ?",
+      )
+        .bind(list.id)
+        .first(),
+    ).toMatchObject({ count: 0 });
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM google_groups_sync_queue WHERE user_id = ? AND google_group_email = ?",
+      )
+        .bind(outsider, list.email)
+        .first(),
+    ).toMatchObject({ count: 0 });
+    const roster = await callApi(env, `/api/v1/groups/${group.id}/mailing-lists/${list.id}/subscribers`, {
+      headers: { authorization: `Bearer ${chair.token!}` },
+    });
+    expect(
+      ((await roster.json()) as { subscribers: { userId: string }[] }).subscribers.some(
+        (row) => row.userId === outsider,
+      ),
+    ).toBe(false);
+    // Inherit remains deletion, so a stale preference can still be cleaned up.
+    await env.DB.prepare(`INSERT INTO mailing_list_subscription_preferences(mailing_list_id,user_id,preference,created_at,updated_at)
+      VALUES (?,?,'unsubscribed','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')`)
+      .bind(list.id, outsider)
+      .run();
+    expect((await jsonRequest(endpoint, "PUT", { preference: "inherit" }, chair.token!)).status).toBe(200);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM mailing_list_subscription_preferences WHERE mailing_list_id = ?",
+      )
+        .bind(list.id)
+        .first(),
+    ).toMatchObject({ count: 0 });
   });
 });
 
