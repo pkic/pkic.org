@@ -48,6 +48,13 @@ and unrecognized privilege levels are protected by the Google adapter.
 Previously confirmed primary addresses now absent are treated as unsubscribes;
 full sync does not re-enroll them or retain their dependent aliases.
 
+A new additional address is added only after its primary address is present.
+If both are missing and the additional address sorts into an earlier window,
+that address is skipped until the cursor completes a sweep and revisits it.
+This can delay its membership by one full reconciliation rotation across the
+enabled lists. A rotation may require multiple scheduled invocations because
+both the address windows and the shared work budget are bounded.
+
 The existing scheduled job shares its bounded work budget between queued
 changes and full reconciliation. Existing durable subscriptions and the job's
 lease/retry mechanism provide recovery. Migration 0040 adds only the durable
