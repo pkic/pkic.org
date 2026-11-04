@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { renderToString } from "preact-render-to-string";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { memberJoinVerifySchema } from "../../assets/shared/schemas/member-join";
 import { JoinFlow } from "../../assets/ts/site/JoinFlow";
 import {
   forgetJoinDraft,
@@ -138,6 +139,51 @@ describe("a verified application kept for this tab", () => {
       }),
     );
   });
+
+  it.each([503, 429, "network"] as const)(
+    "retries a new verification link after a temporary failure without restoring the previous draft (%s)",
+    async (failure) => {
+      rememberJoinToken(organizationContext.joinToken);
+      const oldForm = applicationForm();
+      oldForm.querySelector<HTMLInputElement>('[name="firstName"]')!.value = "Jane";
+      saveJoinAnswers(oldForm);
+      const newToken = "b".repeat(32);
+      history.replaceState({}, "", `/join/#verify=${newToken}`);
+      document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
+      const verifiedTokens: string[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          if (!String(input).endsWith("/members/join/verify")) return new Response(null, { status: 500 });
+          verifiedTokens.push(memberJoinVerifySchema.parse(JSON.parse(String(init?.body))).token);
+          if (verifiedTokens.length === 1) {
+            if (failure === "network") throw new TypeError("Network unavailable");
+            return Response.json({ error: { code: "TEMPORARY_FAILURE", message: "Try again" } }, { status: failure });
+          }
+          return Response.json({ ...organizationContext, applicantEmail: "new@example-corp.test" });
+        }),
+      );
+      vi.resetModules();
+      await import("../../assets/ts/member-flows/join-form");
+      await vi.waitFor(() =>
+        expect(document.querySelector("[data-flow-status]")?.textContent).toMatch(/could not verify/i),
+      );
+      expect(window.location.hash).toBe("");
+      expect(rememberedJoinToken()).toBe(newToken);
+
+      // A fresh controller represents reloading after the address-bar link was removed.
+      document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
+      vi.resetModules();
+      await import("../../assets/ts/member-flows/join-form");
+      await vi.waitFor(() =>
+        expect(document.querySelector("[data-flow-status]")?.textContent).toMatch(/could not load/i),
+      );
+      expect(verifiedTokens).toEqual([newToken, newToken]);
+      const reloaded = applicationForm();
+      expect(restoreJoinAnswers(reloaded, () => undefined)).toBe(false);
+      expect(reloaded.querySelector<HTMLInputElement>('[name="firstName"]')!.value).toBe("");
+    },
+  );
 
   it("leaves the kept answers alone when the application fails to load on a reload", async () => {
     rememberJoinToken(organizationContext.joinToken);

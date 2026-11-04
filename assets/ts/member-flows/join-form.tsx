@@ -445,6 +445,8 @@ async function main(): Promise<void> {
       }
     } catch (error) {
       if (!(error instanceof ApiClientError) || ![404, 409, 410].includes(error.status)) {
+        // Retry the newly opened proof after a reload, never a previous applicant's draft.
+        if (linked) rememberJoinToken(linked);
         showSection(startSection);
         setStatus(
           statusEl,

@@ -604,6 +604,24 @@ describe("verified-email-first membership join", () => {
     expect(again.status).toBe("application_ready");
   });
 
+  it("lets an individual apply at a domain held by another applicant's open organization application", async () => {
+    const testEnv = makeEnv();
+    await seedMemberApplication({
+      applicantEmail: "owner@university.example",
+      organizationDomain: "university.example",
+      stage: "processing",
+    });
+    const token = await startAndMaterializeVerification(testEnv, "researcher@university.example", true);
+    const response = await verifyJoin(testEnv, token, { maxRoundTrips: 1 });
+
+    expect(response.status).toBe(200);
+    expect(memberJoinVerifyResponseSchema.parse(await response.json())).toMatchObject({
+      status: "application_ready",
+      applicantEmail: "researcher@university.example",
+      applicantKind: "individual",
+    });
+  });
+
   it("finds an applicant's open application through another verified address on the same account", async () => {
     const testEnv = makeEnv();
     const userId = await insertUser(testEnv.DB, "jane@acmegrp.example.com");

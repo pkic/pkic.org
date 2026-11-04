@@ -61,7 +61,9 @@ export async function verifyMemberJoin(
   if (!claimedMember) {
     const open = await resolveOpenJoinApplication(input.signingSecret, observed.openApplication);
     if (open?.kind === "own") return { status: "application_in_progress", statusPath: open.statusPath };
-    if (open?.kind === "organization") return { status: "organization_application_in_progress" };
+    if (open?.kind === "organization" && capability.applicantKind === "organization") {
+      return { status: "organization_application_in_progress" };
+    }
     if (capability.applicantKind === "individual" && observed.state?.individual_conflict) {
       return { status: "support_required" };
     }
