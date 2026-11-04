@@ -859,7 +859,7 @@ describe("passkeys (WebAuthn)", () => {
       .run();
     const allowed = await call(`/api/v1/auth/passkeys/${passkeyId}`, { method: "DELETE" }, token);
     expect(allowed.status).toBe(200);
-    expect(await passkeyRemovals(passkeyId)).toEqual([{}]);
+    expect(await passkeyRemovals(passkeyId)).toEqual([{ otherSessionsSignedOut: { from: null, to: true } }]);
   });
 
   it("revokes the last way to sign in once its owner confirms, signing out the other sessions", async () => {
@@ -895,9 +895,9 @@ describe("passkeys (WebAuthn)", () => {
     ]);
   });
 
-  it("treats a confirmation as a plain removal while another way to sign in remains", async () => {
+  it("signs out other sessions when a passkey is removed even if email sign-in remains", async () => {
     const { passkeyId } = await registerPasskey();
-    await createAdminSession(env.DB, userId, "passkey-user-other-device");
+    const otherToken = await createAdminSession(env.DB, userId, "passkey-user-other-device");
 
     const response = await call(
       `/api/v1/auth/passkeys/${passkeyId}?confirmLastMethod=true`,
@@ -905,8 +905,32 @@ describe("passkeys (WebAuthn)", () => {
       token,
     );
     expect(response.status).toBe(200);
-    expect(await liveSessionIds()).toHaveLength(2);
-    expect(await passkeyRemovals(passkeyId)).toEqual([{}]);
+    expect(await liveSessionIds()).toHaveLength(1);
+    expect((await call("/api/v1/auth/session", {}, token)).status).toBe(200);
+    expect((await call("/api/v1/auth/session", {}, otherToken)).status).toBe(401);
+    expect(await passkeyRemovals(passkeyId)).toEqual([{ otherSessionsSignedOut: { from: null, to: true } }]);
+  });
+
+  it("ends a session opened by a revoked passkey while retaining the caller's session", async () => {
+    const { passkeyId, authenticator } = await registerPasskey();
+    const begin = await beginAuthentication();
+    const assertion = await buildAuthenticationResponse(authenticator, {
+      challenge: begin.options.challenge,
+      rpId: RP_ID,
+      origin: ORIGIN,
+      signCount: 1,
+    });
+    const signedIn = await call("/api/v1/auth/passkeys/authenticate/complete", {
+      method: "POST",
+      body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
+    });
+    expect(signedIn.status).toBe(200);
+    const cookie = (signedIn.headers.get("set-cookie") ?? "").split(";")[0];
+    expect((await call("/api/v1/auth/session", { headers: { cookie } })).status).toBe(200);
+
+    expect((await call(`/api/v1/auth/passkeys/${passkeyId}`, { method: "DELETE" }, token)).status).toBe(200);
+    expect((await call("/api/v1/auth/session", { headers: { cookie } })).status).toBe(401);
+    expect((await call("/api/v1/auth/session", {}, token)).status).toBe(200);
   });
 
   it("a user cannot authenticate with a revoked passkey", async () => {
