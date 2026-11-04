@@ -118,6 +118,7 @@ describe("portal organization self-service", () => {
                 pendingSecondaryContact: null,
                 pendingSecondaryContactUserId: null,
                 pendingReview: null,
+                rejectedReview: null,
               },
             });
           }

@@ -1,4 +1,4 @@
-import { first } from "../../db/queries";
+import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
 import { uuid } from "../../utils/ids";
 import { parseJsonSafe } from "../../utils/json";
@@ -89,6 +89,28 @@ export function toReviewSummary(row: ReviewRow) {
     reviewerNote: row.reviewer_note,
     submittedAt: row.submitted_at,
     reviewedAt: row.reviewed_at,
+  };
+}
+
+/**
+ * The latest staff decision when it refused the submission: a contact revises
+ * from what they proposed instead of retyping it. An approval since replaces it.
+ * A logo-only decision proposes no content, so it neither offers nor replaces a revision.
+ */
+export async function fetchProfileReviews(db: DatabaseLike, organizationId: string) {
+  const reviews = await all<ReviewRow>(
+    db,
+    `SELECT ${REVIEW_COLUMNS} FROM organization_content_reviews
+     WHERE organization_id = ? AND (status = 'pending' OR id = (
+       SELECT id FROM organization_content_reviews
+       WHERE organization_id = ? AND status IN ('approved', 'rejected') AND proposed_changes_json <> '{}'
+       ORDER BY reviewed_at DESC, id DESC LIMIT 1
+     )) LIMIT 2`,
+    [organizationId, organizationId],
+  );
+  return {
+    pendingReview: reviews.find((review) => review.status === "pending") ?? null,
+    rejectedReview: reviews.find((review) => review.status === "rejected") ?? null,
   };
 }
 

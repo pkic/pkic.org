@@ -429,3 +429,105 @@ test("staff open an organization representative directly from the person's name"
     }
   }
 });
+
+test("organization profiles show real membership details and preserve rejected revisions", async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  const suffix = uniqueSuffix();
+  const email = `revision-${suffix}@revision-${suffix}.test`;
+  const organizationName = `Revision Organization ${suffix}`;
+  const staffEmail = e2eAdminEmail("portal-organization-revisions");
+  const note = "Please use a factual slogan.";
+  const proposed = "A factual organization profile";
+  const revised = "An approved organization profile";
+  async function capture(state: string) {
+    for (const width of [1440, 375]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+      });
+      await page.screenshot({ path: testInfo.outputPath(`${state}-${width}.png`), fullPage: true });
+    }
+  }
+  await signInToPortal(page, staffEmail);
+  const nonmember = await page.request.post("/api/v1/organizations", {
+    data: { name: `Nonmember Organization ${suffix}`, identities: [], workingGroupSlugs: [] },
+  });
+  expect(nonmember.status()).toBe(201);
+  const { organization: nonmemberOrganization } = await nonmember.json();
+  await page.goto(`/portal/#/organizations/${nonmemberOrganization.id}`);
+  const membership = page.getByRole("region", { name: "Membership", exact: true });
+  await expect(membership).toBeVisible();
+  await expect(membership.getByText("Not a member", { exact: true })).toBeVisible();
+  await expect(membership.locator("dt", { hasText: /^Member since$/ })).toHaveCount(0);
+  await expect(membership.getByRole("link", { name: /members\// })).toHaveCount(0);
+  await capture("nonmember");
+
+  await approveMemberThroughReview(page, { email, name: `Revision Contact ${suffix}`, organizationName });
+  await page.context().clearCookies();
+  await signInToPortal(page, email);
+  await page.goto("/portal/#/organization");
+  await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
+  const recordUrl = page.url();
+  const editor = page.getByRole("region", { name: "Member page content", exact: true });
+  await editor.getByRole("button", { name: "Member page content actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit settings" }).click();
+  await editor.getByLabel("Slogan", { exact: true }).fill(proposed);
+  await editor
+    .getByRole("textbox", { name: "Long-form content (Markdown)", exact: true })
+    .fill("Content retained through revision.");
+  await editor.getByLabel("Blog URL", { exact: true }).fill("https://example.test/blog");
+  const submitted = page.waitForResponse(
+    (response) =>
+      /\/content\/reviews$/.test(new URL(response.url()).pathname) && response.request().method() === "POST",
+  );
+  await editor.getByRole("button", { name: "Submit for review" }).click();
+  const response = await submitted;
+  expect(response.status()).toBe(200);
+  const { review } = await response.json();
+
+  await page.context().clearCookies();
+  await signInToPortal(page, staffEmail);
+  await page.goto(`/portal/#/settings/organization-content-reviews/${review.id}`);
+  await page.getByRole("textbox", { name: "Reviewer note", exact: true }).fill(note);
+  await page.getByRole("button", { name: "Reject", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Content reviews", exact: true })).toBeVisible();
+
+  await page.context().clearCookies();
+  await signInToPortal(page, email);
+  await page.goto(recordUrl);
+  await expect(editor.getByText(note, { exact: true })).toBeVisible();
+  await capture("rejected");
+  await editor.getByRole("button", { name: "Revise submission" }).click();
+  await expect(editor.getByLabel("Slogan", { exact: true })).toHaveValue(proposed);
+  await expect(editor.getByRole("textbox", { name: "Long-form content (Markdown)", exact: true })).toHaveText(
+    "Content retained through revision.",
+  );
+  await expect(editor.getByLabel("Blog URL", { exact: true })).toHaveValue("https://example.test/blog");
+  await capture("revision");
+  await editor.getByLabel("Slogan", { exact: true }).fill(revised);
+  const resubmitted = page.waitForResponse(
+    (response) =>
+      /\/content\/reviews$/.test(new URL(response.url()).pathname) && response.request().method() === "POST",
+  );
+  await editor.getByRole("button", { name: "Submit for review" }).click();
+  const revisionResponse = await resubmitted;
+  expect(revisionResponse.status()).toBe(200);
+  const { review: revision } = await revisionResponse.json();
+
+  await page.context().clearCookies();
+  await signInToPortal(page, staffEmail);
+  await page.goto(`/portal/#/settings/organization-content-reviews/${revision.id}`);
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Content reviews", exact: true })).toBeVisible();
+  await page.context().clearCookies();
+  await signInToPortal(page, email);
+  await page.goto(recordUrl);
+  await expect(editor.getByRole("button", { name: "Revise submission" })).toHaveCount(0);
+  await expect(editor.getByText(note, { exact: true })).toHaveCount(0);
+  await editor.getByRole("button", { name: "Member page content actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit settings" }).click();
+  await expect(editor.getByLabel("Slogan", { exact: true })).toHaveValue(revised);
+  await expect(editor.getByLabel("Blog URL", { exact: true })).toHaveValue("https://example.test/blog");
+});

@@ -40,7 +40,7 @@ export function draftFromOrganization(organization: OrganizationDetail): Organiz
     >),
     links: organization.links,
     membershipCategory: organization.membershipCategory ?? "",
-    memberSince: organization.memberSince.slice(0, 10),
+    memberSince: organization.memberSince?.slice(0, 10) ?? "",
     primaryContactUserId: organization.primaryContactUserId ?? "",
     secondaryContactUserId: organization.secondaryContactUserId ?? "",
   };

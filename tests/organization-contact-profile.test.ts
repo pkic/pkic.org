@@ -42,9 +42,80 @@ async function readProfile(token: string, organizationId: string) {
   return organizationMemberProfileResponseSchema.parse(await response.json()).organization;
 }
 
+async function recordReviewDecision(
+  organizationId: string,
+  userId: string,
+  status: string,
+  changes: Record<string, unknown>,
+  reviewedAt: string,
+  note: string | null = null,
+) {
+  await env.DB.prepare(
+    `INSERT INTO organization_content_reviews
+       (id, organization_id, submitted_by_user_id, proposed_changes_json, status, reviewer_note, submitted_at, reviewed_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      organizationId,
+      userId,
+      JSON.stringify(changes),
+      status,
+      note,
+      reviewedAt,
+      reviewedAt,
+      reviewedAt,
+    )
+    .run();
+}
+
 beforeEach(resetDb);
 
 describe("organization contact profile", () => {
+  it("returns the latest refused submission until a later one is approved", async () => {
+    const org = await organization();
+    const [primary] = org.representatives;
+    await assignRepresentativeRole(env.DB, org.memberId, primary.userId, REPRESENTATIVE_ROLE_IDS.primaryContact);
+    const decide = (status: string, changes: Record<string, unknown>, reviewedAt: string, note: string | null) =>
+      recordReviewDecision(org.organizationId, primary.userId, status, changes, reviewedAt, note);
+    expect((await readProfile(primary.token, org.organizationId)).rejectedReview).toBeNull();
+
+    await decide("approved", { slogan: "Old" }, "2026-08-01T00:00:00.000Z", null);
+    await decide("rejected", { slogan: "Bold claim" }, "2026-08-02T00:00:00.000Z", "Tone it down.");
+    await decide("withdrawn", { slogan: "Second thoughts" }, "2026-08-03T00:00:00.000Z", null);
+    expect((await readProfile(primary.token, org.organizationId)).rejectedReview).toMatchObject({
+      status: "rejected",
+      reviewerNote: "Tone it down.",
+      proposedChanges: { slogan: "Bold claim" },
+    });
+
+    await decide("pending", { slogan: "Awaiting a new decision" }, "2026-08-03T12:00:00.000Z", null);
+    const pending = await readProfile(primary.token, org.organizationId);
+    expect(pending.pendingReview?.proposedChanges).toEqual({ slogan: "Awaiting a new decision" });
+    expect(pending.rejectedReview?.proposedChanges).toEqual({ slogan: "Bold claim" });
+
+    await decide("approved", { slogan: "Measured claim" }, "2026-08-04T00:00:00.000Z", null);
+    expect((await readProfile(primary.token, org.organizationId)).rejectedReview).toBeNull();
+  });
+
+  it("offers no content revision for a refused logo-only submission", async () => {
+    const org = await organization();
+    const [primary] = org.representatives;
+    await assignRepresentativeRole(env.DB, org.memberId, primary.userId, REPRESENTATIVE_ROLE_IDS.primaryContact);
+    const decide = (status: string, changes: Record<string, unknown>, reviewedAt: string) =>
+      recordReviewDecision(org.organizationId, primary.userId, status, changes, reviewedAt);
+
+    await decide("rejected", {}, "2026-08-01T00:00:00.000Z");
+    expect((await readProfile(primary.token, org.organizationId)).rejectedReview).toBeNull();
+
+    await decide("rejected", { slogan: "Bold claim" }, "2026-08-02T00:00:00.000Z");
+    await decide("rejected", {}, "2026-08-03T00:00:00.000Z");
+    await decide("approved", {}, "2026-08-04T00:00:00.000Z");
+    expect((await readProfile(primary.token, org.organizationId)).rejectedReview).toMatchObject({
+      proposedChanges: { slogan: "Bold claim" },
+    });
+  });
+
   it("resolves both confirmed identities and caller roles without treating ordinary representatives as contacts", async () => {
     const org = await organization();
     const [primary, secondary, ordinary] = org.representatives;

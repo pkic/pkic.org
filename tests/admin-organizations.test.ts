@@ -21,12 +21,15 @@
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "./helpers/app";
-import "./helpers/app";
+import { callApi } from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
-import { organizationsListResponseSchema } from "../assets/shared/schemas/organization-management";
+import { insertOrganization } from "./helpers/membership";
+import {
+  organizationDetailResponseSchema,
+  organizationsListResponseSchema,
+} from "../assets/shared/schemas/organization-management";
 import { userDetailResponseSchema, usersListResponseSchema } from "../assets/shared/schemas/user-management";
 import { identitiesListResponseSchema } from "../assets/shared/schemas/identity";
 
@@ -40,11 +43,7 @@ function request(token: string, path: string, init: RequestInit = {}): Request {
 }
 
 async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
-  return app.fetch(
-    request(token, path, init),
-    env as any,
-    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
-  );
+  return callApi(env, request(token, path, init));
 }
 
 async function publicationCount(organizationId: string) {
@@ -280,6 +279,35 @@ describe("Organization management — membership category on the aggregate (Phas
     const sortedBody = organizationsListResponseSchema.parse(await sortedResponse.json());
     const categories = sortedBody.organizations.map((o) => o.membershipCategory);
     expect(categories).toEqual([...categories].sort());
+  });
+
+  it("gives an organization that is not a member no membership date and no member page", async () => {
+    const organizationId = await insertOrganization(env.DB, "Not A Member Ltd");
+    const response = await call(adminToken, `/api/v1/organizations/${organizationId}`);
+    expect(response.status).toBe(200);
+    const body = organizationDetailResponseSchema.parse(await response.json());
+    expect(body.organization).toMatchObject({ memberSince: null, publicProfileHref: null });
+    const listed = organizationsListResponseSchema.parse(
+      await (await call(adminToken, "/api/v1/organizations")).json(),
+    );
+    expect(listed.organizations.find((organization) => organization.id === organizationId)).toMatchObject({
+      memberSince: null,
+      publicProfileHref: null,
+    });
+
+    const { organizationId: memberOrganizationId } = await createOrg();
+    const member = organizationDetailResponseSchema.parse(
+      await (await call(adminToken, `/api/v1/organizations/${memberOrganizationId}`)).json(),
+    );
+    expect(member.organization).toMatchObject({ memberSince: "2026-01-15" });
+    expect(member.organization.publicProfileHref).toMatch(/^\/members\//);
+    await env.DB.prepare("UPDATE members SET status = 'inactive' WHERE organization_id = ?")
+      .bind(memberOrganizationId)
+      .run();
+    const inactive = organizationDetailResponseSchema.parse(
+      await (await call(adminToken, `/api/v1/organizations/${memberOrganizationId}`)).json(),
+    );
+    expect(inactive.organization).toMatchObject({ memberSince: "2026-01-15", publicProfileHref: null });
   });
 
   it("creating an organization sets member_since on the aggregate", async () => {

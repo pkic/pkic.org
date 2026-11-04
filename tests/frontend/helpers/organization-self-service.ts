@@ -18,6 +18,21 @@ export function pendingReview() {
   };
 }
 
+export function rejectedReview() {
+  return {
+    ...pendingReview(),
+    proposedChanges: {
+      slogan: "Rejected slogan",
+      blogUrl: "https://blog.example.test",
+      links: ["https://x.example.test"],
+    },
+    status: "rejected" as const,
+    reviewerUserId: "00000000-0000-4000-8000-000000000230",
+    reviewerNote: "Please drop the superlatives.",
+    reviewedAt: "2026-08-21T00:00:00.000Z",
+  };
+}
+
 export function organizationWithPendingReview() {
   return {
     id: organizationId,
@@ -41,6 +56,7 @@ export function organizationWithPendingReview() {
     pendingSecondaryContact: null,
     pendingSecondaryContactUserId: null,
     pendingReview: pendingReview(),
+    rejectedReview: null,
   };
 }
 

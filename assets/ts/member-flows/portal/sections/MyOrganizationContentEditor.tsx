@@ -93,6 +93,33 @@ function PendingReviewBanner({
 
 type EditableField = (typeof ORGANIZATION_URL_FIELD_ORDER)[number] | "slogan" | "description" | "contentMarkdown";
 
+/** What a refused submission proposed, laid over the live values, so a revision starts from it. */
+function revisionDraft(
+  live: Record<EditableField, string>,
+  liveLinks: string[],
+  revising: MyOrganizationReview | null,
+): { form: Record<EditableField, string>; links: string[] } {
+  if (!revising) return { form: live, links: liveLinks };
+  const form = { ...live };
+  for (const key of Object.keys(live) as EditableField[]) {
+    const proposed = revising.proposedChanges[key];
+    if (typeof proposed === "string") form[key] = proposed;
+    else if (proposed === null) form[key] = "";
+  }
+  const proposedLinks = revising.proposedChanges.links;
+  const links =
+    Array.isArray(proposedLinks) && proposedLinks.every((link) => typeof link === "string") ? proposedLinks : liveLinks;
+  return { form, links };
+}
+
+function RejectedReviewNote({ review }: { review: MyOrganizationReview }) {
+  return (
+    <Alert tone="warn" title={`Your submission from ${fmt(review.submittedAt)} was not approved.`}>
+      {review.reviewerNote && <p>{review.reviewerNote}</p>}
+    </Alert>
+  );
+}
+
 function ContentEditForm({
   organizationId,
   org,
@@ -104,6 +131,7 @@ function ContentEditForm({
   reload: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const revising = org.rejectedReview;
   const initial = useMemo<Record<EditableField, string>>(
     () => ({
       slogan: org.slogan ?? "",
@@ -119,8 +147,10 @@ function ContentEditForm({
     [org],
   );
   const initialLinks = useMemo(() => [...org.links], [org]);
-  const [form, setForm] = useState(initial);
-  const [links, setLinks] = useState<string[]>(initialLinks);
+  // Changes are measured against the live profile; a refused submission only seeds what is typed.
+  const draft = useMemo(() => revisionDraft(initial, initialLinks, revising), [initial, initialLinks, revising]);
+  const [form, setForm] = useState(draft.form);
+  const [links, setLinks] = useState<string[]>(draft.links);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -167,8 +197,11 @@ function ContentEditForm({
 
   return (
     <form noValidate {...validation.handlers} onSubmit={(e) => void handleSubmit(e)} class="pk-stack">
+      {revising && <RejectedReviewNote review={revising} />}
       <p class="pk-muted pk-small">
-        Changes are queued for staff review — your organization's public page won't update until they're approved.
+        {revising
+          ? "The form starts from your last submission. Revise it and submit again; your organization's public page won't update until staff approve it."
+          : "Changes are queued for staff review — your organization's public page won't update until they're approved."}
       </p>
       <Field label="Slogan" {...validation.of("slogan")}>
         {(control) => (
@@ -287,10 +320,24 @@ export function ContentEditorCard({
             }}
             onCancel={() => setEditing(false)}
           />
-        ) : org.contentMarkdown ? (
-          <Markdown markdown={org.contentMarkdown} />
         ) : (
-          <p class="pk-muted">No member page content yet.</p>
+          <div class="pk-stack">
+            {org.rejectedReview && (
+              <div class="pk-stack pk-stack--snug">
+                <RejectedReviewNote review={org.rejectedReview} />
+                <div class="pk-cluster">
+                  <Button variant="secondary" onClick={() => setEditing(true)}>
+                    Revise submission
+                  </Button>
+                </div>
+              </div>
+            )}
+            {org.contentMarkdown ? (
+              <Markdown markdown={org.contentMarkdown} />
+            ) : (
+              <p class="pk-muted">No member page content yet.</p>
+            )}
+          </div>
         )}
       </PanelBody>
     </Panel>

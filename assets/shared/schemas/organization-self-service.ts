@@ -24,6 +24,8 @@ export const organizationMemberProfileSchema = z
     pendingSecondaryContact: actingIdentitySchema.nullable(),
     pendingSecondaryContactUserId: databaseIdSchema.nullable(),
     pendingReview: organizationContentReviewSchema.nullable(),
+    /** The latest decision when staff refused the submission, so a contact revises from it. */
+    rejectedReview: organizationContentReviewSchema.nullable(),
   })
   .extend(organizationProfileContentFieldsSchema.shape);
 export const organizationMemberProfileResponseSchema = z.object({ organization: organizationMemberProfileSchema });

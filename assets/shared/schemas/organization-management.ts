@@ -32,11 +32,13 @@ export const organizationSummarySchema = z
      * The organization's public member page — `/members/<slug>/` once it has
      * a slug, the id-keyed shell while it does not. Server-computed through
      * the shared rule so the portal shows the address a visitor would see
-     * rather than guessing at one (#15).
+     * rather than guessing at one (#15). Null without an active membership:
+     * only members have a public member page.
      */
-    publicProfileHref: z.string(),
+    publicProfileHref: z.string().nullable(),
     membershipCategory: z.string().nullable(),
-    memberSince: z.string(),
+    /** Null for an organization that has never been a member. */
+    memberSince: z.string().nullable(),
     activeIdentityCount: z.number(),
     primaryContactName: z.string().nullable(),
     primaryContactEmail: z.string().nullable(),
