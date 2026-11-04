@@ -44,6 +44,16 @@ export function rememberedJoinToken(): string | null {
   return read()?.token ?? null;
 }
 
+function hasAnswers(draft: JoinDraft): boolean {
+  return draft.checked.length > 0 || Object.keys(draft.values).length > 0 || Object.keys(draft.answers).length > 0;
+}
+
+/** Whether the current proof has saved form answers, beyond the token itself. */
+export function hasJoinAnswers(): boolean {
+  const draft = read();
+  return draft !== null && hasAnswers(draft);
+}
+
 /** Keeps a token that verified; a different token starts a fresh draft. */
 export function rememberJoinToken(token: string): void {
   const current = read();
@@ -99,11 +109,7 @@ export function restoreJoinAnswers(
   renderQuestions: (answers: Record<string, unknown>) => void,
 ): boolean {
   const draft = read();
-  if (
-    !draft ||
-    (draft.checked.length === 0 && Object.keys(draft.values).length === 0 && Object.keys(draft.answers).length === 0)
-  )
-    return false;
+  if (!draft || !hasAnswers(draft)) return false;
   const checked = new Set(draft.checked);
   const category = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="membershipCategory"]')).find(
     (input) => checked.has(`membershipCategory=${input.value}`),

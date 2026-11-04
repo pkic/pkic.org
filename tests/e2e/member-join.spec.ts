@@ -245,3 +245,43 @@ test("keeps the individual path an explicit policy exception for an institutiona
   await expect(page.getByLabel(/F —/)).toHaveCount(0);
   await expect(page.getByLabel("Organization name")).toBeHidden();
 });
+
+for (const draftState of ["first link", "replacement link", "saved answers"] as const) {
+  test(`describes retained answers accurately after verification fails: ${draftState}`, async ({ page }, testInfo) => {
+    const token = "b".repeat(32);
+    if (draftState !== "first link") {
+      await page.addInitScript(
+        ({ token, replacing }) => {
+          sessionStorage.setItem(
+            "pkic.join.verifiedApplication",
+            JSON.stringify({
+              token: replacing ? "a".repeat(32) : token,
+              values: { firstName: "Morgan" },
+              checked: [],
+              answers: {},
+            }),
+          );
+        },
+        { token, replacing: draftState === "replacement link" },
+      );
+    }
+    await page.route("**/api/v1/members/join/verify", (route) =>
+      route.fulfill({ status: 503, json: { error: { code: "SERVICE_UNAVAILABLE", message: "Try again" } } }),
+    );
+    await page.goto(`/join/#verify=${token}`);
+    const message = page.getByText(
+      draftState === "saved answers"
+        ? "We could not verify your email right now. Your saved answers are still available in this tab. Refresh to try again."
+        : "We could not verify your email right now. Refresh to try again.",
+      { exact: true },
+    );
+    await expect(message).toBeVisible();
+    await expect(page.getByLabel(EMAIL_FIRST_COPY.join.work.label)).toBeVisible();
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await message.scrollIntoViewIfNeeded();
+      await expect(message).toBeInViewport();
+      await page.screenshot({ path: testInfo.outputPath(`verification-failure-${width}.png`) });
+    }
+  });
+}

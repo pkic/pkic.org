@@ -168,6 +168,9 @@ describe("a verified application kept for this tab", () => {
       await vi.waitFor(() =>
         expect(document.querySelector("[data-flow-status]")?.textContent).toMatch(/could not verify/i),
       );
+      expect(document.querySelector("[data-flow-status]")?.textContent).toBe(
+        "We could not verify your email right now. Refresh to try again.",
+      );
       expect(window.location.hash).toBe("");
       expect(rememberedJoinToken()).toBe(newToken);
 
@@ -184,6 +187,23 @@ describe("a verified application kept for this tab", () => {
       expect(reloaded.querySelector<HTMLInputElement>('[name="firstName"]')!.value).toBe("");
     },
   );
+
+  it("offers a refresh without claiming saved answers for a first verification link", async () => {
+    history.replaceState({}, "", `/join/#verify=${organizationContext.joinToken}`);
+    document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 503 })),
+    );
+    vi.resetModules();
+    await import("../../assets/ts/member-flows/join-form");
+    await vi.waitFor(() =>
+      expect(document.querySelector("[data-flow-status]")?.textContent).toBe(
+        "We could not verify your email right now. Refresh to try again.",
+      ),
+    );
+    expect(rememberedJoinToken()).toBe(organizationContext.joinToken);
+  });
 
   it("leaves the kept answers alone when the application fails to load on a reload", async () => {
     rememberJoinToken(organizationContext.joinToken);
@@ -213,6 +233,9 @@ it.each([503, 410])(
   "keeps saved answers on a temporary verification refusal but clears an expired proof (%s)",
   async (statusCode) => {
     rememberJoinToken(organizationContext.joinToken);
+    const form = document.createElement("form");
+    form.innerHTML = '<input name="firstName" value="Jane" />';
+    saveJoinAnswers(form);
     document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
     const kept = sessionStorage.getItem("pkic.join.verifiedApplication");
     vi.stubGlobal(

@@ -7,6 +7,7 @@
  */
 import {
   forgetJoinDraft,
+  hasJoinAnswers,
   rememberJoinToken,
   rememberedJoinToken,
   restoreJoinAnswers,
@@ -450,9 +451,11 @@ async function main(): Promise<void> {
         showSection(startSection);
         setStatus(
           statusEl,
-          rememberedJoinToken()
+          hasJoinAnswers()
             ? "We could not verify your email right now. Your saved answers are still available in this tab. Refresh to try again."
-            : "We could not verify your email right now. Open your email link again to try again.",
+            : rememberedJoinToken()
+              ? "We could not verify your email right now. Refresh to try again."
+              : "We could not verify your email right now. Open your email link again to try again.",
           true,
         );
         return;
