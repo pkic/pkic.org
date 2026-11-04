@@ -59,6 +59,29 @@ afterEach(() => {
 });
 
 describe("portal event list", () => {
+  it("keeps next year's event visible without an Upcoming badge", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          events: [
+            audienceEventRow({
+              name: "Next year conference",
+              startsAt: "2027-11-15T09:00:00.000Z",
+              endsAt: "2027-11-17T17:00:00.000Z",
+            }),
+          ],
+          page: { limit: 25, offset: 0, total: 1, hasMore: false },
+        }),
+      ),
+    );
+    const container = mount(<EventList />, "grid");
+    await settle();
+    await settle();
+    expect(container.querySelector(".blog-card-title")?.textContent).toBe("Next year conference");
+    expect(container.querySelector(".event-card-location")?.textContent).toContain("2027");
+    expect(container.querySelector(".event-card-badge")).toBeNull();
+  });
   it("starts with public event cards and switches views without another collection request", async () => {
     const fetch = vi.fn(async () =>
       json({

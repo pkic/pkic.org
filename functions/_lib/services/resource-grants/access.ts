@@ -184,10 +184,11 @@ export function guardGroupResourceViewerDatabase<K extends ResourceGrantKind>(
 export function groupResourceContextAuthorizationEvidence<K extends ResourceGrantKind>(
   groupId: SqlId,
   kind: K,
-  resourceId: string,
+  resourceId: SqlId,
   capability: ResourceGrantCapability<K>,
 ): AuthorizationEvidence {
   const group = sqlValue(groupId);
+  const selectedResource = sqlValue(resourceId);
   const definition = getResourceGrantDefinition(kind);
   const accepted = resourceGrantCapabilitiesFor(definition, capability).filter((candidate) =>
     isManagerResourceCapability(definition, candidate),
@@ -205,13 +206,13 @@ export function groupResourceContextAuthorizationEvidence<K extends ResourceGran
     sql: `SELECT 1
             FROM ${definition.resourceTable} resource
             JOIN groups context_group ON context_group.id = ${group.sql} AND context_group.active = 1
-           WHERE resource.id = ?
+           WHERE resource.id = ${selectedResource.sql}
              AND (
                resource.${definition.ownerGroupColumn} = context_group.id
                OR ${sharedAccess}
              )
            LIMIT 1`,
-    bindings: [...group.bindings, resourceId, ...accepted],
+    bindings: [...group.bindings, ...selectedResource.bindings, ...accepted],
   };
 }
 

@@ -23,6 +23,7 @@ const eventType = (document: ContentDocument): string =>
 
 export function createEventsIndex(source: EventsIndexSource) {
   const { documents, inlineMarkdownHtml, listingItem, parseYaml } = source;
+  const eventListingItem = (document: ContentDocument) => ({ ...listingItem(document), date: eventDate(document) });
 
   return async function eventsIndex(body: string): Promise<SiteEventsIndex> {
     // The `events-sidebar` block carries the sidebar's copy. Hugo stashed it on
@@ -52,7 +53,7 @@ export function createEventsIndex(source: EventsIndexSource) {
             .sort((a, b) =>
               ascending ? eventDate(a).localeCompare(eventDate(b)) : eventDate(b).localeCompare(eventDate(a)),
             )
-            .map(listingItem),
+            .map(eventListingItem),
           year,
         }));
     };
@@ -62,7 +63,7 @@ export function createEventsIndex(source: EventsIndexSource) {
         .sort((a, b) =>
           ascending ? eventDate(a).localeCompare(eventDate(b)) : eventDate(b).localeCompare(eventDate(a)),
         )
-        .map((document) => ({ ...listingItem(document), date: eventDate(document) }));
+        .map(eventListingItem);
 
     const isPast = (document: ContentDocument) => eventDate(document).slice(0, 10) < today;
 

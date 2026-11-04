@@ -1,3 +1,4 @@
+import { eventHeroImageSources } from "../../shared/event-hero-image-variants";
 import { createContext, type ComponentChildren, type JSX, type ComponentType } from "preact";
 import { lazy } from "preact/compat";
 import { useContext } from "preact/hooks";
@@ -74,6 +75,8 @@ export function DeferredImages({ children }: { children: ComponentChildren }) {
 export function SiteImage({ portrait = false, ...props }: SiteImageProps) {
   const deferred = useContext(ImageDeferral);
   const src = typeof props.src === "string" ? props.src : undefined;
+  const hero = src ? eventHeroImageSources(src) : null;
+  if (hero) return renderSiteImage({ ...props, deferred }, hero);
   if (!src || !resolveAsset) return <Img {...props} deferred={deferred} />;
   void prepareSiteImage(src, portrait);
   const asset = assets.get(JSON.stringify([src, portrait]))!;

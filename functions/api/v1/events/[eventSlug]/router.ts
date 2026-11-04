@@ -63,6 +63,7 @@ import { TermsGet } from "./terms";
 import { EventSponsorTiersGet, EventSponsorTiersPut } from "./sponsors/tiers";
 import { EventDetailGet } from "./index";
 import { EventSettingsPatch } from "./settings";
+import { EventHeroImageGet, EventHeroImagePost } from "./images";
 import {
   EventLiveOverlayLayoutDelete,
   EventLiveOverlayLayoutPut,
@@ -284,6 +285,8 @@ openapi.route("/proposals", proposals_Router);
 openapi.route("/registrations", registrations_Router);
 openapi.get("/days", EventDaysGet);
 openapi.put("/days", EventDaysPut);
+openapi.post("/images/hero", EventHeroImagePost);
+openapi.get("/images/:file", EventHeroImageGet);
 openapi.patch("/settings", EventSettingsPatch);
 openapi.get("/settings/live/layouts", EventLiveOverlayLayoutsGet);
 openapi.put("/settings/live/layouts/:layoutSlug", EventLiveOverlayLayoutPut);

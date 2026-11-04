@@ -32,7 +32,12 @@ export function EventCollectionCard({
   const Heading = useSectionHeading(headingLevel);
   const now = useBoundaryClock((at) => {
     for (const stamp of [event.startsAt, event.endsAt]) {
-      if (stamp && Date.parse(stamp) > at) return Date.parse(stamp);
+      if (stamp && Date.parse(stamp) > at) {
+        // A date-based badge enters its six-month window at a UTC day boundary.
+        const nextDay = new Date(at);
+        nextDay.setUTCHours(24, 0, 0, 0);
+        return Math.min(Date.parse(stamp), nextDay.getTime());
+      }
     }
     return null;
   });
@@ -44,6 +49,7 @@ export function EventCollectionCard({
       phase={eventPhase(event, now)}
       item={{
         title: event.name,
+        date: event.startsAt ?? undefined,
         href: eventDestination(event),
         imageSrc: event.heroImageUrl ?? undefined,
         location: [event.startsAt ? formatDateRange(event.startsAt, event.endsAt, event.timezone) : null, place]

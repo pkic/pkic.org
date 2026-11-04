@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import type { EventPhase } from "../../shared/event-phase";
+import { withinUpcomingEventWindow, type EventPhase } from "../../shared/event-phase";
 import type { HeadingTag } from "../ui/HeadingOutline";
 import "./EventCard.css";
 import "./ListingCards.css";
@@ -40,7 +40,7 @@ export function EventCard({
           <SiteImage src={item.imageSrc} alt={item.title} loading="lazy" width="600" height="320" />
         ) : null}
         <div class="blog-card-header-overlay" />
-        {state && (
+        {state && (state !== "upcoming" || withinUpcomingEventWindow(item.date)) && (
           <span class={`blog-card-tag event-card-badge event-card-badge--${state}`}>
             {state === "now" ? "Happening now" : state === "upcoming" ? "Upcoming" : "Past event"}
           </span>
