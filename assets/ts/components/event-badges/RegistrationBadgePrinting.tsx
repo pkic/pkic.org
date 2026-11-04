@@ -152,10 +152,13 @@ export function RegistrationBadgePrinting({
   }
   return (
     <div class="pk-stack">
-      <PageHeader title={scope.kind === "selected" ? "Print selected labels" : "Print all matching labels"} />
+      <PageHeader
+        title={scope.kind === "selected" ? "Print selected badges or labels" : "Print matching badges or labels"}
+      />
       {busy && <p role="status">Loading labels…</p>}
       {error && <ErrorAlert error={error} />}
       {!busy && !error && !printed.length && <p>No matching registrations to print.</p>}
+
       <div class="pk-cluster">
         {error && (
           <Button disabled={busy} onClick={() => setRetry((value) => value + 1)}>

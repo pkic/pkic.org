@@ -13,8 +13,12 @@ import { StrokeIcon } from "../ui/MediaIcons";
 import { useState } from "preact/hooks";
 import type { MenuItem } from "../ui/Menu";
 import { SplitButton } from "../ui/SplitButton";
-import type { Column, HeadCell } from "./Table";
+import type { Column, ColumnFilter, HeadCell } from "./Table";
 import type { AppliedFilterChip } from "./table-filter-strip";
+
+export function columnFilters<T>(column: Column<T>): readonly ColumnFilter[] {
+  return column.filters ?? (column.filter ? [column.filter] : []);
+}
 
 export function headLabel(head: HeadCell): string {
   return typeof head === "string" ? head : head.label;
@@ -97,8 +101,21 @@ export function useColumnControls<T>(
   }
 
   function filterItems(column: Column<T>, id: string, optionsLabel: string): MenuItem[] {
-    const columnFilter = column.filter;
-    if (!columnFilter || !onFilterChange) return [];
+    return columnFilters(column).flatMap((filter) =>
+      filterGroupItems(
+        filter,
+        `${id}-${filter.param}`,
+        filter.label
+          ? optionsLabel.startsWith("Filter by")
+            ? `Filter by ${filter.label}`
+            : filter.label
+          : optionsLabel,
+      ),
+    );
+  }
+
+  function filterGroupItems(columnFilter: ColumnFilter, id: string, optionsLabel: string): MenuItem[] {
+    if (!onFilterChange) return [];
     const current = filters[columnFilter.param] ?? "";
     const items: MenuItem[] = [];
     if (columnFilter.options) {
@@ -110,9 +127,28 @@ export function useColumnControls<T>(
           ...columnFilter.options.map((option) => ({
             id: `${id}-filter-${option.value || "all"}`,
             label: option.label,
-            checked: current === option.value,
-            onSelect: () => onFilterChange(columnFilter.param, option.value),
+            checked:
+              columnFilter.multiple && option.value
+                ? current.split(",").includes(option.value)
+                : current === option.value,
+            multiple: columnFilter.multiple && Boolean(option.value),
+            keepOpen: columnFilter.multiple,
+            onSelect: () => {
+              if (!columnFilter.multiple || !option.value) return onFilterChange(columnFilter.param, option.value);
+              const selected = new Set(current.split(",").filter(Boolean));
+              if (selected.has(option.value)) selected.delete(option.value);
+              else selected.add(option.value);
+              onFilterChange(columnFilter.param, [...selected].sort().join(","));
+            },
           })),
+          ...(columnFilter.match?.options.map((option, index) => ({
+            id: `${id}-match-${option.value || "default"}`,
+            label: option.label,
+            checked: (filters[columnFilter.match!.param] ?? "") === option.value,
+            separatorBefore: index === 0,
+            keepOpen: true,
+            onSelect: () => onFilterChange(columnFilter.match!.param, option.value),
+          })) ?? []),
           ...(columnFilter.optionNavigation ?? []),
         ],
       });
@@ -164,13 +200,28 @@ export function useColumnControls<T>(
     return items;
   }
 
-  function filterSummaryFor(column: Column<T>): string | undefined {
-    if (!column.filter) return undefined;
-    const current = filters[column.filter.param];
+  function summaryForFilter(columnFilter: ColumnFilter): string | undefined {
+    const current = filters[columnFilter.param];
     if (!current) return undefined;
     // A typed value is its own summary; an enum value reads by its label, so
     // "role=observer" is stated as the word the reader chose.
-    return column.filter.options?.find((option) => option.value === current)?.label ?? current;
+    if (columnFilter.multiple) {
+      const values = current.split(",");
+      if (columnFilter.formatSummary)
+        return columnFilter.formatSummary(values, filters[columnFilter.match?.param ?? ""] ?? "");
+      const labels = current
+        .split(",")
+        .map((value) => columnFilter?.options?.find((option) => option.value === value)?.label ?? value)
+        .join(", ");
+      const match = columnFilter.match;
+      const mode = match?.options.find((option) => option.value === (filters[match.param] ?? ""))?.label;
+      return mode ? `${mode}: ${labels}` : labels;
+    }
+    return columnFilter.options?.find((option) => option.value === current)?.label ?? current;
+  }
+
+  function filterSummaryFor(column: Column<T>): string | undefined {
+    return columnFilters(column).map(summaryForFilter).filter(Boolean).join("; ") || undefined;
   }
 
   const columnsMenu: MenuItem[] = columns.flatMap((column, index) => {
@@ -195,19 +246,20 @@ export function useColumnControls<T>(
   const chips: AppliedFilterChip[] = [];
   if (onFilterChange) {
     for (const column of columns) {
-      const columnFilter = column.filter;
-      const summary = columnFilter ? filterSummaryFor(column) : undefined;
-      if (!columnFilter || summary === undefined) continue;
-      const label = headLabel(column.header);
-      chips.push({
-        id: `filter-${columnFilter.param}`,
-        label: `${label}: ${summary}`,
-        clearLabel: `Clear the ${label} filter`,
-        onClear: () => {
-          onFilterChange(columnFilter.param, "");
-          setFilterOpen((open) => (open === columnFilter.param ? null : open));
-        },
-      });
+      for (const columnFilter of columnFilters(column)) {
+        const summary = summaryForFilter(columnFilter);
+        if (!columnFilter || summary === undefined) continue;
+        const label = columnFilter.label ?? headLabel(column.header);
+        chips.push({
+          id: `filter-${columnFilter.param}`,
+          label: `${label}: ${summary}`,
+          clearLabel: `Clear the ${label} filter`,
+          onClear: () => {
+            onFilterChange(columnFilter.param, "");
+            setFilterOpen((open) => (open === columnFilter.param ? null : open));
+          },
+        });
+      }
     }
   }
 
@@ -225,7 +277,7 @@ export function useColumnControls<T>(
   });
   const filterMenu: MenuItem[] = visibleColumns.flatMap(({ column, index }) => {
     const name = headLabel(column.header);
-    const narrowed = Boolean(column.filter && filters[column.filter.param]);
+    const narrowed = columnFilters(column).some((filter) => Boolean(filters[filter.param]));
     return filterItems(column, `card-${String(index)}`, `Filter by ${name}`).map((item) =>
       item.id.endsWith("-filter-text")
         ? { ...item, label: narrowed ? `Edit the ${name} filter…` : `Filter by ${name}…` }

@@ -8,6 +8,7 @@ import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
 import { callApi } from "./helpers/app";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { issueBadge } from "../functions/_lib/services/event-participation/badge-lifecycle";
+import { insertUser } from "./helpers/membership";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 
 const fixture = createEventScannerFixture();
@@ -123,14 +124,66 @@ describe("Compact authorized bulk label data", () => {
       )?.n,
     ).toBe(kind === "missing" ? 0 : 1);
   });
-  it.each(["cancelled", "inactive", "capture closed"])("refuses %s selections", async (failure) => {
-    if (failure === "cancelled")
-      await env.DB.prepare("UPDATE registrations SET status='cancelled' WHERE id=?").bind(registrationId).run();
-    if (failure === "inactive") await env.DB.prepare("UPDATE users SET active=0 WHERE id=?").bind(fixture.userId).run();
-    if (failure === "capture closed")
-      await env.DB.prepare("UPDATE event_evidence_retention_state SET capture_closed_at=? WHERE event_id=?")
-        .bind(new Date().toISOString(), fixture.eventId)
-        .run();
+  it.each([
+    ["cancelled", false],
+    ["cancelled", true],
+    ["pending_email_confirmation", false],
+    ["pending_email_confirmation", true],
+  ] as const)(
+    "prints %s registrations with existing badge: %s without granting admission",
+    async (status, existing) => {
+      await env.DB.prepare("UPDATE registrations SET status=? WHERE id=?").bind(status, registrationId).run();
+      if (!existing)
+        await env.DB.prepare("DELETE FROM event_badge_credentials WHERE event_id=?").bind(fixture.eventId).run();
+      const body = input();
+      const response = await request(body);
+      expect(response.status).toBe(200);
+      const data = badgeLabelBatchResponseSchema.parse(await response.json());
+      expect(data.labels[0]).toMatchObject({ registrationId, userId: fixture.userId });
+      expect(data.labels[0].credential).toBeTruthy();
+      const checked = await fixture.scan(
+        fixture.scanBody({ badgeId: data.labels[0].credential, action: "admission", occurrenceId: null }),
+      );
+      expect(checked.status).toBe(200);
+      expect(await checked.json()).toMatchObject({
+        outcome: "warning",
+        attendanceRecorded: false,
+        admissionRecorded: true,
+        admissionDecision: "refused",
+      });
+      expect(await (await request(body)).json()).toEqual(data);
+      expect(await env.DB.prepare("SELECT status FROM registrations WHERE id=?").bind(registrationId).first()).toEqual({
+        status,
+      });
+    },
+  );
+  it.each([false, true])("prints a mixed active/inactive selection with existing badge: %s", async (existing) => {
+    const inactiveId = await insertUser(env.DB, "inactive-label@example.test"),
+      inactiveRegistrationId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE users SET first_name='Inactive Attendee',active=0 WHERE id=?").bind(inactiveId),
+      env.DB.prepare(
+        "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','manual',?,?,?)",
+      ).bind(inactiveRegistrationId, fixture.eventId, inactiveId, crypto.randomUUID(), now, now),
+    ]);
+    const body = { operationId: crypto.randomUUID(), registrationIds: [registrationId, inactiveRegistrationId] };
+    if (existing)
+      expect(
+        (await request({ operationId: crypto.randomUUID(), registrationIds: [inactiveRegistrationId] })).status,
+      ).toBe(200);
+    const response = await request(body);
+    expect(response.status).toBe(200);
+    const data = badgeLabelBatchResponseSchema.parse(await response.json());
+    expect(data.labels.map((row) => row.registrationId)).toEqual(body.registrationIds);
+    expect(data.labels[1]).toMatchObject({ userId: inactiveId, firstName: "Inactive Attendee" });
+    expect(await (await request(body)).json()).toEqual(data);
+    expect(await env.DB.prepare("SELECT active FROM users WHERE id=?").bind(inactiveId).first()).toEqual({ active: 0 });
+  });
+  it("refuses selections after capture closes", async () => {
+    await env.DB.prepare("UPDATE event_evidence_retention_state SET capture_closed_at=? WHERE event_id=?")
+      .bind(new Date().toISOString(), fixture.eventId)
+      .run();
     const response = await request(input());
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ error: { code: "BADGE_BATCH_CHANGED" } });
@@ -149,7 +202,9 @@ describe("Compact authorized bulk label data", () => {
               .bind(new Date().toISOString(), fixture.eventId)
               .run();
           if (change === "registration")
-            await env.DB.prepare("UPDATE registrations SET status='cancelled' WHERE id=?").bind(registrationId).run();
+            await env.DB.prepare("UPDATE registrations SET user_id=? WHERE id=?")
+              .bind(fixture.operatorId, registrationId)
+              .run();
           if (change === "role")
             await env.DB.prepare(
               "INSERT INTO registration_badge_role_overrides(registration_id,role,set_by_user_id,created_at,updated_at) VALUES(?,'staff',?,?,?)",

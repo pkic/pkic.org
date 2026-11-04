@@ -116,11 +116,16 @@ async function save() {
       .querySelector("form.pk-layout-editor")!
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
-  // The shared positions and the layout save one after the other.
-  for (let step = 0; step < 6; step++)
+  // Shared positions and the layout save sequentially; wait for the visible
+  // saving state rather than assuming a fixed number of promise completions.
+  await vi.waitFor(async () => {
     await act(async () => {
       await Promise.resolve();
     });
+    const submit = root!.querySelector('form.pk-layout-editor button[type="submit"]');
+    expect(submit).not.toBeNull();
+    expect(submit?.getAttribute("aria-busy")).not.toBe("true");
+  });
 }
 
 describe("overlay layout editor", () => {

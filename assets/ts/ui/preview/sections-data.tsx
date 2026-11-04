@@ -1,3 +1,4 @@
+import { AttendeeHeaderFiltersPreview } from "./AttendeeHeaderFiltersPreview";
 import { useState } from "preact/hooks";
 import type { PreviewSection } from "./PreviewShell";
 import { Badge } from "../Badge";
@@ -64,6 +65,12 @@ const MEMBERS: Member[] = [
 ];
 
 export const dataSections: PreviewSection[] = [
+  {
+    id: "attendee-header-filters",
+    title: "Attendee header filters",
+    note: "Shared header menus support several day choices and any/all matching; phone cards expose the same filters.",
+    render: () => <AttendeeHeaderFiltersPreview />,
+  },
   {
     id: "forms",
     title: "Forms",

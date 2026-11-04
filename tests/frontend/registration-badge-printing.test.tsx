@@ -463,3 +463,13 @@ it("refuses a custom layout that does not fit, then applies the corrected canoni
   });
   expect(badgePrintSettingsSchema.parse(onApply.mock.calls[0]?.[0]).label.widthMm).toBe(100);
 });
+
+it("includes explicitly selected pending and cancelled registrations without changing their status", async () => {
+  const rows = [
+    { ...row(801), status: "pending_email_confirmation" as const },
+    { ...row(802), status: "cancelled" as const },
+  ];
+  const result = await loadBadgePrintPopulation({ kind: "selected", rows }, new AbortController().signal, () => {});
+  expect(result).toEqual(rows);
+  expect(result.map((item) => item.status)).toEqual(["pending_email_confirmation", "cancelled"]);
+});

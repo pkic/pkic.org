@@ -8,6 +8,7 @@ export function RegistrationRosterActions({
   promotionsEndpoint,
   exportsEndpoint,
   exportHasStatusFilter = false,
+  exportMatchesFilters = false,
   onPromoted,
   notify,
   onPrintAllMatching,
@@ -15,6 +16,7 @@ export function RegistrationRosterActions({
   promotionsEndpoint: string;
   exportsEndpoint: string | null;
   exportHasStatusFilter?: boolean;
+  exportMatchesFilters?: boolean;
   onPromoted: () => void | Promise<void>;
   notify: (message: string, kind: "success" | "error") => void;
   onPrintAllMatching?: () => void;
@@ -41,7 +43,14 @@ export function RegistrationRosterActions({
         align="end"
         items={[
           ...(onPrintAllMatching
-            ? [{ id: "print-all-matching", label: "Print all matching labels", onSelect: onPrintAllMatching }]
+            ? [
+                {
+                  id: "print-all-matching",
+                  label: "Print matching badges, labels or printing CSV…",
+                  onSelect: onPrintAllMatching,
+                  disabled: exportsEndpoint === null,
+                },
+              ]
             : []),
           {
             id: "waitlist-promotions",
@@ -53,7 +62,11 @@ export function RegistrationRosterActions({
       />
       <DownloadAction
         label={
-          exportHasStatusFilter ? "Download registrations (CSV)" : "Download registered and pending registrations (CSV)"
+          exportMatchesFilters
+            ? "Download matching attendee list (CSV)"
+            : exportHasStatusFilter
+              ? "Download registrations (CSV)"
+              : "Download registered and pending registrations (CSV)"
         }
         href={exportsEndpoint ?? ""}
         disabled={exportsEndpoint === null}

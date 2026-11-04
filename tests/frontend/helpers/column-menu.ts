@@ -26,24 +26,31 @@ export function openColumnMenu(container: ParentNode, column: string): HTMLEleme
 }
 
 /** Opens the filter choices nested inside a column menu. */
-export function openColumnFilterMenu(container: ParentNode, column: string): HTMLElement {
+export function openColumnFilterMenu(container: ParentNode, column: string, group?: string): HTMLElement {
   const popup = openColumnMenu(container, column);
-  const filter = popup.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
-  if (filter) void act(() => filter.click());
+  const filter = [...popup.querySelectorAll<HTMLButtonElement>('[aria-haspopup="menu"]')].find(
+    (item) => !group || labelOf(item).replace(/\s*›$/, "") === group,
+  );
+  if (filter && filter.getAttribute("aria-expanded") !== "true") void act(() => filter.click());
   return popup;
 }
 
 /** The labels of the filter choices a column's menu offers, in order. */
-export function columnFilterOptions(container: ParentNode, column: string): string[] {
-  const popup = openColumnFilterMenu(container, column);
+export function columnFilterOptions(container: ParentNode, column: string, group?: string): string[] {
+  const popup = openColumnFilterMenu(container, column, group);
   return [...popup.querySelectorAll('[role="menuitemradio"]')]
     .filter((item) => !labelOf(item).startsWith("Sort "))
     .map(labelOf);
 }
 
 /** Narrows a column to one of its filter choices, by the choice's label. */
-export async function chooseColumnFilter(container: ParentNode, column: string, option: string): Promise<void> {
-  const popup = openColumnFilterMenu(container, column);
+export async function chooseColumnFilter(
+  container: ParentNode,
+  column: string,
+  option: string,
+  group?: string,
+): Promise<void> {
+  const popup = openColumnFilterMenu(container, column, group);
   const item = [...popup.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(
     (candidate) => labelOf(candidate) === option,
   );

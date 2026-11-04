@@ -33,7 +33,7 @@ import {
   type SortDirection,
 } from "../ui/DataTable";
 import { Menu, type MenuItem } from "../ui/Menu";
-import { headLabel, useColumnControls, type ColumnControls } from "./table-column-controls";
+import { columnFilters, headLabel, useColumnControls, type ColumnControls } from "./table-column-controls";
 import type { FilterOption } from "./FilterSelect";
 import { AppliedFilterChips, ColumnTextFilterRow } from "./table-filter-strip";
 import "../ui/Content.css";
@@ -74,6 +74,8 @@ export interface Column<T> {
    * finds a column's filter where the column is.
    */
   filter?: ColumnFilter;
+  /** Independent filter groups for a compact composite column. */
+  filters?: readonly ColumnFilter[];
   /**
    * Whether the reader may take the column out of the table. The subject
    * column and the row's actions cannot be hidden — a list without its subject
@@ -89,6 +91,14 @@ export interface Column<T> {
 }
 
 export interface ColumnFilter {
+  /** Names a filter group when a column offers several. */
+  label?: string;
+  /** Independent choices encoded as a comma-separated query value. */
+  multiple?: boolean;
+  /** Compact applied-filter wording for a selected set and its matching mode. */
+  formatSummary?: (values: readonly string[], match: string) => string;
+  /** How several selected values combine, when the server supports it. */
+  match?: { param: string; options: readonly FilterOption[] };
   param: string;
   /**
    * The closed vocabulary the column accepts, offered in its menu. The first
@@ -315,8 +325,11 @@ export function DataTable<T>({
   // Every narrowing in force, in one sentence above the rows (`chips`). A
   // column menu states its own filter at the column; the chips state the
   // whole query, so a reader looking at eleven rows learns why.
-  const openColumn = filterOpen ? columns.find((column) => column.filter?.param === filterOpen) : undefined;
-  const openTextFilter = openColumn?.filter?.text;
+  const openColumn = filterOpen
+    ? columns.find((column) => columnFilters(column).some((filter) => filter.param === filterOpen))
+    : undefined;
+  const openFilter = openColumn && columnFilters(openColumn).find((filter) => filter.param === filterOpen);
+  const openTextFilter = openFilter?.text;
 
   // A fragment, deliberately: `pk-table-list` is a flex column whose regions
   // separate with rules and a zero gap, so these bands have to be siblings of
@@ -326,7 +339,7 @@ export function DataTable<T>({
       <AppliedFilterChips chips={chips} />
       {openColumn && openTextFilter && onFilterChange && (
         <ColumnTextFilterRow
-          columnLabel={headLabel(openColumn.header)}
+          columnLabel={openFilter?.label ?? headLabel(openColumn.header)}
           value={filters[filterOpen ?? ""] ?? ""}
           suggestions={openTextFilter.suggestions}
           placeholder={openTextFilter.placeholder}

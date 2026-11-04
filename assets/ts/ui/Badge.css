@@ -21,6 +21,60 @@
     white-space: nowrap;
   }
 
+  .pk-badge-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: max-content;
+    vertical-align: middle;
+  }
+
+  @container (max-width: 52rem) {
+    .pk-badge-group {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+  }
+
+  .pk-badge-group > .pk-badge {
+    flex: none;
+  }
+
+  .pk-badge[data-color="blue"] {
+    --tone: var(--pk-palette-blue);
+  }
+  .pk-badge[data-color="teal"] {
+    --tone: var(--pk-palette-teal);
+  }
+  .pk-badge[data-color="purple"] {
+    --tone: var(--pk-palette-purple);
+  }
+
+  .pk-badge[data-filled] {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .pk-badge__fill {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .pk-badge__solid {
+    fill: color-mix(in srgb, var(--tone) 38%, transparent);
+  }
+
+  .pk-badge__stripe {
+    fill: none;
+    stroke: color-mix(in srgb, var(--pk-surface) 85%, transparent);
+    stroke-width: 2;
+  }
+
   /* Yellow is the lightest stop; a slightly fuller fill keeps the pill from
      reading as empty. Grey is a surface color, so it needs more to show. */
   .pk-badge--warn {

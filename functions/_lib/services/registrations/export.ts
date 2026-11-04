@@ -86,7 +86,7 @@ export async function buildRegistrationCsv(
             ${sponsorConsentSql("r")} AS sponsor_consent,
             r.custom_answers_json, r.form_placement_id
      ${population.fromSql}
-       ${query?.status || query?.ids ? "" : "AND r.status IN ('registered', 'pending_email_confirmation')"}
+       ${query ? "" : "AND r.status IN ('registered', 'pending_email_confirmation')"}
        ${selected ? `AND ${selected.sql}` : ""}
      ORDER BY r.status ASC, r.created_at ASC
      LIMIT ?`,

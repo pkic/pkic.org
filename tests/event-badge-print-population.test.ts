@@ -49,21 +49,21 @@ async function registration(eventId: string, label: string, status = "registered
 }
 
 describe("group-owned badge print population", () => {
-  it("enumerates exact eligible IDs with bounded keyset pages and minimal metadata", async () => {
+  it("enumerates the complete matching IDs regardless of registration status with bounded keyset pages and minimal metadata", async () => {
     const f = await fixture();
     const people = await Promise.all([
       registration(f.eventId, "Ada"),
       registration(f.eventId, "Grace"),
       registration(f.eventId, "Linus"),
     ]);
-    await registration(f.eventId, "Cancelled", "cancelled");
-    await registration(f.eventId, "Pending", "pending_email_confirmation");
-    await registration(f.eventId, "Inactive", "registered", 0);
+    people.push(await registration(f.eventId, "Cancelled", "cancelled"));
+    people.push(await registration(f.eventId, "Pending", "pending_email_confirmation"));
+    people.push(await registration(f.eventId, "Inactive", "registered", 0));
     const seen: string[] = [];
     let cursor: string | null = null;
     do {
       const response = await f.page(`?limit=2${cursor ? `&cursor=${cursor}` : ""}`);
-      expect(response.page.total).toBe(3);
+      expect(response.page.total).toBe(6);
       expect(response.registrations.length).toBeLessThanOrEqual(2);
       for (const row of response.registrations)
         expect(Object.keys(row).sort()).toEqual(["display_name", "id", "status", "user_id"]);
@@ -71,11 +71,11 @@ describe("group-owned badge print population", () => {
       cursor = response.page.nextCursor;
     } while (cursor);
     expect(seen).toEqual(people.map((p) => p.id).sort());
-    expect(new Set(seen).size).toBe(3);
+    expect(new Set(seen).size).toBe(6);
     const empty = await f.page("?q=Nobody");
     expect(empty).toMatchObject({ registrations: [], page: { total: 0, nextCursor: null } });
   });
-  it("reuses registration search/status/active-day waitlist predicates and reports only eligible totals", async () => {
+  it("reuses registration search/status/active-day waitlist predicates and reports exact matching totals", async () => {
     const f = await fixture();
     const waiting = await registration(f.eventId, "Ada");
     await registration(f.eventId, "Grace");
@@ -95,7 +95,9 @@ describe("group-owned badge print population", () => {
     expect((await f.page("?waitlisted=false&status=registered")).registrations.map((r) => r.display_name)).toEqual([
       "Grace Attendee",
     ]);
-    expect((await f.page("?status=pending_email_confirmation")).page.total).toBe(0);
+    expect((await f.page("?status=pending_email_confirmation")).registrations.map((row) => row.id)).toEqual([
+      pending.id,
+    ]);
     expect((await f.page("?q=ada%40example.test")).registrations[0]?.id).toBe(waiting.id);
     expect(pending.id).not.toBe(waiting.id);
   });
@@ -185,12 +187,12 @@ describe("group-owned badge print population", () => {
   it("reports live population drift rather than claiming a frozen cross-page snapshot", async () => {
     const f = await fixture();
     const rows = await Promise.all([registration(f.eventId, "One"), registration(f.eventId, "Two")]);
-    const first = await f.page("?limit=1");
+    const first = await f.page("?limit=1&status=registered");
     expect(first.page.total).toBe(2);
     await env.DB.prepare("UPDATE registrations SET status='cancelled' WHERE id=?")
       .bind(rows.find((r) => r.id !== first.registrations[0]?.id)!.id)
       .run();
-    const tail = await f.page(`?limit=1&cursor=${first.page.nextCursor}`);
+    const tail = await f.page(`?limit=1&status=registered&cursor=${first.page.nextCursor}`);
     expect(tail.page.total).toBe(1);
     expect(tail.registrations).toEqual([]);
   });

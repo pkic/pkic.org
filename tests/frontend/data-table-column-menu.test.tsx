@@ -138,3 +138,51 @@ describe("column menus", () => {
     expect(itemLabels(columnsMenu)).toEqual(["Stage"]);
   });
 });
+
+it("toggles several header choices independently, keeps the menu open and clears the complete selection", () => {
+  const changed = vi.fn();
+  const scoped = columns();
+  scoped[1]!.filter = {
+    param: "stage",
+    multiple: true,
+    options: [
+      { value: "", label: "All stages" },
+      { value: "contacted", label: "Contacted" },
+      { value: "new_inquiry", label: "New inquiry" },
+    ],
+    match: {
+      param: "match",
+      options: [
+        { value: "", label: "Any selected value" },
+        { value: "all", label: "All selected values" },
+      ],
+    },
+  };
+  const container = mount(
+    <DataTable
+      caption="Pipeline"
+      columns={scoped}
+      data={rows}
+      filters={{ stage: "contacted" }}
+      onFilterChange={changed}
+    />,
+  );
+  const trigger = openMenu(container, "Stage column options");
+  const filter = trigger.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!;
+  void act(() => filter.click());
+  const choice = (name: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"], [role="menuitemradio"]')].find(
+      (button) => button.textContent?.replace(/^✓/, "").trim() === name,
+    )!;
+  expect(choice("Contacted").getAttribute("aria-checked")).toBe("true");
+  expect(choice("New inquiry").getAttribute("aria-checked")).toBe("false");
+  void act(() => choice("New inquiry").click());
+  expect(changed).toHaveBeenLastCalledWith("stage", "contacted,new_inquiry");
+  expect(container.querySelector('[role="menu"]')).not.toBeNull();
+  void act(() => choice("Contacted").click());
+  expect(changed).toHaveBeenLastCalledWith("stage", "");
+  void act(() => choice("All selected values").click());
+  expect(changed).toHaveBeenLastCalledWith("match", "all");
+  void act(() => choice("All stages").click());
+  expect(changed).toHaveBeenLastCalledWith("stage", "");
+});

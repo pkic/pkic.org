@@ -13,7 +13,10 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { eventAttendanceRegistrationsListResponseSchema } from "../../assets/shared/schemas/event-registrations";
+import {
+  eventAttendanceRegistrationsQuerySchema,
+  eventAttendanceRegistrationsListResponseSchema,
+} from "../../assets/shared/schemas/event-registrations";
 import { eventRegistrationNotificationCreateSchema } from "../../assets/shared/schemas/route-contracts-event-registration-management";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupEventRegistrationRecord } from "../../assets/ts/member-flows/portal/sections/management/GroupEventRegistrationRecord";
@@ -167,7 +170,7 @@ describe("group event registrations roster", () => {
     const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Registration actions"]');
     expect(trigger).not.toBeNull();
     await act(async () => trigger!.click());
-    await act(async () => menuItemNamed(container, "Print all matching labels")!.click());
+    await act(async () => menuItemNamed(container, "Print matching badges, labels or printing CSV…")!.click());
     expect(onPrint).toHaveBeenCalledWith({
       kind: "filtered",
       endpoint: `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/registrations/badges/population`,
@@ -185,9 +188,8 @@ describe("group event registrations roster", () => {
     const headers = [...container.querySelectorAll("thead th")].map((cell) =>
       (cell.textContent ?? "").replace(/[↑↓↕]/g, "").trim(),
     );
-    // Organization joins the row and the job title waits in the columns
-    // menu, hidden by default (#119). So does the whole-registration
-    // attendance type: Attendance already states it day by day.
+    // Organization joins the row; job title stays hidden by default.
+    // Attendance combines type and waitlist summaries in one column.
     expect(headers).toEqual(["Attendee", "Organization", "Status", "Attendance", "Registered"]);
     for (const header of headers) expect(header).not.toBe("");
   });
@@ -207,46 +209,35 @@ describe("group event registrations roster", () => {
     expect(container.querySelector(".pk-table__detail")).toBeNull();
   });
 
-  it("states each day's attendance and waitlist standing in words, not the derived whole-registration type", async () => {
+  it("summarizes attendance by type while retaining exact waitlisted days in accessible labels", async () => {
     installApi(false);
     const container = mountRoster();
     await settle();
-
-    const days = container.querySelector('[aria-label="Attendance by day"]');
-    expect(days).not.toBeNull();
-    const badges = [...days!.querySelectorAll(".pk-badge")].map((badge) => badge.textContent);
-    expect(badges).toHaveLength(3);
-    expect(badges[0]).toContain("In-person");
-    expect(badges[1]).toContain("Waitlisted");
-    expect(badges[1]).toContain("Venue pass");
-    expect(badges[2]).toContain("Virtual");
-    // The raw token never reaches the page.
+    const badges = [...container.querySelectorAll('tbody .pk-badge-group [role="img"]')];
+    expect(badges).toHaveLength(2);
+    expect(badges[0]?.textContent).toBe("2");
+    expect(badges[0]?.getAttribute("aria-label")).toContain(
+      "In-person: 2 days total; 1 not waitlisted; 1 of these is waitlisted",
+    );
+    expect(badges[1]?.getAttribute("aria-label")).toContain("Virtual: 1 day total; 1 not waitlisted");
     expect(container.textContent).not.toContain("in_person");
   });
 
-  it("keeps the attendance type one column away, as the filter a badge print run can take in-person attendees by", async () => {
+  it("offers attendance types in the compact Attendance header for filtering and printing", async () => {
     const requests = installApi(false);
     const container = mountRoster();
     await settle();
-
-    const chooser = container.querySelector<HTMLButtonElement>('button[aria-label="Choose columns"]')!;
-    await act(async () => chooser.click());
-    const show = [...container.querySelectorAll<HTMLElement>('[role^="menuitem"]')].find((item) =>
-      item.textContent?.includes("Attendance type"),
-    )!;
-    await act(async () => show.click());
-    await settle();
-
-    expect(columnFilterOptions(container, "Attendance type")).toEqual([
+    expect(columnFilterOptions(container, "Attendance", "Attendance type")).toEqual([
       "All types",
       "In-person",
       "Virtual",
       "Livestream lounge",
     ]);
-    await chooseColumnFilter(container, "Attendance type", "In-person");
+    await chooseColumnFilter(container, "Attendance", "In-person", "Attendance type");
     await settle();
     const last = requests.filter(({ method }) => method === "GET").at(-1);
-    expect(new URLSearchParams(last?.search).get("attendance_type")).toBe("in_person");
+    const query = eventAttendanceRegistrationsQuerySchema.parse(Object.fromEntries(new URLSearchParams(last?.search)));
+    expect(query.attendance_type).toBe("in_person");
   });
 
   it("offers the waitlist as the Attendance column's filter and sends it to the query", async () => {
@@ -254,16 +245,17 @@ describe("group event registrations roster", () => {
     const container = mountRoster();
     await settle();
 
-    expect(columnFilterOptions(container, "Attendance")).toEqual([
-      "All attendance",
+    expect(columnFilterOptions(container, "Attendance", "Waitlist")).toEqual([
+      "Any waitlist status",
       "On a day waitlist",
       "Not waitlisted",
     ]);
-    await chooseColumnFilter(container, "Attendance", "On a day waitlist");
+    await chooseColumnFilter(container, "Attendance", "On a day waitlist", "Waitlist");
     await settle();
     const last = requests.filter(({ method }) => method === "GET").at(-1);
-    expect(new URLSearchParams(last?.search).get("waitlisted")).toBe("true");
-    expect(new URLSearchParams(last?.search).get("offset")).toBe("0");
+    const query = eventAttendanceRegistrationsQuerySchema.parse(Object.fromEntries(new URLSearchParams(last?.search)));
+    expect(query.waitlisted).toBe("true");
+    expect(query.offset).toBe(0);
   });
 
   it("states the totals in words beside the figures, including the waitlisted share", async () => {
