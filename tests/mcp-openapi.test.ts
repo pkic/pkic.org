@@ -39,6 +39,14 @@ describe("MCP OpenAPI filtering", () => {
         "/api/v1/browser": {
           get: { [MCP_EXTENSION]: { expose: false, reason: "Requires browser redirect" } },
         },
+        "/api/v1/binary": {
+          get: {
+            responses: { "200": { content: { "application/pdf": { schema: { type: "string", format: "binary" } } } } },
+          },
+        },
+        "/api/v1/multipart": {
+          post: { requestBody: { content: { "multipart/form-data": { schema: { type: "object" } } } } },
+        },
         "/outside-api": { get: { summary: "Not an API operation" } },
       },
     });
@@ -46,6 +54,8 @@ describe("MCP OpenAPI filtering", () => {
     expect(filtered.paths["/api/v1/groups/{groupId}/events"].post).toBeDefined();
     expect(filtered.paths["/api/v1/groups/{groupId}/events"].head).toBeUndefined();
     expect(filtered.paths["/api/v1/browser"]).toBeUndefined();
+    expect(filtered.paths["/api/v1/binary"]).toBeUndefined();
+    expect(filtered.paths["/api/v1/multipart"]).toBeUndefined();
     expect(filtered.paths["/outside-api"]).toBeUndefined();
   });
 

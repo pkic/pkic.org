@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import { createMcpOauthTestClient } from "./helpers/mcp-oauth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
-import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
+import { ensureGroupMembershipCapacity, grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { groupEventCreateSchema } from "../assets/shared/schemas/group-events";
@@ -170,6 +170,75 @@ describe("group event operations through delegated MCP", () => {
     },
   );
 
+  it("does not delegate membership participation or participant roster access", async () => {
+    const fixture = await groupFixture();
+    const memberId = await ensureGroupMembershipCapacity(env.DB, fixture.approved, fixture.userId);
+    const [identity] = await queryAll<{ identity_id: string }>(
+      env.DB,
+      "SELECT identity_id FROM identity_member_capacities WHERE member_id=? AND user_id=?",
+      memberId,
+      fixture.userId,
+    );
+    const token = await createAdminSession(
+      env.DB,
+      fixture.userId,
+      crypto.randomUUID(),
+      env.INTERNAL_SIGNING_SECRET,
+      identity.identity_id,
+    );
+    const grant = await authorize(token, ["groups:read"], identity.identity_id);
+    const detail = value(
+      await callTool(grant.access_token, "request", { method: "GET", path: `/api/v1/groups/${fixture.approved}` }),
+    );
+    expect(detail.capabilities).toEqual(["view"]);
+    const roster = value(
+      await callTool(grant.access_token, "request", {
+        method: "GET",
+        path: `/api/v1/groups/${fixture.approved}/memberships`,
+      }),
+    );
+    expect(roster.error.code).toBe("GROUP_PARTICIPATION_REQUIRED");
+    const ordinary = await call(`/api/v1/groups/${fixture.approved}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(ordinary.status).toBe(200);
+    expect(((await ordinary.json()) as { capabilities: string[] }).capabilities).toContain("participate");
+  });
+
+  it.each(["participants", "managed"])(
+    "keeps scoped %s group list and detail visibility consistent",
+    async (visibility) => {
+      const fixture = await groupFixture();
+      await env.DB.prepare("UPDATE groups SET visibility=? WHERE id IN (?,?)")
+        .bind(visibility, fixture.approved, fixture.other)
+        .run();
+      await env.DB.prepare("DELETE FROM user_roles WHERE user_id=?").bind(fixture.userId).run();
+      const id = crypto.randomUUID();
+      await env.DB.prepare(
+        "INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,created_at) VALUES (?,?,'groups:read','group',?,?)",
+      )
+        .bind(id, fixture.userId, fixture.approved, new Date().toISOString())
+        .run();
+      const grant = await authorize(fixture.token, ["groups:read"]);
+      await env.DB.prepare("DELETE FROM permission_grants WHERE id=?").bind(id).run();
+      await env.DB.prepare(
+        "INSERT INTO permission_grants (id,user_id,permission,created_at) VALUES (?,?,'groups:read',?)",
+      )
+        .bind(crypto.randomUUID(), fixture.userId, new Date().toISOString())
+        .run();
+      const listed = value(await callTool(grant.access_token, "request", { method: "GET", path: "/api/v1/groups" }));
+      expect(listed.groups.map((group: { id: string }) => group.id)).toEqual([fixture.approved]);
+      const detail = value(
+        await callTool(grant.access_token, "request", { method: "GET", path: `/api/v1/groups/${fixture.approved}` }),
+      );
+      expect(detail.group.id).toBe(fixture.approved);
+      const other = value(
+        await callTool(grant.access_token, "request", { method: "GET", path: `/api/v1/groups/${fixture.other}` }),
+      );
+      expect(other.error).toBeDefined();
+    },
+  );
+
   it.each(["authorization", "expiry", "session", "permission"])(
     "rolls back an event update when %s changes before commit",
     async (reason) => {
@@ -215,6 +284,11 @@ describe("group event operations through delegated MCP", () => {
             ).run();
         },
       );
+      const [auditBefore] = await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action='event_settings_updated' AND entity_id=?",
+        created.event.id,
+      );
       await expect(
         updateGroupManagedEventSettings(
           guarded,
@@ -225,8 +299,19 @@ describe("group event operations through delegated MCP", () => {
           "https://app.test",
         ),
       ).rejects.toMatchObject({ code: "EVENT_MANAGEMENT_CONTEXT_CHANGED" });
-      const [stored] = await queryAll<{ city: string }>(env.DB, "SELECT city FROM events WHERE id=?", created.event.id);
+      const [stored] = await queryAll<{ city: string; updated_at: string }>(
+        env.DB,
+        "SELECT city, updated_at FROM events WHERE id=?",
+        created.event.id,
+      );
       expect(stored.city).toBe("Toronto");
+      expect(stored.updated_at).toBe(created.event.updatedAt);
+      const [auditAfter] = await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action='event_settings_updated' AND entity_id=?",
+        created.event.id,
+      );
+      expect(auditAfter.total).toBe(auditBefore.total);
     },
   );
 });
