@@ -151,7 +151,7 @@ export async function processGoogleGroupsSyncQueue(
         memberEmail,
         ...(preference?.preference === "archive_only"
           ? { delivery: "none" as const }
-          : preference
+          : preference?.preference === "subscribed"
             ? { delivery: "all" as const }
             : {}),
       });

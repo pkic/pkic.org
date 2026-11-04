@@ -192,6 +192,53 @@ describe("Google Groups sync", () => {
     expect(await listPendingGoogleGroupsSync(env.DB)).toHaveLength(0);
   });
 
+  it.each([
+    { preference: null, existing: "DIGEST", expected: "DIGEST" },
+    { preference: null, existing: "NONE", expected: "NONE" },
+    { preference: "subscribed", existing: "NONE", expected: "ALL_MAIL" },
+    { preference: "archive_only", existing: "ALL_MAIL", expected: "NONE" },
+  ])(
+    "preserves delivery unless explicitly selected: $preference / $existing",
+    async ({ preference, existing, expected }) => {
+      const [list] = await queryAll<{ id: string; email: string }>(
+        env.DB,
+        "SELECT id, email FROM mailing_lists WHERE active = 1 LIMIT 1",
+      );
+      const userId = await insertUser(`delivery-${crypto.randomUUID()}@example.test`);
+      const at = new Date().toISOString();
+      if (preference) {
+        await env.DB.prepare(`INSERT INTO mailing_list_subscription_preferences
+        (mailing_list_id, user_id, preference, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
+          .bind(list.id, userId, preference, at, at)
+          .run();
+      }
+      await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail: list.email, action: "add_to_list" });
+      let delivery = existing;
+      const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === "https://oauth2.googleapis.com/token") return Response.json({ access_token: "synthetic-token" });
+        if (init?.method === "POST") return new Response(null, { status: 409 });
+        if (init?.method === "PUT") {
+          delivery = JSON.parse(String(init.body)).delivery_settings;
+          return Response.json({});
+        }
+        return Response.json({ role: "MEMBER", type: "USER", delivery_settings: delivery });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      expect(await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv())).toMatchObject({
+        succeeded: 1,
+        failed: 0,
+      });
+      expect(delivery).toBe(expected);
+      if (!preference) {
+        expect(fetchMock.mock.calls.some(([, request]) => request?.method === "PUT")).toBe(false);
+        const addition = fetchMock.mock.calls.find(
+          ([url, request]) => url.includes("/members") && request?.method === "POST",
+        )!;
+        expect(JSON.parse(String(addition[1]?.body))).not.toHaveProperty("delivery_settings");
+      }
+    },
+  );
+
   it("enqueues a pending sync row", async () => {
     const userId = await insertUser("gg-enqueue@example.test");
     const id = await enqueueGoogleGroupsSync(env.DB, {

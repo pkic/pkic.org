@@ -11,7 +11,11 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { beginRecordEdit } from "./helpers/record-edit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mailingListLifecycleTransitionSchema, type MailingList } from "../../assets/shared/schemas/mailing-lists";
+import {
+  mailingListLifecycleTransitionSchema,
+  mailingListPreferenceMutationSchema,
+  type MailingList,
+} from "../../assets/shared/schemas/mailing-lists";
 import { mailingListSyncUpdateSchema } from "../../assets/shared/schemas/mailing-list-sync";
 import { BreadcrumbScope } from "../../assets/ts/ui/BreadcrumbScope";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
@@ -554,12 +558,11 @@ it.each(["Allow archive access only", "Unsubscribe"])(
     expect(calls.filter((call) => call.method === "PUT")).toHaveLength(0);
     await act(() => buttonNamed(document, label).click());
     await settle();
-    expect(calls.find((call) => call.method === "PUT")).toMatchObject({
-      body: { preference },
-      url: expect.objectContaining({
-        pathname: `/api/v1/groups/${GROUP_ID}/mailing-lists/${LIST_ID}/subscribers/${subscriber.user.id}`,
-      }),
-    });
+    const put = calls.find((call) => call.method === "PUT")!;
+    expect(mailingListPreferenceMutationSchema.parse(put.body)).toEqual({ preference });
+    expect(put.url.pathname).toBe(
+      `/api/v1/groups/${GROUP_ID}/mailing-lists/${LIST_ID}/subscribers/${subscriber.user.id}`,
+    );
     expect(calls.filter((call) => call.method === "GET" && call.url.pathname.endsWith("/subscribers")).length).toBe(2);
   },
 );
