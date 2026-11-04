@@ -8,6 +8,7 @@ async function getTerms(c: any, eventSlug: string, audience: "attendee" | "speak
   return json(await getEventTerms(requestDb(c), eventSlug, audience));
 }
 
+/** Read current consent terms directly; do not wrap this handler in the public response cache. */
 export const TermsGet = openApiRoute(eventTermsGetRouteSchema, (c: any, data) =>
   getTerms(c, data.params.eventSlug, data.query.audience),
 );

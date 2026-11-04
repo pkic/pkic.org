@@ -163,7 +163,6 @@ openapi.get("/proposals", EventProposalsListGet);
 openapi.post("/registrations", EventsEventSlugRegistrationsPost);
 openapi.post("/speakers/invitations", EventSpeakerInvitationsPost);
 openapi.get("/speakers", EventProposalSpeakersListGet);
-// Terms decide consent and are never purged on change, so every read is current.
 openapi.get("/terms", TermsGet);
 openapi.get("/sponsors/tiers", EventSponsorTiersGet);
 openapi.put("/sponsors/tiers", EventSponsorTiersPut);
