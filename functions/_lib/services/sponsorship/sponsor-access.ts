@@ -16,13 +16,13 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
-import type { SponsorCapacity } from "../../../../assets/shared/schemas/sponsor-access";
+import type { SponsorAttendee, SponsorCapacity } from "../../../../assets/shared/schemas/sponsor-access";
 import { findActiveSponsorCapacityForUser, sponsorAttendeeAuthorizationEvidence } from "../../auth/sponsor-capacity";
 import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
 import { writeAuditLog } from "../audit";
 import type { SponsorAttendeesListQuery } from "../../../../assets/shared/schemas/sponsor-access";
 import { sponsorConsentSql } from "../event-participation/sponsor-consent";
-import { contactAffiliation } from "../../email-domains/contact-kind";
+import { sponsorFacingOrganization } from "../../email-domains/contact-kind";
 
 export async function requireSponsorAttendeeAccess(
   db: DatabaseLike,
@@ -55,16 +55,6 @@ export async function getMyOrganizationSponsorship(
   return { tier: row?.sponsor_tier ?? null, startDate: row?.sponsor_start_date ?? null };
 }
 
-export interface SponsorAttendeeRow {
-  registrationId: string;
-  firstName: string | null;
-  lastName: string | null;
-  email: string | null;
-  organizationName: string | null;
-  personalEmail: boolean;
-  jobTitle: string | null;
-}
-
 const SPONSOR_ATTENDEES_FROM = `
   FROM registrations r
   JOIN users u ON u.id = r.user_id
@@ -72,22 +62,12 @@ const SPONSOR_ATTENDEES_FROM = `
     AND ${sponsorConsentSql("r")}
 `;
 
-function toAttendeeRow(r: {
-  registration_id: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-  organization_name: string | null;
-  job_title: string | null;
-}): SponsorAttendeeRow {
-  const affiliation = contactAffiliation(r.email, r.organization_name);
+function toAttendeeRow(r: SponsorAttendeeDatabaseRow): SponsorAttendee {
   return {
-    registrationId: r.registration_id,
     firstName: r.first_name,
     lastName: r.last_name,
     email: r.email,
-    organizationName: affiliation.organization,
-    personalEmail: affiliation.personalEmail,
+    organizationName: sponsorFacingOrganization(r.email, r.organization_name),
     jobTitle: r.job_title,
   };
 }
@@ -113,7 +93,7 @@ function prepareSponsorAttendeeExport(db: DatabaseLike, eventId: string, maxRows
     .bind(eventId, maxRows + 1);
 }
 
-function assertExportWithinLimit(rows: SponsorAttendeeDatabaseRow[], maxRows: number): SponsorAttendeeRow[] {
+function assertExportWithinLimit(rows: SponsorAttendeeDatabaseRow[], maxRows: number): SponsorAttendee[] {
   if (rows.length > maxRows) {
     throw new AppError(413, "CSV_EXPORT_ROW_LIMIT_EXCEEDED", `CSV export is limited to ${maxRows} records`);
   }
@@ -125,7 +105,7 @@ export async function listSponsorAttendeesForExport(
   db: DatabaseLike,
   eventId: string,
   maxRows: number,
-): Promise<SponsorAttendeeRow[]> {
+): Promise<SponsorAttendee[]> {
   const rows = await prepareSponsorAttendeeExport(db, eventId, maxRows).all<SponsorAttendeeDatabaseRow>();
   return assertExportWithinLimit(rows.results, maxRows);
 }
@@ -170,7 +150,7 @@ export async function listSponsorAttendeesPage(
   db: DatabaseLike,
   eventId: string,
   params: SponsorAttendeesListQuery,
-): Promise<{ attendees: SponsorAttendeeRow[]; total: number }> {
+): Promise<{ attendees: SponsorAttendee[]; total: number }> {
   const { rows, total } = await queryPage<SponsorAttendeeDatabaseRow>(
     db,
     buildSponsorAttendeesPageQuery(eventId, params),
@@ -184,8 +164,8 @@ export async function listSponsorAttendeesPageWithAudit(
   actorUserId: string,
   capacity: SponsorCapacity,
   params: SponsorAttendeesListQuery,
-): Promise<{ attendees: SponsorAttendeeRow[]; total: number }> {
-  let result: { attendees: SponsorAttendeeRow[]; total: number };
+): Promise<{ attendees: SponsorAttendee[]; total: number }> {
+  let result: { attendees: SponsorAttendee[]; total: number };
   try {
     const [, pageResult, countResult] = await db.batch([
       prepareAuthorizationGuard(
@@ -213,8 +193,8 @@ export async function listSponsorAttendeesForExportWithAudit(
   actorUserId: string,
   capacity: SponsorCapacity,
   maxRows: number,
-): Promise<SponsorAttendeeRow[]> {
-  let attendees: SponsorAttendeeRow[];
+): Promise<SponsorAttendee[]> {
+  let attendees: SponsorAttendee[];
   try {
     const [, exportResult] = await db.batch([
       prepareAuthorizationGuard(

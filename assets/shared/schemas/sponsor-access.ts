@@ -38,14 +38,16 @@ export const sponsorAccessLinkCreateRouteSchema = {
   },
 };
 
+/**
+ * What a sponsor receives about a consenting attendee: the owner's allowlist,
+ * with no internal identifiers or flags. A consumer mailbox reads "Personal
+ * email address" in place of an organization.
+ */
 export const sponsorAttendeeSchema = z.object({
-  registrationId: databaseIdSchema,
   firstName: z.string().nullable(),
   lastName: z.string().nullable(),
   email: z.email().nullable(),
   organizationName: z.string().nullable(),
-  /** A consumer mailbox: shown as "Personal email address" in place of an organization. */
-  personalEmail: z.boolean(),
   jobTitle: z.string().nullable(),
 });
 

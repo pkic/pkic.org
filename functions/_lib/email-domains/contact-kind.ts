@@ -5,6 +5,7 @@
  */
 import type { EmailDomainKind } from "../../../assets/shared/schemas/email-domain-kind";
 import { mailboxKind } from "./classification";
+import { PERSONAL_EMAIL_ADDRESS_LABEL } from "../../../assets/shared/email-first-copy";
 
 /** Free and disposable mailboxes are personal; anything else may speak for an organization. */
 export function emailDomainKind(email: string | null | undefined): EmailDomainKind {
@@ -18,6 +19,19 @@ export function contactAffiliation(
 ): { organization: string | null; personalEmail: boolean } {
   const personalEmail = emailDomainKind(email) === "personal";
   return { organization: personalEmail ? null : organization, personalEmail };
+}
+
+/**
+ * The organization column sponsors receive, in every format: the organization,
+ * or "Personal email address" for a consumer mailbox. Sponsors get this one
+ * text field, never a separate flag.
+ */
+export function sponsorFacingOrganization(
+  email: string | null | undefined,
+  organization: string | null,
+): string | null {
+  const affiliation = contactAffiliation(email, organization);
+  return affiliation.personalEmail ? PERSONAL_EMAIL_ADDRESS_LABEL : affiliation.organization;
 }
 
 /** Whether any of a person's verified addresses is a work address; only such a person keeps normal priority. */

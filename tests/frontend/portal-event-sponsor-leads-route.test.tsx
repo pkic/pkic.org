@@ -72,7 +72,6 @@ async function mount(access: boolean, canView = true, canExport = false, refused
                 name: "Consenting attendee",
                 email: "attendee@example.test",
                 organization: null,
-                personalEmail: false,
                 capturedAt: "2030-01-01T10:00:00.000Z",
                 operatorUserId: sponsorId,
                 operatorName: "Operator",

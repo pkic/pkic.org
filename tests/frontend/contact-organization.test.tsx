@@ -16,22 +16,12 @@ afterEach(() => {
   host = undefined;
 });
 
-async function mount(
-  organization: string | null,
-  personalEmail: boolean,
-  handledLast = false,
-  audience: "organizer" | "sponsor" = "sponsor",
-) {
+async function mount(organization: string | null, personalEmail: boolean, handledLast = false) {
   host = document.createElement("div");
   document.body.append(host);
   await act(() =>
     render(
-      <ContactOrganization
-        organization={organization}
-        personalEmail={personalEmail}
-        handledLast={handledLast}
-        audience={audience}
-      />,
+      <ContactOrganization organization={organization} personalEmail={personalEmail} handledLast={handledLast} />,
       host!,
     ),
   );
@@ -39,8 +29,8 @@ async function mount(
 }
 
 describe("contact organization", () => {
-  it("marks a personal-mailbox contact instead of naming any organization", async () => {
-    expect(await mount("Selected organization", true)).toBe(PERSONAL_EMAIL_ADDRESS_LABEL);
+  it("never names an organization for a personal-mailbox contact", async () => {
+    expect(await mount("Selected organization", true)).not.toContain("Selected organization");
   });
 
   it("tells organizers why a waiting registrant is handled last in one pill", async () => {
@@ -54,8 +44,8 @@ describe("contact organization", () => {
   });
 
   it("shows organizers the same one pill for every personal-mailbox registrant, waiting or not", async () => {
-    const waiting = await mount(null, true, true, "organizer");
-    const notWaiting = await mount(null, true, false, "organizer");
+    const waiting = await mount(null, true, true);
+    const notWaiting = await mount(null, true, false);
     expect(notWaiting).toBe(waiting);
     expect(notWaiting).not.toContain(PERSONAL_EMAIL_ADDRESS_LABEL);
     expect(host!.querySelectorAll(".pk-badge--warn")).toHaveLength(1);

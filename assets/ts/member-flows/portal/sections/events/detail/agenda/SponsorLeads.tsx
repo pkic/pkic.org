@@ -16,7 +16,6 @@ import { Menu } from "../../../../../../ui/Menu";
 
 import { loadLiveSponsorLeads } from "./sponsor-lead-loader";
 import { portalSession } from "../../../../state";
-import { ContactOrganization } from "../../../../../../components/ContactOrganization";
 const EventScanner = lazy(() => import("../scanner/EventScanner").then((module) => ({ default: module.EventScanner })));
 
 export function SponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZone }) {
@@ -185,9 +184,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                     { header: "Email", cell: (row) => row.email ?? "—", sort: { asc: "email", desc: "-email" } },
                     {
                       header: "Organization",
-                      cell: (row) => (
-                        <ContactOrganization organization={row.organization} personalEmail={row.personalEmail} />
-                      ),
+                      cell: (row) => row.organization ?? "—",
                       sort: { asc: "organization", desc: "-organization" },
                     },
                     {

@@ -6,8 +6,7 @@ import type { DatabaseLike } from "../../db/types";
 import { assertEventContactAccess, eventContactAccessSql } from "./evidence-retention";
 import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadPermissionSql } from "./lead-scope";
-import { contactAffiliation } from "../../email-domains/contact-kind";
-import { PERSONAL_EMAIL_ADDRESS_LABEL } from "../../../../assets/shared/email-first-copy";
+import { sponsorFacingOrganization } from "../../email-domains/contact-kind";
 
 export const SPONSOR_LEAD_EXPORT_PERMISSION_SQL = sponsorLeadPermissionSql("agenda:leads_export");
 
@@ -48,16 +47,13 @@ export async function exportSponsorLeads(db: DatabaseLike, eventId: string, spon
   return encodeBoundedCsv(
     [
       ["Attendee ID", "Name", "Email", "Organization", "Captured at"],
-      ...rows.map((row) => {
-        const affiliation = contactAffiliation(row.email, row.organization);
-        return [
-          row.user_id,
-          row.name,
-          row.email,
-          affiliation.personalEmail ? PERSONAL_EMAIL_ADDRESS_LABEL : affiliation.organization,
-          row.observed_at,
-        ];
-      }),
+      ...rows.map((row) => [
+        row.user_id,
+        row.name,
+        row.email,
+        sponsorFacingOrganization(row.email, row.organization),
+        row.observed_at,
+      ]),
     ],
     20 * 1024 * 1024,
   );

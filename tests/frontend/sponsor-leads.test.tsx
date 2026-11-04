@@ -28,7 +28,6 @@ async function mount(canView: boolean, canCapture = false, canExport = false) {
               name: "Private person",
               email: "private@example.test",
               organization: "Example",
-              personalEmail: false,
               capturedAt: "2030-01-01T10:00:00.000Z",
               operatorUserId: id,
               operatorName: "Operator",

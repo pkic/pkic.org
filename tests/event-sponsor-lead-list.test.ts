@@ -298,10 +298,14 @@ describe("sponsor live lead viewing through the mounted API", () => {
     await env.DB.prepare("UPDATE registrations SET registration_identity_id = ? WHERE event_id = ? AND user_id = ?")
       .bind(identity, eventId, person.id)
       .run();
-    const page = sponsorLeadListSchema.parse(await (await request(undefined, "?q=lead.person")).json());
+    const payload: unknown = await (await request(undefined, "?q=lead.person")).json();
+    expect(payload).not.toHaveProperty("leads.0.personalEmail");
+    const page = sponsorLeadListSchema.parse(payload);
+    // Sponsors get the organization as one text field: a consumer mailbox reads as such, with no separate flag.
     expect(page.leads).toEqual([
-      expect.objectContaining({ email: "lead.person@gmail.com", organization: null, personalEmail: true }),
+      expect.objectContaining({ email: "lead.person@gmail.com", organization: "Personal email address" }),
     ]);
+    expect(page.leads[0]).not.toHaveProperty("personalEmail");
     await grant("agenda:leads_export");
     const csv = await (await request(`/sponsors/${sponsorId}/leads.csv`)).text();
     expect(csv).toContain(`,lead.person@gmail.com,${PERSONAL_EMAIL_ADDRESS_LABEL},`);

@@ -11,9 +11,8 @@ export const sponsorLeadSchema = z.object({
   userId: databaseIdSchema,
   name: z.string(),
   email: z.string(),
+  /** The organization, or "Personal email address" for a consumer mailbox. */
   organization: z.string().nullable(),
-  /** A consumer mailbox: shown as "Personal email address" in place of an organization. */
-  personalEmail: z.boolean(),
   capturedAt: utcInstantSchema,
   operatorUserId: databaseIdSchema,
   operatorName: z.string(),

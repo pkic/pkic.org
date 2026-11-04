@@ -11,7 +11,6 @@ import { SponsorAttendees } from "../../assets/ts/member-flows/portal/sections/s
 
 const SPONSOR_ID = "20000000-0000-4000-8000-000000000001";
 const EVENT_ID = "20000000-0000-4000-8000-000000000002";
-const REGISTRATION_ID = "20000000-0000-4000-8000-000000000003";
 const ATTENDEES_PATH = `/api/v1/sponsors/${SPONSOR_ID}/events/spring-summit/attendees`;
 const mounted: HTMLElement[] = [];
 
@@ -37,12 +36,10 @@ function attendeesResponse(attendees: Array<Record<string, unknown>>) {
 
 const ONE_ATTENDEE = attendeesResponse([
   {
-    registrationId: REGISTRATION_ID,
     firstName: "Ada",
     lastName: "Lovelace",
     email: "ada@example.test",
     organizationName: "Analytical Engines",
-    personalEmail: false,
     jobTitle: "Analyst",
   },
 ]);

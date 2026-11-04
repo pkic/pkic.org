@@ -19,6 +19,9 @@ import { waitForCapturedEmail } from "./helpers/sendgrid";
 import { declinePasskeyOffer } from "./helpers/portal-auth";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { endEventSponsor } from "./helpers/event-sponsor";
+import { ownDomainEmail, registerInBrowser } from "./helpers/registration";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { sponsorAttendeesListResponseSchema } from "../../assets/shared/schemas/sponsor-access";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
@@ -49,9 +52,12 @@ async function signInAsAdmin(page: Page): Promise<void> {
 
 test.describe("portal sponsor workspace", () => {
   /** The sponsorship this test activated, and the staff session that may end it. */
+  let attendeeContext: BrowserContext | undefined;
   let activeSponsorship: { id: string; staff: Awaited<ReturnType<BrowserContext["storageState"]>> } | undefined;
 
   test.afterEach(async ({ browser }, info) => {
+    await attendeeContext?.close();
+    attendeeContext = undefined;
     if (!activeSponsorship) return;
     const staffContext = await browser.newContext({
       baseURL: info.project.use.baseURL,
@@ -65,10 +71,16 @@ test.describe("portal sponsor workspace", () => {
     }
   });
 
-  test("magic-link access, attendee list + CSV export, sign out, and slug-based link re-request", async ({ page }) => {
+  test("magic-link access, attendee list + CSV export, sign out, and slug-based link re-request", async ({
+    page,
+    browser,
+  }, info) => {
     const stamp = Date.now();
     const contactEmail = `sponsor-e2e-${stamp}@example.test`;
-    const attendeeEmail = `sponsor-e2e-attendee-${stamp}@example.test`;
+    const attendeeEmail = ownDomainEmail("sponsor-disclosure");
+    const organizationName = `Synthetic Disclosure Services ${stamp}`;
+    const personalEmail = `synthetic-sponsor-${stamp}@gmail.com`;
+    const deniedEmail = ownDomainEmail("sponsor-no-sharing");
     const renewalDate = new Date(Date.now() + 180 * 86_400_000).toISOString().slice(0, 10);
 
     await signInAsAdmin(page);
@@ -122,56 +134,22 @@ test.describe("portal sponsor workspace", () => {
     activeSponsorship = { id: sponsorship.id, staff: await page.context().storageState() };
     expect(sponsorship.stageStatus).toBe(200);
 
-    // ── Register a consenting attendee via the real public registration API ─
-    const registration = await page.evaluate(
-      async ({ slug, attendeeEmail }) => {
-        const res = await fetch(`/api/v1/events/${slug}/registrations`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            firstName: "Casey",
-            lastName: "Attendee",
-            email: attendeeEmail,
-            attendanceType: "virtual",
-            // country is this event's own required custom registration field
-            // (seeded via scripts/seed-event.yaml's "pqc-2026-registration"
-            // form). Organization and job title are not form answers: they
-            // come from the person's identity.
-            customAnswers: { country: "NL" },
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-              { termKey: "photo-policy", version: "v1" },
-              { termKey: "sponsor-data-sharing", version: "v1" },
-            ],
-          }),
-        });
-        return { status: res.status, body: await res.text() };
-      },
-      { slug: EVENT_SLUG, attendeeEmail },
-    );
-    expect(registration.status, registration.body).toBe(200);
-
-    // Self-registration starts pending_email_confirmation — only
-    // status='registered' rows are sponsor-data eligible (see
-    // attendee projection) — so confirm it via the same link the
-    // attendee would receive by email, hit directly as a GET (its query
-    // params are the same either way; skips rendering the confirm page,
-    // which isn't part of what this phase tests).
-    const confirmEmail = await waitForCapturedEmail(attendeeEmail, "confirm your registration");
-    const confirmUrl = extractUrlFromEmail(confirmEmail, "/confirm/");
-    const confirmParams = new URL(confirmUrl, "http://127.0.0.1:8788").searchParams;
-    const confirmStatus = await page.evaluate(
-      async ({ slug, token, id }) => {
-        const url = `/api/v1/events/${slug}/registrations/confirm-email?token=${encodeURIComponent(token)}${
-          id ? `&id=${encodeURIComponent(id)}` : ""
-        }`;
-        const res = await fetch(url);
-        return res.status;
-      },
-      { slug: EVENT_SLUG, token: confirmParams.get("token") ?? "", id: confirmParams.get("id") },
-    );
-    expect(confirmStatus).toBe(200);
+    attendeeContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
+    const attendee = await attendeeContext.newPage();
+    const optIn = async (form: Page) => {
+      await form.getByRole("checkbox", { name: /sharing my professional profile with event sponsors/ }).check();
+    };
+    const workRegistration = await registerInBrowser(attendee, attendeeEmail, undefined, undefined, {
+      organization: organizationName,
+      onReviewReady: optIn,
+    });
+    const personalRegistration = await registerInBrowser(attendee, personalEmail, undefined, undefined, {
+      individual: true,
+      onReviewReady: optIn,
+    });
+    await registerInBrowser(attendee, deniedEmail, undefined, undefined, {
+      organization: "Synthetic Private Services",
+    });
 
     // ── Sponsor clicks the capability-bearing unified portal link ──────────
     const accessEmail = await waitForCapturedEmail(contactEmail, "sponsor workspace");
@@ -194,7 +172,34 @@ test.describe("portal sponsor workspace", () => {
     ).toBeVisible();
     await expect(page.getByText("Leader sponsor")).toBeVisible();
     await expect(page.getByText(attendeeEmail)).toBeVisible();
-    await expect(page.getByText("Casey Attendee")).toBeVisible();
+    await expect(page.getByText(personalEmail, { exact: true })).toBeVisible();
+    await expect(page.getByText(deniedEmail, { exact: true })).toBeHidden();
+    await expect(page.getByText("Personal email address", { exact: true })).toBeVisible();
+    const endpoint = `/api/v1/sponsors/${sponsorship.id}/events/${event.id}/attendees`;
+    const rosterResponse = await page.request.get(endpoint);
+    expect(rosterResponse.status()).toBe(200);
+    const raw = await rosterResponse.json();
+    const roster = sponsorAttendeesListResponseSchema.parse(raw);
+    expect(roster.attendees.find((row) => row.email === attendeeEmail)).toMatchObject({
+      organizationName,
+      jobTitle: "Conference attendee",
+    });
+    for (const row of raw.attendees) {
+      expect(Object.keys(row).sort()).toEqual(
+        ["firstName", "lastName", "email", "organizationName", "jobTitle"].sort(),
+      );
+    }
+    expect(roster.attendees.find((row) => row.email === personalEmail)?.organizationName).toBe(
+      "Personal email address",
+    );
+    for (const [width, height, device] of [
+      [1280, 900, "desktop"],
+      [375, 812, "phone"],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await page.screenshot({ path: info.outputPath(`sponsor-disclosure-${device}.png`), fullPage: true });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
 
     // ── CSV export via the real download link ──────────────────────────────
     const csvLink = page.getByRole("link", { name: "Download consenting attendees (CSV)", exact: true });
@@ -206,7 +211,24 @@ test.describe("portal sponsor workspace", () => {
     const csvPath = await download.path();
     const csv = readFileSync(csvPath as string, "utf8");
     expect(csv).toContain(attendeeEmail);
-    expect(csv).toContain("Casey");
+    expect(csv).toContain(personalEmail);
+    expect(csv).toContain("Personal email address");
+    expect(csv).not.toContain(deniedEmail);
+    expect(csv.split(/\r?\n/)[0]).toBe("First name,Last name,Email,Organization,Job title");
+    expect(csv).not.toContain(workRegistration.result.registrationId);
+    expect(csv).not.toContain(personalRegistration.result.registrationId);
+
+    const personalManage = personalRegistration.result.manageUrl;
+    expect(personalManage).toBeTruthy();
+    await attendee.goto(personalManage!);
+    await attendee.getByRole("button", { name: "Withdraw sharing…", exact: true }).click();
+    await acceptConfirmDialog(attendee, "Withdraw sharing");
+    await expect(attendee.getByText("Sharing withdrawn", { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByText(personalEmail, { exact: true })).toBeHidden();
+    await expect(page.getByText(attendeeEmail, { exact: true })).toBeVisible();
+    const withdrawnCsv = await (await page.request.get(csvEndpoint!)).text();
+    expect(withdrawnCsv).not.toContain(personalEmail);
 
     // ── Sign out clears the canonical session; a fresh visit is anonymous ─
     // Sign out now lives in the sidebar footer's account menu rather than as

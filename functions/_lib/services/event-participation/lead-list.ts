@@ -16,7 +16,7 @@ import { AppError } from "../../errors";
 import { assertEventContactAccess, eventContactAccessSql } from "./evidence-retention";
 import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadPermissionSql } from "./lead-scope";
-import { contactAffiliation } from "../../email-domains/contact-kind";
+import { sponsorFacingOrganization } from "../../email-domains/contact-kind";
 
 /** Page and count recheck authorization and current consent in the same native D1 batch. */
 export async function listSponsorLeads(
@@ -42,7 +42,7 @@ export async function listSponsorLeads(
   const name = "TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,''))";
   const organization = registrationOrganizationSql("reg");
   const search = query.q ? buildD1TextSearchFilter(query.q, [name, "u.email", organization]) : null;
-  const { rows, total } = await queryPage<Omit<SponsorLead, "personalEmail">>(db, {
+  const { rows, total } = await queryPage<SponsorLead>(db, {
     source: {
       selectSql: `SELECT lead.id,lead.user_id AS userId,${name} AS name,u.email,${organization} AS organization,
         lead.observed_at AS capturedAt,lead.operator_user_id AS operatorUserId,
@@ -66,7 +66,7 @@ export async function listSponsorLeads(
     offset: query.offset,
   });
   return sponsorLeadListSchema.parse({
-    leads: rows.map((lead) => ({ ...lead, ...contactAffiliation(lead.email, lead.organization) })),
+    leads: rows.map((lead) => ({ ...lead, organization: sponsorFacingOrganization(lead.email, lead.organization) })),
     page: buildPageInfo(query.limit, query.offset, total, rows.length),
   });
 }

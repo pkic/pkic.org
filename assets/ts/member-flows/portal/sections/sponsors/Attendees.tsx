@@ -9,7 +9,6 @@ import type { Column } from "../../../../components/Table";
 import { EmptyState } from "../../../../ui/EmptyState";
 import type { SponsorAttendee, SponsorCapacity } from "../../../../../shared/schemas/sponsor-access";
 import { sponsorAttendeesListResponseSchema } from "../../../../../shared/schemas/sponsor-access";
-import { ContactOrganization } from "../../../../components/ContactOrganization";
 
 function fmtName(a: SponsorAttendee): string {
   return [a.firstName, a.lastName].filter(Boolean).join(" ").trim() || "—";
@@ -29,7 +28,7 @@ const ATTENDEE_COLUMNS: Column<SponsorAttendee>[] = [
   { header: "Email", cell: (a) => a.email ?? "—" },
   {
     header: "Organization",
-    cell: (a) => <ContactOrganization organization={a.organizationName} personalEmail={a.personalEmail} />,
+    cell: (a) => a.organizationName ?? "—",
   },
   { header: "Job title", cell: (a) => a.jobTitle ?? "—" },
 ];
@@ -102,7 +101,8 @@ export function SponsorAttendees({
         initialSort="name"
         paginate
         load={load}
-        rowKey={(attendee) => attendee.registrationId}
+        // Sponsors receive no internal identifier; an attendee's address is unique on this list.
+        rowKey={(attendee) => attendee.email ?? `${attendee.firstName} ${attendee.lastName}`}
         toolbar={() => (
           <DownloadAction
             label="Download consenting attendees (CSV)"

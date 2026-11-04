@@ -13,6 +13,8 @@ import { createAdminSession } from "./helpers/auth";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { resetDb } from "./helpers/reset-db";
+import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
+import { sponsorAttendeesListResponseSchema } from "../assets/shared/schemas/sponsor-access";
 
 function jsonRequest(path: string, body: unknown, token?: string): Request {
   const headers = new Headers({ "content-type": "application/json" });
@@ -167,8 +169,12 @@ describe("sponsor capacity in the canonical portal session", () => {
     await expect(session.json()).resolves.toMatchObject({ sponsors: [{ sponsorId }] });
     const attendees = await call(getRequest(`/api/v1/sponsors/${sponsorId}/events/${eventId}/attendees`, sessionToken));
     expect(attendees.status).toBe(200);
-    const attendeeBody = (await attendees.json()) as { attendees: Array<{ email: string }> };
+    const attendeeBody = (await attendees.json()) as { attendees: Array<Record<string, unknown>> };
     expect(attendeeBody.attendees.map((attendee) => attendee.email)).toEqual(["yes@attendee.test"]);
+    // Only the owner's allowlist reaches sponsors: no internal identifier and no flags.
+    expect(Object.keys(attendeeBody.attendees[0]!).sort()).toEqual(
+      ["email", "firstName", "jobTitle", "lastName", "organizationName"].sort(),
+    );
     expect(attendeeBody.attendees[0]).not.toHaveProperty("attendanceType");
     expect(attendeeBody.attendees[0]).not.toHaveProperty("days");
     expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = 'leader@sponsor.test'")).toHaveLength(
@@ -202,6 +208,45 @@ describe("sponsor capacity in the canonical portal session", () => {
     const secondBody = (await second.json()) as { attendees: unknown[]; page: { hasMore: boolean } };
     expect(secondBody.attendees).toHaveLength(1);
     expect(secondBody.page.hasMore).toBe(false);
+  });
+
+  it("masks a personal mailbox's selected organization consistently in JSON and CSV", async () => {
+    const sponsorId = await createActiveEventSponsor("Leader", "personal-list@sponsor.test");
+    const registrationId = await seedConsentingRegistration(
+      eventId,
+      "synthetic.attendee@gmail.com",
+      "sponsor-data-sharing",
+    );
+    const [{ user_id: userId }] = await queryAll<{ user_id: string }>(
+      env.DB,
+      "SELECT user_id FROM registrations WHERE id = ?",
+      registrationId,
+    );
+    const identity = await addRepresentative(
+      env.DB,
+      await seedOrganizationAggregate(env.DB, await insertOrganization(env.DB, "Selected synthetic organization"), "A"),
+      userId,
+    );
+    await env.DB.prepare("UPDATE registrations SET registration_identity_id = ? WHERE id = ?")
+      .bind(identity, registrationId)
+      .run();
+    const token = await createSponsorUserSession("personal-list@sponsor.test");
+    const path = `/api/v1/sponsors/${sponsorId}/events/${eventId}/attendees`;
+    const response = await call(getRequest(path, token));
+    expect(response.status).toBe(200);
+    const raw: unknown = await response.json();
+    expect(raw).not.toHaveProperty("attendees.0.registrationId");
+    expect(raw).not.toHaveProperty("attendees.0.personalEmail");
+    const body = sponsorAttendeesListResponseSchema.parse(raw);
+    expect(body.attendees[0]).toMatchObject({
+      email: "synthetic.attendee@gmail.com",
+      organizationName: "Personal email address",
+    });
+    expect(JSON.stringify(raw)).not.toContain("Selected synthetic organization");
+    const csv = await (await call(getRequest(`${path}?format=csv`, token))).text();
+    expect(csv).toContain("Personal email address");
+    expect(csv).not.toContain("Selected synthetic organization");
+    expect(csv).not.toContain(registrationId);
   });
 
   it("deduplicates repeated consent versions and bounds CSV export", async () => {
