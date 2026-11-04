@@ -55,13 +55,24 @@ describe("DownloadAction", () => {
     expect(host.querySelector("a")!.hasAttribute("download")).toBe(false);
   });
 
-  it("renders an unavailable URL download as a disabled button rather than a live link", async () => {
-    const host = await mount(<DownloadAction label="Download roster (CSV)" href="/roster" disabled />);
-    expect(host.querySelector("a")).toBeNull();
-    const button = host.querySelector("button")!;
-    expect(button.disabled).toBe(true);
-    expect(button.getAttribute("aria-label")).toBe("Download roster (CSV)");
-  });
+  it.each(["disabled", "busy"])(
+    "renders a %s URL download as a disabled button rather than a live link",
+    async (state) => {
+      const host = await mount(
+        <DownloadAction
+          label="Download roster (CSV)"
+          href="/roster"
+          disabled={state === "disabled"}
+          busy={state === "busy"}
+        />,
+      );
+      expect(host.querySelector("a")).toBeNull();
+      const button = host.querySelector("button")!;
+      if (state === "busy") expect(button.getAttribute("aria-disabled")).toBe("true");
+      else expect(button.disabled).toBe(true);
+      expect(button.getAttribute("aria-label")).toBe("Download roster (CSV)");
+    },
+  );
 
   it("stays busy while a generated download is built and keeps its accessible name", async () => {
     let finish!: () => void;
@@ -130,12 +141,10 @@ describe("DownloadAction", () => {
       const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
         (item) => item.textContent === "Attendee data",
       );
-      expect(item?.getAttribute("aria-disabled")).toBe("true");
-      const click = new MouseEvent("click", { bubbles: true, cancelable: true });
-      await act(() => {
-        item!.dispatchEvent(click);
-      });
-      expect(click.defaultPrevented).toBe(true);
+      expect(item).toBeInstanceOf(HTMLButtonElement);
+      expect((item as HTMLButtonElement).disabled).toBe(true);
+      expect(item?.hasAttribute("href")).toBe(false);
+      expect(host.querySelector('a[href="/roster"]')).toBeNull();
     },
   );
 

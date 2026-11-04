@@ -189,16 +189,8 @@ export function MenuLevel({
             {item.children && <span aria-hidden="true"> ›</span>}
           </>
         );
-        return item.href ? (
-          <a
-            {...shared}
-            href={item.href}
-            aria-disabled={item.disabled ? "true" : undefined}
-            onClick={(event) => {
-              if (item.disabled) event.preventDefault();
-              else close(false);
-            }}
-          >
+        return item.href && !item.disabled ? (
+          <a {...shared} href={item.href} onClick={() => close(false)}>
             {content}
           </a>
         ) : (

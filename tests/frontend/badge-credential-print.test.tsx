@@ -147,6 +147,19 @@ describe("authorized badge reprinting", () => {
           />
         ),
       );
+      if (view === "scoped") {
+        await rendered(() => expect(navigate).toHaveBeenCalledWith(`${BASE}/${ID}`, { replace: true }));
+        await mount(
+          <BadgeCredentials
+            slug="workshop"
+            basePath={BASE}
+            credentialId={ID}
+            eventId={metadata.eventId}
+            onPrintClose={vi.fn()}
+            printRequest={{ scope: { kind: "selected", rows: [] }, session: null }}
+          />,
+        );
+      }
       await rendered(() => expect(host.querySelector('iframe[title="Attendee label"]')).not.toBeNull());
       expect(badgeLabelRequestSchema.parse(bodies[0])).toMatchObject({ source: "badge", badgeId: ID });
       expect(host.textContent).not.toContain("Preview and download badge");

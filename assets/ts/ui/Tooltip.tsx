@@ -24,6 +24,8 @@ export function Tooltip({
     setOpen(true);
   };
   const hide = () => {
+    clearTimeout(closing.current);
+    if (document.activeElement === trigger.current) return;
     closing.current = setTimeout(() => setOpen(false), 150);
   };
   useEffect(() => () => clearTimeout(closing.current), []);

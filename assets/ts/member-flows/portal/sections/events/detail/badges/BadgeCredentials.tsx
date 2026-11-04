@@ -5,7 +5,7 @@ import { RegistrationBadgePrinting } from "../../../../../../components/event-ba
 import type { BadgePrintScope } from "../../../../../../components/event-badges/badge-print-population";
 import type { PortalSession } from "../../../../types";
 import { isAuthed, portalSession } from "../../../../state";
-import { useCallback, useState } from "preact/hooks";
+import { useCallback, useRef, useState } from "preact/hooks";
 import {
   badgeCredentialMetadataSchema,
   badgeCredentialsResponseSchema,
@@ -57,7 +57,7 @@ export function BadgeCredentials({
   onPrintClose?: () => void;
 }) {
   const [, navigate] = usePortalHashLocation();
-  const [soleBadge, setSoleBadge] = useState<{ slug: string; userId: string; id: string } | null>(null);
+  const narrowed = useRef(false);
   const printSession = printRequest?.session;
   const printContextCurrent = useCallback(
     () =>
@@ -73,7 +73,7 @@ export function BadgeCredentials({
     new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("userId"),
   );
   const scopedUserId = userId ?? (requestedUser.success ? requestedUser.data : undefined);
-  if (printRequest && !scopedUserId && eventId && onPrintClose)
+  if (printRequest && !credentialId && !scopedUserId && eventId && onPrintClose)
     return printContextCurrent() ? (
       <RegistrationBadgePrinting
         slug={slug}
@@ -123,16 +123,17 @@ export function BadgeCredentials({
         basePath={basePath}
       />
     );
-  if (scopedUserId && soleBadge?.userId === scopedUserId && soleBadge.slug === slug)
-    return <BadgeCredentialRecord slug={slug} credentialId={soleBadge.id} replacing={false} basePath={basePath} />;
   return (
     <ApiDataTable
       caption="Attendee badges"
       endpoint={`/api/v1/events/${encodeURIComponent(slug)}/badges`}
       responseSchema={badgeCredentialsResponseSchema}
       onData={(data) => {
-        if (scopedUserId && data.page.total === 1 && data.badges[0])
-          setSoleBadge({ slug, userId: scopedUserId, id: data.badges[0].id });
+        if (scopedUserId && !narrowed.current && data.page.total === 1 && data.badges[0])
+          navigate(recordPath(data.badges[0].id), { replace: true });
+      }}
+      onQueryChange={(query) => {
+        narrowed.current = Boolean(query.q || query.status);
       }}
       resolve={(data) => data.badges}
       resolvePage={(data) => data.page}

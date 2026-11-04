@@ -82,5 +82,9 @@ it.each(["focus", "tap"] as const)("cancels a pending hover close when %s reopen
   await act(() => {
     vi.advanceTimersByTime(200);
   });
+  if (method === "focus") {
+    expect(document.querySelector('[role="tooltip"]')).not.toBeNull();
+    await act(() => trigger.blur());
+  }
   expect(document.querySelector('[role="tooltip"]')).toBeNull();
 });

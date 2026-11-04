@@ -110,7 +110,7 @@ export function DownloadAction(props: DownloadActionProps) {
     );
   }
 
-  if (props.href !== undefined && !props.disabled) {
+  if (props.href !== undefined && !props.disabled && !busy) {
     return (
       <ButtonLink
         variant="secondary"

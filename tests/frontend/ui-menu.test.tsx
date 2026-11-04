@@ -60,6 +60,26 @@ function press(element: Element, key: string) {
 }
 
 describe("Menu", () => {
+  it("renders disabled destinations as inert buttons while keeping enabled destinations as links", () => {
+    const container = mount(
+      <Menu
+        label="Downloads"
+        items={[
+          { id: "blocked", label: "Unavailable export", href: "/private-export", disabled: true },
+          { id: "available", label: "Available export", href: "/available-export" },
+        ]}
+      />,
+    );
+    void act(() => trigger(container).click());
+    const [disabled, enabled] = container.querySelectorAll('[role="menuitem"]');
+    expect(disabled).toBeInstanceOf(HTMLButtonElement);
+    expect((disabled as HTMLButtonElement).disabled).toBe(true);
+    expect(disabled.hasAttribute("href")).toBe(false);
+    expect(enabled).toBeInstanceOf(HTMLAnchorElement);
+    expect(enabled.getAttribute("href")).toBe("/available-export");
+    expect(document.activeElement).toBe(enabled);
+  });
+
   it("keeps paginated choices open and moves focus when the next page is shorter", () => {
     const next = vi.fn();
     const container = mount(
