@@ -1,3 +1,4 @@
+import { ScannerAttendeeSearch } from "./ScannerAttendeeSearch";
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import type { FieldPresentation } from "../../../../../../hooks/useContractForm";
@@ -13,6 +14,7 @@ export function ScannerManualEntry({
   onBadge,
   field,
   children,
+  lookup,
 }: {
   focusRequested: boolean;
   onFocusHandled: () => void;
@@ -20,6 +22,7 @@ export function ScannerManualEntry({
   onBadge: (code: string) => void;
   field: FieldPresentation;
   children?: ComponentChildren;
+  lookup?: { slug: string; online: boolean; disabled: boolean };
 }) {
   const manual = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -30,19 +33,35 @@ export function ScannerManualEntry({
   }, [focusRequested, onFocusHandled]);
   return (
     <section ref={manual}>
-      <SectionHeading level={3}>Manual entry</SectionHeading>
+      <SectionHeading level={3}>{lookup?.online ? "Find an attendee" : "Enter badge code"}</SectionHeading>
       <div class="pk-form">
-        <p>Type or paste the badge code printed below the QR. Spaces and hyphens are optional.</p>
-        <Field label="Badge code" {...field}>
-          {(control) => (
-            <TextInput
-              {...control}
-              name="badgeId"
-              value={badgeId}
-              onInput={(event) => onBadge(event.currentTarget.value)}
-              autoComplete="off"
-            />
-          )}
+        <p>
+          {lookup?.online
+            ? "Search for an attendee or enter the code printed on their badge."
+            : "Type or paste the badge code printed below the QR. Spaces and hyphens are optional."}
+        </p>
+        {lookup && !lookup.online && (
+          <p role="status">Offline: use a badge code. Name, email, and organization search needs a connection.</p>
+        )}
+        <Field label={lookup?.online ? "Badge code or attendee" : "Badge code"} {...field}>
+          {(control) =>
+            lookup?.online ? (
+              <ScannerAttendeeSearch
+                slug={lookup.slug}
+                control={control}
+                onBadge={onBadge}
+                disabled={lookup.disabled}
+              />
+            ) : (
+              <TextInput
+                {...control}
+                name="badgeId"
+                value={badgeId}
+                onInput={(event) => onBadge(event.currentTarget.value)}
+                autoComplete="off"
+              />
+            )
+          }
         </Field>
         {children}
       </div>

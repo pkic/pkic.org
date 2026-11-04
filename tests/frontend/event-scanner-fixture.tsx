@@ -72,7 +72,7 @@ vi.mock(
       typeof import("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useEligibilityManifest")
     >()),
     useEligibilityManifest: () => ({
-      eligibilityManifest: { current: mocks.snapshot },
+      eligibilityManifest: { current: { occurrenceId: null, roomId: null, ...mocks.snapshot } },
       manifestReady: true,
       manifestPreparing: false,
       manifestError: "",
@@ -97,7 +97,11 @@ vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/Scan
   ScannerRecovery: () => null,
 }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerSetup", () => ({
-  ScannerSetup: () => null,
+  ScannerSetup: ({ onStart, ready, locked }: { onStart: () => void; ready: boolean; locked: boolean }) => (
+    <button type="button" disabled={!ready || locked} onClick={onStart}>
+      Start scanning
+    </button>
+  ),
 }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-device-ledger", () => ({
   freezeScannerEpoch: mocks.freeze,
@@ -144,7 +148,10 @@ export async function mount(ready: boolean, actions: EventScanRequest["action"][
   const start = Array.from(host.querySelectorAll("button")).find(
     (button) => button.textContent?.trim() === "Start scanning",
   )!;
-  expect(start.disabled).toBe(!ready);
+  await vi.waitFor(async () => {
+    await act(async () => {});
+    expect(start.disabled).toBe(!ready);
+  });
 }
 export function scannerDialog(title: string) {
   return Array.from(host.querySelectorAll<HTMLDialogElement>("dialog")).find(
@@ -152,21 +159,35 @@ export function scannerDialog(title: string) {
   )!;
 }
 export async function openManual(title = "Enter badge code") {
-  const dialog = scannerDialog(title);
-  Object.defineProperty(dialog, "close", { configurable: true, value: () => dialog.removeAttribute("open") });
-  await act(async () => {});
-  if (!host.querySelector('input[name="badgeId"]'))
+  if (title === "Review sponsor lead") {
+    const dialog = scannerDialog(title);
+    Object.defineProperty(dialog, "close", { configurable: true, value: () => dialog.removeAttribute("open") });
     await act(async () =>
       Array.from(host.querySelectorAll("button"))
-        .find((button) => button.textContent?.trim() === "Manual entry")!
+        .find((button) => button.textContent?.trim() === "Find attendee or badge")!
         .click(),
     );
+    return dialog.querySelector<HTMLInputElement>('input[name="badgeId"]')!;
+  }
+  if (!host.querySelector(".pk-fast-scanner")) {
+    await act(async () =>
+      Array.from(host.querySelectorAll("button"))
+        .find((button) => button.textContent?.trim() === "Start scanning")!
+        .click(),
+    );
+  }
+  if (!host.querySelector('.pk-fast-scanner input[name="badgeId"]')) {
+    await act(async () =>
+      Array.from(host.querySelectorAll("button"))
+        .find((button) => button.textContent?.trim() === "Find attendee or badge")!
+        .click(),
+    );
+  }
   await vi.waitFor(async () => {
     await act(async () => {});
-    expect(dialog.open).toBe(true);
-    expect(host.querySelector('input[name="badgeId"]')).not.toBeNull();
+    expect(host.querySelector('.pk-fast-scanner input[name="badgeId"]')).not.toBeNull();
   });
-  return host.querySelector<HTMLInputElement>('input[name="badgeId"]')!;
+  return host.querySelector<HTMLInputElement>('.pk-fast-scanner input[name="badgeId"]')!;
 }
 export async function openDiagnostics() {
   await act(async () => {
@@ -181,7 +202,7 @@ export async function openDiagnostics() {
 export async function closeDiagnostics() {
   await act(async () => {
     Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-      .find((button) => button.textContent?.trim() === "Setup")!
+      .find((button) => button.textContent?.trim() === "Scan")!
       .click();
   });
   expect(host.querySelector('[aria-label="Recovery and diagnostics"]')).toBeNull();
@@ -193,7 +214,9 @@ export async function submit() {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await act(async () => {
-    host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    host
+      .querySelector(".pk-fast-scanner form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
   await vi.waitFor(async () => {
     await act(async () => {});

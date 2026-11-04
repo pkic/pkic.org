@@ -2,6 +2,12 @@ import type {
   EventScanResponse,
   EventScanRequest,
 } from "../../../../../../../shared/schemas/event-participation-scanning";
+export const unverifiedSavedFeedback = {
+  outcome: "unverified" as const,
+  reason: "verification_required" as const,
+  message: "Scan saved on this device. Verification is pending.",
+};
+
 /** Suppresses repeated camera frames while allowing every different badge through immediately. */
 export class ScanFrameGate {
   private readonly seen = new Map<string, number>();

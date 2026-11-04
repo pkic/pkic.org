@@ -19,7 +19,8 @@ export function scannerContextLabel({
   rooms: ReadonlyArray<{ id: string; name: string }>;
 }): string {
   if (action === "lead") return `${sponsorName || "Sponsor lead capture"} · Event-wide`;
-  const place = targetLabel || (targetId ? "Session check-in" : "Event entrance");
+  const place =
+    targetLabel || (targetId ? "Session check-in" : action === "checkout" ? "Venue exit" : "Venue entrance");
   return roomId ? `${place} · ${rooms.find((room) => room.id === roomId)?.name ?? "Room"}` : place;
 }
 

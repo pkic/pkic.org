@@ -19,6 +19,7 @@ export interface SearchPickerProps<Data, Row> {
   onPick: (row: Row) => void;
   /** Called when the reader types again after picking, which lets the pick go. */
   onClear: () => void;
+  onQueryChange?: (query: string) => void;
   endpoint: string;
   responseSchema: z.ZodType<Data>;
   querySchema?: z.ZodType;
@@ -55,6 +56,7 @@ export function SearchPicker<Data, Row>({
   picked,
   onPick,
   onClear,
+  onQueryChange,
   endpoint,
   responseSchema,
   querySchema,
@@ -115,6 +117,7 @@ export function SearchPicker<Data, Row>({
       previousPicked.current = null;
       onClear();
     }
+    onQueryChange?.(next);
     cancelPendingSearch();
     const term = next.trim();
     const parameters = { limit: "8", offset: "0", sort, q: term };

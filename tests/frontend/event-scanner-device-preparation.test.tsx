@@ -19,7 +19,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
   it("keeps capture disabled until persistent device enrollment is ready", async () => {
     await mount(false);
     expect(host.textContent).toContain("Preparing scanner for this session");
-    await submit();
+    expect(host.querySelector(".pk-fast-scanner")).toBeNull();
     expect(mocks.persist).not.toHaveBeenCalled();
     expect(
       Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Start scanning")
@@ -28,14 +28,16 @@ describe("scanner device enrollment and manual capture boundary", () => {
   });
   it("defaults to attendance with explicit manual entry and recovery in its dedicated tab without quota or exception controls", async () => {
     await mount(true, ["check", "attendance", "exception"]);
+    await openDiagnostics();
     const modes = host.querySelector<HTMLSelectElement>('select[name="action"]')!;
     expect(modes.value).toBe("attendance");
     expect(Array.from(modes.options).map((option) => option.value)).toEqual(["check", "attendance"]);
+    await closeDiagnostics();
     expect(host.querySelector('[aria-label="Recovery and diagnostics"]')).toBeNull();
     expect(host.querySelector("details, summary")).toBeNull();
     expect(host.querySelector('input[name="badgeId"]')).toBeNull();
     expect(Array.from(host.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent)).toEqual([
-      "Setup",
+      "Scan",
       "Recent scans",
       "Diagnostics",
     ]);
@@ -55,11 +57,13 @@ describe("scanner device enrollment and manual capture boundary", () => {
   });
   it("switches continuous scanning to Recent scans, stops the camera and retains the selected mode", async () => {
     await mount(true, ["attendance", "check"]);
+    await openDiagnostics();
     const mode = host.querySelector<HTMLSelectElement>('select[name="action"]')!;
     await act(() => {
       mode.value = "check";
       mode.dispatchEvent(new Event("change", { bubbles: true }));
     });
+    await closeDiagnostics();
     await act(async () =>
       Array.from(host.querySelectorAll("button"))
         .find((button) => button.textContent?.trim() === "Start scanning")!
@@ -87,7 +91,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
         .click();
     });
     expect(host.querySelector<HTMLElement>("#scanner-scan-panel")!.hidden).toBe(false);
-    expect(host.querySelector<HTMLSelectElement>('select[name="action"]')!.value).toBe("check");
+    expect(host.querySelector(".pk-fast-scanner__context")?.textContent).toContain("Check registration only");
     expect(window.location.hash).not.toContain("scannerTab=");
     expect(mocks.persist).not.toHaveBeenCalled();
   });
@@ -197,24 +201,26 @@ describe("scanner device enrollment and manual capture boundary", () => {
       });
       return { scan: eventScanCaptureIntentSchema.parse(scan), local: undefined };
     });
-    const dialog = scannerDialog("Enter badge code");
-    const confirm = dialog.querySelector<HTMLButtonElement>(".pk-dialog__foot .pk-btn--primary")!;
+    const dialog = host.querySelector<HTMLElement>(".pk-fast-scanner")!;
+    const confirm = dialog.querySelector<HTMLButtonElement>('form button[type="submit"]')!;
     expect(confirm.textContent).toBe("Record attendance");
-    expect(dialog.querySelector(".pk-dialog__body button")).toBeNull();
+    expect(dialog.querySelectorAll('form button[type="submit"]')).toHaveLength(1);
     await act(() => {
       confirm.click();
-      host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      host
+        .querySelector(".pk-fast-scanner form")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
     expect(mocks.persist).toHaveBeenCalledOnce();
     expect(confirm.disabled).toBe(true);
-    expect(dialog.open).toBe(true);
+    expect(dialog.querySelector("form")).not.toBeNull();
     expect(input.value).toBe(badgeCode);
     const captured = eventScanCaptureIntentSchema.parse(mocks.persist.mock.calls[0][0]);
     expect(captured.action).toBe("attendance");
     await act(async () => finish!());
     await vi.waitFor(async () => {
       await act(async () => {});
-      expect(dialog.open).toBe(false);
+      expect(dialog.querySelector("form")).toBeNull();
     });
     expect(mocks.persist).toHaveBeenCalledOnce();
   });
@@ -238,7 +244,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
       "22222222-2222-4222-8222-222222222222",
     );
     expect(host.textContent).toContain("Retry closing scanner session");
-    await submit();
+    expect(host.querySelector(".pk-fast-scanner")).toBeNull();
     expect(mocks.persist).not.toHaveBeenCalled();
     mocks.close.mockResolvedValueOnce({ ...frozen, state: "closed" });
     await act(async () => {
@@ -337,7 +343,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
         },
       }));
       await submit();
-      expect(scannerDialog("Enter badge code").open).toBe(false);
+      expect(host.querySelector('.pk-fast-scanner input[name="badgeId"]')).toBeNull();
       const input = await openManual();
       expect(input.value).toBe("");
       expect(input.hasAttribute("aria-invalid")).toBe(false);
@@ -347,7 +353,9 @@ describe("scanner device enrollment and manual capture boundary", () => {
       expect(eventScanCaptureIntentSchema.parse(mocks.persist.mock.calls[0][0]).badgeId).toBe(badgeCode);
       // A new empty submission still receives the canonical error; only completed capture resets presentation.
       await act(async () => {
-        host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        host
+          .querySelector(".pk-fast-scanner form")!
+          .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       });
       expect(input.getAttribute("aria-invalid")).toBe("true");
       expect(mocks.persist).toHaveBeenCalledOnce();
@@ -362,7 +370,9 @@ describe("scanner device enrollment and manual capture boundary", () => {
         input.dispatchEvent(new Event("input", { bubbles: true }));
       });
       await act(async () => {
-        host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        host
+          .querySelector(".pk-fast-scanner form")!
+          .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       });
     }
     expect(mocks.audit).toHaveBeenCalledTimes(2);
@@ -387,10 +397,16 @@ describe("scanner device enrollment and manual capture boundary", () => {
       input.value = "invalid badge";
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+    await act(() => {
+      host
+        .querySelector(".pk-fast-scanner form")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
     expect(input.getAttribute("aria-invalid")).toBe("true");
     await act(async () =>
-      Array.from(scannerDialog("Enter badge code").querySelectorAll("button"))
-        .find((button) => button.textContent?.trim() === "Cancel")!
+      Array.from(host.querySelectorAll<HTMLButtonElement>(".pk-fast-scanner button"))
+        .find((button) => button.textContent?.trim() === "Return to scanning")!
         .click(),
     );
     mocks.persist.mockImplementation(async (scan) => ({
@@ -414,7 +430,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
     });
     await act(async () =>
       Array.from(host.querySelectorAll("button"))
-        .find((button) => button.textContent?.trim() === "Exit")!
+        .find((button) => button.textContent?.trim() === "Close scanner")!
         .click(),
     );
     const cleared = await openManual();
@@ -437,7 +453,7 @@ it("keeps manual entry inside fullscreen, focuses it, submits once and resumes s
   Object.defineProperty(document, "fullscreenElement", { configurable: true, value: host.firstElementChild });
   Object.defineProperty(document, "exitFullscreen", { configurable: true, value: exitFullscreen });
   try {
-    await act(() => button(fast, "Manual entry").click());
+    await act(() => button(fast, "Find attendee or badge").click());
     expect(host.querySelector('[aria-label="Continuous badge scanner"]')).toBe(fast);
     expect(document.body.classList.contains("pk-scanner-immersive")).toBe(true);
     expect(exitFullscreen).not.toHaveBeenCalled();

@@ -148,7 +148,12 @@ async function update(overrides: Partial<Options>) {
 }
 async function click(label: string) {
   await act(() =>
-    [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === label)!.click(),
+    [...host.querySelectorAll<HTMLButtonElement>("button")]
+      .find(
+        (button) =>
+          button.textContent === label || button.querySelector(".pk-action-tile__label")?.textContent === label,
+      )!
+      .click(),
   );
   await settle();
 }
@@ -188,8 +193,8 @@ describe("assigned scanner setup", () => {
     });
     vi.stubGlobal("fetch", fetcher);
     await showLocation(false);
-    await click("Choose session or room");
-    await click("Browse days and rooms");
+    await click("Sessions");
+    await click("All sessions");
     const day = host.querySelector<HTMLSelectElement>('select[name="dayDate"]')!;
     expect(day).not.toBeNull();
     expect(Array.from(day.options, (option) => option.value)).toEqual(["", "2026-12-01", "2026-12-03"]);
@@ -240,8 +245,8 @@ describe("assigned scanner setup", () => {
     });
     vi.stubGlobal("fetch", fetcher);
     await showLocation(false);
-    await click("Choose session or room");
-    expect(host.querySelector("dialog[open]")?.textContent).toContain("Choose check-in session");
+    await click("Sessions");
+    expect(host.querySelector("dialog[open]")?.textContent).toContain("Choose a room");
     expect(host.textContent).toContain("Session");
     expect(fetcher.mock.calls.some(([url]) => String(url).includes("/scans/targets"))).toBe(true);
     await showLocation(true);
@@ -263,7 +268,7 @@ describe("assigned scanner setup", () => {
       }),
     );
     expect(host.textContent).toContain("Session");
-    expect(host.textContent).toContain("Physical room");
+    expect(host.textContent).toContain("Sessions");
     await showLocation(true);
     expect(locationState()).toEqual({ target: null, room: null, rooms: [] });
     await showLocation(false);
@@ -271,20 +276,16 @@ describe("assigned scanner setup", () => {
     expect(locationState()).toEqual({ target: session, room, rooms: [{ id: room, name: "Main hall" }] });
   });
 
-  it("renders assigned duty times in the event zone and applies the session and physical room together", async () => {
+  it("requires an explicit venue choice instead of silently applying an assigned duty", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: string) =>
-        String(url).includes("/suggestions")
-          ? response()
-          : new Response(JSON.stringify({ sessions: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } }), {
-              headers: { "content-type": "application/json" },
-            }),
-      ),
+      vi.fn(async () => targetResponse()),
     );
     host = document.createElement("div");
     document.body.append(host);
-    const selectRoom = vi.fn();
+    const selectRoom = vi.fn(),
+      onAction = vi.fn(),
+      onStart = vi.fn();
     await act(() =>
       render(
         <ScannerSetup
@@ -302,20 +303,73 @@ describe("assigned scanner setup", () => {
           roomField={{}}
           onTarget={choose}
           onRoom={selectRoom}
+          onAction={onAction}
+          onStart={onStart}
         />,
         host,
       ),
     );
     await settle();
-    expect(choose).toHaveBeenCalledExactlyOnceWith(candidate.occurrence);
+    expect(choose).not.toHaveBeenCalled();
+    await click("Venue exit");
+    expect(choose).toHaveBeenCalledExactlyOnceWith(null);
+    expect(onAction).toHaveBeenCalledExactlyOnceWith("checkout");
+    expect(onStart).toHaveBeenCalledOnce();
+  });
+
+  it("chooses a room and current session before starting, with server-side room and time filters", async () => {
+    const fetcher = vi.fn(async (_url: RequestInfo | URL) => targetResponse());
+    vi.stubGlobal("fetch", fetcher);
+    host = document.createElement("div");
+    document.body.append(host);
+    const selectRoom = vi.fn(),
+      onAction = vi.fn(),
+      onStart = vi.fn();
+    await act(() =>
+      render(
+        <ScannerSetup
+          slug="conference"
+          operatorUserId={operator}
+          sponsorOnly={false}
+          explicitTarget={false}
+          ready
+          locked={false}
+          targetId={null}
+          label=""
+          roomId={null}
+          rooms={[]}
+          targetField={{}}
+          roomField={{}}
+          onTarget={choose}
+          onRoom={selectRoom}
+          onAction={onAction}
+          onStart={onStart}
+        />,
+        host,
+      ),
+    );
+    await click("Sessions");
+    await click("Main hall");
+    await act(() => {
+      host
+        .querySelector<HTMLInputElement>('[role="combobox"]')!
+        .dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+    await vi.waitFor(async () => {
+      await settle();
+      expect(host.querySelector('[role="option"]')).not.toBeNull();
+    });
+    await act(() => host.querySelector<HTMLElement>('[role="option"]')!.click());
+    expect(choose).toHaveBeenLastCalledWith(candidate.occurrence);
     expect(selectRoom).toHaveBeenCalledExactlyOnceWith(room);
-    await click("Choose session or room");
-    await click("My shifts");
-    const dialog = host.querySelector("dialog[open]");
-    expect(dialog?.textContent).toContain("Amsterdam time");
-    expect(dialog?.textContent).not.toContain("Europe/Amsterdam");
-    expect(dialog?.textContent).toContain("11:00");
-    expect(dialog?.textContent).toContain("Quantum readiness · Main hall");
+    expect(onAction).toHaveBeenCalledExactlyOnceWith("attendance");
+    expect(onStart).toHaveBeenCalledOnce();
+    expect(
+      fetcher.mock.calls.some(
+        ([url]) => String(url).includes(`roomId=${room}`) && String(url).includes("timeWindow=now"),
+      ),
+    ).toBe(true);
+    expect(host.querySelector("dialog[open]")).toBeNull();
   });
 
   it("prefills one unique target once after the pending outbox has been checked", async () => {
@@ -433,7 +487,7 @@ describe("assigned scanner setup", () => {
 describe("scanner setup bookmarks", () => {
   it("restores the selected session finder without reopening capture or persisting transient choices", async () => {
     const path = "/portal/#/events/conference/scanner";
-    history.replaceState(null, "", `${path}?scannerSetup=shifts`);
+    history.replaceState(null, "", `${path}?scannerSetup=browse`);
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => (String(url).includes("/suggestions") ? response() : targetResponse())),
@@ -443,17 +497,18 @@ describe("scanner setup bookmarks", () => {
     await act(() => render(<LocationHarness lead={false} />, host));
     await settle();
     expect(host.querySelector("dialog[open]")).toBeNull();
-    await click("Choose session or room");
-    expect(host.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("My shifts");
+    await click("Sessions");
+    await click("All sessions");
+    expect(host.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Other");
     await click("Next");
     expect(location.hash).toContain("scannerSetup=next");
     await act(() => {
-      history.replaceState(null, "", `${path}?scannerSetup=shifts`);
+      history.replaceState(null, "", `${path}?scannerSetup=browse`);
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     await settle();
-    expect(host.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("My shifts");
-    await click("Now");
+    expect(host.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Other");
+    await click("Current");
     expect(location.hash).not.toContain("scannerSetup");
     expect(location.hash).not.toContain(operator);
   });

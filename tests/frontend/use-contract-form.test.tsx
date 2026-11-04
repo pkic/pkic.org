@@ -17,9 +17,13 @@ const contract = z.object({ name: z.string().trim().min(1, "Enter a name."), web
 let outcome = "";
 let container: HTMLDivElement | null = null;
 
-function Harness() {
+function Harness({ deferred = false }: { deferred?: boolean }) {
   const [draft, setDraft] = useState({ name: "", website: "" });
-  const form = useContractForm(contract, { name: draft.name, website: draft.website || null });
+  const form = useContractForm(
+    contract,
+    { name: draft.name, website: draft.website || null },
+    { deferUntilSubmit: deferred ? ["website"] : [] },
+  );
   return (
     <form {...form.handlers} onSubmit={(event) => event.preventDefault()}>
       <Field label="Name" {...form.of("name")}>
@@ -75,10 +79,10 @@ function Harness() {
   );
 }
 
-function mount(): HTMLDivElement {
+function mount(deferred = false): HTMLDivElement {
   container = document.createElement("div");
   document.body.append(container);
-  void act(() => render(<Harness />, container!));
+  void act(() => render(<Harness deferred={deferred} />, container!));
   return container;
 }
 

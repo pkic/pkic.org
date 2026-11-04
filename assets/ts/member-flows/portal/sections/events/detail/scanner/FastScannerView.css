@@ -122,6 +122,11 @@
     gap: var(--pk-2);
     margin-block: var(--pk-3);
   }
+  .pk-fast-scanner__last {
+    margin-block: var(--pk-2);
+    text-align: center;
+    font-size: var(--pk-text-sm);
+  }
   .pk-fast-scanner__mark svg {
     width: 100%;
     height: 100%;

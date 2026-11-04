@@ -21,6 +21,7 @@ export function useScannerFeedback({
   committedOperation: MutableRef<string | null>;
   authorityPaused: MutableRef<boolean>;
 }) {
+  const [lastResult, setLastResult] = useState<EventScanResponse | null>(null);
   const [result, updateResult] = useState<EventScanResponse | null>(null);
   const [message, updateMessage] = useState("Ready to scan");
   const messageOperation = useRef<string | null>(null);
@@ -38,6 +39,7 @@ export function useScannerFeedback({
   function setResult(value: EventScanResponse | null) {
     setFailed(false);
     updateResult(value);
+    if (value) setLastResult(value);
   }
   function failure(value: string) {
     setFailed(true);
@@ -55,8 +57,9 @@ export function useScannerFeedback({
     failed,
   );
   function presentReceipt(receipt: EventScanResponse) {
-    if (collector || authorityPaused.current || !receiptMatchesOperation(receipt.operationId, lastOperation.current))
-      return;
+    if (collector || authorityPaused.current) return;
+    setLastResult((last) => (last?.operationId === receipt.operationId ? receipt : last));
+    if (!receiptMatchesOperation(receipt.operationId, lastOperation.current)) return;
     lastCommittedOperation.current = receipt.operationId;
     setResult(receipt);
     if (messageOperation.current === receipt.operationId) setMessage("");
@@ -73,6 +76,9 @@ export function useScannerFeedback({
   }
   return {
     result,
+    lastResult,
+    clearLastResult: () => setLastResult(null),
+    failed,
     setResult,
     message,
     setMessage,

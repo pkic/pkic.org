@@ -3,18 +3,24 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import { ScannerLocationSelect } from "./ScannerLocationSelect";
 import { ScannerTargetPicker } from "./ScannerTargetPicker";
-import { useScannerSuggestions } from "./useScannerSuggestions";
+import { useScannerTargetCatalog } from "./useScannerTargetCatalog";
+import { ScannerDestinationTiles } from "./ScannerDestinationTiles";
+import { ActionTile, ActionTiles } from "../../../../../../ui/ActionTile";
+import { IconMapPin } from "../../../../../../ui/MediaIcons";
+import type { EventScanRequest } from "../../../../../../../shared/schemas/event-participation-scanning";
 import { Button } from "../../../../../../ui/Button";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { Tabs } from "../../../../../../components/Tabs";
-import { formatTimeRangeInZone } from "../../../../../../../shared/format-date";
 
 export function ScannerSetup({
-  operatorUserId,
+  operatorUserId: _operatorUserId,
   sponsorOnly,
   explicitTarget,
   ready,
   locked,
+  allowedActions = ["attendance", "checkout", "check"],
+  onAction,
+  onStart,
   ...location
 }: ComponentProps<typeof ScannerLocationSelect> & {
   operatorUserId: string;
@@ -22,23 +28,16 @@ export function ScannerSetup({
   explicitTarget: boolean;
   ready: boolean;
   locked: boolean;
+  allowedActions?: readonly EventScanRequest["action"][];
+  onAction?: (action: EventScanRequest["action"]) => void;
+  onStart?: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [view, setView] = useHashQueryParam("scannerSetup", "now", ["now", "next", "shifts", "browse"]);
-  const suggestions = useScannerSuggestions({
-    slug: location.slug,
-    operatorUserId,
-    enabled: !sponsorOnly,
-    explicitTarget,
-    ready,
-    locked,
-    onChoose: (suggestion) => {
-      location.onTarget(suggestion.occurrence);
-      location.onRoom(suggestion.suggestedRoomId);
-    },
-  });
-  const timeZone = suggestions.clock?.timeZone;
-  const city = suggestions.clock?.city;
+  const [view, setView] = useHashQueryParam("scannerSetup", "now", ["now", "next", "browse"]);
+  const [room, setRoom] = useState<{ id: string; name: string } | null>(null);
+  const { catalog, error } = useScannerTargetCatalog(location.slug, open && !sponsorOnly);
+  const timeZone = catalog?.timeZone;
+  const city = catalog?.clockCity;
   const onTimeZone = useRef(location.onTimeZone);
   onTimeZone.current = location.onTimeZone;
   useEffect(() => {
@@ -50,112 +49,134 @@ export function ScannerSetup({
   }
   return (
     <>
-      <div class="pk-cluster">
-        <Button type="button" variant="secondary" disabled={locked || !ready} onClick={() => setOpen(true)}>
-          Choose session or room
-        </Button>
+      <ScannerDestinationTiles
+        allowedActions={allowedActions}
+        disabled={locked || !ready}
+        onVenue={(action) => {
+          location.onTarget(null);
+          onAction?.(action);
+          onStart?.();
+        }}
+        onSessions={() => {
+          setRoom(null);
+          setOpen(true);
+        }}
+      />
+      {explicitTarget && location.targetId && (
         <Button
           type="button"
-          variant={location.targetId ? "secondary" : "primary"}
-          aria-pressed={!location.targetId}
-          disabled={locked || !ready}
-          onClick={() => {
-            suggestions.manual();
-            location.onTarget(null);
-          }}
+          variant="secondary"
+          disabled={locked || !ready || (location.rooms.length > 1 && !location.roomId)}
+          onClick={onStart}
         >
-          Event entrance
+          Start scanning
         </Button>
-      </div>
-      <p class="pk-muted">
-        Event entrance records attendance for the day of the scan when Record attendance is selected. Choose a session
-        to record session attendance.
-      </p>
-      {locked && <p class="pk-muted">Finish scanning and sync pending scans before changing the session.</p>}
+      )}
+      {locked && <p class="pk-muted">Finish the current scan before changing where you scan.</p>}
       <Dialog
         open={open}
-        title="Choose check-in session"
-        confirmLabel="Done"
-        cancelLabel="Close"
+        title={room ? room.name : "Choose a room"}
+        confirmLabel="Close"
+        cancelLabel={null}
         onConfirm={close}
         onCancel={close}
       >
         {open && (
           <div class="pk-stack">
-            <Tabs
-              label="Find sessions"
-              active={view}
-              onChange={(next) => {
-                if (next === "now" || next === "next" || next === "shifts" || next === "browse") setView(next);
-              }}
-              items={[
-                { key: "now", label: "Now" },
-                { key: "next", label: "Next" },
-                { key: "shifts", label: "My shifts" },
-                { key: "browse", label: "Browse days and rooms" },
-              ]}
-            />
-            {view === "shifts" ? (
-              <section aria-label="Your assigned check-in sessions">
-                <p>Assignments suggest where to scan. Your scan permissions still apply.</p>
-                {suggestions.loading && <p role="status">Loading assigned sessions…</p>}
-                {suggestions.error && <p role="status">{suggestions.error}</p>}
-                {!suggestions.loading && !suggestions.error && suggestions.suggestions.length === 0 && (
-                  <p>No current or upcoming assigned check-in sessions. Use Now, Next, or Browse.</p>
-                )}
-                {suggestions.truncated && <p>More assignments are available. Choose the session and room manually.</p>}
-                {suggestions.suggestions.map((suggestion) => (
-                  <div
-                    key={`${suggestion.occurrence.id}:${suggestion.suggestedRoomId ?? ""}`}
-                    class="pk-stack pk-stack--snug"
-                  >
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={locked || !ready}
-                      onClick={() => {
-                        suggestions.choose(suggestion);
-                        close();
-                      }}
-                    >
-                      {suggestion.occurrence.title}
-                      {suggestion.suggestedRoomId &&
-                        ` · ${suggestion.occurrence.rooms?.find((room) => room.id === suggestion.suggestedRoomId)?.name ?? "Room"}`}
-                    </Button>
-                    <small>
-                      {suggestion.status === "current" ? "Current duty" : "Upcoming duty"} ·{" "}
-                      {suggestion.roles.join(" / ")} ·{" "}
-                      {suggestions.clock &&
-                        formatTimeRangeInZone(suggestion.startAt, suggestion.endAt, suggestions.clock)}
-                    </small>
-                  </div>
-                ))}
+            {error && <p role="status">{error}</p>}
+            {!catalog && !error && <p role="status">Loading rooms…</p>}
+            {!room && catalog && (
+              <>
+                <ActionTiles label="Choose a room">
+                  {catalog.rooms.map((item) => (
+                    <li key={item.id}>
+                      <ActionTile
+                        icon={<IconMapPin />}
+                        label={item.name}
+                        hint="Choose a session"
+                        onClick={() => {
+                          location.onTarget(null);
+                          setRoom(item);
+                          setView("now");
+                        }}
+                      />
+                    </li>
+                  ))}
+                </ActionTiles>
+                {catalog.rooms.length === 0 && <p>No rooms are scheduled. Choose a session from the agenda.</p>}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    location.onTarget(null);
+                    setRoom({ id: "", name: "All sessions" });
+                    setView("browse");
+                  }}
+                >
+                  All sessions
+                </Button>
+                {catalog.roomsTruncated && <p>More rooms are available through All sessions.</p>}
+              </>
+            )}
+            {room && (
+              <>
                 <Button
                   type="button"
                   variant="ghost"
-                  disabled={locked || suggestions.loading}
-                  onClick={suggestions.refresh}
+                  onClick={() => {
+                    location.onTarget(null);
+                    setRoom(null);
+                  }}
                 >
-                  Refresh assignments
+                  Change room
                 </Button>
-              </section>
-            ) : (
-              <ScannerTargetPicker
-                key={view}
-                {...location}
-                disabled={locked || !ready}
-                timeWindow={view === "now" || view === "next" ? view : undefined}
-                onTarget={(target) => {
-                  suggestions.manual();
-                  location.onTarget(target);
-                  if ((target?.rooms?.length ?? 0) <= 1) close();
-                }}
-                onRoom={(id) => {
-                  suggestions.manual();
-                  location.onRoom(id);
-                  close();
-                }}
-              />
+                <Tabs
+                  label="Find sessions"
+                  active={view}
+                  onChange={(next) => {
+                    if (next === "now" || next === "next" || next === "browse") {
+                      location.onTarget(null);
+                      setView(next);
+                    }
+                  }}
+                  items={[
+                    { key: "now", label: "Current" },
+                    { key: "next", label: "Next" },
+                    { key: "browse", label: "Other" },
+                  ]}
+                />
+                <ScannerTargetPicker
+                  key={`${room.id}:${view}`}
+                  {...location}
+                  catalog={catalog}
+                  selectedRoomId={room.id}
+                  disabled={locked || !ready}
+                  timeWindow={view === "now" || view === "next" ? view : undefined}
+                  onTarget={(target) => {
+                    if (!target) return;
+                    location.onTarget(target);
+                    if (room.id) location.onRoom(room.id);
+                    onAction?.(
+                      allowedActions.includes("attendance")
+                        ? "attendance"
+                        : allowedActions.includes("admission")
+                          ? "admission"
+                          : allowedActions.includes("check")
+                            ? "check"
+                            : "checkout",
+                    );
+                    if (room.id || (target.rooms?.length ?? 0) <= 1) {
+                      close();
+                      onStart?.();
+                    }
+                  }}
+                  onRoom={(id) => {
+                    location.onRoom(id);
+                    close();
+                    onStart?.();
+                  }}
+                />
+              </>
             )}
           </div>
         )}
