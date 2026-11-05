@@ -2,8 +2,6 @@
 authors:
 - CA Security Council
 date: "2015-04-15T15:00:58+00:00"
-dsq_thread_id:
-- 3670518851
 keywords:
 - ssl
 tags:

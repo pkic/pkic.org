@@ -2,8 +2,6 @@
 authors:
 - Jeremy Rowley
 date: "2013-02-14T16:00:30+00:00"
-dsq_thread_id:
-- 1958557398
 keywords:
 - ssl
 - ocsp

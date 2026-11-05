@@ -1,13 +1,8 @@
 ---
 title: Member Portal
-type: portal
 robots: noindex
 sitemap:
   disable: true
-build:
-  list: never
-  publishResources: false
-
 # The brand panel beside the sign-in card. The screen reads these through the
 # shared portal-login-copy contract, so the pitch and the figures are edited
 # here rather than in the frontend.

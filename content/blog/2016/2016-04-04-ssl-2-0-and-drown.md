@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2016-04-04T18:41:33+00:00"
-dsq_thread_id:
-- 4719900263
 keywords:
 - vulnerability
 - attack

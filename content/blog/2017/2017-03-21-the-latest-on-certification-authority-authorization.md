@@ -2,8 +2,6 @@
 authors:
 - Jeremy Rowley
 date: "2017-03-21T20:40:22+00:00"
-dsq_thread_id:
-- 5653305703
 keywords:
 - qualified
 - organization validated

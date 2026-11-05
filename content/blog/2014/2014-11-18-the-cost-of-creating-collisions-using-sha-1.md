@@ -2,8 +2,6 @@
 authors:
 - Rick Andrews
 date: "2014-11-18T18:30:21+00:00"
-dsq_thread_id:
-- 3238327616
 excerpt: SHA-1 is a cryptographic hash algorithm that is most commonly used today
   in TLS/SSL certificates on the Internet. It has almost completely replaced older
   algorithms like MD2, MD4 and MD5, which were phased out when practical attacks against

@@ -2,8 +2,6 @@
 authors:
 - Ben Wilson
 date: "2015-06-08T16:14:36+00:00"
-dsq_thread_id:
-- 3831754275
 keywords:
 - ssl
 - https

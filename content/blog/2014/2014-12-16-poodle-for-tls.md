@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2014-12-16T16:10:34+00:00"
-dsq_thread_id:
-- 3329883282
 keywords:
 - tls
 - ssl 3.0

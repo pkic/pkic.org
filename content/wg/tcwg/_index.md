@@ -20,7 +20,6 @@ heroButton:
 
 wgID: TCWG
 color: teal
-sectionNav: true
 
 cascade:
   params:

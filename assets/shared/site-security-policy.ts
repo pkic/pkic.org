@@ -7,7 +7,6 @@ const featurePaths = {
   portal: ["/portal/"],
   payment: ["/donate/"],
   assessment: ["/wg/pkimm/assessment/", "/wg/pkimm/1.0.0/tools/self-assessment/"],
-  questions: ["/questions"],
 } as const;
 
 /** The same allowlist protects native static responses and Worker-rendered shells. */
@@ -20,7 +19,6 @@ export function siteContentSecurityPolicy(pathname = "/"): string {
   const portal = pathname.startsWith("/portal/");
   const payment = featurePaths.payment.some((path) => pathname.startsWith(path));
   const assessment = featurePaths.assessment.some((path) => pathname.startsWith(path));
-  const questions = featurePaths.questions.some((path) => pathname.startsWith(path));
   const script = ["'self'", "'wasm-unsafe-eval'", "https://challenges.cloudflare.com"];
   const connect = ["'self'"];
   const images = ["'self'", "data:", "https://i.ytimg.com"];
@@ -31,7 +29,6 @@ export function siteContentSecurityPolicy(pathname = "/"): string {
     "https://player.vimeo.com",
   ];
   if (portal) frames.push("'self'");
-  if (questions) connect.push("https://docs.google.com/spreadsheets/d/");
   if (payment) {
     // Embedded Checkout, Stripe.js, redirects, and Link; restricted to donation pages.
     script.push("https://js.stripe.com", "https://*.js.stripe.com", "https://checkout.stripe.com");

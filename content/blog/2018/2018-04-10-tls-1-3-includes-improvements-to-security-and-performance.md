@@ -2,8 +2,6 @@
 authors:
 - Tim Shirley
 date: "2018-04-10T17:55:05+00:00"
-dsq_thread_id:
-- 6606123721
 keywords:
 - internet engineering task force
 - https

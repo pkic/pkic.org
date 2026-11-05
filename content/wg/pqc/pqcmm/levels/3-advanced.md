@@ -6,7 +6,6 @@ description: A product at Level 3 maintains a full cryptographic inventory, docu
 summary: Level 3 adds full cryptographic visibility and agility. Vendors can account for all cryptographic use cases and update algorithms without major redesign.
 
 weight: 40
-sectionNav: true
 ---
 
 ## What Level 3 Means

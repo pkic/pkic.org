@@ -2,9 +2,6 @@
 authors:
 - Dean Coclin
 date: "2014-03-12T19:00:43+00:00"
-dsq_thread_id:
-- 2404731137
-- General
 keywords:
 - ov certificate
 - ev certificate

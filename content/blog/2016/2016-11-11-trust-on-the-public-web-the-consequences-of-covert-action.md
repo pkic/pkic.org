@@ -2,8 +2,6 @@
 authors:
 - Dean Coclin
 date: "2016-11-11T20:38:03+00:00"
-dsq_thread_id:
-- 5297030218
 keywords:
 - mozilla
 - apple

@@ -2,8 +2,6 @@
 authors:
 - CA Security Council
 date: "2013-04-10T01:48:03+00:00"
-dsq_thread_id:
-- 2232565486
 keywords:
 - pki
 - nist

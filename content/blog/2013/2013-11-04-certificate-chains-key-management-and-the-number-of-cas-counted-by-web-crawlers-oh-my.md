@@ -2,9 +2,6 @@
 authors:
 - Ryan Hurst
 date: "2013-11-04T18:00:25+00:00"
-dsq_thread_id:
-- 1937259999
-- General
 keywords:
 - policy
 - ocsp

@@ -1,8 +1,7 @@
 ---
 title: Thank You
 description: Your generous donation to the PKI Consortium has been received.
-layout: single
-noindex: true
+robots: noindex
 
 ---
 

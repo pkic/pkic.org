@@ -28,15 +28,12 @@ export default {
     },
     {
       // Fixed canvases measured in pixels, not text: the 1920 × 1080 broadcast
-      // frames (scaled as a whole by their layout box), the 1200 × 630 social
-      // card image, and printed pages.
+      // frames (scaled as a whole by their layout box), and printed pages.
       files: [
         "assets/ts/live-session/Live*Overlay.css",
         "assets/ts/live-session/LiveLowerThird.css",
         "assets/ts/live-session/LiveStageDisplay.css",
         "assets/ts/live-session/LiveGraphicTheme.css",
-        "assets/scss/conference-overlays.scss",
-        "assets/scss/og-card.scss",
         "assets/ts/site/AgendaPrint.css",
         "assets/ts/components/event-badges/BadgePrintPreview.css",
       ],

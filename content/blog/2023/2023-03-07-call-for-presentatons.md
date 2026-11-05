@@ -6,7 +6,7 @@ authors:
 date: 2023-03-07T15:00:00+00:00
 lastmod: 2023-06-29T07:00:00+00:00
 categories:
-keyword: [pqc, qsc, post-quantum, quantum-safe, cryptography, hardware, solutions, software, conference]
+keywords: [pqc, qsc, post-quantum, quantum-safe, cryptography, hardware, solutions, software, conference]
 tags: [Post-Quantum Cryptography, PQC, Conference]
 
 authorProfiles:

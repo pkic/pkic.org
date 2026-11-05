@@ -2,8 +2,6 @@
 authors:
 - Wayne Thayer
 date: "2014-10-30T16:15:01+00:00"
-dsq_thread_id:
-- 3171194704
 keywords:
 - revocation
 - hsts

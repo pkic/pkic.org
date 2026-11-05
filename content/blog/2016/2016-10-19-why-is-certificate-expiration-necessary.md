@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2016-10-19T16:26:21+00:00"
-dsq_thread_id:
-- 5236047018
 keywords:
 - rsa
 - ca/browser forum
