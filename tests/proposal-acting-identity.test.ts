@@ -631,6 +631,7 @@ describe("proposal speaker acting identity", () => {
       );
       await expect(
         confirmSpeakerParticipation(racedDb, capability, env.INTERNAL_SIGNING_SECRET!, {
+          appBaseUrl: "https://app.test",
           consents: f.body.consents,
           ip: null,
           userAgent: null,

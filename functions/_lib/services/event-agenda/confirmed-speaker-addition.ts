@@ -4,6 +4,7 @@ import { first } from "../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { prepareScopedAuditLog } from "../audit";
 import { proposalOccurrenceSql } from "./declined-speaker-removal";
+import { prepareAgendaScheduleGuard } from "./schedule-guards";
 import { prepareAgendaRevisionGuard } from "./revision";
 
 /**
@@ -95,6 +96,7 @@ export async function prepareConfirmedSpeakerAgendaAddition(
       },
     ),
     ...prepareEventSpeakingStanding(db, input.at, { eventId: input.eventId, nextAgendaRevision: true }),
+    ...prepareAgendaScheduleGuard(db, input.eventId),
     db
       .prepare("UPDATE event_agenda_state SET revision=revision+1,updated_at=? WHERE event_id=? AND revision=?")
       .bind(input.at, input.eventId, revision),

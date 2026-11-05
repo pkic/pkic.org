@@ -1,3 +1,7 @@
+import { isLateSpeakerResponseAwaitingReview } from "../../../assets/shared/proposal-speaker-acceptance";
+import { prepareSpeakerResponseNotices } from "./proposal-speaker-response-notice";
+import { isAgendaScheduleGuardFailure } from "./event-agenda/schedule-guards";
+import { throwAgendaRevisionError } from "./event-agenda/revision";
 import {
   prepareOrganizerSpeakerIdentity,
   prepareOrganizerSpeakerNotification,
@@ -47,10 +51,21 @@ export async function confirmSpeakerParticipation(
   db: DatabaseLike,
   authority: ParticipantAuthority,
   signingSecret: string,
-  payload: { consents: Array<{ termKey: string; version: string }>; ip: string | null; userAgent: string | null },
-): Promise<void> {
+  payload: {
+    consents: Array<{ termKey: string; version: string }>;
+    ip: string | null;
+    userAgent: string | null;
+    appBaseUrl: string;
+  },
+): Promise<"confirmed" | "pending"> {
   const context = await getSpeakerByManageToken(db, authority, signingSecret);
   await confirmParticipation(db, context, { kind: "speaker", authority, signingSecret, payload });
+  const awaitingReview = isLateSpeakerResponseAwaitingReview(
+    context.speaker.status,
+    context.speaker.response_invite_generation,
+    context.speaker.invite_generation,
+  );
+  return context.speaker.status !== "confirmed" && (context.inviteExpired || awaitingReview) ? "pending" : "confirmed";
 }
 
 /** Confirms the displayed identity and participation on behalf of the speaker, with attributed terms and notice. */
@@ -73,7 +88,12 @@ type SpeakerConfirmation =
       kind: "speaker";
       authority: ParticipantAuthority;
       signingSecret: string;
-      payload: { consents: Array<{ termKey: string; version: string }>; ip: string | null; userAgent: string | null };
+      payload: {
+        consents: Array<{ termKey: string; version: string }>;
+        ip: string | null;
+        userAgent: string | null;
+        appBaseUrl: string;
+      };
     };
 
 async function confirmParticipation(
@@ -84,6 +104,14 @@ async function confirmParticipation(
   const { speaker, proposal, currentRepresentation } = context;
   const manager = confirmation.kind === "manager" ? confirmation.actor : undefined;
   if (speaker.status === "confirmed") return null;
+  // Pending plus accepted terms is the durable late willingness response, not participation.
+  const late = !manager && context.inviteExpired;
+  if (
+    !manager &&
+    isLateSpeakerResponseAwaitingReview(speaker.status, speaker.response_invite_generation, speaker.invite_generation)
+  )
+    return null;
+  const nextStatus = late ? "pending" : "confirmed";
   if (!isProposalSpeakerRosterEditableStatus(proposal.status)) {
     throw new AppError(409, "PROPOSAL_CLOSED", "Speaker participation cannot be changed on a closed proposal");
   }
@@ -140,6 +168,11 @@ async function confirmParticipation(
           now,
         )
       : null;
+  const notices = await prepareSpeakerResponseNotices(db, context, {
+    late,
+    appBaseUrl: confirmation.kind === "manager" ? confirmation.appBaseUrl : confirmation.payload.appBaseUrl,
+    at: now,
+  });
   const invitationScope = {
     sql: `SELECT 1 FROM proposal_speakers ps
       JOIN session_proposals sp ON sp.id=ps.proposal_id AND sp.deleted_at IS NULL
@@ -151,13 +184,15 @@ async function confirmParticipation(
   const databaseNow = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
   const rosterRevision = await getProposalSpeakerRosterRevision(db, proposal.id);
   // A speaker who confirms after placement joins every session their proposal was placed in, in this same batch.
-  const agendaAddition = await prepareConfirmedSpeakerAgendaAddition(db, {
-    eventId: proposal.event_id,
-    proposalId: proposal.id,
-    speaker: { userId: speaker.user_id, proposalRole: speaker.role },
-    actor: manager ? { type: "admin", id: manager.id } : { type: "user", id: speaker.user_id },
-    at: now,
-  });
+  const agendaAddition = late
+    ? []
+    : await prepareConfirmedSpeakerAgendaAddition(db, {
+        eventId: proposal.event_id,
+        proposalId: proposal.id,
+        speaker: { userId: speaker.user_id, proposalRole: speaker.role },
+        actor: manager ? { type: "admin", id: manager.id } : { type: "user", id: speaker.user_id },
+        at: now,
+      });
   try {
     await db.batch([
       confirmation.kind === "manager"
@@ -174,7 +209,15 @@ async function confirmParticipation(
       ...(manager
         ? [
             prepareAuthorizationGuard(db, {
-              sql: `${invitationScope.sql} AND (${activeEffectiveInviteExpirySql(effectiveExpiry, databaseNow)})`,
+              sql: `${invitationScope.sql} AND (((${activeEffectiveInviteExpirySql(effectiveExpiry, databaseNow)}) AND (ps.status<>'pending' OR ps.response_invite_generation IS NULL)) OR (ps.status='pending' AND ps.terms_accepted_at IS NOT NULL AND ps.response_invite_generation=ps.invite_generation))`,
+              bindings: invitationScope.bindings,
+            }),
+          ]
+        : []),
+      ...(!manager
+        ? [
+            prepareAuthorizationGuard(db, {
+              sql: `${invitationScope.sql} AND (${effectiveExpiry}) IS NOT NULL AND (${late ? inactiveEffectiveInviteExpirySql(effectiveExpiry, databaseNow) : activeEffectiveInviteExpirySql(effectiveExpiry, databaseNow)})`,
               bindings: invitationScope.bindings,
             }),
           ]
@@ -206,7 +249,7 @@ async function confirmParticipation(
       db
         .prepare(
           `UPDATE proposal_speakers
-           SET status = 'confirmed', confirmed_at = ?, terms_accepted_at = ?,
+           SET response_invite_generation = invite_generation, status = ?, confirmed_at = ?, terms_accepted_at = ?,
                acting_identity_id = ?, acting_identity_selected_at = ?
            WHERE id = ? AND proposal_id = ? AND user_id = ? AND role = ? AND status = ? AND invite_generation = ?
              AND acting_identity_id IS ? AND acting_identity_selected_at IS ?
@@ -216,7 +259,8 @@ async function confirmParticipation(
              )`,
         )
         .bind(
-          now,
+          nextStatus,
+          late ? null : now,
           now,
           organizerIdentity ? organizerIdentity.identityId : speaker.acting_identity_id,
           speaker.acting_identity_selected_at ?? organizerIdentity?.selectedAt ?? null,
@@ -237,7 +281,7 @@ async function confirmParticipation(
         { type: "proposal", id: speaker.proposal_id },
         manager ? "admin" : "user",
         manager?.id ?? speaker.user_id,
-        manager ? "speaker_confirmed_by_organizer" : "speaker_confirmed",
+        manager ? "speaker_confirmed_by_organizer" : late ? "speaker_late_response" : "speaker_confirmed",
         "proposal_speaker",
         speaker.id,
         {
@@ -255,17 +299,19 @@ async function confirmParticipation(
         now,
       ),
       ...(notification ? [notification.statement] : []),
+      ...notices.map((notice) => notice.statement),
       ...(await prepareProposalRoleCapacityForSpeakerChange(db, {
         eventId: proposal.event_id,
         userId: speaker.user_id,
         proposalRole: speaker.role,
         sourceRef: proposal.id,
-        status: proposalParticipantStatus(proposal.status, "confirmed"),
+        status: proposalParticipantStatus(proposal.status, nextStatus),
         sourceRevisionAdvance: 1,
       })),
       ...agendaAddition,
     ]);
   } catch (error) {
+    if (isAgendaScheduleGuardFailure(error)) throwAgendaRevisionError(error);
     if (error instanceof Error && error.message.includes("AGENDA_REVISION_CHANGED"))
       throw new AppError(
         409,

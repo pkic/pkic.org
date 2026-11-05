@@ -1,3 +1,4 @@
+import { rejectLateSpeakerParticipation } from "../../../../../../_lib/services/proposal-speaker-late-decision";
 import type { ValidatedData } from "chanfana";
 import { proposalSpeakerAcceptanceRouteSchema } from "../../../../../../../assets/shared/schemas/route-contracts-proposal-management";
 import { proposalSpeakerAcceptanceResponseSchema } from "../../../../../../../assets/shared/schemas/proposal-speakers";
@@ -14,7 +15,8 @@ export async function onRequestPost(
 ): Promise<Response> {
   const db = requestDb(c);
   const actor = await requireAdminFromRequest(db, c.req.raw, c.env);
-  const outboxId = await acceptSpeakerParticipationByManager(
+  const decide = data.body.decision === "reject" ? rejectLateSpeakerParticipation : acceptSpeakerParticipationByManager;
+  const outboxId = await decide(
     db,
     actor,
     data.params.proposalId,

@@ -9,7 +9,6 @@ import {
 } from "../../assets/shared/schemas/proposal-management";
 import { eventFormsResponseSchema } from "../../assets/shared/schemas/forms";
 import { PROPOSAL_COMMITTEE_NOTES_COPY } from "../../assets/shared/proposal-committee-notes-copy";
-import { PROPOSAL_REVISION_COPY } from "../../assets/shared/proposal-revision-copy";
 import { controlFor } from "./helpers/labeled-control";
 import { expectAbstractShownAsText, MARKUP_LIKE_ABSTRACT } from "./helpers/markup-like-abstract";
 
@@ -19,10 +18,7 @@ const eventId = "10000000-0000-4000-8000-000000000001";
 function submission(
   status: string,
   notes: string | null,
-  {
-    abstract = "A walk through migrating a working certificate authority to post-quantum algorithms.",
-    revisionNote,
-  }: { abstract?: string; revisionNote?: string } = {},
+  abstract = "A walk through migrating a working certificate authority to post-quantum algorithms.",
 ) {
   return proposalAccessReadResponseSchema.parse({
     success: true,
@@ -36,7 +32,6 @@ function submission(
       abstract,
       committee_notes: notes,
       details: null,
-      revision_request: revisionNote ? { note: revisionNote, decided_at: "2026-10-20T10:00:00.000Z" } : null,
     },
     speakers: [],
   });
@@ -58,13 +53,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function mount(status: string, notes: string | null, options?: { abstract?: string; revisionNote?: string }) {
+async function mount(status: string, notes: string | null, abstract?: string) {
   host = document.createElement("div");
   document.body.append(host);
   await act(() =>
     render(
       <ParticipantSubmission
-        data={submission(status, notes, options)}
+        data={submission(status, notes, abstract)}
         forms={forms}
         event={{ startsAt: null, endsAt: null, timezone: "UTC" } as never}
         facet="submission"
@@ -112,52 +107,9 @@ describe("notes for the program committee on the proposer's page", () => {
   });
 });
 
-describe("a proposal the program committee sent back for changes", () => {
-  function stubSaves(sent: unknown[]) {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        sent.push(proposalAccessPatchSchema.parse(JSON.parse(String(init?.body))));
-        return Response.json({
-          success: true,
-          proposal: submission("needs-work", null, { revisionNote: "Narrow it." }).proposal,
-        });
-      }),
-    );
-  }
-
-  it("shows the committee's note and saves edits as a draft without resubmitting", async () => {
-    const sent: unknown[] = [];
-    stubSaves(sent);
-    await mount("needs-work", null, { revisionNote: "Narrow the scope to one migration story." });
-    expect(host.textContent).toContain(PROPOSAL_REVISION_COPY.title);
-    expect(host.textContent).toContain("Narrow the scope to one migration story.");
-    await act(() => button("Edit").click());
-    await act(async () => {
-      button(PROPOSAL_REVISION_COPY.save).click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    expect(sent).toHaveLength(1);
-    expect(sent[0]).not.toHaveProperty("status");
-    expect(host.textContent).toContain(PROPOSAL_REVISION_COPY.saved);
-  });
-
-  it("resubmits for review only when the proposer asks to", async () => {
-    const sent: unknown[] = [];
-    stubSaves(sent);
-    await mount("needs-work", null, { revisionNote: "Narrow it." });
-    await act(async () => {
-      button(PROPOSAL_REVISION_COPY.resubmit).click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    expect(sent).toEqual([{ status: "resubmitted" }]);
-    expect(host.textContent).toContain(PROPOSAL_REVISION_COPY.resubmitted);
-  });
-});
-
 describe("the abstract on the proposer's page", () => {
   it("shows markup-like characters exactly once, as text", async () => {
-    await mount("submitted", null, { abstract: MARKUP_LIKE_ABSTRACT });
+    await mount("submitted", null, MARKUP_LIKE_ABSTRACT);
     expectAbstractShownAsText(host);
   });
 });

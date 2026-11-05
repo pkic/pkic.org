@@ -6,7 +6,6 @@ import type {
   proposalAccessReadResponseSchema,
 } from "../../../assets/shared/schemas/proposal-management";
 import { parseLinksJson } from "../../../assets/shared/schemas/links";
-import { proposalRevisionRequestSchema } from "../../../assets/shared/schemas/proposal-management";
 import type { DatabaseLike } from "../types";
 import { parseJsonSafe, stringifyJson } from "../utils/json";
 import {
@@ -14,7 +13,6 @@ import {
   toEventFormResolutionEvent,
   validateCustomAnswersForSubmission,
 } from "./forms";
-import { readProposalRevisionDraft, withProposalRevisionDraft } from "./proposal-revision-draft";
 import { listProposalSpeakersWithStatus, type ProposalSpeakerWithUser } from "./proposal-speakers";
 import { getProposalByManageToken, type ProposalRecord, updateProposalForVerifiedOwner } from "./proposals";
 import { getEventById, requireConfiguredSessionType } from "./events";
@@ -25,8 +23,7 @@ type ProposalAccessInput = z.infer<typeof proposalAccessPatchSchema>;
 type ProposalAccessReadResponse = z.infer<typeof proposalAccessReadResponseSchema>;
 type ProposalAccessPatchResponse = z.infer<typeof proposalAccessPatchResponseSchema>;
 
-function toAccessibleProposal(stored: ProposalRecord): ProposalAccessPatchResponse["proposal"] {
-  const proposal = withProposalRevisionDraft(stored);
+function toAccessibleProposal(proposal: ProposalRecord): ProposalAccessPatchResponse["proposal"] {
   return {
     id: proposal.id,
     event_id: proposal.event_id,
@@ -37,9 +34,6 @@ function toAccessibleProposal(stored: ProposalRecord): ProposalAccessPatchRespon
     abstract: proposal.abstract,
     committee_notes: proposal.committee_notes ?? null,
     details: parseJsonSafe<Record<string, unknown> | null>(proposal.details_json, null),
-    revision_request: proposalRevisionRequestSchema
-      .nullable()
-      .parse(parseJsonSafe(proposal.revision_request_json, null)),
   };
 }
 
@@ -115,39 +109,28 @@ export async function saveProposalAccessChanges(
     input.body.proposalType === undefined
       ? undefined
       : requireConfiguredSessionType(event.settings_json, input.body.proposalType);
-  const resubmitting = input.body.status === "resubmitted";
-  const keepsDraft = proposal.status === "needs-work" && !resubmitting && input.body.status !== "withdrawn";
-  // A resubmission hands over drafted answers, so they are checked and recorded the way submitted ones are.
-  const draft = resubmitting ? readProposalRevisionDraft(proposal) : null;
-  const customAnswers =
-    input.body.details ??
-    (draft && draft.detailsJson !== proposal.details_json
-      ? parseJsonSafe<Record<string, unknown>>(draft.detailsJson, {})
-      : undefined);
   const validatedForm =
-    customAnswers === undefined
+    input.body.details === undefined
       ? undefined
       : await validateCustomAnswersForSubmission(db, {
           event: toEventFormResolutionEvent({ id: event.id, source_mode: event.source_mode }),
           purpose: "proposal_submission",
-          customAnswers,
+          customAnswers: input.body.details,
         });
   const details = validatedForm?.answers;
-  // Recorded form answers feed the reviewer view, so a draft does not replace them.
-  const formSubmission =
-    validatedForm?.form && !keepsDraft
-      ? await prepareReplaceContextFormSubmission(
-          db,
-          validatedForm.form,
-          {
-            submittedByUserId: proposal.proposer_user_id,
-            contextType: "proposal",
-            contextRef: proposal.id,
-          },
-          details ?? {},
-          new Date().toISOString(),
-        )
-      : null;
+  const formSubmission = validatedForm?.form
+    ? await prepareReplaceContextFormSubmission(
+        db,
+        validatedForm.form,
+        {
+          submittedByUserId: proposal.proposer_user_id,
+          contextType: "proposal",
+          contextRef: proposal.id,
+        },
+        details ?? {},
+        new Date().toISOString(),
+      )
+    : null;
   const saved = await updateProposalForVerifiedOwner(db, proposal, {
     action: input.body.status === "withdrawn" ? "withdraw" : "update",
     proposalType,
@@ -157,7 +140,6 @@ export async function saveProposalAccessChanges(
     detailsJson: details === undefined ? undefined : Object.keys(details).length > 0 ? stringifyJson(details) : null,
     formSubmissionStatements: formSubmission?.statements,
     formPlacementId: validatedForm?.form?.placement?.id ?? null,
-    resubmit: resubmitting,
   });
 
   return { success: true, proposal: toAccessibleProposal(saved) };

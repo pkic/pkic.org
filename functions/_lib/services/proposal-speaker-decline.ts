@@ -1,3 +1,5 @@
+import { prepareSpeakerSelfAuthorityGuard } from "./proposals-speaker-profile";
+import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { speakerInvitedAddressOwnedSql } from "./proposal-speaker-invited-address";
 import type { ParticipantAuthority } from "./participant-authority";
 import { first } from "../db/queries";
@@ -134,6 +136,13 @@ export async function declineSpeakerParticipation(
   });
   try {
     await db.batch([
+      prepareSpeakerSelfAuthorityGuard(db, manageToken, {
+        proposalSpeakerId: speaker.id,
+        proposalId: proposal.id,
+        userId: speaker.user_id,
+        inviteGeneration: speaker.invite_generation,
+        expectedManageLinkSecret: speaker.manage_link_secret,
+      }),
       db
         .prepare(
           `UPDATE proposal_speakers
@@ -190,7 +199,12 @@ export async function declineSpeakerParticipation(
         "PROPOSAL_SPEAKER_CONFLICT",
         "The agenda changed while the decline was processed. Try again.",
       );
-    if (!isAuditChangeGuardFailure(error) && !isEventParticipantSourceConflict(error)) throw error;
+    if (
+      !isAuditChangeGuardFailure(error) &&
+      !isEventParticipantSourceConflict(error) &&
+      !isAuthorizationGuardFailure(error)
+    )
+      throw error;
 
     const currentCount = await first<{ total: number }>(
       db,

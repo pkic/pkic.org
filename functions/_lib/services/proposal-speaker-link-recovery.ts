@@ -1,7 +1,5 @@
 import { first } from "../db/queries";
 import type { DatabaseLike } from "../types";
-import { activeEffectiveInviteExpirySql, effectiveProposalSpeakerInviteExpirySql } from "../invite-validity";
-import { nowIso } from "../utils/time";
 import type { EventRecord } from "./events";
 import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
 import { portalVerifyLinkBase, requestUserSignInLink } from "./user-auth-flow";
@@ -29,12 +27,10 @@ export async function queueProposalSpeakerManageLinkRecovery(
       ))
       AND EXISTS (SELECT 1 FROM proposal_speakers ps
         JOIN session_proposals sp ON sp.id = ps.proposal_id
-        JOIN events e ON e.id = sp.event_id
-        WHERE ps.user_id = u.id AND ps.role <> 'proposer' AND ps.status IN ('invited', 'confirmed')
+        WHERE ps.user_id = u.id AND ps.role <> 'proposer' AND ps.status IN ('invited', 'pending', 'confirmed')
           AND sp.event_id = ? AND sp.deleted_at IS NULL AND sp.status NOT IN (${PROPOSAL_INACTIVE_STATUS_SQL_LIST})
-          AND (ps.status = 'confirmed' OR ${activeEffectiveInviteExpirySql(effectiveProposalSpeakerInviteExpirySql("ps", "e"))})
       ) LIMIT 1`,
-    [email, email, event.id, nowIso()],
+    [email, email, event.id],
   );
   if (!person) return null;
   const result = await requestUserSignInLink(db, {

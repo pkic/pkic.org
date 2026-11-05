@@ -1,3 +1,5 @@
+import { eventWorkspacePath } from "./helpers/agenda-workspace";
+import { SPEAKER_PARTICIPATION_COPY } from "../../assets/shared/proposal-speaker-acceptance";
 import {
   agendaSnapshotSchema,
   agendaRoomCreateSchema,
@@ -607,118 +609,170 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await expect(page.getByText(nextOrganization, { exact: false })).toBeVisible();
 });
 
-test("proposer and invited speaker manage their own event records without emailed management tokens", async ({
-  page,
-  browser,
-}, testInfo) => {
-  await page.goto("/portal/");
-  const proposerEmail = `portal-proposer-${Date.now()}@example.test`;
-  const speakerEmail = `portal-speaker-${Date.now()}@example.test`;
-  const title = `Portal proposal ${Date.now()}`;
-  const proposal = await submitProposal(page, {
-    proposerEmail,
-    firstName: "Portal",
-    lastName: "Proposer",
-    title,
-    abstract:
-      "A sufficiently detailed proposal describing how participants can manage their event records directly in the portal.",
-  });
-  expect(
-    await inviteCoSpeaker(page, proposal.accessToken, {
-      email: speakerEmail,
+for (const late of [false, true]) {
+  test(`proposer and invited speaker manage their own event records (${late ? "late review" : "normal response"})`, async ({
+    page,
+    browser,
+  }, testInfo) => {
+    test.slow();
+    await page.goto("/portal/");
+    const proposerEmail = `portal-proposer-${Date.now()}@example.test`;
+    const speakerEmail = `portal-speaker-${Date.now()}@example.test`;
+    const title = `Portal proposal ${Date.now()}`;
+    const invitationDeadline = new Date(Date.now() + 10000).toISOString();
+    const proposal = await submitProposal(page, {
+      proposerEmail,
       firstName: "Portal",
-      lastName: "Speaker",
-      role: "speaker",
-    }),
-  ).toBe(200);
-  await signInToPortal(page, proposerEmail);
-  await page
-    .getByRole("heading", { name: "Post-Quantum Cryptography Conference", exact: true })
-    .getByRole("link", { name: "Post-Quantum Cryptography Conference", exact: true })
-    .click();
-  await page.getByRole("link", { name: "View proposals", exact: true }).click();
-  await page.getByRole("link", { name: title, exact: true }).click();
-  // The submission opens read-only; withdrawal lives in its menu, never beside saving.
-  const submission = page.getByRole("region", { name: "Submission", exact: true });
-  await expect(page.getByLabel("Title", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Withdraw proposal/ })).toHaveCount(0);
-  await page.getByRole("button", { name: "Submission actions", exact: true }).click();
-  await expect(page.getByRole("menuitem", { name: "Withdraw proposal…", exact: true })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await submission.getByRole("button", { name: "Edit", exact: true }).click();
-  await page.getByLabel("Title", { exact: true }).fill(title + " edited");
-  await page.getByRole("button", { name: "Save proposal", exact: true }).click();
-  await expect(page.getByText("Proposal updated.", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Title", { exact: true })).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByRole("definition").filter({ hasText: title + " edited" })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("proposal-desktop.png"), fullPage: true });
-  const context = await browser.newContext({ baseURL: new URL(page.url()).origin });
-  const speaker = await context.newPage();
-  try {
-    await signInToPortal(speaker, speakerEmail);
-    await speaker.goto(`/portal/#/events/${PROPOSAL_EVENT_SLUG}/proposals/${proposal.proposalId}`);
-    await expect(speaker.getByRole("button", { name: "Confirm participation", exact: true })).toBeVisible();
-    for (const checkbox of await speaker.getByRole("checkbox").all()) await checkbox.check();
-    const confirmParticipation = speaker.getByRole("button", { name: "Confirm participation", exact: true });
-    await expect(confirmParticipation).toBeDisabled();
-    await expect(speaker.getByText(/choose and save your speaker identity before confirming/i)).toBeVisible();
-    const profilePath = `/api/v1/proposals/${proposal.proposalId}/participation/profile`;
-    const before = speakerSelfServiceReadResponseSchema.parse(
-      await (await speaker.request.get(`/api/v1/proposals/${proposal.proposalId}/participation`)).json(),
-    );
-    expect(before.speaker.status).toBe("invited");
-    expect(before.profile.actingIdentitySelection).toBe("unrecorded");
-    const individual = speaker.getByRole("button", { name: EMAIL_FIRST_COPY.speaker.individualSwitch, exact: true });
-    // Choosing resolves the signed-in speaker's representation at once, so the question closes on click.
-    await individual.click();
-    await expect(speaker.getByText("Individual participation", { exact: true })).toBeVisible();
-    await expect(individual).toHaveCount(0);
-    await completeIndependentCapacityDisclosure(speaker);
-    await expect(speaker.getByLabel("Organization", { exact: true })).toHaveCount(0);
-    await expect(speaker.getByLabel("Job title", { exact: true })).toHaveCount(0);
-    const selectionResponse = speaker.waitForResponse(
-      (response) => new URL(response.url()).pathname === profilePath && response.request().method() === "PATCH",
-    );
-    await speaker.getByRole("button", { name: "Save speaker identity", exact: true }).click();
-    const selectedResponse = await selectionResponse;
-    expect(selectedResponse.status()).toBe(200);
-    const selectedBody = speakerSelfProfilePatchSchema.parse(selectedResponse.request().postDataJSON());
-    expect(selectedBody.actingIdentityId).toBeNull();
-    expect(selectedBody.unaffiliatedAttestation).toBe(true);
-    const selected = speakerProfileUpdateResponseSchema.parse(await selectedResponse.json());
-    expect(selected.profile.actingIdentitySelection).toBe("individual");
-    expect(selected.profile.actingIdentitySelectedAt).not.toBeNull();
-    await expect(speaker.getByText("Speaker identity saved.", { exact: true })).toBeVisible();
-    await speaker.getByRole("button", { name: "Confirm participation", exact: true }).click();
-    await expect(speaker.getByText("Participation confirmed.", { exact: true })).toBeVisible();
-    await expect(speaker.getByRole("button", { name: "Save proposal", exact: true })).toHaveCount(0);
-    // The saved profile reads back as text until the reader chooses to edit it.
-    const bio = speaker.getByRole("textbox", { name: "Your speaker bio", exact: true });
-    await expect(bio).toHaveCount(0);
-    await expect(speaker.getByRole("button", { name: "Save speaker identity", exact: true })).toHaveCount(0);
-    await speaker
-      .getByRole("region", { name: "Speaker profile", exact: true })
-      .getByRole("button", { name: "Edit", exact: true })
+      lastName: "Proposer",
+      title,
+      abstract:
+        "A sufficiently detailed proposal describing how participants can manage their event records directly in the portal.",
+    });
+    expect(
+      await inviteCoSpeaker(page, proposal.accessToken, {
+        email: speakerEmail,
+        firstName: "Portal",
+        lastName: "Speaker",
+        role: "speaker",
+        ...(late ? { expiresAt: invitationDeadline } : {}),
+      }),
+    ).toBe(200);
+    await signInToPortal(page, proposerEmail);
+    await page
+      .getByRole("heading", { name: "Post-Quantum Cryptography Conference", exact: true })
+      .getByRole("link", { name: "Post-Quantum Cryptography Conference", exact: true })
       .click();
-    await bio.fill("Guest speaker biography saved through authenticated self-service.");
-    await speaker.getByRole("button", { name: "Save changes", exact: true }).click();
-    await expect(speaker.getByText("Profile updated.", { exact: true })).toBeVisible();
-    await expect(bio).toHaveCount(0);
-    await speaker.reload();
-    await expect(
-      speaker
-        .getByRole("definition")
-        .filter({ hasText: "Guest speaker biography saved through authenticated self-service." }),
-    ).toBeVisible();
-    const restored = speakerSelfServiceReadResponseSchema.parse(
-      await (await speaker.request.get(`/api/v1/proposals/${proposal.proposalId}/participation`)).json(),
-    );
-    expect(restored.speaker.status).toBe("confirmed");
-    expect(restored.profile.actingIdentitySelectedAt).toBe(selected.profile.actingIdentitySelectedAt);
-    expect(restored.profile.organizationName).toBeNull();
-    expect(restored.profile.jobTitle).toBeNull();
-  } finally {
-    await context.close();
-  }
-});
+    await page.getByRole("link", { name: "View proposals", exact: true }).click();
+    await page.getByRole("link", { name: title, exact: true }).click();
+    // The submission opens read-only; withdrawal lives in its menu, never beside saving.
+    const submission = page.getByRole("region", { name: "Submission", exact: true });
+    await expect(page.getByLabel("Title", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Withdraw proposal/ })).toHaveCount(0);
+    await page.getByRole("button", { name: "Submission actions", exact: true }).click();
+    await expect(page.getByRole("menuitem", { name: "Withdraw proposal…", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await submission.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByLabel("Title", { exact: true }).fill(title + " edited");
+    await page.getByRole("button", { name: "Save proposal", exact: true }).click();
+    await expect(page.getByText("Proposal updated.", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Title", { exact: true })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole("definition").filter({ hasText: title + " edited" })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("proposal-desktop.png"), fullPage: true });
+    const context = await browser.newContext({ baseURL: new URL(page.url()).origin });
+    const speaker = await context.newPage();
+    try {
+      await signInToPortal(speaker, speakerEmail);
+      if (late) await expect.poll(() => Date.now(), { timeout: 20000 }).toBeGreaterThan(Date.parse(invitationDeadline));
+      await speaker.goto(`/portal/#/events/${PROPOSAL_EVENT_SLUG}/proposals/${proposal.proposalId}`);
+      await expect(
+        speaker.getByRole("button", { name: "Confirm willingness to participate", exact: true }),
+      ).toBeVisible();
+      for (const checkbox of await speaker.getByRole("checkbox").all()) await checkbox.check();
+      const confirmParticipation = speaker.getByRole("button", {
+        name: "Confirm willingness to participate",
+        exact: true,
+      });
+      await expect(confirmParticipation).toBeDisabled();
+      await expect(speaker.getByText(/choose and save your speaker identity before confirming/i)).toBeVisible();
+      const profilePath = `/api/v1/proposals/${proposal.proposalId}/participation/profile`;
+      const before = speakerSelfServiceReadResponseSchema.parse(
+        await (await speaker.request.get(`/api/v1/proposals/${proposal.proposalId}/participation`)).json(),
+      );
+      expect(before.speaker.status).toBe("invited");
+      expect(before.profile.actingIdentitySelection).toBe("unrecorded");
+      const individual = speaker.getByRole("button", { name: EMAIL_FIRST_COPY.speaker.individualSwitch, exact: true });
+      // Choosing resolves the signed-in speaker's representation at once, so the question closes on click.
+      await individual.click();
+      await expect(speaker.getByText("Individual participation", { exact: true })).toBeVisible();
+      await expect(individual).toHaveCount(0);
+      await completeIndependentCapacityDisclosure(speaker);
+      await expect(speaker.getByLabel("Organization", { exact: true })).toHaveCount(0);
+      await expect(speaker.getByLabel("Job title", { exact: true })).toHaveCount(0);
+      const selectionResponse = speaker.waitForResponse(
+        (response) => new URL(response.url()).pathname === profilePath && response.request().method() === "PATCH",
+      );
+      await speaker.getByRole("button", { name: "Save speaker identity", exact: true }).click();
+      const selectedResponse = await selectionResponse;
+      expect(selectedResponse.status()).toBe(200);
+      const selectedBody = speakerSelfProfilePatchSchema.parse(selectedResponse.request().postDataJSON());
+      expect(selectedBody.actingIdentityId).toBeNull();
+      expect(selectedBody.unaffiliatedAttestation).toBe(true);
+      const selected = speakerProfileUpdateResponseSchema.parse(await selectedResponse.json());
+      expect(selected.profile.actingIdentitySelection).toBe("individual");
+      expect(selected.profile.actingIdentitySelectedAt).not.toBeNull();
+      await expect(speaker.getByText("Speaker identity saved.", { exact: true })).toBeVisible();
+      await speaker.getByRole("button", { name: "Confirm willingness to participate", exact: true }).click();
+      if (late) {
+        await expect(speaker.getByText(SPEAKER_PARTICIPATION_COPY.pending, { exact: true })).toBeVisible();
+        await expect(
+          speaker.getByRole("button", { name: SPEAKER_PARTICIPATION_COPY.confirm, exact: true }),
+        ).toHaveCount(0);
+        for (const width of [1280, 375]) {
+          await speaker.setViewportSize({ width, height: 900 });
+          await speaker.screenshot({ path: testInfo.outputPath(`late-speaker-${width}.png`), fullPage: true });
+        }
+        const managerContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
+        try {
+          const manager = await managerContext.newPage();
+          await signInAsE2eStaff(manager, e2eAdminEmail("speaker-submission-confirmation"));
+          await manager.goto(
+            `${await eventWorkspacePath(manager, PROPOSAL_EVENT_SLUG)}/proposals/${proposal.proposalId}/speakers`,
+          );
+          await expect(manager.getByRole("region", { name: "Proposal speakers" })).toBeVisible();
+          await manager.getByRole("button", { name: "Actions for Portal Speaker", exact: true }).click();
+          await expect(
+            manager.getByRole("menuitem", { name: "Approve late participation", exact: true }),
+          ).toBeVisible();
+          for (const width of [1280, 375]) {
+            await manager.setViewportSize({ width, height: 900 });
+            await manager.screenshot({ path: testInfo.outputPath(`late-review-menu-${width}.png`), fullPage: true });
+          }
+          await manager.getByRole("menuitem", { name: "Approve late participation", exact: true }).click();
+          await acceptConfirmDialog(manager, "Approve late participation");
+        } finally {
+          await managerContext.close();
+        }
+        await speaker.reload();
+        await expect
+          .poll(
+            async () =>
+              speakerSelfServiceReadResponseSchema.parse(
+                await (await speaker.request.get(`/api/v1/proposals/${proposal.proposalId}/participation`)).json(),
+              ).speaker.status,
+          )
+          .toBe("confirmed");
+      } else {
+        await expect(speaker.getByText(SPEAKER_PARTICIPATION_COPY.confirmed, { exact: true })).toBeVisible();
+      }
+      await expect(speaker.getByRole("button", { name: "Save proposal", exact: true })).toHaveCount(0);
+      // The saved profile reads back as text until the reader chooses to edit it.
+      const bio = speaker.getByRole("textbox", { name: "Your speaker bio", exact: true });
+      await expect(bio).toHaveCount(0);
+      await expect(speaker.getByRole("button", { name: "Save speaker identity", exact: true })).toHaveCount(0);
+      await speaker
+        .getByRole("region", { name: "Speaker profile", exact: true })
+        .getByRole("button", { name: "Edit", exact: true })
+        .click();
+      await bio.fill("Guest speaker biography saved through authenticated self-service.");
+      await speaker.getByRole("button", { name: "Save changes", exact: true }).click();
+      await expect(speaker.getByText("Profile updated.", { exact: true })).toBeVisible();
+      await expect(bio).toHaveCount(0);
+      await speaker.reload();
+      await expect(
+        speaker
+          .getByRole("definition")
+          .filter({ hasText: "Guest speaker biography saved through authenticated self-service." }),
+      ).toBeVisible();
+      const restored = speakerSelfServiceReadResponseSchema.parse(
+        await (await speaker.request.get(`/api/v1/proposals/${proposal.proposalId}/participation`)).json(),
+      );
+      expect(restored.speaker.status).toBe("confirmed");
+      expect(restored.profile.actingIdentitySelectedAt).toBe(selected.profile.actingIdentitySelectedAt);
+      expect(restored.profile.organizationName).toBeNull();
+      expect(restored.profile.jobTitle).toBeNull();
+    } finally {
+      await context.close();
+    }
+  });
+}

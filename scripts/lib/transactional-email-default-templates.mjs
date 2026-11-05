@@ -3,6 +3,26 @@ import { IDENTITY_NOTIFICATION_EMAIL_TEMPLATE } from "../../assets/shared/email-
 export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
   IDENTITY_NOTIFICATION_EMAIL_TEMPLATE,
   {
+    key: "proposal_speaker_response",
+    contentType: "markdown",
+    messageType: "transactional",
+    subjectTemplate:
+      "{{#if rejected}}Late speaker participation declined{{else}}{{#if late}}Late speaker response awaits review{{else}}Speaker willingness confirmed{{/if}}{{/if}} — {{eventName}}",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
+
+{{#if rejected}}An organizer declined late participation by {{speakerName}} in the proposal **{{proposalTitle}}** for **{{eventName}}**.{{else}}
+
+{{speakerName}} is willing to participate in the proposal **{{proposalTitle}}** for **{{eventName}}**.
+
+{{#if late}}The response arrived after the invitation deadline. A replacement may already exist. Participation awaits an authorized organizer's approval; this response grants no participation or agenda credit.{{else}}Their willingness to participate in the proposal is confirmed.{{/if}}{{/if}}
+
+Speaker participation does not accept the proposal or guarantee inclusion in the program. Committee acceptance and scheduling are separate decisions.
+
+[Review the proposal]({{proposalUrl}})
+`,
+  },
+
+  {
     key: "event_proposal_verify",
     subjectTemplate: "Verify your email for {{eventName}}",
     content:

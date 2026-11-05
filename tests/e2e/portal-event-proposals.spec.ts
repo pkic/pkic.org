@@ -1,7 +1,3 @@
-import {
-  proposalAccessPatchSchema,
-  proposalAccessPatchResponseSchema,
-} from "../../assets/shared/schemas/proposal-management";
 /**
  * @covers proposal.4.7
  */
@@ -9,7 +5,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { openRow } from "./helpers/data-table";
 import { clientIpForIdentity, signInToPortal } from "./helpers/portal-auth";
-import { PROPOSAL_EVENT_SLUG, decideProposal, submitProposal } from "./helpers/proposals";
+import { decideProposal, submitProposal } from "./helpers/proposals";
 import { eventWorkspacePath } from "./helpers/agenda-workspace";
 import { eventRegistrationAttendanceDetailResponseSchema } from "../../assets/shared/schemas/event-registration-detail";
 import { tab } from "./helpers/tabs";
@@ -320,110 +316,4 @@ test("portal opens a registration created by accepting a speaker proposal", asyn
   await expect(page.getByRole("heading", { name: "Synthetic Proposal Speaker", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Attendance by day", exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("proposal-speaker-registration.png"), fullPage: true });
-});
-
-test("a proposer saves private revision drafts and explicitly resubmits for review", async ({
-  page,
-  browser,
-}, info) => {
-  test.slow();
-  await signInToPortal(page, e2eAdminEmail("speaker-submission-confirmation"));
-  const suffix = `${Date.now()}-${info.workerIndex}`;
-  const email = `revision-${suffix}@gmail.com`;
-  const title = `Submission awaiting revision ${suffix}`;
-  const draftTitle = `A private revision draft ${suffix}`;
-  const created = await submitProposal(page, {
-    eventSlug: PROPOSAL_EVENT_SLUG,
-    proposerEmail: email,
-    firstName: "Revision",
-    lastName: "Speaker",
-    title,
-    abstract:
-      "A detailed practical proposal examining certificate authority migration, operational evidence, and rollout decisions.",
-  });
-  const reviewed = await page.request.post(`/api/v1/proposals/${created.proposalId}/reviews`, {
-    data: { recommendation: "needs-work", score: 3 },
-  });
-  expect(reviewed.status(), await reviewed.text()).toBe(200);
-  const reviewer = await browser.newContext({ baseURL: new URL(page.url()).origin });
-  try {
-    const reviewerPage = await reviewer.newPage();
-    await signInToPortal(reviewerPage, e2eAdminEmail("speaker-submission-confirmation-reviewer"));
-    const secondReview = await reviewerPage.request.post(`/api/v1/proposals/${created.proposalId}/reviews`, {
-      data: { recommendation: "needs-work", score: 3 },
-    });
-    expect(secondReview.status(), await secondReview.text()).toBe(200);
-  } finally {
-    await reviewer.close();
-  }
-  const decided = await page.request.post(`/api/v1/proposals/${created.proposalId}/decisions`, {
-    data: { finalStatus: "needs-work", decisionNote: "Decided by a browser journey." },
-  });
-  expect(decided.status(), await decided.text()).toBe(200);
-  const participant = await browser.newContext({ baseURL: new URL(page.url()).origin });
-  const proposer = await participant.newPage();
-  async function capture(state: string) {
-    for (const width of [1440, 375]) {
-      await proposer.setViewportSize({ width, height: 1000 });
-      await proposer.evaluate(async () => {
-        await document.fonts.ready;
-      });
-      await proposer.screenshot({ path: info.outputPath(`${state}-${width}.png`), fullPage: true });
-    }
-  }
-  try {
-    await proposer.goto(
-      `/events/2026/${PROPOSAL_EVENT_SLUG}/propose/manage/?token=${encodeURIComponent(created.accessToken)}`,
-    );
-    await expect(proposer.getByText("Decided by a browser journey.", { exact: true })).toBeVisible();
-    await expect(proposer.getByRole("button", { name: "Save draft", exact: true })).toBeVisible();
-    await capture("proposal-manage-revision");
-    await proposer.getByLabel("Title", { exact: false }).fill(draftTitle);
-    const saved = proposer.waitForResponse(
-      (response) => response.request().method() === "PATCH" && response.url().includes("/api/v1/proposals/access/"),
-    );
-    await proposer.getByLabel("Title", { exact: false }).press("Enter");
-    const savedResponse = await saved;
-    expect(savedResponse.status()).toBe(200);
-    expect(proposalAccessPatchSchema.parse(savedResponse.request().postDataJSON()).status).toBeUndefined();
-    expect(proposalAccessPatchResponseSchema.parse(await savedResponse.json()).proposal.status).toBe("needs-work");
-    await proposer.reload();
-    await expect(proposer.getByLabel("Title", { exact: false })).toHaveValue(draftTitle);
-    const staffRead = await page.request.get(`/api/v1/proposals/${created.proposalId}`);
-    expect(staffRead.status()).toBe(200);
-    expect((await staffRead.json()).proposal.title).toBe(title);
-    await capture("proposal-manage-saved-draft");
-
-    await signInToPortal(proposer, email);
-    await proposer.goto(`/portal/#/events/${PROPOSAL_EVENT_SLUG}/proposals/${created.proposalId}`);
-    const submission = proposer.getByRole("region", { name: "Submission", exact: true });
-    await expect(submission.getByText("Decided by a browser journey.", { exact: true })).toBeVisible();
-    await expect(submission.getByText(draftTitle, { exact: true })).toBeVisible();
-    await capture("portal-proposal-revision");
-    await submission.getByRole("button", { name: "Edit", exact: true }).click();
-    await submission.getByLabel("Title", { exact: false }).fill(`${draftTitle} updated`);
-    const portalSaved = proposer.waitForResponse(
-      (response) =>
-        response.request().method() === "PATCH" &&
-        response.url().includes(`/api/v1/proposals/${created.proposalId}/submission`),
-    );
-    await submission.getByRole("button", { name: "Save draft", exact: true }).click();
-    expect((await portalSaved).status()).toBe(200);
-    await expect(submission.getByRole("button", { name: "Resubmit for review", exact: true })).toBeVisible();
-    await capture("portal-proposal-saved-draft");
-    const resubmitted = proposer.waitForResponse(
-      (response) =>
-        response.request().method() === "PATCH" &&
-        response.url().includes(`/api/v1/proposals/${created.proposalId}/submission`),
-    );
-    await submission.getByRole("button", { name: "Resubmit for review", exact: true }).click();
-    const resubmittedResponse = await resubmitted;
-    expect(resubmittedResponse.status()).toBe(200);
-    expect(proposalAccessPatchSchema.parse(resubmittedResponse.request().postDataJSON()).status).toBe("resubmitted");
-    await expect(submission.getByRole("button", { name: "Resubmit for review", exact: true })).toHaveCount(0);
-    const after = await page.request.get(`/api/v1/proposals/${created.proposalId}`);
-    expect((await after.json()).proposal).toMatchObject({ title: `${draftTitle} updated`, status: "resubmitted" });
-  } finally {
-    await participant.close();
-  }
 });

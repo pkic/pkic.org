@@ -1,10 +1,13 @@
+import { SpeakerParticipationPreview, ConfirmedSpeakerPreview } from "./SpeakerParticipationPreview";
 import { ProposalProofSupportNotice } from "../../components/ProposalProofSupportNotice";
 import type { PreviewSection } from "./PreviewShell";
 import { ProposalIdentityPreview } from "./VerifiedOrganizationPreview";
-import { ProposalRevisionPreview } from "./ProposalRevisionPreview";
 
 /** Speaker submission states rendered with the production components and synthetic data. */
 export const proposalSections: PreviewSection[] = [
+  { id: "speaker-confirmed", title: "Confirmed proposal participant", render: () => <ConfirmedSpeakerPreview /> },
+  { id: "speaker-participation", title: "Speaker willingness", render: () => <SpeakerParticipationPreview /> },
+  { id: "speaker-late-response", title: "Late speaker response", render: () => <SpeakerParticipationPreview late /> },
   {
     id: "proposal-identity",
     title: "Proposal identity",
@@ -33,5 +36,4 @@ export const proposalSections: PreviewSection[] = [
       />
     ),
   },
-  { id: "proposal-revision", title: "Proposal revision", render: () => <ProposalRevisionPreview /> },
 ];

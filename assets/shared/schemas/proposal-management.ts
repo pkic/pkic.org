@@ -214,12 +214,7 @@ export const inviteResendLinkSchema = proposalResendManageLinkSchema;
 
 export const proposalAccessPatchSchema = boundedJsonObject(
   {
-    /**
-     * `withdrawn` takes the proposal out of review. `resubmitted` hands a
-     * proposal the committee sent back for changes to its next review round;
-     * until then, saving changes keeps them as a draft.
-     */
-    status: z.enum(["withdrawn", "resubmitted"]).optional(),
+    status: z.literal("withdrawn").optional(),
     proposalType: proposalTypeSchema.optional(),
     title: proposalTitleSchema.optional(),
     abstract: proposalAbstractSchema.optional(),
@@ -240,12 +235,6 @@ export const proposalAccessPatchSchema = boundedJsonObject(
 
 export const proposalAccessTokenParamsSchema = z.object({ token: tokenSchema });
 
-/** The committee's request for changes, shown to the proposer while the proposal awaits their revision. */
-export const proposalRevisionRequestSchema = z.object({
-  note: z.string().nullable(),
-  decided_at: utcInstantSchema,
-});
-
 export const proposalAccessRecordSchema = z.object({
   event_id: databaseIdSchema.optional(),
   id: databaseIdSchema,
@@ -257,8 +246,6 @@ export const proposalAccessRecordSchema = z.object({
   /** The proposer's own private notes for the program committee. */
   committee_notes: z.string().nullable().default(null),
   details: z.record(z.string(), z.unknown()).nullable(),
-  /** Present exactly while the proposal is in `needs-work`. */
-  revision_request: proposalRevisionRequestSchema.nullable().default(null),
 });
 
 export const proposalAccessSpeakerStatusSchema = z.enum(["pending", "invited", "confirmed", "declined"]);

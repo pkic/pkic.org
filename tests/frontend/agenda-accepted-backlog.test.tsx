@@ -134,7 +134,7 @@ describe("Accepted proposal agenda backlog", () => {
     await mount();
     const cards = [...host.querySelectorAll<HTMLElement>("[data-agenda-proposal]")];
     expect(cards[0]!.textContent).toContain(pendingSpeakersLabel(2));
-    expect(cards[1]!.textContent).not.toContain("not yet accepted");
+    expect(cards[1]!.textContent).not.toContain("not yet confirmed");
   });
   it("does not enable the add action when the source catalog denies read access", async () => {
     vi.stubGlobal(

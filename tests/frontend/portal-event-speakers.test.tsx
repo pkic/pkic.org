@@ -132,7 +132,7 @@ describe("proposal speakers tab", () => {
     // a warning: the agenda cannot publish that speaker yet.
     expect(page.querySelector("tbody")?.textContent).toContain("sam@example.test");
     expect(page.querySelector("tbody")?.textContent).not.toContain("Unnamed speaker");
-    expect(page.querySelector("tbody .pk-badge--warn")?.textContent).toBe("Not yet accepted");
+    expect(page.querySelector("tbody .pk-badge--warn")?.textContent).toBe("Participation not confirmed");
     expect(page.querySelector<HTMLAnchorElement>("tbody a.pk-table__row-link")?.href).toContain(
       `/proposals/detail/${PROPOSAL_ID}`,
     );

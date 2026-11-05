@@ -5,8 +5,6 @@ import { Select, TextInput, Textarea } from "../ui/TextControl";
 import { Button } from "../ui/Button";
 import { HeadshotDialogTemplates } from "./HeadshotDialogTemplates";
 import { PROPOSAL_COMMITTEE_NOTES_COPY } from "../../shared/proposal-committee-notes-copy";
-import { PROPOSAL_REVISION_COPY } from "../../shared/proposal-revision-copy";
-import { Alert } from "../ui/Alert";
 
 /** Token-dependent content is populated by the existing proposal controller. */
 export function EventProposalManagement() {
@@ -22,15 +20,6 @@ export function EventProposalManagement() {
       </p>
       <div class="pk-stack pk-stack--loose" hidden data-proposal-manage-content>
         <p class="pk-muted pk-small">Return here any time with the link from your proposal email.</p>
-        <p>
-          Status: <strong data-proposal-status />
-        </p>
-        <div hidden data-revision-request>
-          <Alert tone="warn" title={PROPOSAL_REVISION_COPY.title}>
-            <p class="pk-prose-block" data-revision-note />
-            <p class="pk-small">{PROPOSAL_REVISION_COPY.draftHelp}</p>
-          </Alert>
-        </div>
         <form class="pk-form needs-validation" noValidate>
           <Field id="manage-proposal-type" label="Session type" errorSlot="proposalType" required>
             {(control) => <Select {...control} name="proposalType" required />}
@@ -53,12 +42,7 @@ export function EventProposalManagement() {
             {PROPOSAL_COMMITTEE_NOTES_COPY.locked}
           </p>
           <div class="pk-cluster">
-            <Button type="submit" data-action="save">
-              Save changes
-            </Button>
-            <Button type="submit" name="status" value="resubmitted" hidden data-action="resubmit">
-              {PROPOSAL_REVISION_COPY.resubmit}
-            </Button>
+            <Button type="submit">Save changes</Button>
             <Button type="button" variant="danger-quiet" data-action="withdraw">
               Withdraw proposal
             </Button>

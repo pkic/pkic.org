@@ -1,3 +1,4 @@
+import { isLateSpeakerResponseAwaitingReview } from "../../../../../../assets/shared/proposal-speaker-acceptance";
 import { assertInvitedSpeakerClaimSelection } from "../../../../../_lib/services/event-proposal-proof-redemption";
 /**
  * Proposal-speaker capability endpoint.
@@ -95,6 +96,11 @@ export async function onRequestGet(
           confirmedAt: speaker.confirmed_at,
           declinedAt: speaker.declined_at,
           termsAcceptedAt: speaker.terms_accepted_at,
+          awaitingReview: isLateSpeakerResponseAwaitingReview(
+            speaker.status,
+            speaker.response_invite_generation,
+            speaker.invite_generation,
+          ),
         },
         proposal: {
           id: proposal.id,
@@ -128,12 +134,13 @@ export async function onRequestParticipationPatch(
     const token = data.params.token;
 
     if (body.status === "confirmed") {
-      await confirmSpeakerParticipation(requestDb(c), token, requireInternalSecret(c.env), {
+      const status = await confirmSpeakerParticipation(requestDb(c), token, requireInternalSecret(c.env), {
         consents: body.consents,
+        appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
         ip: c.req.raw.headers.get("cf-connecting-ip"),
         userAgent: c.req.raw.headers.get("user-agent"),
       });
-      return json(speakerParticipationResponseSchema.parse({ success: true, status: "confirmed" }));
+      return json(speakerParticipationResponseSchema.parse({ success: true, status }));
     }
 
     const declined = await declineSpeakerParticipation(requestDb(c), token, requireInternalSecret(c.env), {

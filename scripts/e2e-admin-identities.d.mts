@@ -43,7 +43,6 @@ export const E2E_ADMIN_SCOPES: readonly [
   "portal-event-attendee-management",
   "portal-event-proposals",
   "speaker-submission-confirmation",
-  "speaker-submission-confirmation-reviewer",
   "portal-analytics",
   "portal-leadership",
   "portal-group-leadership",

@@ -25,6 +25,7 @@ import {
 } from "../../../assets/shared/schemas/speaker-self-service";
 
 export interface SpeakerWithContext {
+  inviteExpired: boolean;
   speaker: ProposalSpeakerRecord;
   proposal: ProposalRecord;
   currentRepresentation: SpeakerCurrentRepresentation | null;
@@ -95,6 +96,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
     ps_declined_at: string | null;
     ps_decline_reason: string | null;
     ps_created_at: string;
+    ps_response_invite_generation: number | null;
     ps_invite_generation: number;
     ps_invite_expires_at: string | null;
     ps_invited_email: string | null;
@@ -142,6 +144,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
        ps.declined_at     AS ps_declined_at,
        ps.decline_reason  AS ps_decline_reason,
        ps.created_at      AS ps_created_at,
+       ps.response_invite_generation AS ps_response_invite_generation,
        ps.invite_generation AS ps_invite_generation,
        ps.invite_expires_at AS ps_invite_expires_at,
        ps.invited_email   AS ps_invited_email,
@@ -187,11 +190,12 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
   if (!row || (userId !== undefined && row.ps_user_id !== userId)) {
     throw new AppError(404, "SPEAKER_TOKEN_NOT_FOUND", "This speaker link is no longer available.");
   }
-  if (row.ps_invite_expired === 1) {
+  if (row.ps_invite_expired === 1 && userId === undefined) {
     throw new AppError(410, "SPEAKER_INVITATION_EXPIRED", "Speaker invitation has expired");
   }
 
   const context: SpeakerWithContext = {
+    inviteExpired: row.ps_invite_expired === 1,
     currentRepresentation: null,
     speaker: {
       id: row.ps_id,
@@ -205,6 +209,7 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
       declined_at: row.ps_declined_at,
       decline_reason: row.ps_decline_reason,
       created_at: row.ps_created_at,
+      response_invite_generation: row.ps_response_invite_generation,
       invite_generation: row.ps_invite_generation,
       invite_expires_at: row.ps_invite_expires_at,
       invited_email: row.ps_invited_email,

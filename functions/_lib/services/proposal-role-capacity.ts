@@ -41,7 +41,9 @@ export function participantRoleForProposalRole(role: ProposalSpeakerRole): Propo
 }
 
 export function proposalParticipantStatus(proposalStatus: string, speakerStatus: string): "active" | "inactive" {
-  return proposalStatus === "accepted" && speakerStatus !== "declined" ? "active" : "inactive";
+  return proposalStatus === "accepted" && (speakerStatus === "confirmed" || speakerStatus === "invited")
+    ? "active"
+    : "inactive";
 }
 
 async function listProposalRoleSourcesAfterChange(
@@ -90,8 +92,7 @@ async function listProposalRoleSourcesAfterChange(
     const participant = participantRoleForProposalRole(source.role);
     const key = `${participant.role}\u0000${participant.subrole ?? ""}`;
     const current = byParticipantRole.get(key);
-    const status =
-      source.proposal_status === "accepted" && source.speaker_status !== "declined" ? "active" : "inactive";
+    const status = proposalParticipantStatus(source.proposal_status, source.speaker_status);
     if (
       !current ||
       (status === "active" && current.status !== "active") ||
@@ -192,6 +193,8 @@ export async function prepareProposalRoleCapacityForProposalStatus(
   ];
   const sharedCapacityGuards: EventDayCapacityGuardPlan = new Map();
   for (const speaker of speakers) {
+    const active =
+      payload.nextStatus === "active" && proposalParticipantStatus("accepted", speaker.status) === "active";
     statements.push(
       ...(await prepareProposalRoleCapacityAfterSourceChange(db, {
         eventId: payload.eventId,
@@ -199,8 +202,8 @@ export async function prepareProposalRoleCapacityForProposalStatus(
         sourceRef: payload.sourceRef,
         sharedCapacityGuards,
         nextRole: speaker.role,
-        nextStatus: payload.nextStatus === "active" && speaker.status !== "declined" ? "active" : "inactive",
-        ensureRegistration: payload.nextStatus === "active" && speaker.status !== "declined",
+        nextStatus: active ? "active" : "inactive",
+        ensureRegistration: active,
       })),
     );
   }
