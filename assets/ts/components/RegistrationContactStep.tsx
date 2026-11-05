@@ -150,13 +150,13 @@ function Details({
           <DescriptionList
             align="baseline"
             items={[
-              ...(firstName && lastName
+              ...(firstName || lastName || saveNames
                 ? [
                     {
                       term: "Name",
                       value: (
                         <span class="pk-cluster pk-cluster--nowrap">
-                          <span>{`${firstName} ${lastName}`}</span>
+                          <span>{[firstName, lastName].filter(Boolean).join(" ") || "Add your name"}</span>
                           {edit && (
                             <Button
                               type="button"
@@ -199,7 +199,14 @@ function Details({
           />
         )}
       />
-      <NameFields firstName={firstName} lastName={lastName} presentationOf={presentationOf} />
+      {saveNames ? (
+        <>
+          <input type="hidden" name="firstName" value={firstName ?? ""} />
+          <input type="hidden" name="lastName" value={lastName ?? ""} />
+        </>
+      ) : (
+        <NameFields firstName={firstName} lastName={lastName} presentationOf={presentationOf} />
+      )}
     </>
   );
 }
