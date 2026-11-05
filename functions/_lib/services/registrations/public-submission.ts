@@ -32,6 +32,7 @@ import type { VerifiedRegistrationIdentityContext } from "./types";
 import { nowIso } from "../../utils/time";
 import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
 import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
+import { findRegistrationGroup, prepareGroupEventRegistrationGuard } from "./authorization";
 import { eventTakesRegistrations } from "./email-proof";
 
 /** The individual capacity only gates the public contract's work-email policy; the use case does not read it. */
@@ -63,6 +64,10 @@ export interface EventRegistrationSubmissionMetadata {
   authorizationGuards?: readonly StatementLike[];
 }
 
+function registrationAllowsPublicAccess(registrationMode: string): boolean {
+  return registrationMode === "public" || registrationMode === "open" || registrationMode === "invite_or_open";
+}
+
 function requireRegistrationPolicy(
   registrationMode: string,
   access: { invited: boolean; authorizedByGroup: boolean },
@@ -72,7 +77,7 @@ function requireRegistrationPolicy(
   if (!eventTakesRegistrations(registrationMode)) {
     throw new AppError(403, "EVENT_REGISTRATION_DISABLED", "This event does not use registration");
   }
-  if (registrationMode === "public" || registrationMode === "open" || registrationMode === "invite_or_open") return;
+  if (registrationAllowsPublicAccess(registrationMode)) return;
   if (
     (registrationMode === "optional" ||
       registrationMode === "required" ||
@@ -100,7 +105,10 @@ async function linkVerifiedRegistrant(
     organization?: RegistrationConfirmOrganization;
   },
 ): Promise<RegistrationOrganizationOutcome | null> {
-  await linkVerifiedAddressToDomainOrganization(db, { userId: input.userId, normalizedEmail: input.normalizedEmail });
+  await linkVerifiedAddressToDomainOrganization(db, {
+    userId: input.userId,
+    normalizedEmail: input.normalizedEmail,
+  });
   return input.organization
     ? linkConfirmedRegistrationOrganization(db, {
         registrationId: input.registrationId,
@@ -127,9 +135,32 @@ export async function submitEventRegistration(
       throw new AppError(400, "INVITE_INVALID", "Invite token is not valid for attendee registration for this event");
     }
   }
+  let verifiedIdentity = metadata.verifiedIdentity;
+  const authorizationGuards = [...(metadata.authorizationGuards ?? [])];
+  if (
+    verifiedIdentity &&
+    !verifiedIdentity.registrationGroupId &&
+    !invite &&
+    !registrationAllowsPublicAccess(event.registration_mode)
+  ) {
+    const registrationGroupId = await findRegistrationGroup(db, {
+      eventId: event.id,
+      userId: verifiedIdentity.userId,
+    });
+    if (registrationGroupId) {
+      verifiedIdentity = { ...verifiedIdentity, registrationGroupId };
+      authorizationGuards.push(
+        prepareGroupEventRegistrationGuard(db, {
+          eventId: event.id,
+          groupId: registrationGroupId,
+          userId: verifiedIdentity.userId,
+        }),
+      );
+    }
+  }
   requireRegistrationPolicy(event.registration_mode, {
     invited: Boolean(invite),
-    authorizedByGroup: Boolean(metadata.verifiedIdentity?.registrationGroupId),
+    authorizedByGroup: Boolean(verifiedIdentity?.registrationGroupId),
   });
 
   if (!metadata.verifiedIdentity && !metadata.mailboxVerified) {
@@ -176,9 +207,9 @@ export async function submitEventRegistration(
     signingSecret: metadata.signingSecret,
     confirmationTtlHours: metadata.config.confirmationLinkTtlHours,
     referralCodeLength: metadata.config.referralCodeLength,
-    authorizationGuards: metadata.authorizationGuards,
+    authorizationGuards,
     event: { id: event.id, source_mode: event.source_mode },
-    verifiedIdentity: metadata.verifiedIdentity,
+    verifiedIdentity,
     affiliationContext,
     mailboxVerified: metadata.mailboxVerified,
   });

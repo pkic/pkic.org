@@ -146,10 +146,12 @@ function buildIcsContent(events: CalendarEvent[]): string {
   }
 }
 
-/** Standard calendar reminder alarms — 1 day and 1 hour before each event. */
+/** Standard calendar reminder alarms — 1 day, 1 hour, 15 minutes, and 5 minutes before each event. */
 const STANDARD_ALARMS: CalendarAlarm[] = [
   { action: "display", description: "Reminder", trigger: { hours: 24, before: true } },
   { action: "display", description: "Reminder", trigger: { hours: 1, before: true } },
+  { action: "display", description: "Reminder", trigger: { minutes: 15, before: true } },
+  { action: "display", description: "Reminder", trigger: { minutes: 5, before: true } },
 ];
 
 export interface DayAttendanceEntry {

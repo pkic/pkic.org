@@ -14,7 +14,7 @@ const event = {
 };
 
 describe("registration calendar invites", () => {
-  it("link the sign-in registration page, never the emailed management link, with two reminders", async () => {
+  it("link the sign-in registration page, never the emailed management link, with the standard reminders", async () => {
     const registrationUrl = registrationPortalPageUrl("https://app.test", event, "registration-1");
     const calendar = await buildRegistrationIcs(event, "registration-1", registrationUrl, [
       { dayDate: "2026-12-01", attendanceType: "in_person", label: "Day 1" },
@@ -27,7 +27,9 @@ describe("registration calendar invites", () => {
     for (const entry of events) {
       expect(entry.getFirstPropertyValue("url")).toBe(registrationUrl);
       expect(String(entry.getFirstPropertyValue("description"))).toContain(registrationUrl);
-      expect(entry.getAllSubcomponents("valarm")).toHaveLength(2);
+      expect(
+        entry.getAllSubcomponents("valarm").map((alarm) => String(alarm.getFirstPropertyValue("trigger"))),
+      ).toEqual(["-PT24H", "-PT1H", "-PT15M", "-PT5M"]);
     }
     expect(registrationUrl).toBe("https://app.test/portal/#/events/summit-2026/registrations/registration-1");
   });

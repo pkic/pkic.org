@@ -1,4 +1,5 @@
 import { guardAuthorizedDatabase, prepareAuthorizationGuard } from "../../db/authorization-guard";
+import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { UserRecord } from "../users";
@@ -19,13 +20,14 @@ export function prepareVerifiedRegistrationUserGuard(db: DatabaseLike, user: Use
 }
 
 /** Rechecks selected-group membership and the event's live register capability. */
-function groupEventRegistrationEvidence(input: { eventId: string; groupId: string; userId: string }) {
+function groupEventRegistrationEvidence(input: { eventId: string; groupId?: string; userId: string }) {
   return {
-    sql: `SELECT 1
+    sql: `SELECT registration_group.id AS groupId
             FROM events event
             JOIN groups registration_group
-              ON registration_group.id = ? AND registration_group.active = 1
+              ON registration_group.active = 1
            WHERE event.id = ?
+             ${input.groupId ? "AND registration_group.id = ?" : ""}
              AND event.owner_group_id IS NOT NULL
              AND event.registration_mode NOT IN ('no_registration', 'automatic')
              AND EXISTS (
@@ -45,9 +47,19 @@ function groupEventRegistrationEvidence(input: { eventId: string; groupId: strin
                     AND grant_row.capability = 'register'
                )
              )
+           ORDER BY (event.owner_group_id = registration_group.id) DESC, registration_group.id
            LIMIT 1`,
-    bindings: [input.groupId, input.eventId, input.userId],
+    bindings: [input.eventId, ...(input.groupId ? [input.groupId] : []), input.userId],
   };
+}
+
+/** Discover access from live memberships and event grants, never request-supplied group IDs. */
+export async function findRegistrationGroup(
+  db: DatabaseLike,
+  input: { eventId: string; userId: string },
+): Promise<string | undefined> {
+  const evidence = groupEventRegistrationEvidence(input);
+  return (await first<{ groupId: string }>(db, evidence.sql, evidence.bindings))?.groupId;
 }
 
 export function prepareGroupEventRegistrationGuard(
