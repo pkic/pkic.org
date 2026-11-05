@@ -1,3 +1,4 @@
+import { cropImage } from "../../assets/ts/shared/headshot/crop";
 // @vitest-environment jsdom
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -8,8 +9,12 @@ import { cleanup, json, mount, responseEvent } from "./helpers/event-management"
 import { beginRecordEdit } from "./helpers/record-edit";
 import { controlFor, typeInto } from "./helpers/labeled-control";
 
+vi.mock("../../assets/ts/shared/headshot/crop", () => ({ cropImage: vi.fn(async (file: File) => file) }));
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 const writableEvent = eventDetailSchema.parse({
   ...responseEvent,
   ownerGroupId: null,
@@ -59,8 +64,8 @@ describe("event hero image selection", () => {
       input.dispatchEvent(new Event("change", { bubbles: true }));
     });
     const preview = await heroPreview(container);
-    expect(preview.getAttribute("src")).toMatch(/^data:image\/png;base64,/);
-    Object.defineProperties(preview, { naturalWidth: { value: 1200 }, naturalHeight: { value: 630 } });
+    expect(preview.getAttribute("src")).toMatch(/^data:image\/jpeg;base64,/);
+    Object.defineProperties(preview, { naturalWidth: { value: 1200 }, naturalHeight: { value: 675 } });
     await act(async () => {
       preview.dispatchEvent(new Event("load"));
     });
@@ -74,7 +79,7 @@ describe("event hero image selection", () => {
     expect(parsed.name).toBe(writableEvent.name);
     expect(parsed.expectedUpdatedAt).toBe(writableEvent.updatedAt);
     expect(init.method).toBe("POST");
-    expect(init.body).toBe(file);
+    expect(init.body).toBeInstanceOf(File);
     expect(updated).toHaveBeenCalled();
   });
 
@@ -96,6 +101,10 @@ describe("event hero image selection", () => {
         await act(async () => {
           preview.dispatchEvent(new Event("load"));
         });
+      }
+      if (mime === "image/svg+xml") {
+        expect(cropImage).not.toHaveBeenCalled();
+        return;
       }
       await submitForm(container);
       expect(container.querySelector('button[aria-label*="hero image"]')?.getAttribute("aria-invalid")).toBe("true");
@@ -128,4 +137,18 @@ it("offers an image address as an alternative and saves it without uploading a f
   const [url, init] = fetcher.mock.calls[0];
   expect(url).toContain("/settings");
   expect(eventSettingsUpdateSchema.parse(JSON.parse(String(init?.body))).heroImageUrl).toBe("/images/conference.png");
+});
+
+it("keeps the saved image when the crop is canceled", async () => {
+  vi.mocked(cropImage).mockResolvedValueOnce(null);
+  const container = mount(
+    <GeneralTab event={{ ...writableEvent, heroImageUrl: "/images/saved.jpg" }} onUpdated={vi.fn()} />,
+  );
+  await beginRecordEdit(container, "Event settings actions");
+  const input = container.querySelector<HTMLInputElement>('input[name="file"]')!;
+  Object.defineProperty(input, "files", { value: [new File(["image"], "source.png", { type: "image/png" })] });
+  await act(async () => {
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(container.querySelector('img[alt="Event hero preview"]')?.getAttribute("src")).toBe("/images/saved.jpg");
 });

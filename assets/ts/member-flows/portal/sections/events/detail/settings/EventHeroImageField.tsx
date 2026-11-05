@@ -1,8 +1,12 @@
+import { cropImage } from "../../../../../../shared/headshot/crop";
+import { toast } from "../../../../ui";
 import {
   EVENT_HERO_IMAGE_GUIDANCE,
+  EVENT_HERO_IMAGE_WIDTH,
+  EVENT_HERO_IMAGE_HEIGHT,
   eventHeroImageFormSchema,
 } from "../../../../../../../shared/schemas/event-hero-image";
-import { useEffect, useId, useState } from "preact/hooks";
+import { useEffect, useId, useRef, useState } from "preact/hooks";
 import { Field } from "../../../../../../ui/Field";
 import { Radio } from "../../../../../../ui/Checkbox";
 import { TextInput } from "../../../../../../ui/TextControl";
@@ -26,6 +30,34 @@ export function EventHeroImageField({
   fieldFor: (name: string) => FieldPresentation;
 }) {
   const sourceName = useId();
+  const selection = useRef(0);
+  useEffect(
+    () => () => {
+      selection.current++;
+    },
+    [],
+  );
+  async function selectFile(selected: File) {
+    const attempt = ++selection.current;
+    const validation = eventHeroImageFormSchema.shape.file.safeParse(selected);
+    if (!validation.success) {
+      toast(validation.error.issues[0].message, "error");
+      return;
+    }
+    try {
+      const cropped = await cropImage(selected, {
+        width: EVENT_HERO_IMAGE_WIDTH,
+        height: EVENT_HERO_IMAGE_HEIGHT,
+        title: "Crop event header",
+        confirmLabel: "Use crop",
+      });
+      if (cropped && attempt === selection.current)
+        onFileChange(new File([cropped], "event-header.jpg", { type: "image/jpeg" }));
+    } catch (error) {
+      if (attempt === selection.current)
+        toast(error instanceof Error ? error.message : "Could not crop the image.", "error");
+    }
+  }
   const [source, setSource] = useState<"upload" | "address">("upload");
   const [selectedPreview, setSelectedPreview] = useState<{ file: File; source: string } | null>(null);
   const preview = selectedPreview?.file === file ? selectedPreview.source : null;
@@ -69,6 +101,7 @@ export function EventHeroImageField({
               value="address"
               checked={source === "address"}
               onChange={() => {
+                selection.current++;
                 onFileChange(null);
                 setSource("address");
               }}
@@ -86,7 +119,9 @@ export function EventHeroImageField({
               canChange
               accept={IMAGE_UPLOAD_ALLOWED_MIME_TYPES.join(",")}
               selection={{
-                onSelectFile: onFileChange,
+                onSelectFile: (selected) => {
+                  void selectFile(selected);
+                },
                 onRemove: () => {
                   onFileChange(null);
                   onImageChange("");
