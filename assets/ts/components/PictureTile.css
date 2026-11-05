@@ -32,7 +32,7 @@
   .pk-picture-tile--landscape .pk-picture-tile__control,
   .pk-picture-tile--landscape.pk-picture-tile--static {
     max-width: none;
-    aspect-ratio: 1200 / 630;
+    aspect-ratio: 16 / 9;
     padding: 0;
     background: var(--pk-surface-sunk);
   }
