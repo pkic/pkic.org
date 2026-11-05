@@ -226,6 +226,38 @@ describe("virtual room", () => {
     expect(chooseLocation(streams.locations, program.agenda, { room: "unknown", session: null })).toBe(HALL);
   });
 
+  it("follows a moved session instead of the room saved in its bookmarked link", async () => {
+    hashLocation.current = `/events/summit/virtual?room=${HALL}&session=${WORKSHOP}`;
+    await open();
+    expect(player()?.getAttribute("src")).toContain(STUDIO_STREAM);
+    expect(nowPlaying()).toContain("Hands-on lab");
+    expect(host.querySelector(".pk-alert")).toBeNull();
+  });
+
+  it("preserves a requested additional room that still carries the session", () => {
+    const agenda = {
+      occurrences: [{ ...program.agenda!.occurrences[0]!, additionalRoomIds: [STUDIO] }],
+    };
+    expect(chooseLocation(streams.locations, agenda, { room: STUDIO, session: KEYNOTE })).toBe(STUDIO);
+    expect(chooseLocation(streams.locations, agenda, { room: HALL, session: KEYNOTE })).toBe(HALL);
+    expect(chooseLocation([], agenda, { room: HALL, session: KEYNOTE })).toBeNull();
+  });
+
+  it("opens the first stream when its join window opens", async () => {
+    vi.setSystemTime(new Date("2027-01-20T08:44:00.000Z"));
+    await open();
+    expect(player()).toBeNull();
+    await act(async () => {
+      vi.advanceTimersByTime(59_999);
+    });
+    expect(player()).toBeNull();
+    await act(async () => {
+      vi.advanceTimersByTime(251);
+    });
+    expect(player()?.getAttribute("src")).toContain(HALL_STREAM);
+    expect(nowPlaying()).toContain("Up next");
+  });
+
   it("says a linked session has ended, or when it starts, above what the room is showing now", async () => {
     vi.setSystemTime(new Date("2027-01-20T10:30:00.000Z"));
     hashLocation.current = `/events/summit/virtual?room=${HALL}&session=${KEYNOTE}`;
@@ -259,9 +291,9 @@ describe("virtual room", () => {
     expect(host.querySelector<HTMLTextAreaElement>("textarea")?.disabled).toBe(true);
   });
 
-  it("refreshes stream configuration when the waiting room reaches its first session", async () => {
+  it("refreshes stream configuration when the first join window opens", async () => {
     waiting = true;
-    vi.setSystemTime(new Date("2027-01-20T08:59:00.000Z"));
+    vi.setSystemTime(new Date("2027-01-20T08:44:00.000Z"));
     await open();
     expect(player()).toBeNull();
     waiting = false;

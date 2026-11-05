@@ -1,4 +1,8 @@
-import { agendaMediaCapabilities, agendaOccurrenceMedia } from "../../../../../../../shared/event-agenda-media";
+import {
+  agendaMediaCapabilities,
+  agendaOccurrenceMedia,
+  ONLINE_JOIN_LEAD_MS,
+} from "../../../../../../../shared/event-agenda-media";
 /**
  * The event app's virtual room: one location's live stream, large, with what is on now and next, the
  * session's questions and the event's sponsors beside it (below it on a phone, under a player that stays in
@@ -73,7 +77,7 @@ export function VirtualRoom({ slug, eventName }: { slug: string; eventName: stri
     useCallback((at: number) => nextRoomBoundary(sessions, at, timeZone), [sessions, timeZone]),
   );
   const startsAt = sessions[0]?.startAt;
-  const waiting = Boolean(startsAt && now < Date.parse(startsAt));
+  const waiting = Boolean(startsAt && now < Date.parse(startsAt) - ONLINE_JOIN_LEAD_MS);
   const previousCountdown = useRef({ roomId, waiting });
   const reloadStreams = streams.reload;
   useEffect(() => {

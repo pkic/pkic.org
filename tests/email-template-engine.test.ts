@@ -1,5 +1,5 @@
 import { analyzeTemplateReferences } from "../functions/_lib/email/template-references";
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { formatDateTimeInZone } from "../assets/shared/format-date";
 import { emailInstant } from "../functions/_lib/email/plain-text";
 import {
@@ -21,6 +21,13 @@ function expectRenderLimit(action: () => unknown): void {
 }
 
 describe("meeting email clock", () => {
+  const toLocaleString = Date.prototype.toLocaleString;
+  beforeEach(() => {
+    vi.spyOn(Date.prototype, "toLocaleString").mockImplementation(function (this: Date, locales, options) {
+      return toLocaleString.call(this, locales ?? "en-US", options);
+    });
+  });
+  afterEach(() => vi.restoreAllMocks());
   it.each([
     ["2026-03-28T08:00:00.000Z", "09:00"],
     ["2026-03-29T07:00:00.000Z", "09:00"],

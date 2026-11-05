@@ -45,21 +45,30 @@ test("session stream joining follows its window and old links explain the reques
   );
   const base = `/api/v1/events/${event.slug}/agenda`;
   let agenda = agendaSnapshotSchema.parse(await (await page.request.get(base)).json());
-  const roomResponse = await page.request.post(`${base}/rooms`, {
-    data: agendaRoomCreateSchema.parse({
-      expectedRevision: agenda.revision,
-      name: "Timing test hall",
-      capacity: 120,
-      equipment: ["live_streaming"],
-    }),
-  });
-  expect(roomResponse.status(), await roomResponse.text()).toBe(200);
-  agenda = agendaSnapshotSchema.parse(await roomResponse.json());
-  const roomId = agenda.rooms[0]!.id;
-  const stream = await page.request.put(`${base}/rooms/${roomId}/stream`, {
-    data: locationLiveStreamUpdateSchema.parse({ videoId: "dQw4w9WgXcQ", days: [] }),
-  });
-  expect(stream.status(), await stream.text()).toBe(200);
+  const rooms = [];
+  for (const [name, videoId] of [
+    ["Timing test hall", "dQw4w9WgXcQ"],
+    ["Timing test studio", "jfKfPfyJRdk"],
+  ] as const) {
+    const roomResponse = await page.request.post(`${base}/rooms`, {
+      data: agendaRoomCreateSchema.parse({
+        expectedRevision: agenda.revision,
+        name,
+        capacity: 120,
+        equipment: ["live_streaming"],
+      }),
+    });
+    expect(roomResponse.status(), await roomResponse.text()).toBe(200);
+    agenda = agendaSnapshotSchema.parse(await roomResponse.json());
+    const room = agenda.rooms.find((candidate) => candidate.name === name)!;
+    rooms.push(room);
+    const stream = await page.request.put(`${base}/rooms/${room.id}/stream`, {
+      data: locationLiveStreamUpdateSchema.parse({ videoId, days: [] }),
+    });
+    expect(stream.status(), await stream.text()).toBe(200);
+  }
+  const roomId = rooms[0]!.id;
+  const studioId = rooms[1]!.id;
   const sessions = [];
   for (const [title, start, end] of [
     ["Ended timing session", -60, -30],
@@ -73,7 +82,7 @@ test("session stream joining follows its window and old links explain the reques
         description: "Synthetic session for online joining boundary verification.",
         startAt: new Date(now + start * 60_000).toISOString(),
         endAt: new Date(now + end * 60_000).toISOString(),
-        roomId,
+        roomId: title === "Future timing session" ? studioId : roomId,
         admissionPolicy: "preference",
         accessPolicy: "open",
         speakerUserIds: [],
@@ -134,7 +143,8 @@ test("session stream joining follows its window and old links explain the reques
     await page.goto(`/portal/#/events/${event.slug}/virtual?room=${roomId}&session=${session.id}`);
     const notice = page.getByRole("status").filter({ hasText: session.title });
     await expect(notice).toContainText(session === sessions[0] ? "has ended" : "starts");
-    await expect(notice).toContainText("Timing test hall");
+    await expect(notice).toContainText(session === sessions[0] ? "Timing test hall" : "Timing test studio");
+    if (session === sessions[2]) await expect(page.getByTitle("Timing test studio live stream")).toBeHidden();
     await capture(session === sessions[0] ? "room-ended-link" : "room-future-link");
   }
   await page.goto(`/portal/#/events/${event.slug}/agenda?session=${sessions[2]!.id}`);
@@ -147,6 +157,11 @@ test("session stream joining follows its window and old links explain the reques
   await joinFuture.click();
   const notice = page.getByRole("status").filter({ hasText: sessions[2]!.title });
   await expect(notice).toContainText("starts");
+  await expect(page.getByTitle("Timing test studio live stream")).toHaveAttribute("src", /jfKfPfyJRdk/);
+  // The old hall ID in a saved link must not override the session's current studio.
+  await page.goto(`/portal/#/events/${event.slug}/virtual?room=${roomId}&session=${sessions[2]!.id}`);
+  await expect(page.getByTitle("Timing test studio live stream")).toBeVisible();
+  await capture("room-moved-session-join-window");
   await page.clock.fastForward(15 * 60_000);
   await expect(notice).toBeHidden();
   await page.clock.fastForward(5 * 60_000);
