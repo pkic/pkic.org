@@ -325,7 +325,6 @@ export function AgendaEditor({
             occurrence={promotionSession}
             snapshot={canEdit ? data : undefined}
             onSaved={setSnapshot}
-            onClose={() => setPromotionSession(null)}
           />
         )}
         {historySession && (hasEditPermission || canReviewAppearances) && (

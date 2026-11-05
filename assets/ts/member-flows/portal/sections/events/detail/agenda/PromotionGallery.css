@@ -18,7 +18,7 @@
     width: 100%;
     height: auto;
   }
-  .pk-promotion-tile__frame {
+  .pk-promotion-tile .pk-promotion-tile__frame {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -58,6 +58,11 @@
     flex-wrap: wrap;
     justify-content: space-between;
     gap: var(--pk-2);
+  }
+  .pk-promotion-tile__actions {
+    display: flex;
+    gap: var(--pk-2);
+    align-items: center;
   }
   .pk-promotion-tile__text {
     display: flex;

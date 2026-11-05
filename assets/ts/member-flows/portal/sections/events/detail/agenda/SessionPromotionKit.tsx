@@ -21,13 +21,11 @@ export function SessionPromotionKit({
   occurrence,
   snapshot,
   onSaved,
-  onClose,
 }: {
   slug: string;
   occurrence: AgendaOccurrence;
   snapshot?: AgendaSnapshot;
   onSaved?: (snapshot: AgendaSnapshot) => void;
-  onClose: () => void;
 }) {
   const [whyAttend, setWhy] = useState(occurrence.promotionCopy?.whyAttend ?? occurrence.description);
   const [takeaways, setTakeaways] = useState(occurrence.promotionCopy?.takeaways.join("\n") ?? "");
@@ -73,9 +71,7 @@ export function SessionPromotionKit({
       <PersonalPromotionKit
         key={snapshot?.revision}
         base={base}
-        title="Share session"
-        context={occurrence.title}
-        onClose={onClose}
+        title={occurrence.title}
         menu={
           snapshot && (
             <PromotionBulkPreparation

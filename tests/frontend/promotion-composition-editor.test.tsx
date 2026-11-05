@@ -143,7 +143,7 @@ it("keeps a stale attendee draft editable while holding back renders and downloa
   );
   expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
   expect(buttonNamed("Download tall post (JPEG)")?.disabled).toBe(true);
-  await act(() => buttonNamed("Customize")!.click());
+  await act(() => buttonNamed("Customize tall post")!.click());
   expect(root.querySelector("dialog form")).not.toBeNull();
 });
 
@@ -159,7 +159,7 @@ it("keeps a personal editor draft through browser Back and Forward using shared 
     render(<PersonalPromotionKit base="/api/v1/events/example/promotion" title="Your materials" />, root),
   );
   await vi.waitFor(() => expect(root.querySelector("dialog")).not.toBeNull());
-  await act(() => buttonNamed("Customize")!.click());
+  await act(() => buttonNamed("Customize tall post")!.click());
   const dialog = root.querySelector<HTMLDialogElement>("dialog")!;
   expect(dialog.open).toBe(true);
   await typeInto(controlFor(dialog, "Your short description"), "Keep this personal draft while navigating.");

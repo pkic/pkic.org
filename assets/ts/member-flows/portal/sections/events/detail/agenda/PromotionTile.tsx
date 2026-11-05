@@ -19,6 +19,7 @@ export function PromotionTile({
   stacked,
   status,
   action,
+  previewActions,
 }: {
   name: string;
   detail: string;
@@ -31,6 +32,7 @@ export function PromotionTile({
   stacked?: boolean;
   status?: string;
   action?: ComponentChildren;
+  previewActions?: ComponentChildren;
 }) {
   const [open, show, close] = useDialogQueryState(`promotionPreview:${previewId ?? name}`);
   return (
@@ -61,6 +63,7 @@ export function PromotionTile({
           onConfirm={() => void close()}
           onCancel={() => void close()}
         >
+          {previewActions}
           <img class="pk-promotion-preview" src={previewSrc} alt={previewAlt} />
         </Dialog>
       )}

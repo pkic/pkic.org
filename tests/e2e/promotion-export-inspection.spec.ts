@@ -209,7 +209,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await expect(sharedCopy).toBeVisible();
   await sharedCopy.getByRole("button", { name: "Close shared promotion copy", exact: true }).click();
   await expect(sharedCopy).not.toBeVisible();
-  await page.getByRole("button", { name: "Customize", exact: true }).click();
+  await page.getByRole("button", { name: "Customize tall post", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Personalize promotion materials", exact: true });
   const shortDescription = editor.getByRole("textbox", { name: "Your short description", exact: true });
   const previousDescription = await shortDescription.inputValue();
