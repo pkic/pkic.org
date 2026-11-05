@@ -1,4 +1,5 @@
-import { Tabs } from "../../../../components/Tabs";
+import { ButtonLink } from "../../../../ui/Button";
+import { IconPrint } from "../../../../components/icons/app-navigation";
 import { BadgeLabelDesk } from "../events/detail/badges/BadgeLabelDesk";
 import { lazy, Suspense } from "preact/compat";
 import { scannerPermission, availableScannerActions } from "../../../../../shared/event-scanner-permissions";
@@ -29,13 +30,14 @@ export function EventStaffScanner({
   const operator = portalSession.value?.identity.id ?? "";
   return (
     <div class="pk-stack">
-      <Tabs
-        label="Scanner sections"
-        items={[{ key: "scan", label: "Scan badges" }, ...(canPrintLabels ? [{ key: "labels", label: "Print" }] : [])]}
-        active={section === "labels" && canPrintLabels ? "labels" : "scan"}
-        hrefFor={(key) => (key === "scan" ? basePath : `${basePath}/${key}`)}
-      />
-      {section === "labels" && canPrintLabels ? (
+      {canPrintLabels && section !== "print" && (
+        <div class="pk-cluster">
+          <ButtonLink href={`#${basePath}/print`}>
+            <IconPrint /> Print
+          </ButtonLink>
+        </div>
+      )}
+      {section === "print" && canPrintLabels ? (
         <BadgeLabelDesk slug={slug} />
       ) : (
         <Suspense fallback={<Spinner />}>

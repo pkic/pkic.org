@@ -8,17 +8,20 @@ export function useScannerImmersiveLifecycle(
   shell: RefObject<HTMLDivElement>,
   exit: () => void,
   releaseCapture: () => void,
+  immersive = true,
 ) {
   const latest = useRef({ exit, releaseCapture });
   latest.current = { exit, releaseCapture };
   const [screenAwake, setScreenAwake] = useState(false);
   useEffect(() => {
-    if (!active || !shell.current) return;
+    if (!active || !immersive || !shell.current) return;
     const release = scannerImmersiveLifecycle(shell.current, () => latest.current.exit(), setScreenAwake);
     return () => {
-      latest.current.releaseCapture();
       release();
     };
-  }, [active, shell]);
+  }, [active, immersive, shell]);
+  useEffect(() => {
+    if (active) return () => latest.current.releaseCapture();
+  }, [active]);
   return screenAwake;
 }

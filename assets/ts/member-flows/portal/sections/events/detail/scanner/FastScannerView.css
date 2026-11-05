@@ -1,8 +1,14 @@
 @layer components {
+  .pk-login__backdrop.pk-fast-scanner.pk-fast-scanner--embedded {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    min-height: 32rem;
+    border-radius: var(--pk-radius-lg);
+    overflow: hidden;
+  }
   .pk-login__backdrop.pk-fast-scanner {
     margin: 0;
-  }
-  .pk-fast-scanner {
     position: fixed;
     inset: 0;
     z-index: 1100;

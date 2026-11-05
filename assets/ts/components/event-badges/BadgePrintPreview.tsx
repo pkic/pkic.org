@@ -1,4 +1,5 @@
 import { useMeasuredWidth } from "../../hooks/useMeasuredWidth";
+import { printBadgeDocument } from "./badge-print-command";
 import { badgePrintPageDimensions } from "../../../shared/schemas/badge-print-layout";
 import { badgeLabelSvg } from "../../../shared/badge-label-svg";
 import { isBrotherDk1208Paper } from "../../../shared/badge-label-policy";
@@ -39,6 +40,7 @@ export function BadgePrintPreview({
   beforeRelease?: () => Promise<boolean>;
 }) {
   const { element, width: availableWidth } = useMeasuredWidth();
+  const printLifetime = useRef(new AbortController());
   const [completePrinting, setCompletePrinting] = useState<BadgePrintingContext | null>(null);
   const context = completePrinting ?? printing;
   const [layout, setLayout] = useState<BadgePrintLayout>(() =>
@@ -60,14 +62,15 @@ export function BadgePrintPreview({
   useEffect(
     () => () => {
       live.current = false;
+      printLifetime.current.abort();
     },
     [],
   );
   const csvAvailable = badges.length > 0 && badges.every((badge) => badgePrintCredential(badge));
-  async function release(action: () => void) {
+  async function release(action: () => void | Promise<void>) {
     if (checking.current || !live.current) return;
     if (!beforeRelease) {
-      action();
+      await action();
       return;
     }
     checking.current = true;
@@ -81,7 +84,7 @@ export function BadgePrintPreview({
         setError("The badge artwork changed. Reload the print layout.");
         return;
       }
-      if ((await beforeRelease()) && live.current) action();
+      if ((await beforeRelease()) && live.current) await action();
     } catch (cause) {
       if (live.current) setError(cause instanceof Error ? cause.message : "Could not check this print document.");
     } finally {
@@ -184,7 +187,18 @@ export function BadgePrintPreview({
       ) : (
         <>
           <div class="pk-cluster">
-            <Button disabled={!ready || busy} onClick={() => void release(() => frame.current?.contentWindow?.print())}>
+            <Button
+              disabled={!ready || busy}
+              onClick={() =>
+                void release(() =>
+                  printBadgeDocument(
+                    html,
+                    () => live.current && owner.current === badges,
+                    printLifetime.current.signal,
+                  ),
+                )
+              }
+            >
               {design === "name_qr" ? "Print labels" : "Print badges"}
             </Button>
             <DownloadAction

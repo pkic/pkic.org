@@ -4,7 +4,7 @@ import {
 } from "../../../../../../../shared/schemas/event-badge-template";
 import type { z } from "zod";
 import type { ComponentChildren, RefObject } from "preact";
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { BADGE_LABEL_COPY_OPTIONS, BADGE_LABEL_DEFAULT_COPIES } from "../../../../../../../shared/badge-label-policy";
 import { badgeAttendeesResponseSchema } from "../../../../../../../shared/schemas/route-contracts-event-badges";
 import { BADGE_PRINT_SIDE_LABELS } from "../../../../../../../shared/badge-print-layout";
@@ -24,7 +24,11 @@ import { useBadgeLabelPrinting } from "./useBadgeLabelPrinting";
 import { BadgeDocumentFrame } from "../../../../../../components/event-badges/BadgeDocumentFrame";
 import { SearchPicker } from "../../../../../../components/SearchPicker";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
-import { IconScan } from "../../../../../../components/icons/app-navigation";
+import { IconPrint, IconFullscreen } from "../../../../../../components/icons/app-navigation";
+import { scannerImmersiveLifecycle } from "../scanner/immersive-scanner";
+import { useScannerPresentation } from "../scanner/useScannerPresentation";
+import { FastScannerView } from "../scanner/FastScannerView";
+import { downloadBadgeArtifact } from "../../../../../../components/event-badges/badge-print-artifacts";
 import { Button } from "../../../../../../ui/Button";
 import { Field, type FieldControlProps } from "../../../../../../ui/Field";
 import { Menu } from "../../../../../../ui/Menu";
@@ -48,10 +52,29 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
   const [design, setDesign] = useHashQueryParam("printDesign", "name_qr", badgePrintDesignSchema.options);
   const [sides, setSides] = useHashQueryParam("badgeSides", "front_back", badgePrintSidesSchema.options);
   const copies = badgePrintLayoutSchema.shape.copies.parse(Number(copiesQuery));
+  const [format, setFormat] = useHashQueryParam("printFormat", "html", ["html", "pdf"]);
+  const [pdfUrl, setPdfUrl] = useState("");
   const continuous = useRef(false);
-  const printing = useBadgeLabelPrinting(slug, session, copies, design, sides, () => {
-    if (continuous.current) void camera.start();
-  });
+  const printing = useBadgeLabelPrinting(
+    slug,
+    session,
+    copies,
+    design,
+    sides,
+    () => {
+      if (continuous.current) void camera.start();
+    },
+    format,
+  );
+  useEffect(() => {
+    if (!printing.pdf) {
+      setPdfUrl("");
+      return;
+    }
+    const url = URL.createObjectURL(printing.pdf);
+    setPdfUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [printing.pdf]);
   const camera = useScannerCamera((raw) => {
     if (camera.acceptsFrame(raw) && printing.scan(raw)) camera.stop();
   });
@@ -71,6 +94,8 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
         cameraActive={camera.active}
         starting={camera.starting}
         busy={printing.busy}
+        format={format}
+        onFormat={setFormat}
         copies={copies}
         design={design}
         onDesign={setDesign}
@@ -127,6 +152,14 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
         )}
       >
         {printing.message && <p role="status">{printing.message}</p>}
+        {printing.pdf && pdfUrl && (
+          <div class="pk-cluster">
+            <Button onClick={() => window.open(pdfUrl, "_blank", "noopener")}>Open PDF</Button>
+            <Button onClick={() => downloadBadgeArtifact(printing.pdf!, "application/pdf", "attendee-print.pdf")}>
+              Download PDF
+            </Button>
+          </div>
+        )}
         {(printing.error || camera.error) && <ErrorAlert error={printing.error || camera.error} />}
         {printing.job && (
           <div class="pk-cluster">
@@ -143,7 +176,7 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
           className="pk-label-desk__print-document"
           title={printing.job.design === "name_qr" ? "Attendee label print document" : "Attendee badge print document"}
           html={printing.html}
-          onReady={printing.printReady}
+          onReady={() => void printing.printReady()}
           onError={printing.documentError}
         />
       )}
@@ -167,7 +200,11 @@ export function BadgeLabelDeskView({
   stop,
   search,
   children,
+  format = "html",
+  onFormat,
 }: {
+  format?: "html" | "pdf";
+  onFormat?: (value: "html" | "pdf") => void;
   video: RefObject<HTMLVideoElement>;
   cameraActive: boolean;
   starting: boolean;
@@ -183,6 +220,19 @@ export function BadgeLabelDeskView({
   search: (control: FieldControlProps) => ComponentChildren;
   children?: ComponentChildren;
 }) {
+  const [preview, setPreview] = useState(false);
+  const cameraShell = useRef<HTMLDivElement>(null);
+  const { presentation, setPresentation, toggle } = useScannerPresentation(cameraShell, "embedded");
+  const fullscreen = presentation === "fullscreen";
+  const latestStop = useRef(stop);
+  latestStop.current = stop;
+  useEffect(() => {
+    if (fullscreen && cameraShell.current)
+      return scannerImmersiveLifecycle(cameraShell.current, () => {
+        latestStop.current();
+        setPresentation("embedded");
+      });
+  }, [fullscreen, setPresentation]);
   return (
     <div class="pk-label-desk pk-stack">
       <PageHeader
@@ -193,6 +243,18 @@ export function BadgeLabelDeskView({
             label="Print settings"
             align="end"
             items={[
+              ...(onFormat
+                ? [
+                    {
+                      id: "pdf",
+                      label: "Use PDF",
+                      multiple: true,
+                      checked: format === "pdf",
+                      disabled: busy,
+                      onSelect: () => onFormat(format === "pdf" ? "html" : "pdf"),
+                    },
+                  ]
+                : []),
               {
                 id: "labels",
                 label: "Labels",
@@ -228,11 +290,56 @@ export function BadgeLabelDeskView({
           />
         }
       />
-      <div class="pk-label-desk__camera" aria-label={cameraActive ? "Ticket scanner" : "Camera off"}>
-        <ScannerCamera video={video} cameraActive={cameraActive} fastMode={false} preview />
-        {!cameraActive && (
+      <div
+        ref={cameraShell}
+        class={`pk-label-desk__camera${fullscreen ? " pk-label-desk__camera--fullscreen" : ""}`}
+        aria-label={cameraActive ? "Ticket scanner" : "Camera off"}
+      >
+        {!fullscreen && (
+          <div class="pk-label-desk__camera-toolbar">
+            <span class="pk-cluster">
+              <IconPrint /> Print
+            </span>
+            <Button
+              variant="ghost"
+              aria-label={fullscreen ? "Exit full screen" : "Enter full screen"}
+              title={fullscreen ? "Exit full screen" : "Enter full screen"}
+              onClick={toggle}
+            >
+              <IconFullscreen />
+            </Button>
+          </div>
+        )}
+        <ScannerCamera
+          video={video}
+          cameraActive={cameraActive}
+          fastMode={fullscreen}
+          preview={!fullscreen || preview}
+        />
+        {fullscreen && (
+          <FastScannerView
+            purpose="print"
+            context={design === "name_qr" ? "Labels" : "Full badges"}
+            result={null}
+            pending={0}
+            message={busy ? "Preparing print document…" : "Scan an attendee’s ticket."}
+            cameraActive={cameraActive}
+            cameraStarting={starting}
+            onCameraRetry={start}
+            preview={preview}
+            onPreview={() => setPreview((value) => !value)}
+            onExit={() => {
+              stop();
+              setPresentation("embedded");
+            }}
+            onPresentation={() => setPresentation("embedded")}
+            onManual={() => setPresentation("embedded")}
+            connectionStatus={children}
+            canRecordAttendance={false}
+          />
+        )}
+        {!fullscreen && !cameraActive && (
           <>
-            <IconScan />
             <p>{starting ? "Starting camera…" : "Camera off"}</p>
             <Button variant="primary" disabled={busy || starting} onClick={start}>
               Start camera

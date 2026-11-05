@@ -5,6 +5,7 @@ import type { BadgePrintingContext } from "../../../shared/schemas/route-contrac
 import { BADGE_LABEL_PRINTING_CONTEXT } from "../../../shared/badge-label-policy";
 import { badgeFaceLayout, badgePrintPreset, badgePrintPageDimensions } from "../../../shared/badge-print-layout";
 import { BadgeDocumentFrame } from "./BadgeDocumentFrame";
+import { printBadgeDocument } from "./badge-print-command";
 import {
   badgePrintCsv,
   badgePrintHtml,
@@ -128,17 +129,7 @@ export function BadgePrintCommand({
         downloadBadgeArtifact(file, "application/pdf", fullBadge ? "attendee-badges.pdf" : "attendee-labels.pdf");
       else {
         callbacks.current.onProgress("Opening print dialog…");
-        const target = frame.current?.contentWindow;
-        if (!target) throw new Error("The print document is no longer available.");
-        target.addEventListener(
-          "afterprint",
-          () => {
-            if (isCurrent()) callbacks.current.onComplete();
-          },
-          { once: true },
-        );
-        target.print();
-        return;
+        await printBadgeDocument(document.html, isCurrent);
       }
       if (isCurrent()) callbacks.current.onComplete();
     } catch (cause) {

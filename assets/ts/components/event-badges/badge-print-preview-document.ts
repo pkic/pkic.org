@@ -85,6 +85,14 @@ export async function applyBadgePrintPreviewStyles(frame: HTMLIFrameElement, css
     throw new Error("This browser cannot display the print preview. Download the HTML print file to preview it.");
   }
   sheet.replaceSync(css);
+  await loadBadgePrintFonts(document, sheet, realm);
+  if (frame.contentDocument !== document || !frame.isConnected) return false;
+  document.adoptedStyleSheets = [sheet];
+  return waitBadgePrintPreviewImages(frame, document);
+}
+
+/** Load embedded fonts explicitly before either previewing or opening native printing. */
+export async function loadBadgePrintFonts(document: Document, sheet: CSSStyleSheet, realm: Window & typeof globalThis) {
   for (let index = sheet.cssRules.length - 1; index >= 0; index--) {
     const rule = sheet.cssRules[index];
     if (rule.type !== CSSRule.FONT_FACE_RULE) continue;
@@ -99,7 +107,4 @@ export async function applyBadgePrintPreviewStyles(frame: HTMLIFrameElement, css
     document.fonts.add(font);
     sheet.deleteRule(index);
   }
-  if (frame.contentDocument !== document || !frame.isConnected) return false;
-  document.adoptedStyleSheets = [sheet];
-  return waitBadgePrintPreviewImages(frame, document);
 }
