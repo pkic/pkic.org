@@ -367,7 +367,13 @@ describe("registration workflows", () => {
       consents: [{ termKey: "privacy-policy", version: "v1" }],
     });
     expect(invalidResponse.status).toBe(400);
-    await expect(invalidResponse.json()).resolves.toMatchObject({ error: { code: "CONSENT_REQUIRED" } });
+    await expect(invalidResponse.json()).resolves.toMatchObject({
+      error: {
+        code: "CONSENT_REQUIRED",
+        message: "Agree to this required term to continue.",
+        details: { fieldErrors: { consents: ["Agree to this required term to continue."] } },
+      },
+    });
 
     const createResponse = await postRegistration({
       firstName: "Alice",

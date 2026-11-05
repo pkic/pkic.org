@@ -438,6 +438,7 @@ export function EventProposalIdentityStep({
           {...identity.supportRequired}
           onUsePersonal={() => {
             identity.setKind("individual");
+            identity.setEmail("");
             setSent(false);
           }}
         />

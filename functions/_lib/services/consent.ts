@@ -27,7 +27,14 @@ export async function validateRequiredConsents(
     requiredTerms.map((term) => ({ termKey: term.term_key, version: term.version, required: term.required === 1 })),
     accepted,
   );
-  if (refusal) throw new AppError(400, refusal.code, TERMS_CHANGED_MESSAGE, TERMS_CHANGED_DETAILS);
+  if (refusal) {
+    if (refusal.code === "CONSENT_REQUIRED") {
+      throw new AppError(400, refusal.code, refusal.message, {
+        fieldErrors: { consents: [refusal.message] },
+      } satisfies z.infer<typeof apiValidationErrorDetailsSchema>);
+    }
+    throw new AppError(400, refusal.code, TERMS_CHANGED_MESSAGE, TERMS_CHANGED_DETAILS);
+  }
 }
 
 export async function persistConsents(

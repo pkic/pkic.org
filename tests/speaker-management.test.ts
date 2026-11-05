@@ -1229,7 +1229,20 @@ describe("speaker self-management endpoints", () => {
     expect(((await response.json()) as { status: string }).status).toBe("confirmed");
   });
 
-  it("POST confirm — names changed terms in words instead of an internal key", async () => {
+  it.each([
+    {
+      consents: [],
+      code: "CONSENT_REQUIRED",
+      message: "Agree to this required term to continue.",
+      fieldMessage: "Agree to this required term to continue.",
+    },
+    {
+      consents: [{ termKey: "speaker-terms", version: "v0" }],
+      code: "CONSENT_INVALID",
+      message: "The event terms changed. Reload the page to review and accept the current terms.",
+      fieldMessage: "Accept the event's current terms.",
+    },
+  ])("POST confirm — explains $code without an internal key", async ({ consents, code, message, fieldMessage }) => {
     await setupWorkflow();
     const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
     await selectIndividualSpeakerRepresentation({
@@ -1246,7 +1259,7 @@ describe("speaker self-management endpoints", () => {
         new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ status: "confirmed", consents: [] }),
+          body: JSON.stringify({ status: "confirmed", consents }),
         }),
         { token: speakerManageToken },
       ),
@@ -1255,10 +1268,8 @@ describe("speaker self-management endpoints", () => {
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error: { code: string; message: string; details: unknown } };
     // The refusal speaks the shared validation shape, so forms show it on the consents field.
-    expect(body.error).toMatchObject({ code: "CONSENT_REQUIRED" });
-    expect(apiValidationErrorDetailsSchema.parse(body.error.details).fieldErrors?.consents).toEqual([
-      expect.any(String),
-    ]);
+    expect(body.error).toMatchObject({ code, message });
+    expect(apiValidationErrorDetailsSchema.parse(body.error.details).fieldErrors?.consents).toEqual([fieldMessage]);
     expect(body.error.message).not.toContain("speaker-terms");
   });
 

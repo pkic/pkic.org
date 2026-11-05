@@ -54,6 +54,7 @@ describe("proposal address review", () => {
         await act(() => personal!.click());
         expect(host.textContent).not.toContain(PROOF_SUPPORT_COPY[reason].title);
         expect(radioNamed(host, EMAIL_FIRST_COPY.proposal.personal.title).checked).toBe(true);
+        expect(host.querySelector<HTMLInputElement>("input[type=email]")!.value).toBe("");
       } else expect(personal).toBeUndefined();
     },
   );
