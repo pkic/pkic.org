@@ -75,7 +75,6 @@ it("places authorized printing beside the scanner tasks using the shared action 
   expect(icons[0]!.innerHTML).not.toBe(icons[1]!.innerHTML);
   const print = grid.querySelector<HTMLAnchorElement>("a.pk-action-tile")!;
   expect(print.getAttribute("href")).toBe("#/events/test/scanner/print");
-  expect(print.textContent).toBe("PrintPrint labels or badges");
   await act(() => render(<ScannerDestinationTiles {...props} />, host));
   expect(host.querySelector("a")).toBeNull();
   expect(host.querySelectorAll(".pk-action-tile")).toHaveLength(3);

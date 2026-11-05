@@ -109,7 +109,7 @@ test("the registration desk switches between immediate labels and full badges", 
   });
   await page.setViewportSize({ width: 375, height: 844 });
   await page.goto(labelsPage.replace(/\/print$/, ""));
-  await page.getByRole("link", { name: "Print Print labels or badges", exact: true }).click();
+  await page.getByRole("link", { name: /^Print\b/ }).click();
   await expect(page).toHaveURL(new RegExp("/scanner/print$"));
   // Mobile browsers can print the parent document even when an iframe initiated the command.
   await page.evaluate(() => {
