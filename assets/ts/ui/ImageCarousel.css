@@ -1,0 +1,20 @@
+@layer components {
+  .pk-image-carousel {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+  }
+  .pk-image-carousel__slide {
+    flex: 0 0 100%;
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+  .pk-image-carousel__slide img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: calc(100dvh - 14rem);
+    object-fit: contain;
+  }
+}

@@ -63,6 +63,11 @@ describe("own promotion artwork", () => {
     const cover = await callApi(env, path, { headers: f.headers }, { maxRoundTrips: 1 });
     expect(cover.status).toBe(200);
     expect(promotionArtworkSchema.parse(await cover.json()).pages).toHaveLength(1);
+    const full = await callApi(env, `${path}&pages=all`, { headers: f.headers }, { maxRoundTrips: 1 });
+    expect(full.status).toBe(200);
+    expect(promotionArtworkSchema.parse(await full.json()).pages.length).toBeGreaterThan(1);
+    const refusedFull = await callApi(env, `${path}&pages=all`, { headers: f.attendeeHeaders }, { maxRoundTrips: 1 });
+    expect(refusedFull.status).toBe(403);
   });
   it("refuses stale or unauthorized PDF exports without queue jobs", async () => {
     const f = await promotionFixture();

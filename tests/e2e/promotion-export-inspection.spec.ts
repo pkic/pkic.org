@@ -325,6 +325,39 @@ test("every delivered long-panel promotion export has complete evidence and refu
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog", { name: "Tall post", exact: true })).toHaveCount(0);
     await expect(enlarge).toBeFocused();
+    await page.getByRole("button", { name: "Enlarge carousel", exact: true }).click();
+    const carousel = page.getByRole("dialog", { name: "Carousel", exact: true });
+    const slideNavigation = carousel.getByRole("toolbar", { name: "Slide navigation" });
+    await expect(slideNavigation).toBeVisible();
+    const viewport = carousel.getByRole("region", { name: "Carousel", exact: true });
+    await carousel.getByRole("button", { name: "Next slide", exact: true }).click();
+    await expect(slideNavigation.getByRole("status")).toContainText("2 of");
+    await viewport.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(slideNavigation.getByRole("status")).toContainText("3 of");
+    if (device === "phone") {
+      const touch = await page.context().newCDPSession(page);
+      const box = await viewport.boundingBox();
+      if (!box) throw new Error("Carousel viewport is missing");
+      await touch.send("Input.synthesizeScrollGesture", {
+        x: box.x + box.width * 0.2,
+        y: box.y + box.height / 2,
+        xDistance: box.width * 0.6,
+        yDistance: 0,
+        gestureSourceType: "touch",
+        preventFling: true,
+      });
+      await touch.detach();
+    } else {
+      await viewport.evaluate((element) => element.scrollBy({ left: -element.clientWidth }));
+    }
+    await expect(slideNavigation.getByRole("status")).toContainText("2 of");
+    await expect
+      .poll(() => viewport.evaluate((element) => Math.abs(element.scrollLeft - element.clientWidth)))
+      .toBeLessThan(1);
+    await page.screenshot({ path: info.outputPath(`promotion-carousel-${device}.png`) });
+    await page.keyboard.press("Escape");
+    await expect(carousel).not.toBeVisible();
   }
   const kitBeforeDownload = promotionKitSchema.parse(await (await page.request.get(kitApi)).json());
   expect(kitBeforeDownload.artifacts).toHaveLength(0);

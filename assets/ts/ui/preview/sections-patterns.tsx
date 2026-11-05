@@ -1,3 +1,4 @@
+import { imageCarouselSection } from "./image-carousel";
 import { badgeOutputProgressSection } from "./badge-output-progress";
 import { TooltipPreview } from "./TooltipPreview";
 import { ServerSelectPreview } from "./ServerSelectPreview";
@@ -362,6 +363,7 @@ export const patternSections: PreviewSection[] = [
     title: "Agenda",
     render: () => <AgendaExample />,
   },
+  imageCarouselSection,
   ...contentSections,
   {
     id: "row-list",
