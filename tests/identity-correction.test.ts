@@ -340,6 +340,67 @@ describe("identity deletion", () => {
       ).first("count"),
     ).toBe(0);
   });
+  it.each([
+    ["delete", false],
+    ["delete", true],
+    ["correct", false],
+    ["correct", true],
+  ] as const)("refuses to %s an identity with group history (ended: %s) atomically", async (action, ended) => {
+    const f = await proposalIdentityFixture();
+    const at = nowIso();
+    const groupId = crypto.randomUUID();
+    const seatId = crypto.randomUUID();
+    const memberId = await env.DB.prepare("SELECT member_id FROM identity_member_capacities WHERE identity_id=?")
+      .bind(f.identityId)
+      .first<string>("member_id");
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO groups(id,type_key,name,slug,visibility,eligibility_mode,created_at,updated_at)
+        VALUES(?,'working_group','Protected group',?,'public','open',?,?)`).bind(groupId, groupId, at, at),
+      env.DB.prepare(`INSERT INTO group_memberships(id,group_id,user_id,identity_id,member_id,source,joined_at,left_at,created_at,updated_at)
+        VALUES(?,?,?,?,?,'self_service',?,?,?,?)`).bind(
+        seatId,
+        groupId,
+        f.userId,
+        f.identityId,
+        memberId,
+        at,
+        ended ? at : null,
+        at,
+        at,
+      ),
+    ]);
+    await assignRepresentativeRole(env.DB, memberId!, f.userId, REPRESENTATIVE_ROLE_IDS.secondaryContact);
+    const registrationId = action === "correct" ? await registration(f) : null;
+    const actor = await staff();
+    const response = action === "correct" ? await correct(f, actor.token) : await remove(f, actor.token);
+    expect(response.status, await response.clone().text()).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "IDENTITY_HAS_PROTECTED_HISTORY" } });
+    expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first("id")).toBe(
+      f.identityId,
+    );
+    expect(
+      await env.DB.prepare("SELECT identity_id,left_at FROM group_memberships WHERE id=?").bind(seatId).first(),
+    ).toEqual({
+      identity_id: f.identityId,
+      left_at: ended ? at : null,
+    });
+    expect(
+      await env.DB.prepare("SELECT count(*) AS count FROM user_roles WHERE identity_id=?")
+        .bind(f.identityId)
+        .first("count"),
+    ).toBeGreaterThan(0);
+    if (registrationId)
+      expect(
+        await env.DB.prepare("SELECT registration_identity_id FROM registrations WHERE id=?")
+          .bind(registrationId)
+          .first("registration_identity_id"),
+      ).toBe(f.identityId);
+    expect(
+      await env.DB.prepare(
+        "SELECT count(*) AS count FROM audit_log WHERE action IN ('incorrect_representation_removed','incorrect_representation_corrected')",
+      ).first("count"),
+    ).toBe(0);
+  });
   it("deletes an unused personal identity without deleting its user account", async () => {
     const f = await proposalIdentityFixture();
     f.userId = await insertUser(env.DB, "personal-only@example.test");
