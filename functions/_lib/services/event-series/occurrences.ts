@@ -354,6 +354,7 @@ export async function updateSeriesOccurrence(
             occurrenceId,
             eventId: current.series.eventId,
             eventName: current.series.eventName,
+            timezone: current.series.timezone,
             startsAt,
             endsAt,
             location,

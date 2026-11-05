@@ -6,10 +6,15 @@ import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { capturedEmailCount, extractEmailUrl, extractVerificationCode, waitForCapturedEmail } from "./helpers/sendgrid";
+import { formatDateTimeInZone } from "../../assets/shared/format-date";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
+test.use({ timezoneId: "America/New_York" });
 
-test("invited external guest verifies the separate mailbox code before meeting entry", async ({ browser, page }) => {
+test("invited external guest verifies the separate mailbox code before meeting entry", async ({
+  browser,
+  page,
+}, info) => {
   await signInAsE2eStaff(page, e2eAdminEmail("meeting-guest"));
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const eventName = `E2E external guest meeting ${unique}`;
@@ -33,7 +38,7 @@ test("invited external guest verifies the separate mailbox code before meeting e
           },
           startsAt,
           recurrenceRule: "FREQ=WEEKLY;COUNT=1",
-          timezone: "UTC",
+          timezone: "Europe/Amsterdam",
           durationMinutes: 60,
           location: "Online",
           providerType: "external_url",
@@ -54,10 +59,7 @@ test("invited external guest verifies the separate mailbox code before meeting e
           providerJoinUrl: `https://meet.example.test/${unique}`,
         }),
       });
-      const occurrenceBody = (await occurrenceResponse.json()) as {
-        occurrence?: { id: string };
-        error?: unknown;
-      };
+      const occurrenceBody = (await occurrenceResponse.json()) as { occurrence?: { id: string }; error?: unknown };
       if (!occurrenceBody.occurrence) {
         return { stage: "occurrence", status: occurrenceResponse.status, body: occurrenceBody };
       }
@@ -90,6 +92,35 @@ test("invited external guest verifies the separate mailbox code before meeting e
   expect(created.status, JSON.stringify(created.body)).toBe(201);
   const invitationSince = await capturedEmailCount();
   const invitation = await waitForCapturedEmail(guestEmail, "Invitation:", { since: invitationSince - 1 });
+  const clock = formatDateTimeInZone(startsAt, "Europe/Amsterdam");
+  const content = invitation.payload.content as Array<{ type: string; value: string }>;
+  expect(content.find((part) => part.type === "text/plain")?.value).toContain(clock);
+  await page.goto(`/portal/#/groups/${GROUP_ID}/meetings`);
+  const row = page.getByRole("row").filter({ hasText: eventName });
+  // Compute in the browser: Node and the attendee may use different locales.
+  const localClock = await page.evaluate(
+    (instant) =>
+      new Date(instant).toLocaleString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+        timeZoneName: "short",
+      }),
+    startsAt,
+  );
+  await expect(row).toContainText(`Your time: ${localClock}`);
+  await expect(row).toContainText("Scheduled:");
+  await expect(row).toContainText("Amsterdam time");
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`meeting-series-clock-${device}.png`), fullPage: true });
+  }
   const invitationUrl = extractEmailUrl(invitation, "/m/#token=g2.");
   expect(invitationUrl).toMatch(/\/m\/#token=g2(?:\.[A-Za-z0-9_-]{22}){2}$/);
 

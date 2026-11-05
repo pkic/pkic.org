@@ -4,6 +4,7 @@ import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
 import { DetailsSummary } from "../../assets/ts/components/DetailsSummary";
+import { formatDateTime } from "../../assets/shared/format-date";
 
 const mounted: HTMLElement[] = [];
 
@@ -50,16 +51,7 @@ describe("DetailsSummary", () => {
     const container = mount(<DetailsSummary value={{ occurred_at: "2026-08-21T10:00:00.000Z" }} />);
     const dd = container.querySelector("dd");
     expect(dd?.textContent).not.toBe("2026-08-21T10:00:00.000Z");
-    expect(dd?.textContent).toBe(
-      new Date("2026-08-21T10:00:00.000Z").toLocaleString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23",
-      }),
-    );
+    expect(dd?.textContent).toBe(formatDateTime("2026-08-21T10:00:00.000Z"));
   });
 
   it("renders booleans as yes/no and null as an em dash", () => {

@@ -38,6 +38,7 @@ export const E2E_ADMIN_SCOPES: readonly [
   "browser-historical-mapping-speaker",
   "browser-waitlist",
   "meeting-guest",
+  "session-timing",
   "portal-event",
   "portal-event-management",
   "portal-event-attendee-management",
