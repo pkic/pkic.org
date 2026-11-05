@@ -5,7 +5,7 @@ import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import type { PreviewSection } from "./PreviewShell";
 
 function ScannerPresentationExample() {
-  const [presentation, setPresentation] = useHashQueryParam("scannerView", "embedded", ["embedded", "fullscreen"]);
+  const [presentation, setPresentation] = useState<"embedded" | "fullscreen">("embedded");
   const [role] = useHashQueryParam("scannerRole", "scan", ["scan", "print", "lead"]);
   const [preview, setPreview] = useState(false);
   const shell = useRef<HTMLDivElement>(null);

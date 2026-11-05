@@ -92,7 +92,12 @@ export async function applyBadgePrintPreviewStyles(frame: HTMLIFrameElement, css
 }
 
 /** Load embedded fonts explicitly before either previewing or opening native printing. */
-export async function loadBadgePrintFonts(document: Document, sheet: CSSStyleSheet, realm: Window & typeof globalThis) {
+export async function loadBadgePrintFonts(
+  document: Document,
+  sheet: CSSStyleSheet,
+  realm: Window & typeof globalThis,
+  registered: FontFace[] = [],
+) {
   for (let index = sheet.cssRules.length - 1; index >= 0; index--) {
     const rule = sheet.cssRules[index];
     if (rule.type !== CSSRule.FONT_FACE_RULE) continue;
@@ -105,6 +110,7 @@ export async function loadBadgePrintFonts(document: Document, sheet: CSSStyleShe
     const font = new realm.FontFace(family, bytes, badgePreviewFontDescriptors(fontRule.style));
     await font.load();
     document.fonts.add(font);
+    registered.push(font);
     sheet.deleteRule(index);
   }
 }

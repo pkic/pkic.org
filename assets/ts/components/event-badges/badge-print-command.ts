@@ -13,8 +13,11 @@ export async function printBadgeDocument(html: string, isCurrent: () => boolean 
   root.append(...Array.from(parsed.body.childNodes, (node) => document.importNode(node, true)));
   const sheet = new CSSStyleSheet();
   sheet.replaceSync("#pk-badge-print-command { display:none }");
+  const registeredFonts: FontFace[] = [];
   const cleanup = () => {
     root.remove();
+    for (const font of registeredFonts) document.fonts.delete(font);
+    registeredFonts.length = 0;
     document.adoptedStyleSheets = document.adoptedStyleSheets.filter((item) => item !== sheet);
     window.removeEventListener("afterprint", cleanup);
     window.removeEventListener("pagehide", cleanup);
@@ -32,7 +35,7 @@ export async function printBadgeDocument(html: string, isCurrent: () => boolean 
   try {
     const fontSheet = new CSSStyleSheet();
     fontSheet.replaceSync(prepared.css);
-    await loadBadgePrintFonts(document, fontSheet, window);
+    await loadBadgePrintFonts(document, fontSheet, window, registeredFonts);
     const printCss = Array.from(fontSheet.cssRules, (rule) => rule.cssText).join("\n");
     sheet.replaceSync(`#pk-badge-print-command { display:none } @media print { body > :not(#pk-badge-print-command) { display:none!important }
     html,body { height:auto!important;min-height:0!important;overflow:visible!important;display:block!important; }

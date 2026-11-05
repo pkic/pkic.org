@@ -29,7 +29,7 @@ import { scannerImmersiveLifecycle } from "../scanner/immersive-scanner";
 import { useScannerPresentation } from "../scanner/useScannerPresentation";
 import { FastScannerView } from "../scanner/FastScannerView";
 import { downloadBadgeArtifact } from "../../../../../../components/event-badges/badge-print-artifacts";
-import { Button } from "../../../../../../ui/Button";
+import { Button, ButtonLink } from "../../../../../../ui/Button";
 import { Field, type FieldControlProps } from "../../../../../../ui/Field";
 import { Menu } from "../../../../../../ui/Menu";
 import { PageHeader } from "../../../../../../ui/PageHeader";
@@ -154,7 +154,9 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
         {printing.message && <p role="status">{printing.message}</p>}
         {printing.pdf && pdfUrl && (
           <div class="pk-cluster">
-            <Button onClick={() => window.open(pdfUrl, "_blank", "noopener")}>Open PDF</Button>
+            <ButtonLink href={pdfUrl} external>
+              Open PDF
+            </ButtonLink>
             <Button onClick={() => downloadBadgeArtifact(printing.pdf!, "application/pdf", "attendee-print.pdf")}>
               Download PDF
             </Button>

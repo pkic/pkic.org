@@ -206,7 +206,9 @@ export function useBadgeLabelPrinting(
         running.current = false;
         return;
       }
+      let dialogClosed = false;
       const closed = () => {
+        dialogClosed = true;
         afterPrint.current?.();
         running.current = false;
         if (current()) {
@@ -223,10 +225,12 @@ export function useBadgeLabelPrinting(
       setMessage(`Opening print dialog for ${job.label.displayName ?? "attendee"}…`);
       await printBadgeDocument(html, printable, printOwner.current.signal);
       // Some mobile browsers omit afterprint; do not trap the operator in a busy state.
-      running.current = false;
-      if (current()) {
-        setBusy(false);
-        setMessage("Print requested. If no dialog opened, try PDF in Print settings.");
+      if (!dialogClosed && printed.current === job.key) {
+        running.current = false;
+        if (current()) {
+          setBusy(false);
+          setMessage("Print requested. If no dialog opened, try PDF in Print settings.");
+        }
       }
     } catch (cause) {
       afterPrint.current?.();

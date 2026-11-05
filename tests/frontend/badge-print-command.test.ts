@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import * as preview from "../../assets/ts/components/event-badges/badge-print-preview-document";
 import { printBadgeDocument } from "../../assets/ts/components/event-badges/badge-print-command";
 
 const html =
@@ -61,4 +62,34 @@ it("replaces an earlier print document instead of printing both attendees", asyn
   expect(document.querySelectorAll("#pk-badge-print-command")).toHaveLength(1);
   expect(document.querySelector("#pk-badge-print-command")?.textContent).toBe("Next label");
   expect(document.adoptedStyleSheets).toHaveLength(1);
+});
+
+it.each([false, true])("releases only owned fonts, including delayed loads after cancellation: %s", async (cancel) => {
+  const owner = new AbortController();
+  const registered = new Set<FontFace>();
+  const portalFont = {} as FontFace;
+  const badgeFont = {} as FontFace;
+  registered.add(portalFont);
+  Object.defineProperty(document, "fonts", {
+    configurable: true,
+    value: {
+      ready: Promise.resolve(),
+      delete: (font: FontFace) => registered.delete(font),
+    },
+  });
+  let finish!: () => void;
+  vi.spyOn(preview, "loadBadgePrintFonts").mockImplementation(async (_document, _sheet, _realm, owned = []) => {
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    registered.add(badgeFont);
+    owned.push(badgeFont);
+  });
+  const pending = printBadgeDocument(html, () => true, owner.signal);
+  if (cancel) owner.abort();
+  finish();
+  await pending;
+  if (!cancel) window.dispatchEvent(new Event("afterprint"));
+  expect(registered).toEqual(new Set([portalFont]));
+  expect(print).toHaveBeenCalledTimes(cancel ? 0 : 1);
 });
