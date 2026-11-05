@@ -215,6 +215,7 @@
   /* The actions sit above the stretched title link, so the menu opens
      instead of the card. */
   .pk-collection-card__actions {
+    margin-inline-start: auto;
     position: relative;
     z-index: 1;
     flex: none;

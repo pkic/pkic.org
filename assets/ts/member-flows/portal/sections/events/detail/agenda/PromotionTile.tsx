@@ -1,4 +1,4 @@
-import { CollectionCardFooter } from "../../../../../../ui/CollectionCard";
+import { CollectionCardFooter, CollectionCardSurface } from "../../../../../../ui/CollectionCard";
 import { Button } from "../../../../../../ui/Button";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { useDialogQueryState } from "../../../../../../hooks/useDialogQueryState";
@@ -38,46 +38,48 @@ export function PromotionTile({
   const [open, show, close] = useDialogQueryState(`promotionPreview:${previewId ?? name}`);
   return (
     <li class="pk-promotion-tile">
-      {previewSrc ? (
-        <Button
-          variant="ghost"
-          class={`pk-promotion-tile__frame${stacked ? " pk-promotion-tile__frame--stacked" : ""}`}
-          aria-label={`Enlarge ${name.toLowerCase()}`}
-          title={`Enlarge ${name.toLowerCase()}`}
-          onClick={show}
-        >
-          <img src={previewSrc} alt={previewAlt} loading="lazy" decoding="async" />
-        </Button>
-      ) : (
-        <div class="pk-promotion-tile__frame">
-          <span class="pk-promotion-tile__pending">{pending}</span>
-        </div>
-      )}
-      {previewSrc && open && (
-        <Dialog
-          open={open}
-          viewer
-          size="wide"
-          title={name}
-          closeLabel="Close preview"
-          footerActions={previewActions?.(close)}
-          confirmLabel="Close"
-          onConfirm={() => void close()}
-          onCancel={() => void close()}
-        >
-          <img class="pk-promotion-preview" src={previewSrc} alt={previewAlt} />
-        </Dialog>
-      )}
-      <CollectionCardFooter
-        fact={
-          <span class="pk-promotion-tile__text">
-            <span class="pk-promotion-tile__name">{name}</span>
-            <span class="pk-promotion-tile__detail">{detail}</span>
-            <span role="status">{status}</span>
-          </span>
-        }
-        actions={action}
-      />
+      <CollectionCardSurface>
+        {previewSrc ? (
+          <Button
+            variant="ghost"
+            class={`pk-promotion-tile__frame${stacked ? " pk-promotion-tile__frame--stacked" : ""}`}
+            aria-label={`Enlarge ${name.toLowerCase()}`}
+            title={`Enlarge ${name.toLowerCase()}`}
+            onClick={show}
+          >
+            <img src={previewSrc} alt={previewAlt} loading="lazy" decoding="async" />
+          </Button>
+        ) : (
+          <div class="pk-promotion-tile__frame">
+            <span class="pk-promotion-tile__pending">{pending}</span>
+          </div>
+        )}
+        {previewSrc && open && (
+          <Dialog
+            open={open}
+            viewer
+            size="wide"
+            title={name}
+            closeLabel="Close preview"
+            footerActions={previewActions?.(close)}
+            confirmLabel="Close"
+            onConfirm={() => void close()}
+            onCancel={() => void close()}
+          >
+            <img class="pk-promotion-preview" src={previewSrc} alt={previewAlt} />
+          </Dialog>
+        )}
+        <CollectionCardFooter
+          fact={
+            <span class="pk-promotion-tile__text">
+              <span class="pk-promotion-tile__name">{name}</span>
+              <span class="pk-promotion-tile__detail">{detail}</span>
+              <span role="status">{status}</span>
+            </span>
+          }
+          actions={action}
+        />
+      </CollectionCardSurface>
     </li>
   );
 }

@@ -10,7 +10,6 @@
   .pk-promotion-tile {
     display: flex;
     flex-direction: column;
-    gap: var(--pk-2);
     min-width: 0;
   }
   .pk-promotion-preview {
@@ -27,8 +26,8 @@
     padding: var(--pk-2);
     overflow: hidden;
     background: var(--pk-surface-sunk);
-    border: 1px solid var(--pk-line-soft);
-    border-radius: var(--pk-radius-card);
+    border: 0;
+    border-radius: 0;
   }
   .pk-promotion-tile__frame img {
     min-width: 0;

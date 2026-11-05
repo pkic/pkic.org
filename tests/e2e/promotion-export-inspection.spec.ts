@@ -277,7 +277,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
     ["phone", 375, 812],
   ] as const) {
     await page.setViewportSize({ width, height });
-    await page.getByRole("button", { name: "Sharing actions", exact: true }).scrollIntoViewIfNeeded();
+    await page.locator(".pk-promotion-gallery").scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath(`promotion-gallery-${device}.png`) });
     const enlarge = page.getByRole("button", { name: "Enlarge tall post", exact: true });
     await enlarge.click();

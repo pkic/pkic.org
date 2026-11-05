@@ -86,7 +86,7 @@ export function CollectionCard({
   actions,
 }: CollectionCardProps) {
   return (
-    <article class={`pk-collection-card${cover?.class ? ` ${cover.class}` : ""}`}>
+    <CollectionCardSurface class={cover?.class}>
       <div class={`pk-collection-card__media${imageSrc ? "" : " pk-collection-card__media--cover"}`}>
         {imageSrc ? (
           <img src={imageSrc} alt="" loading="lazy" decoding="async" width="600" height="240" />
@@ -110,7 +110,7 @@ export function CollectionCard({
         )}
       </div>
       <CollectionCardFooter fact={fact} actions={actions} />
-    </article>
+    </CollectionCardSurface>
   );
 }
 
@@ -153,4 +153,9 @@ export function CollectionCardFooter({ fact, actions }: { fact?: ComponentChildr
       {actions && <span class="pk-collection-card__actions">{actions}</span>}
     </div>
   );
+}
+
+/** Shared surface for collection records and interactive media previews. */
+export function CollectionCardSurface({ children, class: className }: { children: ComponentChildren; class?: string }) {
+  return <article class={["pk-collection-card", className].filter(Boolean).join(" ")}>{children}</article>;
 }
