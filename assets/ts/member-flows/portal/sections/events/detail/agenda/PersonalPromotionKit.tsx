@@ -1,15 +1,15 @@
+import { usePromotionArtwork } from "./usePromotionArtwork";
+import { usePromotionDownloads } from "./usePromotionDownloads";
 import { useDialogQueryState } from "../../../../../../hooks/useDialogQueryState";
 import { Alert } from "../../../../../../ui/Alert";
-import { downloadFile } from "../../../../../../shared/download-file";
 import { loadPromotionKit } from "./promotion-kit-client";
 import type { ComponentChildren } from "preact";
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { z } from "zod";
 import {
   promotionKitSchema,
   type promotionFormatSchema,
 } from "../../../../../../../shared/schemas/event-promotion-kit";
-import { postJson, getBlob } from "../../../../../../shared/api-client";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { Button } from "../../../../../../ui/Button";
 import { CloseButton } from "../../../../../../ui/CloseButton";
@@ -29,7 +29,6 @@ const tiles = [
   { format: "landscape", name: "Wide post", detail: "1.91:1 · JPEG", type: "JPEG" },
   { format: "carousel", name: "Carousel", detail: "PDF slides", type: "PDF", stacked: true },
 ] satisfies readonly { format: Format; name: string; detail: string; type: string; stacked?: boolean }[];
-const inFlight = ["queued", "rendering", "retrying"];
 
 export function PersonalPromotionKit({
   base,
@@ -45,12 +44,13 @@ export function PersonalPromotionKit({
 }) {
   const [kit, setKit] = useState<Kit | null>(null),
     [error, setError] = useState("");
-  const requested = useRef(false);
+  const { previews, failures } = usePromotionArtwork(base, kit);
+  const downloads = usePromotionDownloads(base, kit);
   const [editing, showEditing, closeEditing] = useDialogQueryState(`promotionComposition:${base}`);
   useEffect(() => {
     let cancelled = false;
     setKit(null);
-    requested.current = false;
+    setError("");
     void loadPromotionKit(base)
       .then((value) => {
         if (!cancelled) setKit(value);
@@ -62,67 +62,6 @@ export function PersonalPromotionKit({
       cancelled = true;
     };
   }, [base]);
-  const prepare = useCallback(
-    async (current: Kit) => {
-      try {
-        setKit(
-          await postJson(
-            `${base}/renders`,
-            {
-              fingerprint: current.fingerprint,
-              publishedRevision: current.publishedRevision,
-              compositionRevision: current.compositionRevision,
-            },
-            promotionKitSchema,
-          ),
-        );
-        setError("");
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not create your materials.");
-      }
-    },
-    [base],
-  );
-  useEffect(() => {
-    if (!kit || kit.stale) return;
-    const missing = tiles.some((tile) =>
-      [undefined, "obsolete"].includes(kit.artifacts.find((item) => item.format === tile.format)?.status),
-    );
-    if (missing && !requested.current) {
-      requested.current = true;
-      void prepare(kit);
-      return;
-    }
-    if (!kit.artifacts.some((item) => inFlight.includes(item.status))) return;
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      void loadPromotionKit(base)
-        .then((value) => {
-          if (!cancelled) setKit(value);
-        })
-        .catch((e) => {
-          if (!cancelled) setError(e instanceof Error ? e.message : "Could not refresh your materials.");
-        });
-    }, 2500);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [kit, base, prepare]);
-  async function download(format: Format) {
-    try {
-      const content = await getBlob(artifact(format));
-      const extension =
-        { "application/zip": "zip", "application/pdf": "pdf", "image/jpeg": "jpg" }[content.type] ?? "png";
-      downloadFile(content, content.type, `promotion-${format}.${extension}`);
-      setError("");
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Could not download these materials.");
-    }
-  }
-  const artifact = (format: Format, preview = false) =>
-    `${base}/artifact?format=${encodeURIComponent(format)}&revision=${kit!.publishedRevision}&fingerprint=${kit!.fingerprint}${preview ? "&download=false" : ""}`;
-  const status = (format: Format) => kit?.artifacts.find((item) => item.format === format)?.status;
   return (
     <Panel>
       <PanelHeader title={title}>
@@ -145,7 +84,7 @@ export function PersonalPromotionKit({
         {onClose && <CloseButton label="Close promotion materials" onClick={onClose} />}
       </PanelHeader>
       <PanelBody>
-        {error && <ErrorAlert error={error} />}
+        {(error || downloads.error) && <ErrorAlert error={error || downloads.error} />}
         {kit && (
           <div class="pk-stack">
             {kit.stale && (
@@ -156,21 +95,25 @@ export function PersonalPromotionKit({
             <ul class="pk-promotion-gallery">
               {leading}
               {tiles.map((tile) => {
-                const ready = status(tile.format) === "rendered";
+                const loaded = previews[tile.format];
+                const preview = !kit.stale && loaded?.artwork.fingerprint === kit.fingerprint ? loaded : undefined;
+                const ready = !kit.stale && (tile.format === "carousel" || Boolean(preview));
                 return (
                   <PromotionTile
                     key={tile.format}
+                    previewId={`${base}:${tile.format}`}
                     name={tile.name}
                     detail={tile.detail}
                     stacked={"stacked" in tile}
-                    previewSrc={ready ? artifact(tile.format, true) : undefined}
+                    previewSrc={preview?.urls[0]}
                     previewAlt={`Preview of your ${tile.name.toLowerCase()}`}
-                    pending={status(tile.format) === "failed" ? "Couldn't create this" : "Creating…"}
+                    pending={kit.stale ? "Review your session picks" : (failures[tile.format] ?? "Loading preview…")}
+                    status={tile.format === "carousel" && downloads.pdfPending ? "Preparing PDF…" : undefined}
                     action={
                       <DownloadAction
                         label={`Download ${tile.name.toLowerCase()} (${tile.type})`}
                         disabled={!ready}
-                        onDownload={() => download(tile.format)}
+                        onDownload={() => downloads.download(tile.format, preview)}
                       />
                     }
                   />
@@ -189,7 +132,6 @@ export function PersonalPromotionKit({
               }}
               onSaved={(value) => {
                 setKit(value);
-                requested.current = false;
                 void closeEditing().catch((cause: unknown) =>
                   setError(cause instanceof Error ? cause.message : "Could not close the editor."),
                 );

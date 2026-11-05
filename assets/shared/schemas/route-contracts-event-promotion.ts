@@ -3,6 +3,8 @@ import { z } from "zod";
 import { eventSlugParamsSchema } from "./api-common";
 import {
   promotionArtifactQuerySchema,
+  promotionArtworkSchema,
+  promotionPdfExportSchema,
   promotionKitSchema,
   promotionKitSaveSchema,
   promotionSessionsQuerySchema,
@@ -41,8 +43,10 @@ export const promotionArtifactGetRouteSchema = {
   request: { params, query: promotionArtifactQuerySchema },
   responses: {
     200: {
-      description: "PNG card, complete PNG card ZIP set, or selectable-text PDF",
+      description: "Browser artwork, JPEG card, complete card ZIP set, or selectable-text PDF",
       content: {
+        "application/json": { schema: promotionArtworkSchema },
+        "image/jpeg": { schema: z.string() },
         "application/pdf": { schema: z.string() },
         "image/png": { schema: z.string() },
         "application/zip": { schema: z.string() },
@@ -129,4 +133,19 @@ export const promotionKitInitializeRouteSchema = {
 export const eventPromotionInitializeRouteSchema = {
   ...promotionKitInitializeRouteSchema,
   request: { ...promotionKitInitializeRouteSchema.request, params: eventSlugParamsSchema },
+};
+
+export const promotionPdfExportRouteSchema = {
+  ...promotionKitGetRouteSchema,
+  "x-pkic-mcp": { expose: false },
+  summary: "Generate own current promotion PDF for immediate download",
+  request: { params, body: { content: { "application/json": { schema: promotionPdfExportSchema } } } },
+  responses: {
+    200: { description: "Selectable-text PDF", content: { "application/pdf": { schema: z.string() } } },
+    ...authErrors({ conflict: "Promotion material changed", notFound: "Session not found" }),
+  },
+};
+export const eventPromotionPdfExportRouteSchema = {
+  ...promotionPdfExportRouteSchema,
+  request: { ...promotionPdfExportRouteSchema.request, params: eventSlugParamsSchema },
 };

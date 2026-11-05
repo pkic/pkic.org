@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
@@ -18,7 +18,6 @@ import {
   sessionHistoryCorrectionSchema,
 } from "../../assets/shared/schemas/event-session-history";
 import {
-  promotionArtifactQuerySchema,
   promotionFormatSchema,
   promotionKitSaveSchema,
   promotionKitSchema,
@@ -29,7 +28,6 @@ import {
   organizationCreateResponseSchema,
 } from "../../assets/shared/schemas/organization-management";
 import { eventDetailResponseSchema } from "../../assets/shared/schemas/event-management";
-import { runScheduledWork } from "./helpers/scheduled-work";
 
 const slug = "pqc-conference-amsterdam-nl";
 const agendaApi = `/api/v1/events/${slug}/agenda`;
@@ -209,7 +207,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await expect(sharedCopy).toBeVisible();
   await sharedCopy.getByRole("button", { name: "Close shared promotion copy", exact: true }).click();
   await expect(sharedCopy).not.toBeVisible();
-  await page.getByRole("button", { name: "Personalize promotion materials", exact: true }).click();
+  await page.getByRole("button", { name: "Customize", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Personalize promotion materials", exact: true });
   const shortDescription = editor.getByRole("textbox", { name: "Your short description", exact: true });
   const previousDescription = await shortDescription.inputValue();
@@ -233,7 +231,6 @@ test("every delivered long-panel promotion export has complete evidence and refu
     .check();
   await page.getByRole("button", { name: "Save my materials", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Personalize promotion materials", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Prepare downloads", exact: true }).click();
   const kitResponse = await page.request.get(kitApi);
   expect(kitResponse.status(), await kitResponse.text()).toBe(200);
   const kit = promotionKitSchema.parse(await kitResponse.json());
@@ -256,74 +253,73 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await mkdir(directory, { recursive: true });
   const records = [];
   const urls = [];
-  const expectedPdfText = [title, ...copy.takeaways, ...names, ...affiliations, ...roles, copy.callToAction];
-  const fetchReady = async (url: string) => {
-    let response = await page.request.get(url);
-    await expect
-      .poll(
-        async () => {
-          if (response.status() === 200) return true;
-          expect(response.status()).toBe(409);
-          expect(["PROMOTION_RENDER_PENDING", "PROMOTION_PREVIEW_PENDING"]).toContain(
-            apiErrorPayloadSchema.parse(await response.json()).error.code,
-          );
-          await runScheduledWork(page);
-          response = await page.request.get(url);
-          return response.status() === 200;
-        },
-        { timeout: 120_000, intervals: [1000, 2000, 5000] },
-      )
-      .toBe(true);
-    return response;
+  const expectedPdfText = [title, ...copy.takeaways, ...names, ...affiliations, ...roles];
+  const labels = {
+    portrait: "tall post (JPEG)",
+    square: "square post (JPEG)",
+    landscape: "wide post (JPEG)",
+    carousel: "carousel (PDF)",
   };
+  await expect(page.locator(".pk-promotion-tile img")).toHaveCount(4);
+  await expect
+    .poll(() =>
+      page
+        .locator(".pk-promotion-tile img")
+        .evaluateAll((images) =>
+          images.every((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0),
+        ),
+    )
+    .toBe(true);
+  for (const [device, width, height] of [
+    ["desktop", 1280, 900],
+    ["phone", 375, 812],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.getByRole("heading", { name: "My published materials", exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`promotion-gallery-${device}.png`) });
+    const enlarge = page.getByRole("button", { name: "Enlarge tall post", exact: true });
+    await enlarge.click();
+    await expect(page.getByRole("dialog", { name: "Tall post", exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`promotion-enlarged-${device}.png`) });
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "Tall post", exact: true })).toHaveCount(0);
+    await expect(enlarge).toBeFocused();
+  }
+  const kitBeforeDownload = promotionKitSchema.parse(await (await page.request.get(kitApi)).json());
+  expect(kitBeforeDownload.artifacts).toHaveLength(0);
   for (const format of promotionFormatSchema.options) {
-    // Exercise the scheduler through the local runtime trigger; artifact requests remain reads.
-    const probe = promotionArtifactQuerySchema.parse({
-      format,
-      revision: kit.publishedRevision,
-      fingerprint: kit.fingerprint,
-      download: "false",
-    });
-    await fetchReady(`${kitApi}/artifact?${new URLSearchParams({ ...probe, revision: String(probe.revision) })}`);
-    const label = format === "carousel" ? "Carousel PDF" : `${format} images`;
-    const link = page.getByRole("link", { name: label, exact: true });
-    await expect(link).toBeVisible({ timeout: 120_000 });
-    if (format === "carousel") {
-      const completed = page.waitForEvent("download");
-      await link.click();
-      const downloaded = await completed;
-      expect(downloaded.suggestedFilename()).toBe("promotion-carousel.pdf");
-      await downloaded.saveAs(join(directory, "browser-download.pdf"));
-    }
-    const href = await link.getAttribute("href");
-    if (!href) throw new Error("The delivered export requires its real portal link");
-    const artifactUrl = new URL(href, page.url());
-    expect(artifactUrl.searchParams.get("revision")).toBe(String(kit.publishedRevision));
-    expect(artifactUrl.searchParams.get("format")).toBe(format);
-    const response = await fetchReady(href);
-    const responseHeaders = protectedArtifactHeaders(response);
+    const action = page.getByRole("button", { name: `Download ${labels[format]}`, exact: true });
+    await expect(action).toBeEnabled();
+    const completed = page.waitForEvent("download", { timeout: 120_000 });
+    await action.click();
+    const downloaded = await completed;
+    const filename = downloaded.suggestedFilename();
+    expect(filename).toMatch(new RegExp(`^promotion-${format}\\.(pdf|jpg|zip)$`));
+    const file = join(directory, filename);
+    await downloaded.saveAs(file);
+    const contentType = filename.endsWith(".pdf")
+      ? "application/pdf"
+      : filename.endsWith(".zip")
+        ? "application/zip"
+        : "image/jpeg";
     const evidence = await inspectPromotionExport({
       directory: join(directory, format),
       format,
-      contentType: response.headers()["content-type"]!,
-      bytes: await response.body(),
+      contentType,
+      bytes: await readFile(file),
       registrationUrl: kit.registrationUrl,
       expectedPdfText,
     });
-    records.push({
-      url: artifactUrl.href,
-      publishedRevision: kit.publishedRevision,
-      templateVersion: kit.templateVersion,
-      responseHeaders,
-      ...evidence,
-    });
-    urls.push(href);
+    records.push({ publishedRevision: kit.publishedRevision, templateVersion: kit.templateVersion, ...evidence });
+    urls.push(
+      `${kitApi}/artifact?${new URLSearchParams({ format, revision: String(kit.publishedRevision), fingerprint: kit.fingerprint!, representation: "artwork" })}`,
+    );
   }
   expect(records.find((record) => record.format === "landscape")!.pageCount).toBeGreaterThan(1);
   expect(records.find((record) => record.format === "carousel")!.pageCount).toBeGreaterThan(4);
   for (const [device, width, height] of [
     ["desktop", 1280, 900],
-    ["phone", 390, 844],
+    ["phone", 375, 812],
   ] as const) {
     await page.setViewportSize({ width, height });
     await page.evaluate(async () => {
@@ -333,10 +329,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await page.screenshot({ path: join(directory, `kit-${device}.png`), fullPage: true });
   }
-  const previewUrl = new URL(
-    (await page.getByRole("img", { name: "Preview of your promotion materials", exact: true }).getAttribute("src"))!,
-    page.url(),
-  ).href;
+  const previewUrl = urls[0]!;
   const manifest = {
     eventSlug: slug,
     occurrenceId: occurrence.id,
@@ -374,22 +367,15 @@ test("every delivered long-panel promotion export has complete evidence and refu
   expect(fresh.registrationUrl).toBe(kit.registrationUrl);
   expect(fresh.metrics.clicks).toBe(0);
   expect(fresh.metrics.confirmedRegistrations).toBe(0);
-  const freshQuery = promotionArtifactQuerySchema.parse({
-    format: "carousel",
-    revision: fresh.publishedRevision,
-    fingerprint: fresh.fingerprint,
-  });
-  const freshUrl = `${kitApi}/artifact?${new URLSearchParams({ ...freshQuery, revision: String(freshQuery.revision) })}`;
-  const queued = await page.request.post(`${kitApi}/renders`, {
+  const freshUrl = `${kitApi}/artifact`;
+  const freshArtifact = await page.request.post(freshUrl, {
     data: {
       fingerprint: fresh.fingerprint,
       publishedRevision: fresh.publishedRevision,
       compositionRevision: fresh.compositionRevision,
-      formats: ["carousel"],
     },
   });
-  expect(queued.status(), await queued.text()).toBe(200);
-  const freshArtifact = await fetchReady(freshUrl);
+  expect(freshArtifact.status(), await freshArtifact.text()).toBe(200);
   const freshResponseHeaders = protectedArtifactHeaders(freshArtifact);
   const freshEvidence = await inspectPromotionExport({
     directory: join(directory, "fresh-carousel"),

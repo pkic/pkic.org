@@ -1,3 +1,8 @@
+import { preparePromotionArtwork } from "./promotion-artwork-inputs";
+import { buildPromotionPages } from "./promotion-scene";
+import { promotionSceneSvg } from "./promotion-svg";
+import { promotionDesignArtwork } from "./promotion-design";
+import { json } from "../../http";
 import type { z } from "zod";
 import type { DatabaseLike, Env } from "../../types";
 import { promotionArtifactQuerySchema } from "../../../../assets/shared/schemas/event-promotion-kit";
@@ -23,11 +28,13 @@ export async function downloadOwnPromotionArtifact(
   if (!query.fingerprint) throw new AppError(409, "PROMOTION_ARTIFACT_STALE", "Refresh your kit before downloading.");
   const location = await promotionRenderLocation(source.actor.subjectId, occurrenceId, query.fingerprint, query.format),
     event = eventReadIdSql({ slug });
-  if (!env.ASSETS_BUCKET) throw new AppError(503, "PROMOTION_STORAGE_UNAVAILABLE", "Promotion storage is unavailable.");
+  if (query.representation === "file" && !env.ASSETS_BUCKET)
+    throw new AppError(503, "PROMOTION_STORAGE_UNAVAILABLE", "Promotion storage is unavailable.");
   // A preview is the small gallery thumbnail, never the full file.
-  const cached = await env.ASSETS_BUCKET.get(
-    query.download === "false" ? promotionThumbnailKey(location.key) : location.key,
-  );
+  const cached =
+    query.representation === "file"
+      ? await env.ASSETS_BUCKET!.get(query.download === "false" ? promotionThumbnailKey(location.key) : location.key)
+      : null;
   const loaded = await db.batch([
     ...source.statements,
     db
@@ -43,6 +50,32 @@ export async function downloadOwnPromotionArtifact(
     current.kit.publishedRevision !== query.revision
   )
     throw new AppError(409, "PROMOTION_ARTIFACT_STALE", "Your materials changed. Refresh your kit before downloading.");
+  if (query.representation === "artwork") {
+    const branding = current.design.sponsorGroups.length
+      ? await promotionDesignArtwork(env, current.visual)
+      : { sponsors: [] };
+    const artwork = await preparePromotionArtwork(env, origin, {
+      ...current,
+      ...current.kit,
+      sponsors: branding.sponsors,
+    });
+    // A carousel gallery needs its cover; the downloadable PDF keeps every slide.
+    const pages = buildPromotionPages(artwork.source, query.format);
+    return json(
+      {
+        fingerprint: current.kit.fingerprint,
+        format: query.format,
+        pages: (query.format === "carousel" ? pages.slice(0, 1) : pages).map((page) => ({
+          width: page.width,
+          height: page.height,
+          svg: promotionSceneSvg(artwork.source, page),
+        })),
+        fontFiles: artwork.faces.map((face) => face.file),
+      },
+      200,
+      { "cache-control": "private, no-store" },
+    );
+  }
   const job = batchFirst<{ status: string }>(loaded.at(-1)!);
   if (!cached || job?.status !== "rendered")
     throw new AppError(409, "PROMOTION_RENDER_PENDING", "Your material is being prepared. Refresh the kit shortly.");

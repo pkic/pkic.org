@@ -141,7 +141,13 @@ export async function prepareOwnPromotionRequest(
     const material = occurrenceId
       ? await buildSpeakerPromotionSource(basis, current.userId, origin)
       : await buildAttendeePromotionSource(basis, current.userId, origin);
-    return { ...material, eventId: basis.visual.event.id, eventSlug: basis.visual.event.slug };
+    return {
+      ...material,
+      headshotKeys: basis.headshotKeys,
+      visual: basis.visual,
+      eventId: basis.visual.event.id,
+      eventSlug: basis.visual.event.slug,
+    };
   }
   return {
     actor,

@@ -1,3 +1,8 @@
+import { downloadOwnPromotionPdf } from "../../../../../_lib/services/event-agenda/promotion-pdf-download";
+import {
+  promotionPdfExportRouteSchema,
+  eventPromotionPdfExportRouteSchema,
+} from "../../../../../../assets/shared/schemas/route-contracts-event-promotion";
 import { downloadOwnPromotionArtifact } from "../../../../../_lib/services/event-agenda/promotion-artifact-download";
 import { queueOwnPromotionRenders } from "../../../../../_lib/services/event-agenda/promotion-render-command";
 import { readOwnPromotionSessions } from "../../../../../_lib/services/event-agenda/promotion-session-list";
@@ -162,5 +167,28 @@ export const EventPromotionInitialize = openApiRoute(eventPromotionInitializeRou
         true,
       )
     ).kit,
+  ),
+);
+
+export const PromotionPdfExport = openApiRoute(promotionPdfExportRouteSchema, async (c, data) =>
+  downloadOwnPromotionPdf(
+    requestDb(c),
+    c.req.raw,
+    c.env,
+    data.params.eventSlug,
+    data.params.occurrenceId,
+    resolveAppBaseUrl(c.env, c.req.raw),
+    data.body,
+  ),
+);
+export const EventPromotionPdfExport = openApiRoute(eventPromotionPdfExportRouteSchema, async (c, data) =>
+  downloadOwnPromotionPdf(
+    requestDb(c),
+    c.req.raw,
+    c.env,
+    data.params.eventSlug,
+    null,
+    resolveAppBaseUrl(c.env, c.req.raw),
+    data.body,
   ),
 );
