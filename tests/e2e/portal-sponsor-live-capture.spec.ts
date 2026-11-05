@@ -236,7 +236,13 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     const listed = await page.request.get(leadsPath);
     expect(listed.status()).toBe(200);
     expect(listed.headers()["cache-control"]).toContain("no-store");
-    const leads = sponsorLeadListSchema.parse(await listed.json());
+    const rawLeads = await listed.json();
+    for (const row of rawLeads.leads) {
+      expect(row).not.toHaveProperty("userId");
+      expect(row).not.toHaveProperty("operatorUserId");
+    }
+    expect(JSON.stringify(rawLeads)).not.toContain(fixture.denied.userId);
+    const leads = sponsorLeadListSchema.parse(rawLeads);
     expect(leads.leads).toHaveLength(1);
     const lead = leads.leads[0];
     expect(lead).toMatchObject({
@@ -244,9 +250,6 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
       name: `${fixture.firstName} ${fixture.lastName}`,
       organization: fixture.organization,
     });
-    expect(JSON.stringify(leads)).not.toContain(fixture.denied.userId);
-    expect(lead).not.toHaveProperty("userId");
-    expect(lead).not.toHaveProperty("operatorUserId");
     const contacts = page.getByRole("region", { name: "Consenting leads", exact: true });
     await expect(contacts.getByText(fixture.email, { exact: true })).toBeVisible();
     const searched = page.waitForResponse((response) => {
@@ -262,9 +265,10 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     const capturesPath = `${leadsPath}/${lead.id}/captures`;
     const historyResponse = await page.request.get(capturesPath);
     expect(historyResponse.status()).toBe(200);
-    const history = sponsorLeadCapturesSchema.parse(await historyResponse.json());
+    const rawHistory = await historyResponse.json();
+    for (const row of rawHistory.captures) expect(row).not.toHaveProperty("operatorUserId");
+    const history = sponsorLeadCapturesSchema.parse(rawHistory);
     expect(history.captures).toHaveLength(4);
-    for (const row of history.captures) expect(row).not.toHaveProperty("operatorUserId");
     expect(history.captures.map((row) => row.observedAt).sort()).toEqual(
       [
         first.request.observedAt,

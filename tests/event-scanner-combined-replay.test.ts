@@ -97,6 +97,11 @@ describe("Combined enrolled attendance and sponsor lead reconciliation", () => {
       otherSponsorId = crypto.randomUUID();
     const secondOperator = await insertUser(env.DB);
     const rival = await insertUser(env.DB);
+    for (const [id, name] of [
+      [fixture.operatorId, "Casey"],
+      [secondOperator, "Jordan"],
+    ])
+      await env.DB.prepare("UPDATE users SET first_name=?,last_name='Scanner' WHERE id=?").bind(name, id).run();
     await env.DB.prepare("INSERT INTO event_agenda_rooms(id,event_id,name,capacity) VALUES(?,?,'Single place',1)")
       .bind(roomId, fixture.eventId)
       .run();
@@ -279,9 +284,12 @@ describe("Combined enrolled attendance and sponsor lead reconciliation", () => {
     expect(lead.leads[0]).toMatchObject({ email: `${fixture.userId}@example.test` });
     const captures = await callApi(env, `${leadPath}/${lead.leads[0]!.id}/captures`, { headers: headers(secondToken) });
     expect(captures.status).toBe(200);
-    const history = sponsorLeadCapturesSchema.parse(await captures.json());
+    const rawCaptures = await captures.json();
+    expect(rawCaptures).not.toHaveProperty("captures.0.operatorUserId");
+    expect(rawCaptures).not.toHaveProperty("captures.1.operatorUserId");
+    const history = sponsorLeadCapturesSchema.parse(rawCaptures);
     expect(history.page.total).toBe(2);
-    for (const entry of history.captures) expect(entry).not.toHaveProperty("operatorUserId");
+    expect(history.captures.map((entry) => entry.operatorName).sort()).toEqual(["Casey Scanner", "Jordan Scanner"]);
     const scopeBaseline = await ledger();
     const excessPersonalData = await callApi(env, `${base}/scans`, {
       method: "POST",

@@ -109,6 +109,11 @@ it("interleaves two prepared last-seat claims with online and delayed attendance
     secondDevice = crypto.randomUUID();
   const rival = await insertUser(env.DB),
     secondOperator = await insertUser(env.DB);
+  for (const [id, name] of [
+    [fixture.operatorId, "Casey"],
+    [secondOperator, "Jordan"],
+  ])
+    await env.DB.prepare("UPDATE users SET first_name=?,last_name='Scanner' WHERE id=?").bind(name, id).run();
   await env.DB.prepare("INSERT INTO event_agenda_rooms(id,event_id,name,capacity) VALUES(?,?,'One place',1)")
     .bind(roomId, fixture.eventId)
     .run();
@@ -319,9 +324,12 @@ it("interleaves two prepared last-seat claims with online and delayed attendance
       headers: headers(secondToken),
     });
     expect(capturesResponse.status).toBe(200);
-    const captures = sponsorLeadCapturesSchema.parse(await capturesResponse.json());
+    const rawCaptures = await capturesResponse.json();
+    expect(rawCaptures).not.toHaveProperty("captures.0.operatorUserId");
+    expect(rawCaptures).not.toHaveProperty("captures.1.operatorUserId");
+    const captures = sponsorLeadCapturesSchema.parse(rawCaptures);
     expect(captures.page.total).toBe(2);
-    for (const entry of captures.captures) expect(entry).not.toHaveProperty("operatorUserId");
+    expect(captures.captures.map((entry) => entry.operatorName).sort()).toEqual(["Casey Scanner", "Jordan Scanner"]);
     for (let replay = 0; replay < 2; replay++) {
       const receipts = await Promise.all(
         originals.map((entry, index) => receive(entry, index < 2 ? fixture.token : secondToken)),

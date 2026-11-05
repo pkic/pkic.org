@@ -176,12 +176,13 @@ describe("sponsor live lead viewing through the mounted API", () => {
       const response = await read(actorToken, `${base}?q=${encodeURIComponent(attendee!.email)}`);
       expect(response.status).toBe(200);
       expect(response.headers.get("cache-control")).toContain("no-store");
-      const page = sponsorLeadListSchema.parse(await response.json());
+      const rawPage = await response.json();
+      expect(rawPage).not.toHaveProperty("leads.0.userId");
+      expect(rawPage).not.toHaveProperty("leads.0.operatorUserId");
+      const page = sponsorLeadListSchema.parse(rawPage);
       expect(page.page.total).toBe(1);
       expect(page.leads).toHaveLength(1);
       expect(page.leads[0]).toMatchObject({ email: attendee!.email });
-      expect(page.leads[0]).not.toHaveProperty("userId");
-      expect(page.leads[0]).not.toHaveProperty("operatorUserId");
       pages.push(page);
     }
     expect(pages[1]).toEqual(pages[0]);
@@ -191,10 +192,12 @@ describe("sponsor live lead viewing through the mounted API", () => {
       const response = await read(actorToken, `${historyPath}?sort=receivedAt`);
       expect(response.status).toBe(200);
       expect(response.headers.get("cache-control")).toContain("no-store");
-      const history = sponsorLeadCapturesSchema.parse(await response.json());
+      const rawHistory = await response.json();
+      expect(rawHistory).not.toHaveProperty("captures.0.operatorUserId");
+      expect(rawHistory).not.toHaveProperty("captures.1.operatorUserId");
+      const history = sponsorLeadCapturesSchema.parse(rawHistory);
       expect(history.page.total).toBe(2);
       expect(history.captures).toHaveLength(2);
-      expect(history.captures[0]).not.toHaveProperty("operatorUserId");
       expect(history.captures.map((row) => row.operatorName).sort()).toEqual(["Casey Scanner", "Jordan Colleague"]);
       histories.push(history);
       const csv = await read(actorToken, `${base}.csv`);
@@ -457,10 +460,9 @@ describe("sponsor live lead viewing through the mounted API", () => {
       observedAt: "2026-10-04T10:00:00.000Z",
       receivedAt: "2026-10-04T11:00:00.000Z",
     });
-    const last = sponsorLeadCapturesSchema.parse(
-      await (await request(path, "?limit=1&offset=1&sort=receivedAt")).json(),
-    );
-    expect(last.captures[0]).not.toHaveProperty("operatorUserId");
+    const rawLast = await (await request(path, "?limit=1&offset=1&sort=receivedAt")).json();
+    expect(rawLast).not.toHaveProperty("captures.0.operatorUserId");
+    const last = sponsorLeadCapturesSchema.parse(rawLast);
     expect(last.page.hasMore).toBe(false);
     const registrationId = await env.DB.prepare("SELECT id FROM registrations WHERE event_id=? AND user_id=?")
       .bind(eventId, lead!.user_id)
