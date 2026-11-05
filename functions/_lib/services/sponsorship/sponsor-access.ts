@@ -22,7 +22,7 @@ import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
 import { writeAuditLog } from "../audit";
 import type { SponsorAttendeesListQuery } from "../../../../assets/shared/schemas/sponsor-access";
 import { sponsorConsentSql } from "../event-participation/sponsor-consent";
-import { sponsorFacingOrganization } from "../../email-domains/contact-kind";
+import { contactAffiliation } from "../../email-domains/contact-kind";
 
 export async function requireSponsorAttendeeAccess(
   db: DatabaseLike,
@@ -63,11 +63,13 @@ const SPONSOR_ATTENDEES_FROM = `
 `;
 
 function toAttendeeRow(r: SponsorAttendeeDatabaseRow): SponsorAttendee {
+  const affiliation = contactAffiliation(r.email, r.organization_name);
   return {
     firstName: r.first_name,
     lastName: r.last_name,
     email: r.email,
-    organizationName: sponsorFacingOrganization(r.email, r.organization_name),
+    organizationName: affiliation.organization,
+    personalEmail: affiliation.personalEmail,
     jobTitle: r.job_title,
   };
 }

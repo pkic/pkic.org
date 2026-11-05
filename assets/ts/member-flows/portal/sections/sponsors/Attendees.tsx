@@ -1,3 +1,4 @@
+import { ContactOrganization } from "../../../../components/ContactOrganization";
 /** Sponsor-capability view of consenting attendees in the unified portal. */
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { ApiClientError, getJson } from "../../../../shared/api-client";
@@ -28,7 +29,9 @@ const ATTENDEE_COLUMNS: Column<SponsorAttendee>[] = [
   { header: "Email", cell: (a) => a.email ?? "—" },
   {
     header: "Organization",
-    cell: (a) => a.organizationName ?? "—",
+    cell: (a) => (
+      <ContactOrganization audience="sponsor" organization={a.organizationName} personalEmail={a.personalEmail} />
+    ),
   },
   { header: "Job title", cell: (a) => a.jobTitle ?? "—" },
 ];
@@ -101,8 +104,8 @@ export function SponsorAttendees({
         initialSort="name"
         paginate
         load={load}
-        // Sponsors receive no internal identifier; an attendee's address is unique on this list.
-        rowKey={(attendee) => attendee.email ?? `${attendee.firstName} ${attendee.lastName}`}
+        // Rows have no actions or selection state; page positions give every contact a unique key.
+        rowKey={(_attendee, index) => index}
         toolbar={() => (
           <DownloadAction
             label="Download consenting attendees (CSV)"

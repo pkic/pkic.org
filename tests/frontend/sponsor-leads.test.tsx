@@ -24,12 +24,11 @@ async function mount(canView: boolean, canCapture = false, canExport = false) {
           leads: [
             {
               id,
-              userId: id,
               name: "Private person",
               email: "private@example.test",
               organization: "Example",
+              personalEmail: false,
               capturedAt: "2030-01-01T10:00:00.000Z",
-              operatorUserId: id,
               operatorName: "Operator",
             },
           ],
@@ -119,7 +118,6 @@ describe("Live sponsor leads", () => {
         captures: [
           {
             id,
-            operatorUserId: id,
             operatorName: "Second operator",
             observedAt: "2030-01-01T09:00:00.000Z",
             receivedAt: "2030-01-01T11:00:00.000Z",

@@ -276,14 +276,12 @@ describe("Combined enrolled attendance and sponsor lead reconciliation", () => {
     const lead = sponsorLeadListSchema.parse(await contacts.json());
     expect(lead.page.total).toBe(1);
     expect(lead.leads).toHaveLength(1);
-    expect(lead.leads[0]).toMatchObject({ userId: fixture.userId, email: `${fixture.userId}@example.test` });
+    expect(lead.leads[0]).toMatchObject({ email: `${fixture.userId}@example.test` });
     const captures = await callApi(env, `${leadPath}/${lead.leads[0]!.id}/captures`, { headers: headers(secondToken) });
     expect(captures.status).toBe(200);
     const history = sponsorLeadCapturesSchema.parse(await captures.json());
     expect(history.page.total).toBe(2);
-    expect(history.captures.map((entry) => entry.operatorUserId).sort()).toEqual(
-      [fixture.operatorId, secondOperator].sort(),
-    );
+    for (const entry of history.captures) expect(entry).not.toHaveProperty("operatorUserId");
     const scopeBaseline = await ledger();
     const excessPersonalData = await callApi(env, `${base}/scans`, {
       method: "POST",

@@ -13,7 +13,6 @@ import {
 const slug = "pqc-conference-amsterdam-nl";
 const sponsorId = "10000000-0000-4000-8000-000000000041";
 const leadId = "10000000-0000-4000-8000-000000000042";
-const operatorId = "10000000-0000-4000-8000-000000000043";
 const pageInfo = { limit: 50, offset: 0, total: 1, hasMore: false };
 test.use({ actionTimeout: 20_000 });
 test("sponsor live lead UI searches current contacts, shows capture provenance and clears offline", async ({
@@ -40,7 +39,6 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
           captures: [
             {
               id: leadId,
-              operatorUserId: operatorId,
               operatorName: "Demo operator",
               observedAt: "2026-12-01T09:30:00.000Z",
               receivedAt: "2026-12-01T09:32:00.000Z",
@@ -53,12 +51,11 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
             leads: [
               {
                 id: leadId,
-                userId: leadId,
                 name: "Synthetic attendee",
                 email: "synthetic-lead@gmail.com",
-                organization: "Personal email address",
+                organization: null,
+                personalEmail: true,
                 capturedAt: "2026-12-01T09:30:00.000Z",
-                operatorUserId: operatorId,
                 operatorName: "Demo operator",
               },
             ],

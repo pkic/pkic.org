@@ -51,6 +51,14 @@ describe("contact organization", () => {
     expect(host!.querySelectorAll(".pk-badge--warn")).toHaveLength(1);
   });
 
+  it("renders sponsor classification as plain text without an organizer warning", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(() => render(<ContactOrganization audience="sponsor" organization={null} personalEmail />, host!));
+    expect(host.textContent).toBe(PERSONAL_EMAIL_ADDRESS_LABEL);
+    expect(host.querySelector(".pk-badge")).toBeNull();
+  });
+
   it("names the organization of a work-address contact", async () => {
     expect(await mount("Selected organization", false)).toBe("Selected organization");
   });

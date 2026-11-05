@@ -171,9 +171,9 @@ describe("sponsor capacity in the canonical portal session", () => {
     expect(attendees.status).toBe(200);
     const attendeeBody = (await attendees.json()) as { attendees: Array<Record<string, unknown>> };
     expect(attendeeBody.attendees.map((attendee) => attendee.email)).toEqual(["yes@attendee.test"]);
-    // Only the owner's allowlist reaches sponsors: no internal identifier and no flags.
+    // Sponsors receive contact data and mailbox classification, without internal identifiers.
     expect(Object.keys(attendeeBody.attendees[0]!).sort()).toEqual(
-      ["email", "firstName", "jobTitle", "lastName", "organizationName"].sort(),
+      ["email", "firstName", "jobTitle", "lastName", "organizationName", "personalEmail"].sort(),
     );
     expect(attendeeBody.attendees[0]).not.toHaveProperty("attendanceType");
     expect(attendeeBody.attendees[0]).not.toHaveProperty("days");
@@ -236,15 +236,17 @@ describe("sponsor capacity in the canonical portal session", () => {
     expect(response.status).toBe(200);
     const raw: unknown = await response.json();
     expect(raw).not.toHaveProperty("attendees.0.registrationId");
-    expect(raw).not.toHaveProperty("attendees.0.personalEmail");
+    expect(raw).toHaveProperty("attendees.0.personalEmail", true);
     const body = sponsorAttendeesListResponseSchema.parse(raw);
     expect(body.attendees[0]).toMatchObject({
       email: "synthetic.attendee@gmail.com",
-      organizationName: "Personal email address",
+      organizationName: null,
+      personalEmail: true,
     });
     expect(JSON.stringify(raw)).not.toContain("Selected synthetic organization");
     const csv = await (await call(getRequest(`${path}?format=csv`, token))).text();
-    expect(csv).toContain("Personal email address");
+    expect(csv.split("\r\n")[0]).toBe("First name,Last name,Email,Organization,Job title,Personal email address");
+    expect(csv).toContain(",synthetic.attendee@gmail.com,,,true");
     expect(csv).not.toContain("Selected synthetic organization");
     expect(csv).not.toContain(registrationId);
   });

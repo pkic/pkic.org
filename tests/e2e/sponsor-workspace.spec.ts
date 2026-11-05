@@ -186,12 +186,13 @@ test.describe("portal sponsor workspace", () => {
     });
     for (const row of raw.attendees) {
       expect(Object.keys(row).sort()).toEqual(
-        ["firstName", "lastName", "email", "organizationName", "jobTitle"].sort(),
+        ["firstName", "lastName", "email", "organizationName", "jobTitle", "personalEmail"].sort(),
       );
     }
-    expect(roster.attendees.find((row) => row.email === personalEmail)?.organizationName).toBe(
-      "Personal email address",
-    );
+    expect(roster.attendees.find((row) => row.email === personalEmail)).toMatchObject({
+      organizationName: null,
+      personalEmail: true,
+    });
     for (const [width, height, device] of [
       [1280, 900, "desktop"],
       [375, 812, "phone"],
@@ -214,7 +215,7 @@ test.describe("portal sponsor workspace", () => {
     expect(csv).toContain(personalEmail);
     expect(csv).toContain("Personal email address");
     expect(csv).not.toContain(deniedEmail);
-    expect(csv.split(/\r?\n/)[0]).toBe("First name,Last name,Email,Organization,Job title");
+    expect(csv.split(/\r?\n/)[0]).toBe("First name,Last name,Email,Organization,Job title,Personal email address");
     expect(csv).not.toContain(workRegistration.result.registrationId);
     expect(csv).not.toContain(personalRegistration.result.registrationId);
 

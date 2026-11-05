@@ -241,13 +241,13 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     expect(leads.leads).toHaveLength(1);
     const lead = leads.leads[0];
     expect(lead).toMatchObject({
-      userId: fixture.consenting.userId,
       email: fixture.email,
       name: `${fixture.firstName} ${fixture.lastName}`,
       organization: fixture.organization,
-      operatorUserId: fixture.operator.userId,
     });
-    expect(leads.leads.some((row) => row.userId === fixture.denied.userId)).toBe(false);
+    expect(JSON.stringify(leads)).not.toContain(fixture.denied.userId);
+    expect(lead).not.toHaveProperty("userId");
+    expect(lead).not.toHaveProperty("operatorUserId");
     const contacts = page.getByRole("region", { name: "Consenting leads", exact: true });
     await expect(contacts.getByText(fixture.email, { exact: true })).toBeVisible();
     const searched = page.waitForResponse((response) => {
@@ -265,7 +265,7 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     expect(historyResponse.status()).toBe(200);
     const history = sponsorLeadCapturesSchema.parse(await historyResponse.json());
     expect(history.captures).toHaveLength(4);
-    for (const row of history.captures) expect(row.operatorUserId).toBe(fixture.operator.userId);
+    for (const row of history.captures) expect(row).not.toHaveProperty("operatorUserId");
     expect(history.captures.map((row) => row.observedAt).sort()).toEqual(
       [
         first.request.observedAt,

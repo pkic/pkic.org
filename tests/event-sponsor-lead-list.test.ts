@@ -15,7 +15,6 @@ import {
 import { captureSponsorLead } from "../functions/_lib/services/event-participation/sponsor-leads";
 import { hashBadgeCredential } from "../functions/_lib/services/event-participation/scanning";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
-import { PERSONAL_EMAIL_ADDRESS_LABEL } from "../assets/shared/email-first-copy";
 import { exportSponsorLeads } from "../functions/_lib/services/event-participation/lead-export";
 import { eventContactAccessSql } from "../functions/_lib/services/event-participation/evidence-retention";
 import { listSponsorLeads } from "../functions/_lib/services/event-participation/lead-list";
@@ -180,7 +179,9 @@ describe("sponsor live lead viewing through the mounted API", () => {
       const page = sponsorLeadListSchema.parse(await response.json());
       expect(page.page.total).toBe(1);
       expect(page.leads).toHaveLength(1);
-      expect(page.leads[0]).toMatchObject({ userId: attendee!.user_id, email: attendee!.email });
+      expect(page.leads[0]).toMatchObject({ email: attendee!.email });
+      expect(page.leads[0]).not.toHaveProperty("userId");
+      expect(page.leads[0]).not.toHaveProperty("operatorUserId");
       pages.push(page);
     }
     expect(pages[1]).toEqual(pages[0]);
@@ -193,7 +194,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
       const history = sponsorLeadCapturesSchema.parse(await response.json());
       expect(history.page.total).toBe(2);
       expect(history.captures).toHaveLength(2);
-      expect(history.captures.map((row) => row.operatorUserId).sort()).toEqual([operator, secondOperator].sort());
+      expect(history.captures[0]).not.toHaveProperty("operatorUserId");
       expect(history.captures.map((row) => row.operatorName).sort()).toEqual(["Casey Scanner", "Jordan Colleague"]);
       histories.push(history);
       const csv = await read(actorToken, `${base}.csv`);
@@ -299,16 +300,25 @@ describe("sponsor live lead viewing through the mounted API", () => {
       .bind(identity, eventId, person.id)
       .run();
     const payload: unknown = await (await request(undefined, "?q=lead.person")).json();
-    expect(payload).not.toHaveProperty("leads.0.personalEmail");
+    expect(payload).toHaveProperty("leads.0.personalEmail", true);
+    expect(payload).not.toHaveProperty("leads.0.userId");
+    expect(payload).not.toHaveProperty("leads.0.operatorUserId");
+    expect(JSON.stringify(payload)).not.toContain(person.id);
+    expect(JSON.stringify(payload)).not.toContain(operator);
     const page = sponsorLeadListSchema.parse(payload);
-    // Sponsors get the organization as one text field: a consumer mailbox reads as such, with no separate flag.
     expect(page.leads).toEqual([
-      expect.objectContaining({ email: "lead.person@gmail.com", organization: "Personal email address" }),
+      expect.objectContaining({
+        email: "lead.person@gmail.com",
+        organization: null,
+        personalEmail: true,
+      }),
     ]);
-    expect(page.leads[0]).not.toHaveProperty("personalEmail");
     await grant("agenda:leads_export");
     const csv = await (await request(`/sponsors/${sponsorId}/leads.csv`)).text();
-    expect(csv).toContain(`,lead.person@gmail.com,${PERSONAL_EMAIL_ADDRESS_LABEL},`);
+    expect(csv.split("\r\n")[0]).toBe("Name,Email,Organization,Personal email address,Captured at");
+    expect(csv).toContain(",lead.person@gmail.com,,true,");
+    expect(csv).not.toContain(person.id);
+    expect(csv).not.toContain(operator);
     expect(csv).not.toContain("Selected organization");
   });
 
@@ -320,7 +330,6 @@ describe("sponsor live lead viewing through the mounted API", () => {
     expect(page.page).toEqual({ limit: 2, offset: 0, total: 3, hasMore: true });
     expect(page.leads.map((row) => row.name)).toEqual(["Person 0 Example", "Person 1 Example"]);
     expect(page.leads[0]).toMatchObject({
-      operatorUserId: operator,
       operatorName: "Casey Scanner",
       capturedAt: "2026-10-04T10:00:00.000Z",
     });
@@ -444,7 +453,6 @@ describe("sponsor live lead viewing through the mounted API", () => {
     expect(firstPage.page.total).toBe(2);
     expect(firstPage.page.hasMore).toBe(true);
     expect(firstPage.captures[0]).toMatchObject({
-      operatorUserId: operator,
       operatorName: "Casey Scanner",
       observedAt: "2026-10-04T10:00:00.000Z",
       receivedAt: "2026-10-04T11:00:00.000Z",
@@ -452,7 +460,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
     const last = sponsorLeadCapturesSchema.parse(
       await (await request(path, "?limit=1&offset=1&sort=receivedAt")).json(),
     );
-    expect(last.captures[0].operatorUserId).toBe(otherOperator);
+    expect(last.captures[0]).not.toHaveProperty("operatorUserId");
     expect(last.page.hasMore).toBe(false);
     const registrationId = await env.DB.prepare("SELECT id FROM registrations WHERE event_id=? AND user_id=?")
       .bind(eventId, lead!.user_id)

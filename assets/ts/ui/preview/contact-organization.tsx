@@ -1,11 +1,10 @@
 import { ContactOrganization } from "../../components/ContactOrganization";
-import { PERSONAL_EMAIL_ADDRESS_LABEL } from "../../../shared/email-first-copy";
 import type { PreviewSection } from "./PreviewShell";
 
 export const contactOrganizationSection: PreviewSection = {
   id: "contact-organization",
   title: "Contact organization",
-  note: "Organizers see the personal-address warning; sponsor lists receive one organization text field.",
+  note: "Organizers see the personal-address warning; sponsors see a neutral personal-address label.",
   render: () => (
     <div class="pk-stack">
       <div>
@@ -22,7 +21,7 @@ export const contactOrganizationSection: PreviewSection = {
       </div>
       <div>
         <p>Sponsor: personal address</p>
-        <p>{PERSONAL_EMAIL_ADDRESS_LABEL}</p>
+        <ContactOrganization audience="sponsor" organization={null} personalEmail />
       </div>
     </div>
   ),

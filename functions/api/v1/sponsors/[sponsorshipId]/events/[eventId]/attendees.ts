@@ -25,13 +25,14 @@ export const SponsorAttendeesList = openApiRoute(sponsorAttendeesListRouteSchema
     const attendees = await listSponsorAttendeesForExportWithAudit(db, session.identity.id, capacity, limits.maxRows);
     const csv = encodeBoundedCsv(
       [
-        ["First name", "Last name", "Email", "Organization", "Job title"],
+        ["First name", "Last name", "Email", "Organization", "Job title", "Personal email address"],
         ...attendees.map((attendee) => [
           attendee.firstName,
           attendee.lastName,
           attendee.email,
           attendee.organizationName,
           attendee.jobTitle,
+          attendee.personalEmail,
         ]),
       ],
       limits.maxBytes,

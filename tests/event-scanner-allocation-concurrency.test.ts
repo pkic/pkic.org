@@ -314,16 +314,14 @@ it("interleaves two prepared last-seat claims with online and delayed attendance
     const leadsResponse = await callApi(env, leadsPath, { headers: headers(secondToken) });
     expect(leadsResponse.status).toBe(200);
     const leads = sponsorLeadListSchema.parse(await leadsResponse.json());
-    expect(leads).toMatchObject({ page: { total: 1 }, leads: [{ userId: fixture.userId }] });
+    expect(leads).toMatchObject({ page: { total: 1 }, leads: [{ email: `${fixture.userId}@example.test` }] });
     const capturesResponse = await callApi(env, `${leadsPath}/${leads.leads[0]!.id}/captures`, {
       headers: headers(secondToken),
     });
     expect(capturesResponse.status).toBe(200);
     const captures = sponsorLeadCapturesSchema.parse(await capturesResponse.json());
     expect(captures.page.total).toBe(2);
-    expect(captures.captures.map((entry) => entry.operatorUserId).sort()).toEqual(
-      [fixture.operatorId, secondOperator].sort(),
-    );
+    for (const entry of captures.captures) expect(entry).not.toHaveProperty("operatorUserId");
     for (let replay = 0; replay < 2; replay++) {
       const receipts = await Promise.all(
         originals.map((entry, index) => receive(entry, index < 2 ? fixture.token : secondToken)),
