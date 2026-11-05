@@ -454,6 +454,18 @@ require a binary-capable API client, and multipart uploads and browser interacti
 are not provided by these helpers. Exposure documents an operation; it neither
 grants access nor promises compatibility with every API media type.
 
+MCP also advertises resource templates generated from exposed, read-only JSON
+GET operations. `resources/templates/list` returns 20 templates per page; pass
+`nextCursor` back as `cursor` to continue. Templates include the canonical path
+and query parameter names without embedding request or response schemas.
+For example, `resources/read` with `pkic://api/api/v1/events?limit=5` reads events.
+Reads use the same API adapter, validation, permissions, OAuth scope limits, and
+revocation checks as tools. Results are limited to 24,000 characters; narrow the
+query rather than fetching every page automatically. Ordinary API responses are
+unchanged. Clients must support MCP resources; template discovery does not imply
+auto-selection by an AI model. Known URIs can be read without discovery, while
+finding a nested template may require multiple discovery pages.
+
 ### MCP authorization lifetimes
 
 Email-authenticated and existing unmarked sessions retain the current staff

@@ -1,8 +1,9 @@
+import { registerApiResources } from "./resource-templates";
 import { withPreparedRequestAdmin } from "../auth/admin";
 import { readBoundedStream } from "../utils/bounded-stream";
 import { singleOperationExecutor } from "./single-operation-executor";
 import { prepareMcpRequestAuthorization } from "./request-authorization";
-import { CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ReadResourceRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { AppError } from "../errors";
 import { DynamicWorkerExecutor, type Executor, type ExecuteResult } from "@cloudflare/codemode";
 import type { RequestOptions } from "@cloudflare/codemode/mcp";
@@ -150,9 +151,9 @@ function createMcpResponse(options: McpWorkerOptions) {
     const rpc = CallToolRequestSchema.safeParse(message);
     const source = options.getOperationSource(request, env);
     const domainCall = rpc.success && !MCP_GENERIC_TOOLS.includes(rpc.data.params.name);
-    const execution = Boolean(
-      rpc.success && (["execute", "request", "batch_read"].includes(rpc.data.params.name) || domainCall),
-    );
+    const execution =
+      ReadResourceRequestSchema.safeParse(message).success ||
+      Boolean(rpc.success && (["execute", "request", "batch_read"].includes(rpc.data.params.name) || domainCall));
     const authorization = await (execution ? deferredAuthorizationHeaderForMcp : authorizationHeaderForMcp)(
       request,
       env,
@@ -169,6 +170,7 @@ function createMcpResponse(options: McpWorkerOptions) {
       { name: "pkic-api", version: "v1" },
       { jsonSchemaValidator: new CfWorkerJsonSchemaValidator() },
     );
+    registerApiResources(server, source, apiRequest);
     registerOperationTools(server, source);
     registerExecuteTools(server, singleOperationExecutor(mcpExecutor(env)), apiRequest);
     registerReadTools(server, apiRequest);

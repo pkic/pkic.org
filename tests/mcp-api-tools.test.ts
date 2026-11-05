@@ -8,7 +8,7 @@ import { filterOpenApiSpecForMcp } from "../functions/_lib/openapi/mcp";
 import { openapi } from "../functions/http-router";
 
 const env = { ...workerEnv, INTERNAL_SIGNING_SECRET: "synthetic-oauth-test-signing-secret-32-plus" };
-const { callTool, authorize, initialize } = createMcpOauthTestClient(env);
+const { call, callTool, authorize, initialize } = createMcpOauthTestClient(env);
 
 function value(result: { content: { type: string; text?: string }[] }) {
   return JSON.parse(result.content.find((item) => item.type === "text")!.text!);
@@ -18,6 +18,99 @@ describe("generic MCP API helpers", () => {
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
+  });
+
+  async function resourceRpc(token: string, method: string, params: Record<string, unknown> = {}) {
+    const response = await call("/api/v1/mcp", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 3, method, params }),
+    });
+    const text = await response.text();
+    expect(response.status, text).toBe(200);
+    return JSON.parse(
+      text.startsWith("event:")
+        ? text
+            .split("\n")
+            .find((line) => line.startsWith("data: "))!
+            .slice(6)
+        : text,
+    );
+  }
+
+  it("discovers the events template and reads it in two protocol calls", async () => {
+    const { access_token } = await authorize(undefined, ["events:read"]);
+    const initialized = await initialize(access_token);
+    expect(await initialized.text()).toContain('"resources"');
+    const discovered = await resourceRpc(access_token, "resources/templates/list");
+    expect(discovered.error).toBeUndefined();
+    expect(discovered.result.resourceTemplates.length).toBeLessThanOrEqual(20);
+    const template = discovered.result.resourceTemplates.find(
+      (item: { name: string }) => item.name === "GET /api/v1/events",
+    );
+    expect(template.uriTemplate).toContain("limit");
+    expect(discovered.result.nextCursor).toBeDefined();
+    const read = await resourceRpc(access_token, "resources/read", { uri: "pkic://api/api/v1/events?limit=1" });
+    expect(read.error).toBeUndefined();
+    const data = JSON.parse(read.result.contents[0].text);
+    expect(data.events).toHaveLength(1);
+    expect(data.page.limit).toBe(1);
+    const next = await resourceRpc(access_token, "resources/templates/list", { cursor: discovered.result.nextCursor });
+    expect(next.result.resourceTemplates[0].name).not.toBe(discovered.result.resourceTemplates[0].name);
+  });
+
+  it("preserves API validation and OAuth scope limits on resource reads", async () => {
+    const { access_token } = await authorize(undefined, ["users:read"]);
+    await env.DB.prepare("UPDATE events SET visibility='invitation_only' WHERE slug='pqc-2026'").run();
+    const read = await resourceRpc(access_token, "resources/read", { uri: "pkic://api/api/v1/events/pqc-2026" });
+    expect(JSON.parse(read.result.contents[0].text).error.code).toBe("EVENT_NOT_FOUND");
+    const invalid = await resourceRpc(access_token, "resources/read", { uri: "pkic://api/api/v1/events?limit=0" });
+    expect(JSON.parse(invalid.result.contents[0].text).error).toBeDefined();
+    for (const uri of [
+      "https://example.com/api/v1/events",
+      "pkic://api/api/v1/auth/oauth/token",
+      "pkic://api/api/v1/missing",
+    ]) {
+      const refused = await resourceRpc(access_token, "resources/read", { uri });
+      expect(refused.error).toBeDefined();
+      expect(refused.result).toBeUndefined();
+    }
+  });
+
+  it("refuses resource reads after the OAuth grant is revoked", async () => {
+    const grant = await authorize(undefined, ["events:read"]);
+    const headers = { cookie: `pkic_session=${grant.userToken}` };
+    const review = await call(`/api/v1/auth/oauth/authorizations/${grant.authorizationId}`, { headers });
+    const { authorization } = (await review.json()) as { authorization: { revision: string } };
+    expect(
+      (
+        await call(`/api/v1/auth/oauth/authorizations/${grant.authorizationId}/revoke`, {
+          method: "POST",
+          headers: { ...headers, "content-type": "application/json" },
+          body: JSON.stringify({ revision: authorization.revision }),
+        })
+      ).status,
+    ).toBe(200);
+    const response = await call("/api/v1/mcp", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${grant.access_token}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 4,
+        method: "resources/read",
+        params: { uri: "pkic://api/api/v1/events?limit=1" },
+      }),
+    });
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain("invalid_token");
   });
 
   it.each([["events:read"], ["events:read", "agenda:leads_capture"]] as const)(

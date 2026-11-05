@@ -11,6 +11,28 @@ import { openapi } from "../functions/http-router";
 import { filterOpenApiSpecForMcp } from "../functions/_lib/openapi/mcp";
 
 describe("MCP schema delivery", () => {
+  it("derives only safe JSON GET templates and their canonical query parameters", () => {
+    const get = { responses: { "200": { content: { "application/json": {} } } } };
+    const { templates } = buildMcpCatalog({
+      paths: {
+        "/api/v1/examples/{id}": {
+          parameters: [{ in: "query", name: "limit" }],
+          get: { ...get, parameters: [{ in: "query", name: "attendance_type" }] },
+          post: get,
+        },
+        "/api/v1/binary": { get: { responses: { "200": { content: { "image/png": {} } } } } },
+        "/api/v1/side-effect": { get: { ...get, "x-pkic-mcp": { readonly: false } } },
+      },
+    });
+    expect(templates).toEqual([
+      {
+        name: "GET /api/v1/examples/{id}",
+        uriTemplate: "pkic://api/api/v1/examples/{id}{?limit,attendance_type}",
+        mimeType: "application/json",
+      },
+    ]);
+  });
+
   it("loads only the compact index and a selected contract from build assets", async () => {
     const canonical = {
       paths: { "/api/v1/example": { post: { summary: "Example", requestBody: { sentinel: "canonical schema" } } } },
