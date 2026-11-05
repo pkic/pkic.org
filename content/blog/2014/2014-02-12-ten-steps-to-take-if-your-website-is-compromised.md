@@ -2,8 +2,6 @@
 authors:
 - Wayne Thayer
 date: "2014-02-12T20:00:50+00:00"
-dsq_thread_id:
-- 2248652651
 keywords:
 - encryption
 - csr

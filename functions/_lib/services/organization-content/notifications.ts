@@ -2,12 +2,12 @@ import { all } from "../../db/queries";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { prepareQueueEmailStatementWhen } from "../../email/outbox";
 import { staffPermissionPredicate } from "../../auth/permissions";
-import { sha256Hex } from "../../utils/crypto";
 import { nowIso } from "../../utils/time";
 import { emailPlainText } from "../../email/plain-text";
 import { reviewDigestSendAt } from "../../../../assets/shared/review-notifications";
 import { buildManagementLink } from "../management-links";
 import type { DatabaseLike, StatementLike } from "../../types";
+import { outboxIdForOperation } from "../../email/outbox-queue";
 
 const CONTENT_REVIEW_PERMISSION = "organizations:content-review";
 export const ORGANIZATION_CONTENT_REVIEW_DIGEST_TEMPLATE = "org-content-review-digest";
@@ -83,7 +83,7 @@ export async function queueOrganizationContentReviewDigests(
       return prepareQueueEmailStatementWhen(
         db,
         {
-          outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32),
+          outboxId: await outboxIdForOperation(idempotencyKey),
           idempotencyKey,
           templateKey: ORGANIZATION_CONTENT_REVIEW_DIGEST_TEMPLATE,
           recipientUserId: recipient.id,

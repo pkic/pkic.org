@@ -203,10 +203,27 @@ export async function getBadgePrintingContext(
   sponsorGroups?: z.infer<typeof badgeTemplateSponsorGroupSchema>[],
 ) {
   const basis = await prepareBadgePrintingBasis(db, eventId, sponsorGroups);
+  const { branding } = await loadBadgeSponsorArtwork(
+    environment,
+    basis.populations,
+    basis.template?.sponsorGroups ?? [],
+  );
+  await db.batch(basis.guards);
+  return { revision: basis.revision, template: basis.template, branding };
+}
+
+/** Load and validate artwork from an already authorized, canonical sponsor population. */
+export async function loadBadgeSponsorArtwork(
+  environment: Pick<Env, "ASSETS_BUCKET">,
+  populations: Awaited<ReturnType<typeof prepareBadgePrintingBasis>>["populations"],
+  sponsorGroups: z.infer<typeof badgeTemplateSponsorGroupSchema>[],
+) {
+  if (populations.event.length + populations.consortium.length > BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT)
+    throw new AppError(422, "BADGE_SPONSOR_LIMIT", "Use at most 40 sponsors in one badge template.");
   const logos = new Map<string, { id: string; name: string; svg: string }>();
   const capturedObjects: { key: string; etag: string }[] = [];
   let totalBytes = 0;
-  for (const row of [...basis.populations.consortium, ...basis.populations.event]) {
+  for (const row of [...populations.consortium, ...populations.event]) {
     if (logos.has(row.id)) continue;
     const key = row.logo_r2_key ?? row.sponsorship_logo_r2_key;
     if (!key || !/^(?:org-logos|sponsor-logos)\//.test(key) || key.split("/").includes(".."))
@@ -252,11 +269,11 @@ export async function getBadgePrintingContext(
     logos.set(row.id, { id: row.id, name: row.name, svg });
     capturedObjects.push({ key, etag: object.etag });
   }
-  const branding: BadgeTemplateSponsorGroup[] = (basis.template?.sponsorGroups ?? []).flatMap((group) => {
+  const branding: BadgeTemplateSponsorGroup[] = sponsorGroups.flatMap((group) => {
     const source = badgeSponsorGroupSource(group);
     const sponsors = [
       ...new Map(
-        basis.populations[source]
+        populations[source]
           .filter((row) => sourceTier(row, source) === group.tierName)
           .map((row) => [row.id, logos.get(row.id)!]),
       ).values(),
@@ -275,8 +292,7 @@ export async function getBadgePrintingContext(
     if (!current || current.etag !== captured.etag)
       throw new AppError(409, "BADGE_SPONSOR_CHANGED", "Sponsor artwork changed. Reload the print document.");
   }
-  await db.batch(basis.guards);
-  return { revision: basis.revision, template: basis.template, branding: checkedBranding.data };
+  return { branding: checkedBranding.data, capturedObjects };
 }
 
 /** Refusals that name a sponsor's stored artwork: organizers fix these, attendees cannot. */

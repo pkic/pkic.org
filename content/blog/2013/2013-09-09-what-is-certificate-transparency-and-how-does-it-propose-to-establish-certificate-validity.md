@@ -2,8 +2,6 @@
 authors:
 - CA Security Council
 date: "2013-09-09T15:00:52+00:00"
-dsq_thread_id:
-- 1942941130
 keywords:
 - timestamp
 - tls

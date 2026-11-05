@@ -6,7 +6,6 @@ description: A product at Level 5 defaults to quantum-safe algorithms, meets per
 summary: Level 5 is the gold standard — PQC is the default, performance is benchmarked, implementations are independently verified. The product is fully optimised for a post-quantum world.
 
 weight: 60
-sectionNav: true
 ---
 
 ## What Level 5 Means

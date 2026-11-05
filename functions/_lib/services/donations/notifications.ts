@@ -1,11 +1,11 @@
 import { buildBadgeAttachment } from "../../email/attachments";
 import { prepareQueueEmailStatement } from "../../email/outbox";
-import { sha256Hex } from "../../utils/crypto";
 import { prerenderDonationBadge } from "../og-badge-prerender";
 import { formatDonationAmount } from "./amount";
 import { getDonationBySession, type DonationRecord } from "./lifecycle";
 import { getOrCreateDonationPromoterForRecord } from "./promoter";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
+import { outboxIdForOperation } from "../../email/outbox-queue";
 
 export type DonationNotificationKind = "thank_you" | "payment_failed" | "expired";
 
@@ -109,7 +109,7 @@ export async function prepareDonationNotification(
 ): Promise<PreparedDonationNotification | null> {
   if (!donation.email) return null;
   const idempotencyKey = `donation:${donation.id}:${kind}`;
-  const outboxId = (await sha256Hex(idempotencyKey)).slice(0, 32);
+  const outboxId = await outboxIdForOperation(idempotencyKey);
   return kind === "thank_you"
     ? queueThankYou(db, env, donation, appBaseUrl, outboxId, idempotencyKey)
     : queueUnsuccessfulPayment(db, donation, kind, appBaseUrl, outboxId, idempotencyKey);

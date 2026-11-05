@@ -2,8 +2,6 @@
 authors:
 - CA Security Council
 date: "2013-02-25T15:32:34+00:00"
-dsq_thread_id:
-- 2037505082
 keywords:
 - rsa
 - pki

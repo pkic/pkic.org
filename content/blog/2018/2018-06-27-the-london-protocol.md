@@ -4,8 +4,6 @@ authors:
 categories:
 - Initiative
 date: "2018-06-27T13:00:15+00:00"
-dsq_thread_id:
-- 6753867873
 keywords:
 - extended validation
 - domain validated

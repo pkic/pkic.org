@@ -2,8 +2,6 @@
 authors:
 - Wayne Thayer
 date: "2013-08-13T17:50:22+00:00"
-dsq_thread_id:
-- 1982737917
 keywords:
 - malware
 - firefox

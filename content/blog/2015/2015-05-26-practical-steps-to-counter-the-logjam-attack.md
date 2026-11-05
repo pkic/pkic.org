@@ -2,8 +2,6 @@
 authors:
 - Kirk Hall
 date: "2015-05-26T16:00:54+00:00"
-dsq_thread_id:
-- 3794748637
 keywords:
 - https
 - vulnerability

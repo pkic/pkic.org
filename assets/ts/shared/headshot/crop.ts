@@ -16,11 +16,23 @@ import { dismissModalDialog, mountModalTemplate, openModalDialog } from "../moda
  * Resolves with a JPEG Blob on confirm, or null on cancel.
  */
 export function cropHeadshot(file: File): Promise<Blob | null> {
+  return cropImage(file);
+}
+
+export interface ImageCropOptions {
+  width: number;
+  height: number;
+  title: string;
+  confirmLabel: string;
+}
+
+/** Reuses the accessible photo crop dialog for a fixed output shape. */
+export function cropImage(file: File, options?: ImageCropOptions): Promise<Blob | null> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
-      img.onload = () => showCropModal(img, resolve, reject);
+      img.onload = () => showCropModal(img, resolve, reject, options);
       img.onerror = () => reject(new Error("Failed to decode image. Please try a different file."));
       img.src = reader.result as string;
     };
@@ -29,7 +41,12 @@ export function cropHeadshot(file: File): Promise<Blob | null> {
   });
 }
 
-function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void, fail: (error: Error) => void): void {
+function showCropModal(
+  img: HTMLImageElement,
+  done: (blob: Blob | null) => void,
+  fail: (error: Error) => void,
+  options?: ImageCropOptions,
+): void {
   // ── Get or create dialog from template ─────────────────────────────────────
   const dialog = mountModalTemplate("crop-headshot-template", "crop-headshot-modal", "Crop headshot");
   if (!dialog) {
@@ -51,6 +68,14 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void,
     return;
   }
 
+  if (options) {
+    canvas.width = options.width;
+    canvas.height = options.height;
+    dialog.querySelector(".crop-headshot-title")!.textContent = options.title;
+    canvas.setAttribute("aria-label", `${options.title} preview`);
+    confirmBtn.textContent = options.confirmLabel;
+    viewport.classList.add("crop-headshot-viewport--wide");
+  }
   const dialogEl = dialog;
   const preview = canvas;
   const context = ctx;
@@ -58,24 +83,29 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void,
   openModalDialog(dialog);
 
   // ── Initial scale (cover) ─────────────────────────────────────────────────
-  // Coordinates are fractions of the square, independent of borders and resizing.
-  const viewportSize = 1;
+  // Coordinates are fractions of the output width, independent of borders and resizing.
+  const viewportWidth = 1;
+  const viewportHeight = canvas.height / canvas.width;
   const naturalW = img.naturalWidth;
   const naturalH = img.naturalHeight;
-  const minDim = Math.min(naturalW, naturalH);
-  const fitScale = viewportSize / minDim;
+  const fitScale = Math.max(viewportWidth / naturalW, viewportHeight / naturalH);
+  if (options && fitScale > 1 / options.width) {
+    dismissModalDialog(dialog);
+    fail(new Error(`Choose an image large enough for a ${options.width} × ${options.height} crop.`));
+    return;
+  }
   const minScale = fitScale;
-  const maxScale = fitScale * 4;
+  const maxScale = options ? Math.max(fitScale, 1 / options.width) : fitScale * 4;
 
   let scale = fitScale;
-  let panX = -(naturalW * scale - viewportSize) / 2;
-  let panY = -(naturalH * scale - viewportSize) / 2;
+  let panX = -(naturalW * scale - viewportWidth) / 2;
+  let panY = -(naturalH * scale - viewportHeight) / 2;
 
   function clampPan(): void {
     const imgW = naturalW * scale;
     const imgH = naturalH * scale;
-    panX = Math.min(0, Math.max(viewportSize - imgW, panX));
-    panY = Math.min(0, Math.max(viewportSize - imgH, panY));
+    panX = Math.min(0, Math.max(viewportWidth - imgW, panX));
+    panY = Math.min(0, Math.max(viewportHeight - imgH, panY));
   }
 
   function renderCrop(): void {
@@ -83,8 +113,8 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void,
       img,
       -panX / scale,
       -panY / scale,
-      viewportSize / scale,
-      viewportSize / scale,
+      viewportWidth / scale,
+      viewportHeight / scale,
       0,
       0,
       preview.width,
@@ -117,7 +147,7 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void,
   viewport.addEventListener("pointermove", (e) => {
     if (!dragging) return;
     panX = panStartX + (e.clientX - dragStartX) / viewport.clientWidth;
-    panY = panStartY + (e.clientY - dragStartY) / viewport.clientHeight;
+    panY = panStartY + ((e.clientY - dragStartY) / viewport.clientHeight) * viewportHeight;
     clampPan();
     renderCrop();
   });
@@ -153,12 +183,12 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void,
   });
 
   // ── Zoom slider ───────────────────────────────────────────────────────────
-  slider.value = String(((fitScale - minScale) / (maxScale - minScale)) * 100);
+  slider.value = String(0);
 
   slider.addEventListener("input", () => {
     const newScale = minScale + (parseFloat(slider.value) / 100) * (maxScale - minScale);
-    const cx = viewportSize / 2;
-    const cy = viewportSize / 2;
+    const cx = viewportWidth / 2;
+    const cy = viewportHeight / 2;
     panX = cx - ((cx - panX) / scale) * newScale;
     panY = cy - ((cy - panY) / scale) * newScale;
     scale = newScale;
@@ -175,13 +205,13 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void,
       const newScale = Math.min(maxScale, Math.max(minScale, scale * (1 + delta)));
       const rect = viewport.getBoundingClientRect();
       const cx = (e.clientX - rect.left - viewport.clientLeft) / viewport.clientWidth;
-      const cy = (e.clientY - rect.top - viewport.clientTop) / viewport.clientHeight;
+      const cy = ((e.clientY - rect.top - viewport.clientTop) / viewport.clientHeight) * viewportHeight;
       panX = cx - ((cx - panX) / scale) * newScale;
       panY = cy - ((cy - panY) / scale) * newScale;
       scale = newScale;
       clampPan();
       renderCrop();
-      slider.value = String(((scale - minScale) / (maxScale - minScale)) * 100);
+      slider.value = String(maxScale === minScale ? 0 : ((scale - minScale) / (maxScale - minScale)) * 100);
     },
     { passive: false },
   );

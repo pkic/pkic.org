@@ -1302,7 +1302,7 @@ test("agenda compact and expanded views preserve tabs and session details", asyn
 
 test("historical agenda integrates recording, slide downloads, and moderator roles", async ({ page, request }) => {
   await openPublishedAgenda(page, "/events/2025/pqc-conference-kuala-lumpur-my/");
-  await page.getByRole("tab", { name: "Wednesday", exact: true }).click();
+  await page.getByRole("tab").filter({ hasText: "Wednesday" }).click();
   const panel = page.getByRole("tabpanel", { name: "Wednesday" });
   const opening = panel
     .locator(".pk-content-agenda__session")
@@ -1335,128 +1335,18 @@ test("historical agenda integrates recording, slide downloads, and moderator rol
   }
 });
 
-test("conference speaker-card variants preserve legacy aliases and render without inline styles", async ({
-  page,
-}, testInfo) => {
+test("historical agenda remains published after retiring static conference displays", async ({ request }) => {
   const route = "/events/2025/pqc-conference-kuala-lumpur-my/";
-  const data = await page.request.get(`${route}event-data.json`);
-  expect(data.status()).toBe(200);
-  const program = await data.json();
-  const violations: string[] = [];
-  page.on("console", (message) => {
-    if (/Content Security Policy|Refused to/i.test(message.text())) violations.push(message.text());
-  });
-  for (const variant of ["event-speakers", "event-speakers2"]) {
-    const response = await page.goto(`${route}${variant}.html#speaker=1`);
-    expect(response?.status()).toBe(200);
-    await expect(page.locator("#speaker-name")).toHaveText(program.speakers[0].name);
-    await expect(page.locator(".speaker-card-event-info")).toContainText(program.name);
-    expect(await page.locator("[style]").count()).toBe(0);
-    const image = page.locator("#speaker-photo img");
-    if (program.speakers[0].headshot) {
-      await expect(image).toBeVisible();
-      await expect
-        .poll(() => image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0))
-        .toBe(true);
-    }
-    await page.keyboard.press("ArrowRight");
-    await expect(page.locator("#speaker-name")).toHaveText(program.speakers[1].name);
-    await page.screenshot({ path: testInfo.outputPath(`${variant}.png`), fullPage: true });
-    const sitemap = await page.request.get("/sitemap-0.xml");
-    expect(await sitemap.text()).not.toContain(`${route}${variant}/`);
+  const release = sitePublicationReleaseSchema.parse(await (await request.get("/publication.json")).json());
+  for (const name of ["event-session", "event-speakers", "event-speakers2", "event-overlays"]) {
+    expect(release.files).not.toContain(`${route.slice(1)}${name}/index.html`);
+    expect(release.redirects.some(({ from }) => from === `${route}${name}.html`)).toBe(false);
   }
-  expect(violations).toEqual([]);
-});
-
-test("historical Kuala Lumpur session display preserves sponsors and presentation controls", async ({
-  page,
-}, testInfo) => {
-  const route = "/events/2025/pqc-conference-kuala-lumpur-my/";
-  const data = await page.request.get(`${route}event-data.json`);
-  const program = await data.json();
-  const date = Object.keys(program.agenda)[0];
-  const slot = program.agenda[date].find((entry: { sessions: unknown[] }) => entry.sessions.length > 1);
-  const parameters = new URLSearchParams({ day: date, time: slot.time, layout: "panel" });
-  const apiRequests: string[] = [];
-  const violations: string[] = [];
-  await page.route("**/api/**", async (request) => {
-    apiRequests.push(request.request().url());
-    await request.abort();
-  });
-  page.on("console", (message) => {
-    if (/Content Security Policy|Refused to/i.test(message.text())) violations.push(message.text());
-  });
-  const response = await page.goto(`${route}event-session.html#${parameters}`);
-  expect(response?.status()).toBe(200);
-  expect(await response!.text()).toContain("Kiosk verification sponsor");
-  await expect(page.getByRole("img", { name: /Kiosk verification sponsor/ })).toBeVisible();
-  await expect(page.locator("#title")).toHaveText(slot.sessions[0].title);
-  await expect(page.locator(".headshot-container").first()).toBeVisible();
-  await page.keyboard.press("ArrowRight");
-  await expect(page.locator("#title")).toHaveText(slot.sessions[1].title);
-  await expect(page.locator("#description")).not.toContainText("**");
-  await page.keyboard.press("+");
-  await expect(page.locator("#footer")).toBeHidden();
-  await page.keyboard.press("-");
-  await expect(page.locator("#footer")).toBeVisible();
-  const logo = await page.locator("#logo").boundingBox();
-  expect(logo!.height).toBeLessThan(60);
-  await page.screenshot({ path: testInfo.outputPath("conference-kiosk.png"), fullPage: true });
-  parameters.set("clean", "true");
-  parameters.set("showTitle", "true");
-  await page.evaluate((hash) => {
-    window.location.hash = hash;
-  }, parameters.toString());
-  await expect(page.locator("#header")).toBeHidden();
-  await expect(page.locator("#title")).toBeVisible();
-  expect(await page.locator("[style]").count()).toBe(0);
-  expect(apiRequests).toEqual([]);
-  expect(violations).toEqual([]);
-});
-
-test("conference broadcast overlays preserve speaker selection and diagnostic controls under CSP", async ({
-  page,
-}, testInfo) => {
-  const route = "/events/2025/pqc-conference-kuala-lumpur-my/";
-  const program = await (await page.request.get(`${route}event-data.json`)).json();
-  const speaker = program.speakers[0];
-  const date = Object.keys(program.agenda)[0];
-  const slot = program.agenda[date].find((entry: { sessions: { speakers: string[] }[] }) =>
-    entry.sessions.some((session) => session.speakers.length > 1),
-  );
-  const apiRequests: string[] = [];
-  const violations: string[] = [];
-  await page.route("**/api/**", async (request) => {
-    apiRequests.push(request.request().url());
-    await request.abort();
-  });
-  page.on("console", (message) => {
-    if (/Content Security Policy|Refused to/i.test(message.text())) violations.push(message.text());
-  });
-  const response = await page.goto(
-    `${route}event-overlays.html#${new URLSearchParams({ day: date, time: slot.time, debug: "true" })}`,
-  );
-  expect(response?.status()).toBe(200);
-  await expect(page.locator("#Name tspan")).not.toHaveText("No speaker scheduled");
-  await expect(page.locator("#debug-overlay")).toContainText("View mode: CURRENT");
-  const name = await page.locator("#Name tspan").textContent();
-  await page.keyboard.press("ArrowRight");
-  await expect(page.locator("#Name tspan")).not.toHaveText(name!);
-  const allMode = (await page.locator("#debug-overlay").textContent())!.includes("View mode: ALL");
-  await page.keyboard.press(" ");
-  await expect(page.locator("#debug-overlay")).toContainText(`View mode: ${allMode ? "CURRENT" : "ALL"}`);
-  expect(await page.locator("[style], style").count()).toBe(0);
-  expect(apiRequests).toEqual([]);
-  expect(violations).toEqual([]);
-  await page.evaluate(
-    (hash) => {
-      window.location.hash = hash;
-    },
-    new URLSearchParams({ name: speaker.name }).toString(),
-  );
-  await expect(page.locator("#debug-overlay")).toHaveCount(0);
-  await expect(page.locator("#Name tspan")).toHaveText(speaker.name);
-  await page.screenshot({ path: testInfo.outputPath("conference-overlays.png"), fullPage: true });
+  expect(release.files).not.toContain(`${route.slice(1)}event-data.json`);
+  for (const path of ["/questions.html", "/countdown.html", "/scripts/questions.js", "/scripts/countdown.js"]) {
+    expect((await request.get(path)).status()).toBe(404);
+  }
+  expect((await request.get(`${route}agenda.ics`)).status()).toBe(200);
 });
 
 test("proposal agreements show rejected and accepted states beside a primary Continue action", async ({ page }) => {

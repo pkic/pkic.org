@@ -1,3 +1,4 @@
+import { badgeOutputProgressSection } from "./badge-output-progress";
 import { TooltipPreview } from "./TooltipPreview";
 import { ServerSelectPreview } from "./ServerSelectPreview";
 import { RegistrationFieldsPreview } from "./RegistrationFieldsPreview";
@@ -8,6 +9,7 @@ import { contentContributionPreview } from "./ContentContributionPreview";
 import { pictureUploadSection } from "./picture-upload";
 import { contentSections } from "./sections-content";
 import { contactOrganizationSection } from "./contact-organization";
+import { sessionTimingSection } from "./session-timing";
 /**
  * Pattern catalog specimens.
  *
@@ -262,6 +264,7 @@ const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://ww
 export const patternSections: PreviewSection[] = [
   pictureUploadSection,
   contactOrganizationSection,
+  sessionTimingSection,
   {
     id: "choice-controls",
     title: "Choice controls",
@@ -590,4 +593,5 @@ export const patternSections: PreviewSection[] = [
     ),
   },
   contentContributionPreview,
+  badgeOutputProgressSection,
 ];

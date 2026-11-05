@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2013-05-10T19:40:27+00:00"
-dsq_thread_id:
-- 1997020829
 keywords:
 - ssl
 - etsi

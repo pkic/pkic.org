@@ -2,8 +2,6 @@
 authors:
 - Jeremy Rowley
 date: "2013-12-18T17:00:18+00:00"
-dsq_thread_id:
-- 2058909581
 keywords:
 - policy
 - casc

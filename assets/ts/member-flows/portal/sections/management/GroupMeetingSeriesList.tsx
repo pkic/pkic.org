@@ -9,7 +9,8 @@ import { downloadMeetingCalendar } from "./meeting-calendar-actions";
 import { Badge } from "../../../../components/Badge";
 import { EmptyState } from "../../../../ui/EmptyState";
 import { RowActions } from "../../../../ui/RowActions";
-import { fmt } from "../../ui";
+import { formatDateTimeWithSchedule } from "../../../../../shared/format-date";
+import { eventClock } from "../../../../../shared/event-clock";
 
 export function GroupMeetingSeriesList({
   groupId,
@@ -69,7 +70,7 @@ export function GroupMeetingSeriesList({
           // A date has a bounded length; the column says so instead of
           // wearing `pk-nowrap` while still claiming slack.
           header: "Next",
-          cell: (series) => fmt(series.nextOccurrenceAt ?? series.startsAt),
+          cell: (series) => formatDateTimeWithSchedule(series.nextOccurrenceAt ?? series.startsAt, eventClock(series)),
           width: "fit",
           sort: { asc: "next_occurrence_at", desc: "-next_occurrence_at", defaultDirection: "asc" },
         },

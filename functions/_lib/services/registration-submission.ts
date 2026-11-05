@@ -33,6 +33,7 @@ import {
 import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { prepareVerifyOwnedEmailStatements } from "./email-verification";
 import { normalizeEmail } from "../validation";
+import { prepareVerifiedRegistrationUserGuard, requireRegistrationUserProfile } from "./registrations/authorization";
 
 export interface PreparedRegistrationSubmission {
   user: UserRecord;
@@ -105,6 +106,9 @@ export async function prepareRegistrationSubmission(
   if (payload.verifiedIdentity && preparedUser.user.id !== payload.verifiedIdentity.userId) {
     throw new AppError(403, "REGISTRATION_IDENTITY_MISMATCH", "Registration identity does not match the session");
   }
+  // Registration uses the canonical account, not the submitted name fields.
+  // Existing accounts must correct invalid saved names through an owned profile write.
+  requireRegistrationUserProfile(preparedUser.user);
   const affiliation = payload.affiliationContext
     ? await planRegistrationAffiliation(
         db,
@@ -187,6 +191,7 @@ export async function prepareRegistrationSubmission(
   if (payload.termsSnapshotGuard) statements.push(payload.termsSnapshotGuard);
   if (payload.formRevisionGuard) statements.push(payload.formRevisionGuard);
   statements.push(...preparedUser.statements);
+  if (!preparedUser.created) statements.push(prepareVerifiedRegistrationUserGuard(db, preparedUser.user));
   if (personalIdentity)
     statements.push(prepareIndividualIdentityStatement(db, preparedUser.user.id, nowIso(), personalIdentity));
   if (payload.mailboxVerified)

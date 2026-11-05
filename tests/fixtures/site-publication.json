@@ -374,24 +374,6 @@
         ]
       }
     ],
-    "{\"limit\":200,\"offset\":0,\"sort\":\"-weight\",\"eventName\":\"Post-Quantum Cryptography Conference Kuala Lumpur 2025\",\"minWeight\":4}": [
-      {
-        "weight": 4,
-        "tierName": "Gold",
-        "sponsors": [
-          {
-            "id": "00000000-0000-4000-8000-000000000008",
-            "name": "Kiosk verification sponsor",
-            "website": "https://example.test/",
-            "logoUrl": "/favicon.svg",
-            "tier": null,
-            "eventTier": "Gold",
-            "effectiveTier": "Gold",
-            "weight": 4
-          }
-        ]
-      }
-    ],
     "{\"limit\":200,\"offset\":0,\"sort\":\"-weight\"}": [
       {
         "weight": 6,

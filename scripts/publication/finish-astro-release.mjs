@@ -33,7 +33,7 @@ import { publishAgendaLayout } from "./publish-agenda-layout.mjs";
 import { publicDiagramPublisher } from "./publish-diagrams.mjs";
 import { excludeNonindexableSitemapEntries } from "./exclude-nonindexable-sitemap-entries.mjs";
 import { publicEmailImagePublisher } from "./publish-email-images.mjs";
-import { collectConferenceOutputs, conferenceDisplayRedirects } from "./collect-conference-outputs.mjs";
+import { collectConferenceOutputs } from "./collect-conference-outputs.mjs";
 
 /** Verify the framework's generated pages before exposing them as a static release. */
 export async function finishAstroRelease(output, pages) {
@@ -213,7 +213,6 @@ async function finishRelease(output, pages, timings) {
     if (!files.some((file) => file.startsWith("members/"))) throw new Error("Publication contains no member pages");
     await timings.measure("Pagefind search", () => indexPublicPages(output));
     const redirects = [
-      ...conferenceDisplayRedirects(files),
       ...collectSessionRedirects(snapshot, files),
       ...JSON.parse(await readFile(resolve(publicationStagingDirectory(), "redirects.json"), "utf8")),
       ...socialCards.manifest.map(({ route, url }) => ({

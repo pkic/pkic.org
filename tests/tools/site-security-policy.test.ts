@@ -24,7 +24,7 @@ it("denies inline code, embedding, objects, and external API connections on ordi
   expect(policy).not.toContain("pkic.github.io");
 });
 
-it("limits payment, assessment, and presentation data permissions to their canonical paths", () => {
+it("limits payment and assessment permissions to their canonical paths", () => {
   const payment = siteContentSecurityPolicy("/donate/");
   expect(directive(payment, "script-src")).toContain("https://js.stripe.com");
   expect(directive(payment, "connect-src")).toContain("https://api.stripe.com");
@@ -36,9 +36,7 @@ it("limits payment, assessment, and presentation data permissions to their canon
   );
   expect(directive(siteContentSecurityPolicy("/wg/pkimm/assessment/"), "style-src-attr")).toBe("style-src-attr 'none'");
   expect(siteContentSecurityPolicy("/wg/pkimm/assessment-other/")).not.toContain("pkic.github.io");
-  expect(directive(siteContentSecurityPolicy("/questions.html"), "connect-src")).toContain(
-    "https://docs.google.com/spreadsheets/d/",
-  );
+  expect(directive(siteContentSecurityPolicy("/questions.html"), "connect-src")).toBe("connect-src 'self'");
 });
 
 it("keeps native Cloudflare headers identical to the canonical policy and within platform line limits", async () => {

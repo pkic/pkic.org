@@ -55,8 +55,7 @@ export function liveLowerThirdEmblemPoint(point: Point): Point {
 }
 
 /**
- * The lower third exactly as the brand drew it (the stream overlay's
- * 2500 x 417 drawing in `assets/js/event-overlays.js`): the white name bar,
+ * The lower third in the brand's 2500 x 417 drawing: the white name bar,
  * whose left edge runs under the orange seat, the wider grey title bar set
  * off to the right of the name, and the emblem's parts in the drawing's own
  * coordinates. The emblem is drawn over the bars, so its orange seat is the

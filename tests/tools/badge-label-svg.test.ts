@@ -89,3 +89,45 @@ describe("Brother attendee labels", () => {
     expect(svg).not.toContain("null");
   });
 });
+
+it("draws decodable labels directly from authorized compact data without an intermediate QR image", async () => {
+  const credential = "23456789ABCDEFGH";
+  const svg = badgeLabelSvg(
+    {
+      svg: "",
+      credential,
+      firstName: "Alex",
+      lastName: "Example",
+      displayName: "Alex Example",
+      jobTitle: null,
+      organization: null,
+    },
+    38,
+    89.8,
+  );
+  expect(svg).not.toContain("<image");
+  expect(svg).toContain("2345-6789-ABCD-EFGH");
+  const raster = await sharp(Buffer.from(svg), { density: 300 })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  expect(jsQR(new Uint8ClampedArray(raster.data), raster.info.width, raster.info.height)?.data).toBe(credential);
+});
+
+it("refuses a supplied code that disagrees with the existing badge", async () => {
+  const svg = composeBadgePrintSvg(
+    await QRCode.toString("ABCDEFGHJKLMNPQR", { type: "svg", margin: 4 }),
+    "ABCDEFGHJKLMNPQR",
+  );
+  expect(() =>
+    badgeLabelSvg({
+      svg,
+      credential: "23456789ABCDEFGH",
+      firstName: "Alex",
+      lastName: "Example",
+      displayName: "Alex Example",
+      jobTitle: null,
+      organization: null,
+    }),
+  ).toThrow("do not match");
+});

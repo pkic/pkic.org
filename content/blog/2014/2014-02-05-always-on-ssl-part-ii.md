@@ -4,8 +4,6 @@ authors:
 categories:
 - General
 date: "2014-02-05T20:30:25+00:00"
-dsq_thread_id:
-- 2220757524
 keywords:
 - tls
 - firefox

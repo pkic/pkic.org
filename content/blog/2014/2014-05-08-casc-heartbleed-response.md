@@ -2,8 +2,6 @@
 authors:
 - CA Security Council
 date: "2014-05-08T15:45:14+00:00"
-dsq_thread_id:
-- 2670224904
 keywords:
 - google
 - crlsets

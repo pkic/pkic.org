@@ -12,7 +12,7 @@ function PrintDeskExample() {
   const [labels, setLabels] = useState(2);
   const [sides, setSides] = useState<BadgePrintLayout["sides"]>("front_back");
   return (
-    <div data-gallery-open>
+    <div>
       <BadgeLabelDeskView
         video={createRef()}
         cameraActive={false}

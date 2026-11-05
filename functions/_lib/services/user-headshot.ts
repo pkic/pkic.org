@@ -407,7 +407,18 @@ export async function currentUserHeadshotResponse(
     "SELECT headshot_r2_key FROM users WHERE id = ?",
     [userId],
   );
-  const storedKey = current?.headshot_r2_key ?? null;
+  return userHeadshotFileResponse(env, userId, requestedFile, current?.headshot_r2_key ?? null, rendition, request);
+}
+
+/** Serve a file using its canonical pointer from an authorized source snapshot. */
+export async function userHeadshotFileResponse(
+  env: Pick<Env, "ASSETS_BUCKET" | "SPEAKER_UPLOADS_BUCKET" | "IMAGES">,
+  userId: string,
+  requestedFile: string,
+  storedKey: string | null,
+  rendition?: { width: HeadshotVariantWidth; origin: string },
+  request?: Request,
+): Promise<Response> {
   if (!storedKey || userHeadshotKeyFile(storedKey) !== requestedFile) {
     throw new AppError(404, "NOT_FOUND", "Headshot not found");
   }

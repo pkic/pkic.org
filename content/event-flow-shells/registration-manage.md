@@ -4,9 +4,7 @@ url: /_event-flow-shells/registration-manage/
 robots: noindex
 sitemap:
   disable: true
-build:
-  list: never
-  publishResources: false
+
 ---
 
 ## Manage your registration

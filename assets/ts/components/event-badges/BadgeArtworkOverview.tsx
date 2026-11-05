@@ -4,7 +4,8 @@ import { getJson } from "../../shared/api-client";
 import { badgePrintingResponseSchema } from "../../../shared/schemas/route-contracts-event-badges";
 import { BADGE_LABEL_PRINTING_CONTEXT } from "../../../shared/badge-label-policy";
 import type { BadgePrintAction } from "../../../shared/schemas/event-badge-printing";
-import { BadgePrintPreview } from "./BadgePrintPreview";
+import { BadgePrintCommand } from "./BadgePrintCommand";
+import { BadgeOutputProgress } from "./BadgeOutputProgress";
 import { BadgeFace } from "./BadgeFace";
 import type { PrintableBadgePrint } from "./badge-print-artifacts";
 import { SectionHeading } from "../../ui/SectionHeading";
@@ -26,8 +27,14 @@ export function BadgeArtworkOverview({
   const badges = useMemo(() => [badge], [badge]);
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/badges/printing`;
   const printing = useData(() => getJson(endpoint, badgePrintingResponseSchema), [endpoint]);
-  const [output, setOutput] = useState<{ action: BadgePrintAction; id: string } | null>(null);
-  const print = (action: BadgePrintAction) => setOutput({ action, id: crypto.randomUUID() });
+  const [output, setOutput] = useState<{ action: Exclude<BadgePrintAction, "preview">; id: string } | null>(null);
+  const [progress, setProgress] = useState("Preparing print file…");
+  const [error, setError] = useState("");
+  const print = (action: Exclude<BadgePrintAction, "preview">) => {
+    setError("");
+    setProgress("Preparing print file…");
+    setOutput({ action, id: crypto.randomUUID() });
+  };
   return (
     <div class="pk-stack">
       <div class="pk-cluster">
@@ -60,14 +67,31 @@ export function BadgeArtworkOverview({
         </section>
       </div>
       {output && (
-        <BadgePrintPreview
-          key={output.id}
-          badges={badges}
-          action={output.action}
-          printing={BADGE_LABEL_PRINTING_CONTEXT}
-          beforeRelease={beforeRelease}
-          loadPrintingContext={() => getJson(endpoint, badgePrintingResponseSchema)}
-        />
+        <BadgeOutputProgress
+          title={
+            output.action === "label_csv"
+              ? "Download labels CSV"
+              : output.action === "badges"
+                ? "Print badge"
+                : "Print label"
+          }
+          progress={progress}
+          error={error}
+          onClose={() => setOutput(null)}
+        >
+          {!error && (
+            <BadgePrintCommand
+              key={output.id}
+              badges={badges}
+              action={output.action}
+              beforeRelease={beforeRelease}
+              loadPrintingContext={() => getJson(endpoint, badgePrintingResponseSchema)}
+              onProgress={setProgress}
+              onComplete={() => setOutput(null)}
+              onError={setError}
+            />
+          )}
+        </BadgeOutputProgress>
       )}
     </div>
   );

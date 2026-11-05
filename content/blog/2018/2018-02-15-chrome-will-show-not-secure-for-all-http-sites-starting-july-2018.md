@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2018-02-15T18:30:48+00:00"
-dsq_thread_id:
-- 6482214748
 keywords:
 - hsts
 - android

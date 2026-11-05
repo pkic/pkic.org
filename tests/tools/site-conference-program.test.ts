@@ -6,10 +6,8 @@ import ICAL from "ical.js";
 import { publishedConferenceProgram } from "../../functions/_lib/services/site-conference-program";
 import { conferenceAgendaCalendar } from "../../functions/_lib/services/site-conference-calendar";
 import { parseFrontMatter } from "../../functions/_lib/services/site-markdown";
-import {
-  collectConferenceOutputs,
-  conferenceDisplayRedirects,
-} from "../../scripts/publication/collect-conference-outputs.mjs";
+import { collectSiteSponsorSelections } from "../../functions/_lib/services/site-sponsor-selections";
+import { collectConferenceOutputs } from "../../scripts/publication/collect-conference-outputs.mjs";
 
 describe("conference publication outputs", () => {
   it.each([
@@ -117,23 +115,16 @@ describe("conference publication outputs", () => {
     expect(second.getFirstProperty("conference")).toBeNull();
   });
 
-  it("redirects only generated conference display aliases", () => {
-    expect(
-      conferenceDisplayRedirects([
-        "events/synthetic/event-speakers/index.html",
-        "events/synthetic/event-speakers2/index.html",
-        "events/synthetic/event-session/index.html",
-        "events/synthetic/event-overlays/index.html",
-        "events/synthetic/index.html",
-        "events/synthetic/event-data.json",
-      ]),
-    ).toEqual(
-      ["event-speakers", "event-speakers2", "event-session", "event-overlays"].map((name) => ({
-        from: `/events/synthetic/${name}.html`,
-        to: `/events/synthetic/${name}/`,
-        status: 301,
-      })),
-    );
+  it("retains authored sponsor selections for public pages", () => {
+    const selections = collectSiteSponsorSelections([
+      {
+        body: '{{< sponsors event-slug="synthetic-event" level="all" >}}',
+        sponsor: { eventSlug: "synthetic-event", minimumWeight: 5 },
+      },
+    ]);
+    expect(selections).toContainEqual({});
+    expect(selections).toContainEqual({ mode: "strip", eventSlug: "synthetic-event", minWeight: "5" });
+    expect(selections).toContainEqual({ "event-slug": "synthetic-event", level: "all" });
   });
 
   it("owns generated JSON and calendar endpoints in the release and detects their withdrawal", async () => {
@@ -141,7 +132,6 @@ describe("conference publication outputs", () => {
     try {
       const directory = resolve(output, "events", "synthetic");
       await mkdir(directory, { recursive: true });
-      await writeFile(resolve(directory, "event-data.json"), JSON.stringify(program()));
       await writeFile(
         resolve(directory, "agenda.ics"),
         conferenceAgendaCalendar(program(), "https://pkic.org/events/synthetic/", "2025-01-01T00:00:00.000Z"),
@@ -158,15 +148,13 @@ describe("conference publication outputs", () => {
         "events/synthetic/agenda.ics",
         "events/synthetic/agenda/calendar.ics",
         "events/synthetic/agenda/data.json",
-        "events/synthetic/event-data.json",
       ]);
-      await rm(resolve(directory, "event-data.json"));
+      await rm(resolve(agendaDirectory, "data.json"));
       expect(await collectConferenceOutputs(output)).toEqual([
         "events/synthetic/agenda.ics",
         "events/synthetic/agenda/calendar.ics",
-        "events/synthetic/agenda/data.json",
       ]);
-      await writeFile(resolve(directory, "event-data.json"), "{}");
+      await writeFile(resolve(agendaDirectory, "data.json"), "{}");
       await expect(collectConferenceOutputs(output)).rejects.toThrow();
     } finally {
       await rm(output, { recursive: true, force: true });

@@ -1,3 +1,8 @@
+import { downloadOwnPromotionPdf } from "../../../../../_lib/services/event-agenda/promotion-pdf-download";
+import {
+  promotionPdfExportRouteSchema,
+  eventPromotionPdfExportRouteSchema,
+} from "../../../../../../assets/shared/schemas/route-contracts-event-promotion";
 import { downloadOwnPromotionArtifact } from "../../../../../_lib/services/event-agenda/promotion-artifact-download";
 import { queueOwnPromotionRenders } from "../../../../../_lib/services/event-agenda/promotion-render-command";
 import { readOwnPromotionSessions } from "../../../../../_lib/services/event-agenda/promotion-session-list";
@@ -29,7 +34,7 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { savePromotionCopyRequest } from "../../../../../_lib/services/event-agenda/promotion-copy-command";
-async function ownKit(c: AdminContext, eventSlug: string, occurrenceId: string | null) {
+async function ownKit(c: AdminContext, eventSlug: string, occurrenceId: string | null, targetUserId?: string) {
   return readOwnPromotionRequest(
     requestDb(c),
     c.req.raw,
@@ -37,11 +42,13 @@ async function ownKit(c: AdminContext, eventSlug: string, occurrenceId: string |
     eventSlug,
     occurrenceId,
     resolveAppBaseUrl(c.env, c.req.raw),
+    false,
+    targetUserId,
   );
 }
 
 export const PromotionKitGet = openApiRoute(promotionKitGetRouteSchema, async (c, data) =>
-  json((await ownKit(c, data.params.eventSlug, data.params.occurrenceId)).kit),
+  json((await ownKit(c, data.params.eventSlug, data.params.occurrenceId, data.query.userId)).kit),
 );
 export const PromotionCopySave = openApiRoute(promotionCopySaveRouteSchema, async (c, data) =>
   json(
@@ -99,7 +106,7 @@ export const PromotionCompositionSave = openApiRoute(promotionCompositionSaveRou
   saveOwn(c, data.params.eventSlug, data.params.occurrenceId, data.body),
 );
 export const EventPromotionGet = openApiRoute(eventPromotionGetRouteSchema, async (c, data) =>
-  json((await ownKit(c, data.params.eventSlug, null)).kit),
+  json((await ownKit(c, data.params.eventSlug, null, data.query.userId)).kit),
 );
 export const EventPromotionCompositionSave = openApiRoute(eventPromotionCompositionSaveRouteSchema, async (c, data) =>
   saveOwn(c, data.params.eventSlug, null, data.body),
@@ -145,6 +152,7 @@ export const PromotionKitInitialize = openApiRoute(promotionKitInitializeRouteSc
         data.params.occurrenceId,
         resolveAppBaseUrl(c.env, c.req.raw),
         true,
+        data.query.userId,
       )
     ).kit,
   ),
@@ -160,7 +168,33 @@ export const EventPromotionInitialize = openApiRoute(eventPromotionInitializeRou
         null,
         resolveAppBaseUrl(c.env, c.req.raw),
         true,
+        data.query.userId,
       )
     ).kit,
+  ),
+);
+
+export const PromotionPdfExport = openApiRoute(promotionPdfExportRouteSchema, async (c, data) =>
+  downloadOwnPromotionPdf(
+    requestDb(c),
+    c.req.raw,
+    c.env,
+    data.params.eventSlug,
+    data.params.occurrenceId,
+    resolveAppBaseUrl(c.env, c.req.raw),
+    data.body,
+    data.query.userId,
+  ),
+);
+export const EventPromotionPdfExport = openApiRoute(eventPromotionPdfExportRouteSchema, async (c, data) =>
+  downloadOwnPromotionPdf(
+    requestDb(c),
+    c.req.raw,
+    c.env,
+    data.params.eventSlug,
+    null,
+    resolveAppBaseUrl(c.env, c.req.raw),
+    data.body,
+    data.query.userId,
   ),
 );

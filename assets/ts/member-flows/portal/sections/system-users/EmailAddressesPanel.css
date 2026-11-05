@@ -3,6 +3,8 @@
 @layer components {
   .pk-email-address {
     display: inline-flex;
+    flex-wrap: wrap;
+    overflow-wrap: anywhere;
     align-items: center;
     gap: var(--pk-1);
   }

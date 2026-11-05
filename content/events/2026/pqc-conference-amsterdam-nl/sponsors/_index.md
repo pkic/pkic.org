@@ -4,7 +4,7 @@ title: Sponsors — PQC Conference Amsterdam 2026
 linkTitle: Sponsors
 weight: 40
 summary: Sponsor the world's leading post-quantum cryptography conference and put your organisation in front of 800+ decision-makers who are actively procuring PQC-ready solutions.
-layout: single
+
 ---
 
 Sponsoring the 2026 PQC Conference places your organisation in front of the most concentrated audience of post-quantum cryptography decision-makers in the world — practitioners who are actively specifying and procuring PQC-ready solutions across enterprise, government, and critical infrastructure.

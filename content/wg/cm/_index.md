@@ -20,7 +20,6 @@ heroButton:
 
 wgID: CM
 color: orange
-sectionNav: true
 
 cascade:
   params:

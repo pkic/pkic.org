@@ -59,12 +59,14 @@ export function GroupEventRegistrations({
   eventSlug,
   badgesPath,
   onPrint,
+  onOpenPromotion,
 }: {
   groupId: string;
   eventId: string;
   canManage?: boolean;
   eventSlug?: string;
   badgesPath?: string;
+  onOpenPromotion?: (userId: string, name?: string) => void;
   onPrint?: (scope: BadgePrintScope, action?: BadgePrintAction) => void;
 }) {
   const startPrinting = (scope: BadgePrintScope, action: BadgePrintAction = "preview") => onPrint?.(scope, action);
@@ -259,6 +261,16 @@ export function GroupEventRegistrations({
                     <RowActions
                       subject={registration.display_name ?? registration.user_email ?? "this attendee"}
                       actions={[
+                        ...(onOpenPromotion && eventSlug
+                          ? [
+                              {
+                                id: "promotion-materials",
+                                label: "Open promotion materials",
+                                onSelect: () =>
+                                  onOpenPromotion(registration.user_id, registration.display_name ?? undefined),
+                              },
+                            ]
+                          : []),
                         ...registrationOutputMenuItems({
                           onPrint:
                             eventSlug && onPrint

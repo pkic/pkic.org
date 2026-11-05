@@ -38,12 +38,13 @@ import { pendingScanCount } from "./scan-outbox";
 import { useScannerOutboxSync } from "./useScannerOutboxSync";
 import "./EventScanner.css";
 import { FastScannerView } from "./FastScannerView";
-import { enterScannerFullscreen } from "./immersive-scanner";
+import { useScannerPresentation } from "./useScannerPresentation";
 import { useScanCooldown } from "./useScanCooldown";
 import { useScannerSyncHistory } from "./useScannerSyncHistory";
 import { scannerPreparationRefusal } from "./scanner-offline-context";
 export function EventScannerCapture({
   slug,
+  printHref,
   operatorUserId,
   occurrenceId = null,
   sponsorId,
@@ -55,9 +56,7 @@ export function EventScannerCapture({
 }: EventScannerProps) {
   const refusePreparation = scannerPreparationRefusal(portalSession.value, operatorUserId);
   const [badgeId, setBadge] = useState("");
-  const [action, setAction] = useState<EventScanRequest["action"]>(
-    scannerInitialAction(allowedActions, collectorContext?.action, Boolean(sponsorId)),
-  );
+  const [action, setAction] = useState(scannerInitialAction(allowedActions, collectorContext?.action, !!sponsorId));
   const [scannerTab, setScannerTab] = useHashQueryParam("scannerTab", "scan", ["scan", "recent", "diagnostics"]);
   const recentVisible = scannerTab === "recent" && !collectorContext;
   const [consentConfirmed, setConsent] = useState(false);
@@ -98,6 +97,7 @@ export function EventScannerCapture({
   const cooldown = useScanCooldown(feedbackPause);
   const [preview, setPreview] = useState(false);
   const scannerShell = useRef<HTMLDivElement>(null);
+  const { presentation, enter: enterPresentation, toggle: togglePresentation } = useScannerPresentation(scannerShell);
   const badgeCamera = useScannerCamera((raw) => void scanCredential(raw, true));
   const manual = useScannerManualEntry(fastMode, badgeCamera.stop, () => void camera());
   const { open: manualOpen, focusRequested: manualFocusRequested, paused: manualPaused } = manual;
@@ -142,6 +142,7 @@ export function EventScannerCapture({
       badgeCamera.stop();
       cooldown.reset();
     },
+    presentation === "fullscreen",
   );
   const scannerLifecycle = useRef({ manualPaused, badgeCamera });
   scannerLifecycle.current = { manualPaused, badgeCamera };
@@ -349,7 +350,7 @@ export function EventScannerCapture({
     sound.unlock();
     manualPaused.current = false;
     if (!allowedActions.includes(action) || !scannerDevice.ready) return;
-    if (scannerShell.current) enterScannerFullscreen(scannerShell.current);
+    enterPresentation();
     lastOperation.current = null;
     setResult(null);
     setMessage(scannerStartMessage(manifestReady, Boolean(collectorContext), action));
@@ -474,6 +475,7 @@ export function EventScannerCapture({
                 collector={collectorContext}
                 onCheckSignIn={onCheckSignIn}
                 setup={{
+                  printHref,
                   operatorUserId,
                   sponsorOnly: action === "lead",
                   explicitTarget: Boolean(occurrenceId),
@@ -549,6 +551,8 @@ export function EventScannerCapture({
       />
       {fastMode && (
         <FastScannerView
+          presentation={presentation}
+          onPresentation={togglePresentation}
           canRecordAttendance={!collectorContext && allowedActions.includes("attendance")}
           context={contextLabel}
           lastResult={lastResult}
@@ -587,7 +591,7 @@ export function EventScannerCapture({
       <ScannerCamera
         video={badgeCamera.video}
         cameraActive={badgeCamera.active}
-        fastMode={fastMode}
+        fastMode={fastMode && presentation === "fullscreen"}
         preview={preview}
       />
     </div>

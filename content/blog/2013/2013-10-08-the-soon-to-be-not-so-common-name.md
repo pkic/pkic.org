@@ -2,8 +2,6 @@
 authors:
 - Ryan Hurst
 date: "2013-10-08T16:00:21+00:00"
-dsq_thread_id:
-- 1938402928
 keywords:
 - crl
 - ca/browser forum

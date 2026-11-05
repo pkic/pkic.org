@@ -1,5 +1,4 @@
-import type { PreparedUserSessionRead } from "../../auth/user-session-request";
-import { createUserBackedAuthAdmin } from "../../auth/admin-identity";
+import type { PreparedRequestViewerRead } from "../../auth/optional-request-viewer";
 import { hasPermission, permissionAuthorizationEvidenceForResource } from "../../auth/permissions";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
@@ -21,11 +20,9 @@ import { eventManagementCapabilities } from "./capabilities";
  * JWT identity plans the queries; it never supplies permissions. Canonical live
  * session decoding and SQL row authority share the resource's one D1 snapshot.
  */
-export async function readEventDetailPage(db: DatabaseLike, eventSlug: string, auth: PreparedUserSessionRead | null) {
-  const userId = auth?.claims.sub ?? null;
-  const subject = auth
-    ? createUserBackedAuthAdmin({ id: auth.claims.sub, sessionId: auth.claims.sid, email: "" })
-    : null;
+export async function readEventDetailPage(db: DatabaseLike, eventSlug: string, auth: PreparedRequestViewerRead | null) {
+  const userId = auth?.userId ?? null;
+  const subject = auth?.permissionActor ?? null;
   const queryViewer = { userId, ...(subject ? { admin: subject } : {}) };
   const selection = { slug: eventSlug };
   const managementAuthority = subject
@@ -43,21 +40,26 @@ export async function readEventDetailPage(db: DatabaseLike, eventSlug: string, a
     call.statement,
   ]);
   // No projection is released until the canonical session, idle, identity and sign-in policy passes.
-  const session = auth ? await auth.decode(loaded.slice(0, authentication.length)) : null;
+  const resolved = auth ? await auth.decode(loaded.slice(0, authentication.length)) : null;
+  const staff = resolved?.staff;
   const [audienceResult, managementResult, participationResult, viewerResult, sponsorsResult, callResult] =
     loaded.slice(authentication.length);
   const audience = batchFirst<EventAudienceRow>(audienceResult);
   const management = batchFirst<EventDetailRow>(managementResult);
   const row = audience ?? management;
   if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found or not visible to this caller");
-  const viewer = eventAudienceViewer(session);
+  const viewer = {
+    ...eventAudienceViewer(resolved?.session ?? null),
+    admin: staff,
+    scannerGrants: staff?.grants ?? [],
+  };
   const access = decodeEventAudienceAccess(viewer, [row.id], batchRows<EventAudienceSponsorRow>(sponsorsResult)).get(
     row.id,
   );
   const context = { type: "event", id: row.id };
   const event =
-    management && session?.staff && hasPermission(session.staff, "events:read", context)
-      ? decodeEventDetail(management, eventManagementCapabilities(session.staff, context), access?.scannerAccess)
+    management && staff && hasPermission(staff, "events:read", context)
+      ? decodeEventDetail(management, eventManagementCapabilities(staff, context), access?.scannerAccess)
       : audience
         ? mapEventAudience(
             audience,

@@ -2,8 +2,6 @@
 authors:
 - Wayne Thayer
 date: "2014-02-26T17:30:34+00:00"
-dsq_thread_id:
-- 2295145224
 keywords:
 - microsoft
 - ssl

@@ -1,3 +1,4 @@
+import * as badgeFrame from "../../assets/ts/components/event-badges/BadgeDocumentFrame";
 import { createGenericBadgeTemplate } from "../../assets/shared/badge-generic-template";
 import { badgeLabelSvg } from "../../assets/shared/badge-label-svg";
 // @vitest-environment jsdom
@@ -138,28 +139,12 @@ describe("authorized badge reprinting", () => {
         view === "record" ? (
           <BadgeCredentials slug="workshop" basePath={BASE} credentialId={ID} />
         ) : (
-          <BadgeCredentials
-            slug="workshop"
-            basePath={BASE}
-            userId={metadata.userId}
-            eventId={metadata.eventId}
-            onPrintClose={vi.fn()}
-            printRequest={{ scope: { kind: "selected", rows: [] }, session: null }}
-          />
+          <BadgeCredentials slug="workshop" basePath={BASE} userId={metadata.userId} eventId={metadata.eventId} />
         ),
       );
       if (view === "scoped") {
         await rendered(() => expect(navigate).toHaveBeenCalledWith(`${BASE}/${ID}`, { replace: true }));
-        await mount(
-          <BadgeCredentials
-            slug="workshop"
-            basePath={BASE}
-            credentialId={ID}
-            eventId={metadata.eventId}
-            onPrintClose={vi.fn()}
-            printRequest={{ scope: { kind: "selected", rows: [] }, session: null }}
-          />,
-        );
+        await mount(<BadgeCredentials slug="workshop" basePath={BASE} credentialId={ID} eventId={metadata.eventId} />);
       }
       await rendered(() => expect(host.querySelector('iframe[title="Attendee label"]')).not.toBeNull());
       expect(badgeLabelRequestSchema.parse(bodies[0])).toMatchObject({ source: "badge", badgeId: ID });
@@ -171,6 +156,10 @@ describe("authorized badge reprinting", () => {
   );
 
   it("keeps an in-flight badge artwork load through an unchanged portal rerender", async () => {
+    const frame = vi
+      .spyOn(badgeFrame, "BadgeDocumentFrame")
+      .mockImplementation(({ title, html, frameRef }) => <iframe title={title} srcDoc={html} ref={frameRef} />);
+
     const artwork = {
       ...printing,
       template: createGenericBadgeTemplate({ eventName: "Stable artwork", sponsorGroups: [] }),
@@ -200,7 +189,9 @@ describe("authorized badge reprinting", () => {
     await act(async () => {
       finish();
     });
-    await rendered(() => expect(button("Print badges")).toBeDefined());
+    await rendered(() => expect(host.querySelector('iframe[title="Prepared print document"]')).not.toBeNull());
+    expect(loads).toBe(2);
+    frame.mockRestore();
   });
 
   it("prepares the same credential through the canonical request, rechecks release, and never offers a raw-code CSV", async () => {

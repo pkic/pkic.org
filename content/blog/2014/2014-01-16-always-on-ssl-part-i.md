@@ -4,8 +4,6 @@ authors:
 categories:
 - General
 date: "2014-01-16T16:00:40+00:00"
-dsq_thread_id:
-- 2127857340
 keywords:
 - mixed content
 - ssl

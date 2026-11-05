@@ -551,7 +551,7 @@ describe("email outbox batch processing", () => {
 
   it("bulk-enqueues a retried domain notification only once", async () => {
     const payload = {
-      outboxId: "bulk-idempotent-outbox",
+      outboxId: crypto.randomUUID(),
       idempotencyKey: "weekly-digest:group-1:user-1:2026-08-17",
       templateKey: "attendee_invite",
       recipientUserId: adminId,

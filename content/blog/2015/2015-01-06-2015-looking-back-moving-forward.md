@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2015-01-06T16:30:28+00:00"
-dsq_thread_id:
-- 3392720280
 keywords:
 - tls
 - tls 1.2

@@ -1,3 +1,4 @@
+import { prepareAddressDeliveryTransfer } from "./email-address-delivery";
 import { readEmailOwnership, provedMailboxUserId, prepareEmailOwnershipClaim } from "./email-ownership";
 import { first } from "../db/queries";
 import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../db/authorization-guard";
@@ -127,6 +128,9 @@ export async function prepareProposalProofPerson(
               )
               .bind(resolved.emailId, prepared.user.id, payload.email, payload.email, at, at),
           ]
+        : []),
+      ...(ownership && resolved.emailId
+        ? [prepareAddressDeliveryTransfer(db, "user_emails", resolved.emailId, ownership)]
         : []),
       ...prepareVerifyOwnedEmailStatements(db, {
         userId: prepared.user.id,

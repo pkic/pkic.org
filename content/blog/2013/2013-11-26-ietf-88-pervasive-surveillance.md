@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2013-11-26T19:00:04+00:00"
-dsq_thread_id:
-- 2001652975
 keywords:
 - pki
 - crl

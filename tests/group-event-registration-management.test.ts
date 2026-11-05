@@ -329,6 +329,24 @@ describe("group event attendee management", () => {
     )
       .bind(crypto.randomUUID(), event.id, new Date().toISOString())
       .run();
+    await env.DB.prepare("UPDATE users SET first_name='name@example.test',last_name='Attendee' WHERE id=?")
+      .bind(fixture.ownerLeader.id)
+      .run();
+    const invalidProfile = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations`,
+      {
+        method: "POST",
+        body: JSON.stringify(
+          attendeeRegistrationParticipationSchema.parse({
+            dayAttendance: [{ dayDate: "2027-04-12", attendanceType: "virtual" }],
+            consents: [{ termKey: "privacy-policy", version: "v1" }],
+          }),
+        ),
+      },
+    );
+    expect(invalidProfile.status, await invalidProfile.clone().text()).toBe(422);
+    expect(await invalidProfile.json()).toMatchObject({ error: { code: "REGISTRATION_PROFILE_INCOMPLETE" } });
     await env.DB.prepare("UPDATE users SET first_name='Individual',last_name='Attendee' WHERE id=?")
       .bind(fixture.ownerLeader.id)
       .run();

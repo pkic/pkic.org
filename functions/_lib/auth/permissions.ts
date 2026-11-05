@@ -204,7 +204,7 @@ export async function computeGrantsForUser(
 function scannerLegacyCompatible(permission: string): boolean {
   return (scannerCapabilities as readonly string[]).includes(permission);
 }
-function tokenAllowsPermission(actor: AuthAdmin, permission: string): boolean {
+export function tokenAllowsPermission(actor: AuthAdmin, permission: string): boolean {
   return (
     !actor.scopeRestricted ||
     actor.scopes?.includes(permission) === true ||

@@ -21,7 +21,6 @@ heroButton:
 
 wgID: CBOM
 color: teal
-sectionNav: true
 
 cascade:
   params:

@@ -2,8 +2,6 @@
 authors:
 - CA Security Council
 date: "2015-10-21T15:07:49+00:00"
-dsq_thread_id:
-- 4245903980
 keywords:
 - ssl
 - https

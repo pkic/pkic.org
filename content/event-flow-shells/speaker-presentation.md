@@ -4,9 +4,7 @@ url: /_event-flow-shells/speaker-presentation/
 robots: noindex
 sitemap:
   disable: true
-build:
-  list: never
-  publishResources: false
+
 ---
 
 ## Presentation upload

@@ -1,6 +1,5 @@
 import type { EventsListQuery } from "../../../../assets/shared/schemas/event-management";
-import type { PreparedUserSessionRead } from "../../auth/user-session-request";
-import { createUserBackedAuthAdmin } from "../../auth/admin-identity";
+import type { PreparedRequestViewerRead } from "../../auth/optional-request-viewer";
 import { hasPermission } from "../../auth/permissions";
 import { buildOffsetPageStatements, decodeOffsetPageResults, batchRows } from "../../db/pagination";
 import type { DatabaseLike } from "../../types";
@@ -28,13 +27,11 @@ import { eventAudienceViewer } from "./visibility";
 export async function readEventsListPage(
   db: DatabaseLike,
   query: EventsListQuery,
-  auth: PreparedUserSessionRead | null,
+  auth: PreparedRequestViewerRead | null,
 ) {
-  const userId = auth?.claims.sub ?? null;
-  // This locally verified identity is only a SQL evidence subject. It supplies no grants.
-  const subject = auth
-    ? createUserBackedAuthAdmin({ id: auth.claims.sub, sessionId: auth.claims.sid, email: "" })
-    : null;
+  const userId = auth?.userId ?? null;
+  // Permission metadata bounds the query; canonical live authority is resolved in this batch.
+  const subject = auth?.permissionActor ?? null;
   const queryViewer = { userId, ...(subject ? { admin: subject } : {}) };
   const audienceQuery = buildEventsPageQuery(
     queryViewer,
@@ -55,15 +52,20 @@ export async function readEventsListPage(
     prepareEventAudienceSponsors(db, queryViewer, audienceSelection),
     ...(stats ? [db.prepare(stats.sql).bind(...stats.bindings)] : []),
   ]);
-  const session = auth ? await auth.decode(loaded.slice(0, authentication.length)) : null;
+  const resolved = auth ? await auth.decode(loaded.slice(0, authentication.length)) : null;
+  const staff = resolved?.staff;
   const resources = loaded.slice(authentication.length);
   const audience = decodeOffsetPageResults<EventAudienceRow>(resources[0], resources[1]);
   const management = managementQuery ? decodeOffsetPageResults<EventManagementRow>(resources[2], resources[3]) : null;
   const offset = managementQuery ? 4 : 2;
   const participation = decodeEventParticipation(batchRows<EventParticipationRow>(resources[offset]));
   const viewerStates = decodeViewerEventStates(batchRows<EventViewerStateRow>(resources[offset + 1]));
-  const viewer = eventAudienceViewer(session);
-  if (management && session?.staff && hasPermission(session.staff, "events:read")) {
+  const viewer = {
+    ...eventAudienceViewer(resolved?.session ?? null),
+    admin: staff,
+    scannerGrants: staff?.grants ?? [],
+  };
+  if (management && staff && hasPermission(staff, "events:read")) {
     const counts = new Map(batchRows<EventStatsRow>(resources[offset + 3]).map((row) => [row.event_id, row]));
     return {
       events: management.rows.map((row) =>

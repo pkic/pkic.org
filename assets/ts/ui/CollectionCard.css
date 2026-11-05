@@ -199,6 +199,7 @@
 
   .pk-collection-card__footer {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: var(--pk-3);
@@ -214,6 +215,7 @@
   /* The actions sit above the stretched title link, so the menu opens
      instead of the card. */
   .pk-collection-card__actions {
+    margin-inline-start: auto;
     position: relative;
     z-index: 1;
     flex: none;

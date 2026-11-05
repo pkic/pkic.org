@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2013-04-02T20:48:10+00:00"
-dsq_thread_id:
-- 1937101464
 keywords:
 - domain validated
 - crl

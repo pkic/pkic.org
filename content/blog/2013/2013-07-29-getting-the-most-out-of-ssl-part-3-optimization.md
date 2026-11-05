@@ -3,8 +3,6 @@ authors:
 - Rick Andrews
 - Ryan Hurst
 date: "2013-07-29T15:03:42+00:00"
-dsq_thread_id:
-- 1939290999
 keywords:
 - mixed content
 - ssl

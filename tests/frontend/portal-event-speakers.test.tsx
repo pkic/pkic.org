@@ -70,6 +70,7 @@ describe("proposal speakers tab", () => {
               },
               {
                 id: "10000000-0000-4000-8000-000000000002",
+                userId: "30000000-0000-4000-8000-000000000002",
                 proposalId: PROPOSAL_ID,
                 proposalTitle: "Organization security case study",
                 headshotUrl: null,

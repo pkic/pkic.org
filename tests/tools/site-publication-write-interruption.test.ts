@@ -19,7 +19,7 @@ it("keeps the active release served coherently through a failed second candidate
   const root = await createTemporaryDirectory("publication-write-interruption");
   const active = resolve(root, "active");
   const candidate = resolve(root, "candidate-assets");
-  const files = ["index.html", "events/failure/event-data.json", "events/failure/agenda.ics"];
+  const files = ["index.html", "events/failure/agenda/data.json", "events/failure/agenda.ics"];
   const server = createServer((request, response) => {
     async function respond() {
       try {

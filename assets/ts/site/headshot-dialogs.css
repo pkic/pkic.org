@@ -91,6 +91,11 @@
     touch-action: none;
   }
 
+  #crop-headshot-modal .crop-headshot-viewport--wide {
+    max-width: 100%;
+    aspect-ratio: 16 / 9;
+  }
+
   #crop-headshot-modal .crop-headshot-viewport.dragging {
     cursor: grabbing;
   }

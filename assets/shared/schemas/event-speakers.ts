@@ -25,6 +25,7 @@ export const eventProposalSpeakerSchema = proposalSpeakerProfileSchema
   .pick({ email: true, firstName: true, lastName: true, organizationName: true, status: true })
   .extend({
     id: databaseIdSchema,
+    userId: databaseIdSchema,
     proposalId: databaseIdSchema,
     proposalTitle: z.string(),
     /** The speaker's portrait for the roster row, as a same-origin path; null without one. */

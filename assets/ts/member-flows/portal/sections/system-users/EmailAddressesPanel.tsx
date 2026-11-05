@@ -1,3 +1,10 @@
+import {
+  EMAIL_ADDRESS_DELIVERY_LABELS,
+  UNKNOWN_EMAIL_DELIVERY,
+  type EmailAddressDelivery,
+} from "../../../../../shared/schemas/email-address-delivery";
+import { statusTone } from "../../../../../shared/status-display";
+import { Badge } from "../../../../ui/Badge";
 /**
  * A user's email addresses on the user record.
  *
@@ -43,6 +50,7 @@ interface AddressRow {
   /** The primary address of the signed-in person has no row id of its own. */
   id: string | null;
   email: string;
+  delivery: EmailAddressDelivery;
   primary: boolean;
   /** Whether the address is proven; null where the list does not say. */
   verified: boolean | null;
@@ -68,11 +76,13 @@ export function EmailAddressesPanel({
   userId,
   isSelf,
   primaryEmail,
+  primaryEmailDelivery = UNKNOWN_EMAIL_DELIVERY,
 }: {
   userId: string;
   /** The person's own addresses, with every action they may take on them; otherwise staff management. */
   isSelf: boolean;
   primaryEmail: string;
+  primaryEmailDelivery?: EmailAddressDelivery;
 }) {
   const [, navigate] = usePortalHashLocation();
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -81,6 +91,7 @@ export function EmailAddressesPanel({
     if (isSelf) {
       const response = await getJson(OWN_EMAILS_ENDPOINT, ownEmailAddressesListResponseSchema);
       return response.emails.map((address) => ({
+        delivery: address.delivery,
         id: address.id ?? null,
         email: address.email,
         primary: address.primary,
@@ -91,8 +102,17 @@ export function EmailAddressesPanel({
     }
     const response = await getJson(endpoint, userEmailsListResponseSchema);
     return [
-      { id: null, email: primaryEmail, primary: true, verified: null, usedBy: [], signInEnabled: null },
+      {
+        id: null,
+        delivery: primaryEmailDelivery,
+        email: primaryEmail,
+        primary: true,
+        verified: null,
+        usedBy: [],
+        signInEnabled: null,
+      },
       ...response.emails.map((address) => ({
+        delivery: address.delivery,
         id: address.id,
         email: address.email,
         primary: false,
@@ -101,7 +121,7 @@ export function EmailAddressesPanel({
         signInEnabled: null,
       })),
     ];
-  }, [endpoint, isSelf, primaryEmail]);
+  }, [endpoint, isSelf, primaryEmail, primaryEmailDelivery]);
 
   function addressEndpoint(address: AddressRow, child = ""): string {
     return `${endpoint}/${encodeURIComponent(address.id ?? "")}${child}`;
@@ -242,6 +262,11 @@ export function EmailAddressesPanel({
               >
                 <span class="pk-email-address">
                   {address.email}
+                  {address.delivery.status !== "unknown" && address.delivery.status !== "delivered" && (
+                    <Badge tone={statusTone(address.delivery.status)}>
+                      {EMAIL_ADDRESS_DELIVERY_LABELS[address.delivery.status]}
+                    </Badge>
+                  )}
                   {address.verified && (
                     <IconCheckmark class="pk-email-address__verified" role="img" aria-label="Verified" />
                   )}

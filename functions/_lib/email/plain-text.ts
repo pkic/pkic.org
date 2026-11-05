@@ -1,8 +1,10 @@
 import type { EmailContentType } from "../../../assets/shared/schemas/email-templates";
 import { escapeMarkdownText } from "./markdown";
+import { formatMeetingEmailTime } from "../../../assets/shared/format-date";
 
 const EMAIL_PLAIN_TEXT_KEY = "__pkicEmailPlainText";
 const EMAIL_MARKDOWN_TEXT_KEY = "__pkicEmailMarkdownText";
+const EMAIL_INSTANT_KEY = "__pkicEmailInstant";
 
 /** Explicitly marks an untrusted value that a trusted email template must render as literal text. */
 export interface EmailPlainTextValue {
@@ -12,6 +14,22 @@ export interface EmailPlainTextValue {
 /** Marks authorized Markdown whose raw HTML must still be neutralized. */
 export interface EmailMarkdownTextValue {
   [EMAIL_MARKDOWN_TEXT_KEY]: string;
+}
+
+/**
+ * An instant shown on a named clock. The queued payload keeps the UTC instant
+ * and the IANA zone; the wall-clock wording is made only when the email is
+ * rendered, which is the presentation boundary.
+ */
+export interface EmailInstantValue {
+  [EMAIL_INSTANT_KEY]: string;
+  timeZone: string;
+  recipientTimeZone?: string;
+}
+
+/** Queue an instant with its scheduled clock and an explicitly known recipient clock, if available. */
+export function emailInstant(at: string, timeZone: string, recipientTimeZone?: string): EmailInstantValue {
+  return { [EMAIL_INSTANT_KEY]: at, timeZone, ...(recipientTimeZone ? { recipientTimeZone } : {}) };
 }
 
 export function emailPlainText(value: string): EmailPlainTextValue {
@@ -35,6 +53,15 @@ function isEmailMarkdownTextValue(value: unknown): value is EmailMarkdownTextVal
     value !== null &&
     typeof value === "object" &&
     typeof (value as Partial<EmailMarkdownTextValue>)[EMAIL_MARKDOWN_TEXT_KEY] === "string"
+  );
+}
+
+function isEmailInstantValue(value: unknown): value is EmailInstantValue {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    typeof (value as Partial<EmailInstantValue>)[EMAIL_INSTANT_KEY] === "string" &&
+    typeof (value as Partial<EmailInstantValue>).timeZone === "string"
   );
 }
 
@@ -62,6 +89,11 @@ function resolveMarkdownText(value: string, mode: EmailContentType | "subject"):
 function resolveValue(value: unknown, mode: EmailContentType | "subject"): unknown {
   if (isEmailPlainTextValue(value)) return resolvePlainText(value[EMAIL_PLAIN_TEXT_KEY], mode);
   if (isEmailMarkdownTextValue(value)) return resolveMarkdownText(value[EMAIL_MARKDOWN_TEXT_KEY], mode);
+  if (isEmailInstantValue(value))
+    return resolvePlainText(
+      formatMeetingEmailTime(value[EMAIL_INSTANT_KEY], value.timeZone, value.recipientTimeZone),
+      mode,
+    );
   if (Array.isArray(value)) return value.map((item) => resolveValue(item, mode));
   if (value !== null && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveValue(item, mode)]));

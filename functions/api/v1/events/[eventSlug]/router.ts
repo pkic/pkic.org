@@ -1,13 +1,4 @@
-import { PromotionKitInitialize, EventPromotionInitialize } from "./agenda/promotion";
-import { PromotionBatchesCreate, PromotionBatchGet } from "./agenda/promotion-batches";
-import { EventPromotionSessionsGet } from "./agenda/promotion";
-import {
-  PromotionCompositionSave,
-  EventPromotionGet,
-  EventPromotionCompositionSave,
-  EventPromotionRendersCreate,
-  EventPromotionArtifactGet,
-} from "./agenda/promotion";
+import { registerPromotionRoutes } from "./register-promotion-routes";
 import { registerRecordingRoutes } from "./register-recording-routes";
 import { SpeakerProfileReviewsGet, SpeakerProfileApprovalPost } from "./agenda/speaker-profiles";
 import { registerScanningRoutes } from "./register-scanning-routes";
@@ -131,13 +122,6 @@ import {
   AgendaCalendarSettingsGet,
   AgendaCalendarSettingsPut,
 } from "./agenda-calendar";
-import {
-  PromotionKitGet,
-  PromotionCopySave,
-  PromotionArtifactGet,
-  PromotionSessionsGet,
-  PromotionRendersCreate,
-} from "./agenda/promotion";
 import emailRouter from "./email/router";
 import proposals_Router from "./proposals/router";
 import registrations_Router from "./registrations/router";
@@ -218,21 +202,7 @@ openapi.post("/calendar/subscriptions", AgendaCalendarRotatePost);
 openapi.delete("/calendar/subscriptions", AgendaCalendarRevokeDelete);
 openapi.get("/calendar/subscriptions/current", AgendaCalendarCurrentGet);
 openapi.get("/calendar/subscriptions/:token/calendar.ics", AgendaCalendarFeedGet);
-openapi.post("/promotion/batches", PromotionBatchesCreate);
-openapi.get("/promotion/batches/:batchId", PromotionBatchGet);
-openapi.get("/promotion", EventPromotionGet);
-openapi.post("/promotion/referrals", EventPromotionInitialize);
-openapi.get("/promotion/sessions", EventPromotionSessionsGet);
-openapi.post("/promotion/composition", EventPromotionCompositionSave);
-openapi.post("/promotion/renders", EventPromotionRendersCreate);
-openapi.get("/promotion/artifact", EventPromotionArtifactGet);
-openapi.post("/agenda/occurrences/:occurrenceId/promotion/composition", PromotionCompositionSave);
-openapi.get("/agenda/promotion", PromotionSessionsGet);
-openapi.get("/agenda/occurrences/:occurrenceId/promotion", PromotionKitGet);
-openapi.post("/agenda/occurrences/:occurrenceId/promotion/referrals", PromotionKitInitialize);
-openapi.post("/agenda/occurrences/:occurrenceId/promotion", PromotionCopySave);
-openapi.post("/agenda/occurrences/:occurrenceId/promotion/renders", PromotionRendersCreate);
-openapi.get("/agenda/occurrences/:occurrenceId/promotion/artifact", PromotionArtifactGet);
+registerPromotionRoutes(openapi);
 openapi.get("/agenda/contents", AgendaContentsGet);
 openapi.post("/agenda/contents", AgendaContentCreate);
 openapi.post("/agenda/contents/copy", AgendaContentCopy);

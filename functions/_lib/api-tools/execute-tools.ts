@@ -3,7 +3,7 @@ import type { RequestOptions } from "@cloudflare/codemode/mcp";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-const requestSchema = z.object({
+export const requestSchema = z.object({
   method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
   path: z.string().min(1).max(500),
   query: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
@@ -12,7 +12,7 @@ const requestSchema = z.object({
   rawBody: z.boolean().optional(),
 });
 
-function resultContent(result: unknown) {
+export function resultContent(result: unknown) {
   const text = JSON.stringify(result) ?? "null";
   if (text.length > 24_000) {
     return {
@@ -38,7 +38,7 @@ export function registerExecuteTools(
     "request",
     {
       description:
-        "Call one existing API operation. Discover its path and inspect its request contract first. Uses the API's existing validation and permissions. Narrow API queries to keep responses small.",
+        'Call one existing API operation directly when its path and inputs are known; discovery and inspection are optional. Example: list events with {method: "GET", path: "/api/v1/events", query: {limit: 5}}. For unknown operations, discover with a narrow query and inspect only the missing contract details. Uses existing API validation and permissions. Narrow API queries to keep responses small.',
       inputSchema: requestSchema,
     },
     async (options) => resultContent(await request(options)),

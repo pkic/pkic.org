@@ -20,7 +20,6 @@ heroButton:
 
 wgID: PKIMM
 color: purple
-sectionNav: true
 
 cascade:
   params:

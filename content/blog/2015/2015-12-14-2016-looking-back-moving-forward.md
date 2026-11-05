@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2015-12-14T19:53:24+00:00"
-dsq_thread_id:
-- 4403870208
 keywords:
 - google
 - microsoft

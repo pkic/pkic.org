@@ -3,8 +3,6 @@ authors:
 - Bruce Morton
 - Erik Costlow
 date: "2013-12-09T16:00:15+00:00"
-dsq_thread_id:
-- 2030893091
 keywords:
 - pdf
 - identity
