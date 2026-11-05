@@ -14,6 +14,7 @@ import {
 } from "./day-waitlist-capacity";
 import type { DayWaitlistLane, EventDayCapacityRow, PlannedDayWaitlistEntry } from "./day-waitlist-types";
 import { prepareRegistrationDayWaitlistRead, type RegistrationDayWaitlistSnapshot } from "./day-waitlist-read";
+import { LAPSED_OFFER_REASON_CODE, prepareLapsedDayOfferRequeue } from "./day-waitlist-policy";
 import { batchRows } from "../../db/pagination";
 
 function normalizeSelections(selections?: DayAttendanceSelection[]): DayAttendanceSelection[] {
@@ -117,16 +118,7 @@ export function planRegistrationDayWaitlistSync(
       : undefined,
     payload.sharedCapacityGuards,
   );
-  const statements: StatementLike[] = [
-    db
-      .prepare(
-        `UPDATE event_day_waitlist_entries
-         SET status = 'expired', updated_at = ?
-         WHERE event_id = ? AND status = 'offered'
-           AND offer_expires_at IS NOT NULL AND offer_expires_at <= ?`,
-      )
-      .bind(now, payload.eventId, now),
-  ];
+  const statements: StatementLike[] = [prepareLapsedDayOfferRequeue(db, { now, eventId: payload.eventId })];
   const activeRows: PlannedDayWaitlistEntry[] = [];
   const decisions: DayCapacityDecision[] = [];
   let changed = false;
@@ -248,7 +240,10 @@ export function planRegistrationDayWaitlistSync(
     const continuity =
       storedRegistration?.status === "registered" &&
       eventDays.some((other) => other.id !== day.id && selectedByDate.get(other.day_date) === selectedType);
-    const priorityLane: DayWaitlistLane = continuity ? "continuity" : "general";
+    const offerLapsed =
+      existing?.reason_code === LAPSED_OFFER_REASON_CODE ||
+      (existing?.status === "offered" && existingStatus === "expired");
+    const priorityLane: DayWaitlistLane = continuity && !offerLapsed ? "continuity" : "general";
     if (existing && (existingStatus === "waiting" || existingStatus === "expired")) {
       recordDecision("waitlisted", "existing_queue_position");
       if (

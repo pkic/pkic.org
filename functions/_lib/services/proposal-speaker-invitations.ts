@@ -1,7 +1,6 @@
 import { prepareQueueEmailStatement } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
 import type { DatabaseLike, StatementLike } from "../types";
-import { sha256Hex } from "../utils/crypto";
 import type { EventRecord } from "./events";
 import { buildEventEmailVariables } from "./events";
 import { speakerParticipationPageUrl } from "./frontend-links";
@@ -25,6 +24,7 @@ import { withProposalWriteContextGuard, type ProposalWriteAuthorization } from "
 import { nowIso } from "../utils/time";
 import { normalizeEmail } from "../validation";
 import { first } from "../db/queries";
+import { outboxIdForOperation } from "../email/outbox-queue";
 
 class ConcurrentSpeakerInvitation extends Error {}
 
@@ -98,7 +98,7 @@ async function inviteProposalSpeakerOnce(
   );
   const idempotencyKey = `proposal_speaker_invite:${preparedSpeaker.speakerId}:${preparedSpeaker.inviteGeneration}`;
   const queued = prepareQueueEmailStatement(db, {
-    outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32),
+    outboxId: await outboxIdForOperation(idempotencyKey),
     idempotencyKey,
     eventId: payload.event.id,
     baseUrl: payload.appBaseUrl,

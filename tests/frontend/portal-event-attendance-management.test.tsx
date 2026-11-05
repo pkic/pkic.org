@@ -36,6 +36,7 @@ import {
   json,
   registrationList,
 } from "./helpers/group-event-attendance-fixtures";
+import { eventRegistrationSelectedDayAdmitSchema } from "../../assets/shared/schemas/event-registration-detail";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
 
@@ -340,17 +341,14 @@ describe("group event registration record", () => {
     await act(async () => confirmButton("Admit from waitlist").click());
     await settle();
 
-    expect(requests).toContainEqual(
-      expect.objectContaining({
-        path: `${REGISTRATION_ENDPOINT}/admissions`,
-        method: "POST",
-        body: {
-          mode: "capacity_exempt",
-          reason: "Event manager approved attendance admission",
-          dayDates: ["2026-09-01"],
-        },
-      }),
+    const admission = requests.find(
+      (request) => request.path === `${REGISTRATION_ENDPOINT}/admissions` && request.method === "POST",
     );
+    // Admitting from the waitlist takes a free seat; the beyond-capacity override is a separate action.
+    expect(eventRegistrationSelectedDayAdmitSchema.parse(admission?.body)).toMatchObject({
+      mode: "within_capacity",
+      dayDates: ["2026-09-01"],
+    });
     expect(container.textContent).toContain("registration update email was queued");
     expect(requests.some(({ path }) => path.startsWith("/api/v1/admin/"))).toBe(false);
   });

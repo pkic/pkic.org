@@ -1,5 +1,5 @@
 import { eventDayOptionAccessSql } from "../event-participation/session-access";
-import { all, run } from "../../db/queries";
+import { all } from "../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { addHours, nowIso } from "../../utils/time";
 import {
@@ -9,19 +9,12 @@ import {
   ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL,
 } from "./day-waitlist-capacity";
 import type { DayWaitlistRow } from "./day-waitlist-types";
+import { prepareLapsedDayOfferRequeue } from "./day-waitlist-policy";
 import { prioritizeWorkAddresses } from "../../email-domains/contact-kind";
 import { parseVerifiedAddresses, verifiedAddressesJsonSql } from "../user-emails";
 
 export async function expireDayWaitlistOffers(db: DatabaseLike, eventId: string): Promise<void> {
-  const now = nowIso();
-  await run(
-    db,
-    `UPDATE event_day_waitlist_entries
-     SET status = 'expired', updated_at = ?
-     WHERE event_id = ? AND status = 'offered'
-       AND offer_expires_at IS NOT NULL AND offer_expires_at <= ?`,
-    [now, eventId, now],
-  );
+  await prepareLapsedDayOfferRequeue(db, { now: nowIso(), eventId }).run();
 }
 
 export async function promoteDayWaitlistIfCapacity(
