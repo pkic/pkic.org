@@ -1,3 +1,4 @@
+import { DELIVERY_COLUMNS } from "../email-address-delivery";
 import type { SendgridEvent } from "../../../../assets/shared/schemas/email-webhook";
 import { chunkJsonRows } from "../../db/json-bulk";
 import { logInfo } from "../../logging";
@@ -17,6 +18,7 @@ const EVENT_ACTIONS: Readonly<Record<string, string>> = {
 };
 
 interface NormalizedSendgridEvent {
+  signal: string | null;
   baseId: string | null;
   outboxId: string | null;
   eventType: string;
@@ -46,7 +48,7 @@ function eventReason(event: SendgridEvent): string {
 
 function normalizeEvent(event: SendgridEvent, sequence: number): NormalizedSendgridEvent | null {
   const action = EVENT_ACTIONS[event.event];
-  if (!action || (!event.sg_message_id && !event.outbox_id)) return null;
+  if (!action || (!event.sg_message_id && !event.outbox_id && !event.email)) return null;
   const baseId = event.sg_message_id ? extractBaseMessageId(event.sg_message_id) : null;
   const temporaryBounce = event.event === "bounce" && (event.type === "soft" || event.type === "blocked");
   const hardFailure =
@@ -81,6 +83,16 @@ function normalizeEvent(event: SendgridEvent, sequence: number): NormalizedSendg
     ].join(":");
 
   return {
+    signal:
+      event.event === "delivered"
+        ? "delivery_delivered_at"
+        : softFailure
+          ? "delivery_delayed_at"
+          : event.event === "bounce" || (event.event === "dropped" && /bounced address/i.test(reason))
+            ? "delivery_bounced_at"
+            : hardFailure
+              ? "delivery_blocked_at"
+              : null,
     baseId,
     outboxId: event.outbox_id ?? null,
     eventType: event.event,
@@ -109,6 +121,7 @@ function normalizeEvent(event: SendgridEvent, sequence: number): NormalizedSendg
 
 const JSON_EVENT_ROWS = `
   SELECT
+    json_extract(value, '$.signal') AS signal,
     json_extract(value, '$.baseId') AS base_id,
     json_extract(value, '$.outboxId') AS outbox_id,
     json_extract(value, '$.eventType') AS event_type,
@@ -132,36 +145,21 @@ const OUTBOX_RECIPIENT_EVENT_SQL = `(outbox_id = email_outbox.id OR base_id = em
   AND (email IS NULL OR email = email_outbox.recipient_email COLLATE NOCASE)`;
 
 function prepareEventBatchStatements(env: Env, jsonRows: string) {
-  // Retain a legacy terminal outcome once before a new webhook changes its
-  // state or delivery evidence. Older messages may have no provider-event audit.
-  const preserveLegacyOutcome = env.DB.prepare(
-    `WITH event_rows AS (${JSON_EVENT_ROWS}), candidate_outbox AS MATERIALIZED (
-       SELECT id FROM email_outbox WHERE id IN (SELECT outbox_id FROM event_rows WHERE outbox_id IS NOT NULL)
-       UNION
-       SELECT id FROM email_outbox WHERE provider_message_id IN (SELECT base_id FROM event_rows WHERE base_id IS NOT NULL)
-     )
-     INSERT OR IGNORE INTO audit_log
-       (id,actor_type,actor_id,action,entity_type,entity_id,details_json,created_at,idempotency_key)
-     SELECT lower(hex(randomblob(16))),'system',NULL,
-       CASE WHEN email_outbox.status='delivered' THEN 'email_delivered'
-            WHEN email_outbox.last_error LIKE 'Spam report%' THEN 'email_spam_report'
-            WHEN email_outbox.last_error LIKE 'Dropped:%' AND email_outbox.last_error NOT LIKE '%Bounced Address%' THEN 'email_dropped'
-            ELSE 'email_hard_bounce' END,
-       'email_outbox',email_outbox.id,
-       json_object('source','legacy_outbox'),
-       strftime('%Y-%m-%dT%H:%M:%fZ',email_outbox.updated_at),
-       'email:legacy-outcome:' || email_outbox.id
-     FROM candidate_outbox candidate CROSS JOIN email_outbox ON email_outbox.id=candidate.id
-     WHERE status IN ('delivered','bounced')
-       AND EXISTS (SELECT 1 FROM event_rows
-         WHERE (outbox_id=email_outbox.id OR base_id=email_outbox.provider_message_id)
-           AND (hard_failure=1 OR delivered=1 OR accepted=1 OR error_text IS NOT NULL))
-       AND NOT EXISTS (SELECT 1 FROM audit_log evidence
-         WHERE evidence.entity_type='email_outbox' AND evidence.entity_id=email_outbox.id
-           AND evidence.action IN ('email_delivered','email_hard_bounce','email_dropped','email_spam_report')
-           AND (email_outbox.status='bounced' OR json_extract(evidence.details_json,'$.email') IS NULL
-             OR json_extract(evidence.details_json,'$.email')=email_outbox.recipient_email COLLATE NOCASE))`,
-  ).bind(jsonRows);
+  // Exact recipient matching also works after the corresponding outbox row has expired.
+  // MAX watermarks make duplicates and out-of-order webhook batches harmless.
+  const updateAddresses = (["users", "user_emails"] as const).map((table) =>
+    env.DB.prepare(
+      `WITH event_rows AS (${JSON_EVENT_ROWS})
+     UPDATE ${table} SET ${DELIVERY_COLUMNS.map(
+       (column) => `${column} = (
+       SELECT MAX(observed_at) FROM (
+         SELECT ${table}.${column} AS observed_at UNION ALL
+         SELECT occurred_at FROM event_rows WHERE signal='${column}' AND lower(email)=${table}.normalized_email
+       ))`,
+     ).join(", ")}
+     WHERE normalized_email IN (SELECT lower(email) FROM event_rows WHERE signal IS NOT NULL AND email IS NOT NULL)`,
+    ).bind(jsonRows),
+  );
 
   const updateOutbox = env.DB.prepare(
     `WITH event_rows AS (${JSON_EVENT_ROWS})
@@ -276,7 +274,7 @@ function prepareEventBatchStatements(env: Env, jsonRows: string) {
        AND (event_rows.email IS NULL OR event_rows.email = email_outbox.recipient_email COLLATE NOCASE)`,
   ).bind(jsonRows);
 
-  return [preserveLegacyOutcome, updateOutbox, insertUnsubscribes, insertOutboxAudits, insertRegistrationAudits];
+  return [...updateAddresses, updateOutbox, insertUnsubscribes, insertOutboxAudits, insertRegistrationAudits];
 }
 
 export async function processSendgridEvents(

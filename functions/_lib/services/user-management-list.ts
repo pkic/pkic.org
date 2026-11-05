@@ -71,7 +71,7 @@ export function buildUsersPageQuery(query: UsersListQuery) {
       // the old "1 active identity · 1 event" counts — a name tells the
       // reader which Ada this is; a count of events did not, and cost a
       // DISTINCT over the participation table for every row.
-      selectSql: `SELECT ${emailAddressDeliveryJsonSql("u.id", "u.email")} AS delivery_json, u.id, u.email, u.first_name, u.last_name, u.active, u.created_at,
+      selectSql: `SELECT ${emailAddressDeliveryJsonSql("u")} AS delivery_json, u.id, u.email, u.first_name, u.last_name, u.active, u.created_at,
               u.headshot_r2_key,
               ${affiliationOrganizationNameSql("u.id")} AS organization_name,
               ${affiliationJobTitleSql("u.id")} AS job_title,

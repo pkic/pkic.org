@@ -1,3 +1,4 @@
+import { DELIVERY_COLUMNS, prepareAddressDeliveryTransfer, type AddressDeliveryRow } from "./email-address-delivery";
 /** A pending claim is not ownership. Resolve only after the caller has proved this mailbox. */
 import { primaryEmailProofMayAuthenticateSql } from "../auth/email-sign-in-policy";
 import { nowIso } from "../utils/time";
@@ -7,7 +8,11 @@ import { prepareAuthorizationGuard } from "../db/authorization-guard";
 import type { DatabaseLike, StatementLike } from "../types";
 import { prepareRotateUserProposalSpeakerManageSecrets } from "./registrations/manage-capability-revocation";
 
-export interface EmailOwnership {
+export interface EmailOwnership extends AddressDeliveryRow {
+  alternate_delivery_bounced_at: string | null;
+  alternate_delivery_blocked_at: string | null;
+  alternate_delivery_delayed_at: string | null;
+  alternate_delivery_delivered_at: string | null;
   userId: string;
   provedUserId: string | null;
   kind: "primary" | "secondary";
@@ -22,13 +27,13 @@ export function emailOwnershipSelection(email: string) {
   return {
     sql: `WITH owner AS (
     SELECT person.id AS userId,'primary' AS kind,NULL AS emailId,person.email_verified_at AS verifiedAt,
-      CASE WHEN ${primaryEmailProofMayAuthenticateSql("person")} THEN person.id ELSE NULL END AS provedUserId
+      CASE WHEN ${primaryEmailProofMayAuthenticateSql("person")} THEN person.id ELSE NULL END AS provedUserId, ${DELIVERY_COLUMNS.map((column) => `person.${column}`).join(", ")}
       FROM users person WHERE person.normalized_email=?
-    UNION ALL SELECT user_id,'secondary',id,verified_at,CASE WHEN verified_at IS NOT NULL THEN user_id ELSE NULL END
+    UNION ALL SELECT user_id,'secondary',id,verified_at,CASE WHEN verified_at IS NOT NULL THEN user_id ELSE NULL END, ${DELIVERY_COLUMNS.join(", ")}
       FROM user_emails WHERE normalized_email=?
   ) SELECT owner.userId,owner.kind,owner.emailId,owner.verifiedAt,alternate.id AS alternateId,
     alternate.email AS alternateEmail,alternate.verified_at AS alternateVerifiedAt,
-    owner.provedUserId
+    owner.provedUserId, ${DELIVERY_COLUMNS.map((column) => `owner.${column}, alternate.${column} AS alternate_${column}`).join(", ")}
     FROM owner LEFT JOIN user_emails alternate ON alternate.id=(SELECT id FROM user_emails
       WHERE user_id=owner.userId AND verified_at IS NOT NULL ORDER BY created_at,id LIMIT 1) LIMIT 1`,
     bindings: [email, email],
@@ -76,12 +81,24 @@ export function prepareEmailOwnershipClaim(
   const evidence =
     owner.kind === "secondary"
       ? {
-          sql: "SELECT 1 FROM user_emails WHERE id=? AND user_id=? AND normalized_email=? AND verified_at IS ?",
-          bindings: [owner.emailId, owner.userId, email, owner.verifiedAt],
+          sql: `SELECT 1 FROM user_emails WHERE id=? AND user_id=? AND normalized_email=? AND verified_at IS ? AND ${DELIVERY_COLUMNS.map((column) => `${column} IS ?`).join(" AND ")}`,
+          bindings: [
+            owner.emailId,
+            owner.userId,
+            email,
+            owner.verifiedAt,
+            ...DELIVERY_COLUMNS.map((column) => owner[column]),
+          ],
         }
       : {
-          sql: `SELECT 1 FROM users WHERE id=? AND normalized_email=? AND email_verified_at IS ? AND (SELECT id FROM user_emails WHERE user_id=users.id AND verified_at IS NOT NULL ORDER BY created_at,id LIMIT 1) IS ?`,
-          bindings: [owner.userId, email, owner.verifiedAt, owner.alternateId],
+          sql: `SELECT 1 FROM users WHERE id=? AND normalized_email=? AND email_verified_at IS ? AND (SELECT id FROM user_emails WHERE user_id=users.id AND verified_at IS NOT NULL ORDER BY created_at,id LIMIT 1) IS ? AND ${DELIVERY_COLUMNS.map((column) => `${column} IS ?`).join(" AND ")}`,
+          bindings: [
+            owner.userId,
+            email,
+            owner.verifiedAt,
+            owner.alternateId,
+            ...DELIVERY_COLUMNS.map((column) => owner[column]),
+          ],
         };
   const statements: StatementLike[] = [prepareAuthorizationGuard(db, evidence), ...pendingRelease];
   if (owner.userId === targetUserId) return statements;
@@ -98,8 +115,14 @@ export function prepareEmailOwnershipClaim(
     // Preserve an already verified account under the address it actually owns.
     statements.push(
       prepareAuthorizationGuard(db, {
-        sql: "SELECT 1 FROM user_emails WHERE id=? AND user_id=? AND email=? AND verified_at=?",
-        bindings: [owner.alternateId, owner.userId, owner.alternateEmail, owner.alternateVerifiedAt],
+        sql: `SELECT 1 FROM user_emails WHERE id=? AND user_id=? AND email=? AND verified_at=? AND ${DELIVERY_COLUMNS.map((column) => `${column} IS ?`).join(" AND ")}`,
+        bindings: [
+          owner.alternateId,
+          owner.userId,
+          owner.alternateEmail,
+          owner.alternateVerifiedAt,
+          ...DELIVERY_COLUMNS.map((column) => owner[`alternate_${column}`]),
+        ],
       }),
       db.prepare("DELETE FROM user_emails WHERE id=? AND user_id=?").bind(owner.alternateId, owner.userId),
       db
@@ -112,6 +135,14 @@ export function prepareEmailOwnershipClaim(
           owner.userId,
           email,
         ),
+      prepareAddressDeliveryTransfer(
+        db,
+        "users",
+        owner.userId,
+        Object.fromEntries(
+          DELIVERY_COLUMNS.map((column) => [column, owner[`alternate_${column}`]]),
+        ) as AddressDeliveryRow,
+      ),
       prepareRotateUserProposalSpeakerManageSecrets(db, owner.userId),
     );
   }

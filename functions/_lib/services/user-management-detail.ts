@@ -70,7 +70,7 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
   const [userResult, membershipResult, formerResult, groupsResult] = await db.batch([
     db
       .prepare(
-        `SELECT ${emailAddressDeliveryJsonSql("users.id", "users.email")} AS delivery_json, id, email, first_name, last_name, preferred_name,
+        `SELECT ${emailAddressDeliveryJsonSql("users")} AS delivery_json, id, email, first_name, last_name, preferred_name,
                 active, ${executiveCouncilSeatSql("users.id")} AS is_ec_member,
                 headshot_r2_key, headshot_updated_at, created_at, updated_at, pii_redacted_at
          FROM users WHERE id = ?`,

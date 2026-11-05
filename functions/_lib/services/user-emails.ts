@@ -1,4 +1,9 @@
-import { emailAddressDeliveryJsonSql, decodeEmailAddressDelivery } from "./email-address-delivery";
+import {
+  emailAddressDeliveryJsonSql,
+  decodeEmailAddressDelivery,
+  DELIVERY_COLUMNS,
+  type AddressDeliveryRow,
+} from "./email-address-delivery";
 import { prepareMailingListAddressSync } from "./mailing-list-subscriptions/queue-email-change";
 /**
  * Secondary email addresses on a user account reserve its email namespace.
@@ -39,7 +44,7 @@ const USER_EMAIL_SORT_EXPRESSIONS: Record<(typeof USER_EMAILS_SORT_COLUMNS)[numb
   created_at: "created_at",
 };
 
-export interface UserEmailOwner {
+export interface UserEmailOwner extends AddressDeliveryRow {
   userId: string;
   kind: "primary" | "secondary" | "pending";
   verified: number;
@@ -96,7 +101,7 @@ export async function listUserEmails(
   const search = query.q ? buildD1TextSearchFilter(query.q, ["email"]) : null;
   const { rows, total } = await queryPage<UserEmailRow>(db, {
     sql: `SELECT id, user_id, email, identity_id, created_at,
-            ${emailAddressDeliveryJsonSql("user_emails.user_id", "user_emails.email")} AS delivery_json
+            ${emailAddressDeliveryJsonSql("user_emails")} AS delivery_json
             FROM user_emails
            WHERE user_id = ?${search ? ` AND ${search.sql}` : ""}`,
     bindings: [userId, ...(search?.bindings ?? [])],
@@ -112,15 +117,15 @@ export async function listUserEmails(
 export async function findUserEmailOwner(db: DatabaseLike, normalizedEmail: string): Promise<UserEmailOwner | null> {
   return first<UserEmailOwner>(
     db,
-    `SELECT id AS userId, 'primary' AS kind, email_verified_at IS NOT NULL AS verified
+    `SELECT id AS userId, 'primary' AS kind, email_verified_at IS NOT NULL AS verified, ${DELIVERY_COLUMNS.join(", ")}
        FROM users
       WHERE normalized_email = ?
       UNION ALL
-     SELECT user_id AS userId, 'secondary' AS kind, verified_at IS NOT NULL AS verified
+     SELECT user_id AS userId, 'secondary' AS kind, verified_at IS NOT NULL AS verified, ${DELIVERY_COLUMNS.join(", ")}
        FROM user_emails
       WHERE normalized_email = ?
       UNION ALL
-     SELECT id AS userId, 'pending' AS kind, 0 AS verified
+     SELECT id AS userId, 'pending' AS kind, 0 AS verified, ${DELIVERY_COLUMNS.map(() => "NULL").join(", ")}
        FROM users
       WHERE pending_email = ?
       LIMIT 1`,

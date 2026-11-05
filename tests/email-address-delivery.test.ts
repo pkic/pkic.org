@@ -1,3 +1,6 @@
+import { makeOwnEmailAddressPrimary } from "../functions/_lib/services/own-email-addresses";
+import { updateUser } from "../functions/_lib/services/user-management-update";
+import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
@@ -52,11 +55,21 @@ async function event(id: string, values: Partial<SendgridEvent> = {}) {
   ]);
 }
 async function delivery(address = email) {
-  const result = await env.DB.prepare(`SELECT ${emailAddressDeliveryJsonSql("?", "?")} AS evidence`)
-    // The address history is selected once and shared by both evidence sources.
-    .bind(address, userId)
+  const result = await env.DB.prepare(
+    `SELECT ${emailAddressDeliveryJsonSql("users")} AS evidence FROM users WHERE id=? AND normalized_email=?`,
+  )
+    .bind(userId, address)
     .first<{ evidence: string }>();
   return decodeEmailAddressDelivery(result?.evidence);
+}
+async function alias() {
+  const id = crypto.randomUUID(),
+    address = "delivery.alias@example.test";
+  await env.DB.prepare(`INSERT INTO user_emails(id,user_id,email,normalized_email,created_at,verified_at,verification_method)
+    VALUES(?,?,?,?,?,?,'magic_link')`)
+    .bind(id, userId, address, address, started, started)
+    .run();
+  return { id, address };
 }
 
 describe("address delivery evidence", () => {
@@ -121,88 +134,10 @@ describe("address delivery evidence", () => {
     expect((await delivery()).status).toBe("unknown");
     expect(await env.DB.prepare("SELECT status FROM email_outbox WHERE id=?").bind(id).first("status")).toBe("sent");
   });
-  it("does not erase legacy primary delivery evidence when a BCC recipient bounces", async () => {
-    const id = await message(email, userId, "delivered");
-    await event(id, { email: "bcc@example.test" });
-    expect((await delivery()).status).toBe("delivered");
-  });
-  it("does not let a BCC update advance a legacy delivery timestamp and clear a later bounce", async () => {
-    const legacy = await message(email, userId, "delivered"),
-      failed = await message();
-    await event(failed, { timestamp: timestamp + 1 });
-    await event(legacy, { email: "bcc@example.test", timestamp: timestamp + 2 });
-    expect((await delivery()).status).toBe("bouncing");
-    expect(
-      await env.DB.prepare("SELECT updated_at FROM email_outbox WHERE id=?").bind(legacy).first("updated_at"),
-    ).toBe(started);
-  });
   it("accepts an asynchronous bounce correlated by outbox id without a provider message id", async () => {
     const id = await message();
     await event(id, { sg_message_id: undefined, outbox_id: id });
     expect((await delivery()).status).toBe("bouncing");
-  });
-  it("projects legacy delivery outcomes with no provider-event audit and no copied user id", async () => {
-    await message(email, null, "bounced");
-    expect(await delivery()).toEqual({ status: "bouncing", observedAt: started });
-  });
-  it("retains a legacy primary bounce when only its BCC recipient reports delivery", async () => {
-    const legacy = await message(email, userId, "bounced");
-    await event(legacy, { event: "delivered", email: "bcc@example.test", timestamp: timestamp + 10 });
-    expect((await delivery()).status).toBe("bouncing");
-    expect(
-      await env.DB.prepare("SELECT updated_at FROM email_outbox WHERE id=?").bind(legacy).first("updated_at"),
-    ).toBe(started);
-  });
-  it("preserves legacy evidence in the same bounded webhook batch", async () => {
-    const legacy = await message(email, userId, "delivered");
-    const flow = profileD1Flow(env.DB, { measurePayloadBytes: true });
-    await processSendgridEvents({ ...env, DB: flow.db as typeof env.DB }, [
-      {
-        event: "processed",
-        email,
-        sg_message_id: legacy,
-        sg_event_id: "legacy-batch-proof",
-        timestamp,
-        env_url: env.APP_BASE_URL,
-      },
-    ]);
-    const profile = await flow.report();
-    expect(profile.roundTrips).toBe(1);
-    expect(Math.max(...profile.queries.map((query) => query.requestBytes ?? 0))).toBeLessThan(64 * 1024);
-    const legacyPlan = profile.plans.find((plan) => plan.sql.includes("email:legacy-outcome:"));
-    expect(legacyPlan).toBeDefined();
-    expect(JSON.stringify(legacyPlan?.plan)).not.toContain("SCAN email_outbox");
-  });
-  it("does not let late acceptance falsely recover a legacy delivery after a newer bounce", async () => {
-    const legacy = await message(email, userId, "delivered"),
-      failed = await message();
-    await event(failed, { timestamp: timestamp + 10 });
-    await event(legacy, { event: "processed", timestamp: timestamp - 10 });
-    expect((await delivery()).status).toBe("bouncing");
-    expect(
-      await env.DB.prepare("SELECT updated_at FROM email_outbox WHERE id=?").bind(legacy).first("updated_at"),
-    ).toBe(started);
-  });
-  it("retains a legacy hard bounce through temporary failures and webhook replay", async () => {
-    const legacy = await message(email, userId, "bounced");
-    await event(legacy, { type: "blocked", timestamp: timestamp + 10 });
-    await event(legacy, { event: "processed", timestamp: timestamp + 20 });
-    expect((await delivery()).status).toBe("bouncing");
-    expect(
-      await env.DB.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE idempotency_key=?")
-        .bind(`email:legacy-outcome:${legacy}`)
-        .first("count"),
-    ).toBe(1);
-  });
-  it("preserves a newer legacy delivery when its first received bounce is older", async () => {
-    const legacy = await message(email, userId, "delivered");
-    await event(legacy, { timestamp: timestamp - 10 });
-    expect(await delivery()).toEqual({ status: "delivered", observedAt: started });
-  });
-  it("does not relabel a legacy spam report as an invalid mailbox", async () => {
-    const id = await message(email, userId, "bounced");
-    await env.DB.prepare("UPDATE email_outbox SET last_error='Spam report received' WHERE id=?").bind(id).run();
-    expect((await delivery()).status).toBe("blocked");
   });
   it("keeps primary and secondary addresses independent in the address read model", async () => {
     const alias = "delivery.alias@example.test",
@@ -215,44 +150,98 @@ describe("address delivery evidence", () => {
     expect((await readOwnEmailAddress(env.DB, userId, aliasId)).delivery.status).toBe("bouncing");
     expect((await readOwnEmailAddress(env.DB, userId, null)).delivery.status).toBe("unknown");
   });
-  it("uses address and audit indexes for both historical sources", async () => {
-    const result = await env.DB.prepare(
-      `EXPLAIN QUERY PLAN SELECT ${emailAddressDeliveryJsonSql("users.id", "users.email")} FROM users WHERE id=?`,
-    )
-      .bind(userId)
-      .all<{ detail: string }>();
-    const plan = result.results.map((row) => row.detail).join("\n");
-    expect(plan).toContain("idx_email_outbox_recipient_address");
-    expect(plan).toContain("idx_audit_log_entity");
-    expect(plan).not.toMatch(/SCAN evidence/);
+  it("survives deletion of message and audit history", async () => {
+    const id = await message();
+    await event(id);
+    await env.DB.batch([env.DB.prepare("DELETE FROM audit_log"), env.DB.prepare("DELETE FROM email_outbox")]);
+    expect(await delivery()).toEqual({ status: "bouncing", observedAt: started });
+    expect((await readOwnEmailAddress(env.DB, userId, null)).delivery.status).toBe("bouncing");
   });
-  it("keeps a populated user page in one bounded database batch", async () => {
+  it("records recipient-only events after outbox cleanup, including additional addresses", async () => {
+    const added = await alias();
+    await event("gone", { sg_message_id: undefined, email: added.address });
+    expect((await readOwnEmailAddress(env.DB, userId, added.id)).delivery.status).toBe("bouncing");
+    expect((await delivery()).status).toBe("unknown");
+    await event("gone", { sg_message_id: undefined });
+    expect((await delivery()).status).toBe("bouncing");
+  });
+  it("records a BCC account address without changing the primary recipient's status", async () => {
+    const added = await alias(),
+      id = await message();
+    await event(id, { email: added.address });
+    expect((await readOwnEmailAddress(env.DB, userId, added.id)).delivery.status).toBe("bouncing");
+    expect((await delivery()).status).toBe("unknown");
+  });
+  it("preserves both addresses' state when making an additional address primary", async () => {
+    const added = await alias();
+    await event("gone", { event: "delivered" });
+    await event("gone", { email: added.address });
+    const primary = await makeOwnEmailAddressPrimary(env.DB, { userId, emailId: added.id });
+    expect(primary.email).toBe(added.address);
+    expect(primary.delivery.status).toBe("bouncing");
+    const demoted = await readOwnEmailAddress(env.DB, userId, added.id);
+    expect(demoted.email).toBe(email);
+    expect(demoted.delivery.status).toBe("delivered");
+  });
+  it("does not overwrite a webhook that races with a primary-address swap", async () => {
+    const added = await alias();
+    const raced = gateNextBatch(env.DB);
+    const change = makeOwnEmailAddressPrimary(raced.db, { userId, emailId: added.id });
+    const refused = change.catch((error: unknown) => error);
+    await raced.reached;
+    await event("gone", { email: added.address });
+    raced.release();
+    expect(await refused).toMatchObject({ code: "USER_LIFECYCLE_CHANGED" });
+    expect((await readOwnEmailAddress(env.DB, userId, added.id)).delivery.status).toBe("bouncing");
+    expect((await readOwnEmailAddress(env.DB, userId, null)).email).toBe(email);
+  });
+  it("transfers additional-address delivery state during a staff correction", async () => {
+    const added = await alias(),
+      { admin } = await seedEventAndAdmin(env.DB);
+    await event("gone", { email: added.address });
+    await updateUser(env.DB, admin, userId, { email: added.address });
+    expect((await readOwnEmailAddress(env.DB, userId, null)).delivery.status).toBe("bouncing");
+    await updateUser(env.DB, admin, userId, { email: "corrected@example.test" });
+    expect((await readOwnEmailAddress(env.DB, userId, null)).delivery.status).toBe("unknown");
+  });
+  it("refuses a staff promotion when delivery state changes after its preflight", async () => {
+    const added = await alias(),
+      { admin } = await seedEventAndAdmin(env.DB),
+      raced = gateNextBatch(env.DB);
+    const change = updateUser(raced.db, admin, userId, { email: added.address }).catch((error: unknown) => error);
+    await raced.reached;
+    await event("gone", { email: added.address });
+    raced.release();
+    expect(await change).toMatchObject({ code: "USER_UPDATE_CONFLICT" });
+    expect((await readOwnEmailAddress(env.DB, userId, null)).email).toBe(email);
+    expect((await readOwnEmailAddress(env.DB, userId, added.id)).delivery.status).toBe("bouncing");
+  });
+  it("retains every signal needed to handle transient outcomes arriving before older hard failures", async () => {
+    await event("gone", { event: "delivered", timestamp: timestamp + 10 });
+    await event("gone", { type: "blocked", timestamp: timestamp + 30 });
+    await event("gone", { type: "bounce", timestamp: timestamp + 20 });
+    expect((await delivery()).status).toBe("bouncing");
+    await event("gone", { event: "delivered", timestamp: timestamp + 25 });
+    expect((await delivery()).status).toBe("delayed");
+    await event("gone", { event: "delivered", timestamp: timestamp + 40 });
+    expect((await delivery()).status).toBe("delivered");
+  });
+  it("reads a populated user page from account records in one bounded batch", async () => {
     for (let i = 0; i < 8; i++) {
-      const address = `history-${i}@example.test`;
-      const owner = await insertUser(env.DB, address);
-      const statements = Array.from({ length: 12 }, () =>
-        env.DB.prepare(`INSERT INTO email_outbox
-        (id,template_key,recipient_user_id,recipient_email,message_type,subject,payload_json,provider,status,send_after,created_at,updated_at)
-        VALUES (?,'test',?,?,'transactional','Test','{}','sendgrid','bounced',?,?,?)`).bind(
-          crypto.randomUUID(),
-          owner,
-          address,
-          started,
-          started,
-          started,
-        ),
-      );
-      await env.DB.batch(statements);
+      const address = `delivery-page-${i}@example.test`,
+        owner = await insertUser(env.DB, address);
+      await event("gone", { email: address });
+      expect(owner).toBeTruthy();
     }
     const flow = profileD1Flow(env.DB, { measurePayloadBytes: true });
-    const result = await listUsers(flow.db, usersListQuerySchema.parse({ q: "history-", limit: 8 }));
+    const result = await listUsers(flow.db, usersListQuerySchema.parse({ q: "delivery-page-", limit: 8 }));
     expect(result.users).toHaveLength(8);
     expect(result.users.every((user) => user.emailDelivery.status === "bouncing")).toBe(true);
     const profile = await flow.report();
     expect(profile.roundTrips).toBe(1);
     expect(profile.statements).toBe(2);
-    expect(Math.max(...profile.queries.map((query) => query.requestBytes ?? 0))).toBeLessThan(64 * 1024);
     expect(Math.max(...profile.queries.map((query) => query.resultBytes ?? 0))).toBeLessThan(32 * 1024);
+    expect(profile.plans.some((plan) => plan.sql.includes("email_outbox"))).toBe(false);
   });
   it("exposes the status through mounted user APIs without an extra users-list round trip", async () => {
     const { admin } = await seedEventAndAdmin(env.DB);
