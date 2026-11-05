@@ -17,6 +17,7 @@ export { promotionDimensions, buildPromotionPages } from "./promotion-scene";
 export { promotionMeasuredLines } from "./promotion-text";
 export { renderPromotionPdf } from "./promotion-pdf";
 export interface PromotionRenderData {
+  headshotKeys?: Record<string, string | null>;
   fontAssets?: { mono: Uint8Array; monoBold: Uint8Array; medium: Uint8Array };
   heroImage?: import("../../utils/image-format").EmbeddedRasterImage | null;
   agenda: AgendaSnapshot;
@@ -58,9 +59,7 @@ export interface PromotionRenderData {
   cardPage?: number;
   cardPageCount?: number;
 }
-export function hasUnsupportedPromotionScript(text: string) {
-  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(text);
-}
+export { hasUnsupportedPromotionScript } from "./promotion-text";
 export function promotionCardPages(
   data: PromotionRenderData,
   format: Exclude<keyof typeof promotionDimensions, "carousel">,

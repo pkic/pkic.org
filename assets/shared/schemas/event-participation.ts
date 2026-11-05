@@ -15,5 +15,6 @@ export const eventParticipationSchema = z.object({
   speakerStates: z.array(proposalAccessSpeakerStatusSchema).default([]),
   proposals: z.number().int().nonnegative(),
   speakerProposals: z.number().int().nonnegative(),
+  speakerSessions: z.number().int().nonnegative().default(0),
 });
 export type EventParticipation = z.infer<typeof eventParticipationSchema>;

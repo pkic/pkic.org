@@ -1,3 +1,5 @@
+import { Dialog } from "../../../../ui/Dialog";
+import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
 import { eventClock } from "../../../../../shared/event-clock";
 import { groupEventWhenAndWhere } from "./group-event-place";
 
@@ -18,6 +20,9 @@ import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { lazy, Suspense } from "preact/compat";
 import { Spinner } from "../../../../components/Spinner";
+const MyPromotionKits = lazy(() =>
+  import("../events/detail/agenda/MyPromotionKits").then((module) => ({ default: module.MyPromotionKits })),
+);
 const RegistrationBadgePrinting = lazy(() =>
   import("../../../../components/event-badges/RegistrationBadgePrinting").then((module) => ({
     default: module.RegistrationBadgePrinting,
@@ -122,6 +127,12 @@ export function GroupEventWorkspace({
       legacy === "team" ? "settings" : legacy === "promoters" || legacy === "attendance" ? "stats" : "registrations";
   }
   const [, navigate] = usePortalHashLocation();
+  const [promotionUserId, setPromotionUserId] = useHashQueryParam("promotionUserId", "");
+  const [promotionContext, setPromotionContext] = useState<{ userId: string; name?: string } | null>(null);
+  function openPromotion(userId: string, name?: string) {
+    setPromotionContext({ userId, name });
+    setPromotionUserId(userId);
+  }
   useEffect(() => {
     const base = `/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}`;
     if (tab === "proposals" && detailId === CALL_SEGMENT) navigate(`${base}/settings/cfp`);
@@ -262,6 +273,7 @@ export function GroupEventWorkspace({
                     eventSlug={event.slug}
                     badgesPath={`${tabPath("registrations")}/badges`}
                     registrationId={detailId}
+                    onOpenPromotion={canManage ? openPromotion : undefined}
                     canVip={canManage}
                   />
                 ) : (
@@ -295,6 +307,7 @@ export function GroupEventWorkspace({
                       eventSlug={event.slug}
                       badgesPath={`${tabPath("registrations")}/badges`}
                       canManage={canManage}
+                      onOpenPromotion={canManage ? openPromotion : undefined}
                       onPrint={(scope, action) => {
                         setBadgePrint({ scope, action, session: portalSession.value, eventId: event.id, groupId });
                       }}
@@ -324,6 +337,7 @@ export function GroupEventWorkspace({
                     speakers={
                       <EventProposalSpeakersTable
                         slug={event.slug}
+                        onOpenPromotion={canManage ? openPromotion : undefined}
                         rowHref={(speaker) =>
                           usePortalHashLocation.hrefs(groupEventProposalPath(groupId, event.id, speaker.proposalId))
                         }
@@ -373,6 +387,7 @@ export function GroupEventWorkspace({
                     slug={event.slug}
                     canEdit={hasEventAgendaPermission(event.id, "agenda:write")}
                     canReviewAppearances={hasEventAgendaPermission(event.id, "agenda:appearance_approve")}
+                    onOpenPromotion={canManage ? openPromotion : undefined}
                     teamEligibilityPath={`${tabPath("settings")}/team`}
                   />
                 </Suspense>
@@ -433,6 +448,23 @@ export function GroupEventWorkspace({
               )}
             </Suspense>
           </section>
+        )}
+        {canManage && promotionUserId && (
+          <Dialog
+            open
+            viewer
+            size="wide"
+            title="Promotion materials"
+            meta={promotionContext?.userId === promotionUserId ? promotionContext.name : undefined}
+            closeLabel="Close promotion materials"
+            confirmLabel="Close"
+            onConfirm={() => setPromotionUserId("")}
+            onCancel={() => setPromotionUserId("")}
+          >
+            <Suspense fallback={<Spinner />}>
+              <MyPromotionKits key={promotionUserId} slug={event.slug} userId={promotionUserId} />
+            </Suspense>
+          </Dialog>
         )}
         {tab === "registrations" &&
           detailId === undefined &&

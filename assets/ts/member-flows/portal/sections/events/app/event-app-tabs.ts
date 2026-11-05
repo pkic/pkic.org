@@ -82,7 +82,9 @@ export function hasEventPromotionMaterials(
 ): boolean {
   return (
     promotionIsOpen({ startsAt: event.startsAt ?? null, endsAt: event.endsAt ?? null }) &&
-    (hasEventProposals(event) || eventRegistrationStanding(event).status === "registered")
+    (hasEventProposals(event) ||
+      Boolean(event.participation?.speakerSessions) ||
+      eventRegistrationStanding(event).status === "registered")
   );
 }
 

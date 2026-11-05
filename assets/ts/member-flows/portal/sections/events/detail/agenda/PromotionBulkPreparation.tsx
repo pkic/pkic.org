@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import { useDialogQueryState } from "../../../../../../hooks/useDialogQueryState";
 import { useEffect, useState } from "preact/hooks";
 import {
@@ -11,9 +12,7 @@ import { formatNumber } from "../../../../../../../shared/format-number";
 import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { postJson, getJson } from "../../../../../../shared/api-client";
-import { IconPlus } from "../../../../../../components/icons";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
-import { Button } from "../../../../../../ui/Button";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { Checkbox } from "../../../../../../ui/Checkbox";
@@ -26,9 +25,11 @@ const formatLabels = {
 export function PromotionBulkPreparation({
   slug,
   publishedRevision,
+  trigger,
 }: {
   slug: string;
   publishedRevision: number | null;
+  trigger: (open: () => void, disabled: boolean) => ComponentChildren;
 }) {
   const [batchId, setBatchId] = useHashQueryParam("promotionBatch", "");
   const [creating, showCreating, closeCreating] = useDialogQueryState("promotionBatchCreate");
@@ -90,18 +91,12 @@ export function PromotionBulkPreparation({
   }
   return (
     <>
-      <Button
-        onClick={() => {
-          setRequestId(crypto.randomUUID());
-          setBatch(null);
-          showCreating();
-          setError("");
-        }}
-        disabled={!publishedRevision}
-      >
-        <IconPlus />
-        Prepare kits for all speakers
-      </Button>
+      {trigger(() => {
+        setRequestId(crypto.randomUUID());
+        setBatch(null);
+        showCreating();
+        setError("");
+      }, !publishedRevision)}
       {(creating || batchId) && (
         <Dialog
           open

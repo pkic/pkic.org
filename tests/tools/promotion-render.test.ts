@@ -58,6 +58,27 @@ const data = {
   sessionUrl: "https://pkic.org/events/event/sessions/session/",
 };
 describe("promotion exports", () => {
+  it("keeps a long carousel title and its metadata below the logo", () => {
+    const title =
+      "Building trustworthy cryptographic infrastructure across independent organizations: migration evidence, certificate lifecycle ownership and practical operational boundaries panel-synthetic";
+    const page = buildPromotionPages(
+      {
+        ...data,
+        occurrence: { ...data.occurrence, title },
+        agenda: { ...data.agenda, eventName: "Post-Quantum Cryptography Conference" },
+      },
+      "carousel",
+    )[0]!;
+    expect(Math.min(...page.texts.map((text) => text.y - text.size))).toBeGreaterThanOrEqual(180);
+    expect(Math.max(...page.texts.map((text) => text.y))).toBeLessThanOrEqual(1050);
+    expect(
+      page.texts
+        .filter((text) => text.role === "H1")
+        .map((text) => text.text)
+        .join(" "),
+    ).toBe(title);
+  });
+
   it("keeps wrapped speaker credits together beside the portrait and clears the following summary", () => {
     const person = {
       userId: "credit",

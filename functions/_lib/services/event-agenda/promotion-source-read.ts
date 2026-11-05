@@ -129,6 +129,11 @@ export function preparePromotionSourceRead(
         agenda,
         people,
         person,
+        headshotKeys: occurrenceId
+          ? Object.fromEntries(
+              batchRows<AgendaSpeakerRow>(loaded[offset + 2]).map((row) => [row.user_id, row.headshot_r2_key]),
+            )
+          : { [userId]: person?.headshot_r2_key ?? null },
         code: progress.code ?? "",
         metrics: progress.metrics,
         assigned: Boolean(entitlement?.assigned),

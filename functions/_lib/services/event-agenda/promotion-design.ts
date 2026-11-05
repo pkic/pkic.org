@@ -11,7 +11,7 @@ import { prepareConfiguredSponsorBranding } from "./sponsors";
 import {
   badgeEventInstant,
   badgePrintingBasisRevision,
-  getBadgePrintingContext,
+  loadBadgeSponsorArtwork,
 } from "../event-participation/badge-print-branding";
 import { parseJsonSafe } from "../../utils/json";
 import { bytesToBase64 } from "../../../../assets/shared/base64";
@@ -64,6 +64,7 @@ export function preparePromotionDesign(db: DatabaseLike, selection: EventReadSel
         event,
         design,
         brandingRevision,
+        populations,
         place: eventPlaceSummary({ ...event, venue: typeof settings.venue === "string" ? settings.venue : null }) ?? "",
       };
     },
@@ -75,11 +76,18 @@ export async function resolvePromotionDesign(db: DatabaseLike, eventId: string) 
 }
 
 export async function promotionSponsorArtwork(db: DatabaseLike, env: Pick<Env, "ASSETS_BUCKET">, eventId: string) {
-  const { design } = await resolvePromotionDesign(db, eventId);
+  return promotionDesignArtwork(env, await resolvePromotionDesign(db, eventId));
+}
+
+export async function promotionDesignArtwork(
+  env: Pick<Env, "ASSETS_BUCKET">,
+  visual: Awaited<ReturnType<typeof resolvePromotionDesign>>,
+) {
+  const { design, populations } = visual;
   if (!design.sponsorGroups.length) return { revision: "", sponsors: [] };
-  const context = await getBadgePrintingContext(db, env, eventId, design.sponsorGroups);
+  const context = await loadBadgeSponsorArtwork(env, populations, design.sponsorGroups);
   return {
-    revision: context.revision,
+    revision: visual.brandingRevision,
     sponsors: context.branding.map((group) => ({
       tierName: group.tierName,
       ...(group.label ? { label: group.label } : {}),
