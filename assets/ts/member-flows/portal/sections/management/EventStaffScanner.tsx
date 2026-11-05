@@ -1,5 +1,3 @@
-import { ButtonLink } from "../../../../ui/Button";
-import { IconPrint } from "../../../../components/icons/app-navigation";
 import { BadgeLabelDesk } from "../events/detail/badges/BadgeLabelDesk";
 import { lazy, Suspense } from "preact/compat";
 import { scannerPermission, availableScannerActions } from "../../../../../shared/event-scanner-permissions";
@@ -30,13 +28,6 @@ export function EventStaffScanner({
   const operator = portalSession.value?.identity.id ?? "";
   return (
     <div class="pk-stack">
-      {canPrintLabels && section !== "print" && (
-        <div class="pk-cluster">
-          <ButtonLink href={`#${basePath}/print`}>
-            <IconPrint /> Print
-          </ButtonLink>
-        </div>
-      )}
       {section === "print" && canPrintLabels ? (
         <BadgeLabelDesk slug={slug} />
       ) : (
@@ -44,6 +35,7 @@ export function EventStaffScanner({
           <EventScanner
             key={`${eventId}:${slug}:${operator}`}
             slug={slug}
+            printHref={canPrintLabels ? `#${basePath}/print` : undefined}
             operatorUserId={operator}
             allowedActions={[...actions, ...(canAdmitExceptions ? ["exception" as const] : [])]}
             canAdmitExceptions={canAdmitExceptions}

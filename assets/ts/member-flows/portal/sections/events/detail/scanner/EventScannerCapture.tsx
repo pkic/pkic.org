@@ -44,6 +44,7 @@ import { useScannerSyncHistory } from "./useScannerSyncHistory";
 import { scannerPreparationRefusal } from "./scanner-offline-context";
 export function EventScannerCapture({
   slug,
+  printHref,
   operatorUserId,
   occurrenceId = null,
   sponsorId,
@@ -55,9 +56,7 @@ export function EventScannerCapture({
 }: EventScannerProps) {
   const refusePreparation = scannerPreparationRefusal(portalSession.value, operatorUserId);
   const [badgeId, setBadge] = useState("");
-  const [action, setAction] = useState<EventScanRequest["action"]>(
-    scannerInitialAction(allowedActions, collectorContext?.action, Boolean(sponsorId)),
-  );
+  const [action, setAction] = useState(scannerInitialAction(allowedActions, collectorContext?.action, !!sponsorId));
   const [scannerTab, setScannerTab] = useHashQueryParam("scannerTab", "scan", ["scan", "recent", "diagnostics"]);
   const recentVisible = scannerTab === "recent" && !collectorContext;
   const [consentConfirmed, setConsent] = useState(false);
@@ -476,6 +475,7 @@ export function EventScannerCapture({
                 collector={collectorContext}
                 onCheckSignIn={onCheckSignIn}
                 setup={{
+                  printHref,
                   operatorUserId,
                   sponsorOnly: action === "lead",
                   explicitTarget: Boolean(occurrenceId),

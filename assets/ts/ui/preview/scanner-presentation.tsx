@@ -1,3 +1,5 @@
+import { ScannerDestinationTiles } from "../../member-flows/portal/sections/events/detail/scanner/ScannerDestinationTiles";
+import "../../member-flows/portal/sections/events/detail/scanner/EventScanner.css";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { FastScannerView } from "../../member-flows/portal/sections/events/detail/scanner/FastScannerView";
 import { scannerImmersiveLifecycle } from "../../member-flows/portal/sections/events/detail/scanner/immersive-scanner";
@@ -37,4 +39,18 @@ export const scannerPresentationSection: PreviewSection = {
   id: "scanner-presentation",
   title: "Shared scanner views",
   render: () => <ScannerPresentationExample />,
+};
+
+export const scannerDestinationsSection: PreviewSection = {
+  id: "scanner-destinations",
+  title: "Scanner tasks",
+  render: () => (
+    <ScannerDestinationTiles
+      allowedActions={["attendance", "checkout"]}
+      disabled={false}
+      onVenue={() => {}}
+      onSessions={() => {}}
+      printHref="#/events/example/scanner/print"
+    />
+  ),
 };

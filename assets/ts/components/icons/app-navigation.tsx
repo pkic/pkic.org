@@ -82,6 +82,23 @@ export function IconScan(props: SvgProps) {
   );
 }
 
+/** An arrow enters the doorway. */
+export function IconVenueEntrance(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M10 2h4v12h-4M2 8h9m-4-4 4 4-4 4" />
+    </StrokeIcon>
+  );
+}
+/** An arrow leaves the doorway. */
+export function IconVenueExit(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M6 2H2v12h4M5 8h9m-4-4 4 4-4 4" />
+    </StrokeIcon>
+  );
+}
+
 /** A printer identifies badge printing wherever its scanner appears. */
 export function IconPrint(props: SvgProps) {
   return (

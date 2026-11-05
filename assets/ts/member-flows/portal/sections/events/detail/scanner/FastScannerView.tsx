@@ -1,3 +1,4 @@
+import { ScannerModeIcon } from "./ScannerModeIcon";
 import { ScannerPreparationStatus } from "./ScannerPreparationStatus";
 import type { ComponentChildren, ComponentProps } from "preact";
 import { scanFeedbackLabel, scanFeedbackOutcome, scanEligibilityLabel } from "./scan-stream";
@@ -19,7 +20,7 @@ import "../../../../shell/Login.css";
 import "./FastScannerView.css";
 import { HeadingOutline } from "../../../../../../ui/HeadingOutline";
 import { SectionHeading } from "../../../../../../ui/SectionHeading";
-import { IconScan, IconLeadCard, IconPrint, IconFullscreen } from "../../../../../../components/icons/app-navigation";
+import { IconPrint, IconFullscreen } from "../../../../../../components/icons/app-navigation";
 
 export function FastScannerView({
   presentation = "fullscreen",
@@ -191,10 +192,8 @@ export function FastScannerView({
                 <IconInfoCircle />
               ) : purpose === "print" ? (
                 <IconPrint />
-              ) : mode === "lead" ? (
-                <IconLeadCard />
               ) : (
-                <IconScan />
+                <ScannerModeIcon action={mode} />
               )}
             </span>
             <strong class="pk-fast-scanner__label">

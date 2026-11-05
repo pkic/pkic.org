@@ -5,6 +5,7 @@ import { EventScannerCapture } from "./EventScannerCapture";
 
 export interface EventScannerProps {
   slug: string;
+  printHref?: string;
   operatorUserId: string;
   occurrenceId?: string | null;
   sponsorId?: string;
