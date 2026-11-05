@@ -2,10 +2,10 @@ import { eventClock } from "../../../../../shared/event-clock";
 import { groupEventWhenAndWhere } from "./group-event-place";
 
 /** URL-addressed event record and nested sections inside its owning group. */
-import { useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
 import { hasEventAgendaPermission } from "../events/event-agenda-access";
-import { portalSession } from "../../state";
+import { isAuthed, portalSession } from "../../state";
 import type { PortalSession } from "../../types";
 import type { BadgePrintAction } from "../../../../../shared/schemas/event-badge-printing";
 import type { BadgePrintScope } from "../../../../components/event-badges/badge-print-population";
@@ -18,6 +18,11 @@ import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { lazy, Suspense } from "preact/compat";
 import { Spinner } from "../../../../components/Spinner";
+const RegistrationBadgePrinting = lazy(() =>
+  import("../../../../components/event-badges/RegistrationBadgePrinting").then((module) => ({
+    default: module.RegistrationBadgePrinting,
+  })),
+);
 const ProposalDetailPage = lazy(() =>
   import("../events/detail/ProposalDetailPage").then((module) => ({ default: module.ProposalDetailPage })),
 );
@@ -127,10 +132,27 @@ export function GroupEventWorkspace({
     action?: BadgePrintAction;
     session: PortalSession | null;
     eventId: string;
+    groupId: string;
   } | null>(null);
   useEffect(() => {
-    if (tab !== "registrations" || detailId !== "badges") setBadgePrint(null);
-  }, [tab, detailId, event.id]);
+    setBadgePrint((pending) =>
+      pending &&
+      (tab !== "registrations" || detailId !== undefined || pending.eventId !== event.id || pending.groupId !== groupId)
+        ? null
+        : pending,
+    );
+  }, [tab, detailId, event.id, groupId]);
+  const printSession = badgePrint?.session;
+  const printContextCurrent = useCallback(
+    () =>
+      Boolean(
+        printSession &&
+        isAuthed.value &&
+        portalSession.value === printSession &&
+        Math.min(Date.parse(printSession.expiresAt), Date.parse(printSession.idleExpiresAt)) > Date.now(),
+      ),
+    [printSession],
+  );
   const canManage = event.capabilities.includes("manage");
   const canRegister = event.registrationPolicy !== "no_registration" && event.capabilities.includes("register");
   const canFinalizeProposals = event.proposalAccess?.canFinalize === true;
@@ -260,11 +282,6 @@ export function GroupEventWorkspace({
                             segment={detailSegment}
                             eventId={event.id}
                             groupId={groupId}
-                            printRequest={badgePrint?.eventId === event.id ? badgePrint : null}
-                            onPrintClose={() => {
-                              setBadgePrint(null);
-                              navigate(tabPath("registrations"));
-                            }}
                           />
                         </Suspense>
                       ) : detailId === "badges" ? (
@@ -279,8 +296,7 @@ export function GroupEventWorkspace({
                       badgesPath={`${tabPath("registrations")}/badges`}
                       canManage={canManage}
                       onPrint={(scope, action) => {
-                        setBadgePrint({ scope, action, session: portalSession.value, eventId: event.id });
-                        navigate(`${tabPath("registrations")}/badges`);
+                        setBadgePrint({ scope, action, session: portalSession.value, eventId: event.id, groupId });
                       }}
                     />
                   </GroupEventRecordSections>
@@ -418,6 +434,21 @@ export function GroupEventWorkspace({
             </Suspense>
           </section>
         )}
+        {tab === "registrations" &&
+          detailId === undefined &&
+          badgePrint?.eventId === event.id &&
+          badgePrint.groupId === groupId && (
+            <Suspense fallback={<Spinner label="Preparing attendee output…" />}>
+              <RegistrationBadgePrinting
+                slug={event.slug}
+                eventId={event.id}
+                scope={badgePrint.scope}
+                action={badgePrint.action ?? "labels"}
+                isCurrent={printContextCurrent}
+                onBack={() => setBadgePrint(null)}
+              />
+            </Suspense>
+          )}
       </section>
     </BreadcrumbBranch>
   );

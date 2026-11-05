@@ -18,6 +18,7 @@ export function BadgeDocumentFrame({
   height,
   onReady,
   onError,
+  decorative = false,
 }: {
   html: string;
   title: string;
@@ -28,6 +29,7 @@ export function BadgeDocumentFrame({
   height?: number;
   onReady?: () => void;
   onError?: (message: string) => void;
+  decorative?: boolean;
 }) {
   const ownFrame = useRef<HTMLIFrameElement>(null);
   const frame = frameRef ?? ownFrame;
@@ -41,6 +43,8 @@ export function BadgeDocumentFrame({
   return (
     <iframe
       sandbox="allow-same-origin allow-modals"
+      tabIndex={decorative ? -1 : undefined}
+      aria-hidden={decorative || undefined}
       ref={frame}
       class={className}
       title={title}
