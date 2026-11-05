@@ -103,8 +103,11 @@ export const REGISTRATION_ADMISSION_MODES = ["within_capacity", "vip", "capacity
 export const registrationAdmissionModeSchema = z.enum(REGISTRATION_ADMISSION_MODES);
 /**
  * `within_capacity` admits someone off the waiting list, so it acts only for a
- * registration still waiting (or holding a live offer) on every selected day:
- * a lapsed offer or an arbitrary registration cannot jump the queue.
+ * registration still waiting (or holding a live offer) on every selected day;
+ * a lapsed offer or a registration that never joined the waitlist cannot use it.
+ * It enforces capacity, not queue order: a manager may admit any active waiter
+ * into a free place, including one the promotion job would offer to someone
+ * earlier in the queue. Places already offered are counted and cannot be taken.
  */
 export function admissionRequiresActiveWaitlist(mode: (typeof REGISTRATION_ADMISSION_MODES)[number]): boolean {
   return mode === "within_capacity";
