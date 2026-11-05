@@ -70,6 +70,14 @@ describe("group event operations through delegated MCP", () => {
       const created = await mcpCreate(grant.access_token, fixture.approved);
       expect(created.error).toBeUndefined();
       expect(created.event).toMatchObject({ city: "Toronto", timezone: "America/Toronto" });
+      const listed = value(
+        await callTool(grant.access_token, "request", {
+          method: "GET",
+          path: `/api/v1/groups/${fixture.approved}/events`,
+          query: { limit: 1 },
+        }),
+      );
+      expect(listed.events.map((event: { id: string }) => event.id)).toContain(created.event.id);
       for (const suffix of ["", "/days", "/terms"]) {
         const result = value(
           await callTool(grant.access_token, "request", {
@@ -103,6 +111,34 @@ describe("group event operations through delegated MCP", () => {
       expect(settings.error).toBeUndefined();
       expect(settings.event.id).toBe(created.event.id);
       expect(settings.event.settings.venue).toBe("Synthetic North Building, 100 Level");
+      let revision = updated.event.updatedAt;
+      for (const [suffix, configuration] of [
+        ["terms", { attendee: [{ termKey: "event-terms", version: "1", displayText: "I agree to the event terms" }] }],
+        [
+          "days",
+          {
+            days: [
+              {
+                date: "2031-06-02",
+                startTime: "09:00",
+                endTime: "17:00",
+                attendanceOptions: [{ value: "in_person", label: "In person" }],
+              },
+            ],
+          },
+        ],
+      ] as const) {
+        const saved = value(
+          await callTool(grant.access_token, "request", {
+            method: "PUT",
+            path: `/api/v1/groups/${fixture.approved}/events/${created.event.id}/${suffix}`,
+            body: { expectedUpdatedAt: revision, configuration },
+          }),
+        );
+        expect(saved.error).toBeUndefined();
+        expect(saved.success).toBe(true);
+        revision = saved.eventUpdatedAt;
+      }
       const [stored] = await queryAll<{ venue: string }>(
         env.DB,
         "SELECT json_extract(settings_json,'$.venue') AS venue FROM events WHERE id=?",
