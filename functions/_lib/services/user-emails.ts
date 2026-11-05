@@ -1,3 +1,9 @@
+import {
+  emailAddressDeliveryJsonSql,
+  decodeEmailAddressDelivery,
+  DELIVERY_COLUMNS,
+  type AddressDeliveryRow,
+} from "./email-address-delivery";
 import { prepareMailingListAddressSync } from "./mailing-list-subscriptions/queue-email-change";
 /**
  * Secondary email addresses on a user account reserve its email namespace.
@@ -25,6 +31,7 @@ import { authorizedUserMutationDb } from "./user-management-authorization";
 import { prepareRotateProposalSpeakerSecretsMailedToUserEmail } from "./registrations/manage-capability-revocation";
 
 interface UserEmailRow {
+  delivery_json: string;
   id: string;
   user_id: string;
   email: string;
@@ -37,7 +44,7 @@ const USER_EMAIL_SORT_EXPRESSIONS: Record<(typeof USER_EMAILS_SORT_COLUMNS)[numb
   created_at: "created_at",
 };
 
-export interface UserEmailOwner {
+export interface UserEmailOwner extends AddressDeliveryRow {
   userId: string;
   kind: "primary" | "secondary" | "pending";
   verified: number;
@@ -77,6 +84,7 @@ export function emailTakenError(): AppError {
 
 function toRecord(row: UserEmailRow): UserEmailRecord {
   return userEmailResponseSchema.parse({
+    delivery: decodeEmailAddressDelivery(row.delivery_json),
     id: row.id,
     userId: row.user_id,
     email: row.email,
@@ -92,7 +100,8 @@ export async function listUserEmails(
 ): Promise<{ emails: UserEmailRecord[]; page: PageInfo }> {
   const search = query.q ? buildD1TextSearchFilter(query.q, ["email"]) : null;
   const { rows, total } = await queryPage<UserEmailRow>(db, {
-    sql: `SELECT id, user_id, email, identity_id, created_at
+    sql: `SELECT id, user_id, email, identity_id, created_at,
+            ${emailAddressDeliveryJsonSql("user_emails")} AS delivery_json
             FROM user_emails
            WHERE user_id = ?${search ? ` AND ${search.sql}` : ""}`,
     bindings: [userId, ...(search?.bindings ?? [])],
@@ -108,15 +117,15 @@ export async function listUserEmails(
 export async function findUserEmailOwner(db: DatabaseLike, normalizedEmail: string): Promise<UserEmailOwner | null> {
   return first<UserEmailOwner>(
     db,
-    `SELECT id AS userId, 'primary' AS kind, email_verified_at IS NOT NULL AS verified
+    `SELECT id AS userId, 'primary' AS kind, email_verified_at IS NOT NULL AS verified, ${DELIVERY_COLUMNS.join(", ")}
        FROM users
       WHERE normalized_email = ?
       UNION ALL
-     SELECT user_id AS userId, 'secondary' AS kind, verified_at IS NOT NULL AS verified
+     SELECT user_id AS userId, 'secondary' AS kind, verified_at IS NOT NULL AS verified, ${DELIVERY_COLUMNS.join(", ")}
        FROM user_emails
       WHERE normalized_email = ?
       UNION ALL
-     SELECT id AS userId, 'pending' AS kind, 0 AS verified
+     SELECT id AS userId, 'pending' AS kind, 0 AS verified, ${DELIVERY_COLUMNS.map(() => "NULL").join(", ")}
        FROM users
       WHERE pending_email = ?
       LIMIT 1`,
@@ -216,7 +225,7 @@ export async function addUserEmail(
     throw error;
   }
 
-  return { id, userId, email, identityId: null, createdAt: now };
+  return userEmailResponseSchema.parse({ id, userId, email, identityId: null, createdAt: now });
 }
 
 export async function removeUserEmail(

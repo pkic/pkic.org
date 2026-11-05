@@ -4,6 +4,7 @@
  * person manages their own through `/api/v1/users/current/emails`.
  */
 import { z } from "zod";
+import { emailAddressDeliverySchema, UNKNOWN_EMAIL_DELIVERY } from "./email-address-delivery";
 import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
@@ -14,6 +15,7 @@ export const userEmailIdParamsSchema = z.object({ userId: databaseIdSchema, emai
 export const userEmailAddSchema = z.object({ email: normalizedEmailSchema });
 
 export const userEmailResponseSchema = z.object({
+  delivery: emailAddressDeliverySchema.default(UNKNOWN_EMAIL_DELIVERY),
   id: databaseIdSchema,
   userId: databaseIdSchema,
   email: z.string(),

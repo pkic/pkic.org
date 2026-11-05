@@ -371,3 +371,38 @@ describe("email addresses on the user record", () => {
     expect(host.textContent).not.toContain("expired");
   });
 });
+
+describe("email address delivery warnings", () => {
+  it("shows each address's own delivery warning without changing its verification", async () => {
+    stub(() => json({}), {
+      ...addresses,
+      emails: addresses.emails.map((address, index) => ({
+        ...address,
+        delivery: {
+          status: index === 0 ? "delivered" : index === 1 ? "bouncing" : "delayed",
+          observedAt: "2026-11-01T10:00:00.000Z",
+        },
+      })),
+    });
+    const host = mount(<EmailAddressesPanel userId={USER_ID} isSelf primaryEmail="ana@gmail.com" />);
+    await settle();
+    expect(host.textContent).toContain("Bouncing");
+    expect(host.textContent).toContain("Delivery delayed");
+    expect(host.querySelectorAll('[aria-label="Verified"]').length).toBe(2);
+    expect(host.querySelectorAll(".pk-badge").length).toBe(2);
+  });
+  it("shows staff the primary address's failure from the user record", async () => {
+    stub(() => json({}), { emails: [], page: { limit: 10, offset: 0, total: 0, hasMore: false } });
+    const host = mount(
+      <EmailAddressesPanel
+        userId={USER_ID}
+        isSelf={false}
+        primaryEmail="primary@example.test"
+        primaryEmailDelivery={{ status: "bouncing", observedAt: "2026-11-01T10:00:00.000Z" }}
+      />,
+    );
+    await settle();
+    expect(host.textContent).toContain("primary@example.test");
+    expect(host.textContent).toContain("Bouncing");
+  });
+});

@@ -1,3 +1,4 @@
+import { prepareAddressDeliveryTransfer } from "./email-address-delivery";
 import { prepareMailingListAddressSync } from "./mailing-list-subscriptions/queue-email-change";
 /**
  * Proving that a person receives mail at an address they added.
@@ -374,6 +375,7 @@ export async function verifyOwnEmailAddress(
           "UPDATE user_emails SET verified_at = ?, verification_method = 'magic_link' WHERE id = ? AND user_id = ?",
         )
         .bind(at, address.id, userId),
+      ...(ownership ? [prepareAddressDeliveryTransfer(db, "user_emails", address.id, ownership)] : []),
       ...(joined?.statements ?? []),
       ...prepareMailingListAddressSync(db, userId, at),
     ],

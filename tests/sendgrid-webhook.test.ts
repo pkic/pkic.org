@@ -1,3 +1,5 @@
+import { insertUser } from "./helpers/membership";
+import { readOwnEmailAddress } from "../functions/_lib/services/own-email-address-read";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "./helpers/app";
@@ -172,6 +174,32 @@ describe("SendGrid event webhook security", () => {
       { provider_message_id: "message-2", status: "delivered" },
       { provider_message_id: "message-3", status: "sent" },
     ]);
+  });
+
+  it("persists a signed recipient-only bounce without outbox history and rejects other environments", async () => {
+    const address = "signed.bounce@example.test",
+      userId = await insertUser(env.DB, address);
+    const body = JSON.stringify([
+      { event: "bounce", type: "bounce", email: address, timestamp: 1793527200, env_url: "https://pkic.org" },
+    ]);
+    const signed = await signedWebhook(body),
+      environment = { ...env, APP_BASE_URL: "https://pkic.org", SENDGRID_WEBHOOK_VERIFICATION_KEY: signed.key } as Env;
+    expect((await callWebhook(environment, body)).status).toBe(400);
+    expect((await readOwnEmailAddress(env.DB, userId, null)).delivery.status).toBe("unknown");
+    const headers = {
+      "X-Twilio-Email-Event-Webhook-Signature": signed.signature,
+      "X-Twilio-Email-Event-Webhook-Timestamp": signed.timestamp,
+    };
+    expect(
+      (await callWebhook({ ...environment, APP_BASE_URL: "https://preview.example.test" }, body, headers)).status,
+    ).toBe(200);
+    expect((await readOwnEmailAddress(env.DB, userId, null)).delivery.status).toBe("unknown");
+    expect((await callWebhook(environment, body, headers)).status).toBe(200);
+    await env.DB.batch([env.DB.prepare("DELETE FROM audit_log"), env.DB.prepare("DELETE FROM email_outbox")]);
+    expect((await readOwnEmailAddress(env.DB, userId, null)).delivery).toEqual({
+      status: "bouncing",
+      observedAt: "2026-11-01T10:00:00.000Z",
+    });
   });
 
   it("reconciles an ambiguous send by its signed stable outbox id", async () => {

@@ -1,3 +1,4 @@
+import { DELIVERY_COLUMNS } from "../email-address-delivery";
 import type { SendgridEvent } from "../../../../assets/shared/schemas/email-webhook";
 import { chunkJsonRows } from "../../db/json-bulk";
 import { logInfo } from "../../logging";
@@ -17,7 +18,8 @@ const EVENT_ACTIONS: Readonly<Record<string, string>> = {
 };
 
 interface NormalizedSendgridEvent {
-  baseId: string;
+  signal: string | null;
+  baseId: string | null;
   outboxId: string | null;
   eventType: string;
   action: string;
@@ -46,11 +48,12 @@ function eventReason(event: SendgridEvent): string {
 
 function normalizeEvent(event: SendgridEvent, sequence: number): NormalizedSendgridEvent | null {
   const action = EVENT_ACTIONS[event.event];
-  if (!action || !event.sg_message_id) return null;
-  const baseId = extractBaseMessageId(event.sg_message_id);
+  if (!action || (!event.sg_message_id && !event.outbox_id && !event.email)) return null;
+  const baseId = event.sg_message_id ? extractBaseMessageId(event.sg_message_id) : null;
+  const temporaryBounce = event.event === "bounce" && (event.type === "soft" || event.type === "blocked");
   const hardFailure =
-    event.event === "dropped" || event.event === "spamreport" || (event.event === "bounce" && event.type !== "soft");
-  const softFailure = event.event === "deferred" || (event.event === "bounce" && event.type === "soft");
+    event.event === "dropped" || event.event === "spamreport" || (event.event === "bounce" && !temporaryBounce);
+  const softFailure = event.event === "deferred" || temporaryBounce;
   const reason = eventReason(event);
   const errorText =
     event.event === "spamreport"
@@ -72,7 +75,7 @@ function normalizeEvent(event: SendgridEvent, sequence: number): NormalizedSendg
   const eventIdentity =
     event.sg_event_id ??
     [
-      baseId,
+      baseId ?? event.outbox_id,
       event.event,
       event.timestamp ?? "no-time",
       event.email ?? "no-email",
@@ -80,6 +83,17 @@ function normalizeEvent(event: SendgridEvent, sequence: number): NormalizedSendg
     ].join(":");
 
   return {
+    signal: !event.timestamp
+      ? null
+      : event.event === "delivered"
+        ? "delivery_delivered_at"
+        : softFailure
+          ? "delivery_delayed_at"
+          : event.event === "bounce" || (event.event === "dropped" && /bounced address/i.test(reason))
+            ? "delivery_bounced_at"
+            : hardFailure
+              ? "delivery_blocked_at"
+              : null,
     baseId,
     outboxId: event.outbox_id ?? null,
     eventType: event.event,
@@ -95,6 +109,7 @@ function normalizeEvent(event: SendgridEvent, sequence: number): NormalizedSendg
     unsubscribeReason: event.event === "spamreport" ? "spam_report" : unsubscribeChannel ? "unsubscribed" : null,
     detailsJson: stringifyJson({
       email: event.email ?? null,
+      bounceType: event.type ?? null,
       reason,
       baseId,
       outboxId: event.outbox_id ?? null,
@@ -107,6 +122,7 @@ function normalizeEvent(event: SendgridEvent, sequence: number): NormalizedSendg
 
 const JSON_EVENT_ROWS = `
   SELECT
+    json_extract(value, '$.signal') AS signal,
     json_extract(value, '$.baseId') AS base_id,
     json_extract(value, '$.outboxId') AS outbox_id,
     json_extract(value, '$.eventType') AS event_type,
@@ -126,46 +142,65 @@ const JSON_EVENT_ROWS = `
   FROM json_each(?)
 `;
 
+const OUTBOX_RECIPIENT_EVENT_SQL = `(outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id)
+  AND (email IS NULL OR email = email_outbox.recipient_email COLLATE NOCASE)`;
+
 function prepareEventBatchStatements(env: Env, jsonRows: string) {
+  // Exact recipient matching also works after the corresponding outbox row has expired.
+  // MAX watermarks make duplicates and out-of-order webhook batches harmless.
+  const updateAddresses = (["users", "user_emails"] as const).map((table) =>
+    env.DB.prepare(
+      `WITH event_rows AS (${JSON_EVENT_ROWS})
+     UPDATE ${table} SET ${DELIVERY_COLUMNS.map(
+       (column) => `${column} = (
+       SELECT MAX(observed_at) FROM (
+         SELECT ${table}.${column} AS observed_at UNION ALL
+         SELECT occurred_at FROM event_rows WHERE signal='${column}' AND lower(email)=${table}.normalized_email
+       ))`,
+     ).join(", ")}
+     WHERE normalized_email IN (SELECT lower(email) FROM event_rows WHERE signal IS NOT NULL AND email IS NOT NULL)`,
+    ).bind(jsonRows),
+  );
+
   const updateOutbox = env.DB.prepare(
     `WITH event_rows AS (${JSON_EVENT_ROWS})
      UPDATE email_outbox
      SET status = CASE
            WHEN (SELECT MAX(hard_failure) FROM event_rows
-                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) = 1 THEN 'bounced'
+                  WHERE ${OUTBOX_RECIPIENT_EVENT_SQL}) = 1 THEN 'bounced'
            WHEN (SELECT MAX(delivered) FROM event_rows
-                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) = 1 THEN 'delivered'
+                  WHERE ${OUTBOX_RECIPIENT_EVENT_SQL}) = 1 THEN 'delivered'
            WHEN (SELECT MAX(accepted) FROM event_rows
-                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) = 1
+                  WHERE ${OUTBOX_RECIPIENT_EVENT_SQL}) = 1
                 AND status IN ('sending', 'delivery_unknown') THEN 'sent'
            ELSE status
          END,
          provider_message_id = COALESCE(
            provider_message_id,
            (SELECT base_id FROM event_rows
-             WHERE outbox_id = email_outbox.id
+             WHERE outbox_id = email_outbox.id AND (email IS NULL OR email = email_outbox.recipient_email COLLATE NOCASE)
              ORDER BY sequence DESC LIMIT 1)
          ),
          sent_at = CASE
            WHEN (SELECT MAX(accepted + delivered) FROM event_rows
-                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) > 0
+                  WHERE ${OUTBOX_RECIPIENT_EVENT_SQL}) > 0
              THEN COALESCE(sent_at, (SELECT occurred_at FROM event_rows
-                                     WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id
+                                     WHERE ${OUTBOX_RECIPIENT_EVENT_SQL}
                                      ORDER BY sequence DESC LIMIT 1))
            ELSE sent_at
          END,
          last_error = CASE
            WHEN (SELECT MAX(hard_failure) FROM event_rows
-                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) = 1
+                  WHERE ${OUTBOX_RECIPIENT_EVENT_SQL}) = 1
              THEN (SELECT error_text FROM event_rows
-                    WHERE (outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id)
+                    WHERE ${OUTBOX_RECIPIENT_EVENT_SQL}
                       AND error_text IS NOT NULL
                     ORDER BY hard_failure DESC, sequence DESC LIMIT 1)
            WHEN (SELECT MAX(accepted + delivered) FROM event_rows
-                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) > 0 THEN NULL
+                  WHERE ${OUTBOX_RECIPIENT_EVENT_SQL}) > 0 THEN NULL
            ELSE COALESCE(
              (SELECT error_text FROM event_rows
-               WHERE (outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id)
+               WHERE ${OUTBOX_RECIPIENT_EVENT_SQL}
                  AND error_text IS NOT NULL
                ORDER BY sequence DESC LIMIT 1),
              last_error
@@ -173,18 +208,22 @@ function prepareEventBatchStatements(env: Env, jsonRows: string) {
          END,
          processing_token = CASE
            WHEN (SELECT MAX(hard_failure + delivered + accepted) FROM event_rows
-                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) > 0
+                  WHERE ${OUTBOX_RECIPIENT_EVENT_SQL}) > 0
              THEN NULL
            ELSE processing_token
          END,
          lease_expires_at = CASE
            WHEN (SELECT MAX(hard_failure + delivered + accepted) FROM event_rows
-                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) > 0
+                  WHERE ${OUTBOX_RECIPIENT_EVENT_SQL}) > 0
              THEN NULL
            ELSE lease_expires_at
          END,
-         updated_at = datetime('now')
-     WHERE id IN (
+         updated_at = CASE
+           WHEN status IN ('delivered','bounced') AND NOT EXISTS (
+             SELECT 1 FROM event_rows WHERE ${OUTBOX_RECIPIENT_EVENT_SQL}
+               AND (hard_failure=1 OR delivered=1)) THEN updated_at
+           ELSE strftime('%Y-%m-%dT%H:%M:%fZ','now') END
+     WHERE (id IN (
              SELECT outbox_id FROM event_rows
               WHERE outbox_id IS NOT NULL
                 AND (hard_failure = 1 OR delivered = 1 OR accepted = 1 OR error_text IS NOT NULL)
@@ -192,7 +231,10 @@ function prepareEventBatchStatements(env: Env, jsonRows: string) {
         OR provider_message_id IN (
              SELECT base_id FROM event_rows
               WHERE hard_failure = 1 OR delivered = 1 OR accepted = 1 OR error_text IS NOT NULL
-           )`,
+           ))
+       AND EXISTS (SELECT 1 FROM event_rows
+         WHERE ${OUTBOX_RECIPIENT_EVENT_SQL}
+           AND (hard_failure=1 OR delivered=1 OR accepted=1 OR error_text IS NOT NULL))`,
   ).bind(jsonRows);
 
   const insertUnsubscribes = env.DB.prepare(
@@ -229,10 +271,11 @@ function prepareEventBatchStatements(env: Env, jsonRows: string) {
      JOIN registrations ON registrations.event_id = email_outbox.event_id
                        AND registrations.user_id = email_outbox.recipient_user_id
                        AND registrations.status = 'pending_email_confirmation'
-     WHERE event_rows.registration_failure = 1`,
+     WHERE event_rows.registration_failure = 1
+       AND (event_rows.email IS NULL OR event_rows.email = email_outbox.recipient_email COLLATE NOCASE)`,
   ).bind(jsonRows);
 
-  return [updateOutbox, insertUnsubscribes, insertOutboxAudits, insertRegistrationAudits];
+  return [...updateAddresses, updateOutbox, insertUnsubscribes, insertOutboxAudits, insertRegistrationAudits];
 }
 
 export async function processSendgridEvents(
