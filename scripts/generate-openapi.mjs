@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { filterOpenApiSpecForMcp } from "../functions/_lib/openapi/mcp.ts";
+import { MCP_RESOURCE_TEMPLATES_PATH } from "../functions/_lib/openapi/mcp-resources.ts";
 import { buildMcpCatalog, MCP_CATALOG_PATH, MCP_CONTRACTS_PATH } from "../functions/_lib/openapi/mcp-catalog.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -107,10 +108,11 @@ try {
     await writeFile(destination, body);
     console.log(`Generated ${path} (${Buffer.byteLength(body)} bytes)`);
   }
-  const { catalog, contracts } = buildMcpCatalog(mcpOpenapi);
+  const { catalog, contracts, templates } = buildMcpCatalog(mcpOpenapi);
   await rm(artifactPath(MCP_CONTRACTS_PATH), { recursive: true, force: true });
   await mkdir(artifactPath(MCP_CONTRACTS_PATH), { recursive: true });
   await writeFile(artifactPath(MCP_CATALOG_PATH), JSON.stringify(catalog));
+  await writeFile(artifactPath(MCP_RESOURCE_TEMPLATES_PATH), JSON.stringify(templates));
   for (const [key, contract] of Object.entries(contracts)) {
     await writeFile(artifactPath(`${MCP_CONTRACTS_PATH}/${key}.json`), JSON.stringify(contract));
   }

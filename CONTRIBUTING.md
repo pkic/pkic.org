@@ -416,10 +416,26 @@ permissions, group capabilities, and OAuth consent limits remain authoritative.
 MCP metadata cannot replace API scope requirements. A transport exclusion uses
 `x-pkic-mcp: { expose: false, reason: "..." }`; it does not replace authorization.
 
-Use `discover_operations` for paginated summaries filtered by text, method, or
-tag (ten summaries by default), then `inspect_operation` for a selected
-operation's canonical request contract. Response inspection selects one status
-code; full operation details are opt-in. `request` calls one API operation;
+MCP also exposes one tool per API domain, such as `events`, `groups`, and `users`.
+The catalog generates each tool's supported actions and immediate subdomains.
+For example, `events({action: "list", query: {limit: 5}})` calls `GET /api/v1/events`.
+Use `path` for a domain-relative resource, such as `/{eventSlug}/agenda`, with real
+identifiers. Actions are HTTP aliases: `list`/`get` use GET, `create` POST,
+`update` PATCH, `replace` PUT, and `delete` DELETE. The exact method/path must still
+be exposed in the API catalog. These tools reuse the same request adapter,
+permissions, validation, response limits, and OAuth checks as `request`.
+Tool listing reads the compact index to generate descriptions; initialization
+still loads no catalog or detailed contracts. Domain schemas contain no operation
+request or response schemas; inspect a contract only when its inputs are unknown.
+
+Call `request` directly when the API path and inputs are known. For example,
+`{method: "GET", path: "/api/v1/events", query: {limit: 5}}` lists events in one
+tool call. Discovery and inspection are optional. Use `discover_operations` for
+unknown operations, filtered by text, method, or tag (five summaries by default).
+Exact resource paths and shallow collections rank first; results contain only
+method, path, and summary. Use `inspect_operation` for a selected operation's
+canonical request contract when its inputs are unknown. Response inspection
+selects one status code; full operation details are opt-in. `request` calls one API operation;
 `execute` retains the single-operation safety check without loading any API
 schema into execution. `batch_read` runs up to ten independent GET
 requests, preserving order and individual results or failures. It does not retry,
@@ -437,6 +453,18 @@ The JSON/text response adapter reads at most 2 MiB per call. Binary responses
 require a binary-capable API client, and multipart uploads and browser interaction
 are not provided by these helpers. Exposure documents an operation; it neither
 grants access nor promises compatibility with every API media type.
+
+MCP also advertises resource templates generated from exposed, read-only JSON
+GET operations. `resources/templates/list` returns 20 templates per page; pass
+`nextCursor` back as `cursor` to continue. Templates include the canonical path
+and query parameter names without embedding request or response schemas.
+For example, `resources/read` with `pkic://api/api/v1/events?limit=5` reads events.
+Reads use the same API adapter, validation, permissions, OAuth scope limits, and
+revocation checks as tools. Results are limited to 24,000 characters; narrow the
+query rather than fetching every page automatically. Ordinary API responses are
+unchanged. Clients must support MCP resources; template discovery does not imply
+auto-selection by an AI model. Known URIs can be read without discovery, while
+finding a nested template may require multiple discovery pages.
 
 ### MCP authorization lifetimes
 

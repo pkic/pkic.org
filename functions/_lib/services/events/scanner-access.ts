@@ -19,7 +19,7 @@ export function decodeEventAudienceAccess(
   sponsors: EventAudienceSponsorRow[],
 ) {
   const access = new Map<string, EventAudienceAccess>();
-  if (!viewer.userId) return access;
+  if (!viewer.userId && !viewer.admin) return access;
   const grants = viewer.scannerGrants ?? [];
   for (const eventId of eventIds) {
     const canScan = grants.some(

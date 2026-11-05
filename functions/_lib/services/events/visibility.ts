@@ -1,5 +1,7 @@
 import {
   anyPermissionAuthorizationEvidenceForResource,
+  anyPermissionAuthorizationEvidenceFromSelection,
+  tokenAllowsPermission,
   guardPermissionDatabase,
   permissionsAuthorizationEvidence,
   type PermissionContext,
@@ -47,34 +49,47 @@ export function buildEventAudiencePredicate(
   if (!viewer.userId && !viewer.admin) return { sql: `${eventAlias}.visibility = 'public'`, bindings: [] };
   const actor: AuthAdmin = viewer.admin ?? { identityType: "user", id: viewer.userId ?? "", email: "" };
   const globalRead = permissionsAuthorizationEvidence(actor, [{ permission: "events:read" }]);
-  if (!viewer.userId)
-    return {
-      sql: `(EXISTS (${globalRead.sql}) OR ${eventAlias}.visibility = 'public')`,
-      bindings: [...globalRead.bindings],
-    };
   const leadPermissions = ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"] as const;
-  const eventRead = anyPermissionAuthorizationEvidenceForResource(
-    actor,
-    [
-      "events:read",
-      "agenda:read",
-      "agenda:scan",
-      ...scannerCapabilities,
-      "agenda:attendance_read",
-      "agenda:attendance_correct",
-      "agenda:attendance_import",
-      "agenda:appearance_approve",
-      ...leadPermissions,
-    ],
-    {
-      type: "event",
-      idSql: `${eventAlias}.id`,
-    },
-  );
+  const eventPermissions = [
+    "events:read",
+    "agenda:read",
+    "agenda:scan",
+    ...scannerCapabilities,
+    "agenda:attendance_read",
+    "agenda:attendance_correct",
+    "agenda:attendance_import",
+    "agenda:appearance_approve",
+    ...leadPermissions,
+  ];
+  const eventRead = anyPermissionAuthorizationEvidenceForResource(actor, eventPermissions, {
+    type: "event",
+    idSql: `${eventAlias}.id`,
+  });
   const sponsorRead = anyPermissionAuthorizationEvidenceForResource(actor, leadPermissions, {
     type: "event_sponsor",
     idSql: "sponsor_scope.id",
   });
+
+  // Delegated callers use explicit grants and public visibility, never the
+  // account's memberships, registrations, invitations, or proposals.
+  if (!viewer.userId) {
+    const allowedEvents = eventPermissions.filter((permission) => tokenAllowsPermission(actor, permission));
+    const allowedSponsors = leadPermissions.filter((permission) => tokenAllowsPermission(actor, permission));
+    const authority = anyPermissionAuthorizationEvidenceFromSelection(actor, eventPermissions, {
+      sql: `SELECT value AS permission, 'event' AS context_type, ${eventAlias}.id AS context_id
+        FROM json_each(?)
+        UNION ALL
+        SELECT permission.value AS permission, 'event_sponsor' AS context_type, sponsor_scope.id AS context_id
+        FROM sponsorships sponsor_scope CROSS JOIN json_each(?) permission
+        WHERE sponsor_scope.event_id=${eventAlias}.id AND sponsor_scope.sponsor_type='event'
+          AND sponsor_scope.pipeline_stage='active'`,
+      bindings: [JSON.stringify(allowedEvents), JSON.stringify(allowedSponsors)],
+    });
+    return {
+      sql: `(${eventAlias}.visibility = 'public' OR EXISTS (${authority.sql}))`,
+      bindings: [...authority.bindings],
+    };
+  }
 
   return {
     sql: `(

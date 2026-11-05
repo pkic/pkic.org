@@ -1,3 +1,4 @@
+import { buildApiResourceTemplates, type ApiResourceTemplate } from "./mcp-resources.ts";
 import { MCP_HTTP_METHODS } from "./mcp.ts";
 
 export const MCP_CATALOG_PATH = "/api/v1/mcp/operations.json";
@@ -20,6 +21,7 @@ export interface McpContract {
 
 export interface McpCatalogSource {
   list(): Promise<McpCatalogEntry[]>;
+  templates(): Promise<ApiResourceTemplate[]>;
   get(entry: McpCatalogEntry): Promise<McpContract>;
 }
 
@@ -44,5 +46,5 @@ export function buildMcpCatalog(spec: { paths?: unknown }) {
       contracts[contract] = { parameters: item.parameters, operation };
     }
   }
-  return { catalog, contracts };
+  return { catalog, contracts, templates: buildApiResourceTemplates(catalog, contracts) };
 }
