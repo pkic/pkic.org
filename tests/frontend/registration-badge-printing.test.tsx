@@ -502,7 +502,7 @@ it.each([true, false])("downloads fresh CSV without rendering QR artwork or a pr
     await vi.waitFor(() => expect(host.textContent).toContain("Print access changed"));
     expect(downloadBadgeArtifact).not.toHaveBeenCalled();
   }
-  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch).toHaveBeenCalledTimes(authorized ? 2 : 1);
   expect(qr).not.toHaveBeenCalled();
   expect(host.querySelector("iframe")).toBeNull();
 });
@@ -523,7 +523,43 @@ it("does not release CSV after the session changes while attendee data is loadin
   expect(host.querySelector("iframe")).toBeNull();
 });
 
-it("downloads 3,001 attendees with four compact requests and no QR or document work", async () => {
+it("does not download prepared CSV when event-management access is revoked before release", async () => {
+  const fetch = vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+    const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
+    if (fetch.mock.calls.length > 1)
+      return json({ error: { code: "FORBIDDEN", message: "Event management required" } }, 403);
+    return json(batchResponse(body));
+  });
+  vi.stubGlobal("fetch", fetch);
+  const host = await mountPrinting([row(1)], () => true, "label_csv");
+  await vi.waitFor(() => expect(host.textContent).toContain("Event management required"));
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(downloadBadgeArtifact).not.toHaveBeenCalled();
+  expect(QR.toString).not.toHaveBeenCalled();
+  expect(host.querySelector("iframe")).toBeNull();
+});
+
+it("refuses CSV when an earlier batch changes while preparing later attendees", async () => {
+  const fetch = vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+    const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
+    const response = batchResponse(body);
+    if (fetch.mock.calls.length === 3) response.labels[0].firstName = "Changed";
+    return json(response);
+  });
+  vi.stubGlobal("fetch", fetch);
+  const host = await mountPrinting(
+    Array.from({ length: 1001 }, (_, index) => row(index + 1)),
+    () => true,
+    "label_csv",
+  );
+  await vi.waitFor(() => expect(host.textContent).toContain("attendee details or badge codes changed"));
+  expect(fetch).toHaveBeenCalledTimes(3);
+  expect(downloadBadgeArtifact).not.toHaveBeenCalled();
+  expect(QR.toString).not.toHaveBeenCalled();
+  expect(host.querySelector("iframe")).toBeNull();
+});
+
+it("downloads 3,001 attendees after rechecking four compact batches without QR or document work", async () => {
   const fetch = vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
     const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
     return json(batchResponse(body));
@@ -535,7 +571,12 @@ it("downloads 3,001 attendees with four compact requests and no QR or document w
     "label_csv",
   );
   await vi.waitFor(() => expect(downloadBadgeArtifact).toHaveBeenCalledTimes(1));
-  expect(fetch).toHaveBeenCalledTimes(4);
+  expect(fetch).toHaveBeenCalledTimes(8);
+  expect(
+    fetch.mock.calls.slice(4).map(([, init]) => badgeLabelBatchRequestSchema.parse(JSON.parse(String(init?.body)))),
+  ).toEqual(
+    fetch.mock.calls.slice(0, 4).map(([, init]) => badgeLabelBatchRequestSchema.parse(JSON.parse(String(init?.body)))),
+  );
   expect(QR.toString).not.toHaveBeenCalled();
   expect(host.querySelector("iframe")).toBeNull();
 });

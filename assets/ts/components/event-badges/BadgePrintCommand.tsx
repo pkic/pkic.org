@@ -22,7 +22,6 @@ export function BadgePrintCommand({
   onProgress,
   onComplete,
   onError,
-  fresh = false,
   assertCurrent,
 }: {
   badges: readonly PrintableBadgePrint[];
@@ -32,7 +31,6 @@ export function BadgePrintCommand({
   onProgress: (message: string) => void;
   onComplete: () => void;
   onError: (message: string) => void;
-  fresh?: boolean;
   assertCurrent?: () => void;
 }) {
   const [document, setDocument] = useState<{
@@ -43,15 +41,11 @@ export function BadgePrintCommand({
   const frame = useRef<HTMLIFrameElement>(null);
   const live = useRef(true);
   const released = useRef(false);
-  const owner = useRef({ badges, action, fresh });
-  owner.current = { badges, action, fresh };
+  const owner = useRef({ badges, action });
+  owner.current = { badges, action };
   const isCurrent = useCallback(
-    () =>
-      live.current &&
-      owner.current.badges === badges &&
-      owner.current.action === action &&
-      owner.current.fresh === fresh,
-    [badges, action, fresh],
+    () => live.current && owner.current.badges === badges && owner.current.action === action,
+    [badges, action],
   );
   const callbacks = useRef({ beforeRelease, loadPrintingContext, onProgress, onComplete, onError, assertCurrent });
   callbacks.current = { beforeRelease, loadPrintingContext, onProgress, onComplete, onError, assertCurrent };
@@ -70,10 +64,9 @@ export function BadgePrintCommand({
     void (async () => {
       try {
         if (action === "label_csv") {
-          if (!fresh && !(await callbacks.current.beforeRelease())) return;
+          if (!(await callbacks.current.beforeRelease())) return;
           if (!isCurrent()) return;
           callbacks.current.assertCurrent?.();
-          // Fresh rows were just authorized by the batch endpoint; no preview needs revalidation.
           downloadBadgeArtifact(badgePrintCsv(badges), "text/csv;charset=utf-8", "attendee-labels.csv");
           callbacks.current.onComplete();
           return;
@@ -102,7 +95,7 @@ export function BadgePrintCommand({
     return () => {
       live.current = false;
     };
-  }, [badges, action, fullBadge, fresh, isCurrent]);
+  }, [badges, action, fullBadge, isCurrent]);
   async function ready() {
     if (released.current || !document || document.badges !== badges || !isCurrent()) return;
     released.current = true;

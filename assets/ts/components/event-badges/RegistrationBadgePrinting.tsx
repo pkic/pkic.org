@@ -193,7 +193,6 @@ export function RegistrationBadgePrinting({
       />
     ) : (
       <BadgePrintCommand
-        fresh
         assertCurrent={requireCurrent}
         badges={printed}
         action={action}
