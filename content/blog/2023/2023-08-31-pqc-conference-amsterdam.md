@@ -4,7 +4,7 @@ summary: Join us on November 7 and 8, either in-person at the Meervaart in Amste
 authors:
   - Paul van Brouwershaven
 date: 2023-08-31T11:00:00+00:00
-keyword: [PQC, Post-Quantum Cryptography, Conference]
+keywords: [PQC, Post-Quantum Cryptography, Conference]
 tags: [PQC, Post-Quantum Cryptography, Conference]
 
 authorProfiles:

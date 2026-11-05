@@ -2,8 +2,6 @@
 authors:
 - Wayne Thayer
 date: "2014-06-10T14:30:44+00:00"
-dsq_thread_id:
-- 2751146927
 keywords:
 - ecdsa
 - rsa

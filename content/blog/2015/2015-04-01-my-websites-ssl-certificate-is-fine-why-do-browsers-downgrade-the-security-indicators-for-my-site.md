@@ -2,8 +2,6 @@
 authors:
 - Rick Andrews
 date: "2015-04-01T16:19:02+00:00"
-dsq_thread_id:
-- 3646401095
 keywords:
 - attack
 - rc4

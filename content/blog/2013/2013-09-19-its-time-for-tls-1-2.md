@@ -2,8 +2,6 @@
 authors:
 - Wayne Thayer
 date: "2013-09-19T15:00:40+00:00"
-dsq_thread_id:
-- 1937106864
 keywords:
 - attack
 - rc4

@@ -2,8 +2,6 @@
 authors:
 - Ben Wilson
 date: "2015-08-27T02:13:49+00:00"
-dsq_thread_id:
-- 4070477842
 keywords:
 - malware
 - code signing

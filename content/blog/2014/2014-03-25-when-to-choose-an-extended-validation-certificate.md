@@ -2,8 +2,6 @@
 authors:
 - Wayne Thayer
 date: "2014-03-25T17:30:45+00:00"
-dsq_thread_id:
-- 2499366759
 keywords:
 - ca/browser forum
 - ssl

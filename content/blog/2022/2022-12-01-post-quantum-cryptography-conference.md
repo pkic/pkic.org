@@ -5,7 +5,7 @@ authors:
   - Kirk Hall
   - Paul van Brouwershaven
 date: 2022-11-30T14:00:00+00:00
-keyword: [PQC, Post-Quantum Cryptography, Conference]
+keywords: [PQC, Post-Quantum Cryptography, Conference]
 tags: [PQC, Post-Quantum Cryptography, Conference]
 
 authorProfiles:

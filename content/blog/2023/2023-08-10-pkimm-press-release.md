@@ -4,7 +4,7 @@ summary:  The PKI Consortium, a dynamic alliance dedicated to enhancing trust an
 authors: [Paul van Brouwershaven]
 date: 2023-08-10T10:00:00+00:00
 categories:
-keyword: [pki, maturity, model, assessment, improvement, evaluation, comparison, performance, capability, ability]
+keywords: [pki, maturity, model, assessment, improvement, evaluation, comparison, performance, capability, ability]
 tags: [PKIMM, Maturity model, Press Release]
 
 authorProfiles:

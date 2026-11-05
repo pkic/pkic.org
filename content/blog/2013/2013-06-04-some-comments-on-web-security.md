@@ -2,8 +2,6 @@
 authors:
 - CA Security Council
 date: "2013-06-05T02:23:43+00:00"
-dsq_thread_id:
-- 2096655623
 keywords:
 - casc
 - ietf

@@ -2,8 +2,6 @@
 authors:
 - Robin Alden
 date: "2014-01-09T21:00:38+00:00"
-dsq_thread_id:
-- 2100801660
 keywords:
 - cps
 - ssl

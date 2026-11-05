@@ -6,7 +6,6 @@ description: A product at Level 0 has no post-quantum cryptography integrated in
 summary: Level 0 means no quantum-safe capabilities are available yet. Discovery and preparation may be underway, but this is the baseline entry point for supply-chain questionnaires.
 
 weight: 10
-sectionNav: true
 ---
 
 ## What Level 0 Means

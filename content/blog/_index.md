@@ -13,7 +13,5 @@ menu:
         parent: resources
         weight: 31
 
-outputs:
-    - html
-    - rss
+
 ---

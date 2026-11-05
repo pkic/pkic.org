@@ -2,8 +2,6 @@
 authors:
 - Dean Coclin
 date: "2014-01-24T18:00:26+00:00"
-dsq_thread_id:
-- 2154752063
 keywords:
 - microsoft
 - etsi

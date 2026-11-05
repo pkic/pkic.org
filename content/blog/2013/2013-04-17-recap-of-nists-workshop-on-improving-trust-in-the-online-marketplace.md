@@ -2,8 +2,6 @@
 authors:
 - Rick Andrews
 date: "2013-04-17T18:29:25+00:00"
-dsq_thread_id:
-- 1942473929
 keywords:
 - tls
 - casc

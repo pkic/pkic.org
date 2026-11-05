@@ -2,8 +2,6 @@
 authors:
 - Ben Wilson
 date: "2016-05-12T17:00:17+00:00"
-dsq_thread_id:
-- 4819537197
 keywords:
 - ev certificate
 - extended validation

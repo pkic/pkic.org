@@ -2,8 +2,6 @@
 authors:
 - CA Security Council
 date: "2013-06-17T20:12:31+00:00"
-dsq_thread_id:
-- 1963873401
 keywords:
 - casc
 - vulnerabilities

@@ -2,8 +2,6 @@
 authors:
 - CA Security Council
 date: "2014-11-30T13:00:39+00:00"
-dsq_thread_id:
-- 3249747832
 keywords:
 - https
 - vulnerabilities

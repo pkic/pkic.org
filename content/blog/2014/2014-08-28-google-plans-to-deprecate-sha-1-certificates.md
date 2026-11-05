@@ -2,8 +2,6 @@
 authors:
 - CA Security Council
 date: "2014-08-28T14:07:44+00:00"
-dsq_thread_id:
-- 2966836432
 keywords:
 - casc
 - chrome

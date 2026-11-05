@@ -99,14 +99,14 @@ describe("source-owned original agenda publication paths", () => {
       { sourcePath, sourceDigest: await agendaTransferDigest(source.data.data), route: source.route },
     ]);
   });
-  it("uses the same owner for original overview/child agenda and program JSON while leaving other pages alone", () => {
+  it("uses the same owner for original overview/child agenda and calendar program while leaving other pages alone", () => {
     const snapshot = publication();
     expect(approvedEventAgendaForRoute(snapshot, route)?.eventSlug).toBe(agenda.eventSlug);
     expect(approvedEventAgendaForRoute(snapshot, `${route}details/`, route)?.eventSlug).toBe(agenda.eventSlug);
     expect(approvedEventAgendaForRoute(snapshot, "/events/other/")).toBeUndefined();
     const source = document(
       owner.sourcePath,
-      "---\ntitle: Original narrative\noutputs: [event-data]\ndata:\n  name: Original\n  timezone: UTC\n  agenda: {}\n---\nOverview stays intact\n{{< agenda >}}\n",
+      "---\ntitle: Original narrative\noutputs: [event-agenda]\ndata:\n  name: Original\n  timezone: UTC\n  agenda: {}\n---\nOverview stays intact\n{{< agenda >}}\n",
     );
     const program = createSiteConferencePrograms([source], () => [])(snapshot)[0]!.program;
     expect(program.timezone).toBe(agenda.timeZone);

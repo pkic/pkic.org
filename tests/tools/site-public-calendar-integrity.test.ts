@@ -142,7 +142,6 @@ it("keeps 240 session calendars and private-page protections inside the edge hea
     for (const [index, path] of agendaPaths.entries()) {
       await put(source, `${path}data.json`, JSON.stringify({ timezone: "UTC", agenda: {} }));
       await put(source, `${path}calendar.ics`, bytes);
-      await put(source, `events/history-${index}/event-data.json`, JSON.stringify({ timezone: "UTC", agenda: {} }));
       await put(source, `events/history-${index}/agenda.ics`, bytes);
       for (let session = 0; session < 60; session += 1)
         await put(source, `${path}calendar/session-${session}.ics`, bytes);
@@ -160,7 +159,6 @@ it("keeps 240 session calendars and private-page protections inside the edge hea
         `${path}data.json`,
         `${path}calendar.ics`,
         `${path}calendar/*`,
-        `events/history-${index}/event-data.json`,
         `events/history-${index}/agenda.ics`,
       ])
         expect(headers).toContain(`/${file}\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive`);

@@ -2,8 +2,6 @@
 authors:
 - Rick Andrews
 date: "2015-06-24T18:15:52+00:00"
-dsq_thread_id:
-- 3875121772
 keywords:
 - rsa
 - nist

@@ -118,7 +118,6 @@ const scanned = [
   "assets/ts/components/UserPicker.tsx",
   "assets/ts/components/EnumSelect.tsx",
   "assets/ts/components/FilterSelect.tsx",
-  "assets/js/session-registration.js",
   "assets/js",
   "assets/ts/member-flows/portal/sections/management/GroupStatistics.tsx",
   "assets/ts/member-flows/portal/sections/management/GroupCreateForm.tsx",

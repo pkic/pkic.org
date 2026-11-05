@@ -4,21 +4,6 @@ import { initLocalTime } from "./local-time.js";
 
 initLocalTime();
 
-var e = document.querySelectorAll(".nav-tabs .nav-link");
-for (var i = 0; i < e.length; i++) {
-  e[i].addEventListener("click", function (event) {
-    location.hash = event.target.dataset.bsTarget;
-
-    var se = document.getElementById(event.target.parentElement.dataset.scrollTarget);
-    if (se) se.scrollIntoView();
-  });
-}
-
-if (window.location.hash.indexOf("nav") == 1) {
-  var tab = document.getElementById(window.location.hash.substr(1) + "-tab");
-  if (tab) tab.click();
-}
-
 document.querySelectorAll("time[datetime]").forEach(function ($e) {
   var date = new Date($e.dateTime);
   $e.title = date.toString();

@@ -3,8 +3,6 @@ authors:
 - Kirk Hall
 - Chris Bailey
 date: "2017-06-06T14:04:05+00:00"
-dsq_thread_id:
-- 5885314464
 keywords:
 - ev certificate
 - extended validation

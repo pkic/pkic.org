@@ -6,7 +6,6 @@ description: A product at Level 4 maintains a Cryptographic Bill of Materials (C
 summary: Level 4 adds a CBOM, zero-legacy capability, and explicit hybrid/composite support. Suitable for high-assurance and regulated environments.
 
 weight: 50
-sectionNav: true
 ---
 
 ## What Level 4 Means
