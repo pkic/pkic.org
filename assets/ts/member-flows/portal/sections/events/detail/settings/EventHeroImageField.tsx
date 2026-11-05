@@ -123,6 +123,7 @@ export function EventHeroImageField({
                   void selectFile(selected);
                 },
                 onRemove: () => {
+                  selection.current++;
                   onFileChange(null);
                   onImageChange("");
                 },
