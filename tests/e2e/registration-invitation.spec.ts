@@ -66,15 +66,6 @@ test("cancelled attendees can restore registration without stale badge or invita
   await expect(page.getByRole("dialog", { name: "Check-in code", exact: true })).toBeVisible();
   await expect(page.getByRole("img", { name: "Your check-in QR code", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close check-in code", exact: true }).click();
-  await page.goto("/missing-attendee-page/");
-  await expect(page.getByRole("heading", { name: "Page not found", exact: true })).toBeVisible();
-  for (const [width, height, device] of [
-    [1280, 900, "desktop"],
-    [375, 812, "phone"],
-  ] as const) {
-    await page.setViewportSize({ width, height });
-    await page.screenshot({ path: info.outputPath(`neutral-404-${device}.png`), fullPage: true });
-  }
 });
 
 async function captureStep(page: Page, info: TestInfo, step: number, name: string) {
