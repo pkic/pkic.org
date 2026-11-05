@@ -1,3 +1,4 @@
+import { databaseIdSchema } from "./identifiers";
 import { timeZoneSchema } from "./event-series";
 import { z } from "zod";
 import { promotionCopySchema } from "./event-promotion-copy";
@@ -58,7 +59,8 @@ export const promotionKitSchema = z.object({
     sessionRsvps: z.number().int().nonnegative(),
   }),
 });
-export const promotionArtifactQuerySchema = z.object({
+export const promotionParticipantQuerySchema = z.object({ userId: databaseIdSchema.optional() });
+export const promotionArtifactQuerySchema = promotionParticipantQuerySchema.extend({
   download: z.enum(["true", "false"]).default("true"),
   representation: z.enum(["file", "artwork"]).default("file"),
   format: promotionFormatSchema,
@@ -72,7 +74,7 @@ export type PromotionCopy = z.infer<typeof promotionCopySchema>;
 
 export const promotionSessionsQuerySchema = agendaOccurrenceQuerySchema
   .omit({ accessPolicy: true, speakerUserId: true, publicationStatus: true, track: true, conflict: true })
-  .extend({ timeZone: timeZoneSchema.optional() })
+  .extend({ ...promotionParticipantQuerySchema.shape, timeZone: timeZoneSchema.optional() })
   .superRefine((query, ctx) => {
     if (query.day && !query.timeZone)
       ctx.addIssue({ code: "custom", path: ["timeZone"], message: "Include the event time zone when choosing a day." });

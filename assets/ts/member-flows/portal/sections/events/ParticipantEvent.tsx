@@ -205,7 +205,7 @@ export function ParticipantEvent({
           <MyPromotionKits
             slug={event.slug}
             attendeeEligible={eventRegistrationStanding(event).status === "registered"}
-            speakerEligible={hasProposals}
+            speakerEligible={hasProposals || Boolean(event.participation?.speakerSessions)}
             share={
               event.participation?.promotion
                 ? {

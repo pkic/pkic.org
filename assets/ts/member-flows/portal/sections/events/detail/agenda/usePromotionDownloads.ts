@@ -1,3 +1,4 @@
+import { promotionResourcePath } from "./promotion-kit-client";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { z } from "zod";
 import {
@@ -36,7 +37,7 @@ export function usePromotionDownloads(base: string, kit: Kit | null) {
         content = await exportPromotionImages(prepared.artwork, prepared.urls);
       } else {
         setPdfPending(true);
-        content = await requestJson(`${base}/artifact`, z.instanceof(Blob), {
+        content = await requestJson(promotionResourcePath(base, "artifact"), z.instanceof(Blob), {
           method: "POST",
           signal,
           responseType: "blob",

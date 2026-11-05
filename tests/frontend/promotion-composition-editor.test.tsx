@@ -327,3 +327,80 @@ it("keeps the PDF announcement region mounted before preparation starts", async 
   expect(root.querySelector('[role="status"]')).toBe(announcement);
   expect(announcement?.textContent).toBe("Preparing PDF…");
 });
+
+it("keeps organizer requests on the selected participant and offers downloads without personal editing", async () => {
+  const current = { ...kit, fingerprint: "c".repeat(64) };
+  const requests: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (request: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(request), window.location.origin);
+      requests.push(url.pathname + url.search);
+      expect(url.searchParams.get("userId")).toBe("selected-participant");
+      if (url.searchParams.get("representation") === "artwork")
+        return json(
+          promotionArtworkSchema.parse({
+            fingerprint: current.fingerprint,
+            format: url.searchParams.get("format"),
+            pages: [{ width: 1080, height: 1350, svg: "<svg/>" }],
+            fontFiles: [],
+          }),
+        );
+      if (init?.method === "POST") return new Response("pdf", { headers: { "content-type": "application/pdf" } });
+      return json(current);
+    }),
+  );
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  root = document.createElement("div");
+  document.body.append(root);
+  await act(() =>
+    render(
+      <PersonalPromotionKit
+        base="/api/v1/events/example/promotion?userId=selected-participant"
+        title="Participant materials"
+        readOnly
+      />,
+      root,
+    ),
+  );
+  await vi.waitFor(() => expect(root.querySelectorAll(".pk-promotion-tile img")).toHaveLength(4));
+  expect(buttonNamed("Customize tall post")).toBeUndefined();
+  await act(() => buttonNamed("Enlarge tall post")!.click());
+  expect(root.querySelector('dialog[open] [aria-label="Customize tall post"]')).toBeNull();
+  expect(root.querySelector('dialog[open] [aria-label="Download tall post (JPEG)"]')).not.toBeNull();
+  await act(() => buttonNamed("Close preview")!.click());
+  await act(() => buttonNamed("Download carousel (PDF)")!.click());
+  await vi.waitFor(() =>
+    expect(
+      requests.some(
+        (path) => path.includes("/artifact?userId=selected-participant") && !path.includes("representation"),
+      ),
+    ).toBe(true),
+  );
+});
+
+it("includes the selected attendee's badge using the same referral as their promotion materials", async () => {
+  const current = { ...kit, audience: "attendee", registrationUrl: "https://example.test/r/Attendee123" };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => json(current)),
+  );
+  root = document.createElement("div");
+  document.body.append(root);
+  await act(() =>
+    render(
+      <PersonalPromotionKit
+        base="/api/v1/events/example/promotion?userId=selected-attendee"
+        title="Participant materials"
+        readOnly
+      />,
+      root,
+    ),
+  );
+  await vi.waitFor(() => expect(root.querySelector('img[alt="Preview of your badge"]')).not.toBeNull());
+  const preview = root.querySelector<HTMLImageElement>('img[alt="Preview of your badge"]')!;
+  expect(preview.src).toContain("/api/v1/registrations/referrals/Attendee123/badge");
+  expect(root.querySelector('a[aria-label="Download badge (JPEG)"]')).not.toBeNull();
+  await act(() => buttonNamed("Enlarge badge")!.click());
+  expect(root.querySelector('dialog[open] .pk-dialog__foot a[aria-label="Download badge (JPEG)"]')).not.toBeNull();
+});

@@ -15,8 +15,9 @@ export async function downloadOwnPromotionPdf(
   occurrenceId: string | null,
   origin: string,
   input: z.infer<typeof promotionPdfExportSchema>,
+  targetUserId?: string,
 ) {
-  const current = await readOwnPromotionRequest(db, request, env, slug, occurrenceId, origin);
+  const current = await readOwnPromotionRequest(db, request, env, slug, occurrenceId, origin, false, targetUserId);
   if (
     current.kit.stale ||
     current.kit.fingerprint !== input.fingerprint ||

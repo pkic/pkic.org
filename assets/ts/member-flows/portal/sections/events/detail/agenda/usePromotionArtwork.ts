@@ -1,3 +1,4 @@
+import { promotionResourcePath } from "./promotion-kit-client";
 import { useEffect, useState } from "preact/hooks";
 import type { z } from "zod";
 import {
@@ -31,7 +32,7 @@ export function usePromotionArtwork(base: string, kit: Kit | null) {
             fingerprint,
             representation: "artwork",
           });
-          const artwork = await getJson(`${base}/artifact?${query}`, promotionArtworkSchema, {
+          const artwork = await getJson(promotionResourcePath(base, "artifact", query), promotionArtworkSchema, {
             signal: controller.signal,
           });
           const sources = await promotionArtworkUrls(artwork);

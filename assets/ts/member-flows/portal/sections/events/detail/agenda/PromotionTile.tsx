@@ -61,7 +61,7 @@ export function PromotionTile({
             size="wide"
             title={name}
             closeLabel="Close preview"
-            footerActions={previewActions?.(close)}
+            footerActions={previewActions?.(close) ?? action}
             confirmLabel="Close"
             onConfirm={() => void close()}
             onCancel={() => void close()}

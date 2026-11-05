@@ -13,7 +13,6 @@ import { loadRegistrationDayStates } from "./registrations/day-states";
 
 type SpeakerRow = Omit<EventProposalSpeaker, "days" | "headshotUrl"> & {
   registrationId: string | null;
-  userId: string;
   headshot_r2_key: string | null;
   headshot_updated_at: string | null;
 };
@@ -84,7 +83,7 @@ export async function listEventProposalSpeakers(db: DatabaseLike, eventId: strin
   );
   return {
     speakers: rows.map((row) => {
-      const { registrationId, userId: _userId, headshot_r2_key: _key, headshot_updated_at: _updated, ...speaker } = row;
+      const { registrationId, headshot_r2_key: _key, headshot_updated_at: _updated, ...speaker } = row;
       return {
         ...speaker,
         headshotUrl: speakerHeadshotPath(row),

@@ -1,3 +1,4 @@
+import { signInToPortal } from "./helpers/portal-auth";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -50,6 +51,7 @@ function protectedArtifactHeaders(response: APIResponse) {
 
 test("every delivered long-panel promotion export has complete evidence and refuses its stale revision", async ({
   page,
+  browser,
 }, info) => {
   test.setTimeout(360_000);
   await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-preview"));
@@ -70,6 +72,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
   ];
   const people = [];
   for (const [index, name] of names.entries()) {
+    const email = `promotion-${randomUUID()}@example.test`;
     // Use the existing audited staff provisioning API. Immediate activation
     // is explicit; no test grants itself mailbox/domain authority or writes D1.
     const response = await page.request.post("/api/v1/organizations", {
@@ -77,14 +80,14 @@ test("every delivered long-panel promotion export has complete evidence and refu
         name: affiliations[index],
         membershipCategory: "F",
         memberSince: "2026-01-15",
-        identities: [{ name, email: `promotion-${randomUUID()}@example.test`, jobTitle: roles[index] }],
+        identities: [{ name, email, jobTitle: roles[index] }],
         activationReason: "Activate synthetic panel fixtures for reviewed promotion export inspection.",
       }),
     });
     expect(response.status(), await response.text()).toBe(201);
     const organization = organizationCreateResponseSchema.parse(await response.json()).organization;
     expect(organization.identities).toHaveLength(1);
-    people.push({ id: organization.identities[0]!.userId, identityId: organization.identities[0]!.identityId });
+    people.push({ id: organization.identities[0]!.userId, identityId: organization.identities[0]!.identityId, email });
   }
   expect(new Set(people.map((person) => person.id)).size).toBe(3);
   let snapshot = agendaSnapshotSchema.parse(await (await page.request.get(agendaApi)).json());
@@ -177,6 +180,16 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await page.goto(
     `/portal/#/groups/${encodeURIComponent(event.ownerGroupId)}/events/${encodeURIComponent(event.id)}/agenda`,
   );
+  for (const [device, width, height] of [
+    ["desktop", 1280, 900],
+    ["phone", 375, 812],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(page.getByRole("tablist", { name: "Agenda views", exact: true })).toBeVisible();
+    await page.getByRole("tablist", { name: "Agenda views", exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`agenda-spacing-${device}.png`) });
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page
     .getByRole("tablist", { name: "Agenda views", exact: true })
     .getByRole("tab", { name: "Schedule", exact: true })
@@ -278,6 +291,16 @@ test("every delivered long-panel promotion export has complete evidence and refu
   ] as const) {
     await page.setViewportSize({ width, height });
     await page.locator(".pk-promotion-gallery").scrollIntoViewIfNeeded();
+    const spacing = await page.locator(".pk-agenda-editor").evaluate((editor) => {
+      const section = editor.parentElement!;
+      const tabs = section.previousElementSibling!;
+      return {
+        actual: section.getBoundingClientRect().top - tabs.getBoundingClientRect().bottom,
+        expected: Number.parseFloat(getComputedStyle(section.parentElement!).rowGap),
+      };
+    });
+    expect(spacing.expected).toBeGreaterThan(0);
+    expect(spacing.actual).toBeCloseTo(spacing.expected, 0);
     await page.screenshot({ path: info.outputPath(`promotion-gallery-${device}.png`) });
     const enlarge = page.getByRole("button", { name: "Enlarge tall post", exact: true });
     await enlarge.click();
@@ -407,4 +430,73 @@ test("every delivered long-panel promotion export has complete evidence and refu
       2,
     ),
   );
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("button", { name: "Sharing actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: `Open ${names[0]}’s materials`, exact: true }).click();
+  const participantMaterials = page.getByRole("dialog", { name: "Promotion materials", exact: true });
+  await expect(participantMaterials).toBeVisible();
+  await expect(participantMaterials.locator(".pk-promotion-tile img")).toHaveCount(4);
+  await expect
+    .poll(() =>
+      participantMaterials
+        .locator(".pk-promotion-tile img")
+        .evaluateAll((images) =>
+          images.every((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0),
+        ),
+    )
+    .toBe(true);
+  await expect(participantMaterials.getByRole("button", { name: "Customize tall post", exact: true })).toHaveCount(0);
+  const selectedKitResponse = await page.request.get(`${kitApi}?userId=${people[0]!.id}`);
+  expect(selectedKitResponse.status(), await selectedKitResponse.text()).toBe(200);
+  const selectedKit = promotionKitSchema.parse(await selectedKitResponse.json());
+  expect(selectedKit.registrationUrl).not.toBe(fresh.registrationUrl);
+  const delegatedDownload = page.waitForEvent("download");
+  await participantMaterials.getByRole("button", { name: "Download carousel (PDF)", exact: true }).click();
+  const delegatedPdf = await delegatedDownload;
+  expect(delegatedPdf.suggestedFilename()).toBe("promotion-carousel.pdf");
+  for (const [device, width, height] of [
+    ["desktop", 1280, 900],
+    ["phone", 375, 812],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`organizer-participant-materials-${device}.png`) });
+  }
+  await participantMaterials.getByRole("button", { name: "Close promotion materials", exact: true }).click();
+  await expect(participantMaterials).toHaveCount(0);
+  await page.goBack();
+  await expect(participantMaterials).toBeVisible();
+  await page.goForward();
+  await expect(participantMaterials).toHaveCount(0);
+  const participantContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
+  const participant = await participantContext.newPage();
+  try {
+    await signInToPortal(participant, people[0]!.email);
+    await participant.goto(`/portal/#/events/${slug}/promotion`);
+    await expect(participant.getByRole("heading", { name: "Share", exact: true })).toBeVisible();
+    await expect(participant.locator(".pk-promotion-tile img")).toHaveCount(4);
+    await expect(participant.getByRole("button", { name: "Customize tall post", exact: true })).toBeVisible();
+    const ownResponse = await participant.request.get(kitApi);
+    expect(ownResponse.status(), await ownResponse.text()).toBe(200);
+    const ownKit = promotionKitSchema.parse(await ownResponse.json());
+    expect(ownKit.fingerprint).toBe(selectedKit.fingerprint);
+    await expect
+      .poll(() =>
+        participant
+          .locator(".pk-promotion-tile img")
+          .evaluateAll((images) =>
+            images.every((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0),
+          ),
+      )
+      .toBe(true);
+    for (const [device, width, height] of [
+      ["desktop", 1280, 900],
+      ["phone", 375, 812],
+    ] as const) {
+      await participant.setViewportSize({ width, height });
+      await participant.locator(".pk-promotion-gallery").scrollIntoViewIfNeeded();
+      await participant.screenshot({ path: info.outputPath(`speaker-share-${device}.png`) });
+    }
+  } finally {
+    await participantContext.close();
+  }
 });

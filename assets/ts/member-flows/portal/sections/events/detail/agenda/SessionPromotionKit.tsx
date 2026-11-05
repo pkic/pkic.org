@@ -21,11 +21,13 @@ export function SessionPromotionKit({
   occurrence,
   snapshot,
   onSaved,
+  onOpenPromotion,
 }: {
   slug: string;
   occurrence: AgendaOccurrence;
   snapshot?: AgendaSnapshot;
   onSaved?: (snapshot: AgendaSnapshot) => void;
+  onOpenPromotion?: (userId: string, name?: string) => void;
 }) {
   const [whyAttend, setWhy] = useState(occurrence.promotionCopy?.whyAttend ?? occurrence.description);
   const [takeaways, setTakeaways] = useState(occurrence.promotionCopy?.takeaways.join("\n") ?? "");
@@ -81,6 +83,13 @@ export function SessionPromotionKit({
                 <Menu
                   label="Sharing actions"
                   items={[
+                    ...(onOpenPromotion
+                      ? occurrence.speakers.map((speaker) => ({
+                          id: `participant-${speaker.userId}`,
+                          label: `Open ${speaker.displayName}’s materials`,
+                          onSelect: () => onOpenPromotion(speaker.userId, speaker.displayName),
+                        }))
+                      : []),
                     { id: "shared-copy", label: "Edit shared promotion copy", onSelect: showEditing },
                     { id: "prepare-speakers", label: "Prepare kits for all speakers", onSelect: open, disabled },
                   ]}

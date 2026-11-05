@@ -68,11 +68,13 @@ export function AgendaEditor({
   canEdit: hasEditPermission,
   canReviewAppearances = false,
   teamEligibilityPath,
+  onOpenPromotion,
 }: {
   slug: string;
   canEdit: boolean;
   canReviewAppearances?: boolean;
   teamEligibilityPath?: string;
+  onOpenPromotion?: (userId: string, name?: string) => void;
 }) {
   const source = useData(
     () => getJson(`/api/v1/events/${encodeURIComponent(slug)}/agenda`, agendaSnapshotSchema),
@@ -323,6 +325,7 @@ export function AgendaEditor({
           <SessionPromotionKit
             slug={slug}
             occurrence={promotionSession}
+            onOpenPromotion={onOpenPromotion}
             snapshot={canEdit ? data : undefined}
             onSaved={setSnapshot}
           />

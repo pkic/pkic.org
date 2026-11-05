@@ -1,3 +1,5 @@
+import { PromotionBadgeTile } from "./PromotionBadgeTile";
+import { extractOgBadgeUrl } from "../../../../../../shared/widgets/share-panel";
 import { usePromotionArtwork } from "./usePromotionArtwork";
 import { usePromotionDownloads } from "./usePromotionDownloads";
 import { useDialogQueryState } from "../../../../../../hooks/useDialogQueryState";
@@ -35,6 +37,7 @@ export function PersonalPromotionKit({
   base,
   title,
   leading,
+  readOnly = false,
   menu,
 }: {
   base: string;
@@ -42,6 +45,7 @@ export function PersonalPromotionKit({
   menu?: ComponentChildren;
   /** Tiles from outside this kit shown first, such as the attendee badge. */
   leading?: ComponentChildren;
+  readOnly?: boolean;
 }) {
   const [kit, setKit] = useState<Kit | null>(null),
     [error, setError] = useState("");
@@ -63,6 +67,8 @@ export function PersonalPromotionKit({
       cancelled = true;
     };
   }, [base]);
+  const attendeeBadgeUrl =
+    kit?.audience === "attendee" && !leading ? extractOgBadgeUrl(kit.registrationUrl, kit.fingerprint) : null;
   return (
     <Panel aria-label={title}>
       <PanelBody>
@@ -75,7 +81,7 @@ export function PersonalPromotionKit({
               </Alert>
             )}
             <ul class="pk-promotion-gallery">
-              {leading}
+              {leading ?? (attendeeBadgeUrl && <PromotionBadgeTile badgeUrl={attendeeBadgeUrl} />)}
               {tiles.map((tile) => {
                 const loaded = previews[tile.format];
                 const preview = !kit.stale && loaded?.artwork.fingerprint === kit.fingerprint ? loaded : undefined;
@@ -101,20 +107,22 @@ export function PersonalPromotionKit({
                         >
                           Copy post
                         </Button>
-                        <Button
-                          icon
-                          aria-label={`Customize ${tile.name.toLowerCase()}`}
-                          title={`Customize ${tile.name.toLowerCase()}`}
-                          onClick={() =>
-                            void dismiss()
-                              .then(showEditing)
-                              .catch((cause: unknown) =>
-                                setError(cause instanceof Error ? cause.message : "Could not open the editor."),
-                              )
-                          }
-                        >
-                          <IconPencil />
-                        </Button>
+                        {!readOnly && (
+                          <Button
+                            icon
+                            aria-label={`Customize ${tile.name.toLowerCase()}`}
+                            title={`Customize ${tile.name.toLowerCase()}`}
+                            onClick={() =>
+                              void dismiss()
+                                .then(showEditing)
+                                .catch((cause: unknown) =>
+                                  setError(cause instanceof Error ? cause.message : "Could not open the editor."),
+                                )
+                            }
+                          >
+                            <IconPencil />
+                          </Button>
+                        )}
                         <DownloadAction
                           label={`Download ${tile.name.toLowerCase()} (${tile.type})`}
                           disabled={!ready}
@@ -126,14 +134,16 @@ export function PersonalPromotionKit({
                     status={tile.format === "carousel" && downloads.pdfPending ? "Preparing PDF…" : undefined}
                     action={
                       <Toolbar label={`${tile.name} actions`}>
-                        <Button
-                          icon
-                          aria-label={`Customize ${tile.name.toLowerCase()}`}
-                          title={`Customize ${tile.name.toLowerCase()}`}
-                          onClick={showEditing}
-                        >
-                          <IconPencil />
-                        </Button>
+                        {!readOnly && (
+                          <Button
+                            icon
+                            aria-label={`Customize ${tile.name.toLowerCase()}`}
+                            title={`Customize ${tile.name.toLowerCase()}`}
+                            onClick={showEditing}
+                          >
+                            <IconPencil />
+                          </Button>
+                        )}
                         <DownloadAction
                           label={`Download ${tile.name.toLowerCase()} (${tile.type})`}
                           disabled={!ready}
@@ -146,23 +156,25 @@ export function PersonalPromotionKit({
               })}
             </ul>
             {menu && <Toolbar label="Session sharing actions">{menu}</Toolbar>}
-            <PromotionCompositionEditor
-              open={editing}
-              key={kit.compositionRevision}
-              kit={kit}
-              base={base}
-              onCancel={() => {
-                void closeEditing().catch((cause: unknown) =>
-                  setError(cause instanceof Error ? cause.message : "Could not close the editor."),
-                );
-              }}
-              onSaved={(value) => {
-                setKit(value);
-                void closeEditing().catch((cause: unknown) =>
-                  setError(cause instanceof Error ? cause.message : "Could not close the editor."),
-                );
-              }}
-            />
+            {!readOnly && (
+              <PromotionCompositionEditor
+                open={editing}
+                key={kit.compositionRevision}
+                kit={kit}
+                base={base}
+                onCancel={() => {
+                  void closeEditing().catch((cause: unknown) =>
+                    setError(cause instanceof Error ? cause.message : "Could not close the editor."),
+                  );
+                }}
+                onSaved={(value) => {
+                  setKit(value);
+                  void closeEditing().catch((cause: unknown) =>
+                    setError(cause instanceof Error ? cause.message : "Could not close the editor."),
+                  );
+                }}
+              />
+            )}
           </div>
         )}
       </PanelBody>

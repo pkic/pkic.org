@@ -24,9 +24,20 @@ export async function downloadOwnPromotionArtifact(
   origin: string,
   query: z.infer<typeof promotionArtifactQuerySchema>,
 ) {
-  const source = await prepareOwnPromotionRequest(db, request, env, slug, occurrenceId, origin);
+  const source = await prepareOwnPromotionRequest(
+    db,
+    request,
+    env,
+    slug,
+    occurrenceId,
+    origin,
+    false,
+    undefined,
+    undefined,
+    query.userId,
+  );
   if (!query.fingerprint) throw new AppError(409, "PROMOTION_ARTIFACT_STALE", "Refresh your kit before downloading.");
-  const location = await promotionRenderLocation(source.actor.subjectId, occurrenceId, query.fingerprint, query.format),
+  const location = await promotionRenderLocation(source.subjectUserId, occurrenceId, query.fingerprint, query.format),
     event = eventReadIdSql({ slug });
   if (query.representation === "file" && !env.ASSETS_BUCKET)
     throw new AppError(503, "PROMOTION_STORAGE_UNAVAILABLE", "Promotion storage is unavailable.");
@@ -41,7 +52,7 @@ export async function downloadOwnPromotionArtifact(
       .prepare(
         `SELECT status FROM event_promotion_renders WHERE id=? AND event_id=${event.sql} AND user_id=? AND occurrence_id IS ? AND fingerprint=?`,
       )
-      .bind(location.id, ...event.bindings, source.actor.subjectId, occurrenceId, query.fingerprint),
+      .bind(location.id, ...event.bindings, source.subjectUserId, occurrenceId, query.fingerprint),
   ]);
   const current = await source.decode(loaded.slice(0, source.statements.length));
   if (
