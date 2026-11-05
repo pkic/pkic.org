@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2014-03-28T14:00:37+00:00"
-dsq_thread_id:
-- 2526284372
 keywords:
 - pki
 - ssl

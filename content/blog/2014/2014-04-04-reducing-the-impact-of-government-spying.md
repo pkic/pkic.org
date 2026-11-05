@@ -2,8 +2,6 @@
 authors:
 - Jeremy Rowley
 date: "2014-04-04T17:00:55+00:00"
-dsq_thread_id:
-- 2586074339
 keywords:
 - sha2
 - ssl

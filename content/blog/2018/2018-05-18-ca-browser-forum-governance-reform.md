@@ -2,8 +2,6 @@
 authors:
 - Dean Coclin
 date: "2018-05-18T12:17:14+00:00"
-dsq_thread_id:
-- 6677876230
 keywords:
 - tls
 - apple

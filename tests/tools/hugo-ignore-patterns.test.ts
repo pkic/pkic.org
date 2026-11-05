@@ -50,7 +50,7 @@ function ignored(patterns: RegExp[], absolutePath: string): boolean {
   return patterns.some((pattern) => pattern.test(absolutePath));
 }
 
-describe("Hugo's ignoreFiles patterns", () => {
+describe("site content exclusion patterns", () => {
   it("ignore the same files wherever the repository is checked out", () => {
     const patterns = ignorePatterns();
     for (const file of SITE_FILES) {

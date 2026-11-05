@@ -9,15 +9,7 @@ import "../js/modules/global-ui.js";
  * styles must be linked from the document head. Keeping them in a dedicated
  * entry preserves the small universal loader used by portal-only surfaces.
  *
- * The behavior half is the site's own scripts. Hugo loaded them from its
- * templates — `navbar.js` from the navbar partial, `main.js` from the footer,
- * `wg-nav.js` from the working-group layout, the event scripts from the event
- * layouts — and the migration inherited the markup without ever loading them,
- * which is why the mega menus, the search panel, the section-nav disclosures,
- * the side menu, the member-wall effects and every event page were inert.
- *
- * Each one is imported only when the page it belongs to is on screen, so a
- * blog post does not download the agenda.
+ * Page-specific behavior loads only when its markup is present.
  */
 
 /** Load a behavior module when the markup it drives is present. */
@@ -30,8 +22,6 @@ async function start(): Promise<void> {
   const { installPublicAccountMenu } = await import("./account-menu");
   void installPublicAccountMenu();
 
-  // Site-wide behavior that `main.js` carried, minus its Bootstrap import:
-  // this build has no Bootstrap to load.
   await Promise.all([
     import("../js/modules/sponsor-banner-marquee.js"),
     whenPresent(
@@ -59,19 +49,13 @@ async function start(): Promise<void> {
     ),
     // Working-group section nav: its disclosures and the page side menu.
     whenPresent("#wgSectionNav, .wg-sidebar", () => import("../js/wg-nav.js")),
-    whenPresent("#agenda-container:not(.pk-content-agenda)", () => import("../js/event-agenda.js")),
-    whenPresent("#session", () => import("../js/event-session.js")),
-    whenPresent("#svg-container", () => import("../js/event-overlays.js")),
-    whenPresent("#speaker-name", () => import("../js/event-speaker-card.js")),
-    whenPresent("#registration-form, .session-card", () => import("../js/session-registration.js")),
     whenPresent("[data-countdown]", () => import("../js/modules/event-countdown.js")),
     whenPresent(".mermaid-wrap", async () => {
       await import("./site/diagrams");
     }),
-    whenPresent("#memberSearch, .members-az-sidebar", () => import("../js/members.js")),
   ]);
 
-  // Scroll reveal, which `main.js` also owned.
+  // Reveal sections as they enter the viewport.
   for (const element of document.querySelectorAll("[data-reveal]")) {
     const observer = new IntersectionObserver(
       (entries) => {

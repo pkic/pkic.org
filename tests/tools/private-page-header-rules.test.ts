@@ -116,7 +116,7 @@ it("does not generalize private event roots, entry forms, or arbitrary authored 
   const paths = [
     "/events/2027/first/register/",
     "/events/2027/second/register/",
-    "/events/2027/first/event-speakers/",
+    "/events/2027/first/private-details/",
     "/portal/",
     "/404.html",
   ];

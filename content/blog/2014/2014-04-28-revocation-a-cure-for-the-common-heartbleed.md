@@ -2,8 +2,6 @@
 authors:
 - Jeremy Rowley
 date: "2014-04-28T21:47:47+00:00"
-dsq_thread_id:
-- 2645992736
 keywords:
 - google
 - attack

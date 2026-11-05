@@ -53,14 +53,22 @@ export function badgePrintHtml(
   const dimensions = badgePrintPageDimensions(layout.page);
   const pages: string[] = [];
   const slotStyles: string[] = [];
+  const labels = new Map<number, string>();
   for (const page of badgePrintPages(badges.length, layout)) {
     pages.push(
-      `<section class="badge-print-sheet" aria-label="Badge sheet">${page.slots
+      `<section class="badge-print-sheet" data-print-key="${page.slots.map((slot) => `${slot.itemIndex}:${compiled ? slot.side : "label"}:${slot.xMm}:${slot.yMm}:${slot.widthMm}:${slot.heightMm}`).join("|")}" aria-label="Badge sheet">${page.slots
         .map((slot) => {
           const badge = badges[slot.itemIndex];
+          if (!compiled && !labels.has(slot.itemIndex)) {
+            const svg = badgeLabelSvg({ ...badge, jobTitle: badge.jobTitle ?? null }, slot.widthMm, slot.heightMm);
+            labels.set(
+              slot.itemIndex,
+              `<symbol id="badge-label-${slot.itemIndex}" viewBox="0 0 ${slot.widthMm} ${slot.heightMm}">${svg.slice(svg.indexOf(">") + 1, svg.lastIndexOf("</svg>"))}</symbol>`,
+            );
+          }
           const body = compiled
             ? `<div class="badge-template-surface">${compiled.renderSide(slot.side, badge)}</div>`
-            : `<img class="badge-label" alt="${escapeHtml(badge.displayName)}" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(badgeLabelSvg({ ...badge, jobTitle: badge.jobTitle ?? null }, slot.widthMm, slot.heightMm))}">`;
+            : `<svg xmlns="http://www.w3.org/2000/svg" class="badge-label" viewBox="0 0 ${slot.widthMm} ${slot.heightMm}" role="img" aria-label="${escapeHtml(badge.displayName)}"><use href="#badge-label-${slot.itemIndex}"/></svg>`;
           const slotClass = `badge-print-slot-${slotStyles.length}`;
           slotStyles.push(
             `.${slotClass}{left:${slot.xMm}mm;top:${slot.yMm}mm;width:${slot.widthMm}mm;height:${slot.heightMm}mm}`,
@@ -72,10 +80,11 @@ export function badgePrintHtml(
   }
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${BADGE_PRINT_CONTENT_SECURITY_POLICY}"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width"><title>Attendee ${design === "name_qr" ? "labels" : "badges"}</title><style>
 @page{size:${dimensions.widthMm}mm ${dimensions.heightMm}mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;width:${dimensions.widthMm}mm}body{font-family:Arial,sans-serif;color:#111;background:white}.badge-print-sheet{width:${dimensions.widthMm}mm;height:${dimensions.heightMm}mm;position:relative;break-after:page;break-inside:avoid;overflow:hidden}.badge-print-sheet:last-child{break-after:auto}.badge-print-slot{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2mm;padding:3mm;overflow:hidden}.badge-print-slot:has(.badge-label){padding:0}.badge-print-slot .badge-label{width:100%;height:100%;object-fit:contain;min-height:0}@media screen{body{background:#eee}.badge-print-sheet{background:white;margin:10px auto;box-shadow:0 1px 5px #aaa}}
+.badge-print-label-resources{position:absolute;width:0;height:0;overflow:hidden}
 ${compiled?.css ?? ""}
 ${slotStyles.join("\n")}
 .badge--template{display:block;padding:0}.badge-template-surface{width:${template?.widthMm ?? layout.label.widthMm}mm;height:${template?.heightMm ?? layout.label.heightMm}mm}
-</style></head><body>${compiled?.resourcesHtml ?? ""}<div hidden aria-hidden="true"><pre>${escapeHtml(BADGE_GENERIC_FONT_LICENSE)}</pre></div>${pages.join("")}</body></html>`;
+</style></head><body>${compiled?.resourcesHtml ?? ""}${labels.size ? `<svg xmlns="http://www.w3.org/2000/svg" class="badge-print-label-resources" aria-hidden="true"><defs>${[...labels.values()].join("")}</defs></svg>` : ""}<div hidden aria-hidden="true"><pre>${escapeHtml(BADGE_GENERIC_FONT_LICENSE)}</pre></div>${pages.join("")}</body></html>`;
 }
 
 /** One face of one badge through the print renderer, on a page of exactly the badge's printed size. */

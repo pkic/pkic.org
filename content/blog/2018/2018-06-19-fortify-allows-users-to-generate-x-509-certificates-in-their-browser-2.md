@@ -2,8 +2,6 @@
 authors:
 - Tim Hollebeek
 date: "2018-06-19T14:00:25+00:00"
-dsq_thread_id:
-- 6740978321
 keywords:
 - chrome
 - s/mime

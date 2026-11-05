@@ -5,6 +5,7 @@ import { resolveEmailTemplateData } from "../functions/_lib/email/plain-text";
 import { seedCampaignForm, attachCampaignFormResponse } from "./helpers/campaign-forms";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
+import { z } from "zod";
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { grantAdministrator } from "./helpers/administrator";
 import {
@@ -210,7 +211,8 @@ describe("event email campaign recipients", () => {
       "late-optout@example.test",
       "open@example.test",
     ]);
-    expect(queued.every((row) => /^[0-9a-f]{32}$/.test(row.id))).toBe(true);
+    // Operation outbox ids are UUIDs derived from the operation, like every other derived id.
+    expect(queued.every((row) => z.uuid().safeParse(row.id).success)).toBe(true);
     const outbox = await app.fetch(
       new Request("https://app.test/api/v1/email/outbox?sort=-createdAt&limit=25&offset=0", {
         headers: { authorization: `Bearer ${token}` },

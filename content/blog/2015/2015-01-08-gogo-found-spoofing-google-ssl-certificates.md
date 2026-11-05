@@ -2,8 +2,6 @@
 authors:
 - Rick Andrews
 date: "2015-01-08T19:17:13+00:00"
-dsq_thread_id:
-- 3402552367
 keywords:
 - mitm
 - malware

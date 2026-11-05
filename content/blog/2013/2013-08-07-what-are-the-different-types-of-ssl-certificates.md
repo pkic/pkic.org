@@ -2,10 +2,6 @@
 authors:
 - Dean Coclin
 date: "2013-08-07T18:18:01+00:00"
-dsq_needs_sync:
-- 1
-dsq_thread_id:
-- 1980218040
 keywords:
 - domain validated
 - ssl

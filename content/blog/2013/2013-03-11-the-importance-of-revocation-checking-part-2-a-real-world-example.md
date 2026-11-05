@@ -2,8 +2,6 @@
 authors:
 - Wayne Thayer
 date: "2013-03-11T16:00:08+00:00"
-dsq_thread_id:
-- 1937734354
 keywords:
 - revocation
 - malware

@@ -105,16 +105,17 @@ describe("GET /api/v1/email/outbox", () => {
 
   it("lists and manages campaign rows queued before outbox IDs became opaque", async () => {
     await setupAdmin();
+    // The queue no longer writes this id shape, so the stored row is inserted as it was written then.
     const legacyId = `${crypto.randomUUID()}:legacy@example.test`;
-    await queueEmail(env.DB, {
-      outboxId: legacyId,
-      idempotencyKey: `event-campaign:${legacyId}`,
-      templateKey: "user_magic_link",
-      recipientEmail: "legacy@example.test",
-      messageType: "transactional",
-      data: {},
-    });
-    await env.DB.prepare("UPDATE email_outbox SET status = 'sent' WHERE id = ?").bind(legacyId).run();
+    const queuedAt = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO email_outbox (
+         id, template_key, recipient_email, payload_json, message_type, provider, status, send_after,
+         created_at, updated_at, idempotency_key
+       ) VALUES (?, 'user_magic_link', 'legacy@example.test', '{}', 'transactional', 'sendgrid', 'sent', ?, ?, ?, ?)`,
+    )
+      .bind(legacyId, queuedAt, queuedAt, queuedAt, `event-campaign:${legacyId}`)
+      .run();
 
     const list = await callAdmin("/api/v1/email/outbox?sort=-createdAt&limit=25&offset=0");
     expect(list.status).toBe(200);

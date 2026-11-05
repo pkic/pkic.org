@@ -2,8 +2,6 @@
 authors:
 - Wayne Thayer
 date: "2013-05-25T01:09:42+00:00"
-dsq_thread_id:
-- 1958468420
 keywords:
 - https
 - microsoft

@@ -203,6 +203,24 @@ describe("one D1 round trip includes JWT context and event data", () => {
 });
 
 describe("one D1 round trip for bounded event listing", () => {
+  it("composes delegated event list and detail authentication in the resource batch", async () => {
+    const token = await createMcpSession(
+      env.DB,
+      { id: f.operatorId, email: `${f.operatorId}@example.test` },
+      crypto.randomUUID(),
+      ["events:read"],
+    );
+    for (const target of ["/api/v1/events?limit=1", path]) {
+      const response = await callApi(
+        env,
+        target,
+        { headers: { authorization: `Bearer ${token}`, "x-pkic-machine-auth": "mcp" } },
+        strict,
+      );
+      expect(response.status, await response.clone().text()).toBe(200);
+    }
+  });
+
   it.each(["anonymous", "attendee", "management"] as const)(
     "includes auth, pagination, count and %s enrichment in one batch",
     async (capacity) => {

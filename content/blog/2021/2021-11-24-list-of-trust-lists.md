@@ -4,7 +4,7 @@ Summary: The PKI Consortium is curating a global List of Trust Lists (a curated 
 authors: [Paul van Brouwershaven]
 date: 2021-11-24T15:00:00+00:00
 categories:
-keyword: [trust list, trusted list, ltl, lotl, root store, pki]
+keywords: [trust list, trusted list, ltl, lotl, root store, pki]
 tags: [LTL]
 
 authorProfiles:

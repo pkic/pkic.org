@@ -8,7 +8,7 @@ authors:
 - Paul van Brouwershaven
 date: 2023-01-26T12:00:00+00:00
 categories:
-keyword: [pqc, qsc, post-quantum, quantum-safe, cryptography, hardware, solutions, software]
+keywords: [pqc, qsc, post-quantum, quantum-safe, cryptography, hardware, solutions, software]
 tags: [Post-Quantum Cryptography, PQC]
 
 authorProfiles:

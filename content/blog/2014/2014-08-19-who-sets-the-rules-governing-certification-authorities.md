@@ -2,8 +2,6 @@
 authors:
 - Kirk Hall
 date: "2014-08-19T15:30:46+00:00"
-dsq_thread_id:
-- 2940431346
 keywords:
 - root program
 - domain validated

@@ -2,8 +2,6 @@
 authors:
 - Jeremy Rowley
 date: "2013-11-14T21:00:21+00:00"
-dsq_thread_id:
-- 1963595351
 keywords:
 - malware
 - ca/browser forum

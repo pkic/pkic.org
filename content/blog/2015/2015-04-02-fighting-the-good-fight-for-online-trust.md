@@ -2,8 +2,6 @@
 authors:
 - CA Security Council
 date: "2015-04-02T19:47:41+00:00"
-dsq_thread_id:
-- 3649974504
 keywords:
 - casc
 - caa

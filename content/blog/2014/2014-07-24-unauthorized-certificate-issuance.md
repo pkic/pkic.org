@@ -2,8 +2,6 @@
 authors:
 - Ben Wilson
 date: "2014-07-24T21:05:00+00:00"
-dsq_thread_id:
-- 2870645942
 keywords:
 - etsi
 - tls

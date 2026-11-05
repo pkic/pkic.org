@@ -4,9 +4,7 @@ url: /_event-flow-shells/speaker-manage/
 robots: noindex
 sitemap:
   disable: true
-build:
-  list: never
-  publishResources: false
+
 ---
 
 ## Speaker participation

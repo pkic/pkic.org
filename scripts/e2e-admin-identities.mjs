@@ -48,6 +48,7 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "portal-event-proposals",
   "speaker-submission-confirmation",
   "portal-analytics",
+  "portal-waitlist-admission",
   "portal-leadership",
   "portal-group-leadership",
   "public-members-signed-in",

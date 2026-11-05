@@ -21,6 +21,7 @@
 - These rules apply only to agent-to-human communication, including chat, issue comments, and handoffs. They do not apply to website or product copy.
 - Keep owner updates, issue comments, and handoffs very brief and easy to scan.
 - Keep PR descriptions brief too: outcome, evidence, and remaining risks or manual steps; usually under 150 words. Link longer evidence.
+- Before opening or updating a PR, run the pre-PR mode of `$pkic-review` and write its result as a short `Review:` bullet under Evidence. Fill every section of `.github/pull_request_template.md`, including a plain-English goal; the template is not inserted by every PR tool.
 - Use concise bullets and short sections; lead with the outcome, remaining work, and checks.
 - Label questions explicitly as **Question**. Ask only when an answer is needed to proceed.
 

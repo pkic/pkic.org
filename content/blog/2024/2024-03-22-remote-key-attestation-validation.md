@@ -5,7 +5,7 @@ authors:
 - Tomas Gustavsson
 date: 2024-03-22T12:00:00+00:00
 categories:
-keyword: [cryptography, hardware, solutions, software]
+keywords: [cryptography, hardware, solutions, software]
 tags: [Remote Key Attestation]
 
 authorProfiles:

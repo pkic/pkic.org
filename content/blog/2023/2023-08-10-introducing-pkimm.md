@@ -4,7 +4,7 @@ summary: The PKI Consortium publishes initial draft of the PKI maturity model wi
 authors: [Roman Cinkais]
 date: 2023-08-10T10:05:00+00:00
 categories:
-keyword: [pki, maturity, model, assessment, improvement, evaluation, comparison, performance, capability, ability]
+keywords: [pki, maturity, model, assessment, improvement, evaluation, comparison, performance, capability, ability]
 tags: [PKIMM, Maturity model]
 
 authorProfiles:

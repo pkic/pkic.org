@@ -2,8 +2,6 @@
 authors:
 - Ben Wilson
 date: "2016-02-18T16:15:16+00:00"
-dsq_thread_id:
-- 4588964321
 keywords:
 - mixed content
 - ssl

@@ -3,15 +3,116 @@ import { env } from "cloudflare:workers";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import {
   createRegistration,
+  confirmRegistrationByToken,
   updateRegistrationById,
   updateRegistrationByManageToken,
 } from "../functions/_lib/services/registrations";
-import { promoteDayWaitlistIfCapacity } from "../functions/_lib/services/registrations/day-waitlist";
+import {
+  buildRegistrationDayWaitlistSync,
+  promoteDayWaitlistIfCapacity,
+} from "../functions/_lib/services/registrations/day-waitlist";
+import { prepareLapsedDayOfferRequeue } from "../functions/_lib/services/registrations/day-waitlist-policy";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 
+async function lapsedOfferFixture() {
+  const { eventId } = await seedEventAndAdmin(env.DB);
+  const days = ["2026-12-01", "2026-12-02"];
+  await env.DB.batch([
+    ...days.map((date, index) =>
+      env.DB.prepare(
+        `INSERT INTO event_days (id,event_id,day_date,label,in_person_capacity,sort_order,created_at,updated_at)
+       VALUES (?,?,?,'Day',1,?,datetime('now'),datetime('now'))`,
+      ).bind(`lapsed-day-${index}`, eventId, date, index),
+    ),
+    ...["lapsed-holder", "lapsed-waiter"].map((id) =>
+      env.DB.prepare(
+        `INSERT INTO users (id,email,normalized_email,created_at,updated_at) VALUES (?,?,?,datetime('now'),datetime('now'))`,
+      ).bind(id, `${id}@example.test`, `${id}@example.test`),
+    ),
+  ]);
+  const event = await getEventBySlug(env.DB, "pqc-2026");
+  const selections = days.map((dayDate) => ({ dayDate, attendanceType: "in_person" }));
+  let waiterId = "";
+  for (const userId of ["lapsed-holder", "lapsed-waiter"]) {
+    const result = await createRegistration(env.DB, {
+      event,
+      userId,
+      dayAttendance: selections,
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: result.confirmationToken!,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    if (userId === "lapsed-waiter") waiterId = result.registration.id;
+  }
+  const now = new Date().toISOString();
+  const expired = new Date(Date.now() - 3600000).toISOString();
+  await env.DB.prepare(
+    `UPDATE event_day_waitlist_entries SET status='offered',priority_lane='continuity',offer_expires_at=? WHERE registration_id=? AND event_day_id='lapsed-day-0'`,
+  )
+    .bind(expired, waiterId)
+    .run();
+  return { eventId, waiterId, selections, now, expired };
+}
+
 describe("day waitlist queue fairness", () => {
   beforeEach(resetDb);
+
+  it.each([false, true])(
+    "keeps lapsed multi-day offers in the general lane after sync (already requeued: %s)",
+    async (alreadyRequeued) => {
+      const { eventId, waiterId, selections, now } = await lapsedOfferFixture();
+      if (alreadyRequeued) await env.DB.batch([prepareLapsedDayOfferRequeue(env.DB, { eventId, now })]);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const plan = await buildRegistrationDayWaitlistSync(env.DB, {
+          registrationId: waiterId,
+          eventId,
+          userId: "lapsed-waiter",
+          selections,
+          capacityExemptReason: null,
+        });
+        await env.DB.batch([...plan.guardStatements, ...plan.statements]);
+        const rows = await queryAll<{ event_day_id: string; priority_lane: string; reason_code: string | null }>(
+          env.DB,
+          "SELECT event_day_id,priority_lane,reason_code FROM event_day_waitlist_entries WHERE registration_id=? ORDER BY event_day_id",
+          [waiterId],
+        );
+        expect(rows[0]).toMatchObject({
+          event_day_id: "lapsed-day-0",
+          priority_lane: "general",
+          reason_code: "offer_lapsed",
+        });
+        expect(rows[1]).toMatchObject({ event_day_id: "lapsed-day-1", priority_lane: "continuity" });
+      }
+    },
+  );
+
+  it("grows queue positions linearly across repeated lapsed offers", async () => {
+    const { eventId, waiterId, now, expired } = await lapsedOfferFixture();
+    const [before] = await queryAll<{ tail: number }>(
+      env.DB,
+      "SELECT MAX(position) AS tail FROM event_day_waitlist_entries WHERE event_day_id='lapsed-day-0'",
+    );
+    for (let attempt = 0; attempt < 32; attempt++)
+      await env.DB.batch([
+        env.DB.prepare(
+          "UPDATE event_day_waitlist_entries SET status='offered',offer_expires_at=? WHERE registration_id=? AND event_day_id='lapsed-day-0'",
+        ).bind(expired, waiterId),
+        prepareLapsedDayOfferRequeue(env.DB, { eventId, now }),
+      ]);
+    const [after] = await queryAll<{ position: number }>(
+      env.DB,
+      "SELECT position FROM event_day_waitlist_entries WHERE registration_id=? AND event_day_id='lapsed-day-0'",
+      [waiterId],
+    );
+    expect(after.position).toBe(before.tail + 32);
+    expect(Number.isSafeInteger(after.position)).toBe(true);
+  });
 
   it("counts a role-exempt attendee toward physical capacity for an ordinary registration", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);

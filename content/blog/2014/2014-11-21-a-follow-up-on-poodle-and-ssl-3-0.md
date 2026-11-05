@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2014-11-21T15:15:32+00:00"
-dsq_thread_id:
-- 3238353717
 keywords:
 - vulnerabilities
 - ssl 3.0

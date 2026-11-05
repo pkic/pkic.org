@@ -4,8 +4,6 @@ authors:
 categories:
 - Initiative
 date: "2013-02-14T13:00:20+00:00"
-dsq_thread_id:
-- 1938884807
 keywords:
 - crl
 - internet engineering task force

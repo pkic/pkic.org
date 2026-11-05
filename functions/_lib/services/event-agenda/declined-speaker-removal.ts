@@ -4,9 +4,9 @@ import { listPermissionHolders } from "../../auth/permission-holders";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { emailPlainText } from "../../email/plain-text";
 import type { DatabaseLike, StatementLike } from "../../types";
-import { sha256Hex } from "../../utils/crypto";
 import { prepareScopedAuditLog } from "../audit";
 import { prepareAgendaRevisionGuard } from "./revision";
+import { outboxIdForOperation } from "../../email/outbox-queue";
 
 /** At most this many organizers are told about one decline; the agenda itself shows the rest. */
 const MAX_ORGANIZER_RECIPIENTS = 25;
@@ -116,7 +116,7 @@ export async function prepareDeclinedSpeakerAgendaRemoval(
       prepareQueueEmailStatement(
         db,
         {
-          outboxId: (await sha256Hex(key)).slice(0, 32),
+          outboxId: await outboxIdForOperation(key),
           idempotencyKey: key,
           eventId: input.event.id,
           templateKey: "agenda_speaker_declined",

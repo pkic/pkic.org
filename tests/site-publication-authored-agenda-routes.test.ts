@@ -124,7 +124,7 @@ describe("trusted original event-root agenda ownership", () => {
       },
     };
     const parsed = parseFrontMatter(
-      `---\ntitle: Historical event\noutputs: [event-data]\ndata: ${JSON.stringify(raw)}\n---\n{{< agenda >}}\n`,
+      `---\ntitle: Historical event\noutputs: [event-agenda]\ndata: ${JSON.stringify(raw)}\n---\n{{< agenda >}}\n`,
     );
     const sourcePath = `../../${value.authored[0]!.sourcePath}`;
     const document: ContentDocument = {

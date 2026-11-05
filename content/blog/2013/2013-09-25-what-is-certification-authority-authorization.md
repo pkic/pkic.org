@@ -2,8 +2,6 @@
 authors:
 - Rick Andrews
 date: "2013-09-25T17:00:11+00:00"
-dsq_thread_id:
-- 1938190411
 keywords:
 - caa
 - cps

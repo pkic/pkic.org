@@ -2,8 +2,6 @@
 authors:
 - Rick Andrews
 date: "2013-03-09T03:50:21+00:00"
-dsq_thread_id:
-- 1967257322
 keywords:
 - ssl
 - identity

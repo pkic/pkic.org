@@ -1,6 +1,6 @@
 @use "sass:meta";
 
-// Keep the existing portal shell in the same cascade layer as the Hugo build.
+// Component styles override the portal shell through the shared cascade order.
 @layer legacy {
   @include meta.load-css("portal");
   @include meta.load-css("management-workspace");

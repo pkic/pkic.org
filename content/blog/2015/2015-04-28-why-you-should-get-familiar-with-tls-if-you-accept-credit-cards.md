@@ -2,8 +2,6 @@
 authors:
 - Billy VanCannon
 date: "2015-04-28T16:27:35+00:00"
-dsq_thread_id:
-- 3720076616
 keywords:
 - https
 - vulnerability

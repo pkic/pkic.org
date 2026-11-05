@@ -611,12 +611,14 @@ describe("public capability links", () => {
       data: { manageUrl: marker },
       messageType: "transactional" as const,
     };
-    const direct = prepareBulkQueueEmailStatements(env.DB, [{ ...baseRow, outboxId: "speaker-bulk-direct" }]);
-    const chunked = prepareBulkQueueEmailChunkStatements(env.DB, [{ ...baseRow, outboxId: "speaker-bulk-chunked" }]);
+    const directId = crypto.randomUUID();
+    const chunkedId = crypto.randomUUID();
+    const direct = prepareBulkQueueEmailStatements(env.DB, [{ ...baseRow, outboxId: directId }]);
+    const chunked = prepareBulkQueueEmailChunkStatements(env.DB, [{ ...baseRow, outboxId: chunkedId }]);
     await env.DB.batch([...direct.map((row) => row.statement), ...chunked.map((chunk) => chunk.statement)]);
 
     const rows = await env.DB.prepare("SELECT id, payload_json FROM email_outbox WHERE id IN (?, ?) ORDER BY id")
-      .bind("speaker-bulk-direct", "speaker-bulk-chunked")
+      .bind(directId, chunkedId)
       .all<{ id: string; payload_json: string }>();
     expect(rows.results).toHaveLength(2);
     for (const row of rows.results) {

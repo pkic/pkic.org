@@ -2,9 +2,6 @@
 authors:
 - Doug Beattie
 date: "2015-02-20T22:27:36+00:00"
-dsq_thread_id:
-- 3534027017
-- General
 keywords:
 - malware
 - firefox

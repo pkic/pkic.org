@@ -4,9 +4,7 @@ url: /_event-flow-shells/proposal/
 robots: noindex
 sitemap:
   disable: true
-build:
-  list: never
-  publishResources: false
+
 ---
 
 ## Submit a session proposal

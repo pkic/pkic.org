@@ -1,3 +1,4 @@
+import { badgeOutputProgressSection } from "./badge-output-progress";
 import { TooltipPreview } from "./TooltipPreview";
 import { proposalSections } from "./sections-proposals";
 import { ServerSelectPreview } from "./ServerSelectPreview";
@@ -584,4 +585,5 @@ export const patternSections: PreviewSection[] = [
     ),
   },
   contentContributionPreview,
+  badgeOutputProgressSection,
 ];

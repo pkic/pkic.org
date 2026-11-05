@@ -2,8 +2,6 @@
 authors:
 - Jeremy Rowley
 date: "2014-10-20T17:00:00+00:00"
-dsq_thread_id:
-- 3132033613
 keywords:
 - casc
 - vulnerabilities

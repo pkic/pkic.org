@@ -2,9 +2,6 @@
 authors:
 - Bruce Morton
 date: "2015-03-11T16:00:22+00:00"
-dsq_thread_id:
-- 3586675110
-- General
 keywords:
 - ssl
 - vulnerability

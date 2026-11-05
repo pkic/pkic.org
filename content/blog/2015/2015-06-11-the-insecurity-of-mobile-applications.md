@@ -2,8 +2,6 @@
 authors:
 - Rick Andrews
 date: "2015-06-11T18:30:23+00:00"
-dsq_thread_id:
-- 3838882351
 keywords:
 - ssl
 - vulnerability

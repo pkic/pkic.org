@@ -194,7 +194,16 @@ describe("MCP OAuth session interoperability", () => {
   it("discovers scoped operations through compact MCP discovery", async () => {
     await withAuthorizedMcpClient(async (client) => {
       expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(
-        expect.arrayContaining(["discover_operations", "inspect_operation", "request", "execute", "batch_read"]),
+        expect.arrayContaining([
+          "discover_operations",
+          "inspect_operation",
+          "request",
+          "execute",
+          "batch_read",
+          "events",
+          "groups",
+          "users",
+        ]),
       );
       const search = await client.callTool({
         name: "discover_operations",

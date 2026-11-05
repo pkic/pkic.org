@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2016-09-15T18:59:31+00:00"
-dsq_thread_id:
-- 5147064909
 keywords:
 - chrome
 - ssl

@@ -3,8 +3,6 @@ authors:
 - Rick Andrews
 - Bruce Morton
 date: "2014-04-11T16:30:26+00:00"
-dsq_thread_id:
-- 2604243236
 keywords:
 - rc4
 - openssl

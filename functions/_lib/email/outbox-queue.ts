@@ -2,11 +2,12 @@ import { run } from "../db/queries";
 import { chunkJsonRows } from "../db/json-bulk";
 import { authorizeQueuedCapabilityLinks } from "../auth/capability-links";
 import type { DatabaseLike, StatementLike } from "../types";
-import { uuid } from "../utils/ids";
+import { deterministicUuid, uuid } from "../utils/ids";
 import { stringifyJson } from "../utils/json";
 import { nowIso } from "../utils/time";
 import type { QueuedEmailAttachment } from "./attachments";
 import type { EmailMessageType } from "../../../assets/shared/schemas/email-templates";
+import { databaseIdSchema } from "../../../assets/shared/schemas/identifiers";
 
 export interface CalendarPayload {
   /** The registration the invite belongs to; a meeting invite names its occurrence instead. */
@@ -132,11 +133,27 @@ function buildEmailOutboxValues(payload: QueueEmailPayload, id: string, queuedAt
   ];
 }
 
-function resolveOutboxId(payload: QueueEmailPayload): string {
+/**
+ * The outbox id for a domain operation that enqueues exactly once: a UUID
+ * derived from the operation's idempotency key (UUIDv8, like every other
+ * deterministic id), so a retry lands on the same row. The key itself is
+ * stored as `idempotency_key`, which is what the insert conflicts on.
+ */
+export function outboxIdForOperation(idempotencyKey: string): Promise<string> {
+  return deterministicUuid(["email_outbox", idempotencyKey]);
+}
+
+function resolveOutboxId(payload: Pick<QueueEmailPayload, "outboxId" | "idempotencyKey">): string {
   if (payload.idempotencyKey && !payload.outboxId) {
     throw new Error("QueueEmailPayload.outboxId is required when idempotencyKey is set");
   }
-  return payload.outboxId ?? uuid();
+  const id = payload.outboxId ?? uuid();
+  // Every reader parses outbox ids through the shared contract, so one row
+  // with another shape would take down the whole outbox list. Refuse it here.
+  if (!databaseIdSchema.safeParse(id).success) {
+    throw new Error("QueueEmailPayload.outboxId must be a database id; derive it with outboxIdForOperation");
+  }
+  return id;
 }
 
 export async function queueEmail(db: DatabaseLike, payload: QueueEmailPayload): Promise<string> {

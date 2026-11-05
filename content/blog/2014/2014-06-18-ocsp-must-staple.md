@@ -3,8 +3,6 @@ authors:
 - Rick Andrews
 - Bruce Morton
 date: "2014-06-18T18:50:27+00:00"
-dsq_thread_id:
-- 2775942548
 keywords:
 - ssl
 - announcement

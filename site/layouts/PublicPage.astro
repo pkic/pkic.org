@@ -32,6 +32,7 @@ const excludeFromSearch = privatePage || robots?.includes("noindex");
       structuredData={privatePage ? undefined : structuredData}
       title={title}
       description={description}
+      keywords={page.keywords}
       currentPath={page.route}
       canonicalUrl={page.canonicalUrl}
       assets={{}}

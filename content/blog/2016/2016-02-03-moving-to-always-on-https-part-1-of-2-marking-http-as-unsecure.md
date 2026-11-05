@@ -2,8 +2,6 @@
 authors:
 - Ben Wilson
 date: "2016-02-03T21:32:31+00:00"
-dsq_thread_id:
-- 4549273563
 keywords:
 - tls
 - vulnerabilities
