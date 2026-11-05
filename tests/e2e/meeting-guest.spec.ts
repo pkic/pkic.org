@@ -59,10 +59,7 @@ test("invited external guest verifies the separate mailbox code before meeting e
           providerJoinUrl: `https://meet.example.test/${unique}`,
         }),
       });
-      const occurrenceBody = (await occurrenceResponse.json()) as {
-        occurrence?: { id: string };
-        error?: unknown;
-      };
+      const occurrenceBody = (await occurrenceResponse.json()) as { occurrence?: { id: string }; error?: unknown };
       if (!occurrenceBody.occurrence) {
         return { stage: "occurrence", status: occurrenceResponse.status, body: occurrenceBody };
       }
@@ -100,7 +97,23 @@ test("invited external guest verifies the separate mailbox code before meeting e
   expect(content.find((part) => part.type === "text/plain")?.value).toContain(clock);
   await page.goto(`/portal/#/groups/${GROUP_ID}/meetings`);
   const row = page.getByRole("row").filter({ hasText: eventName });
-  await expect(row).toContainText(clock);
+  // Compute in the browser: Node and the attendee may use different locales.
+  const localClock = await page.evaluate(
+    (instant) =>
+      new Date(instant).toLocaleString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+        timeZoneName: "short",
+      }),
+    startsAt,
+  );
+  await expect(row).toContainText(`Your time: ${localClock}`);
+  await expect(row).toContainText("Scheduled:");
+  await expect(row).toContainText("Amsterdam time");
   for (const [width, height, device] of [
     [1280, 900, "desktop"],
     [375, 812, "phone"],

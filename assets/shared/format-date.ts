@@ -22,6 +22,7 @@
  * not here).
  */
 
+import { MEETING_EMAIL_TIME_ZONES } from "./meeting-time-policy";
 import { formatNumber } from "./format-number";
 import { clockTimeZone, type ClockZone } from "./event-clock";
 
@@ -160,11 +161,7 @@ export function formatMonthYear(value: string | null | undefined): string {
   const dateOnly = DATE_ONLY.test(value);
   const date = toDate(dateOnly ? `${value}T00:00:00Z` : value);
   if (!date) return EMPTY;
-  return date.toLocaleString(undefined, {
-    month: "short",
-    year: "numeric",
-    ...(dateOnly ? { timeZone: "UTC" } : {}),
-  });
+  return date.toLocaleString(undefined, { month: "short", year: "numeric", ...(dateOnly ? { timeZone: "UTC" } : {}) });
 }
 
 /**
@@ -293,6 +290,10 @@ export function formatEventDayInZone(value: string, zone: ClockZone): string {
  * place rather than a code.
  */
 export function formatZoneCity(timeZone: string): string {
+  const fixed = /^Etc\/GMT([+-])(\d{1,2})$/.exec(timeZone);
+  if (fixed && Number(fixed[2]) === 0) return "UTC";
+  if (fixed) return `UTC${fixed[1] === "+" ? "−" : "+"}${fixed[2]!.padStart(2, "0")}:00`;
+  if (timeZone === "Etc/GMT" || timeZone === "Etc/UTC") return "UTC";
   return timeZone === "UTC" ? "UTC" : (timeZone.split("/").pop() ?? timeZone).replaceAll("_", " ");
 }
 
@@ -321,6 +322,24 @@ export function formatClockName(zone: ClockZone): string {
 export function formatDateTimeInZone(value: string | null | undefined, zone: ClockZone): string {
   const clock = wallClock(value, zone);
   return clock === EMPTY ? EMPTY : `${clock} ${formatClockName(zone)}`;
+}
+
+/** Attendee-local time first, followed by the scheduled clock for coordination. */
+export function formatDateTimeWithSchedule(value: string | null | undefined, zone: ClockZone): string {
+  if (!value || !toDate(value)) return EMPTY;
+  return `Your time: ${formatDateTime(value)} · Scheduled: ${formatDateTimeInZone(value, zone)}`;
+}
+
+/** Email clock choices: use a known recipient zone, otherwise representative regional clocks. */
+export function formatMeetingEmailTime(value: string, scheduledZone: string, recipientZone?: string): string {
+  const zones = recipientZone ? [recipientZone] : [...MEETING_EMAIL_TIME_ZONES];
+  zones.push(scheduledZone);
+  const unique = new Map<string, string>();
+  for (const zone of zones) {
+    const canonical = new Intl.DateTimeFormat(undefined, { timeZone: zone }).resolvedOptions().timeZone;
+    if (!unique.has(canonical)) unique.set(canonical, zone);
+  }
+  return [...unique.values()].map((zone) => formatDateTimeInZone(value, zone)).join(" / ");
 }
 
 function wallClock(value: string | null | undefined, zone: ClockZone): string {

@@ -14,7 +14,7 @@ import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { usePortalHashLocation } from "../../hash-location";
-import { formatDateTimeInZone } from "../../../../../shared/format-date";
+import { formatDateTimeWithSchedule } from "../../../../../shared/format-date";
 import { eventClock } from "../../../../../shared/event-clock";
 import { EventScopeToggle, eventScopeActions, useEventScope } from "../events/EventScopeToggle";
 import { lazy, Suspense } from "preact/compat";
@@ -175,25 +175,17 @@ export function GroupEvents({
             ),
             sort: { asc: "name", desc: "-name" },
           },
-          {
-            header: "Profile",
-            cell: (event) => <Badge status={event.profileKey ?? "event"} />,
-            width: "fit",
-          },
+          { header: "Profile", cell: (event) => <Badge status={event.profileKey ?? "event"} />, width: "fit" },
           {
             // A date has a bounded length; the column says so instead of
             // wearing `pk-nowrap` while still claiming slack.
             header: past ? "Date" : "Next",
             cell: (event) =>
               event.nextOccurrenceAt || event.startsAt
-                ? formatDateTimeInZone(event.nextOccurrenceAt ?? event.startsAt, eventClock(event))
+                ? formatDateTimeWithSchedule(event.nextOccurrenceAt ?? event.startsAt, eventClock(event))
                 : "Not scheduled",
             width: "fit",
-            sort: {
-              asc: "next_occurrence_at",
-              desc: "-next_occurrence_at",
-              defaultDirection: past ? "desc" : "asc",
-            },
+            sort: { asc: "next_occurrence_at", desc: "-next_occurrence_at", defaultDirection: past ? "desc" : "asc" },
           },
         ]}
         empty={

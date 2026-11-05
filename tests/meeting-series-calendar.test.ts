@@ -363,7 +363,7 @@ describe("recurring meeting calendars", () => {
     const rendered = resolveEmailTemplateData(updateMessage, "text") as {
       changedOccurrences: Array<{ moved?: boolean; startsAt: string }>;
     };
-    expect(rendered.changedOccurrences.find((item) => item.moved)?.startsAt).toBe(
+    expect(rendered.changedOccurrences.find((item) => item.moved)?.startsAt).toContain(
       formatDateTimeInZone(moved.startsAt, series.timezone),
     );
     let calendars = await deliveries();

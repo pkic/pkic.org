@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { agendaTimeZones } from "../../../../../../../shared/agenda-time-display";
 import { eventVirtualRoomRoute } from "../../../../../../../shared/event-participation-link";
-import { formatDateTimeInZone, formatTimeRangeInZone } from "../../../../../../../shared/format-date";
+import { formatDateTimeWithSchedule, formatTimeRangeInZone } from "../../../../../../../shared/format-date";
 import { locationStreamOn, virtualRoomResponseSchema } from "../../../../../../../shared/schemas/event-live-stream";
 import { personalAgendaProgramResponseSchema } from "../../../../../../../shared/schemas/event-personal-agenda";
 import { instantToCalendarDate, viewerTimeZone } from "../../../../../../../shared/timezone";
@@ -102,7 +102,7 @@ export function VirtualRoom({ slug, eventName }: { slug: string; eventName: stri
           title={
             requested.state === "ended"
               ? `${requested.session.title} has ended`
-              : `${requested.session.title} starts ${formatDateTimeInZone(requested.session.startAt, viewerZone)}`
+              : `${requested.session.title} starts ${formatDateTimeWithSchedule(requested.session.startAt, timeZone)}`
           }
         >
           {requested.state === "ended"

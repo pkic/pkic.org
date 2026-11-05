@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { formatTimeRangeInZone } from "../../assets/shared/format-date";
+import {
+  formatTimeRangeInZone,
+  formatZoneCity,
+  formatDateTimeWithSchedule,
+  formatMeetingEmailTime,
+} from "../../assets/shared/format-date";
 import {
   formatCalendarDate,
   formatDate,
@@ -134,11 +139,7 @@ describe("friendly date formatting", () => {
   it("renders a month-precise value without a day, pinned to the UTC calendar for date-only input", () => {
     const rendered = formatMonthYear("2026-09-04");
     expect(rendered).toBe(
-      new Date("2026-09-04T00:00:00Z").toLocaleString(undefined, {
-        month: "short",
-        year: "numeric",
-        timeZone: "UTC",
-      }),
+      new Date("2026-09-04T00:00:00Z").toLocaleString(undefined, { month: "short", year: "numeric", timeZone: "UTC" }),
     );
     expect(rendered).toContain("2026");
     expect(rendered).not.toContain("4");
@@ -255,4 +256,29 @@ it("formats the social-card header with the handoff's compact date range", () =>
       month: "short",
     }),
   ).toMatch(/1.*3 Dec 2026/u);
+});
+
+it("labels fixed IANA offsets with their actual sign", () => {
+  expect(formatZoneCity("Etc/GMT+5")).toBe("UTC−05:00");
+  expect(formatZoneCity("Etc/GMT-9")).toBe("UTC+09:00");
+  expect(formatZoneCity("Etc/GMT")).toBe("UTC");
+  expect(formatZoneCity("Europe/Amsterdam")).toBe("Amsterdam");
+});
+
+it("puts the attendee clock before the scheduled clock", () => {
+  const instant = "2026-12-01T00:30:00.000Z";
+  expect(formatDateTimeWithSchedule(instant, "America/Los_Angeles")).toBe(
+    `Your time: ${formatDateTime(instant)} · Scheduled: ${formatDateTimeInZone(instant, "America/Los_Angeles")}`,
+  );
+});
+
+it("uses a reliable recipient clock and deduplicates scheduled-zone aliases", () => {
+  const instant = "2026-12-01T00:30:00.000Z";
+  expect(formatMeetingEmailTime(instant, "US/Pacific", "America/Los_Angeles")).toBe(
+    formatDateTimeInZone(instant, "America/Los_Angeles"),
+  );
+  const text = formatMeetingEmailTime(instant, "Europe/Amsterdam", "Asia/Tokyo");
+  expect(text).toBe(
+    `${formatDateTimeInZone(instant, "Asia/Tokyo")} / ${formatDateTimeInZone(instant, "Europe/Amsterdam")}`,
+  );
 });

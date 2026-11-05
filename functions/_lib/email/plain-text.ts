@@ -1,6 +1,6 @@
 import type { EmailContentType } from "../../../assets/shared/schemas/email-templates";
 import { escapeMarkdownText } from "./markdown";
-import { formatDateTimeInZone } from "../../../assets/shared/format-date";
+import { formatMeetingEmailTime } from "../../../assets/shared/format-date";
 
 const EMAIL_PLAIN_TEXT_KEY = "__pkicEmailPlainText";
 const EMAIL_MARKDOWN_TEXT_KEY = "__pkicEmailMarkdownText";
@@ -24,10 +24,12 @@ export interface EmailMarkdownTextValue {
 export interface EmailInstantValue {
   [EMAIL_INSTANT_KEY]: string;
   timeZone: string;
+  recipientTimeZone?: string;
 }
 
-export function emailInstant(at: string, timeZone: string): EmailInstantValue {
-  return { [EMAIL_INSTANT_KEY]: at, timeZone };
+/** Queue an instant with its scheduled clock and an explicitly known recipient clock, if available. */
+export function emailInstant(at: string, timeZone: string, recipientTimeZone?: string): EmailInstantValue {
+  return { [EMAIL_INSTANT_KEY]: at, timeZone, ...(recipientTimeZone ? { recipientTimeZone } : {}) };
 }
 
 export function emailPlainText(value: string): EmailPlainTextValue {
@@ -88,7 +90,10 @@ function resolveValue(value: unknown, mode: EmailContentType | "subject"): unkno
   if (isEmailPlainTextValue(value)) return resolvePlainText(value[EMAIL_PLAIN_TEXT_KEY], mode);
   if (isEmailMarkdownTextValue(value)) return resolveMarkdownText(value[EMAIL_MARKDOWN_TEXT_KEY], mode);
   if (isEmailInstantValue(value))
-    return resolvePlainText(formatDateTimeInZone(value[EMAIL_INSTANT_KEY], value.timeZone), mode);
+    return resolvePlainText(
+      formatMeetingEmailTime(value[EMAIL_INSTANT_KEY], value.timeZone, value.recipientTimeZone),
+      mode,
+    );
   if (Array.isArray(value)) return value.map((item) => resolveValue(item, mode));
   if (value !== null && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveValue(item, mode)]));

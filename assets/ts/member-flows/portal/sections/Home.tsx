@@ -16,7 +16,7 @@ import {
 import { eventsListResponseSchema } from "../../../../shared/schemas/event-management";
 import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/user-organizations";
 import { currentUserVotesListResponseSchema } from "../../../../shared/schemas/votes";
-import { formatDateTime, formatWeekdayTimeInZone } from "../../../../shared/format-date";
+import { formatDateTimeWithSchedule, formatWeekdayTimeInZone } from "../../../../shared/format-date";
 import { meetingEntryUrl } from "../../../../shared/meeting-entry-navigation";
 import { meetingSeriesCalendarPath, registrationCalendarPath } from "../../../../shared/calendar-subscription-links";
 import { MEETING_JOIN_ACTION_LEAD_MINUTES } from "../../../../shared/schemas/meeting-entry-policy";
@@ -205,11 +205,10 @@ function MeetingsPanel() {
                 </ButtonLink>
               </div>
               <span class="pk-small">{meeting.groupName}</span>
-              {meetingSchedule(meeting) && <span class="pk-small">{meetingSchedule(meeting)}</span>}
               <div class="pk-cluster">
                 <span class="pk-small">
-                  {now >= Date.parse(meeting.nextStartsAt) ? "Happening now" : "Next"} (your time):{" "}
-                  {formatDateTime(meeting.nextStartsAt)}
+                  {now >= Date.parse(meeting.nextStartsAt) ? "Happening now" : "Next"} ·{" "}
+                  {formatDateTimeWithSchedule(meeting.nextStartsAt, meeting.timezone)}
                 </span>
                 {formatRelativeDays(meeting.nextStartsAt) && (
                   <span class="pk-small pk-push">({formatRelativeDays(meeting.nextStartsAt)})</span>
@@ -227,6 +226,7 @@ function MeetingsPanel() {
                   <IconCalendarDownload />
                 </ButtonLink>
               </div>
+              {meetingSchedule(meeting) && <span class="pk-small">{meetingSchedule(meeting)}</span>}
               {meeting.canJoin &&
                 now >= Date.parse(meeting.nextStartsAt) - MEETING_JOIN_ACTION_LEAD_MINUTES * 60_000 &&
                 now < Date.parse(meeting.nextEndsAt) && (
@@ -363,10 +363,7 @@ function HomeShortcuts() {
     portalSectionEnabled(session, "events") && { label: "Events", href: "/events" },
     portalSectionEnabled(session, "sponsors") && { label: "Sponsorships", href: "/sponsors" },
     portalSectionEnabled(session, "users") &&
-      session?.identity && {
-        label: "My profile",
-        href: `/users/${encodeURIComponent(session.identity.id)}`,
-      },
+      session?.identity && { label: "My profile", href: `/users/${encodeURIComponent(session.identity.id)}` },
   ].filter((link): link is { label: string; href: string } => Boolean(link));
 
   return (
