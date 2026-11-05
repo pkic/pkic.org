@@ -12,6 +12,8 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BALLOT_CHOICES, memberVoteSchema, submitBallotSchema } from "../../assets/shared/schemas/votes";
 import type { MemberVote } from "../../assets/ts/member-flows/portal/types";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { confirmationButton, openConfirmation } from "./helpers/confirm-dialog";
 import { BallotForm } from "../../assets/ts/member-flows/portal/sections/Votes/BallotForm";
 
 let container: HTMLDivElement | null = null;
@@ -206,6 +208,45 @@ describe("BallotForm — election", () => {
     expect(onCast).toHaveBeenCalled();
   });
 
+  it("shows the recorded candidate and confirms before changing the election ballot", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return Response.json({ success: true });
+      }),
+    );
+    const castAt = "2026-01-01T10:00:00.000Z";
+    const root = mount(
+      <>
+        <ConfirmDialogHost />
+        <BallotForm
+          vote={vote({ candidates: CANDIDATES })}
+          memberId="40000000-0000-4000-8000-000000000001"
+          organizationName="Synthetic election organization"
+          hasCastBallot
+          recorded={{ choice: CANDIDATES[0].id, castByName: "Synthetic colleague", castByYou: false, castAt }}
+          endpoint="/api/v1/votes/x/ballots"
+          onCast={async () => undefined}
+        />
+      </>,
+    );
+    expect(root.textContent).toContain("Recorded: Ada Lovelace, cast by Synthetic colleague");
+    expect(root.querySelectorAll<HTMLInputElement>('input[type="radio"]')[0].checked).toBe(true);
+    await act(() => root.querySelectorAll<HTMLInputElement>('input[type="radio"]')[1].click());
+    await act(() => buttonLabeled(root, "Update ballot").click());
+    await settle();
+    expect(openConfirmation(root)?.textContent).toContain("from Ada Lovelace to Grace Hopper?");
+    expect(bodies).toHaveLength(0);
+    await act(() => confirmationButton("Change ballot", root)?.click());
+    await settle();
+    expect(submitBallotSchema.parse(bodies[0])).toMatchObject({
+      choice: CANDIDATES[1].id,
+      replacesBallotCastAt: castAt,
+    });
+  });
+
   it("reports a rejected ballot and does not tell the caller it was cast", async () => {
     vi.stubGlobal(
       "fetch",
@@ -233,10 +274,7 @@ describe("BallotForm — election", () => {
     });
     await settle();
 
-    const toast = document.querySelector(".my-toast");
-    expect(toast?.getAttribute("role")).toBe("status");
-    expect(toast?.textContent).toBe("This vote has closed.");
-    expect(toast?.classList.contains("pk-toast--danger")).toBe(true);
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain("This vote has closed.");
     expect(onCast).not.toHaveBeenCalled();
   });
 });

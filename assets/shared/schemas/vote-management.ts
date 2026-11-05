@@ -84,15 +84,21 @@ export const voteLifecycleTransitionResponseSchema = voteMutationResponseSchema.
 export const rawVoteBallotSchema = z.object({
   id: databaseIdSchema,
   userId: databaseIdSchema,
+  /** Who cast the ballot, as people know them. */
+  voterName: z.string(),
   memberId: databaseIdSchema.nullable(),
+  /** The represented organization, for a per-Member ballot. */
+  memberName: z.string().nullable(),
   choice: z.string(),
+  /** The chosen candidate's name, for an election ballot. */
+  candidateName: z.string().nullable(),
   round: z.number(),
   submittedAt: z.string(),
   updatedAt: z.string(),
 });
 export type RawVoteBallot = z.infer<typeof rawVoteBallotSchema>;
 
-export const RAW_VOTE_BALLOT_SORT_COLUMNS = ["submittedAt", "round", "choice", "userId", "memberId"] as const;
+export const RAW_VOTE_BALLOT_SORT_COLUMNS = ["submittedAt", "round", "choice", "voterName", "memberName"] as const;
 export const rawVoteBallotsListQuerySchema = listQuerySchema(RAW_VOTE_BALLOT_SORT_COLUMNS).extend({
   round: z.coerce.number().int().min(1).optional(),
 });

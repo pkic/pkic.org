@@ -1,4 +1,5 @@
 /** Member-scoped vote discovery, detail, and results for group resource adapters. */
+import type { z } from "zod";
 import { nowIso } from "../../utils/time";
 import { deriveVoteStatus, isVoteAcceptingBallots, voteStatusSql } from "./status";
 import { loadConsultationForm, type ConsultationForm } from "./question";
@@ -30,13 +31,14 @@ import {
   voteViewGroupPredicate,
 } from "./vote-access";
 import type { AuthMember, DatabaseLike } from "../../types";
-import { VOTES_LIST_SORT_COLUMNS, type VotesListQuery } from "../../../../assets/shared/schemas/votes";
+import {
+  VOTES_LIST_SORT_COLUMNS,
+  type eligibleMemberBallotSchema,
+  type VotesListQuery,
+} from "../../../../assets/shared/schemas/votes";
+import { personDisplayNameSql } from "../people/person-name-sql";
 
-export interface EligibleMemberBallot {
-  memberId: string;
-  organizationName: string;
-  hasCastBallot: boolean;
-}
+export type EligibleMemberBallot = z.infer<typeof eligibleMemberBallotSchema>;
 
 export interface MemberVoteSummary extends VoteSummary {
   /** Resolved only on the detail read; null in list projections. */
@@ -95,10 +97,17 @@ async function loadEligibleMemberBallots(
     member_id: string;
     organization_name: string;
     ballot_id: string | null;
+    ballot_choice: string | null;
+    ballot_updated_at: string | null;
+    ballot_user_id: string | null;
+    ballot_cast_by_name: string | null;
   }>(
     db,
     `SELECT DISTINCT vote.id AS vote_id, membership.member_id,
-            organization.name AS organization_name, ballot.id AS ballot_id
+            organization.name AS organization_name, ballot.id AS ballot_id,
+            ballot.choice AS ballot_choice, ballot.updated_at AS ballot_updated_at,
+            ballot.user_id AS ballot_user_id,
+            ${personDisplayNameSql("caster", "Another representative")} AS ballot_cast_by_name
      FROM votes vote
      JOIN group_memberships membership
       ON membership.user_id = ?
@@ -122,6 +131,7 @@ async function loadEligibleMemberBallots(
        ON ballot.vote_id = vote.id
       AND ballot.member_id = membership.member_id
       AND ballot.round = vote.current_round
+     LEFT JOIN users caster ON caster.id = ballot.user_id
      WHERE vote.electorate_mode = 'per_member'
        AND ${filter.sql}
        AND ${votingMembershipCategoryExistsSql("category.category_code")}
@@ -141,6 +151,15 @@ async function loadEligibleMemberBallots(
       memberId: row.member_id,
       organizationName: row.organization_name,
       hasCastBallot: row.ballot_id !== null,
+      recorded:
+        row.ballot_id === null
+          ? null
+          : {
+              choice: row.ballot_choice!,
+              castByName: row.ballot_cast_by_name!,
+              castByYou: row.ballot_user_id === userId,
+              castAt: row.ballot_updated_at!,
+            },
     });
     byVoteId.set(row.vote_id, ballots);
   }

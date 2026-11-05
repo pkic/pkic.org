@@ -14,6 +14,8 @@ export const GroupVoteBallotsPost = openApiRoute(groupVoteBallotRouteSchema, asy
   const viewer = requireGroupParticipantMember(context);
   const ip = getClientIp(c.req.raw);
   const ipHash = ip ? await hmacSha256Hex(requireInternalSecret(c.env), ip) : null;
-  await submitBallot(db, viewer, data.params.voteId, data.body.memberId, data.body.choice, ipHash, context.group.id);
+  await submitBallot(db, viewer, data.params.voteId, data.body.memberId, data.body.choice, ipHash, context.group.id, {
+    replacesBallotCastAt: data.body.replacesBallotCastAt,
+  });
   return json(submitBallotResponseSchema.parse({ success: true }));
 });

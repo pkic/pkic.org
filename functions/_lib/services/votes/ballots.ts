@@ -4,7 +4,7 @@ import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
-import { nowIso } from "../../utils/time";
+import { nowIso, nextIsoRevision } from "../../utils/time";
 import { MOTION_CHOICES, eligibleCategoriesOf, getVoteRowOrThrow, type BallotChoice, type VoteRow } from "./shared";
 import { exactVoteGroupMembership, voteParticipationGroupPredicate } from "./vote-access";
 import { votingMembershipCategoryExistsSql } from "../membership/categories";
@@ -160,9 +160,14 @@ function preparePerMemberBallotUpsert(
   choice: string,
   ipHash: string | null,
   now: string,
-  throughGroupId?: string,
+  throughGroupId: string | undefined,
+  replacesBallotCastAt: string | null,
 ): StatementLike {
   const context = exactVoteGroupMembership(throughGroupId);
+  const replaceGuard = {
+    sql: `AND ${RECORDED_MEMBER_BALLOT_AT_SQL} = ?`,
+    bindings: [capacity.memberId, replacesBallotCastAt ?? ""],
+  };
   return db
     .prepare(
       `INSERT INTO vote_ballots
@@ -171,6 +176,7 @@ function preparePerMemberBallotUpsert(
        FROM votes current_vote
        WHERE current_vote.id = ?
          AND current_vote.electorate_mode = 'per_member'
+         ${replaceGuard.sql}
          AND current_vote.closed_at IS NULL
          AND current_vote.cancelled_at IS NULL
          AND current_vote.current_round = ?
@@ -221,6 +227,7 @@ function preparePerMemberBallotUpsert(
       now,
       ipHash,
       vote.id,
+      ...replaceGuard.bindings,
       vote.current_round,
       vote.transition_revision,
       now,
@@ -297,6 +304,35 @@ function preparePerPersonBallotUpsert(
     );
 }
 
+/** The current round's Member ballot, by when it was last cast, or null when none is recorded. */
+const RECORDED_MEMBER_BALLOT_AT_SQL = `COALESCE((
+  SELECT existing.updated_at FROM vote_ballots existing
+  WHERE existing.vote_id = current_vote.id AND existing.member_id = ? AND existing.round = current_vote.current_round
+), '')`;
+
+/**
+ * Another representative may have cast or replaced the Member's ballot since
+ * this one opened the vote. Replacing a ballot the person has not seen is refused.
+ */
+async function assertMemberBallotUnchanged(
+  db: DatabaseLike,
+  vote: VoteRow,
+  memberId: string,
+  replacesBallotCastAt: string | null,
+): Promise<void> {
+  const recorded = await first<{ cast_at: string }>(
+    db,
+    `SELECT ${RECORDED_MEMBER_BALLOT_AT_SQL} AS cast_at FROM votes current_vote WHERE current_vote.id = ?`,
+    [memberId, vote.id],
+  );
+  if ((recorded?.cast_at ?? "") !== (replacesBallotCastAt ?? ""))
+    throw new AppError(
+      409,
+      "BALLOT_CHANGED",
+      "Your organization's ballot changed since you opened this vote. Reload to review the recorded ballot before replacing it.",
+    );
+}
+
 export async function submitBallot(
   db: DatabaseLike,
   member: BallotActor,
@@ -305,6 +341,7 @@ export async function submitBallot(
   choice: string,
   ipHash: string | null,
   throughGroupId?: string,
+  { replacesBallotCastAt }: { replacesBallotCastAt?: string | null } = {},
 ): Promise<void> {
   const vote = await getVoteRowOrThrow(db, voteIdOrSlug);
   let capacity: EligibleCapacity | null = null;
@@ -321,13 +358,31 @@ export async function submitBallot(
   assertVoteOpen(vote, now);
   await assertBallotChoiceValid(db, vote, choice);
 
+  // A Member's ballot is shared by its representatives. A submission that does not name the ballot it
+  // replaces is taken to expect none, so it can cast the first ballot but never overwrite a recorded one.
+  const replaces = capacity ? (replacesBallotCastAt ?? null) : undefined;
+  // A replacement must advance the revision even if two submissions share a millisecond.
+  const castAt = replaces ? nextIsoRevision(replaces) : now;
+
   const statement =
     vote.electorate_mode === "per_member"
-      ? preparePerMemberBallotUpsert(db, vote, member, capacity!, choice, ipHash, now, throughGroupId)
+      ? preparePerMemberBallotUpsert(
+          db,
+          vote,
+          member,
+          capacity!,
+          choice,
+          ipHash,
+          castAt,
+          throughGroupId,
+          replaces ?? null,
+        )
       : preparePerPersonBallotUpsert(db, vote, member, choice, ipHash, now, throughGroupId);
 
   const result = await statement.run();
   if (result.meta?.changes !== 1) {
+    // Diagnose only a refused write; the atomic guard is authoritative and successful writes add no read.
+    if (capacity) await assertMemberBallotUnchanged(db, vote, capacity.memberId, replaces ?? null);
     throw new AppError(409, "VOTE_CHANGED", "Voting eligibility or the voting window changed; reload and retry");
   }
 }
