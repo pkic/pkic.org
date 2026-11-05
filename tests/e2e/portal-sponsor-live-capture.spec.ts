@@ -80,7 +80,7 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     };
     await openSponsor();
     await page.getByRole("button", { name: "Scan leads", exact: true }).click();
-    await expect(page.getByText("Capture sponsor lead", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Scan mode", exact: true })).toHaveCount(0);
     await configureFeedbackPause();
     const first = await captureSponsorBadge(
@@ -172,7 +172,6 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     } finally {
       await reconnectScannerBrowser(page.context(), page);
     }
-    await page.getByRole("button", { name: "Sync now", exact: true }).click();
     await expect.poll(async () => (await scannerStorage(page)).pending.length, { timeout: 30_000 }).toBe(0);
     const acknowledged = await scannerStorage(page);
     for (const record of offlineRecords) {
