@@ -79,6 +79,13 @@ export const eventPromotionDesignSchema = z
     }
   });
 export type PromotionComposition = z.infer<typeof promotionCompositionSchema>;
+/** Empty personal takeaways inherit the reviewed session copy in both editing and artwork. */
+export function effectivePromotionTakeaways(
+  composition: PromotionComposition,
+  reviewed: readonly string[],
+): readonly string[] {
+  return composition.takeaways.length ? composition.takeaways : reviewed;
+}
 export type EventPromotionDesign = z.infer<typeof eventPromotionDesignSchema>;
 export const DEFAULT_PROMOTION_COLORS = ["#0b2a1c", "#125c3c", "#20506e", "#b0581f"] as const;
 export const DEFAULT_PROMOTION_PANELS = ["cover", "speakers", "content", "details", "register", "sponsors"] as const;

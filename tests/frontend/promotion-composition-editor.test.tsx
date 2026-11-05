@@ -50,6 +50,37 @@ const kit = promotionKitSchema.parse({
   stale: false,
   metrics: { clicks: 0, confirmedRegistrations: 0, sessionRsvps: 0 },
 });
+it("shows inherited takeaways and saves removal of the fifth point as a personal override", async () => {
+  const reviewed = Array.from({ length: 5 }, (_, index) => `Reviewed supply chain takeaway ${index + 1}`);
+  const inheritedKit = { ...kit, audience: "speaker" as const, copy: { ...kit.copy, takeaways: reviewed } };
+  let captured: unknown;
+  const saved = vi.fn();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_request, init?: RequestInit) => {
+      captured = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify(inheritedKit), { headers: { "content-type": "application/json" } });
+    }),
+  );
+  root = document.createElement("div");
+  document.body.append(root);
+  await act(() =>
+    render(
+      <PromotionCompositionEditor kit={inheritedKit} base="/promotion" onSaved={saved} onCancel={() => {}} />,
+      root,
+    ),
+  );
+  const input = controlFor<HTMLTextAreaElement>(root, "Your key takeaways");
+  expect(input.value.split("\n")).toEqual(reviewed);
+  await typeInto(input, reviewed.slice(0, 4).join("\n"));
+  await act(() => {
+    root.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  expect(promotionCompositionSaveSchema.parse(captured).composition.takeaways).toEqual(reviewed.slice(0, 4));
+  expect(inheritedKit.copy.takeaways).toEqual(reviewed);
+});
+
 it("saves personal copy and ordered panels through the canonical contract without copying speaker facts", async () => {
   let captured: unknown;
   const saved = vi.fn();

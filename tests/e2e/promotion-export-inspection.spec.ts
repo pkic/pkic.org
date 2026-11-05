@@ -154,6 +154,8 @@ test("every delivered long-panel promotion export has complete evidence and refu
       "Identify the evidence needed to approve a cryptographic migration without losing certificate lifecycle accountability.",
       "Compare operational boundaries across independent organizations and preserve clear ownership when trust services change.",
       "Choose observable migration and recovery controls that teams can explain, audit and maintain together.",
+      "Agree on supplier readiness evidence and clear accountability before accepting a migration roadmap.",
+      "Remove this optional fifth takeaway from my personal materials.",
     ],
     callToAction: "Register for this event",
     campaign: `export-${randomUUID()}`,
@@ -234,6 +236,9 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await page.getByRole("button", { name: "Customize tall post", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Personalize promotion materials", exact: true });
   const shortDescription = editor.getByRole("textbox", { name: "Your short description", exact: true });
+  const takeawayInput = editor.getByRole("textbox", { name: "Your key takeaways", exact: true });
+  await expect(takeawayInput).toHaveValue(copy.takeaways.join("\n"));
+  await takeawayInput.fill(copy.takeaways.slice(0, 4).join("\n"));
   const previousDescription = await shortDescription.inputValue();
   await shortDescription.fill("Keep the personal draft through browser Back and Forward.");
   await page.goBack();
@@ -246,7 +251,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
     ["phone", 375, 812],
   ] as const) {
     await page.setViewportSize({ width, height });
-    await editor.getByLabel("Session content", { exact: true }).scrollIntoViewIfNeeded();
+    await takeawayInput.scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath(`promotion-editor-${device}.png`) });
   }
 
@@ -258,6 +263,8 @@ test("every delivered long-panel promotion export has complete evidence and refu
   const kitResponse = await page.request.get(kitApi);
   expect(kitResponse.status(), await kitResponse.text()).toBe(200);
   const kit = promotionKitSchema.parse(await kitResponse.json());
+  expect(kit.composition?.takeaways).toEqual(copy.takeaways.slice(0, 4));
+  expect(kit.copy.takeaways).toEqual(copy.takeaways);
   expect(kit.publishedRevision).toBe(snapshot.publishedRevision);
   expect(kit.formats).toEqual(promotionFormatSchema.options);
   const registration = new URL(kit.registrationUrl);
@@ -277,7 +284,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await mkdir(directory, { recursive: true });
   const records = [];
   const urls = [];
-  const expectedPdfText = [title, ...copy.takeaways, ...names, ...affiliations, ...roles];
+  const expectedPdfText = [title, ...copy.takeaways.slice(0, 4), ...names, ...affiliations, ...roles];
   const labels = {
     portrait: "tall post (JPEG)",
     square: "square post (JPEG)",
