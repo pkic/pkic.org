@@ -71,7 +71,7 @@ export function PersonalPromotionKit({
     kit?.audience === "attendee" && !leading ? extractOgBadgeUrl(kit.registrationUrl, kit.fingerprint) : null;
   return (
     <Panel aria-label={title}>
-      <PanelBody>
+      <PanelBody class="pk-stack">
         {(error || downloads.error) && <ErrorAlert error={error || downloads.error} />}
         {kit && (
           <div class="pk-stack">
