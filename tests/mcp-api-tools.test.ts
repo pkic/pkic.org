@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import { createMcpOauthTestClient } from "./helpers/mcp-oauth";
-import { seedEventAndAdmin } from "./helpers/context";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { filterOpenApiSpecForMcp } from "../functions/_lib/openapi/mcp";
 import { openapi } from "../functions/http-router";
@@ -17,6 +17,80 @@ describe("generic MCP API helpers", () => {
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
+  });
+
+  it.each([["events:read"], ["events:read", "agenda:leads_capture"]] as const)(
+    "lists events in one request call without discovery or contract loading (%j)",
+    async (...scopes) => {
+      const { access_token } = await authorize(undefined, scopes);
+      const result = value(
+        await callTool(access_token, "request", { method: "GET", path: "/api/v1/events", query: { limit: 1 } }),
+      );
+      expect(result.error).toBeUndefined();
+      expect(result.events).toHaveLength(1);
+      expect(result.page.limit).toBe(1);
+    },
+  );
+
+  it("ranks the event collection first in a compact default discovery page", async () => {
+    const { access_token } = await authorize(undefined, ["events:read"]);
+    const result = value(await callTool(access_token, "discover_operations", { q: "events", method: "GET" }));
+    expect(result.page.limit).toBe(5);
+    expect(result.operations).toHaveLength(5);
+    expect(result.operations[0]).toMatchObject({ path: "/api/v1/events", method: "GET" });
+    expect(Object.keys(result.operations[0]).sort()).toEqual(["method", "path", "summary"]);
+    expect(JSON.stringify(result).length).toBeLessThan(1800);
+  });
+
+  it("keeps live event context grants inside the approved OAuth boundary", async () => {
+    const [event] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM events WHERE slug='pqc-2026'");
+    const [user] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM users WHERE normalized_email='admin@pkic.org'",
+    );
+    await env.DB.prepare("UPDATE events SET visibility='invitation_only' WHERE id=?").bind(event.id).run();
+    await env.DB.prepare(
+      "INSERT INTO events(id,slug,name,timezone,visibility,created_at,updated_at) VALUES (?,'other-private','Other private event','UTC','invitation_only',?,?)",
+    )
+      .bind(crypto.randomUUID(), new Date().toISOString(), new Date().toISOString())
+      .run();
+    await env.DB.prepare("DELETE FROM user_roles WHERE user_id=?").bind(user.id).run();
+    await env.DB.prepare(
+      "INSERT INTO permission_grants(id,user_id,permission,context_type,context_id,created_at) VALUES (?,?,'events:read','event',?,?)",
+    )
+      .bind(crypto.randomUUID(), user.id, event.id, new Date().toISOString())
+      .run();
+    const grant = await authorize(undefined, ["events:read"]);
+    const list = value(await callTool(grant.access_token, "request", { method: "GET", path: "/api/v1/events" }));
+    expect(list.events.map((row: { id: string }) => row.id)).toEqual([event.id]);
+    const detail = value(
+      await callTool(grant.access_token, "request", { method: "GET", path: "/api/v1/events/pqc-2026" }),
+    );
+    expect(detail.event.id).toBe(event.id);
+    const other = value(
+      await callTool(grant.access_token, "request", { method: "GET", path: "/api/v1/events/other-private" }),
+    );
+    expect(other.error.code).toBe("EVENT_NOT_FOUND");
+  });
+
+  it("does not turn unrelated OAuth consent into the user's event access", async () => {
+    await env.DB.prepare("UPDATE events SET visibility='invitation_only'").run();
+    const [event] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM events WHERE slug='pqc-2026'");
+    const [user] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM users WHERE normalized_email='admin@pkic.org'",
+    );
+    await env.DB.prepare(
+      "INSERT INTO event_participants(id,event_id,user_id,role,status,created_at,updated_at) VALUES (?,?,?,'attendee','active',?,?)",
+    )
+      .bind(crypto.randomUUID(), event.id, user.id, new Date().toISOString(), new Date().toISOString())
+      .run();
+    const { access_token } = await authorize(undefined, ["organizations:read"]);
+    const result = value(await callTool(access_token, "request", { method: "GET", path: "/api/v1/events" }));
+    expect(result.error).toBeUndefined();
+    expect(result.events).toEqual([]);
+    const detail = value(await callTool(access_token, "request", { method: "GET", path: "/api/v1/events/pqc-2026" }));
+    expect(detail.error.code).toBe("EVENT_NOT_FOUND");
   });
 
   it("includes generated API operations without duplicating their request contracts", () => {

@@ -82,6 +82,16 @@ describe("group event operations through delegated MCP", () => {
     );
     expect(updated.error).toBeUndefined();
     expect(updated.event.city).toBe("Toronto updated");
+    const settings = value(
+      await callTool(grant.access_token, "request", {
+        method: "GET",
+        path: `/api/v1/events/${created.event.slug}`,
+        query: { groupId: fixture.approved },
+      }),
+    );
+    expect(settings.error).toBeUndefined();
+    expect(settings.event.id).toBe(created.event.id);
+    expect(settings.event.settings.venue).toBe("Synthetic North Building, 100 Level");
     const [stored] = await queryAll<{ venue: string }>(
       env.DB,
       "SELECT json_extract(settings_json,'$.venue') AS venue FROM events WHERE id=?",

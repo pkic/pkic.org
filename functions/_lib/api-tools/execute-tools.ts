@@ -38,7 +38,7 @@ export function registerExecuteTools(
     "request",
     {
       description:
-        "Call one existing API operation. Discover its path and inspect its request contract first. Uses the API's existing validation and permissions. Narrow API queries to keep responses small.",
+        'Call one existing API operation directly when its path and inputs are known; discovery and inspection are optional. Example: list events with {method: "GET", path: "/api/v1/events", query: {limit: 5}}. For unknown operations, discover with a narrow query and inspect only the missing contract details. Uses existing API validation and permissions. Narrow API queries to keep responses small.',
       inputSchema: requestSchema,
     },
     async (options) => resultContent(await request(options)),

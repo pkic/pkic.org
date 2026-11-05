@@ -416,10 +416,14 @@ permissions, group capabilities, and OAuth consent limits remain authoritative.
 MCP metadata cannot replace API scope requirements. A transport exclusion uses
 `x-pkic-mcp: { expose: false, reason: "..." }`; it does not replace authorization.
 
-Use `discover_operations` for paginated summaries filtered by text, method, or
-tag (ten summaries by default), then `inspect_operation` for a selected
-operation's canonical request contract. Response inspection selects one status
-code; full operation details are opt-in. `request` calls one API operation;
+Call `request` directly when the API path and inputs are known. For example,
+`{method: "GET", path: "/api/v1/events", query: {limit: 5}}` lists events in one
+tool call. Discovery and inspection are optional. Use `discover_operations` for
+unknown operations, filtered by text, method, or tag (five summaries by default).
+Exact resource paths and shallow collections rank first; results contain only
+method, path, and summary. Use `inspect_operation` for a selected operation's
+canonical request contract when its inputs are unknown. Response inspection
+selects one status code; full operation details are opt-in. `request` calls one API operation;
 `execute` retains the single-operation safety check without loading any API
 schema into execution. `batch_read` runs up to ten independent GET
 requests, preserving order and individual results or failures. It does not retry,
