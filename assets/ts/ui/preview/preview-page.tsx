@@ -10,6 +10,7 @@ import { render } from "preact";
 
 import { PreviewShell } from "./PreviewShell";
 import { badgeLabelDeskSection } from "./badge-label-desk";
+import { scannerPresentationSection } from "./scanner-presentation";
 import { badgePrintingSection } from "./badge-printing";
 import { registrationRosterActionsSection } from "./registration-roster-actions";
 import { basicSections } from "./sections-basics";
@@ -36,6 +37,7 @@ function main(): void {
     badgePrintingSection,
     registrationRosterActionsSection,
     badgeLabelDeskSection,
+    scannerPresentationSection,
   ];
   // `?only=<id>` renders one section alone, for a tight screenshot of one control.
   const only = new URLSearchParams(window.location.search).get("only");

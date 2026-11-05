@@ -8,6 +8,10 @@ import { badgeFaceBadge } from "./helpers/badge-face-fixture";
 import { downloadBadgeArtifact } from "../../assets/ts/components/event-badges/badge-print-artifacts";
 import { badgePrintPdf } from "../../assets/ts/components/event-badges/badge-print-pdf";
 
+import { printBadgeDocument } from "../../assets/ts/components/event-badges/badge-print-command";
+vi.mock("../../assets/ts/components/event-badges/badge-print-command", () => ({
+  printBadgeDocument: vi.fn(async () => {}),
+}));
 const frameGate = vi.hoisted(() => ({ ready: () => {} }));
 vi.mock("../../assets/ts/components/event-badges/BadgeDocumentFrame", () => ({
   BadgeDocumentFrame: ({
@@ -57,19 +61,18 @@ async function mount(action: "labels" | "label_pdf", beforeRelease = vi.fn(async
   );
   await vi.waitFor(() => expect(host.querySelector("iframe")).not.toBeNull());
   const frame = host.querySelector("iframe")!;
-  const print = vi.fn();
-  frame.contentWindow!.print = print;
+  const print = vi.mocked(printBadgeDocument);
   return { frame, print, onComplete, onError, beforeRelease };
 }
 
-it("opens printing only after all pages are ready and access is rechecked, then waits for afterprint", async () => {
+it("opens printing only after all pages are ready and access is rechecked, does not wait for mobile afterprint", async () => {
   const { frame, print, onComplete, beforeRelease } = await mount("labels");
   expect(print).not.toHaveBeenCalled();
   expect(beforeRelease).not.toHaveBeenCalled();
   await act(() => frameGate.ready());
   await vi.waitFor(() => expect(print).toHaveBeenCalledTimes(1));
   expect(beforeRelease).toHaveBeenCalledTimes(1);
-  expect(onComplete).not.toHaveBeenCalled();
+  expect(onComplete).toHaveBeenCalledOnce();
   await act(() => frameGate.ready());
   expect(print).toHaveBeenCalledTimes(1);
   frame.contentWindow!.dispatchEvent(new Event("afterprint"));

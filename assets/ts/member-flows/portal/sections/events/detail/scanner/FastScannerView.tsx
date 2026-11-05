@@ -2,6 +2,7 @@ import { ScannerPreparationStatus } from "./ScannerPreparationStatus";
 import type { ComponentChildren, ComponentProps } from "preact";
 import { scanFeedbackLabel, scanFeedbackOutcome, scanEligibilityLabel } from "./scan-stream";
 import "../../../../../../../design/tokens.scanner.generated.css";
+import "../../../../../../../design/tokens.event.generated.css";
 import { ScannerExceptionReview } from "./ScannerExceptionReview";
 import { scannerActionLabel } from "./ScannerModeSelect";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
@@ -11,15 +12,19 @@ import type {
 } from "../../../../../../../shared/schemas/event-participation-scanning";
 import { Button } from "../../../../../../ui/Button";
 import { CloseButton } from "../../../../../../ui/CloseButton";
-import { IconClock, IconTools } from "../../../../../../components/icons/indicators";
+import { IconTools } from "../../../../../../components/icons/indicators";
 import { IconCheckmark, IconInfoCircle, IconRefresh, IconRemove } from "../../../../../../components/icons";
 import { scannerSwipeDirection, trapScannerDrawerTab } from "./scanner-gestures";
 import "../../../../shell/Login.css";
 import "./FastScannerView.css";
 import { HeadingOutline } from "../../../../../../ui/HeadingOutline";
 import { SectionHeading } from "../../../../../../ui/SectionHeading";
+import { IconScan, IconLeadCard, IconPrint, IconFullscreen } from "../../../../../../components/icons/app-navigation";
 
 export function FastScannerView({
+  presentation = "fullscreen",
+  purpose = "scan",
+  onPresentation,
   canRecordAttendance = true,
   context,
   mode = "check",
@@ -50,6 +55,9 @@ export function FastScannerView({
   soundLabel,
   onSound,
 }: {
+  presentation?: "embedded" | "fullscreen";
+  purpose?: "scan" | "print";
+  onPresentation?: () => void;
   lastResult?: EventScanResponse | null;
   connectionStatus?: ComponentChildren;
   soundLabel?: string;
@@ -120,11 +128,17 @@ export function FastScannerView({
       : "Ready for the next badge";
   return (
     <div
-      class={`pk-login__backdrop pk-fast-scanner pk-fast-scanner--${outcome}${result ? " pk-fast-scanner--result" : ""}${manualEntry || recentScans ? " pk-fast-scanner--manual" : ""}`}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Continuous badge scanner"
+      class={`pk-login__backdrop pk-fast-scanner pk-fast-scanner--${outcome}${presentation === "embedded" ? " pk-fast-scanner--embedded" : ""}${result ? " pk-fast-scanner--result" : ""}${manualEntry || recentScans ? " pk-fast-scanner--manual" : ""}`}
+      role={presentation === "fullscreen" ? "dialog" : "region"}
+      aria-modal={presentation === "fullscreen" ? "true" : undefined}
+      aria-label={purpose === "print" ? "Badge printing scanner" : "Continuous badge scanner"}
       onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          onExit();
+          return;
+        }
+        if (presentation !== "fullscreen") return;
         if (!operatorOpen) {
           const stage = event.currentTarget.querySelector<HTMLElement>(".pk-fast-scanner__stage");
           if (stage) trapScannerDrawerTab(stage, event);
@@ -164,7 +178,7 @@ export function FastScannerView({
         <img class="pk-fast-scanner__brand" src="/img/logo.svg" alt="PKI Consortium" width="1256" height="324" />
         {connectionStatus}
         <p class="pk-fast-scanner__context">
-          {context} · {scannerActionLabel(mode)}
+          {context} · {purpose === "print" ? "Print badges" : scannerActionLabel(mode)}
         </p>
         {!manualEntry && !recentScans && (
           <div class="pk-fast-scanner__feedback" role="status" aria-live="polite" aria-atomic="true">
@@ -175,8 +189,12 @@ export function FastScannerView({
                 <IconRemove />
               ) : outcome === "warning" ? (
                 <IconInfoCircle />
+              ) : purpose === "print" ? (
+                <IconPrint />
+              ) : mode === "lead" ? (
+                <IconLeadCard />
               ) : (
-                <IconClock />
+                <IconScan />
               )}
             </span>
             <strong class="pk-fast-scanner__label">
@@ -202,6 +220,12 @@ export function FastScannerView({
           <p class="pk-fast-scanner__last">Last scan: {scanFeedbackLabel(lastResult, mode)}</p>
         )}
         <div class="pk-fast-scanner__actions">
+          {onPresentation && (
+            <Button variant="secondary" onClick={onPresentation}>
+              <IconFullscreen />
+              {presentation === "fullscreen" ? "Embedded view" : "Full screen"}
+            </Button>
+          )}
           {cameraActive && !manualEntry && !recentScans && (
             <Button variant="secondary" onClick={onPreview}>
               {preview ? "Hide preview" : "Show preview"}
