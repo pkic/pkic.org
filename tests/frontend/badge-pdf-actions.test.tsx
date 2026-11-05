@@ -2,8 +2,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { BadgePrintPreview } from "../../assets/ts/components/event-badges/BadgePrintPreview";
-import { BADGE_LABEL_PRINTING_CONTEXT } from "../../assets/shared/badge-label-policy";
+import { BadgePrintCommand } from "../../assets/ts/components/event-badges/BadgePrintCommand";
 import { createGenericBadgeTemplate } from "../../assets/shared/badge-generic-template";
 import { downloadBadgeArtifact } from "../../assets/ts/components/event-badges/badge-print-artifacts";
 import { badgePrintPdf } from "../../assets/ts/components/event-badges/badge-print-pdf";
@@ -72,9 +71,8 @@ it.each([
   };
   await act(() =>
     render(
-      <BadgePrintPreview
+      <BadgePrintCommand
         action={action}
-        printing={BADGE_LABEL_PRINTING_CONTEXT}
         loadPrintingContext={async () => context}
         badges={[
           {
@@ -89,6 +87,9 @@ it.each([
           },
         ]}
         beforeRelease={beforeRelease}
+        onProgress={vi.fn()}
+        onComplete={vi.fn()}
+        onError={vi.fn()}
       />,
       host,
     ),

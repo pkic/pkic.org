@@ -1,3 +1,6 @@
+import { menuPath } from "./helpers/menu-path";
+import { registrationList } from "./helpers/group-event-attendance-fixtures";
+import { savePortalSession, clearAuth } from "../../assets/ts/member-flows/portal/state";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
 import { visibleEventWorkspaceTabs } from "../../assets/ts/member-flows/portal/sections/management/group-event-workspace-tabs";
@@ -540,4 +543,41 @@ describe("group event workspace", () => {
       expect(container.querySelector("caption")?.textContent).toBe("Event proposals");
     });
   });
+});
+
+it("keeps registration output on the roster instead of navigating to the badge collection", async () => {
+  savePortalSession(portalSessionFixture({ administrator: true }));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), location.origin);
+      if (url.pathname.endsWith("/days")) return json({ days: [], eventUpdatedAt: "2026-01-01T00:00:00Z" });
+      if (url.pathname.endsWith("/population")) return new Promise<Response>(() => {});
+      return json(registrationList());
+    }),
+  );
+  try {
+    const event = baseEvent({ capabilities: ["view", "manage", "manage_attendance"] });
+    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="registrations" />);
+    await vi.waitFor(async () => {
+      await settle();
+      expect(container.querySelector('button[aria-label="Registration actions"]')).not.toBeNull();
+    });
+    navigate.mockClear();
+    const download = await menuPath(container, "Registration actions", ["Download", "CSV", "Labels"]);
+    await act(() => download.click());
+    await vi.dynamicImportSettled();
+    await vi.waitFor(async () => {
+      await settle();
+      expect(container.querySelector("dialog")?.textContent).toContain("Download labels CSV");
+    });
+    expect(navigate).not.toHaveBeenCalled();
+    expect(container.querySelector('nav[aria-label="Registration sections"]')).not.toBeNull();
+    const cancel = [...container.querySelectorAll("dialog button")].find((item) => item.textContent === "Cancel");
+    await act(() => (cancel as HTMLButtonElement).click());
+    expect(container.querySelector("dialog")).toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
+  } finally {
+    clearAuth();
+  }
 });
