@@ -5,7 +5,6 @@ import { dayNotConfiguredError } from "../event-day-refusals";
 import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { sha256Hex } from "../../utils/crypto";
 import { prepareAuditLog } from "../audit";
 import { configuredAttendanceOptions, listEventDays } from "../event-days";
 import { buildRegistrationDayWaitlistSync, roleBasedCapacityExemptReason, withDayCapacityRetry } from "./day-waitlist";
@@ -14,10 +13,15 @@ import { getRegistrationById } from "./queries";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailParams } from "./status-notifications";
 import type { RegistrationRecord } from "./types";
 import {
+  admissionRequiresActiveWaitlist,
+  type RegistrationAdmissionMode,
+} from "../../../../assets/shared/schemas/event-registration-detail";
+import {
   isRegistrationTransitionConflict,
   prepareRegistrationTransitionGuard,
   registrationChangedError,
 } from "./transition-guard";
+import { outboxIdForOperation } from "../../email/outbox-queue";
 
 interface ExistingAttendanceRow {
   event_day_id: string;
@@ -28,7 +32,7 @@ interface AdmissionPayload {
   registrationId: string;
   event: RegistrationStatusEmailParams["event"];
   dayDates?: string[];
-  mode: string;
+  mode: RegistrationAdmissionMode;
   reason: string;
   actorUserId: string;
   appBaseUrl: string;
@@ -41,6 +45,11 @@ interface BuiltAdmission {
   admittedDayDates: string[];
   statements: StatementLike[];
   outboxId: string | null;
+}
+
+/** The caller's own requirement, or the mode's: admitting off the waiting list needs a live entry. */
+function requiresActiveWaitlist(payload: AdmissionPayload): boolean {
+  return Boolean(payload.requireActiveWaitlist) || admissionRequiresActiveWaitlist(payload.mode);
 }
 
 async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Promise<BuiltAdmission> {
@@ -65,7 +74,7 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
     }
   }
 
-  if (payload.requireActiveWaitlist) {
+  if (requiresActiveWaitlist(payload)) {
     const activeWaitlistRows = await all<{ day_date: string }>(
       db,
       `SELECT ed.day_date
@@ -101,7 +110,7 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
   );
   const existingAttendanceByDayId = new Map(existingRows.map((row) => [row.event_day_id, row.attendance_type]));
   if (
-    payload.requireActiveWaitlist &&
+    requiresActiveWaitlist(payload) &&
     admittedDayDates.some((date) => !existingAttendanceByDayId.has(dayByDate.get(date)!.id))
   ) {
     throw new AppError(
@@ -146,9 +155,24 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
     registrationStatus: registration.status,
     configuredEventDays: eventDays,
   });
+  // The canonical planner counts each selected option, including live offers,
+  // and excludes this registration. Its revision guards fence the same write.
+  if (payload.mode === "within_capacity") {
+    const full = waitlist.decisions
+      .filter(
+        (decision) =>
+          admittedDayDates.includes(decision.dayDate) &&
+          decision.limit !== null &&
+          decision.limit > 0 &&
+          decision.seatsReservedBeforeDecision >= decision.limit,
+      )
+      .map((decision) => dayByDate.get(decision.dayDate)!.label || decision.dayDate);
+    if (full.length)
+      throw new AppError(409, "DAY_CAPACITY_FULL", `No place is free on ${full.join(", ")}.`, { days: full });
+  }
   const statements: StatementLike[] = [
     prepareRegistrationTransitionGuard(db, registration),
-    ...(payload.requireActiveWaitlist
+    ...(requiresActiveWaitlist(payload)
       ? admittedDayDates.map((dayDate) =>
           prepareAuthorizationGuard(db, {
             sql: `SELECT 1
@@ -203,7 +227,7 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
           .bind(uuid(), registration.id, day.id, fromType, toType, payload.actorUserId, now),
       );
     }
-    if (!roleExemptReason || payload.requireActiveWaitlist) {
+    if (!roleExemptReason || requiresActiveWaitlist(payload)) {
       dayOverrideStatements.push(
         db
           .prepare(
@@ -227,7 +251,7 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
             registration.id,
             registration.user_id,
             day.id,
-            ADMIN_DAY_CAPACITY_EXEMPT_REASON_CODE,
+            payload.mode === "within_capacity" ? null : ADMIN_DAY_CAPACITY_EXEMPT_REASON_CODE,
             `${payload.mode}:${payload.reason}`,
             now,
             now,
@@ -248,7 +272,10 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
       mode: payload.mode,
       reason: payload.reason,
       admittedDayDates,
-      capacityExemptReason: roleExemptReason ?? `day:${ADMIN_DAY_CAPACITY_EXEMPT_REASON_CODE}`,
+      capacityExemptReason:
+        payload.mode === "within_capacity"
+          ? null
+          : (roleExemptReason ?? `day:${ADMIN_DAY_CAPACITY_EXEMPT_REASON_CODE}`),
       capacityDecisions: waitlist.decisions
         .filter((decision) => admittedDayDates.includes(decision.dayDate))
         .map((decision) => ({
@@ -269,7 +296,7 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
     templateKey: "registration_updated",
     subject: `Registration updated — ${payload.event.name}`,
     noticeKind: "status_update",
-    outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32),
+    outboxId: await outboxIdForOperation(idempotencyKey),
     idempotencyKey,
     dayAttendance: eventDays
       .filter((day) => attendanceByDayId.has(day.id))
@@ -306,7 +333,7 @@ export async function admitRegistration(
     });
   } catch (error) {
     if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
-    if (payload.requireActiveWaitlist && isAuthorizationGuardFailure(error)) {
+    if (requiresActiveWaitlist(payload) && isAuthorizationGuardFailure(error)) {
       throw new AppError(
         409,
         "REGISTRATION_DAY_WAITLIST_CHANGED",

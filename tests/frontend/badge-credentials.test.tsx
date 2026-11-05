@@ -30,7 +30,9 @@ vi.mock("../../assets/ts/member-flows/portal/ui", async (importOriginal) => ({
   browserTimeZone: () => viewer.timeZone,
 }));
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigate] }));
-vi.mock("qrcode", () => ({ default: { toString: (...args: unknown[]) => qr(...args) } }));
+vi.mock("qrcode", async (load) => ({
+  default: { create: (await load<typeof import("qrcode")>()).create, toString: (...args: unknown[]) => qr(...args) },
+}));
 vi.mock("../../assets/ts/components/ConfirmDialog", () => ({ confirmAction: vi.fn(async () => true) }));
 
 const BASE = "/groups/example/events/workshop/registrations/badges";

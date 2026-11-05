@@ -1204,7 +1204,7 @@ describe("day attendance capacity", () => {
     expect(Number(statuses.find((row) => row.status === "waiting")?.total ?? 0)).toBe(1);
   });
 
-  it("restores an expired explicit offer attempt to its old waitlist position", async () => {
+  it("keeps a holder whose offer lapsed waiting behind the people who were already waiting", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     await env.DB.batch([
@@ -1305,13 +1305,13 @@ describe("day attendance capacity", () => {
     expect(nextOffer).toMatchObject({ registration_id: backup.registration.id, status: "offered" });
     expect(
       (await loadRegistrationDayStates(env.DB, [waiting.registration.id])).get(waiting.registration.id),
-    ).toMatchObject([{ waitlistStatus: "expired" }]);
+    ).toMatchObject([{ waitlistStatus: "waiting" }]);
     expect(await listDayWaitlistForRegistration(env.DB, waiting.registration.id)).toMatchObject([
-      { status: "expired" },
+      { status: "waiting" },
     ]);
     expect(await fetchViewerEventState(env.DB, "user-2", eventId)).toMatchObject({
-      waitlisted: false,
-      days: [{ state: "expired" }],
+      waitlisted: true,
+      days: [{ state: "waitlisted" }],
     });
 
     await updateRegistrationById(
@@ -1331,8 +1331,10 @@ describe("day attendance capacity", () => {
       "SELECT registration_id, status, position FROM event_day_waitlist_entries WHERE event_day_id = 'day-1' ORDER BY position ASC",
     );
 
+    // A lapsed offer releases its seat to the queue: the holder waits again, behind the backup.
+    expect(rows.map((row) => row.registration_id)).toEqual([backup.registration.id, waiting.registration.id]);
     expect(rows.find((row) => row.registration_id === waiting.registration.id)?.status).toBe("waiting");
-    expect(rows.find((row) => row.registration_id === waiting.registration.id)?.position).toBe(1);
+    expect(rows.find((row) => row.registration_id === waiting.registration.id)?.position).toBe(3);
     expect(rows.find((row) => row.registration_id === backup.registration.id)?.position).toBe(2);
 
     await env.DB.prepare("UPDATE event_day_waitlist_entries SET status = 'expired' WHERE registration_id = ?")

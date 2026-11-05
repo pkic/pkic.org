@@ -1,3 +1,4 @@
+import { groupEventWorkspaceFixture as baseEvent, GROUP_ID, EVENT_ID } from "./helpers/group-event-workspace-fixture";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
 import { visibleEventWorkspaceTabs } from "../../assets/ts/member-flows/portal/sections/management/group-event-workspace-tabs";
@@ -5,7 +6,6 @@ import { visibleEventWorkspaceTabs } from "../../assets/ts/member-flows/portal/s
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
 import { GroupEvents } from "../../assets/ts/member-flows/portal/sections/management/GroupEvents";
 import { isCurrentTab, tabs } from "./helpers/tabs";
@@ -36,8 +36,6 @@ vi.mock("../../assets/ts/member-flows/portal/sections/management/GroupEventSetti
   ),
 }));
 
-const GROUP_ID = "10000000-0000-4000-8000-000000000001";
-const EVENT_ID = "architecture-workshop";
 const mounted: HTMLElement[] = [];
 
 function json(value: unknown): Response {
@@ -72,34 +70,6 @@ function tabLabels(container: HTMLElement): string[] {
 
 function tab(container: HTMLElement, label: string): HTMLElement | undefined {
   return tabButtons(container).find((button) => button.textContent?.trim() === label);
-}
-
-function baseEvent(overrides: Partial<GroupEvent> = {}): GroupEvent {
-  return {
-    id: EVENT_ID,
-    ownerGroupId: GROUP_ID,
-    seriesId: null,
-    slug: EVENT_ID,
-    basePath: `/events/2026/${EVENT_ID}/`,
-    name: "Architecture workshop",
-    timezone: "Europe/Amsterdam",
-    startsAt: "2026-09-01T15:00:00.000Z",
-    endsAt: "2026-09-01T16:00:00.000Z",
-    profileKey: "workshop",
-    sourceMode: "portal",
-    registrationPolicy: "optional",
-    visibility: "group_members",
-    inviteLimitAttendee: 5,
-    city: null,
-    country: null,
-    meetingLocation: null,
-    links: [],
-    nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
-    updatedAt: "2026-08-01T00:00:00.000Z",
-    proposalAccess: null,
-    capabilities: ["view"],
-    ...overrides,
-  };
 }
 
 beforeEach(async () => {

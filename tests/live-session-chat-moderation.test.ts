@@ -1,4 +1,4 @@
-import { runInDurableObject } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LIVE_CHAT_POLICY } from "../assets/shared/live-chat-policy";
@@ -181,13 +181,14 @@ describe("live chat reactions, reports and moderation", () => {
       ).toHaveLength(2),
     );
     for (const viewer of [author, reporter, fresh, ...crowd]) expectNoModerationData(viewer);
-    await runInDurableObject(f.room(), (_room, state) => {
-      const actions = state.storage.sql
-        .exec("SELECT action FROM staff_actions ORDER BY seq")
-        .toArray()
-        .map((row) => row.action);
-      expect(actions).toEqual(expect.arrayContaining(["live_session.chat.held", "live_session.chat.kept"]));
-    });
+    // The pending staff-action queue may already have been copied and drained by an alarm.
+    await runDurableObjectAlarm(f.room());
+    const { results: actions } = await env.DB.prepare(
+      "SELECT action FROM audit_log WHERE scope_type='event' AND scope_id=? AND entity_id=? AND action IN ('live_session.chat.held','live_session.chat.kept') ORDER BY action",
+    )
+      .bind(f.eventId, f.occurrenceId)
+      .all<{ action: string }>();
+    expect(actions.map((row) => row.action)).toEqual(["live_session.chat.held", "live_session.chat.kept"]);
   });
 
   it("lets authors delete only their own messages and moderators hide any", async () => {

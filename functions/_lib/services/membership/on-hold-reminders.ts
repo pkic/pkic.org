@@ -3,7 +3,6 @@ import { hasD1QueryCapacity, type D1QueryBudget } from "../../db/query-budget";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { isAppError } from "../../errors";
 import type { DatabaseLike, Env } from "../../types";
-import { sha256Hex } from "../../utils/crypto";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
@@ -15,6 +14,7 @@ import {
   type ApplicationStageTransitionSubject,
 } from "./applications/transition";
 import { buildApplicationClosedNoResponseEmail, buildOnHoldReminderEmail } from "./notifications";
+import { outboxIdForOperation } from "../../email/outbox-queue";
 
 export const ON_HOLD_CLOSURE_DUE_QUERY = `
   SELECT id, applicant_email, applicant_name, stage, stage_entered_at, transition_revision,
@@ -119,7 +119,7 @@ async function claimOnHoldReminder(
         applicantName: application.applicant_name,
         deadlineDays,
       }),
-      outboxId: (await sha256Hex(operationKey)).slice(0, 32),
+      outboxId: await outboxIdForOperation(operationKey),
       idempotencyKey: operationKey,
     },
     now,

@@ -1,4 +1,4 @@
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, type PDFImage } from "pdf-lib";
 import { toCanvas } from "html-to-image";
 
 const POINTS_PER_MM = 72 / 25.4;
@@ -31,18 +31,29 @@ export async function badgePrintPdf(
   dimensions: { widthMm: number; heightMm: number },
   isCurrent: () => boolean,
   canonicalHtml = "",
+  onProgress?: (completed: number, total: number) => void,
 ): Promise<Blob> {
   await document.fonts.ready;
   const sheets = [...document.querySelectorAll<HTMLElement>(".badge-print-sheet")];
   if (!sheets.length) throw new Error("No print pages are available.");
-  if (sheets.length > 200)
-    throw new Error("This selection is too large for one PDF. Narrow the selection or use the HTML print file.");
+  if (sheets.length > 200 && sheets.some((sheet) => !sheet.querySelector(".badge-label")))
+    throw new Error("This selection is too large for one badge PDF. Select fewer attendees or use Print > Badges.");
   const fontCss = (canonicalHtml.match(/@font-face\s*\{[^}]*\}/g) ?? []).join("\n");
   const pdf = await PDFDocument.create();
   pdf.setTitle("Attendee print file");
   pdf.setCreator("PKI Consortium");
+  const images = new Map<string, PDFImage>();
+  let completed = 0;
   for (const sheet of sheets) {
     if (!isCurrent()) throw new Error("This print job is no longer available.");
+    const key = sheet.dataset.printKey;
+    const cached = key ? images.get(key) : undefined;
+    if (cached) {
+      const page = pdf.addPage([dimensions.widthMm * POINTS_PER_MM, dimensions.heightMm * POINTS_PER_MM]);
+      page.drawImage(cached, { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() });
+      onProgress?.(++completed, sheets.length);
+      continue;
+    }
     const copy = sheet.cloneNode(true) as HTMLElement;
     copy.style.setProperty("position", "fixed");
     copy.style.setProperty("left", "0");
@@ -58,6 +69,7 @@ export async function badgePrintPdf(
         height: (dimensions.heightMm * 96) / 25.4,
         backgroundColor: "#ffffff",
         fontEmbedCSS: fontCss,
+        skipFonts: !fontCss,
         style: { position: "relative", left: "0", top: "0", margin: "0", zoom: "1", boxShadow: "none" },
         onImageErrorHandler: () => {
           renderFailed = true;
@@ -75,10 +87,13 @@ export async function badgePrintPdf(
         ),
       );
       const image = await pdf.embedPng(new Uint8Array(await png.arrayBuffer()));
+      if (key) images.set(key, image);
       const page = pdf.addPage([dimensions.widthMm * POINTS_PER_MM, dimensions.heightMm * POINTS_PER_MM]);
       page.drawImage(image, { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() });
       // Flush each embedded image so decoded pixels do not accumulate across a large roster.
       await pdf.flush();
+      onProgress?.(++completed, sheets.length);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
     } finally {
       canvas.width = 0;
       canvas.height = 0;

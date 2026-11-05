@@ -8,9 +8,9 @@ import type { RegistrationRecord } from "./types";
 import type { ParticipantAuthority } from "../participant-authority";
 import { buildRegistrationUpdate, type RegistrationUpdatePayload } from "./update-plan";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./transition-guard";
-import { sha256Hex } from "../../utils/crypto";
 import { emailTakenError, isEmailReservationConflict } from "../user-emails";
 import { formSubmissionContextChangedError, isFormSubmissionContextConflict } from "../forms";
+import { outboxIdForOperation } from "../../email/outbox-queue";
 
 type RegistrationUpdatePlan = Awaited<ReturnType<typeof buildRegistrationUpdate>>;
 
@@ -60,7 +60,7 @@ async function commitUpdateWithNotification(
     payload.notification.idempotencyKey ??
     `registration-status:${built.registration.id}:${built.notificationRevision}:` +
       `${payload.notification.templateKey}:${payload.notification.noticeKind ?? "status_update"}`;
-  const outboxId = payload.notification.outboxId ?? (await sha256Hex(idempotencyKey)).slice(0, 32);
+  const outboxId = payload.notification.outboxId ?? (await outboxIdForOperation(idempotencyKey));
   const email = await prepareRegistrationStatusEmail(db, {
     ...payload.notification,
     outboxId,

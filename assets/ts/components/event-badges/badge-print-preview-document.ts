@@ -1,5 +1,15 @@
 /** Only canonical, sanitized print-renderer output belongs in this adapter. */
 export function badgePrintPreviewDocument(html: string): { html: string; css: string } {
+  // Label documents already use stylesheet classes. Avoid constructing and serializing
+  // thousands of pages in a second DOM before the iframe parses the same document.
+  if (!/\sstyle\s*=/i.test(html)) {
+    const rules: string[] = [];
+    const document = html.replace(/<style>([\s\S]*?)<\/style>/gi, (_match, css: string) => {
+      rules.push(css);
+      return "";
+    });
+    return { html: document, css: rules.join("\n") };
+  }
   const fragment = document.createElement("template");
   fragment.innerHTML = html;
   const rules: string[] = [];
@@ -44,7 +54,22 @@ export function badgePreviewFontDescriptors(style: CSSStyleDeclaration): FontFac
 }
 
 export async function waitBadgePrintPreviewImages(frame: HTMLIFrameElement, document: Document): Promise<boolean> {
-  await Promise.all(Array.from(document.images, (image) => image.decode()));
+  const realm = frame.contentWindow as (Window & typeof globalThis) | null;
+  if (!realm) return false;
+  const vectors = [
+    ...new Set(Array.from(document.querySelectorAll("svg image"), (image) => image.getAttribute("href"))),
+  ];
+  await Promise.all([
+    ...Array.from(document.images, (image) => image.decode()),
+    ...vectors
+      .filter((source): source is string => Boolean(source?.startsWith("data:image/")))
+      .map((source) => {
+        const image = new realm.Image();
+        image.src = source;
+        return image.decode();
+      }),
+    document.fonts?.ready,
+  ]);
   return frame.isConnected && frame.contentDocument === document;
 }
 

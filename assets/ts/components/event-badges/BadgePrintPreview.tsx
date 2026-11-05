@@ -1,5 +1,3 @@
-import type { BadgePrintAction } from "../../../shared/schemas/event-badge-printing";
-import { formatNumber } from "../../../shared/format-number";
 import { useMeasuredWidth } from "../../hooks/useMeasuredWidth";
 import { badgePrintPageDimensions } from "../../../shared/schemas/badge-print-layout";
 import { badgeLabelSvg } from "../../../shared/badge-label-svg";
@@ -28,14 +26,12 @@ import "./BadgePrintPreview.css";
 
 export function BadgePrintPreview({
   badges,
-  action = "preview",
   initialDesign = "name_qr",
   beforeRelease,
   printing,
   loadPrintingContext,
 }: {
   badges: readonly PrintableBadgePrint[];
-  action?: BadgePrintAction;
   initialDesign?: BadgePrintDesign;
   printing: BadgePrintingContext;
   loadPrintingContext?: () => Promise<BadgePrintingContext>;
@@ -129,60 +125,6 @@ export function BadgePrintPreview({
       if (live.current) setBusy(false);
     }
   }
-  // Effects trigger commands once; commands read the latest authorized print context.
-  const commands = useRef({ applyFullBadge, release, downloadPdf });
-  commands.current = { applyFullBadge, release, downloadPdf };
-  const started = useRef(false);
-  const performed = useRef(false);
-  useEffect(() => {
-    if ((action !== "badges" && action !== "badge_pdf") || started.current) return;
-    started.current = true;
-    void commands.current.applyFullBadge(false);
-  }, [action]);
-  useEffect(() => {
-    if (action === "preview" || performed.current || busy) return;
-    if (action === "label_csv") {
-      performed.current = true;
-      void commands.current.release(() =>
-        downloadBadgeArtifact(badgePrintCsv(badges), "text/csv;charset=utf-8", "attendee-labels.csv"),
-      );
-    } else if (ready && ((action !== "badges" && action !== "badge_pdf") || design === "event_badge")) {
-      performed.current = true;
-      if (action === "label_pdf" || action === "badge_pdf") void commands.current.downloadPdf();
-      else void commands.current.release(() => frame.current?.contentWindow?.print());
-    }
-  }, [action, ready, busy, design, badges]);
-  async function downloadPdf() {
-    if (archiveBuilding.current || checking.current || !frame.current?.contentDocument) return;
-    const owned = badges;
-    archiveBuilding.current = true;
-    setBusy(true);
-    setError("");
-    try {
-      const { badgePrintPdf } = await import("./badge-print-pdf");
-      const document = frame.current.contentDocument;
-      if (!document) throw new Error("The print document is unavailable.");
-      const file = await badgePrintPdf(
-        document,
-        badgePrintPageDimensions(layout.page),
-        () => live.current && owner.current === owned,
-        html,
-      );
-      await release(() => {
-        if (owner.current === owned)
-          downloadBadgeArtifact(
-            file,
-            "application/pdf",
-            design === "event_badge" ? "attendee-badges.pdf" : "attendee-labels.pdf",
-          );
-      });
-    } catch (cause) {
-      if (live.current) setError(cause instanceof Error ? cause.message : "Could not prepare the PDF.");
-    } finally {
-      archiveBuilding.current = false;
-      if (live.current) setBusy(false);
-    }
-  }
   async function downloadSvgArchive() {
     if (archiveBuilding.current || checking.current) return;
     const owned = badges;
@@ -207,10 +149,6 @@ export function BadgePrintPreview({
   const html = useMemo(() => badgePrintHtml(badges, layout, context, design), [badges, layout, context, design]);
   return (
     <div class="pk-stack" ref={element}>
-      <Alert tone="info">
-        {formatNumber(layout.copies * (layout.sides === "front_back" ? 2 : 1))}{" "}
-        {design === "name_qr" ? "labels" : "badge faces"} per attendee. Keep downloaded print files private.
-      </Alert>
       <TabList
         label="Badge print views"
         items={[

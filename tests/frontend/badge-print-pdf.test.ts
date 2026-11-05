@@ -65,7 +65,25 @@ it("refuses an empty document instead of releasing a blank PDF", async () => {
 it("rejects oversized PDF selections before capturing any sheet", async () => {
   frame.contentDocument!.body.innerHTML = '<section class="badge-print-sheet"></section>'.repeat(201);
   await expect(badgePrintPdf(frame.contentDocument!, { widthMm: 105, heightMm: 148 }, () => true)).rejects.toThrow(
-    "HTML print file",
+    "badge PDF",
   );
   expect(toCanvas).not.toHaveBeenCalled();
+});
+
+it("reuses duplicate label captures and preserves every page beyond the full-badge PDF limit", async () => {
+  const { badgePrintHtml } = await import("../../assets/ts/components/event-badges/badge-print-artifacts");
+  const { badgePrintPreset } = await import("../../assets/shared/badge-print-layout");
+  const { BADGE_LABEL_PRINTING_CONTEXT } = await import("../../assets/shared/badge-label-policy");
+  const { badgeFaceBadge } = await import("./helpers/badge-face-fixture");
+  const first = await badgeFaceBadge();
+  const badges = Array.from({ length: 101 }, (_, index) => ({ ...first, firstName: `Attendee ${index}` }));
+  const html = badgePrintHtml(badges, badgePrintPreset("brother_dk_1208"), BADGE_LABEL_PRINTING_CONTEXT, "name_qr");
+  const content = frame.contentDocument!;
+  content.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+  const progress = vi.fn();
+  const file = await badgePrintPdf(content, { widthMm: 38, heightMm: 89.8 }, () => true, html, progress);
+  const pdf = await PDFDocument.load(new Uint8Array(await file.arrayBuffer()));
+  expect(pdf.getPageCount()).toBe(202);
+  expect(toCanvas).toHaveBeenCalledTimes(101);
+  expect(progress).toHaveBeenLastCalledWith(202, 202);
 });
