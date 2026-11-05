@@ -22,12 +22,14 @@ export function SessionPromotionKit({
   snapshot,
   onSaved,
   onOpenPromotion,
+  onClose,
 }: {
   slug: string;
   occurrence: AgendaOccurrence;
   snapshot?: AgendaSnapshot;
   onSaved?: (snapshot: AgendaSnapshot) => void;
   onOpenPromotion?: (userId: string, name?: string) => void;
+  onClose: () => void;
 }) {
   const [whyAttend, setWhy] = useState(occurrence.promotionCopy?.whyAttend ?? occurrence.description);
   const [takeaways, setTakeaways] = useState(occurrence.promotionCopy?.takeaways.join("\n") ?? "");
@@ -51,6 +53,7 @@ export function SessionPromotionKit({
     },
   };
   const form = useContractForm(promotionKitSaveSchema, body);
+  const closeAction = { id: "close-materials", label: "Return to agenda", onSelect: onClose };
   async function approve() {
     const checked = form.submit();
     if (!checked.data) {
@@ -75,7 +78,7 @@ export function SessionPromotionKit({
         base={base}
         title={occurrence.title}
         menu={
-          snapshot && (
+          snapshot ? (
             <PromotionBulkPreparation
               slug={slug}
               publishedRevision={snapshot.publishedRevision}
@@ -92,10 +95,13 @@ export function SessionPromotionKit({
                       : []),
                     { id: "shared-copy", label: "Edit shared promotion copy", onSelect: showEditing },
                     { id: "prepare-speakers", label: "Prepare kits for all speakers", onSelect: open, disabled },
+                    closeAction,
                   ]}
                 />
               )}
             />
+          ) : (
+            <Menu label="Sharing actions" items={[closeAction]} />
           )
         }
       />

@@ -202,6 +202,15 @@ test("every delivered long-panel promotion export has complete evidence and refu
     .getByRole("row")
     .filter({ has: page.getByText(title, { exact: true }) });
   await runRowAction(page, row, "Speaker promotion kit");
+  await expect(page).toHaveURL(/promotionSession=/);
+  await page.goBack();
+  await expect(page.getByRole("tablist", { name: "Agenda views", exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole("button", { name: "Sharing actions", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Sharing actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Return to agenda", exact: true }).click();
+  await expect(page.getByRole("tablist", { name: "Agenda views", exact: true })).toBeVisible();
+  await runRowAction(page, row, "Speaker promotion kit");
   await page.getByRole("button", { name: "Sharing actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Prepare kits for all speakers", exact: true }).click();
   const bulk = page.getByRole("dialog", { name: "Prepare speaker promotion kits", exact: true });

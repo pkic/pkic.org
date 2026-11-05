@@ -80,7 +80,7 @@ export function AgendaEditor({
     () => getJson(`/api/v1/events/${encodeURIComponent(slug)}/agenda`, agendaSnapshotSchema),
     [slug],
   );
-  const [promotionSession, setPromotionSession] = useState<AgendaOccurrence | null>(null);
+  const [promotionSessionId, setPromotionSessionId] = useHashQueryParam("promotionSession", "");
   const [historySession, setHistorySession] = useState<AgendaOccurrence | null>(null);
   const [participation, setParticipation] = useState<AgendaOccurrence | null>(null);
   const [settings, setSettings] = useState(false);
@@ -108,6 +108,7 @@ export function AgendaEditor({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const data = snapshot?.eventSlug === slug ? snapshot : source.data;
+  const promotionSession = data?.occurrences.find((occurrence) => occurrence.id === promotionSessionId) ?? null;
   const interactionLock = useAgendaInteractionLock(slug);
   // The lock only guards the interactive calendar (drag, resize, in-grid moves); every other
   // view and dialog follows the edit permission alone.
@@ -230,7 +231,7 @@ export function AgendaEditor({
         open: {
           duplicate: setDuplicating,
           history: setHistorySession,
-          promotion: setPromotionSession,
+          promotion: (occurrence) => setPromotionSessionId(occurrence.id),
           participation: setParticipation,
           move: setMoving,
           swap: setSwapping,
@@ -326,6 +327,7 @@ export function AgendaEditor({
             slug={slug}
             occurrence={promotionSession}
             onOpenPromotion={onOpenPromotion}
+            onClose={() => setPromotionSessionId("")}
             snapshot={canEdit ? data : undefined}
             onSaved={setSnapshot}
           />
