@@ -469,6 +469,14 @@ test("a proved work address requires organization confirmation and an incorrect 
     email: e2eAdminEmail("representation-onboarding"),
     firstName: "Ada",
     lastName: "Example",
+    onContactReady: async (current) => {
+      await current.getByRole("button", { name: "Edit personal details", exact: true }).click();
+      const editor = current.getByRole("dialog", { name: "Edit my details", exact: true });
+      await editor.getByRole("textbox", { name: /^First name/ }).fill("Ada");
+      await editor.getByRole("textbox", { name: /^Last name/ }).fill("Example");
+      await editor.getByRole("button", { name: "Save my details", exact: true }).click();
+      await expect(editor).not.toBeVisible();
+    },
   });
   await page.getByRole("button", { name: /^Choose On[- ]demand for every available day$/ }).click();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
