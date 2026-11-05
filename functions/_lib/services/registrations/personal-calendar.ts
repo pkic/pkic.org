@@ -6,7 +6,6 @@ import { buildRegistrationIcs, calendarConfirmedDays } from "../../utils/calenda
 import { getEventBySlug } from "../events";
 import { listDayWaitlistForRegistration } from "./day-waitlist-queries";
 import { getRegistrationDayAttendance } from "../event-days";
-import { registrationPortalPageUrl } from "../frontend-links";
 
 /** Rebuild the same registration calendar that confirmation mail attaches. */
 export async function personalEventCalendar(
@@ -28,7 +27,7 @@ export async function personalEventCalendar(
   if (!registration || registration.user_id !== userId || registration.status !== "registered") {
     throw new AppError(404, "REGISTRATION_NOT_FOUND", "Active registration not found");
   }
-  const registrationUrl = registrationPortalPageUrl(origin, { slug: eventSlug }, registrationId);
+  const manageUrl = `${origin}/portal/#/events/${encodeURIComponent(eventSlug)}/registrations/${encodeURIComponent(registrationId)}`;
   const dayAttendance = await getRegistrationDayAttendance(db, registrationId);
   const organizerEmail = signingSecret
     ? await generateSignedRsvpAddress(registrationId, signingSecret, rsvpEmail)
@@ -36,7 +35,7 @@ export async function personalEventCalendar(
   const calendar = await buildRegistrationIcs(
     event,
     registrationId,
-    registrationUrl,
+    manageUrl,
     calendarConfirmedDays(dayAttendance, await listDayWaitlistForRegistration(db, registrationId)),
     origin,
     organizerEmail,

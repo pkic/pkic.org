@@ -21,7 +21,7 @@ import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../.
 import { buildAcceptedTermsText, buildCustomAnswerRows } from "../../utils/registration-email";
 import { prepareValidatedAttendeeRegistration } from "../attendee-registration";
 import { buildEventEmailVariables, getEventBySlug, recordHugoEventBasePath } from "../events";
-import { myAgendaPageUrl, registrationManagePageUrl, registrationPortalPageUrl } from "../frontend-links";
+import { myAgendaPageUrl, registrationManagePageUrl } from "../frontend-links";
 import { findInviteByToken, type InviteRecord } from "../invites";
 import { prepareBadgeRenderJob } from "../badge-render-job-statements";
 import { seedGravatarAndProcessBadgeRenderJob } from "../registration-badge-regeneration";
@@ -284,7 +284,7 @@ export async function submitEventRegistration(
     const calendar = await buildRegistrationIcs(
       event,
       registration.id,
-      registrationPortalPageUrl(metadata.appBaseUrl, event, registration.id),
+      queuedManageUrl,
       calendarConfirmedDays(prepared.dayAttendance, dayWaitlist),
       metadata.appBaseUrl,
       rsvpEmail,

@@ -1,4 +1,7 @@
 import { env } from "cloudflare:workers";
+import ICAL from "ical.js";
+import { getEventBySlug } from "../functions/_lib/services/events";
+import { prepareRegistrationConfirmedEmail } from "../functions/_lib/services/registrations/status-notifications";
 import { beforeEach, describe, expect, it } from "vitest";
 import { registrationCreateSchema, registrationSubmissionResponseSchema } from "../assets/shared/schemas/registration";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
@@ -8,7 +11,7 @@ import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
-import { createTestRateLimiter, seedEventAndAdmin } from "./helpers/context";
+import { createTestRateLimiter, deliveredEmailPayload, seedEventAndAdmin } from "./helpers/context";
 import { insertOrgRepresentative } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
@@ -96,6 +99,49 @@ describe("group access through the canonical registration route", () => {
         .bind(result.registrationId)
         .first(),
     ).toEqual({ user_id: f.userId, registration_group_id: f.groupId });
+  });
+
+  it.each(["submission", "confirmation"])("preserves sign-in-free calendar access after %s", async (producer) => {
+    const f = await fixture();
+    const response = await f.submit();
+    expect(response.status, await response.clone().text()).toBe(200);
+    const result = registrationSubmissionResponseSchema.parse(await response.json());
+    let outboxId: string;
+    if (producer === "confirmation") {
+      const prepared = await prepareRegistrationConfirmedEmail(env.DB, {
+        event: await getEventBySlug(env.DB, "pqc-2026"),
+        registrationId: result.registrationId,
+        appBaseUrl: "https://app.test",
+      });
+      await env.DB.batch([prepared.statement]);
+      outboxId = prepared.outboxId;
+    } else {
+      outboxId = (await env.DB.prepare(
+        "SELECT id FROM email_outbox WHERE recipient_user_id=? AND template_key='registration_confirmed'",
+      )
+        .bind(f.userId)
+        .first<string>("id"))!;
+    }
+    const stored = await env.DB.prepare("SELECT payload_json FROM email_outbox WHERE id=?")
+      .bind(outboxId)
+      .first<string>("payload_json");
+    const payload = await deliveredEmailPayload<{
+      manageUrl: string;
+      __calendarInvite: { icsFiles: { content: string }[] };
+    }>(env.DB, env, stored!);
+    const entries = new ICAL.Component(ICAL.parse(payload.__calendarInvite.icsFiles[0]!.content)).getAllSubcomponents(
+      "vevent",
+    );
+    expect(entries).toHaveLength(1);
+    expect(new URL(payload.manageUrl).searchParams.get("token")).toBeTruthy();
+    expect(new URL(payload.manageUrl).pathname).toContain("/register/manage/");
+    expect(entries[0]!.getFirstPropertyValue("url")).toBe("https://app.test/portal/#/events/pqc-2026/virtual");
+    expect(String(entries[0]!.getFirstPropertyValue("description"))).toContain(payload.manageUrl);
+    const access = await callApi(
+      env,
+      `/api/v1/registrations/access/${encodeURIComponent(new URL(payload.manageUrl).searchParams.get("token")!)}`,
+    );
+    expect(access.status, await access.clone().text()).toBe(200);
   });
 
   it("keeps open registration independent of group membership", async () => {

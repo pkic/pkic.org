@@ -29,7 +29,7 @@ import type { UserProfilePatch } from "../users";
 import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
 import type { RegistrationRecord } from "./types";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
-import { myAgendaPageUrl, registrationPortalPageUrl } from "../frontend-links";
+import { myAgendaPageUrl } from "../frontend-links";
 
 interface UserRow {
   id: string;
@@ -225,7 +225,7 @@ export async function prepareRegistrationConfirmedEmail(
   const calendar = await buildRegistrationIcs(
     params.event,
     registration.id,
-    registrationPortalPageUrl(params.appBaseUrl, params.event, registration.id),
+    manageUrl,
     calendarConfirmedDays(dayAttendance, dayWaitlist),
     params.appBaseUrl,
     rsvpAddress,
