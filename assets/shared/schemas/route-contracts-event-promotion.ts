@@ -15,7 +15,7 @@ import { agendaSnapshotSchema, promotionSessionListSchema } from "./event-agenda
 import { authErrors, ok, requiresPermissions, requiresSession } from "./route-contract";
 import { promotionCompositionSaveSchema } from "./event-promotion-design";
 const params = eventSlugParamsSchema.extend({ occurrenceId: z.string().min(1) });
-const personalWriteQuerySchema = promotionParticipantQuerySchema.extend({ userId: z.never().optional() });
+const personalWriteQuerySchema = z.strictObject({});
 export const promotionKitGetRouteSchema = {
   "x-pkic-mcp": { expose: true, readonly: true },
   tags: ["Event promotion"],

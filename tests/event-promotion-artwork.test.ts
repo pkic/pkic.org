@@ -1,3 +1,4 @@
+import { openapi } from "../functions/http-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -17,6 +18,16 @@ vi.mock("../functions/_lib/services/event-agenda/promotion-artwork-inputs", () =
 
 describe("own promotion artwork", () => {
   beforeEach(() => resetDb());
+
+  it("documents participant reads without declaring delegated personal writes", () => {
+    const paths = openapi.schema.paths;
+    const read = paths["/api/v1/events/{eventSlug}/promotion"].get;
+    const write = paths["/api/v1/events/{eventSlug}/promotion/composition"].post;
+    expect(read.parameters).toEqual(expect.arrayContaining([expect.objectContaining({ name: "userId", in: "query" })]));
+    expect(write.parameters).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "userId", in: "query" })]),
+    );
+  });
 
   it("serves current SVG pages without queueing or reading a rendered file, in one D1 round trip", async () => {
     const f = await promotionFixture();

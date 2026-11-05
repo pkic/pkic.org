@@ -155,7 +155,6 @@ export function PersonalPromotionKit({
                 );
               })}
             </ul>
-            {menu && <Toolbar label="Session sharing actions">{menu}</Toolbar>}
             {!readOnly && (
               <PromotionCompositionEditor
                 open={editing}
@@ -177,6 +176,7 @@ export function PersonalPromotionKit({
             )}
           </div>
         )}
+        {menu && <Toolbar label="Session sharing actions">{menu}</Toolbar>}
       </PanelBody>
     </Panel>
   );
