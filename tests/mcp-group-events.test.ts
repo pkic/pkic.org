@@ -1,3 +1,4 @@
+import { AUTH_SCOPES } from "../functions/_lib/auth/scopes";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import { createMcpOauthTestClient } from "./helpers/mcp-oauth";
@@ -61,42 +62,91 @@ describe("group event operations through delegated MCP", () => {
     await seedEventAndAdmin(env.DB);
   });
 
-  it("creates and updates a group event through the existing API", async () => {
-    const fixture = await groupFixture();
-    const grant = await authorize(fixture.token, ["groups:write"]);
-    const created = await mcpCreate(grant.access_token, fixture.approved);
-    expect(created.error).toBeUndefined();
-    expect(created.event).toMatchObject({ city: "Toronto", timezone: "America/Toronto" });
-    const updated = value(
-      await callTool(grant.access_token, "request", {
-        method: "PATCH",
-        path: `/api/v1/groups/${fixture.approved}/events/${created.event.id}/settings`,
-        body: {
-          expectedUpdatedAt: created.event.updatedAt,
-          venue: "Synthetic North Building, 100 Level",
-          city: "Toronto updated",
-        },
-      }),
-    );
-    expect(updated.error).toBeUndefined();
-    expect(updated.event.city).toBe("Toronto updated");
-    const settings = value(
-      await callTool(grant.access_token, "request", {
-        method: "GET",
-        path: `/api/v1/events/${created.event.slug}`,
-        query: { groupId: fixture.approved },
-      }),
-    );
-    expect(settings.error).toBeUndefined();
-    expect(settings.event.id).toBe(created.event.id);
-    expect(settings.event.settings.venue).toBe("Synthetic North Building, 100 Level");
-    const [stored] = await queryAll<{ venue: string }>(
-      env.DB,
-      "SELECT json_extract(settings_json,'$.venue') AS venue FROM events WHERE id=?",
-      created.event.id,
-    );
-    expect(stored.venue).toBe("Synthetic North Building, 100 Level");
-  });
+  it.each([{ scopes: ["groups:write"] as const }, { scopes: AUTH_SCOPES }])(
+    "creates and updates a group event with consent $scopes",
+    async ({ scopes }) => {
+      const fixture = await groupFixture();
+      const grant = await authorize(fixture.token, scopes);
+      const created = await mcpCreate(grant.access_token, fixture.approved);
+      expect(created.error).toBeUndefined();
+      expect(created.event).toMatchObject({ city: "Toronto", timezone: "America/Toronto" });
+      const listed = value(
+        await callTool(grant.access_token, "request", {
+          method: "GET",
+          path: `/api/v1/groups/${fixture.approved}/events`,
+          query: { limit: 1 },
+        }),
+      );
+      expect(listed.events.map((event: { id: string }) => event.id)).toContain(created.event.id);
+      for (const suffix of ["", "/days", "/terms"]) {
+        const result = value(
+          await callTool(grant.access_token, "request", {
+            method: "GET",
+            path: `/api/v1/groups/${fixture.approved}/events/${created.event.id}${suffix}`,
+          }),
+        );
+        expect(result.error).toBeUndefined();
+      }
+
+      const updated = value(
+        await callTool(grant.access_token, "request", {
+          method: "PATCH",
+          path: `/api/v1/groups/${fixture.approved}/events/${created.event.id}/settings`,
+          body: {
+            expectedUpdatedAt: created.event.updatedAt,
+            venue: "Synthetic North Building, 100 Level",
+            city: "Toronto updated",
+          },
+        }),
+      );
+      expect(updated.error).toBeUndefined();
+      expect(updated.event.city).toBe("Toronto updated");
+      const settings = value(
+        await callTool(grant.access_token, "request", {
+          method: "GET",
+          path: `/api/v1/events/${created.event.slug}`,
+          query: { groupId: fixture.approved },
+        }),
+      );
+      expect(settings.error).toBeUndefined();
+      expect(settings.event.id).toBe(created.event.id);
+      expect(settings.event.settings.venue).toBe("Synthetic North Building, 100 Level");
+      let revision = updated.event.updatedAt;
+      for (const [suffix, configuration] of [
+        ["terms", { attendee: [{ termKey: "event-terms", version: "1", displayText: "I agree to the event terms" }] }],
+        [
+          "days",
+          {
+            days: [
+              {
+                date: "2031-06-02",
+                startTime: "09:00",
+                endTime: "17:00",
+                attendanceOptions: [{ value: "in_person", label: "In person" }],
+              },
+            ],
+          },
+        ],
+      ] as const) {
+        const saved = value(
+          await callTool(grant.access_token, "request", {
+            method: "PUT",
+            path: `/api/v1/groups/${fixture.approved}/events/${created.event.id}/${suffix}`,
+            body: { expectedUpdatedAt: revision, configuration },
+          }),
+        );
+        expect(saved.error).toBeUndefined();
+        expect(saved.success).toBe(true);
+        revision = saved.eventUpdatedAt;
+      }
+      const [stored] = await queryAll<{ venue: string }>(
+        env.DB,
+        "SELECT json_extract(settings_json,'$.venue') AS venue FROM events WHERE id=?",
+        created.event.id,
+      );
+      expect(stored.venue).toBe("Synthetic North Building, 100 Level");
+    },
+  );
 
   it("does not turn read-only consent into group management", async () => {
     const fixture = await groupFixture();
