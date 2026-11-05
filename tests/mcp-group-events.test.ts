@@ -52,9 +52,7 @@ function eventInput() {
 }
 
 async function mcpCreate(token: string, groupId: string) {
-  return value(
-    await callTool(token, "request", { method: "POST", path: `/api/v1/groups/${groupId}/events`, body: eventInput() }),
-  );
+  return value(await callTool(token, "groups", { action: "create", path: `/${groupId}/events`, body: eventInput() }));
 }
 
 describe("group event operations through delegated MCP", () => {

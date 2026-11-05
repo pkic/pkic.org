@@ -10,6 +10,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/cfworker";
 import { registerOperationTools } from "./operation-tools";
 import { registerExecuteTools } from "./execute-tools";
+import { registerDomainTools } from "./domain-tools";
+import { buildMcpDomains, MCP_GENERIC_TOOLS } from "../openapi/mcp-domains";
 import { registerReadTools } from "./read-tools";
 import type { McpCatalogSource } from "../openapi/mcp-catalog";
 import OAuthProvider from "@cloudflare/workers-oauth-provider";
@@ -138,22 +140,27 @@ function apiRequestFromMcp(
 
 function createMcpResponse(options: McpWorkerOptions) {
   return async (request: Request, env: Env, ctx: ExecutionContext, oauthProps?: McpOAuthProps): Promise<Response> => {
-    const rpc =
+    const message =
       request.method === "POST"
-        ? CallToolRequestSchema.safeParse(
-            await request
-              .clone()
-              .json()
-              .catch(() => null),
-          )
+        ? await request
+            .clone()
+            .json()
+            .catch(() => null)
         : null;
-    const execution = Boolean(rpc?.success && ["execute", "request", "batch_read"].includes(rpc.data.params.name));
+    const rpc = CallToolRequestSchema.safeParse(message);
+    const source = options.getOperationSource(request, env);
+    const domainCall = rpc.success && !MCP_GENERIC_TOOLS.includes(rpc.data.params.name);
+    const execution = Boolean(
+      rpc.success && (["execute", "request", "batch_read"].includes(rpc.data.params.name) || domainCall),
+    );
     const authorization = await (execution ? deferredAuthorizationHeaderForMcp : authorizationHeaderForMcp)(
       request,
       env,
       oauthProps,
     );
-    const source = options.getOperationSource(request, env);
+    const listing =
+      message !== null && typeof message === "object" && "method" in message && message.method === "tools/list";
+    const domains = listing || domainCall ? buildMcpDomains(await source.list()) : [];
     const finishers: Array<() => Promise<void>> = [];
     const apiRequest = apiRequestFromMcp(options.app, request, env, ctx, authorization, source, (value) => {
       finishers.push(value);
@@ -165,6 +172,7 @@ function createMcpResponse(options: McpWorkerOptions) {
     registerOperationTools(server, source);
     registerExecuteTools(server, singleOperationExecutor(mcpExecutor(env)), apiRequest);
     registerReadTools(server, apiRequest);
+    registerDomainTools(server, domains, apiRequest);
 
     const response = await createMcpHandler(server, { route: MCP_PATH })(request, env, ctx);
     if (execution) {

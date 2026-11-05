@@ -416,6 +416,18 @@ permissions, group capabilities, and OAuth consent limits remain authoritative.
 MCP metadata cannot replace API scope requirements. A transport exclusion uses
 `x-pkic-mcp: { expose: false, reason: "..." }`; it does not replace authorization.
 
+MCP also exposes one tool per API domain, such as `events`, `groups`, and `users`.
+The catalog generates each tool's supported actions and immediate subdomains.
+For example, `events({action: "list", query: {limit: 5}})` calls `GET /api/v1/events`.
+Use `path` for a domain-relative resource, such as `/{eventSlug}/agenda`, with real
+identifiers. Actions are HTTP aliases: `list`/`get` use GET, `create` POST,
+`update` PATCH, `replace` PUT, and `delete` DELETE. The exact method/path must still
+be exposed in the API catalog. These tools reuse the same request adapter,
+permissions, validation, response limits, and OAuth checks as `request`.
+Tool listing reads the compact index to generate descriptions; initialization
+still loads no catalog or detailed contracts. Domain schemas contain no operation
+request or response schemas; inspect a contract only when its inputs are unknown.
+
 Call `request` directly when the API path and inputs are known. For example,
 `{method: "GET", path: "/api/v1/events", query: {limit: 5}}` lists events in one
 tool call. Discovery and inspection are optional. Use `discover_operations` for

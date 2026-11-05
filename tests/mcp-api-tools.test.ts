@@ -1,3 +1,4 @@
+import { eventSettingsUpdateSchema } from "../assets/shared/schemas/event-management";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import { createMcpOauthTestClient } from "./helpers/mcp-oauth";
@@ -32,6 +33,25 @@ describe("generic MCP API helpers", () => {
     },
   );
 
+  it("runs the generated events domain tool with the same API permissions and validation", async () => {
+    const { access_token } = await authorize(undefined, ["events:read"]);
+    const list = value(await callTool(access_token, "events", { action: "list", query: { limit: 1 } }));
+    expect(list.events).toHaveLength(1);
+    const invalid = value(await callTool(access_token, "events", { action: "list", query: { limit: 0 } }));
+    expect(invalid.error).toBeDefined();
+    const before = value(await callTool(access_token, "events", { action: "get", path: "/pqc-2026" }));
+    const forbidden = value(
+      await callTool(access_token, "events", {
+        action: "update",
+        path: "/pqc-2026/settings",
+        body: eventSettingsUpdateSchema.parse({ name: "Must not change", expectedUpdatedAt: before.event.updatedAt }),
+      }),
+    );
+    expect(forbidden.error.code).toBe("SCOPE_REQUIRED");
+    const after = value(await callTool(access_token, "events", { action: "get", path: "/pqc-2026" }));
+    expect(after.event.name).toBe("PQC Conference 2026");
+  });
+
   it("ranks the event collection first in a compact default discovery page", async () => {
     const { access_token } = await authorize(undefined, ["events:read"]);
     const result = value(await callTool(access_token, "discover_operations", { q: "events", method: "GET" }));
@@ -61,15 +81,11 @@ describe("generic MCP API helpers", () => {
       .bind(crypto.randomUUID(), user.id, event.id, new Date().toISOString())
       .run();
     const grant = await authorize(undefined, ["events:read"]);
-    const list = value(await callTool(grant.access_token, "request", { method: "GET", path: "/api/v1/events" }));
+    const list = value(await callTool(grant.access_token, "events", { action: "list" }));
     expect(list.events.map((row: { id: string }) => row.id)).toEqual([event.id]);
-    const detail = value(
-      await callTool(grant.access_token, "request", { method: "GET", path: "/api/v1/events/pqc-2026" }),
-    );
+    const detail = value(await callTool(grant.access_token, "events", { action: "get", path: "/pqc-2026" }));
     expect(detail.event.id).toBe(event.id);
-    const other = value(
-      await callTool(grant.access_token, "request", { method: "GET", path: "/api/v1/events/other-private" }),
-    );
+    const other = value(await callTool(grant.access_token, "events", { action: "get", path: "/other-private" }));
     expect(other.error.code).toBe("EVENT_NOT_FOUND");
   });
 

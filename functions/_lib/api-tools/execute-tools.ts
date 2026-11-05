@@ -3,7 +3,7 @@ import type { RequestOptions } from "@cloudflare/codemode/mcp";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-const requestSchema = z.object({
+export const requestSchema = z.object({
   method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
   path: z.string().min(1).max(500),
   query: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
@@ -12,7 +12,7 @@ const requestSchema = z.object({
   rawBody: z.boolean().optional(),
 });
 
-function resultContent(result: unknown) {
+export function resultContent(result: unknown) {
   const text = JSON.stringify(result) ?? "null";
   if (text.length > 24_000) {
     return {
