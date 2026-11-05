@@ -129,6 +129,18 @@ export function speakerParticipationPageUrl(
   return url.toString();
 }
 
+/** Opens the organizer roster where an authorized reviewer can decide late participation. */
+export function proposalSpeakerReviewPageUrl(
+  appBaseUrl: string,
+  event: Pick<EventRecord, "id" | "slug" | "owner_group_id">,
+  proposalId: string,
+): string {
+  const workspace = event.owner_group_id
+    ? `/groups/${encodeURIComponent(event.owner_group_id)}/events/${encodeURIComponent(event.id)}`
+    : `/events/${encodeURIComponent(event.slug)}`;
+  return new URL(`/portal/#${workspace}/proposals/${encodeURIComponent(proposalId)}/speakers`, appBaseUrl).toString();
+}
+
 export function speakerManagePageUrl(appBaseUrl: string, event: EventRouteSource, token: string): string {
   const routes = routesForEvent(event);
   return buildUrl(appBaseUrl, routes.speakerManagePath, {

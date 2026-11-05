@@ -112,6 +112,10 @@ describe("speaker willingness and late review", () => {
     const recipients = (await notices()).map((row) => row.recipient_user_id);
     expect(recipients).toContain((await proposalState(f)).proposer_user_id);
     expect(recipients).toContain(adminUserId);
+    const committeeNotice = (await notices()).find((row) => row.recipient_user_id === adminUserId)!;
+    expect(JSON.parse(committeeNotice.payload_json).proposalUrl).toMatch(
+      new RegExp(`/groups/[^/]+/events/${eventId}/proposals/${f.proposalId}/speakers$`),
+    );
     expect((await notices()).every((row) => JSON.parse(row.payload_json).late)).toBe(true);
     expect(
       await queryAll(

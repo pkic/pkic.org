@@ -1,3 +1,4 @@
+import { proposalSpeakerReviewPageUrl } from "./frontend-links";
 import { first } from "../db/queries";
 import { listPermissionHolders } from "../auth/permission-holders";
 import { prepareQueueEmailStatement } from "../email/outbox";
@@ -21,6 +22,7 @@ export async function prepareSpeakerResponseNotices(
     [proposal.proposer_user_id],
   );
   const recipients = new Map(proposer ? [[proposer.id, proposer]] : []);
+  const reviewers = new Set<string>();
   if (input.late) {
     const committee = (
       await Promise.all(
@@ -33,7 +35,10 @@ export async function prepareSpeakerResponseNotices(
         ),
       )
     ).flat();
-    for (const person of committee) recipients.set(person.id, person);
+    for (const person of committee) {
+      reviewers.add(person.id);
+      recipients.set(person.id, person);
+    }
   }
   if (input.rejected)
     recipients.set(context.user.id, {
@@ -63,7 +68,9 @@ export async function prepareSpeakerResponseNotices(
             proposalTitle: emailPlainText(proposal.title),
             rejected: input.rejected ?? false,
             late: input.late,
-            proposalUrl: `${input.appBaseUrl}/portal/#/events/${encodeURIComponent(event.slug)}/proposals/${encodeURIComponent(proposal.id)}`,
+            proposalUrl: reviewers.has(person.id)
+              ? proposalSpeakerReviewPageUrl(input.appBaseUrl, event, proposal.id)
+              : `${input.appBaseUrl}/portal/#/events/${encodeURIComponent(event.slug)}/proposals/${encodeURIComponent(proposal.id)}`,
           },
         },
         input.at,
