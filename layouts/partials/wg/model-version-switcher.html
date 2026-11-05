@@ -1,0 +1,56 @@
+{{/*
+  Shared maturity-model version switcher.
+
+  Receives a dictionary containing:
+  - page: current Hugo page
+  - versions: ordered version entries with id, label, path, isLatestRelease
+  - modelName: accessible model name, for example PKIMM or PQCMM
+
+  Equivalent subpaths are preserved when they exist. Otherwise the link falls
+  back to the target version root, avoiding client-side URL rewriting and 404s.
+*/}}
+{{- $page := .page -}}
+{{- $versions := .versions -}}
+{{- $modelName := .modelName -}}
+{{- if $versions -}}
+  {{- $current := "" -}}
+  {{- $currentPath := "" -}}
+  {{- range $versions -}}
+    {{- if and (strings.HasPrefix $page.RelPermalink .path) (gt (len .path) (len $currentPath)) -}}
+      {{- $current = .id -}}
+      {{- $currentPath = .path -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $subPath := "" -}}
+  {{- if $currentPath -}}
+    {{- $subPath = strings.TrimPrefix $currentPath $page.RelPermalink -}}
+  {{- end -}}
+<div class="wg-version-switcher" data-current="{{ $current }}">
+  <p class="wg-version-eyebrow">Switch version</p>
+  <div class="wg-version-list" role="group" aria-label="Switch {{ $modelName }} model version">
+    {{- range $versions -}}
+      {{- $href := .path -}}
+      {{- $exists := true -}}
+      {{- if eq .id $current -}}
+        {{- $href = $page.RelPermalink -}}
+      {{- else if $subPath -}}
+        {{- $candidate := printf "%s%s" .path $subPath -}}
+        {{- if $page.Site.GetPage $candidate -}}
+          {{- $href = $candidate -}}
+        {{- else -}}
+          {{- $exists = false -}}
+        {{- end -}}
+      {{- end -}}
+    <a class="wg-version-item{{ if eq $current .id }} is-active{{ end }}" href="{{ $href }}">
+      <span class="wg-version-badge">{{ .label }}</span>
+      {{- if .isLatestRelease }}
+      <span class="wg-version-hint">Latest release</span>
+      {{- end }}
+      {{- if not $exists }}
+      <span class="wg-version-hint wg-version-hint--fallback" title="This page is not available in {{ .label }} — go to the version overview instead">Overview</span>
+      {{- end }}
+    </a>
+    {{- end }}
+  </div>
+</div>
+{{- end -}}

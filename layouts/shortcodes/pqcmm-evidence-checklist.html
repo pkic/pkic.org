@@ -1,0 +1,16 @@
+{{/* Render the approved evidence checklist for one PQCMM level. */}}
+{{- $levelNumber := int (.Get "level") -}}
+{{- $model := partial "pqcmm/model-data.html" (dict "page" .Page "version" (.Get "version")) -}}
+{{- $matches := where $model.data.levels "number" $levelNumber -}}
+{{- if ne (len $matches) 1 -}}
+  {{- errorf "PQCMM level %d is missing or duplicated in %s" $levelNumber $model.resource.Name -}}
+{{- end -}}
+{{- $checklist := (index $matches 0).evidenceChecklist -}}
+{{- with $checklist.introduction }}{{ . | $.Page.RenderString }}{{ end }}
+{{- with $checklist.items }}
+<ul>
+  {{- range $item := . }}
+  <li id="evidence-{{ $item.id | anchorize }}">{{ $item.text | $.Page.RenderString }}</li>
+  {{- end }}
+</ul>
+{{- end }}

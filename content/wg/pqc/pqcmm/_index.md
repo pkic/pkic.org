@@ -19,7 +19,6 @@ sideMenu: true
 cascade:
   params:
     sideMenu: true
-    version: "1.0.1"
 
 ---
 
@@ -39,7 +38,7 @@ The model serves two primary audiences:
 > This isn't a project with a finish line, but the operationalization of a **Modern Cryptographic Lifecycle** that ensures security remains resilient against both current and future threats.
 {.callout-info}
 
-*The PQCMM is currently at **Version {{< param version >}}**. As an actively maintained framework, it is continuously shaped by community feedback. You can [join the discussion](/discussions) to share your thoughts, or simply select any text and click **Edit** to propose changes to the model or its documentation.*
+*The PQCMM is currently at **Version {{< pqcmm-version >}}**. As an actively maintained framework, it is continuously shaped by community feedback. You can [join the discussion](/discussions) to share your thoughts, or simply select any text and click **Edit** to propose changes to the model or its documentation.*
 
 ## Choosing Your Path
 
@@ -116,39 +115,7 @@ Vendors and assessors should read the criteria as *what* must be achieved and th
 
 The model defines **six levels (0–5)**. Level 0 represents a state where no post-quantum capabilities are available in the product. Levels 1 through 5 are cumulative — a product claiming Level 3 must satisfy all requirements of Levels 1 and 2 as well.
 
-{{< maturity-staircase >}}
-levels:
-  - number: 0
-    label: None
-    color: none
-    summary: "No PQC implemented"
-    url: "/wg/pqc/pqcmm/levels/0-none/"
-  - number: 1
-    label: Initial
-    color: gray
-    summary: "Available for testing & evaluation"
-    url: "/wg/pqc/pqcmm/levels/1-initial/"
-  - number: 2
-    label: Foundational
-    color: green
-    summary: "Production-ready, standards-compliant"
-    url: "/wg/pqc/pqcmm/levels/2-foundational/"
-  - number: 3
-    label: Advanced
-    color: blue
-    summary: "Inventory + SBOM + Crypto Agility"
-    url: "/wg/pqc/pqcmm/levels/3-advanced/"
-  - number: 4
-    label: Managed
-    color: violet
-    summary: "CBOM + Zero-Legacy + Hybrid support"
-    url: "/wg/pqc/pqcmm/levels/4-managed/"
-  - number: 5
-    label: Optimized
-    color: purple
-    summary: "PQC default + Benchmarked + Certified"
-    url: "/wg/pqc/pqcmm/levels/5-optimized/"
-{{< /maturity-staircase >}}
+{{< pqcmm-levels-overview >}}
 
 [View detailed criteria, assessment questions, and evidence requirements for each level →](/wg/pqc/pqcmm/levels/)
 

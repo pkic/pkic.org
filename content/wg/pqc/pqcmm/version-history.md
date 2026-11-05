@@ -7,7 +7,7 @@ summary: Review past releases and revisions of the PQC Maturity Model to ensure 
 weight: 90
 ---
 
-## Model version: {{< param version >}}
+## Current Version: {{< pqcmm-version >}}
 
 Drafts are unreleased proposals for review. The version bar identifies the exact model revision being viewed; entries marked as releases below are published versions.
 
