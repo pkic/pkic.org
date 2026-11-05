@@ -10,7 +10,7 @@ import {
   promotionKitSchema,
   type promotionFormatSchema,
 } from "../../../../../../../shared/schemas/event-promotion-kit";
-import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
+import { PageHeader } from "../../../../../../ui/PageHeader";
 import { Button } from "../../../../../../ui/Button";
 import { CloseButton } from "../../../../../../ui/CloseButton";
 import { DownloadAction } from "../../../../../../ui/DownloadAction";
@@ -67,84 +67,88 @@ export function PersonalPromotionKit({
     };
   }, [base]);
   return (
-    <Panel>
-      <PanelHeader title={title} menu={menu}>
-        {kit && (
+    <div class="pk-stack">
+      <PageHeader
+        title={title}
+        description={context}
+        actions={
           <>
-            <Button
-              onClick={() =>
-                void copyText(`${kit.source?.title ?? title}\n${kit.copy.whyAttend}\n${kit.registrationUrl}`, {
-                  copied: "Post copied",
-                  failed: "Your browser could not copy the post",
-                  notify: toast,
-                })
-              }
-            >
-              Copy post
-            </Button>
-            <Button onClick={showEditing}>Customize</Button>
-          </>
-        )}
-        {onClose && <CloseButton label="Close promotion materials" onClick={onClose} />}
-      </PanelHeader>
-      <PanelBody>
-        {context && <p class="pk-muted">{context}</p>}
-        {(error || downloads.error) && <ErrorAlert error={error || downloads.error} />}
-        {kit && (
-          <div class="pk-stack">
-            {kit.stale && (
-              <Alert tone="warn">
-                Some sessions in your materials are no longer on the agenda. Choose Customize to review them.
-              </Alert>
+            {menu}
+            {kit && (
+              <>
+                <Button
+                  onClick={() =>
+                    void copyText(`${kit.source?.title ?? title}\n${kit.copy.whyAttend}\n${kit.registrationUrl}`, {
+                      copied: "Post copied",
+                      failed: "Your browser could not copy the post",
+                      notify: toast,
+                    })
+                  }
+                >
+                  Copy post
+                </Button>
+                <Button onClick={showEditing}>Customize</Button>
+              </>
             )}
-            <ul class="pk-promotion-gallery">
-              {leading}
-              {tiles.map((tile) => {
-                const loaded = previews[tile.format];
-                const preview = !kit.stale && loaded?.artwork.fingerprint === kit.fingerprint ? loaded : undefined;
-                const ready = !kit.stale && (tile.format === "carousel" || Boolean(preview));
-                return (
-                  <PromotionTile
-                    key={tile.format}
-                    previewId={`${base}:${tile.format}`}
-                    name={tile.name}
-                    detail={tile.detail}
-                    stacked={"stacked" in tile}
-                    previewSrc={preview?.urls[0]}
-                    previewAlt={`Preview of your ${tile.name.toLowerCase()}`}
-                    pending={kit.stale ? "Review your session picks" : (failures[tile.format] ?? "Loading preview…")}
-                    status={tile.format === "carousel" && downloads.pdfPending ? "Preparing PDF…" : undefined}
-                    action={
-                      <DownloadAction
-                        label={`Download ${tile.name.toLowerCase()} (${tile.type})`}
-                        disabled={!ready}
-                        onDownload={() => downloads.download(tile.format, preview)}
-                      />
-                    }
-                  />
-                );
-              })}
-            </ul>
-            <PromotionCompositionEditor
-              open={editing}
-              key={kit.compositionRevision}
-              kit={kit}
-              base={base}
-              onCancel={() => {
-                void closeEditing().catch((cause: unknown) =>
-                  setError(cause instanceof Error ? cause.message : "Could not close the editor."),
-                );
-              }}
-              onSaved={(value) => {
-                setKit(value);
-                void closeEditing().catch((cause: unknown) =>
-                  setError(cause instanceof Error ? cause.message : "Could not close the editor."),
-                );
-              }}
-            />
-          </div>
-        )}
-      </PanelBody>
-    </Panel>
+            {onClose && <CloseButton label="Close promotion materials" onClick={onClose} />}
+          </>
+        }
+      />
+      {(error || downloads.error) && <ErrorAlert error={error || downloads.error} />}
+      {kit && (
+        <div class="pk-stack">
+          {kit.stale && (
+            <Alert tone="warn">
+              Some sessions in your materials are no longer on the agenda. Choose Customize to review them.
+            </Alert>
+          )}
+          <ul class="pk-promotion-gallery">
+            {leading}
+            {tiles.map((tile) => {
+              const loaded = previews[tile.format];
+              const preview = !kit.stale && loaded?.artwork.fingerprint === kit.fingerprint ? loaded : undefined;
+              const ready = !kit.stale && (tile.format === "carousel" || Boolean(preview));
+              return (
+                <PromotionTile
+                  key={tile.format}
+                  previewId={`${base}:${tile.format}`}
+                  name={tile.name}
+                  detail={tile.detail}
+                  stacked={"stacked" in tile}
+                  previewSrc={preview?.urls[0]}
+                  previewAlt={`Preview of your ${tile.name.toLowerCase()}`}
+                  pending={kit.stale ? "Review your session picks" : (failures[tile.format] ?? "Loading preview…")}
+                  status={tile.format === "carousel" && downloads.pdfPending ? "Preparing PDF…" : undefined}
+                  action={
+                    <DownloadAction
+                      label={`Download ${tile.name.toLowerCase()} (${tile.type})`}
+                      disabled={!ready}
+                      onDownload={() => downloads.download(tile.format, preview)}
+                    />
+                  }
+                />
+              );
+            })}
+          </ul>
+          <PromotionCompositionEditor
+            open={editing}
+            key={kit.compositionRevision}
+            kit={kit}
+            base={base}
+            onCancel={() => {
+              void closeEditing().catch((cause: unknown) =>
+                setError(cause instanceof Error ? cause.message : "Could not close the editor."),
+              );
+            }}
+            onSaved={(value) => {
+              setKit(value);
+              void closeEditing().catch((cause: unknown) =>
+                setError(cause instanceof Error ? cause.message : "Could not close the editor."),
+              );
+            }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
