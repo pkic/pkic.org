@@ -58,6 +58,7 @@ const user: UserDetail = {
   created_at: "2026-01-01T00:00:00.000Z",
   updated_at: "2026-01-01T00:00:00.000Z",
   pii_redacted_at: null,
+  emailDelivery: { status: "unknown", observedAt: null },
   identities: [],
   formerIdentities: [],
 };

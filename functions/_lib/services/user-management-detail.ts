@@ -1,3 +1,4 @@
+import { emailAddressDeliveryJsonSql, decodeEmailAddressDelivery } from "./email-address-delivery";
 import { executiveCouncilSeatSql } from "../auth/executive-council";
 import { identityJobTitleSql, identityOrganizationEmailDomainSql } from "./identities/affiliation-projection";
 import { parseLinksJson } from "../../../assets/shared/schemas/links";
@@ -8,6 +9,7 @@ import { organizationAddressEvidence } from "./identities/reinstatement-link";
 import type { DatabaseLike } from "../types";
 
 interface UserDetailRow {
+  delivery_json: string;
   id: string;
   email: string;
   first_name: string | null;
@@ -68,7 +70,7 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
   const [userResult, membershipResult, formerResult, groupsResult] = await db.batch([
     db
       .prepare(
-        `SELECT id, email, first_name, last_name, preferred_name,
+        `SELECT ${emailAddressDeliveryJsonSql("users.id", "users.email")} AS delivery_json, id, email, first_name, last_name, preferred_name,
                 active, ${executiveCouncilSeatSql("users.id")} AS is_ec_member,
                 headshot_r2_key, headshot_updated_at, created_at, updated_at, pii_redacted_at
          FROM users WHERE id = ?`,
@@ -198,7 +200,12 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
    * key names its own version, so no cache-busting query is needed.
    */
   const headshotUrl = publicUserHeadshotPath(user.id, user.headshot_r2_key);
-  const { headshot_r2_key: _headshotR2Key, headshot_updated_at: _headshotUpdatedAt, ...publicUser } = user;
+  const {
+    delivery_json: deliveryJson,
+    headshot_r2_key: _headshotR2Key,
+    headshot_updated_at: _headshotUpdatedAt,
+    ...publicUser
+  } = user;
   const formerIdentities = await Promise.all(
     batchRows<FormerIdentityRow>(formerResult).map(async (identity) => ({
       identityId: identity.id,
@@ -220,6 +227,7 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
 
   return {
     ...publicUser,
+    emailDelivery: decodeEmailAddressDelivery(deliveryJson),
     active: Boolean(user.active),
     isEcMember: Boolean(user.is_ec_member),
     headshotUrl,

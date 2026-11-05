@@ -10,6 +10,7 @@ import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./a
 import { requiresPermissions } from "./route-contract";
 import { userSelectionProfileSchema } from "./user-selection-profile";
 import { z } from "zod";
+import { emailAddressDeliverySchema, UNKNOWN_EMAIL_DELIVERY } from "./email-address-delivery";
 import { userIdParamsSchema, successResponseSchema } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { memberStatusSchema, membershipCategorySchema } from "./membership-categories";
@@ -55,6 +56,7 @@ export const usersListQuerySchema = listQuerySchema(USERS_SORT_COLUMNS).extend({
 export type UsersListQuery = z.infer<typeof usersListQuerySchema>;
 
 const userResponseBaseSchema = z.object({
+  emailDelivery: emailAddressDeliverySchema.default(UNKNOWN_EMAIL_DELIVERY),
   id: z.string(),
   email: z.string(),
   first_name: z.string().nullable(),

@@ -1,3 +1,4 @@
+import { emailAddressDeliveryJsonSql, decodeEmailAddressDelivery } from "./email-address-delivery";
 import { prepareMailingListAddressSync } from "./mailing-list-subscriptions/queue-email-change";
 /**
  * Secondary email addresses on a user account reserve its email namespace.
@@ -25,6 +26,7 @@ import { authorizedUserMutationDb } from "./user-management-authorization";
 import { prepareRotateProposalSpeakerSecretsMailedToUserEmail } from "./registrations/manage-capability-revocation";
 
 interface UserEmailRow {
+  delivery_json: string;
   id: string;
   user_id: string;
   email: string;
@@ -77,6 +79,7 @@ export function emailTakenError(): AppError {
 
 function toRecord(row: UserEmailRow): UserEmailRecord {
   return userEmailResponseSchema.parse({
+    delivery: decodeEmailAddressDelivery(row.delivery_json),
     id: row.id,
     userId: row.user_id,
     email: row.email,
@@ -92,7 +95,8 @@ export async function listUserEmails(
 ): Promise<{ emails: UserEmailRecord[]; page: PageInfo }> {
   const search = query.q ? buildD1TextSearchFilter(query.q, ["email"]) : null;
   const { rows, total } = await queryPage<UserEmailRow>(db, {
-    sql: `SELECT id, user_id, email, identity_id, created_at
+    sql: `SELECT id, user_id, email, identity_id, created_at,
+            ${emailAddressDeliveryJsonSql("user_emails.user_id", "user_emails.email")} AS delivery_json
             FROM user_emails
            WHERE user_id = ?${search ? ` AND ${search.sql}` : ""}`,
     bindings: [userId, ...(search?.bindings ?? [])],
@@ -216,7 +220,7 @@ export async function addUserEmail(
     throw error;
   }
 
-  return { id, userId, email, identityId: null, createdAt: now };
+  return userEmailResponseSchema.parse({ id, userId, email, identityId: null, createdAt: now });
 }
 
 export async function removeUserEmail(

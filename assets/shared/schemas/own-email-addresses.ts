@@ -9,6 +9,7 @@
  * the organization its domain belongs to through the shared domain rule.
  */
 import { z } from "zod";
+import { emailAddressDeliverySchema, UNKNOWN_EMAIL_DELIVERY } from "./email-address-delivery";
 import { formatConjunction } from "../format-list";
 import { workEmailStepSchema } from "./work-email";
 import { jsonErrorResponse, magicLinkVerifySchema, successResponseSchema } from "./api-common";
@@ -58,6 +59,7 @@ export function ownEmailInUseMessage(organizationNames: readonly string[]): stri
  * whose active identity uses it.
  */
 export const ownEmailAddressSchema = verifiedEmailIdentitySchema.extend({
+  delivery: emailAddressDeliverySchema.default(UNKNOWN_EMAIL_DELIVERY),
   createdAt: z.string(),
   signInEnabled: z.boolean(),
   usedBy: z.array(organizationReferenceSchema).default([]),
