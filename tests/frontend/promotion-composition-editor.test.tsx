@@ -1,13 +1,10 @@
-import { exportPromotionImages } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/promotion-browser-export";
-vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/agenda/promotion-browser-export", () => ({
-  promotionArtworkUrls: vi.fn(async () => ["blob:synthetic-preview"]),
-  exportPromotionImages: vi.fn(async () => new Blob(["image"], { type: "image/jpeg" })),
-}));
-import { MyPromotionKits } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/MyPromotionKits";
 // @vitest-environment jsdom
+import { PromotionTile } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/PromotionTile";
+import { afterEach, expect, it, vi } from "vitest";
+import { exportPromotionImages } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/promotion-browser-export";
+import { MyPromotionKits } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/MyPromotionKits";
 import { render } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, expect, it, vi } from "vitest";
 import { PersonalPromotionKit } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/PersonalPromotionKit";
 import { PromotionCompositionEditor } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/PromotionCompositionEditor";
 import {
@@ -21,6 +18,11 @@ import {
   promotionCompositionSaveSchema,
 } from "../../assets/shared/schemas/event-promotion-design";
 import { controlFor, typeInto } from "./helpers/labeled-control";
+vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/agenda/promotion-browser-export", () => ({
+  promotionArtworkUrls: vi.fn(async () => ["blob:synthetic-preview"]),
+  exportPromotionImages: vi.fn(async () => new Blob(["image"], { type: "image/jpeg" })),
+}));
+
 let root: HTMLElement;
 afterEach(() => {
   if (root) {
@@ -300,4 +302,17 @@ it("opens Share on one gallery with the badge first and the invite link below", 
   expect(root.querySelector("[data-og-badge-img]")).toBeNull();
   expect(root.textContent).not.toContain("Prepare downloads");
   expect(root.querySelector("table")).toBeNull();
+});
+
+it("keeps the PDF announcement region mounted before preparation starts", async () => {
+  root = document.createElement("div");
+  document.body.append(root);
+  const props = { name: "Carousel", detail: "PDF slides", previewAlt: "Carousel preview" };
+  await act(() => render(<PromotionTile {...props} />, root));
+  const announcement = root.querySelector('[role="status"]');
+  expect(announcement).not.toBeNull();
+  expect(announcement?.textContent).toBe("");
+  await act(() => render(<PromotionTile {...props} status="Preparing PDF…" />, root));
+  expect(root.querySelector('[role="status"]')).toBe(announcement);
+  expect(announcement?.textContent).toBe("Preparing PDF…");
 });

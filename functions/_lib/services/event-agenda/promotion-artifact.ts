@@ -16,17 +16,34 @@ import { encodeRenderedPng, THUMBNAIL_OUTPUT, type EncodedImage } from "../../ut
 /** Downloads are photos people post; JPEG keeps them a fraction of a PNG's size. */
 const download = { format: "image/jpeg", quality: 88 } as const;
 
+interface PromotionArtifact {
+  body: Uint8Array | ReadableStream<Uint8Array>;
+  contentType: string;
+  count: number;
+  thumbnail: EncodedImage;
+}
+
+export function renderPromotionArtifact(
+  env: Env,
+  origin: string,
+  data: PromotionRenderData,
+  format: z.infer<typeof promotionFormatSchema>,
+): Promise<PromotionArtifact>;
+export function renderPromotionArtifact(
+  env: Env,
+  origin: string,
+  data: PromotionRenderData,
+  format: "carousel",
+  options: { thumbnail: false },
+): Promise<Omit<PromotionArtifact, "thumbnail">>;
+/** Queued exports include gallery thumbnails; a direct PDF download needs only its document. */
 export async function renderPromotionArtifact(
   env: Env,
   origin: string,
   data: PromotionRenderData,
   format: z.infer<typeof promotionFormatSchema>,
-): Promise<{
-  body: Uint8Array | ReadableStream<Uint8Array>;
-  contentType: string;
-  count: number;
-  thumbnail: EncodedImage;
-}> {
+  options: { thumbnail?: boolean } = {},
+): Promise<Omit<PromotionArtifact, "thumbnail"> & { thumbnail?: EncodedImage }> {
   const { fonts, source } = await preparePromotionArtwork(env, origin, data);
   const Resvg = await ensureResvgWasm();
   const rasterize = async (svg: string) => {
@@ -38,13 +55,20 @@ export async function renderPromotionArtifact(
     }
   };
   if (format === "carousel") {
-    const [cover] = buildPromotionPages(source, "carousel");
     return {
       body: await renderPromotionPdf(source, fonts[0]!, fonts[1]!, fonts.slice(5), rasterize),
       contentType: "application/pdf",
       count: 1,
       // The first slide, so a gallery shows the carousel's own cover instead of another format.
-      thumbnail: await encodeRenderedPng(env, await rasterize(promotionSceneSvg(source, cover!)), THUMBNAIL_OUTPUT),
+      ...(options.thumbnail === false
+        ? {}
+        : {
+            thumbnail: await encodeRenderedPng(
+              env,
+              await rasterize(promotionSceneSvg(source, buildPromotionPages(source, "carousel")[0]!)),
+              THUMBNAIL_OUTPUT,
+            ),
+          }),
     };
   }
   const imageFormat = format;

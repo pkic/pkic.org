@@ -36,6 +36,7 @@ export async function downloadOwnPromotionPdf(
     origin,
     { ...current, ...current.kit, sponsors: branding.sponsors },
     "carousel",
+    { thumbnail: false },
   );
   return new Response(artifact.body instanceof Uint8Array ? new Uint8Array(artifact.body) : artifact.body, {
     headers: {

@@ -68,7 +68,7 @@ export function PromotionTile({
         <span class="pk-promotion-tile__text">
           <span class="pk-promotion-tile__name">{name}</span>
           <span class="pk-promotion-tile__detail">{detail}</span>
-          {status && <span role="status">{status}</span>}
+          <span role="status">{status}</span>
         </span>
         {action}
       </div>
