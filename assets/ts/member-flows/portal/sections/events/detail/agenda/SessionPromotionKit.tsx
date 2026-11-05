@@ -10,11 +10,8 @@ import {
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { postJson } from "../../../../../../shared/api-client";
 import { Dialog } from "../../../../../../ui/Dialog";
-import { Button } from "../../../../../../ui/Button";
-import { IconPlus } from "../../../../../../components/icons";
+import { Menu } from "../../../../../../ui/Menu";
 import { PromotionBulkPreparation } from "./PromotionBulkPreparation";
-import { CloseButton } from "../../../../../../ui/CloseButton";
-import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { Field } from "../../../../../../ui/Field";
 import { TextInput, Textarea } from "../../../../../../ui/TextControl";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
@@ -72,81 +69,83 @@ export function SessionPromotionKit({
     }
   }
   return (
-    <Panel>
-      <PanelHeader title={`Promotion kit · ${occurrence.title}`}>
-        {snapshot && (
-          <>
-            <PromotionBulkPreparation slug={slug} publishedRevision={snapshot.publishedRevision} />
-            <Button
-              icon
-              aria-label="Edit shared promotion copy"
-              title="Edit shared promotion copy"
-              onClick={showEditing}
-            >
-              <IconPlus />
-            </Button>
-          </>
-        )}
-        <CloseButton label="Close promotion kit" onClick={onClose} />
-      </PanelHeader>
-      <PanelBody>
-        {snapshot && editing && (
-          <Dialog
-            open
-            title="Shared promotion copy"
-            closeLabel="Close shared promotion copy"
-            confirmLabel="Approve promotion copy"
-            confirmDisabled={busy}
-            onConfirm={() => void approve()}
-            onCancel={() => {
-              void closeEditing().catch((cause: unknown) =>
-                setError(cause instanceof Error ? cause.message : "Could not close the editor."),
-              );
+    <>
+      <PersonalPromotionKit
+        key={snapshot?.revision}
+        base={base}
+        title="Share session"
+        context={occurrence.title}
+        onClose={onClose}
+        menu={
+          snapshot && (
+            <PromotionBulkPreparation
+              slug={slug}
+              publishedRevision={snapshot.publishedRevision}
+              trigger={(open, disabled) => (
+                <Menu
+                  label="Sharing actions"
+                  items={[
+                    { id: "shared-copy", label: "Edit shared promotion copy", onSelect: showEditing },
+                    { id: "prepare-speakers", label: "Prepare kits for all speakers", onSelect: open, disabled },
+                  ]}
+                />
+              )}
+            />
+          )
+        }
+      />
+      {snapshot && editing && (
+        <Dialog
+          open
+          title="Shared promotion copy"
+          closeLabel="Close shared promotion copy"
+          confirmLabel="Approve promotion copy"
+          confirmDisabled={busy}
+          onConfirm={() => void approve()}
+          onCancel={() => {
+            void closeEditing().catch((cause: unknown) =>
+              setError(cause instanceof Error ? cause.message : "Could not close the editor."),
+            );
+          }}
+        >
+          <form
+            noValidate
+            {...form.handlers}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void approve();
             }}
+            class="pk-form"
           >
-            <form
-              noValidate
-              {...form.handlers}
-              onSubmit={(event) => {
-                event.preventDefault();
-                void approve();
-              }}
-              class="pk-form"
+            <p>
+              Review the narrative, then approve the agenda to release this copy with its schedule and speaker credits.
+            </p>
+            <Field label="Why attend" {...form.of("copy.whyAttend")}>
+              {(control) => <Textarea {...control} value={whyAttend} onInput={(e) => setWhy(e.currentTarget.value)} />}
+            </Field>
+            <Field
+              label="Key questions / takeaways"
+              help="Optional: one per line, up to eight specific points."
+              {...form.of("copy.takeaways")}
             >
-              <p>
-                Review the narrative, then approve the agenda to release this copy with its schedule and speaker
-                credits.
-              </p>
-              <Field label="Why attend" {...form.of("copy.whyAttend")}>
-                {(control) => (
-                  <Textarea {...control} value={whyAttend} onInput={(e) => setWhy(e.currentTarget.value)} />
-                )}
-              </Field>
-              <Field
-                label="Key questions / takeaways"
-                help="Optional: one per line, up to eight specific points."
-                {...form.of("copy.takeaways")}
-              >
-                {(control) => (
-                  <Textarea {...control} value={takeaways} onInput={(e) => setTakeaways(e.currentTarget.value)} />
-                )}
-              </Field>
-              <Field label="Call to action" {...form.of("copy.callToAction")}>
-                {(control) => (
-                  <TextInput {...control} value={callToAction} onInput={(e) => setCta(e.currentTarget.value)} />
-                )}
-              </Field>
-              <Field label="Campaign" {...form.of("copy.campaign")}>
-                {(control) => (
-                  <TextInput {...control} value={campaign} onInput={(e) => setCampaign(e.currentTarget.value)} />
-                )}
-              </Field>
-              {error && <ErrorAlert error={error} />}
-            </form>
-          </Dialog>
-        )}
-        <PersonalPromotionKit key={snapshot?.revision} base={base} title="My published materials" />
-      </PanelBody>
-    </Panel>
+              {(control) => (
+                <Textarea {...control} value={takeaways} onInput={(e) => setTakeaways(e.currentTarget.value)} />
+              )}
+            </Field>
+            <Field label="Call to action" {...form.of("copy.callToAction")}>
+              {(control) => (
+                <TextInput {...control} value={callToAction} onInput={(e) => setCta(e.currentTarget.value)} />
+              )}
+            </Field>
+            <Field label="Campaign" {...form.of("copy.campaign")}>
+              {(control) => (
+                <TextInput {...control} value={campaign} onInput={(e) => setCampaign(e.currentTarget.value)} />
+              )}
+            </Field>
+            {error && <ErrorAlert error={error} />}
+          </form>
+        </Dialog>
+      )}
+    </>
   );
 }

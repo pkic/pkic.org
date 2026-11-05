@@ -189,7 +189,8 @@ test("every delivered long-panel promotion export has complete evidence and refu
     .getByRole("row")
     .filter({ has: page.getByText(title, { exact: true }) });
   await runRowAction(page, row, "Speaker promotion kit");
-  await page.getByRole("button", { name: "Prepare kits for all speakers", exact: true }).click();
+  await page.getByRole("button", { name: "Sharing actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Prepare kits for all speakers", exact: true }).click();
   const bulk = page.getByRole("dialog", { name: "Prepare speaker promotion kits", exact: true });
   await expect(bulk).toBeVisible();
   await page.goBack();
@@ -198,7 +199,8 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await expect(bulk).toBeVisible();
   await bulk.getByRole("button", { name: "Close bulk promotion preparation", exact: true }).click();
   await expect(bulk).not.toBeVisible();
-  await page.getByRole("button", { name: "Edit shared promotion copy", exact: true }).click();
+  await page.getByRole("button", { name: "Sharing actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit shared promotion copy", exact: true }).click();
   const sharedCopy = page.getByRole("dialog", { name: "Shared promotion copy", exact: true });
   await expect(sharedCopy).toBeVisible();
   await page.goBack();
@@ -275,7 +277,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
     ["phone", 375, 812],
   ] as const) {
     await page.setViewportSize({ width, height });
-    await page.getByRole("heading", { name: "My published materials", exact: true }).scrollIntoViewIfNeeded();
+    await page.getByRole("heading", { name: "Share session", exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath(`promotion-gallery-${device}.png`) });
     const enlarge = page.getByRole("button", { name: "Enlarge tall post", exact: true });
     await enlarge.click();

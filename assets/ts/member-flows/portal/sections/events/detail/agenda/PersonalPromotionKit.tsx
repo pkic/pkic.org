@@ -34,10 +34,14 @@ export function PersonalPromotionKit({
   base,
   title,
   leading,
+  context,
+  menu,
   onClose,
 }: {
   base: string;
   title: string;
+  context?: string;
+  menu?: ComponentChildren;
   /** Tiles from outside this kit shown first, such as the attendee badge. */
   leading?: ComponentChildren;
   onClose?: () => void;
@@ -64,7 +68,7 @@ export function PersonalPromotionKit({
   }, [base]);
   return (
     <Panel>
-      <PanelHeader title={title}>
+      <PanelHeader title={title} menu={menu}>
         {kit && (
           <>
             <Button
@@ -84,6 +88,7 @@ export function PersonalPromotionKit({
         {onClose && <CloseButton label="Close promotion materials" onClick={onClose} />}
       </PanelHeader>
       <PanelBody>
+        {context && <p class="pk-muted">{context}</p>}
         {(error || downloads.error) && <ErrorAlert error={error || downloads.error} />}
         {kit && (
           <div class="pk-stack">
