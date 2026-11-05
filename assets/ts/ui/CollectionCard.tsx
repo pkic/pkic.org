@@ -109,12 +109,7 @@ export function CollectionCard({
           </div>
         )}
       </div>
-      {(fact || actions) && (
-        <div class="pk-collection-card__footer" data-density="compact">
-          <span class="pk-collection-card__fact">{fact}</span>
-          {actions && <span class="pk-collection-card__actions">{actions}</span>}
-        </div>
-      )}
+      <CollectionCardFooter fact={fact} actions={actions} />
     </article>
   );
 }
@@ -146,5 +141,16 @@ export function CollectionStatusLine({ items }: { items: readonly CollectionStat
         </Badge>
       ))}
     </span>
+  );
+}
+
+/** Shared card footer: identifying detail first, scoped controls at the end. */
+export function CollectionCardFooter({ fact, actions }: { fact?: ComponentChildren; actions?: ComponentChildren }) {
+  if (!fact && !actions) return null;
+  return (
+    <div class="pk-collection-card__footer" data-density="compact">
+      <span class="pk-collection-card__fact">{fact}</span>
+      {actions && <span class="pk-collection-card__actions">{actions}</span>}
+    </div>
   );
 }

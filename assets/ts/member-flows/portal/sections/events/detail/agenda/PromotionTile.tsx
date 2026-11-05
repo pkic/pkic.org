@@ -1,3 +1,4 @@
+import { CollectionCardFooter } from "../../../../../../ui/CollectionCard";
 import { Button } from "../../../../../../ui/Button";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { useDialogQueryState } from "../../../../../../hooks/useDialogQueryState";
@@ -32,7 +33,7 @@ export function PromotionTile({
   stacked?: boolean;
   status?: string;
   action?: ComponentChildren;
-  previewActions?: ComponentChildren;
+  previewActions?: (dismiss: () => Promise<void>) => ComponentChildren;
 }) {
   const [open, show, close] = useDialogQueryState(`promotionPreview:${previewId ?? name}`);
   return (
@@ -59,22 +60,24 @@ export function PromotionTile({
           size="wide"
           title={name}
           closeLabel="Close preview"
+          footerActions={previewActions?.(close)}
           confirmLabel="Close"
           onConfirm={() => void close()}
           onCancel={() => void close()}
         >
-          {previewActions}
           <img class="pk-promotion-preview" src={previewSrc} alt={previewAlt} />
         </Dialog>
       )}
-      <div class="pk-promotion-tile__caption">
-        <span class="pk-promotion-tile__text">
-          <span class="pk-promotion-tile__name">{name}</span>
-          <span class="pk-promotion-tile__detail">{detail}</span>
-          <span role="status">{status}</span>
-        </span>
-        {action}
-      </div>
+      <CollectionCardFooter
+        fact={
+          <span class="pk-promotion-tile__text">
+            <span class="pk-promotion-tile__name">{name}</span>
+            <span class="pk-promotion-tile__detail">{detail}</span>
+            <span role="status">{status}</span>
+          </span>
+        }
+        actions={action}
+      />
     </li>
   );
 }

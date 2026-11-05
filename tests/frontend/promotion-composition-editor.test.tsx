@@ -220,6 +220,10 @@ it("shows artwork before exports exist and generates only the requested image or
   await vi.waitFor(() => expect(root.querySelectorAll(".pk-promotion-tile img")).toHaveLength(4));
   await act(() => buttonNamed("Enlarge tall post")!.click());
   expect(root.querySelector("dialog[open] img")?.getAttribute("src")).toBe("blob:synthetic-preview");
+  const footer = root.querySelector("dialog[open] .pk-dialog__foot")!;
+  expect(footer.textContent).toContain("Copy post");
+  expect(footer.querySelector('[aria-label="Customize tall post"]')).not.toBeNull();
+  expect(footer.querySelector('[aria-label="Download tall post (JPEG)"]')).not.toBeNull();
   await act(() => buttonNamed("Close preview")!.click());
   await vi.waitFor(() => expect(buttonNamed("Close preview")).toBeUndefined());
   expect(requests.filter(({ init }) => init?.method === "POST")).toHaveLength(0);
@@ -234,6 +238,13 @@ it("shows artwork before exports exist and generates only the requested image or
   await vi.waitFor(() =>
     expect(requests.some(({ url, init }) => url.endsWith("/artifact") && init?.method === "POST")).toBe(true),
   );
+  await act(() => buttonNamed("Enlarge tall post")!.click());
+  await act(async () => {
+    root.querySelector<HTMLButtonElement>('dialog[open] .pk-dialog__foot [aria-label="Customize tall post"]')!.click();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  });
+  await vi.waitFor(() => expect(buttonNamed("Close preview")).toBeUndefined());
+  expect(buttonNamed("Close promotion editor")).toBeDefined();
 });
 
 it("keeps previews and image downloads usable when PDF preparation fails and allows a retry", async () => {

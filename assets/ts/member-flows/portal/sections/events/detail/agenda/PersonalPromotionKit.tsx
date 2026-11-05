@@ -11,6 +11,7 @@ import {
   type promotionFormatSchema,
 } from "../../../../../../../shared/schemas/event-promotion-kit";
 import { Panel, PanelBody } from "../../../../../../ui/Panel";
+import { Toolbar } from "../../../../../../ui/Toolbar";
 import { IconPencil } from "../../../../../../ui/MediaIcons";
 import { Button } from "../../../../../../ui/Button";
 import { DownloadAction } from "../../../../../../ui/DownloadAction";
@@ -88,23 +89,43 @@ export function PersonalPromotionKit({
                     stacked={"stacked" in tile}
                     previewSrc={preview?.urls[0]}
                     previewAlt={`Preview of your ${tile.name.toLowerCase()}`}
-                    previewActions={
-                      <Button
-                        onClick={() =>
-                          void copyText(
-                            `${kit.source?.title ?? title}\n${kit.copy.whyAttend}\n${kit.registrationUrl}`,
-                            { copied: "Post copied", failed: "Your browser could not copy the post", notify: toast },
-                          )
-                        }
-                      >
-                        Copy post
-                      </Button>
-                    }
+                    previewActions={(dismiss) => (
+                      <>
+                        <Button
+                          onClick={() =>
+                            void copyText(
+                              `${kit.source?.title ?? title}\n${kit.copy.whyAttend}\n${kit.registrationUrl}`,
+                              { copied: "Post copied", failed: "Your browser could not copy the post", notify: toast },
+                            )
+                          }
+                        >
+                          Copy post
+                        </Button>
+                        <Button
+                          icon
+                          aria-label={`Customize ${tile.name.toLowerCase()}`}
+                          title={`Customize ${tile.name.toLowerCase()}`}
+                          onClick={() =>
+                            void dismiss()
+                              .then(showEditing)
+                              .catch((cause: unknown) =>
+                                setError(cause instanceof Error ? cause.message : "Could not open the editor."),
+                              )
+                          }
+                        >
+                          <IconPencil />
+                        </Button>
+                        <DownloadAction
+                          label={`Download ${tile.name.toLowerCase()} (${tile.type})`}
+                          disabled={!ready}
+                          onDownload={() => downloads.download(tile.format, preview)}
+                        />
+                      </>
+                    )}
                     pending={kit.stale ? "Review your session picks" : (failures[tile.format] ?? "Loading preview…")}
                     status={tile.format === "carousel" && downloads.pdfPending ? "Preparing PDF…" : undefined}
                     action={
-                      <span class="pk-promotion-tile__actions">
-                        {tile.format === "portrait" && menu}
+                      <Toolbar label={`${tile.name} actions`}>
                         <Button
                           icon
                           aria-label={`Customize ${tile.name.toLowerCase()}`}
@@ -118,12 +139,13 @@ export function PersonalPromotionKit({
                           disabled={!ready}
                           onDownload={() => downloads.download(tile.format, preview)}
                         />
-                      </span>
+                      </Toolbar>
                     }
                   />
                 );
               })}
             </ul>
+            {menu && <Toolbar label="Session sharing actions">{menu}</Toolbar>}
             <PromotionCompositionEditor
               open={editing}
               key={kit.compositionRevision}
