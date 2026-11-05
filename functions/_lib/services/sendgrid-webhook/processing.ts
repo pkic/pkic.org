@@ -132,6 +132,37 @@ const OUTBOX_RECIPIENT_EVENT_SQL = `(outbox_id = email_outbox.id OR base_id = em
   AND (email IS NULL OR email = email_outbox.recipient_email COLLATE NOCASE)`;
 
 function prepareEventBatchStatements(env: Env, jsonRows: string) {
+  // Retain a legacy terminal outcome once before a new webhook changes its
+  // state or delivery evidence. Older messages may have no provider-event audit.
+  const preserveLegacyOutcome = env.DB.prepare(
+    `WITH event_rows AS (${JSON_EVENT_ROWS}), candidate_outbox AS MATERIALIZED (
+       SELECT id FROM email_outbox WHERE id IN (SELECT outbox_id FROM event_rows WHERE outbox_id IS NOT NULL)
+       UNION
+       SELECT id FROM email_outbox WHERE provider_message_id IN (SELECT base_id FROM event_rows WHERE base_id IS NOT NULL)
+     )
+     INSERT OR IGNORE INTO audit_log
+       (id,actor_type,actor_id,action,entity_type,entity_id,details_json,created_at,idempotency_key)
+     SELECT lower(hex(randomblob(16))),'system',NULL,
+       CASE WHEN email_outbox.status='delivered' THEN 'email_delivered'
+            WHEN email_outbox.last_error LIKE 'Spam report%' THEN 'email_spam_report'
+            WHEN email_outbox.last_error LIKE 'Dropped:%' AND email_outbox.last_error NOT LIKE '%Bounced Address%' THEN 'email_dropped'
+            ELSE 'email_hard_bounce' END,
+       'email_outbox',email_outbox.id,
+       json_object('source','legacy_outbox'),
+       strftime('%Y-%m-%dT%H:%M:%fZ',email_outbox.updated_at),
+       'email:legacy-outcome:' || email_outbox.id
+     FROM candidate_outbox candidate CROSS JOIN email_outbox ON email_outbox.id=candidate.id
+     WHERE status IN ('delivered','bounced')
+       AND EXISTS (SELECT 1 FROM event_rows
+         WHERE (outbox_id=email_outbox.id OR base_id=email_outbox.provider_message_id)
+           AND (hard_failure=1 OR delivered=1 OR accepted=1 OR error_text IS NOT NULL))
+       AND NOT EXISTS (SELECT 1 FROM audit_log evidence
+         WHERE evidence.entity_type='email_outbox' AND evidence.entity_id=email_outbox.id
+           AND evidence.action IN ('email_delivered','email_hard_bounce','email_dropped','email_spam_report')
+           AND (email_outbox.status='bounced' OR json_extract(evidence.details_json,'$.email') IS NULL
+             OR json_extract(evidence.details_json,'$.email')=email_outbox.recipient_email COLLATE NOCASE))`,
+  ).bind(jsonRows);
+
   const updateOutbox = env.DB.prepare(
     `WITH event_rows AS (${JSON_EVENT_ROWS})
      UPDATE email_outbox
@@ -188,7 +219,11 @@ function prepareEventBatchStatements(env: Env, jsonRows: string) {
              THEN NULL
            ELSE lease_expires_at
          END,
-         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         updated_at = CASE
+           WHEN status IN ('delivered','bounced') AND NOT EXISTS (
+             SELECT 1 FROM event_rows WHERE ${OUTBOX_RECIPIENT_EVENT_SQL}
+               AND (hard_failure=1 OR delivered=1)) THEN updated_at
+           ELSE strftime('%Y-%m-%dT%H:%M:%fZ','now') END
      WHERE (id IN (
              SELECT outbox_id FROM event_rows
               WHERE outbox_id IS NOT NULL
@@ -241,7 +276,7 @@ function prepareEventBatchStatements(env: Env, jsonRows: string) {
        AND (event_rows.email IS NULL OR event_rows.email = email_outbox.recipient_email COLLATE NOCASE)`,
   ).bind(jsonRows);
 
-  return [updateOutbox, insertUnsubscribes, insertOutboxAudits, insertRegistrationAudits];
+  return [preserveLegacyOutcome, updateOutbox, insertUnsubscribes, insertOutboxAudits, insertRegistrationAudits];
 }
 
 export async function processSendgridEvents(

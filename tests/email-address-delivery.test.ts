@@ -145,6 +145,60 @@ describe("address delivery evidence", () => {
     await message(email, null, "bounced");
     expect(await delivery()).toEqual({ status: "bouncing", observedAt: started });
   });
+  it("retains a legacy primary bounce when only its BCC recipient reports delivery", async () => {
+    const legacy = await message(email, userId, "bounced");
+    await event(legacy, { event: "delivered", email: "bcc@example.test", timestamp: timestamp + 10 });
+    expect((await delivery()).status).toBe("bouncing");
+    expect(
+      await env.DB.prepare("SELECT updated_at FROM email_outbox WHERE id=?").bind(legacy).first("updated_at"),
+    ).toBe(started);
+  });
+  it("preserves legacy evidence in the same bounded webhook batch", async () => {
+    const legacy = await message(email, userId, "delivered");
+    const flow = profileD1Flow(env.DB, { measurePayloadBytes: true });
+    await processSendgridEvents({ ...env, DB: flow.db as typeof env.DB }, [
+      {
+        event: "processed",
+        email,
+        sg_message_id: legacy,
+        sg_event_id: "legacy-batch-proof",
+        timestamp,
+        env_url: env.APP_BASE_URL,
+      },
+    ]);
+    const profile = await flow.report();
+    expect(profile.roundTrips).toBe(1);
+    expect(Math.max(...profile.queries.map((query) => query.requestBytes ?? 0))).toBeLessThan(64 * 1024);
+    const legacyPlan = profile.plans.find((plan) => plan.sql.includes("email:legacy-outcome:"));
+    expect(legacyPlan).toBeDefined();
+    expect(JSON.stringify(legacyPlan?.plan)).not.toContain("SCAN email_outbox");
+  });
+  it("does not let late acceptance falsely recover a legacy delivery after a newer bounce", async () => {
+    const legacy = await message(email, userId, "delivered"),
+      failed = await message();
+    await event(failed, { timestamp: timestamp + 10 });
+    await event(legacy, { event: "processed", timestamp: timestamp - 10 });
+    expect((await delivery()).status).toBe("bouncing");
+    expect(
+      await env.DB.prepare("SELECT updated_at FROM email_outbox WHERE id=?").bind(legacy).first("updated_at"),
+    ).toBe(started);
+  });
+  it("retains a legacy hard bounce through temporary failures and webhook replay", async () => {
+    const legacy = await message(email, userId, "bounced");
+    await event(legacy, { type: "blocked", timestamp: timestamp + 10 });
+    await event(legacy, { event: "processed", timestamp: timestamp + 20 });
+    expect((await delivery()).status).toBe("bouncing");
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE idempotency_key=?")
+        .bind(`email:legacy-outcome:${legacy}`)
+        .first("count"),
+    ).toBe(1);
+  });
+  it("preserves a newer legacy delivery when its first received bounce is older", async () => {
+    const legacy = await message(email, userId, "delivered");
+    await event(legacy, { timestamp: timestamp - 10 });
+    expect(await delivery()).toEqual({ status: "delivered", observedAt: started });
+  });
   it("does not relabel a legacy spam report as an invalid mailbox", async () => {
     const id = await message(email, userId, "bounced");
     await env.DB.prepare("UPDATE email_outbox SET last_error='Spam report received' WHERE id=?").bind(id).run();
