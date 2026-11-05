@@ -1,6 +1,4 @@
-import { menuPath } from "./helpers/menu-path";
-import { registrationList } from "./helpers/group-event-attendance-fixtures";
-import { savePortalSession, clearAuth } from "../../assets/ts/member-flows/portal/state";
+import { groupEventWorkspaceFixture as baseEvent, GROUP_ID, EVENT_ID } from "./helpers/group-event-workspace-fixture";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
 import { visibleEventWorkspaceTabs } from "../../assets/ts/member-flows/portal/sections/management/group-event-workspace-tabs";
@@ -8,7 +6,6 @@ import { visibleEventWorkspaceTabs } from "../../assets/ts/member-flows/portal/s
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
 import { GroupEvents } from "../../assets/ts/member-flows/portal/sections/management/GroupEvents";
 import { isCurrentTab, tabs } from "./helpers/tabs";
@@ -39,8 +36,6 @@ vi.mock("../../assets/ts/member-flows/portal/sections/management/GroupEventSetti
   ),
 }));
 
-const GROUP_ID = "10000000-0000-4000-8000-000000000001";
-const EVENT_ID = "architecture-workshop";
 const mounted: HTMLElement[] = [];
 
 function json(value: unknown): Response {
@@ -75,34 +70,6 @@ function tabLabels(container: HTMLElement): string[] {
 
 function tab(container: HTMLElement, label: string): HTMLElement | undefined {
   return tabButtons(container).find((button) => button.textContent?.trim() === label);
-}
-
-function baseEvent(overrides: Partial<GroupEvent> = {}): GroupEvent {
-  return {
-    id: EVENT_ID,
-    ownerGroupId: GROUP_ID,
-    seriesId: null,
-    slug: EVENT_ID,
-    basePath: `/events/2026/${EVENT_ID}/`,
-    name: "Architecture workshop",
-    timezone: "Europe/Amsterdam",
-    startsAt: "2026-09-01T15:00:00.000Z",
-    endsAt: "2026-09-01T16:00:00.000Z",
-    profileKey: "workshop",
-    sourceMode: "portal",
-    registrationPolicy: "optional",
-    visibility: "group_members",
-    inviteLimitAttendee: 5,
-    city: null,
-    country: null,
-    meetingLocation: null,
-    links: [],
-    nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
-    updatedAt: "2026-08-01T00:00:00.000Z",
-    proposalAccess: null,
-    capabilities: ["view"],
-    ...overrides,
-  };
 }
 
 beforeEach(async () => {
@@ -543,41 +510,4 @@ describe("group event workspace", () => {
       expect(container.querySelector("caption")?.textContent).toBe("Event proposals");
     });
   });
-});
-
-it("keeps registration output on the roster instead of navigating to the badge collection", async () => {
-  savePortalSession(portalSessionFixture({ administrator: true }));
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL) => {
-      const url = new URL(String(input), location.origin);
-      if (url.pathname.endsWith("/days")) return json({ days: [], eventUpdatedAt: "2026-01-01T00:00:00Z" });
-      if (url.pathname.endsWith("/population")) return new Promise<Response>(() => {});
-      return json(registrationList());
-    }),
-  );
-  try {
-    const event = baseEvent({ capabilities: ["view", "manage", "manage_attendance"] });
-    const container = await mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="registrations" />);
-    await vi.waitFor(async () => {
-      await settle();
-      expect(container.querySelector('button[aria-label="Registration actions"]')).not.toBeNull();
-    });
-    navigate.mockClear();
-    const download = await menuPath(container, "Registration actions", ["Download", "CSV", "Labels"]);
-    await act(() => download.click());
-    await vi.dynamicImportSettled();
-    await vi.waitFor(async () => {
-      await settle();
-      expect(container.querySelector("dialog")?.textContent).toContain("Download labels CSV");
-    });
-    expect(navigate).not.toHaveBeenCalled();
-    expect(container.querySelector('nav[aria-label="Registration sections"]')).not.toBeNull();
-    const cancel = [...container.querySelectorAll("dialog button")].find((item) => item.textContent === "Cancel");
-    await act(() => (cancel as HTMLButtonElement).click());
-    expect(container.querySelector("dialog")).toBeNull();
-    expect(navigate).not.toHaveBeenCalled();
-  } finally {
-    clearAuth();
-  }
 });

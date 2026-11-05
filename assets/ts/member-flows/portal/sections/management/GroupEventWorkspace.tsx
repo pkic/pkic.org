@@ -132,10 +132,16 @@ export function GroupEventWorkspace({
     action?: BadgePrintAction;
     session: PortalSession | null;
     eventId: string;
+    groupId: string;
   } | null>(null);
   useEffect(() => {
-    if (tab !== "registrations") setBadgePrint(null);
-  }, [tab, detailId, event.id]);
+    setBadgePrint((pending) =>
+      pending &&
+      (tab !== "registrations" || detailId !== undefined || pending.eventId !== event.id || pending.groupId !== groupId)
+        ? null
+        : pending,
+    );
+  }, [tab, detailId, event.id, groupId]);
   const printSession = badgePrint?.session;
   const printContextCurrent = useCallback(
     () =>
@@ -290,7 +296,7 @@ export function GroupEventWorkspace({
                       badgesPath={`${tabPath("registrations")}/badges`}
                       canManage={canManage}
                       onPrint={(scope, action) => {
-                        setBadgePrint({ scope, action, session: portalSession.value, eventId: event.id });
+                        setBadgePrint({ scope, action, session: portalSession.value, eventId: event.id, groupId });
                       }}
                     />
                   </GroupEventRecordSections>
@@ -428,18 +434,21 @@ export function GroupEventWorkspace({
             </Suspense>
           </section>
         )}
-        {badgePrint?.eventId === event.id && (
-          <Suspense fallback={<Spinner label="Preparing attendee output…" />}>
-            <RegistrationBadgePrinting
-              slug={event.slug}
-              eventId={event.id}
-              scope={badgePrint.scope}
-              action={badgePrint.action ?? "labels"}
-              isCurrent={printContextCurrent}
-              onBack={() => setBadgePrint(null)}
-            />
-          </Suspense>
-        )}
+        {tab === "registrations" &&
+          detailId === undefined &&
+          badgePrint?.eventId === event.id &&
+          badgePrint.groupId === groupId && (
+            <Suspense fallback={<Spinner label="Preparing attendee output…" />}>
+              <RegistrationBadgePrinting
+                slug={event.slug}
+                eventId={event.id}
+                scope={badgePrint.scope}
+                action={badgePrint.action ?? "labels"}
+                isCurrent={printContextCurrent}
+                onBack={() => setBadgePrint(null)}
+              />
+            </Suspense>
+          )}
       </section>
     </BreadcrumbBranch>
   );
