@@ -7,20 +7,17 @@ import { IMAGE_UPLOAD_ALLOWED_MIME_TYPES } from "./images";
 
 export const EVENT_HERO_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const EVENT_HERO_IMAGE_WIDTH = 1200;
-export const EVENT_HERO_IMAGE_HEIGHT = 630;
+export const EVENT_HERO_IMAGE_HEIGHT = 675;
 export const EVENT_HERO_IMAGE_GUIDANCE =
-  "Choose a wide landscape image, at least 1200 pixels wide and 630 pixels tall. JPEG, PNG, or WebP, up to 5 MB.";
+  "Choose an image to crop to 16:9, at least 1200 pixels wide and 675 pixels tall. JPEG, PNG, or WebP, up to 5 MB.";
 const imageDimensionsSchema = z.object({ width: z.number(), height: z.number() });
 export const eventHeroImageDimensionsSchema = imageDimensionsSchema
   .refine(({ width, height }) => width >= EVENT_HERO_IMAGE_WIDTH && height >= EVENT_HERO_IMAGE_HEIGHT, {
-    message: "Choose an image at least 1200 × 630 pixels.",
+    message: "Choose an image at least 1200 × 675 pixels.",
   })
-  .refine(
-    ({ width, height }) => Math.abs(width / height / (EVENT_HERO_IMAGE_WIDTH / EVENT_HERO_IMAGE_HEIGHT) - 1) <= 0.02,
-    {
-      message: "Choose a wide landscape image shaped like 1200 × 630 pixels.",
-    },
-  );
+  .refine(({ width, height }) => Math.abs(width / height - 16 / 9) <= 0.01, {
+    message: "Crop the image to 16:9.",
+  });
 export const eventHeroImageSaveSchema = eventSettingsUpdateSchema
   .pick({
     expectedUpdatedAt: true,

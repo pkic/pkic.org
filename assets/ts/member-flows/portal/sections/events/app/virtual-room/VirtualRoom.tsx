@@ -1,4 +1,8 @@
-import { agendaMediaCapabilities, agendaOccurrenceMedia } from "../../../../../../../shared/event-agenda-media";
+import {
+  agendaMediaCapabilities,
+  agendaOccurrenceMedia,
+  ONLINE_JOIN_LEAD_MS,
+} from "../../../../../../../shared/event-agenda-media";
 /**
  * The event app's virtual room: one location's live stream, large, with what is on now and next, the
  * session's questions and the event's sponsors beside it (below it on a phone, under a player that stays in
@@ -11,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { agendaTimeZones } from "../../../../../../../shared/agenda-time-display";
 import { eventVirtualRoomRoute } from "../../../../../../../shared/event-participation-link";
-import { formatTimeRangeInZone } from "../../../../../../../shared/format-date";
+import { formatDateTimeWithSchedule, formatTimeRangeInZone } from "../../../../../../../shared/format-date";
 import { locationStreamOn, virtualRoomResponseSchema } from "../../../../../../../shared/schemas/event-live-stream";
 import { personalAgendaProgramResponseSchema } from "../../../../../../../shared/schemas/event-personal-agenda";
 import { instantToCalendarDate, viewerTimeZone } from "../../../../../../../shared/timezone";
@@ -20,13 +24,20 @@ import { Spinner } from "../../../../../../components/Spinner";
 import { useBoundaryClock } from "../../../../../../hooks/useBoundaryClock";
 import { useData } from "../../../../../../hooks/useData";
 import { getJson } from "../../../../../../shared/api-client";
+import { Alert } from "../../../../../../ui/Alert";
 import { EmptyState } from "../../../../../../ui/EmptyState";
 import { Tabs } from "../../../../../../ui/Tabs";
 import { useSponsorDisplay } from "../../../../../sponsors-wall-data";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { VirtualRoomPanels } from "./VirtualRoomPanels";
 import { VirtualRoomNowPlaying, VirtualRoomPlayer } from "./VirtualRoomPlayer";
-import { chooseLocation, locationSessions, nextRoomBoundary, roomMoment } from "./virtual-room-schedule";
+import {
+  chooseLocation,
+  locationSessions,
+  nextRoomBoundary,
+  requestedSessionNotice,
+  roomMoment,
+} from "./virtual-room-schedule";
 import "../EventApp.css";
 import "./VirtualRoom.css";
 
@@ -66,7 +77,7 @@ export function VirtualRoom({ slug, eventName }: { slug: string; eventName: stri
     useCallback((at: number) => nextRoomBoundary(sessions, at, timeZone), [sessions, timeZone]),
   );
   const startsAt = sessions[0]?.startAt;
-  const waiting = Boolean(startsAt && now < Date.parse(startsAt));
+  const waiting = Boolean(startsAt && now < Date.parse(startsAt) - ONLINE_JOIN_LEAD_MS);
   const previousCountdown = useRef({ roomId, waiting });
   const reloadStreams = streams.reload;
   useEffect(() => {
@@ -87,8 +98,22 @@ export function VirtualRoom({ slug, eventName }: { slug: string; eventName: stri
   const moment = roomMoment(sessions, now);
   const viewerZone = agendaTimeZones(timeZone, viewerTimeZone(), "remote").primary.zone;
   const formatTime = (startAt: string, endAt: string) => formatTimeRangeInZone(startAt, endAt, viewerZone);
+  const requested = requestedSessionNotice(agenda, query.get("session"), now);
   return (
     <div class="pk-virtual-room">
+      {requested && (
+        <Alert
+          title={
+            requested.state === "ended"
+              ? `${requested.session.title} has ended`
+              : `${requested.session.title} starts ${formatDateTimeWithSchedule(requested.session.startAt, timeZone)}`
+          }
+        >
+          {requested.state === "ended"
+            ? `Below is what is on in ${room.name} now.`
+            : `Until then, below is what is on in ${room.name}.`}
+        </Alert>
+      )}
       {locations.length > 1 && (
         <Tabs
           class="pk-virtual-room__locations"

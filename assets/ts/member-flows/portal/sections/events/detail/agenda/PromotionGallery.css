@@ -10,19 +10,24 @@
   .pk-promotion-tile {
     display: flex;
     flex-direction: column;
-    gap: var(--pk-2);
     min-width: 0;
   }
-  .pk-promotion-tile__frame {
+  .pk-promotion-preview {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .pk-promotion-tile .pk-promotion-tile__frame {
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 100%;
     height: 9rem;
     padding: var(--pk-2);
     overflow: hidden;
     background: var(--pk-surface-sunk);
-    border: 1px solid var(--pk-line-soft);
-    border-radius: var(--pk-radius-card);
+    border: 0;
+    border-radius: 0;
   }
   .pk-promotion-tile__frame img {
     min-width: 0;
@@ -45,13 +50,6 @@
   .pk-promotion-tile__pending {
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-sm);
-  }
-  .pk-promotion-tile__caption {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: var(--pk-2);
   }
   .pk-promotion-tile__text {
     display: flex;

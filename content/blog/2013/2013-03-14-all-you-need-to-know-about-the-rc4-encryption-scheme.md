@@ -2,8 +2,6 @@
 authors:
 - Rick Andrews
 date: "2013-03-14T21:12:28+00:00"
-dsq_thread_id:
-- 1958594618
 keywords:
 - ssl
 - attack

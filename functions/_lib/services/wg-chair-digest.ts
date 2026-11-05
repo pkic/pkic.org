@@ -3,8 +3,8 @@ import { batchRows } from "../db/pagination";
 import { prepareBulkQueueEmailChunkStatements, processSelectedOutbox, type BulkEmailQueueRow } from "../email/outbox";
 import { getConfig } from "../config";
 import type { DatabaseLike, Env } from "../types";
-import { sha256Hex } from "../utils/crypto";
 import { CURRENT_GROUP_LEADERSHIP_CTES_SQL, GROUP_LEAD_ROLE_ID } from "./group-leadership-query";
+import { outboxIdForOperation } from "../email/outbox-queue";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1_000;
 const DIGEST_BOUNDARY_HOUR_UTC = 8;
@@ -218,7 +218,7 @@ async function buildOutboxRows(groups: WgDigestGroup[], window: WgChairDigestWin
       group.recipients.map(async (recipient) => {
         const idempotencyKey = `${DIGEST_TEMPLATE_KEY}:${window.key}:${group.id}:${recipient.userId}`;
         return {
-          outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32),
+          outboxId: await outboxIdForOperation(idempotencyKey),
           idempotencyKey,
           eventId: null,
           templateKey: DIGEST_TEMPLATE_KEY,

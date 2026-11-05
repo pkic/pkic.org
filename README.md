@@ -90,7 +90,7 @@ Do not create a new `data/members/*.yaml` file or commit a logo to `assets/image
 ## Adding a new author
 
 - Keep a post's `authors` and `authorProfiles` front matter accurate. Member and representative records are managed in the portal.
-- For authors who are not associated with a member, add a listing in `data/authors.yaml` when the public author catalog needs one.
+- Record historical affiliations and images in the post's `authorProfiles`. The author catalog is generated from posts; `data/authors.yaml` is legacy material and is not read by the publication.
 
 ## Formatting content
 

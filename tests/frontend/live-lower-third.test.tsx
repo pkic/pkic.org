@@ -1,12 +1,9 @@
 // @vitest-environment jsdom
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   LIVE_EMBLEM,
-  LIVE_LOWER_THIRD_BRAND,
   LIVE_LOWER_THIRD_DRAWING,
   initialLiveLowerThird,
   liveLowerThirdEmblemPoint,
@@ -48,39 +45,9 @@ describe("the lower third's geometry", () => {
     expect(center.y).toBeCloseTo(LIVE_LOWER_THIRD_DRAWING.emblem.center.y, 2);
   });
 
-  it("draws the bars and the emblem exactly as the brand's stream overlay drew them", () => {
-    const template = readFileSync(resolve(process.cwd(), "assets/js/event-overlays.js"), "utf8");
-    const part = (id: string) => new RegExp(`id="${id}"[^>]*d="([^"]+)"`, "u").exec(template)![1]!;
-    expect(LIVE_LOWER_THIRD_BRAND.nameBar).toBe(part("Name BG"));
-    expect(LIVE_LOWER_THIRD_BRAND.titleBar).toBe(part("Title BG"));
-    expect(LIVE_LOWER_THIRD_BRAND.emblem).toEqual({
-      blue: part("Bottom"),
-      orange: part("Right"),
-      green: part("Left"),
-      table: part("Table"),
-      keyhole: part("Keyhole"),
-    });
-    // The title starts further right than the name, where the brand set it.
-    expect(template).toContain(`translate(${LIVE_LOWER_THIRD_BRAND.nameX} 160)`);
-    expect(template).toContain(`translate(${LIVE_LOWER_THIRD_BRAND.titleX} 310)`);
-  });
   it("keeps the shared emblem's seat ends on its seat radius", () => {
     for (const end of [LIVE_EMBLEM.orangeSeat.top, LIVE_EMBLEM.orangeSeat.bottom])
       expect(distance(end, LIVE_EMBLEM.center)).toBeCloseTo(LIVE_EMBLEM.seatRadius, 2);
-  });
-
-  it("draws the stand-alone overlay page's lower third with the same attach point", () => {
-    const template = readFileSync(resolve(process.cwd(), "assets/js/event-overlays.js"), "utf8");
-    const right = /id="Right"[^>]*d="([^"]+)"/.exec(template)![1]!;
-    const nameBar = /id="Name BG"[^>]*d="([^"]+)"/.exec(template)![1]!;
-    // The orange seat's outline passes through both corners of the name bar's left edge.
-    const arcEnds = [...right.matchAll(/(?:[ML]|0 0 [01] )([\d.]+) ([\d.]+)/g)].map((match) => ({
-      x: Number(match[1]),
-      y: Number(match[2]),
-    }));
-    expect(nameBar.startsWith("m2331 6v228h-1949.5")).toBe(true);
-    expect(arcEnds.some((end) => distance(end, LIVE_LOWER_THIRD_DRAWING.nameBarSeat.bottom) < 3)).toBe(true);
-    expect(arcEnds.some((end) => distance(end, LIVE_LOWER_THIRD_DRAWING.nameBarSeat.top) < 1.6)).toBe(true);
   });
 });
 

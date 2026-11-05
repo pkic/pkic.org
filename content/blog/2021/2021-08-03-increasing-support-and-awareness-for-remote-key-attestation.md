@@ -7,7 +7,7 @@ authors:
 - Paul van Brouwershaven
 date: 2021-08-03T12:00:00+00:00
 categories:
-keyword: [hsm, token, tpm, secure-enclave, smart-card, private key, attestation, pki, crypto]
+keywords: [hsm, token, tpm, secure-enclave, smart-card, private key, attestation, pki, crypto]
 tags: [HSM, Token, Smart-card, TPM, Secure Enclave, Key Attestation]
 
 authorProfiles:

@@ -8,17 +8,6 @@ summary: |
 aliases:
  - /pqcc
 
-layout: single
-outputs:
- - html
- - og-card
- - event-data
-# TODO: Resolve the og-card<>event-overlays random display conflict 
-#  - event-overlays
-#  - event-session
-#  - event-speakers
-#  - event-speakers2
-#  - event-agenda
 
 cascade:
   params:

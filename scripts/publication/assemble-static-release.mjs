@@ -112,7 +112,7 @@ export async function assembleStaticRelease(source, destination, environment) {
     ...new Set(
       release.files
         .filter((file) =>
-          /^(?:events\/.*\/(?:event-data\.json|agenda\.ics)|.*\/agenda\/(?:data\.json|calendar\.ics|calendar\/[^/]+\.ics))$/.test(
+          /^(?:events\/.*\/agenda\.ics|.*\/agenda\/(?:data\.json|calendar\.ics|calendar\/[^/]+\.ics))$/.test(
             file,
           ),
         )

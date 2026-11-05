@@ -13,6 +13,7 @@ import { getGroupEvent } from "./group-read-model";
 import {
   prepareGroupEventRegistrationGuard,
   prepareVerifiedRegistrationUserGuard,
+  requireRegistrationUserProfile,
 } from "../registrations/authorization";
 
 export async function submitGroupEventRegistration(
@@ -38,9 +39,7 @@ export async function submitGroupEventRegistration(
     viewer.userId,
   ]);
   if (!user) throw new AppError(403, "REGISTRATION_IDENTITY_REQUIRED", "An active verified identity is required");
-  if (!user.first_name?.trim() || !user.last_name?.trim()) {
-    throw new AppError(422, "REGISTRATION_PROFILE_INCOMPLETE", "Complete your name before registering");
-  }
+  const profile = requireRegistrationUserProfile(user);
   const selectedIdentity = input.identityId
     ? await selectRegistrationIdentity(db, user.id, input.identityId)
     : undefined;
@@ -48,9 +47,7 @@ export async function submitGroupEventRegistration(
     db,
     env,
     {
-      firstName: user.first_name,
-      lastName: user.last_name,
-      email: user.email,
+      ...profile,
       dayAttendance: input.dayAttendance,
       customAnswers: input.customAnswers,
       consents: input.consents,

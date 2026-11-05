@@ -2,7 +2,6 @@ import { isAttendeeCampaignAudience } from "../../../assets/shared/schemas/event
 import { prepareBulkQueueEmailChunkStatements } from "../email/outbox";
 import { DIRECT_EMAIL_TEMPLATE_KEY, directEmailBodyPayload } from "../email/direct-body";
 import type { DatabaseLike, StatementLike } from "../types";
-import { sha256Hex } from "../utils/crypto";
 import { buildEventEmailVariables, type EventRecord } from "./events";
 import { proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import { registrationManageCapability } from "./registrations/capability-urls";
@@ -12,10 +11,11 @@ import { buildPersonalCampaignTemplateData } from "./event-email-campaign/templa
 import { chunkRecipients } from "./event-email-campaign/batching";
 import { findBroadcastOnlyTemplateRefs } from "./event-email-campaign/broadcast-safety";
 import type { EventEmailCampaignInput, CampaignDeliveryPage } from "./event-email-campaign/types";
+import { outboxIdForOperation } from "../email/outbox-queue";
 
 async function campaignOutboxIdentity(campaignId: string, email: string) {
   const idempotencyKey = `event-campaign:${campaignId}:${email}`;
-  return { outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32), idempotencyKey };
+  return { outboxId: await outboxIdForOperation(idempotencyKey), idempotencyKey };
 }
 
 /** Builds a bounded outbox page for the campaign use case to commit with its cursor. */

@@ -1,3 +1,4 @@
+import { DELIVERY_COLUMNS, type AddressDeliveryRow } from "./email-address-delivery";
 import { prepareMailingListEmailChange } from "./mailing-list-subscriptions/queue-email-change";
 import type { z } from "zod";
 import { executiveCouncilSeatSql } from "../auth/executive-council";
@@ -83,6 +84,7 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
 
   let email = user.email;
   let promotedSecondaryEmail: string | null = null;
+  let promotedDelivery: AddressDeliveryRow | null = null;
   if (input.email !== undefined) {
     const normalized = normalizeEmail(input.email);
     if (normalized !== normalizeEmail(user.email)) {
@@ -98,7 +100,10 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
       if (owner?.kind === "pending") {
         throw new AppError(409, "EMAIL_CHANGE_PENDING", "That email address has a pending verification request");
       }
-      if (owner?.kind === "secondary") promotedSecondaryEmail = normalized;
+      if (owner?.kind === "secondary") {
+        promotedSecondaryEmail = normalized;
+        promotedDelivery = owner;
+      }
       email = normalized;
     }
   }
@@ -123,8 +128,12 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
   if (promotedSecondaryEmail) {
     statements.push(
       db
-        .prepare("DELETE FROM user_emails WHERE user_id = ? AND normalized_email = ?")
-        .bind(user.id, promotedSecondaryEmail),
+        .prepare(`DELETE FROM user_emails WHERE user_id = ? AND normalized_email = ?
+          AND ${DELIVERY_COLUMNS.map((column) => `${column} IS ?`).join(" AND ")}`)
+        .bind(user.id, promotedSecondaryEmail, ...DELIVERY_COLUMNS.map((column) => promotedDelivery![column])),
+      prepareAuditLogAfterOneChange(db, "admin", actor.id, "user_email_promoted", "user", user.id, {
+        changedFields: ["email"],
+      }),
     );
   }
   if (clearPendingEmailChange && user.pending_email_change_registration_id) {
@@ -177,6 +186,13 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
       ...(active !== Boolean(user.active) ? { active: { from: Boolean(user.active), to: active } } : {}),
     }),
   );
+  if (promotedDelivery) {
+    statements.push(
+      db
+        .prepare(`UPDATE users SET ${DELIVERY_COLUMNS.map((column) => `${column} = ?`).join(", ")} WHERE id = ?`)
+        .bind(...DELIVERY_COLUMNS.map((column) => promotedDelivery[column]), user.id),
+    );
+  }
   if (Object.keys(patch).length > 0) statements.push(...prepareUserProfileStatements(db, user.id, patch));
   const deactivating = user.active === 1 && !active;
   const changingPrimaryEmail = email !== user.email;

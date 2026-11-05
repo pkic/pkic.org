@@ -11,7 +11,6 @@
 import { prepareBulkQueueEmailChunkStatements, type BulkEmailQueueRow } from "../email/outbox";
 import { hasD1QueryCapacity, type D1QueryBudget } from "../db/query-budget";
 import { nowIso } from "../utils/time";
-import { sha256Hex } from "../utils/crypto";
 import {
   closeDueVotes,
   listPendingVoteRepresentativeNotificationIntents,
@@ -20,6 +19,7 @@ import {
 } from "./votes";
 import type { DatabaseLike, Env } from "../types";
 import { emailPlainText } from "../email/plain-text";
+import { outboxIdForOperation } from "../email/outbox-queue";
 
 export interface VotesDueWorkResult {
   opened: number;
@@ -57,7 +57,7 @@ export async function runVotesDueWork(
   const preparedRecipients = await Promise.all(
     pending.map(async (recipient) => {
       const operationKey = `member-vote-representative-notify:${recipient.voteId}:${recipient.round}:${recipient.memberId}:${recipient.representativeUserId}`;
-      return { recipient, operationKey, outboxId: (await sha256Hex(operationKey)).slice(0, 32) };
+      return { recipient, operationKey, outboxId: await outboxIdForOperation(operationKey) };
     }),
   );
   const emailRows: BulkEmailQueueRow[] = preparedRecipients.map(({ recipient, operationKey, outboxId }) => ({

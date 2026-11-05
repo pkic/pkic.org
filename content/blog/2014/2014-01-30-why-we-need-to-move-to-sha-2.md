@@ -3,8 +3,6 @@ authors:
 - Bruce Morton
 - Clayton Smith
 date: "2014-01-30T18:30:55+00:00"
-dsq_thread_id:
-- 2193146291
 keywords:
 - ssl
 - attack

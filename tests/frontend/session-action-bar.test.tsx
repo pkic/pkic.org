@@ -28,6 +28,14 @@ const SESSION = "10000000-0000-4000-8000-000000000001";
 const OTHER = "10000000-0000-4000-8000-000000000002";
 const ROOM = "10000000-0000-4000-8000-000000000003";
 
+/** A session placed relative to the real clock, which the join window is read against. */
+function liveWindow(startOffset: number, endOffset: number) {
+  return {
+    startAt: new Date(Date.now() + startOffset).toISOString(),
+    endAt: new Date(Date.now() + endOffset).toISOString(),
+  };
+}
+
 function session(overrides: Record<string, unknown> = {}) {
   return personalAgendaSessionSchema.parse({
     id: SESSION,
@@ -89,6 +97,7 @@ afterEach(() => {
   vi.mocked(confirmAction).mockReset();
   vi.mocked(confirmAction).mockResolvedValue(true);
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("session participation action bar", () => {
@@ -181,6 +190,7 @@ describe("session participation action bar", () => {
         liveStreamRoomId: ROOM,
         onlineAccessAvailable: true,
         availability: { attendanceMode: "remote", state: "available", message: "Online.", bookingAction: "reserve" },
+        ...liveWindow(-5 * 60_000, 55 * 60_000),
       }),
     );
     const join = [...host.querySelectorAll<HTMLAnchorElement>("a")].find(
@@ -191,6 +201,19 @@ describe("session participation action bar", () => {
     // The external meeting is still offered, as the secondary action, and nothing was fetched to show either.
     expect(buttons(host)).toEqual(["Join the meeting"]);
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["ended", -2 * 60 * 60_000, -60 * 60_000],
+    ["later today", 60 * 60_000, 2 * 60 * 60_000],
+  ])("offers no stream join for a session that has %s", (_label, startOffset, endOffset) => {
+    const { host } = mount(session({ liveStreamRoomId: ROOM, ...liveWindow(startOffset, endOffset) }));
+    expect([...host.querySelectorAll("a")].some((link) => link.textContent?.trim() === "Join online")).toBe(false);
+  });
+
+  it("opens the stream join a quarter of an hour before the session starts", () => {
+    const { host } = mount(session({ liveStreamRoomId: ROOM, ...liveWindow(10 * 60_000, 70 * 60_000) }));
+    expect([...host.querySelectorAll("a")].some((link) => link.textContent?.trim() === "Join online")).toBe(true);
   });
 
   it.each([
@@ -411,6 +434,22 @@ describe("live participation in the session details", () => {
     await settle();
     await settle();
     expect(reservable.querySelector(".session-modal__participation button")?.textContent).toBe("Reserve a seat");
+  });
+
+  it("offers the stream join when the window opens while the details stay open", async () => {
+    vi.useFakeTimers();
+    const advance = (ms: number) =>
+      act(async () => {
+        await vi.advanceTimersByTimeAsync(ms);
+      });
+    const host = mountManager(async () =>
+      page(session({ ...openSession(), liveStreamRoomId: ROOM, ...liveWindow(75 * 60_000, 135 * 60_000) })),
+    );
+    await advance(0);
+    await advance(0);
+    expect(host.innerHTML).toBe("");
+    await advance(61 * 60_000);
+    expect([...host.querySelectorAll("a")].some((link) => link.textContent?.trim() === "Join online")).toBe(true);
   });
 
   it("still surfaces a load failure", async () => {

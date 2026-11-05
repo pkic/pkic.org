@@ -1,3 +1,4 @@
+import { RowActions } from "../../ui/RowActions";
 import { ApiDataTable } from "../ApiDataTable";
 import { SpeakerParticipationBadge } from "./SpeakerParticipationBadge";
 import { Badge } from "../Badge";
@@ -25,8 +26,10 @@ function selectedDays(speaker: EventProposalSpeaker) {
 export function EventProposalSpeakersTable({
   slug,
   rowHref,
+  onOpenPromotion,
 }: {
   slug: string;
+  onOpenPromotion?: (userId: string, name?: string) => void;
   rowHref: (speaker: EventProposalSpeaker) => string;
 }) {
   return (
@@ -103,6 +106,26 @@ export function EventProposalSpeakersTable({
           },
         },
         { header: "Attendance", cell: selectedDays },
+        ...(onOpenPromotion
+          ? [
+              {
+                header: "",
+                width: "fit" as const,
+                cell: (speaker: EventProposalSpeaker) => (
+                  <RowActions
+                    subject={speakerName(speaker)}
+                    actions={[
+                      {
+                        id: "promotion-materials",
+                        label: "Open promotion materials",
+                        onSelect: () => onOpenPromotion(speaker.userId, speakerName(speaker)),
+                      },
+                    ]}
+                  />
+                ),
+              },
+            ]
+          : []),
       ]}
       empty="No proposal speakers found"
       rowKey={(speaker) => speaker.id}

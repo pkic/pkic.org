@@ -2,8 +2,6 @@
 authors:
 - Kirk Hall
 date: "2013-10-15T16:00:25+00:00"
-dsq_thread_id:
-- 1937611668
 keywords:
 - root program
 - webtrust

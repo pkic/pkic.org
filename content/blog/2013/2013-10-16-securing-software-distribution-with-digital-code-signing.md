@@ -3,8 +3,6 @@ authors:
 - Bruce Morton
 - Jeremy Rowley
 date: "2013-10-16T18:16:21+00:00"
-dsq_thread_id:
-- 1937106327
 keywords:
 - malware
 - ssl

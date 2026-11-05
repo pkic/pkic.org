@@ -32,6 +32,8 @@ import { queryAll } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { formatDateTimeInZone } from "../assets/shared/format-date";
+import { emailInstant, resolveEmailTemplateData } from "../functions/_lib/email/plain-text";
 
 const GROUP = "20000000-0000-4000-8000-000000000003";
 const BASE = "https://app.test";
@@ -348,10 +350,21 @@ describe("recurring meeting calendars", () => {
     );
     const updateMessage = JSON.parse(messages[1].payload_json);
     expect(updateMessage.isUpdate).toBe(true);
+    // The queued payload keeps UTC instants and the series zone; the email states them on that clock when rendered.
     expect(updateMessage.changedOccurrences).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ moved: true, originalStartsAt: first.starts_at, startsAt: moved.startsAt }),
+        expect.objectContaining({
+          moved: true,
+          originalStartsAt: emailInstant(first.starts_at, series.timezone),
+          startsAt: emailInstant(moved.startsAt, series.timezone),
+        }),
       ]),
+    );
+    const rendered = resolveEmailTemplateData(updateMessage, "text") as {
+      changedOccurrences: Array<{ moved?: boolean; startsAt: string }>;
+    };
+    expect(rendered.changedOccurrences.find((item) => item.moved)?.startsAt).toContain(
+      formatDateTimeInZone(moved.startsAt, series.timezone),
     );
     let calendars = await deliveries();
     const update = calendars[1].getAllSubcomponents("vevent");

@@ -22,6 +22,7 @@ export interface EventParticipationRow {
   speakerStates: string;
   proposals: number;
   speakerProposals: number;
+  speakerSessions: number;
 }
 
 export function prepareEventParticipation(db: DatabaseLike, userId: string | null, selection: EventReadSelection) {
@@ -44,12 +45,14 @@ export function prepareEventParticipation(db: DatabaseLike, userId: string | nul
       (SELECT COUNT(*) FROM session_proposals p WHERE p.event_id = e.id AND p.deleted_at IS NULL
         AND p.proposer_user_id = ?) AS proposals,
       (SELECT COUNT(*) FROM proposal_speakers ps JOIN session_proposals p
-        ON p.id = ps.proposal_id AND p.deleted_at IS NULL WHERE p.event_id = e.id AND ps.user_id = ?) AS speakerProposals
+        ON p.id = ps.proposal_id AND p.deleted_at IS NULL WHERE p.event_id = e.id AND ps.user_id = ?) AS speakerProposals,
+      (SELECT COUNT(*) FROM event_agenda_occurrence_speakers speaker JOIN event_agenda_occurrences occurrence ON occurrence.id=speaker.occurrence_id WHERE occurrence.event_id=e.id AND speaker.user_id=?) AS speakerSessions
       FROM events e LEFT JOIN registrations r ON r.event_id = e.id AND r.user_id = ?
       WHERE ${filter.sql}`,
     )
     .bind(
       ...(filter.withSql ? filter.bindings : []),
+      userId,
       userId,
       userId,
       userId,

@@ -6,7 +6,6 @@ description: A product at Level 1 has quantum-safe algorithms available for test
 summary: Level 1 means PQC is available for testing and evaluation. The vendor has started the journey — integration teams can begin compatibility assessments.
 
 weight: 20
-sectionNav: true
 ---
 
 ## What Level 1 Means

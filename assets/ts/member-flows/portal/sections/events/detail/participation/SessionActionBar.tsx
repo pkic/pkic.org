@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import type { personalAgendaSessionSchema } from "../../../../../../../shared/schemas/event-personal-agenda";
 import {
@@ -23,6 +23,8 @@ import { Button, ButtonLink } from "../../../../../../ui/Button";
 import { SessionHeldBadge } from "../../../../../../site/AgendaParticipationControls";
 import { statusTone } from "../../../../../../../shared/status-display";
 import { usePortalHashLocation } from "../../../../hash-location";
+import { useBoundaryClock } from "../../../../../../hooks/useBoundaryClock";
+import { nextOnlineJoinBoundary, sessionOnlineJoinOpen } from "../../../../../../../shared/event-agenda-media";
 import { JoinSessionMeeting } from "./JoinSessionMeeting";
 
 type Session = z.infer<typeof personalAgendaSessionSchema>;
@@ -45,17 +47,24 @@ function invitedStanding(session: Session) {
   return !heldStatus(session.status) && session.accessPolicy === "invitation" && session.invited;
 }
 
+/** The current time, refreshed when the session's online join opens or closes. */
+export function useOnlineJoinClock(session: Session | undefined) {
+  const startAt = session?.startAt;
+  const endAt = session?.endAt;
+  return useBoundaryClock(useCallback((at: number) => nextOnlineJoinBoundary(startAt, endAt, at), [startAt, endAt]));
+}
+
 /**
  * Whether the action bar has anything to show: an action, a standing, or a reason no seat can be
  * taken. An open session has none; its star and admission rule live with the session's heading.
  */
-export function sessionHasParticipationActions(session: Session, notice?: string) {
+export function sessionHasParticipationActions(session: Session, notice?: string, now = Date.now()) {
   return Boolean(
     notice ||
     heldStatus(session.status) ||
     invitedStanding(session) ||
     sessionSeatAction(session) ||
-    session.liveStreamRoomId ||
+    (session.liveStreamRoomId && sessionOnlineJoinOpen(session.startAt, session.endAt, now)) ||
     session.onlineAccessAvailable ||
     unavailableReason(session) ||
     session.overlapCount > 0,
@@ -170,7 +179,11 @@ export function SessionActionBar({
       setBusy(false);
     }
   }
-  if (!sessionHasParticipationActions(session, notice) && !error) return null;
+  // The location's stream shows another session outside this one's window, so joining is offered only within it.
+  const now = useOnlineJoinClock(session);
+  const streamJoinOpen =
+    Boolean(session.liveStreamRoomId) && sessionOnlineJoinOpen(session.startAt, session.endAt, now);
+  if (!sessionHasParticipationActions(session, notice, now) && !error) return null;
   const reason = held || seat ? null : unavailableReason(session);
   const invited = invitedStanding(session);
   return (
@@ -185,7 +198,7 @@ export function SessionActionBar({
       }}
     >
       {notice && <Alert tone="warn">{notice}</Alert>}
-      {(held || invited || seat || session.liveStreamRoomId || session.onlineAccessAvailable) && (
+      {(held || invited || seat || streamJoinOpen || session.onlineAccessAvailable) && (
         <div class="pk-cluster">
           {held && <SessionHeldBadge status={held} />}
           {invited && <Badge tone={statusTone("invited")}>{SESSION_INVITED_LABEL}</Badge>}
@@ -194,7 +207,7 @@ export function SessionActionBar({
               {seat.label}
             </Button>
           )}
-          {session.liveStreamRoomId && (
+          {streamJoinOpen && session.liveStreamRoomId && (
             <ButtonLink
               variant={seat ? "secondary" : "primary"}
               href={usePortalHashLocation.hrefs(

@@ -2,8 +2,6 @@
 authors:
 - Ben Wilson
 date: "2013-09-13T17:04:21+00:00"
-dsq_thread_id:
-- 1937290916
 keywords:
 - rsa
 - malware

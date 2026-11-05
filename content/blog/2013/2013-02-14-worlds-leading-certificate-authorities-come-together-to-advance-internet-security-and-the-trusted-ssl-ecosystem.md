@@ -4,8 +4,6 @@ authors:
 categories:
 - Press Releases
 date: "2013-02-14T13:00:06+00:00"
-dsq_thread_id:
-- 1938037391
 keywords:
 - certificate authority security council
 - ocsp

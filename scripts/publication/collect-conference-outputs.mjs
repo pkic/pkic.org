@@ -18,7 +18,7 @@ export async function collectConferenceOutputs(output) {
     if (!entry.isFile()) continue;
     const directory = relative(output, entry.parentPath).split("\\").join("/");
     const owned =
-      (["event-data.json", "agenda.ics"].includes(entry.name) && directory.startsWith("events/")) ||
+      (entry.name === "agenda.ics" && directory.startsWith("events/")) ||
       (["data.json", "calendar.ics"].includes(entry.name) && entry.parentPath.endsWith("/agenda")) ||
       (/(?:^|\/)agenda\/calendar$/.test(directory) && entry.name.length > 4 && entry.name.endsWith(".ics"));
     if (!owned) continue;
@@ -30,15 +30,4 @@ export async function collectConferenceOutputs(output) {
     files.push(relative(output, path).split("\\").join("/"));
   }
   return files.sort();
-}
-
-/** Keep bookmarked legacy display URLs pointed at their native pages. */
-export function conferenceDisplayRedirects(files) {
-  return files
-    .filter((file) => /^events\/.*\/event-(?:session|overlays|speakers2?)\/index\.html$/.test(file))
-    .map((file) => ({
-      from: `/${file.replace(/\/index\.html$/, ".html")}`,
-      to: `/${file.replace(/index\.html$/, "")}`,
-      status: 301,
-    }));
 }

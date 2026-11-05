@@ -3,6 +3,25 @@ import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { UserRecord } from "../users";
+import { userProfileSchema } from "../../../../assets/shared/schemas/registration";
+import { z } from "zod";
+
+/** Read models tolerate legacy names; a new registration requires a corrected canonical profile. */
+export function requireRegistrationUserProfile(user: UserRecord) {
+  const profile = userProfileSchema.safeParse({
+    firstName: user.first_name,
+    lastName: user.last_name,
+    email: user.email,
+  });
+  if (!profile.success)
+    throw new AppError(
+      422,
+      "REGISTRATION_PROFILE_INCOMPLETE",
+      "Edit your personal details and save a valid first and last name before registering.",
+      z.flattenError(profile.error),
+    );
+  return profile.data;
+}
 
 /** Rechecks the verified identity fields used to build an authenticated registration. */
 export function prepareVerifiedRegistrationUserGuard(db: DatabaseLike, user: UserRecord): StatementLike {

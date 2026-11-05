@@ -1,5 +1,5 @@
 import { USER_HEADSHOT_PATH } from "../../../../assets/shared/headshot-variants";
-import { currentUserHeadshotResponse } from "../user-headshot";
+import { currentUserHeadshotResponse, userHeadshotFileResponse } from "../user-headshot";
 import type { Env } from "../../types";
 import { resolveHeroImageSource, fetchStaticAsset } from "../og-badge-hero-image";
 import { readBoundedStream } from "../../utils/bounded-stream";
@@ -24,13 +24,21 @@ export async function promotionPortraits(
           const headshot = USER_HEADSHOT_PATH.exec(new URL(source.url).pathname);
           const response =
             headshot && source.assetPath
-              ? await currentUserHeadshotResponse(
-                  env.DB,
-                  env,
-                  decodeURIComponent(headshot[1]!),
-                  decodeURIComponent(headshot[2]!),
-                  { width: "384", origin },
-                )
+              ? data.headshotKeys
+                ? await userHeadshotFileResponse(
+                    env,
+                    person.userId,
+                    decodeURIComponent(headshot[2]!),
+                    data.headshotKeys[person.userId] ?? null,
+                    { width: "384", origin },
+                  )
+                : await currentUserHeadshotResponse(
+                    env.DB,
+                    env,
+                    decodeURIComponent(headshot[1]!),
+                    decodeURIComponent(headshot[2]!),
+                    { width: "384", origin },
+                  )
               : source.assetPath
                 ? await fetchStaticAsset(env, origin, source.assetPath, signal)
                 : await fetch(source.url, { signal, redirect: "manual" });

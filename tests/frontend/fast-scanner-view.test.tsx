@@ -25,6 +25,22 @@ const props = {
   onPreview: () => {},
   onExit: () => {},
 };
+it.each(["scan", "print"] as const)("supports the %s role in both scanner presentations", (purpose) => {
+  const embedded = render(
+    <FastScannerView {...props} purpose={purpose} presentation="embedded" result={null} onPresentation={() => {}} />,
+  );
+  expect(embedded).toContain('role="region"');
+  expect(
+    new DOMParser().parseFromString(embedded, "text/html").body.firstElementChild?.hasAttribute("aria-modal"),
+  ).toBe(false);
+  expect(embedded).toContain("Full screen");
+  const fullscreen = render(
+    <FastScannerView {...props} purpose={purpose} presentation="fullscreen" result={null} onPresentation={() => {}} />,
+  );
+  expect(fullscreen).toContain('role="dialog"');
+  expect(fullscreen).toContain('aria-modal="true"');
+  expect(fullscreen).toContain("Embedded view");
+});
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();

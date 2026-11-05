@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2014-10-08T15:05:10+00:00"
-dsq_thread_id:
-- 3096189901
 keywords:
 - firefox
 - chrome

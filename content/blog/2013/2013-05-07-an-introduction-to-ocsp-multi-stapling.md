@@ -2,8 +2,6 @@
 authors:
 - CA Security Council
 date: "2013-05-07T21:03:01+00:00"
-dsq_thread_id:
-- 1955712788
 keywords:
 - ocsp
 - tls

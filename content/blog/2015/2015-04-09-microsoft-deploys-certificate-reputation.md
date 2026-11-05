@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2015-04-09T19:00:24+00:00"
-dsq_thread_id:
-- 3662223644
 keywords:
 - ssl
 - identity

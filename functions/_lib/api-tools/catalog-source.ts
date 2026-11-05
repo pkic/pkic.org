@@ -1,3 +1,4 @@
+import { MCP_RESOURCE_TEMPLATES_PATH, type ApiResourceTemplate } from "../openapi/mcp-resources";
 import {
   buildMcpCatalog,
   MCP_CATALOG_PATH,
@@ -9,6 +10,7 @@ import {
 import type { StaticAssetsBinding } from "../types";
 
 // Deployment metadata only. Cache completed values, never request I/O or authority.
+const templates = new WeakMap<StaticAssetsBinding, ApiResourceTemplate[]>();
 const catalogs = new WeakMap<StaticAssetsBinding, McpCatalogEntry[]>();
 
 export function createCatalogSource(
@@ -29,6 +31,13 @@ export function createCatalogSource(
       if (!catalog) return fallback().catalog;
       if (assets) catalogs.set(assets, catalog);
       return catalog;
+    },
+    async templates() {
+      const cached = assets && templates.get(assets);
+      if (cached) return cached;
+      const result = (await asset<ApiResourceTemplate[]>(MCP_RESOURCE_TEMPLATES_PATH)) ?? fallback().templates;
+      if (assets) templates.set(assets, result);
+      return result;
     },
     async get(entry) {
       const contract = await asset<McpContract>(`${MCP_CONTRACTS_PATH}/${entry.contract}.json`);

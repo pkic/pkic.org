@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2016-09-07T17:02:37+00:00"
-dsq_thread_id:
-- 5126635769
 keywords:
 - attack
 - rc4

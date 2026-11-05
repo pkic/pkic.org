@@ -1,0 +1,49 @@
+name: PR Description
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  description:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check goal, evidence, and review result
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+
+          const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+          const body = (event.pull_request?.body ?? '').replace(/<!--[\s\S]*?-->/g, '');
+          const headings = ['Goal', 'Change', 'Evidence', 'Risks and manual steps'];
+          const sections = [...body.matchAll(/^## (.+?)\s*$/gm)];
+          const errors = [];
+
+          for (const heading of headings) {
+            const index = sections.findIndex((section) => section[1] === heading);
+            if (index < 0) {
+              errors.push(`Add the ## ${heading} section from the PR template.`);
+              continue;
+            }
+            const start = sections[index].index + sections[index][0].length;
+            const end = sections[index + 1]?.index ?? body.length;
+            const content = body.slice(start, end).trim();
+            if (!content || /^(?:n\/a|tbd|todo|-)$/i.test(content)) {
+              errors.push(`Fill in ## ${heading}.`);
+            }
+            if (heading === 'Evidence' && !/^\s*[-*] Review:\s*\S.+$/im.test(content)) {
+              errors.push('Add a short "- Review: ..." result under ## Evidence.');
+            }
+          }
+
+          if (errors.length) {
+            for (const error of errors) console.error(`::error::${error}`);
+            process.exitCode = 1;
+          } else {
+            console.log('PR description includes the goal, change, evidence, review result, and risks.');
+          }
+          NODE

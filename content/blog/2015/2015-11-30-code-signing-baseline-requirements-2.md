@@ -2,8 +2,6 @@
 authors:
 - CA Security Council
 date: "2015-11-30T17:51:30+00:00"
-dsq_thread_id:
-- 4363586650
 keywords:
 - casc
 - malware

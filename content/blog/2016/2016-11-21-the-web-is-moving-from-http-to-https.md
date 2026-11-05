@@ -2,8 +2,6 @@
 authors:
 - Dean Coclin
 date: "2016-11-21T17:56:09+00:00"
-dsq_thread_id:
-- 5321741303
 keywords:
 - chrome
 - ssl

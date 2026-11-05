@@ -10,7 +10,7 @@
 
 ## Evidence
 
-<!-- Checks actually run and their results; UI screenshot links when applicable. -->
+<!-- Checks actually run and their results; UI screenshot links when applicable. Include "- Review: ..." with the pre-PR review result. -->
 
 ## Risks and manual steps
 

@@ -1,6 +1,4 @@
-import type { PreparedUserSessionRead } from "../../auth/user-session-request";
-import { createUserBackedAuthAdmin } from "../../auth/admin-identity";
-import { userSessionMemberSelection } from "../../auth/identity-capacities";
+import type { PreparedRequestViewerRead } from "../../auth/optional-request-viewer";
 import { permissionsAuthorizationEvidence } from "../../auth/permissions";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { batchFirst } from "../../db/pagination";
@@ -48,22 +46,16 @@ export function prepareGroupEventSettingsAccess(
 /** Configuration and its exact selected-group authority share one authenticated read snapshot. */
 export async function readGroupEventSettingsPage(
   db: DatabaseLike,
-  auth: PreparedUserSessionRead | null,
+  auth: PreparedRequestViewerRead | null,
   groupId: string,
   slug: string,
 ) {
   if (!auth) throw new AppError(401, "AUTH_REQUIRED", "Sign in to view event settings");
-  const candidate = createUserBackedAuthAdmin({ id: auth.claims.sub, email: "", sessionId: auth.claims.sid });
-  const access = prepareGroupEventSettingsAccess(
-    db,
-    candidate,
-    groupId,
-    slug,
-    userSessionMemberSelection(auth.claims.sub, auth.claims.iid),
-  );
+  const candidate = auth.permissionActor;
+  const access = prepareGroupEventSettingsAccess(db, candidate, groupId, slug, auth.memberSelection);
   const results = await db.batch([...auth.statements, ...access.statements, prepareEventDetail(db, slug)]);
-  const session = await auth.decode(results.slice(0, auth.statements.length));
-  if (!session.staff) throw new AppError(403, "PERMISSION_REQUIRED", "Event management permission is required");
+  const resolved = await auth.decode(results.slice(0, auth.statements.length));
+  if (!resolved.staff) throw new AppError(403, "PERMISSION_REQUIRED", "Event management permission is required");
   access.decode(results.slice(auth.statements.length));
   const event = batchFirst<EventDetailRow>(results.at(-1)!);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");

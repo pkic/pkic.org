@@ -36,19 +36,27 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 it("opens editable archive and promotion panels from the loaded agenda while the calendar stays locked", async () => {
+  window.history.replaceState({}, "", "/portal/#/groups/example/events/example/agenda");
   vi.stubGlobal(
     "fetch",
     vi.fn(
       async (url: string) =>
         new Response(
           JSON.stringify(
-            url.includes("history/materials")
-              ? { versions: [], page: { limit: 200, offset: 0, total: 0, hasMore: false } }
-              : url.includes("history/identities")
-                ? { identities: [], page: { limit: 200, offset: 0, total: 0, hasMore: false } }
-                : snapshot,
+            url.endsWith("/promotion")
+              ? {
+                  error: {
+                    code: "AGENDA_NOT_PUBLISHED",
+                    message: "Approve this event agenda before generating promotion materials.",
+                  },
+                }
+              : url.includes("history/materials")
+                ? { versions: [], page: { limit: 200, offset: 0, total: 0, hasMore: false } }
+                : url.includes("history/identities")
+                  ? { identities: [], page: { limit: 200, offset: 0, total: 0, hasMore: false } }
+                  : snapshot,
           ),
-          { headers: { "content-type": "application/json" } },
+          { status: url.endsWith("/promotion") ? 409 : 200, headers: { "content-type": "application/json" } },
         ),
     ),
   );
@@ -74,9 +82,25 @@ it("opens editable archive and promotion panels from the loaded agenda while the
   await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Close session archive"]')!.click());
   await runRowAction(host, "Cryptographic operations", "Speaker promotion kit");
   expect(host.querySelector("form")).toBeNull();
-  await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Edit shared promotion copy"]')!.click());
+  await vi.waitFor(() => expect(host.querySelector('button[aria-label="Sharing actions"]')).not.toBeNull());
+  await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Sharing actions"]')!.click());
+  await act(() =>
+    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+      .find((item) => item.textContent?.trim() === "Edit shared promotion copy")!
+      .click(),
+  );
   const dialog = host.querySelector("dialog[open]")!;
   expect(dialog).not.toBeNull();
   expect([...dialog.querySelectorAll("label")].some((label) => label.textContent?.startsWith("Why attend"))).toBe(true);
   expect(dialog.querySelector("form textarea")).not.toBeNull();
+  await act(() => dialog.querySelector<HTMLButtonElement>('button[aria-label="Close shared promotion copy"]')!.click());
+  await vi.waitFor(() => expect(host.querySelector("dialog[open]")).toBeNull());
+  expect(host.textContent).toContain("Approve this event agenda before generating promotion materials.");
+  await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Sharing actions"]')!.click());
+  await act(() =>
+    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+      .find((item) => item.textContent?.trim() === "Return to agenda")!
+      .click(),
+  );
+  await vi.waitFor(() => expect(host.querySelector('[role="tablist"][aria-label="Agenda views"]')).not.toBeNull());
 });

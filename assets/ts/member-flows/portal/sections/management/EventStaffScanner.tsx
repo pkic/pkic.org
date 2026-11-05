@@ -1,4 +1,3 @@
-import { Tabs } from "../../../../components/Tabs";
 import { BadgeLabelDesk } from "../events/detail/badges/BadgeLabelDesk";
 import { lazy, Suspense } from "preact/compat";
 import { scannerPermission, availableScannerActions } from "../../../../../shared/event-scanner-permissions";
@@ -29,19 +28,14 @@ export function EventStaffScanner({
   const operator = portalSession.value?.identity.id ?? "";
   return (
     <div class="pk-stack">
-      <Tabs
-        label="Scanner sections"
-        items={[{ key: "scan", label: "Scan badges" }, ...(canPrintLabels ? [{ key: "labels", label: "Print" }] : [])]}
-        active={section === "labels" && canPrintLabels ? "labels" : "scan"}
-        hrefFor={(key) => (key === "scan" ? basePath : `${basePath}/${key}`)}
-      />
-      {section === "labels" && canPrintLabels ? (
+      {section === "print" && canPrintLabels ? (
         <BadgeLabelDesk slug={slug} />
       ) : (
         <Suspense fallback={<Spinner />}>
           <EventScanner
             key={`${eventId}:${slug}:${operator}`}
             slug={slug}
+            printHref={canPrintLabels ? `#${basePath}/print` : undefined}
             operatorUserId={operator}
             allowedActions={[...actions, ...(canAdmitExceptions ? ["exception" as const] : [])]}
             canAdmitExceptions={canAdmitExceptions}

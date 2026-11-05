@@ -260,11 +260,30 @@ export async function getBadgePrintingContext(
   { unusableArtwork = "refuse" }: { unusableArtwork?: UnusableSponsorArtwork } = {},
 ) {
   const basis = await prepareBadgePrintingBasis(db, eventId, sponsorGroups);
+  const { branding } = await loadBadgeSponsorArtwork(
+    environment,
+    basis.populations,
+    basis.template?.sponsorGroups ?? [],
+    { unusableArtwork, eventId },
+  );
+  await db.batch(basis.guards);
+  return { revision: basis.revision, template: basis.template, branding };
+}
+
+/** Load and validate artwork from an already authorized, canonical sponsor population. */
+export async function loadBadgeSponsorArtwork(
+  environment: Pick<Env, "ASSETS_BUCKET">,
+  populations: Awaited<ReturnType<typeof prepareBadgePrintingBasis>>["populations"],
+  sponsorGroups: z.infer<typeof badgeTemplateSponsorGroupSchema>[],
+  { unusableArtwork = "refuse", eventId }: { unusableArtwork?: UnusableSponsorArtwork; eventId?: string } = {},
+) {
+  if (populations.event.length + populations.consortium.length > BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT)
+    throw new AppError(422, "BADGE_SPONSOR_LIMIT", "Use at most 40 sponsors in one badge template.");
   const logos = new Map<string, { id: string; name: string; svg: string }>();
   const capturedObjects: { key: string; etag: string }[] = [];
   const omitted: string[] = [];
   let totalBytes = 0;
-  for (const row of [...basis.populations.consortium, ...basis.populations.event]) {
+  for (const row of [...populations.consortium, ...populations.event]) {
     if (logos.has(row.id) || omitted.includes(row.id)) continue;
     try {
       const logo = await loadSponsorLogo(environment, row);
@@ -288,13 +307,17 @@ export async function getBadgePrintingContext(
       omitted.push(row.id);
     }
   }
-  // Staff see the reason in badge printing; the log says how many tickets went out without it.
-  if (omitted.length) console.warn("[badge-ticket] sponsor artwork omitted", { eventId, sponsors: omitted.length });
-  const branding: BadgeTemplateSponsorGroup[] = (basis.template?.sponsorGroups ?? []).flatMap((group) => {
+  // Staff see the reason in badge printing; the log says how many sponsors were omitted.
+  if (omitted.length)
+    console.warn("[badge-ticket] sponsor artwork omitted", {
+      eventId,
+      sponsors: omitted.length,
+    });
+  const branding: BadgeTemplateSponsorGroup[] = sponsorGroups.flatMap((group) => {
     const source = badgeSponsorGroupSource(group);
     const sponsors = [
       ...new Map(
-        basis.populations[source]
+        populations[source]
           .filter((row) => sourceTier(row, source) === group.tierName && logos.has(row.id))
           .map((row) => [row.id, logos.get(row.id)!]),
       ).values(),
@@ -318,8 +341,7 @@ export async function getBadgePrintingContext(
       if (!current || current.etag !== captured.etag)
         throw new AppError(409, "BADGE_SPONSOR_CHANGED", "Sponsor artwork changed. Reload the print document.");
     }
-  await db.batch(basis.guards);
-  return { revision: basis.revision, template: basis.template, branding: checkedBranding.data ?? [] };
+  return { branding: checkedBranding.data ?? [], capturedObjects };
 }
 
 /** Refusals that name a sponsor's stored artwork: organizers fix these, attendees cannot. */
@@ -342,7 +364,9 @@ export async function getBadgeHolderPrintingContext(
   eventId: string,
 ) {
   try {
-    return await getBadgePrintingContext(db, environment, eventId, undefined, { unusableArtwork: "omit" });
+    return await getBadgePrintingContext(db, environment, eventId, undefined, {
+      unusableArtwork: "omit",
+    });
   } catch (error) {
     if (!(error instanceof AppError) || !SPONSOR_ARTWORK_REFUSALS.has(error.code)) throw error;
     const basis = await prepareBadgePrintingBasis(db, eventId);

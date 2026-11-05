@@ -9,11 +9,12 @@ import {
   type BadgePrintingContext,
   type BadgeLabelRequest,
 } from "../../../../../../../shared/schemas/route-contracts-event-badges";
-import { BADGE_LABEL_PRINTING_CONTEXT } from "../../../../../../../shared/badge-label-policy";
+import { BADGE_LABEL_PRINTING_CONTEXT, BROTHER_DK_1208_PAPER } from "../../../../../../../shared/badge-label-policy";
 import type { BadgePrintDesign } from "../../../../../../../shared/schemas/event-badge-template";
 import { badgeFaceLayout, badgePrintPreset } from "../../../../../../../shared/badge-print-layout";
 import { badgePrintLayoutSchema, type BadgePrintLayout } from "../../../../../../../shared/schemas/badge-print-layout";
 import { badgePrintHtml } from "../../../../../../components/event-badges/badge-print-artifacts";
+import { printBadgeDocument } from "../../../../../../components/event-badges/badge-print-command";
 import { getJson, requestJson } from "../../../../../../shared/api-client";
 import { isAuthed, portalSession } from "../../../../state";
 import type { PortalSession } from "../../../../types";
@@ -36,11 +37,13 @@ export function useBadgeLabelPrinting(
   design: BadgePrintDesign,
   sides: BadgePrintLayout["sides"],
   resume: () => void,
+  format: "html" | "pdf" = "html",
 ) {
   const requestScope = useMemo(() => ({ slug, session, controller: new AbortController() }), [slug, session]);
   const controller = requestScope.controller;
   const artwork = useRef<Promise<BadgePrintingContext> | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
+  const printOwner = useRef(new AbortController());
   const running = useRef(false);
   const lastScanned = useRef("");
   const issueOperations = useRef(new Map<string, string>());
@@ -50,6 +53,7 @@ export function useBadgeLabelPrinting(
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [pdf, setPdf] = useState<Blob | null>(null);
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/badges`;
   const latestResume = useRef(resume);
   latestResume.current = resume;
@@ -64,6 +68,7 @@ export function useBadgeLabelPrinting(
     setMessage("");
     return () => {
       controller.abort();
+      printOwner.current.abort();
       artwork.current = null;
       afterPrint.current?.();
       operations.clear();
@@ -71,7 +76,7 @@ export function useBadgeLabelPrinting(
   }, [controller]);
   useEffect(() => {
     lastScanned.current = "";
-  }, [design, copies, sides]);
+  }, [design, copies, sides, format]);
   function current() {
     return (
       !controller.signal.aborted &&
@@ -121,6 +126,9 @@ export function useBadgeLabelPrinting(
     if (running.current || !current()) return;
     running.current = true;
     setBusy(true);
+    printOwner.current.abort();
+    printOwner.current = new AbortController();
+    setPdf(null);
     setError("");
     setMessage(design === "name_qr" ? "Loading label…" : "Loading badge…");
     afterPrint.current?.();
@@ -172,7 +180,7 @@ export function useBadgeLabelPrinting(
     void load(parsed.data);
     return true;
   }
-  function printReady() {
+  async function printReady() {
     if (!job || printed.current === job.key) return;
     try {
       requireCurrent();
@@ -180,7 +188,27 @@ export function useBadgeLabelPrinting(
       const window = frame.current?.contentWindow;
       if (!window) throw new Error("The print document is unavailable. Try printing again.");
       printed.current = job.key;
+      const printable = () => current() && printed.current === job.key && Date.parse(job.label.expiresAt) > Date.now();
+      if (format === "pdf") {
+        setMessage("Preparing PDF…");
+        const { badgePrintPdf } = await import("../../../../../../components/event-badges/badge-print-pdf");
+        const template = job.printing.template;
+        const dimensions =
+          job.design === "event_badge" && template
+            ? { widthMm: template.widthMm, heightMm: template.heightMm }
+            : BROTHER_DK_1208_PAPER;
+        const blob = await badgePrintPdf(window.document, dimensions, printable, html);
+        requireCurrent();
+        if (!printable()) throw new Error("This badge is no longer available. Load it again before printing.");
+        setPdf(blob);
+        setMessage("PDF ready. Open or download it to print.");
+        setBusy(false);
+        running.current = false;
+        return;
+      }
+      let dialogClosed = false;
       const closed = () => {
+        dialogClosed = true;
         afterPrint.current?.();
         running.current = false;
         if (current()) {
@@ -189,13 +217,21 @@ export function useBadgeLabelPrinting(
           latestResume.current();
         }
       };
-      window.addEventListener("afterprint", closed, { once: true });
+      globalThis.window.addEventListener("afterprint", closed, { once: true });
       afterPrint.current = () => {
-        window.removeEventListener("afterprint", closed);
+        globalThis.window.removeEventListener("afterprint", closed);
         afterPrint.current = null;
       };
       setMessage(`Opening print dialog for ${job.label.displayName ?? "attendee"}…`);
-      window.print();
+      await printBadgeDocument(html, printable, printOwner.current.signal);
+      // Some mobile browsers omit afterprint; do not trap the operator in a busy state.
+      if (!dialogClosed && printed.current === job.key) {
+        running.current = false;
+        if (current()) {
+          setBusy(false);
+          setMessage("Print requested. If no dialog opened, try PDF in Print settings.");
+        }
+      }
     } catch (cause) {
       afterPrint.current?.();
       running.current = false;
@@ -229,6 +265,7 @@ export function useBadgeLabelPrinting(
     busy,
     error,
     message,
+    pdf,
     scan,
     printReady,
     selectAttendee: (userId: string) => void load({ userId }),

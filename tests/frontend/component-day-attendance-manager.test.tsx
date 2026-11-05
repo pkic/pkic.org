@@ -208,7 +208,7 @@ describe("day attendance manager", () => {
     const admission = requests.find((request) => request.path === `${REGISTRATION_ENDPOINT}/admissions`);
     expect(admission?.method).toBe("POST");
     const body = eventRegistrationSelectedDayAdmitSchema.parse(admission?.body);
-    expect(body.mode).toBe("capacity_exempt");
+    expect(body.mode).toBe("within_capacity");
     expect(body.dayDates).toEqual([DAY]);
     expect(reload).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("registration update email was queued");

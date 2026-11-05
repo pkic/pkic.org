@@ -15,7 +15,7 @@ module.exports = {
       from: {},
       to: {
         couldNotResolve: true,
-        pathNot: "^(cloudflare:workers|virtual:pkic-content-media|virtual:pkic-trust-list|virtual:pkic-bylines|/pagefind/pagefind\\.js|js/bootstrap)$",
+        pathNot: "^(cloudflare:workers|virtual:pkic-content-media|virtual:pkic-trust-list|virtual:pkic-bylines|/pagefind/pagefind\\.js)$",
       },
     },
     {

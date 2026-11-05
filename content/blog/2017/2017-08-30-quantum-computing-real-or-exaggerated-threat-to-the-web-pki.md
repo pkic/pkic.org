@@ -3,8 +3,6 @@ authors:
 - Dean Coclin
 - Tim Hollebeek
 date: "2017-08-30T20:14:03+00:00"
-dsq_thread_id:
-- 6108064630
 keywords:
 - https
 - quantum

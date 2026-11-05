@@ -1,3 +1,4 @@
+import { DELIVERY_COLUMNS, type AddressDeliveryRow } from "./email-address-delivery";
 import { refuseIneligibleWorkEmail } from "../email-domains/work-email-screen";
 import {
   prepareMailingListAddressSync,
@@ -184,7 +185,11 @@ export async function addOwnEmailAddress(
   return { status: "verification_sent", email: input.email, requestId: id, outboxId: message.outboxId };
 }
 
-interface SwapParty {
+interface SwapParty extends AddressDeliveryRow {
+  primary_delivery_bounced_at: string | null;
+  primary_delivery_blocked_at: string | null;
+  primary_delivery_delayed_at: string | null;
+  primary_delivery_delivered_at: string | null;
   user_updated_at: string;
   pending_email: string | null;
   primary_email: string;
@@ -214,7 +219,8 @@ export async function makeOwnEmailAddressPrimary(
     `SELECT person.updated_at AS user_updated_at, person.pending_email, person.email AS primary_email,
             person.normalized_email AS primary_normalized, person.email_verified_at AS primary_verified_at,
             person.email_verification_method AS primary_method, address.email, address.normalized_email,
-            address.verified_at, address.verification_method
+            address.verified_at, address.verification_method,
+            ${DELIVERY_COLUMNS.map((column) => `person.${column} AS primary_${column}, address.${column}`).join(", ")}
        FROM user_emails address JOIN users person ON person.id = address.user_id
       WHERE address.id = ? AND address.user_id = ? AND person.active = 1`,
     [input.emailId, input.userId],
@@ -239,7 +245,10 @@ export async function makeOwnEmailAddressPrimary(
       .prepare(
         `UPDATE users SET email = ?, normalized_email = ?, email_verified_at = ?, email_verification_method = ?,
                 updated_at = ?
-          WHERE id = ? AND updated_at = ? AND normalized_email = ? AND pending_email IS NULL`,
+          WHERE id = ? AND updated_at = ? AND normalized_email = ? AND pending_email IS NULL
+            AND ${DELIVERY_COLUMNS.map((column) => `${column} IS ?`).join(" AND ")}
+            AND EXISTS (SELECT 1 FROM user_emails WHERE id = ? AND user_id = ?
+              AND ${DELIVERY_COLUMNS.map((column) => `${column} IS ?`).join(" AND ")})`,
       )
       .bind(
         party.email,
@@ -250,6 +259,10 @@ export async function makeOwnEmailAddressPrimary(
         userId,
         party.user_updated_at,
         party.primary_normalized,
+        ...DELIVERY_COLUMNS.map((column) => party[`primary_${column}`]),
+        emailId,
+        userId,
+        ...DELIVERY_COLUMNS.map((column) => party[column]),
       ),
     prepareAuditLogAfterOneChange(
       db,
@@ -291,6 +304,16 @@ export async function makeOwnEmailAddressPrimary(
       )
       .bind(userId, emailId, userId, emailId, emailId, userId),
   ];
+  statements.push(
+    db
+      .prepare(`UPDATE users SET ${DELIVERY_COLUMNS.map((column) => `${column} = ?`).join(", ")} WHERE id = ?`)
+      .bind(...DELIVERY_COLUMNS.map((column) => party[column]), userId),
+    db
+      .prepare(
+        `UPDATE user_emails SET ${DELIVERY_COLUMNS.map((column) => `${column} = ?`).join(", ")} WHERE id = ? AND user_id = ?`,
+      )
+      .bind(...DELIVERY_COLUMNS.map((column) => party[`primary_${column}`]), emailId, userId),
+  );
   statements.push(...prepareMailingListEmailChange(db, userId, at));
   try {
     await db.batch(statements);

@@ -3,7 +3,6 @@ import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
-import { sha256Hex } from "../../utils/crypto";
 import type { EventRecord } from "../events";
 import { assertEventHasScheduledDays } from "../event-days";
 import { isStaleInviteTransition } from "../invite-lifecycle";
@@ -16,6 +15,7 @@ import type { RegistrationConfirmOrganization } from "../../../../assets/shared/
 import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
 import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
 import { workEmailDomain } from "../../email-domains/classification";
+import { outboxIdForOperation } from "../../email/outbox-queue";
 
 export interface ConfirmRegistrationWorkflowPayload {
   event: EventRecord;
@@ -134,7 +134,7 @@ async function confirmRegistrationWithNotificationOnce(
     internalSigningSecret: payload.signingSecret,
     rsvpEmail: payload.rsvpEmail,
     idempotencyKey,
-    outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32),
+    outboxId: await outboxIdForOperation(idempotencyKey),
   });
   await commitConfirmationIntent(db, prepared, email.statement);
   // The proved address joins the organization its domain belongs to, when the shared rule links it automatically.

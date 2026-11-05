@@ -6,7 +6,6 @@ description: Working Groups of the PKI Consortium
 summary: 
 keywords: ["pkic", "trust","identity","pki","tls","ssl","crypto","iot","devices", "consortium"]
 
-layout: wg-listing
 
 heroTitle: Working Groups of the PKI Consortium
 heroDescription: Collaboration hubs where PKI Consortium members drive standards, tooling, and best practices.

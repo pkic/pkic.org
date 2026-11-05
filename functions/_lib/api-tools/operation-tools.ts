@@ -9,7 +9,7 @@ import {
 import type { McpCatalogSource } from "../openapi/mcp-catalog";
 
 const methodSchema = z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]);
-const operationQuerySchema = paginationQuerySchemaWithDefaults({ limit: 10, maxLimit: 50 })
+const operationQuerySchema = paginationQuerySchemaWithDefaults({ limit: 5, maxLimit: 50 })
   .merge(searchQuerySchema)
   .extend({
     method: methodSchema.optional(),
@@ -26,7 +26,7 @@ export function registerOperationTools(server: McpServer, source: McpCatalogSour
     "discover_operations",
     {
       description:
-        "Find API operations by text, HTTP method, or exact tag. Returns a bounded page of compact summaries, not full schemas. Requirements describe the API contract, not a guarantee of current access. Use inspect_operation for the selected contract; use the existing resource API for effective capabilities.",
+        "Find unknown API operations by text, HTTP method, or exact tag. Start with a narrow query and the default five results. Exact resource paths and shallow collections rank first. Returns method, path, and summary only. Skip discovery for known paths. Use inspect_operation only for missing contract details. The API evaluates effective permissions.",
       inputSchema: operationQuerySchema,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -43,10 +43,19 @@ export function registerOperationTools(server: McpServer, source: McpCatalogSour
             .includes(query.q.toLowerCase())
         );
       });
-      matches.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
+      const resource = query.q?.trim().toLowerCase();
+      const rank = (path: string) =>
+        path.toLowerCase() === resource || path.toLowerCase().endsWith(`/${resource}`) ? 0 : 1;
+      matches.sort(
+        (a, b) =>
+          rank(a.path) - rank(b.path) ||
+          a.path.split("/").length - b.path.split("/").length ||
+          a.path.localeCompare(b.path) ||
+          a.method.localeCompare(b.method),
+      );
       const operations = matches
         .slice(query.offset, query.offset + query.limit)
-        .map(({ contract: _contract, ...entry }) => entry);
+        .map(({ method, path, summary }) => ({ method, path, summary }));
       return toolResult({
         operations,
         page: buildPageInfo(query.limit, query.offset, matches.length, operations.length),

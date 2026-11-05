@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2017-05-03T15:42:21+00:00"
-dsq_thread_id:
-- 5782832850
 keywords:
 - google
 - policy

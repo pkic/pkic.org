@@ -4,10 +4,6 @@ authors:
 categories:
 - Press Releases
 date: "2018-06-19T14:00:23+00:00"
-dsq_needs_sync:
-- 1
-dsq_thread_id:
-- 6741401962
 keywords:
 - casc
 - ssl

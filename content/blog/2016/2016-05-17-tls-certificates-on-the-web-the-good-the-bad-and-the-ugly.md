@@ -2,8 +2,6 @@
 authors:
 - Rick Andrews
 date: "2016-05-17T14:30:47+00:00"
-dsq_thread_id:
-- 4831856515
 keywords:
 - tls
 - ecc

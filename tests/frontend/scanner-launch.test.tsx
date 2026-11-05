@@ -1,3 +1,4 @@
+import { ScannerDestinationTiles } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerDestinationTiles";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
@@ -58,4 +59,23 @@ it("can start with unverified feedback after preparation fails, while Cancel pre
   expect(onStart).not.toHaveBeenCalled();
   await act(() => host.querySelector<HTMLButtonElement>("button")!.click());
   expect(onStart).toHaveBeenCalledOnce();
+});
+
+it("places authorized printing beside the scanner tasks using the shared action tile", async () => {
+  const props = {
+    allowedActions: ["attendance", "checkout"] as const,
+    disabled: false,
+    onVenue: vi.fn(),
+    onSessions: vi.fn(),
+  };
+  await act(() => render(<ScannerDestinationTiles {...props} printHref="#/events/test/scanner/print" />, host));
+  const grid = host.querySelector('[aria-label="Choose a scanner task"]')!;
+  expect(grid.children).toHaveLength(4);
+  const icons = grid.querySelectorAll("svg");
+  expect(icons[0]!.innerHTML).not.toBe(icons[1]!.innerHTML);
+  const print = grid.querySelector<HTMLAnchorElement>("a.pk-action-tile")!;
+  expect(print.getAttribute("href")).toBe("#/events/test/scanner/print");
+  await act(() => render(<ScannerDestinationTiles {...props} />, host));
+  expect(host.querySelector("a")).toBeNull();
+  expect(host.querySelectorAll(".pk-action-tile")).toHaveLength(3);
 });

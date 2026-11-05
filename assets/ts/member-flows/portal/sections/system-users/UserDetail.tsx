@@ -388,7 +388,12 @@ export function UserDetail({
           {/* The addresses the account answers to: the person manages their own,
               and staff with Users write permission manage a secondary address. */}
           {(isSelf || permissions.canWrite) && (
-            <EmailAddressesPanel userId={user.id} isSelf={isSelf} primaryEmail={user.email} />
+            <EmailAddressesPanel
+              userId={user.id}
+              isSelf={isSelf}
+              primaryEmail={user.email}
+              primaryEmailDelivery={user.emailDelivery}
+            />
           )}
 
           {/* Email notifications are the person's own choice, made by nobody else. */}

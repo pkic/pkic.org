@@ -1,3 +1,4 @@
+import { prepareAddressDeliveryTransfer } from "./email-address-delivery";
 import { firstNameSchema, lastNameSchema } from "../../../assets/shared/schemas/api-common";
 import {
   readEmailOwnership,
@@ -345,6 +346,9 @@ async function resolveUserWrite(
       statements: [
         ...(payload.mailboxVerified ? prepareEmailOwnershipClaim(db, normalized, user.id, ownership) : []),
         insert,
+        ...(payload.mailboxVerified && ownership
+          ? [prepareAddressDeliveryTransfer(db, "users", user.id, ownership)]
+          : []),
         ...(payload.identityInBatch ? [] : [prepareAccountIdentityStatement(db, user.id, now)]),
       ],
     };
