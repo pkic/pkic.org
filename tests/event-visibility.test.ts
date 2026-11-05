@@ -1,3 +1,4 @@
+import { buildEventAudiencePredicate } from "../functions/_lib/services/events/visibility";
 import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
@@ -133,6 +134,32 @@ async function insertActiveDayWaitlistEntry(
 describe("event audience visibility", () => {
   beforeEach(async () => {
     await resetDb();
+  });
+
+  it("does not infer delegated event access from an authenticated user's registration", async () => {
+    const userId = await insertUser(env.DB);
+    const eventId = await insertEvent("registered-private", "invitation_only");
+    await registerUserForEvent(eventId, userId);
+    for (const delegated of [false, true]) {
+      const audience = buildEventAudiencePredicate("event", {
+        userId,
+        ...(delegated
+          ? {
+              admin: {
+                identityType: "user" as const,
+                id: userId,
+                email: "",
+                scopes: ["users:read"],
+                scopeRestricted: true,
+              },
+            }
+          : {}),
+      });
+      const row = await env.DB.prepare(`SELECT 1 AS visible FROM events event WHERE event.id=? AND ${audience.sql}`)
+        .bind(eventId, ...audience.bindings)
+        .first<{ visible: number }>();
+      expect(row?.visible ?? 0).toBe(delegated ? 0 : 1);
+    }
   });
 
   it("filters rows in D1 and projects fields according to the caller's live audience", async () => {

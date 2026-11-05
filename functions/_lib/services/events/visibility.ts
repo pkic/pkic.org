@@ -46,8 +46,10 @@ export function buildEventAudiencePredicate(
   eventAlias: string,
   viewer: EventAudienceViewer,
 ): { sql: string; bindings: unknown[] } {
-  if (!viewer.userId && !viewer.admin) return { sql: `${eventAlias}.visibility = 'public'`, bindings: [] };
-  const actor: AuthAdmin = viewer.admin ?? { identityType: "user", id: viewer.userId ?? "", email: "" };
+  // A delegated account ID identifies the actor; it does not carry human participation access.
+  const userId = viewer.admin?.scopeRestricted ? null : viewer.userId;
+  if (!userId && !viewer.admin) return { sql: `${eventAlias}.visibility = 'public'`, bindings: [] };
+  const actor: AuthAdmin = viewer.admin ?? { identityType: "user", id: userId ?? "", email: "" };
   const globalRead = permissionsAuthorizationEvidence(actor, [{ permission: "events:read" }]);
   const leadPermissions = ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"] as const;
   const eventPermissions = [
@@ -72,7 +74,7 @@ export function buildEventAudiencePredicate(
 
   // Delegated callers use explicit grants and public visibility, never the
   // account's memberships, registrations, invitations, or proposals.
-  if (!viewer.userId) {
+  if (!userId) {
     const allowedEvents = eventPermissions.filter((permission) => tokenAllowsPermission(actor, permission));
     const allowedSponsors = leadPermissions.filter((permission) => tokenAllowsPermission(actor, permission));
     const authority = anyPermissionAuthorizationEvidenceFromSelection(actor, eventPermissions, {
@@ -178,15 +180,15 @@ export function buildEventAudiencePredicate(
     )`,
     bindings: [
       ...globalRead.bindings,
-      viewer.userId,
-      viewer.userId,
-      viewer.userId,
-      viewer.userId,
-      viewer.userId,
-      viewer.userId,
-      viewer.userId,
-      viewer.userId,
-      viewer.userId,
+      userId,
+      userId,
+      userId,
+      userId,
+      userId,
+      userId,
+      userId,
+      userId,
+      userId,
       ...eventRead.bindings,
       ...sponsorRead.bindings,
     ],
