@@ -77,6 +77,25 @@ describe("address delivery evidence", () => {
     await message(email, userId, "queued");
     expect(await delivery()).toEqual({ status: "unknown", observedAt: null });
   });
+  it("does not let timestamp-less events change address state while retaining message observability", async () => {
+    const id = await message();
+    await event(id, { timestamp: undefined });
+    expect(await delivery()).toEqual({ status: "unknown", observedAt: null });
+    expect(await env.DB.prepare("SELECT status FROM email_outbox WHERE id=?").bind(id).first("status")).toBe("bounced");
+    await event(id);
+    await event(id, { event: "delivered", timestamp: undefined });
+    expect(await delivery()).toEqual({ status: "bouncing", observedAt: started });
+    expect(await env.DB.prepare("SELECT status FROM email_outbox WHERE id=?").bind(id).first("status")).toBe(
+      "delivered",
+    );
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) FROM audit_log WHERE entity_type='email_outbox' AND entity_id=?")
+        .bind(id)
+        .first("COUNT(*)"),
+    ).toBe(3);
+    await event(id, { event: "delivered", timestamp: timestamp + 1 });
+    expect((await delivery()).status).toBe("delivered");
+  });
   it("keeps a hard bounce across queued sends, processed events and temporary failures", async () => {
     const id = await message();
     await event(id);

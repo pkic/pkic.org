@@ -83,8 +83,9 @@ function normalizeEvent(event: SendgridEvent, sequence: number): NormalizedSendg
     ].join(":");
 
   return {
-    signal:
-      event.event === "delivered"
+    signal: !event.timestamp
+      ? null
+      : event.event === "delivered"
         ? "delivery_delivered_at"
         : softFailure
           ? "delivery_delayed_at"
