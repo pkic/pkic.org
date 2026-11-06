@@ -1,3 +1,4 @@
+import { ScannerRecentScans } from "../../member-flows/portal/sections/events/detail/scanner/ScannerRecentScans";
 import { useScannerAudio } from "../../member-flows/portal/sections/events/detail/scanner/useScannerAudio";
 import { eventScanResponseSchema, type EventScanResponse } from "../../../shared/schemas/event-participation-scanning";
 import { ScannerDestinationTiles } from "../../member-flows/portal/sections/events/detail/scanner/ScannerDestinationTiles";
@@ -50,6 +51,7 @@ function ScannerPresentationExample() {
           checkoutRecorded: feedback === "eligible" && role === "exit",
         });
   const [preview, setPreview] = useState(false);
+  const [recent, setRecent] = useState(false);
   const shell = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (presentation === "fullscreen" && shell.current)
@@ -79,6 +81,13 @@ function ScannerPresentationExample() {
                 : role === "exit"
                   ? "Venue exit"
                   : "Venue entrance"
+        }
+        onRecentScans={() => setRecent(true)}
+        onReturnToScanning={() => setRecent(false)}
+        recentScans={
+          recent ? (
+            <ScannerRecentScans slug="gallery" operatorUserId="11111111-1111-4111-8111-111111111111" pending={0} />
+          ) : undefined
         }
         result={result}
         pending={feedback === "unverified" ? 1 : 0}

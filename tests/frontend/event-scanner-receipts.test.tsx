@@ -44,7 +44,10 @@ describe("scanner foreground receipt and drain lifecycle", () => {
       let upload: (() => Promise<Response>) | undefined;
       let captured: EventScanRequest | undefined;
       mocks.persist.mockImplementation(async (scan) => {
-        captured = eventScanRequestSchema.parse(scan);
+        captured = eventScanRequestSchema.parse({
+          ...scan,
+          scannerSession: { epochId: "99999999-9999-4999-8999-999999999999", sequence: 1 },
+        });
         return {
           scan: captured,
           local: {
@@ -68,6 +71,11 @@ describe("scanner foreground receipt and drain lifecycle", () => {
               reason: "verification_required",
               recorded: true,
               attendanceRecorded: false,
+              scannerReceipt: {
+                ...request.scannerSession!,
+                operationId: request.operationId,
+                receivedAt: "2026-11-06T12:00:00.000Z",
+              },
             }),
           ),
           { status: 200 },

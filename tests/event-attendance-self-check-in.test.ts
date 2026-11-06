@@ -126,6 +126,49 @@ describe("attendee self check-in", () => {
     expect((await request("attendee", "/attendance/points")).status).toBe(403);
   });
 
+  it("uses session and lead observations as presence without requiring a venue scan", async () => {
+    const session = await studioCode({ kind: "session", occurrenceId: ids.running });
+    expect((await record("attendee", "check-ins", session)).body.status).toBe("checked_in");
+    expect((await occupancy())[0]).toMatchObject({ checkedIn: 1, onSite: 1 });
+    const checkOut = await point("venue_check_out");
+    expect((await record("attendee", "check-outs", checkOut)).body.status).toBe("checked_out");
+    expect((await occupancy())[0]).toMatchObject({ checkedIn: 1, checkedOut: 1, onSite: 0 });
+    const lead = async (observedAt: string, userId = ids.attendee, outcome = "eligible") => {
+      await env.DB.prepare(`INSERT INTO event_scan_attempts
+        (id,event_id,user_id,operator_user_id,device_id,operation_id,request_hash,outcome,reason,action,observed_at,created_at,capture_day_date,capture_time_zone,capture_context_source)
+        VALUES (?,?,?,?,?,?,?,?,?,'lead',?,?,?,'UTC','server_receipt')`)
+        .bind(
+          crypto.randomUUID(),
+          ids.event,
+          userId,
+          ids.organizer,
+          crypto.randomUUID(),
+          crypto.randomUUID(),
+          "synthetic-lead",
+          outcome,
+          outcome === "eligible" ? "eligible" : "revoked_badge",
+          observedAt,
+          new Date().toISOString(),
+          fixture.dates.today,
+        )
+        .run();
+    };
+    // Delayed upload never turns an older observation into a new arrival.
+    await lead(new Date(Date.now() - 5000).toISOString());
+    expect((await occupancy())[0]).toMatchObject({ checkedIn: 1, checkedOut: 1, onSite: 0 });
+    // A later physical lead scan is fresh evidence of presence.
+    await lead(new Date(Date.now() + 1000).toISOString());
+    expect((await occupancy())[0]).toMatchObject({ checkedIn: 1, checkedOut: 0, onSite: 1 });
+    expect(await (await request("attendee", "/attendance/check-ins/current")).json()).toMatchObject({
+      venue: "checked_in",
+    });
+    // Remote attendance and rejected leads never establish physical presence.
+    await lead(new Date(Date.now() + 2000).toISOString(), ids.stranger, "denied");
+    const venue = await point("venue_check_in");
+    await record("virtual", "check-ins", venue);
+    expect((await occupancy())[0]).toMatchObject({ checkedIn: 1, onSite: 1 });
+  });
+
   it("records an online registrant's scan as remote, never as in-person attendance", async () => {
     const token = await point("venue_check_in");
     expect((await record("virtual", "check-ins", token)).body).toMatchObject({
@@ -260,8 +303,8 @@ describe("attendee self check-in", () => {
       outcomes.push((await record("attendee", "check-ins", session)).body.status);
       outcomes.push((await record("attendee", "check-ins", venue)).body.status);
     }
-    expect(outcomes.filter((status) => status === "checked_in")).toHaveLength(2);
-    expect(await count("SELECT COUNT(*) AS total FROM event_scan_attempts WHERE user_id=?", ids.attendee)).toBe(2);
+    expect(outcomes.filter((status) => status === "checked_in")).toHaveLength(1);
+    expect(await count("SELECT COUNT(*) AS total FROM event_scan_attempts WHERE user_id=?", ids.attendee)).toBe(1);
     expect((await occupancy())[0]).toMatchObject({ checkedIn: 1, onSite: 1, selfCheckIns: 1 });
     const attributions = attendanceAttributionsResponseSchema.parse(
       await (await request("organizer", "/attendance/attributions")).json(),
@@ -273,7 +316,7 @@ describe("attendee self check-in", () => {
     const checkIns = selfCheckInsResponseSchema.parse(
       await (await request("organizer", "/attendance/check-ins")).json(),
     );
-    expect(checkIns.page.total).toBe(2);
+    expect(checkIns.page.total).toBe(1);
   });
 
   it("takes the same scan again within seconds as the earlier one, without a new record", async () => {
@@ -400,6 +443,6 @@ describe("attendee self check-in", () => {
       reason: "session_not_open",
     });
     const current = await request("attendee", "/attendance/check-ins/current");
-    expect(await current.json()).toMatchObject({ venue: "none", lastSession: { title: "Opening keynote" } });
+    expect(await current.json()).toMatchObject({ venue: "checked_in", lastSession: { title: "Opening keynote" } });
   });
 });

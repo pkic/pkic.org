@@ -30,7 +30,6 @@ import { IconPrint, IconFullscreen } from "../../../../../../components/icons/ap
 import { useScannerImmersiveLifecycle } from "../scanner/useScannerImmersiveLifecycle";
 import { useScannerPresentation } from "../scanner/useScannerPresentation";
 import { FastScannerView } from "../scanner/FastScannerView";
-import { IconScannerHelp } from "../../../../../../components/icons/scanner-controls";
 import { IconVirtual } from "../../../../../../components/icons";
 import { BadgePdfActions } from "./BadgePdfActions";
 import type { ScannerStatus } from "../scanner/ScannerStatus";
@@ -257,13 +256,11 @@ export function BadgeLabelDeskView({
   children?: ComponentChildren;
 }) {
   const [preview, setPreview] = useState(false);
-  const [helpOnStart, setHelpOnStart] = useState(false);
   const cameraShell = useRef<HTMLDivElement>(null);
   const { presentation, setPresentation, toggle } = useScannerPresentation(cameraShell, "responsive");
   const fullscreen = presentation === "fullscreen";
   const screenAwake = useScannerImmersiveLifecycle(fullscreen, cameraShell, () => {
     stop();
-    setHelpOnStart(false);
     setPresentation("embedded");
   });
   const settings = (
@@ -338,20 +335,6 @@ export function BadgeLabelDeskView({
               <IconPrint /> Print
             </span>
             <Button
-              icon
-              variant="secondary"
-              data-tour-trigger
-              aria-label="Scanner help"
-              title="Scanner help"
-              onClick={() => {
-                onOperatorPause?.(true);
-                setHelpOnStart(true);
-                setPresentation("fullscreen");
-              }}
-            >
-              <IconScannerHelp />
-            </Button>
-            <Button
               variant="ghost"
               aria-label={fullscreen ? "Exit full screen" : "Enter full screen"}
               title={fullscreen ? "Exit full screen" : "Enter full screen"}
@@ -370,7 +353,6 @@ export function BadgeLabelDeskView({
         {fullscreen && (
           <FastScannerView
             purpose="print"
-            helpOnStart={helpOnStart}
             taskSwitchDisabled={busy || starting}
             screenAwake={screenAwake}
             soundLabel={sound?.label}
@@ -396,11 +378,9 @@ export function BadgeLabelDeskView({
             onPreview={() => setPreview((value) => !value)}
             onExit={() => {
               stop();
-              setHelpOnStart(false);
               setPresentation("embedded");
             }}
             onManual={() => {
-              setHelpOnStart(false);
               setPresentation("embedded");
             }}
             canRecordAttendance={false}

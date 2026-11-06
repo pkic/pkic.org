@@ -122,6 +122,9 @@
     }
   }
   .pk-login__backdrop.pk-fast-scanner {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
     --pk-scanner-field-angle: 135deg;
     --pk-scanner-green-end: var(--pk-scanner-target-green-end);
     --pk-scanner-blue-start: var(--pk-scanner-target-blue-start);
@@ -259,7 +262,8 @@
     flex-wrap: wrap;
     justify-content: center;
     gap: var(--pk-2);
-    margin-block: var(--pk-3);
+    margin-block: auto var(--pk-3);
+    padding-top: var(--pk-3);
   }
   .pk-fast-scanner__results {
     width: 100%;

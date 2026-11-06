@@ -125,6 +125,7 @@ describe("badge printing desk", () => {
     vi.stubGlobal("fetch", fetch);
     await mount();
     await click("Start camera");
+    await click("Enter full screen");
     await click("Scanner help");
     await settle(() => expect(document.querySelector(".pk-guided-tour")).not.toBeNull());
     await scan();
@@ -138,8 +139,10 @@ describe("badge printing desk", () => {
     expect(fetch).toHaveBeenCalledOnce();
     expect(capture.starts).toBe(1);
   });
-  it("does not reopen help after leaving full screen through the immersive lifecycle", async () => {
+  it("shows help only in the fullscreen scanner", async () => {
     await mount();
+    expect(host.querySelector('[aria-label="Scanner help"]')).toBeNull();
+    await click("Enter full screen");
     await click("Scanner help");
     await settle(() => expect(document.querySelector(".pk-guided-tour")).not.toBeNull());
     await click("Close help tour");

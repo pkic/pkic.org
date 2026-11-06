@@ -134,6 +134,7 @@ describe("visible synchronization status", () => {
       "Sign in again",
     );
     expect(scannerConnectionLabel({ pending: 0, online: true, syncing: false })).toBe("All scans synced");
+    expect(scannerConnectionLabel({ pending: 0, online: true, syncing: true })).toBe("Checking uploads…");
   });
   it("separates disconnected saved scans from uploads and has no staff sync action", () => {
     expect(scannerConnectionLabel({ pending: 3, online: false, syncing: false })).toBe(

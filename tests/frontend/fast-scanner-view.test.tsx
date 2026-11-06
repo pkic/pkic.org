@@ -48,7 +48,7 @@ afterEach(() => {
 describe("shared supporting scanner warning labels", () => {
   it.each([
     ["wrong_location", "Known badge · location notice"],
-    ["wrong_attendance_mode", "Known badge · attendance notice"],
+    ["wrong_attendance_mode", "Check registration for this date or attendance mode"],
     ["missing_registration", "Known badge · not registered"],
   ] as const)("renders %s honestly in both scanner views", (reason, label) => {
     const result = eventScanResponseSchema.parse({

@@ -24,7 +24,7 @@ import { ScannerCaptureControls, ScannerManualControls, scannerStartMessage } fr
 import { useScannerPreparation } from "./useScannerPreparation";
 import { ScannerCamera } from "./ScannerCamera";
 import { ScannerRecentScans } from "./ScannerRecentScans";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import {
   scanActionSchema,
   eventScanCaptureIntentForRoomsSchema,
@@ -74,6 +74,7 @@ export function EventScannerCapture({
     lastResult,
     clearLastResult,
     failed,
+    captureStatus,
     setResult,
     message,
     setMessage,
@@ -97,7 +98,7 @@ export function EventScannerCapture({
   const scannerShell = useRef<HTMLDivElement>(null);
   const { presentation, enter: enterPresentation, toggle: togglePresentation } = useScannerPresentation(scannerShell);
   const badgeCamera = useScannerCamera((raw) => void scanCredential(raw, true));
-  const manual = useScannerManualEntry(fastMode, badgeCamera.stop, () => void camera());
+  const manual = useScannerManualEntry(fastMode, badgeCamera.stop, () => void camera(), recentVisible);
   const { open: manualOpen, focusRequested: manualFocusRequested, paused: manualPaused } = manual;
   const preparation = useScannerPreparation({
     slug,
@@ -143,8 +144,6 @@ export function EventScannerCapture({
     },
     presentation === "fullscreen",
   );
-  const scannerLifecycle = useRef({ manualPaused, badgeCamera });
-  scannerLifecycle.current = { manualPaused, badgeCamera };
   useScannerHardware(fastMode && !manualOpen, (credential) => void scanCredential(credential));
   const form = useContractForm(
     eventScanCaptureIntentForRoomsSchema(targetRooms.map((room) => room.id)),
@@ -191,7 +190,6 @@ export function EventScannerCapture({
       stopCamera: badgeCamera.stop,
       refreshHistory: syncHistory.refresh,
     });
-  /** Leave the displayed scan: no camera stream, no operation awaiting a receipt, no result on screen. */
   function clearCurrentScan() {
     badgeCamera.stop();
     lastOperation.current = null;
@@ -279,7 +277,6 @@ export function EventScannerCapture({
       setBadge(raw);
       manual.setOpen(true);
       manual.setFocusRequested(true);
-      badgeCamera.stop();
       setFastMode(false);
       if (current.action === "lead") setConsent(false);
       setMessage("Badge detected. Review and confirm before recording.");
@@ -383,12 +380,6 @@ export function EventScannerCapture({
     manual.setOpen(false);
     setScannerTab("recent");
   }
-  useEffect(() => {
-    if (recentVisible) {
-      scannerLifecycle.current.badgeCamera.stop();
-      scannerLifecycle.current.manualPaused.current = true;
-    }
-  }, [recentVisible]);
   const contextLabel = scannerContextLabel({ ...preparation.location, action, sponsorName });
   const manualControls = {
     handlers: form.handlers,
@@ -429,6 +420,7 @@ export function EventScannerCapture({
       ready={pendingReadyScope === `${slug}:${operatorUserId}`}
       collector={Boolean(collectorContext)}
       uploadStatus={uploadStatus}
+      error={failed ? message : scannerDevice.error}
     />
   );
   const mode = {
@@ -560,6 +552,7 @@ export function EventScannerCapture({
           onTourSound={sound.test}
           onSound={() => sound.toggle(preferences.setSound)}
           result={result}
+          status={captureStatus}
           preparation={collectorContext ? undefined : preparationStatus}
           mode={action}
           pending={pending}

@@ -365,21 +365,23 @@ export function FastScannerView({
               <IconScannerSound />
             </Button>
           )}
-          <Button
-            variant="secondary"
-            icon
-            data-tour-trigger
-            aria-label="Scanner help"
-            title="Scanner help"
-            aria-expanded={helpOpen}
-            disabled={taskSwitchDisabled || cooldown?.saving}
-            onClick={() => {
-              if (!helpOpen) operatorPause.current?.(true);
-              setHelpOpen(!helpOpen);
-            }}
-          >
-            <IconScannerHelp />
-          </Button>
+          {presentation === "fullscreen" && (
+            <Button
+              variant="secondary"
+              icon
+              data-tour-trigger
+              aria-label="Scanner help"
+              title="Scanner help"
+              aria-expanded={helpOpen}
+              disabled={taskSwitchDisabled || cooldown?.saving}
+              onClick={() => {
+                if (!helpOpen) operatorPause.current?.(true);
+                setHelpOpen(!helpOpen);
+              }}
+            >
+              <IconScannerHelp />
+            </Button>
+          )}
           <CloseButton variant="secondary" data-scanner-help="close" label="Close scanner" onClick={onExit} />
         </div>
         <div class="pk-fast-scanner__next">

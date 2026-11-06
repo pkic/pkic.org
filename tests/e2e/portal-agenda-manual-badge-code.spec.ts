@@ -197,6 +197,8 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.evaluate(() =>
     Object.defineProperty(Element.prototype, "requestFullscreen", { value: undefined, configurable: true }),
   );
+  await expect(page.getByRole("button", { name: "Scanner help", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Enter full screen", exact: true }).click();
   await page.getByRole("button", { name: "Scanner help", exact: true }).click();
   await expect(page.locator(".pk-guided-tour")).toBeVisible();
   expect((await page.locator(".pk-guided-tour").boundingBox())?.width).toBeLessThan(400);
@@ -259,6 +261,25 @@ test("the registration desk switches between immediate labels and full badges", 
   await expect(captureScanner.getByText("Ready for entry", { exact: true })).toBeVisible();
   await expect(captureScanner).not.toHaveAttribute("data-gradient-from");
   const entryField = await captureScanner.evaluate((element) => getComputedStyle(element).backgroundImage);
+  const scanUploaded = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === `${fixture.api}/scans` && response.request().method() === "POST",
+  );
+  await page.keyboard.type(fixture.eligible);
+  await page.keyboard.press("Enter");
+  const scanResponse = await scanUploaded;
+  expect(scanResponse.status()).toBe(200);
+  expect(eventScanResponseSchema.parse(await scanResponse.json())).toMatchObject({
+    recorded: true,
+    attendanceRecorded: true,
+  });
+  await captureScanner.getByRole("button", { name: "Recent scans", exact: true }).click();
+  await expect(captureScanner.getByText(/attendance recorded/).first()).toBeVisible();
+  const tools = await captureScanner.locator(".pk-fast-scanner__tools").boundingBox();
+  expect(tools).not.toBeNull();
+  expect(tools!.y + tools!.height).toBeGreaterThan(page.viewportSize()!.height - 40);
+  await page.screenshot({ path: info.outputPath("recent-recorded-scan-phone.png") });
+  await captureScanner.getByRole("button", { name: "Return to scanning", exact: true }).click();
+
   await swipe().press("ArrowLeft");
   await expect(captureScanner.getByText("Ready for exit", { exact: true })).toBeVisible();
   await expect(captureScanner).not.toHaveAttribute("data-gradient-from");
