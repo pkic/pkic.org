@@ -121,6 +121,10 @@ test("the registration desk switches between immediate labels and full badges", 
         String(document.querySelectorAll("#pk-badge-print-command .badge-print-sheet").length),
       );
       window.dispatchEvent(new Event("afterprint"));
+      document.documentElement.setAttribute(
+        "data-print-retained-pages",
+        String(document.querySelectorAll("#pk-badge-print-command .badge-print-sheet").length),
+      );
     };
   });
   await expect(page.getByRole("heading", { name: "Print badge labels", exact: true })).toBeVisible();
@@ -145,6 +149,12 @@ test("the registration desk switches between immediate labels and full badges", 
   expect(badgePrintResponseSchema.parse(await response.json()).id).toBe(fixture.eligibleBadgeId);
   await expect(page.locator("html")).toHaveAttribute("data-print-called", "1");
   await expect(page.locator("html")).toHaveAttribute("data-print-pages", "2");
+  await expect(page.locator("html")).toHaveAttribute("data-print-retained-pages", "2");
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator("#pk-badge-print-command")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Print badge labels", exact: true })).not.toBeVisible();
+  await page.screenshot({ path: info.outputPath("label-print-after-early-event.png"), fullPage: true });
+  await page.emulateMedia({ media: "screen" });
   await expect(page.frameLocator('iframe[title="Attendee label print document"]').getByRole("img")).toHaveCount(2);
   await page.getByRole("button", { name: "Print settings", exact: true }).click();
   await page.getByRole("menuitemradio", { name: "1 label", exact: true }).click();
