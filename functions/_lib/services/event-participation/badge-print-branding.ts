@@ -2,9 +2,10 @@ import { z } from "zod";
 import { ZodError } from "zod";
 import {
   eventBadgeTemplateSchema,
-  badgeTemplateBrandingSchema,
+  sponsorArtworkBrandingSchema,
+  BADGE_SPONSOR_ARTWORK_LIMITS,
+  type SponsorArtworkLimits,
   BADGE_TEMPLATE_SPONSOR_LOGO_MAX_BYTES,
-  BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_BYTES,
   BADGE_TEMPLATE_SPONSOR_GROUPS_MAX_COUNT,
   BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT,
   badgeTemplateSponsorGroupSchema,
@@ -217,9 +218,10 @@ export async function loadBadgeSponsorArtwork(
   environment: Pick<Env, "ASSETS_BUCKET">,
   populations: Awaited<ReturnType<typeof prepareBadgePrintingBasis>>["populations"],
   sponsorGroups: z.infer<typeof badgeTemplateSponsorGroupSchema>[],
+  limits: SponsorArtworkLimits = BADGE_SPONSOR_ARTWORK_LIMITS,
 ) {
-  if (populations.event.length + populations.consortium.length > BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT)
-    throw new AppError(422, "BADGE_SPONSOR_LIMIT", "Use at most 40 sponsors in one badge template.");
+  if (populations.event.length + populations.consortium.length > limits.maxCount)
+    throw new AppError(422, "BADGE_SPONSOR_LIMIT", `Use at most ${limits.maxCount} sponsors in these materials.`);
   const logos = new Map<string, { id: string; name: string; svg: string }>();
   const capturedObjects: { key: string; etag: string }[] = [];
   let totalBytes = 0;
@@ -260,11 +262,11 @@ export async function loadBadgeSponsorArtwork(
       if (error instanceof AppError && error.code === "INVALID_SVG_LOGO") throw replacement(row.name, error.message);
       throw error;
     }
-    if (totalBytes > BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_BYTES)
+    if (totalBytes > limits.maxBytes)
       throw new AppError(
         413,
         "BADGE_SPONSOR_ARTWORK_TOO_LARGE",
-        "The selected sponsor logos exceed the 4 MiB document artwork limit.",
+        `The selected sponsor logos exceed the ${limits.maxBytes / (1024 * 1024)} MiB document artwork limit.`,
       );
     logos.set(row.id, { id: row.id, name: row.name, svg });
     capturedObjects.push({ key, etag: object.etag });
@@ -280,7 +282,7 @@ export async function loadBadgeSponsorArtwork(
     ];
     return sponsors.length ? [{ ...group, sponsors }] : [];
   });
-  const checkedBranding = badgeTemplateBrandingSchema.safeParse(branding);
+  const checkedBranding = sponsorArtworkBrandingSchema(limits).safeParse(branding);
   if (!checkedBranding.success)
     throw new AppError(
       422,

@@ -1,3 +1,4 @@
+import { PROMOTION_SPONSOR_ARTWORK_LIMITS } from "../../../../assets/shared/schemas/event-promotion-design";
 import type { z } from "zod";
 import { BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT } from "../../../../assets/shared/schemas/event-badge-template";
 import {
@@ -211,13 +212,18 @@ async function prepareSponsorBrandingRead(db: DatabaseLike, sql: string, binding
   const read = prepareSponsorBrandingSnapshot(db, sql, bindings);
   return read.decode(await db.batch(read.statements));
 }
-function prepareSponsorBrandingSnapshot(db: DatabaseLike, sql: string, bindings: readonly unknown[]) {
+function prepareSponsorBrandingSnapshot(
+  db: DatabaseLike,
+  sql: string,
+  bindings: readonly unknown[],
+  readLimit = BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT,
+) {
   return {
-    statements: [db.prepare(`${sql} LIMIT ${BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT + 1}`).bind(...bindings)],
-    decode(loaded: D1StatementResult[]) {
+    statements: [db.prepare(`${sql} LIMIT ${readLimit + 1}`).bind(...bindings)],
+    decode(loaded: D1StatementResult[], maxCount = readLimit) {
       const rows = batchRows<AgendaSponsorRow>(loaded[0]);
-      if (rows.length > BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT)
-        throw new AppError(422, "BADGE_SPONSOR_LIMIT", "Use at most 40 sponsors in one badge template.");
+      if (rows.length > maxCount)
+        throw new AppError(422, "BADGE_SPONSOR_LIMIT", `Use at most ${maxCount} sponsors in these materials.`);
       return {
         rows,
         guard: prepareAuthorizationGuard(db, {
@@ -240,14 +246,19 @@ export function prepareConfiguredSponsorBranding(db: DatabaseLike, eventId: Even
       db,
       `${read.sql} AND (${automatic} OR public.event_tier IN(${selected})) ORDER BY sp.id`,
       [...read.bindings, ...scope.bindings, ...scope.bindings, "event"],
+      PROMOTION_SPONSOR_ARTWORK_LIMITS.maxCount,
     );
   }
   const read = buildPublicSponsorReadModel(typeof eventId === "string" ? { eventId } : { eventSlug: eventId.slug });
+  const eventRead = source(eventId);
   return prepareSponsorBrandingSnapshot(
     db,
     `${read.sql} SELECT public.id,public.name,public.website,public.logo_r2_key,public.sponsorship_logo_r2_key,public.tier,public.event_tier,public.effective_tier,catalog.display_weight AS effective_weight, public.id AS sponsor_id,
     json_object('publicId',public.id,'name',public.name,'website',public.website,'logo',public.logo_r2_key,'sponsorLogo',public.sponsorship_logo_r2_key,'tier',public.tier,'weight',catalog.display_weight) AS source_json
-    FROM enriched_sponsors public JOIN sponsorship_tier_catalog catalog ON catalog.sponsor_type='consortium' AND catalog.tier=public.tier AND catalog.active=1 AND catalog.display_weight>0 WHERE (${automatic} OR public.tier IN(${selected})) ORDER BY public.name,public.id`,
-    [...read.bindings, ...scope.bindings, ...scope.bindings, "consortium"],
+    FROM enriched_sponsors public JOIN sponsorship_tier_catalog catalog ON catalog.sponsor_type='consortium' AND catalog.tier=public.tier AND catalog.active=1 AND catalog.display_weight>0 WHERE (${automatic} OR public.tier IN(${selected}))
+      AND NOT (${automatic} AND public.id IN(SELECT event_branding.id FROM (${eventRead.sql}) event_branding))
+      ORDER BY public.name,public.id`,
+    [...read.bindings, ...scope.bindings, ...scope.bindings, "consortium", ...scope.bindings, ...eventRead.bindings],
+    PROMOTION_SPONSOR_ARTWORK_LIMITS.maxCount,
   );
 }

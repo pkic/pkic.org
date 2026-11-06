@@ -6,8 +6,12 @@ import {
   eventBadgeTemplateSchema,
   badgeTemplateAssetSchema,
   badgeTemplateSponsorGroupSchema,
+  type SponsorArtworkLimits,
 } from "./event-badge-template";
 import { validateBadgeTemplateAsset, badgeTemplateVectorAsset } from "../badge-template-policy";
+
+/** Multi-page materials have a separate population budget from printed badges. */
+export const PROMOTION_SPONSOR_ARTWORK_LIMITS: SponsorArtworkLimits = { maxCount: 200, maxBytes: 4 * 1024 * 1024 };
 
 export const promotionPanelSchema = z.enum([
   "cover",

@@ -114,6 +114,64 @@ describe("own promotion artwork", () => {
     expect(branding.sponsors.map((group) => [group.tierName, group.sponsors.length])).toEqual([["Leader", 1]]);
   });
 
+  it("loads and renders all automatic sponsors beyond the badge limit after SQL deduplication", async () => {
+    const f = await promotionFixture();
+    const sponsors = [];
+    for (let index = 0; index < 65; index++) sponsors.push(await brandingSponsor(f.eventId, "consortium", "Diamond"));
+    const now = new Date().toISOString();
+    await env.DB.batch(
+      sponsors
+        .slice(0, 25)
+        .map((sponsor) =>
+          env.DB.prepare(
+            "INSERT INTO sponsorships(id,sponsor_type,organization_id,event_id,tier,pipeline_stage,created_at,updated_at) VALUES(?,'event',?,?,'Leader','active',?,?)",
+          ).bind(crypto.randomUUID(), sponsor.organizationId, f.eventId, now, now),
+        ),
+    );
+    const visual = await resolvePromotionDesign(env.DB, f.eventId);
+    expect(visual.populations.event).toHaveLength(25);
+    expect(visual.populations.consortium).toHaveLength(40);
+    const kitResponse = await callApi(env, f.sessionBase, { headers: f.headers }, { maxRoundTrips: 1 });
+    expect(kitResponse.status, await kitResponse.clone().text()).toBe(200);
+    const kit = promotionKitSchema.parse(await kitResponse.json());
+    const response = await callApi(
+      env,
+      `${f.sessionBase}/artifact?format=carousel&revision=${kit.publishedRevision}&fingerprint=${kit.fingerprint}&representation=artwork&pages=all`,
+      { headers: f.headers },
+      { maxRoundTrips: 1 },
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    const boards = promotionArtworkSchema
+      .parse(await response.json())
+      .pages.filter((page) => page.svg.includes('aria-label="Our sponsors"'));
+    expect(boards.length).toBeGreaterThan(1);
+    expect(boards.reduce((count, page) => count + (page.svg.match(/<image /gu)?.length ?? 0), 0)).toBe(65);
+    await env.DB.prepare("UPDATE events SET settings_json=? WHERE id=?")
+      .bind(
+        JSON.stringify({
+          promotionDesign: {
+            ...defaultEventPromotionDesign("Selected sponsors"),
+            sponsorSource: "selected",
+            sponsorGroups: [{ key: "diamond", source: "consortium", tierName: "Diamond" }],
+          },
+        }),
+        f.eventId,
+      )
+      .run();
+    const selected = await callApi(env, f.sessionBase, { headers: f.headers });
+    expect(selected.status).toBe(422);
+    expect(await selected.text()).toContain("40 sponsors");
+  });
+
+  it("rejects a combined automatic population over its document budget without truncating it", async () => {
+    const f = await promotionFixture();
+    for (let index = 0; index < 101; index++) await brandingSponsor(f.eventId, "event", "Leader");
+    for (let index = 0; index < 100; index++) await brandingSponsor(f.eventId, "consortium", "Diamond");
+    const response = await callApi(env, f.sessionBase, { headers: f.headers }, { maxRoundTrips: 1 });
+    expect(response.status).toBe(422);
+    expect(await response.text()).toContain("200 sponsors");
+  });
+
   it("documents participant reads without declaring delegated personal writes", () => {
     const paths = openapi.schema.paths;
     const read = paths["/api/v1/events/{eventSlug}/promotion"].get;

@@ -1,7 +1,13 @@
-import type { BadgeSponsorSource } from "../../../../assets/shared/schemas/event-badge-template";
+import {
+  BADGE_SPONSOR_ARTWORK_LIMITS,
+  type BadgeSponsorSource,
+} from "../../../../assets/shared/schemas/event-badge-template";
 import { eventPlaceSummary } from "../../../../assets/shared/event-place";
 import { svgLogoDimensions } from "../../utils/svg-logo";
-import { eventPromotionDesignFromSettings } from "../../../../assets/shared/schemas/event-promotion-design";
+import {
+  eventPromotionDesignFromSettings,
+  PROMOTION_SPONSOR_ARTWORK_LIMITS,
+} from "../../../../assets/shared/schemas/event-promotion-design";
 import type { DatabaseLike, Env } from "../../types";
 import { EVENT_COLUMNS, type EventRecord } from "../events";
 import { eventReadIdSql, type EventReadSelection } from "../events/selection";
@@ -36,14 +42,17 @@ export function preparePromotionDesign(db: DatabaseLike, selection: EventReadSel
       if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event unavailable.");
       const settings = parseJsonSafe<Record<string, unknown>>(event.settings_json, {});
       const design = eventPromotionDesignFromSettings(event.name, settings);
+      const limits = design.sponsorSource === "event" ? PROMOTION_SPONSOR_ARTWORK_LIMITS : BADGE_SPONSOR_ARTWORK_LIMITS;
       const populations = {
-        event: eventSponsors.decode(loaded.slice(2, 3)).rows,
-        consortium: consortiumSponsors.decode(loaded.slice(3, 4)).rows,
+        event: eventSponsors.decode(loaded.slice(2, 3), limits.maxCount).rows,
+        consortium: consortiumSponsors.decode(loaded.slice(3, 4), limits.maxCount).rows,
       };
+      if (
+        design.sponsorSource === "event" &&
+        populations.event.length + populations.consortium.length > limits.maxCount
+      )
+        throw new AppError(422, "BADGE_SPONSOR_LIMIT", `Use at most ${limits.maxCount} sponsors in these materials.`);
       if (design.sponsorSource === "event") {
-        // Automatic materials show each organization once, preferring its event sponsorship.
-        const eventIds = new Set(populations.event.map((row) => row.id));
-        populations.consortium = populations.consortium.filter((row) => !eventIds.has(row.id));
         design.sponsorGroups = batchRows<{ sponsor_type: BadgeSponsorSource; tier: string }>(loaded[1])
           .filter((row) =>
             populations[row.sponsor_type].some(
@@ -97,7 +106,12 @@ export async function promotionDesignArtwork(
 ) {
   const { design, populations } = visual;
   if (!design.sponsorGroups.length) return { revision: "", sponsors: [] };
-  const context = await loadBadgeSponsorArtwork(env, populations, design.sponsorGroups);
+  const context = await loadBadgeSponsorArtwork(
+    env,
+    populations,
+    design.sponsorGroups,
+    design.sponsorSource === "event" ? PROMOTION_SPONSOR_ARTWORK_LIMITS : undefined,
+  );
   return {
     revision: visual.brandingRevision,
     sponsors: context.branding.map((group) => ({
