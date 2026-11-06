@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { prepareScannerDevice, prepareScannerEpoch, type ScannerEpoch } from "./scanner-device-ledger";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { readScannerOfflineEpoch } from "./scanner-offline-context";
@@ -8,11 +8,27 @@ export function useScannerDevice(
   sponsorId?: string,
   collector?: ScannerOfflineContext,
 ) {
+  const context = useRef(collector);
+  context.current = collector;
+  const scope = collector
+    ? JSON.stringify([
+        collector.slug,
+        collector.operatorUserId,
+        collector.sessionId,
+        collector.deviceId,
+        collector.epochId,
+        collector.action,
+        collector.occurrenceId,
+        collector.roomId,
+        collector.serverNow,
+      ])
+    : null;
   const [deviceId, setDeviceId] = useState("");
   const [epoch, setEpoch] = useState<ScannerEpoch | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     let active = true;
+    const collector = context.current;
     setEpoch(null);
     setDeviceId("");
     void (async () => {
@@ -32,6 +48,6 @@ export function useScannerDevice(
     return () => {
       active = false;
     };
-  }, [slug, operatorUserId, sponsorId, collector]);
+  }, [slug, operatorUserId, sponsorId, scope]);
   return { deviceId, epoch, setEpoch, error, ready: epoch?.state === "open" };
 }

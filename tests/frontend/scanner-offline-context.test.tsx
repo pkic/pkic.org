@@ -188,6 +188,25 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe("scanner-only offline preparation", () => {
+  it("prepares through the local day independently of portal idle expiry", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    mocks.warm.mockResolvedValue(true);
+    const expiresAt = "2026-10-08T00:00:00.000Z";
+    const prepared = await saveScannerOfflineContext({
+      prepareCode: mocks.warm,
+      slug,
+      session: { ...session, idleExpiresAt: "2026-10-07T09:10:00.000Z" },
+      epoch: epoch(),
+      manifest: { ...manifest(), expiresAt, validUntil: Date.parse(expiresAt) },
+      action: "attendance",
+    });
+    expect(prepared?.expiresAt).toBe(expiresAt);
+    vi.setSystemTime(new Date("2026-10-07T20:00:00.000Z"));
+    scannerTransportUnavailable.value = true;
+    expect(await restoreScannerOfflineContext(route)).not.toBeNull();
+    vi.setSystemTime(new Date(expiresAt));
+    expect(await restoreScannerOfflineContext(route)).toBeNull();
+  });
   it("does not persist preparation until controlled public code warming completes", async () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
     let release!: (ready: boolean) => void;
@@ -287,6 +306,8 @@ describe("scanner-only offline preparation", () => {
     ).toBe(false);
     expect(await restoreScannerOfflineContext("/events/other-event/scanner")).toBeNull();
     expect(scannerCollectorPath(`#${route}?session=${occurrenceId}`)).toBeNull();
+    expect(scannerCollectorPath(`#${route}?scannerTab=diagnostics`)).toBe(route);
+    expect(scannerCollectorPath(`#${route}?scanAction=checkout&scannerTab=recent`)).toBe(route);
   });
   it("restores a long valid slug through its full canonical JSON owner key", async () => {
     const longSlug = "synthetic-" + "a".repeat(150);
@@ -459,7 +480,7 @@ describe("scanner-only offline preparation", () => {
         host!,
       ),
     );
-    await vi.waitFor(() => expect(host?.textContent).toContain("Offline · unverified until synced"));
+    await vi.waitFor(() => expect(host?.textContent).toContain("Offline scanning"));
     expect(host.textContent).not.toContain("Recovery and diagnostics");
     expect(host.textContent).not.toContain("Recent scans");
     expect(host.textContent).not.toContain("Prepare eligibility data");
@@ -476,7 +497,7 @@ describe("scanner-only offline preparation", () => {
     expect(mocks.backgroundSync).not.toHaveBeenCalled();
     expect(portalSession.value).toBeNull();
   });
-  it("queues only the fixed original context and always reports unverified, even with an eligible cached manifest", async () => {
+  it("queues only the fixed original context and verifies using its prepared eligibility snapshot", async () => {
     retain();
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
     host = document.createElement("div");
@@ -505,8 +526,8 @@ describe("scanner-only offline preparation", () => {
     );
     const saved = await controller.persist(scan);
     expect(eventScanRequestSchema.parse(saved.scan)).toMatchObject({ ...scan, capturePublicationRevision: 7 });
-    expect(saved.local).toMatchObject({ outcome: "unverified", reason: "verification_required" });
-    expect(cached.lookup).not.toHaveBeenCalled();
+    expect(saved.local).toMatchObject({ outcome: "eligible", reason: "eligible" });
+    expect(cached.lookup).toHaveBeenCalledWith(scan.badgeId, scan.action);
     expect(mocks.queue).toHaveBeenCalledExactlyOnceWith(
       { eventId: slug, scan: saved.scan },
       session.sessionId,

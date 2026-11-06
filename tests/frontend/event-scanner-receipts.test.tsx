@@ -19,7 +19,9 @@ describe("scanner foreground receipt and drain lifecycle", () => {
     }));
     await submit();
     const scan = eventScanCaptureIntentSchema.parse(mocks.persist.mock.calls[0]![0]);
-    await vi.waitFor(() => expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready for entry"));
+    await vi.waitFor(() => expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready for entry"), {
+      timeout: 1500,
+    });
     expect(host.querySelector(".pk-fast-scanner__trail")?.textContent).toContain("scan saved on device");
     await act(async () => {
       worker.dispatchEvent(

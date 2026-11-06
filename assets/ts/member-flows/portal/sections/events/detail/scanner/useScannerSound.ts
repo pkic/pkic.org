@@ -14,7 +14,6 @@ export function useScannerSound(
   result: EventScanResponse | null,
   action: EventScanRequest["action"],
   failed: boolean,
-  offline = false,
   session = false,
 ) {
   const success = scannerRole(action, session);
@@ -26,8 +25,7 @@ export function useScannerSound(
   useEffect(() => {
     if (!result || presented.current === result) return;
     presented.current = result;
-    const outcome =
-      offline && !result.recorded && result.outcome === "eligible" ? "unverified" : scanFeedbackOutcome(result, action);
+    const outcome = scanFeedbackOutcome(result, action);
     const sound =
       outcome === "eligible"
         ? success
@@ -40,7 +38,7 @@ export function useScannerSound(
     if (heard.current?.operation === result.operationId && heard.current.sound === sound) return;
     heard.current = { operation: result.operationId, sound };
     latestPlay.current(sound);
-  }, [result, action, offline, success]);
+  }, [result, action, success]);
   useEffect(() => {
     if (failed) latestPlay.current("error");
   }, [failed]);

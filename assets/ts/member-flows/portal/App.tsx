@@ -1,3 +1,4 @@
+import { SCANNER_ELIGIBILITY_REFRESH_MS } from "../../../shared/event-offline-expiry";
 import { Button } from "../../ui/Button";
 import { ScannerCodePreparation } from "./sections/events/detail/scanner/scanner-code-preparation";
 import { prepareScannerDecoder } from "./sections/events/detail/scanner/prepareScannerDecoder";
@@ -92,10 +93,15 @@ export function App() {
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
-  async function loadPortalSession(isCurrent: () => boolean = () => true): Promise<boolean> {
+  async function loadPortalSession(
+    isCurrent: () => boolean = () => true,
+    preserveOfflineScanner = false,
+  ): Promise<boolean> {
     if (!isCurrent()) return portalSession.value !== null;
-    scannerTransportUnavailable.value = false;
-    setSessionError(null);
+    if (!preserveOfflineScanner) {
+      scannerTransportUnavailable.value = false;
+      setSessionError(null);
+    }
     const checkedSessionId = portalSession.value?.sessionId;
     let checkedLocalSession: Awaited<ReturnType<typeof readActiveUserSession>> = null;
     try {
@@ -116,12 +122,15 @@ export function App() {
         return portalSession.value !== null;
       }
       if (portalSession.value?.identity.id !== session.identity.id) clearMemberProfile();
+      scannerTransportUnavailable.value = false;
+      setSessionError(null);
       savePortalSession(session);
       const nextProfile = await getJson("/api/v1/users/current", myProfileSchema);
       if (isCurrent() && portalSession.value === session) saveProfile(nextProfile);
     } catch (error) {
       if (!isCurrent()) return portalSession.value !== null;
       if (error instanceof ApiClientError && [401, 403].includes(error.status)) {
+        scannerTransportUnavailable.value = false;
         await clearScannerOfflineContexts(checkedLocalSession).catch(() => {
           if (isCurrent())
             setSessionError("Local scanner preparation could not be cleared. Reconnect before scanning.");
@@ -245,16 +254,40 @@ export function App() {
         if (portalSession.value?.sessionId === current.sessionId) clearAuth();
       }
     }
+    let reconnecting = false;
+    let disposed = false;
     function reconnect() {
+      if (reconnecting || !navigator.onLine) return;
+      reconnecting = true;
       void (async () => {
-        if (!(await resumePendingUserLogout()) && !portalSession.value) await loadPortalSession();
-      })().catch(() => setSessionError("Could not reconnect. Please try again."));
+        if (!(await resumePendingUserLogout()) && !portalSession.value)
+          await loadPortalSession(() => !disposed, scannerTransportUnavailable.value);
+      })()
+        .catch(() => {
+          if (!disposed) setSessionError("Could not reconnect. Please try again.");
+        })
+        .finally(() => {
+          reconnecting = false;
+        });
     }
+    const resumeScanner = () => {
+      if (scannerTransportUnavailable.value && scannerCollectorPath(window.location.hash)) reconnect();
+    };
+    const visible = () => {
+      if (document.visibilityState === "visible") resumeScanner();
+    };
+    const refreshScanner = window.setInterval(resumeScanner, SCANNER_ELIGIBILITY_REFRESH_MS);
     const unsubscribe = subscribeUserSessionState(() => {
       void changed();
     });
     window.addEventListener("online", reconnect);
+    window.addEventListener("focus", resumeScanner);
+    document.addEventListener("visibilitychange", visible);
     return () => {
+      disposed = true;
+      window.clearInterval(refreshScanner);
+      window.removeEventListener("focus", resumeScanner);
+      document.removeEventListener("visibilitychange", visible);
       scannerTransportUnavailable.value = false;
       unsubscribe();
       window.removeEventListener("online", reconnect);

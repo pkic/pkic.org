@@ -22,7 +22,7 @@ export function ScannerPacing({
           {...control}
           value={value}
           onChange={(event) =>
-            onChange(scannerFeedbackPauses.find((duration) => String(duration) === event.currentTarget.value) ?? 300)
+            onChange(scannerFeedbackPauses.find((duration) => String(duration) === event.currentTarget.value) ?? 1000)
           }
         >
           {scannerFeedbackPauses.map((duration) => (
