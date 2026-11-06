@@ -16,22 +16,12 @@ afterEach(() => {
   host = undefined;
 });
 
-async function mount(
-  organization: string | null,
-  personalEmail: boolean,
-  handledLast = false,
-  audience: "organizer" | "sponsor" = "sponsor",
-) {
+async function mount(organization: string | null, personalEmail: boolean, handledLast = false) {
   host = document.createElement("div");
   document.body.append(host);
   await act(() =>
     render(
-      <ContactOrganization
-        organization={organization}
-        personalEmail={personalEmail}
-        handledLast={handledLast}
-        audience={audience}
-      />,
+      <ContactOrganization organization={organization} personalEmail={personalEmail} handledLast={handledLast} />,
       host!,
     ),
   );
@@ -39,8 +29,8 @@ async function mount(
 }
 
 describe("contact organization", () => {
-  it("marks a personal-mailbox contact instead of naming any organization", async () => {
-    expect(await mount("Selected organization", true)).toBe(PERSONAL_EMAIL_ADDRESS_LABEL);
+  it("never names an organization for a personal-mailbox contact", async () => {
+    expect(await mount("Selected organization", true)).not.toContain("Selected organization");
   });
 
   it("tells organizers why a waiting registrant is handled last in one pill", async () => {
@@ -53,12 +43,27 @@ describe("contact organization", () => {
     expect(pills[0]?.querySelector(".pk-sr-only")?.textContent).toContain(PERSONAL_ADDRESS_HANDLED_LAST_DESCRIPTION);
   });
 
-  it("shows organizers the same one pill for every personal-mailbox registrant, waiting or not", async () => {
-    const waiting = await mount(null, true, true, "organizer");
-    const notWaiting = await mount(null, true, false, "organizer");
-    expect(notWaiting).toBe(waiting);
-    expect(notWaiting).not.toContain(PERSONAL_EMAIL_ADDRESS_LABEL);
-    expect(host!.querySelectorAll(".pk-badge--warn")).toHaveLength(1);
+  it("does not claim a personal primary address is handled last when a verified work address restores priority", async () => {
+    expect(await mount(null, true, false)).toBe(PERSONAL_EMAIL_ADDRESS_LABEL);
+    expect(host!.querySelectorAll(".pk-badge--neutral")).toHaveLength(1);
+    expect(host!.querySelector(".pk-badge--warn")).toBeNull();
+    expect(host!.querySelector("[title]")).toBeNull();
+    expect(host!.querySelector(".pk-sr-only")).toBeNull();
+  });
+
+  it("keeps the handled-last warning beside a work organization awaiting verification", async () => {
+    expect(await mount("Selected organization", false, true)).toContain("Selected organization");
+    expect(host!.querySelector(".pk-badge--warn")?.getAttribute("title")).toBe(
+      PERSONAL_ADDRESS_HANDLED_LAST_DESCRIPTION,
+    );
+  });
+
+  it("renders sponsor classification as plain text without an organizer warning", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(() => render(<ContactOrganization audience="sponsor" organization={null} personalEmail />, host!));
+    expect(host.textContent).toBe(PERSONAL_EMAIL_ADDRESS_LABEL);
+    expect(host.querySelector(".pk-badge")).toBeNull();
   });
 
   it("names the organization of a work-address contact", async () => {

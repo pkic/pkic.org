@@ -172,7 +172,6 @@ export function GroupEventRegistrations({
                 organization={r.organization_name}
                 personalEmail={r.personal_email}
                 handledLast={r.waitlist_handled_last}
-                audience="organizer"
               />
             ),
             className: "pk-small",

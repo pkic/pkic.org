@@ -7,12 +7,10 @@ import { assertEventContactAccess, eventContactAccessSql } from "./evidence-rete
 import { sponsorConsentSql } from "./sponsor-consent";
 import { sponsorLeadPermissionSql } from "./lead-scope";
 import { contactAffiliation } from "../../email-domains/contact-kind";
-import { PERSONAL_EMAIL_ADDRESS_LABEL } from "../../../../assets/shared/email-first-copy";
 
 export const SPONSOR_LEAD_EXPORT_PERMISSION_SQL = sponsorLeadPermissionSql("agenda:leads_export");
 
 interface LeadExportRow {
-  user_id: string;
   name: string;
   email: string;
   organization: string | null;
@@ -33,7 +31,7 @@ export async function exportSponsorLeads(db: DatabaseLike, eventId: string, spon
   await assertEventContactAccess(db, eventId);
   const rows = await all<LeadExportRow>(
     db,
-    `SELECT lead.user_id,TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) AS name,u.email,${registrationOrganizationSql("reg")} AS organization,lead.observed_at
+    `SELECT TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) AS name,u.email,${registrationOrganizationSql("reg")} AS organization,lead.observed_at
     FROM event_sponsor_leads lead JOIN users u ON u.id=lead.user_id
     JOIN registrations reg ON reg.event_id=lead.event_id AND reg.user_id=lead.user_id
     JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id AND sponsor.event_id=lead.event_id
@@ -47,16 +45,10 @@ export async function exportSponsorLeads(db: DatabaseLike, eventId: string, spon
   if (rows.length > 100000) throw new AppError(413, "CSV_EXPORT_TOO_LARGE", "Export must not exceed 100000 leads.");
   return encodeBoundedCsv(
     [
-      ["Attendee ID", "Name", "Email", "Organization", "Captured at"],
+      ["Name", "Email", "Organization", "Personal email address", "Captured at"],
       ...rows.map((row) => {
         const affiliation = contactAffiliation(row.email, row.organization);
-        return [
-          row.user_id,
-          row.name,
-          row.email,
-          affiliation.personalEmail ? PERSONAL_EMAIL_ADDRESS_LABEL : affiliation.organization,
-          row.observed_at,
-        ];
+        return [row.name, row.email, affiliation.organization, affiliation.personalEmail, row.observed_at];
       }),
     ],
     20 * 1024 * 1024,

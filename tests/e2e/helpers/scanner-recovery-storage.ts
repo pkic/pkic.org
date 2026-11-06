@@ -82,7 +82,7 @@ export async function openScannerDiagnostics(page: Page) {
 
 export async function closeScannerDiagnostics(page: Page): Promise<void> {
   const diagnostics = scannerDiagnostics(page);
-  if (await diagnostics.isVisible()) await page.getByRole("tab", { name: "Setup", exact: true }).click();
+  if (await diagnostics.isVisible()) await page.getByRole("tab", { name: "Scan", exact: true }).click();
   await expect(diagnostics).not.toBeVisible();
 }
 
@@ -95,11 +95,11 @@ export async function openScannerManualEntry(page: Page): Promise<void> {
       const controls = page.getByRole("dialog", { name: "Scanner operator controls", exact: true });
       if (await controls.isVisible())
         await controls.getByRole("button", { name: "Close operator controls", exact: true }).click();
-      await continuous.getByRole("button", { name: "Manual entry", exact: true }).click();
+      await continuous.getByRole("button", { name: "Find attendee or badge", exact: true }).click();
     } else {
-      const scan = page.getByRole("tab", { name: "Setup", exact: true });
+      const scan = page.getByRole("tab", { name: "Scan", exact: true });
       if ((await scan.isVisible()) && (await scan.getAttribute("aria-selected")) === "false") await scan.click();
-      await page.getByRole("button", { name: "Manual entry", exact: true }).click();
+      await page.getByRole("button", { name: "Find attendee or badge", exact: true }).click();
     }
   }
   await expect(manual).toBeVisible();

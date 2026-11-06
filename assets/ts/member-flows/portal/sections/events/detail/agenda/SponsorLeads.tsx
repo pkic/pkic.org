@@ -1,3 +1,4 @@
+import { ContactOrganization } from "../../../../../../components/ContactOrganization";
 import { type ClockZone } from "../../../../../../../shared/event-clock";
 import { SponsorLeadCaptures } from "./SponsorLeadCaptures";
 import { useEffect, useState } from "preact/hooks";
@@ -16,7 +17,6 @@ import { Menu } from "../../../../../../ui/Menu";
 
 import { loadLiveSponsorLeads } from "./sponsor-lead-loader";
 import { portalSession } from "../../../../state";
-import { ContactOrganization } from "../../../../../../components/ContactOrganization";
 const EventScanner = lazy(() => import("../scanner/EventScanner").then((module) => ({ default: module.EventScanner })));
 
 export function SponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZone }) {
@@ -186,7 +186,11 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                     {
                       header: "Organization",
                       cell: (row) => (
-                        <ContactOrganization organization={row.organization} personalEmail={row.personalEmail} />
+                        <ContactOrganization
+                          audience="sponsor"
+                          organization={row.organization}
+                          personalEmail={row.personalEmail}
+                        />
                       ),
                       sort: { asc: "organization", desc: "-organization" },
                     },
@@ -195,7 +199,10 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: ClockZ
                       cell: (row) => formatDateTimeInZone(row.capturedAt, timeZone),
                       sort: { asc: "capturedAt", desc: "-capturedAt" },
                     },
-                    { header: "Captured by", cell: (row) => row.operatorName ?? row.operatorUserId },
+                    {
+                      header: "Captured by",
+                      cell: (row) => row.operatorName || "—",
+                    },
                     {
                       header: "History",
                       hideable: false,
