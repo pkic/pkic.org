@@ -3,7 +3,7 @@
  * endpoints and group-scoped management surfaces.
  */
 import { z } from "zod";
-import { successResponseSchema } from "./api-common";
+import { successResponseSchema, utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema, type PaginationDefaults } from "./pagination";
 import { membershipCategorySelectionSchema } from "./membership-categories";
@@ -52,6 +52,12 @@ export const VOTE_PROPOSAL_STATUSES = [
 export const voteProposalStatusSchema = z.enum(VOTE_PROPOSAL_STATUSES);
 
 export const BALLOT_CHOICES = ["in_favor", "opposed", "abstain"] as const;
+/** How each motion choice reads, on the ballot and in the managers' ballot audit alike. */
+export const BALLOT_CHOICE_LABELS: Record<(typeof BALLOT_CHOICES)[number], string> = {
+  in_favor: "In favor",
+  opposed: "Opposed",
+  abstain: "Abstain",
+};
 
 // ── Closed-vote result contract ──────────────────────────────────────
 // result_json is written by exactly two producers, never a third shape:
@@ -201,10 +207,22 @@ export const publicVoteSchema = z.object({
   result: voteResultSchema,
 });
 
+/**
+ * The Member's ballot as its representatives see it. Any of them may replace
+ * it, so each sees what is recorded, who cast it, and when.
+ */
+export const recordedMemberBallotSchema = z.object({
+  choice: z.string(),
+  castByName: z.string(),
+  castByYou: z.boolean(),
+  castAt: utcInstantSchema,
+});
+
 export const eligibleMemberBallotSchema = z.object({
   memberId: databaseIdSchema,
   organizationName: z.string(),
   hasCastBallot: z.boolean(),
+  recorded: recordedMemberBallotSchema.nullable(),
 });
 
 export const memberVoteSchema = z.object({
@@ -312,6 +330,13 @@ export const publicVotesFeedRouteSchema = {
 export const submitBallotSchema = z.object({
   memberId: databaseIdSchema.nullable().optional(),
   choice: z.string().trim().min(1).max(100),
+  /**
+   * The recorded Member ballot this submission replaces, by its `castAt`, or
+   * null when none was recorded; omitted reads as null. A ballot that changed
+   * since is refused rather than silently replaced, so a client that never
+   * read the recorded ballot can cast the first one but never overwrite it.
+   */
+  replacesBallotCastAt: utcInstantSchema.nullable().optional(),
 });
 export const submitBallotResponseSchema = successResponseSchema;
 

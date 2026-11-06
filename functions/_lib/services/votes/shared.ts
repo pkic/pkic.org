@@ -9,7 +9,9 @@ import { nowIso } from "../../utils/time";
 import { deriveVoteStatus } from "./status";
 import type { z } from "zod";
 import { all, first } from "../../db/queries";
-import { buildD1JsonMembershipFilter } from "../../db/json-membership";
+import { batchRows } from "../../db/pagination";
+import type { D1StatementResult } from "../../types";
+import type { SqlSelection } from "../../db/sql-value";
 import { parseJsonSafe } from "../../utils/json";
 import { AppError } from "../../errors";
 import { getGroup } from "../groups/read-model";
@@ -117,7 +119,7 @@ export async function uniqueSlug(db: DatabaseLike, title: string): Promise<strin
   );
 }
 
-export function eligibleCategoriesOf(row: VoteRow): string[] | null {
+export function eligibleCategoriesOf(row: Pick<VoteRow, "eligible_categories">): string[] | null {
   const parsed = parseJsonSafe<string[] | null>(row.eligible_categories, null);
   return parsed;
 }
@@ -217,24 +219,32 @@ export async function getCandidatesForVotes(
   db: DatabaseLike,
   voteIds: string[],
 ): Promise<Map<string, CandidateSummary[]>> {
-  const byVoteId = new Map<string, CandidateSummary[]>();
-  if (voteIds.length === 0) return byVoteId;
+  if (voteIds.length === 0) return new Map();
+  const read = prepareCandidatesForVotes(db, {
+    sql: "SELECT value FROM json_each(?)",
+    bindings: [JSON.stringify(voteIds)],
+  });
+  return read.decode((await db.batch([read.statement]))[0]);
+}
 
-  const voteFilter = buildD1JsonMembershipFilter("vote_id", voteIds);
-  const rows = await all<CandidateRow>(
-    db,
-    `SELECT ${VOTE_CANDIDATE_COLUMNS}
-     FROM vote_candidates
-     WHERE ${voteFilter.sql}
-     ORDER BY vote_id, sort_order ASC, created_at ASC`,
-    voteFilter.bindings,
-  );
-  for (const row of rows) {
-    const list = byVoteId.get(row.vote_id) ?? [];
-    list.push(toCandidateSummary(row));
-    byVoteId.set(row.vote_id, list);
-  }
-  return byVoteId;
+export function prepareCandidatesForVotes(db: DatabaseLike, selection: SqlSelection) {
+  return {
+    statement: db
+      .prepare(
+        `SELECT ${VOTE_CANDIDATE_COLUMNS} FROM vote_candidates
+      WHERE vote_id IN (${selection.sql}) ORDER BY vote_id, sort_order ASC, created_at ASC`,
+      )
+      .bind(...selection.bindings),
+    decode(result: D1StatementResult): Map<string, CandidateSummary[]> {
+      const byVoteId = new Map<string, CandidateSummary[]>();
+      for (const row of batchRows<CandidateRow>(result)) {
+        const list = byVoteId.get(row.vote_id) ?? [];
+        list.push(toCandidateSummary(row));
+        byVoteId.set(row.vote_id, list);
+      }
+      return byVoteId;
+    },
+  };
 }
 
 export async function getVoteRowOrThrow(db: DatabaseLike, idOrSlug: string): Promise<VoteRow> {

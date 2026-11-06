@@ -1,3 +1,6 @@
+import { sqlValue, type SqlId } from "../../db/sql-value";
+import { batchFirst } from "../../db/pagination";
+import type { D1StatementResult } from "../../types";
 import { nowIso } from "../../utils/time";
 import { deriveVoteStatus, isVoteAcceptingBallots, voteStatusSql } from "./status";
 import {
@@ -10,7 +13,6 @@ import {
 import type { VoteGroupCapability } from "../../../../assets/shared/schemas/resource-grants";
 import { VOTES_LIST_SORT_COLUMNS } from "../../../../assets/shared/schemas/votes";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
-import { first } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -35,7 +37,7 @@ import {
   type VoteResult,
   type VoteRow,
 } from "./shared";
-import { hydrateVotesForUser } from "./member-read-model";
+import { hydrateVotesForUser, type MemberVoteSummary } from "./member-read-model";
 
 interface GroupVoteRow extends VoteRow {
   granted_capabilities: string | null;
@@ -79,7 +81,7 @@ function contextualVoteCapabilities(
   );
 }
 
-function availableVoteTransitions(
+export function availableVoteTransitions(
   row: VoteRow,
   capabilities: readonly VoteGroupCapability[],
   nowMs: number,
@@ -112,39 +114,46 @@ function mapGroupVote(row: GroupVoteRow, groupId: string, nowMs: number): GroupV
   });
 }
 
-async function resolveGroupVote(
+export function prepareGroupVoteDetailRow(
   db: DatabaseLike,
-  viewer: GroupResourceViewer,
-  groupId: string,
+  groupId: SqlId,
   voteId: string,
-): Promise<{ row: VoteRow; capabilities: VoteGroupCapability[] }> {
-  const accessibleVotes = buildLiveAccessibleGroupResourceIdsCte(
-    "vote",
-    groupId,
-    liveGroupResourceContextAccess(viewer, groupId),
-    "view",
-  );
-  const row = await first<GroupVoteRow>(
-    db,
-    `WITH ${accessibleVotes.sql}
+  access: LiveGroupResourceContextAccess,
+) {
+  const group = sqlValue(groupId);
+  const accessibleVotes = buildLiveAccessibleGroupResourceIdsCte("vote", groupId, access, "view");
+  const statement = db
+    .prepare(
+      `WITH ${accessibleVotes.sql}
      SELECT ${voteRowProjection("vote")}, GROUP_CONCAT(DISTINCT grant_row.capability) AS granted_capabilities,
             group_access.member_access, group_access.manager_access
        FROM accessible_resource accessible
        JOIN votes vote ON vote.id = accessible.resource_id
        CROSS JOIN group_access
-       LEFT JOIN vote_group_grants grant_row ON grant_row.vote_id = vote.id AND grant_row.group_id = ?
+       LEFT JOIN vote_group_grants grant_row ON grant_row.vote_id = vote.id AND grant_row.group_id = ${group.sql}
       WHERE vote.id = ?
       GROUP BY vote.id`,
-    [...accessibleVotes.bindings, groupId, voteId],
-  );
-  if (!row) throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
-  const capabilities = contextualVoteCapabilities(
-    row,
-    effectiveVoteCapabilities(row, groupId, rowAccess(row), grantedCapabilities(row)),
-    Date.now(),
-  );
-  if (!capabilities.includes("view")) throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
-  return { row, capabilities };
+    )
+    .bind(...accessibleVotes.bindings, ...group.bindings, voteId);
+  return {
+    statement,
+    decode(result: D1StatementResult, resolvedGroupId: string) {
+      const row = batchFirst<GroupVoteRow>(result);
+      if (!row) throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
+      const capabilities = contextualVoteCapabilities(
+        row,
+        effectiveVoteCapabilities(row, resolvedGroupId, rowAccess(row), grantedCapabilities(row)),
+        Date.now(),
+      );
+      if (!capabilities.includes("view")) throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
+      return { row, capabilities };
+    },
+  };
+}
+
+async function resolveGroupVote(db: DatabaseLike, viewer: GroupResourceViewer, groupId: string, voteId: string) {
+  const read = prepareGroupVoteDetailRow(db, groupId, voteId, liveGroupResourceContextAccess(viewer, groupId));
+  return read.decode((await db.batch([read.statement]))[0], groupId);
 }
 
 export function buildGroupVotesPageQuery(
@@ -241,6 +250,14 @@ export async function getGroupVoteDetail(
 ): Promise<GroupVoteDetail> {
   const { row, capabilities } = await resolveGroupVote(db, viewer, groupId, voteId);
   const [hydrated] = await hydrateVotesForUser(db, [row], viewer.userId, viewer.identityId ?? null, groupId);
+  return projectGroupVoteDetail(row, capabilities, hydrated);
+}
+
+export function projectGroupVoteDetail(
+  row: VoteRow,
+  capabilities: VoteGroupCapability[],
+  hydrated: MemberVoteSummary,
+): GroupVoteDetail {
   const result: VoteResult =
     deriveVoteStatus(row, nowIso()) === "closed" && capabilities.includes("view_results")
       ? closedVoteResult(row)

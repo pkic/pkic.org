@@ -1,14 +1,12 @@
-import { BALLOT_CHOICES } from "../../../../../shared/schemas/votes";
+import { BALLOT_CHOICE_LABELS, BALLOT_CHOICES } from "../../../../../shared/schemas/votes";
 import type { MemberVote, ElectionVoteResult, MotionVoteResult } from "../../types";
 
 type BallotChoice = (typeof BALLOT_CHOICES)[number];
 
-/** How each choice reads on a ballot. The set itself belongs to the contract. */
-const BALLOT_CHOICE_LABELS: Record<BallotChoice, string> = {
-  in_favor: "In favor",
-  opposed: "Opposed",
-  abstain: "Abstain",
-};
+/** A motion choice in words; an unknown value is shown as stored. */
+export function ballotChoiceLabel(choice: string): string {
+  return BALLOT_CHOICE_LABELS[choice as BallotChoice] ?? choice;
+}
 
 export const MOTION_CHOICES: { value: BallotChoice; label: string }[] = BALLOT_CHOICES.map((value) => ({
   value,

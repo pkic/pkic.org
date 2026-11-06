@@ -45,9 +45,8 @@ export function VoteDetails({
              */
             <Panel key={ballot.memberId}>
               <PanelHeader title={ballot.organizationName}>
-                <Badge tone={ballot.hasCastBallot ? "accent" : "neutral"}>
-                  {ballot.hasCastBallot ? "Ballot recorded" : "Not yet voted"}
-                </Badge>
+                {/* A recorded ballot is stated in the body with its choice; only a missing one needs attention. */}
+                {!ballot.hasCastBallot && <Badge tone="warn">Not yet voted</Badge>}
               </PanelHeader>
               <PanelBody>
                 {vote.questionForm ? (
@@ -62,6 +61,8 @@ export function VoteDetails({
                   <BallotForm
                     vote={vote}
                     memberId={ballot.memberId}
+                    organizationName={ballot.organizationName}
+                    recorded={ballot.recorded}
                     hasCastBallot={ballot.hasCastBallot}
                     endpoint={ballotEndpoint}
                     onCast={onChanged}

@@ -1,3 +1,4 @@
+import { formatNumber } from "../../../../../shared/format-number";
 import { useId, useState } from "preact/hooks";
 import {
   groupVoteBallotsAuditResponseSchema,
@@ -21,11 +22,8 @@ import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, TextInput } from "../../../../ui/TextControl";
 import { fmt } from "../../ui";
 import { GroupVoteLifecycleActions } from "./GroupVoteLifecycleActions";
-// The ballot columns are written by class name (`pk-mono` for the opaque
-// identifiers), and component CSS ships in a lazy chunk, so the stylesheet
-// that defines them has to be imported by the module that names them.
-import "../../../../ui/Content.css";
 import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
+import { ballotChoiceLabel } from "../Votes/shared";
 
 const VISIBILITY_LABELS: Record<VoteVisibility, string> = {
   private: "Private",
@@ -254,22 +252,24 @@ export function GroupVoteBallots({ groupId, voteId }: { groupId: string; voteId:
       columns={[
         {
           header: "Voter",
-          className: "pk-mono",
-          cell: (ballot) => ballot.userId,
-          sort: { asc: "userId", desc: "-userId" },
+          cell: (ballot) => ballot.voterName,
+          sort: { asc: "voterName", desc: "-voterName" },
         },
         {
           header: "Member",
-          className: "pk-mono",
-          cell: (ballot) => ballot.memberId ?? "—",
-          sort: { asc: "memberId", desc: "-memberId" },
+          cell: (ballot) => ballot.memberName ?? "—",
+          sort: { asc: "memberName", desc: "-memberName" },
         },
-        { header: "Choice", cell: (ballot) => ballot.choice, sort: { asc: "choice", desc: "-choice" } },
+        {
+          header: "Choice",
+          cell: (ballot) => ballot.candidateName ?? ballotChoiceLabel(ballot.choice),
+          sort: { asc: "choice", desc: "-choice" },
+        },
         {
           header: "Round",
-          className: "pk-end",
+          align: "end",
           width: "fit",
-          cell: (ballot) => ballot.round,
+          cell: (ballot) => formatNumber(ballot.round),
           sort: { asc: "round", desc: "-round" },
         },
         {
