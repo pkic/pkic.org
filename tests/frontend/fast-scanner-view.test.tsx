@@ -383,3 +383,45 @@ it("shows compact setup feedback without a fullscreen mark while retaining actua
   expect(html).toContain("Unable to save scan. Retry.");
   expect(html).toContain("2 scans awaiting upload");
 });
+
+it.each([
+  { role: "entry", mode: "attendance" as const },
+  { role: "exit", mode: "checkout" as const },
+  { role: "lead", mode: "lead" as const },
+  { role: "print", mode: "attendance" as const, purpose: "print" as const },
+  {
+    role: "session",
+    mode: "attendance" as const,
+    preparation: {
+      action: "attendance" as const,
+      occurrenceId: "example-session",
+      ready: false,
+      preparing: true,
+      error: "",
+    },
+  },
+])("preserves the $role identity through ready and warning feedback", ({ role, ...modeProps }) => {
+  const ready = new DOMParser().parseFromString(
+    render(<FastScannerView {...props} {...modeProps} result={null} />),
+    "text/html",
+  ).body.firstElementChild!;
+  const warning = new DOMParser().parseFromString(
+    render(
+      <FastScannerView
+        {...props}
+        {...modeProps}
+        result={{
+          operationId: "example",
+          outcome: "warning",
+          reason: "wrong_location",
+          recorded: false,
+          attendanceRecorded: false,
+        }}
+      />,
+    ),
+    "text/html",
+  ).body.firstElementChild!;
+  expect(ready.getAttribute("data-scanner-role")).toBe(role);
+  expect(warning.getAttribute("data-scanner-role")).toBe(role);
+  expect(warning.classList.contains("pk-fast-scanner--warning")).toBe(true);
+});

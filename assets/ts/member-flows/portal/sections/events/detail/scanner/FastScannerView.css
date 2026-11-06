@@ -15,7 +15,14 @@
     border-radius: var(--pk-radius-lg);
     overflow: hidden;
   }
+  .pk-fast-scanner[data-scanner-role="entry"] { --pk-scanner-field-position: 0% 0%; }
+  .pk-fast-scanner[data-scanner-role="exit"] { --pk-scanner-field-position: 30% 30%; }
+  .pk-fast-scanner[data-scanner-role="session"] { --pk-scanner-field-position: 58% 58%; }
+  .pk-fast-scanner[data-scanner-role="lead"] { --pk-scanner-field-position: 78% 78%; }
+  .pk-fast-scanner[data-scanner-role="print"] { --pk-scanner-field-position: 100% 100%; }
   .pk-login__backdrop.pk-fast-scanner {
+    background-size: 400% 400%;
+    background-position: var(--pk-scanner-field-position);
     margin: 0;
     padding: max(var(--pk-5), env(safe-area-inset-top)) max(var(--pk-5), env(safe-area-inset-right))
       max(var(--pk-4), env(safe-area-inset-bottom)) max(var(--pk-5), env(safe-area-inset-left));

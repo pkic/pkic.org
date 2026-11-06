@@ -81,6 +81,7 @@ export function ScannerPreparationStatus({
   lastSync,
 }: {
   action: EventScanRequest["action"];
+  occurrenceId?: string | null;
   preparing: boolean;
   ready: boolean;
   error: string;

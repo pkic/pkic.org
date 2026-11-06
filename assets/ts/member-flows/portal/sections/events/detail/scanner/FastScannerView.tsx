@@ -1,3 +1,4 @@
+import { scannerRole } from "./scanner-role";
 import { useScannerTaskSwipe } from "./ScannerTaskNavigation";
 import { ScannerModeIcon } from "./ScannerModeIcon";
 import { ScannerPreparationStatus } from "./ScannerPreparationStatus";
@@ -135,6 +136,7 @@ export function FastScannerView({
     <div
       class={`pk-login__backdrop pk-fast-scanner pk-scanner-viewport pk-fast-scanner--${outcome}${presentation === "embedded" ? " pk-fast-scanner--embedded" : ""}${result ? " pk-fast-scanner--result" : ""}${manualEntry || recentScans ? " pk-fast-scanner--manual" : ""}`}
       data-fullscreen={presentation === "fullscreen" || undefined}
+      data-scanner-role={scannerRole(mode, Boolean(preparation?.occurrenceId), purpose === "print")}
       role={presentation === "fullscreen" ? "dialog" : "region"}
       aria-modal={presentation === "fullscreen" ? "true" : undefined}
       aria-label={purpose === "print" ? "Badge printing scanner" : "Continuous badge scanner"}

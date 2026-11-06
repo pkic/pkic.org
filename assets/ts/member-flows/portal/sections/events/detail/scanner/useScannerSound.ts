@@ -1,3 +1,4 @@
+import { scannerRole } from "./scanner-role";
 import { useEffect, useRef } from "preact/hooks";
 import type {
   EventScanRequest,
@@ -16,7 +17,7 @@ export function useScannerSound(
   offline = false,
   session = false,
 ) {
-  const success = action === "lead" ? "lead" : session ? "session" : action === "checkout" ? "exit" : "entry";
+  const success = scannerRole(action, session);
   const audio = useScannerAudio(enabled, success);
   const presented = useRef<EventScanResponse | null>(null);
   const heard = useRef<{ operation: string; sound: ScannerSound } | null>(null);
