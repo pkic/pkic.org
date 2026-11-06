@@ -7,6 +7,7 @@ import { SectionHeading } from "./SectionHeading";
 import { HeadingOutline } from "./HeadingOutline";
 import { usePopupPlacement } from "./popup-placement";
 import { formatNumber } from "../../shared/format-number";
+import "../../design/tokens.tour.generated.css";
 import "./GuidedTour.css";
 
 export interface GuidedTourStep {

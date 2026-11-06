@@ -148,12 +148,6 @@ const shadowDark: Record<keyof typeof shadowLight, string> = {
   "shadow-3": "0 12px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)",
 };
 
-/**
- * The conference kit's field gradient. The attendee event app paints its key
- * visual with it and the agenda's session dialog paints its header with it, so
- * both tokens read this one definition.
- */
-
 /** Values that do not change with the theme. */
 export const constants = {
   // Decorative Handlebars backgrounds keep the editor's ordinary ink readable.
@@ -547,6 +541,7 @@ export const publicationBrand = {
 
 /** Component-only tokens load with their consumers rather than the global entry. */
 export const featureTokenGroups = {
+  tour: ["tour-highlight"],
   agenda: Object.keys(constants).filter((name) => name.startsWith("agenda-")),
   scanner: [
     "grad-state-ok",
