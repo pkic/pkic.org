@@ -113,7 +113,7 @@ test("the registration desk switches between immediate labels and full badges", 
   await expect(page).toHaveURL(new RegExp("/scanner/print$"));
   await expect(page.getByRole("dialog", { name: "Badge printing scanner", exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath("print-scanner-mobile-default.png") });
-  await page.getByRole("button", { name: "Embedded view", exact: true }).click();
+  await page.getByRole("button", { name: "Find attendee or badge", exact: true }).click();
   // Mobile browsers can print the parent document even when an iframe initiated the command.
   await page.evaluate(() => {
     let printCalls = 0;
@@ -195,6 +195,11 @@ test("the registration desk switches between immediate labels and full badges", 
   const printScanner = page.getByRole("dialog", { name: "Badge printing scanner", exact: true });
   await expect(printScanner).toBeVisible();
   expect(await printScanner.evaluate((element) => element.contains(document.elementFromPoint(20, 20)))).toBe(true);
+  await expect(printScanner.getByRole("button", { name: "Embedded view", exact: true })).toHaveCount(0);
+  await expect(printScanner.getByRole("list", { name: "Recent scan results" })).toBeVisible();
+  await printScanner.getByRole("button", { name: "Operator controls", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Print settings", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close operator controls", exact: true }).click();
   await page.screenshot({ path: info.outputPath("print-scanner-fullscreen-desktop.png") });
   await page.setViewportSize({ width: 375, height: 812 });
   expect(await printScanner.evaluate((element) => element.contains(document.elementFromPoint(20, 20)))).toBe(true);
@@ -215,9 +220,9 @@ test("the registration desk switches between immediate labels and full badges", 
   await expect(page.locator("html")).toHaveAttribute("data-scanner-spin", "print:entry");
   const captureScanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
   await expect(captureScanner).toBeVisible();
-  await expect(captureScanner.getByText("Venue entrance · Record attendance", { exact: true })).toBeVisible();
+  await expect(captureScanner.getByText("Ready for entry", { exact: true })).toBeVisible();
   await swipe().press("ArrowLeft");
-  await expect(captureScanner.getByText("Venue exit · Record checkout", { exact: true })).toBeVisible();
+  await expect(captureScanner.getByText("Ready for exit", { exact: true })).toBeVisible();
   await swipe().press("ArrowLeft");
   await expect(page).toHaveURL(/\/scanner\/print$/);
   await expect(printScanner).toBeVisible();

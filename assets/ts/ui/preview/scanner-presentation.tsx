@@ -30,7 +30,7 @@ function ScannerPresentationExample() {
     feedback === "ready" || role === "print"
       ? null
       : eventScanResponseSchema.parse({
-          operationId: "11111111-1111-4111-8111-111111111111",
+          operationId: `11111111-1111-4111-8111-${String(["ready", "eligible", "warning", "denied", "unverified", "unknown"].indexOf(feedback)).padStart(12, "0")}`,
           outcome: feedback,
           reason:
             feedback === "eligible"

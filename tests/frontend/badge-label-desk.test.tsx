@@ -133,7 +133,7 @@ describe("badge printing desk", () => {
     expect(host.querySelector('[role="dialog"][aria-label="Badge printing scanner"]')).not.toBeNull();
     expect(host.querySelector("video")).toBe(video);
     expect(capture.starts).toBe(1);
-    await click("Embedded view");
+    await click("Find attendee or badge");
     expect(release).toHaveBeenCalled();
     expect(host.querySelector("video")).toBe(video);
     expect(capture.starts).toBe(1);

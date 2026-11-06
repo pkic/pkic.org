@@ -39,7 +39,7 @@ it.each(["scan", "print"] as const)("supports the %s role in both scanner presen
   );
   expect(fullscreen).toContain('role="dialog"');
   expect(fullscreen).toContain('aria-modal="true"');
-  expect(fullscreen).toContain("Embedded view");
+  expect(fullscreen).not.toContain("Embedded view");
 });
 afterEach(() => {
   vi.unstubAllGlobals();

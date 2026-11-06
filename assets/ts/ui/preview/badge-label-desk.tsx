@@ -1,6 +1,5 @@
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import { Button } from "../Button";
-import { ErrorAlert } from "../../components/ErrorAlert";
 import { createRef } from "preact";
 import { useState } from "preact/hooks";
 import type { BadgePrintLayout } from "../../../shared/schemas/badge-print-layout";
@@ -22,6 +21,23 @@ function PrintDeskExample() {
         cameraActive={state === "ready"}
         starting={false}
         busy={state === "preparing"}
+        status={
+          state === "error"
+            ? {
+                key: "sample-error",
+                tone: "denied",
+                title: "Could not print",
+                detail: "Could not prepare the print document. Try again.",
+              }
+            : state === "requested" || state === "pdf"
+              ? {
+                  key: state,
+                  tone: "eligible",
+                  title: state === "pdf" ? "PDF ready" : "Print requested",
+                  detail: "Alex Morgan",
+                }
+              : undefined
+        }
         copies={labels}
         design={design}
         onDesign={setDesign}
@@ -34,23 +50,19 @@ function PrintDeskExample() {
           <TextInput {...control} type="search" placeholder="Name, email, or organization" readOnly />
         )}
       >
-        {state === "preparing" && <p role="status">Preparing label…</p>}
         {state === "requested" && (
           <>
-            <p role="status">Print requested.</p>
             <Button>Print labels again</Button>
           </>
         )}
         {state === "pdf" && (
           <>
-            <p role="status">PDF ready. Open or download it to print.</p>
             <div class="pk-cluster">
-              <Button>Open PDF</Button>
+              <Button>Share PDF</Button>
               <Button>Download PDF</Button>
             </div>
           </>
         )}
-        {state === "error" && <ErrorAlert error="Could not prepare the print document. Try again." />}
       </BadgeLabelDeskView>
     </div>
   );

@@ -7,7 +7,7 @@ import { scanFeedbackLabel, scanFeedbackOutcome, scanEligibilityLabel } from "./
 import "../../../../../../../design/tokens.scanner.generated.css";
 import "../../../../../../../design/tokens.event.generated.css";
 import { ScannerExceptionReview } from "./ScannerExceptionReview";
-import { scannerActionLabel } from "./ScannerModeSelect";
+import { ScannerResultTrail, ScannerStatusIcon, useScannerStatus, type ScannerStatus } from "./ScannerStatus";
 import { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type {
   EventScanResponse,
@@ -16,7 +16,7 @@ import type {
 import { Button } from "../../../../../../ui/Button";
 import { CloseButton } from "../../../../../../ui/CloseButton";
 import { IconTools } from "../../../../../../components/icons/indicators";
-import { IconCheckmark, IconInfoCircle, IconRefresh, IconRemove } from "../../../../../../components/icons";
+import { IconRefresh, IconVideo } from "../../../../../../components/icons";
 import { scannerSwipeDirection, trapScannerDrawerTab } from "./scanner-gestures";
 import "../../../../shell/Login.css";
 import "./FastScannerView.css";
@@ -56,6 +56,9 @@ export function FastScannerView({
   preparation,
   lastResult,
   connectionStatus,
+  status,
+  statusActions,
+  operatorControls,
   soundLabel,
   onSound,
 }: {
@@ -65,6 +68,9 @@ export function FastScannerView({
   onPresentation?: () => void;
   lastResult?: EventScanResponse | null;
   connectionStatus?: ComponentChildren;
+  status?: ScannerStatus;
+  statusActions?: ComponentChildren;
+  operatorControls?: ComponentChildren;
   soundLabel?: string;
   onSound?: () => void;
   canRecordAttendance?: boolean;
@@ -123,7 +129,23 @@ export function FastScannerView({
     if (operatorOpen) drawer.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
     else trigger.current?.focus({ preventScroll: true });
   }, [operatorOpen]);
-  const outcome = scanFeedbackOutcome(result, mode);
+  const scanStatus = (scan: EventScanResponse | null | undefined): ScannerStatus | undefined =>
+    scan
+      ? {
+          key: scan.operationId,
+          tone: scanFeedbackOutcome(scan, mode),
+          title: scanFeedbackLabel(scan, mode),
+        }
+      : undefined;
+  const feedback = useScannerStatus(status ?? scanStatus(result), scanStatus(lastResult));
+  const outcome = feedback.visible?.tone ?? scanFeedbackOutcome(result, mode);
+  const readyLabel = {
+    entry: "Ready for entry",
+    exit: "Ready for exit",
+    session: "Ready for session check-in",
+    lead: "Ready to capture a lead",
+    print: "Ready to scan and print",
+  }[visualRole];
   const visibleUploadStatus =
     pending > 0 && uploadStatus === "All pending scans uploaded." ? "Uploading scans in the background…" : uploadStatus;
   const label = result
@@ -140,7 +162,7 @@ export function FastScannerView({
       : "Ready for the next badge";
   return (
     <div
-      class={`pk-login__backdrop pk-fast-scanner pk-scanner-viewport pk-fast-scanner--${outcome}${presentation === "embedded" ? " pk-fast-scanner--embedded" : ""}${result ? " pk-fast-scanner--result" : ""}${manualEntry || recentScans ? " pk-fast-scanner--manual" : ""}`}
+      class={`pk-login__backdrop pk-fast-scanner pk-scanner-viewport pk-fast-scanner--${outcome}${presentation === "embedded" ? " pk-fast-scanner--embedded" : ""}${feedback.visible ? " pk-fast-scanner--result" : ""}${manualEntry || recentScans ? " pk-fast-scanner--manual" : ""}`}
       data-fullscreen={presentation === "fullscreen" || undefined}
       data-scanner-role={visualRole}
       data-gradient-from={gradientFrom}
@@ -202,36 +224,29 @@ export function FastScannerView({
       }}
     >
       <span class="pk-fast-scanner__tone pk-fast-scanner__tone--ok" aria-hidden="true" />
-      <span class="pk-fast-scanner__tone pk-fast-scanner__tone--attention" aria-hidden="true" />
+      <span class="pk-fast-scanner__tone pk-fast-scanner__tone--warning" aria-hidden="true" />
+      <span class="pk-fast-scanner__tone pk-fast-scanner__tone--error" aria-hidden="true" />
       <div class="pk-fast-scanner__stage" aria-hidden={operatorOpen ? true : undefined}>
         <img class="pk-fast-scanner__brand" src="/img/logo.svg" alt="PKI Consortium" width="1256" height="324" />
         {connectionStatus}
-        <p class="pk-fast-scanner__context">
-          {context} · {purpose === "print" ? "Print badges" : scannerActionLabel(mode)}
-        </p>
+
         {!manualEntry && !recentScans && (
           <div class="pk-fast-scanner__feedback" role="status" aria-live="polite" aria-atomic="true">
-            <span class="pk-fast-scanner__mark" aria-hidden="true" key={result?.operationId ?? "ready"}>
-              {outcome === "eligible" ? (
-                <IconCheckmark />
-              ) : outcome === "denied" || outcome === "unknown" ? (
-                <IconRemove />
-              ) : outcome === "warning" ? (
-                <IconInfoCircle />
+            <span class="pk-fast-scanner__mark" aria-hidden="true" key={feedback.visible?.key ?? "ready"}>
+              {feedback.visible ? (
+                <ScannerStatusIcon tone={feedback.visible.tone} />
               ) : (
                 <ScannerModeIcon action={mode} role={visualRole} />
               )}
             </span>
             <strong class="pk-fast-scanner__label">
-              {result
-                ? label
-                : cameraStarting
-                  ? "Starting camera…"
-                  : cameraActive
-                    ? "Ready to scan"
-                    : "Use a reader or paste a code"}
+              {feedback.visible?.title ?? (cameraStarting ? "Starting camera…" : readyLabel)}
             </strong>
-            {message && <p class="pk-fast-scanner__message">{message}</p>}
+            {(feedback.visible?.detail || message) && (
+              <p class="pk-fast-scanner__message">{feedback.visible?.detail || message}</p>
+            )}
+            {purpose === "print" && <div class="pk-fast-scanner__print-status">{statusActions}</div>}
+            {!feedback.visible && context && <p class="pk-fast-scanner__context">{context}</p>}
           </div>
         )}
         {cameraError && (
@@ -241,9 +256,7 @@ export function FastScannerView({
         )}
         {manualEntry && <div class="pk-fast-scanner__manual">{manualEntry}</div>}
         {recentScans && <div class="pk-fast-scanner__manual">{recentScans}</div>}
-        {!manualEntry && !recentScans && lastResult && (
-          <p class="pk-fast-scanner__last">Last scan: {scanFeedbackLabel(lastResult, mode)}</p>
-        )}
+        {!manualEntry && !recentScans && <ScannerResultTrail results={feedback.history} />}
         {presentation === "fullscreen" && !manualEntry && !recentScans && taskSwipe.tasks.length > 1 && (
           <p
             class="pk-fast-scanner__task-swipe"
@@ -263,15 +276,22 @@ export function FastScannerView({
           </p>
         )}
         <div class="pk-fast-scanner__actions">
-          {onPresentation && (
+          {onPresentation && presentation === "embedded" && (
             <Button variant="secondary" onClick={onPresentation}>
               <IconFullscreen />
-              {presentation === "fullscreen" ? "Embedded view" : "Full screen"}
+              Full screen
             </Button>
           )}
           {cameraActive && !manualEntry && !recentScans && (
-            <Button variant="secondary" onClick={onPreview}>
-              {preview ? "Hide preview" : "Show preview"}
+            <Button
+              variant="secondary"
+              icon
+              aria-label={preview ? "Hide preview" : "Show preview"}
+              title={preview ? "Hide preview" : "Show preview"}
+              aria-pressed={preview}
+              onClick={onPreview}
+            >
+              <IconVideo />
             </Button>
           )}
           {!cameraActive && !manualEntry && !recentScans && onCameraRetry && (
@@ -299,9 +319,7 @@ export function FastScannerView({
               {soundLabel}
             </Button>
           )}
-          <Button variant="secondary" onClick={onExit}>
-            Close scanner
-          </Button>
+          <CloseButton overMedia label="Close scanner" onClick={onExit} />
         </div>
         <div class="pk-fast-scanner__next">
           <span class="pk-sr-only">{readiness}</span>
@@ -361,6 +379,7 @@ export function FastScannerView({
             <SectionHeading level={2}>Scanner operator controls</SectionHeading>
             <CloseButton label="Close operator controls" onClick={() => setOperatorOpen(false)} />
           </header>
+          {operatorControls}
           <dl>
             <div>
               <dt>Scanning scope</dt>
@@ -368,7 +387,7 @@ export function FastScannerView({
             </div>
             <div>
               <dt>Current result</dt>
-              <dd>{label}</dd>
+              <dd>{feedback.visible?.title ?? label}</dd>
             </div>
             {result?.admissionRecorded && result.admissionDecision && (
               <>

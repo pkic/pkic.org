@@ -96,7 +96,7 @@ describe("attendee-facing scanner and operator drawer", () => {
     const controls = [...stage.querySelectorAll<HTMLButtonElement>("button:not([disabled])")];
     const first = controls[0]!,
       last = controls.at(-1)!;
-    expect(first.textContent).toBe("Show preview");
+    expect(first.getAttribute("aria-label")).toBe("Show preview");
     expect(last).toBe(trigger);
     for (const [start, target, shiftKey] of [
       [last, first, false],

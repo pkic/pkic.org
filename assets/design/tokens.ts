@@ -482,7 +482,9 @@ export const constants = {
   "grad-duo": "linear-gradient(135deg, var(--pk-accent-deep) 0%, var(--pk-accent) 45%, var(--pk-accent-2) 100%)",
   "grad-brand": `linear-gradient(135deg, ${palette.green} 0%, ${palette.blue} 50%, ${palette.orange} 100%)`,
   "grad-state-ok": `linear-gradient(135deg, #0b2a1c, color-mix(in oklab, ${palette.green} 85%, #000))`,
-  "grad-state-attention": `linear-gradient(135deg, #5b2c0d, color-mix(in oklab, ${palette.orange} 70%, #000))`,
+  "scanner-status-stroke": "4px",
+  "grad-state-warning": `linear-gradient(135deg, color-mix(in oklab, ${palette.yellow} 28%, #000), color-mix(in oklab, ${palette.yellow} 48%, #000))`,
+  "grad-state-error": `linear-gradient(135deg, color-mix(in oklab, ${palette.red} 38%, #000), color-mix(in oklab, ${palette.red} 80%, #000))`,
   stripe: `linear-gradient(90deg, ${palette.green} 0%, ${palette.blue} 50%, ${palette.orange} 100%)`,
 } as const;
 
@@ -549,7 +551,7 @@ export const publicationBrand = {
 /** Component-only tokens load with their consumers rather than the global entry. */
 export const featureTokenGroups = {
   agenda: Object.keys(constants).filter((name) => name.startsWith("agenda-")),
-  scanner: ["grad-state-ok", "grad-state-attention", "pqc-field-stops"],
+  scanner: ["grad-state-ok", "grad-state-warning", "grad-state-error", "scanner-status-stroke", "pqc-field-stops"],
   event: [
     "live-question-type",
     "live-question-type-long",

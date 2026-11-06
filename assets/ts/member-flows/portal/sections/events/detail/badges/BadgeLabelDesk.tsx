@@ -30,8 +30,9 @@ import { IconPrint, IconFullscreen } from "../../../../../../components/icons/ap
 import { useScannerImmersiveLifecycle } from "../scanner/useScannerImmersiveLifecycle";
 import { useScannerPresentation } from "../scanner/useScannerPresentation";
 import { FastScannerView } from "../scanner/FastScannerView";
-import { downloadBadgeArtifact } from "../../../../../../components/event-badges/badge-print-artifacts";
-import { Button, ButtonLink } from "../../../../../../ui/Button";
+import { BadgePdfActions } from "./BadgePdfActions";
+import type { ScannerStatus } from "../scanner/ScannerStatus";
+import { Button } from "../../../../../../ui/Button";
 import { Field, type FieldControlProps } from "../../../../../../ui/Field";
 import { Menu } from "../../../../../../ui/Menu";
 import { PageHeader } from "../../../../../../ui/PageHeader";
@@ -103,6 +104,24 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
         cameraError={camera.error}
         starting={camera.starting}
         busy={printing.busy}
+        status={
+          printing.error
+            ? {
+                key: `${printing.job?.key ?? "print"}:error:${printing.error}`,
+                tone: "denied",
+                title: "Could not print",
+                detail: printing.error,
+              }
+            : printing.job && !printing.busy
+              ? {
+                  key: printing.job.key,
+                  tone: "eligible",
+                  title: printing.pdf ? "PDF ready" : "Print requested",
+                  detail: printing.job.label.displayName ?? "Attendee",
+                  transient: !printing.pdf,
+                }
+              : undefined
+        }
         sound={sound}
         format={format}
         onFormat={setFormat}
@@ -162,18 +181,8 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
           />
         )}
       >
-        {printing.message && <p role="status">{printing.message}</p>}
-        {printing.pdf && pdfUrl && (
-          <div class="pk-cluster">
-            <ButtonLink href={pdfUrl} external>
-              Open PDF
-            </ButtonLink>
-            <Button onClick={() => downloadBadgeArtifact(printing.pdf!, "application/pdf", "attendee-print.pdf")}>
-              Download PDF
-            </Button>
-          </div>
-        )}
-        {(printing.error || camera.error) && <ErrorAlert error={printing.error || camera.error} />}
+        {printing.pdf && pdfUrl && <BadgePdfActions pdf={printing.pdf} url={pdfUrl} />}
+
         {printing.job && (
           <div class="pk-cluster">
             <Button disabled={printing.busy} onClick={printing.reprint}>
@@ -217,7 +226,9 @@ export function BadgeLabelDeskView({
   sound,
   format = "html",
   onFormat,
+  status,
 }: {
+  status?: ScannerStatus;
   sound?: Pick<ReturnType<typeof usePrintScannerSound>, "label" | "toggleSound">;
   format?: "html" | "pdf";
   onFormat?: (value: "html" | "pdf") => void;
@@ -245,63 +256,66 @@ export function BadgeLabelDeskView({
     stop();
     setPresentation("embedded");
   });
+  const settings = (
+    <Menu
+      label="Print settings"
+      align="end"
+      items={[
+        ...(onFormat
+          ? [
+              {
+                id: "pdf",
+                label: "Use PDF",
+                multiple: true,
+                checked: format === "pdf",
+                disabled: busy,
+                onSelect: () => onFormat(format === "pdf" ? "html" : "pdf"),
+              },
+            ]
+          : []),
+        {
+          id: "labels",
+          label: "Labels",
+          checked: design === "name_qr",
+          disabled: busy,
+          onSelect: () => onDesign("name_qr"),
+        },
+        {
+          id: "badges",
+          label: "Full badges",
+          checked: design === "event_badge",
+          disabled: busy,
+          onSelect: () => onDesign("event_badge"),
+        },
+        ...(design === "name_qr"
+          ? BADGE_LABEL_COPY_OPTIONS.map((count) => ({
+              separatorBefore: count === 1,
+              id: String(count),
+              label: `${formatNumber(count)} ${count === 1 ? "label" : "labels"}`,
+              checked: copies === count,
+              disabled: busy,
+              onSelect: () => onCopies(count),
+            }))
+          : (["front_back", "front", "back"] as const).map((side, index) => ({
+              separatorBefore: index === 0,
+              id: side,
+              label: BADGE_PRINT_SIDE_LABELS[side],
+              checked: sides === side,
+              disabled: busy,
+              onSelect: () => onSides(side),
+            }))),
+      ]}
+    />
+  );
   return (
     <div class="pk-label-desk pk-stack">
-      <PageHeader
-        title={design === "name_qr" ? "Print badge labels" : "Print badges"}
-        description="Scan the QR code on the attendee’s ticket."
-        actions={
-          <Menu
-            label="Print settings"
-            align="end"
-            items={[
-              ...(onFormat
-                ? [
-                    {
-                      id: "pdf",
-                      label: "Use PDF",
-                      multiple: true,
-                      checked: format === "pdf",
-                      disabled: busy,
-                      onSelect: () => onFormat(format === "pdf" ? "html" : "pdf"),
-                    },
-                  ]
-                : []),
-              {
-                id: "labels",
-                label: "Labels",
-                checked: design === "name_qr",
-                disabled: busy,
-                onSelect: () => onDesign("name_qr"),
-              },
-              {
-                id: "badges",
-                label: "Full badges",
-                checked: design === "event_badge",
-                disabled: busy,
-                onSelect: () => onDesign("event_badge"),
-              },
-              ...(design === "name_qr"
-                ? BADGE_LABEL_COPY_OPTIONS.map((count) => ({
-                    separatorBefore: count === 1,
-                    id: String(count),
-                    label: `${formatNumber(count)} ${count === 1 ? "label" : "labels"}`,
-                    checked: copies === count,
-                    disabled: busy,
-                    onSelect: () => onCopies(count),
-                  }))
-                : (["front_back", "front", "back"] as const).map((side, index) => ({
-                    separatorBefore: index === 0,
-                    id: side,
-                    label: BADGE_PRINT_SIDE_LABELS[side],
-                    checked: sides === side,
-                    disabled: busy,
-                    onSelect: () => onSides(side),
-                  }))),
-            ]}
-          />
-        }
-      />
+      {!fullscreen && (
+        <PageHeader
+          title={design === "name_qr" ? "Print badge labels" : "Print badges"}
+          description="Scan the QR code on the attendee’s ticket."
+          actions={settings}
+        />
+      )}
       <div
         ref={cameraShell}
         class={`pk-label-desk__camera pk-scanner-viewport${fullscreen ? " pk-label-desk__camera--fullscreen" : ""}`}
@@ -339,7 +353,14 @@ export function BadgeLabelDeskView({
             context={design === "name_qr" ? "Labels" : "Full badges"}
             result={null}
             pending={0}
-            message={busy ? "Preparing print document…" : "Scan an attendee’s ticket."}
+            status={
+              busy
+                ? { key: "preparing", tone: "unverified", title: "Preparing print document…", record: false }
+                : status
+            }
+            statusActions={children}
+            operatorControls={settings}
+            message={busy || status ? "" : "Scan an attendee’s ticket."}
             cameraActive={cameraActive}
             cameraError={cameraError}
             cameraStarting={starting}
@@ -350,9 +371,7 @@ export function BadgeLabelDeskView({
               stop();
               setPresentation("embedded");
             }}
-            onPresentation={() => setPresentation("embedded")}
             onManual={() => setPresentation("embedded")}
-            connectionStatus={children}
             canRecordAttendance={false}
           />
         )}
@@ -365,13 +384,20 @@ export function BadgeLabelDeskView({
           </>
         )}
       </div>
-      {cameraActive && (
+      {!fullscreen && cameraActive && (
         <div class="pk-cluster">
           <Button onClick={stop}>Stop camera</Button>
         </div>
       )}
-      <Field label="Find an attendee">{search}</Field>
-      {children}
+      {!fullscreen && <Field label="Find an attendee">{search}</Field>}
+      {!fullscreen && (
+        <div role="status" aria-live="polite">
+          {busy ? "Preparing print document…" : status?.title}
+          {status?.detail && <p>{status.detail}</p>}
+          {cameraError && <ErrorAlert error={cameraError} />}
+          {children}
+        </div>
+      )}
     </div>
   );
 }
