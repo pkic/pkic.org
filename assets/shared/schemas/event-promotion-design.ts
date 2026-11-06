@@ -6,8 +6,12 @@ import {
   eventBadgeTemplateSchema,
   badgeTemplateAssetSchema,
   badgeTemplateSponsorGroupSchema,
+  type SponsorArtworkLimits,
 } from "./event-badge-template";
 import { validateBadgeTemplateAsset, badgeTemplateVectorAsset } from "../badge-template-policy";
+
+/** Multi-page materials have a separate population budget from printed badges. */
+export const PROMOTION_SPONSOR_ARTWORK_LIMITS: SponsorArtworkLimits = { maxCount: 200, maxBytes: 4 * 1024 * 1024 };
 
 export const promotionPanelSchema = z.enum([
   "cover",
@@ -54,7 +58,10 @@ export const eventPromotionDesignSchema = z
       })
       .default({}),
     sponsorGroups: z.array(badgeTemplateSponsorGroupSchema).max(8).default([]),
-    sponsorSource: z.enum(["event", "selected"]).default("event"),
+    sponsorSource: z
+      .enum(["event", "selected"])
+      .default("event")
+      .describe("Use the event's public sponsors, including PKI Consortium sponsors, or selected tier groups."),
     panels: promotionCompositionSchema.shape.panels,
     /** A plan to capture media never grants permission to advertise it. */
     advertiseLiveStreaming: z.boolean().default(false),
@@ -79,6 +86,13 @@ export const eventPromotionDesignSchema = z
     }
   });
 export type PromotionComposition = z.infer<typeof promotionCompositionSchema>;
+/** Empty personal takeaways inherit the reviewed session copy in both editing and artwork. */
+export function effectivePromotionTakeaways(
+  composition: PromotionComposition,
+  reviewed: readonly string[],
+): readonly string[] {
+  return composition.takeaways.length ? composition.takeaways : reviewed;
+}
 export type EventPromotionDesign = z.infer<typeof eventPromotionDesignSchema>;
 export const DEFAULT_PROMOTION_COLORS = ["#0b2a1c", "#125c3c", "#20506e", "#b0581f"] as const;
 export const DEFAULT_PROMOTION_PANELS = ["cover", "speakers", "content", "details", "register", "sponsors"] as const;

@@ -22,6 +22,7 @@ import {
 } from "../../../../assets/shared/format-date";
 import {
   defaultPromotionComposition,
+  effectivePromotionTakeaways,
   type PromotionComposition,
 } from "../../../../assets/shared/schemas/event-promotion-design";
 import { creditAffiliationLabels, creditAffiliations } from "../../../../assets/shared/agenda-speaker-affiliations";
@@ -463,7 +464,7 @@ export function buildPromotionPages(
       }
     }
     if (panel === "content" && data.audience !== "attendee") {
-      const takeaways = composition.takeaways.length ? composition.takeaways : data.copy.takeaways;
+      const takeaways = effectivePromotionTakeaways(composition, data.copy.takeaways);
       const useTake = composition.content !== "abstract" && takeaways.length > 0;
       const summary =
         composition.summary ||

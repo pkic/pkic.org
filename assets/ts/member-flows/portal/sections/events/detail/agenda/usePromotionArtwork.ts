@@ -5,6 +5,7 @@ import {
   promotionArtworkSchema,
   promotionFormatSchema,
   type promotionKitSchema,
+  type promotionArtifactQuerySchema,
 } from "../../../../../../../shared/schemas/event-promotion-kit";
 import { getJson } from "../../../../../../shared/api-client";
 import { promotionArtworkUrls, type PromotionArtwork } from "./promotion-browser-export";
@@ -26,16 +27,13 @@ export function usePromotionArtwork(base: string, kit: Kit | null) {
     if (fingerprint && revision && !stale) {
       for (const format of promotionFormatSchema.options) {
         void (async () => {
-          const query = new URLSearchParams({
+          const { artwork, urls: sources } = await loadPromotionArtwork(
+            base,
+            { fingerprint, publishedRevision: revision },
             format,
-            revision: String(revision),
-            fingerprint,
-            representation: "artwork",
-          });
-          const artwork = await getJson(promotionResourcePath(base, "artifact", query), promotionArtworkSchema, {
-            signal: controller.signal,
-          });
-          const sources = await promotionArtworkUrls(artwork);
+            "cover",
+            controller.signal,
+          );
           if (controller.signal.aborted) return;
           setPreviews((current) => ({ ...current, [format]: { artwork, urls: sources } }));
         })().catch((error: unknown) => {
@@ -52,4 +50,23 @@ export function usePromotionArtwork(base: string, kit: Kit | null) {
     };
   }, [base, fingerprint, revision, stale]);
   return { previews, failures };
+}
+
+/** The gallery requests only a cover; the viewer loads the complete slide set on demand. */
+export async function loadPromotionArtwork(
+  base: string,
+  kit: Pick<Kit, "fingerprint" | "publishedRevision">,
+  format: Format,
+  pages: z.infer<typeof promotionArtifactQuerySchema>["pages"],
+  signal?: AbortSignal,
+): Promise<PreparedPromotionArtwork> {
+  const query = new URLSearchParams({
+    format,
+    revision: String(kit.publishedRevision),
+    fingerprint: kit.fingerprint!,
+    representation: "artwork",
+    pages,
+  });
+  const artwork = await getJson(promotionResourcePath(base, "artifact", query), promotionArtworkSchema, { signal });
+  return { artwork, urls: await promotionArtworkUrls(artwork) };
 }

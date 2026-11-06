@@ -16,7 +16,7 @@ function text(
 }
 /** Bottom-aligned editorial list, with a separate numbered accent rail as in the event artwork. */
 export function layoutPromotionTakeaways(
-  items: string[],
+  items: readonly string[],
   add: AddPage,
   measure: PromotionMeasure,
   scale: number,

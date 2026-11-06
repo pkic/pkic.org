@@ -2,6 +2,9 @@ import { CollectionCardFooter, CollectionCardSurface } from "../../../../../../u
 import { Button } from "../../../../../../ui/Button";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { useDialogQueryState } from "../../../../../../hooks/useDialogQueryState";
+import { useEffect, useRef, useState } from "preact/hooks";
+import { ImageCarousel, ImageCarouselControls } from "../../../../../../ui/ImageCarousel";
+import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import type { ComponentChildren } from "preact";
 import "./PromotionGallery.css";
 
@@ -21,6 +24,7 @@ export function PromotionTile({
   status,
   action,
   previewActions,
+  loadSlides,
 }: {
   name: string;
   detail: string;
@@ -33,9 +37,40 @@ export function PromotionTile({
   stacked?: boolean;
   status?: string;
   action?: ComponentChildren;
+  loadSlides?: (signal: AbortSignal) => Promise<string[]>;
   previewActions?: (dismiss: () => Promise<void>) => ComponentChildren;
 }) {
   const [open, show, close] = useDialogQueryState(`promotionPreview:${previewId ?? name}`);
+  const [slides, setSlides] = useState<string[] | null>(null);
+  const [slideIndex, setSlideIndex] = useState(0);
+  const [slideError, setSlideError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const viewport = useRef<HTMLDivElement>(null);
+  const loader = useRef(loadSlides);
+  loader.current = loadSlides;
+  const hasSlides = Boolean(loadSlides);
+  useEffect(() => {
+    if (!open) {
+      setSlideIndex(0);
+      return;
+    }
+    if (!hasSlides || slides) return;
+    const controller = new AbortController();
+    setSlideError("");
+    void loader.current!(controller.signal)
+      .then((sources) => {
+        if (!controller.signal.aborted) setSlides(sources);
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted)
+          setSlideError(error instanceof Error ? error.message : "Could not load the slides.");
+      });
+    return () => controller.abort();
+  }, [open, hasSlides, slides, attempt]);
+  const moveSlide = (direction: -1 | 1) => {
+    const element = viewport.current;
+    element?.scrollBy({ left: element.clientWidth * direction });
+  };
   return (
     <li class="pk-promotion-tile">
       <CollectionCardSurface>
@@ -61,12 +96,38 @@ export function PromotionTile({
             size="wide"
             title={name}
             closeLabel="Close preview"
-            footerActions={previewActions?.(close) ?? action}
+            footerActions={
+              <>
+                {slides && slides.length > 1 && (
+                  <ImageCarouselControls index={slideIndex} count={slides.length} onMove={moveSlide} />
+                )}
+                {previewActions?.(close) ?? action}
+              </>
+            }
             confirmLabel="Close"
             onConfirm={() => void close()}
             onCancel={() => void close()}
           >
-            <img class="pk-promotion-preview" src={previewSrc} alt={previewAlt} />
+            {loadSlides ? (
+              <>
+                {slideError ? (
+                  <>
+                    <ErrorAlert error={slideError} />
+                    <Button onClick={() => setAttempt((value) => value + 1)}>Retry loading slides</Button>
+                  </>
+                ) : (
+                  !slides && <p role="status">Loading slides…</p>
+                )}
+                <ImageCarousel
+                  sources={slides ?? [previewSrc]}
+                  label={name}
+                  viewportRef={viewport}
+                  onIndexChange={setSlideIndex}
+                />
+              </>
+            ) : (
+              <img class="pk-promotion-preview" src={previewSrc} alt={previewAlt} />
+            )}
           </Dialog>
         )}
         <CollectionCardFooter

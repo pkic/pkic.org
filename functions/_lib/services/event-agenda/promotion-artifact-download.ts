@@ -70,13 +70,13 @@ export async function downloadOwnPromotionArtifact(
       ...current.kit,
       sponsors: branding.sponsors,
     });
-    // A carousel gallery needs its cover; the downloadable PDF keeps every slide.
+    // Keep gallery covers small; the enlarged viewer requests the complete carousel.
     const pages = buildPromotionPages(artwork.source, query.format);
     return json(
       {
         fingerprint: current.kit.fingerprint,
         format: query.format,
-        pages: (query.format === "carousel" ? pages.slice(0, 1) : pages).map((page) => ({
+        pages: (query.format === "carousel" && query.pages === "cover" ? pages.slice(0, 1) : pages).map((page) => ({
           width: page.width,
           height: page.height,
           svg: promotionSceneSvg(artwork.source, page),
