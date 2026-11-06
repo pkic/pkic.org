@@ -138,6 +138,19 @@ describe("badge printing desk", () => {
     expect(fetch).toHaveBeenCalledOnce();
     expect(capture.starts).toBe(1);
   });
+  it("does not reopen help after leaving full screen through the immersive lifecycle", async () => {
+    await mount();
+    await click("Scanner help");
+    await settle(() => expect(document.querySelector(".pk-guided-tour")).not.toBeNull());
+    await click("Close help tour");
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(host.querySelector('[aria-label="Badge printing scanner"]')).toBeNull();
+    await click("Enter full screen");
+    expect(host.querySelector('[aria-label="Badge printing scanner"]')).not.toBeNull();
+    expect(document.querySelector(".pk-guided-tour")).toBeNull();
+  });
   it("retains the camera when switching views, and Escape closes the full-screen scanner", async () => {
     const release = vi.fn(async () => {});
     const request = vi.fn(async () => ({ released: false, release, addEventListener: vi.fn() }));

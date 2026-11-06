@@ -1,6 +1,6 @@
 import type { ComponentChildren, RefObject } from "preact";
 import { createPortal } from "preact/compat";
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { Button } from "./Button";
 import { CloseButton } from "./CloseButton";
 import { SectionHeading } from "./SectionHeading";
@@ -60,6 +60,18 @@ export function GuidedTour({
     heading.current?.focus({ preventScroll: true });
     return () => target?.removeAttribute("data-tour-active");
   }, [scope, targetSelector, stepId]);
+  const point = useCallback(() => {
+    const target = anchor.current?.getBoundingClientRect();
+    const card = popup.current;
+    if (!target || !card) return;
+    const box = card.getBoundingClientRect();
+    card.dataset.pointer = box.y + box.height / 2 < target.y + target.height / 2 ? "bottom" : "top";
+    const inset = Number.parseFloat(getComputedStyle(card).paddingLeft) || 0;
+    card.style.setProperty(
+      "--pk-tour-pointer-x",
+      `${Math.max(inset, Math.min(box.width - inset, target.x + target.width / 2 - box.x))}px`,
+    );
+  }, []);
   usePopupPlacement({
     open: Boolean(step),
     anchorRef: anchor,
@@ -68,31 +80,8 @@ export function GuidedTour({
     revision: step?.id,
     topLayer: true,
     matchAnchorWidth: false,
+    afterPlace: point,
   });
-  useLayoutEffect(() => {
-    const point = () => {
-      const target = anchor.current?.getBoundingClientRect();
-      const card = popup.current;
-      if (!target || !card) return;
-      const box = card.getBoundingClientRect();
-      card.dataset.pointer = box.y + box.height / 2 < target.y + target.height / 2 ? "bottom" : "top";
-      const inset = Number.parseFloat(getComputedStyle(card).paddingLeft) || 0;
-      card.style.setProperty(
-        "--pk-tour-pointer-x",
-        `${Math.max(inset, Math.min(box.width - inset, target.x + target.width / 2 - box.x))}px`,
-      );
-    };
-    point();
-    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(point);
-    if (popup.current) observer?.observe(popup.current);
-    window.addEventListener("resize", point);
-    window.addEventListener("scroll", point, true);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener("resize", point);
-      window.removeEventListener("scroll", point, true);
-    };
-  }, [step?.id]);
   useEffect(() => {
     const initialOpener = opener.current;
     const initialScope = scope.current;

@@ -1,5 +1,5 @@
-import { useContext, useState } from "preact/hooks";
-import { ScannerTaskNavigation } from "./ScannerTaskNavigation";
+import { useState } from "preact/hooks";
+import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import {
   scanActionSchema,
   type EventScanRequest,
@@ -75,15 +75,16 @@ export function scannerInitialAction(
   );
 }
 
-/** Preserve all authorized modes while starting the task explicitly chosen by a swipe. */
+/** Restore authorized scanner tasks from shared links, refresh, and browser history. */
 export function useScannerAction(
   allowed: readonly EventScanRequest["action"][],
   preferred: EventScanRequest["action"] | undefined,
   sponsor: boolean,
 ) {
-  const navigation = useContext(ScannerTaskNavigation);
-  const requested = navigation?.tasks.find((task) => task.key === navigation?.launch)?.action;
-  return useState(() => scannerInitialAction(allowed, requested ?? preferred, sponsor));
+  const initial = scannerInitialAction(allowed, preferred, sponsor);
+  const [boundAction, setBoundAction] = useState(initial);
+  const [action, setAction] = useHashQueryParam("scanAction", initial, allowed);
+  return preferred || sponsor ? ([boundAction, setBoundAction] as const) : ([action, setAction] as const);
 }
 
 /** The same authorized venue-entry action drives the task card and swipe destination. */

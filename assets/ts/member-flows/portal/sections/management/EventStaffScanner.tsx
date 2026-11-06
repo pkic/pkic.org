@@ -48,7 +48,7 @@ export function EventStaffScanner({
       ? [{ key: "entry" as const, label: "Entry", href: `#${basePath}`, action: entryAction }]
       : []),
     ...(actions.includes("checkout")
-      ? [{ key: "exit" as const, label: "Exit", href: `#${basePath}`, action: "checkout" as const }]
+      ? [{ key: "exit" as const, label: "Exit", href: `#${basePath}?scanAction=checkout`, action: "checkout" as const }]
       : []),
     ...(printHref ? [{ key: "print" as const, label: "Print", href: printHref }] : []),
   ];

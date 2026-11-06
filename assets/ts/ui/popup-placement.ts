@@ -131,6 +131,7 @@ export function usePopupPlacement({
   anchorPoint,
   spacing,
   beforePlace,
+  afterPlace,
   matchAnchorWidth = true,
 }: {
   open: boolean;
@@ -152,6 +153,8 @@ export function usePopupPlacement({
   anchorPoint?: { x: number; y: number } | (() => { x: number; y: number } | null) | null;
   /** Position an anchored parent before measuring its child, regardless of event-listener order. */
   beforePlace?: () => void;
+  /** Update dependent decorations after every placement, including viewport and frame updates. */
+  afterPlace?: () => void;
   /** Coach marks may point to a wide subject without becoming equally wide. */
   matchAnchorWidth?: boolean;
 }): () => void {
@@ -171,7 +174,8 @@ export function usePopupPlacement({
     const position = measurePopupPosition(anchorRect, popup.getBoundingClientRect(), align, side, { gap, crossAxis });
     if (!matchAnchorWidth) position.minWidth = 0;
     applyPopupPosition(popup, position);
-  }, [align, anchorRef, popupRef, side, anchorPoint, gap, crossAxis, beforePlace, matchAnchorWidth]);
+    afterPlace?.();
+  }, [align, anchorRef, popupRef, side, anchorPoint, gap, crossAxis, beforePlace, afterPlace, matchAnchorWidth]);
 
   useLayoutEffect(() => {
     if (!open) return;

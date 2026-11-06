@@ -9,6 +9,8 @@ import {
 import { FastScannerView } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/FastScannerView";
 import { useScannerPresentation } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useScannerPresentation";
 
+import { useScannerAction } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerModeSelect";
+
 const host = document.createElement("div");
 document.body.append(host);
 afterEach(async () => {
@@ -150,4 +152,35 @@ it("carries the previous gradient orientation through scanner mounting", async (
   });
   expect(root.hasAttribute("data-gradient-from")).toBe(false);
   expect(root.getAttribute("data-scanner-role")).toBe("print");
+});
+
+it("restores entry and exit from shared URL state without starting full screen", async () => {
+  const path = "#/events/example/scanner";
+  function Mode() {
+    const [action, setAction] = useScannerAction(["attendance", "checkout"], undefined, false);
+    return (
+      <>
+        <output>{action}</output>
+        <button onClick={() => setAction("checkout")}>Exit task</button>
+      </>
+    );
+  }
+  window.location.hash = `${path}?scanAction=checkout`;
+  await act(() => render(<Mode />, host));
+  expect(host.querySelector("output")?.textContent).toBe("checkout");
+  await act(() => {
+    window.location.hash = path;
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  expect(host.querySelector("output")?.textContent).toBe("attendance");
+  await act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+  expect(window.location.hash).toContain("scanAction=checkout");
+  await act(() => render(null, host));
+  await act(() => render(<Mode />, host));
+  expect(host.querySelector("output")?.textContent).toBe("checkout");
+  await act(() => {
+    window.location.hash = `${path}?scanAction=lead`;
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  expect(host.querySelector("output")?.textContent).toBe("attendance");
 });

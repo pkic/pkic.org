@@ -263,6 +263,7 @@ export function BadgeLabelDeskView({
   const fullscreen = presentation === "fullscreen";
   const screenAwake = useScannerImmersiveLifecycle(fullscreen, cameraShell, () => {
     stop();
+    setHelpOnStart(false);
     setPresentation("embedded");
   });
   const settings = (
