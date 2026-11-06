@@ -1,3 +1,4 @@
+import { eligibilityPageDigest } from "../../assets/shared/event-eligibility-digest";
 vi.mock("../../assets/ts/shared/pending-user-logout", () => ({
   scannerUploadSuspended: vi.fn(async () => false),
   readActiveUserSession: vi.fn(async () => ({
@@ -32,6 +33,8 @@ async function fixture() {
     occurrenceId: null,
     publishedRevision: 1,
     revision: 1,
+    scopeDate: "2026-11-06",
+    snapshotId: crypto.randomUUID(),
     serverNow: new Date(now).toISOString(),
     expiresAt: new Date(now + 900000).toISOString(),
     writtenAt: now,
@@ -348,14 +351,19 @@ describe("local scoped eligibility manifest", () => {
     const snapshot = await fixture();
     const saved = new Map<string, unknown>();
     stubManifestStorage(saved);
-    const { writtenAt: _written, validUntil: _valid, ...page } = snapshot;
+    const { writtenAt: _written, validUntil: _valid, snapshotId: _snapshot, ...page } = snapshot;
     const fetcher = vi.fn(async (input: string) => {
       const query = enrolledOfflineEligibilityQuerySchema.parse(
         Object.fromEntries(new URL(input, "https://pkic.example").searchParams),
       );
       expect(query.epochId).toBe(snapshot.epochId);
       expect(query.deviceId).toBe(snapshot.deviceId);
-      return Response.json({ ...page, nextBadgeId: null });
+      return Response.json({
+        ...page,
+        nextBadgeId: null,
+        unchanged: false,
+        pageDigest: await eligibilityPageDigest({ ...page, nextBadgeId: null }),
+      });
     });
     vi.stubGlobal("fetch", fetcher);
     const enrolled = { epochId: snapshot.epochId, deviceId: snapshot.deviceId };
@@ -385,6 +393,42 @@ describe("local scoped eligibility manifest", () => {
         epochId: "88888888-8888-4888-8888-888888888888",
       }),
     ).rejects.toThrow("Offline");
+  });
+  it("keeps a newer revocation when another tab finishes an older download afterward", async () => {
+    const snapshot = { ...(await fixture()), complete: true };
+    const key = JSON.stringify([
+      snapshot.operatorUserId,
+      "synthetic-event",
+      null,
+      null,
+      snapshot.epochId,
+      snapshot.deviceId,
+    ]);
+    const saved = new Map<string, unknown>([[key, snapshot]]);
+    stubManifestStorage(saved);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        enrolledOfflineEligibilityQuerySchema.parse(
+          Object.fromEntries(new URL(url, "https://test.invalid").searchParams),
+        );
+        saved.set(key, {
+          ...snapshot,
+          snapshotId: crypto.randomUUID(),
+          entries: [{ ...snapshot.entries[0], revoked: true }],
+        });
+        const { writtenAt: _, validUntil: __, complete: ___, snapshotId: ____, ...page } = snapshot;
+        return Response.json({
+          ...page,
+          nextBadgeId: null,
+          unchanged: false,
+          pageDigest: await eligibilityPageDigest({ ...page, nextBadgeId: null }),
+        });
+      }),
+    );
+    const result = await prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, snapshot);
+    expect((await result.lookup(badge)).reason).toBe("revoked_badge");
+    expect((await buildEligibilityManifest(saved.get(key)).lookup(badge)).reason).toBe("revoked_badge");
   });
   it("honors the server expiry boundary even before the local freshness window ends", async () => {
     const snapshot = await fixture();

@@ -87,7 +87,7 @@ export async function closeScannerDiagnostics(page: Page): Promise<void> {
 }
 
 export async function openScannerManualEntry(page: Page): Promise<void> {
-  const code = page.getByRole("textbox", { name: "Badge code", exact: true });
+  const code = page.getByRole("textbox", { name: /^Badge code(?: or attendee)?$/ });
   if (!(await code.isVisible())) {
     await closeScannerDiagnostics(page);
     const continuous = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });

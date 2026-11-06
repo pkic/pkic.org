@@ -186,7 +186,7 @@
     opacity: 1;
   }
   .pk-fast-scanner--warning .pk-fast-scanner__tone--warning,
-  .pk-fast-scanner--unverified.pk-fast-scanner--result .pk-fast-scanner__tone--warning,
+  .pk-fast-scanner--unverified.pk-fast-scanner--result:not([data-status-pending]) .pk-fast-scanner__tone--warning,
   .pk-fast-scanner--denied .pk-fast-scanner__tone--error,
   .pk-fast-scanner--unknown .pk-fast-scanner__tone--error {
     opacity: 1;

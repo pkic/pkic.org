@@ -293,6 +293,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
         .find((button) => button.textContent?.trim() === "Start scanning")!
         .click();
     });
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Scan next now"]')!.click());
     await act(async () => {
       mocks.hardwareScan!(badgeCode);
     });
@@ -333,7 +334,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
     expect(fast.textContent).toContain("Using saved registration data");
   });
   it.each(["eligible", "unknown"] as const)(
-    "resets the cleared entry field after a successfully captured %s badge without changing its result",
+    "resets the cleared entry field after capturing a %s badge while retaining feedback",
     async (outcome) => {
       await mount(true, ["attendance"]);
       mocks.persist.mockImplementation(async (scan) => ({
@@ -350,7 +351,9 @@ describe("scanner device enrollment and manual capture boundary", () => {
       expect(input.value).toBe("");
       expect(input.hasAttribute("aria-invalid")).toBe(false);
       expect(input.closest(".pk-field")?.className).not.toContain("pk-field--invalid");
-      expect(host.querySelector(`.pk-event-scanner--${outcome}`)?.textContent).toContain("Captured observation");
+      expect(
+        host.querySelector(`.pk-event-scanner--${outcome === "unknown" ? "unverified" : outcome}`)?.textContent,
+      ).toContain(outcome === "unknown" ? "Verification pending" : "Captured observation");
       expect(mocks.persist).toHaveBeenCalledOnce();
       expect(eventScanCaptureIntentSchema.parse(mocks.persist.mock.calls[0][0]).badgeId).toBe(badgeCode);
       // A new empty submission still receives the canonical error; only completed capture resets presentation.
@@ -426,9 +429,8 @@ describe("scanner device enrollment and manual capture boundary", () => {
     await vi.waitFor(async () => {
       await act(async () => {});
       expect(mocks.persist).toHaveBeenCalledOnce();
-      expect(host.querySelector(".pk-fast-scanner--unknown")?.textContent).toContain(
-        "Unknown badge for this event snapshot",
-      );
+      expect(host.querySelector(".pk-fast-scanner--unverified")?.textContent).toContain("Verification pending");
+      expect(host.querySelector(".pk-fast-scanner--unknown")).toBeNull();
     });
     await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Close scanner"]')!.click());
     const cleared = await openManual();

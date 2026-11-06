@@ -9,6 +9,8 @@ import { expect, test, type Page, type Locator } from "@playwright/test";
 import { formatBadgeCredential, badgeCredentialSchema } from "../../assets/shared/schemas/badge-credential";
 import {
   badgeCredentialMetadataSchema,
+  badgeIssueRequestSchema,
+  badgeIssueResponseSchema,
   badgeCredentialsResponseSchema,
   badgeLabelRequestSchema,
   badgePrintResponseSchema,
@@ -560,6 +562,15 @@ test("the protected printed short code works through manual offline capture and 
       registrationManageReadResponseSchema.parse(await (await page.request.get(fixture.managePath)).json()),
     ).toEqual(fixture.registrationBefore);
     expect(await metadata(page, endpoint, credential)).toEqual(before);
+    const refreshing = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname.endsWith("/offline-eligibility") && url.searchParams.has("knownDigest");
+    });
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    const delta = enrolledOfflineEligibilityResponseSchema.parse(await (await refreshing).json());
+    expect(delta.entries).toEqual([]);
+    expect(delta.unchanged).toBe(true);
+    expect(delta.nextBadgeId).toBeNull();
     const finalPrivacy = await expectNoStoredSponsorContacts(
       page,
       [...fixture.forbidden, firstPrint.artifact.svg],
@@ -580,8 +591,9 @@ test("the protected printed short code works through manual offline capture and 
           canonicalOfflineQueueSurvivedReload: true,
           twoIntentionalOriginalOperationsReplayedExactlyOnce: true,
           oneUniqueObservedPerson: true,
-          postReloadCaptureWasUnverifiedUntilCanonicalSync: true,
-          reconnectUsedExplicitCanonicalSignInRetry: true,
+          postReloadCaptureVerifiedAgainstPreparedSnapshot: true,
+          reconnectUsedAutomaticCanonicalSignInRetry: true,
+          subsequentEligibilityRefreshOmittedUnchangedEntries: true,
           printPrivacy,
           queuedPrivacy,
           collectorPrivacy,
@@ -592,6 +604,61 @@ test("the protected printed short code works through manual offline capture and 
         2,
       ),
     );
+    // Issue a replacement after preparation, and keep the saved inventory unchanged.
+    await page.route("**/offline-eligibility?**", (route) => route.abort());
+    const replacementResponse = await page.request.post(fixture.api + "/badges", {
+      data: badgeIssueRequestSchema.parse({
+        operationId: crypto.randomUUID(),
+        userId: fixture.attendeeId,
+        replaceBadgeId: fixture.eligibleBadgeId,
+      }),
+    });
+    expect(replacementResponse.status()).toBe(200);
+    const replacement = badgeIssueResponseSchema.parse(await replacementResponse.json());
+    if (replacement.result !== "issued") throw new Error("Expected a new synthetic badge credential");
+    let releaseCheck: (() => void) | undefined;
+    await page.route("**/scans", async (route) => {
+      const scan = enrolledEventScanRequestSchema.parse(route.request().postDataJSON());
+      if (scan.badgeId === replacement.credential)
+        await new Promise<void>((resolve) => {
+          releaseCheck = resolve;
+        });
+      await route.continue();
+    });
+    await openScannerManualEntry(page);
+    const checked = page.waitForResponse((response) => {
+      if (!new URL(response.url()).pathname.endsWith("/scans") || response.request().method() !== "POST") return false;
+      return enrolledEventScanRequestSchema.parse(response.request().postDataJSON()).badgeId === replacement.credential;
+    });
+    await page.getByRole("textbox", { name: /^Badge code(?: or attendee)?$/ }).fill(replacement.credential);
+    await page.getByRole("button", { name: "Record attendance", exact: true }).click();
+    await expect.poll(() => Boolean(releaseCheck)).toBe(true);
+    await expect(page.locator(".pk-fast-scanner__label")).toBeVisible();
+    await expect(page.locator(".pk-fast-scanner__label")).toHaveText("Checking badge online…");
+    await expect(page.locator(".pk-fast-scanner__tone--warning")).toHaveCSS("opacity", "0");
+    // Keep the scanner's fixed viewport while allowing desktop/phone capture sizes.
+    await page.evaluate(async () => {
+      if (document.fullscreenElement) await document.exitFullscreen();
+    });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.screenshot({ path: info.outputPath("local-miss-checking-desktop.png") });
+    await page.setViewportSize({ width: 375, height: 844 });
+    await page.screenshot({ path: info.outputPath("local-miss-checking-phone.png") });
+    releaseCheck!();
+    const onlineResponse = await checked;
+    expect(onlineResponse.status()).toBe(200);
+    expect(eventScanResponseSchema.parse(await onlineResponse.json())).toMatchObject({
+      outcome: "eligible",
+      attendanceRecorded: true,
+    });
+    await expect(page.locator(".pk-fast-scanner__label")).toContainText("Registered");
+    const checkedScan = enrolledEventScanRequestSchema.parse(onlineResponse.request().postDataJSON());
+    await expect
+      .poll(
+        async () =>
+          (await scannerStorage(page)).history.filter((row) => row.scan.operationId === checkedScan.operationId).length,
+      )
+      .toBe(1);
   } finally {
     await page.context().setOffline(false);
   }

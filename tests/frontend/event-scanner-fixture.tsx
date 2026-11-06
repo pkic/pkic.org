@@ -211,7 +211,7 @@ export async function closeDiagnostics() {
   });
   expect(host.querySelector('[aria-label="Recovery and diagnostics"]')).toBeNull();
 }
-export async function submit() {
+export async function submit({ waitForIdle = true }: { waitForIdle?: boolean } = {}) {
   const input = await openManual();
   await act(async () => {
     input.value = badgeCode;
@@ -222,9 +222,10 @@ export async function submit() {
       .querySelector(".pk-fast-scanner form")!
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
-  await vi.waitFor(async () => {
-    await act(async () => {});
-    expect(host.querySelector('form[aria-busy="true"]')).toBeNull();
-  });
+  if (waitForIdle)
+    await vi.waitFor(async () => {
+      await act(async () => {});
+      expect(host.querySelector('form[aria-busy="true"]')).toBeNull();
+    });
   await act(async () => {});
 }

@@ -1,31 +1,13 @@
-import { SCANNER_OFFLINE_MAXIMUM_MS } from "../../../../../../../shared/event-offline-expiry";
 import { readActiveUserSession } from "../../../../../../shared/pending-user-logout";
 import type { NativeEventCaptureContext } from "../../../../../../../shared/schemas/event-attendance-capture";
 import { scannerUploadSuspended } from "../../../../../../shared/pending-user-logout";
-import { z } from "zod";
-import {
-  enrolledOfflineEligibilityQuerySchema,
-  enrolledOfflineEligibilityResponseSchema as offlineEligibilityResponseSchema,
-} from "../../../../../../../shared/schemas/event-offline-eligibility";
+import { cachedManifestSchema, snapshotCurrent, type CachedManifest } from "./eligibility-snapshot";
+import { downloadEligibilitySnapshot } from "./eligibility-download";
 import type {
   EventScanRequest,
   EventScanResponse,
 } from "../../../../../../../shared/schemas/event-participation-scanning";
 
-const cachedManifestSchema = offlineEligibilityResponseSchema
-  .omit({ entries: true, nextBadgeId: true })
-  .extend({
-    entries: offlineEligibilityResponseSchema.shape.entries.element.array().max(100000),
-    complete: z.boolean().default(false),
-    writtenAt: z.number(),
-    validUntil: z.number(),
-  })
-  .strict()
-  .refine(
-    (value) => value.validUntil >= value.writtenAt && value.validUntil - value.writtenAt <= SCANNER_OFFLINE_MAXIMUM_MS,
-    "Eligibility snapshot lifetime must not exceed one local calendar day",
-  );
-type CachedManifest = z.infer<typeof cachedManifestSchema>;
 export type LocalEligibility = Pick<EventScanResponse, "outcome" | "reason"> & { message: string; userId?: string };
 export interface EligibilityManifest {
   enrollment?: Pick<CachedManifest, "eventId" | "deviceId" | "epochId" | "writtenAt">;
@@ -48,17 +30,33 @@ function database(): Promise<IDBDatabase> {
     open.onerror = () => reject(open.error ?? new Error("Eligibility storage unavailable"));
   });
 }
-async function cached(key: string, value?: CachedManifest): Promise<unknown> {
+async function cached(key: string, value?: CachedManifest, expectedSnapshotId?: string): Promise<unknown> {
   const db = await database();
   try {
     return await new Promise((resolve, reject) => {
       const transaction = db.transaction("manifests", value ? "readwrite" : "readonly");
-      const request = value
-        ? transaction.objectStore("manifests").put(cachedManifestSchema.parse(value), key)
-        : transaction.objectStore("manifests").get(key);
+      const request = transaction.objectStore("manifests").get(key);
       let result: unknown;
       request.onsuccess = () => {
         result = request.result;
+        if (!value) return;
+        const candidate = cachedManifestSchema.parse(value);
+        const previous = cachedManifestSchema.safeParse(result);
+        // A slower tab must not overwrite revocations already learned by another tab.
+        if (
+          previous.success &&
+          previous.data.eventId === candidate.eventId &&
+          previous.data.operatorUserId === candidate.operatorUserId &&
+          previous.data.epochId === candidate.epochId &&
+          previous.data.deviceId === candidate.deviceId &&
+          previous.data.occurrenceId === candidate.occurrenceId &&
+          (previous.data.roomId ?? null) === (candidate.roomId ?? null) &&
+          previous.data.complete &&
+          previous.data.snapshotId !== expectedSnapshotId
+        )
+          return;
+        result = candidate;
+        transaction.objectStore("manifests").put(candidate, key);
       };
       transaction.oncomplete = () => resolve(result);
       transaction.onerror = () => reject(transaction.error ?? new Error("Eligibility storage failed"));
@@ -67,14 +65,6 @@ async function cached(key: string, value?: CachedManifest): Promise<unknown> {
   } finally {
     db.close();
   }
-}
-function snapshotCurrent(snapshot: CachedManifest, now = Date.now()): boolean {
-  return (
-    Number.isFinite(now) &&
-    now >= snapshot.writtenAt &&
-    now < snapshot.validUntil &&
-    now - snapshot.writtenAt < Date.parse(snapshot.expiresAt) - Date.parse(snapshot.serverNow)
-  );
 }
 
 /** Expiring eligibility never touches the independent attempt queue, history, or recovery storage. */
@@ -269,71 +259,21 @@ export async function prepareEligibilityManifest(
   };
   if (source === "cache") return restore();
   try {
-    let cursor: string | null = null;
-    let snapshot: CachedManifest | undefined;
-    const visited = new Set<string>();
-    do {
-      const query = new URLSearchParams({ epochId: enrollment.epochId, deviceId: enrollment.deviceId });
-      if (occurrenceId) query.set("occurrenceId", occurrenceId);
-      if (roomId) query.set("roomId", roomId);
-      if (cursor) query.set("afterBadgeId", cursor);
-      if (snapshot?.publishedRevision !== null && snapshot?.publishedRevision !== undefined)
-        query.set("publishedRevision", String(snapshot.publishedRevision));
-      enrolledOfflineEligibilityQuerySchema.parse(Object.fromEntries(query));
-      const requestedAt = Date.now();
-      const response = await fetch(`/api/v1/events/${encodeURIComponent(slug)}/offline-eligibility?${query}`, {
-        credentials: "same-origin",
-        cache: "no-store",
-        signal,
-      });
-      if (response.status === 401 || response.status === 403) throw new Error("SCANNER_PERMISSION_CHANGED");
-      if (!response.ok) throw new Error("Eligibility preparation unavailable");
-      const page = offlineEligibilityResponseSchema.parse(await response.json());
-      if (
-        page.operatorUserId !== operatorUserId ||
-        page.occurrenceId !== occurrenceId ||
-        page.epochId !== enrollment.epochId ||
-        page.deviceId !== enrollment.deviceId
-      )
-        throw new Error("SCANNER_PERMISSION_CHANGED");
-      if ((page.roomId ?? null) !== roomId) throw new Error("SCANNER_ROOM_CONTEXT_CHANGED");
-      if (
-        snapshot &&
-        (page.eventId !== snapshot.eventId ||
-          page.revision !== snapshot.revision ||
-          page.publishedRevision !== snapshot.publishedRevision ||
-          page.nativeEventContext?.profileKey !== snapshot.nativeEventContext?.profileKey ||
-          page.nativeEventContext?.timeZone !== snapshot.nativeEventContext?.timeZone)
-      )
-        throw new Error("Eligibility revision changed");
-      if (!snapshot) {
-        const { nextBadgeId: _, ...first } = page;
-        const now = Date.now();
-        snapshot = {
-          ...first,
-          complete: false,
-          writtenAt: now,
-          validUntil: Math.max(
-            now,
-            requestedAt +
-              Math.min(
-                SCANNER_OFFLINE_MAXIMUM_MS,
-                Math.max(0, Date.parse(page.expiresAt) - Date.parse(page.serverNow)),
-              ),
-          ),
-        };
-      } else snapshot.entries.push(...page.entries);
-      if (snapshot.entries.length > 100000) throw new Error("Eligibility snapshot too large");
-      cursor = page.nextBadgeId;
-      if (cursor) {
-        if (visited.has(cursor)) throw new Error("Eligibility pagination repeated");
-        visited.add(cursor);
-      }
-    } while (cursor);
-    if (!snapshotCurrent(snapshot)) throw new Error("Eligibility snapshot expired during preparation");
-    snapshot.complete = true;
+    const saved = cachedManifestSchema.safeParse(fallback);
+    const downloaded = await downloadEligibilitySnapshot(
+      slug,
+      operatorUserId,
+      occurrenceId,
+      roomId,
+      enrollment,
+      signal,
+      saved.success && saved.data.complete ? saved.data : undefined,
+    );
     if (await scannerUploadSuspended(operatorUserId, sessionId)) throw new Error("SCANNER_SIGNED_OUT");
-    await cached(key, snapshot);
+    if (signal?.aborted) throw new DOMException("Eligibility preparation canceled", "AbortError");
+    const snapshot = cachedManifestSchema.parse(
+      await cached(key, downloaded, saved.success ? saved.data.snapshotId : undefined),
+    );
     if (await scannerUploadSuspended(operatorUserId, sessionId)) {
       await clearOperatorEligibilityManifests(operatorUserId);
       throw new Error("SCANNER_SIGNED_OUT");

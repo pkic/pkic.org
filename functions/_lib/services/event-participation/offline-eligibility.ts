@@ -1,8 +1,11 @@
+import { eligibilityPageDigest } from "../../../../assets/shared/event-eligibility-digest";
+import { instantToCalendarDate } from "../../../../assets/shared/timezone";
 import { operationalAllocationCompatibleSql } from "./session-allocation";
 import { resolvePhysicalSessionRoom } from "./session-room";
 import { offlineEligibilityExpiresAt } from "../../../../assets/shared/event-offline-expiry";
 import {
   offlineEligibilityResponseSchema,
+  OFFLINE_ELIGIBILITY_PAGE_SIZE,
   type OfflineEligibilityQuery,
 } from "../../../../assets/shared/schemas/event-offline-eligibility";
 import type { DatabaseLike, D1StatementResult } from "../../types";
@@ -92,7 +95,7 @@ export function prepareOfflineEligibility(db: DatabaseLike, event: EventReadSele
         LEFT JOIN registrations r ON r.event_id=b.event_id AND r.user_id=b.user_id
         LEFT JOIN agenda_session_participations p ON p.user_id=b.user_id AND p.occurrence_id=target.occurrence_id
         LEFT JOIN (${publishedSessionsSql}) s ON s.id=target.occurrence_id AND s.event_id=b.event_id
-        WHERE b.event_id=(SELECT id FROM manifest_event) AND b.id>? ORDER BY b.id LIMIT 251`)
+        WHERE b.event_id=(SELECT id FROM manifest_event) AND b.id>? ORDER BY b.id LIMIT ${OFFLINE_ELIGIBILITY_PAGE_SIZE + 1}`)
         .bind(
           ...scope.bindings,
           query.occurrenceId ?? null,
@@ -102,7 +105,7 @@ export function prepareOfflineEligibility(db: DatabaseLike, event: EventReadSele
           query.afterBadgeId ?? "",
         ),
     ],
-    decode(results: D1StatementResult[], operatorUserId: string) {
+    async decode(results: D1StatementResult[], operatorUserId: string) {
       const state = batchFirst<ManifestState>(results[0]);
       if (!state) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found.");
       if (query.publishedRevision !== undefined && query.publishedRevision !== state.published_revision)
@@ -123,19 +126,25 @@ export function prepareOfflineEligibility(db: DatabaseLike, event: EventReadSele
       if (!session && query.roomId)
         throw new AppError(400, "SESSION_ROOM_INVALID", "Choose a session before selecting its room.");
       const timeZone = session?.timezone ?? state.timezone;
+      const scopeDate = instantToCalendarDate(session?.start_at ?? serverNow, timeZone);
+      if (query.scopeDate !== undefined && query.scopeDate !== scopeDate)
+        throw new AppError(409, "OFFLINE_MANIFEST_CHANGED", "The eligibility date changed. Refresh the manifest.");
       const rows = batchRows<ManifestEntry>(results[2]);
-      return offlineEligibilityResponseSchema.parse({
+      const page = offlineEligibilityResponseSchema.parse({
         eventId: state.id,
         operatorUserId,
         occurrenceId: query.occurrenceId ?? null,
         roomId,
         revision: state.revision,
+        scopeDate,
+        pageDigest: "0".repeat(64),
+        unchanged: false,
         publishedRevision: state.published_revision ?? null,
         ...(nativeEventContext ? { nativeEventContext } : {}),
         serverNow,
         expiresAt: offlineEligibilityExpiresAt(serverNow, timeZone),
         session: session ? { admissionPolicy: session.admission_policy, visibility: session.visibility } : null,
-        entries: rows.slice(0, 250).map((row) => {
+        entries: rows.slice(0, OFFLINE_ELIGIBILITY_PAGE_SIZE).map((row) => {
           const physicalDayEligible =
             registrationSessionAttendance({ ...row, startAt: session?.start_at ?? serverNow, timeZone }) ===
             "in_person";
@@ -158,8 +167,12 @@ export function prepareOfflineEligibility(db: DatabaseLike, event: EventReadSele
               Boolean(row.entryEligible),
           };
         }),
-        nextBadgeId: rows.length > 250 ? rows[249]!.badgeId : null,
+        nextBadgeId:
+          rows.length > OFFLINE_ELIGIBILITY_PAGE_SIZE ? rows[OFFLINE_ELIGIBILITY_PAGE_SIZE - 1]!.badgeId : null,
       });
+      const pageDigest = await eligibilityPageDigest(page);
+      const unchanged = pageDigest === query.knownDigest;
+      return { ...page, pageDigest, unchanged, entries: unchanged ? [] : page.entries };
     },
   };
 }

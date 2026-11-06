@@ -40,6 +40,34 @@ export function useScannerOutboxSync({
   const activeSyncs = useRef(0);
   const syncAgain = useRef(false);
   const generation = useRef(0);
+  const verificationWaiters = useRef(new Map<string, (confirmed: boolean) => void>());
+  function cancelVerification() {
+    for (const finish of verificationWaiters.current.values()) finish(false);
+  }
+  function received(receipt: EventScanResponse) {
+    presentReceipt(receipt);
+    verificationWaiters.current.get(receipt.operationId)?.(true);
+  }
+  /** Await the existing queue's receipt; never create a second scan operation or retry path. */
+  async function verifyQueuedScan(operationId: string): Promise<boolean> {
+    if (collectorContext || authorityPaused.current) return false;
+    return new Promise((resolve) => {
+      const finish = (confirmed: boolean) => {
+        window.clearTimeout(timeout);
+        verificationWaiters.current.delete(operationId);
+        resolve(confirmed);
+      };
+      const timeout = window.setTimeout(() => finish(false), 8500);
+      verificationWaiters.current.set(operationId, finish);
+      if (activeSyncs.current === 0) void sync().catch(() => finish(false));
+    });
+  }
+
+  async function scanSaved() {
+    setUploadStatus(collectorContext ? "Saved on this device · upload pending" : "Uploading scans in the background…");
+    setPending(await pendingScanCount(operatorUserId));
+    void sync();
+  }
   function cancelRetries() {
     syncAgain.current = false;
     if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
@@ -90,7 +118,7 @@ export function useScannerOutboxSync({
               .catch(() => null),
           );
           if (receipt.success && scannerReceiptMatches(receipt.data, record.scan)) {
-            if (record.kind === "scan") presentReceipt(receipt.data);
+            if (record.kind === "scan") received(receipt.data);
           } else uploadFailure = "Scan upload was not confirmed. Saved on this device; retrying automatically.";
         }
         if (!response.ok)
@@ -140,10 +168,11 @@ export function useScannerOutboxSync({
         syncAgain.current = false;
         void sync();
       }
+      if (activeSyncs.current === 0) cancelVerification();
     }
   }
-  const lifecycle = useRef({ sync, currentOperation, authorityPaused, presentReceipt, stopCamera });
-  lifecycle.current = { sync, currentOperation, authorityPaused, presentReceipt, stopCamera };
+  const lifecycle = useRef({ sync, currentOperation, authorityPaused, presentReceipt: received, stopCamera });
+  lifecycle.current = { sync, currentOperation, authorityPaused, presentReceipt: received, stopCamera };
   useEffect(() => {
     const scopeGeneration = generation;
     scopeGeneration.current++;
@@ -182,6 +211,7 @@ export function useScannerOutboxSync({
     reconnect();
     return () => {
       scopeGeneration.current++;
+      cancelVerification();
       syncAgain.current = false;
       window.removeEventListener("online", reconnect);
       window.removeEventListener("focus", reconnect);
@@ -191,5 +221,17 @@ export function useScannerOutboxSync({
       if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
     };
   }, [slug, operatorUserId, collectorContext?.epochId]);
-  return { syncing, pending, setPending, pendingReadyScope, uploadStatus, setUploadStatus, sync, cancelRetries };
+  return {
+    syncing,
+    pending,
+    setPending,
+    scanSaved,
+    pendingReadyScope,
+    uploadStatus,
+    setUploadStatus,
+    sync,
+    verifyQueuedScan,
+    cancelVerification,
+    cancelRetries,
+  };
 }
