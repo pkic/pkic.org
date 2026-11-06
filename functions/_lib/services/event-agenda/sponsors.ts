@@ -232,12 +232,13 @@ function prepareSponsorBrandingSnapshot(db: DatabaseLike, sql: string, bindings:
 /** The configured tier selection is SQL-owned so it composes with an unresolved event slug. */
 export function prepareConfiguredSponsorBranding(db: DatabaseLike, eventId: EventReadSelection, consortium = false) {
   const scope = eventReadIdSql(eventId);
+  const automatic = `EXISTS(SELECT 1 FROM events configured WHERE configured.id=${scope.sql} AND COALESCE(json_extract(configured.settings_json,'$.promotionDesign.sponsorSource'),'event')='event')`;
   const selected = `SELECT json_extract(value,'$.tierName') FROM events configured, json_each(COALESCE(json_extract(configured.settings_json,'$.promotionDesign.sponsorGroups'),json_extract(configured.settings_json,'$.badgeTemplate.sponsorGroups'),'[]')) WHERE configured.id=${scope.sql} AND COALESCE(json_extract(value,'$.source'),'event')=?`;
   if (!consortium) {
     const read = source(eventId);
     return prepareSponsorBrandingSnapshot(
       db,
-      `${read.sql} AND (EXISTS(SELECT 1 FROM events configured WHERE configured.id=${scope.sql} AND COALESCE(json_extract(configured.settings_json,'$.promotionDesign.sponsorSource'),'event')='event') OR public.event_tier IN(${selected})) ORDER BY sp.id`,
+      `${read.sql} AND (${automatic} OR public.event_tier IN(${selected})) ORDER BY sp.id`,
       [...read.bindings, ...scope.bindings, ...scope.bindings, "event"],
     );
   }
@@ -246,7 +247,7 @@ export function prepareConfiguredSponsorBranding(db: DatabaseLike, eventId: Even
     db,
     `${read.sql} SELECT public.id,public.name,public.website,public.logo_r2_key,public.sponsorship_logo_r2_key,public.tier,public.event_tier,public.effective_tier,catalog.display_weight AS effective_weight, public.id AS sponsor_id,
     json_object('publicId',public.id,'name',public.name,'website',public.website,'logo',public.logo_r2_key,'sponsorLogo',public.sponsorship_logo_r2_key,'tier',public.tier,'weight',catalog.display_weight) AS source_json
-    FROM enriched_sponsors public JOIN sponsorship_tier_catalog catalog ON catalog.sponsor_type='consortium' AND catalog.tier=public.tier AND catalog.active=1 AND catalog.display_weight>0 WHERE public.tier IN(${selected}) ORDER BY public.name,public.id`,
-    [...read.bindings, ...scope.bindings, "consortium"],
+    FROM enriched_sponsors public JOIN sponsorship_tier_catalog catalog ON catalog.sponsor_type='consortium' AND catalog.tier=public.tier AND catalog.active=1 AND catalog.display_weight>0 WHERE (${automatic} OR public.tier IN(${selected})) ORDER BY public.name,public.id`,
+    [...read.bindings, ...scope.bindings, ...scope.bindings, "consortium"],
   );
 }

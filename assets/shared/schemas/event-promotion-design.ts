@@ -54,7 +54,10 @@ export const eventPromotionDesignSchema = z
       })
       .default({}),
     sponsorGroups: z.array(badgeTemplateSponsorGroupSchema).max(8).default([]),
-    sponsorSource: z.enum(["event", "selected"]).default("event"),
+    sponsorSource: z
+      .enum(["event", "selected"])
+      .default("event")
+      .describe("Use the event's public sponsors, including PKI Consortium sponsors, or selected tier groups."),
     panels: promotionCompositionSchema.shape.panels,
     /** A plan to capture media never grants permission to advertise it. */
     advertiseLiveStreaming: z.boolean().default(false),

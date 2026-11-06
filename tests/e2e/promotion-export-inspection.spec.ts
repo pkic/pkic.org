@@ -1,3 +1,9 @@
+import {
+  sponsorshipCreateSchema,
+  sponsorshipResponseSchema,
+  sponsorshipStageUpdateSchema,
+} from "../../assets/shared/schemas/sponsorship-management";
+import { logoUploadResponseSchema } from "../../assets/shared/schemas/images";
 import { signInToPortal } from "./helpers/portal-auth";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
@@ -87,6 +93,31 @@ test("every delivered long-panel promotion export has complete evidence and refu
     expect(response.status(), await response.text()).toBe(201);
     const organization = organizationCreateResponseSchema.parse(await response.json()).organization;
     expect(organization.identities).toHaveLength(1);
+    if (index === 0) {
+      const logo =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="60"><path d="M10 10H70V25H25V50H10ZM90 10H180V25H105V50H90Z" fill="#125c3c"/></svg>';
+      const uploaded = await page.request.put(`/api/v1/organizations/${organization.id}/logo`, {
+        headers: { "content-type": "image/svg+xml" },
+        data: logo,
+      });
+      expect(uploaded.status(), await uploaded.text()).toBe(200);
+      logoUploadResponseSchema.parse(await uploaded.json());
+      const created = await page.request.post("/api/v1/sponsors", {
+        data: sponsorshipCreateSchema.parse({
+          sponsorType: "consortium",
+          organizationId: organization.id,
+          tier: "Diamond",
+          renewalDate: "2027-12-31",
+        }),
+      });
+      expect(created.status(), await created.text()).toBe(201);
+      const sponsor = sponsorshipResponseSchema.parse(await created.json()).sponsorship;
+      const activated = await page.request.patch(`/api/v1/sponsors/${sponsor.id}/stage`, {
+        data: sponsorshipStageUpdateSchema.parse({ toStage: "active" }),
+      });
+      expect(activated.status(), await activated.text()).toBe(200);
+      sponsorshipResponseSchema.parse(await activated.json());
+    }
     people.push({ id: organization.identities[0]!.userId, identityId: organization.identities[0]!.identityId, email });
   }
   expect(new Set(people.map((person) => person.id)).size).toBe(3);
@@ -284,7 +315,15 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await mkdir(directory, { recursive: true });
   const records = [];
   const urls = [];
-  const expectedPdfText = [title, ...copy.takeaways.slice(0, 4), ...names, ...affiliations, ...roles];
+  const expectedPdfText = [
+    title,
+    ...copy.takeaways.slice(0, 4),
+    ...names,
+    ...affiliations,
+    ...roles,
+    "Our sponsors",
+    "PKI Consortium · Diamond",
+  ];
   const labels = {
     portrait: "tall post (JPEG)",
     square: "square post (JPEG)",
@@ -356,6 +395,21 @@ test("every delivered long-panel promotion export has complete evidence and refu
       .poll(() => viewport.evaluate((element) => Math.abs(element.scrollLeft - element.clientWidth)))
       .toBeLessThan(1);
     await page.screenshot({ path: info.outputPath(`promotion-carousel-${device}.png`) });
+    await viewport.evaluate((element) => element.scrollTo({ left: element.scrollWidth - element.clientWidth }));
+    await expect
+      .poll(() =>
+        viewport.evaluate((element) => Math.abs(element.scrollWidth - element.clientWidth - element.scrollLeft)),
+      )
+      .toBeLessThan(1);
+    const fit = await viewport.evaluate((element) => ({
+      height: element.getBoundingClientRect().height,
+      bodyHeight:
+        element.parentElement!.clientHeight -
+        Number.parseFloat(getComputedStyle(element.parentElement!).paddingTop) -
+        Number.parseFloat(getComputedStyle(element.parentElement!).paddingBottom),
+    }));
+    expect(fit.height).toBeLessThanOrEqual(fit.bodyHeight + 1);
+    await page.screenshot({ path: info.outputPath(`promotion-sponsors-${device}.png`) });
     await page.keyboard.press("Escape");
     await expect(carousel).not.toBeVisible();
   }
@@ -383,6 +437,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
       bytes: await readFile(file),
       registrationUrl: kit.registrationUrl,
       expectedPdfText,
+      excludedPdfText: [copy.takeaways[4]!],
     });
     records.push({ publishedRevision: kit.publishedRevision, templateVersion: kit.templateVersion, ...evidence });
     urls.push(
@@ -458,6 +513,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
     bytes: await freshArtifact.body(),
     registrationUrl: fresh.registrationUrl,
     expectedPdfText: [`${title} · revised`, ...expectedPdfText.slice(1)],
+    excludedPdfText: [copy.takeaways[4]!],
   });
   await writeFile(
     join(directory, "stale-refusals.json"),

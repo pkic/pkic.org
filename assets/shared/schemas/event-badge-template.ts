@@ -115,7 +115,8 @@ export const badgeTemplateBrandingSchema = z
       .extend({ sponsors: z.array(badgeTemplateSponsorLogoSchema).max(BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT) })
       .strict(),
   )
-  .max(BADGE_TEMPLATE_SPONSOR_GROUPS_MAX_COUNT)
+  // Discovered branding can span more tiers than an authored template; total logos remain bounded.
+  .max(BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT)
   .superRefine((groups, ctx) => {
     if (
       new Set(groups.map((group) => group.key)).size !== groups.length ||

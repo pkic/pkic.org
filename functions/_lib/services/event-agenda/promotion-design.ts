@@ -1,3 +1,4 @@
+import type { BadgeSponsorSource } from "../../../../assets/shared/schemas/event-badge-template";
 import { eventPlaceSummary } from "../../../../assets/shared/event-place";
 import { svgLogoDimensions } from "../../utils/svg-logo";
 import { eventPromotionDesignFromSettings } from "../../../../assets/shared/schemas/event-promotion-design";
@@ -25,7 +26,7 @@ export function preparePromotionDesign(db: DatabaseLike, selection: EventReadSel
     statements: [
       db.prepare(`SELECT ${EVENT_COLUMNS} FROM events WHERE id=${scope.sql}`).bind(...scope.bindings),
       db.prepare(
-        "SELECT tier FROM sponsorship_tier_catalog WHERE sponsor_type='event' AND active=1 ORDER BY display_weight DESC,tier DESC",
+        "SELECT sponsor_type,tier FROM sponsorship_tier_catalog WHERE sponsor_type IN('event','consortium') AND active=1 AND display_weight>0 ORDER BY display_weight DESC,sponsor_type DESC,tier DESC",
       ),
       ...eventSponsors.statements,
       ...consortiumSponsors.statements,
@@ -35,16 +36,27 @@ export function preparePromotionDesign(db: DatabaseLike, selection: EventReadSel
       if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event unavailable.");
       const settings = parseJsonSafe<Record<string, unknown>>(event.settings_json, {});
       const design = eventPromotionDesignFromSettings(event.name, settings);
-      if (design.sponsorSource === "event")
-        design.sponsorGroups = batchRows<{ tier: string }>(loaded[1]).map((row, index) => ({
-          key: `event_${index}`,
-          source: "event" as const,
-          tierName: row.tier,
-        }));
       const populations = {
         event: eventSponsors.decode(loaded.slice(2, 3)).rows,
         consortium: consortiumSponsors.decode(loaded.slice(3, 4)).rows,
       };
+      if (design.sponsorSource === "event") {
+        // Automatic materials show each organization once, preferring its event sponsorship.
+        const eventIds = new Set(populations.event.map((row) => row.id));
+        populations.consortium = populations.consortium.filter((row) => !eventIds.has(row.id));
+        design.sponsorGroups = batchRows<{ sponsor_type: BadgeSponsorSource; tier: string }>(loaded[1])
+          .filter((row) =>
+            populations[row.sponsor_type].some(
+              (sponsor) => (row.sponsor_type === "event" ? sponsor.event_tier : sponsor.tier) === row.tier,
+            ),
+          )
+          .map((row, index) => ({
+            key: `sponsor_${index}`,
+            source: row.sponsor_type,
+            tierName: row.tier,
+            ...(row.sponsor_type === "consortium" ? { label: `PKI Consortium · ${row.tier}` } : {}),
+          }));
+      }
       const brandingRevision = design.sponsorGroups.length
         ? await badgePrintingBasisRevision(
             event.id,
