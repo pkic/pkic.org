@@ -1,3 +1,4 @@
+import { useScannerAudio } from "../../member-flows/portal/sections/events/detail/scanner/useScannerAudio";
 import { eventScanResponseSchema, type EventScanResponse } from "../../../shared/schemas/event-participation-scanning";
 import { ScannerDestinationTiles } from "../../member-flows/portal/sections/events/detail/scanner/ScannerDestinationTiles";
 import "../../member-flows/portal/sections/events/detail/scanner/EventScanner.css";
@@ -10,6 +11,8 @@ import type { PreviewSection } from "./PreviewShell";
 function ScannerPresentationExample() {
   const [presentation, setPresentation] = useState<"embedded" | "fullscreen">("embedded");
   const [role] = useHashQueryParam("scannerRole", "scan", ["scan", "exit", "session", "print", "lead"]);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const audio = useScannerAudio(soundEnabled, role === "scan" ? "entry" : role);
   const [feedback] = useHashQueryParam("scannerFeedback", "ready", [
     "ready",
     "eligible",
@@ -55,6 +58,9 @@ function ScannerPresentationExample() {
   return (
     <div ref={shell}>
       <FastScannerView
+        soundLabel={audio.label}
+        onSound={() => audio.toggle(setSoundEnabled)}
+        onTourSound={audio.test}
         presentation={presentation}
         purpose={role === "print" ? "print" : "scan"}
         mode={role === "lead" ? "lead" : role === "exit" ? "checkout" : "attendance"}

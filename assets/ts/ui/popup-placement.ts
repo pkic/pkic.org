@@ -131,6 +131,7 @@ export function usePopupPlacement({
   anchorPoint,
   spacing,
   beforePlace,
+  matchAnchorWidth = true,
 }: {
   open: boolean;
   anchorRef: RefObject<HTMLElement>;
@@ -151,6 +152,8 @@ export function usePopupPlacement({
   anchorPoint?: { x: number; y: number } | (() => { x: number; y: number } | null) | null;
   /** Position an anchored parent before measuring its child, regardless of event-listener order. */
   beforePlace?: () => void;
+  /** Coach marks may point to a wide subject without becoming equally wide. */
+  matchAnchorWidth?: boolean;
 }): () => void {
   const gap = spacing?.gap;
   const crossAxis = spacing?.crossAxis;
@@ -161,12 +164,14 @@ export function usePopupPlacement({
     const point = typeof anchorPoint === "function" ? anchorPoint() : anchorPoint;
     if ((!anchor && !point) || !popup) return;
     const anchorRect = point ? new DOMRect(point.x, point.y, 0, 0) : anchor!.getBoundingClientRect();
-    popup.style.setProperty("min-width", `${side === "right" || side === "left" ? 0 : anchorRect.width}px`);
-    applyPopupPosition(
-      popup,
-      measurePopupPosition(anchorRect, popup.getBoundingClientRect(), align, side, { gap, crossAxis }),
+    popup.style.setProperty(
+      "min-width",
+      `${!matchAnchorWidth || side === "right" || side === "left" ? 0 : anchorRect.width}px`,
     );
-  }, [align, anchorRef, popupRef, side, anchorPoint, gap, crossAxis, beforePlace]);
+    const position = measurePopupPosition(anchorRect, popup.getBoundingClientRect(), align, side, { gap, crossAxis });
+    if (!matchAnchorWidth) position.minWidth = 0;
+    applyPopupPosition(popup, position);
+  }, [align, anchorRef, popupRef, side, anchorPoint, gap, crossAxis, beforePlace, matchAnchorWidth]);
 
   useLayoutEffect(() => {
     if (!open) return;

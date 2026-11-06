@@ -1,3 +1,4 @@
+import { useScannerAudio } from "../../member-flows/portal/sections/events/detail/scanner/useScannerAudio";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import { Button } from "../Button";
 import { createRef } from "preact";
@@ -12,11 +13,14 @@ import "./badge-label-desk.css";
 function PrintDeskExample() {
   const [design, setDesign] = useState<BadgePrintDesign>("name_qr");
   const [state] = useHashQueryParam("printState", "ready", ["ready", "preparing", "requested", "pdf", "error"]);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const audio = useScannerAudio(soundEnabled, "print");
   const [labels, setLabels] = useState(2);
   const [sides, setSides] = useState<BadgePrintLayout["sides"]>("front_back");
   return (
     <div>
       <BadgeLabelDeskView
+        sound={{ ...audio, toggleSound: () => audio.toggle(setSoundEnabled) }}
         video={createRef()}
         cameraActive={state === "ready"}
         starting={false}

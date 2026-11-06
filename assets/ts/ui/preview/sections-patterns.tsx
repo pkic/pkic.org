@@ -1,3 +1,4 @@
+import { guidedTourSection } from "./GuidedTourPreview";
 import { badgeOutputProgressSection } from "./badge-output-progress";
 import { TooltipPreview } from "./TooltipPreview";
 import { ServerSelectPreview } from "./ServerSelectPreview";
@@ -262,6 +263,7 @@ function RowListSpecimen() {
 const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="16" viewBox="0 0 100 40"><path fill="currentColor" d="M0 0h28v40H0zm36 0h28v40H36zm36 0h28v40H72z"/></svg>')}`;
 
 export const patternSections: PreviewSection[] = [
+  guidedTourSection,
   pictureUploadSection,
   ...registrationSections,
   sessionTimingSection,

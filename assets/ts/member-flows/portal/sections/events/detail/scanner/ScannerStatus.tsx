@@ -26,7 +26,8 @@ export function ScannerStatusIcon({ tone }: { tone: ScannerStatus["tone"] }) {
 export function useScannerStatus(status: ScannerStatus | undefined, fallback?: ScannerStatus) {
   const [history, setHistory] = useState<ScannerStatus[]>([]);
   const [dismissed, setDismissed] = useState("");
-  const { key, tone, title, detail, transient, record } = status ?? {};
+  const { key, tone, title, detail, transient, record } =
+    (status?.record === false ? undefined : status) ?? fallback ?? {};
   useEffect(() => {
     if (!key || !tone || !title || record === false) return;
     setHistory((items) => [...items.filter((item) => item.key !== key), { key, tone, title, detail }].slice(-5));
@@ -42,7 +43,7 @@ export function useScannerStatus(status: ScannerStatus | undefined, fallback?: S
 
 export function ScannerResultTrail({ results }: { results: ScannerStatus[] }) {
   return (
-    <div class="pk-fast-scanner__results">
+    <div class="pk-fast-scanner__results" data-scanner-help="results">
       {results.length > 0 && (
         <ol class="pk-fast-scanner__trail" aria-label="Recent scan results">
           {results.map((result) => (

@@ -13,12 +13,16 @@
     min-block-size: 0;
     block-size: 2.125rem;
     padding: 0;
-    border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+    border-width: 1px;
+    border-style: solid;
     border-radius: var(--pk-radius);
+  }
+  .pk-close.pk-btn--ghost {
+    border-color: color-mix(in srgb, currentColor 28%, transparent);
     background: transparent;
     color: inherit;
   }
-  .pk-close.pk-btn:hover:not(:disabled, [aria-disabled="true"]) {
+  .pk-close.pk-btn--ghost:hover:not(:disabled, [aria-disabled="true"]) {
     background: color-mix(in srgb, currentColor 12%, transparent);
     color: inherit;
   }

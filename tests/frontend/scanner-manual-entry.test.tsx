@@ -52,7 +52,7 @@ it("opens the actual manual dialog, focuses its input and retains controlled inp
   const dialog = host.querySelector<HTMLDialogElement>("dialog")!;
   Object.defineProperty(dialog, "close", { configurable: true, value: () => dialog.removeAttribute("open") });
   const enter = Array.from(host.querySelectorAll("button")).find(
-    (button) => button.textContent === "Find attendee or badge",
+    (button) => (button.getAttribute("aria-label") ?? button.textContent?.trim()) === "Find attendee or badge",
   )!;
   expect(dialog.open).toBe(false);
   expect(host.querySelector('input[name="badgeId"]')).toBeNull();

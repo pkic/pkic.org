@@ -68,7 +68,6 @@ export function EventScannerCapture({
   const authorityPaused = useRef(false);
   const [fastMode, setFastMode] = useScannerCaptureActive();
   const preferences = useScannerPreferences();
-  const feedbackPause = preferences.feedbackPause;
   const online = useScannerConnection();
   const {
     result,
@@ -84,7 +83,7 @@ export function EventScannerCapture({
     failure,
   } = useScannerFeedback({
     enabled: fastMode,
-    durationMs: feedbackPause,
+    durationMs: preferences.feedbackPause,
     collector: Boolean(collectorContext),
     currentOperation: lastOperation,
     committedOperation: lastCommittedOperation,
@@ -93,7 +92,7 @@ export function EventScannerCapture({
   const offline = !online || Boolean(collectorContext);
   const [busy, setBusy] = useState(false);
   const manualCapturePending = useRef(false);
-  const cooldown = useScanCooldown(feedbackPause);
+  const cooldown = useScanCooldown(preferences.feedbackPause);
   const [preview, setPreview] = useState(false);
   const scannerShell = useRef<HTMLDivElement>(null);
   const { presentation, enter: enterPresentation, toggle: togglePresentation } = useScannerPresentation(scannerShell);
@@ -558,6 +557,7 @@ export function EventScannerCapture({
           lastResult={lastResult}
           connectionStatus={connection}
           soundLabel={sound.label}
+          onTourSound={sound.test}
           onSound={() => sound.toggle(preferences.setSound)}
           result={result}
           preparation={collectorContext ? undefined : preparationStatus}

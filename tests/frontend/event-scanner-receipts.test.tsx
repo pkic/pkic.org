@@ -19,10 +19,8 @@ describe("scanner foreground receipt and drain lifecycle", () => {
     }));
     await submit();
     const scan = eventScanCaptureIntentSchema.parse(mocks.persist.mock.calls[0]![0]);
-    await vi.waitFor(() =>
-      expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Use a reader or paste a code"),
-    );
-    expect(host.querySelector(".pk-fast-scanner__last")?.textContent).toContain("scan saved on device");
+    await vi.waitFor(() => expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready for entry"));
+    expect(host.querySelector(".pk-fast-scanner__trail")?.textContent).toContain("scan saved on device");
     await act(async () => {
       worker.dispatchEvent(
         new MessageEvent("message", {
@@ -36,8 +34,8 @@ describe("scanner foreground receipt and drain lifecycle", () => {
         }),
       );
     });
-    expect(host.querySelector(".pk-fast-scanner__last")?.textContent).toContain("Badge not valid");
-    expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Use a reader or paste a code");
+    expect(host.querySelector(".pk-fast-scanner__trail")?.textContent).toContain("Badge not valid");
+    expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready for entry");
   });
   it.each([false, true])(
     "replaces provisional helper text with a matching foreground receipt (continuous=%s)",

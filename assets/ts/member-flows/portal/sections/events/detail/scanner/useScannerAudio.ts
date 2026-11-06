@@ -20,8 +20,8 @@ export function useScannerAudio(enabled: boolean, success: ScannerSound) {
       setAvailable(false);
     }
   }
-  function play(sound: ScannerSound) {
-    if (!enabled) return;
+  function play(sound: ScannerSound, preview = false) {
+    if (!enabled && !preview) return;
     const feedback = SCANNER_AUDIO_FEEDBACK[sound];
     try {
       if (feedback.vibration.length) navigator.vibrate?.([...feedback.vibration]);
@@ -70,11 +70,11 @@ export function useScannerAudio(enabled: boolean, success: ScannerSound) {
       if (!enabled || available) onChange(!enabled);
       unlock();
     },
-    test: () => {
+    test: (sound: ScannerSound = success) => {
       unlock();
       void context.current
         ?.resume()
-        .then(() => latestPlay.current(success))
+        .then(() => latestPlay.current(sound, true))
         .catch(() => setAvailable(false));
     },
   };

@@ -71,6 +71,19 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 describe("audible scanner results", () => {
+  it("previews warning and error sounds from explicit tour controls even when live feedback is muted", async () => {
+    vi.stubGlobal("AudioContext", Audio);
+    await act(() => render(<Harness enabled={false} />, host));
+    await act(async () => sound.test("warning"));
+    expect(frequencies).toEqual([440, 440]);
+    frequencies.length = 0;
+    await act(async () => sound.test("error"));
+    expect(frequencies.length).toBeGreaterThan(0);
+    expect(frequencies).not.toEqual([440, 440]);
+    frequencies.length = 0;
+    await act(() => render(<Harness enabled={false} result={receipt("eligible")} />, host));
+    expect(frequencies).toEqual([]);
+  });
   it("plays distinct short tones, deduplicates an acknowledgment and closes audio on unmount", async () => {
     vi.stubGlobal("AudioContext", Audio);
     await act(() => render(<Harness />, host));

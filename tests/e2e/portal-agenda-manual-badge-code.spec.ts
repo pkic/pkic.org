@@ -191,7 +191,12 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.evaluate(() =>
     Object.defineProperty(Element.prototype, "requestFullscreen", { value: undefined, configurable: true }),
   );
-  await page.getByRole("button", { name: "Enter full screen", exact: true }).click();
+  await page.getByRole("button", { name: "Scanner help", exact: true }).click();
+  await expect(page.locator(".pk-guided-tour")).toBeVisible();
+  expect((await page.locator(".pk-guided-tour").boundingBox())?.width).toBeLessThan(400);
+  await page.screenshot({ path: info.outputPath("scanner-help-desktop.png") });
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".pk-guided-tour")).toHaveCount(0);
   const printScanner = page.getByRole("dialog", { name: "Badge printing scanner", exact: true });
   await expect(printScanner).toBeVisible();
   expect(await printScanner.evaluate((element) => element.contains(document.elementFromPoint(20, 20)))).toBe(true);
@@ -204,6 +209,27 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.setViewportSize({ width: 375, height: 812 });
   expect(await printScanner.evaluate((element) => element.contains(document.elementFromPoint(20, 20)))).toBe(true);
   await page.screenshot({ path: info.outputPath("print-scanner-fullscreen-phone.png") });
+  const printsBeforeTour = await page.locator("html").getAttribute("data-print-called");
+  await printScanner.getByRole("button", { name: "Scanner help", exact: true }).click();
+  const help = page.locator(".pk-guided-tour");
+  await expect(help.getByRole("heading", { name: "Check your scanner" })).toBeVisible();
+  await expect(printScanner.locator("[data-tour-active]")).toBeVisible();
+  await page.screenshot({ path: info.outputPath("scanner-help-phone.png") });
+  for (let step = 0; step < 3; step++) await help.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(printScanner.getByText("Example: Print requested", { exact: true })).toBeVisible();
+  await help.getByRole("button", { name: "Replay sound", exact: true }).click();
+  await help.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(printScanner.getByText("Example: Needs attention", { exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("scanner-help-warning.png") });
+  await help.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(printScanner.getByText("Example: Could not print", { exact: true })).toBeVisible();
+  for (let step = 0; step < 5 && (await help.getByRole("button", { name: "Next", exact: true }).count()); step++)
+    await help.getByRole("button", { name: "Next", exact: true }).click();
+  await help.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(help).toHaveCount(0);
+  await expect(printScanner.getByText(/Example:/)).toHaveCount(0);
+  expect(await page.locator("html").getAttribute("data-print-called")).toBe(printsBeforeTour);
+  const printField = await printScanner.evaluate((element) => getComputedStyle(element).backgroundImage);
   const swipe = () =>
     page.getByRole("group", { name: "Swipe left or right, or use arrow keys, to switch scanner", exact: true });
   await page.evaluate(() =>
@@ -221,8 +247,14 @@ test("the registration desk switches between immediate labels and full badges", 
   const captureScanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
   await expect(captureScanner).toBeVisible();
   await expect(captureScanner.getByText("Ready for entry", { exact: true })).toBeVisible();
+  await expect(captureScanner).not.toHaveAttribute("data-gradient-from");
+  const entryField = await captureScanner.evaluate((element) => getComputedStyle(element).backgroundImage);
   await swipe().press("ArrowLeft");
   await expect(captureScanner.getByText("Ready for exit", { exact: true })).toBeVisible();
+  await expect(captureScanner).not.toHaveAttribute("data-gradient-from");
+  const exitField = await captureScanner.evaluate((element) => getComputedStyle(element).backgroundImage);
+  expect(new Set([entryField, exitField, printField]).size).toBe(3);
+  expect(new Set([entryField, exitField, printField].map((field) => field.split(",")[0])).size).toBe(1);
   await swipe().press("ArrowLeft");
   await expect(page).toHaveURL(/\/scanner\/print$/);
   await expect(printScanner).toBeVisible();

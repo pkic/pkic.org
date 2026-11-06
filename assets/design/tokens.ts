@@ -1,3 +1,5 @@
+import { conferenceField } from "./conference-field.ts";
+import { scannerTokens } from "./scanner-tokens.ts";
 /**
  * The canonical design tokens.
  *
@@ -151,8 +153,6 @@ const shadowDark: Record<keyof typeof shadowLight, string> = {
  * visual with it and the agenda's session dialog paints its header with it, so
  * both tokens read this one definition.
  */
-const conferenceFieldStops = "#0b2a1c 0%, #125c3c 32%, #20506e 74%, #b0581f 100%";
-const conferenceField = `linear-gradient(135deg, ${conferenceFieldStops})`;
 
 /** Values that do not change with the theme. */
 export const constants = {
@@ -468,7 +468,6 @@ export const constants = {
   "pqc-on-field": "#ffffff",
   "pqc-on-field-muted": "rgba(255,255,255,0.88)",
   "pqc-field": conferenceField,
-  "pqc-field-stops": conferenceFieldStops,
   "pqc-light": "radial-gradient(110% 80% at 8% 0%, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 60%)",
   "pqc-stripe": `linear-gradient(90deg, ${palette.green} 0%, ${palette.blue} 50%, ${palette.orange} 100%)`,
   "pqc-dots": `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='1.7' fill='rgba(255,255,255,0.22)'/%3E%3C/svg%3E")`,
@@ -481,10 +480,8 @@ export const constants = {
   "grad-tonal": "linear-gradient(135deg, var(--pk-accent-deep), var(--pk-accent-lift))",
   "grad-duo": "linear-gradient(135deg, var(--pk-accent-deep) 0%, var(--pk-accent) 45%, var(--pk-accent-2) 100%)",
   "grad-brand": `linear-gradient(135deg, ${palette.green} 0%, ${palette.blue} 50%, ${palette.orange} 100%)`,
-  "grad-state-ok": `linear-gradient(135deg, #0b2a1c, color-mix(in oklab, ${palette.green} 85%, #000))`,
-  "scanner-status-stroke": "4px",
-  "grad-state-warning": `linear-gradient(135deg, color-mix(in oklab, ${palette.yellow} 28%, #000), color-mix(in oklab, ${palette.yellow} 48%, #000))`,
-  "grad-state-error": `linear-gradient(135deg, color-mix(in oklab, ${palette.red} 38%, #000), color-mix(in oklab, ${palette.red} 80%, #000))`,
+  "tour-highlight": palette.blue,
+  ...scannerTokens,
   stripe: `linear-gradient(90deg, ${palette.green} 0%, ${palette.blue} 50%, ${palette.orange} 100%)`,
 } as const;
 
@@ -551,7 +548,12 @@ export const publicationBrand = {
 /** Component-only tokens load with their consumers rather than the global entry. */
 export const featureTokenGroups = {
   agenda: Object.keys(constants).filter((name) => name.startsWith("agenda-")),
-  scanner: ["grad-state-ok", "grad-state-warning", "grad-state-error", "scanner-status-stroke", "pqc-field-stops"],
+  scanner: [
+    "grad-state-ok",
+    "grad-state-warning",
+    "grad-state-error",
+    ...Object.keys(constants).filter((name) => name.startsWith("scanner-")),
+  ],
   event: [
     "live-question-type",
     "live-question-type-long",

@@ -77,6 +77,7 @@
     --pk-grad-tonal: linear-gradient(135deg, var(--pk-accent-deep), var(--pk-accent-lift));
     --pk-grad-duo: linear-gradient(135deg, var(--pk-accent-deep) 0%, var(--pk-accent) 45%, var(--pk-accent-2) 100%);
     --pk-grad-brand: linear-gradient(135deg, #198754 0%, #5a9bd5 50%, #ed7d31 100%);
+    --pk-tour-highlight: #5a9bd5;
     --pk-stripe: linear-gradient(90deg, #198754 0%, #5a9bd5 50%, #ed7d31 100%);
 
     --pk-control-y: 0.4rem;

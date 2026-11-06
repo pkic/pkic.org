@@ -30,6 +30,8 @@ import { IconPrint, IconFullscreen } from "../../../../../../components/icons/ap
 import { useScannerImmersiveLifecycle } from "../scanner/useScannerImmersiveLifecycle";
 import { useScannerPresentation } from "../scanner/useScannerPresentation";
 import { FastScannerView } from "../scanner/FastScannerView";
+import { IconScannerHelp } from "../../../../../../components/icons/scanner-controls";
+import { IconVirtual } from "../../../../../../components/icons";
 import { BadgePdfActions } from "./BadgePdfActions";
 import type { ScannerStatus } from "../scanner/ScannerStatus";
 import { Button } from "../../../../../../ui/Button";
@@ -58,6 +60,7 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
   const [format, setFormat] = useHashQueryParam("printFormat", "html", ["html", "pdf"]);
   const [pdfUrl, setPdfUrl] = useState("");
   const continuous = useRef(false);
+  const paused = useRef(false);
   const printing = useBadgeLabelPrinting(
     slug,
     session,
@@ -80,7 +83,7 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
   }, [printing.pdf]);
   const sound = usePrintScannerSound(printing.job?.key, printing.busy, printing.error);
   const camera = useScannerCamera((raw) => {
-    if (camera.acceptsFrame(raw) && printing.scan(raw)) camera.stop();
+    if (!paused.current && camera.acceptsFrame(raw) && printing.scan(raw)) camera.stop();
   });
   useScannerTaskLaunch("print", () => {
     sound.unlock();
@@ -123,6 +126,9 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
               : undefined
         }
         sound={sound}
+        onOperatorPause={(value) => {
+          paused.current = value;
+        }}
         format={format}
         onFormat={setFormat}
         copies={copies}
@@ -227,9 +233,11 @@ export function BadgeLabelDeskView({
   format = "html",
   onFormat,
   status,
+  onOperatorPause,
 }: {
+  onOperatorPause?: (value: boolean) => void;
   status?: ScannerStatus;
-  sound?: Pick<ReturnType<typeof usePrintScannerSound>, "label" | "toggleSound">;
+  sound?: Pick<ReturnType<typeof usePrintScannerSound>, "label" | "toggleSound" | "test">;
   format?: "html" | "pdf";
   onFormat?: (value: "html" | "pdf") => void;
   video: RefObject<HTMLVideoElement>;
@@ -249,6 +257,7 @@ export function BadgeLabelDeskView({
   children?: ComponentChildren;
 }) {
   const [preview, setPreview] = useState(false);
+  const [helpOnStart, setHelpOnStart] = useState(false);
   const cameraShell = useRef<HTMLDivElement>(null);
   const { presentation, setPresentation, toggle } = useScannerPresentation(cameraShell, "responsive");
   const fullscreen = presentation === "fullscreen";
@@ -328,6 +337,20 @@ export function BadgeLabelDeskView({
               <IconPrint /> Print
             </span>
             <Button
+              icon
+              variant="secondary"
+              data-tour-trigger
+              aria-label="Scanner help"
+              title="Scanner help"
+              onClick={() => {
+                onOperatorPause?.(true);
+                setHelpOnStart(true);
+                setPresentation("fullscreen");
+              }}
+            >
+              <IconScannerHelp />
+            </Button>
+            <Button
               variant="ghost"
               aria-label={fullscreen ? "Exit full screen" : "Enter full screen"}
               title={fullscreen ? "Exit full screen" : "Enter full screen"}
@@ -346,10 +369,13 @@ export function BadgeLabelDeskView({
         {fullscreen && (
           <FastScannerView
             purpose="print"
+            helpOnStart={helpOnStart}
             taskSwitchDisabled={busy || starting}
             screenAwake={screenAwake}
             soundLabel={sound?.label}
             onSound={sound?.toggleSound}
+            onTourSound={sound?.test}
+            onOperatorPause={onOperatorPause}
             context={design === "name_qr" ? "Labels" : "Full badges"}
             result={null}
             pending={0}
@@ -369,9 +395,13 @@ export function BadgeLabelDeskView({
             onPreview={() => setPreview((value) => !value)}
             onExit={() => {
               stop();
+              setHelpOnStart(false);
               setPresentation("embedded");
             }}
-            onManual={() => setPresentation("embedded")}
+            onManual={() => {
+              setHelpOnStart(false);
+              setPresentation("embedded");
+            }}
             canRecordAttendance={false}
           />
         )}
@@ -379,7 +409,7 @@ export function BadgeLabelDeskView({
           <>
             <p>{starting ? "Starting camera…" : "Camera off"}</p>
             <Button variant="primary" disabled={busy || starting} onClick={start}>
-              Start camera
+              <IconVirtual /> Start camera
             </Button>
           </>
         )}
