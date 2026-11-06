@@ -15,7 +15,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 /** The manage read the page boots from, with one offered in-person day. */
-function manageResponse(): Response {
+function manageResponse(overrides: { registration?: Record<string, unknown>; shareUrl?: string } = {}): Response {
   return jsonResponse({
     success: true,
     sponsorSharing: { allowed: false, withdrawnAt: null },
@@ -27,6 +27,7 @@ function manageResponse(): Response {
       attendance_type: "in_person",
       custom_answers: null,
       isEmailVerified: true,
+      ...overrides.registration,
     },
     event: { id: "event-1", slug: "pqc-2026", name: "PQC Conference" },
     user: {
@@ -56,7 +57,7 @@ function manageResponse(): Response {
         offerExpiresAt: "2026-12-01T10:00:00.000Z",
       },
     ],
-    shareUrl: null,
+    shareUrl: overrides.shareUrl ?? null,
     headshotUrl: null,
   });
 }
@@ -354,6 +355,39 @@ describe("registration manage read view", () => {
       expect(document.querySelector("[data-post-action-title]")?.textContent).toBe("Registration cancelled"),
     );
     expect(patchBodies(fetchMock)).toEqual([{ action: "cancel" }]);
+    // The welcome and status pill belonged to the active registration.
+    expect(document.querySelector<HTMLElement>("[data-manage-greeting]")?.hidden).toBe(true);
+  });
+
+  it("leads a cancelled registration with that, withholds the badge and invitations, and restores on request", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === "PATCH"
+        ? jsonResponse({ success: true, emailChanged: false, sponsorSharing: { allowed: false, withdrawnAt: null } })
+        : manageResponse({
+            registration: { status: "cancelled", cancellation_reason_code: "attendee_cancelled" },
+            shareUrl: "https://pkic.org/events/pqc-2026/register/?ref=casey",
+          }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await import("../../assets/ts/event-flows/registration-manage-page");
+    const banner = await vi.waitFor(() => {
+      const found = document.querySelector<HTMLElement>("[data-manage-status-banner]");
+      expect(found?.hidden).toBe(false);
+      return found!;
+    });
+    expect(banner.textContent).toMatch(/cancelled/i);
+    expect(document.querySelector("[data-manage-greeting-text]")?.textContent).toMatch(/cancelled/i);
+    expect(document.querySelector("[data-manage-agenda-link]")).toBeNull();
+    expect(document.querySelector("[data-manage-share]")?.childElementCount).toBe(0);
+
+    buttonReading("Restore registration")!.click();
+    await vi.waitFor(() =>
+      expect(document.querySelector("[data-post-action-title]")?.textContent).toBe("Registration restored"),
+    );
+    expect(patchBodies(fetchMock)).toEqual([{ action: "update" }]);
+    // Nothing on the page still says the restored registration is cancelled.
+    expect(banner.hidden).toBe(true);
+    expect(document.querySelector<HTMLElement>("[data-manage-greeting]")?.hidden).toBe(true);
   });
 
   it("reports an unauthorized registration only after the shared confirmation", async () => {
