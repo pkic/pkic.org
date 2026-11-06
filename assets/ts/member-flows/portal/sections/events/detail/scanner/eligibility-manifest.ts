@@ -10,6 +10,7 @@ import type {
 
 export type LocalEligibility = Pick<EventScanResponse, "outcome" | "reason"> & { message: string; userId?: string };
 export interface EligibilityManifest {
+  refreshError?: string;
   enrollment?: Pick<CachedManifest, "eventId" | "deviceId" | "epochId" | "writtenAt">;
   operatorUserId: string;
   occurrenceId: string | null;
@@ -231,6 +232,7 @@ export async function prepareEligibilityManifest(
   signal?: AbortSignal,
   roomId: string | null = null,
   source: "refresh" | "cache" = "refresh",
+  onProgress?: (checkedBadges: number) => void,
 ): Promise<EligibilityManifest> {
   const session = await readActiveUserSession();
   const sessionId = session?.sessionId;
@@ -268,6 +270,7 @@ export async function prepareEligibilityManifest(
       enrollment,
       signal,
       saved.success && saved.data.complete ? saved.data : undefined,
+      onProgress,
     );
     if (await scannerUploadSuspended(operatorUserId, sessionId)) throw new Error("SCANNER_SIGNED_OUT");
     if (signal?.aborted) throw new DOMException("Eligibility preparation canceled", "AbortError");
@@ -287,6 +290,12 @@ export async function prepareEligibilityManifest(
       throw error;
     if (await scannerUploadSuspended(operatorUserId, sessionId))
       throw new Error("SCANNER_SIGNED_OUT", { cause: error });
-    return restore(error);
+    return {
+      ...restore(error),
+      refreshError:
+        error instanceof Error && /^Badge refresh failed \(HTTP \d{3}\)\.$/.test(error.message)
+          ? error.message
+          : "Badge data could not be refreshed. Check your connection and try again.",
+    };
   }
 }

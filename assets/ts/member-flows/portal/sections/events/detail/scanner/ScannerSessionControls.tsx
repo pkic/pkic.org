@@ -3,13 +3,11 @@ import { Button } from "../../../../../../ui/Button";
 import { useState } from "preact/hooks";
 import { startNextScannerEpoch, freezeScannerEpoch, closeScannerEpoch } from "./scanner-device-ledger";
 import type { useScannerDevice } from "./useScannerDevice";
-import { ScannerRecovery } from "./ScannerRecovery";
 export function ScannerSessionControls({
   scanner,
   slug,
   operatorUserId,
   sponsorId,
-  sessionId,
   capturePause,
   sync,
   message,
@@ -18,7 +16,6 @@ export function ScannerSessionControls({
   slug: string;
   operatorUserId: string;
   sponsorId?: string;
-  sessionId?: string;
   capturePause: (paused: boolean) => void;
   sync: () => Promise<void>;
   message: (value: string) => void;
@@ -86,7 +83,6 @@ export function ScannerSessionControls({
           </Button>
         )}
       </div>
-      <ScannerRecovery slug={slug} operatorUserId={operatorUserId} sessionId={sessionId} sponsorId={sponsorId} />
     </>
   );
 }

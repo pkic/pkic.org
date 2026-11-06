@@ -26,12 +26,15 @@ export function useEligibilityManifest(
   const [manifestReady, setManifestReady] = useState(false);
   const [manifestPreparing, setManifestPreparing] = useState(false);
   const [manifestError, setManifestError] = useState("");
+  const [manifestProgress, setManifestProgress] = useState<number | null>(null);
+  const refreshRequest = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
     const controller = new AbortController();
     eligibilityManifest.current = null;
     setManifestReady(false);
     setManifestPreparing(false);
     setManifestError("");
+    setManifestProgress(null);
     if (!epoch?.epochId || epoch.state !== "open") return;
     if (
       action !== "check" &&
@@ -48,6 +51,7 @@ export function useEligibilityManifest(
       refreshing = true;
       const onRefusal = permissionChanged.current;
       setManifestPreparing(true);
+      setManifestProgress(null);
       try {
         const manifest = await prepareEligibilityManifest(
           slug,
@@ -57,11 +61,14 @@ export function useEligibilityManifest(
           controller.signal,
           roomId,
           collector ? "cache" : "refresh",
+          (checked) => {
+            if (!controller.signal.aborted) setManifestProgress(checked);
+          },
         );
         if (controller.signal.aborted) return;
         eligibilityManifest.current = manifest;
         setManifestReady(true);
-        setManifestError("");
+        setManifestError(manifest.refreshError ?? "");
       } catch (error) {
         if (controller.signal.aborted) return;
         if (error instanceof Error && error.message === "SCANNER_PERMISSION_CHANGED") {
@@ -70,13 +77,18 @@ export function useEligibilityManifest(
         }
         setManifestReady(Boolean(eligibilityManifest.current));
         setManifestError(
-          "Eligibility data could not be refreshed. Using the last saved registration data where available.",
+          error instanceof Error && error.message === "SCANNER_PERMISSION_CHANGED"
+            ? "Scanner access changed. Check sign-in and reopen the scanner."
+            : collector
+              ? "Prepared badge data is unavailable. Connect and refresh before scanning."
+              : "Badge data could not be refreshed. Check your connection and try again.",
         );
       } finally {
         refreshing = false;
         if (!controller.signal.aborted) setManifestPreparing(false);
       }
     };
+    refreshRequest.current = prepare;
     void prepare();
     const reconnect = () => {
       if (!collector && navigator.onLine) void prepare();
@@ -96,7 +108,14 @@ export function useEligibilityManifest(
       document.removeEventListener("visibilitychange", visible);
     };
   }, [slug, operatorUserId, occurrenceId, action, roomId, epoch?.epochId, epoch?.state, epoch?.deviceId, collector]);
-  return { eligibilityManifest, manifestReady, manifestPreparing, manifestError };
+  return {
+    eligibilityManifest,
+    manifestReady,
+    manifestPreparing,
+    manifestError,
+    manifestProgress,
+    refresh: () => refreshRequest.current(),
+  };
 }
 
 /** Save only after a canonical session, open epoch and current manifest have prepared this view. */

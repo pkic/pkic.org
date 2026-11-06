@@ -1,6 +1,6 @@
 import { ScannerModeSelect } from "./ScannerModeSelect";
 import { ScannerSoundPreferences } from "./ScannerSoundPreferences";
-import { ScannerSyncStatus } from "./ScannerPreparationStatus";
+import { ScannerSyncStatus, ScannerPreparationStatus } from "./ScannerPreparationStatus";
 import { Button } from "../../../../../../ui/Button";
 import type { ComponentProps } from "preact";
 import { ScannerDiagnostics } from "./ScannerCaptureControls";
@@ -31,27 +31,30 @@ export function ScannerDiagnosticsView({
   preferences: ComponentProps<typeof ScannerSoundPreferences>["preferences"];
   sound: ComponentProps<typeof ScannerSoundPreferences>["sound"];
   status: Omit<ComponentProps<typeof ScannerSyncStatus>, "sync">;
-  preparation: Diagnostics["preparation"];
+  preparation: ComponentProps<typeof ScannerPreparationStatus> & { refreshEligibility?: () => Promise<void> };
   unverifiedStart?: Diagnostics["unverifiedStart"];
 }) {
   return (
-    <>
-      <ScannerModeSelect {...mode} />
-      <Button type="button" variant="secondary" disabled={!scanner.ready} onClick={onStart}>
-        Start scanning
-      </Button>
-      <ScannerDiagnostics
-        session={{ ...context, scanner, sync, message: onMessage, capturePause: onCapturePause }}
-        sound={<ScannerSoundPreferences preferences={preferences} sound={sound} />}
-        syncStatus={<ScannerSyncStatus {...status} sync={() => void sync()} />}
-        pacing={{
-          value: preferences.feedbackPause,
-          onChange: (value) => preferences.update({ feedbackPause: value }),
-          field: preferences.form.of("feedbackPause"),
-        }}
-        preparation={preparation}
-        unverifiedStart={unverifiedStart}
-      />
-    </>
+    <ScannerDiagnostics
+      setup={<ScannerModeSelect {...mode} />}
+      sessionAction={
+        <Button type="button" variant="secondary" disabled={!scanner.ready} onClick={onStart}>
+          Start scanning
+        </Button>
+      }
+      session={{ ...context, scanner, sync, message: onMessage, capturePause: onCapturePause }}
+      sound={<ScannerSoundPreferences preferences={preferences} sound={sound} />}
+      syncStatus={
+        <ScannerSyncStatus {...status} refreshEligibility={preparation.refreshEligibility} sync={() => void sync()}>
+          <ScannerPreparationStatus {...preparation} />
+        </ScannerSyncStatus>
+      }
+      pacing={{
+        value: preferences.feedbackPause,
+        onChange: (value) => preferences.update({ feedbackPause: value }),
+        field: preferences.form.of("feedbackPause"),
+      }}
+      unverifiedStart={unverifiedStart}
+    />
   );
 }

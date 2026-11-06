@@ -404,9 +404,14 @@ describe("local scoped eligibility manifest", () => {
     expect((await restored.lookup(badge, "attendance")).outcome).toBe("eligible");
     expect(fetcher).not.toHaveBeenCalled();
     fetcher.mockRejectedValueOnce(new Error("Offline"));
-    await expect(
-      prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled),
-    ).resolves.toBeTruthy();
+    const fallback = await prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled);
+    expect(fallback.refreshError).toContain("could not be refreshed");
+    expect(fallback.serverNow).toBe(restored.serverNow);
+    expect((await fallback.lookup(badge, "attendance")).outcome).toBe("eligible");
+    fetcher.mockResolvedValueOnce(Response.json({}, { status: 503 }));
+    const failed = await prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled);
+    expect(failed.refreshError).toContain("HTTP 503");
+    expect(failed.validUntil).toBe(restored.validUntil);
     fetcher.mockRejectedValueOnce(new Error("Offline"));
     await expect(
       prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, {

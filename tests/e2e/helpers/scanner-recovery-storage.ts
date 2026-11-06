@@ -74,6 +74,9 @@ function scannerDiagnostics(page: Page) {
 }
 
 export async function openScannerDiagnostics(page: Page) {
+  const scanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+  if (await scanner.isVisible())
+    await scanner.getByRole("button", { name: "Close scanner", exact: true }).first().click();
   const diagnostics = scannerDiagnostics(page);
   if (!(await diagnostics.isVisible())) await page.getByRole("tab", { name: "Diagnostics", exact: true }).click();
   await expect(diagnostics).toBeVisible();

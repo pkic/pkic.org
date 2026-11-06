@@ -534,12 +534,11 @@ export function EventScannerCapture({
             }}
             status={{
               pending,
-              lastSync: syncHistory.lastSync,
               uploadStatus,
               collector: collectorContext,
               offline: offlinePreparation,
               action,
-              syncing,
+              syncing: syncing || manifestPreparing,
             }}
             preparation={preparationStatus}
             unverifiedStart={action !== "lead" && !manifestReady && !manifestPreparing ? startScanning : undefined}

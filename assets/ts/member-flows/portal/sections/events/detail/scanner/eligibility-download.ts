@@ -16,6 +16,7 @@ export async function downloadEligibilitySnapshot(
   enrollment: { epochId: string; deviceId: string },
   signal?: AbortSignal,
   saved?: CachedManifest,
+  onProgress?: (checkedBadges: number) => void,
 ): Promise<CachedManifest> {
   const matching =
     saved &&
@@ -56,7 +57,7 @@ export async function downloadEligibilitySnapshot(
     const response = await fetch(`/api/v1/events/${encodeURIComponent(slug)}/offline-eligibility?${query}`, {
       credentials: "same-origin",
       cache: "no-store",
-      signal,
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
     });
     if (response.status === 401 || response.status === 403) throw new Error("SCANNER_PERMISSION_CHANGED");
     if (response.status === 409 && !restarted) {
@@ -68,7 +69,7 @@ export async function downloadEligibilitySnapshot(
       restarted = true;
       continue;
     }
-    if (!response.ok) throw new Error("Eligibility preparation unavailable");
+    if (!response.ok) throw new Error(`Badge refresh failed (HTTP ${response.status}).`);
     const page = enrolledOfflineEligibilityResponseSchema.parse(await response.json());
     if (
       page.operatorUserId !== operatorUserId ||
@@ -111,6 +112,7 @@ export async function downloadEligibilitySnapshot(
       };
     } else snapshot.validUntil = Math.min(snapshot.validUntil, validUntil);
     snapshot.entries.push(...entries);
+    onProgress?.(snapshot.entries.length);
     if (snapshot.entries.length > 100000) throw new Error("Eligibility snapshot too large");
     cursor = page.nextBadgeId;
     if (cursor !== null) continue;

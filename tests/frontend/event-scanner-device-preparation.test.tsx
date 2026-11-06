@@ -317,9 +317,9 @@ describe("scanner device enrollment and manual capture boundary", () => {
     await mount(true, ["attendance"]);
     await openDiagnostics();
     const normal = Array.from(host.querySelectorAll("dl")).find((list) =>
-      list.textContent?.includes("Last eligibility check"),
+      list.textContent?.includes("Last badge refresh"),
     )!;
-    expect(normal.textContent).toContain("Last eligibility check");
+    expect(normal.textContent).toContain("Last badge refresh");
     expect(normal.textContent).toContain(formatDateTime(mocks.snapshot.serverNow));
     await closeDiagnostics();
     await act(async () => {
@@ -328,7 +328,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
         .click();
     });
     const fast = host.querySelector('[role="dialog"][aria-label="Continuous badge scanner"]')!;
-    expect(fast.textContent).toContain("Last eligibility check");
+    expect(fast.textContent).toContain("Last badge refresh");
     expect(fast.textContent).toContain(formatDateTime(mocks.snapshot.serverNow));
     expect(fast.textContent).toContain(formatDateTime(mocks.snapshot.expiresAt));
     expect(fast.textContent).toContain("Using saved registration data");

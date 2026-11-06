@@ -5,68 +5,87 @@ import type { EventScanRequest } from "../../../../../../../shared/schemas/event
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import { Button } from "../../../../../../ui/Button";
+import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
+import type { ComponentChildren } from "preact";
+import { useScannerConnection } from "./useScannerConnection";
+import { Alert } from "../../../../../../ui/Alert";
 
 /** Last acknowledgment, queue and committed offline readiness are separate facts. */
 export function ScannerSyncStatus({
   pending,
-  lastSync,
   uploadStatus,
   collector,
   offline,
   action,
   sync,
   syncing = false,
+  refreshEligibility,
+  children,
 }: {
   pending: number;
-  lastSync: string | null | undefined;
   uploadStatus: string;
   collector?: ScannerOfflineContext;
   offline: { context: ScannerOfflineContext | null; preparing: boolean; error: string; retry: () => void };
   action: EventScanRequest["action"];
   sync?: () => void;
   syncing?: boolean;
+  refreshEligibility?: () => Promise<void>;
+  children?: ComponentChildren;
 }) {
   const context = collector ?? offline.context;
+  const online = useScannerConnection();
   return (
-    <section aria-label="Sync and offline status" class="pk-stack pk-stack--snug">
-      <p role="status">
-        {pending ? `${formatNumber(pending)} pending scans` : "No pending scans"}
-        {lastSync ? ` · Last synced ${formatDateTime(lastSync)}` : ""}
-        {syncing
-          ? " · Syncing pending scans…"
-          : uploadStatus && uploadStatus !== "All pending scans uploaded."
-            ? ` · ${uploadStatus}`
-            : ""}
-      </p>
-      <p class="pk-muted">
-        {collector
-          ? "Offline scanning · checks use prepared badge data"
-          : action === "lead"
-            ? "Lead scans sync automatically when connected. Names and contact details stay off this device."
-            : context
-              ? `Offline scanner prepared until ${formatDateTime(context.expiresAt)}. Badge checks run locally; scan records upload when connected.`
-              : offline.preparing
-                ? "Preparing offline scanner (recommended)…"
-                : offline.error || "Prepare offline scanning while connected (recommended)."}
-      </p>
-      <div class="pk-cluster">
+    <Panel aria-label="Sync and offline status">
+      <PanelHeader title="Sync status">
         {sync && (
-          <Button type="button" variant="secondary" loading={syncing} disabled={syncing} onClick={sync}>
-            Sync now
+          <Button
+            type="button"
+            variant="secondary"
+            loading={syncing}
+            onClick={() => {
+              sync();
+              void refreshEligibility?.();
+            }}
+          >
+            {syncing ? "Syncing…" : "Sync now"}
           </Button>
         )}
-        {!collector && action !== "lead" && !context && (
-          <Button type="button" variant="ghost" disabled={offline.preparing} onClick={offline.retry}>
-            Prepare offline scanner
-          </Button>
-        )}
-      </div>
-      {!collector && action !== "lead" && (
-        <small class="pk-muted">
-          Badge checks use the downloaded eligibility data. Pending scans upload automatically when connected.
-        </small>
-      )}
-    </section>
+      </PanelHeader>
+      <PanelBody>
+        <div class="pk-grid pk-grid--cards">
+          <div class="pk-stack pk-stack--snug">
+            <p role="status">
+              {online && !collector ? "Online · " : "Offline · "}
+              {pending ? `${formatNumber(pending)} pending scans` : "No pending scans"}
+              {syncing
+                ? " · Sync in progress…"
+                : uploadStatus && uploadStatus !== "All pending scans uploaded."
+                  ? ` · ${uploadStatus}`
+                  : ""}
+            </p>
+            <p class="pk-muted">
+              {collector
+                ? "Offline scanning · checks use prepared badge data"
+                : action === "lead"
+                  ? "Lead scans sync automatically when connected. Names and contact details stay off this device."
+                  : context
+                    ? `Offline scanner prepared until ${formatDateTime(context.expiresAt)}. Badge checks run locally; scan records upload when connected.`
+                    : offline.preparing
+                      ? "Preparing offline scanner…"
+                      : offline.error || "Prepare offline scanning while connected."}
+            </p>
+            {!collector && action !== "lead" && !context && (
+              <div class="pk-cluster">
+                <Button type="button" variant="secondary" loading={offline.preparing} onClick={offline.retry}>
+                  Prepare offline scanner
+                </Button>
+              </div>
+            )}
+          </div>
+          <div class="pk-stack pk-stack--snug">{children}</div>
+        </div>
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -79,6 +98,7 @@ export function ScannerPreparationStatus({
   stale = false,
   snapshot,
   lastSync,
+  checkedBadges = null,
 }: {
   action: EventScanRequest["action"];
   occurrenceId?: string | null;
@@ -87,21 +107,33 @@ export function ScannerPreparationStatus({
   error: string;
   stale?: boolean;
   lastSync?: string | null;
+  checkedBadges?: number | null;
   snapshot?: Pick<EligibilityManifest, "serverNow" | "expiresAt"> | null;
 }) {
   return (
     <>
-      <p>
-        {preparing
-          ? "Preparing fast eligibility checks…"
-          : ready && stale
-            ? "Using saved registration data. Refresh resumes when connected; scans upload in the background."
-            : ready
-              ? action === "checkout"
-                ? "Badge data ready. Checkout saves locally and uploads in the background."
-                : "Eligibility data ready. Checks run locally; attendance uploads in the background."
-              : error || "Prepare eligibility data before scanning."}
-      </p>
+      {error && !preparing ? (
+        <Alert tone="warn">
+          <p>{error}</p>
+          {ready && <p>Using saved registration data; its original expiry still applies.</p>}
+        </Alert>
+      ) : (
+        <p role="status">
+          {preparing
+            ? checkedBadges === null
+              ? "Refreshing badge data…"
+              : `Refreshing badge data · ${formatNumber(checkedBadges)} badges checked…`
+            : ready && stale
+              ? "Using saved registration data. Refresh resumes when connected; scans upload in the background."
+              : ready && checkedBadges !== null
+                ? `Badge data up to date · ${formatNumber(checkedBadges)} badges checked.`
+                : ready
+                  ? action === "checkout"
+                    ? "Badge data ready. Checkout saves locally and uploads in the background."
+                    : "Eligibility data ready. Checks run locally; attendance uploads in the background."
+                  : "Prepare eligibility data before scanning."}
+        </p>
+      )}
       <DescriptionList
         density="compact"
         items={[
@@ -111,29 +143,17 @@ export function ScannerPreparationStatus({
               lastSync === undefined
                 ? "Not available"
                 : lastSync === null
-                  ? "No retained acknowledgment"
+                  ? "No recent upload"
                   : formatDateTime(lastSync),
           },
+          ...(snapshot
+            ? [
+                { term: "Last badge refresh", value: formatDateTime(snapshot.serverNow) },
+                { term: "Badge data valid until", value: formatDateTime(snapshot.expiresAt) },
+              ]
+            : []),
         ]}
       />
-      {lastSync && (
-        <p class="pk-muted pk-small">
-          Device-recorded time after a durable server acknowledgment; it does not establish attendance or current
-          eligibility.
-        </p>
-      )}
-      {snapshot && (
-        <>
-          <DescriptionList
-            density="compact"
-            items={[
-              { term: "Last eligibility check", value: formatDateTime(snapshot.serverNow) },
-              { term: "Snapshot expires", value: formatDateTime(snapshot.expiresAt) },
-            ]}
-          />
-          <p class="pk-muted pk-small">These are server snapshot times. Later offline changes require a refresh.</p>
-        </>
-      )}
     </>
   );
 }

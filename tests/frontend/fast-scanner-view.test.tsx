@@ -156,8 +156,8 @@ describe("continuous scanner presentation", () => {
     );
     expect(html).toContain("Scanner operator controls");
     expect(html).toContain("Using saved registration data");
-    expect(html).toContain("Last eligibility check");
-    expect(html).toContain("Snapshot expires");
+    expect(html).toContain("Last badge refresh");
+    expect(html).toContain("Badge data valid until");
     expect(html).toContain(formatDateTime(snapshot.serverNow));
     expect(html).toContain(formatDateTime(snapshot.expiresAt));
     expect(html).not.toContain("Last sync");

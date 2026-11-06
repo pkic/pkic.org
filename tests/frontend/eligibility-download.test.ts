@@ -175,7 +175,18 @@ describe("Conditional eligibility page downloads", () => {
       return response;
     });
     vi.stubGlobal("fetch", fetcher);
-    const initial = await downloadEligibilitySnapshot("synthetic", snapshot.operatorUserId, null, null, snapshot);
+    const progress = vi.fn();
+    const initial = await downloadEligibilitySnapshot(
+      "synthetic",
+      snapshot.operatorUserId,
+      null,
+      null,
+      snapshot,
+      undefined,
+      undefined,
+      progress,
+    );
+    expect(progress.mock.calls.map(([checked]) => checked)).toEqual([250, 500, 750, 1000]);
     expect(initial.entries).toHaveLength(1000);
     expect(transferred).toBe(1000);
     expect(fetcher).toHaveBeenCalledTimes(4);
