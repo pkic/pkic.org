@@ -82,29 +82,35 @@ export async function openScannerDiagnostics(page: Page) {
 
 export async function closeScannerDiagnostics(page: Page): Promise<void> {
   const diagnostics = scannerDiagnostics(page);
-  if (await diagnostics.isVisible()) await page.getByRole("tab", { name: "Setup", exact: true }).click();
+  if (await diagnostics.isVisible()) await page.getByRole("tab", { name: "Scan", exact: true }).click();
   await expect(diagnostics).not.toBeVisible();
 }
 
 export async function openScannerManualEntry(page: Page): Promise<void> {
-  const manual = page.getByRole("dialog", { name: /^(Enter badge code|Review sponsor lead)$/ });
-  if (!(await manual.isVisible())) {
+  const code = page.getByRole("textbox", { name: "Badge code", exact: true });
+  if (!(await code.isVisible())) {
     await closeScannerDiagnostics(page);
     const continuous = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
     if (await continuous.isVisible()) {
       const controls = page.getByRole("dialog", { name: "Scanner operator controls", exact: true });
       if (await controls.isVisible())
         await controls.getByRole("button", { name: "Close operator controls", exact: true }).click();
-      await continuous.getByRole("button", { name: "Manual entry", exact: true }).click();
+      await continuous.getByRole("button", { name: "Find attendee or badge", exact: true }).click();
     } else {
-      const scan = page.getByRole("tab", { name: "Setup", exact: true });
+      const scan = page.getByRole("tab", { name: "Scan", exact: true });
       if ((await scan.isVisible()) && (await scan.getAttribute("aria-selected")) === "false") await scan.click();
-      await page.getByRole("button", { name: "Manual entry", exact: true }).click();
+      const find = page.getByRole("button", { name: "Find attendee or badge", exact: true });
+      if (!(await find.isVisible())) {
+        const mode = page.locator('select[name="action"]');
+        const action = (await mode.count()) ? await mode.inputValue() : "attendance";
+        await page.getByRole("button", { name: action === "checkout" ? /^Venue exit\b/ : /^Venue entrance\b/ }).click();
+      }
+      await find.click();
     }
   }
-  await expect(manual).toBeVisible();
-  await expect(manual).toHaveJSProperty("open", true);
-  await expect(manual.getByLabel("Badge code", { exact: true })).toBeVisible();
+  await expect(code).toBeVisible();
+  const manual = page.getByRole("dialog", { name: /^(Enter badge code|Review sponsor lead)$/ });
+  if (await manual.isVisible()) await expect(manual).toHaveJSProperty("open", true);
 }
 
 export async function openScannerRecovery(page: Page): Promise<void> {

@@ -75,22 +75,18 @@ async function preparePrintedBadge(page: Page, endpoint: string, credential: str
     const image = side.getByRole("img");
     await expect(image).toHaveCount(1);
     await expect(image).toBeVisible();
-    await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+    await expect.poll(() => image.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(0);
     expect(await decodeRenderedQr(image), `${label} must encode the original credential`).toBe(credential);
     const vector = await image.evaluate((element) => {
-      const source = (element as HTMLImageElement).src;
-      const document = new DOMParser().parseFromString(
-        decodeURIComponent(source.slice(source.indexOf(",") + 1)),
-        "image/svg+xml",
-      );
+      const reference = element.querySelector("use")?.getAttribute("href");
+      const resource = reference?.startsWith("#") ? element.ownerDocument.getElementById(reference.slice(1)) : element;
       return {
-        errors: document.querySelectorAll("parsererror").length,
-        width: document.documentElement.getAttribute("width"),
-        height: document.documentElement.getAttribute("height"),
-        text: [...document.querySelectorAll("text")].map((node) => node.textContent).join(" "),
+        namespace: element.namespaceURI,
+        viewBox: element.getAttribute("viewBox"),
+        text: [...(resource ?? element).querySelectorAll("text")].map((node) => node.textContent).join(" "),
       };
     });
-    expect(vector).toMatchObject({ errors: 0, width: "90.3mm", height: "38mm" });
+    expect(vector).toMatchObject({ namespace: "http://www.w3.org/2000/svg", viewBox: "0 0 38 89.8" });
     expect(vector.text).toContain(formatBadgeCredential(credential));
     if (printed.artifact.firstName) expect(vector.text).toContain(printed.artifact.firstName);
     if (printed.artifact.lastName) expect(vector.text).toContain(printed.artifact.lastName);
@@ -402,7 +398,7 @@ test("the protected printed short code works through manual offline capture and 
     });
     const queuedPrivacy = await expectNoStoredSponsorContacts(page, fixture.forbidden, await readConsole());
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Scanner setup", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Start scanning", exact: true })).toBeVisible();
     await expect(page.getByText("Offline · unverified until synced", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sync now", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Export sponsor leads", exact: true })).toHaveCount(0);
@@ -479,7 +475,6 @@ test("the protected printed short code works through manual offline capture and 
     await page.getByRole("button", { name: "Check sign-in again", exact: true }).click();
     expect((await reauthenticated).status()).toBe(200);
     await expect(page.getByText("Offline · unverified until synced", { exact: true })).toHaveCount(0);
-    await page.getByRole("button", { name: "Sync now", exact: true }).click();
     const receipts = await Promise.all(uploads);
     for (const [index, original] of originals.entries())
       expect(receipts[index]).toMatchObject({
