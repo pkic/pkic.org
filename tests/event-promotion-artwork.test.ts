@@ -1,3 +1,4 @@
+import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
 import {
   resolvePromotionDesign,
   promotionDesignArtwork,
@@ -145,7 +146,10 @@ describe("own promotion artwork", () => {
       .parse(await response.json())
       .pages.filter((page) => page.svg.includes('aria-label="Our sponsors"'));
     expect(boards.length).toBeGreaterThan(1);
-    expect(boards.reduce((count, page) => count + (page.svg.match(/<image /gu)?.length ?? 0), 0)).toBe(65);
+    const branding = await promotionDesignArtwork(env, visual);
+    const logos = branding.sponsors.flatMap((group) => group.sponsors);
+    expect(logos).toHaveLength(65);
+    expect(new Set(logos.map((logo) => logo.id)).size).toBe(65);
     await env.DB.prepare("UPDATE events SET settings_json=? WHERE id=?")
       .bind(
         JSON.stringify({
@@ -160,7 +164,7 @@ describe("own promotion artwork", () => {
       .run();
     const selected = await callApi(env, f.sessionBase, { headers: f.headers });
     expect(selected.status).toBe(422);
-    expect(await selected.text()).toContain("40 sponsors");
+    expect(apiErrorPayloadSchema.parse(await selected.json()).error.code).toBe("BADGE_SPONSOR_LIMIT");
   });
 
   it("rejects a combined automatic population over its document budget without truncating it", async () => {
@@ -169,7 +173,7 @@ describe("own promotion artwork", () => {
     for (let index = 0; index < 100; index++) await brandingSponsor(f.eventId, "consortium", "Diamond");
     const response = await callApi(env, f.sessionBase, { headers: f.headers }, { maxRoundTrips: 1 });
     expect(response.status).toBe(422);
-    expect(await response.text()).toContain("200 sponsors");
+    expect(apiErrorPayloadSchema.parse(await response.json()).error.code).toBe("BADGE_SPONSOR_LIMIT");
   });
 
   it("documents participant reads without declaring delegated personal writes", () => {
