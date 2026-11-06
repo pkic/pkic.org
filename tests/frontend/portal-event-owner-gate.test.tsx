@@ -54,6 +54,7 @@ function detailResponse(ownerGroupId: string | null) {
       country: null,
       sessionTypes: null,
       links: [],
+      registrationPath: null,
       settings: {},
       capabilities: ["read", "write", "manage"],
     },

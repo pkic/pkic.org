@@ -25,6 +25,7 @@ const event = eventDetailSchema.parse({
   ownerGroupId: null,
   seriesId: null,
   links: [],
+  registrationPath: null,
   slug: "synthetic",
   name: "Synthetic",
   timezone: "UTC",

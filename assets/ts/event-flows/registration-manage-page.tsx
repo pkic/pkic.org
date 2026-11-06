@@ -28,6 +28,7 @@ import { eventMyAgendaPath } from "../../shared/event-participation-link";
 import { Kicker } from "../ui/Kicker";
 import { confirmAction } from "../components/ConfirmDialog";
 import { RegistrationManageSummary } from "./registration-manage-summary";
+import { CancelledRegistrationNotice } from "./registration-cancelled-notice";
 // `pk-datalist` is defined in Content.css, which ships in a lazy chunk rather
 // than the entry stylesheet. `pk-btn` and `pk-badge` are written by the two
 // imperative branches below and ship with the entry, because the public
@@ -162,9 +163,11 @@ async function main(): Promise<void> {
 
   // ── Greeting ──────────────────────────────────────────────────────────────
   if (greetingEl && greetingText && statusBadge) {
-    greetingText.textContent = firstName
-      ? `Hi ${firstName}, we're looking forward to seeing you at ${eventName}!`
-      : `Your registration for ${eventName}`;
+    greetingText.textContent = isCancelled
+      ? `Your registration for ${eventName} is cancelled.`
+      : firstName
+        ? `Hi ${firstName}, we're looking forward to seeing you at ${eventName}!`
+        : `Your registration for ${eventName}`;
     const { label, cssClass } = statusLabel(registration.status, registration.cancellation_reason_code);
     statusBadge.textContent = label;
     statusBadge.className = `pk-badge ${cssClass}`;
@@ -251,65 +254,49 @@ async function main(): Promise<void> {
     }
   }
 
-  // ── A cancelled registration has nothing to edit; say why, and offer restore when it can be ──
-  if (isCancelled) {
-    // Show different message and options based on email verification status
-    const isEmailVerified = manageData.registration.isEmailVerified;
-    if (registration.cancellation_reason_code === "unauthorized_registration") {
-      setStatus(
-        statusEl,
-        "This registration was reported as unauthorized and cannot be restored through self-service. Please contact the organizer if it should be reviewed.",
-        true,
-      );
-    } else if (isEmailVerified) {
-      // Email verified but registration cancelled for other reason → offer simple restore
-      const restoreBtn = document.createElement("button");
-      restoreBtn.type = "button";
-      restoreBtn.className = "pk-btn pk-btn--primary";
-      restoreBtn.textContent = "Restore Registration";
-      let restoring = false;
-      restoreBtn.onclick = async (e) => {
-        e.preventDefault();
-        if (restoring) return;
-        restoring = true;
-        restoreBtn.disabled = true;
-        try {
-          await patchJson(
-            `/api/v1/registrations/access/${encodeURIComponent(token)}`,
-            { action: "update" },
-            registrationManageUpdateResponseSchema,
-          );
-          if (manageFormEl) {
-            showPostAction(root, manageFormEl, {
-              title: "Registration Restored",
-              message: "Your registration has been successfully restored. You will be redirected momentarily.",
-            });
-          }
-          setTimeout(() => window.location.reload(), 1500);
-        } catch (error) {
-          if (manageFormEl) {
-            showPostAction(root, manageFormEl, {
-              title: "Restore Failed",
-              message: (error as Error).message,
-              isError: true,
-            });
-          }
-          restoring = false;
-          restoreBtn.disabled = false;
+  // ── A cancelled registration leads with that, says why, and offers restore when it can be ──
+  if (isCancelled && statusBanner) {
+    const restore = async () => {
+      try {
+        await patchJson(
+          `/api/v1/registrations/access/${encodeURIComponent(token)}`,
+          { action: "update" },
+          registrationManageUpdateResponseSchema,
+        );
+        // The cancellation notice and greeting no longer hold once the registration is restored.
+        for (const element of [greetingEl, statusBanner]) if (element) element.hidden = true;
+        if (manageFormEl) {
+          showPostAction(root, manageFormEl, {
+            title: "Registration restored",
+            message: "Your registration has been restored. This page reloads in a moment.",
+          });
         }
-      };
-      // The gap between the banner and the button is the parent's, replacing
-      // the `mt-2` the button used to carry: one decision instead of two.
-      statusEl?.parentElement?.classList.add("pk-stack", "pk-stack--snug");
-      statusEl?.parentElement?.insertBefore(restoreBtn, statusEl?.nextSibling);
-      setStatus(statusEl, "This registration has been cancelled. Your email address is verified.", true);
-    } else {
-      setStatus(
-        statusEl,
-        "This registration has been cancelled because your email address could not be verified. Please check or correct your email address and try again to restore your registration.",
-        true,
-      );
-    }
+        setTimeout(() => window.location.reload(), 1500);
+      } catch (error) {
+        if (manageFormEl) {
+          showPostAction(root, manageFormEl, {
+            title: "Restore failed",
+            message: (error as Error).message,
+            isError: true,
+          });
+        }
+        throw error;
+      }
+    };
+    render(
+      <CancelledRegistrationNotice
+        reason={
+          registration.cancellation_reason_code === "unauthorized_registration"
+            ? "unauthorized"
+            : manageData.registration.isEmailVerified
+              ? "restorable"
+              : "unverified"
+        }
+        onRestore={restore}
+      />,
+      statusBanner,
+    );
+    statusBanner.hidden = false;
   }
 
   // ── Show the registration, read-only until the attendee asks to edit ──────
@@ -319,7 +306,8 @@ async function main(): Promise<void> {
 
   // ── Share panel ───────────────────────────────────────────────────────────
   const sharePanelEl = root.querySelector<HTMLElement>("[data-manage-share]");
-  if (sharePanelEl && manageData.shareUrl) {
+  // A cancelled registration has no badge to print and no seat to invite colleagues alongside.
+  if (sharePanelEl && manageData.shareUrl && !isCancelled) {
     renderSharePanel(sharePanelEl, {
       shareUrl: manageData.shareUrl,
       badgeVersion: manageData.badgeVersion,
@@ -435,6 +423,8 @@ async function main(): Promise<void> {
   ): Promise<void> {
     try {
       await patchJson(accessUrl, registrationManageSchema.parse({ action }), registrationManageUpdateResponseSchema);
+      // The welcome, the status pill and the badge and invitation panel belonged to the active registration.
+      for (const element of [greetingEl, sharePanelEl, statusBanner]) if (element) element.hidden = true;
       if (manageFormEl) showPostAction(root, manageFormEl, outcome);
     } catch (error) {
       setStatus(statusEl, normalizeValidation(error).globalMessage, true);

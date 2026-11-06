@@ -306,6 +306,8 @@ export const eventDetailSchema = eventResourceCoreSchema.extend({
   heroImageUrl: httpOrSameOriginUrlSchema.nullable(),
   sessionTypes: proposalSessionTypesSchema.nullable(),
   links: linksSchema,
+  /** Where a person registers, when the event's registration flow is open; never the event's base page. */
+  registrationPath: z.string().nullable(),
   settings: z.record(z.string(), z.unknown()),
   capabilities: z.array(eventManagementCapabilitySchema).max(3),
 });

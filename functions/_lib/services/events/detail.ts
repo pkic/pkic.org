@@ -14,6 +14,7 @@ import { EVENT_FORM_PURPOSES } from "../../../../assets/shared/schemas/forms";
 import { placedEventFormSelection } from "../forms/event-placement-read";
 import { readEventAudienceAccess } from "./scanner-access";
 import type { EventAudienceViewer } from "./visibility";
+import { eventRegistrationPath } from "../event-presentation";
 import { persistedUtcInstant } from "../../utils/time";
 
 export interface EventDetailRow extends EventRecord {
@@ -112,6 +113,7 @@ export function decodeEventDetail(
     heroImageUrl: typeof settings.heroImageUrl === "string" ? settings.heroImageUrl : null,
     sessionTypes: resolveEventSessionTypes(event.settings_json),
     links: parseLinksJson(event.links_json),
+    registrationPath: eventRegistrationPath(event),
     settings,
     capabilities: directWriteAllowed ? capabilities : capabilities.filter((capability) => capability !== "write"),
   });

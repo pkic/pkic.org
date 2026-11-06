@@ -9,6 +9,7 @@ import {
   badgeCredentialMetadataSchema,
 } from "../assets/shared/schemas/route-contracts-event-badges";
 import { eventBadgeTemplateSchema } from "../assets/shared/schemas/event-badge-template";
+import { currentBadgeResponseSchema } from "../assets/shared/schemas/route-contracts-event-current-badge";
 import { eventResourceCoreSchema } from "../assets/shared/schemas/event-management";
 import {
   registrationBadgePatchSchema,
@@ -564,6 +565,59 @@ describe("Event-owned authenticated badge print metadata and branding", () => {
     );
     expect(body).toMatchObject({ error: { code: "BADGE_SPONSOR_SVG_REQUIRED" } });
     expect(body.error.message).toContain(reason);
+  });
+  it("renders the attendee's own ticket without a sponsor whose artwork organizers must replace", async () => {
+    const usable = await sponsor({ name: "Usable sponsor" });
+    await sponsor({ logo: "not SVG raster bytes", name: "Awaiting artwork" });
+    const attendeeToken = await createAdminSession(env.DB, fixture.userId, crypto.randomUUID());
+
+    const ticket = await callApi(env, "/api/v1/events/scan-test/badges/current", {
+      method: "PUT",
+      headers: { authorization: `Bearer ${attendeeToken}` },
+    });
+    expect(ticket.status, await ticket.clone().text()).toBe(200);
+    const body = currentBadgeResponseSchema.parse(await ticket.json());
+    expect(body.printing.branding.flatMap((group) => group.sponsors.map((entry) => entry.id))).toEqual([usable.id]);
+    expect(JSON.stringify(body)).not.toContain("Awaiting artwork");
+
+    // Organizers still see which logo to replace before printing.
+    const printing = await request(`${base}/printing`);
+    expect(printing.status).toBe(422);
+    expect(await printing.text()).toContain("Awaiting artwork");
+  });
+  it("renders the attendee's own ticket when reading or rechecking sponsor artwork fails", async () => {
+    const first = await sponsor({ name: "First sponsor" });
+    const second = await sponsor({ name: "Second sponsor" });
+    const attendeeToken = await createAdminSession(env.DB, fixture.userId, crypto.randomUUID());
+    const bucket = env.ASSETS_BUCKET!;
+    let reads = 0;
+    // The second logo read rejects like a transient storage failure, and every recheck reports changed artwork.
+    const flaky = {
+      get: (key: string) => (++reads === 2 ? Promise.reject(new Error("R2 read failed")) : bucket.get(key)),
+      head: () => Promise.resolve(null),
+    } as unknown as R2Bucket;
+    const ticket = await callApi({ ...env, ASSETS_BUCKET: flaky }, "/api/v1/events/scan-test/badges/current", {
+      method: "PUT",
+      headers: { authorization: `Bearer ${attendeeToken}` },
+    });
+    expect(ticket.status, await ticket.clone().text()).toBe(200);
+    const ids = currentBadgeResponseSchema
+      .parse(await ticket.json())
+      .printing.branding.flatMap((group) => group.sponsors.map((entry) => entry.id));
+    // Whichever logo failed to read is left off; the other is kept.
+    expect(ids).toHaveLength(1);
+    expect([first.id, second.id]).toContain(ids[0]);
+  });
+
+  it("renders the attendee's own ticket without sponsor artwork when artwork storage is unavailable", async () => {
+    await sponsor();
+    const attendeeToken = await createAdminSession(env.DB, fixture.userId, crypto.randomUUID());
+    const ticket = await callApi({ ...env, ASSETS_BUCKET: undefined }, "/api/v1/events/scan-test/badges/current", {
+      method: "PUT",
+      headers: { authorization: `Bearer ${attendeeToken}` },
+    });
+    expect(ticket.status, await ticket.clone().text()).toBe(200);
+    expect(currentBadgeResponseSchema.parse(await ticket.json()).printing.branding).toEqual([]);
   });
   it("refuses unavailable owned artwork storage through the declared context contract", async () => {
     await sponsor();
