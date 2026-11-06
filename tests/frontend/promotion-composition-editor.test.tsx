@@ -50,6 +50,37 @@ const kit = promotionKitSchema.parse({
   stale: false,
   metrics: { clicks: 0, confirmedRegistrations: 0, sessionRsvps: 0 },
 });
+it("shows inherited takeaways and saves removal of the fifth point as a personal override", async () => {
+  const reviewed = Array.from({ length: 5 }, (_, index) => `Reviewed supply chain takeaway ${index + 1}`);
+  const inheritedKit = { ...kit, audience: "speaker" as const, copy: { ...kit.copy, takeaways: reviewed } };
+  let captured: unknown;
+  const saved = vi.fn();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_request, init?: RequestInit) => {
+      captured = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify(inheritedKit), { headers: { "content-type": "application/json" } });
+    }),
+  );
+  root = document.createElement("div");
+  document.body.append(root);
+  await act(() =>
+    render(
+      <PromotionCompositionEditor kit={inheritedKit} base="/promotion" onSaved={saved} onCancel={() => {}} />,
+      root,
+    ),
+  );
+  const input = controlFor<HTMLTextAreaElement>(root, "Your key takeaways");
+  expect(input.value.split("\n")).toEqual(reviewed);
+  await typeInto(input, reviewed.slice(0, 4).join("\n"));
+  await act(() => {
+    root.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  expect(promotionCompositionSaveSchema.parse(captured).composition.takeaways).toEqual(reviewed.slice(0, 4));
+  expect(inheritedKit.copy.takeaways).toEqual(reviewed);
+});
+
 it("saves personal copy and ordered panels through the canonical contract without copying speaker facts", async () => {
   let captured: unknown;
   const saved = vi.fn();
@@ -115,6 +146,42 @@ const buttonNamed = (name: string) =>
   [...root.querySelectorAll<HTMLButtonElement>("button")].find(
     (button) => button.textContent === name || button.getAttribute("aria-label") === name,
   );
+
+it("loads complete carousel slides only when enlarged and offers retry after a failed request", async () => {
+  const loader = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("Slides unavailable"))
+    .mockResolvedValue(["slide-one", "slide-two", "slide-three"]);
+  root = document.createElement("div");
+  document.body.append(root);
+  await act(() =>
+    render(
+      <PromotionTile name="Carousel" detail="PDF slides" previewAlt="Cover" previewSrc="cover" loadSlides={loader} />,
+      root,
+    ),
+  );
+  expect(loader).not.toHaveBeenCalled();
+  await act(() => buttonNamed("Enlarge carousel")!.click());
+  await vi.waitFor(() => expect(root.textContent).toContain("Slides unavailable"));
+  await act(() => buttonNamed("Retry loading slides")!.click());
+  await vi.waitFor(() => expect(root.querySelectorAll(".pk-image-carousel__slide")).toHaveLength(3));
+  expect(buttonNamed("Previous slide")!.disabled).toBe(true);
+  expect(buttonNamed("Next slide")!.disabled).toBe(false);
+  const viewport = root.querySelector<HTMLElement>(".pk-image-carousel")!;
+  Object.defineProperty(viewport, "clientWidth", { value: 300 });
+  viewport.scrollLeft = 600;
+  await act(() => {
+    viewport.dispatchEvent(new Event("scroll"));
+  });
+  expect(root.querySelector('[aria-label="Slide navigation"]')!.textContent).toContain("3 of 3");
+  expect(buttonNamed("Next slide")!.disabled).toBe(true);
+  const scrollBy = vi.fn();
+  viewport.scrollBy = scrollBy;
+  await act(() => {
+    viewport.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+  });
+  expect(scrollBy).toHaveBeenCalledWith({ left: -300 });
+});
 
 it("keeps a stale attendee draft editable while holding back renders and downloads", async () => {
   const draft = promotionKitSchema.parse({

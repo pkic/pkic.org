@@ -1,3 +1,9 @@
+import {
+  sponsorshipCreateSchema,
+  sponsorshipResponseSchema,
+  sponsorshipStageUpdateSchema,
+} from "../../assets/shared/schemas/sponsorship-management";
+import { logoUploadResponseSchema } from "../../assets/shared/schemas/images";
 import { signInToPortal } from "./helpers/portal-auth";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
@@ -87,6 +93,31 @@ test("every delivered long-panel promotion export has complete evidence and refu
     expect(response.status(), await response.text()).toBe(201);
     const organization = organizationCreateResponseSchema.parse(await response.json()).organization;
     expect(organization.identities).toHaveLength(1);
+    if (index === 0) {
+      const logo =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="60"><path d="M10 10H70V25H25V50H10ZM90 10H180V25H105V50H90Z" fill="#125c3c"/></svg>';
+      const uploaded = await page.request.put(`/api/v1/organizations/${organization.id}/logo`, {
+        headers: { "content-type": "image/svg+xml" },
+        data: logo,
+      });
+      expect(uploaded.status(), await uploaded.text()).toBe(200);
+      logoUploadResponseSchema.parse(await uploaded.json());
+      const created = await page.request.post("/api/v1/sponsors", {
+        data: sponsorshipCreateSchema.parse({
+          sponsorType: "consortium",
+          organizationId: organization.id,
+          tier: "Diamond",
+          renewalDate: "2027-12-31",
+        }),
+      });
+      expect(created.status(), await created.text()).toBe(201);
+      const sponsor = sponsorshipResponseSchema.parse(await created.json()).sponsorship;
+      const activated = await page.request.patch(`/api/v1/sponsors/${sponsor.id}/stage`, {
+        data: sponsorshipStageUpdateSchema.parse({ toStage: "active" }),
+      });
+      expect(activated.status(), await activated.text()).toBe(200);
+      sponsorshipResponseSchema.parse(await activated.json());
+    }
     people.push({ id: organization.identities[0]!.userId, identityId: organization.identities[0]!.identityId, email });
   }
   expect(new Set(people.map((person) => person.id)).size).toBe(3);
@@ -154,6 +185,8 @@ test("every delivered long-panel promotion export has complete evidence and refu
       "Identify the evidence needed to approve a cryptographic migration without losing certificate lifecycle accountability.",
       "Compare operational boundaries across independent organizations and preserve clear ownership when trust services change.",
       "Choose observable migration and recovery controls that teams can explain, audit and maintain together.",
+      "Agree on supplier readiness evidence and clear accountability before accepting a migration roadmap.",
+      "Remove this optional fifth takeaway from my personal materials.",
     ],
     callToAction: "Register for this event",
     campaign: `export-${randomUUID()}`,
@@ -234,6 +267,9 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await page.getByRole("button", { name: "Customize tall post", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Personalize promotion materials", exact: true });
   const shortDescription = editor.getByRole("textbox", { name: "Your short description", exact: true });
+  const takeawayInput = editor.getByRole("textbox", { name: "Your key takeaways", exact: true });
+  await expect(takeawayInput).toHaveValue(copy.takeaways.join("\n"));
+  await takeawayInput.fill(copy.takeaways.slice(0, 4).join("\n"));
   const previousDescription = await shortDescription.inputValue();
   await shortDescription.fill("Keep the personal draft through browser Back and Forward.");
   await page.goBack();
@@ -246,7 +282,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
     ["phone", 375, 812],
   ] as const) {
     await page.setViewportSize({ width, height });
-    await editor.getByLabel("Session content", { exact: true }).scrollIntoViewIfNeeded();
+    await takeawayInput.scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath(`promotion-editor-${device}.png`) });
   }
 
@@ -258,6 +294,8 @@ test("every delivered long-panel promotion export has complete evidence and refu
   const kitResponse = await page.request.get(kitApi);
   expect(kitResponse.status(), await kitResponse.text()).toBe(200);
   const kit = promotionKitSchema.parse(await kitResponse.json());
+  expect(kit.composition?.takeaways).toEqual(copy.takeaways.slice(0, 4));
+  expect(kit.copy.takeaways).toEqual(copy.takeaways);
   expect(kit.publishedRevision).toBe(snapshot.publishedRevision);
   expect(kit.formats).toEqual(promotionFormatSchema.options);
   const registration = new URL(kit.registrationUrl);
@@ -277,7 +315,15 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await mkdir(directory, { recursive: true });
   const records = [];
   const urls = [];
-  const expectedPdfText = [title, ...copy.takeaways, ...names, ...affiliations, ...roles];
+  const expectedPdfText = [
+    title,
+    ...copy.takeaways.slice(0, 4),
+    ...names,
+    ...affiliations,
+    ...roles,
+    "Our sponsors",
+    "PKI Consortium · Diamond",
+  ];
   const labels = {
     portrait: "tall post (JPEG)",
     square: "square post (JPEG)",
@@ -318,6 +364,54 @@ test("every delivered long-panel promotion export has complete evidence and refu
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog", { name: "Tall post", exact: true })).toHaveCount(0);
     await expect(enlarge).toBeFocused();
+    await page.getByRole("button", { name: "Enlarge carousel", exact: true }).click();
+    const carousel = page.getByRole("dialog", { name: "Carousel", exact: true });
+    const slideNavigation = carousel.getByRole("toolbar", { name: "Slide navigation" });
+    await expect(slideNavigation).toBeVisible();
+    const viewport = carousel.getByRole("region", { name: "Carousel", exact: true });
+    await carousel.getByRole("button", { name: "Next slide", exact: true }).click();
+    await expect(slideNavigation.getByRole("status")).toContainText("2 of");
+    await viewport.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(slideNavigation.getByRole("status")).toContainText("3 of");
+    if (device === "phone") {
+      const touch = await page.context().newCDPSession(page);
+      const box = await viewport.boundingBox();
+      if (!box) throw new Error("Carousel viewport is missing");
+      await touch.send("Input.synthesizeScrollGesture", {
+        x: box.x + box.width * 0.2,
+        y: box.y + box.height / 2,
+        xDistance: box.width * 0.6,
+        yDistance: 0,
+        gestureSourceType: "touch",
+        preventFling: true,
+      });
+      await touch.detach();
+    } else {
+      await viewport.evaluate((element) => element.scrollBy({ left: -element.clientWidth }));
+    }
+    await expect(slideNavigation.getByRole("status")).toContainText("2 of");
+    await expect
+      .poll(() => viewport.evaluate((element) => Math.abs(element.scrollLeft - element.clientWidth)))
+      .toBeLessThan(1);
+    await page.screenshot({ path: info.outputPath(`promotion-carousel-${device}.png`) });
+    await viewport.evaluate((element) => element.scrollTo({ left: element.scrollWidth - element.clientWidth }));
+    await expect
+      .poll(() =>
+        viewport.evaluate((element) => Math.abs(element.scrollWidth - element.clientWidth - element.scrollLeft)),
+      )
+      .toBeLessThan(1);
+    const fit = await viewport.evaluate((element) => ({
+      height: element.getBoundingClientRect().height,
+      bodyHeight:
+        element.parentElement!.clientHeight -
+        Number.parseFloat(getComputedStyle(element.parentElement!).paddingTop) -
+        Number.parseFloat(getComputedStyle(element.parentElement!).paddingBottom),
+    }));
+    expect(fit.height).toBeLessThanOrEqual(fit.bodyHeight + 1);
+    await page.screenshot({ path: info.outputPath(`promotion-sponsors-${device}.png`) });
+    await page.keyboard.press("Escape");
+    await expect(carousel).not.toBeVisible();
   }
   const kitBeforeDownload = promotionKitSchema.parse(await (await page.request.get(kitApi)).json());
   expect(kitBeforeDownload.artifacts).toHaveLength(0);
@@ -343,6 +437,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
       bytes: await readFile(file),
       registrationUrl: kit.registrationUrl,
       expectedPdfText,
+      excludedPdfText: [copy.takeaways[4]!],
     });
     records.push({ publishedRevision: kit.publishedRevision, templateVersion: kit.templateVersion, ...evidence });
     urls.push(
@@ -418,6 +513,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
     bytes: await freshArtifact.body(),
     registrationUrl: fresh.registrationUrl,
     expectedPdfText: [`${title} · revised`, ...expectedPdfText.slice(1)],
+    excludedPdfText: [copy.takeaways[4]!],
   });
   await writeFile(
     join(directory, "stale-refusals.json"),

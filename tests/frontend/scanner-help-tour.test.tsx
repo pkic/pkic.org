@@ -63,7 +63,10 @@ it("teaches print outcomes and real sound profiles without creating scan history
   expect(host.querySelector(".pk-fast-scanner--denied")).not.toBeNull();
   expect(sound).toHaveBeenLastCalledWith("error");
   expect(host.querySelectorAll(".pk-fast-scanner__trail li")).toHaveLength(0);
+  await click("Next");
+  expect(host.querySelectorAll(".pk-fast-scanner__trail li")).toHaveLength(3);
   await click("Close help tour");
+  expect(host.querySelectorAll(".pk-fast-scanner__trail li")).toHaveLength(0);
   expect(pause).toHaveBeenLastCalledWith(false);
   expect(host.textContent).not.toContain("Example:");
   expect(host.textContent).toContain("Print again");

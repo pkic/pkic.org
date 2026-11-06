@@ -132,6 +132,7 @@ export async function inspectPromotionExport(options: {
   bytes: Buffer;
   registrationUrl: string;
   expectedPdfText: string[];
+  excludedPdfText?: readonly string[];
 }) {
   const { directory, format, contentType, bytes, registrationUrl } = options;
   await mkdir(directory, { recursive: true });
@@ -167,6 +168,8 @@ export async function inspectPromotionExport(options: {
       .replace(/\s+/gu, "");
     for (const expected of options.expectedPdfText)
       expect(continuous.toLowerCase()).toContain(expected.replace(/\s+/gu, "").toLowerCase());
+    for (const excluded of options.excludedPdfText ?? [])
+      expect(continuous.toLowerCase()).not.toContain(excluded.replace(/\s+/gu, "").toLowerCase());
     // The digital material directs every response through its personal referral link.
     expect(extracted.stdout.replace(/\s+/gu, "")).toContain(registrationUrl);
     const sections = [options.expectedPdfText[0]!.split(":")[0]!, "SPEAKER", "Key takeaways", "Register"];

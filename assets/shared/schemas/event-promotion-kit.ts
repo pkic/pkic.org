@@ -63,6 +63,7 @@ export const promotionParticipantQuerySchema = z.object({ userId: databaseIdSche
 export const promotionArtifactQuerySchema = promotionParticipantQuerySchema.extend({
   download: z.enum(["true", "false"]).default("true"),
   representation: z.enum(["file", "artwork"]).default("file"),
+  pages: z.enum(["cover", "all"]).default("cover"),
   format: promotionFormatSchema,
   revision: z.coerce.number().int().positive(),
   fingerprint: z

@@ -20,7 +20,9 @@ export function ScannerHelpTour({
   onClose,
   onDemo,
   onSound,
+  onSamples,
 }: {
+  onSamples: (samples: ScannerStatus[] | undefined) => void;
   scope: RefObject<HTMLElement>;
   role: ScannerRole;
   onClose: () => void;
@@ -57,7 +59,7 @@ export function ScannerHelpTour({
       id: "mode",
       target: '[data-scanner-help="feedback"]',
       title: "Check your scanner",
-      body: `${roleGuidance[role]} Live capture is paused during this tour.`,
+      body: `${roleGuidance[role]} Scanning is paused during this tour.`,
     },
     {
       id: "camera",
@@ -108,13 +110,25 @@ export function ScannerHelpTour({
       body: "Swipe left or right to switch between the scanner tasks available to you. Check the large icon and ready message after switching.",
     },
     {
+      id: "sound",
+      target: '[data-scanner-help="sound"]',
+      title: "Control scan sounds",
+      body: "Use the speaker to turn live scan sounds on or off. The tour’s Replay sound button works even when scan sounds are off.",
+    },
+    {
       id: "options",
       target: '[data-scanner-help="options"]',
       title: "More controls",
       body:
         role === "print"
-          ? "Open the tools for labels or full badges, copies or sides, and the optional PDF fallback. Use Share PDF when your browser supports it. Close the scanner with the × button."
-          : "Open the tools for scanner details and recovery options. Tap the speaker to control sounds, and use × to close the scanner. You can replay this tour with the help button.",
+          ? "Open the tools to choose labels or full badges, set copies or sides, or use the PDF fallback. Use Share PDF when your browser supports it."
+          : "Open the tools for scanner details, upload status, and recovery options.",
+    },
+    {
+      id: "close",
+      target: '[data-scanner-help="close"]',
+      title: "Finish scanning",
+      body: "Use × to leave the scanner. Done closes this tour and lets you continue scanning. Tap help whenever you need this tour again.",
     },
   ];
   const soundFor = (id: string): ScannerSound => (id === "success" ? role : id === "warning" ? "warning" : "error");
@@ -131,6 +145,7 @@ export function ScannerHelpTour({
       onClose={onClose}
       onStepChange={(id) => {
         onDemo(id ? examples[id] : undefined);
+        onSamples(id === "results" ? Object.values(examples) : undefined);
         if (id && examples[id]) onSound?.(soundFor(id));
       }}
     />

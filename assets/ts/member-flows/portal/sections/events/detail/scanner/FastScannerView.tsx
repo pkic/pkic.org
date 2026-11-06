@@ -108,6 +108,7 @@ export function FastScannerView({
 }) {
   const [helpOpen, setHelpOpen] = useState(helpOnStart);
   const [tourDemo, setTourDemo] = useState<ScannerStatus>();
+  const [tourResults, setTourResults] = useState<ScannerStatus[]>();
   const surface = useRef<HTMLDivElement>(null);
   const [review, setReview] = useState<EventScanRequest | null>(null);
   const [operatorOpen, setOperatorOpen] = useState(false);
@@ -277,7 +278,7 @@ export function FastScannerView({
         )}
         {manualEntry && <div class="pk-fast-scanner__manual">{manualEntry}</div>}
         {recentScans && <div class="pk-fast-scanner__manual">{recentScans}</div>}
-        {!manualEntry && !recentScans && <ScannerResultTrail results={feedback.history} />}
+        {!manualEntry && !recentScans && <ScannerResultTrail results={tourResults ?? feedback.history} />}
         {presentation === "fullscreen" && !manualEntry && !recentScans && taskSwipe.tasks.length > 1 && (
           <p
             class="pk-fast-scanner__task-swipe"
@@ -353,7 +354,14 @@ export function FastScannerView({
             </Button>
           )}
           {onSound && (
-            <Button variant="secondary" icon aria-label={soundLabel} title={soundLabel} onClick={onSound}>
+            <Button
+              variant="secondary"
+              icon
+              data-scanner-help="sound"
+              aria-label={soundLabel}
+              title={soundLabel}
+              onClick={onSound}
+            >
               <IconScannerSound />
             </Button>
           )}
@@ -372,7 +380,7 @@ export function FastScannerView({
           >
             <IconScannerHelp />
           </Button>
-          <CloseButton variant="secondary" label="Close scanner" onClick={onExit} />
+          <CloseButton variant="secondary" data-scanner-help="close" label="Close scanner" onClick={onExit} />
         </div>
         <div class="pk-fast-scanner__next">
           <span class="pk-sr-only">{readiness}</span>
@@ -416,10 +424,12 @@ export function FastScannerView({
           scope={surface}
           role={visualRole}
           onDemo={setTourDemo}
+          onSamples={setTourResults}
           onSound={onTourSound}
           onClose={() => {
             setHelpOpen(false);
             setTourDemo(undefined);
+            setTourResults(undefined);
           }}
         />
       )}

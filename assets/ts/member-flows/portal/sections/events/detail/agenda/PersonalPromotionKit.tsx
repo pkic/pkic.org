@@ -1,6 +1,6 @@
 import { PromotionBadgeTile } from "./PromotionBadgeTile";
 import { extractOgBadgeUrl } from "../../../../../../shared/widgets/share-panel";
-import { usePromotionArtwork } from "./usePromotionArtwork";
+import { usePromotionArtwork, loadPromotionArtwork } from "./usePromotionArtwork";
 import { usePromotionDownloads } from "./usePromotionDownloads";
 import { useDialogQueryState } from "../../../../../../hooks/useDialogQueryState";
 import { Alert } from "../../../../../../ui/Alert";
@@ -88,12 +88,18 @@ export function PersonalPromotionKit({
                 const ready = !kit.stale && (tile.format === "carousel" || Boolean(preview));
                 return (
                   <PromotionTile
-                    key={tile.format}
+                    key={`${tile.format}:${kit.fingerprint}`}
                     previewId={`${base}:${tile.format}`}
                     name={tile.name}
                     detail={tile.detail}
                     stacked={"stacked" in tile}
                     previewSrc={preview?.urls[0]}
+                    loadSlides={
+                      tile.format === "carousel"
+                        ? (signal) =>
+                            loadPromotionArtwork(base, kit, "carousel", "all", signal).then((result) => result.urls)
+                        : undefined
+                    }
                     previewAlt={`Preview of your ${tile.name.toLowerCase()}`}
                     previewActions={(dismiss) => (
                       <>

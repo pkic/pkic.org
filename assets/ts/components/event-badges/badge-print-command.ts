@@ -19,7 +19,6 @@ export async function printBadgeDocument(html: string, isCurrent: () => boolean 
     for (const font of registeredFonts) document.fonts.delete(font);
     registeredFonts.length = 0;
     document.adoptedStyleSheets = document.adoptedStyleSheets.filter((item) => item !== sheet);
-    window.removeEventListener("afterprint", cleanup);
     window.removeEventListener("pagehide", cleanup);
     window.removeEventListener("hashchange", cleanup);
     signal?.removeEventListener("abort", cleanup);
@@ -28,7 +27,8 @@ export async function printBadgeDocument(html: string, isCurrent: () => boolean 
   document.body.append(root);
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   releasePrevious = cleanup;
-  window.addEventListener("afterprint", cleanup, { once: true });
+  // Safari can fire afterprint while its preview still reads the live document.
+  // Keep this one hidden job until replacement, navigation, or owner cancellation.
   window.addEventListener("pagehide", cleanup, { once: true });
   window.addEventListener("hashchange", cleanup, { once: true });
   signal?.addEventListener("abort", cleanup, { once: true });

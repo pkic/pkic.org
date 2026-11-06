@@ -124,6 +124,10 @@ test("the registration desk switches between immediate labels and full badges", 
         String(document.querySelectorAll("#pk-badge-print-command .badge-print-sheet").length),
       );
       window.dispatchEvent(new Event("afterprint"));
+      document.documentElement.setAttribute(
+        "data-print-retained-pages",
+        String(document.querySelectorAll("#pk-badge-print-command .badge-print-sheet").length),
+      );
     };
   });
   await expect(page.getByRole("heading", { name: "Print badge labels", exact: true })).toBeVisible();
@@ -148,6 +152,12 @@ test("the registration desk switches between immediate labels and full badges", 
   expect(badgePrintResponseSchema.parse(await response.json()).id).toBe(fixture.eligibleBadgeId);
   await expect(page.locator("html")).toHaveAttribute("data-print-called", "1");
   await expect(page.locator("html")).toHaveAttribute("data-print-pages", "2");
+  await expect(page.locator("html")).toHaveAttribute("data-print-retained-pages", "2");
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator("#pk-badge-print-command")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Print badge labels", exact: true })).not.toBeVisible();
+  await page.screenshot({ path: info.outputPath("label-print-after-early-event.png"), fullPage: true });
+  await page.emulateMedia({ media: "screen" });
   await expect(page.frameLocator('iframe[title="Attendee label print document"]').getByRole("img")).toHaveCount(2);
   await page.getByRole("button", { name: "Print settings", exact: true }).click();
   await page.getByRole("menuitemradio", { name: "1 label", exact: true }).click();
@@ -209,6 +219,7 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.setViewportSize({ width: 375, height: 812 });
   expect(await printScanner.evaluate((element) => element.contains(document.elementFromPoint(20, 20)))).toBe(true);
   await page.screenshot({ path: info.outputPath("print-scanner-fullscreen-phone.png") });
+  const resultsBeforeTour = await printScanner.locator(".pk-fast-scanner__trail li").count();
   const printsBeforeTour = await page.locator("html").getAttribute("data-print-called");
   await printScanner.getByRole("button", { name: "Scanner help", exact: true }).click();
   const help = page.locator(".pk-guided-tour");
@@ -223,10 +234,13 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.screenshot({ path: info.outputPath("scanner-help-warning.png") });
   await help.getByRole("button", { name: "Next", exact: true }).click();
   await expect(printScanner.getByText("Example: Could not print", { exact: true })).toBeVisible();
+  await help.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(printScanner.locator(".pk-fast-scanner__trail li")).toHaveCount(3);
   for (let step = 0; step < 5 && (await help.getByRole("button", { name: "Next", exact: true }).count()); step++)
     await help.getByRole("button", { name: "Next", exact: true }).click();
   await help.getByRole("button", { name: "Done", exact: true }).click();
   await expect(help).toHaveCount(0);
+  await expect(printScanner.locator(".pk-fast-scanner__trail li")).toHaveCount(resultsBeforeTour);
   await expect(printScanner.getByText(/Example:/)).toHaveCount(0);
   expect(await page.locator("html").getAttribute("data-print-called")).toBe(printsBeforeTour);
   const printField = await printScanner.evaluate((element) => getComputedStyle(element).backgroundImage);

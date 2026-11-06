@@ -1,4 +1,5 @@
 import { guidedTourSection } from "./GuidedTourPreview";
+import { imageCarouselSection } from "./image-carousel";
 import { badgeOutputProgressSection } from "./badge-output-progress";
 import { TooltipPreview } from "./TooltipPreview";
 import { ServerSelectPreview } from "./ServerSelectPreview";
@@ -36,7 +37,7 @@ import { Avatar } from "../Avatar";
 import { Badge } from "../Badge";
 import { DataTable } from "../DataTable";
 import { Button } from "../Button";
-import { Checkbox, Radio } from "../Checkbox";
+import { choiceControlsSection } from "./choice-controls";
 import { EmptyState } from "../EmptyState";
 import { Field } from "../Field";
 import { InputGroup } from "../InputGroup";
@@ -267,19 +268,7 @@ export const patternSections: PreviewSection[] = [
   pictureUploadSection,
   ...registrationSections,
   sessionTimingSection,
-  {
-    id: "choice-controls",
-    title: "Choice controls",
-    render: () => (
-      <div class="pk-stack">
-        <Radio name="preview-choice" value="selected" label="Selected option" defaultChecked />
-        <Radio name="preview-choice" value="available" label="Available option" />
-        <Radio name="preview-disabled-choice" label="Unavailable option" disabled />
-        <Checkbox label="Selected checkbox" defaultChecked />
-        <Checkbox label="Enabled switch" switch defaultChecked />
-      </div>
-    ),
-  },
+  choiceControlsSection,
   {
     id: "framed-image",
     title: "Framed image",
@@ -368,6 +357,7 @@ export const patternSections: PreviewSection[] = [
     title: "Agenda",
     render: () => <AgendaExample />,
   },
+  imageCarouselSection,
   ...contentSections,
   {
     id: "row-list",
