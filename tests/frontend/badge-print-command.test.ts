@@ -24,12 +24,12 @@ beforeEach(() => {
   print = vi.spyOn(window, "print").mockImplementation(() => {});
 });
 afterEach(() => {
-  window.dispatchEvent(new Event("afterprint"));
+  window.dispatchEvent(new Event("hashchange"));
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
 });
-it("prints only canonical sheets at the top level and restores the page after printing", async () => {
+it("keeps canonical print sheets intact through afterprint and releases them on navigation", async () => {
   await printBadgeDocument(html);
   expect(print).toHaveBeenCalledOnce();
   expect(document.querySelector("#pk-badge-print-command")?.hasAttribute("hidden")).toBe(false);
@@ -38,6 +38,9 @@ it("prints only canonical sheets at the top level and restores the page after pr
   expect(rules.join("\n")).toContain("body > :not(#pk-badge-print-command)");
   expect(rules.join("\n")).toContain("@page{size:38mm 89.8mm;margin:0}");
   window.dispatchEvent(new Event("afterprint"));
+  expect(document.querySelector("#pk-badge-print-command")?.textContent).toBe("Synthetic label");
+  expect(document.adoptedStyleSheets).toHaveLength(1);
+  window.dispatchEvent(new Event("hashchange"));
   expect(document.querySelector("#pk-badge-print-command")).toBeNull();
   expect(document.adoptedStyleSheets).toEqual([]);
 });
@@ -89,7 +92,24 @@ it.each([false, true])("releases only owned fonts, including delayed loads after
   if (cancel) owner.abort();
   finish();
   await pending;
-  if (!cancel) window.dispatchEvent(new Event("afterprint"));
+  if (!cancel) {
+    window.dispatchEvent(new Event("afterprint"));
+    expect(registered).toEqual(new Set([portalFont, badgeFont]));
+    window.dispatchEvent(new Event("hashchange"));
+  }
   expect(registered).toEqual(new Set([portalFont]));
   expect(print).toHaveBeenCalledTimes(cancel ? 0 : 1);
+});
+
+it("survives Safari firing afterprint before print returns or preview finishes", async () => {
+  print.mockImplementation(() => {
+    window.dispatchEvent(new Event("afterprint"));
+    expect(document.querySelector("#pk-badge-print-command")?.textContent).toBe("Synthetic label");
+    expect(document.adoptedStyleSheets).toHaveLength(1);
+  });
+  await printBadgeDocument(html);
+  expect(print).toHaveBeenCalledOnce();
+  expect(document.querySelector("#pk-badge-print-command")?.textContent).toBe("Synthetic label");
+  window.dispatchEvent(new Event("afterprint"));
+  expect(document.adoptedStyleSheets).toHaveLength(1);
 });
