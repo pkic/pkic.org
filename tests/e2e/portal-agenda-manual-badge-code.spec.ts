@@ -102,32 +102,30 @@ test("the registration desk switches between immediate labels and full badges", 
   const fixture = await prepareScannerTermination(page);
   const { event } = eventManagementDetailResponseSchema.parse(await (await page.request.get(fixture.api)).json());
   if (!event.ownerGroupId) throw new Error("The fixture event requires its owning group");
-  const labelsPage = `/portal/#/groups/${event.ownerGroupId}/events/${event.id}/scanner/labels`;
+  const labelsPage = `/portal/#/groups/${event.ownerGroupId}/events/${event.id}/scanner/print`;
   const artwork: string[] = [];
   page.on("request", (request) => {
     if (new URL(request.url()).pathname.endsWith("/badges/printing")) artwork.push(request.url());
   });
   await page.setViewportSize({ width: 375, height: 844 });
-  await page.goto(labelsPage);
-  // Patch the parent document after hash navigation, before an iframe can print.
+  await page.goto(labelsPage.replace(/\/print$/, ""));
+  await page.getByRole("link", { name: /^Print\b/ }).click();
+  await expect(page).toHaveURL(new RegExp("/scanner/print$"));
+  // Mobile browsers can print the parent document even when an iframe initiated the command.
   await page.evaluate(() => {
     let printCalls = 0;
-    const descriptor = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, "contentWindow");
-    if (!descriptor?.get) throw new Error("The browser must expose iframe windows");
-    Object.defineProperty(HTMLIFrameElement.prototype, "contentWindow", {
-      ...descriptor,
-      get(this: HTMLIFrameElement) {
-        const frameWindow = descriptor.get!.call(this) as Window | null;
-        if (frameWindow) {
-          frameWindow.print = () => {
-            printCalls += 1;
-            this.setAttribute("data-print-called", String(printCalls));
-            frameWindow.dispatchEvent(new Event("afterprint"));
-          };
-        }
-        return frameWindow;
-      },
-    });
+    window.print = () => {
+      document.documentElement.setAttribute("data-print-called", String(++printCalls));
+      document.documentElement.setAttribute(
+        "data-print-pages",
+        String(document.querySelectorAll("#pk-badge-print-command .badge-print-sheet").length),
+      );
+      window.dispatchEvent(new Event("afterprint"));
+      document.documentElement.setAttribute(
+        "data-print-retained-pages",
+        String(document.querySelectorAll("#pk-badge-print-command .badge-print-sheet").length),
+      );
+    };
   });
   await expect(page.getByRole("heading", { name: "Print badge labels", exact: true })).toBeVisible();
   await expect(
@@ -149,13 +147,19 @@ test("the registration desk switches between immediate labels and full badges", 
     badgeId: fixture.eligibleBadgeId,
   });
   expect(badgePrintResponseSchema.parse(await response.json()).id).toBe(fixture.eligibleBadgeId);
-  const document = page.locator('iframe[title="Attendee label print document"]');
-  await expect(document).toHaveAttribute("data-print-called", "1");
+  await expect(page.locator("html")).toHaveAttribute("data-print-called", "1");
+  await expect(page.locator("html")).toHaveAttribute("data-print-pages", "2");
+  await expect(page.locator("html")).toHaveAttribute("data-print-retained-pages", "2");
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator("#pk-badge-print-command")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Print badge labels", exact: true })).not.toBeVisible();
+  await page.screenshot({ path: info.outputPath("label-print-after-early-event.png"), fullPage: true });
+  await page.emulateMedia({ media: "screen" });
   await expect(page.frameLocator('iframe[title="Attendee label print document"]').getByRole("img")).toHaveCount(2);
   await page.getByRole("button", { name: "Print settings", exact: true }).click();
   await page.getByRole("menuitemradio", { name: "1 label", exact: true }).click();
   await page.getByRole("button", { name: "Print labels again", exact: true }).click();
-  await expect(document).toHaveAttribute("data-print-called", "2");
+  await expect(page.locator("html")).toHaveAttribute("data-print-called", "2");
   await expect(page.frameLocator('iframe[title="Attendee label print document"]').getByRole("img")).toHaveCount(1);
   expect(artwork).toEqual([]);
   const inventory = badgeCredentialsResponseSchema.parse(
@@ -165,8 +169,7 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.getByRole("button", { name: "Print settings", exact: true }).click();
   await page.getByRole("menuitemradio", { name: "Full badges", exact: true }).click();
   await page.getByRole("button", { name: "Print badges again", exact: true }).click();
-  const fullDocument = page.locator('iframe[title="Attendee badge print document"]');
-  await expect(fullDocument).toHaveAttribute("data-print-called", "3");
+  await expect(page.locator("html")).toHaveAttribute("data-print-called", "3");
   const full = page.frameLocator('iframe[title="Attendee badge print document"]');
   await expect(full.locator(".badge-print-sheet")).toHaveCount(2);
   await expect(full.locator(".badge-template-surface")).toHaveCount(2);
@@ -174,7 +177,7 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.getByRole("button", { name: "Print settings", exact: true }).click();
   await page.getByRole("menuitemradio", { name: "Back only", exact: true }).click();
   await page.getByRole("button", { name: "Print badges again", exact: true }).click();
-  await expect(fullDocument).toHaveAttribute("data-print-called", "4");
+  await expect(page.locator("html")).toHaveAttribute("data-print-called", "4");
   await expect(full.locator(".badge-print-sheet")).toHaveCount(1);
   await expect(full.locator('[aria-label="Badge back"]')).toHaveCount(1);
   await expect(full.locator('[aria-label="Badge front"]')).toHaveCount(0);
@@ -186,7 +189,7 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.screenshot({ path: info.outputPath("print-mode-settings-phone.png"), fullPage: true });
   await page.getByRole("menuitemradio", { name: "Labels", exact: true }).click();
   await page.getByRole("button", { name: "Print labels again", exact: true }).click();
-  await expect(document).toHaveAttribute("data-print-called", "5");
+  await expect(page.locator("html")).toHaveAttribute("data-print-called", "5");
   await expect(page.frameLocator('iframe[title="Attendee label print document"]').getByRole("img")).toHaveCount(1);
   expect(artwork).toHaveLength(1);
   await page.setViewportSize({ width: 1280, height: 900 });

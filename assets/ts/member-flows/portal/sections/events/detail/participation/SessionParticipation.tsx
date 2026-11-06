@@ -25,7 +25,7 @@ import {
   SessionStarButton,
   type SessionStarControl,
 } from "../../../../../../site/AgendaParticipationControls";
-import { SessionActionBar, sessionHasParticipationActions } from "./SessionActionBar";
+import { SessionActionBar, sessionHasParticipationActions, useOnlineJoinClock } from "./SessionActionBar";
 import { setSessionStar } from "./session-star";
 
 type Session = z.infer<typeof personalAgendaSessionSchema>;
@@ -86,6 +86,8 @@ export function SessionParticipationManager({
 }) {
   const loaded = useParticipationSession(slug, occurrenceId, refreshKey);
   const session = loaded.data?.sessions[0];
+  // Keeps the section in step with the join window, since the action bar is not mounted while it has nothing to show.
+  const now = useOnlineJoinClock(session);
   const changed = useRef(onChanged);
   changed.current = onChanged;
   useEffect(() => {
@@ -99,7 +101,7 @@ export function SessionParticipationManager({
         <ErrorAlert error={loaded.error ?? "This session is no longer available in the published agenda."} />
       </SessionDetailsParticipation>
     );
-  if (!loaded.error && !sessionHasParticipationActions(session, notice)) return null;
+  if (!loaded.error && !sessionHasParticipationActions(session, notice, now)) return null;
   return (
     <SessionDetailsParticipation>
       {loaded.error && <ErrorAlert error={loaded.error} />}

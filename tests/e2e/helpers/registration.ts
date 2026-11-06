@@ -118,7 +118,7 @@ export async function registerInBrowser(
   email: string,
   identityName?: string,
   entryUrl = REGISTRATION_PAGE,
-  options: { individual?: boolean } & RegistrationOrganization = {},
+  options: { individual?: boolean; attendanceLabel?: string } & RegistrationOrganization = {},
 ) {
   await page.goto(entryUrl);
   if (identityName) {
@@ -144,7 +144,13 @@ export async function registerInBrowser(
     await continueRegistrationWithEmail(page, { email, ...options });
   }
   await options.onAttendanceReady?.(page);
-  await page.getByRole("button", { name: /^Choose On[- ]demand for every available day$/ }).click();
+  if (options.attendanceLabel) {
+    await page
+      .getByRole("button", { name: `Choose ${options.attendanceLabel} for every available day`, exact: true })
+      .click();
+  } else {
+    await page.getByRole("button", { name: /^Choose On[- ]demand for every available day$/ }).click();
+  }
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await options.onProfileReady?.(page);
   await page.getByLabel("Country", { exact: true }).selectOption("US");

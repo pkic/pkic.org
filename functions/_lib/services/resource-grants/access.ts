@@ -249,10 +249,13 @@ export function managedGroupResourceAuthorizationEvidence<K extends ResourceGran
     ? groupPermissionAuthorizationEvidence(actor, [groupId], options.ownerPermission)
     : null;
   return {
-    sql: `SELECT 1
-            WHERE EXISTS (${resource.sql})
+    sql: `WITH resource_context AS MATERIALIZED (${resource.sql}),
+               management_authority AS MATERIALIZED (${management.sql})
+               ${permission ? `, owner_permission AS MATERIALIZED (${permission.sql})` : ""}
+          SELECT 1
+            WHERE EXISTS (SELECT 1 FROM resource_context)
               AND (
-                EXISTS (${management.sql})
+                EXISTS (SELECT 1 FROM management_authority)
                 ${
                   permission
                     ? `OR (
@@ -261,7 +264,7 @@ export function managedGroupResourceAuthorizationEvidence<K extends ResourceGran
                             WHERE owned_resource.id = ?
                               AND owned_resource.${definition.ownerGroupColumn} = ?
                          )
-                         AND EXISTS (${permission.sql})
+                         AND EXISTS (SELECT 1 FROM owner_permission)
                        )`
                     : ""
                 }
@@ -269,7 +272,7 @@ export function managedGroupResourceAuthorizationEvidence<K extends ResourceGran
     bindings: [
       ...resource.bindings,
       ...management.bindings,
-      ...(permission ? [resourceId, groupId, ...permission.bindings] : []),
+      ...(permission ? [...permission.bindings, resourceId, groupId] : []),
     ],
   };
 }

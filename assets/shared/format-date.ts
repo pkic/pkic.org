@@ -22,6 +22,7 @@
  * not here).
  */
 
+import { MEETING_EMAIL_TIME_ZONES } from "./meeting-time-policy";
 import { formatNumber } from "./format-number";
 import { clockTimeZone, type ClockZone } from "./event-clock";
 
@@ -160,11 +161,7 @@ export function formatMonthYear(value: string | null | undefined): string {
   const dateOnly = DATE_ONLY.test(value);
   const date = toDate(dateOnly ? `${value}T00:00:00Z` : value);
   if (!date) return EMPTY;
-  return date.toLocaleString(undefined, {
-    month: "short",
-    year: "numeric",
-    ...(dateOnly ? { timeZone: "UTC" } : {}),
-  });
+  return date.toLocaleString(undefined, { month: "short", year: "numeric", ...(dateOnly ? { timeZone: "UTC" } : {}) });
 }
 
 /**
@@ -199,36 +196,21 @@ export function formatTenure(
 
 /**
  * An instant in the viewer's own locale and zone, or an em dash.
- * `seconds` widens the time for audit trails; `zoneName` names the viewer's
- * zone (used where a page shows a converted-to-local time next to UTC
- * source text, so the reader knows whose clock is shown).
+ * `seconds` widens the time for audit trails. The viewer's zone is always named.
  */
 export function formatDateTime(
   value: string | null | undefined,
-  options: { seconds?: boolean; zoneName?: boolean; fullDate?: boolean } = {},
+  options: { seconds?: boolean; fullDate?: boolean } = {},
 ): string {
   if (!value) return EMPTY;
   const date = toDate(value);
   if (!date) return EMPTY;
-  if (options.zoneName) {
-    // dateStyle/timeStyle cannot be combined with timeZoneName, so the
-    // zone-labeled variant spells out equivalent component options.
-    return date.toLocaleString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      ...(options.seconds ? { second: "2-digit" as const } : {}),
-      timeZoneName: "short",
-    });
-  }
   /*
    * The month by name and the 24-hour clock, the way every other date in the
-   * app reads ("Oct 7, 2026, 10:27" in an en-US browser). The short date style
-   * wrote "10/7/26, 10:27 AM" in management lists beside "Oct 11, 2026" and an
-   * agenda on the 24-hour clock, and a numeric date reads month-first or
-   * day-first depending on who is looking.
+   * app reads ("Oct 7, 2026, 10:27 CEST" in an en-US browser). The zone is
+   * always named: the same instant reads differently to staff in different
+   * zones, and an unlabeled time is read as the event's or the reader's at
+   * random.
    */
   return date.toLocaleString(undefined, {
     ...(options.fullDate ? { weekday: "long" as const } : {}),
@@ -239,6 +221,7 @@ export function formatDateTime(
     minute: "2-digit",
     ...(options.seconds ? { second: "2-digit" as const } : {}),
     hourCycle: "h23",
+    timeZoneName: "short",
   });
 }
 
@@ -307,6 +290,10 @@ export function formatEventDayInZone(value: string, zone: ClockZone): string {
  * place rather than a code.
  */
 export function formatZoneCity(timeZone: string): string {
+  const fixed = /^Etc\/GMT([+-])(\d{1,2})$/.exec(timeZone);
+  if (fixed && Number(fixed[2]) === 0) return "UTC";
+  if (fixed) return `UTC${fixed[1] === "+" ? "−" : "+"}${fixed[2]!.padStart(2, "0")}:00`;
+  if (timeZone === "Etc/GMT" || timeZone === "Etc/UTC") return "UTC";
   return timeZone === "UTC" ? "UTC" : (timeZone.split("/").pop() ?? timeZone).replaceAll("_", " ");
 }
 
@@ -335,6 +322,24 @@ export function formatClockName(zone: ClockZone): string {
 export function formatDateTimeInZone(value: string | null | undefined, zone: ClockZone): string {
   const clock = wallClock(value, zone);
   return clock === EMPTY ? EMPTY : `${clock} ${formatClockName(zone)}`;
+}
+
+/** Attendee-local time first, followed by the scheduled clock for coordination. */
+export function formatDateTimeWithSchedule(value: string | null | undefined, zone: ClockZone): string {
+  if (!value || !toDate(value)) return EMPTY;
+  return `Your time: ${formatDateTime(value)} · Scheduled: ${formatDateTimeInZone(value, zone)}`;
+}
+
+/** Email clock choices: use a known recipient zone, otherwise representative regional clocks. */
+export function formatMeetingEmailTime(value: string, scheduledZone: string, recipientZone?: string): string {
+  const zones = recipientZone ? [recipientZone] : [...MEETING_EMAIL_TIME_ZONES];
+  zones.push(scheduledZone);
+  const unique = new Map<string, string>();
+  for (const zone of zones) {
+    const canonical = new Intl.DateTimeFormat(undefined, { timeZone: zone }).resolvedOptions().timeZone;
+    if (!unique.has(canonical)) unique.set(canonical, zone);
+  }
+  return [...unique.values()].map((zone) => formatDateTimeInZone(value, zone)).join(" / ");
 }
 
 function wallClock(value: string | null | undefined, zone: ClockZone): string {
@@ -440,7 +445,7 @@ export function isLocalTimeFormat(value: string | null | undefined): value is Lo
 
 export function formatLocalTime(value: string, format: LocalTimeFormat, until?: string | null): string {
   if (format === "weekday") return formatWeekday(value);
-  if (format === "date-time") return formatDateTime(value, { zoneName: true });
+  if (format === "date-time") return formatDateTime(value);
   if (format === "time") return formatTimeOfDay(value);
   return until ? formatDateRange(value, until) : formatCalendarDate(value);
 }

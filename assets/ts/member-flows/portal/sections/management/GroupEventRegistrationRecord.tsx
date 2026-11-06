@@ -67,6 +67,7 @@ export function GroupEventRegistrationRecord({
   eventSlug,
   badgesPath,
   onChanged,
+  onOpenPromotion,
 }: {
   groupId: string;
   eventId: string;
@@ -76,6 +77,7 @@ export function GroupEventRegistrationRecord({
   eventSlug?: string;
   badgesPath?: string;
   onChanged?: () => void | Promise<void>;
+  onOpenPromotion?: (userId: string, name?: string) => void;
 }) {
   const [, navigate] = usePortalHashLocation();
   const eventEndpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}`;
@@ -178,6 +180,15 @@ export function GroupEventRegistrationRecord({
 
   const commands: MenuItem[] = canVip
     ? [
+        ...(onOpenPromotion && eventSlug
+          ? [
+              {
+                id: "promotion-materials",
+                label: "Open promotion materials",
+                onSelect: () => onOpenPromotion(registration.user_id, registration.display_name ?? undefined),
+              },
+            ]
+          : []),
         ...(eventSlug && badgesPath
           ? [
               {

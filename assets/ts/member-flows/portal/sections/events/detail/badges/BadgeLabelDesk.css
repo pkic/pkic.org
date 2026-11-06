@@ -1,4 +1,7 @@
 @layer components {
+  .pk-label-desk__camera-toolbar .pk-btn { color: inherit; }
+  .pk-label-desk__camera-toolbar { position: absolute; inset-block-start: var(--pk-3); inset-inline: var(--pk-3); display: flex; align-items: center; justify-content: space-between; z-index: 1; }
+  .pk-label-desk__camera.pk-label-desk__camera--fullscreen { position: fixed; inset: 0; inline-size: 100%; block-size: 100dvh; aspect-ratio: auto; z-index: var(--pk-z-modal, 1000); border-radius: 0; }
   .pk-label-desk {
     inline-size: 100%;
     max-inline-size: 24rem;
@@ -6,6 +9,7 @@
   }
 
   .pk-label-desk__camera {
+    position: relative;
     display: flex;
     aspect-ratio: 4 / 3;
     flex-direction: column;
@@ -17,16 +21,16 @@
     color: var(--pk-canvas);
   }
 
-  .pk-label-desk__camera .pk-icon {
+  .pk-label-desk__camera-toolbar .pk-icon {
     inline-size: 2.5rem;
     block-size: 2.5rem;
   }
 
-  .pk-label-desk__camera p {
+  .pk-label-desk__camera > p {
     margin: 0;
   }
 
-  .pk-label-desk__camera video:not(.pk-event-scanner__camera--concealed) {
+  .pk-label-desk__camera:not(.pk-label-desk__camera--fullscreen) video:not(.pk-event-scanner__camera--concealed) {
     inline-size: 100%;
     block-size: 100%;
     max-block-size: none;

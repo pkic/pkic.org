@@ -1,10 +1,11 @@
+import { databaseIdSchema } from "./identifiers";
 import { timeZoneSchema } from "./event-series";
 import { z } from "zod";
 import { promotionCopySchema } from "./event-promotion-copy";
 import { agendaOccurrenceFieldsSchema, agendaPlannedMediaSchema, agendaOccurrenceQuerySchema } from "./event-agenda";
 export { promotionCopySchema } from "./event-promotion-copy";
 import { promotionCompositionSchema } from "./event-promotion-design";
-export const PROMOTION_TEMPLATE_VERSION = 9 as const;
+export const PROMOTION_TEMPLATE_VERSION = 10 as const;
 export const promotionRenderStateSchema = z.enum(["queued", "rendering", "retrying", "rendered", "failed", "obsolete"]);
 export const promotionFormatSchema = z.enum(["landscape", "square", "portrait", "carousel"]);
 export const promotionFingerprintSchema = z.string().regex(/^[a-f0-9]{64}$/);
@@ -58,8 +59,11 @@ export const promotionKitSchema = z.object({
     sessionRsvps: z.number().int().nonnegative(),
   }),
 });
-export const promotionArtifactQuerySchema = z.object({
+export const promotionParticipantQuerySchema = z.object({ userId: databaseIdSchema.optional() });
+export const promotionArtifactQuerySchema = promotionParticipantQuerySchema.extend({
   download: z.enum(["true", "false"]).default("true"),
+  representation: z.enum(["file", "artwork"]).default("file"),
+  pages: z.enum(["cover", "all"]).default("cover"),
   format: promotionFormatSchema,
   revision: z.coerce.number().int().positive(),
   fingerprint: z
@@ -71,8 +75,21 @@ export type PromotionCopy = z.infer<typeof promotionCopySchema>;
 
 export const promotionSessionsQuerySchema = agendaOccurrenceQuerySchema
   .omit({ accessPolicy: true, speakerUserId: true, publicationStatus: true, track: true, conflict: true })
-  .extend({ timeZone: timeZoneSchema.optional() })
+  .extend({ ...promotionParticipantQuerySchema.shape, timeZone: timeZoneSchema.optional() })
   .superRefine((query, ctx) => {
     if (query.day && !query.timeZone)
       ctx.addIssue({ code: "custom", path: ["timeZone"], message: "Include the event time zone when choosing a day." });
   });
+
+/** SVG pages are isolated images in the browser, never inserted as live markup. */
+export const promotionArtworkSchema = z.object({
+  fingerprint: promotionFingerprintSchema,
+  format: promotionFormatSchema,
+  pages: z
+    .array(z.object({ width: z.number().int().positive(), height: z.number().int().positive(), svg: z.string() }))
+    .min(1)
+    .max(128),
+  fontFiles: z.array(z.string()).max(6),
+});
+
+export const promotionPdfExportSchema = promotionRenderRequestSchema.omit({ formats: true });

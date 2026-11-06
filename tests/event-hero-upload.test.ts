@@ -37,7 +37,7 @@ async function upload(
   } = {},
   environment: typeof env = env,
 ) {
-  const { bytes = validPngBytes(1200, 630), type = "image/png", ...settings } = options;
+  const { bytes = validPngBytes(1200, 675), type = "image/png", ...settings } = options;
   const query = eventHeroImageSaveSchema.parse({ expectedUpdatedAt: revision, ...settings });
   return app.fetch(
     new Request(
@@ -100,7 +100,7 @@ describe("event hero uploads", () => {
     const image = await app.fetch(new Request(`https://app.test${event.heroImageUrl}`), env, context as any);
     expect(image.status).toBe(200);
     expect(image.headers.get("content-type")).toBe("image/png");
-    expect(new Uint8Array(await image.arrayBuffer())).toEqual(validPngBytes(1200, 630));
+    expect(new Uint8Array(await image.arrayBuffer())).toEqual(validPngBytes(1200, 675));
     expect(
       (
         await fetchHeroImage(JSON.stringify({ heroImageUrl: event.heroImageUrl }), "https://app.test", {
@@ -156,9 +156,13 @@ describe("event hero uploads", () => {
     });
   });
 
-  it("accepts a higher-resolution landscape image", async () => {
+  it.each([
+    [1200, 675],
+    [1600, 900],
+    [1920, 1080],
+  ])("accepts cropped 16:9 images (%i × %i)", async (width, height) => {
     const { token, revision } = await fixture();
-    await saved(await upload(token, revision, { bytes: validPngBytes(2400, 1260) }));
+    await saved(await upload(token, revision, { bytes: validPngBytes(width, height) }));
   });
 
   it("denies ordinary members and allows an owning group leader only through the exact group context", async () => {
@@ -251,7 +255,7 @@ describe("event hero display renditions", () => {
       const response = await read(images);
       expect(response.status).toBe(200);
       expect(response.headers.get("content-type")).toBe("image/png");
-      expect(new Uint8Array(await response.arrayBuffer())).toEqual(validPngBytes(1200, 630));
+      expect(new Uint8Array(await response.arrayBuffer())).toEqual(validPngBytes(1200, 675));
     }
   });
   it("rejects unsupported sizes instead of creating unbounded image variants", async () => {

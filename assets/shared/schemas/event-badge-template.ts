@@ -109,27 +109,42 @@ export const badgeTemplateSponsorLogoSchema = z
       });
     }
   });
-export const badgeTemplateBrandingSchema = z
-  .array(
-    badgeTemplateSponsorGroupSchema
-      .extend({ sponsors: z.array(badgeTemplateSponsorLogoSchema).max(BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT) })
-      .strict(),
-  )
-  .max(BADGE_TEMPLATE_SPONSOR_GROUPS_MAX_COUNT)
-  .superRefine((groups, ctx) => {
-    if (
-      new Set(groups.map((group) => group.key)).size !== groups.length ||
-      groups.some((group) => new Set(group.sponsors.map((sponsor) => sponsor.id)).size !== group.sponsors.length) ||
-      groups.reduce((sum, group) => sum + group.sponsors.length, 0) > BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT ||
-      groups.reduce(
-        (sum, group) =>
-          sum + group.sponsors.reduce((bytes, sponsor) => bytes + new TextEncoder().encode(sponsor.svg).byteLength, 0),
-        0,
-      ) > BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_BYTES
+export interface SponsorArtworkLimits {
+  maxCount: number;
+  maxBytes: number;
+}
+export const BADGE_SPONSOR_ARTWORK_LIMITS: SponsorArtworkLimits = {
+  maxCount: BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT,
+  maxBytes: BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_BYTES,
+};
+/** One artwork codec; each document owns its count and byte budgets. */
+export function sponsorArtworkBrandingSchema(limits: SponsorArtworkLimits) {
+  return z
+    .array(
+      badgeTemplateSponsorGroupSchema
+        .extend({
+          sponsors: z.array(badgeTemplateSponsorLogoSchema).max(limits.maxCount),
+        })
+        .strict(),
     )
-      ctx.addIssue({
-        code: "custom",
-        message: "Use distinct groups and sponsor IDs, and at most 40 approved sponsor logos within 4 MiB.",
-      });
-  });
+    .max(limits.maxCount)
+    .superRefine((groups, ctx) => {
+      if (
+        new Set(groups.map((group) => group.key)).size !== groups.length ||
+        groups.some((group) => new Set(group.sponsors.map((sponsor) => sponsor.id)).size !== group.sponsors.length) ||
+        groups.reduce((sum, group) => sum + group.sponsors.length, 0) > limits.maxCount ||
+        groups.reduce(
+          (sum, group) =>
+            sum +
+            group.sponsors.reduce((bytes, sponsor) => bytes + new TextEncoder().encode(sponsor.svg).byteLength, 0),
+          0,
+        ) > limits.maxBytes
+      )
+        ctx.addIssue({
+          code: "custom",
+          message: `Use distinct groups and sponsor IDs, and at most ${limits.maxCount} approved sponsor logos within ${limits.maxBytes / (1024 * 1024)} MiB.`,
+        });
+    });
+}
+export const badgeTemplateBrandingSchema = sponsorArtworkBrandingSchema(BADGE_SPONSOR_ARTWORK_LIMITS);
 export type BadgeTemplateSponsorGroup = z.infer<typeof badgeTemplateBrandingSchema>[number];

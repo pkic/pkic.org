@@ -1,3 +1,4 @@
+import { hasEventPromotionMaterials } from "../../assets/ts/member-flows/portal/sections/events/app/event-app-tabs";
 // @vitest-environment jsdom
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -147,6 +148,7 @@ describe("permission-derived attendee scanner navigation", () => {
       calendarAvailable: false,
       proposals: 0,
       speakerProposals: 0,
+      speakerSessions: 0,
       proposalStates: [],
       speakerStates: [],
     };
@@ -169,6 +171,7 @@ describe("permission-derived attendee scanner navigation", () => {
       calendarAvailable: false,
       proposals: 1,
       speakerProposals: 1,
+      speakerSessions: 0,
       proposalStates: [],
       speakerStates: [],
     };
@@ -352,4 +355,19 @@ describe("permission-derived attendee scanner navigation", () => {
     });
     expect(room.value).toBe(roomIds[1]);
   });
+});
+
+it("offers Share to an assigned speaker without a proposal or attendee registration", () => {
+  const speaker = event();
+  speaker.participation = {
+    registrationId: null,
+    registrationStatus: null,
+    calendarAvailable: false,
+    proposals: 0,
+    speakerProposals: 0,
+    speakerSessions: 1,
+    proposalStates: [],
+    speakerStates: [],
+  };
+  expect(hasEventPromotionMaterials(speaker)).toBe(true);
 });

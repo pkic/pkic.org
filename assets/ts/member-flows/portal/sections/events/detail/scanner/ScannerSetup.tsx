@@ -15,6 +15,7 @@ import { Tabs } from "../../../../../../components/Tabs";
 export function ScannerSetup({
   operatorUserId: _operatorUserId,
   sponsorOnly,
+  printHref,
   explicitTarget,
   ready,
   locked,
@@ -25,6 +26,7 @@ export function ScannerSetup({
 }: ComponentProps<typeof ScannerLocationSelect> & {
   operatorUserId: string;
   sponsorOnly: boolean;
+  printHref?: string;
   explicitTarget: boolean;
   ready: boolean;
   locked: boolean;
@@ -51,6 +53,7 @@ export function ScannerSetup({
     <>
       <ScannerDestinationTiles
         allowedActions={allowedActions}
+        printHref={printHref}
         disabled={locked || !ready}
         onVenue={(action) => {
           location.onTarget(null);

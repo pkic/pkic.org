@@ -371,6 +371,34 @@ describe("admin event management endpoints", () => {
     expect(detail.registration.referral_code).toBe("first001");
   });
 
+  it("links the organizer's registration action to the registration flow, not the event's page", async () => {
+    await setupAdmin();
+    await env.DB.prepare(
+      "UPDATE events SET base_path = '/events/2026/pqc-2026/', registration_mode = 'open' WHERE slug = 'pqc-2026'",
+    ).run();
+
+    const detail = eventManagementDetailResponseSchema.parse(await (await callAdmin("/api/v1/events/pqc-2026")).json());
+
+    expect(detail.event.basePath).toBe("/events/2026/pqc-2026/");
+    expect(detail.event.registrationPath).toBe("/events/2026/pqc-2026/register/");
+  });
+
+  it("offers the registration flow of a required event but not of an invitation-only one", async () => {
+    await setupAdmin();
+    const registrationPathFor = async (registrationMode: string) => {
+      await env.DB.prepare(
+        "UPDATE events SET base_path = '/events/2026/pqc-2026/', registration_mode = ? WHERE slug = 'pqc-2026'",
+      )
+        .bind(registrationMode)
+        .run();
+      const response = await callAdmin("/api/v1/events/pqc-2026");
+      return eventManagementDetailResponseSchema.parse(await response.json()).event.registrationPath;
+    };
+
+    expect(await registrationPathFor("required")).toBe("/events/2026/pqc-2026/register/");
+    expect(await registrationPathFor("invitation_only")).toBeNull();
+  });
+
   it("returns details and persists settings updates", async () => {
     const { baseEventId } = await setupAdmin();
     await env.DB.prepare(`INSERT INTO forms(id,key,scope_type,scope_ref,purpose,status,title,created_at,updated_at)

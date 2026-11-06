@@ -1,3 +1,6 @@
+import { EMAIL_ADDRESS_DELIVERY_LABELS } from "../../../../../shared/schemas/email-address-delivery";
+import { statusTone } from "../../../../../shared/status-display";
+import { Badge } from "../../../../ui/Badge";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { personLegalName } from "../../../../../shared/person-display";
 import { PersonCell } from "../../../../ui/PersonCell";
@@ -71,10 +74,23 @@ export function UsersList({ canWrite, canGrantAccess }: { canWrite: boolean; can
             <PersonCell
               name={personLegalName({ firstName: user.first_name, lastName: user.last_name }, user.email)}
               avatarSrc={user.headshotUrl}
+              detail={user.email}
               size="sm"
             />
           ),
           sort: { asc: "last_name", desc: "-last_name" },
+        },
+        {
+          header: "Primary email delivery",
+          cell: (user) =>
+            user.emailDelivery.status === "unknown" || user.emailDelivery.status === "delivered" ? (
+              EMAIL_ADDRESS_DELIVERY_LABELS[user.emailDelivery.status]
+            ) : (
+              <Badge tone={statusTone(user.emailDelivery.status)}>
+                {EMAIL_ADDRESS_DELIVERY_LABELS[user.emailDelivery.status]}
+              </Badge>
+            ),
+          width: "fit",
         },
         {
           // Names, not counts: the column says which organizations the person

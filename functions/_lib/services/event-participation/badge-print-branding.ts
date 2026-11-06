@@ -2,9 +2,10 @@ import { z } from "zod";
 import { ZodError } from "zod";
 import {
   eventBadgeTemplateSchema,
-  badgeTemplateBrandingSchema,
+  sponsorArtworkBrandingSchema,
+  BADGE_SPONSOR_ARTWORK_LIMITS,
+  type SponsorArtworkLimits,
   BADGE_TEMPLATE_SPONSOR_LOGO_MAX_BYTES,
-  BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_BYTES,
   BADGE_TEMPLATE_SPONSOR_GROUPS_MAX_COUNT,
   BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT,
   badgeTemplateSponsorGroupSchema,
@@ -195,88 +196,161 @@ function replacement(name: string, reason?: string): AppError {
   return new AppError(422, "BADGE_SPONSOR_SVG_REQUIRED", reason ? `${instruction} ${reason}` : instruction);
 }
 
+/**
+ * Expected sponsor artwork omissions. Unexpected logo read failures are also
+ * omitted from tickets, with a diagnostic warning; organizer printing refuses both.
+ */
+const OMITTABLE_ARTWORK_CODES = new Set([
+  "BADGE_SPONSOR_SVG_REQUIRED",
+  "BADGE_SPONSOR_LOGO_TOO_LARGE",
+  "BADGE_SPONSOR_ARTWORK_TOO_LARGE",
+  "UPLOADS_NOT_CONFIGURED",
+]);
+
+/**
+ * What to do with a sponsor whose artwork cannot be printed. Organizer printing
+ * refuses, naming the sponsor and the fix. An attendee's own ticket leaves the
+ * sponsor out: their QR code and badge code never wait on sponsor artwork.
+ */
+export type UnusableSponsorArtwork = "refuse" | "omit";
+
+async function loadSponsorLogo(
+  environment: Pick<Env, "ASSETS_BUCKET">,
+  row: BrandingRow,
+): Promise<{ svg: string; bytes: number; captured: { key: string; etag: string } }> {
+  const key = row.logo_r2_key ?? row.sponsorship_logo_r2_key;
+  if (!key || !/^(?:org-logos|sponsor-logos)\//.test(key) || key.split("/").includes("..")) throw replacement(row.name);
+  const bucket = environment.ASSETS_BUCKET;
+  if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "Asset storage is not configured.");
+  const object = await bucket.get(key);
+  if (!object) throw replacement(row.name);
+  const tooLarge = () =>
+    new AppError(
+      413,
+      "BADGE_SPONSOR_LOGO_TOO_LARGE",
+      `The logo for ${row.name} exceeds the 1 MiB badge artwork limit.`,
+    );
+  if (object.size > BADGE_TEMPLATE_SPONSOR_LOGO_MAX_BYTES) throw tooLarge();
+  const read = await readBoundedStream(object.body, BADGE_TEMPLATE_SPONSOR_LOGO_MAX_BYTES);
+  if (!read.ok) throw tooLarge();
+  try {
+    const cleaned = await sanitizeSvgLogo(read.bytes.buffer as ArrayBuffer);
+    if (cleaned.buffer.byteLength > BADGE_TEMPLATE_SPONSOR_LOGO_MAX_BYTES)
+      throw new AppError(
+        413,
+        "BADGE_SPONSOR_LOGO_TOO_LARGE",
+        `The normalized logo for ${row.name} exceeds the 1 MiB badge artwork limit.`,
+      );
+    return {
+      svg: new TextDecoder("utf-8", { fatal: true }).decode(cleaned.buffer),
+      bytes: cleaned.buffer.byteLength,
+      captured: { key, etag: object.etag },
+    };
+  } catch (error) {
+    if (error instanceof AppError && error.code === "INVALID_SVG_LOGO") throw replacement(row.name, error.message);
+    throw error;
+  }
+}
+
 /** No URL is fetched: only pointers from the canonical active event sponsor read model are followed. */
 export async function getBadgePrintingContext(
   db: DatabaseLike,
   environment: Pick<Env, "ASSETS_BUCKET">,
   eventId: string,
   sponsorGroups?: z.infer<typeof badgeTemplateSponsorGroupSchema>[],
+  { unusableArtwork = "refuse" }: { unusableArtwork?: UnusableSponsorArtwork } = {},
 ) {
   const basis = await prepareBadgePrintingBasis(db, eventId, sponsorGroups);
+  const { branding } = await loadBadgeSponsorArtwork(
+    environment,
+    basis.populations,
+    basis.template?.sponsorGroups ?? [],
+    { unusableArtwork, eventId },
+  );
+  await db.batch(basis.guards);
+  return { revision: basis.revision, template: basis.template, branding };
+}
+
+/** Load and validate artwork from an already authorized, canonical sponsor population. */
+export async function loadBadgeSponsorArtwork(
+  environment: Pick<Env, "ASSETS_BUCKET">,
+  populations: Awaited<ReturnType<typeof prepareBadgePrintingBasis>>["populations"],
+  sponsorGroups: z.infer<typeof badgeTemplateSponsorGroupSchema>[],
+  {
+    unusableArtwork = "refuse",
+    eventId,
+    limits = BADGE_SPONSOR_ARTWORK_LIMITS,
+  }: {
+    unusableArtwork?: UnusableSponsorArtwork;
+    eventId?: string;
+    limits?: SponsorArtworkLimits;
+  } = {},
+) {
+  if (populations.event.length + populations.consortium.length > limits.maxCount)
+    throw new AppError(422, "BADGE_SPONSOR_LIMIT", `Use at most ${limits.maxCount} sponsors in these materials.`);
   const logos = new Map<string, { id: string; name: string; svg: string }>();
   const capturedObjects: { key: string; etag: string }[] = [];
+  const omitted: string[] = [];
   let totalBytes = 0;
-  for (const row of [...basis.populations.consortium, ...basis.populations.event]) {
-    if (logos.has(row.id)) continue;
-    const key = row.logo_r2_key ?? row.sponsorship_logo_r2_key;
-    if (!key || !/^(?:org-logos|sponsor-logos)\//.test(key) || key.split("/").includes(".."))
-      throw replacement(row.name);
-    const bucket = environment.ASSETS_BUCKET;
-    if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "Asset storage is not configured.");
-    const object = await bucket.get(key);
-    if (!object) throw replacement(row.name);
-    if (object.size > BADGE_TEMPLATE_SPONSOR_LOGO_MAX_BYTES)
-      throw new AppError(
-        413,
-        "BADGE_SPONSOR_LOGO_TOO_LARGE",
-        `The logo for ${row.name} exceeds the 1 MiB badge artwork limit.`,
-      );
-    const read = await readBoundedStream(object.body, BADGE_TEMPLATE_SPONSOR_LOGO_MAX_BYTES);
-    if (!read.ok)
-      throw new AppError(
-        413,
-        "BADGE_SPONSOR_LOGO_TOO_LARGE",
-        `The logo for ${row.name} exceeds the 1 MiB badge artwork limit.`,
-      );
-    let svg: string;
+  for (const row of [...populations.consortium, ...populations.event]) {
+    if (logos.has(row.id) || omitted.includes(row.id)) continue;
     try {
-      const cleaned = await sanitizeSvgLogo(read.bytes.buffer as ArrayBuffer);
-      if (cleaned.buffer.byteLength > BADGE_TEMPLATE_SPONSOR_LOGO_MAX_BYTES)
+      const logo = await loadSponsorLogo(environment, row);
+      if (totalBytes + logo.bytes > limits.maxBytes)
         throw new AppError(
           413,
-          "BADGE_SPONSOR_LOGO_TOO_LARGE",
-          `The normalized logo for ${row.name} exceeds the 1 MiB badge artwork limit.`,
+          "BADGE_SPONSOR_ARTWORK_TOO_LARGE",
+          `The selected sponsor logos exceed the ${limits.maxBytes / (1024 * 1024)} MiB document artwork limit.`,
         );
-      totalBytes += cleaned.buffer.byteLength;
-      svg = new TextDecoder("utf-8", { fatal: true }).decode(cleaned.buffer);
+      totalBytes += logo.bytes;
+      logos.set(row.id, { id: row.id, name: row.name, svg: logo.svg });
+      capturedObjects.push(logo.captured);
     } catch (error) {
-      if (error instanceof AppError && error.code === "INVALID_SVG_LOGO") throw replacement(row.name, error.message);
-      throw error;
+      if (unusableArtwork === "refuse") throw error;
+      // An attendee's ticket never waits on sponsor artwork: unusable or unreadable, the logo is left off.
+      if (!(error instanceof AppError) || !OMITTABLE_ARTWORK_CODES.has(error.code))
+        console.warn("[badge-ticket] sponsor artwork unreadable", {
+          eventId,
+          error: error instanceof Error ? error.name : "unknown",
+        });
+      omitted.push(row.id);
     }
-    if (totalBytes > BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_BYTES)
-      throw new AppError(
-        413,
-        "BADGE_SPONSOR_ARTWORK_TOO_LARGE",
-        "The selected sponsor logos exceed the 4 MiB document artwork limit.",
-      );
-    logos.set(row.id, { id: row.id, name: row.name, svg });
-    capturedObjects.push({ key, etag: object.etag });
   }
-  const branding: BadgeTemplateSponsorGroup[] = (basis.template?.sponsorGroups ?? []).flatMap((group) => {
+  // Staff see the reason in badge printing; the log says how many sponsors were omitted.
+  if (omitted.length)
+    console.warn("[badge-ticket] sponsor artwork omitted", {
+      eventId,
+      sponsors: omitted.length,
+    });
+  const branding: BadgeTemplateSponsorGroup[] = sponsorGroups.flatMap((group) => {
     const source = badgeSponsorGroupSource(group);
     const sponsors = [
       ...new Map(
-        basis.populations[source]
-          .filter((row) => sourceTier(row, source) === group.tierName)
+        populations[source]
+          .filter((row) => sourceTier(row, source) === group.tierName && logos.has(row.id))
           .map((row) => [row.id, logos.get(row.id)!]),
       ).values(),
     ];
     return sponsors.length ? [{ ...group, sponsors }] : [];
   });
-  const checkedBranding = badgeTemplateBrandingSchema.safeParse(branding);
-  if (!checkedBranding.success)
-    throw new AppError(
-      422,
-      "BADGE_SPONSOR_ARTWORK_INVALID",
-      "The selected sponsor artwork cannot be safely printed. Replace it with a valid vector SVG.",
-    );
-  for (const captured of capturedObjects) {
-    const current = await environment.ASSETS_BUCKET!.head(captured.key);
-    if (!current || current.etag !== captured.etag)
-      throw new AppError(409, "BADGE_SPONSOR_CHANGED", "Sponsor artwork changed. Reload the print document.");
+  const checkedBranding = sponsorArtworkBrandingSchema(limits).safeParse(branding);
+  if (!checkedBranding.success) {
+    if (unusableArtwork === "refuse")
+      throw new AppError(
+        422,
+        "BADGE_SPONSOR_ARTWORK_INVALID",
+        "The selected sponsor artwork cannot be safely printed. Replace it with a valid vector SVG.",
+      );
+    console.warn("[badge-ticket] sponsor strip omitted", { eventId });
   }
-  await db.batch(basis.guards);
-  return { revision: basis.revision, template: basis.template, branding: checkedBranding.data };
+  // A print document must match what staff reviewed; a ticket already holds the artwork it read.
+  if (unusableArtwork === "refuse")
+    for (const captured of capturedObjects) {
+      const current = await environment.ASSETS_BUCKET!.head(captured.key);
+      if (!current || current.etag !== captured.etag)
+        throw new AppError(409, "BADGE_SPONSOR_CHANGED", "Sponsor artwork changed. Reload the print document.");
+    }
+  return { branding: checkedBranding.data ?? [], capturedObjects };
 }
 
 /** Refusals that name a sponsor's stored artwork: organizers fix these, attendees cannot. */
@@ -289,8 +363,9 @@ const SPONSOR_ARTWORK_REFUSALS = new Set([
 
 /**
  * The holder's ticket design. Sponsor artwork an organizer still has to replace must not hide the attendee's QR or
- * show them organizer instructions, so the ticket falls back to the same template without sponsor logos. The
- * organizer print document keeps refusing through {@link getBadgePrintingContext}.
+ * show them organizer instructions, so the ticket leaves that sponsor out and keeps the usable ones; if the strip
+ * still cannot be assembled, it falls back to the same template without sponsor logos. The organizer print document
+ * keeps refusing through {@link getBadgePrintingContext}.
  */
 export async function getBadgeHolderPrintingContext(
   db: DatabaseLike,
@@ -298,7 +373,9 @@ export async function getBadgeHolderPrintingContext(
   eventId: string,
 ) {
   try {
-    return await getBadgePrintingContext(db, environment, eventId);
+    return await getBadgePrintingContext(db, environment, eventId, undefined, {
+      unusableArtwork: "omit",
+    });
   } catch (error) {
     if (!(error instanceof AppError) || !SPONSOR_ARTWORK_REFUSALS.has(error.code)) throw error;
     const basis = await prepareBadgePrintingBasis(db, eventId);

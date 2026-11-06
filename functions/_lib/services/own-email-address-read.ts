@@ -3,6 +3,7 @@
  * id of its own, and every added `user_emails` row. Account settings list
  * them all; the profile's address choice reads only the verified ones.
  */
+import { emailAddressDeliveryJsonSql, decodeEmailAddressDelivery } from "./email-address-delivery";
 import { secondaryEmailSignInAllowedSql } from "../auth/email-sign-in-policy";
 import { ownEmailAddressSchema, type OwnEmailAddress } from "../../../assets/shared/schemas/own-email-addresses";
 import type { EmailVerificationMethod } from "./email-verification";
@@ -21,6 +22,7 @@ export interface OwnAddressRow {
   created_at: string;
   sign_in_enabled: number;
   used_by_json: string;
+  delivery_json: string;
 }
 
 export const ADDRESS_SORT_EXPRESSIONS = { email: "LOWER(email)", created_at: "created_at" } as const;
@@ -46,19 +48,19 @@ function identityOrganizationsJsonSql(identityCondition: string): string {
 
 /** Every address of one person as the `addresses` table; bind the person's id twice. */
 export const OWN_ADDRESSES_SQL = `WITH addresses AS (
-    SELECT NULL AS id, email, 1 AS is_primary, email_verified_at AS verified_at,
+    SELECT NULL AS id, users.id AS user_id, email, 1 AS is_primary, email_verified_at AS verified_at,
            email_verification_method AS verification_method, NULL AS identity_id, created_at, 1 AS sign_in_enabled,
-           ${identityOrganizationsJsonSql("identity.user_id = users.id AND identity.email_id IS NULL")} AS used_by_json
+           ${identityOrganizationsJsonSql("identity.user_id = users.id AND identity.email_id IS NULL")} AS used_by_json, delivery_bounced_at, delivery_blocked_at, delivery_delayed_at, delivery_delivered_at
       FROM users WHERE id = ?
     UNION ALL
-    SELECT id, email, 0, verified_at, verification_method, identity_id, created_at,
+    SELECT id, user_id, email, 0, verified_at, verification_method, identity_id, created_at,
       (${secondaryEmailSignInAllowedSql("user_emails")}) AS sign_in_enabled,
-      ${addressUsedByJsonSql("user_emails")} AS used_by_json FROM user_emails WHERE user_id = ?
+      ${addressUsedByJsonSql("user_emails")} AS used_by_json, delivery_bounced_at, delivery_blocked_at, delivery_delayed_at, delivery_delivered_at FROM user_emails WHERE user_id = ?
 
   )`;
 
-export const OWN_ADDRESS_COLUMNS =
-  "id, email, is_primary, verified_at, verification_method, identity_id, created_at, sign_in_enabled, used_by_json";
+export const OWN_ADDRESS_COLUMNS = `id, email, is_primary, verified_at, verification_method, identity_id, created_at, sign_in_enabled, used_by_json,
+   ${emailAddressDeliveryJsonSql("addresses")} AS delivery_json`;
 
 /** Decodes the organizations `addressUsedByJsonSql` projects. */
 export function decodeAddressUsedBy(json: string | null): OwnEmailAddress["usedBy"] {
@@ -68,6 +70,7 @@ export function decodeAddressUsedBy(json: string | null): OwnEmailAddress["usedB
 export function toAddress(row: OwnAddressRow): OwnEmailAddress {
   return {
     usedBy: decodeAddressUsedBy(row.used_by_json),
+    delivery: decodeEmailAddressDelivery(row.delivery_json),
     id: row.id,
     email: row.email,
     primary: Boolean(row.is_primary),

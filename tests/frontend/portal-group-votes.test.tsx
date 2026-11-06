@@ -6,6 +6,7 @@ import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
 import { openConfirmation } from "./helpers/confirm-dialog";
 import { typeMarkdown } from "./helpers/labeled-control";
+import { submitBallotSchema } from "../../assets/shared/schemas/votes";
 
 // The votes surface routes creation through the portal's hash location, so the
 // component needs one even when a test only exercises participation.
@@ -94,6 +95,7 @@ describe("selected-group vote participation", () => {
                   memberId: "c0000000-0000-4000-8000-000000000001",
                   organizationName: "Example Organization",
                   hasCastBallot: false,
+                  recorded: null,
                 },
               ],
               result: null,
@@ -128,10 +130,13 @@ describe("selected-group vote participation", () => {
     await act(() => (inFavor as HTMLButtonElement).click());
     await settle();
 
-    expect(requests).toContainEqual({
-      path: `/api/v1/groups/${GROUP_ID}/votes/${VOTE_ID}/ballots`,
-      method: "POST",
-      body: { choice: "in_favor", memberId: "c0000000-0000-4000-8000-000000000001" },
+    const ballot = requests.find(
+      (request) => request.path === `/api/v1/groups/${GROUP_ID}/votes/${VOTE_ID}/ballots` && request.method === "POST",
+    );
+    expect(submitBallotSchema.parse(ballot?.body)).toEqual({
+      choice: "in_favor",
+      memberId: "c0000000-0000-4000-8000-000000000001",
+      replacesBallotCastAt: null,
     });
   });
 

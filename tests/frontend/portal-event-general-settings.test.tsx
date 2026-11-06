@@ -75,6 +75,7 @@ const portalEvent = {
   seriesId: null,
   links: [],
   capabilities: ["read"],
+  registrationPath: null,
   settings: { forms: { event_registration: "legacy-attendee-form" } },
 } as EventDetail;
 

@@ -450,7 +450,10 @@ describe("registration workflows", () => {
   });
 
   it("delivers existing-identity capabilities by email instead of exposing them to the anonymous submitter", async () => {
-    await seedEventAndAdmin(env.DB);
+    const { admin } = await seedEventAndAdmin(env.DB);
+    await env.DB.prepare("UPDATE users SET first_name='Existing',last_name='Administrator' WHERE id=?")
+      .bind(admin.id)
+      .run();
 
     const createResponse = await postRegistration({
       firstName: "Claimed",

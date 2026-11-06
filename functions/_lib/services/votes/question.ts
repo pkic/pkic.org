@@ -25,6 +25,17 @@ export interface ConsultationForm {
   fields: FormFieldDefinition[];
 }
 
+export function assertConsultationFormUsable(
+  form: { status: string } | null,
+  fieldCount?: number,
+): asserts form is { status: string } {
+  if (!form) throw new AppError(409, "VOTE_FORM_MISSING", "This consultation's form no longer exists");
+  if (form.status === "archived") {
+    throw new AppError(409, "VOTE_FORM_ARCHIVED", "This consultation's form has been archived");
+  }
+  if (fieldCount === 0) throw new AppError(409, "VOTE_FORM_HAS_NO_QUESTIONS", "This consultation asks nothing");
+}
+
 export async function loadConsultationForm(db: DatabaseLike, vote: VoteRow): Promise<ConsultationForm | null> {
   if (!vote.question_form_id) return null;
 
@@ -33,10 +44,7 @@ export async function loadConsultationForm(db: DatabaseLike, vote: VoteRow): Pro
     `SELECT id, title, description, status FROM forms WHERE id = ?`,
     [vote.question_form_id],
   );
-  if (!form) throw new AppError(409, "VOTE_FORM_MISSING", "This consultation's form no longer exists");
-  if (form.status === "archived") {
-    throw new AppError(409, "VOTE_FORM_ARCHIVED", "This consultation's form has been archived");
-  }
+  assertConsultationFormUsable(form);
 
   const rows = await all<FormFieldRow>(
     db,
@@ -47,7 +55,7 @@ export async function loadConsultationForm(db: DatabaseLike, vote: VoteRow): Pro
       ORDER BY sort_order ASC, id ASC`,
     [vote.question_form_id],
   );
-  if (rows.length === 0) throw new AppError(409, "VOTE_FORM_HAS_NO_QUESTIONS", "This consultation asks nothing");
+  assertConsultationFormUsable(form, rows.length);
 
   const catalogs = await resolveFormFieldOptionCatalogs(db, rows);
   return {

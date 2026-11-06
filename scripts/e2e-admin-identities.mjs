@@ -42,6 +42,7 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "browser-historical-mapping-speaker",
   "browser-waitlist",
   "meeting-guest",
+  "session-timing",
   "portal-event",
   "portal-event-management",
   "portal-event-attendee-management",

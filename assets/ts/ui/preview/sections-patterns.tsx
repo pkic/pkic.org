@@ -1,3 +1,4 @@
+import { imageCarouselSection } from "./image-carousel";
 import { badgeOutputProgressSection } from "./badge-output-progress";
 import { TooltipPreview } from "./TooltipPreview";
 import { proposalSections } from "./sections-proposals";
@@ -9,6 +10,9 @@ import { ModelNavigationPreview } from "./ModelNavigationPreview";
 import { contentContributionPreview } from "./ContentContributionPreview";
 import { pictureUploadSection } from "./picture-upload";
 import { contentSections } from "./sections-content";
+import { contactOrganizationSection } from "./contact-organization";
+import { registrationSections } from "./sections-registration";
+import { sessionTimingSection } from "./session-timing";
 /**
  * Pattern catalog specimens.
  *
@@ -262,6 +266,9 @@ const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://ww
 
 export const patternSections: PreviewSection[] = [
   pictureUploadSection,
+  contactOrganizationSection,
+  ...registrationSections,
+  sessionTimingSection,
   {
     id: "choice-controls",
     title: "Choice controls",
@@ -358,6 +365,7 @@ export const patternSections: PreviewSection[] = [
     title: "Agenda",
     render: () => <AgendaExample />,
   },
+  imageCarouselSection,
   ...contentSections,
   {
     id: "row-list",

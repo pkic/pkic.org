@@ -5,6 +5,7 @@ import {
   promotionCompositionSchema,
   promotionPanelSchema,
   defaultPromotionComposition,
+  effectivePromotionTakeaways,
   type PromotionComposition,
 } from "../../../../../../../shared/schemas/event-promotion-design";
 import { promotionKitSchema } from "../../../../../../../shared/schemas/event-promotion-kit";
@@ -58,7 +59,9 @@ export function PromotionCompositionEditor({
   const [composition, setComposition] = useState<PromotionComposition>(
     kit.composition ?? defaultPromotionComposition(kit.audience === "attendee"),
   );
-  const [takeawayText, setTakeawayText] = useState(composition.takeaways.join("\n"));
+  const [takeawayText, setTakeawayText] = useState(
+    effectivePromotionTakeaways(composition, kit.copy.takeaways).join("\n"),
+  );
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const body = { expectedRevision: kit.compositionRevision, composition };
@@ -205,7 +208,7 @@ export function PromotionCompositionEditor({
             </Field>
             <Field
               label="Your key takeaways"
-              help="Optional. One point per line."
+              help="One point per line. Leave blank to use the reviewed session takeaways."
               {...form.of("composition.takeaways")}
             >
               {(control) => (

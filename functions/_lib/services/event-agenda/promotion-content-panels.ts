@@ -16,7 +16,7 @@ function text(
 }
 /** Bottom-aligned editorial list, with a separate numbered accent rail as in the event artwork. */
 export function layoutPromotionTakeaways(
-  items: string[],
+  items: readonly string[],
   add: AddPage,
   measure: PromotionMeasure,
   scale: number,
@@ -216,10 +216,6 @@ export function layoutPromotionCover(
       (line) => measure(line, size, true) - Math.max(0, line.length - 1) * size * 0.035,
     );
   let lines = wrap();
-  while (lines.length * size > 590 * scale && size > 56 * scale) {
-    size -= 2 * scale;
-    lines = wrap();
-  }
   const labelWidth = (line: string) => measure(line, 26 * scale, false, true) + Array.from(line).length * 3.64 * scale;
   const labelText = eyebrow.toUpperCase();
   const label =
@@ -231,6 +227,11 @@ export function layoutPromotionCover(
     904 * scale - rightInset,
     (line) => measure(line, 26 * scale, false, true) + line.length * 2.08 * scale,
   );
+  // Keep the complete cover below the logo, including wrapped metadata and the event label.
+  while (label.length * 34 + (lines.length * size) / scale + 170 + meta.length * 34 > 752 && size > 32 * scale) {
+    size -= 2 * scale;
+    lines = wrap();
+  }
   let y =
     952 * scale -
     (label.length * 34 + 28 + (lines.length * size) / scale + 28 + 10 + 28 + 48 + 28 + meta.length * 34) * scale;

@@ -30,7 +30,7 @@ async function inspectImage(file: string, registrationUrl: string, qrExpected: b
   const pixels = await sharp(bytes).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const qr = jsQR(new Uint8ClampedArray(pixels.data), pixels.info.width, pixels.info.height)?.data ?? null;
   expect(qr, `QR destination in ${file}`).toBe(qrExpected ? registrationUrl : null);
-  const phoneFile = file.replace(/\.png$/u, "-phone.png");
+  const phoneFile = file.replace(/\.(?:png|jpe?g)$/u, "-phone.png");
   const phone = await sharp(bytes).resize({ width: 390 }).png().toBuffer();
   await writeFile(phoneFile, phone);
   return {
@@ -87,7 +87,8 @@ function inspectPdfStructure(pdf: PDFDocument, registrationUrl: string) {
   expect(roles.filter((role) => role === "H2").length).toBeGreaterThanOrEqual(3);
   expect(roles).toContain("LI");
   expect(roles.at(-1)).toBe("Link");
-  expect(figures).toEqual(
+  expect(figures.every((description) => description.trim().length > 0)).toBe(true);
+  expect(figures.filter((description) => description.startsWith("QR code:"))).toEqual(
     Array.from({ length: pdf.getPageCount() }, () => `QR code: register for this event at ${registrationUrl}`),
   );
   const links: Array<{ page: number; url: string }> = [];
@@ -131,6 +132,7 @@ export async function inspectPromotionExport(options: {
   bytes: Buffer;
   registrationUrl: string;
   expectedPdfText: string[];
+  excludedPdfText?: readonly string[];
 }) {
   const { directory, format, contentType, bytes, registrationUrl } = options;
   await mkdir(directory, { recursive: true });
@@ -138,7 +140,9 @@ export async function inspectPromotionExport(options: {
     ? "pdf"
     : contentType.includes("application/zip")
       ? "zip"
-      : "png";
+      : contentType.includes("image/jpeg")
+        ? "jpg"
+        : "png";
   const file = join(directory, `download-${format}.${extension}`);
   await writeFile(file, bytes);
   const base = { format, file, sha256: digest(bytes), bytes: bytes.length, contentType };
@@ -164,14 +168,11 @@ export async function inspectPromotionExport(options: {
       .replace(/\s+/gu, "");
     for (const expected of options.expectedPdfText)
       expect(continuous.toLowerCase()).toContain(expected.replace(/\s+/gu, "").toLowerCase());
+    for (const excluded of options.excludedPdfText ?? [])
+      expect(continuous.toLowerCase()).not.toContain(excluded.replace(/\s+/gu, "").toLowerCase());
     // The digital material directs every response through its personal referral link.
     expect(extracted.stdout.replace(/\s+/gu, "")).toContain(registrationUrl);
-    const sections = [
-      options.expectedPdfText[0]!.split(":")[0]!,
-      "Meet the speakers",
-      "Key takeaways",
-      options.expectedPdfText.at(-1)!,
-    ];
+    const sections = [options.expectedPdfText[0]!.split(":")[0]!, "SPEAKER", "Key takeaways", "Register"];
     const positions = sections.map((section) => text.toLowerCase().indexOf(normalized(section).toLowerCase()));
     expect(positions.every((position) => position >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
@@ -204,14 +205,14 @@ export async function inspectPromotionExport(options: {
     expect(members.length).toBeGreaterThan(1);
     for (const [index, member] of members.entries()) {
       // Only generated flat canonical members, no extraction paths or symlinks.
-      expect(member).toBe(`session-${format}-${String(index + 1).padStart(2, "0")}.png`);
+      expect(member).toMatch(new RegExp(`^session-${format}-${String(index + 1).padStart(2, "0")}\\.(png|jpg)$`));
       const output = await runFile("unzip", ["-p", file, member], { encoding: "buffer", maxBuffer: 16 * 1024 * 1024 });
       const imagePath = join(directory, member);
       await writeFile(imagePath, output.stdout);
       imagePaths.push(imagePath);
     }
   } else {
-    expect(contentType).toContain("image/png");
+    expect(["image/png", "image/jpeg"]).toContain(contentType);
     imagePaths.push(file);
   }
   const dimensions = format === "square" ? [1080, 1080] : format === "portrait" ? [1080, 1350] : [1200, 630];
