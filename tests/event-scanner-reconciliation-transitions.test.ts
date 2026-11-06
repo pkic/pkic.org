@@ -285,6 +285,8 @@ describe("Known offline scans reconciled after server state changes", () => {
     const captured = await capture();
     vi.setSystemTime(new Date(Date.parse(captured.manifest.expiresAt) + 1000));
     expect(Date.now()).toBeGreaterThan(Date.parse(captured.manifest.expiresAt));
+    // Upload still requires a current portal session after a full day offline.
+    await fixture.signIn();
     await reconcile(captured, { outcome: "eligible", reason: "eligible", attendanceRecorded: false });
     const current = enrolledOfflineEligibilityResponseSchema.parse(await (await prepare()).json());
     expect(Date.parse(current.serverNow)).toBeGreaterThan(Date.parse(captured.manifest.expiresAt));

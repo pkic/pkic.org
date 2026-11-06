@@ -42,6 +42,9 @@ export function createEventScannerFixture() {
       body: JSON.stringify(body),
     });
   }
+  async function signIn() {
+    token = await createAdminSession(env.DB, operatorId, crypto.randomUUID());
+  }
   async function setup() {
     await resetDb();
     const now = new Date().toISOString();
@@ -89,7 +92,7 @@ export function createEventScannerFixture() {
       .run();
     badgeId = (await issueBadge(env.DB, eventId, operatorId, { userId, operationId: crypto.randomUUID() }, env))
       .credential!;
-    token = await createAdminSession(env.DB, operatorId, crypto.randomUUID());
+    await signIn();
     epochId = (await enrollScannerDevice(env.DB, eventId, operatorId, { operationId: crypto.randomUUID(), deviceId }))
       .epochId;
     sequence = 0;
@@ -103,6 +106,7 @@ export function createEventScannerFixture() {
     scanBody,
     scan,
     setup,
+    signIn,
     get badgeId() {
       return badgeId;
     },
