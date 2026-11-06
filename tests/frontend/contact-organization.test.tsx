@@ -43,12 +43,19 @@ describe("contact organization", () => {
     expect(pills[0]?.querySelector(".pk-sr-only")?.textContent).toContain(PERSONAL_ADDRESS_HANDLED_LAST_DESCRIPTION);
   });
 
-  it("shows organizers the same one pill for every personal-mailbox registrant, waiting or not", async () => {
-    const waiting = await mount(null, true, true);
-    const notWaiting = await mount(null, true, false);
-    expect(notWaiting).toBe(waiting);
-    expect(notWaiting).not.toContain(PERSONAL_EMAIL_ADDRESS_LABEL);
-    expect(host!.querySelectorAll(".pk-badge--warn")).toHaveLength(1);
+  it("does not claim a personal primary address is handled last when a verified work address restores priority", async () => {
+    expect(await mount(null, true, false)).toBe(PERSONAL_EMAIL_ADDRESS_LABEL);
+    expect(host!.querySelectorAll(".pk-badge--neutral")).toHaveLength(1);
+    expect(host!.querySelector(".pk-badge--warn")).toBeNull();
+    expect(host!.querySelector("[title]")).toBeNull();
+    expect(host!.querySelector(".pk-sr-only")).toBeNull();
+  });
+
+  it("keeps the handled-last warning beside a work organization awaiting verification", async () => {
+    expect(await mount("Selected organization", false, true)).toContain("Selected organization");
+    expect(host!.querySelector(".pk-badge--warn")?.getAttribute("title")).toBe(
+      PERSONAL_ADDRESS_HANDLED_LAST_DESCRIPTION,
+    );
   });
 
   it("renders sponsor classification as plain text without an organizer warning", async () => {

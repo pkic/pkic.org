@@ -4,7 +4,7 @@ import type { PreviewSection } from "./PreviewShell";
 export const contactOrganizationSection: PreviewSection = {
   id: "contact-organization",
   title: "Contact organization",
-  note: "Organizers see the personal-address warning; sponsors see a neutral personal-address label.",
+  note: "Organizers see a warning only for handled-last contacts; other personal addresses use a neutral label.",
   render: () => (
     <div class="pk-stack">
       <div>
@@ -12,8 +12,12 @@ export const contactOrganizationSection: PreviewSection = {
         <ContactOrganization organization="Synthetic Trust Services" personalEmail={false} />
       </div>
       <div>
-        <p>Organizer: personal address</p>
+        <p>Organizer: personal primary address with verified work address</p>
         <ContactOrganization organization="Withheld organization" personalEmail />
+      </div>
+      <div>
+        <p>Organizer: personal address handled last</p>
+        <ContactOrganization organization={null} personalEmail handledLast />
       </div>
       <div>
         <p>Organizer: work address awaiting priority verification</p>
