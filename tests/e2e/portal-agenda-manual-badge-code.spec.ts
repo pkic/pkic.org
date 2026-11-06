@@ -356,6 +356,7 @@ test("the protected printed short code works through manual offline capture and 
     eventRegistered: true,
   });
   await openScannerDiagnostics(page);
+  await expect(page.getByRole("combobox", { name: "Feedback pause", exact: true })).toHaveValue("1000");
   await expect(
     page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
       exact: true,
@@ -421,7 +422,7 @@ test("the protected printed short code works through manual offline capture and 
     const queuedPrivacy = await expectNoStoredSponsorContacts(page, fixture.forbidden, await readConsole());
     await page.reload();
     await expect(page.getByRole("heading", { name: "Start scanning", exact: true })).toBeVisible();
-    await expect(page.getByText("Offline · unverified until synced", { exact: true })).toBeVisible();
+    await expect(page.getByText("Offline scanning", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sync now", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Export sponsor leads", exact: true })).toHaveCount(0);
     expect((await scannerStorage(page)).pending[0]!.scan).toEqual(queued);
@@ -460,12 +461,17 @@ test("the protected printed short code works through manual offline capture and 
     expect(
       (await scannerStorage(page)).pending.find((row) => row.scan.operationId === queued.operationId)?.scan,
     ).toEqual(queued);
-    await expect(page.locator(".pk-event-scanner--unverified")).toBeVisible();
+    await expect(page.locator(".pk-event-scanner--eligible")).toBeVisible();
     await expect(
-      page.getByText("Scan saved on this device. Reconnect to verify and upload.", { exact: true }),
+      page.getByText("Registered. Attendance saved on this device; upload pending.", { exact: true }),
     ).toBeVisible();
     expect((await scannerStorage(page)).history).toHaveLength(0);
     const collectorPrivacy = await expectNoStoredSponsorContacts(page, fixture.forbidden, await readConsole());
+    await page.screenshot({
+      path: info.outputPath("manual-code-offline-canonical-desktop.png"),
+      fullPage: true,
+      animations: "disabled",
+    });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({
@@ -489,14 +495,14 @@ test("the protected printed short code works through manual offline capture and 
           return eventScanResponseSchema.parse(await response.json());
         }),
     );
-    await page.context().setOffline(false);
     const reauthenticated = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === "/api/v1/auth/session" && response.request().method() === "GET",
     );
-    await page.getByRole("button", { name: "Check sign-in again", exact: true }).click();
+    await page.context().setOffline(false);
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
     expect((await reauthenticated).status()).toBe(200);
-    await expect(page.getByText("Offline · unverified until synced", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Offline scanning", { exact: true })).toHaveCount(0);
     const receipts = await Promise.all(uploads);
     for (const [index, original] of originals.entries())
       expect(receipts[index]).toMatchObject({

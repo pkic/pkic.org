@@ -129,7 +129,7 @@ export function EventScannerCapture({
   } = preparation.location;
   const { eligibilityManifest, manifestReady, manifestPreparing, manifestError } = preparation.eligibility;
   const { offlineAdmission, offlinePreparation } = preparation;
-  const sound = useScannerSound(preferences.sound, result ?? lastResult, action, failed, offline, Boolean(targetId));
+  const sound = useScannerSound(preferences.sound, result ?? lastResult, action, failed, Boolean(targetId));
   const screenAwake = useScannerImmersiveLifecycle(
     fastMode,
     scannerShell,
@@ -251,7 +251,9 @@ export function EventScannerCapture({
     try {
       lastOperation.current = checked.data.operationId;
       const saved = await persistCapture(checked.data);
-      setUploadStatus(collectorContext ? "Saved offline · not yet verified" : "Uploading scans in the background…");
+      setUploadStatus(
+        collectorContext ? "Saved on this device · upload pending" : "Uploading scans in the background…",
+      );
       setPending(await pendingScanCount(operatorUserId));
       showProvisionalMessage(saved.scan.operationId, "Scan saved. Checking eligibility…");
       showLocalEligibility(saved.scan, saved.local ?? unverifiedSavedFeedback);
@@ -321,7 +323,9 @@ export function EventScannerCapture({
     showProvisionalMessage(operation, "Checking eligibility…");
     try {
       const saved = await persistCapture(parsed.data);
-      setUploadStatus(collectorContext ? "Saved offline · not yet verified" : "Uploading scans in the background…");
+      setUploadStatus(
+        collectorContext ? "Saved on this device · upload pending" : "Uploading scans in the background…",
+      );
       setPending(await pendingScanCount(operatorUserId));
       showLocalEligibility(saved.scan, saved.local ?? unverifiedSavedFeedback);
       resetCaptureFields();

@@ -43,17 +43,15 @@ let sound: ReturnType<typeof useScannerSound>;
 function Harness({
   result = null,
   enabled = true,
-  offline = false,
   action = "attendance",
   session = false,
 }: {
   result?: EventScanResponse | null;
   enabled?: boolean;
-  offline?: boolean;
   action?: "attendance" | "checkout" | "lead";
   session?: boolean;
 }) {
-  sound = useScannerSound(enabled, result, action, false, offline, session);
+  sound = useScannerSound(enabled, result, action, false, session);
   return null;
 }
 const receipt = (outcome: EventScanResponse["outcome"], operationId = crypto.randomUUID()): EventScanResponse => ({
@@ -100,17 +98,17 @@ describe("audible scanner results", () => {
     await act(() => render(null, host));
     expect(close).toHaveBeenCalledOnce();
   });
-  it("distinguishes offline results and waits for a server receipt before sounding a correction", async () => {
+  it("plays success for a locally verified badge without repeating it on upload acknowledgment", async () => {
     vi.stubGlobal("AudioContext", Audio);
-    await act(() => render(<Harness offline />, host));
+    await act(() => render(<Harness />, host));
     await act(() => sound.unlock());
     const saved = receipt("eligible");
-    await act(() => render(<Harness offline result={saved} />, host));
-    expect(frequencies).toEqual([550, 550]);
     await act(() => render(<Harness result={saved} />, host));
-    expect(frequencies).toEqual([550, 550]);
+    expect(frequencies).toEqual([880, 1174]);
+    await act(() => render(<Harness result={saved} />, host));
+    expect(frequencies).toEqual([880, 1174]);
     await act(() => render(<Harness result={{ ...saved, recorded: true }} />, host));
-    expect(frequencies.slice(2)).toEqual([880, 1174]);
+    expect(frequencies).toEqual([880, 1174]);
   });
   it("stays silent when muted and tolerates unavailable audio", async () => {
     vi.stubGlobal("AudioContext", Audio);

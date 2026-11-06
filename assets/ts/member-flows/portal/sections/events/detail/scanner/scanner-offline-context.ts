@@ -50,7 +50,12 @@ export async function readScannerOfflineEpoch(context: ScannerOfflineContext): P
 export function scannerCollectorPath(hash: string): string | null {
   const path = portalHashPath(hash);
   const parsed = scannerOfflineRouteSchema.safeParse(path);
-  return parsed.success && !hash.includes("?") ? parsed.data : null;
+  const query = new URLSearchParams(hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
+  if ([...query.keys()].some((key) => key !== "scannerTab" && key !== "scanAction")) return null;
+  if (query.has("scannerTab") && !["scan", "recent", "diagnostics"].includes(query.get("scannerTab")!)) return null;
+  if (query.has("scanAction") && !["check", "attendance", "checkout", "admission"].includes(query.get("scanAction")!))
+    return null;
+  return parsed.success ? parsed.data : null;
 }
 
 export function scannerContextCurrent(context: ScannerOfflineContext, now = Date.now()): boolean {
@@ -97,13 +102,7 @@ export async function saveScannerOfflineContext(input: {
     (await scannerUploadSuspended(session.identity.id, session.sessionId))
   )
     return null;
-  const deadlines = [
-    manifest.expiresAt,
-    session.expiresAt,
-    session.idleExpiresAt,
-    session.staff?.expiresAt,
-    session.staff?.idleExpiresAt,
-  ].filter((value): value is string => Boolean(value));
+  const deadlines = [manifest.expiresAt, session.staff?.expiresAt].filter((value): value is string => Boolean(value));
   const deadline = Math.min(...deadlines.map((value) => Date.parse(value)));
   if (!Number.isFinite(deadline) || !Number.isFinite(manifest.enrollment.writtenAt)) return null;
   const savedDate = new Date(manifest.enrollment.writtenAt);
