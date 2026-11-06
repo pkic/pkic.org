@@ -110,7 +110,7 @@ export async function promotionDesignArtwork(
     env,
     populations,
     design.sponsorGroups,
-    design.sponsorSource === "event" ? PROMOTION_SPONSOR_ARTWORK_LIMITS : undefined,
+    design.sponsorSource === "event" ? { limits: PROMOTION_SPONSOR_ARTWORK_LIMITS } : undefined,
   );
   return {
     revision: visual.brandingRevision,

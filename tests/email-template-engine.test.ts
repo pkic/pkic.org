@@ -1,5 +1,7 @@
 import { analyzeTemplateReferences } from "../functions/_lib/email/template-references";
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { formatDateTimeInZone } from "../assets/shared/format-date";
+import { emailInstant } from "../functions/_lib/email/plain-text";
 import {
   EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS,
   compileSimpleTemplate,
@@ -17,6 +19,62 @@ function expectRenderLimit(action: () => unknown): void {
   }
   expect(thrown).toMatchObject({ code: "EMAIL_TEMPLATE_RENDER_LIMIT_EXCEEDED", status: 422 });
 }
+
+describe("meeting email clock", () => {
+  const toLocaleString = Date.prototype.toLocaleString;
+  beforeEach(() => {
+    vi.spyOn(Date.prototype, "toLocaleString").mockImplementation(function (this: Date, locales, options) {
+      return toLocaleString.call(this, locales ?? "en-US", options);
+    });
+  });
+  afterEach(() => vi.restoreAllMocks());
+  it.each([
+    ["2026-03-28T08:00:00.000Z", "09:00"],
+    ["2026-03-29T07:00:00.000Z", "09:00"],
+  ])("renders the named meeting clock across daylight saving for %s", async (instant, time) => {
+    const data = JSON.parse(JSON.stringify({ startsAt: emailInstant(instant, "Europe/Amsterdam") }));
+    for (const mode of ["markdown", "html", "text"] as const) {
+      const result = await renderEmail("Meeting: {{startsAt}}", data, "{{{body_html}}}", mode);
+      expect(result.text).toContain(`${time} Amsterdam time`);
+      expect(result.text).not.toContain(instant);
+      expect(result.html).not.toContain("[object Object]");
+    }
+    expect(renderSubject("Meeting: {{startsAt}}", "Meeting", data)).toContain(`${time} Amsterdam time`);
+    expect(data.startsAt).toEqual(emailInstant(instant, "Europe/Amsterdam"));
+  });
+  it.each([
+    ["2026-03-28T00:30:00.000Z", "17:30", "01:30", "08:30", "11:30"],
+    ["2026-03-29T00:30:00.000Z", "17:30", "01:30", "08:30", "11:30"],
+    ["2026-03-30T00:30:00.000Z", "17:30", "02:30", "08:30", "11:30"],
+    ["2026-06-01T00:30:00.000Z", "17:30", "02:30", "08:30", "10:30"],
+  ])("renders regional clocks and calendar dates from %s", async (instant, pacific, europe, asia, sydney) => {
+    const data = { startsAt: emailInstant(instant, "Europe/Amsterdam") };
+    const result = await renderEmail("{{startsAt}}", data, "{{{body_html}}}", "text");
+    for (const [zone, time] of [
+      ["America/Los_Angeles", pacific],
+      ["Europe/Amsterdam", europe],
+      ["Asia/Singapore", asia],
+      ["Australia/Sydney", sydney],
+    ]) {
+      const clock = formatDateTimeInZone(instant, zone!);
+      expect(clock).toContain(time);
+      expect(result.text).toContain(clock);
+    }
+    expect(result.text.match(/Amsterdam time/g)).toHaveLength(1);
+    expect(result.text).toContain(formatDateTimeInZone(instant, "America/New_York"));
+    // Pacific is on the previous calendar day, while Asia-Pacific is on the UTC day.
+    expect(result.text).not.toContain(instant);
+  });
+  it("renders an explicitly known recipient zone before the scheduled zone", () => {
+    const instant = "2026-12-01T00:30:00.000Z";
+    const subject = renderSubject("{{startsAt}}", "Meeting", {
+      startsAt: emailInstant(instant, "Europe/Amsterdam", "Asia/Tokyo"),
+    });
+    expect(subject).toBe(
+      `${formatDateTimeInZone(instant, "Asia/Tokyo")} / ${formatDateTimeInZone(instant, "Europe/Amsterdam")}`,
+    );
+  });
+});
 
 describe("email template engine (compileSimpleTemplate)", () => {
   it("finds long unresolved loop tokens and deduplicates them across rendered outputs", () => {

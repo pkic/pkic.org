@@ -3,6 +3,7 @@
  * the session running there now, the ones that follow, and the next instant at which that answer changes.
  * The browser clock is compared with agenda times; nothing polls the server.
  */
+import { ONLINE_JOIN_LEAD_MS } from "../../../../../../../shared/event-agenda-media";
 import type { AgendaOccurrence, AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
 import { dateTimeLocalToIso, instantToCalendarDate } from "../../../../../../../shared/timezone";
 
@@ -40,8 +41,8 @@ export function roomMoment(sessions: readonly RoomSession[], now: number): RoomM
 }
 
 /**
- * The next instant after `now` at which the room's answer can change: a session start or end, or the start of
- * the next event day (when a location's stream may switch to that day's replacement). Null when none is ahead.
+ * The next instant after `now` at which the room's answer can change: the first join window opening, a
+ * session start or end, or the next event day (when a location's stream may switch to that day's replacement). Null when none is ahead.
  */
 export function nextRoomBoundary(sessions: readonly RoomSession[], now: number, timeZone: string): number | null {
   const instant = new Date(now).toISOString();
@@ -49,25 +50,49 @@ export function nextRoomBoundary(sessions: readonly RoomSession[], now: number, 
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
   const midnight = Date.parse(dateTimeLocalToIso(`${tomorrow.toISOString().slice(0, 10)}T00:00`, timeZone));
   let next: number | null = Number.isFinite(midnight) && midnight > now ? midnight : null;
+  const opensAt = Date.parse(sessions[0]?.startAt ?? "") - ONLINE_JOIN_LEAD_MS;
+  if (opensAt > now && (next === null || opensAt < next)) next = opensAt;
   for (const session of sessions)
-    for (const edge of [session.startAt, session.endAt]) {
-      const at = Date.parse(edge);
+    for (const at of [Date.parse(session.startAt), Date.parse(session.endAt)]) {
       if (at > now && (next === null || at < next)) next = at;
     }
   return next;
 }
 
-/** The location a reader arrives in: the one asked for, else the session's own, else the first streamed one. */
+/** Follow a linked session's current rooms; otherwise use the requested location or first streamed one. */
 export function chooseLocation(
   locations: ReadonlyArray<{ id: string }>,
   agenda: Pick<AgendaSnapshot, "occurrences"> | null,
   requested: { room?: string | null; session?: string | null },
 ): string | null {
   const known = (id: string | null | undefined) => (id && locations.some((location) => location.id === id) ? id : null);
-  const sessionRoom = requested.session
-    ? agenda?.occurrences.find((occurrence) => occurrence.id === requested.session)?.roomId
+  const session = requested.session
+    ? agenda?.occurrences.find((occurrence) => occurrence.id === requested.session)
     : null;
-  return known(requested.room) ?? known(sessionRoom) ?? locations[0]?.id ?? null;
+  if (session) {
+    const roomIds = [session.roomId, ...(session.additionalRoomIds ?? [])];
+    const requestedRoom = known(requested.room);
+    if (requestedRoom && roomIds.includes(requestedRoom)) return requestedRoom;
+    return roomIds.map(known).find(Boolean) ?? null;
+  }
+  return known(requested.room) ?? locations[0]?.id ?? null;
+}
+
+/**
+ * The session a reader followed a link to, when it is not on at `now`: it has ended or has not started,
+ * so the room is showing something else. Null when it is on, or when no session was asked for.
+ */
+export function requestedSessionNotice(
+  agenda: Pick<AgendaSnapshot, "occurrences"> | null,
+  sessionId: string | null,
+  now: number,
+): { session: RoomSession; state: "ended" | "upcoming" } | null {
+  const session = sessionId ? agenda?.occurrences.find((occurrence) => occurrence.id === sessionId) : undefined;
+  if (!session?.startAt || !session.endAt) return null;
+  const instant = new Date(now).toISOString();
+  if (instant >= session.endAt) return { session: session as RoomSession, state: "ended" };
+  if (instant < session.startAt) return { session: session as RoomSession, state: "upcoming" };
+  return null;
 }
 
 /** The credited people of a session, as one line. */

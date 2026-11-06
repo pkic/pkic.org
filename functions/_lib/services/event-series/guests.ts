@@ -158,6 +158,7 @@ export async function inviteOccurrenceGuest(
     guestName: input.name,
     eventName: series.eventName,
     startsAt: occurrence.startsAt,
+    timezone: series.timezone,
     occurrenceId,
     appBaseUrl,
     personalUrl: signingSecret

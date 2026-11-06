@@ -17,6 +17,7 @@ afterEach(() => {
 });
 const writableEvent = eventDetailSchema.parse({
   ...responseEvent,
+  registrationPath: null,
   ownerGroupId: null,
   capabilities: ["read", "write", "manage"],
   sourceMode: "integration",

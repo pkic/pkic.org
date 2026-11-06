@@ -11,6 +11,7 @@
  * written to once per seat, at the address that seat acts under, because
  * those are two participations and each is a different person to the record.
  */
+import { emailInstant } from "../../email/plain-text";
 import { prepareBulkQueueEmailChunkStatements } from "../../email/outbox";
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -166,7 +167,7 @@ export async function sendMeetingParticipantInvitations(
       data: {
         recipientName: participant.recipient_name,
         eventName: series.eventName,
-        startsAt: occurrence.startsAt,
+        startsAt: emailInstant(occurrence.startsAt, series.timezone),
         joinUrl: memberMeetingLinkUrl(personalLinks, participant.user_id, participant.recipient_email),
       },
       capabilityLinkValues: [memberMeetingLinkUrl(personalLinks, participant.user_id, participant.recipient_email)],

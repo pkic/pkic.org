@@ -61,7 +61,7 @@ export function SessionHolds({
           {items.map((item) => (
             <li key={item.id}>
               {item.reasonCode.replaceAll("_", " ")} · {item.attendanceMode === "physical" ? "In person" : "Remote"} ·
-              expires {formatDateTime(item.expiresAt, { zoneName: true })}{" "}
+              expires {formatDateTime(item.expiresAt)}{" "}
               <Button
                 type="button"
                 loading={busy === item.id}

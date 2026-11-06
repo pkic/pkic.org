@@ -1,6 +1,7 @@
 import { formatNumber } from "../../shared/format-number";
 import { formatClockInZone } from "../../shared/format-date";
 import { agendaZoneAbbreviation } from "../../shared/agenda-time-display";
+import { nextOnlineJoinBoundary, sessionOnlineJoinOpen } from "../../shared/event-agenda-media";
 
 /** Stop media when a shared session dialog closes or its recording becomes unavailable. */
 export function pauseAgendaSessionMedia(root: HTMLElement): void {
@@ -10,12 +11,17 @@ export function pauseAgendaSessionMedia(root: HTMLElement): void {
 
 /** Update static and portal cards from the current browser clock, never the publication build time. */
 export function initializeAgendaSessionMedia(root: HTMLElement): () => void {
+  let boundaryTimer: number | undefined;
   const update = () => {
+    window.clearTimeout(boundaryTimer);
+    let nextBoundary: number | null = null;
     const cards = root.matches("[data-agenda-media-session]")
       ? [root]
       : [...root.querySelectorAll<HTMLElement>("[data-agenda-media-session]")];
     const now = Date.now();
     for (const card of cards) {
+      const boundary = nextOnlineJoinBoundary(card.dataset.agendaMediaStart, card.dataset.agendaMediaEnd, now);
+      if (boundary !== null && (nextBoundary === null || boundary < nextBoundary)) nextBoundary = boundary;
       const start = Date.parse(card.dataset.agendaMediaStart ?? "");
       const end = Date.parse(card.dataset.agendaMediaEnd ?? "");
       const knownInterval = Number.isFinite(start) && Number.isFinite(end) && end > start;
@@ -58,8 +64,9 @@ export function initializeAgendaSessionMedia(root: HTMLElement): () => void {
       card.querySelectorAll<HTMLElement>("[data-agenda-media-before]").forEach((element) => {
         element.hidden = !before;
       });
+      const joinOpen = sessionOnlineJoinOpen(card.dataset.agendaMediaStart, card.dataset.agendaMediaEnd, now);
       card.querySelectorAll<HTMLElement>("[data-agenda-media-during]").forEach((element) => {
-        element.hidden = !during;
+        element.hidden = !joinOpen;
       });
       const livePlanVisible = before || (during && !card.querySelector("[data-agenda-media-during]"));
       card.querySelectorAll<HTMLElement>("[data-agenda-media-live-plan]").forEach((element) => {
@@ -73,8 +80,13 @@ export function initializeAgendaSessionMedia(root: HTMLElement): () => void {
         if (!recordingAvailable) pauseAgendaSessionMedia(element);
       });
     }
+    // Keep the periodic status refresh, but cross join boundaries at their exact instant.
+    if (nextBoundary !== null) boundaryTimer = window.setTimeout(update, Math.min(nextBoundary - now, 2_147_483_647));
   };
   update();
   const timer = window.setInterval(update, 30_000);
-  return () => window.clearInterval(timer);
+  return () => {
+    window.clearInterval(timer);
+    window.clearTimeout(boundaryTimer);
+  };
 }

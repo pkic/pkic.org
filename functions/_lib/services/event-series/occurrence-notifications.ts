@@ -8,6 +8,7 @@
  * from the outbox rather than from the roster, because the roster says who
  * is in the group today and the question is who was told about this meeting.
  */
+import { emailInstant } from "../../email/plain-text";
 import { generateSignedRsvpAddress } from "../../email/rsvp";
 import { outboundMeetingLocation } from "../../../../assets/shared/meeting-calendar-policy";
 import { prepareBulkQueueEmailChunkStatements } from "../../email/outbox";
@@ -76,6 +77,7 @@ export interface OccurrenceInviteSubject {
   occurrenceId: string;
   eventId: string;
   eventName: string;
+  timezone: string;
   startsAt: string;
   endsAt: string;
   location: string | null;
@@ -159,8 +161,10 @@ async function buildOccurrenceChangeEmails(
       data: {
         recipientName: recipient.recipient_name,
         eventName: subject.eventName,
-        previousStartsAt: subject.previousStartsAt,
-        previousEndsAt: subject.previousEndsAt,
+        previousStartsAt: subject.previousStartsAt
+          ? emailInstant(subject.previousStartsAt, subject.timezone)
+          : undefined,
+        previousEndsAt: subject.previousEndsAt ? emailInstant(subject.previousEndsAt, subject.timezone) : undefined,
         previousLocation,
         timeChanged: Boolean(
           subject.previousStartsAt &&
@@ -169,8 +173,8 @@ async function buildOccurrenceChangeEmails(
         locationChanged: subject.previousLocation !== undefined && previousLocation !== location,
         restored: subject.restored,
         seriesCancelled: subject.seriesCancelled,
-        startsAt: subject.startsAt,
-        endsAt: subject.endsAt,
+        startsAt: emailInstant(subject.startsAt, subject.timezone),
+        endsAt: emailInstant(subject.endsAt, subject.timezone),
         location: location ?? "",
         joinUrl,
       },
@@ -193,7 +197,7 @@ export async function prepareSeriesCancellationNotifications(
   const rows = await all<InvitedRecipient & OccurrenceInviteSubject>(
     db,
     `SELECT occurrence.id AS occurrenceId, occurrence.starts_at AS startsAt,
-       occurrence.ends_at AS endsAt, occurrence.calendar_sequence + 1 AS sequence,
+       occurrence.ends_at AS endsAt, series.timezone, occurrence.calendar_sequence + 1 AS sequence,
        COALESCE(occurrence.location_override, series.location) AS location,
        invited.recipient_user_id AS user_id, invited.recipient_email,
        COALESCE(json_extract(invited.payload_json, '$.recipientName'), invited.recipient_email) AS recipient_name
