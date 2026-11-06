@@ -1,3 +1,4 @@
+import { sqlValue, type SqlId } from "../../db/sql-value";
 import {
   getResourceGrantDefinition,
   isManagerResourceCapability,
@@ -24,10 +25,11 @@ export interface LiveGroupResourceContextAccess {
 /** Live access evidence for reads that must authorize and fetch data in one D1 statement. */
 export function buildLiveAccessibleGroupResourceIdsCte<K extends ResourceGrantKind>(
   kind: K,
-  groupId: string,
+  groupId: SqlId,
   access: LiveGroupResourceContextAccess,
   capability: ResourceGrantCapability<K>,
 ): AccessibleGroupResourceIdsCte {
+  const group = sqlValue(groupId);
   const definition = getResourceGrantDefinition(kind);
   const memberGrants = memberResourceGrantCapabilitiesFor(definition, capability);
   const managerGrants = resourceGrantCapabilitiesFor(definition, capability).filter((candidate) =>
@@ -61,14 +63,14 @@ export function buildLiveAccessibleGroupResourceIdsCte<K extends ResourceGrantKi
       SELECT owned.id
         FROM ${definition.resourceTable} owned INDEXED BY ${definition.ownerGroupIndex}
         CROSS JOIN group_access
-       WHERE owned.${definition.ownerGroupColumn} = ? AND ${ownerAllowed}
+       WHERE owned.${definition.ownerGroupColumn} = ${group.sql} AND ${ownerAllowed}
       ${
         grantAccess.length > 0
           ? `UNION
       SELECT shared.${definition.grantResourceColumn}
         FROM ${definition.grantTable} shared INDEXED BY ${definition.grantGroupIndex}
         CROSS JOIN group_access
-       WHERE shared.group_id = ?
+       WHERE shared.group_id = ${group.sql}
          AND (${grantAccess.join(" OR ")})`
           : ""
       }
@@ -76,8 +78,8 @@ export function buildLiveAccessibleGroupResourceIdsCte<K extends ResourceGrantKi
     bindings: [
       ...access.memberEvidence.bindings,
       ...access.managerEvidence.bindings,
-      groupId,
-      ...(grantAccess.length > 0 ? [groupId, ...grantBindings] : []),
+      ...group.bindings,
+      ...(grantAccess.length > 0 ? [...group.bindings, ...grantBindings] : []),
     ],
   };
 }

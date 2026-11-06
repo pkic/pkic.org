@@ -1,3 +1,4 @@
+import { sqlValue, type SqlId } from "../../db/sql-value";
 import { first } from "../../db/queries";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import type { DatabaseLike } from "../../types";
@@ -8,8 +9,8 @@ function groupMembershipEvidence(userId: string, target: { sql: string; bindings
     bindings: [userId, ...target.bindings],
   };
 }
-export function activeGroupMembershipAuthorizationEvidence(userId: string, groupId: string): AuthorizationEvidence {
-  return groupMembershipEvidence(userId, { sql: "?", bindings: [groupId] });
+export function activeGroupMembershipAuthorizationEvidence(userId: string, groupId: SqlId): AuthorizationEvidence {
+  return groupMembershipEvidence(userId, sqlValue(groupId));
 }
 /** Trusted candidate expression for composing membership with its group read. */
 export function groupMembershipCandidateAuthorizationEvidence(

@@ -1,16 +1,14 @@
 import { currentUserVotesListResponseSchema } from "../../../../../../assets/shared/schemas/votes";
 import { buildPageInfo } from "../../../../../../assets/shared/schemas/pagination";
 import { currentUserVotesListRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts-user-votes";
-import { requireMemberFromRequest } from "../../../../../_lib/auth/member";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { json } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { listVisibleVotesForMember } from "../../../../../_lib/services/votes";
+import { listCurrentUserVotesRequest } from "../../../../../_lib/services/votes/current-user-discovery";
 
 export const CurrentUserVotesGet = openApiRoute(currentUserVotesListRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
-  const member = await requireMemberFromRequest(db, c.req.raw, c.env);
-  const result = await listVisibleVotesForMember(db, member, data.query);
+  const result = await listCurrentUserVotesRequest(db, c.req.raw, c.env, data.query);
   return json(
     currentUserVotesListResponseSchema.parse({
       votes: result.votes,

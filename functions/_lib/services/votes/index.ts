@@ -21,3 +21,5 @@ export * from "./group-proposal-decisions";
 export * from "./manual-transitions";
 export * from "./proposals";
 export * from "./statistics";
+
+export * from "./ballot-audit";
