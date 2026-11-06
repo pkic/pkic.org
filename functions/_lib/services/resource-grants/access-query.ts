@@ -55,9 +55,11 @@ export function buildLiveAccessibleGroupResourceIdsCte<K extends ResourceGrantKi
     grantBindings.push(...managerGrants);
   }
   return {
-    sql: `group_access(member_access, manager_access) AS (
-      SELECT CASE WHEN EXISTS (${access.memberEvidence.sql}) THEN 1 ELSE 0 END,
-             CASE WHEN EXISTS (${access.managerEvidence.sql}) THEN 1 ELSE 0 END
+    sql: `group_member_authority AS MATERIALIZED (${access.memberEvidence.sql}),
+    group_manager_authority AS MATERIALIZED (${access.managerEvidence.sql}),
+    group_access(member_access, manager_access) AS (
+      SELECT CASE WHEN EXISTS (SELECT 1 FROM group_member_authority) THEN 1 ELSE 0 END,
+             CASE WHEN EXISTS (SELECT 1 FROM group_manager_authority) THEN 1 ELSE 0 END
     ),
     accessible_resource(resource_id) AS (
       SELECT owned.id

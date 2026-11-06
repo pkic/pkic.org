@@ -255,29 +255,41 @@ export function prepareAuthenticatedGroupContext(
   memberSelection?: AuthorizationEvidence,
 ) {
   const visibility = buildGroupVisibilityFilter({ userId: viewer.userId, canReadAll: canReadAll === true });
+  const ctes: string[] = [];
+  const prefixBindings: unknown[] = [];
+  if (memberSelection) {
+    ctes.push(`request_member(member_id) AS MATERIALIZED (${memberSelection.sql})`);
+    prefixBindings.push(...memberSelection.bindings);
+  }
+  const selectedMember = memberSelection ? { sql: "SELECT member_id FROM request_member", bindings: [] } : undefined;
   const globalRead = typeof canReadAll === "object" ? canReadAll : null;
   const member = groupMembershipCandidateAuthorizationEvidence(viewer.userId);
   const manager = viewer.admin
-    ? groupManagementCandidateAuthorizationEvidence(viewer.admin, "g.id", memberSelection)
+    ? groupManagementCandidateAuthorizationEvidence(viewer.admin, "g.id", selectedMember)
     : { sql: "SELECT 1 WHERE 0", bindings: [] };
   const delegatedRead = viewer.admin?.scopeRestricted
-    ? groupReadCandidateAuthorizationEvidence(viewer.admin)
+    ? groupReadCandidateAuthorizationEvidence(viewer.admin, "g.id", selectedMember)
     : { sql: "SELECT 1", bindings: [] };
+  // Resolve independent policy results before the group projection; delegated ceilings can be deeply nested.
+  if (globalRead) {
+    ctes.push(`request_global_read(allowed) AS MATERIALIZED (SELECT EXISTS(${globalRead.sql}))`);
+    prefixBindings.push(...globalRead.bindings);
+  }
+  ctes.push(`request_group_authority AS MATERIALIZED (
+    SELECT g.id AS group_id, EXISTS(${manager.sql}) AS manager,
+           EXISTS(${delegatedRead.sql}) AS delegated_authorized
+    FROM groups g WHERE g.id=? OR g.slug=?
+  )`);
+  prefixBindings.push(...manager.bindings, ...delegatedRead.bindings, idOrSlug, idOrSlug);
   const statement = db
-    .prepare(
-      `${GROUP_SELECT}, EXISTS(${delegatedRead.sql}) AS delegated_authorized, (g.active=1 AND (${globalRead ? `EXISTS(${globalRead.sql}) OR ` : ""}${visibility?.sql ?? "1"})) AS visible,
-     EXISTS(${member.sql}) AS participant, EXISTS(${manager.sql}) AS manager
-     ${GROUP_FROM} WHERE g.id=? OR g.slug=?`,
-    )
-    .bind(
-      ...delegatedRead.bindings,
-      ...(globalRead?.bindings ?? []),
-      ...(visibility?.bindings ?? []),
-      ...member.bindings,
-      ...manager.bindings,
-      idOrSlug,
-      idOrSlug,
-    );
+    .prepare(`WITH ${ctes.join(", ")}
+    ${GROUP_SELECT}, authority.delegated_authorized,
+    (g.active=1 AND (${globalRead ? "(SELECT allowed FROM request_global_read)=1 OR " : ""}${visibility?.sql ?? "1"})) AS visible,
+    EXISTS(${member.sql}) AS participant, authority.manager
+    ${GROUP_FROM} JOIN request_group_authority authority ON authority.group_id=g.id
+    WHERE g.id=? OR g.slug=?`)
+    .bind(...prefixBindings, ...(visibility?.bindings ?? []), ...member.bindings, idOrSlug, idOrSlug);
+
   return {
     statement,
     decode(result: D1StatementResult) {

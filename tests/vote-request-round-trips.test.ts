@@ -1,7 +1,11 @@
+import { verifyUserSessionToken } from "../functions/_lib/auth/user-session-token";
+import { signMcpSessionToken } from "../functions/_lib/auth/mcp-session";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
+import { createMcpOauthTestClient } from "./helpers/mcp-oauth";
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { callApi } from "./helpers/app";
-import { createMemberSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { queryAll } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
@@ -133,6 +137,53 @@ describe("complete vote request D1 budgets", () => {
     expect(await queryAll(env.DB, "SELECT member_id, choice FROM vote_ballots WHERE vote_id=?", vote.id)).toEqual([
       { member_id: null, choice: "opposed" },
     ]);
+  });
+
+  it("preserves a delegated leader's selected Member and exact group ceiling", async () => {
+    const delegatedEnv = { ...env, INTERNAL_SIGNING_SECRET: "synthetic-oauth-vote-test-signing-secret-32-plus" };
+    const leadership = await grantGroupLeadershipCapacity(env.DB, TEST_GROUPS.pqc, capacity.userId);
+    const session = await createAdminSession(
+      env.DB,
+      capacity.userId,
+      crypto.randomUUID(),
+      delegatedEnv.INTERNAL_SIGNING_SECRET,
+      leadership.identityId,
+    );
+    const { authorize } = createMcpOauthTestClient(delegatedEnv);
+    const grant = await authorize(session, ["groups:write"], leadership.identityId);
+    const verified = await verifyUserSessionToken(delegatedEnv.INTERNAL_SIGNING_SECRET, session);
+    if (!verified.ok) throw new Error("Synthetic leader session must verify");
+    const [{ email }] = await queryAll<{ email: string }>(
+      env.DB,
+      "SELECT email FROM users WHERE id=?",
+      capacity.userId,
+    );
+    const forwardedToken = await signMcpSessionToken(delegatedEnv.INTERNAL_SIGNING_SECRET, {
+      sub: capacity.userId,
+      sid: verified.claims.sid,
+      email,
+      scopes: ["groups:write"],
+      authorizationId: grant.authorizationId,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const delegated = (url: string, init: RequestInit = {}) => {
+      const headers = new Headers(init.headers);
+      headers.set("x-pkic-machine-auth", "mcp");
+      return call(forwardedToken, url, { ...init, headers }, delegatedEnv);
+    };
+    const response = await delegated(path);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(groupVoteDetailResponseSchema.parse(await response.json()).vote.capabilities).toContain("manage");
+    expect((await delegated(`${path}/ballots`)).status).toBe(200);
+    const outside = await delegated(`/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}`);
+    expect(outside.status).toBeGreaterThanOrEqual(400);
+    expect(outside.status).toBeLessThan(500);
+    const submission = await delegated(`${path}/ballots`, {
+      method: "POST",
+      body: JSON.stringify({ memberId: capacity.memberId, choice: "in_favor" }),
+    });
+    expect(submission.status).toBe(403);
+    expect(await queryAll(env.DB, "SELECT id FROM vote_ballots WHERE vote_id=?", vote.id)).toEqual([]);
   });
 
   it.each(["identity", "session", "membership", "category"] as const)(
