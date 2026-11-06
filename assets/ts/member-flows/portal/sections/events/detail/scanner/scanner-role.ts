@@ -12,3 +12,5 @@ export function scannerRole(action: EventScanRequest["action"], session = false,
           ? "exit"
           : "entry";
 }
+
+export type ScannerRole = ReturnType<typeof scannerRole>;

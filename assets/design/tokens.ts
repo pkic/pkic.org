@@ -151,7 +151,8 @@ const shadowDark: Record<keyof typeof shadowLight, string> = {
  * visual with it and the agenda's session dialog paints its header with it, so
  * both tokens read this one definition.
  */
-const conferenceField = "linear-gradient(135deg, #0b2a1c 0%, #125c3c 32%, #20506e 74%, #b0581f 100%)";
+const conferenceFieldStops = "#0b2a1c 0%, #125c3c 32%, #20506e 74%, #b0581f 100%";
+const conferenceField = `linear-gradient(135deg, ${conferenceFieldStops})`;
 
 /** Values that do not change with the theme. */
 export const constants = {
@@ -467,6 +468,7 @@ export const constants = {
   "pqc-on-field": "#ffffff",
   "pqc-on-field-muted": "rgba(255,255,255,0.88)",
   "pqc-field": conferenceField,
+  "pqc-field-stops": conferenceFieldStops,
   "pqc-light": "radial-gradient(110% 80% at 8% 0%, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 60%)",
   "pqc-stripe": `linear-gradient(90deg, ${palette.green} 0%, ${palette.blue} 50%, ${palette.orange} 100%)`,
   "pqc-dots": `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='1.7' fill='rgba(255,255,255,0.22)'/%3E%3C/svg%3E")`,
@@ -547,7 +549,7 @@ export const publicationBrand = {
 /** Component-only tokens load with their consumers rather than the global entry. */
 export const featureTokenGroups = {
   agenda: Object.keys(constants).filter((name) => name.startsWith("agenda-")),
-  scanner: ["grad-state-ok", "grad-state-attention"],
+  scanner: ["grad-state-ok", "grad-state-attention", "pqc-field-stops"],
   event: [
     "live-question-type",
     "live-question-type-long",

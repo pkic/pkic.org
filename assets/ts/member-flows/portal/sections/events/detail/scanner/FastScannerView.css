@@ -1,3 +1,8 @@
+@property --pk-scanner-field-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 135deg;
+}
 @layer components {
   .pk-fast-scanner__task-swipe { margin: var(--pk-3) 0; font-size: var(--pk-text-sm); }
   .pk-fast-scanner__task-swipe:focus-visible { outline: 2px solid currentColor; outline-offset: var(--pk-1); }
@@ -15,14 +20,26 @@
     border-radius: var(--pk-radius-lg);
     overflow: hidden;
   }
-  .pk-fast-scanner[data-scanner-role="entry"] { --pk-scanner-field-position: 0% 0%; }
-  .pk-fast-scanner[data-scanner-role="exit"] { --pk-scanner-field-position: 30% 30%; }
-  .pk-fast-scanner[data-scanner-role="session"] { --pk-scanner-field-position: 58% 58%; }
-  .pk-fast-scanner[data-scanner-role="lead"] { --pk-scanner-field-position: 78% 78%; }
-  .pk-fast-scanner[data-scanner-role="print"] { --pk-scanner-field-position: 100% 100%; }
+  .pk-fast-scanner[data-scanner-role="entry"] { --pk-scanner-target-angle: 135deg; }
+  .pk-fast-scanner[data-scanner-role="exit"] { --pk-scanner-target-angle: 255deg; }
+  .pk-fast-scanner[data-scanner-role="session"] { --pk-scanner-target-angle: 195deg; }
+  .pk-fast-scanner[data-scanner-role="lead"] { --pk-scanner-target-angle: 315deg; }
+  .pk-fast-scanner[data-scanner-role="print"] { --pk-scanner-target-angle: 375deg; }
+  .pk-fast-scanner[data-gradient-from="entry"] { --pk-scanner-from-angle: 135deg; }
+  .pk-fast-scanner[data-gradient-from="exit"] { --pk-scanner-from-angle: 255deg; }
+  .pk-fast-scanner[data-gradient-from="session"] { --pk-scanner-from-angle: 195deg; }
+  .pk-fast-scanner[data-gradient-from="lead"] { --pk-scanner-from-angle: 315deg; }
+  .pk-fast-scanner[data-gradient-from="print"] { --pk-scanner-from-angle: 375deg; }
+  .pk-fast-scanner[data-scanner-role="entry"][data-gradient-from="print"] { --pk-scanner-target-angle: 495deg; }
+  .pk-fast-scanner[data-scanner-role="print"][data-gradient-from="entry"] { --pk-scanner-target-angle: 15deg; }
+  .pk-fast-scanner[data-gradient-from] { animation: pk-scanner-field-turn var(--pk-dur-slow) var(--pk-ease) both; }
+  @keyframes pk-scanner-field-turn {
+    from { --pk-scanner-field-angle: var(--pk-scanner-from-angle); }
+    to { --pk-scanner-field-angle: var(--pk-scanner-target-angle); }
+  }
   .pk-login__backdrop.pk-fast-scanner {
-    background-size: 400% 400%;
-    background-position: var(--pk-scanner-field-position);
+    --pk-scanner-field-angle: var(--pk-scanner-target-angle);
+    background-image: linear-gradient(var(--pk-scanner-field-angle), var(--pk-pqc-field-stops));
     margin: 0;
     padding: max(var(--pk-5), env(safe-area-inset-top)) max(var(--pk-5), env(safe-area-inset-right))
       max(var(--pk-4), env(safe-area-inset-bottom)) max(var(--pk-5), env(safe-area-inset-left));
@@ -286,6 +303,7 @@
     .pk-fast-scanner__tone {
       transition: none;
     }
+    .pk-fast-scanner,
     .pk-fast-scanner__mark,
     .pk-fast-scanner__drawer {
       animation: none;

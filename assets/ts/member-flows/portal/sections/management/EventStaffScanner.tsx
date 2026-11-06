@@ -1,3 +1,4 @@
+import type { ScannerRole } from "../events/detail/scanner/scanner-role";
 import { scannerEntranceAction } from "../events/detail/scanner/ScannerModeSelect";
 import { useCallback, useState } from "preact/hooks";
 import {
@@ -30,8 +31,12 @@ export function EventStaffScanner({
   canPrintLabels?: boolean;
 }) {
   const [launch, setLaunch] = useState<ScannerTask | null>(null);
+  const [gradientFrom, setGradientFrom] = useState<ScannerRole>();
   const [captureVersion, setCaptureVersion] = useState(0);
-  const consumeLaunch = useCallback(() => setLaunch(null), []);
+  const consumeLaunch = useCallback(() => {
+    setLaunch(null);
+    setGradientFrom(undefined);
+  }, []);
   const can = (permission: Permission) => hasEventAgendaPermission(eventId, permission);
   const actions = availableScannerActions(can);
   const canAdmitExceptions = can("agenda:admit_exceptions") && Boolean(scannerPermission(can, "agenda:admit"));
@@ -47,15 +52,18 @@ export function EventStaffScanner({
       : []),
     ...(printHref ? [{ key: "print" as const, label: "Print", href: printHref }] : []),
   ];
-  function launchTask(task: ScannerTask) {
+  function launchTask(task: ScannerTask, from?: ScannerRole) {
     const destination = tasks.find((item) => item.key === task);
     if (!destination) return;
+    setGradientFrom(from);
     setLaunch(task);
     if (task !== "print" && section !== "print") setCaptureVersion((value) => value + 1);
     window.location.hash = destination.href;
   }
   return (
-    <ScannerTaskNavigation.Provider value={{ launch, tasks, onLaunch: launchTask, onConsumed: consumeLaunch }}>
+    <ScannerTaskNavigation.Provider
+      value={{ launch, gradientFrom, tasks, onLaunch: launchTask, onConsumed: consumeLaunch }}
+    >
       <div class="pk-stack">
         {section === "print" && canPrintLabels ? (
           <BadgeLabelDesk slug={slug} />

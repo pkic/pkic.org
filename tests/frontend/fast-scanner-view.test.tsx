@@ -425,3 +425,25 @@ it.each([
   expect(warning.getAttribute("data-scanner-role")).toBe(role);
   expect(warning.classList.contains("pk-fast-scanner--warning")).toBe(true);
 });
+
+it("gives session and venue entry different mode icons", () => {
+  const icon = (session: boolean) =>
+    new DOMParser()
+      .parseFromString(
+        render(
+          <FastScannerView
+            {...props}
+            mode="attendance"
+            result={null}
+            preparation={
+              session
+                ? { action: "attendance", ready: true, preparing: false, error: "", occurrenceId: "session" }
+                : undefined
+            }
+          />,
+        ),
+        "text/html",
+      )
+      .querySelector(".pk-fast-scanner__mark svg")!.innerHTML;
+  expect(icon(true)).not.toBe(icon(false));
+});

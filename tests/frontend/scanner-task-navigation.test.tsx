@@ -13,6 +13,7 @@ const host = document.createElement("div");
 document.body.append(host);
 afterEach(async () => {
   await act(() => render(null, host));
+  vi.unstubAllGlobals();
 });
 const props = {
   pending: 0,
@@ -45,7 +46,7 @@ it.each(["embedded", "fullscreen"] as const)("supports task swipes only in full 
     root.dispatchEvent(new MouseEvent("pointerdown", { clientX: 250, clientY: 300, bubbles: true }));
     root.dispatchEvent(new MouseEvent("pointerup", { clientX: 80, clientY: 305, bubbles: true }));
   });
-  if (presentation === "fullscreen") expect(onLaunch).toHaveBeenCalledWith("exit");
+  if (presentation === "fullscreen") expect(onLaunch).toHaveBeenCalledWith("exit", "entry");
   else expect(onLaunch).not.toHaveBeenCalled();
   expect(Boolean(host.querySelector('[aria-label^="Swipe left"]'))).toBe(presentation === "fullscreen");
   expect(host.querySelector("a")).toBeNull();
@@ -68,7 +69,7 @@ it("supports keyboard switching, excludes unauthorized modes and refuses switche
   await act(() => {
     cue().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
   });
-  expect(onLaunch).toHaveBeenCalledWith("entry");
+  expect(onLaunch).toHaveBeenCalledWith("entry", "print");
 });
 it("does not show switching without two authorized tasks", async () => {
   await act(() =>
@@ -106,4 +107,47 @@ it("consumes a switch once and keeps print full screen after the launch request 
   await act(() => render(<Owner />, host));
   expect(start).toHaveBeenCalledOnce();
   expect(host.querySelector("output")?.textContent).toBe("fullscreen");
+});
+
+it.each([true, false])("uses the responsive print default and retains a manual override: mobile=%s", async (mobile) => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+  );
+  function Print() {
+    const shell = useRef<HTMLDivElement>(null);
+    const { presentation, setPresentation } = useScannerPresentation(shell, "responsive");
+    return (
+      <div ref={shell}>
+        <output>{presentation}</output>
+        <button onClick={() => setPresentation(mobile ? "embedded" : "fullscreen")}>Change view</button>
+      </div>
+    );
+  }
+  await act(() => render(<Print />, host));
+  expect(host.querySelector("output")?.textContent).toBe(mobile ? "fullscreen" : "embedded");
+  await act(() => host.querySelector<HTMLButtonElement>("button")!.click());
+  await act(() => render(<Print />, host));
+  expect(host.querySelector("output")?.textContent).toBe(mobile ? "embedded" : "fullscreen");
+});
+it("carries the previous gradient orientation through scanner mounting", async () => {
+  await act(() =>
+    render(
+      <ScannerTaskNavigation.Provider
+        value={{ launch: "print", gradientFrom: "exit", tasks, onLaunch: vi.fn(), onConsumed: vi.fn() }}
+      >
+        <FastScannerView {...baseProps} purpose="print" />
+      </ScannerTaskNavigation.Provider>,
+      host,
+    ),
+  );
+  const root = host.querySelector('[aria-label="Badge printing scanner"]')!;
+  expect(root.getAttribute("data-gradient-from")).toBe("exit");
+  await act(() => {
+    const event = new Event("animationend", { bubbles: true });
+    Object.assign(event, { animationName: "pk-scanner-field-turn" });
+    root.dispatchEvent(event);
+  });
+  expect(root.hasAttribute("data-gradient-from")).toBe(false);
+  expect(root.getAttribute("data-scanner-role")).toBe("print");
 });

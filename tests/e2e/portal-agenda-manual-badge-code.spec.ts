@@ -111,6 +111,9 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.goto(labelsPage.replace(/\/print$/, ""));
   await page.getByRole("link", { name: /^Print\b/ }).click();
   await expect(page).toHaveURL(new RegExp("/scanner/print$"));
+  await expect(page.getByRole("dialog", { name: "Badge printing scanner", exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("print-scanner-mobile-default.png") });
+  await page.getByRole("button", { name: "Embedded view", exact: true }).click();
   // Mobile browsers can print the parent document even when an iframe initiated the command.
   await page.evaluate(() => {
     let printCalls = 0;
@@ -198,8 +201,18 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.screenshot({ path: info.outputPath("print-scanner-fullscreen-phone.png") });
   const swipe = () =>
     page.getByRole("group", { name: "Swipe left or right, or use arrow keys, to switch scanner", exact: true });
+  await page.evaluate(() =>
+    document.addEventListener("animationstart", (event) => {
+      if (event.animationName === "pk-scanner-field-turn" && event.target instanceof Element)
+        document.documentElement.setAttribute(
+          "data-scanner-spin",
+          `${event.target.getAttribute("data-gradient-from")}:${event.target.getAttribute("data-scanner-role")}`,
+        );
+    }),
+  );
   await swipe().press("ArrowLeft");
   await expect(page).toHaveURL(/\/scanner$/);
+  await expect(page.locator("html")).toHaveAttribute("data-scanner-spin", "print:entry");
   const captureScanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
   await expect(captureScanner).toBeVisible();
   await expect(captureScanner.getByText("Venue entrance · Record attendance", { exact: true })).toBeVisible();

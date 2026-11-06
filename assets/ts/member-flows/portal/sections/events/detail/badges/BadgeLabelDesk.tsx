@@ -100,6 +100,7 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
       <BadgeLabelDeskView
         video={camera.video}
         cameraActive={camera.active}
+        cameraError={camera.error}
         starting={camera.starting}
         busy={printing.busy}
         sound={sound}
@@ -200,6 +201,7 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
 export function BadgeLabelDeskView({
   video,
   cameraActive,
+  cameraError,
   starting,
   busy,
   copies,
@@ -221,6 +223,7 @@ export function BadgeLabelDeskView({
   onFormat?: (value: "html" | "pdf") => void;
   video: RefObject<HTMLVideoElement>;
   cameraActive: boolean;
+  cameraError?: string;
   starting: boolean;
   busy: boolean;
   copies: number;
@@ -236,7 +239,7 @@ export function BadgeLabelDeskView({
 }) {
   const [preview, setPreview] = useState(false);
   const cameraShell = useRef<HTMLDivElement>(null);
-  const { presentation, setPresentation, toggle } = useScannerPresentation(cameraShell, "embedded");
+  const { presentation, setPresentation, toggle } = useScannerPresentation(cameraShell, "responsive");
   const fullscreen = presentation === "fullscreen";
   const screenAwake = useScannerImmersiveLifecycle(fullscreen, cameraShell, () => {
     stop();
@@ -338,6 +341,7 @@ export function BadgeLabelDeskView({
             pending={0}
             message={busy ? "Preparing print document…" : "Scan an attendee’s ticket."}
             cameraActive={cameraActive}
+            cameraError={cameraError}
             cameraStarting={starting}
             onCameraRetry={start}
             preview={preview}

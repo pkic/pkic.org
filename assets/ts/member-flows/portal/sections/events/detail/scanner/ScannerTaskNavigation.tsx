@@ -1,3 +1,4 @@
+import type { ScannerRole } from "./scanner-role";
 import { createContext } from "preact";
 import { useContext, useEffect, useRef } from "preact/hooks";
 import type { EventScanRequest } from "../../../../../../../shared/schemas/event-participation-scanning";
@@ -11,8 +12,9 @@ export interface ScannerTaskDestination {
 }
 interface ScannerTaskNavigation {
   launch: ScannerTask | null;
+  gradientFrom?: ScannerRole;
   tasks: readonly ScannerTaskDestination[];
-  onLaunch: (task: ScannerTask) => void;
+  onLaunch: (task: ScannerTask, from?: ScannerRole) => void;
   onConsumed: () => void;
 }
 /** Routes own tasks; a swipe carries only a transient request to start full screen. */
@@ -32,7 +34,7 @@ export function useScannerTaskLaunch(task: "scan" | "print", onLaunch: () => voi
   }, [launch, consume, task]);
 }
 
-export function useScannerTaskSwipe(current: ScannerTask) {
+export function useScannerTaskSwipe(current: ScannerTask, role: ScannerRole = current) {
   const navigation = useContext(ScannerTaskNavigation);
   return {
     tasks: navigation?.tasks ?? [],
@@ -41,7 +43,7 @@ export function useScannerTaskSwipe(current: ScannerTask) {
       const index = navigation.tasks.findIndex((task) => task.key === current);
       if (index < 0) return;
       const next = (index + (direction === "left" ? 1 : -1) + navigation.tasks.length) % navigation.tasks.length;
-      navigation.onLaunch(navigation.tasks[next]!.key);
+      navigation.onLaunch(navigation.tasks[next]!.key, role);
     },
   };
 }

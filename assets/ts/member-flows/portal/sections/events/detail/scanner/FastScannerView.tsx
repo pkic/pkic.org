@@ -1,5 +1,5 @@
 import { scannerRole } from "./scanner-role";
-import { useScannerTaskSwipe } from "./ScannerTaskNavigation";
+import { ScannerTaskNavigation, useScannerTaskSwipe } from "./ScannerTaskNavigation";
 import { ScannerModeIcon } from "./ScannerModeIcon";
 import { ScannerPreparationStatus } from "./ScannerPreparationStatus";
 import type { ComponentChildren, ComponentProps } from "preact";
@@ -8,7 +8,7 @@ import "../../../../../../../design/tokens.scanner.generated.css";
 import "../../../../../../../design/tokens.event.generated.css";
 import { ScannerExceptionReview } from "./ScannerExceptionReview";
 import { scannerActionLabel } from "./ScannerModeSelect";
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type {
   EventScanResponse,
   EventScanRequest,
@@ -22,7 +22,7 @@ import "../../../../shell/Login.css";
 import "./FastScannerView.css";
 import { HeadingOutline } from "../../../../../../ui/HeadingOutline";
 import { SectionHeading } from "../../../../../../ui/SectionHeading";
-import { IconPrint, IconFullscreen } from "../../../../../../components/icons/app-navigation";
+import { IconFullscreen } from "../../../../../../components/icons/app-navigation";
 
 export function FastScannerView({
   presentation = "fullscreen",
@@ -102,7 +102,13 @@ export function FastScannerView({
     if (!operatorOpen) setReview(null);
     return () => operatorPause.current?.(false);
   }, [operatorOpen]);
-  const taskSwipe = useScannerTaskSwipe(purpose === "print" ? "print" : mode === "checkout" ? "exit" : "entry");
+  const visualRole = scannerRole(mode, Boolean(preparation?.occurrenceId), purpose === "print");
+  const navigation = useContext(ScannerTaskNavigation);
+  const [gradientFrom, setGradientFrom] = useState(navigation?.gradientFrom);
+  const taskSwipe = useScannerTaskSwipe(
+    purpose === "print" ? "print" : mode === "checkout" ? "exit" : "entry",
+    visualRole,
+  );
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const trigger = useRef<HTMLButtonElement>(null),
     drawer = useRef<HTMLElement>(null);
@@ -136,7 +142,12 @@ export function FastScannerView({
     <div
       class={`pk-login__backdrop pk-fast-scanner pk-scanner-viewport pk-fast-scanner--${outcome}${presentation === "embedded" ? " pk-fast-scanner--embedded" : ""}${result ? " pk-fast-scanner--result" : ""}${manualEntry || recentScans ? " pk-fast-scanner--manual" : ""}`}
       data-fullscreen={presentation === "fullscreen" || undefined}
-      data-scanner-role={scannerRole(mode, Boolean(preparation?.occurrenceId), purpose === "print")}
+      data-scanner-role={visualRole}
+      data-gradient-from={gradientFrom}
+      onAnimationEnd={(event) => {
+        if (event.target === event.currentTarget && event.animationName === "pk-scanner-field-turn")
+          setGradientFrom(undefined);
+      }}
       role={presentation === "fullscreen" ? "dialog" : "region"}
       aria-modal={presentation === "fullscreen" ? "true" : undefined}
       aria-label={purpose === "print" ? "Badge printing scanner" : "Continuous badge scanner"}
@@ -207,10 +218,8 @@ export function FastScannerView({
                 <IconRemove />
               ) : outcome === "warning" ? (
                 <IconInfoCircle />
-              ) : purpose === "print" ? (
-                <IconPrint />
               ) : (
-                <ScannerModeIcon action={mode} />
+                <ScannerModeIcon action={mode} role={visualRole} />
               )}
             </span>
             <strong class="pk-fast-scanner__label">
@@ -267,7 +276,7 @@ export function FastScannerView({
           )}
           {!cameraActive && !manualEntry && !recentScans && onCameraRetry && (
             <Button variant="secondary" loading={cameraStarting} onClick={onCameraRetry}>
-              Retry camera
+              {cameraError ? "Retry camera" : "Start camera"}
             </Button>
           )}
           {onManual && !manualEntry && !recentScans && (
