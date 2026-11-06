@@ -79,6 +79,9 @@ export function useScannerFeedback({
     lastResult,
     clearLastResult: () => setLastResult(null),
     failed,
+    captureStatus: failed
+      ? { key: "capture-failure", tone: "denied" as const, title: "Scan not recorded", detail: message, record: false }
+      : undefined,
     setResult,
     message,
     setMessage,

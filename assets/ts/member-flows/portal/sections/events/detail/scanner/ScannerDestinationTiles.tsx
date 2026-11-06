@@ -1,3 +1,4 @@
+import { scannerEntranceAction } from "./ScannerModeSelect";
 import type { EventScanRequest } from "../../../../../../../shared/schemas/event-participation-scanning";
 import { IconPrint } from "../../../../../../components/icons/app-navigation";
 import { ActionTile, ActionTiles } from "../../../../../../ui/ActionTile";
@@ -18,11 +19,7 @@ export function ScannerDestinationTiles({
   onVenue: (action: EventScanRequest["action"]) => void;
   onSessions: () => void;
 }) {
-  const entrance = allowedActions.includes("attendance")
-    ? "attendance"
-    : allowedActions.includes("admission")
-      ? "admission"
-      : "check";
+  const entrance = scannerEntranceAction(allowedActions);
   return (
     <div class="pk-scanner-destinations">
       <p>What would you like to do?</p>

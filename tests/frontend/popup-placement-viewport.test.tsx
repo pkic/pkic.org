@@ -19,13 +19,15 @@ it("reattaches the popup when the mobile keyboard closes and the visible viewpor
   const viewport = Object.assign(new EventTarget(), { offsetTop: 0, offsetLeft: 0, width: 375, height: 400 });
   vi.stubGlobal("visualViewport", viewport);
   let anchorTop = 300;
+  const positions: string[] = [];
+  const afterPlace = () => positions.push(host.querySelector<HTMLElement>('[data-testid="popup"]')!.style.top);
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
     return this.dataset.anchor ? rect(anchorTop, 40) : rect(0, 120);
   });
   function Picker() {
     const anchorRef = useRef<HTMLDivElement>(null);
     const popupRef = useRef<HTMLDivElement>(null);
-    usePopupPlacement({ open: true, anchorRef, popupRef });
+    usePopupPlacement({ open: true, anchorRef, popupRef, afterPlace });
     return (
       <>
         <div ref={anchorRef} data-anchor="true" />
@@ -43,6 +45,8 @@ it("reattaches the popup when the mobile keyboard closes and the visible viewpor
   anchorTop = 200;
   viewport.dispatchEvent(new Event("scroll"));
   expect(popup.style.top).toBe("244px");
+  expect(positions).toEqual(expect.arrayContaining(["176px", "444px", "244px"]));
+  expect(positions.at(-1)).toBe("244px");
   await act(() => render(null, host));
   viewport.dispatchEvent(new Event("resize"));
 });

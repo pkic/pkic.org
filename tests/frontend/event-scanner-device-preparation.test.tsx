@@ -71,12 +71,12 @@ describe("scanner device enrollment and manual capture boundary", () => {
     );
     await vi.waitFor(async () => {
       await act(async () => {});
-      expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready to scan");
+      expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready to check registration");
     });
     const destroyed = mocks.cameraDestroyed.mock.calls.length;
     await act(async () =>
       Array.from(host.querySelectorAll<HTMLButtonElement>(".pk-fast-scanner button"))
-        .find((button) => button.textContent?.trim() === "Recent scans")!
+        .find((button) => button.getAttribute("aria-label") === "Recent scans")!
         .click(),
     );
     expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
@@ -91,7 +91,9 @@ describe("scanner device enrollment and manual capture boundary", () => {
         .click();
     });
     expect(host.querySelector<HTMLElement>("#scanner-scan-panel")!.hidden).toBe(false);
-    expect(host.querySelector(".pk-fast-scanner__context")?.textContent).toContain("Check registration only");
+    await vi.waitFor(() =>
+      expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready to check registration"),
+    );
     expect(window.location.hash).not.toContain("scannerTab=");
     expect(mocks.persist).not.toHaveBeenCalled();
   });
@@ -104,7 +106,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
     );
     await vi.waitFor(async () => {
       await act(async () => {});
-      expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready to scan");
+      expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready to capture a lead");
     });
     await act(async () => mocks.cameraScan!({ data: badgeCode }));
     await vi.waitFor(async () => {
@@ -428,11 +430,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
         "Unknown badge for this event snapshot",
       );
     });
-    await act(async () =>
-      Array.from(host.querySelectorAll("button"))
-        .find((button) => button.textContent?.trim() === "Close scanner")!
-        .click(),
-    );
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Close scanner"]')!.click());
     const cleared = await openManual();
     expect(cleared.value).toBe("");
     expect(cleared.hasAttribute("aria-invalid")).toBe(false);
@@ -444,7 +442,9 @@ describe("scanner device enrollment and manual capture boundary", () => {
 it("keeps manual entry inside fullscreen, focuses it, submits once and resumes scanning", async () => {
   await mount(true, ["attendance"]);
   const button = (root: ParentNode, label: string) =>
-    [...root.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent?.trim() === label)!;
+    [...root.querySelectorAll<HTMLButtonElement>("button")].find(
+      (item) => (item.getAttribute("aria-label") ?? item.textContent?.trim()) === label,
+    )!;
   await act(() => button(host, "Start scanning").click());
   const fast = host.querySelector<HTMLElement>('[role="dialog"][aria-label="Continuous badge scanner"]')!;
   const fullscreen = Object.getOwnPropertyDescriptor(document, "fullscreenElement");
@@ -491,7 +491,7 @@ it("automatically clears malformed badge feedback after the configured pause whi
     mocks.hardwareScan!("not-a-badge");
   });
   await vi.waitFor(() => expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Unknown badge"));
-  await vi.waitFor(() => expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready to scan"), {
+  await vi.waitFor(() => expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready for entry"), {
     timeout: 1800,
   });
   expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();

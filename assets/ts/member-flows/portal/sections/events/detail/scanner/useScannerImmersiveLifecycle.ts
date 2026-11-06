@@ -7,7 +7,7 @@ export function useScannerImmersiveLifecycle(
   active: boolean,
   shell: RefObject<HTMLDivElement>,
   exit: () => void,
-  releaseCapture: () => void,
+  releaseCapture?: () => void,
   immersive = true,
 ) {
   const latest = useRef({ exit, releaseCapture });
@@ -21,7 +21,7 @@ export function useScannerImmersiveLifecycle(
     };
   }, [active, immersive, shell]);
   useEffect(() => {
-    if (active) return () => latest.current.releaseCapture();
+    if (active) return () => latest.current.releaseCapture?.();
   }, [active]);
   return screenAwake;
 }

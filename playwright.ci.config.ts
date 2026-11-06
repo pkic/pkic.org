@@ -3,6 +3,8 @@ import base from "./playwright.config";
 
 /** Routine CI exercises cross-system boundaries; the full suite remains opt-in. */
 const criticalJourneys = [
+  "the registration desk switches between immediate labels and full badges",
+  "the protected printed short code works through manual offline capture and exact original-operation replay",
   "default badges keep all lead sponsors inside both printed faces",
   "covers unified user sign-in via magic link",
   "an organization contact adds a colleague and can take the access away again",

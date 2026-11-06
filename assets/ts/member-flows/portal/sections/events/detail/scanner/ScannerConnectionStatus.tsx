@@ -23,7 +23,7 @@ export function scannerConnectionLabel({
     return syncing
       ? `Uploading · ${formatNumber(pending)} pending`
       : `${formatNumber(pending)} saved on this device · retrying automatically`;
-  return "All scans synced";
+  return syncing ? "Checking uploads…" : "All scans synced";
 }
 
 /** Always visible, including while capturing; upload status never gates the next badge. */
@@ -35,7 +35,8 @@ export function ScannerConnectionStatus({
     props.error ||
     (uploadStatus.startsWith("Sign in") ||
     uploadStatus.startsWith("A retained") ||
-    uploadStatus.startsWith("Sync unavailable")
+    uploadStatus.startsWith("Sync unavailable") ||
+    uploadStatus.startsWith("Scan upload")
       ? uploadStatus
       : "");
   return (

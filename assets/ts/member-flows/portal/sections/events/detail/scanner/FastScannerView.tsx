@@ -1,3 +1,8 @@
+import { ScannerHelpTour } from "./ScannerHelpTour";
+import { IconScannerHelp, IconScannerSound } from "../../../../../../components/icons/scanner-controls";
+import type { ScannerSound } from "./scanner-audio-feedback";
+import { scannerRole } from "./scanner-role";
+import { ScannerTaskNavigation, useScannerTaskSwipe } from "./ScannerTaskNavigation";
 import { ScannerModeIcon } from "./ScannerModeIcon";
 import { ScannerPreparationStatus } from "./ScannerPreparationStatus";
 import type { ComponentChildren, ComponentProps } from "preact";
@@ -5,8 +10,8 @@ import { scanFeedbackLabel, scanFeedbackOutcome, scanEligibilityLabel } from "./
 import "../../../../../../../design/tokens.scanner.generated.css";
 import "../../../../../../../design/tokens.event.generated.css";
 import { ScannerExceptionReview } from "./ScannerExceptionReview";
-import { scannerActionLabel } from "./ScannerModeSelect";
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { ScannerResultTrail, ScannerStatusIcon, useScannerStatus, type ScannerStatus } from "./ScannerStatus";
+import { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type {
   EventScanResponse,
   EventScanRequest,
@@ -14,16 +19,17 @@ import type {
 import { Button } from "../../../../../../ui/Button";
 import { CloseButton } from "../../../../../../ui/CloseButton";
 import { IconTools } from "../../../../../../components/icons/indicators";
-import { IconCheckmark, IconInfoCircle, IconRefresh, IconRemove } from "../../../../../../components/icons";
+import { IconRefresh, IconVirtual, IconSearch, IconBulletList } from "../../../../../../components/icons";
 import { scannerSwipeDirection, trapScannerDrawerTab } from "./scanner-gestures";
 import "../../../../shell/Login.css";
 import "./FastScannerView.css";
 import { HeadingOutline } from "../../../../../../ui/HeadingOutline";
 import { SectionHeading } from "../../../../../../ui/SectionHeading";
-import { IconPrint, IconFullscreen } from "../../../../../../components/icons/app-navigation";
+import { IconFullscreen } from "../../../../../../components/icons/app-navigation";
 
 export function FastScannerView({
   presentation = "fullscreen",
+  taskSwitchDisabled = false,
   purpose = "scan",
   onPresentation,
   canRecordAttendance = true,
@@ -53,14 +59,25 @@ export function FastScannerView({
   preparation,
   lastResult,
   connectionStatus,
+  status,
+  statusActions,
+  operatorControls,
   soundLabel,
   onSound,
+  onTourSound,
+  helpOnStart = false,
 }: {
+  helpOnStart?: boolean;
+  onTourSound?: (sound: ScannerSound) => void;
   presentation?: "embedded" | "fullscreen";
+  taskSwitchDisabled?: boolean;
   purpose?: "scan" | "print";
   onPresentation?: () => void;
   lastResult?: EventScanResponse | null;
   connectionStatus?: ComponentChildren;
+  status?: ScannerStatus;
+  statusActions?: ComponentChildren;
+  operatorControls?: ComponentChildren;
   soundLabel?: string;
   onSound?: () => void;
   canRecordAttendance?: boolean;
@@ -89,15 +106,26 @@ export function FastScannerView({
   onOperatorPause?: (paused: boolean) => void;
   preparation?: ComponentProps<typeof ScannerPreparationStatus>;
 }) {
+  const [helpOpen, setHelpOpen] = useState(helpOnStart);
+  const [tourDemo, setTourDemo] = useState<ScannerStatus>();
+  const [tourResults, setTourResults] = useState<ScannerStatus[]>();
+  const surface = useRef<HTMLDivElement>(null);
   const [review, setReview] = useState<EventScanRequest | null>(null);
   const [operatorOpen, setOperatorOpen] = useState(false);
   const operatorPause = useRef(onOperatorPause);
   operatorPause.current = onOperatorPause;
   useLayoutEffect(() => {
-    operatorPause.current?.(operatorOpen);
+    operatorPause.current?.(operatorOpen || helpOpen);
     if (!operatorOpen) setReview(null);
     return () => operatorPause.current?.(false);
-  }, [operatorOpen]);
+  }, [operatorOpen, helpOpen]);
+  const visualRole = scannerRole(mode, Boolean(preparation?.occurrenceId), purpose === "print");
+  const navigation = useContext(ScannerTaskNavigation);
+  const [gradientFrom, setGradientFrom] = useState(navigation?.gradientFrom);
+  const taskSwipe = useScannerTaskSwipe(
+    purpose === "print" ? "print" : mode === "checkout" ? "exit" : "entry",
+    visualRole,
+  );
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const trigger = useRef<HTMLButtonElement>(null),
     drawer = useRef<HTMLElement>(null);
@@ -112,7 +140,32 @@ export function FastScannerView({
     if (operatorOpen) drawer.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
     else trigger.current?.focus({ preventScroll: true });
   }, [operatorOpen]);
-  const outcome = scanFeedbackOutcome(result, mode);
+  const scanStatus = (scan: EventScanResponse | null | undefined): ScannerStatus | undefined =>
+    scan
+      ? {
+          key: scan.operationId,
+          tone: scanFeedbackOutcome(scan, mode),
+          title: scanFeedbackLabel(scan, mode),
+        }
+      : undefined;
+  const feedback = useScannerStatus(status ?? scanStatus(result), scanStatus(lastResult));
+  const visibleStatus = helpOpen ? tourDemo : feedback.visible;
+  const detail = visibleStatus?.detail || (helpOpen ? "" : message);
+  const outcome = visibleStatus?.tone ?? (helpOpen ? "unverified" : scanFeedbackOutcome(result, mode));
+  const readyLabel = {
+    entry:
+      mode === "check"
+        ? "Ready to check registration"
+        : mode === "admission"
+          ? "Ready for admission"
+          : mode === "exception"
+            ? "Ready to review admission"
+            : "Ready for entry",
+    exit: "Ready for exit",
+    session: "Ready for session check-in",
+    lead: "Ready to capture a lead",
+    print: "Ready to scan and print",
+  }[visualRole];
   const visibleUploadStatus =
     pending > 0 && uploadStatus === "All pending scans uploaded." ? "Uploading scans in the background…" : uploadStatus;
   const label = result
@@ -129,11 +182,20 @@ export function FastScannerView({
       : "Ready for the next badge";
   return (
     <div
-      class={`pk-login__backdrop pk-fast-scanner pk-fast-scanner--${outcome}${presentation === "embedded" ? " pk-fast-scanner--embedded" : ""}${result ? " pk-fast-scanner--result" : ""}${manualEntry || recentScans ? " pk-fast-scanner--manual" : ""}`}
+      ref={surface}
+      class={`pk-login__backdrop pk-fast-scanner pk-scanner-viewport pk-fast-scanner--${outcome}${presentation === "embedded" ? " pk-fast-scanner--embedded" : ""}${visibleStatus ? " pk-fast-scanner--result" : ""}${manualEntry || recentScans ? " pk-fast-scanner--manual" : ""}`}
+      data-fullscreen={presentation === "fullscreen" || undefined}
+      data-scanner-role={visualRole}
+      data-gradient-from={gradientFrom}
+      onAnimationEnd={(event) => {
+        if (event.target === event.currentTarget && event.animationName === "pk-scanner-field-turn")
+          setGradientFrom(undefined);
+      }}
       role={presentation === "fullscreen" ? "dialog" : "region"}
       aria-modal={presentation === "fullscreen" ? "true" : undefined}
       aria-label={purpose === "print" ? "Badge printing scanner" : "Continuous badge scanner"}
       onKeyDown={(event) => {
+        if (helpOpen) return;
         if (event.key === "Escape") {
           event.stopPropagation();
           onExit();
@@ -146,13 +208,14 @@ export function FastScannerView({
         }
       }}
       onPointerDown={(event) => {
-        if (manualEntry || recentScans) {
+        if (helpOpen || manualEntry || recentScans) {
           pointer.current = null;
           return;
         }
         if (
           event.target instanceof Node &&
-          (drawer.current?.contains(event.target) || (event.target instanceof Element && event.target.closest("form")))
+          (drawer.current?.contains(event.target) ||
+            (event.target instanceof Element && event.target.closest("form,button,a,input,select,textarea")))
         ) {
           pointer.current = null;
           return;
@@ -160,13 +223,22 @@ export function FastScannerView({
         pointer.current = { x: event.clientX, y: event.clientY };
       }}
       onPointerUp={(event) => {
-        if (manualEntry || recentScans) {
+        if (helpOpen || manualEntry || recentScans) {
           pointer.current = null;
           return;
         }
         const direction = scannerSwipeDirection(pointer.current, { x: event.clientX, y: event.clientY });
         pointer.current = null;
-        if (direction === "up") setOperatorOpen(true);
+        if (
+          (direction === "left" || direction === "right") &&
+          presentation === "fullscreen" &&
+          !operatorOpen &&
+          !taskSwitchDisabled &&
+          !cooldown?.saving &&
+          !cooldown?.remainingMs
+        )
+          taskSwipe.move(direction);
+        else if (direction === "up") setOperatorOpen(true);
         else if (direction === "down") setOperatorOpen(false);
       }}
       onPointerCancel={() => {
@@ -174,75 +246,106 @@ export function FastScannerView({
       }}
     >
       <span class="pk-fast-scanner__tone pk-fast-scanner__tone--ok" aria-hidden="true" />
-      <span class="pk-fast-scanner__tone pk-fast-scanner__tone--attention" aria-hidden="true" />
+      <span class="pk-fast-scanner__tone pk-fast-scanner__tone--warning" aria-hidden="true" />
+      <span class="pk-fast-scanner__tone pk-fast-scanner__tone--error" aria-hidden="true" />
       <div class="pk-fast-scanner__stage" aria-hidden={operatorOpen ? true : undefined}>
         <img class="pk-fast-scanner__brand" src="/img/logo.svg" alt="PKI Consortium" width="1256" height="324" />
         {connectionStatus}
-        <p class="pk-fast-scanner__context">
-          {context} · {purpose === "print" ? "Print badges" : scannerActionLabel(mode)}
-        </p>
+
         {!manualEntry && !recentScans && (
           <div class="pk-fast-scanner__feedback" role="status" aria-live="polite" aria-atomic="true">
-            <span class="pk-fast-scanner__mark" aria-hidden="true" key={result?.operationId ?? "ready"}>
-              {outcome === "eligible" ? (
-                <IconCheckmark />
-              ) : outcome === "denied" || outcome === "unknown" ? (
-                <IconRemove />
-              ) : outcome === "warning" ? (
-                <IconInfoCircle />
-              ) : purpose === "print" ? (
-                <IconPrint />
-              ) : (
-                <ScannerModeIcon action={mode} />
-              )}
-            </span>
-            <strong class="pk-fast-scanner__label">
-              {result
-                ? label
-                : cameraStarting
-                  ? "Starting camera…"
-                  : cameraActive
-                    ? "Ready to scan"
-                    : "Use a reader or paste a code"}
-            </strong>
-            {message && <p class="pk-fast-scanner__message">{message}</p>}
+            <div class="pk-fast-scanner__status" data-scanner-help="feedback">
+              <span class="pk-fast-scanner__mark" aria-hidden="true" key={visibleStatus?.key ?? "ready"}>
+                {visibleStatus ? (
+                  <ScannerStatusIcon tone={visibleStatus.tone} />
+                ) : (
+                  <ScannerModeIcon action={mode} role={visualRole} />
+                )}
+              </span>
+              <strong class="pk-fast-scanner__label" data-scanner-help="mode">
+                {visibleStatus?.title ?? (cameraStarting ? "Starting camera…" : readyLabel)}
+              </strong>
+              {detail && <p class="pk-fast-scanner__message">{detail}</p>}
+            </div>
+            {purpose === "print" && !helpOpen && <div class="pk-fast-scanner__print-status">{statusActions}</div>}
+            {!visibleStatus && context && <p class="pk-fast-scanner__context">{context}</p>}
           </div>
         )}
-        {cameraError && (
+        {cameraError && !helpOpen && (
           <p class="pk-fast-scanner__message" role="status">
             {cameraError}
           </p>
         )}
         {manualEntry && <div class="pk-fast-scanner__manual">{manualEntry}</div>}
         {recentScans && <div class="pk-fast-scanner__manual">{recentScans}</div>}
-        {!manualEntry && !recentScans && lastResult && (
-          <p class="pk-fast-scanner__last">Last scan: {scanFeedbackLabel(lastResult, mode)}</p>
+        {!manualEntry && !recentScans && <ScannerResultTrail results={tourResults ?? feedback.history} />}
+        {presentation === "fullscreen" && !manualEntry && !recentScans && taskSwipe.tasks.length > 1 && (
+          <p
+            class="pk-fast-scanner__task-swipe"
+            data-scanner-help="switch"
+            role="group"
+            aria-disabled={taskSwitchDisabled || cooldown?.saving || Boolean(cooldown?.remainingMs) || undefined}
+            tabIndex={0}
+            aria-label="Swipe left or right, or use arrow keys, to switch scanner"
+            onKeyDown={(event) => {
+              if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                event.preventDefault();
+                if (!operatorOpen && !taskSwitchDisabled && !cooldown?.saving && !cooldown?.remainingMs)
+                  taskSwipe.move(event.key === "ArrowLeft" ? "left" : "right");
+              }
+            }}
+          >
+            ← Swipe: {taskSwipe.tasks.map((task) => task.label).join(" · ")} →
+          </p>
         )}
         <div class="pk-fast-scanner__actions">
-          {onPresentation && (
+          {onPresentation && presentation === "embedded" && (
             <Button variant="secondary" onClick={onPresentation}>
               <IconFullscreen />
-              {presentation === "fullscreen" ? "Embedded view" : "Full screen"}
+              Full screen
             </Button>
           )}
           {cameraActive && !manualEntry && !recentScans && (
-            <Button variant="secondary" onClick={onPreview}>
-              {preview ? "Hide preview" : "Show preview"}
+            <Button
+              variant="secondary"
+              icon
+              data-scanner-help="camera"
+              aria-label={preview ? "Hide preview" : "Show preview"}
+              title={preview ? "Hide preview" : "Show preview"}
+              aria-pressed={preview}
+              onClick={onPreview}
+            >
+              <IconVirtual />
             </Button>
           )}
           {!cameraActive && !manualEntry && !recentScans && onCameraRetry && (
-            <Button variant="secondary" loading={cameraStarting} onClick={onCameraRetry}>
-              Retry camera
+            <Button
+              variant="secondary"
+              icon
+              data-scanner-help="camera"
+              aria-label={cameraError ? "Retry camera" : "Start camera"}
+              title={cameraError ? "Retry camera" : "Start camera"}
+              loading={cameraStarting}
+              onClick={onCameraRetry}
+            >
+              <IconVirtual />
             </Button>
           )}
           {onManual && !manualEntry && !recentScans && (
-            <Button variant="secondary" onClick={onManual}>
-              Find attendee or badge
+            <Button
+              variant="secondary"
+              icon
+              data-scanner-help="find"
+              aria-label="Find attendee or badge"
+              title="Find attendee or badge"
+              onClick={onManual}
+            >
+              <IconSearch />
             </Button>
           )}
           {onRecentScans && !recentScans && (
-            <Button variant="secondary" onClick={onRecentScans}>
-              Recent scans
+            <Button variant="secondary" icon aria-label="Recent scans" title="Recent scans" onClick={onRecentScans}>
+              <IconBulletList />
             </Button>
           )}
           {recentScans && onReturnToScanning && (
@@ -251,13 +354,35 @@ export function FastScannerView({
             </Button>
           )}
           {onSound && (
-            <Button variant="secondary" onClick={onSound}>
-              {soundLabel}
+            <Button
+              variant="secondary"
+              icon
+              data-scanner-help="sound"
+              aria-label={soundLabel}
+              title={soundLabel}
+              onClick={onSound}
+            >
+              <IconScannerSound />
             </Button>
           )}
-          <Button variant="secondary" onClick={onExit}>
-            Close scanner
-          </Button>
+          {presentation === "fullscreen" && (
+            <Button
+              variant="secondary"
+              icon
+              data-tour-trigger
+              aria-label="Scanner help"
+              title="Scanner help"
+              aria-expanded={helpOpen}
+              disabled={taskSwitchDisabled || cooldown?.saving}
+              onClick={() => {
+                if (!helpOpen) operatorPause.current?.(true);
+                setHelpOpen(!helpOpen);
+              }}
+            >
+              <IconScannerHelp />
+            </Button>
+          )}
+          <CloseButton variant="secondary" data-scanner-help="close" label="Close scanner" onClick={onExit} />
         </div>
         <div class="pk-fast-scanner__next">
           <span class="pk-sr-only">{readiness}</span>
@@ -285,6 +410,7 @@ export function FastScannerView({
               type="button"
               class="pk-fast-scanner__tool"
               tabIndex={operatorOpen ? -1 : 0}
+              data-scanner-help="options"
               aria-label="Operator controls"
               aria-expanded={operatorOpen}
               aria-controls={drawerId}
@@ -295,6 +421,20 @@ export function FastScannerView({
           </div>
         </div>
       </div>
+      {helpOpen && (
+        <ScannerHelpTour
+          scope={surface}
+          role={visualRole}
+          onDemo={setTourDemo}
+          onSamples={setTourResults}
+          onSound={onTourSound}
+          onClose={() => {
+            setHelpOpen(false);
+            setTourDemo(undefined);
+            setTourResults(undefined);
+          }}
+        />
+      )}
       <section
         ref={drawer}
         id={drawerId}
@@ -317,6 +457,7 @@ export function FastScannerView({
             <SectionHeading level={2}>Scanner operator controls</SectionHeading>
             <CloseButton label="Close operator controls" onClick={() => setOperatorOpen(false)} />
           </header>
+          {operatorControls}
           <dl>
             <div>
               <dt>Scanning scope</dt>
@@ -324,7 +465,7 @@ export function FastScannerView({
             </div>
             <div>
               <dt>Current result</dt>
-              <dd>{label}</dd>
+              <dd>{feedback.visible?.title ?? label}</dd>
             </div>
             {result?.admissionRecorded && result.admissionDecision && (
               <>

@@ -75,22 +75,18 @@ async function preparePrintedBadge(page: Page, endpoint: string, credential: str
     const image = side.getByRole("img");
     await expect(image).toHaveCount(1);
     await expect(image).toBeVisible();
-    await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+    await expect.poll(() => image.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(0);
     expect(await decodeRenderedQr(image), `${label} must encode the original credential`).toBe(credential);
     const vector = await image.evaluate((element) => {
-      const source = (element as HTMLImageElement).src;
-      const document = new DOMParser().parseFromString(
-        decodeURIComponent(source.slice(source.indexOf(",") + 1)),
-        "image/svg+xml",
-      );
+      const reference = element.querySelector("use")?.getAttribute("href");
+      const resource = reference?.startsWith("#") ? element.ownerDocument.getElementById(reference.slice(1)) : element;
       return {
-        errors: document.querySelectorAll("parsererror").length,
-        width: document.documentElement.getAttribute("width"),
-        height: document.documentElement.getAttribute("height"),
-        text: [...document.querySelectorAll("text")].map((node) => node.textContent).join(" "),
+        namespace: element.namespaceURI,
+        viewBox: element.getAttribute("viewBox"),
+        text: [...(resource ?? element).querySelectorAll("text")].map((node) => node.textContent).join(" "),
       };
     });
-    expect(vector).toMatchObject({ errors: 0, width: "90.3mm", height: "38mm" });
+    expect(vector).toMatchObject({ namespace: "http://www.w3.org/2000/svg", viewBox: "0 0 38 89.8" });
     expect(vector.text).toContain(formatBadgeCredential(credential));
     if (printed.artifact.firstName) expect(vector.text).toContain(printed.artifact.firstName);
     if (printed.artifact.lastName) expect(vector.text).toContain(printed.artifact.lastName);
@@ -111,6 +107,9 @@ test("the registration desk switches between immediate labels and full badges", 
   await page.goto(labelsPage.replace(/\/print$/, ""));
   await page.getByRole("link", { name: /^Print\b/ }).click();
   await expect(page).toHaveURL(new RegExp("/scanner/print$"));
+  await expect(page.getByRole("dialog", { name: "Badge printing scanner", exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("print-scanner-mobile-default.png") });
+  await page.getByRole("button", { name: "Find attendee or badge", exact: true }).click();
   // Mobile browsers can print the parent document even when an iframe initiated the command.
   await page.evaluate(() => {
     let printCalls = 0;
@@ -194,6 +193,104 @@ test("the registration desk switches between immediate labels and full badges", 
   expect(artwork).toHaveLength(1);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.screenshot({ path: info.outputPath("label-desk-desktop.png"), fullPage: true });
+  // Exercise the viewport fallback independently of native fullscreen support.
+  await page.evaluate(() =>
+    Object.defineProperty(Element.prototype, "requestFullscreen", { value: undefined, configurable: true }),
+  );
+  await expect(page.getByRole("button", { name: "Scanner help", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Enter full screen", exact: true }).click();
+  await page.getByRole("button", { name: "Scanner help", exact: true }).click();
+  await expect(page.locator(".pk-guided-tour")).toBeVisible();
+  expect((await page.locator(".pk-guided-tour").boundingBox())?.width).toBeLessThan(400);
+  await page.screenshot({ path: info.outputPath("scanner-help-desktop.png") });
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".pk-guided-tour")).toHaveCount(0);
+  const printScanner = page.getByRole("dialog", { name: "Badge printing scanner", exact: true });
+  await expect(printScanner).toBeVisible();
+  expect(await printScanner.evaluate((element) => element.contains(document.elementFromPoint(20, 20)))).toBe(true);
+  await expect(printScanner.getByRole("button", { name: "Embedded view", exact: true })).toHaveCount(0);
+  await expect(printScanner.getByRole("list", { name: "Recent scan results" })).toBeVisible();
+  await printScanner.getByRole("button", { name: "Operator controls", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Print settings", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close operator controls", exact: true }).click();
+  await page.screenshot({ path: info.outputPath("print-scanner-fullscreen-desktop.png") });
+  await page.setViewportSize({ width: 375, height: 812 });
+  expect(await printScanner.evaluate((element) => element.contains(document.elementFromPoint(20, 20)))).toBe(true);
+  await page.screenshot({ path: info.outputPath("print-scanner-fullscreen-phone.png") });
+  const resultsBeforeTour = await printScanner.locator(".pk-fast-scanner__trail li").count();
+  const printsBeforeTour = await page.locator("html").getAttribute("data-print-called");
+  await printScanner.getByRole("button", { name: "Scanner help", exact: true }).click();
+  const help = page.locator(".pk-guided-tour");
+  await expect(help.getByRole("heading", { name: "Check your scanner" })).toBeVisible();
+  await expect(printScanner.locator("[data-tour-active]")).toBeVisible();
+  await page.screenshot({ path: info.outputPath("scanner-help-phone.png") });
+  for (let step = 0; step < 3; step++) await help.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(printScanner.getByText("Example: Print requested", { exact: true })).toBeVisible();
+  await help.getByRole("button", { name: "Replay sound", exact: true }).click();
+  await help.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(printScanner.getByText("Example: Needs attention", { exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("scanner-help-warning.png") });
+  await help.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(printScanner.getByText("Example: Could not print", { exact: true })).toBeVisible();
+  await help.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(printScanner.locator(".pk-fast-scanner__trail li")).toHaveCount(3);
+  for (let step = 0; step < 5 && (await help.getByRole("button", { name: "Next", exact: true }).count()); step++)
+    await help.getByRole("button", { name: "Next", exact: true }).click();
+  await help.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(help).toHaveCount(0);
+  await expect(printScanner.locator(".pk-fast-scanner__trail li")).toHaveCount(resultsBeforeTour);
+  await expect(printScanner.getByText(/Example:/)).toHaveCount(0);
+  expect(await page.locator("html").getAttribute("data-print-called")).toBe(printsBeforeTour);
+  const printField = await printScanner.evaluate((element) => getComputedStyle(element).backgroundImage);
+  const swipe = () =>
+    page.getByRole("group", { name: "Swipe left or right, or use arrow keys, to switch scanner", exact: true });
+  await page.evaluate(() =>
+    document.addEventListener("animationstart", (event) => {
+      if (event.animationName === "pk-scanner-field-turn" && event.target instanceof Element)
+        document.documentElement.setAttribute(
+          "data-scanner-spin",
+          `${event.target.getAttribute("data-gradient-from")}:${event.target.getAttribute("data-scanner-role")}`,
+        );
+    }),
+  );
+  await swipe().press("ArrowLeft");
+  await expect(page).toHaveURL(/\/scanner$/);
+  await expect(page.locator("html")).toHaveAttribute("data-scanner-spin", "print:entry");
+  const captureScanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+  await expect(captureScanner).toBeVisible();
+  await expect(captureScanner.getByText("Ready for entry", { exact: true })).toBeVisible();
+  await expect(captureScanner).not.toHaveAttribute("data-gradient-from");
+  const entryField = await captureScanner.evaluate((element) => getComputedStyle(element).backgroundImage);
+  const scanUploaded = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === `${fixture.api}/scans` && response.request().method() === "POST",
+  );
+  await page.keyboard.type(fixture.eligible);
+  await page.keyboard.press("Enter");
+  const scanResponse = await scanUploaded;
+  expect(scanResponse.status()).toBe(200);
+  expect(eventScanResponseSchema.parse(await scanResponse.json())).toMatchObject({
+    recorded: true,
+    attendanceRecorded: true,
+  });
+  await captureScanner.getByRole("button", { name: "Recent scans", exact: true }).click();
+  await expect(captureScanner.getByText(/attendance recorded/).first()).toBeVisible();
+  const tools = await captureScanner.locator(".pk-fast-scanner__tools").boundingBox();
+  expect(tools).not.toBeNull();
+  expect(tools!.y + tools!.height).toBeGreaterThan(page.viewportSize()!.height - 40);
+  await page.screenshot({ path: info.outputPath("recent-recorded-scan-phone.png") });
+  await captureScanner.getByRole("button", { name: "Return to scanning", exact: true }).click();
+  await expect(swipe()).not.toHaveAttribute("aria-disabled", "true");
+
+  await swipe().press("ArrowLeft");
+  await expect(captureScanner.getByText("Ready for exit", { exact: true })).toBeVisible();
+  await expect(captureScanner).not.toHaveAttribute("data-gradient-from");
+  const exitField = await captureScanner.evaluate((element) => getComputedStyle(element).backgroundImage);
+  expect(new Set([entryField, exitField, printField]).size).toBe(3);
+  expect(new Set([entryField, exitField, printField].map((field) => field.split(",")[0])).size).toBe(1);
+  await swipe().press("ArrowLeft");
+  await expect(page).toHaveURL(/\/scanner\/print$/);
+  await expect(printScanner).toBeVisible();
+  await expect(page.getByRole("button", { name: "Enter full screen", exact: true })).toHaveCount(0);
 });
 
 test("the protected printed short code works through manual offline capture and exact original-operation replay", async ({
@@ -323,7 +420,7 @@ test("the protected printed short code works through manual offline capture and 
     });
     const queuedPrivacy = await expectNoStoredSponsorContacts(page, fixture.forbidden, await readConsole());
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Scanner setup", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Start scanning", exact: true })).toBeVisible();
     await expect(page.getByText("Offline · unverified until synced", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sync now", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Export sponsor leads", exact: true })).toHaveCount(0);
@@ -400,7 +497,6 @@ test("the protected printed short code works through manual offline capture and 
     await page.getByRole("button", { name: "Check sign-in again", exact: true }).click();
     expect((await reauthenticated).status()).toBe(200);
     await expect(page.getByText("Offline · unverified until synced", { exact: true })).toHaveCount(0);
-    await page.getByRole("button", { name: "Sync now", exact: true }).click();
     const receipts = await Promise.all(uploads);
     for (const [index, original] of originals.entries())
       expect(receipts[index]).toMatchObject({

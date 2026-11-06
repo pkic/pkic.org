@@ -120,15 +120,55 @@ afterEach(async () => {
 });
 
 describe("badge printing desk", () => {
+  it("pauses QR capture during the tour and resumes the same camera afterward", async () => {
+    const fetch = vi.fn(async () => json(label));
+    vi.stubGlobal("fetch", fetch);
+    await mount();
+    await click("Start camera");
+    await click("Enter full screen");
+    await click("Scanner help");
+    await settle(() => expect(document.querySelector(".pk-guided-tour")).not.toBeNull());
+    await scan();
+    expect(fetch).not.toHaveBeenCalled();
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(host.querySelector('[aria-label="Badge printing scanner"]')).not.toBeNull();
+    await scan();
+    await settle(() => expect(pages()).toBe(2));
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(capture.starts).toBe(1);
+  });
+  it("shows help only in the fullscreen scanner", async () => {
+    await mount();
+    expect(host.querySelector('[aria-label="Scanner help"]')).toBeNull();
+    await click("Enter full screen");
+    await click("Scanner help");
+    await settle(() => expect(document.querySelector(".pk-guided-tour")).not.toBeNull());
+    await click("Close help tour");
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(host.querySelector('[aria-label="Badge printing scanner"]')).toBeNull();
+    await click("Enter full screen");
+    expect(host.querySelector('[aria-label="Badge printing scanner"]')).not.toBeNull();
+    expect(document.querySelector(".pk-guided-tour")).toBeNull();
+  });
   it("retains the camera when switching views, and Escape closes the full-screen scanner", async () => {
+    const release = vi.fn(async () => {});
+    const request = vi.fn(async () => ({ released: false, release, addEventListener: vi.fn() }));
+    vi.stubGlobal("navigator", Object.create(navigator, { wakeLock: { value: { request } } }));
     await mount();
     await click("Start camera");
     const video = host.querySelector("video");
     await click("Enter full screen");
+    await settle(() => expect(host.textContent).toContain("Screen awake"));
+    expect(request).toHaveBeenCalledWith("screen");
     expect(host.querySelector('[role="dialog"][aria-label="Badge printing scanner"]')).not.toBeNull();
     expect(host.querySelector("video")).toBe(video);
     expect(capture.starts).toBe(1);
-    await click("Embedded view");
+    await click("Find attendee or badge");
+    expect(release).toHaveBeenCalled();
     expect(host.querySelector("video")).toBe(video);
     expect(capture.starts).toBe(1);
     await click("Enter full screen");
