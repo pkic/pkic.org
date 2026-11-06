@@ -8,14 +8,11 @@ export const sponsorLeadQuerySchema = listQuerySchema(["name", "email", "organiz
 });
 export const sponsorLeadSchema = z.object({
   id: databaseIdSchema,
-  userId: databaseIdSchema,
   name: z.string(),
   email: z.string(),
   organization: z.string().nullable(),
-  /** A consumer mailbox: shown as "Personal email address" in place of an organization. */
   personalEmail: z.boolean(),
   capturedAt: utcInstantSchema,
-  operatorUserId: databaseIdSchema,
   operatorName: z.string(),
 });
 export const sponsorLeadListSchema = paginatedResponseSchema("leads", sponsorLeadSchema);
@@ -36,7 +33,6 @@ export type SponsorLeadSponsorsQuery = z.infer<typeof sponsorLeadSponsorsQuerySc
 export const sponsorLeadCapturesQuerySchema = listQuerySchema(["observedAt", "receivedAt"] as const, { maxLimit: 100 });
 export const sponsorLeadCaptureSchema = z.object({
   id: databaseIdSchema,
-  operatorUserId: databaseIdSchema,
   operatorName: z.string(),
   observedAt: utcInstantSchema,
   receivedAt: utcInstantSchema,

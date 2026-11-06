@@ -4,18 +4,10 @@
  * votes.ts.
  */
 import { deriveVoteStatus } from "./status";
-import { buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
-import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { stringifyJson } from "../../utils/json";
 import { AppError } from "../../errors";
-import { resolveMappedOrderBy } from "../../db/sort";
-import { buildD1TextSearchFilter } from "../../db/search";
-import {
-  RAW_VOTE_BALLOT_SORT_COLUMNS,
-  type RawVoteBallotsListQuery,
-} from "../../../../assets/shared/schemas/vote-management";
 import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { adminDatabaseUserId } from "../../auth/admin-identity";
@@ -274,90 +266,4 @@ export async function updateVoteVisibility(
     throw error;
   }
   return toVoteSummary(await getVoteRowOrThrow(db, existing.id));
-}
-
-// ── Managed raw ballot audit ──────────────────────────────────────────
-
-export interface AdminBallotRow {
-  id: string;
-  userId: string;
-  memberId: string | null;
-  choice: string;
-  round: number;
-  submittedAt: string;
-  updatedAt: string;
-}
-
-interface AdminBallotDbRow {
-  id: string;
-  user_id: string;
-  member_id: string | null;
-  choice: string;
-  round: number;
-  submitted_at: string;
-  updated_at: string;
-}
-
-const ADMIN_BALLOT_SORT_COLUMNS = {
-  submittedAt: "b.submitted_at",
-  round: "b.round",
-  choice: "b.choice",
-  userId: "b.user_id",
-  memberId: "b.member_id",
-} as const satisfies Record<(typeof RAW_VOTE_BALLOT_SORT_COLUMNS)[number], string>;
-
-export async function listBallotsForManager(
-  db: DatabaseLike,
-  actor: AuthAdmin,
-  voteId: string,
-  query: RawVoteBallotsListQuery,
-  throughGroupId?: string,
-): Promise<{ ballots: AdminBallotRow[]; page: PageInfo }> {
-  await getVoteRowOrThrow(db, voteId);
-  const conditions = ["b.vote_id = ?"];
-  const bindings: unknown[] = [voteId];
-  if (query.round !== undefined) {
-    conditions.push("b.round = ?");
-    bindings.push(query.round);
-  }
-  if (query.q) {
-    const search = buildD1TextSearchFilter(query.q, ["b.user_id", "b.member_id", "b.choice", "b.round"]);
-    conditions.push(search.sql);
-    bindings.push(...search.bindings);
-  }
-  const where = `WHERE ${conditions.join(" AND ")}`;
-  const orderBy = resolveMappedOrderBy(query.sort, ADMIN_BALLOT_SORT_COLUMNS, "b.submitted_at DESC", "b.id ASC");
-  const pageQuery = {
-    sql: `SELECT b.id, b.user_id, b.member_id, b.choice, b.round, b.submitted_at, b.updated_at
-              FROM vote_ballots b ${where}`,
-    bindings,
-    orderBy,
-    limit: query.limit,
-    offset: query.offset,
-  };
-  let rows: AdminBallotDbRow[];
-  let total: number;
-  try {
-    const [guardResult, pageResult, countResult] = await db.batch([
-      await prepareVoteManagementAuthorizationGuard(db, actor, voteId, throughGroupId),
-      ...buildOffsetPageStatements(db, pageQuery),
-    ]);
-    void guardResult;
-    ({ rows, total } = decodeOffsetPageResults<AdminBallotDbRow>(pageResult, countResult));
-  } catch (error) {
-    if (isAuthorizationGuardFailure(error)) {
-      throw new AppError(409, "VOTE_MANAGEMENT_CHANGED", "Vote management permission changed before the ballot read");
-    }
-    throw error;
-  }
-  const ballots = rows.map((r) => ({
-    id: r.id,
-    userId: r.user_id,
-    memberId: r.member_id,
-    choice: r.choice,
-    round: r.round,
-    submittedAt: r.submitted_at,
-    updatedAt: r.updated_at,
-  }));
-  return { ballots, page: buildPageInfo(query.limit, query.offset, total, ballots.length) };
 }

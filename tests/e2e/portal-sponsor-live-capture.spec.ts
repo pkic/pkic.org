@@ -80,7 +80,7 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     };
     await openSponsor();
     await page.getByRole("button", { name: "Scan leads", exact: true }).click();
-    await expect(page.getByText("Capture sponsor lead", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Scan mode", exact: true })).toHaveCount(0);
     await configureFeedbackPause();
     const first = await captureSponsorBadge(
@@ -172,7 +172,6 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     } finally {
       await reconnectScannerBrowser(page.context(), page);
     }
-    await page.getByRole("button", { name: "Sync now", exact: true }).click();
     await expect.poll(async () => (await scannerStorage(page)).pending.length, { timeout: 30_000 }).toBe(0);
     const acknowledged = await scannerStorage(page);
     for (const record of offlineRecords) {
@@ -237,17 +236,20 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     const listed = await page.request.get(leadsPath);
     expect(listed.status()).toBe(200);
     expect(listed.headers()["cache-control"]).toContain("no-store");
-    const leads = sponsorLeadListSchema.parse(await listed.json());
+    const rawLeads = await listed.json();
+    for (const row of rawLeads.leads) {
+      expect(row).not.toHaveProperty("userId");
+      expect(row).not.toHaveProperty("operatorUserId");
+    }
+    expect(JSON.stringify(rawLeads)).not.toContain(fixture.denied.userId);
+    const leads = sponsorLeadListSchema.parse(rawLeads);
     expect(leads.leads).toHaveLength(1);
     const lead = leads.leads[0];
     expect(lead).toMatchObject({
-      userId: fixture.consenting.userId,
       email: fixture.email,
       name: `${fixture.firstName} ${fixture.lastName}`,
       organization: fixture.organization,
-      operatorUserId: fixture.operator.userId,
     });
-    expect(leads.leads.some((row) => row.userId === fixture.denied.userId)).toBe(false);
     const contacts = page.getByRole("region", { name: "Consenting leads", exact: true });
     await expect(contacts.getByText(fixture.email, { exact: true })).toBeVisible();
     const searched = page.waitForResponse((response) => {
@@ -263,9 +265,10 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     const capturesPath = `${leadsPath}/${lead.id}/captures`;
     const historyResponse = await page.request.get(capturesPath);
     expect(historyResponse.status()).toBe(200);
-    const history = sponsorLeadCapturesSchema.parse(await historyResponse.json());
+    const rawHistory = await historyResponse.json();
+    for (const row of rawHistory.captures) expect(row).not.toHaveProperty("operatorUserId");
+    const history = sponsorLeadCapturesSchema.parse(rawHistory);
     expect(history.captures).toHaveLength(4);
-    for (const row of history.captures) expect(row.operatorUserId).toBe(fixture.operator.userId);
     expect(history.captures.map((row) => row.observedAt).sort()).toEqual(
       [
         first.request.observedAt,

@@ -11,7 +11,6 @@ import { SponsorAttendees } from "../../assets/ts/member-flows/portal/sections/s
 
 const SPONSOR_ID = "20000000-0000-4000-8000-000000000001";
 const EVENT_ID = "20000000-0000-4000-8000-000000000002";
-const REGISTRATION_ID = "20000000-0000-4000-8000-000000000003";
 const ATTENDEES_PATH = `/api/v1/sponsors/${SPONSOR_ID}/events/spring-summit/attendees`;
 const mounted: HTMLElement[] = [];
 
@@ -37,7 +36,6 @@ function attendeesResponse(attendees: Array<Record<string, unknown>>) {
 
 const ONE_ATTENDEE = attendeesResponse([
   {
-    registrationId: REGISTRATION_ID,
     firstName: "Ada",
     lastName: "Lovelace",
     email: "ada@example.test",
@@ -127,6 +125,47 @@ describe("sponsor attendee roster", () => {
     expect(download.getAttribute("download")).toBe("attendees-spring-summit.csv");
     expect(download.getAttribute("aria-label")).toBe("Download consenting attendees (CSV)");
     expect(download.querySelector("svg")).not.toBeNull();
+  });
+
+  it("renders the personal-address label and keeps unnamed, email-less rows distinct on refresh", async () => {
+    let rows = [
+      {
+        firstName: null,
+        lastName: null,
+        email: null,
+        organizationName: "First",
+        jobTitle: null,
+        personalEmail: false,
+      },
+      {
+        firstName: null,
+        lastName: null,
+        email: null,
+        organizationName: null,
+        jobTitle: null,
+        personalEmail: true,
+      },
+    ];
+    stubFetch(() => json(attendeesResponse(rows)));
+    const container = mount();
+    await settle();
+    await settle();
+    expect([...container.querySelectorAll("tbody tr")].map((row) => row.textContent)).toEqual([
+      expect.stringContaining("First"),
+      expect.stringContaining("Personal email address"),
+    ]);
+    rows = [...rows].reverse();
+    const refresh = container.querySelector<HTMLButtonElement>(
+      'button[title="Refresh consenting attendees for spring summit"]',
+    );
+    expect(refresh).not.toBeNull();
+    await act(() => refresh!.click());
+    await settle();
+    await settle();
+    expect([...container.querySelectorAll("tbody tr")].map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Personal email address"),
+      expect.stringContaining("First"),
+    ]);
   });
 
   it("announces an empty roster instead of an empty grid", async () => {

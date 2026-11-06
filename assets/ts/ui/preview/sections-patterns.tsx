@@ -10,6 +10,7 @@ import { ModelNavigationPreview } from "./ModelNavigationPreview";
 import { contentContributionPreview } from "./ContentContributionPreview";
 import { pictureUploadSection } from "./picture-upload";
 import { contentSections } from "./sections-content";
+import { contactOrganizationSection } from "./contact-organization";
 import { registrationSections } from "./sections-registration";
 import { sessionTimingSection } from "./session-timing";
 /**
@@ -266,6 +267,7 @@ const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://ww
 export const patternSections: PreviewSection[] = [
   guidedTourSection,
   pictureUploadSection,
+  contactOrganizationSection,
   ...registrationSections,
   sessionTimingSection,
   choiceControlsSection,

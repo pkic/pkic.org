@@ -1,5 +1,5 @@
 /** Shared SQL fragments for vote ownership, sharing, visibility, and participation. */
-
+import { sqlValue, type SqlId } from "../../db/sql-value";
 import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
@@ -19,9 +19,10 @@ export const VOTE_VIEW_GRANT_CAPABILITIES = memberResourceGrantCapabilitiesFor(V
 export const VOTE_PARTICIPATION_GRANT_CAPABILITIES = memberResourceGrantCapabilitiesFor(VOTE_GRANTS, "participate");
 export const VOTE_RESULT_GRANT_CAPABILITIES = memberResourceGrantCapabilitiesFor(VOTE_GRANTS, "view_results");
 
-export function exactVoteGroupMembership(throughGroupId?: string): { sql: string; bindings: readonly unknown[] } {
-  return throughGroupId
-    ? { sql: "AND membership.group_id = ?", bindings: [throughGroupId] }
+export function exactVoteGroupMembership(throughGroupId?: SqlId): { sql: string; bindings: readonly unknown[] } {
+  const group = throughGroupId ? sqlValue(throughGroupId) : null;
+  return group
+    ? { sql: `AND membership.group_id = ${group.sql}`, bindings: group.bindings }
     : { sql: "", bindings: [] };
 }
 

@@ -9,7 +9,7 @@ import type {
 import { hasPermission } from "../../auth/permissions";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { AppError } from "../../errors";
-import { readAuthenticatedGroupContext } from "./read-model";
+import { readAuthenticatedGroupContext, prepareAuthenticatedGroupContext } from "./read-model";
 
 export interface AuthenticatedGroupViewer {
   userId: string;
@@ -71,17 +71,7 @@ export async function getAuthenticatedGroupContext(
     viewer,
     viewer.admin ? hasPermission(viewer.admin, "groups:read") : false,
   );
-  if (
-    !context ||
-    (!context.visible &&
-      !context.manager &&
-      !(viewer.admin?.scopeRestricted && context.delegatedAuthorized && context.group.active))
-  )
-    throw new AppError(404, "GROUP_NOT_FOUND", "Group not found or not visible");
-  const { group, participant, manager } = context;
-  if (!context.delegatedAuthorized) {
-    throw new AppError(403, "GROUP_PERMISSION_REQUIRED", "The delegated permissions do not cover this group");
-  }
+  const { group, participant, manager } = requireAuthenticatedGroupContext(context, viewer);
 
   const capabilities: GroupCapability[] = [
     "view",
@@ -89,6 +79,24 @@ export async function getAuthenticatedGroupContext(
     ...(manager ? (["manage"] as const) : []),
   ];
   return { group, capabilities };
+}
+
+/** Apply the same visibility and delegation policy to standalone and composed group reads. */
+export function requireAuthenticatedGroupContext(
+  context: ReturnType<ReturnType<typeof prepareAuthenticatedGroupContext>["decode"]>,
+  viewer: AuthenticatedGroupViewer,
+) {
+  if (
+    !context ||
+    (!context.visible &&
+      !context.manager &&
+      !(viewer.admin?.scopeRestricted && context.delegatedAuthorized && context.group.active))
+  )
+    throw new AppError(404, "GROUP_NOT_FOUND", "Group not found or not visible");
+  if (!context.delegatedAuthorized) {
+    throw new AppError(403, "GROUP_PERMISSION_REQUIRED", "The delegated permissions do not cover this group");
+  }
+  return context;
 }
 
 /** Maps one authenticated group context to a capability-scoped API projection. */

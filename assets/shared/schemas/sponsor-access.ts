@@ -38,13 +38,12 @@ export const sponsorAccessLinkCreateRouteSchema = {
   },
 };
 
+/** Contact data and mailbox classification shared with a sponsor, without internal user or registration IDs. */
 export const sponsorAttendeeSchema = z.object({
-  registrationId: databaseIdSchema,
   firstName: z.string().nullable(),
   lastName: z.string().nullable(),
   email: z.email().nullable(),
   organizationName: z.string().nullable(),
-  /** A consumer mailbox: shown as "Personal email address" in place of an organization. */
   personalEmail: z.boolean(),
   jobTitle: z.string().nullable(),
 });

@@ -1,6 +1,6 @@
 import { createExecutionContext, env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
-import app from "./helpers/app";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import app, { callApi } from "./helpers/app";
 import { isAppError } from "../functions/_lib/errors";
 import {
   groupVoteDetailResponseSchema,
@@ -301,6 +301,64 @@ describe("canonical group voting", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     const { ballots } = groupVoteBallotsAuditResponseSchema.parse(await response.json());
     expect(ballots.map((ballot) => ballot.memberId)).toEqual([later.memberId, earlier.memberId]);
+    // People and organizations by name, not by identifier.
+    for (const ballot of ballots) {
+      expect(ballot.voterName).not.toBe(ballot.userId);
+      expect(ballot.memberName).toEqual(expect.any(String));
+    }
+  });
+
+  it("searches and sorts the ballot audit by the choice it shows", async () => {
+    const election = await createCanonicalVote(env.DB, admin, {
+      title: "Audited election",
+      voteType: "election",
+      candidates: [{ name: "Zelda Zimmer" }, { name: "Aaron Abel" }],
+    });
+    const candidates = await queryAll<{ id: string; candidate_name: string }>(
+      env.DB,
+      "SELECT id, candidate_name FROM vote_candidates WHERE vote_id = ?",
+      [election.id],
+    );
+    const candidateId = (name: string) => candidates.find((candidate) => candidate.candidate_name === name)!.id;
+    for (const name of ["Zelda Zimmer", "Aaron Abel"]) {
+      const capacity = await createOrganizationCapacity(env.DB);
+      await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+      await submitBallot(
+        env.DB,
+        await resolveAuthMember(env.DB, capacity.userId),
+        election.id,
+        capacity.memberId,
+        candidateId(name),
+        null,
+      );
+    }
+    const audit = async (query: string) => {
+      const response = await callApi(
+        env,
+        authorizedRequest(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${election.id}/ballots?${query}`),
+      );
+      expect(response.status, await response.clone().text()).toBe(200);
+      return groupVoteBallotsAuditResponseSchema
+        .parse(await response.json())
+        .ballots.map((ballot) => ballot.candidateName);
+    };
+    expect(await audit("q=Zelda")).toEqual(["Zelda Zimmer"]);
+    expect(await audit("sort=choice")).toEqual(["Aaron Abel", "Zelda Zimmer"]);
+    expect(await audit("sort=-choice")).toEqual(["Zelda Zimmer", "Aaron Abel"]);
+
+    const motion = await createCanonicalVote(env.DB, admin, { title: "Audited motion" });
+    const voter = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, voter.userId, [voter.memberId]);
+    await submitBallot(
+      env.DB,
+      await resolveAuthMember(env.DB, voter.userId),
+      motion.id,
+      voter.memberId,
+      "in_favor",
+      null,
+    );
+    const found = await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${motion.id}/ballots?q=In%20favor`);
+    expect(groupVoteBallotsAuditResponseSchema.parse(await found.json()).ballots).toHaveLength(1);
   });
 
   it("keeps identifiable ballots behind exact selected-group management", async () => {
@@ -469,7 +527,18 @@ describe("canonical group voting", () => {
 
     await submitBallot(env.DB, firstRepresentativeA, vote.id, capacityA.memberId, "in_favor", null);
     await submitBallot(env.DB, firstRepresentativeB, vote.id, capacityB.memberId, "opposed", null);
-    await submitBallot(env.DB, secondRepresentative, vote.id, capacityA.memberId, "abstain", null);
+    // Without naming the ballot it replaces, a colleague cannot overwrite the recorded one.
+    await expect(
+      submitBallot(env.DB, secondRepresentative, vote.id, capacityA.memberId, "abstain", null),
+    ).rejects.toMatchObject({ code: "BALLOT_CHANGED" });
+    const [recorded] = await queryAll<{ updated_at: string }>(
+      env.DB,
+      "SELECT updated_at FROM vote_ballots WHERE vote_id = ? AND member_id = ?",
+      [vote.id, capacityA.memberId],
+    );
+    await submitBallot(env.DB, secondRepresentative, vote.id, capacityA.memberId, "abstain", null, undefined, {
+      replacesBallotCastAt: recorded.updated_at,
+    });
 
     expect(
       await queryAll<{ member_id: string; user_id: string; choice: string }>(
@@ -483,6 +552,105 @@ describe("canonical group voting", () => {
         { member_id: capacityB.memberId, user_id: capacityA.userId, choice: "opposed" },
       ].sort((left, right) => left.member_id.localeCompare(right.member_id)),
     );
+  });
+
+  it("refuses to replace a Member ballot the representative has not seen", async () => {
+    const capacity = await createOrganizationCapacity(env.DB, { organizationName: "Organization A" });
+    const colleagueId = await insertUser(env.DB, "colleague@example.test");
+    const colleagueIdentityId = await addRepresentative(env.DB, capacity.memberId, colleagueId);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, colleagueId, [capacity.memberId]);
+    const vote = await createCanonicalVote(env.DB, admin);
+    const first = await resolveAuthMember(env.DB, capacity.userId, crypto.randomUUID(), capacity.identityId);
+    const colleague = await resolveAuthMember(env.DB, colleagueId, crypto.randomUUID(), colleagueIdentityId);
+
+    await submitBallot(env.DB, first, vote.id, capacity.memberId, "opposed", null, undefined, {
+      replacesBallotCastAt: null,
+    });
+    const [{ updated_at: castAt }] = await queryAll<{ updated_at: string }>(
+      env.DB,
+      "SELECT updated_at FROM vote_ballots WHERE vote_id = ? AND member_id = ?",
+      [vote.id, capacity.memberId],
+    );
+
+    await expect(
+      submitBallot(env.DB, colleague, vote.id, capacity.memberId, "in_favor", null, undefined, {
+        replacesBallotCastAt: null,
+      }),
+    ).rejects.toMatchObject({ code: "BALLOT_CHANGED" });
+    await submitBallot(env.DB, colleague, vote.id, capacity.memberId, "in_favor", null, undefined, {
+      replacesBallotCastAt: castAt,
+    });
+
+    expect(
+      await queryAll<{ user_id: string; choice: string }>(
+        env.DB,
+        "SELECT user_id, choice FROM vote_ballots WHERE vote_id = ? AND member_id = ?",
+        [vote.id, capacity.memberId],
+      ),
+    ).toEqual([{ user_id: colleagueId, choice: "in_favor" }]);
+  });
+
+  it("rejects a stale mounted replacement and advances revisions within one millisecond", async () => {
+    const capacity = await createOrganizationCapacity(env.DB, { organizationName: "Synthetic ballot organization" });
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+    const vote = await createCanonicalVote(env.DB, admin);
+    const token = await createMemberSession(
+      env.DB,
+      capacity.userId,
+      "synthetic-replacement-session",
+      undefined,
+      capacity.identityId,
+    );
+    const path = `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}`;
+    const submit = (choice: string, replacesBallotCastAt: string | null) =>
+      callApi(
+        env,
+        authorizedRequest(token, `${path}/ballots`, {
+          method: "POST",
+          body: JSON.stringify({ memberId: capacity.memberId, choice, replacesBallotCastAt }),
+        }),
+      );
+    expect((await submit("opposed", null)).status).toBe(200);
+    const detail = groupVoteDetailResponseSchema.parse(
+      await (await callApi(env, authorizedRequest(token, path))).json(),
+    );
+    const recorded = detail.vote.memberBallots![0].recorded!;
+    expect(recorded).toMatchObject({ choice: "opposed", castByYou: true });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse(recorded.castAt));
+    try {
+      expect((await submit("in_favor", recorded.castAt)).status).toBe(200);
+      const stale = await submit("abstain", recorded.castAt);
+      expect(stale.status).toBe(409);
+      expect(await stale.json()).toMatchObject({ error: { code: "BALLOT_CHANGED" } });
+      const rows = await queryAll<{ choice: string; updated_at: string }>(
+        env.DB,
+        "SELECT choice, updated_at FROM vote_ballots WHERE vote_id = ? AND member_id = ?",
+        vote.id,
+        capacity.memberId,
+      );
+      expect(rows).toEqual([
+        { choice: "in_favor", updated_at: new Date(Date.parse(recorded.castAt) + 1).toISOString() },
+      ]);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("refuses an unseen ballot inserted after the replacement request's reads", async () => {
+    const capacity = await createOrganizationCapacity(env.DB);
+    await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
+    const vote = await createCanonicalVote(env.DB, admin);
+    const member = await resolveAuthMember(env.DB, capacity.userId, crypto.randomUUID(), capacity.identityId);
+    const gate = gateNextRun(env.DB);
+    const pending = submitBallot(gate.db, member, vote.id, capacity.memberId, "in_favor", null);
+    await gate.reached;
+    await submitBallot(env.DB, member, vote.id, capacity.memberId, "opposed", null);
+    gate.release();
+    await expect(pending).rejects.toMatchObject({ code: "BALLOT_CHANGED" });
+    expect(await queryAll(env.DB, "SELECT choice FROM vote_ballots WHERE vote_id = ?", vote.id)).toEqual([
+      { choice: "opposed" },
+    ]);
   });
 
   it("uses the editable D1 category policy for both per-Member and per-person ballots", async () => {
