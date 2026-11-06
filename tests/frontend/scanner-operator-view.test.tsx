@@ -81,7 +81,9 @@ describe("attendee-facing scanner and operator drawer", () => {
       host.querySelector<HTMLButtonElement>('.pk-fast-scanner__stage [aria-label="Scan next now"]')!.click(),
     );
     expect(skip).toHaveBeenCalledOnce();
-    expect(scannerSwipeDirection({ x: 0, y: 0 }, { x: 120, y: -50 })).toBeNull();
+    expect(scannerSwipeDirection({ x: 0, y: 0 }, { x: 120, y: -50 })).toBe("right");
+    expect(scannerSwipeDirection({ x: 120, y: 0 }, { x: 0, y: 10 })).toBe("left");
+    expect(scannerSwipeDirection({ x: 0, y: 0 }, { x: 40, y: 40 })).toBeNull();
   });
   it("contains keyboard focus on the scanning surface and restores focus on exit", async () => {
     const previous = document.createElement("button");

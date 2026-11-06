@@ -1,4 +1,5 @@
-import { useState } from "preact/hooks";
+import { ScannerTaskNavigation } from "./ScannerTaskNavigation";
+import { useContext, useState } from "preact/hooks";
 import type { RefObject } from "preact";
 import { enterScannerFullscreen } from "./immersive-scanner";
 
@@ -7,7 +8,8 @@ export function useScannerPresentation(
   shell: RefObject<HTMLDivElement>,
   initial: "fullscreen" | "embedded" = "fullscreen",
 ) {
-  const [presentation, setPresentation] = useState(initial);
+  const navigation = useContext(ScannerTaskNavigation);
+  const [presentation, setPresentation] = useState(() => (navigation?.launch ? "fullscreen" : initial));
   const enter = () => {
     if (presentation === "fullscreen" && shell.current) enterScannerFullscreen(shell.current);
   };

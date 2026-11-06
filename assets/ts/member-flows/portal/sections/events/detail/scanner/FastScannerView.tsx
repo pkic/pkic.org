@@ -1,3 +1,4 @@
+import { useScannerTaskSwipe } from "./ScannerTaskNavigation";
 import { ScannerModeIcon } from "./ScannerModeIcon";
 import { ScannerPreparationStatus } from "./ScannerPreparationStatus";
 import type { ComponentChildren, ComponentProps } from "preact";
@@ -24,6 +25,7 @@ import { IconPrint, IconFullscreen } from "../../../../../../components/icons/ap
 
 export function FastScannerView({
   presentation = "fullscreen",
+  taskSwitchDisabled = false,
   purpose = "scan",
   onPresentation,
   canRecordAttendance = true,
@@ -57,6 +59,7 @@ export function FastScannerView({
   onSound,
 }: {
   presentation?: "embedded" | "fullscreen";
+  taskSwitchDisabled?: boolean;
   purpose?: "scan" | "print";
   onPresentation?: () => void;
   lastResult?: EventScanResponse | null;
@@ -98,6 +101,7 @@ export function FastScannerView({
     if (!operatorOpen) setReview(null);
     return () => operatorPause.current?.(false);
   }, [operatorOpen]);
+  const taskSwipe = useScannerTaskSwipe(purpose === "print" ? "print" : mode === "checkout" ? "exit" : "entry");
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const trigger = useRef<HTMLButtonElement>(null),
     drawer = useRef<HTMLElement>(null);
@@ -129,7 +133,8 @@ export function FastScannerView({
       : "Ready for the next badge";
   return (
     <div
-      class={`pk-login__backdrop pk-fast-scanner pk-fast-scanner--${outcome}${presentation === "embedded" ? " pk-fast-scanner--embedded" : ""}${result ? " pk-fast-scanner--result" : ""}${manualEntry || recentScans ? " pk-fast-scanner--manual" : ""}`}
+      class={`pk-login__backdrop pk-fast-scanner pk-scanner-viewport pk-fast-scanner--${outcome}${presentation === "embedded" ? " pk-fast-scanner--embedded" : ""}${result ? " pk-fast-scanner--result" : ""}${manualEntry || recentScans ? " pk-fast-scanner--manual" : ""}`}
+      data-fullscreen={presentation === "fullscreen" || undefined}
       role={presentation === "fullscreen" ? "dialog" : "region"}
       aria-modal={presentation === "fullscreen" ? "true" : undefined}
       aria-label={purpose === "print" ? "Badge printing scanner" : "Continuous badge scanner"}
@@ -152,7 +157,8 @@ export function FastScannerView({
         }
         if (
           event.target instanceof Node &&
-          (drawer.current?.contains(event.target) || (event.target instanceof Element && event.target.closest("form")))
+          (drawer.current?.contains(event.target) ||
+            (event.target instanceof Element && event.target.closest("form,button,a,input,select,textarea")))
         ) {
           pointer.current = null;
           return;
@@ -166,7 +172,16 @@ export function FastScannerView({
         }
         const direction = scannerSwipeDirection(pointer.current, { x: event.clientX, y: event.clientY });
         pointer.current = null;
-        if (direction === "up") setOperatorOpen(true);
+        if (
+          (direction === "left" || direction === "right") &&
+          presentation === "fullscreen" &&
+          !operatorOpen &&
+          !taskSwitchDisabled &&
+          !cooldown?.saving &&
+          !cooldown?.remainingMs
+        )
+          taskSwipe.move(direction);
+        else if (direction === "up") setOperatorOpen(true);
         else if (direction === "down") setOperatorOpen(false);
       }}
       onPointerCancel={() => {
@@ -217,6 +232,24 @@ export function FastScannerView({
         {recentScans && <div class="pk-fast-scanner__manual">{recentScans}</div>}
         {!manualEntry && !recentScans && lastResult && (
           <p class="pk-fast-scanner__last">Last scan: {scanFeedbackLabel(lastResult, mode)}</p>
+        )}
+        {presentation === "fullscreen" && !manualEntry && !recentScans && taskSwipe.tasks.length > 1 && (
+          <p
+            class="pk-fast-scanner__task-swipe"
+            role="group"
+            aria-disabled={taskSwitchDisabled || cooldown?.saving || Boolean(cooldown?.remainingMs) || undefined}
+            tabIndex={0}
+            aria-label="Swipe left or right, or use arrow keys, to switch scanner"
+            onKeyDown={(event) => {
+              if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                event.preventDefault();
+                if (!operatorOpen && !taskSwitchDisabled && !cooldown?.saving && !cooldown?.remainingMs)
+                  taskSwipe.move(event.key === "ArrowLeft" ? "left" : "right");
+              }
+            }}
+          >
+            ← Swipe: {taskSwipe.tasks.map((task) => task.label).join(" · ")} →
+          </p>
         )}
         <div class="pk-fast-scanner__actions">
           {onPresentation && (

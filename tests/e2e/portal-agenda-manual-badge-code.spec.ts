@@ -184,6 +184,31 @@ test("the registration desk switches between immediate labels and full badges", 
   expect(artwork).toHaveLength(1);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.screenshot({ path: info.outputPath("label-desk-desktop.png"), fullPage: true });
+  // Exercise the viewport fallback independently of native fullscreen support.
+  await page.evaluate(() =>
+    Object.defineProperty(Element.prototype, "requestFullscreen", { value: undefined, configurable: true }),
+  );
+  await page.getByRole("button", { name: "Enter full screen", exact: true }).click();
+  const printScanner = page.getByRole("dialog", { name: "Badge printing scanner", exact: true });
+  await expect(printScanner).toBeVisible();
+  expect(await printScanner.evaluate((element) => element.contains(document.elementFromPoint(20, 20)))).toBe(true);
+  await page.screenshot({ path: info.outputPath("print-scanner-fullscreen-desktop.png") });
+  await page.setViewportSize({ width: 375, height: 812 });
+  expect(await printScanner.evaluate((element) => element.contains(document.elementFromPoint(20, 20)))).toBe(true);
+  await page.screenshot({ path: info.outputPath("print-scanner-fullscreen-phone.png") });
+  const swipe = () =>
+    page.getByRole("group", { name: "Swipe left or right, or use arrow keys, to switch scanner", exact: true });
+  await swipe().press("ArrowLeft");
+  await expect(page).toHaveURL(/\/scanner$/);
+  const captureScanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+  await expect(captureScanner).toBeVisible();
+  await expect(captureScanner.getByText("Venue entrance · Record attendance", { exact: true })).toBeVisible();
+  await swipe().press("ArrowLeft");
+  await expect(captureScanner.getByText("Venue exit · Record checkout", { exact: true })).toBeVisible();
+  await swipe().press("ArrowLeft");
+  await expect(page).toHaveURL(/\/scanner\/print$/);
+  await expect(printScanner).toBeVisible();
+  await expect(page.getByRole("button", { name: "Enter full screen", exact: true })).toHaveCount(0);
 });
 
 test("the protected printed short code works through manual offline capture and exact original-operation replay", async ({

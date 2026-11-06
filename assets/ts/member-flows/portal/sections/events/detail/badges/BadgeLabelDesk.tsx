@@ -1,3 +1,5 @@
+import { usePrintScannerSound } from "../scanner/usePrintScannerSound";
+import { useScannerTaskLaunch } from "../scanner/ScannerTaskNavigation";
 import {
   badgePrintDesignSchema,
   type BadgePrintDesign,
@@ -25,7 +27,7 @@ import { BadgeDocumentFrame } from "../../../../../../components/event-badges/Ba
 import { SearchPicker } from "../../../../../../components/SearchPicker";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { IconPrint, IconFullscreen } from "../../../../../../components/icons/app-navigation";
-import { scannerImmersiveLifecycle } from "../scanner/immersive-scanner";
+import { useScannerImmersiveLifecycle } from "../scanner/useScannerImmersiveLifecycle";
 import { useScannerPresentation } from "../scanner/useScannerPresentation";
 import { FastScannerView } from "../scanner/FastScannerView";
 import { downloadBadgeArtifact } from "../../../../../../components/event-badges/badge-print-artifacts";
@@ -75,8 +77,14 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
     setPdfUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [printing.pdf]);
+  const sound = usePrintScannerSound(printing.job?.key, printing.busy, printing.error);
   const camera = useScannerCamera((raw) => {
     if (camera.acceptsFrame(raw) && printing.scan(raw)) camera.stop();
+  });
+  useScannerTaskLaunch("print", () => {
+    sound.unlock();
+    continuous.current = true;
+    void camera.start();
   });
   const stopCamera = useRef(camera.stop);
   stopCamera.current = camera.stop;
@@ -94,6 +102,7 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
         cameraActive={camera.active}
         starting={camera.starting}
         busy={printing.busy}
+        sound={sound}
         format={format}
         onFormat={setFormat}
         copies={copies}
@@ -103,6 +112,7 @@ function SessionLabelDesk({ slug, session }: { slug: string; session: PortalSess
         onSides={setSides}
         onCopies={(value) => setCopies(String(value))}
         start={() => {
+          sound.unlock();
           continuous.current = true;
           void camera.start();
         }}
@@ -202,9 +212,11 @@ export function BadgeLabelDeskView({
   stop,
   search,
   children,
+  sound,
   format = "html",
   onFormat,
 }: {
+  sound?: Pick<ReturnType<typeof usePrintScannerSound>, "label" | "toggleSound">;
   format?: "html" | "pdf";
   onFormat?: (value: "html" | "pdf") => void;
   video: RefObject<HTMLVideoElement>;
@@ -226,15 +238,10 @@ export function BadgeLabelDeskView({
   const cameraShell = useRef<HTMLDivElement>(null);
   const { presentation, setPresentation, toggle } = useScannerPresentation(cameraShell, "embedded");
   const fullscreen = presentation === "fullscreen";
-  const latestStop = useRef(stop);
-  latestStop.current = stop;
-  useEffect(() => {
-    if (fullscreen && cameraShell.current)
-      return scannerImmersiveLifecycle(cameraShell.current, () => {
-        latestStop.current();
-        setPresentation("embedded");
-      });
-  }, [fullscreen, setPresentation]);
+  const screenAwake = useScannerImmersiveLifecycle(fullscreen, cameraShell, () => {
+    stop();
+    setPresentation("embedded");
+  });
   return (
     <div class="pk-label-desk pk-stack">
       <PageHeader
@@ -294,7 +301,8 @@ export function BadgeLabelDeskView({
       />
       <div
         ref={cameraShell}
-        class={`pk-label-desk__camera${fullscreen ? " pk-label-desk__camera--fullscreen" : ""}`}
+        class={`pk-label-desk__camera pk-scanner-viewport${fullscreen ? " pk-label-desk__camera--fullscreen" : ""}`}
+        data-fullscreen={fullscreen || undefined}
         aria-label={cameraActive ? "Ticket scanner" : "Camera off"}
       >
         {!fullscreen && (
@@ -321,6 +329,10 @@ export function BadgeLabelDeskView({
         {fullscreen && (
           <FastScannerView
             purpose="print"
+            taskSwitchDisabled={busy || starting}
+            screenAwake={screenAwake}
+            soundLabel={sound?.label}
+            onSound={sound?.toggleSound}
             context={design === "name_qr" ? "Labels" : "Full badges"}
             result={null}
             pending={0}

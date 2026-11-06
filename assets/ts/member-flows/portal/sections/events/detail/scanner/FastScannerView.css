@@ -1,4 +1,12 @@
 @layer components {
+  .pk-fast-scanner__task-swipe { margin: var(--pk-3) 0; font-size: var(--pk-text-sm); }
+  .pk-fast-scanner__task-swipe:focus-visible { outline: 2px solid currentColor; outline-offset: var(--pk-1); }
+  .pk-scanner-viewport[data-fullscreen] {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    min-height: 100dvh;
+  }
   .pk-login__backdrop.pk-fast-scanner.pk-fast-scanner--embedded {
     position: relative;
     inset: auto;
@@ -9,10 +17,6 @@
   }
   .pk-login__backdrop.pk-fast-scanner {
     margin: 0;
-    position: fixed;
-    inset: 0;
-    z-index: 1100;
-    min-height: 100dvh;
     padding: max(var(--pk-5), env(safe-area-inset-top)) max(var(--pk-5), env(safe-area-inset-right))
       max(var(--pk-4), env(safe-area-inset-bottom)) max(var(--pk-5), env(safe-area-inset-left));
     color: var(--pk-on-solid);

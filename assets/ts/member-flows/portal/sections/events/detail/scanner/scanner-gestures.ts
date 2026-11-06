@@ -1,10 +1,11 @@
 export function scannerSwipeDirection(
   start: { x: number; y: number } | null,
   end: { x: number; y: number },
-): "up" | "down" | null {
+): "up" | "down" | "left" | "right" | null {
   if (!start) return null;
   const x = end.x - start.x,
     y = end.y - start.y;
+  if (Math.abs(x) >= 60 && Math.abs(x) >= Math.abs(y) * 1.5) return x < 0 ? "left" : "right";
   if (Math.abs(y) < 60 || Math.abs(y) < Math.abs(x) * 1.5) return null;
   return y < 0 ? "up" : "down";
 }

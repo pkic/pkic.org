@@ -1,3 +1,5 @@
+import { useContext, useState } from "preact/hooks";
+import { ScannerTaskNavigation } from "./ScannerTaskNavigation";
 import {
   scanActionSchema,
   type EventScanRequest,
@@ -71,4 +73,20 @@ export function scannerInitialAction(
         ? "attendance"
         : (allowedActions.find((value) => value !== "lead" && value !== "exception") ?? "check"))
   );
+}
+
+/** Preserve all authorized modes while starting the task explicitly chosen by a swipe. */
+export function useScannerAction(
+  allowed: readonly EventScanRequest["action"][],
+  preferred: EventScanRequest["action"] | undefined,
+  sponsor: boolean,
+) {
+  const navigation = useContext(ScannerTaskNavigation);
+  const requested = navigation?.tasks.find((task) => task.key === navigation?.launch)?.action;
+  return useState(() => scannerInitialAction(allowed, requested ?? preferred, sponsor));
+}
+
+/** The same authorized venue-entry action drives the task card and swipe destination. */
+export function scannerEntranceAction(allowed: readonly EventScanRequest["action"][]): EventScanRequest["action"] {
+  return allowed.includes("attendance") ? "attendance" : allowed.includes("admission") ? "admission" : "check";
 }

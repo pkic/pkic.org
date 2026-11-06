@@ -121,14 +121,20 @@ afterEach(async () => {
 
 describe("badge printing desk", () => {
   it("retains the camera when switching views, and Escape closes the full-screen scanner", async () => {
+    const release = vi.fn(async () => {});
+    const request = vi.fn(async () => ({ released: false, release, addEventListener: vi.fn() }));
+    vi.stubGlobal("navigator", Object.create(navigator, { wakeLock: { value: { request } } }));
     await mount();
     await click("Start camera");
     const video = host.querySelector("video");
     await click("Enter full screen");
+    await settle(() => expect(host.textContent).toContain("Screen awake"));
+    expect(request).toHaveBeenCalledWith("screen");
     expect(host.querySelector('[role="dialog"][aria-label="Badge printing scanner"]')).not.toBeNull();
     expect(host.querySelector("video")).toBe(video);
     expect(capture.starts).toBe(1);
     await click("Embedded view");
+    expect(release).toHaveBeenCalled();
     expect(host.querySelector("video")).toBe(video);
     expect(capture.starts).toBe(1);
     await click("Enter full screen");

@@ -9,12 +9,12 @@ import { ScannerWorkspace } from "./ScannerWorkspace";
 import { useScannerImmersiveLifecycle } from "./useScannerImmersiveLifecycle";
 import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import { scannerContextLabel } from "./ScannerCaptureContext";
-import { useScannerAutoStart } from "./useScannerAutoStart";
+import { useScannerAutoStart, useScannerCaptureActive } from "./useScannerAutoStart";
 import { ScannerConnectionStatus } from "./ScannerConnectionStatus";
 import { useScannerConnection } from "./useScannerConnection";
 import { useScannerPreferences } from "./useScannerPreferences";
 import { useScannerSound } from "./useScannerSound";
-import { scannerInitialAction } from "./ScannerModeSelect";
+import { useScannerAction } from "./ScannerModeSelect";
 import { portalSession } from "../../../../state";
 import { useScannerSessionFence } from "./useScannerSessionFence";
 import { ScannerLeadExport } from "./ScannerLeadExport";
@@ -56,7 +56,7 @@ export function EventScannerCapture({
 }: EventScannerProps) {
   const refusePreparation = scannerPreparationRefusal(portalSession.value, operatorUserId);
   const [badgeId, setBadge] = useState("");
-  const [action, setAction] = useState(scannerInitialAction(allowedActions, collectorContext?.action, !!sponsorId));
+  const [action, setAction] = useScannerAction(allowedActions, collectorContext?.action, !!sponsorId);
   const [scannerTab, setScannerTab] = useHashQueryParam("scannerTab", "scan", ["scan", "recent", "diagnostics"]);
   const recentVisible = scannerTab === "recent" && !collectorContext;
   const [consentConfirmed, setConsent] = useState(false);
@@ -66,7 +66,7 @@ export function EventScannerCapture({
   const { deviceId } = scannerDevice;
   const [operationId, setOperation] = useState(() => crypto.randomUUID());
   const authorityPaused = useRef(false);
-  const [fastMode, setFastMode] = useState(false);
+  const [fastMode, setFastMode] = useScannerCaptureActive();
   const preferences = useScannerPreferences();
   const feedbackPause = preferences.feedbackPause;
   const online = useScannerConnection();
@@ -91,7 +91,6 @@ export function EventScannerCapture({
     authorityPaused,
   });
   const offline = !online || Boolean(collectorContext);
-  const sound = useScannerSound(preferences.sound, result ?? lastResult, action, failed, offline);
   const [busy, setBusy] = useState(false);
   const manualCapturePending = useRef(false);
   const cooldown = useScanCooldown(feedbackPause);
@@ -130,6 +129,7 @@ export function EventScannerCapture({
   } = preparation.location;
   const { eligibilityManifest, manifestReady, manifestPreparing, manifestError } = preparation.eligibility;
   const { offlineAdmission, offlinePreparation } = preparation;
+  const sound = useScannerSound(preferences.sound, result ?? lastResult, action, failed, offline, Boolean(targetId));
   const screenAwake = useScannerImmersiveLifecycle(
     fastMode,
     scannerShell,
