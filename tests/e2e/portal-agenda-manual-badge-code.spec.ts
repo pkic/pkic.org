@@ -279,6 +279,7 @@ test("the registration desk switches between immediate labels and full badges", 
   expect(tools!.y + tools!.height).toBeGreaterThan(page.viewportSize()!.height - 40);
   await page.screenshot({ path: info.outputPath("recent-recorded-scan-phone.png") });
   await captureScanner.getByRole("button", { name: "Return to scanning", exact: true }).click();
+  await expect(swipe()).not.toHaveAttribute("aria-disabled", "true");
 
   await swipe().press("ArrowLeft");
   await expect(captureScanner.getByText("Ready for exit", { exact: true })).toBeVisible();
