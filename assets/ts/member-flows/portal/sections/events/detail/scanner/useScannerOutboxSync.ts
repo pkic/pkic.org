@@ -57,7 +57,7 @@ export function useScannerOutboxSync({
         verificationWaiters.current.delete(operationId);
         resolve(confirmed);
       };
-      const timeout = window.setTimeout(() => finish(false), 8500);
+      const timeout = window.setTimeout(() => finish(false), 2000);
       verificationWaiters.current.set(operationId, finish);
       if (activeSyncs.current === 0) void sync().catch(() => finish(false));
     });
@@ -65,8 +65,13 @@ export function useScannerOutboxSync({
 
   async function scanSaved() {
     setUploadStatus(collectorContext ? "Saved on this device · upload pending" : "Uploading scans in the background…");
-    setPending(await pendingScanCount(operatorUserId));
-    void sync();
+    try {
+      setPending(await pendingScanCount(operatorUserId));
+    } catch {
+      // Counting is ancillary: the operation has already been saved durably.
+    } finally {
+      void sync();
+    }
   }
   function cancelRetries() {
     syncAgain.current = false;

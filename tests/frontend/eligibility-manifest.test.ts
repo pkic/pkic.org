@@ -124,6 +124,27 @@ function stubManifestStorage(saved: Map<string, unknown>) {
   return open;
 }
 describe("local scoped eligibility manifest", () => {
+  it("preserves an unexpired pre-upgrade roster for offline verification", async () => {
+    const { scopeDate: _, snapshotId: __, ...legacy } = { ...(await fixture()), complete: true };
+    const key = JSON.stringify([legacy.operatorUserId, "synthetic", null, null, legacy.epochId, legacy.deviceId]);
+    const saved = new Map<string, unknown>([[key, legacy]]);
+    stubManifestStorage(saved);
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    await pruneExpiredEligibilityManifests();
+    expect(saved.get(key)).toEqual(legacy);
+    const manifest = await prepareEligibilityManifest(
+      "synthetic",
+      legacy.operatorUserId,
+      null,
+      legacy,
+      undefined,
+      null,
+      "cache",
+    );
+    expect(await manifest.lookup(badge, "attendance")).toMatchObject({ outcome: "eligible" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it("clears only the signed-out owner's cached eligibility without touching other storage", async () => {
     const snapshot = await fixture();
     const other = { ...snapshot, operatorUserId: "00000000-0000-4000-8000-000000000009" };

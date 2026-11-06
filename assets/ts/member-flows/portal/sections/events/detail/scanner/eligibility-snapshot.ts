@@ -6,7 +6,9 @@ export const cachedManifestSchema = offlineEligibilityResponseSchema
   .omit({ entries: true, nextBadgeId: true, pageDigest: true, unchanged: true })
   .extend({
     entries: offlineEligibilityResponseSchema.shape.entries.element.array().max(100000),
-    snapshotId: z.string().uuid(),
+    // Older saved rosters remain usable until their original lease expires.
+    scopeDate: offlineEligibilityResponseSchema.shape.scopeDate.optional(),
+    snapshotId: z.string().uuid().optional(),
     complete: z.boolean().default(false),
     writtenAt: z.number(),
     validUntil: z.number(),

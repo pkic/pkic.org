@@ -39,7 +39,7 @@ export async function downloadEligibilitySnapshot(
     const knownNext =
       previous.length > previousIndex + OFFLINE_ELIGIBILITY_PAGE_SIZE ? knownEntries.at(-1)!.badgeId : null;
     const knownDigest =
-      matching && !restarted
+      matching && saved.scopeDate && saved.snapshotId && !restarted
         ? await eligibilityPageDigest({ ...saved, entries: knownEntries, nextBadgeId: knownNext })
         : undefined;
     const query = new URLSearchParams({ epochId: enrollment.epochId, deviceId: enrollment.deviceId });
@@ -48,7 +48,7 @@ export async function downloadEligibilitySnapshot(
     if (cursor) query.set("afterBadgeId", cursor);
     if (knownDigest) query.set("knownDigest", knownDigest);
     if (snapshot) {
-      query.set("scopeDate", snapshot.scopeDate);
+      if (snapshot.scopeDate) query.set("scopeDate", snapshot.scopeDate);
       if (snapshot.publishedRevision !== null) query.set("publishedRevision", String(snapshot.publishedRevision));
     }
     enrolledOfflineEligibilityQuerySchema.parse(Object.fromEntries(query));

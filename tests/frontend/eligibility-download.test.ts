@@ -60,6 +60,19 @@ afterEach(() => {
 });
 
 describe("Conditional eligibility page downloads", () => {
+  it("replaces a pre-upgrade roster with a complete download before reusing digests", async () => {
+    const snapshot = fixture();
+    const { scopeDate: _, snapshotId: __, ...legacy } = snapshot;
+    const fetcher = vi.fn(async (url: string) => {
+      expect(parseQuery(url).knownDigest).toBeUndefined();
+      return page(snapshot);
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const result = await download(legacy);
+    expect(result.entries).toEqual(snapshot.entries);
+    expect(result.scopeDate).toBe(snapshot.scopeDate);
+    expect(result.snapshotId).toBeDefined();
+  });
   it("renews an unchanged complete roster without transferring its entries", async () => {
     const snapshot = fixture();
     const fetcher = vi.fn(async (url: string) => {
