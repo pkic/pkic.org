@@ -1,5 +1,5 @@
 import type { ScannerRole } from "../events/detail/scanner/scanner-role";
-import { scannerEntranceAction } from "../events/detail/scanner/ScannerModeSelect";
+import { scannerEntranceAction, scannerInitialAction } from "../events/detail/scanner/ScannerModeSelect";
 import { useCallback, useState } from "preact/hooks";
 import {
   ScannerTaskNavigation,
@@ -43,9 +43,10 @@ export function EventStaffScanner({
   const operator = portalSession.value?.identity.id ?? "";
   const printHref = canPrintLabels ? `#${basePath}/print` : undefined;
   const entryAction = scannerEntranceAction(actions);
+  const entryHref = `#${basePath}${entryAction === scannerInitialAction(actions, undefined, false) ? "" : `?scanAction=${entryAction}`}`;
   const tasks: ScannerTaskDestination[] = [
     ...(actions.includes(entryAction)
-      ? [{ key: "entry" as const, label: "Entry", href: `#${basePath}`, action: entryAction }]
+      ? [{ key: "entry" as const, label: "Entry", href: entryHref, action: entryAction }]
       : []),
     ...(actions.includes("checkout")
       ? [{ key: "exit" as const, label: "Exit", href: `#${basePath}?scanAction=checkout`, action: "checkout" as const }]

@@ -65,7 +65,7 @@ export function ScannerHelpTour({
       id: "camera",
       target: '[data-scanner-help="camera"]',
       title: "Use the camera",
-      body: "Scanning continues with the preview hidden. Use this button to show or hide the camera view, or retry if the camera is unavailable. Hold one QR code steady in front of the camera.",
+      body: "After closing help, scanning continues with the preview hidden. Use this button to show or hide the camera view, or retry if the camera is unavailable. Hold one QR code steady in front of the camera.",
     },
     {
       id: "find",

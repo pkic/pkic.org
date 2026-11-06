@@ -9,13 +9,20 @@ export function useScannerManualEntry(
   const [open, setOpen] = useState(false),
     [focusRequested, setFocusRequested] = useState(false);
   const paused = useRef(false);
-  const stop = useRef(pause);
-  stop.current = pause;
+  const lifecycle = useRef({ pause, resume });
+  lifecycle.current = { pause, resume };
+  const wasRecent = useRef(false);
   useEffect(() => {
-    if (!recentVisible) return;
-    stop.current();
-    paused.current = true;
-  }, [recentVisible]);
+    const returning = wasRecent.current && !recentVisible;
+    wasRecent.current = recentVisible;
+    if (recentVisible) {
+      lifecycle.current.pause();
+      paused.current = true;
+    } else if (returning && !open) {
+      paused.current = false;
+      if (immersive) lifecycle.current.resume();
+    }
+  }, [recentVisible, immersive, open]);
   function reset() {
     paused.current = false;
     setOpen(false);

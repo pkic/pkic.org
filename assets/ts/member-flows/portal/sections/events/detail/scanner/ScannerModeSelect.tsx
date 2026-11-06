@@ -22,6 +22,13 @@ export function scannerActionLabel(action: EventScanRequest["action"]) {
             : "Check registration only";
 }
 
+/** Diagnostics and bookmarked state offer the same operator-selectable modes. */
+export function scannerSelectableActions(allowed: readonly EventScanRequest["action"][], sponsor: boolean) {
+  return allowed.filter((value) =>
+    sponsor ? value === "lead" : ["attendance", "checkout", "check", "admission"].includes(value),
+  );
+}
+
 export function ScannerModeSelect({
   action,
   allowedActions = scanActionSchema.options,
@@ -35,11 +42,7 @@ export function ScannerModeSelect({
   actionField: FieldPresentation;
   onAction: (value: EventScanRequest["action"]) => void;
 }) {
-  const modes = allowedActions.filter((value) =>
-    sponsorId
-      ? value === "lead"
-      : value === "attendance" || value === "checkout" || value === "check" || value === "admission",
-  );
+  const modes = scannerSelectableActions(allowedActions, Boolean(sponsorId));
   if (modes.length === 1 && modes[0] === action) return <p class="pk-muted">{scannerActionLabel(action)}</p>;
   return (
     <Field label="Scan mode" {...actionField}>
@@ -83,7 +86,7 @@ export function useScannerAction(
 ) {
   const initial = scannerInitialAction(allowed, preferred, sponsor);
   const [boundAction, setBoundAction] = useState(initial);
-  const [action, setAction] = useHashQueryParam("scanAction", initial, allowed);
+  const [action, setAction] = useHashQueryParam("scanAction", initial, scannerSelectableActions(allowed, sponsor));
   return preferred || sponsor ? ([boundAction, setBoundAction] as const) : ([action, setAction] as const);
 }
 

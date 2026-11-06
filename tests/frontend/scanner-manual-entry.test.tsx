@@ -3,6 +3,8 @@ import { render } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
+import { useScannerManualEntry } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useScannerManualEntry";
+import { useHashQueryParam } from "../../assets/ts/hooks/useHashQueryParam";
 import { ScannerManualControls } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerCaptureControls";
 
 let host: HTMLDivElement;
@@ -89,3 +91,33 @@ it("opens the actual manual dialog, focuses its input and retains controlled inp
   expect(document.activeElement).toBe(reopened);
   expect(reopened.value).toBe(badgeId);
 });
+
+it.each([false, true])(
+  "restores capture on history return while preserving manual entry: manual=%s",
+  async (manualOpen) => {
+    host = document.createElement("div");
+    document.body.append(host);
+    const pause = vi.fn(),
+      resume = vi.fn();
+    let controls!: ReturnType<typeof useScannerManualEntry>;
+    function Scanner() {
+      const [tab] = useHashQueryParam("scannerTab", "scan", ["scan", "recent"]);
+      controls = useScannerManualEntry(true, pause, resume, tab === "recent");
+      return null;
+    }
+    window.location.hash = "#/events/example/scanner";
+    await act(() => render(<Scanner />, host));
+    await act(() => {
+      window.location.hash = "#/events/example/scanner?scannerTab=recent";
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(controls.paused.current).toBe(true);
+    if (manualOpen) await act(() => controls.setOpen(true));
+    await act(() => {
+      window.location.hash = "#/events/example/scanner";
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(controls.paused.current).toBe(manualOpen);
+    expect(resume).toHaveBeenCalledTimes(manualOpen ? 0 : 1);
+  },
+);

@@ -184,3 +184,13 @@ it("restores entry and exit from shared URL state without starting full screen",
   });
   expect(host.querySelector("output")?.textContent).toBe("attendance");
 });
+
+it.each(["exception", "lead"])("rejects nonselectable URL mode %s even with broader permissions", async (requested) => {
+  window.location.hash = `#/events/example/scanner?scanAction=${requested}`;
+  function Mode() {
+    const [action] = useScannerAction(["attendance", "check", "admission", "exception", "lead"], undefined, false);
+    return <output>{action}</output>;
+  }
+  await act(() => render(<Mode />, host));
+  expect(host.querySelector("output")?.textContent).toBe("attendance");
+});
