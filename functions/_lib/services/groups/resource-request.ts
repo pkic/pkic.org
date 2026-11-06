@@ -31,10 +31,13 @@ export async function prepareGroupResourceRequest(
   const identitySelection =
     machine?.actingIdentitySelection ?? (human ? userSessionActingIdentitySelection(userId, human.claims.iid) : null);
   const authStatements = human?.statements ?? machine!.statements;
-  const group = { sql: "SELECT id FROM groups WHERE id=? OR slug=?", bindings: [reference, reference] };
+  const group = {
+    sql: "SELECT id FROM groups WHERE id=? OR slug=? ORDER BY CASE WHEN id=? THEN 0 ELSE 1 END LIMIT 1",
+    bindings: [reference, reference, reference],
+  };
   const groupRead = prepareAuthenticatedGroupContext(
     db,
-    reference,
+    group,
     { userId, admin },
     permissionsAuthorizationEvidence(admin, [{ permission: "groups:read" }]),
     memberSelection,
@@ -57,8 +60,8 @@ export async function prepareGroupResourceRequest(
     access: {
       memberEvidence: activeGroupMembershipAuthorizationEvidence(userId, group),
       managerEvidence: {
-        sql: `SELECT 1 FROM groups g WHERE (g.id=? OR g.slug=?) AND EXISTS(${manage.sql})`,
-        bindings: [reference, reference, ...manage.bindings],
+        sql: `SELECT 1 FROM groups g WHERE g.id=(${group.sql}) AND EXISTS(${manage.sql})`,
+        bindings: [...group.bindings, ...manage.bindings],
       },
     },
     statements: [...authStatements, groupRead.statement],

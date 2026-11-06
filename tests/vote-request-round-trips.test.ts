@@ -1,3 +1,4 @@
+import { createGroup } from "../functions/_lib/services/groups";
 import { verifyUserSessionToken } from "../functions/_lib/auth/user-session-token";
 import { signMcpSessionToken } from "../functions/_lib/auth/mcp-session";
 import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
@@ -137,6 +138,25 @@ describe("complete vote request D1 budgets", () => {
     expect(await queryAll(env.DB, "SELECT member_id, choice FROM vote_ballots WHERE vote_id=?", vote.id)).toEqual([
       { member_id: null, choice: "opposed" },
     ]);
+  });
+
+  it("never borrows management from another group's matching slug", async () => {
+    const shadow = await createGroup(env.DB, admin.admin, {
+      typeKey: "working_group",
+      name: "Synthetic shadow group",
+      slug: TEST_GROUPS.pqc,
+      visibility: "public",
+      eligibilityMode: "open",
+    });
+    await grantGroupLeadershipCapacity(env.DB, shadow.id, capacity.userId);
+    await env.DB.prepare("UPDATE groups SET visibility='public' WHERE id=?").bind(TEST_GROUPS.pqc).run();
+    await env.DB.prepare("UPDATE group_memberships SET left_at=? WHERE user_id=? AND group_id=?")
+      .bind(new Date().toISOString(), capacity.userId, TEST_GROUPS.pqc)
+      .run();
+    const response = await call(token, path);
+    expect(response.status, await response.clone().text()).toBe(404);
+    expect(await response.json()).not.toHaveProperty("vote");
+    expect((await call(token, `${path}/ballots`)).status).toBe(403);
   });
 
   it("preserves a delegated leader's selected Member and exact group ceiling", async () => {

@@ -1,3 +1,4 @@
+import { sqlValue, type SqlId } from "../../db/sql-value";
 import { GROUP_SELECT, GROUP_FROM, mapGroup, type GroupRow } from "./group-projection";
 import { groupMembershipCandidateAuthorizationEvidence } from "./access";
 import { groupManagementCandidateAuthorizationEvidence, groupReadCandidateAuthorizationEvidence } from "./governance";
@@ -249,11 +250,16 @@ export async function readAuthenticatedGroupContext(
 
 export function prepareAuthenticatedGroupContext(
   db: DatabaseLike,
-  idOrSlug: string,
+  idOrSlug: SqlId,
   viewer: { userId: string; admin?: AuthAdmin },
   canReadAll: boolean | AuthorizationEvidence,
   memberSelection?: AuthorizationEvidence,
 ) {
+  const selected = sqlValue(idOrSlug);
+  const reference =
+    typeof idOrSlug === "string"
+      ? { sql: "(g.id=? OR g.slug=?)", bindings: [idOrSlug, idOrSlug] }
+      : { sql: `g.id=${selected.sql}`, bindings: selected.bindings };
   const visibility = buildGroupVisibilityFilter({ userId: viewer.userId, canReadAll: canReadAll === true });
   const ctes: string[] = [];
   const prefixBindings: unknown[] = [];
@@ -278,17 +284,17 @@ export function prepareAuthenticatedGroupContext(
   ctes.push(`request_group_authority AS MATERIALIZED (
     SELECT g.id AS group_id, EXISTS(${manager.sql}) AS manager,
            EXISTS(${delegatedRead.sql}) AS delegated_authorized
-    FROM groups g WHERE g.id=? OR g.slug=?
+    FROM groups g WHERE ${reference.sql}
   )`);
-  prefixBindings.push(...manager.bindings, ...delegatedRead.bindings, idOrSlug, idOrSlug);
+  prefixBindings.push(...manager.bindings, ...delegatedRead.bindings, ...reference.bindings);
   const statement = db
     .prepare(`WITH ${ctes.join(", ")}
     ${GROUP_SELECT}, authority.delegated_authorized,
     (g.active=1 AND (${globalRead ? "(SELECT allowed FROM request_global_read)=1 OR " : ""}${visibility?.sql ?? "1"})) AS visible,
     EXISTS(${member.sql}) AS participant, authority.manager
     ${GROUP_FROM} JOIN request_group_authority authority ON authority.group_id=g.id
-    WHERE g.id=? OR g.slug=?`)
-    .bind(...prefixBindings, ...(visibility?.bindings ?? []), ...member.bindings, idOrSlug, idOrSlug);
+    WHERE ${reference.sql}`)
+    .bind(...prefixBindings, ...(visibility?.bindings ?? []), ...member.bindings, ...reference.bindings);
 
   return {
     statement,
