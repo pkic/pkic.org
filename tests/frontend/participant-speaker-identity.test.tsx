@@ -158,7 +158,7 @@ it("requires speaker terms before resolving identity, preserves refusal, and sav
   );
   const forms = host.querySelectorAll("form");
   const confirm = Array.from(host.querySelectorAll("button")).find(
-    (button) => button.textContent === "Confirm participation",
+    (button) => button.textContent === "Confirm willingness to participate",
   );
   expect(confirm?.disabled).toBe(true);
   expect(host.textContent).toContain("choose and save your speaker identity before confirming");
@@ -182,7 +182,9 @@ it("requires speaker terms before resolving identity, preserves refusal, and sav
   await act(async () => {
     forms[0]!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
-  await vi.waitFor(() => expect(host.textContent).toContain("Participation confirmed."));
+  await vi.waitFor(() =>
+    expect(host.textContent).toContain("Your willingness to participate in this proposal is confirmed."),
+  );
   expect(writes.map((write) => write.path)).toEqual([
     `/api/v1/proposals/${id}/participation`,
     `/api/v1/proposals/${id}/participation/profile`,
@@ -276,4 +278,30 @@ it("resumes a speaker-bound email proof inside the portal route and clears only 
     `/api/v1/proposals/${id}/participation/profile`,
     `/api/v1/proposals/${id}/participation/profile`,
   ]);
+});
+
+it("shows late review without offering self-confirmation or promising a program place", async () => {
+  host = document.createElement("div");
+  document.body.append(host);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => response({ identities: [] })),
+  );
+  await act(() =>
+    render(
+      <ParticipantSpeaker
+        data={{ ...data, speaker: { ...data.speaker, status: "pending", termsAcceptedAt: at, awaitingReview: true } }}
+        eventSlug="pqc-2026"
+        terms={[]}
+        reload={async () => {}}
+      />,
+      host,
+    ),
+  );
+  expect(host.textContent).toContain("Your response arrived after the invitation deadline.");
+  expect(host.textContent).toContain("A replacement may already exist.");
+  expect(host.textContent).toContain("awaits organizer approval");
+  expect(
+    [...host.querySelectorAll("button")].some((button) => button.textContent === "Confirm willingness to participate"),
+  ).toBe(false);
 });

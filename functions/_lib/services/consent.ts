@@ -6,6 +6,18 @@ import { hmacSha256Hex } from "../utils/crypto";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { EventTermRecord } from "./events";
 import { prepareAuthorizationGuard } from "../db/authorization-guard";
+import type { z } from "zod";
+import type { apiValidationErrorDetailsSchema } from "../../../assets/shared/schemas/api-common";
+
+/**
+ * A refusal the person can act on: the terms they accepted are not the event's
+ * current ones. It names no internal term key or version, and points at the
+ * consents field so the form shows it there.
+ */
+const TERMS_CHANGED_MESSAGE = "The event terms changed. Reload the page to review and accept the current terms.";
+const TERMS_CHANGED_DETAILS = {
+  fieldErrors: { consents: ["Accept the event's current terms."] },
+} satisfies z.infer<typeof apiValidationErrorDetailsSchema>;
 
 export async function validateRequiredConsents(
   requiredTerms: EventTermRecord[],
@@ -15,7 +27,14 @@ export async function validateRequiredConsents(
     requiredTerms.map((term) => ({ termKey: term.term_key, version: term.version, required: term.required === 1 })),
     accepted,
   );
-  if (refusal) throw new AppError(400, refusal.code, refusal.message);
+  if (refusal) {
+    if (refusal.code === "CONSENT_REQUIRED") {
+      throw new AppError(400, refusal.code, refusal.message, {
+        fieldErrors: { consents: [refusal.message] },
+      } satisfies z.infer<typeof apiValidationErrorDetailsSchema>);
+    }
+    throw new AppError(400, refusal.code, TERMS_CHANGED_MESSAGE, TERMS_CHANGED_DETAILS);
+  }
 }
 
 export async function persistConsents(

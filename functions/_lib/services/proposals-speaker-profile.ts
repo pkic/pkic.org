@@ -53,7 +53,7 @@ export function prepareSpeakerSelfAuthorityGuard(
           JOIN session_proposals sp ON sp.id=ps.proposal_id AND sp.deleted_at IS NULL
           JOIN events e ON e.id=sp.event_id
           WHERE ps.id=? AND ps.proposal_id=? AND ps.user_id=? AND ps.invite_generation=?
-            AND (ps.status NOT IN ('invited','pending') OR (${activeEffectiveInviteExpirySql(
+            AND (${capability ? "0" : "1"} OR ps.status NOT IN ('invited','pending') OR (${activeEffectiveInviteExpirySql(
               effectiveProposalSpeakerInviteExpirySql("ps", "e"),
               "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
             )}))

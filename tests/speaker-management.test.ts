@@ -1,3 +1,5 @@
+import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
+import { speakerParticipationPatchSchema } from "../assets/shared/schemas/proposal-management";
 import { confirmWorkRegistration } from "./helpers/registration-confirmation";
 import { validateEmailDeliveryGuard } from "../functions/_lib/email/delivery-guard";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
@@ -1197,6 +1199,78 @@ describe("speaker self-management endpoints", () => {
     const body = (await response.json()) as { success: boolean; status: string };
     expect(body.success).toBe(true);
     expect(body.status).toBe("confirmed");
+  });
+
+  it("POST confirm — confirms without consents when the event has no speaker terms", async () => {
+    await setupWorkflow();
+    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+    await selectIndividualSpeakerRepresentation({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "cospeaker@example.test",
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+      speakerManagementToken: speakerManageToken,
+    });
+    await env.DB.prepare("UPDATE event_terms SET active = 0 WHERE audience_type = 'speaker'").run();
+
+    const response = await speakerPost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(speakerParticipationPatchSchema.parse({ status: "confirmed", consents: [] })),
+        }),
+        { token: speakerManageToken },
+      ),
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(((await response.json()) as { status: string }).status).toBe("confirmed");
+  });
+
+  it.each([
+    {
+      consents: [],
+      code: "CONSENT_REQUIRED",
+      message: "Agree to this required term to continue.",
+      fieldMessage: "Agree to this required term to continue.",
+    },
+    {
+      consents: [{ termKey: "speaker-terms", version: "v0" }],
+      code: "CONSENT_INVALID",
+      message: "The event terms changed. Reload the page to review and accept the current terms.",
+      fieldMessage: "Accept the event's current terms.",
+    },
+  ])("POST confirm — explains $code without an internal key", async ({ consents, code, message, fieldMessage }) => {
+    await setupWorkflow();
+    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+    await selectIndividualSpeakerRepresentation({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "cospeaker@example.test",
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+      speakerManagementToken: speakerManageToken,
+    });
+
+    const response = await speakerPost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerManageToken}/participation`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status: "confirmed", consents }),
+        }),
+        { token: speakerManageToken },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { code: string; message: string; details: unknown } };
+    // The refusal speaks the shared validation shape, so forms show it on the consents field.
+    expect(body.error).toMatchObject({ code, message });
+    expect(apiValidationErrorDetailsSchema.parse(body.error.details).fieldErrors?.consents).toEqual([fieldMessage]);
+    expect(body.error.message).not.toContain("speaker-terms");
   });
 
   it("POST confirm — rejects an existing capability after the proposal closes", async () => {

@@ -2,7 +2,7 @@
  * One speaker on a proposal: who they are, where they stand, and what an
  * operator can do about it.
  *
- * Where they stand is plain text — the role, then "Accepted · Registered
+ * Where they stand is plain text — the role, then "Participation confirmed · Registered
  * (in-person)" — because a normal state needs no color. Only what an
  * organizer has to chase (an invitation not yet accepted, a missing bio) is
  * listed under it, each line with a warning mark. A missing headshot is not
@@ -45,7 +45,10 @@ import {
   staffUserHeadshotEndpoint,
 } from "../../shared/headshot/user-headshot";
 import { formatDate, formatDateTime, type ToastType } from "../../shared/ui";
-import { SPEAKER_NOT_YET_ACCEPTED_LABEL } from "../../../shared/proposal-speaker-acceptance";
+import {
+  SPEAKER_NOT_YET_ACCEPTED_LABEL,
+  SPEAKER_PARTICIPATION_COPY,
+} from "../../../shared/proposal-speaker-acceptance";
 import { AttentionList, type AttentionItem } from "../../ui/AttentionList";
 import { Button } from "../../ui/Button";
 import { Markdown } from "../../ui/Markdown";
@@ -99,10 +102,12 @@ const quiet: (message: string, type: ToastType) => void = () => {};
 
 const ROLE_LABELS = new Map(SPEAKER_ROLE_OPTIONS.map((option) => [option.value, option.label]));
 
-/** "Accepted 3 Oct 2026", "Declined …": the answer, when it is a normal one. Open invitations are attention items. */
+/** "Participation confirmed Oct 3, 2026", "Declined …": the answer, when it is a normal one. Open invitations are attention items. */
 function participationText(speaker: ProposalSpeaker): string | null {
   if (speaker.status === "confirmed") {
-    return speaker.confirmedAt ? `Accepted ${formatDate(speaker.confirmedAt)}` : "Accepted";
+    return speaker.confirmedAt
+      ? `${SPEAKER_PARTICIPATION_COPY.confirmedLabel} ${formatDate(speaker.confirmedAt)}`
+      : SPEAKER_PARTICIPATION_COPY.confirmedLabel;
   }
   if (speaker.status === "declined") {
     return speaker.declinedAt ? `Declined ${formatDate(speaker.declinedAt)}` : "Declined";
@@ -293,15 +298,22 @@ export function ProposalSpeakerCard({
   if (canFinalize && endpoints.acceptancePath && (speaker.status === "invited" || speaker.status === "pending")) {
     actions.push({
       id: "accept-invitation",
-      label: accepting ? "Accepting invitation…" : "Accept on behalf of speaker",
+      label: accepting
+        ? "Confirming participation…"
+        : speaker.status === "pending"
+          ? "Approve late participation"
+          : "Confirm on behalf of speaker",
       disabled: accepting,
       onSelect: () => {
         void (async () => {
           if (
             !(await confirmAction({
-              title: `Accept the invitation for ${name}?`,
-              body: "Confirm the displayed identity and accept participation and required event terms on this speaker’s behalf. We’ll email them the terms and explain how to contact the PKI Consortium if they disagree.",
-              confirmLabel: "Accept invitation",
+              title:
+                speaker.status === "pending"
+                  ? `Approve late participation for ${name}?`
+                  : `Confirm participation for ${name}?`,
+              body: "Confirm the displayed identity, willingness to participate in this proposal, and required event terms. This does not accept the proposal or guarantee inclusion in the program. Committee acceptance and scheduling are separate decisions. We’ll email the speaker about this confirmation.",
+              confirmLabel: speaker.status === "pending" ? "Approve late participation" : "Confirm participation",
               tone: "primary",
             }))
           )
@@ -316,7 +328,10 @@ export function ProposalSpeakerCard({
                 body: JSON.stringify(proposalSpeakerAcceptanceRequestSchema.parse({})),
               },
             );
-            notify("Speaker invitation accepted", "success");
+            notify(
+              "Speaker participation confirmed. Proposal acceptance and scheduling are separate decisions.",
+              "success",
+            );
             onProfileChanged?.();
           } catch (error) {
             notify((error as Error).message, "error");
@@ -325,10 +340,48 @@ export function ProposalSpeakerCard({
           }
         })().catch((error: unknown) => {
           notify(
-            error instanceof Error ? error.message : "Could not accept the invitation. Please try again.",
+            error instanceof Error ? error.message : "Could not confirm participation. Please try again.",
             "error",
           );
         });
+      },
+    });
+  }
+  if (canFinalize && endpoints.acceptancePath && speaker.status === "pending") {
+    actions.push({
+      id: "reject-late-participation",
+      label: "Decline late participation",
+      danger: true,
+      disabled: accepting,
+      onSelect: () => {
+        void (async () => {
+          if (
+            !(await confirmAction({
+              title: `Decline late participation for ${name}?`,
+              body: "The speaker will not participate in this proposal. We’ll notify the speaker and proposer.",
+              confirmLabel: "Decline late participation",
+              tone: "danger",
+            }))
+          )
+            return;
+          try {
+            setAccepting(true);
+            await requestJson(
+              endpoints.acceptancePath!(proposalId, speaker.userId),
+              proposalSpeakerAcceptanceResponseSchema,
+              {
+                method: "POST",
+                body: JSON.stringify(proposalSpeakerAcceptanceRequestSchema.parse({ decision: "reject" })),
+              },
+            );
+            notify("Late participation declined", "success");
+            onProfileChanged?.();
+          } catch (error) {
+            notify((error as Error).message, "error");
+          } finally {
+            setAccepting(false);
+          }
+        })();
       },
     });
   }

@@ -521,7 +521,7 @@ export const proposalSpeakerDisclosureReviewRouteSchema = {
 
 export const proposalSpeakerAcceptanceRouteSchema = {
   tags: ["Proposal speakers"],
-  summary: "Accept an invitation on behalf of a speaker",
+  summary: "Confirm speaker willingness or review late participation",
   "x-pkic-auth": proposalManageAuth,
   request: {
     params: proposalSpeakerIdParamsSchema,
@@ -529,7 +529,8 @@ export const proposalSpeakerAcceptanceRouteSchema = {
   },
   responses: {
     "200": {
-      description: "Speaker participation accepted.",
+      description:
+        "Speaker participation confirmed or late participation declined. Proposal acceptance and scheduling are separate decisions.",
       content: { "application/json": { schema: proposalSpeakerAcceptanceResponseSchema } },
     },
     "400": { description: "Invalid request." },
