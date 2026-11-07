@@ -65,8 +65,8 @@ export function prepareIncorrectRepresentationRemoval(
     db.prepare("DELETE FROM affiliation_reviews WHERE resolved_identity_id=? AND user_id=?").bind(identityId, ownerId),
     // Incorrect organization grants are removed, never carried into the replacement organization.
     db.prepare("DELETE FROM user_roles WHERE identity_id=? AND user_id=?").bind(identityId, ownerId),
-    db.prepare("DELETE FROM group_memberships WHERE identity_id=? AND user_id=?").bind(identityId, ownerId),
-    // Voting, membership, and successor references deliberately restrict deletion and roll back the whole correction.
+    // Group history cannot be deleted. Its foreign key, like voting, membership,
+    // and successor references, restricts deletion and rolls back the whole correction.
     db
       .prepare(`DELETE FROM identities WHERE id=?
       AND NOT EXISTS(SELECT 1 FROM registrations registration WHERE registration.user_id=? AND (${registrationIdentity})=?)
@@ -110,7 +110,7 @@ export function incorrectRepresentationRemovalError(cause: unknown, correcting =
     throw new AppError(
       409,
       "IDENTITY_HAS_PROTECTED_HISTORY",
-      "This identity has voting, membership, or succession records that require review before correction.",
+      "This identity has group participation, voting, membership, or succession records that require review before correction.",
     );
   throw cause;
 }
