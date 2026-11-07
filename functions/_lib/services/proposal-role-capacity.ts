@@ -40,8 +40,11 @@ export function participantRoleForProposalRole(role: ProposalSpeakerRole): Propo
   }
 }
 
+// An unanswered invitation and a late response awaiting review retain the same reservation.
+// Confirmation controls agenda credit; only a decline removes existing participation.
 export function proposalParticipantStatus(proposalStatus: string, speakerStatus: string): "active" | "inactive" {
-  return proposalStatus === "accepted" && (speakerStatus === "confirmed" || speakerStatus === "invited")
+  return proposalStatus === "accepted" &&
+    (speakerStatus === "confirmed" || speakerStatus === "invited" || speakerStatus === "pending")
     ? "active"
     : "inactive";
 }

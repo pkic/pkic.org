@@ -269,7 +269,7 @@ describe("proposal speaker capacity conflicts", () => {
         ip: null,
         userAgent: null,
       }),
-    ).resolves.toBe("confirmed");
+    ).resolves.toMatchObject({ status: "confirmed" });
     await expect(
       queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
         proposalId,

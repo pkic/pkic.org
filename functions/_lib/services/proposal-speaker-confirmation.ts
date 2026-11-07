@@ -57,15 +57,19 @@ export async function confirmSpeakerParticipation(
     userAgent: string | null;
     appBaseUrl: string;
   },
-): Promise<"confirmed" | "pending"> {
-  const context = await getSpeakerByManageToken(db, authority, signingSecret);
-  await confirmParticipation(db, context, { kind: "speaker", authority, signingSecret, payload });
+): Promise<{ status: "confirmed" | "pending"; outboxIds: string[] }> {
+  const context = await getSpeakerByManageToken(db, authority, signingSecret, { allowExpiredReadOrConfirmation: true });
+  const outboxIds = await confirmParticipation(db, context, { kind: "speaker", authority, signingSecret, payload });
   const awaitingReview = isLateSpeakerResponseAwaitingReview(
     context.speaker.status,
     context.speaker.response_invite_generation,
     context.speaker.invite_generation,
   );
-  return context.speaker.status !== "confirmed" && (context.inviteExpired || awaitingReview) ? "pending" : "confirmed";
+  return {
+    status:
+      context.speaker.status !== "confirmed" && (context.inviteExpired || awaitingReview) ? "pending" : "confirmed",
+    outboxIds,
+  };
 }
 
 /** Confirms the displayed identity and participation on behalf of the speaker, with attributed terms and notice. */
@@ -75,7 +79,7 @@ export async function acceptSpeakerParticipationByManager(
   proposalId: string,
   userId: string,
   appBaseUrl: string,
-): Promise<string | null> {
+): Promise<string[]> {
   requireUserBackedAuthAdmin(actor);
   const context = await getSpeakerByProposalUser(db, proposalId, userId);
   await requireProposalSpeakerPermission(db, actor, context.proposal.event_id, "manage");
@@ -100,17 +104,20 @@ async function confirmParticipation(
   db: DatabaseLike,
   context: SpeakerWithContext,
   confirmation: SpeakerConfirmation,
-): Promise<string | null> {
+): Promise<string[]> {
   const { speaker, proposal, currentRepresentation } = context;
   const manager = confirmation.kind === "manager" ? confirmation.actor : undefined;
-  if (speaker.status === "confirmed") return null;
-  // Pending plus accepted terms is the durable late willingness response, not participation.
+  if (speaker.status === "confirmed") return [];
+  const reviewingLateResponse =
+    Boolean(manager) &&
+    isLateSpeakerResponseAwaitingReview(speaker.status, speaker.response_invite_generation, speaker.invite_generation);
+  const onBehalf = Boolean(manager) && !reviewingLateResponse;
   const late = !manager && context.inviteExpired;
   if (
     !manager &&
     isLateSpeakerResponseAwaitingReview(speaker.status, speaker.response_invite_generation, speaker.invite_generation)
   )
-    return null;
+    return [];
   const nextStatus = late ? "pending" : "confirmed";
   if (!isProposalSpeakerRosterEditableStatus(proposal.status)) {
     throw new AppError(409, "PROPOSAL_CLOSED", "Speaker participation cannot be changed on a closed proposal");
@@ -131,9 +138,9 @@ async function confirmParticipation(
       "Confirm your speaker identity before confirming participation.",
     );
   const now = nowIso();
-  const organizerIdentity = manager ? await prepareOrganizerSpeakerIdentity(db, context, now) : null;
+  const organizerIdentity = onBehalf ? await prepareOrganizerSpeakerIdentity(db, context, now) : null;
   // The current representation exists only once the speaker chose, and only while that identity is still theirs.
-  if (!manager && !currentRepresentation) throw representationRequired();
+  if (!onBehalf && !currentRepresentation) throw representationRequired();
   const mailbox = currentRepresentation
     ? ownedIdentityEmailEvidence({
         userId: speaker.user_id,
@@ -144,7 +151,7 @@ async function confirmParticipation(
       })
     : null;
   const representation =
-    !manager && speaker.acting_identity_id
+    !onBehalf && speaker.acting_identity_id
       ? ownedIdentityAtEvidence({ userId: speaker.user_id, identityId: speaker.acting_identity_id, at: now })
       : null;
   if (representation)
@@ -172,6 +179,7 @@ async function confirmParticipation(
     late,
     appBaseUrl: confirmation.kind === "manager" ? confirmation.appBaseUrl : confirmation.payload.appBaseUrl,
     at: now,
+    approved: reviewingLateResponse,
   });
   const invitationScope = {
     sql: `SELECT 1 FROM proposal_speakers ps
@@ -189,6 +197,7 @@ async function confirmParticipation(
     : await prepareConfirmedSpeakerAgendaAddition(db, {
         eventId: proposal.event_id,
         proposalId: proposal.id,
+        proposalStatus: proposal.status,
         speaker: { userId: speaker.user_id, proposalRole: speaker.role },
         actor: manager ? { type: "admin", id: manager.id } : { type: "user", id: speaker.user_id },
         at: now,
@@ -205,6 +214,7 @@ async function confirmParticipation(
             userId: speaker.user_id,
             inviteGeneration: speaker.invite_generation,
             expectedManageLinkSecret: speaker.manage_link_secret,
+            allowExpiredConfirmation: true,
           }),
       ...(manager
         ? [
@@ -231,9 +241,11 @@ async function confirmParticipation(
         bindings: [speaker.id, speaker.user_id, speaker.acting_identity_id, speaker.acting_identity_selected_at],
       }),
       ...(representation ? [prepareAuthorizationGuard(db, representation)] : []),
-      ...(!manager && mailbox ? [prepareAuthorizationGuard(db, mailbox)] : []),
+      ...(!onBehalf && mailbox ? [prepareAuthorizationGuard(db, mailbox)] : []),
       ...(organizerIdentity?.guards ?? []),
-      prepareActiveTermsSnapshotGuard(db, proposal.event_id, requiredTerms, "speaker"),
+      ...(!reviewingLateResponse
+        ? [prepareActiveTermsSnapshotGuard(db, proposal.event_id, requiredTerms, "speaker")]
+        : []),
       ...(confirmation.kind === "speaker"
         ? await prepareConsentStatements(db, {
             proposalId: proposal.id,
@@ -253,6 +265,7 @@ async function confirmParticipation(
                acting_identity_id = ?, acting_identity_selected_at = ?
            WHERE id = ? AND proposal_id = ? AND user_id = ? AND role = ? AND status = ? AND invite_generation = ?
              AND acting_identity_id IS ? AND acting_identity_selected_at IS ?
+             AND response_invite_generation IS ? AND terms_accepted_at IS ?
              AND EXISTS (
                SELECT 1 FROM session_proposals
                WHERE id = ? AND status = ? AND updated_at = ? AND deleted_at IS NULL
@@ -261,7 +274,7 @@ async function confirmParticipation(
         .bind(
           nextStatus,
           late ? null : now,
-          now,
+          reviewingLateResponse ? speaker.terms_accepted_at : now,
           organizerIdentity ? organizerIdentity.identityId : speaker.acting_identity_id,
           speaker.acting_identity_selected_at ?? organizerIdentity?.selectedAt ?? null,
           speaker.id,
@@ -272,6 +285,8 @@ async function confirmParticipation(
           speaker.invite_generation,
           speaker.acting_identity_id,
           speaker.acting_identity_selected_at,
+          speaker.response_invite_generation ?? null,
+          speaker.terms_accepted_at,
           proposal.id,
           proposal.status,
           proposal.updated_at,
@@ -281,7 +296,13 @@ async function confirmParticipation(
         { type: "proposal", id: speaker.proposal_id },
         manager ? "admin" : "user",
         manager?.id ?? speaker.user_id,
-        manager ? "speaker_confirmed_by_organizer" : late ? "speaker_late_response" : "speaker_confirmed",
+        reviewingLateResponse
+          ? "speaker_late_response_approved"
+          : manager
+            ? "speaker_confirmed_by_organizer"
+            : late
+              ? "speaker_late_response"
+              : "speaker_confirmed",
         "proposal_speaker",
         speaker.id,
         {
@@ -289,9 +310,12 @@ async function confirmParticipation(
           ...(manager
             ? {
                 speakerUserId: speaker.user_id,
-                acceptanceSource: "organizer",
-                actingIdentityId: organizerIdentity?.identityId ?? null,
-                terms: requiredTerms.filter((term) => term.required === 1),
+                acceptanceSource: reviewingLateResponse ? "speaker" : "organizer",
+                termsAcceptedAt: reviewingLateResponse ? speaker.terms_accepted_at : now,
+                actingIdentityId: reviewingLateResponse
+                  ? speaker.acting_identity_id
+                  : (organizerIdentity?.identityId ?? null),
+                ...(onBehalf ? { terms: requiredTerms.filter((term) => term.required === 1) } : {}),
                 notificationOutboxId: notification?.id,
               }
             : {}),
@@ -344,5 +368,5 @@ async function confirmParticipation(
     }
     throw error;
   }
-  return notification?.id ?? null;
+  return [...(notification ? [notification.id] : []), ...notices.map((notice) => notice.id)];
 }

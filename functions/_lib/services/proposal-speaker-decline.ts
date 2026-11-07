@@ -190,6 +190,12 @@ export async function declineSpeakerParticipation(
       ...proposerNotice.statements,
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error))
+      throw new AppError(
+        403,
+        "PROPOSAL_IDENTITY_AUTHORITY_REQUIRED",
+        "Speaker authority changed. Sign in again or request a new link.",
+      );
     if (isRegistrationTransitionConflict(error)) {
       throw registrationChangedError();
     }
@@ -199,12 +205,7 @@ export async function declineSpeakerParticipation(
         "PROPOSAL_SPEAKER_CONFLICT",
         "The agenda changed while the decline was processed. Try again.",
       );
-    if (
-      !isAuditChangeGuardFailure(error) &&
-      !isEventParticipantSourceConflict(error) &&
-      !isAuthorizationGuardFailure(error)
-    )
-      throw error;
+    if (!isAuditChangeGuardFailure(error) && !isEventParticipantSourceConflict(error)) throw error;
 
     const currentCount = await first<{ total: number }>(
       db,

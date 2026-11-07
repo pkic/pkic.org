@@ -1,3 +1,4 @@
+import { onRequestParticipationPatch } from "../../speakers/access/[token]/participation";
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import type { AdminContext, RequestDbContext } from "../../../../../_lib/db/context";
@@ -5,7 +6,7 @@ import { markResponseSensitive } from "../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { requireParticipantAuthority } from "../../../../../_lib/routes/participant-authority";
 import * as contracts from "../../../../../../assets/shared/schemas/route-contracts-proposal-participant";
-import { onRequestGet, onRequestParticipationPatch, onRequestProfilePatch } from "../../speakers/access/[token]";
+import { onRequestGet, onRequestProfilePatch } from "../../speakers/access/[token]";
 import * as photo from "../../speakers/access/[token]/headshot";
 import * as presentation from "../../speakers/access/[token]/presentation";
 import { onRequestGet as listIdentities } from "../../speakers/access/[token]/identities";

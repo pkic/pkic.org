@@ -40,9 +40,12 @@ export async function getSpeakerByManageToken(
   db: DatabaseLike,
   manageToken: ParticipantAuthority,
   signingSecret: string,
+  options: { allowExpiredReadOrConfirmation?: boolean } = {},
 ): Promise<SpeakerWithContext> {
   if (typeof manageToken !== "string") {
     const context = await getSpeakerByProposalUser(db, manageToken.resourceId, manageToken.userId);
+    if (context.inviteExpired && !options.allowExpiredReadOrConfirmation)
+      throw new AppError(410, "SPEAKER_INVITATION_EXPIRED", "Speaker invitation has expired");
     const verified = await first(
       db,
       `SELECT 1 FROM proposal_speakers ps WHERE ps.id = ? AND ${speakerInvitedAddressOwnedSql("ps")}`,

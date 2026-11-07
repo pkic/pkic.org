@@ -693,7 +693,7 @@ describe("speaker affiliation mailbox proof", () => {
         ip: null,
         userAgent: null,
       }),
-    ).resolves.toBe("confirmed");
+    ).resolves.toMatchObject({ status: "confirmed" });
     expect(await speakerState(f.speakerId)).toMatchObject({ status: "confirmed", acting_identity_selected_at: null });
     expect(
       await env.DB.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE entity_id=? AND action='speaker_confirmed'")

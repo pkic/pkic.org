@@ -683,7 +683,6 @@ for (const late of [false, true]) {
     const proposerEmail = `portal-proposer-${Date.now()}@example.test`;
     const speakerEmail = `portal-speaker-${Date.now()}@example.test`;
     const title = `Portal proposal ${Date.now()}`;
-    const invitationDeadline = new Date(Date.now() + 10000).toISOString();
     const proposal = await submitProposal(page, {
       proposerEmail,
       firstName: "Portal",
@@ -692,6 +691,8 @@ for (const late of [false, true]) {
       abstract:
         "A sufficiently detailed proposal describing how participants can manage their event records directly in the portal.",
     });
+    // Leave time to save the identity while the invitation is live; only confirmation is late.
+    const invitationDeadline = new Date(Date.now() + 120000).toISOString();
     expect(
       await inviteCoSpeaker(page, proposal.accessToken, {
         email: speakerEmail,
@@ -727,7 +728,6 @@ for (const late of [false, true]) {
     const speaker = await context.newPage();
     try {
       await signInToPortal(speaker, speakerEmail);
-      if (late) await expect.poll(() => Date.now(), { timeout: 20000 }).toBeGreaterThan(Date.parse(invitationDeadline));
       await speaker.goto(`/portal/#/events/${PROPOSAL_EVENT_SLUG}/proposals/${proposal.proposalId}`);
       await expect(
         speaker.getByRole("button", { name: "Confirm willingness to participate", exact: true }),
@@ -766,6 +766,8 @@ for (const late of [false, true]) {
       expect(selected.profile.actingIdentitySelection).toBe("individual");
       expect(selected.profile.actingIdentitySelectedAt).not.toBeNull();
       await expect(speaker.getByText("Speaker identity saved.", { exact: true })).toBeVisible();
+      if (late)
+        await expect.poll(() => Date.now(), { timeout: 150000 }).toBeGreaterThan(Date.parse(invitationDeadline));
       await speaker.getByRole("button", { name: "Confirm willingness to participate", exact: true }).click();
       if (late) {
         await expect(speaker.getByText(SPEAKER_PARTICIPATION_COPY.pending, { exact: true })).toBeVisible();

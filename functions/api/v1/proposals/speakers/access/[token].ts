@@ -18,7 +18,6 @@ import { assertInvitedSpeakerClaimSelection } from "../../../../../_lib/services
  *   PUT /api/v1/proposals/speakers/access/[token]/headshot
  *   PUT /api/v1/proposals/speakers/access/[token]/presentation
  */
-import { declineSpeakerParticipation } from "../../../../../_lib/services/proposal-speaker-decline";
 import { AppError } from "../../../../../_lib/errors";
 import { requireIdentityFromRequest, resolveOptionalIdentityFromRequest } from "../../../../../_lib/auth/user-session";
 import { handleError, json } from "../../../../../_lib/http";
@@ -33,10 +32,8 @@ import {
   getProposalCoSpeakers,
   getPresentationUploader,
 } from "../../../../../_lib/services/proposals-speaker-profile";
-import { confirmSpeakerParticipation } from "../../../../../_lib/services/proposal-speaker-confirmation";
 import { getRequiredTerms } from "../../../../../_lib/services/events";
 import { speakerPresentationPageUrl } from "../../../../../_lib/services/frontend-links";
-import { processSelectedOutboxBackground } from "../../../../../_lib/email/outbox";
 import { requireInternalSecret } from "../../../../../_lib/request";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { isProposalSpeakerRosterEditableStatus } from "../../../../../../assets/shared/schemas/proposal-status";
@@ -44,12 +41,10 @@ import { getEventById } from "../../../../../_lib/services/events";
 import { requestDb } from "../../../../../_lib/db/context";
 import { requiredTermReadModel } from "../../../../../_lib/services/event-read-models";
 import {
-  speakerParticipationResponseSchema,
   speakerProfileUpdateResponseSchema,
   speakerSelfServiceReadResponseSchema,
 } from "../../../../../../assets/shared/schemas/speaker-self-service";
 import {
-  proposalSpeakerParticipationRouteSchema,
   proposalSpeakerProfileUpdateRouteSchema,
   proposalSpeakerSelfServiceReadRouteSchema,
 } from "../../../../../../assets/shared/schemas/route-contracts-public-proposals";
@@ -69,7 +64,9 @@ export async function onRequestGet(
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
     const db = requestDb(c);
     const token = data.params.token;
-    const context = await getSpeakerByManageToken(db, token, requireInternalSecret(c.env));
+    const context = await getSpeakerByManageToken(db, token, requireInternalSecret(c.env), {
+      allowExpiredReadOrConfirmation: true,
+    });
     const { speaker, proposal } = context;
 
     const [coSpeakers, presentationUploader, presentationTerms, event, accountAuthority] = await Promise.all([
@@ -120,36 +117,6 @@ export async function onRequestGet(
         currentRepresentation: context.currentRepresentation,
       }),
     );
-  } catch (error) {
-    return handleError(error);
-  }
-}
-
-export async function onRequestParticipationPatch(
-  c: any,
-  data: ParticipantRouteData<typeof proposalSpeakerParticipationRouteSchema>,
-): Promise<Response> {
-  try {
-    const body = data.body;
-    const token = data.params.token;
-
-    if (body.status === "confirmed") {
-      const status = await confirmSpeakerParticipation(requestDb(c), token, requireInternalSecret(c.env), {
-        consents: body.consents,
-        appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
-        ip: c.req.raw.headers.get("cf-connecting-ip"),
-        userAgent: c.req.raw.headers.get("user-agent"),
-      });
-      return json(speakerParticipationResponseSchema.parse({ success: true, status }));
-    }
-
-    const declined = await declineSpeakerParticipation(requestDb(c), token, requireInternalSecret(c.env), {
-      reason: body.reason ?? null,
-      appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
-    });
-    if (declined.outboxIds.length > 0)
-      c.executionCtx.waitUntil(processSelectedOutboxBackground(c.env.DB, c.env, declined.outboxIds));
-    return json(speakerParticipationResponseSchema.parse({ success: true, status: "declined" }));
   } catch (error) {
     return handleError(error);
   }
@@ -284,11 +251,6 @@ function markSensitive(c: any): void {
 export const ProposalSpeakerAccessGet = openApiRoute(
   proposalSpeakerSelfServiceReadRouteSchema,
   onRequestGet,
-  markSensitive,
-);
-export const ProposalSpeakerAccessParticipationPatch = openApiRoute(
-  proposalSpeakerParticipationRouteSchema,
-  onRequestParticipationPatch,
   markSensitive,
 );
 export const ProposalSpeakerAccessProfilePatch = openApiRoute(

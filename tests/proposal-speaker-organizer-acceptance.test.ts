@@ -90,6 +90,7 @@ describe("organizer speaker acceptance", () => {
   it("credits a speaker accepted after placement on the placed session and moves the agenda to a new revision", async () => {
     const { proposalId, coSpeakerUserId } = await acceptanceFixture();
     await recordSpeakerConsent(proposalId, coSpeakerUserId);
+    await env.DB.prepare("UPDATE session_proposals SET status='accepted' WHERE id=?").bind(proposalId).run();
     const occurrenceId = crypto.randomUUID();
     const now = new Date().toISOString();
     await env.DB.batch([
@@ -131,6 +132,7 @@ describe("organizer speaker acceptance", () => {
   it.each([false, true])("keeps content-only agenda confirmation atomic when the agenda races (%s)", async (race) => {
     const { proposalId, coSpeakerUserId } = await acceptanceFixture();
     await recordSpeakerConsent(proposalId, coSpeakerUserId);
+    await env.DB.prepare("UPDATE session_proposals SET status='accepted' WHERE id=?").bind(proposalId).run();
     const at = new Date().toISOString();
     await env.DB.batch([
       env.DB.prepare(

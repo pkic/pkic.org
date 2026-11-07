@@ -12,7 +12,7 @@ import type { SpeakerWithContext } from "./proposals-speaker-capability";
 export async function prepareSpeakerResponseNotices(
   db: DatabaseLike,
   context: SpeakerWithContext,
-  input: { late: boolean; rejected?: boolean; appBaseUrl: string; at: string },
+  input: { late: boolean; rejected?: boolean; approved?: boolean; appBaseUrl: string; at: string },
 ) {
   const { speaker, proposal } = context;
   const event = await getEventById(db, proposal.event_id);
@@ -24,23 +24,23 @@ export async function prepareSpeakerResponseNotices(
   const recipients = new Map(proposer ? [[proposer.id, proposer]] : []);
   const reviewers = new Set<string>();
   if (input.late) {
-    const committee = (
-      await Promise.all(
-        (["proposals:manage", "proposals:score"] as const).map((permission) =>
-          listPermissionHolders(db, {
-            permission,
-            context: { type: "event", id: event.id },
-            limit: 25,
-          }),
-        ),
-      )
-    ).flat();
-    for (const person of committee) {
-      reviewers.add(person.id);
-      recipients.set(person.id, person);
+    let afterId = "";
+    for (;;) {
+      const committee = await listPermissionHolders(db, {
+        permission: "proposals:manage",
+        context: { type: "event", id: event.id },
+        limit: 100,
+        afterId,
+      });
+      for (const person of committee) {
+        reviewers.add(person.id);
+        recipients.set(person.id, person);
+      }
+      if (committee.length < 100) break;
+      afterId = committee[committee.length - 1]!.id;
     }
   }
-  if (input.rejected)
+  if (input.rejected || input.approved)
     recipients.set(context.user.id, {
       id: context.user.id,
       email: context.user.email,
@@ -48,7 +48,7 @@ export async function prepareSpeakerResponseNotices(
     });
   const notifications = [];
   for (const person of recipients.values()) {
-    const key = `proposal_speaker_response:${speaker.id}:${speaker.invite_generation}:${input.rejected ? "rejected" : input.late ? "late" : "confirmed"}:${person.id}`;
+    const key = `proposal_speaker_response:${speaker.id}:${speaker.invite_generation}:${input.rejected ? "rejected" : input.approved ? "approved" : input.late ? "late" : "confirmed"}:${person.id}`;
     notifications.push(
       prepareQueueEmailStatement(
         db,
@@ -64,7 +64,9 @@ export async function prepareSpeakerResponseNotices(
           data: {
             ...buildEventEmailVariables(event, input.appBaseUrl),
             firstName: emailPlainText(person.first_name ?? ""),
-            speakerName: emailPlainText(speaker.invited_email ?? context.user.email),
+            speakerName: emailPlainText(
+              [context.user.first_name, context.user.last_name].filter(Boolean).join(" ") || "A speaker",
+            ),
             proposalTitle: emailPlainText(proposal.title),
             rejected: input.rejected ?? false,
             late: input.late,

@@ -10,6 +10,7 @@ import {
   inviteSpeakerAndSubmitCapacityProposal,
 } from "./helpers/proposal-speaker-capacity";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
+import { declineSpeakerParticipation } from "../functions/_lib/services/proposal-speaker-decline";
 import { confirmSpeakerParticipation } from "../functions/_lib/services/proposal-speaker-confirmation";
 import { speakerParticipationResponseSchema } from "../assets/shared/schemas/speaker-self-service";
 
@@ -96,8 +97,11 @@ describe("speaker willingness and late review", () => {
     expect(await notices()).toEqual([expect.objectContaining({ recipient_user_id: before.proposer_user_id })]);
     expect((await respond(f)).status).toBe(200);
     expect(await notices()).toHaveLength(1);
+    expect(
+      await queryAll(env.DB, "SELECT status FROM email_outbox WHERE template_key='proposal_speaker_response'"),
+    ).toEqual([{ status: "sent" }]);
   });
-  it("records an authenticated late response, notifies proposer and committee, and grants no participation before approval", async () => {
+  it("preserves participation reservations during late review and preserves speaker consent on approval", async () => {
     const f = await fixture();
     await expire(f);
     await env.DB.prepare("UPDATE session_proposals SET status='accepted' WHERE id=?").bind(f.proposalId).run();
@@ -123,20 +127,133 @@ describe("speaker willingness and late review", () => {
         "SELECT role FROM effective_event_participant_roles WHERE event_id=? AND user_id=? AND status='active'",
         [eventId, f.coSpeakerUserId],
       ),
-    ).toEqual([]);
+    ).toContainEqual({ role: "speaker" });
     expect(await queryAll(env.DB, "SELECT id FROM event_agenda_occurrences")).toHaveLength(0);
+    const consentBefore = await state(f);
     const count = (await notices()).length;
     expect((await respond(f)).status).toBe(200);
     expect(await notices()).toHaveLength(count);
     expect((await decide(f, "approve", f.token)).status).toBe(403);
     expect((await decide(f)).status).toBe(200);
     expect(await state(f)).toMatchObject({ status: "confirmed", confirmed_at: expect.any(String) });
+    expect((await state(f))!.terms_accepted_at).toBe(consentBefore!.terms_accepted_at);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM email_outbox WHERE template_key='proposal_speaker_confirmed_by_organizer'",
+      ),
+    ).toEqual([]);
+    const [approval] = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE action='speaker_late_response_approved'",
+    );
+    expect(JSON.parse(approval!.details_json)).toMatchObject({
+      acceptanceSource: { from: null, to: "speaker" },
+      termsAcceptedAt: { from: null, to: consentBefore!.terms_accepted_at },
+    });
     expect((await proposalState(f)).status).toBe("accepted");
     expect(await queryAll(env.DB, "SELECT id FROM event_agenda_occurrences")).toHaveLength(0);
     expect((await decide(f)).status).toBe(200);
     expect(
-      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='speaker_confirmed_by_organizer'"),
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='speaker_late_response_approved'"),
     ).toHaveLength(1);
+  });
+  it("notifies every manager beyond the old cap, excludes scorers, and never substitutes an email for a name", async () => {
+    const f = await fixture();
+    const now = new Date().toISOString();
+    const ids = Array.from({ length: 101 }, (_, index) => `response-manager-${String(index).padStart(3, "0")}`);
+    await env.DB.batch(
+      [...ids, "response-scorer"].flatMap((id) => [
+        env.DB.prepare(
+          "INSERT INTO users(id,email,normalized_email,active,created_at,updated_at) VALUES (?,?,?,1,?,?)",
+        ).bind(id, `${id}@example.test`, `${id}@example.test`, now, now),
+        env.DB.prepare(
+          "INSERT INTO permission_grants(id,user_id,permission,context_type,context_id,created_at) VALUES (?,?,?,'event',?,?)",
+        ).bind(
+          crypto.randomUUID(),
+          id,
+          id === "response-scorer" ? "proposals:score" : "proposals:manage",
+          eventId,
+          now,
+        ),
+      ]),
+    );
+    await expire(f);
+    expect((await respond(f)).status).toBe(200);
+    const queued = await notices();
+    expect(queued.map((row) => row.recipient_user_id)).toEqual(expect.arrayContaining(ids));
+    expect(queued.map((row) => row.recipient_user_id)).not.toContain("response-scorer");
+    expect(queued.every((row) => !JSON.stringify(JSON.parse(row.payload_json).speakerName).includes("@"))).toBe(true);
+  });
+  it("refuses expired session profile edits and declines while allowing a late confirmation", async () => {
+    const f = await fixture();
+    await expire(f);
+    const profile = await callApi(env, `/api/v1/proposals/${f.proposalId}/participation/profile`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${f.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ firstName: "Changed" }),
+    });
+    expect(profile.status).toBe(410);
+    expect((await respond(f, { status: "declined" })).status).toBe(410);
+    expect((await respond(f)).status).toBe(200);
+  });
+  it("reports a revoked decline authority as an authorization failure and rolls back", async () => {
+    const f = await fixture();
+    const raced = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("SET status = 'declined'"),
+      () =>
+        env.DB.prepare("UPDATE proposal_speakers SET manage_link_secret='rotated' WHERE proposal_id=? AND user_id=?")
+          .bind(f.proposalId, f.coSpeakerUserId)
+          .run(),
+    );
+    await expect(
+      declineSpeakerParticipation(raced, f.speakerManageToken, env.INTERNAL_SIGNING_SECRET!, {
+        reason: null,
+        appBaseUrl: "https://app.test",
+      }),
+    ).rejects.toMatchObject({ status: 403, code: "PROPOSAL_IDENTITY_AUTHORITY_REQUIRED" });
+    expect(await state(f)).toMatchObject({ status: "invited" });
+  });
+  it("preserves legacy pending roles on accepted proposals", async () => {
+    const f = await fixture();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE session_proposals SET status='accepted' WHERE id=?").bind(f.proposalId),
+      env.DB.prepare(
+        "UPDATE proposal_speakers SET status='pending',response_invite_generation=NULL WHERE proposal_id=? AND user_id=?",
+      ).bind(f.proposalId, f.coSpeakerUserId),
+    ]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT role FROM effective_event_participant_roles WHERE event_id=? AND user_id=? AND status='active'",
+        [eventId, f.coSpeakerUserId],
+      ),
+    ).toContainEqual({ role: "speaker" });
+  });
+  it("ignores unrelated agenda edits when confirming a submitted proposal", async () => {
+    const f = await fixture();
+    await env.DB.prepare(
+      "INSERT INTO event_agenda_state(event_id,revision,updated_at) VALUES (?,0,?) ON CONFLICT(event_id) DO NOTHING",
+    )
+      .bind(eventId, at)
+      .run();
+    const session = await env.DB.prepare("SELECT id FROM sessions WHERE user_id=? AND revoked_at IS NULL LIMIT 1")
+      .bind(f.coSpeakerUserId)
+      .first<{ id: string }>();
+    const racingDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("SET response_invite_generation"),
+      () => env.DB.prepare("UPDATE event_agenda_state SET revision=revision+1 WHERE event_id=?").bind(eventId).run(),
+    );
+    await expect(
+      confirmSpeakerParticipation(
+        racingDb,
+        { resourceId: f.proposalId, userId: f.coSpeakerUserId, sessionId: session!.id },
+        env.INTERNAL_SIGNING_SECRET!,
+        { appBaseUrl: "https://app.test", consents, ip: null, userAgent: null },
+      ),
+    ).resolves.toMatchObject({ status: "confirmed" });
   });
   it("requires review even if an organizer extends the deadline after a late response", async () => {
     const f = await fixture();
@@ -153,9 +270,17 @@ describe("speaker willingness and late review", () => {
   it("lets organizers decline a late response atomically and retry without duplicate notices", async () => {
     const f = await fixture();
     await expire(f);
+    await env.DB.prepare("UPDATE session_proposals SET status='accepted' WHERE id=?").bind(f.proposalId).run();
     await respond(f);
     expect((await decide(f, "reject")).status).toBe(200);
     expect(await state(f)).toMatchObject({ status: "declined", confirmed_at: null });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT role FROM effective_event_participant_roles WHERE event_id=? AND user_id=? AND status='active'",
+        [eventId, f.coSpeakerUserId],
+      ),
+    ).toEqual([]);
     const rejected = (await notices()).filter((row) => JSON.parse(row.payload_json).rejected);
     expect(rejected.map((row) => row.recipient_user_id)).toContain(f.coSpeakerUserId);
     expect(rejected.map((row) => row.recipient_user_id)).toContain((await proposalState(f)).proposer_user_id);
@@ -260,6 +385,7 @@ describe("speaker willingness and late review", () => {
     const f = await fixture();
     await expire(f);
     await respond(f);
+    await env.DB.prepare("UPDATE session_proposals SET status='accepted' WHERE id=?").bind(f.proposalId).run();
     const placed = await place(f);
     const other = crypto.randomUUID();
     await env.DB.batch([

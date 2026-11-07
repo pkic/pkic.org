@@ -23,12 +23,14 @@ export async function prepareConfirmedSpeakerAgendaAddition(
   input: {
     eventId: string;
     proposalId: string;
+    proposalStatus: string;
     speaker: { userId: string; proposalRole: string };
     /** Who confirmed: the speaker, or an organizer accepting for them. */
     actor: { type: "user" | "admin"; id: string };
     at: string;
   },
 ): Promise<StatementLike[]> {
+  if (input.proposalStatus !== "accepted") return [];
   const role = agendaCreditRoleSchema.parse(input.speaker.proposalRole);
   const state = await first<{ revision: number; missing_count: number; content_missing: number }>(
     db,

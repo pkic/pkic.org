@@ -9,21 +9,26 @@ import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/sc
 import { getSpeakerByProposalUser } from "./proposals-speaker-capability";
 import { requireProposalSpeakerPermission } from "./proposal-speaker-access";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
+import { getEventById } from "./events";
+import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
+import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
+import { prepareProposalRoleCapacityForSpeakerRemoval } from "./proposal-role-capacity";
+import { prepareDeclinedSpeakerAgendaRemoval } from "./event-agenda/declined-speaker-removal";
 import { prepareSpeakerResponseNotices } from "./proposal-speaker-response-notice";
 
-/** Refuses a pending late response; it never changes proposal acceptance or a program placement. */
+/** Declines late participation and reconciles its existing reservations in the same command. */
 export async function rejectLateSpeakerParticipation(
   db: DatabaseLike,
   actor: AuthAdmin,
   proposalId: string,
   userId: string,
   appBaseUrl: string,
-): Promise<string | null> {
+): Promise<string[]> {
   requireUserBackedAuthAdmin(actor);
   const context = await getSpeakerByProposalUser(db, proposalId, userId);
   await requireProposalSpeakerPermission(db, actor, context.proposal.event_id, "manage");
   const { speaker, proposal } = context;
-  if (speaker.status === "declined") return null;
+  if (speaker.status === "declined") return [];
   if (
     !isLateSpeakerResponseAwaitingReview(
       speaker.status,
@@ -35,6 +40,16 @@ export async function rejectLateSpeakerParticipation(
     throw new AppError(409, "SPEAKER_REVIEW_NOT_PENDING", "This speaker has no late response awaiting review.");
   const at = nowIso();
   const notices = await prepareSpeakerResponseNotices(db, context, { late: true, rejected: true, appBaseUrl, at });
+  const agendaRemoval = await prepareDeclinedSpeakerAgendaRemoval(db, {
+    event: await getEventById(db, proposal.event_id),
+    proposal,
+    speaker: {
+      userId: speaker.user_id,
+      name: [context.user.first_name, context.user.last_name].filter(Boolean).join(" ") || "A speaker",
+    },
+    at,
+    appBaseUrl,
+  });
   try {
     await db.batch([
       preparePermissionsAuthorizationGuard(db, actor, [
@@ -65,9 +80,21 @@ export async function rejectLateSpeakerParticipation(
         at,
       ),
       ...notices.map((notice) => notice.statement),
+      ...(await prepareProposalRoleCapacityForSpeakerRemoval(db, {
+        eventId: proposal.event_id,
+        userId: speaker.user_id,
+        sourceRef: proposal.id,
+      })),
+      ...agendaRemoval,
     ]);
   } catch (error) {
-    if (isAuditChangeGuardFailure(error) || isAuthorizationGuardFailure(error))
+    if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
+    if (
+      isAuditChangeGuardFailure(error) ||
+      isAuthorizationGuardFailure(error) ||
+      isEventParticipantSourceConflict(error) ||
+      (error instanceof Error && error.message.includes("AGENDA_REVISION_CHANGED"))
+    )
       throw new AppError(
         409,
         "PROPOSAL_SPEAKER_CONFLICT",
@@ -75,5 +102,5 @@ export async function rejectLateSpeakerParticipation(
       );
     throw error;
   }
-  return null;
+  return notices.map((notice) => notice.id);
 }

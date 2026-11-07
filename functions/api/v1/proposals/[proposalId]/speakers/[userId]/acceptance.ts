@@ -5,7 +5,7 @@ import { proposalSpeakerAcceptanceResponseSchema } from "../../../../../../../as
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { resolveAppBaseUrl } from "../../../../../../_lib/config";
-import { processOutboxByIdBackground } from "../../../../../../_lib/email/outbox";
+import { processSelectedOutboxBackground } from "../../../../../../_lib/email/outbox";
 import { json } from "../../../../../../_lib/http";
 import { acceptSpeakerParticipationByManager } from "../../../../../../_lib/services/proposal-speaker-confirmation";
 
@@ -16,13 +16,13 @@ export async function onRequestPost(
   const db = requestDb(c);
   const actor = await requireAdminFromRequest(db, c.req.raw, c.env);
   const decide = data.body.decision === "reject" ? rejectLateSpeakerParticipation : acceptSpeakerParticipationByManager;
-  const outboxId = await decide(
+  const outboxIds = await decide(
     db,
     actor,
     data.params.proposalId,
     data.params.userId,
     resolveAppBaseUrl(c.env, c.req.raw),
   );
-  if (outboxId) c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
+  if (outboxIds.length) c.executionCtx.waitUntil(processSelectedOutboxBackground(db, c.env, outboxIds));
   return json(proposalSpeakerAcceptanceResponseSchema.parse({ success: true }));
 }

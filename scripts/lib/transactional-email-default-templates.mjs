@@ -14,7 +14,7 @@ export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
 
 {{speakerName}} is willing to participate in the proposal **{{proposalTitle}}** for **{{eventName}}**.
 
-{{#if late}}The response arrived after the invitation deadline. A replacement may already exist. Participation awaits an authorized organizer's approval; this response grants no participation or agenda credit.{{else}}Their willingness to participate in the proposal is confirmed.{{/if}}{{/if}}
+{{#if late}}The response arrived after the invitation deadline. A replacement may already exist. Participation awaits an authorized organizer's approval; existing participation reservations remain until review, and this response adds no agenda credit.{{else}}Their willingness to participate in the proposal is confirmed.{{/if}}{{/if}}
 
 Speaker participation does not accept the proposal or guarantee inclusion in the program. Committee acceptance and scheduling are separate decisions.
 
