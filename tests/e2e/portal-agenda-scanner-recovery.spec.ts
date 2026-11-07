@@ -25,6 +25,7 @@ import {
   scannerEligibilityCount,
   signOutThroughPortal,
   openScannerDiagnostics,
+  openScannerSessionDetails,
   openScannerManualEntry,
   openScannerRecovery,
   scannerStorage,
@@ -64,8 +65,8 @@ test("real pending scanner storage survives reload and logout without crossing a
   await page.goto(scannerPath);
   const snapshot = enrolledOfflineEligibilityResponseSchema.parse(await (await preparing).json());
   expect(snapshot.operatorUserId).toBe(owner.identity.id);
-  const diagnostics = await openScannerDiagnostics(page);
-  await expect(diagnostics.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
+  const diagnostics = await openScannerSessionDetails(page);
+  await expect(diagnostics.getByLabel("Scan mode", { exact: true })).toHaveCount(0);
   await expectScannerSyncTime(page, "No recent upload");
   await expect(page.getByText("Last badge refresh", { exact: true })).toBeVisible();
   await expect(page.getByText("Badge data valid until", { exact: true })).toBeVisible();
@@ -196,7 +197,7 @@ test("real pending scanner storage survives reload and logout without crossing a
   expect(checkedOther.sessionId).toBe(other.sessionId);
   expect(checkedOther.identity.id).toBe(other.identity.id);
   await expect(page.getByRole("tablist", { name: "Badge scanner views", exact: true })).toBeVisible();
-  await openScannerDiagnostics(page);
+  await openScannerSessionDetails(page);
   await expect(page.locator(".pk-event-scanner")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Close scanner session", exact: true })).toBeEnabled();
   await openScannerRecovery(page);
@@ -311,8 +312,7 @@ test("real pending scanner storage survives reload and logout without crossing a
   try {
     const recoveredPage = await recoveryContext.newPage();
     await recoveredPage.goto(new URL(scannerPath, page.url()).href);
-    await openScannerDiagnostics(recoveredPage);
-    await expect(recoveredPage.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
+    await openScannerSessionDetails(recoveredPage);
     await expect(recoveredPage.getByRole("button", { name: "Close scanner session", exact: true })).toBeEnabled();
     await openScannerRecovery(recoveredPage);
     const freshBackup = await downloadScannerRecovery(recoveredPage);

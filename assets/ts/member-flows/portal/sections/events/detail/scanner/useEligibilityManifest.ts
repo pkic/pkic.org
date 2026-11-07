@@ -6,7 +6,7 @@ import type { EventScanRequest } from "../../../../../../../shared/schemas/event
 import type { PortalSession } from "../../../../types";
 import type { ScannerEpoch } from "./scanner-device-ledger";
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
-import { ScannerCodePreparation } from "./scanner-code-preparation";
+import { ScannerCodePreparation, useScannerCodePreparationRetry } from "./scanner-code-preparation";
 import { prepareEligibilityManifest, type EligibilityManifest } from "./eligibility-manifest";
 
 /** Prepares and refreshes scoped IDs-only data outside the camera path. */
@@ -128,7 +128,7 @@ export function useScannerOfflinePreparation(
 ) {
   const prepareCode = useContext(ScannerCodePreparation);
   const route = scannerCollectorPath(window.location.hash);
-  const [retry, setRetry] = useState(0);
+  const { attempt, retry } = useScannerCodePreparationRetry();
   const [prepared, setPrepared] = useState<ScannerOfflineContext | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState("");
@@ -155,7 +155,7 @@ export function useScannerOfflinePreparation(
         });
     }
     return () => controller.abort();
-  }, [slug, action, session, epoch, manifest, prepareCode, retry, route]);
+  }, [slug, action, session, epoch, manifest, prepareCode, attempt, route]);
   useEffect(() => {
     if (!prepared) return;
     const timer = window.setInterval(() => tick((value) => value + 1), 1000);
@@ -178,5 +178,5 @@ export function useScannerOfflinePreparation(
     scannerContextCurrent(prepared)
       ? prepared
       : null;
-  return { context: current, preparing, error, retry: () => setRetry((value) => value + 1) };
+  return { context: current, preparing, error, retry };
 }

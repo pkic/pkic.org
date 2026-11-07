@@ -517,11 +517,6 @@ export function EventScannerCapture({
         }
         diagnostics={
           <ScannerDiagnosticsView
-            mode={mode}
-            onStart={() => {
-              setScannerTab("scan");
-              startScanning();
-            }}
             preferences={preferences}
             sound={sound}
             context={{ sessionId: portalSession.value?.sessionId, slug, operatorUserId, sponsorId }}

@@ -10,6 +10,50 @@ import { createReleaseIntegrity } from "../../scripts/publication/release-integr
 import { createTemporaryDirectory } from "./helpers/temporary-directory";
 import { createTestHarness, unstable_readConfig as readConfig } from "wrangler";
 
+it.each(["preview", "production"])(
+  "keeps one offline worker scope header in a repeated %s release",
+  async (environment) => {
+    const root = await createTemporaryDirectory("publication-offline-worker");
+    const source = resolve(root, "source"),
+      destination = resolve(root, "destination");
+    try {
+      await mkdir(source, { recursive: true });
+      await writeFile(resolve(source, "index.html"), "Synthetic publication");
+      const release = sitePublicationReleaseSchema.parse({
+        version: 1,
+        source: "native",
+        snapshotId: "6".repeat(64),
+        sourceSequence: 1,
+        environment,
+        files: ["index.html"],
+        integrity: await createReleaseIntegrity(source, ["index.html"]),
+      });
+      await writeFile(resolve(source, "publication.json"), JSON.stringify(release));
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await assembleStaticRelease(source, destination, environment);
+        const headers = await readFile(resolve(destination, "_headers"), "utf8");
+        for (const prefix of ["/_assets/*", "/js/built/*"]) {
+          expect(
+            headers.split(/\r?\n/).filter((line) => line === prefix),
+            prefix,
+          ).toHaveLength(1);
+          const scopes: string[] = [];
+          let rule = "";
+          for (const line of headers.split(/\r?\n/)) {
+            if (line.startsWith("/")) rule = line;
+            if (rule === prefix && line.trim().startsWith("Service-Worker-Allowed:"))
+              scopes.push(line.trim().slice("Service-Worker-Allowed:".length).trim());
+          }
+          // Cloudflare joins repeated header values with commas; WebKit rejects that scope.
+          expect(scopes.join(", "), prefix).toBe("/portal/");
+        }
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
+
 it("protects the generic error asset and its canonical path without adding application routes", async () => {
   const root = await createTemporaryDirectory("publication-error-headers");
   const source = resolve(root, "source"),

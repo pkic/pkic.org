@@ -52,8 +52,14 @@ export async function checkScannerSyncStatus(page: Page, path: string, info: Tes
   expect(restored.serverNow >= before.serverNow).toBe(true);
   await expect(diagnostics.getByRole("alert")).toHaveCount(0);
   await expect(diagnostics.getByText(/Badge data up to date/)).toBeVisible();
-  await expect(diagnostics.getByRole("heading", { name: "Scanner session", exact: true })).toBeVisible();
+  await expect(diagnostics.getByRole("combobox", { name: "Scan mode", exact: true })).toHaveCount(0);
+  await expect(diagnostics.getByRole("button", { name: "Close scanner session", exact: true })).not.toBeVisible();
   await expect(diagnostics.getByRole("heading", { name: "Feedback", exact: true })).toBeVisible();
+  const feedback = diagnostics.getByRole("combobox", { name: "Feedback pause", exact: true });
+  await feedback.selectOption("5000");
+  await page.reload();
+  await expect(feedback).toHaveValue("5000");
+  await feedback.selectOption("1000");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: info.outputPath("diagnostics-desktop.png"), fullPage: true });

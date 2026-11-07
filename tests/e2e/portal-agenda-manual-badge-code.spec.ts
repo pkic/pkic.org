@@ -29,10 +29,16 @@ import { agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
 import { eventManagementDetailResponseSchema } from "../../assets/shared/schemas/event-management";
 import { registrationManageReadResponseSchema } from "../../assets/shared/schemas/registration";
 import { prepareScannerTermination } from "./helpers/scanner-browser-termination";
-import { scannerStorage, openScannerDiagnostics, openScannerManualEntry } from "./helpers/scanner-recovery-storage";
+import {
+  scannerStorage,
+  openScannerDiagnostics,
+  openScannerManualEntry,
+  openScannerSessionDetails,
+} from "./helpers/scanner-recovery-storage";
 import { expectNoStoredSponsorContacts } from "./helpers/sponsor-live-fixture";
 import { captureDeviceConsole } from "./helpers/device-console";
 import { checkScannerSyncStatus } from "./helpers/scanner-sync-status";
+import { checkWebKitOfflineScanner } from "./helpers/scanner-webkit-offline";
 
 test.use({ actionTimeout: 20_000 });
 
@@ -361,6 +367,7 @@ test("the protected printed short code works through manual offline capture and 
   await openScannerDiagnostics(page);
   await expect(page.getByRole("combobox", { name: "Feedback pause", exact: true })).toHaveValue("1000");
   await expect(page.getByText(/Badge data up to date/)).toBeVisible();
+  await openScannerSessionDetails(page);
   await expect(page.getByText("Offline camera files prepared.", { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? "")).not.toBe("");
   await expect
@@ -659,6 +666,12 @@ test("the protected printed short code works through manual offline capture and 
     await checkScannerSyncStatus(
       page,
       `/portal/#/groups/${event.ownerGroupId}/events/${event.id}/scanner?scannerTab=diagnostics`,
+      info,
+    );
+    await checkWebKitOfflineScanner(
+      page,
+      `/portal/#/groups/${event.ownerGroupId}/events/${event.id}/scanner?scannerTab=diagnostics`,
+      replacement.credential,
       info,
     );
   } finally {

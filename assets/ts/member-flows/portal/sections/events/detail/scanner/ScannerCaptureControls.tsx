@@ -21,49 +21,39 @@ export function ScannerDiagnostics({
   unverifiedStart,
   sound,
   syncStatus,
-  setup,
-  sessionAction,
 }: {
   session: ComponentProps<typeof ScannerSessionControls> & { sessionId?: string };
   pacing: ComponentProps<typeof ScannerPacing>;
   unverifiedStart?: () => void;
   sound?: ComponentChildren;
   syncStatus?: ComponentChildren;
-  setup?: ComponentChildren;
-  sessionAction?: ComponentChildren;
 }) {
   return (
     <section aria-label="Recovery and diagnostics" class="pk-stack">
       {syncStatus}
-      <div class="pk-grid pk-grid--cards">
-        <Panel>
-          <PanelHeader title="Scanner session">{sessionAction}</PanelHeader>
-          <PanelBody class="pk-stack">
-            {setup}
-            <ScannerSessionControls {...session} />
-          </PanelBody>
-        </Panel>
-        <Panel>
-          <PanelHeader title="Feedback" />
-          <PanelBody class="pk-stack">
-            <p class="pk-muted">These preferences save automatically in this browser.</p>
+      <Panel>
+        <PanelHeader title="Feedback" />
+        <PanelBody class="pk-stack">
+          <p class="pk-muted">These preferences save automatically in this browser.</p>
+          <div class="pk-grid pk-grid--cards">
             {sound}
             <ScannerPacing {...pacing} />
-            {unverifiedStart && (
-              <div class="pk-cluster">
-                <Button type="button" variant="secondary" onClick={unverifiedStart}>
-                  Start with unverified feedback
-                </Button>
-              </div>
-            )}
-          </PanelBody>
-        </Panel>
-      </div>
+          </div>
+          {unverifiedStart && (
+            <div class="pk-cluster">
+              <Button type="button" variant="secondary" onClick={unverifiedStart}>
+                Start with unverified feedback
+              </Button>
+            </div>
+          )}
+        </PanelBody>
+      </Panel>
       <ScannerRecovery
         slug={session.slug}
         operatorUserId={session.operatorUserId}
         sessionId={session.sessionId}
         sponsorId={session.sponsorId}
+        sessionControls={<ScannerSessionControls {...session} />}
       />
     </section>
   );

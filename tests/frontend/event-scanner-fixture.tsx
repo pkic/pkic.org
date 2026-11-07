@@ -9,7 +9,7 @@ vi.mock("../../assets/ts/shared/pending-user-logout", () => ({
 }));
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { badgeCredentialSchema } from "../../assets/shared/schemas/badge-credential";
-import { render } from "preact";
+import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, vi } from "vitest";
 import {
@@ -94,7 +94,7 @@ vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useO
   useOfflineAdmission: () => ({ grantId: null, select: vi.fn(), persist: mocks.persist }),
 }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerRecovery", () => ({
-  ScannerRecovery: () => null,
+  ScannerRecovery: ({ sessionControls }: { sessionControls?: ComponentChildren }) => <>{sessionControls}</>,
 }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerSetup", () => ({
   ScannerSetup: ({ onStart, ready, locked }: { onStart: () => void; ready: boolean; locked: boolean }) => (

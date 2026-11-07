@@ -29,9 +29,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
   it("defaults to attendance with explicit manual entry and recovery in its dedicated tab without quota or exception controls", async () => {
     await mount(true, ["check", "attendance", "exception"]);
     await openDiagnostics();
-    const modes = host.querySelector<HTMLSelectElement>('select[name="action"]')!;
-    expect(modes.value).toBe("attendance");
-    expect(Array.from(modes.options).map((option) => option.value)).toEqual(["check", "attendance"]);
+    expect(host.querySelector('select[name="action"]')).toBeNull();
     await closeDiagnostics();
     expect(host.querySelector('[aria-label="Recovery and diagnostics"]')).toBeNull();
     expect(host.querySelector("details, summary")).toBeNull();
@@ -56,14 +54,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
     expect(host.textContent).not.toContain("Review admission exception");
   });
   it("switches continuous scanning to Recent scans, stops the camera and retains the selected mode", async () => {
-    await mount(true, ["attendance", "check"]);
-    await openDiagnostics();
-    const mode = host.querySelector<HTMLSelectElement>('select[name="action"]')!;
-    await act(() => {
-      mode.value = "check";
-      mode.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await closeDiagnostics();
+    await mount(true, ["check"]);
     await act(async () =>
       Array.from(host.querySelectorAll("button"))
         .find((button) => button.textContent?.trim() === "Start scanning")!

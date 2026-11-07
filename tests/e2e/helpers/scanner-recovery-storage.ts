@@ -117,9 +117,19 @@ export async function openScannerManualEntry(page: Page): Promise<void> {
 }
 
 export async function openScannerRecovery(page: Page): Promise<void> {
-  const diagnostics = await openScannerDiagnostics(page);
+  const diagnostics = await openScannerSessionDetails(page);
   await expect(diagnostics.getByRole("heading", { name: "Recovery backup", exact: true })).toBeVisible();
   await expect(diagnostics.getByRole("button", { name: "Download recovery file (JSON)", exact: true })).toBeVisible();
+}
+
+export async function openScannerSessionDetails(page: Page) {
+  const diagnostics = await openScannerDiagnostics(page);
+  if (!(await diagnostics.getByRole("button", { name: "Close scanner session", exact: true }).isVisible()))
+    await diagnostics
+      .locator("summary")
+      .filter({ hasText: /^Scanner session$/ })
+      .click();
+  return diagnostics;
 }
 
 /** Parse the actual download through the same canonical recovery-file contract. */

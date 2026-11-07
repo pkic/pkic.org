@@ -121,7 +121,7 @@ test("continuous local eligibility checks queue a burst while attempt uploads ar
   });
   await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/scanner");
   await page.getByRole("tab", { name: "Diagnostics", exact: true }).click();
-  await expect(page.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
+  await expect(page.getByLabel("Scan mode", { exact: true })).toHaveCount(0);
   await page.getByLabel("Feedback pause", { exact: true }).selectOption("1000");
   await page.getByRole("tab", { name: "Scan", exact: true }).click();
   await page.getByRole("button", { name: "Venue entrance Check people in", exact: true }).click();

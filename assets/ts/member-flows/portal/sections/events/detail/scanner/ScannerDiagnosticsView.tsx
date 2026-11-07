@@ -1,7 +1,5 @@
-import { ScannerModeSelect } from "./ScannerModeSelect";
 import { ScannerSoundPreferences } from "./ScannerSoundPreferences";
 import { ScannerSyncStatus, ScannerPreparationStatus } from "./ScannerPreparationStatus";
-import { Button } from "../../../../../../ui/Button";
 import type { ComponentProps } from "preact";
 import { ScannerDiagnostics } from "./ScannerCaptureControls";
 type Diagnostics = ComponentProps<typeof ScannerDiagnostics>;
@@ -13,8 +11,6 @@ export function ScannerDiagnosticsView({
   sync,
   onMessage,
   onCapturePause,
-  mode,
-  onStart,
   preferences,
   status,
   preparation,
@@ -26,8 +22,6 @@ export function ScannerDiagnosticsView({
   sync: Session["sync"];
   onMessage: Session["message"];
   onCapturePause: Session["capturePause"];
-  mode: ComponentProps<typeof ScannerModeSelect>;
-  onStart: () => void;
   preferences: ComponentProps<typeof ScannerSoundPreferences>["preferences"];
   sound: ComponentProps<typeof ScannerSoundPreferences>["sound"];
   status: Omit<ComponentProps<typeof ScannerSyncStatus>, "sync">;
@@ -36,12 +30,6 @@ export function ScannerDiagnosticsView({
 }) {
   return (
     <ScannerDiagnostics
-      setup={<ScannerModeSelect {...mode} />}
-      sessionAction={
-        <Button type="button" variant="secondary" disabled={!scanner.ready} onClick={onStart}>
-          Start scanning
-        </Button>
-      }
       session={{ ...context, scanner, sync, message: onMessage, capturePause: onCapturePause }}
       sound={<ScannerSoundPreferences preferences={preferences} sound={sound} />}
       syncStatus={

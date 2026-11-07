@@ -1,9 +1,11 @@
 import { useEffect, useState } from "preact/hooks";
 import { registerPortalServiceWorker } from "../../../../portal-worker-registration";
 import { prepareScannerDecoder } from "./prepareScannerDecoder";
+import { useScannerCodePreparationRetry } from "./scanner-code-preparation";
 
 const unavailable = "Offline camera files are not prepared. Use manual entry or a hardware scanner when offline.";
 export function useScannerDecoderPreparation(scope: string) {
+  const { attempt } = useScannerCodePreparationRetry();
   const [status, setStatus] = useState("Preparing offline camera files…");
   useEffect(() => {
     const controller = new AbortController();
@@ -27,6 +29,6 @@ export function useScannerDecoderPreparation(scope: string) {
       controller.abort();
       window.clearTimeout(deadline);
     };
-  }, [scope]);
+  }, [scope, attempt]);
   return status;
 }

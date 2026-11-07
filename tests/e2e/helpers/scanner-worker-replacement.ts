@@ -245,7 +245,6 @@ export async function replayScannerFromTwoTabs(
   const other = await context.newPage();
   await other.goto(new URL(scannerPath, page.url()).href);
   await openScannerDiagnostics(other);
-  await expect(other.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
   const epochPath = `${scansPath.replace(/\/scans$/u, "")}/scanner/devices/sessions/${original.scannerSession.epochId}`;
   const statusBefore = await page.request.get(epochPath);
   expect(statusBefore.status()).toBe(200);

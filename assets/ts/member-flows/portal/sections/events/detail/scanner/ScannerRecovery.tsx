@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useState, useRef } from "preact/hooks";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import { Field } from "../../../../../../ui/Field";
@@ -30,11 +31,13 @@ export function ScannerRecovery({
   operatorUserId,
   sessionId,
   sponsorId,
+  sessionControls,
 }: {
   slug: string;
   operatorUserId: string;
   sessionId?: string;
   sponsorId?: string;
+  sessionControls?: ComponentChildren;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const importing = useRef<AbortController | null>(null);
@@ -235,6 +238,12 @@ export function ScannerRecovery({
           Import recovery file
         </Button>
         {message && <p role="status">{message}</p>}
+        {sessionControls && (
+          <details>
+            <summary>Scanner session</summary>
+            <div class="pk-stack">{sessionControls}</div>
+          </details>
+        )}
       </PanelBody>
     </Panel>
   );

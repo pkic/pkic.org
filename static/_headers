@@ -61,4 +61,6 @@ https://:project.pages.dev/*
     Service-Worker-Allowed: /portal/
 
 /_assets/*
+    ! Cache-Control
+    Cache-Control: public, max-age=31536000, immutable
     Service-Worker-Allowed: /portal/

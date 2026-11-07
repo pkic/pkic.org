@@ -28,6 +28,7 @@ import { enrolledOfflineEligibilityResponseSchema } from "../../assets/shared/sc
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import {
   openScannerDiagnostics,
+  openScannerSessionDetails,
   closeScannerDiagnostics,
   openScannerManualEntry,
   openScannerRecovery,
@@ -427,7 +428,7 @@ test("organizer reloads two independent QR credentials, replaces only one and re
     publishedRevision,
     occurrenceId: null,
   });
-  const diagnostics = await openScannerDiagnostics(page);
+  const diagnostics = await openScannerSessionDetails(page);
   await expect(diagnostics.getByText("Offline camera files prepared.", { exact: true })).toBeVisible();
   const decoderUrl = (await scannerShellCachedUrls(page)).find((url) => /\/qr-scanner\.min\.[^/]+\.js$/u.test(url));
   if (!decoderUrl) throw new Error("The shipped QR decoder was not prepared");
