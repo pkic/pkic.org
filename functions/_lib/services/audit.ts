@@ -5,6 +5,18 @@ import { parseJsonSafe, stringifyJson } from "../utils/json";
 import type { DatabaseLike, StatementLike } from "../types";
 import { auditActorIdentityId } from "./audit-actor";
 
+/** Trusted scalar SQL returning normalized audit JSON; cannot be confused with a JSON payload. */
+class AuditDetailsSelection {
+  constructor(
+    readonly sql: string,
+    readonly bindings: readonly unknown[],
+  ) {}
+}
+
+export function selectAuditDetails(sql: string, bindings: readonly unknown[]) {
+  return new AuditDetailsSelection(sql, bindings);
+}
+
 interface AuditDeltaLike {
   from: unknown;
   to: unknown;
@@ -222,7 +234,7 @@ export function prepareOneTimeAuditLog(
  * changed anything other than the caller's bounded expected count aborts the
  * surrounding D1 batch and
  * rolls every statement back instead of allowing partial fallout to commit.
- * detailsSelection, when supplied, is trusted internal SQL returning normalized audit JSON.
+ * A selectAuditDetails payload reads normalized audit JSON inside the same transaction.
  * Keep this immediately after the guarded write because SQLite's `changes()`
  * reports the most recently executed statement.
  */
@@ -238,8 +250,8 @@ export function prepareAuditLogAfterExpectedChanges(
   createdAt = nowIso(),
   scope: AuditScope | null = null,
   idempotencyKey: string | null = null,
-  detailsSelection?: { sql: string; bindings: readonly unknown[] },
 ): StatementLike {
+  const detailsSelection = details instanceof AuditDetailsSelection ? details : null;
   if (!Number.isSafeInteger(expectedChanges) || expectedChanges < 1) {
     throw new Error("Expected change count must be a positive safe integer");
   }
@@ -279,7 +291,6 @@ export function prepareAuditLogAfterOneChange(
   createdAt = nowIso(),
   scope: AuditScope | null = null,
   idempotencyKey: string | null = null,
-  detailsSelection?: { sql: string; bindings: readonly unknown[] },
 ): StatementLike {
   return prepareAuditLogAfterExpectedChanges(
     db,
@@ -293,7 +304,6 @@ export function prepareAuditLogAfterOneChange(
     createdAt,
     scope,
     idempotencyKey,
-    detailsSelection,
   );
 }
 

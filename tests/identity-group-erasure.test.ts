@@ -1,9 +1,17 @@
+import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
 import { env } from "cloudflare:workers";
 import { beforeEach, expect, it } from "vitest";
 import { nowIso } from "../functions/_lib/utils/time";
 import { enqueueGoogleGroupsSync } from "../functions/_lib/services/google-groups";
 import { proposalIdentityFixture } from "./helpers/proposal-identity";
-import { correct, registration, staff, remove, type Fixture } from "./helpers/identity-correction";
+import {
+  requestIdentityCorrection,
+  createIdentityRegistration,
+  createStaffSession,
+  requestIdentityDeletion,
+  type IdentityCorrectionFixture,
+} from "./helpers/identity-correction";
+import { getPublicGroupDirectory } from "../functions/_lib/services/groups/public-directory";
 import { resetDb } from "./helpers/reset-db";
 
 beforeEach(resetDb);
@@ -17,7 +25,7 @@ async function group(parentId: string | null = null) {
     .run();
   return id;
 }
-async function seat(f: Fixture, groupId: string, identityId = f.identityId, ended = false) {
+async function seat(f: IdentityCorrectionFixture, groupId: string, identityId = f.identityId, ended = false) {
   const id = crypto.randomUUID();
   const at = nowIso();
   const memberId = await env.DB.prepare("SELECT member_id FROM identity_member_capacities WHERE identity_id=?")
@@ -29,7 +37,13 @@ async function seat(f: Fixture, groupId: string, identityId = f.identityId, ende
     .run();
   return { id, groupId, memberId, at };
 }
-async function leadership(f: Fixture, groupId: string, identityId: string, memberId: string, roleId: string) {
+async function leadership(
+  f: IdentityCorrectionFixture,
+  groupId: string,
+  identityId: string,
+  memberId: string,
+  roleId: string,
+) {
   const id = crypto.randomUUID();
   await env.DB.prepare(`INSERT INTO user_roles(id,user_id,identity_id,member_id,role_id,context_type,context_id,single_holder_per_context,created_at)
     VALUES(?,?,?,?,?,'group',?,0,?)`)
@@ -37,7 +51,7 @@ async function leadership(f: Fixture, groupId: string, identityId: string, membe
     .run();
   return id;
 }
-async function list(f: Fixture, groupId: string) {
+async function list(f: IdentityCorrectionFixture, groupId: string) {
   const id = crypto.randomUUID();
   const email = `${id}@example.test`;
   const at = nowIso();
@@ -48,9 +62,9 @@ async function list(f: Fixture, groupId: string) {
   await enqueueGoogleGroupsSync(env.DB, { userId: f.userId, action: "add_to_list", googleGroupEmail: email });
   return email;
 }
-async function change(f: Fixture, action: "delete" | "correct") {
-  const actor = await staff();
-  return action === "correct" ? correct(f, actor.token) : remove(f, actor.token);
+async function change(f: IdentityCorrectionFixture, action: "delete" | "correct") {
+  const actor = await createStaffSession();
+  return action === "correct" ? requestIdentityCorrection(f, actor.token) : requestIdentityDeletion(f, actor.token);
 }
 async function noMarkers() {
   expect(await env.DB.prepare("SELECT count(*) AS count FROM group_membership_erasures").first("count")).toBe(0);
@@ -66,8 +80,14 @@ it.each(["delete", "correct"] as const)(
     const descendant = await seat(f, child, f.secondIdentityId);
     const lead = await leadership(f, parent, f.identityId, root.memberId!, "role-group_lead");
     const deputy = await leadership(f, child, f.secondIdentityId, descendant.memberId!, "role-group_deputy_lead");
+    const creator = await createStaffSession();
+    await env.DB.prepare(
+      "UPDATE group_memberships SET title='Treasurer',source='staff',created_by_user_id=? WHERE id=?",
+    )
+      .bind(creator.id, root.id)
+      .run();
     const emails = [await list(f, parent), await list(f, child)];
-    const registrationId = action === "correct" ? await registration(f) : null;
+    const registrationId = action === "correct" ? await createIdentityRegistration(f) : null;
     const response = await change(f, action);
     expect(response.status, await response.clone().text()).toBe(200);
     expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first()).toBeNull();
@@ -95,7 +115,54 @@ it.each(["delete", "correct"] as const)(
       )
       .first<string>("details_json");
     expect(JSON.parse(audit!)).toMatchObject({
-      erasedGroupSeats: { from: [{ seatId: root.id, groupId: parent, joinedAt: root.at, leftAt: null }], to: null },
+      erasedGroupSeats: {
+        from: [
+          {
+            seatId: root.id,
+            groupId: parent,
+            userId: f.userId,
+            identityId: f.identityId,
+            memberId: root.memberId,
+            title: "Treasurer",
+            source: "staff",
+            createdByUserId: creator.id,
+            joinedAt: root.at,
+            leftAt: null,
+            createdAt: root.at,
+            updatedAt: root.at,
+          },
+        ],
+        to: null,
+      },
+      endedGroupSeats: {
+        from: [{ seatId: descendant.id, identityId: f.secondIdentityId, leftAt: null }],
+        to: [{ seatId: descendant.id, identityId: f.secondIdentityId, leftAt: ended!.left_at }],
+      },
+      removedIdentityRoles: {
+        from: expect.arrayContaining([
+          {
+            roleAssignmentId: lead,
+            userId: f.userId,
+            roleId: "role-group_lead",
+            contextType: "group",
+            contextId: parent,
+            identityId: f.identityId,
+            memberId: root.memberId,
+            title: null,
+            startsAt: null,
+            grantedByUserId: null,
+            expiresAt: null,
+            revokedAt: null,
+            singleHolderPerContext: 0,
+            createdAt: expect.any(String),
+          },
+        ]),
+        to: null,
+      },
+      revokedGroupRoles: {
+        from: [{ roleAssignmentId: deputy, identityId: f.secondIdentityId, revokedAt: null }],
+        to: [{ roleAssignmentId: deputy, identityId: f.secondIdentityId, revokedAt: ended!.left_at }],
+      },
     });
     if (registrationId)
       expect(
@@ -168,6 +235,15 @@ it("keeps descendant seats and subscriptions when another active parent seat rem
       .bind(email)
       .first("count"),
   ).toBe(0);
+  const audit = await env.DB.prepare(
+    "SELECT details_json FROM audit_log WHERE entity_id=? AND action='incorrect_representation_removed'",
+  )
+    .bind(f.identityId)
+    .first<string>("details_json");
+  expect(JSON.parse(audit!)).toMatchObject({
+    endedGroupSeats: { from: [], to: [] },
+    revokedGroupRoles: { from: [], to: [] },
+  });
   await noMarkers();
 });
 
@@ -186,13 +262,13 @@ it.each(["delete", "correct"] as const)(
     const ballotId = crypto.randomUUID();
     await env.DB.prepare(`INSERT INTO votes(id,slug,title,vote_type,owner_group_id,electorate_mode,created_by_user_id,threshold_type,opens_at,closes_at,created_at,updated_at)
     VALUES(?,?,'Protected vote','motion',?,'per_member',?,'simple_majority','2026-01-01T00:00:00.000Z','2027-01-01T00:00:00.000Z',?,?)`)
-      .bind(voteId, voteId, parent, (await staff()).id, root.at, root.at)
+      .bind(voteId, voteId, parent, (await createStaffSession()).id, root.at, root.at)
       .run();
     await env.DB.prepare(`INSERT INTO vote_ballots(id,vote_id,user_id,identity_id,member_id,choice,submitted_at,updated_at)
     VALUES(?,?,?,?,?,'in_favor',?,?)`)
       .bind(ballotId, voteId, f.userId, f.identityId, root.memberId, root.at, root.at)
       .run();
-    const registrationId = action === "correct" ? await registration(f) : null;
+    const registrationId = action === "correct" ? await createIdentityRegistration(f) : null;
     const tables = [
       "group_memberships",
       "user_roles",
@@ -203,7 +279,10 @@ it.each(["delete", "correct"] as const)(
     const before = await Promise.all(tables.map((table) => env.DB.prepare(`SELECT * FROM ${table} ORDER BY id`).all()));
     const response = await change(f, action);
     expect(response.status, await response.clone().text()).toBe(409);
-    expect(await response.json()).toMatchObject({ error: { code: "IDENTITY_HAS_PROTECTED_HISTORY" } });
+    const refusal = apiErrorPayloadSchema.parse(await response.json());
+    expect(refusal.error.code).toBe("IDENTITY_HAS_PROTECTED_HISTORY");
+    expect(refusal.error.message).toMatch(action === "correct" ? /cannot be corrected/u : /cannot be deleted/u);
+    if (action === "correct") expect(refusal.error.message).not.toMatch(/End the representation/u);
     for (let i = 0; i < tables.length; i++)
       expect((await env.DB.prepare(`SELECT * FROM ${tables[i]} ORDER BY id`).all()).results).toEqual(before[i].results);
     expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first("id")).toBe(
@@ -264,7 +343,7 @@ it("reconciles subscriptions after automatic enrollment through the replacement 
 it("rolls back seat erasure when linked registration prevents the guarded identity deletion", async () => {
   const f = await proposalIdentityFixture();
   const root = await seat(f, await group());
-  await registration(f);
+  await createIdentityRegistration(f);
   const response = await change(f, "delete");
   expect(response.status, await response.clone().text()).toBe(409);
   expect(await response.json()).toMatchObject({ error: { code: "IDENTITY_HAS_PARTICIPATION" } });
@@ -280,3 +359,27 @@ it("rolls back seat erasure when linked registration prevents the guarded identi
   ).toBe(0);
   await noMarkers();
 });
+
+it.each([false, true])(
+  "removes former public roster data only when the roster is published (%s)",
+  async (publicRoster) => {
+    const f = await proposalIdentityFixture();
+    const groupId = await group();
+    await env.DB.prepare("UPDATE groups SET public_roster=? WHERE id=?").bind(Number(publicRoster), groupId).run();
+    const former = await seat(f, groupId, f.identityId, true);
+    await env.DB.prepare("UPDATE group_memberships SET title='Treasurer' WHERE id=?").bind(former.id).run();
+    await env.DB.prepare("UPDATE identities SET ended_at=? WHERE id=?").bind(former.at, f.identityId).run();
+    const before = await getPublicGroupDirectory(env.DB, groupId);
+    if (publicRoster) expect(before.roster!.past).toMatchObject([{ title: "Treasurer" }]);
+    else expect(before.roster).toBeNull();
+    const response = await change(f, "delete");
+    expect(response.status, await response.clone().text()).toBe(200);
+    const after = await getPublicGroupDirectory(env.DB, groupId);
+    if (publicRoster) expect(after.roster!.past).toEqual([]);
+    const requests = await env.DB.prepare("SELECT count(*) AS count FROM site_publication_requests WHERE resource_id=?")
+      .bind(f.identityId)
+      .first("count");
+    expect(Number(requests) > 0).toBe(publicRoster);
+    await noMarkers();
+  },
+);

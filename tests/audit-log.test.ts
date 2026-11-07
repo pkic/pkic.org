@@ -5,6 +5,12 @@
  * `data.query`. This covers every filter the handler supports, plus
  * pagination, to prove the conversion didn't drop or change behavior.
  */
+import {
+  prepareAuditLogAfterOneChange,
+  selectAuditDetails,
+  serializeAuditDetails,
+} from "../functions/_lib/services/audit";
+import { insertUser } from "./helpers/membership";
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "./helpers/app";
@@ -396,5 +402,23 @@ describe("GET /api/v1/audit-log", () => {
   it("does not retain the former System API path", async () => {
     const response = await callAppGet("/api/v1/system/audit-log", adminToken);
     expect(response.status).toBe(404);
+  });
+});
+
+it.each(["value", "selection"] as const)("preserves SQL-shaped audit data through a %s payload", async (mode) => {
+  await resetDb();
+  const userId = await insertUser(env.DB, "audit-payload@example.test");
+  const payload = { sql: "THIS IS DATA, NOT SQL", bindings: ["ordinary JSON"] };
+  const details = mode === "selection" ? selectAuditDetails("SELECT ?", [serializeAuditDetails(payload)]) : payload;
+  await env.DB.batch([
+    env.DB.prepare("UPDATE users SET first_name='Audited' WHERE id=?").bind(userId),
+    prepareAuditLogAfterOneChange(env.DB, "system", null, "user_updated", "user", userId, details),
+  ]);
+  const stored = await env.DB.prepare("SELECT details_json FROM audit_log WHERE entity_id=? AND action='user_updated'")
+    .bind(userId)
+    .first<string>("details_json");
+  expect(JSON.parse(stored!)).toEqual({
+    sql: { from: null, to: "THIS IS DATA, NOT SQL" },
+    bindings: { from: null, to: ["ordinary JSON"] },
   });
 });

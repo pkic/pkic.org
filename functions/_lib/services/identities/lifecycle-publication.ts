@@ -5,12 +5,17 @@ import { PUBLIC_MEMBER_USER_SOURCE_SQL } from "../membership/public-profile-sql"
 import { groupSeatChangePublicationCondition } from "../groups/seat-publication";
 import { prepareSitePublicationRequest } from "../site-publication-requests";
 
-/** Public data changed by an identity transition, including erased seat history when removing a mistake. */
+/**
+ * Public data changed by an identity transition. Erasure includes ended identities:
+ * public rosters and person timelines expose former seats regardless of identity state.
+ */
 export function identityLifecyclePublicationCondition(identityId: string, includeGroupHistory = false) {
+  const activeIdentity = "held.started_at IS NOT NULL AND held.ended_at IS NULL AND held.blocked_at IS NULL";
+  const membershipChanged = includeGroupHistory ? `(${activeIdentity} AND seat.left_at IS NULL)` : "1";
   const groups = groupSeatChangePublicationCondition({
-    sql: `SELECT seat.id,seat.group_id,seat.user_id,seat.member_id,seat.left_at,(seat.left_at IS NULL) AS closes,1 AS membership_changed
+    sql: `SELECT seat.id,seat.group_id,seat.user_id,seat.member_id,seat.left_at,(seat.left_at IS NULL) AS closes,${membershipChanged} AS membership_changed
       FROM group_memberships seat JOIN identities held ON held.id=seat.identity_id
-      WHERE held.id=?${includeGroupHistory ? "" : " AND held.started_at IS NOT NULL AND held.ended_at IS NULL AND held.blocked_at IS NULL AND seat.left_at IS NULL"}`,
+      WHERE held.id=?${includeGroupHistory ? "" : ` AND ${activeIdentity} AND seat.left_at IS NULL`}`,
     bindings: [identityId],
   });
   return {

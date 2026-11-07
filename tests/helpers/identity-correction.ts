@@ -5,8 +5,13 @@ import { proposalIdentityFixture } from "./proposal-identity";
 import { callApi } from "./app";
 import { createAdminSession } from "./auth";
 
-export type Fixture = Awaited<ReturnType<typeof proposalIdentityFixture>>;
-export function correct(f: Fixture, token = f.token, replacement = f.secondIdentityId, machine = false) {
+export type IdentityCorrectionFixture = Awaited<ReturnType<typeof proposalIdentityFixture>>;
+export function requestIdentityCorrection(
+  f: IdentityCorrectionFixture,
+  token = f.token,
+  replacement = f.secondIdentityId,
+  machine = false,
+) {
   return callApi(
     env,
     `/api/v1/users/${f.userId}/identities/${f.identityId}/corrections`,
@@ -27,7 +32,7 @@ export function correct(f: Fixture, token = f.token, replacement = f.secondIdent
     { maxRoundTrips: 1 },
   );
 }
-export async function registration(f: Fixture) {
+export async function createIdentityRegistration(f: IdentityCorrectionFixture) {
   const id = crypto.randomUUID();
   const at = nowIso();
   await env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,registration_identity_id,created_at,updated_at)
@@ -36,14 +41,19 @@ export async function registration(f: Fixture) {
     .run();
   return id;
 }
-export async function staff() {
+export async function createStaffSession() {
   const id = (await env.DB.prepare("SELECT id FROM users WHERE normalized_email='admin@pkic.org'").first<string>(
     "id",
   ))!;
   return { id, token: await createAdminSession(env.DB, id, crypto.randomUUID()) };
 }
 
-export async function remove(f: Fixture, token: string, identityId = f.identityId, machine = false) {
+export async function requestIdentityDeletion(
+  f: IdentityCorrectionFixture,
+  token: string,
+  identityId = f.identityId,
+  machine = false,
+) {
   return callApi(
     env,
     `/api/v1/users/${f.userId}/identities/${identityId}`,
