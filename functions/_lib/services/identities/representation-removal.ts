@@ -11,7 +11,7 @@ import { isAuditChangeGuardFailure } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { ownedIdentityAtEvidence } from "./selection";
 import { prepareBadgeRenderJobsForUser } from "../badge-render-job-statements";
-import { prepareOrganizationIdentityPublication } from "./lifecycle-publication";
+import { identityErasurePublicationCondition, prepareOrganizationIdentityPublication } from "./lifecycle-publication";
 
 /** Remove an incorrect association, optionally preserving event work under a valid replacement. */
 export function prepareIncorrectRepresentationRemoval(
@@ -49,7 +49,7 @@ export function prepareIncorrectRepresentationRemoval(
           }),
         ]
       : []),
-    prepareOrganizationIdentityPublication(db, identityId, at, true),
+    prepareOrganizationIdentityPublication(db, identityId, at, identityErasurePublicationCondition(identityId)),
     ...(replacement
       ? [
           db
