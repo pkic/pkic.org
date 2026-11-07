@@ -1,3 +1,4 @@
+import { eventDayDateSchema } from "./event-read-models";
 import { utcInstantSchema } from "./api-common";
 import { z } from "zod";
 import { sessionParticipationStatusSchema } from "./event-participation-scanning";
@@ -5,11 +6,18 @@ import { databaseIdSchema } from "./identifiers";
 import { nativeEventCaptureContextSchema } from "./event-attendance-capture";
 import { agendaAdmissionPolicySchema } from "./event-agenda";
 
+export const OFFLINE_ELIGIBILITY_PAGE_SIZE = 250;
+
 export const offlineEligibilityQuerySchema = z
   .object({
     occurrenceId: z.string().uuid().optional(),
     roomId: z.string().uuid().optional(),
     afterBadgeId: z.string().uuid().optional(),
+    knownDigest: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
+    scopeDate: eventDayDateSchema.optional(),
     publishedRevision: z.coerce.number().int().nonnegative().optional(),
   })
   .strict();
@@ -20,6 +28,9 @@ export const offlineEligibilityResponseSchema = z
     occurrenceId: z.string().uuid().nullable(),
     roomId: z.string().uuid().nullable().optional(),
     revision: z.number().int().nonnegative(),
+    scopeDate: eventDayDateSchema,
+    pageDigest: z.string().regex(/^[a-f0-9]{64}$/),
+    unchanged: z.boolean(),
     publishedRevision: z.number().int().nonnegative().nullable(),
     nativeEventContext: nativeEventCaptureContextSchema.optional(),
     serverNow: z.string().datetime(),
@@ -49,7 +60,7 @@ export const offlineEligibilityResponseSchema = z
           })
           .strict(),
       )
-      .max(250),
+      .max(OFFLINE_ELIGIBILITY_PAGE_SIZE),
     nextBadgeId: z.string().uuid().nullable(),
   })
   .strict();

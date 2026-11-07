@@ -42,7 +42,7 @@ export async function readEnrolledOfflineEligibilityRequest(
       "Prepare an open scanner session for this operator and device before downloading offline evidence.",
     );
   return enrolledOfflineEligibilityResponseSchema.parse({
-    ...read.decode(results.slice(offset + 1), actor.id),
+    ...(await read.decode(results.slice(offset + 1), actor.id)),
     epochId: query.epochId,
     deviceId: query.deviceId,
   });

@@ -87,7 +87,11 @@ import {
   scannerTransportUnavailable,
   scannerPreparationRefusal,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context";
-import { useEligibilityManifest } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useEligibilityManifest";
+import {
+  useEligibilityManifest,
+  useScannerOfflinePreparation,
+} from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useEligibilityManifest";
+import { ScannerCodePreparation } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-code-preparation";
 import * as eligibility from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-manifest";
 import { scannerRecoverySnapshot } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scan-history";
 import { EventScanner } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/EventScanner";
@@ -187,6 +191,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
+
 describe("scanner-only offline preparation", () => {
   it("prepares through the local day independently of portal idle expiry", async () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
@@ -207,39 +212,44 @@ describe("scanner-only offline preparation", () => {
     vi.setSystemTime(new Date(expiresAt));
     expect(await restoreScannerOfflineContext(route)).toBeNull();
   });
-  it("does not persist preparation until controlled public code warming completes", async () => {
-    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+  it("retries a slow install and persists preparation only after controlled code warming completes", async () => {
+    const workers = new EventTarget();
+    vi.stubGlobal("navigator", { onLine: true, serviceWorker: workers });
     let release!: (ready: boolean) => void;
-    mocks.warm.mockImplementation(
+    mocks.warm.mockResolvedValueOnce(false).mockImplementation(
       () =>
         new Promise<boolean>((resolve) => {
           release = resolve;
         }),
     );
+    const enrolled = epoch(),
+      preparedManifest = manifest();
+    function Preparation() {
+      const state = useScannerOfflinePreparation(session, enrolled, preparedManifest, slug, "attendance");
+      return <output>{state.context ? "Ready offline" : state.error}</output>;
+    }
+    host = document.createElement("div");
+    document.body.append(host);
     const invokedAt = Date.now();
-    const saving = saveScannerOfflineContext({
-      prepareCode: mocks.warm,
-      slug,
-      session,
-      epoch: epoch(),
-      manifest: manifest(),
-      action: "attendance",
-    });
-    await vi.waitFor(() => expect(mocks.warm).toHaveBeenCalledOnce());
-    expect(mocks.rows[0]).not.toHaveProperty("collectorContext");
-    release(true);
-    await saving;
-    const completedAt = Date.now();
-    const saved = scannerOfflineContextSchema.parse(mocks.rows[0]!.collectorContext);
-    expect(saved).toEqual(
-      scannerOfflineContextSchema.parse({
-        ...context(),
-        nativeEventContext: undefined,
-        lastObservedAt: saved.lastObservedAt,
-      }),
+    await act(() =>
+      render(
+        <ScannerCodePreparation.Provider value={mocks.warm}>
+          <Preparation />
+        </ScannerCodePreparation.Provider>,
+        host!,
+      ),
     );
+    await vi.waitFor(() => expect(host!.textContent).toContain("not ready"));
+    await act(() => {
+      workers.dispatchEvent(new Event("controllerchange"));
+    });
+    await vi.waitFor(() => expect(mocks.warm).toHaveBeenCalledTimes(2));
+    expect(mocks.rows[0]).not.toHaveProperty("collectorContext");
+    await act(async () => release(true));
+    await vi.waitFor(() => expect(host!.textContent).toContain("Ready offline"));
+    const saved = scannerOfflineContextSchema.parse(mocks.rows[0]!.collectorContext);
     expect(Date.parse(saved.lastObservedAt)).toBeGreaterThanOrEqual(invokedAt);
-    expect(Date.parse(saved.lastObservedAt)).toBeLessThanOrEqual(completedAt);
+    expect(Date.parse(saved.lastObservedAt)).toBeLessThanOrEqual(Date.now());
     expect(portalSession.value).toBeNull();
   });
   it("refuses failed warming, mismatched enrollment and invalid receipt timestamps", async () => {

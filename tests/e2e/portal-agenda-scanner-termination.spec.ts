@@ -16,7 +16,7 @@ import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-
 import { registrationManageReadResponseSchema } from "../../assets/shared/schemas/registration";
 import {
   scannerStorage,
-  openScannerDiagnostics,
+  openScannerSessionDetails,
   openScannerManualEntry,
   scannerSessionState,
 } from "./helpers/scanner-recovery-storage";
@@ -71,7 +71,7 @@ test("a real browser crash preserves a committed upload lease and reclaims the o
       revoked: false,
       eventRegistered: true,
     });
-    await openScannerDiagnostics(page);
+    await openScannerSessionDetails(page);
     await expect(
       page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
         exact: true,

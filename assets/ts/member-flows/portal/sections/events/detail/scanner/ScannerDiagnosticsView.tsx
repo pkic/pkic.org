@@ -1,9 +1,9 @@
-import { ScannerModeSelect } from "./ScannerModeSelect";
 import { ScannerSoundPreferences } from "./ScannerSoundPreferences";
-import { ScannerSyncStatus } from "./ScannerPreparationStatus";
-import { Button } from "../../../../../../ui/Button";
+import { ScannerSyncStatus, ScannerPreparationStatus } from "./ScannerPreparationStatus";
 import type { ComponentProps } from "preact";
 import { ScannerDiagnostics } from "./ScannerCaptureControls";
+import { useScannerDecoderPreparation } from "./useScannerDecoderPreparation";
+import { Alert } from "../../../../../../ui/Alert";
 type Diagnostics = ComponentProps<typeof ScannerDiagnostics>;
 type Session = Diagnostics["session"];
 /** Assembles the current scanner's diagnostics from its canonical session and preparation controls. */
@@ -13,8 +13,6 @@ export function ScannerDiagnosticsView({
   sync,
   onMessage,
   onCapturePause,
-  mode,
-  onStart,
   preferences,
   status,
   preparation,
@@ -26,32 +24,30 @@ export function ScannerDiagnosticsView({
   sync: Session["sync"];
   onMessage: Session["message"];
   onCapturePause: Session["capturePause"];
-  mode: ComponentProps<typeof ScannerModeSelect>;
-  onStart: () => void;
   preferences: ComponentProps<typeof ScannerSoundPreferences>["preferences"];
   sound: ComponentProps<typeof ScannerSoundPreferences>["sound"];
   status: Omit<ComponentProps<typeof ScannerSyncStatus>, "sync">;
-  preparation: Diagnostics["preparation"];
+  preparation: ComponentProps<typeof ScannerPreparationStatus> & { refreshEligibility?: () => Promise<void> };
   unverifiedStart?: Diagnostics["unverifiedStart"];
 }) {
+  const decoderStatus = useScannerDecoderPreparation(`${context.slug}:${context.operatorUserId}`);
   return (
-    <>
-      <ScannerModeSelect {...mode} />
-      <Button type="button" variant="secondary" disabled={!scanner.ready} onClick={onStart}>
-        Start scanning
-      </Button>
-      <ScannerDiagnostics
-        session={{ ...context, scanner, sync, message: onMessage, capturePause: onCapturePause }}
-        sound={<ScannerSoundPreferences preferences={preferences} sound={sound} />}
-        syncStatus={<ScannerSyncStatus {...status} sync={() => void sync()} />}
-        pacing={{
-          value: preferences.feedbackPause,
-          onChange: (value) => preferences.update({ feedbackPause: value }),
-          field: preferences.form.of("feedbackPause"),
-        }}
-        preparation={preparation}
-        unverifiedStart={unverifiedStart}
-      />
-    </>
+    <ScannerDiagnostics
+      session={{ ...context, scanner, sync, message: onMessage, capturePause: onCapturePause }}
+      sound={<ScannerSoundPreferences preferences={preferences} sound={sound} />}
+      syncStatus={
+        <ScannerSyncStatus {...status} refreshEligibility={preparation.refreshEligibility} sync={() => void sync()}>
+          {scanner.error && <Alert tone="danger">{scanner.error}</Alert>}
+          <ScannerPreparationStatus {...preparation} />
+          <p role="status">{decoderStatus}</p>
+        </ScannerSyncStatus>
+      }
+      pacing={{
+        value: preferences.feedbackPause,
+        onChange: (value) => preferences.update({ feedbackPause: value }),
+        field: preferences.form.of("feedbackPause"),
+      }}
+      unverifiedStart={unverifiedStart}
+    />
   );
 }

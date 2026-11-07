@@ -12,7 +12,7 @@ import {
   scannerDeviceSessionStatusSchema,
 } from "../../../assets/shared/schemas/event-scanner-devices";
 import {
-  closeScannerDiagnostics,
+  openScannerDiagnostics,
   downloadScannerRecovery,
   openScannerRecovery,
   scannerSessionState,
@@ -197,7 +197,7 @@ async function observeScannerClaim(page: Page, operationId: string) {
           observations,
           /** The tab that is uploading keeps its control busy, so only an idle tab can compete; busy answers null. */
           async clickAndAwaitClaim() {
-            if ((button as HTMLButtonElement).disabled) return null;
+            if (button.matches(":disabled, [aria-disabled='true']")) return null;
             button.click();
             const deadline = Date.now() + 5000;
             while (!observations.length && Date.now() < deadline)
@@ -244,7 +244,7 @@ export async function replayScannerFromTwoTabs(
 ) {
   const other = await context.newPage();
   await other.goto(new URL(scannerPath, page.url()).href);
-  await expect(other.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
+  await openScannerDiagnostics(other);
   const epochPath = `${scansPath.replace(/\/scans$/u, "")}/scanner/devices/sessions/${original.scannerSession.epochId}`;
   const statusBefore = await page.request.get(epochPath);
   expect(statusBefore.status()).toBe(200);
@@ -279,10 +279,10 @@ export async function replayScannerFromTwoTabs(
   await context.route(pattern, handler);
   const observers: Awaited<ReturnType<typeof observeScannerClaim>>[] = [];
   try {
-    // The sync control sits on the Setup tab, beside the pending count. Everything the competing tab needs
+    // Keep both Diagnostics sync controls visible. Everything the competing tab needs
     // is in place before the upload is held: the scanner abandons an upload that is held for eight seconds.
-    await closeScannerDiagnostics(page);
-    await closeScannerDiagnostics(other);
+    await openScannerDiagnostics(page);
+    await openScannerDiagnostics(other);
     observers.push(
       await observeScannerClaim(page, original.operationId),
       await observeScannerClaim(other, original.operationId),
@@ -301,6 +301,23 @@ export async function replayScannerFromTwoTabs(
         message: "A real canonical replay must be held before competing sync triggers",
       })
       .toBeGreaterThan(0);
+    // Badge refresh also makes the shared control busy briefly after reconnect.
+    await expect
+      .poll(
+        async () =>
+          (
+            await Promise.all(
+              [page, other].map((tab) =>
+                tab
+                  .getByRole("region", { name: "Sync and offline status", exact: true })
+                  .getByRole("button")
+                  .first()
+                  .isEnabled(),
+              ),
+            )
+          ).filter(Boolean).length,
+      )
+      .toBe(1);
     // Whichever tab won the reconnect race is uploading and keeps its own sync control busy; the other tab
     // is the competitor. One in-page step each, so tool latency between the hold and the clicks cannot
     // outlast the scanner's upload timeout.

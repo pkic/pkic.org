@@ -9,7 +9,7 @@ vi.mock("../../assets/ts/shared/pending-user-logout", () => ({
 }));
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { badgeCredentialSchema } from "../../assets/shared/schemas/badge-credential";
-import { render } from "preact";
+import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, vi } from "vitest";
 import {
@@ -20,6 +20,8 @@ import type { ScannerQueueRecord } from "../../assets/shared/schemas/event-scann
 export const badgeCode = badgeCredentialSchema.parse("ABCDEFGHJKLMNPQR");
 const mocks = vi.hoisted(() => ({
   ready: false,
+  error: "",
+  decoderStatus: "Camera prepared",
   state: "open",
   persist: vi.fn(),
   audit: vi.fn(async (record: unknown) => record),
@@ -54,7 +56,7 @@ vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useS
   useScannerDevice: () => ({
     deviceId: "22222222-2222-4222-8222-222222222222",
     ready: mocks.ready,
-    error: "",
+    error: mocks.error,
     epoch: mocks.state === "preparing" ? null : { state: mocks.state },
     setEpoch: vi.fn((epoch) => {
       mocks.state = epoch.state;
@@ -63,7 +65,7 @@ vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useS
   }),
 }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useScannerDecoderPreparation", () => ({
-  useScannerDecoderPreparation: () => "Camera prepared",
+  useScannerDecoderPreparation: () => mocks.decoderStatus,
 }));
 vi.mock(
   "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useEligibilityManifest",
@@ -94,7 +96,7 @@ vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useO
   useOfflineAdmission: () => ({ grantId: null, select: vi.fn(), persist: mocks.persist }),
 }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerRecovery", () => ({
-  ScannerRecovery: () => null,
+  ScannerRecovery: ({ sessionControls }: { sessionControls?: ComponentChildren }) => <>{sessionControls}</>,
 }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerSetup", () => ({
   ScannerSetup: ({ onStart, ready, locked }: { onStart: () => void; ready: boolean; locked: boolean }) => (
@@ -120,6 +122,8 @@ afterEach(async () => {
   mocks.sessionListeners.clear();
   mocks.cameraScan = null;
   mocks.snapshot = null;
+  mocks.error = "";
+  mocks.decoderStatus = "Camera prepared";
   mocks.drain.mockImplementation(async () => ({ uploaded: 0, state: "complete" }));
   vi.clearAllMocks();
   vi.unstubAllGlobals();
@@ -211,7 +215,7 @@ export async function closeDiagnostics() {
   });
   expect(host.querySelector('[aria-label="Recovery and diagnostics"]')).toBeNull();
 }
-export async function submit() {
+export async function submit({ waitForIdle = true }: { waitForIdle?: boolean } = {}) {
   const input = await openManual();
   await act(async () => {
     input.value = badgeCode;
@@ -222,9 +226,10 @@ export async function submit() {
       .querySelector(".pk-fast-scanner form")!
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
-  await vi.waitFor(async () => {
-    await act(async () => {});
-    expect(host.querySelector('form[aria-busy="true"]')).toBeNull();
-  });
+  if (waitForIdle)
+    await vi.waitFor(async () => {
+      await act(async () => {});
+      expect(host.querySelector('form[aria-busy="true"]')).toBeNull();
+    });
   await act(async () => {});
 }

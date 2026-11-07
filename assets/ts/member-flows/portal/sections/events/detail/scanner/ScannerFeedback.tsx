@@ -1,3 +1,4 @@
+import type { ScannerStatus } from "./ScannerStatus";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import type {
   EventScanRequest,
@@ -11,14 +12,16 @@ export function ScannerFeedback({
   message,
   pending,
   compact = false,
+  status,
 }: {
   result: EventScanResponse | null;
   action: EventScanRequest["action"];
   message: string;
   pending: number;
   compact?: boolean;
+  status?: ScannerStatus;
 }) {
-  const outcome = scanFeedbackOutcome(result, action);
+  const outcome = status?.tone ?? scanFeedbackOutcome(result, action);
   return (
     <div
       className={`pk-event-scanner pk-event-scanner--${outcome}${compact ? " pk-event-scanner--compact" : ""}`}
@@ -30,14 +33,14 @@ export function ScannerFeedback({
           {outcome === "eligible" ? "✓" : outcome === "warning" ? "!" : result && outcome !== "unverified" ? "×" : "○"}
         </span>
       )}
-      <strong>{scanFeedbackLabel(result, action)}</strong>
+      <strong>{status?.title ?? scanFeedbackLabel(result, action)}</strong>
       {result?.admissionRecorded && result.admissionDecision && (
         <p>
           Eligibility: {scanEligibilityLabel(result)}. Attendance:{" "}
           {result.attendanceRecorded ? "Recorded" : "Not recorded"}.
         </p>
       )}
-      <p>{message}</p>
+      {message !== status?.title && <p>{message}</p>}
       <p>{formatNumber(pending)} scans awaiting upload</p>
     </div>
   );

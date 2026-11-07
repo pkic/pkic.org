@@ -176,7 +176,7 @@ export function FastScannerView({
         ? "Ready to scan"
         : "Camera unavailable";
   const readiness = cooldown?.saving
-    ? "Saving scan…"
+    ? "Checking badge…"
     : cooldown && cooldown.remainingMs > 0
       ? `Next badge in ${(cooldown.remainingMs / 1000).toFixed(1)} seconds`
       : "Ready for the next badge";
@@ -185,6 +185,7 @@ export function FastScannerView({
       ref={surface}
       class={`pk-login__backdrop pk-fast-scanner pk-scanner-viewport pk-fast-scanner--${outcome}${presentation === "embedded" ? " pk-fast-scanner--embedded" : ""}${visibleStatus ? " pk-fast-scanner--result" : ""}${manualEntry || recentScans ? " pk-fast-scanner--manual" : ""}`}
       data-fullscreen={presentation === "fullscreen" || undefined}
+      data-status-pending={(visibleStatus?.tone === "unverified" && visibleStatus.record === false) || undefined}
       data-scanner-role={visualRole}
       data-gradient-from={gradientFrom}
       onAnimationEnd={(event) => {
@@ -265,7 +266,7 @@ export function FastScannerView({
               <strong class="pk-fast-scanner__label" data-scanner-help="mode">
                 {visibleStatus?.title ?? (cameraStarting ? "Starting camera…" : readyLabel)}
               </strong>
-              {detail && <p class="pk-fast-scanner__message">{detail}</p>}
+              {detail && detail !== visibleStatus?.title && <p class="pk-fast-scanner__message">{detail}</p>}
             </div>
             {purpose === "print" && !helpOpen && <div class="pk-fast-scanner__print-status">{statusActions}</div>}
             {!visibleStatus && context && <p class="pk-fast-scanner__context">{context}</p>}

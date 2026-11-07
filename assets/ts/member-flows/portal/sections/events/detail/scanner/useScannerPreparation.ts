@@ -57,6 +57,8 @@ export function useScannerPreparation({
     preparing: eligibility.manifestPreparing,
     ready: eligibility.manifestReady,
     error: eligibility.manifestError,
+    checkedBadges: eligibility.manifestProgress,
+    refreshEligibility: eligibility.refresh,
   };
   return { location, eligibility, offlineAdmission, offlinePreparation, status };
 }

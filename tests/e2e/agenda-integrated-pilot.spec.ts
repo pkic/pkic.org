@@ -48,7 +48,7 @@ import { correctPilotAttendance } from "./helpers/attendance-correction";
 import {
   scannerStorage,
   reconnectScannerBrowser,
-  openScannerDiagnostics,
+  openScannerSessionDetails,
   closeScannerDiagnostics,
 } from "./helpers/scanner-recovery-storage";
 import {
@@ -93,7 +93,7 @@ async function closePilotScanner(page: Page, scan: ReturnType<typeof enrolledEve
       return session?.epochId === scan.scannerSession.epochId ? [session.sequence] : [];
     }),
   );
-  const diagnostics = await openScannerDiagnostics(page);
+  const diagnostics = await openScannerSessionDetails(page);
   const closing = page
     .waitForResponse(
       (response) =>

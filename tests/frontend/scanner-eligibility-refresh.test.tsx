@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { useEligibilityManifest } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useEligibilityManifest";
 import type { ScannerEpoch } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-device-ledger";
 import { SCANNER_ELIGIBILITY_REFRESH_MS } from "../../assets/shared/event-offline-expiry";
-const mocks = vi.hoisted(() => ({ prepare: vi.fn(async () => ({})) }));
+const mocks = vi.hoisted(() => ({ prepare: vi.fn(async (..._args: unknown[]) => ({ refreshError: "" })) }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-manifest", () => ({
   prepareEligibilityManifest: mocks.prepare,
 }));
@@ -23,14 +23,21 @@ const epoch: ScannerEpoch = {
 };
 const host = document.createElement("div");
 function Scanner({ collector = false }: { collector?: boolean }) {
-  useEligibilityManifest("synthetic", id, null, "attendance", () => {}, null, epoch, collector);
-  return null;
+  const state = useEligibilityManifest("synthetic", id, null, "attendance", () => {}, null, epoch, collector);
+  return (
+    <>
+      <button onClick={() => void state.refresh()}>Sync now</button>
+      <output>
+        {state.manifestPreparing ? `Checking ${state.manifestProgress ?? 0}` : state.manifestError || "Ready"}
+      </output>
+    </>
+  );
 }
 afterEach(async () => {
   await act(() => render(null, host));
   vi.useRealTimers();
   vi.unstubAllGlobals();
-  mocks.prepare.mockClear();
+  mocks.prepare.mockReset().mockResolvedValue({ refreshError: "" });
 });
 it("refreshes well before the day expires and immediately after reconnect or focus", async () => {
   vi.useFakeTimers();
@@ -61,9 +68,30 @@ it("restores offline checks from storage without attempting a network refresh", 
     expect.any(AbortSignal),
     null,
     "cache",
+    expect.any(Function),
   );
   await act(async () => {
     window.dispatchEvent(new Event("focus"));
   });
   expect(mocks.prepare).toHaveBeenCalledOnce();
+});
+it("exposes manual refresh progress and does not hide a cached-fallback failure", async () => {
+  await act(async () => render(<Scanner />, host));
+  await vi.waitFor(() => expect(host.textContent).toContain("Ready"));
+  let finish: ((value: { refreshError: string }) => void) | undefined;
+  mocks.prepare.mockImplementationOnce(async (...args) => {
+    const progress = args[7];
+    if (typeof progress !== "function") throw new Error("Expected progress callback");
+    progress(250);
+    return new Promise((resolve) => {
+      finish = resolve;
+    });
+  });
+  await act(async () => host.querySelector("button")!.click());
+  expect(host.textContent).toContain("Checking 250");
+  await act(async () => finish!({ refreshError: "Badge refresh failed (HTTP 503)." }));
+  await vi.waitFor(() => expect(host.textContent).toContain("HTTP 503"));
+  expect(mocks.prepare).toHaveBeenCalledTimes(2);
+  await act(async () => host.querySelector("button")!.click());
+  await vi.waitFor(() => expect(host.textContent).toContain("Ready"));
 });

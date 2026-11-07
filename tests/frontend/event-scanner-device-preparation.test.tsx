@@ -16,6 +16,15 @@ import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { formatDateTime } from "../../assets/shared/format-date";
 describe("scanner device enrollment and manual capture boundary", () => {
+  it("keeps camera and enrollment failures in the visible sync panel", async () => {
+    mocks.error = "Could not enroll this scanner";
+    mocks.decoderStatus = "Offline camera files are not prepared";
+    await mount(false);
+    const diagnostics = await openDiagnostics();
+    const status = diagnostics.querySelector('[aria-label="Sync and offline status"]')!;
+    expect(status.textContent).toContain(mocks.decoderStatus);
+    expect(status.querySelector('[role="alert"]')?.textContent).toContain(mocks.error);
+  });
   it("keeps capture disabled until persistent device enrollment is ready", async () => {
     await mount(false);
     expect(host.textContent).toContain("Preparing scanner for this session");
@@ -29,9 +38,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
   it("defaults to attendance with explicit manual entry and recovery in its dedicated tab without quota or exception controls", async () => {
     await mount(true, ["check", "attendance", "exception"]);
     await openDiagnostics();
-    const modes = host.querySelector<HTMLSelectElement>('select[name="action"]')!;
-    expect(modes.value).toBe("attendance");
-    expect(Array.from(modes.options).map((option) => option.value)).toEqual(["check", "attendance"]);
+    expect(host.querySelector('select[name="action"]')).toBeNull();
     await closeDiagnostics();
     expect(host.querySelector('[aria-label="Recovery and diagnostics"]')).toBeNull();
     expect(host.querySelector("details, summary")).toBeNull();
@@ -56,14 +63,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
     expect(host.textContent).not.toContain("Review admission exception");
   });
   it("switches continuous scanning to Recent scans, stops the camera and retains the selected mode", async () => {
-    await mount(true, ["attendance", "check"]);
-    await openDiagnostics();
-    const mode = host.querySelector<HTMLSelectElement>('select[name="action"]')!;
-    await act(() => {
-      mode.value = "check";
-      mode.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await closeDiagnostics();
+    await mount(true, ["check"]);
     await act(async () =>
       Array.from(host.querySelectorAll("button"))
         .find((button) => button.textContent?.trim() === "Start scanning")!
@@ -293,6 +293,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
         .find((button) => button.textContent?.trim() === "Start scanning")!
         .click();
     });
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Scan next now"]')!.click());
     await act(async () => {
       mocks.hardwareScan!(badgeCode);
     });
@@ -316,9 +317,9 @@ describe("scanner device enrollment and manual capture boundary", () => {
     await mount(true, ["attendance"]);
     await openDiagnostics();
     const normal = Array.from(host.querySelectorAll("dl")).find((list) =>
-      list.textContent?.includes("Last eligibility check"),
+      list.textContent?.includes("Last badge refresh"),
     )!;
-    expect(normal.textContent).toContain("Last eligibility check");
+    expect(normal.textContent).toContain("Last badge refresh");
     expect(normal.textContent).toContain(formatDateTime(mocks.snapshot.serverNow));
     await closeDiagnostics();
     await act(async () => {
@@ -327,13 +328,13 @@ describe("scanner device enrollment and manual capture boundary", () => {
         .click();
     });
     const fast = host.querySelector('[role="dialog"][aria-label="Continuous badge scanner"]')!;
-    expect(fast.textContent).toContain("Last eligibility check");
+    expect(fast.textContent).toContain("Last badge refresh");
     expect(fast.textContent).toContain(formatDateTime(mocks.snapshot.serverNow));
     expect(fast.textContent).toContain(formatDateTime(mocks.snapshot.expiresAt));
     expect(fast.textContent).toContain("Using saved registration data");
   });
   it.each(["eligible", "unknown"] as const)(
-    "resets the cleared entry field after a successfully captured %s badge without changing its result",
+    "resets the cleared entry field after capturing a %s badge while retaining feedback",
     async (outcome) => {
       await mount(true, ["attendance"]);
       mocks.persist.mockImplementation(async (scan) => ({
@@ -350,7 +351,9 @@ describe("scanner device enrollment and manual capture boundary", () => {
       expect(input.value).toBe("");
       expect(input.hasAttribute("aria-invalid")).toBe(false);
       expect(input.closest(".pk-field")?.className).not.toContain("pk-field--invalid");
-      expect(host.querySelector(`.pk-event-scanner--${outcome}`)?.textContent).toContain("Captured observation");
+      expect(
+        host.querySelector(`.pk-event-scanner--${outcome === "unknown" ? "unverified" : outcome}`)?.textContent,
+      ).toContain(outcome === "unknown" ? "Verification pending" : "Captured observation");
       expect(mocks.persist).toHaveBeenCalledOnce();
       expect(eventScanCaptureIntentSchema.parse(mocks.persist.mock.calls[0][0]).badgeId).toBe(badgeCode);
       // A new empty submission still receives the canonical error; only completed capture resets presentation.
@@ -426,9 +429,8 @@ describe("scanner device enrollment and manual capture boundary", () => {
     await vi.waitFor(async () => {
       await act(async () => {});
       expect(mocks.persist).toHaveBeenCalledOnce();
-      expect(host.querySelector(".pk-fast-scanner--unknown")?.textContent).toContain(
-        "Unknown badge for this event snapshot",
-      );
+      expect(host.querySelector(".pk-fast-scanner--unverified")?.textContent).toContain("Verification pending");
+      expect(host.querySelector(".pk-fast-scanner--unknown")).toBeNull();
     });
     await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Close scanner"]')!.click());
     const cleared = await openManual();

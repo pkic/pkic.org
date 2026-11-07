@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
-import { openScannerDiagnostics, scannerShellCachedUrls } from "./helpers/scanner-recovery-storage";
+import { openScannerSessionDetails, scannerShellCachedUrls } from "./helpers/scanner-recovery-storage";
 
 test("a fresh offline page decodes a real QR image after preparing with native detection available", async ({
   page,
@@ -23,7 +23,7 @@ test("a fresh offline page decodes a real QR image after preparing with native d
   });
   await signInAsE2eStaff(page, e2eAdminEmail("default"));
   await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/scanner");
-  const diagnostics = await openScannerDiagnostics(page);
+  const diagnostics = await openScannerSessionDetails(page);
   await expect(diagnostics.getByText("Offline camera files prepared.", { exact: true })).toBeVisible();
   const cached = await scannerShellCachedUrls(page);
   const main = cached.find((url) => /\/qr-scanner\.min\.[^/]+\.js$/u.test(url));
