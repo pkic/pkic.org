@@ -1775,7 +1775,7 @@ describe("speaker self-management endpoints", () => {
         appBaseUrl: "https://app.test",
         reason: "Must not commit",
       }),
-    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    ).rejects.toMatchObject({ status: 403, code: "PROPOSAL_IDENTITY_AUTHORITY_REQUIRED" });
     await expect(
       queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
         proposalId,
