@@ -3,7 +3,7 @@ import { proposalSpeakerIdentityIdSql } from "../functions/_lib/services/proposa
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { identityCorrectionSchema, identitiesListResponseSchema } from "../assets/shared/schemas/identity";
+import { identitiesListResponseSchema } from "../assets/shared/schemas/identity";
 import { proposalCreateResponseSchema } from "../assets/shared/schemas/proposal-management";
 import { proposalIdentityFixture, submitIdentityProposal } from "./helpers/proposal-identity";
 import { createAdminSession, createMcpSession } from "./helpers/auth";
@@ -11,6 +11,7 @@ import { callApi } from "./helpers/app";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { resetDb } from "./helpers/reset-db";
 import { nowIso } from "../functions/_lib/utils/time";
+import { correct, registration, staff, remove } from "./helpers/identity-correction";
 import {
   assignRepresentativeRole,
   REPRESENTATIVE_ROLE_IDS,
@@ -20,44 +21,6 @@ import {
 
 beforeEach(resetDb);
 afterEach(() => vi.unstubAllGlobals());
-type Fixture = Awaited<ReturnType<typeof proposalIdentityFixture>>;
-function correct(f: Fixture, token = f.token, replacement = f.secondIdentityId, machine = false) {
-  return callApi(
-    env,
-    `/api/v1/users/${f.userId}/identities/${f.identityId}/corrections`,
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        "content-type": "application/json",
-        ...(machine ? { "x-pkic-machine-auth": "mcp" } : {}),
-      },
-      body: JSON.stringify(
-        identityCorrectionSchema.parse({
-          replacementIdentityId: replacement,
-          reason: "The organization was associated incorrectly.",
-        }),
-      ),
-    },
-    { maxRoundTrips: 1 },
-  );
-}
-async function registration(f: Fixture) {
-  const id = crypto.randomUUID();
-  const at = nowIso();
-  await env.DB.prepare(`INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,registration_identity_id,created_at,updated_at)
-    VALUES(?,?,?,'registered','test',?,?,?,?)`)
-    .bind(id, f.eventId, f.userId, crypto.randomUUID(), f.identityId, at, at)
-    .run();
-  return id;
-}
-async function staff() {
-  const id = (await env.DB.prepare("SELECT id FROM users WHERE normalized_email='admin@pkic.org'").first<string>(
-    "id",
-  ))!;
-  return { id, token: await createAdminSession(env.DB, id, crypto.randomUUID()) };
-}
-
 async function personalIdentity(userId: string) {
   const existing = await env.DB.prepare(
     "SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL AND ended_at IS NULL",
@@ -240,7 +203,7 @@ describe("organization association correction", () => {
       .run();
     const response = await correct(f);
     expect(response.status, await response.clone().text()).toBe(409);
-    expect(await response.text()).toContain("require review");
+    expect(await response.json()).toMatchObject({ error: { code: "IDENTITY_HAS_PROTECTED_HISTORY" } });
     expect(
       await env.DB.prepare("SELECT registration_identity_id FROM registrations WHERE id=?")
         .bind(id)
@@ -297,17 +260,6 @@ describe("organization association correction", () => {
 });
 
 describe("identity deletion", () => {
-  async function remove(f: Fixture, token: string, identityId = f.identityId, machine = false) {
-    return callApi(
-      env,
-      `/api/v1/users/${f.userId}/identities/${identityId}`,
-      {
-        method: "DELETE",
-        headers: { authorization: `Bearer ${token}`, ...(machine ? { "x-pkic-machine-auth": "mcp" } : {}) },
-      },
-      { maxRoundTrips: 1 },
-    );
-  }
   it.each(["owner", "staff"])(
     "lets the %s delete an unused organization identity through the same endpoint",
     async (mode) => {
@@ -337,67 +289,6 @@ describe("identity deletion", () => {
     expect(
       await env.DB.prepare(
         "SELECT count(*) AS count FROM audit_log WHERE action='incorrect_representation_removed'",
-      ).first("count"),
-    ).toBe(0);
-  });
-  it.each([
-    ["delete", false],
-    ["delete", true],
-    ["correct", false],
-    ["correct", true],
-  ] as const)("refuses to %s an identity with group history (ended: %s) atomically", async (action, ended) => {
-    const f = await proposalIdentityFixture();
-    const at = nowIso();
-    const groupId = crypto.randomUUID();
-    const seatId = crypto.randomUUID();
-    const memberId = await env.DB.prepare("SELECT member_id FROM identity_member_capacities WHERE identity_id=?")
-      .bind(f.identityId)
-      .first<string>("member_id");
-    await env.DB.batch([
-      env.DB.prepare(`INSERT INTO groups(id,type_key,name,slug,visibility,eligibility_mode,created_at,updated_at)
-        VALUES(?,'working_group','Protected group',?,'public','open',?,?)`).bind(groupId, groupId, at, at),
-      env.DB.prepare(`INSERT INTO group_memberships(id,group_id,user_id,identity_id,member_id,source,joined_at,left_at,created_at,updated_at)
-        VALUES(?,?,?,?,?,'self_service',?,?,?,?)`).bind(
-        seatId,
-        groupId,
-        f.userId,
-        f.identityId,
-        memberId,
-        at,
-        ended ? at : null,
-        at,
-        at,
-      ),
-    ]);
-    await assignRepresentativeRole(env.DB, memberId!, f.userId, REPRESENTATIVE_ROLE_IDS.secondaryContact);
-    const registrationId = action === "correct" ? await registration(f) : null;
-    const actor = await staff();
-    const response = action === "correct" ? await correct(f, actor.token) : await remove(f, actor.token);
-    expect(response.status, await response.clone().text()).toBe(409);
-    expect(await response.json()).toMatchObject({ error: { code: "IDENTITY_HAS_PROTECTED_HISTORY" } });
-    expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first("id")).toBe(
-      f.identityId,
-    );
-    expect(
-      await env.DB.prepare("SELECT identity_id,left_at FROM group_memberships WHERE id=?").bind(seatId).first(),
-    ).toEqual({
-      identity_id: f.identityId,
-      left_at: ended ? at : null,
-    });
-    expect(
-      await env.DB.prepare("SELECT count(*) AS count FROM user_roles WHERE identity_id=?")
-        .bind(f.identityId)
-        .first("count"),
-    ).toBeGreaterThan(0);
-    if (registrationId)
-      expect(
-        await env.DB.prepare("SELECT registration_identity_id FROM registrations WHERE id=?")
-          .bind(registrationId)
-          .first("registration_identity_id"),
-      ).toBe(f.identityId);
-    expect(
-      await env.DB.prepare(
-        "SELECT count(*) AS count FROM audit_log WHERE action IN ('incorrect_representation_removed','incorrect_representation_corrected')",
       ).first("count"),
     ).toBe(0);
   });

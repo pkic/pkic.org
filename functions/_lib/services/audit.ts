@@ -222,6 +222,7 @@ export function prepareOneTimeAuditLog(
  * changed anything other than the caller's bounded expected count aborts the
  * surrounding D1 batch and
  * rolls every statement back instead of allowing partial fallout to commit.
+ * detailsSelection, when supplied, is trusted internal SQL returning normalized audit JSON.
  * Keep this immediately after the guarded write because SQLite's `changes()`
  * reports the most recently executed statement.
  */
@@ -237,6 +238,7 @@ export function prepareAuditLogAfterExpectedChanges(
   createdAt = nowIso(),
   scope: AuditScope | null = null,
   idempotencyKey: string | null = null,
+  detailsSelection?: { sql: string; bindings: readonly unknown[] },
 ): StatementLike {
   if (!Number.isSafeInteger(expectedChanges) || expectedChanges < 1) {
     throw new Error("Expected change count must be a positive safe integer");
@@ -246,7 +248,7 @@ export function prepareAuditLogAfterExpectedChanges(
       `INSERT INTO audit_log (
         id, actor_type, actor_id, actor_identity_id, action, entity_type, entity_id, details_json, created_at,
         idempotency_key, scope_type, scope_id
-      ) VALUES (?, ?, ?, ?, CASE WHEN changes() = ? THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, CASE WHEN changes() = ? THEN ? ELSE NULL END, ?, ?, ${detailsSelection ? `(${detailsSelection.sql})` : "?"}, ?, ?, ?, ?)
         ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
     )
     .bind(
@@ -258,7 +260,7 @@ export function prepareAuditLogAfterExpectedChanges(
       action,
       entityType,
       entityId,
-      serializeAuditDetails(details),
+      ...(detailsSelection ? detailsSelection.bindings : [serializeAuditDetails(details)]),
       createdAt,
       idempotencyKey,
       scope?.type ?? null,
@@ -277,6 +279,7 @@ export function prepareAuditLogAfterOneChange(
   createdAt = nowIso(),
   scope: AuditScope | null = null,
   idempotencyKey: string | null = null,
+  detailsSelection?: { sql: string; bindings: readonly unknown[] },
 ): StatementLike {
   return prepareAuditLogAfterExpectedChanges(
     db,
@@ -290,6 +293,7 @@ export function prepareAuditLogAfterOneChange(
     createdAt,
     scope,
     idempotencyKey,
+    detailsSelection,
   );
 }
 

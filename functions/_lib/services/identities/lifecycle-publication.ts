@@ -5,13 +5,12 @@ import { PUBLIC_MEMBER_USER_SOURCE_SQL } from "../membership/public-profile-sql"
 import { groupSeatChangePublicationCondition } from "../groups/seat-publication";
 import { prepareSitePublicationRequest } from "../site-publication-requests";
 
-/** Public data changed by ending an identity, or restoring its public capacities. */
-export function identityLifecyclePublicationCondition(identityId: string) {
+/** Public data changed by an identity transition, including erased seat history when removing a mistake. */
+export function identityLifecyclePublicationCondition(identityId: string, includeGroupHistory = false) {
   const groups = groupSeatChangePublicationCondition({
-    sql: `SELECT seat.id,seat.group_id,seat.user_id,seat.member_id,seat.left_at,1 AS closes,1 AS membership_changed
+    sql: `SELECT seat.id,seat.group_id,seat.user_id,seat.member_id,seat.left_at,(seat.left_at IS NULL) AS closes,1 AS membership_changed
       FROM group_memberships seat JOIN identities held ON held.id=seat.identity_id
-      WHERE held.id=? AND held.started_at IS NOT NULL
-        AND held.ended_at IS NULL AND held.blocked_at IS NULL AND seat.left_at IS NULL`,
+      WHERE held.id=?${includeGroupHistory ? "" : " AND held.started_at IS NOT NULL AND held.ended_at IS NULL AND held.blocked_at IS NULL AND seat.left_at IS NULL"}`,
     bindings: [identityId],
   });
   return {
@@ -34,6 +33,7 @@ export function prepareOrganizationIdentityPublication(
   db: DatabaseLike,
   identityId: string,
   at: string,
+  includeGroupHistory = false,
 ): StatementLike {
   return prepareSitePublicationRequest(
     db,
@@ -44,6 +44,6 @@ export function prepareOrganizationIdentityPublication(
       reasonCode: "identity_profile_changed",
       deduplicationKey: `identity-profile:${identityId}:${crypto.randomUUID()}`,
     },
-    identityLifecyclePublicationCondition(identityId),
+    identityLifecyclePublicationCondition(identityId, includeGroupHistory),
   );
 }

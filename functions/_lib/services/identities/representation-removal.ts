@@ -1,3 +1,8 @@
+import {
+  prepareIncorrectRepresentationGroupErasure,
+  incorrectRepresentationErasureAuditDetails,
+} from "./group-seat-erasure";
+import { prepareReconcileMailingListSubscriptionsStatement } from "../mailing-list-subscriptions";
 import { primaryIdentityIdSql } from "./affiliation-projection";
 import { proposalSpeakerIdentityIdSql } from "../proposal-speaker-profile-projection";
 /** Remove an incorrect association, optionally preserving event work under a valid replacement. */
@@ -47,7 +52,7 @@ export function prepareIncorrectRepresentationRemoval(
           }),
         ]
       : []),
-    prepareOrganizationIdentityPublication(db, identityId, at),
+    prepareOrganizationIdentityPublication(db, identityId, at, true),
     ...(replacement
       ? [
           db
@@ -65,8 +70,8 @@ export function prepareIncorrectRepresentationRemoval(
     db.prepare("DELETE FROM affiliation_reviews WHERE resolved_identity_id=? AND user_id=?").bind(identityId, ownerId),
     // Incorrect organization grants are removed, never carried into the replacement organization.
     db.prepare("DELETE FROM user_roles WHERE identity_id=? AND user_id=?").bind(identityId, ownerId),
-    // Group history cannot be deleted. Its foreign key, like voting, membership,
-    // and successor references, restricts deletion and rolls back the whole correction.
+    ...prepareIncorrectRepresentationGroupErasure(db, identityId, ownerId, at),
+    // Recorded outcomes and succession references still restrict deletion and roll back the batch.
     db
       .prepare(`DELETE FROM identities WHERE id=?
       AND NOT EXISTS(SELECT 1 FROM registrations registration WHERE registration.user_id=? AND (${registrationIdentity})=?)
@@ -81,13 +86,17 @@ export function prepareIncorrectRepresentationRemoval(
       identityId,
       correction ?? {},
       at,
+      null,
+      null,
+      incorrectRepresentationErasureAuditDetails(identityId, correction ?? {}),
     ),
+    db.prepare("DELETE FROM group_membership_erasures WHERE identity_id=?").bind(identityId),
     ...(correction
       ? [
           ...prepareAutomaticGroupEnrollmentForUserStatements(db, ownerId, at),
           prepareBadgeRenderJobsForUser(db, ownerId, at),
         ]
-      : []),
+      : [prepareReconcileMailingListSubscriptionsStatement(db, ownerId, at)]),
   ];
 }
 
@@ -110,7 +119,7 @@ export function incorrectRepresentationRemovalError(cause: unknown, correcting =
     throw new AppError(
       409,
       "IDENTITY_HAS_PROTECTED_HISTORY",
-      "This identity has group participation, voting, membership, or succession records that require review before correction.",
+      "This identity cannot be deleted because it has protected voting, consultation, membership, or succession records. End the representation to stop future participation while preserving its history.",
     );
   throw cause;
 }
