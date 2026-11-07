@@ -344,7 +344,7 @@ it("keeps conference exports public while excluding them from indexing and remov
   const root = await mkdtemp(resolve(tmpdir(), "pkic-conference-release-"));
   const source = resolve(root, "source");
   const destination = resolve(root, "destination");
-  const files = ["events/conference/event-data.json", "events/conference/agenda.ics"];
+  const files = ["events/conference/agenda/data.json", "events/conference/agenda.ics"];
   const publish = async (ownedFiles: string[]) => {
     await writeFile(
       resolve(source, "publication.json"),
@@ -363,10 +363,16 @@ it("keeps conference exports public while excluding them from indexing and remov
     return readFile(resolve(destination, "_headers"), "utf8");
   };
   try {
-    await mkdir(resolve(source, "events/conference"), { recursive: true });
+    await mkdir(resolve(source, "events/conference/agenda"), { recursive: true });
     await writeFile(resolve(source, files[0]), "{}");
     await writeFile(resolve(source, files[1]), "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n");
+    const legacyData = "events/conference/event-data.json";
+    await writeFile(resolve(source, legacyData), "{}");
+    await publish([...files, legacyData]);
+    expect(await readFile(resolve(destination, legacyData), "utf8")).toBe("{}");
     const headers = await publish(files);
+    await expect(readFile(resolve(destination, legacyData))).rejects.toMatchObject({ code: "ENOENT" });
+    for (const file of files) await expect(readFile(resolve(destination, file))).resolves.toBeTruthy();
     expect(headers).toContain("Cache-Control: public, max-age=0, must-revalidate");
     for (const file of files) {
       expect(headers).toContain(`/${file}\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive`);

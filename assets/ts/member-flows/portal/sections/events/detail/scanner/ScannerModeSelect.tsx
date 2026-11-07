@@ -1,3 +1,5 @@
+import { useState } from "preact/hooks";
+import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import {
   scanActionSchema,
   type EventScanRequest,
@@ -20,6 +22,13 @@ export function scannerActionLabel(action: EventScanRequest["action"]) {
             : "Check registration only";
 }
 
+/** Diagnostics and bookmarked state offer the same operator-selectable modes. */
+export function scannerSelectableActions(allowed: readonly EventScanRequest["action"][], sponsor: boolean) {
+  return allowed.filter((value) =>
+    sponsor ? value === "lead" : ["attendance", "checkout", "check", "admission"].includes(value),
+  );
+}
+
 export function ScannerModeSelect({
   action,
   allowedActions = scanActionSchema.options,
@@ -33,11 +42,7 @@ export function ScannerModeSelect({
   actionField: FieldPresentation;
   onAction: (value: EventScanRequest["action"]) => void;
 }) {
-  const modes = allowedActions.filter((value) =>
-    sponsorId
-      ? value === "lead"
-      : value === "attendance" || value === "checkout" || value === "check" || value === "admission",
-  );
+  const modes = scannerSelectableActions(allowedActions, Boolean(sponsorId));
   if (modes.length === 1 && modes[0] === action) return <p class="pk-muted">{scannerActionLabel(action)}</p>;
   return (
     <Field label="Scan mode" {...actionField}>
@@ -71,4 +76,21 @@ export function scannerInitialAction(
         ? "attendance"
         : (allowedActions.find((value) => value !== "lead" && value !== "exception") ?? "check"))
   );
+}
+
+/** Restore authorized scanner tasks from shared links, refresh, and browser history. */
+export function useScannerAction(
+  allowed: readonly EventScanRequest["action"][],
+  preferred: EventScanRequest["action"] | undefined,
+  sponsor: boolean,
+) {
+  const initial = scannerInitialAction(allowed, preferred, sponsor);
+  const [boundAction, setBoundAction] = useState(initial);
+  const [action, setAction] = useHashQueryParam("scanAction", initial, scannerSelectableActions(allowed, sponsor));
+  return preferred || sponsor ? ([boundAction, setBoundAction] as const) : ([action, setAction] as const);
+}
+
+/** The same authorized venue-entry action drives the task card and swipe destination. */
+export function scannerEntranceAction(allowed: readonly EventScanRequest["action"][]): EventScanRequest["action"] {
+  return allowed.includes("attendance") ? "attendance" : allowed.includes("admission") ? "admission" : "check";
 }

@@ -213,7 +213,7 @@ describe("external meeting guest invitations", () => {
 
   it("sends a secret-bound invitation and establishes an occurrence-scoped session through the mounted routes", async () => {
     const { admin, series, occurrence } = await fixture();
-    const recipientEmail = `browser-guest-${crypto.randomUUID()}@example.test`;
+    const recipientEmail = `browser-guest-23456789-${crypto.randomUUID()}@example.test`;
     const invited = await inviteOccurrenceGuest(
       env.DB,
       admin,
@@ -272,7 +272,9 @@ describe("external meeting guest invitations", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const codeMessage = sendgridBody(fetchMock, 1);
     expect(codeMessage).toContain(recipientEmail);
-    const verificationCode = codeMessage.match(/\b([A-HJ-NP-Z2-9]{8})\b/)?.[1];
+    const message = JSON.parse(codeMessage) as { content: { type: string; value: string }[] };
+    const text = message.content.find((part) => part.type === "text/plain")?.value;
+    const verificationCode = text?.match(/\b([A-HJ-NP-Z2-9]{8})\b/)?.[1];
     expect(verificationCode).toBeTruthy();
 
     const forwarded = await routeRequest(verificationResource(occurrence.id, challenge.verificationId), {

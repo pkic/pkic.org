@@ -146,6 +146,26 @@ function normalizeFrontendPath(value: string | undefined, basePath?: string): st
   return resolved.endsWith("/") ? resolved : `${resolved}/`;
 }
 
+/**
+ * Registration modes whose registration flow may be offered. The flow's
+ * submission still enforces who may register under `optional` and `required`.
+ */
+const OFFERED_REGISTRATION_MODES = new Set(["open", "invite_or_open", "public", "optional", "required"]);
+
+/**
+ * Where a person registers for the event, when its registration flow is open
+ * to them; null when the event has no public page or registration is closed.
+ * Every event projection links registration through this one path.
+ */
+export function eventRegistrationPath(
+  event: Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json" | "registration_mode"> &
+    Partial<Pick<EventRecord, "source_mode">>,
+): string | null {
+  return event.base_path && OFFERED_REGISTRATION_MODES.has(event.registration_mode)
+    ? resolveEventFrontendRoutes(event).registrationPath
+    : null;
+}
+
 export function resolveEventFrontendRoutes(
   event: Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json"> &
     Partial<Pick<EventRecord, "source_mode">>,

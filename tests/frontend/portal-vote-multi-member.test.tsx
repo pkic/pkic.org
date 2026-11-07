@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MemberVote } from "../../assets/ts/member-flows/portal/types";
 import { VoteDetails } from "../../assets/ts/member-flows/portal/sections/Votes/VoteDetails";
 import { submitBallotSchema } from "../../assets/shared/schemas/votes";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { confirmationButton, openConfirmation } from "./helpers/confirm-dialog";
 
 const mounted: HTMLElement[] = [];
 
@@ -42,11 +44,18 @@ function multiMemberVote(): MemberVote {
         memberId: "00000000-0000-4000-8000-000000000010",
         organizationName: "Organization A",
         hasCastBallot: true,
+        recorded: {
+          choice: "opposed",
+          castByName: "Synthetic colleague",
+          castByYou: false,
+          castAt: "2026-08-24T10:00:00.000Z",
+        },
       },
       {
         memberId: "00000000-0000-4000-8000-000000000020",
         organizationName: "Organization B",
         hasCastBallot: false,
+        recorded: null,
       },
     ],
     result: null,
@@ -102,7 +111,7 @@ describe("group-scoped per-Member ballots", () => {
 
     expect(container.textContent).toContain("Organization A");
     expect(container.textContent).toContain("Organization B");
-    expect(container.textContent).toContain("Ballot recorded");
+    expect(container.textContent).toContain("Recorded: Opposed, cast by Synthetic colleague");
     expect(container.textContent).toContain("Not yet voted");
 
     // One Panel per represented organization, each headed by the organization
@@ -134,6 +143,7 @@ describe("group-scoped per-Member ballots", () => {
     expect(submitBallotSchema.parse(requests[0]?.body)).toEqual({
       choice: "in_favor",
       memberId: "00000000-0000-4000-8000-000000000020",
+      replacesBallotCastAt: null,
     });
     expect(onChanged).toHaveBeenCalledOnce();
   });
@@ -200,5 +210,53 @@ describe("group-scoped per-Member ballots", () => {
     );
 
     expect(container.textContent).toContain("This vote was cancelled: Superseded by a board decision");
+  });
+
+  it("marks the recorded choice and replaces a colleague's ballot only after a confirmation that names it", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    await act(() =>
+      render(
+        <>
+          <ConfirmDialogHost />
+          <VoteDetails vote={multiMemberVote()} ballotEndpoint="/api/v1/ballots" onChanged={async () => undefined} />
+        </>,
+        container,
+      ),
+    );
+    const firstCard = container.querySelectorAll(".pk-panel")[0]!;
+    const button = (label: string) =>
+      Array.from(firstCard.querySelectorAll("button")).find((candidate) => candidate.textContent === label)!;
+    expect(button("Opposed").getAttribute("aria-pressed")).toBe("true");
+    expect(button("In favor").getAttribute("aria-pressed")).toBe("false");
+
+    await act(() => button("In favor").click());
+    await settle();
+
+    expect(openConfirmation(container)?.textContent).toContain(
+      "Change Organization A's ballot from Opposed to In favor?",
+    );
+    expect(openConfirmation(container)?.textContent).toContain("Synthetic colleague cast the recorded ballot.");
+    expect(bodies).toEqual([]);
+
+    await act(() => confirmationButton("Change ballot", container)?.click());
+    await settle();
+
+    expect(submitBallotSchema.parse(bodies[0])).toMatchObject({
+      choice: "in_favor",
+      replacesBallotCastAt: "2026-08-24T10:00:00.000Z",
+    });
   });
 });

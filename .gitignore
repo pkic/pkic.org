@@ -23,9 +23,6 @@ data/asset-manifest.json
 static/js/built/
 backups/
 
-# Ignore hugo itself when located here
-hugo
-hugo.*
 static/_pagefind
 
 # Python cache

@@ -1,3 +1,4 @@
+import { HeadshotDialogTemplates } from "../../site/HeadshotDialogTemplates";
 import { useState } from "preact/hooks";
 import type { PreviewSection } from "./PreviewShell";
 import { EventHeroImageField } from "../../member-flows/portal/sections/events/detail/settings/EventHeroImageField";
@@ -15,6 +16,7 @@ function PictureUploadSpecimen() {
   });
   return (
     <div class="pk-stack" {...form.handlers}>
+      <HeadshotDialogTemplates />
       <EventHeroImageField
         file={file}
         image={image}

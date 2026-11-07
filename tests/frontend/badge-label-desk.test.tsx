@@ -14,6 +14,14 @@ import {
   badgeIssueRequestSchema,
 } from "../../assets/shared/schemas/route-contracts-event-badges";
 import { badgeLabelDeskSection } from "../../assets/ts/ui/preview/badge-label-desk";
+import { printBadgeDocument } from "../../assets/ts/components/event-badges/badge-print-command";
+import { badgePrintPdf } from "../../assets/ts/components/event-badges/badge-print-pdf";
+vi.mock("../../assets/ts/components/event-badges/badge-print-pdf", () => ({
+  badgePrintPdf: vi.fn(async () => new Blob(["synthetic PDF"], { type: "application/pdf" })),
+}));
+vi.mock("../../assets/ts/components/event-badges/badge-print-command", () => ({
+  printBadgeDocument: vi.fn(async () => {}),
+}));
 
 const capture = vi.hoisted(() => ({
   read: null as null | ((raw: string) => void),
@@ -88,10 +96,9 @@ function pages() {
 }
 async function openDialog() {
   const frame = host.querySelector("iframe")!;
-  const print = vi.fn();
-  frame.contentWindow!.print = print;
+  vi.mocked(printBadgeDocument).mockClear();
   await act(async () => capture.ready!());
-  expect(print).toHaveBeenCalledOnce();
+  expect(printBadgeDocument).toHaveBeenCalledOnce();
   return frame;
 }
 beforeEach(() => {
@@ -99,7 +106,7 @@ beforeEach(() => {
   vi.stubGlobal("sessionStorage", memoryStorage());
   clearAuth();
   savePortalSession(portalSessionFixture({ member: true }));
-  window.location.hash = "#/groups/example/events/workshop/scanner/labels";
+  window.location.hash = "#/groups/example/events/workshop/scanner/print";
   capture.read = null;
   capture.starts = 0;
   host = document.createElement("div");
@@ -113,6 +120,95 @@ afterEach(async () => {
 });
 
 describe("badge printing desk", () => {
+  it("pauses QR capture during the tour and resumes the same camera afterward", async () => {
+    const fetch = vi.fn(async () => json(label));
+    vi.stubGlobal("fetch", fetch);
+    await mount();
+    await click("Start camera");
+    await click("Enter full screen");
+    await click("Scanner help");
+    await settle(() => expect(document.querySelector(".pk-guided-tour")).not.toBeNull());
+    await scan();
+    expect(fetch).not.toHaveBeenCalled();
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(host.querySelector('[aria-label="Badge printing scanner"]')).not.toBeNull();
+    await scan();
+    await settle(() => expect(pages()).toBe(2));
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(capture.starts).toBe(1);
+  });
+  it("shows help only in the fullscreen scanner", async () => {
+    await mount();
+    expect(host.querySelector('[aria-label="Scanner help"]')).toBeNull();
+    await click("Enter full screen");
+    await click("Scanner help");
+    await settle(() => expect(document.querySelector(".pk-guided-tour")).not.toBeNull());
+    await click("Close help tour");
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(host.querySelector('[aria-label="Badge printing scanner"]')).toBeNull();
+    await click("Enter full screen");
+    expect(host.querySelector('[aria-label="Badge printing scanner"]')).not.toBeNull();
+    expect(document.querySelector(".pk-guided-tour")).toBeNull();
+  });
+  it("retains the camera when switching views, and Escape closes the full-screen scanner", async () => {
+    const release = vi.fn(async () => {});
+    const request = vi.fn(async () => ({ released: false, release, addEventListener: vi.fn() }));
+    vi.stubGlobal("navigator", Object.create(navigator, { wakeLock: { value: { request } } }));
+    await mount();
+    await click("Start camera");
+    const video = host.querySelector("video");
+    await click("Enter full screen");
+    await settle(() => expect(host.textContent).toContain("Screen awake"));
+    expect(request).toHaveBeenCalledWith("screen");
+    expect(host.querySelector('[role="dialog"][aria-label="Badge printing scanner"]')).not.toBeNull();
+    expect(host.querySelector("video")).toBe(video);
+    expect(capture.starts).toBe(1);
+    await click("Find attendee or badge");
+    expect(release).toHaveBeenCalled();
+    expect(host.querySelector("video")).toBe(video);
+    expect(capture.starts).toBe(1);
+    await click("Enter full screen");
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(host.querySelector('[aria-label="Badge printing scanner"]')).toBeNull();
+    expect(document.body.classList.contains("pk-scanner-immersive")).toBe(false);
+  });
+  it("prepares the optional PDF without opening HTML printing or waiting for afterprint", async () => {
+    vi.stubGlobal(
+      "URL",
+      class extends URL {
+        static createObjectURL() {
+          return "blob:synthetic-pdf";
+        }
+        static revokeObjectURL() {}
+      },
+    );
+    window.location.hash = "#/groups/example/events/workshop/scanner/print";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(label)),
+    );
+    vi.mocked(printBadgeDocument).mockClear();
+    vi.mocked(badgePrintPdf).mockClear();
+    await mount();
+    await click("Print settings");
+    await click("Use PDF");
+    expect(window.location.hash).toContain("printFormat=pdf");
+    await click("Start camera");
+    await scan();
+    await settle(() => expect(host.querySelector("iframe")).not.toBeNull());
+    await act(async () => capture.ready!());
+    await settle(() => expect(host.textContent).toContain("Open PDF"));
+    expect(badgePrintPdf).toHaveBeenCalledOnce();
+    expect(printBadgeDocument).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("Download PDF");
+    expect(host.querySelector('input[aria-autocomplete="list"]')?.hasAttribute("disabled")).toBe(false);
+  });
   it("scans directly into two label pages without issuance or complete artwork, then suppresses the same ticket", async () => {
     const bodies: unknown[] = [];
     const fetch = vi.fn(async (input, init) => {
@@ -130,7 +226,7 @@ describe("badge printing desk", () => {
     expect(frame.srcdoc).toContain("@page{size:38mm 89.8mm;margin:0}");
     expect(frame.srcdoc).not.toContain("105mm 148mm");
     await act(async () => {
-      frame.contentWindow!.dispatchEvent(new Event("afterprint"));
+      window.dispatchEvent(new Event("afterprint"));
     });
     await scan();
     expect(fetch).toHaveBeenCalledOnce();
@@ -192,7 +288,7 @@ describe("badge printing desk", () => {
     expect(frame.srcdoc).toContain('aria-label="Badge front"');
     expect(frame.srcdoc).toContain('aria-label="Badge back"');
     await act(async () => {
-      frame.contentWindow!.dispatchEvent(new Event("afterprint"));
+      window.dispatchEvent(new Event("afterprint"));
     });
     await click("Print settings");
     expect(host.textContent).not.toContain("4 labels");
@@ -201,9 +297,9 @@ describe("badge printing desk", () => {
     await settle(() => expect(pages()).toBe(1));
     expect(host.querySelector("iframe")?.srcdoc).toContain('aria-label="Badge front"');
     expect(host.querySelector("iframe")?.srcdoc).not.toContain('aria-label="Badge back"');
-    const again = await openDialog();
+    await openDialog();
     await act(async () => {
-      again.contentWindow!.dispatchEvent(new Event("afterprint"));
+      window.dispatchEvent(new Event("afterprint"));
     });
     await click("Print settings");
     await click("Back only");
@@ -211,9 +307,9 @@ describe("badge printing desk", () => {
     await settle(() => expect(pages()).toBe(1));
     expect(host.querySelector("iframe")?.srcdoc).toContain('aria-label="Badge back"');
     expect(host.querySelector("iframe")?.srcdoc).not.toContain('aria-label="Badge front"');
-    const back = await openDialog();
+    await openDialog();
     await act(async () => {
-      back.contentWindow!.dispatchEvent(new Event("afterprint"));
+      window.dispatchEvent(new Event("afterprint"));
     });
     expect(artworkReads).toBe(1);
     await click("Print settings");

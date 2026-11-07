@@ -14,6 +14,7 @@ import {
   agendaRevisionSchema,
 } from "../../assets/shared/schemas/event-agenda";
 import { agendaOccurrenceCalendarUid } from "../../assets/shared/event-agenda-calendar-identity";
+import { conferenceProgramSchema } from "../../assets/shared/schemas/conference-program";
 
 const slug = "pqc-conference-amsterdam-nl";
 const title = "Synthetic public calendar lifecycle session";
@@ -138,6 +139,16 @@ test("pre-generated public calendar keeps identity across correction, cancellati
   const publicPage = await publicContext.newPage();
   try {
     let release = await publishE2eSite(page, feedPath);
+    const agendaDataPath = `${agendaPath}data.json`;
+    const agendaDataResponse = await publicContext.request.get(agendaDataPath);
+    expect(agendaDataResponse.status()).toBe(200);
+    expect(agendaDataResponse.headers()["x-pkic-publication"]).toBe(`static; snapshot=${release.snapshotId}`);
+    const agendaData = conferenceProgramSchema.parse(await agendaDataResponse.json());
+    expect(
+      Object.values(agendaData.agenda).flatMap((slots) =>
+        slots.flatMap((slot) => slot.sessions.map((session) => session.title)),
+      ),
+    ).toContain(title);
     const first = occurrence(await staticCalendar(publicContext, release, feedPath), id);
     expect(first.getFirstPropertyValue("sequence")).toBe(0);
     expect(first.getFirstPropertyValue("status")).toBe("CONFIRMED");

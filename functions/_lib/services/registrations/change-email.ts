@@ -1,3 +1,4 @@
+import { prepareAddressDeliveryTransfer } from "../email-address-delivery";
 import { preparePrimaryEmailDomainChange } from "../identities/primary-email-domain-change";
 import { readEmailOwnership, prepareEmailOwnershipClaim } from "../email-ownership";
 import { prepareMailingListEmailChange } from "../mailing-list-subscriptions/queue-email-change";
@@ -441,6 +442,7 @@ export async function prepareFinalizeEmailChange(
       now,
     ),
   );
+  if (emailOwner) stmts.push(prepareAddressDeliveryTransfer(db, "users", user.id, emailOwner));
   // A canonical login identifier changed. Invalidate every outstanding bearer
   // session so neither the former mailbox nor a stale browser can continue
   // authenticating without proving control of the new address. Signed email-

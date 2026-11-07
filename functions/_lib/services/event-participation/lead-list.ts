@@ -44,8 +44,8 @@ export async function listSponsorLeads(
   const search = query.q ? buildD1TextSearchFilter(query.q, [name, "u.email", organization]) : null;
   const { rows, total } = await queryPage<Omit<SponsorLead, "personalEmail">>(db, {
     source: {
-      selectSql: `SELECT lead.id,lead.user_id AS userId,${name} AS name,u.email,${organization} AS organization,
-        lead.observed_at AS capturedAt,lead.operator_user_id AS operatorUserId,
+      selectSql: `SELECT lead.id,${name} AS name,u.email,${organization} AS organization,
+        lead.observed_at AS capturedAt,
         TRIM(COALESCE(capturer.first_name,'') || ' ' || COALESCE(capturer.last_name,'')) AS operatorName`,
       fromSql: `FROM event_sponsor_leads lead JOIN users u ON u.id=lead.user_id
         JOIN users capturer ON capturer.id=lead.operator_user_id
@@ -66,7 +66,10 @@ export async function listSponsorLeads(
     offset: query.offset,
   });
   return sponsorLeadListSchema.parse({
-    leads: rows.map((lead) => ({ ...lead, ...contactAffiliation(lead.email, lead.organization) })),
+    leads: rows.map((lead) => ({
+      ...lead,
+      ...contactAffiliation(lead.email, lead.organization),
+    })),
     page: buildPageInfo(query.limit, query.offset, total, rows.length),
   });
 }
@@ -151,7 +154,7 @@ export async function listSponsorLeadCaptures(
   const search = query.q ? buildD1TextSearchFilter(query.q, [name]) : null;
   const { rows, total } = await queryPage<SponsorLeadCapture>(db, {
     source: {
-      selectSql: `SELECT attempt.id,attempt.operator_user_id AS operatorUserId,${name} AS operatorName,attempt.observed_at AS observedAt,attempt.created_at AS receivedAt`,
+      selectSql: `SELECT attempt.id,${name} AS operatorName,attempt.observed_at AS observedAt,attempt.created_at AS receivedAt`,
       fromSql: `${source} ${search ? `AND ${search.sql}` : ""}`,
       bindings: [
         leadId,

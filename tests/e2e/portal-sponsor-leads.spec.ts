@@ -13,12 +13,11 @@ import {
 const slug = "pqc-conference-amsterdam-nl";
 const sponsorId = "10000000-0000-4000-8000-000000000041";
 const leadId = "10000000-0000-4000-8000-000000000042";
-const operatorId = "10000000-0000-4000-8000-000000000043";
 const pageInfo = { limit: 50, offset: 0, total: 1, hasMore: false };
 test.use({ actionTimeout: 20_000 });
 test("sponsor live lead UI searches current contacts, shows capture provenance and clears offline", async ({
   page,
-}) => {
+}, info) => {
   await signInAsE2eStaff(page, e2eAdminEmail("portal-sponsor-leads"));
   const event = eventDetailResponseSchema.parse(await (await page.request.get(`/api/v1/events/${slug}`)).json()).event;
   const ownerGroupId = "ownerGroupId" in event ? event.ownerGroupId : null;
@@ -40,7 +39,6 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
           captures: [
             {
               id: leadId,
-              operatorUserId: operatorId,
               operatorName: "Demo operator",
               observedAt: "2026-12-01T09:30:00.000Z",
               receivedAt: "2026-12-01T09:32:00.000Z",
@@ -53,13 +51,11 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
             leads: [
               {
                 id: leadId,
-                userId: leadId,
                 name: "Synthetic attendee",
-                email: "demo@example.test",
-                organization: "Example organization",
-                personalEmail: false,
+                email: "synthetic-lead@gmail.com",
+                organization: null,
+                personalEmail: true,
                 capturedAt: "2026-12-01T09:30:00.000Z",
-                operatorUserId: operatorId,
                 operatorName: "Demo operator",
               },
             ],
@@ -77,6 +73,14 @@ test("sponsor live lead UI searches current contacts, shows capture provenance a
   await page.getByRole("button", { name: "Open leads for Example sponsor", exact: true }).click();
   const contacts = page.getByRole("region", { name: "Consenting leads", exact: true });
   await expect(contacts.getByText("Synthetic attendee", { exact: true })).toBeVisible();
+  await expect(contacts.getByText("Personal email address", { exact: true })).toBeVisible();
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`sponsor-lead-organization-${device}.png`), fullPage: true });
+  }
   await page.getByRole("searchbox", { name: "Search consenting leads", exact: true }).fill("Synthetic");
   await page.getByRole("searchbox", { name: "Search consenting leads", exact: true }).press("Enter");
   await expect

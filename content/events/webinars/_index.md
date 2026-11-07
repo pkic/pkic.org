@@ -1,7 +1,6 @@
 ---
 title: Sponsored Webinars
 description: All sponsored webinars hosted by the PKI Consortium — browse upcoming and past sessions.
-layout: webinar-list
 
 params:
   heroTitle: Sponsored Webinars

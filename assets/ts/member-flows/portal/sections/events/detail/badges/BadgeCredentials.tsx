@@ -1,11 +1,6 @@
-import type { BadgePrintAction } from "../../../../../../../shared/schemas/event-badge-printing";
 import { Panel, PanelBody } from "../../../../../../ui/Panel";
 import { lazy, Suspense } from "preact/compat";
-import { RegistrationBadgePrinting } from "../../../../../../components/event-badges/RegistrationBadgePrinting";
-import type { BadgePrintScope } from "../../../../../../components/event-badges/badge-print-population";
-import type { PortalSession } from "../../../../types";
-import { isAuthed, portalSession } from "../../../../state";
-import { useCallback, useRef, useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import {
   badgeCredentialMetadataSchema,
   badgeCredentialsResponseSchema,
@@ -42,8 +37,6 @@ export function BadgeCredentials({
   userId,
   eventId,
   groupId,
-  printRequest,
-  onPrintClose,
 }: {
   slug: string;
   basePath: string;
@@ -53,39 +46,13 @@ export function BadgeCredentials({
   userId?: string;
   eventId?: string;
   groupId?: string;
-  printRequest?: { action?: BadgePrintAction; scope: BadgePrintScope; session: PortalSession | null } | null;
-  onPrintClose?: () => void;
 }) {
   const [, navigate] = usePortalHashLocation();
   const narrowed = useRef(false);
-  const printSession = printRequest?.session;
-  const printContextCurrent = useCallback(
-    () =>
-      Boolean(
-        printSession &&
-        isAuthed.value &&
-        portalSession.value === printSession &&
-        Math.min(Date.parse(printSession.expiresAt), Date.parse(printSession.idleExpiresAt)) > Date.now(),
-      ),
-    [printSession],
-  );
   const requestedUser = databaseIdSchema.safeParse(
     new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("userId"),
   );
   const scopedUserId = userId ?? (requestedUser.success ? requestedUser.data : undefined);
-  if (printRequest && !credentialId && !scopedUserId && eventId && onPrintClose)
-    return printContextCurrent() ? (
-      <RegistrationBadgePrinting
-        slug={slug}
-        eventId={eventId}
-        scope={printRequest.scope}
-        action={printRequest.action}
-        isCurrent={printContextCurrent}
-        onBack={onPrintClose}
-      />
-    ) : (
-      <ErrorAlert error="Sign in again before printing these badges." />
-    );
   const scopeQuery = scopedUserId ? `?userId=${encodeURIComponent(scopedUserId)}` : "";
   const recordPath = (id: string) => `${basePath}/${encodeURIComponent(id)}`;
   if (credentialId === "design")

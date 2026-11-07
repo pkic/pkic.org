@@ -40,11 +40,11 @@ export function ScannerSyncStatus({
       </p>
       <p class="pk-muted">
         {collector
-          ? "Offline collection · unverified until synced"
+          ? "Offline scanning · checks use prepared badge data"
           : action === "lead"
             ? "Lead scans sync automatically when connected. Names and contact details stay off this device."
             : context
-              ? `Offline scanner prepared until ${formatDateTime(context.expiresAt)}. Offline results remain unverified until synced.`
+              ? `Offline scanner prepared until ${formatDateTime(context.expiresAt)}. Badge checks run locally; scan records upload when connected.`
               : offline.preparing
                 ? "Preparing offline scanner (recommended)…"
                 : offline.error || "Prepare offline scanning while connected (recommended)."}
@@ -63,7 +63,7 @@ export function ScannerSyncStatus({
       </div>
       {!collector && action !== "lead" && (
         <small class="pk-muted">
-          Pending scans sync automatically when you reconnect. Admission requires online verification.
+          Badge checks use the downloaded eligibility data. Pending scans upload automatically when connected.
         </small>
       )}
     </section>
@@ -81,6 +81,7 @@ export function ScannerPreparationStatus({
   lastSync,
 }: {
   action: EventScanRequest["action"];
+  occurrenceId?: string | null;
   preparing: boolean;
   ready: boolean;
   error: string;

@@ -1,8 +1,11 @@
 /** Member-scoped vote discovery, detail, and results for group resource adapters. */
+import type { z } from "zod";
 import { nowIso } from "../../utils/time";
 import { deriveVoteStatus, isVoteAcceptingBallots, voteStatusSql } from "./status";
 import { loadConsultationForm, type ConsultationForm } from "./question";
-import { all } from "../../db/queries";
+import { batchRows } from "../../db/pagination";
+import { sqlValue, type SqlId, type SqlSelection } from "../../db/sql-value";
+import type { D1StatementResult } from "../../types";
 import { queryPage } from "../../db/pagination";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { buildD1TextSearchFilter } from "../../db/search";
@@ -12,7 +15,7 @@ import { canMemberAccessGroupResource } from "../resource-grants/access";
 import { votingMembershipCategoryExistsSql } from "../membership/categories";
 import {
   closedVoteResult,
-  getCandidatesForVotes,
+  prepareCandidatesForVotes,
   getVoteRowOrThrow,
   toVoteSummary,
   VOTE_ROW_COLUMNS,
@@ -30,13 +33,14 @@ import {
   voteViewGroupPredicate,
 } from "./vote-access";
 import type { AuthMember, DatabaseLike } from "../../types";
-import { VOTES_LIST_SORT_COLUMNS, type VotesListQuery } from "../../../../assets/shared/schemas/votes";
+import {
+  VOTES_LIST_SORT_COLUMNS,
+  type eligibleMemberBallotSchema,
+  type VotesListQuery,
+} from "../../../../assets/shared/schemas/votes";
+import { personDisplayNameSql } from "../people/person-name-sql";
 
-export interface EligibleMemberBallot {
-  memberId: string;
-  organizationName: string;
-  hasCastBallot: boolean;
-}
+export type EligibleMemberBallot = z.infer<typeof eligibleMemberBallotSchema>;
 
 export interface MemberVoteSummary extends VoteSummary {
   /** Resolved only on the detail read; null in list projections. */
@@ -53,56 +57,60 @@ interface PersonBallotStatus {
   hasCastBallot: boolean;
 }
 
-async function loadAccessibleVoteIds(
+function prepareAccessibleVoteIds(
   db: DatabaseLike,
-  voteIds: string[],
+  selection: SqlSelection,
   userId: string,
-  identityId: string | null,
-  throughGroupId?: string,
-): Promise<Set<string>> {
-  if (voteIds.length === 0) return new Set();
+  identityId: SqlId | null,
+  throughGroupId?: SqlId,
+) {
   const context = exactVoteGroupMembership(throughGroupId);
-  const filter = buildD1JsonMembershipFilter("vote.id", voteIds);
-  const rows = await all<{ vote_id: string }>(
-    db,
-    `SELECT DISTINCT vote.id AS vote_id
+  const filter = { sql: `vote.id IN (${selection.sql})`, bindings: selection.bindings };
+  const identity = sqlValue(identityId);
+  const statement = db
+    .prepare(
+      `SELECT DISTINCT vote.id AS vote_id
      FROM votes vote
      JOIN group_memberships membership
       ON membership.user_id = ?
-      AND membership.identity_id = ?
+      AND membership.identity_id = ${identity.sql}
       AND membership.left_at IS NULL
       ${context.sql}
       AND ${voteResultGroupPredicate("vote", "membership.group_id")}
      WHERE ${filter.sql}`,
-    [userId, identityId, ...context.bindings, ...filter.bindings],
-  );
-  return new Set(rows.map((row) => row.vote_id));
+    )
+    .bind(userId, ...identity.bindings, ...context.bindings, ...filter.bindings);
+  return {
+    statement,
+    decode(loaded: D1StatementResult): Set<string> {
+      const rows = batchRows<{ vote_id: string }>(loaded);
+
+      return new Set(rows.map((row) => row.vote_id));
+    },
+  };
 }
 
-async function loadEligibleMemberBallots(
+function prepareEligibleMemberBallots(
   db: DatabaseLike,
-  voteIds: string[],
+  selection: SqlSelection,
   userId: string,
-  identityId: string | null,
-  throughGroupId?: string,
-): Promise<Map<string, EligibleMemberBallot[]>> {
-  const byVoteId = new Map<string, EligibleMemberBallot[]>();
-  if (voteIds.length === 0) return byVoteId;
+  identityId: SqlId | null,
+  throughGroupId?: SqlId,
+) {
   const context = exactVoteGroupMembership(throughGroupId);
-  const filter = buildD1JsonMembershipFilter("vote.id", voteIds);
-  const rows = await all<{
-    vote_id: string;
-    member_id: string;
-    organization_name: string;
-    ballot_id: string | null;
-  }>(
-    db,
-    `SELECT DISTINCT vote.id AS vote_id, membership.member_id,
-            organization.name AS organization_name, ballot.id AS ballot_id
+  const filter = { sql: `vote.id IN (${selection.sql})`, bindings: selection.bindings };
+  const identity = sqlValue(identityId);
+  const statement = db
+    .prepare(
+      `SELECT DISTINCT vote.id AS vote_id, membership.member_id,
+            organization.name AS organization_name, ballot.id AS ballot_id,
+            ballot.choice AS ballot_choice, ballot.updated_at AS ballot_updated_at,
+            ballot.user_id AS ballot_user_id,
+            ${personDisplayNameSql("caster", "Another representative")} AS ballot_cast_by_name
      FROM votes vote
      JOIN group_memberships membership
       ON membership.user_id = ?
-      AND membership.identity_id = ?
+      AND membership.identity_id = ${identity.sql}
       AND membership.left_at IS NULL
       ${context.sql}
       AND ${voteParticipationGroupPredicate("vote", "membership.group_id")}
@@ -122,6 +130,7 @@ async function loadEligibleMemberBallots(
        ON ballot.vote_id = vote.id
       AND ballot.member_id = membership.member_id
       AND ballot.round = vote.current_round
+     LEFT JOIN users caster ON caster.id = ballot.user_id
      WHERE vote.electorate_mode = 'per_member'
        AND ${filter.sql}
        AND ${votingMembershipCategoryExistsSql("category.category_code")}
@@ -133,38 +142,63 @@ async function loadEligibleMemberBallots(
          )
        )
      ORDER BY vote.id, organization.name COLLATE NOCASE, membership.member_id`,
-    [userId, identityId, ...context.bindings, ...filter.bindings],
-  );
-  for (const row of rows) {
-    const ballots = byVoteId.get(row.vote_id) ?? [];
-    ballots.push({
-      memberId: row.member_id,
-      organizationName: row.organization_name,
-      hasCastBallot: row.ballot_id !== null,
-    });
-    byVoteId.set(row.vote_id, ballots);
-  }
-  return byVoteId;
+    )
+    .bind(userId, ...identity.bindings, ...context.bindings, ...filter.bindings);
+  return {
+    statement,
+    decode(loaded: D1StatementResult): Map<string, EligibleMemberBallot[]> {
+      const rows = batchRows<{
+        vote_id: string;
+        member_id: string;
+        organization_name: string;
+        ballot_id: string | null;
+        ballot_choice: string | null;
+        ballot_updated_at: string | null;
+        ballot_user_id: string | null;
+        ballot_cast_by_name: string | null;
+      }>(loaded);
+
+      const byVoteId = new Map<string, EligibleMemberBallot[]>();
+      for (const row of rows) {
+        const ballots = byVoteId.get(row.vote_id) ?? [];
+        ballots.push({
+          memberId: row.member_id,
+          organizationName: row.organization_name,
+          hasCastBallot: row.ballot_id !== null,
+          recorded:
+            row.ballot_id === null
+              ? null
+              : {
+                  choice: row.ballot_choice!,
+                  castByName: row.ballot_cast_by_name!,
+                  castByYou: row.ballot_user_id === userId,
+                  castAt: row.ballot_updated_at!,
+                },
+        });
+        byVoteId.set(row.vote_id, ballots);
+      }
+      return byVoteId;
+    },
+  };
 }
 
-async function loadPersonBallotStatuses(
+function preparePersonBallotStatuses(
   db: DatabaseLike,
-  voteIds: string[],
+  selection: SqlSelection,
   userId: string,
-  identityId: string | null,
-  throughGroupId?: string,
-): Promise<Map<string, PersonBallotStatus>> {
-  const result = new Map<string, PersonBallotStatus>();
-  if (voteIds.length === 0) return result;
+  identityId: SqlId | null,
+  throughGroupId?: SqlId,
+) {
   const context = exactVoteGroupMembership(throughGroupId);
-  const filter = buildD1JsonMembershipFilter("vote.id", voteIds);
-  const rows = await all<{ vote_id: string; ballot_id: string | null }>(
-    db,
-    `SELECT vote.id AS vote_id, MAX(ballot.id) AS ballot_id
+  const filter = { sql: `vote.id IN (${selection.sql})`, bindings: selection.bindings };
+  const identity = sqlValue(identityId);
+  const statement = db
+    .prepare(
+      `SELECT vote.id AS vote_id, MAX(ballot.id) AS ballot_id
      FROM votes vote
      JOIN group_memberships membership
       ON membership.user_id = ?
-      AND membership.identity_id = ?
+      AND membership.identity_id = ${identity.sql}
       AND membership.left_at IS NULL
       ${context.sql}
       AND ${voteParticipationGroupPredicate("vote", "membership.group_id")}
@@ -189,10 +223,18 @@ async function loadPersonBallotStatuses(
          )
        )
      GROUP BY vote.id`,
-    [userId, identityId, ...context.bindings, userId, ...filter.bindings],
-  );
-  for (const row of rows) result.set(row.vote_id, { eligible: true, hasCastBallot: row.ballot_id !== null });
-  return result;
+    )
+    .bind(userId, ...identity.bindings, ...context.bindings, userId, ...filter.bindings);
+  return {
+    statement,
+    decode(loaded: D1StatementResult): Map<string, PersonBallotStatus> {
+      const rows = batchRows<{ vote_id: string; ballot_id: string | null }>(loaded);
+
+      const result = new Map<string, PersonBallotStatus>();
+      for (const row of rows) result.set(row.vote_id, { eligible: true, hasCastBallot: row.ballot_id !== null });
+      return result;
+    },
+  };
 }
 
 export async function hydrateVotesForUser(
@@ -200,56 +242,78 @@ export async function hydrateVotesForUser(
   rows: VoteRow[],
   userId: string,
   identityId: string | null,
-  throughGroupId?: string,
+  throughGroupId?: SqlId,
 ): Promise<MemberVoteSummary[]> {
   if (rows.length === 0) return [];
-  const voteIds = rows.map((row) => row.id);
-  const electionVoteIds = rows.filter((row) => row.vote_type === "election").map((row) => row.id);
-  const [candidatesByVoteId, memberBallotsByVoteId, personStatuses, accessibleVoteIds] = await Promise.all([
-    getCandidatesForVotes(db, electionVoteIds),
-    loadEligibleMemberBallots(db, voteIds, userId, identityId, throughGroupId),
-    loadPersonBallotStatuses(db, voteIds, userId, identityId, throughGroupId),
-    loadAccessibleVoteIds(db, voteIds, userId, identityId, throughGroupId),
-  ]);
+  const read = prepareVoteHydration(
+    db,
+    {
+      sql: "SELECT value FROM json_each(?)",
+      bindings: [JSON.stringify(rows.map((row) => row.id))],
+    },
+    userId,
+    identityId,
+    throughGroupId,
+  );
+  return read.decode(await db.batch(read.statements), rows);
+}
 
-  const now = nowIso();
-  return rows.map((row) => {
-    const open = isVoteAcceptingBallots(row, now);
-    const memberBallots = row.electorate_mode === "per_member" ? (memberBallotsByVoteId.get(row.id) ?? []) : null;
-    const personStatus = personStatuses.get(row.id) ?? { eligible: false, hasCastBallot: false };
-    const canCastBallot = open && (memberBallots ? memberBallots.length > 0 : personStatus.eligible);
-    const hasCastBallot = memberBallots
-      ? memberBallots.some((ballot) => ballot.hasCastBallot)
-      : personStatus.hasCastBallot;
-    const result =
-      deriveVoteStatus(row, now) !== "closed"
-        ? null
-        : accessibleVoteIds.has(row.id)
-          ? closedVoteResult(row)
-          : row.visibility === "public"
-            ? publicResultForDetailLevel(row)
-            : null;
-    return {
-      ...toVoteSummary(row),
-      candidates: row.vote_type === "election" ? (candidatesByVoteId.get(row.id) ?? []) : null,
-      canCastBallot,
-      hasCastBallot,
-      memberBallots,
-      // Resolved only in the detail read: a list of votes has no use for
-      // every consultation's full field definitions, and loading them per row
-      // would turn one page into a query per vote.
-      questionForm: null,
-      result,
-    };
-  });
+/** Hydration composes with the selected page and authentication in the caller's serving snapshot. */
+export function prepareVoteHydration(
+  db: DatabaseLike,
+  selection: SqlSelection,
+  userId: string,
+  identityId: SqlId | null,
+  throughGroupId?: SqlId,
+) {
+  const candidates = prepareCandidatesForVotes(db, selection);
+  const memberBallots = prepareEligibleMemberBallots(db, selection, userId, identityId, throughGroupId);
+  const persons = preparePersonBallotStatuses(db, selection, userId, identityId, throughGroupId);
+  const access = prepareAccessibleVoteIds(db, selection, userId, identityId, throughGroupId);
+  return {
+    statements: [candidates.statement, memberBallots.statement, persons.statement, access.statement],
+    decode(results: D1StatementResult[], rows: VoteRow[]): MemberVoteSummary[] {
+      const candidatesByVoteId = candidates.decode(results[0]);
+      const memberBallotsByVoteId = memberBallots.decode(results[1]);
+      const personStatuses = persons.decode(results[2]);
+      const accessibleVoteIds = access.decode(results[3]);
+
+      const now = nowIso();
+      return rows.map((row) => {
+        const open = isVoteAcceptingBallots(row, now);
+        const memberBallots = row.electorate_mode === "per_member" ? (memberBallotsByVoteId.get(row.id) ?? []) : null;
+        const personStatus = personStatuses.get(row.id) ?? { eligible: false, hasCastBallot: false };
+        const canCastBallot = open && (memberBallots ? memberBallots.length > 0 : personStatus.eligible);
+        const hasCastBallot = memberBallots
+          ? memberBallots.some((ballot) => ballot.hasCastBallot)
+          : personStatus.hasCastBallot;
+        const result =
+          deriveVoteStatus(row, now) !== "closed"
+            ? null
+            : accessibleVoteIds.has(row.id)
+              ? closedVoteResult(row)
+              : row.visibility === "public"
+                ? publicResultForDetailLevel(row)
+                : null;
+        return {
+          ...toVoteSummary(row),
+          candidates: row.vote_type === "election" ? (candidatesByVoteId.get(row.id) ?? []) : null,
+          canCastBallot,
+          hasCastBallot,
+          memberBallots,
+          // Resolved only in the detail read: a list of votes has no use for
+          // every consultation's full field definitions, and loading them per row
+          // would turn one page into a query per vote.
+          questionForm: null,
+          result,
+        };
+      });
+    },
+  };
 }
 
 /** Votes visible publicly or through membership in an owner/grantee group. */
-export async function listVisibleVotesForMember(
-  db: DatabaseLike,
-  member: AuthMember,
-  params: VotesListQuery,
-): Promise<{ votes: MemberVoteSummary[]; total: number }> {
+export function buildVisibleVotesForMemberPageQuery(userId: string, params: VotesListQuery) {
   const filters = [
     `(votes.visibility = 'public' OR EXISTS (
        SELECT 1
@@ -259,7 +323,7 @@ export async function listVisibleVotesForMember(
          AND ${voteViewGroupPredicate("votes", "membership.group_id")}
      ))`,
   ];
-  const bindings: unknown[] = [member.userId];
+  const bindings: unknown[] = [userId];
   if (params.type) {
     filters.push("votes.vote_type = ?");
     bindings.push(params.type);
@@ -289,13 +353,17 @@ export async function listVisibleVotesForMember(
     bindings.push(params.to);
   }
   const orderBy = resolveOrderBy(params.sort, VOTES_LIST_SORT_COLUMNS, "ORDER BY closes_at DESC", "id ASC");
-  const { rows, total } = await queryPage<VoteRow>(db, {
+  return {
     sql: `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE ${filters.join(" AND ")}`,
     bindings,
     orderBy,
     limit: params.limit,
     offset: params.offset,
-  });
+  };
+}
+
+export async function listVisibleVotesForMember(db: DatabaseLike, member: AuthMember, params: VotesListQuery) {
+  const { rows, total } = await queryPage<VoteRow>(db, buildVisibleVotesForMemberPageQuery(member.userId, params));
   return { votes: await hydrateVotesForUser(db, rows, member.userId, member.identityId), total };
 }
 

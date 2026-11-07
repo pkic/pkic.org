@@ -2,8 +2,6 @@
 authors:
 - Ryan Hurst
 date: "2013-06-29T01:19:26+00:00"
-dsq_thread_id:
-- 1942637664
 keywords:
 - tls
 - tls 1.2

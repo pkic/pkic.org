@@ -1,3 +1,4 @@
+import { SCANNER_ELIGIBILITY_REFRESH_MS } from "../../../../../../../shared/event-offline-expiry";
 import { saveScannerOfflineContext } from "./scanner-offline-context";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { scannerCollectorPath, scannerContextCurrent } from "./scanner-offline-context";
@@ -31,7 +32,7 @@ export function useEligibilityManifest(
     setManifestReady(false);
     setManifestPreparing(false);
     setManifestError("");
-    if (collector || !epoch?.epochId || epoch.state !== "open") return;
+    if (!epoch?.epochId || epoch.state !== "open") return;
     if (
       action !== "check" &&
       action !== "attendance" &&
@@ -41,7 +42,10 @@ export function useEligibilityManifest(
     )
       return;
     const enrollment = { epochId: epoch.epochId, deviceId: epoch.deviceId };
+    let refreshing = false;
     const prepare = async () => {
+      if (refreshing || controller.signal.aborted) return;
+      refreshing = true;
       const onRefusal = permissionChanged.current;
       setManifestPreparing(true);
       try {
@@ -52,6 +56,7 @@ export function useEligibilityManifest(
           enrollment,
           controller.signal,
           roomId,
+          collector ? "cache" : "refresh",
         );
         if (controller.signal.aborted) return;
         eligibilityManifest.current = manifest;
@@ -68,19 +73,27 @@ export function useEligibilityManifest(
           "Eligibility data could not be refreshed. Using the last saved registration data where available.",
         );
       } finally {
+        refreshing = false;
         if (!controller.signal.aborted) setManifestPreparing(false);
       }
     };
     void prepare();
-    const refresh = window.setInterval(
-      () => {
-        void prepare();
-      },
-      2 * 60 * 1000,
-    );
+    const reconnect = () => {
+      if (!collector && navigator.onLine) void prepare();
+    };
+    const visible = () => {
+      if (document.visibilityState === "visible") reconnect();
+    };
+    const refresh = window.setInterval(reconnect, SCANNER_ELIGIBILITY_REFRESH_MS);
+    window.addEventListener("online", reconnect);
+    window.addEventListener("focus", reconnect);
+    document.addEventListener("visibilitychange", visible);
     return () => {
       controller.abort();
       window.clearInterval(refresh);
+      window.removeEventListener("online", reconnect);
+      window.removeEventListener("focus", reconnect);
+      document.removeEventListener("visibilitychange", visible);
     };
   }, [slug, operatorUserId, occurrenceId, action, roomId, epoch?.epochId, epoch?.state, epoch?.deviceId, collector]);
   return { eligibilityManifest, manifestReady, manifestPreparing, manifestError };

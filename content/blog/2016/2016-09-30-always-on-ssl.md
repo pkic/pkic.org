@@ -3,9 +3,6 @@ authors:
 - Rick Andrews
 - Ben Wilson
 date: "2016-09-30T17:12:49+00:00"
-dsq_thread_id:
-- 5186198061
-- Initiative
 keywords:
 - openssl
 - encryption

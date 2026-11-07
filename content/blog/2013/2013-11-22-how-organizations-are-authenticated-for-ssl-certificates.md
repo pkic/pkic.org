@@ -2,8 +2,6 @@
 authors:
 - Kirk Hall
 date: "2013-11-22T18:00:15+00:00"
-dsq_thread_id:
-- 1987547004
 keywords:
 - domain validation
 - ca/browser forum

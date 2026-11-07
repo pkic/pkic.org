@@ -15,7 +15,9 @@
  * @covers vote.5.5
  */
 import { expect, test, type Page } from "@playwright/test";
+import { groupVoteDetailResponseSchema } from "../../assets/shared/schemas/group-votes";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { acceptConfirmDialog, cancelConfirmDialog, confirmDialog } from "./helpers/confirm-dialog";
 import { signInToPortal } from "./helpers/portal-auth";
 import { approveMemberThroughReview, readActiveIdentities, uniqueSuffix } from "./helpers/membership";
 
@@ -65,21 +67,13 @@ async function readMemberVote(page: Page, voteId: string) {
       const response = await fetch(`/api/v1/groups/${groupId}/votes/${voteId}`, { credentials: "same-origin" });
       return {
         status: response.status,
-        body: (await response.json()) as {
-          vote: {
-            status: string;
-            canCastBallot: boolean;
-            hasCastBallot: boolean;
-            memberBallots: Array<{ memberId: string; organizationName: string; hasCastBallot: boolean }> | null;
-            candidates: Array<{ id: string; candidateName: string }> | null;
-          };
-        },
+        body: await response.json(),
       };
     },
     { groupId: ALL_MEMBERS_GROUP, voteId },
   );
   expect(result.status, JSON.stringify(result.body)).toBe(200);
-  return result.body.vote;
+  return groupVoteDetailResponseSchema.parse(result.body).vote;
 }
 
 async function castBallot(page: Page, voteId: string, choice: string, memberId?: string): Promise<number> {
@@ -194,7 +188,7 @@ test("a person representing two organizations casts a separate ballot for each",
   ]);
 });
 
-test("changing your mind replaces your ballot instead of adding one", async ({ page }) => {
+test("changing your mind replaces your ballot instead of adding one", async ({ page }, info) => {
   const suffix = uniqueSuffix();
   const email = `replace-ballot-${suffix}@replace-ballot-${suffix}.test`;
   page.on("dialog", (dialog) => void dialog.accept());
@@ -219,13 +213,72 @@ test("changing your mind replaces your ballot instead of adding one", async ({ p
   const memberships = await readActiveIdentities(page);
   const memberId = memberships[0].memberId;
 
-  expect(await castBallot(page, vote.id, "in_favor", memberId)).toBe(200);
-  expect(await castBallot(page, vote.id, "abstain", memberId)).toBe(200);
+  await page.goto(`/portal/#/groups/${ALL_MEMBERS_GROUP}/votes/${vote.id}`);
+  await page.getByRole("button", { name: "In favor", exact: true }).click();
+  await expect(page.getByText(/Recorded: In favor, cast by you/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "In favor", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+  // A second tab holds the previously recorded ballot while the first replaces it.
+  const stalePage = await page.context().newPage();
+  await stalePage.goto(page.url());
+  await expect(stalePage.getByText(/Recorded: In favor/)).toBeVisible();
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await stalePage.setViewportSize({ width, height });
+    await stalePage.screenshot({ path: info.outputPath(`recorded-ballot-${device}.png`), fullPage: true });
+    await stalePage.getByRole("button", { name: "Opposed", exact: true }).click();
+    await expect(confirmDialog(stalePage)).toContainText("from In favor to Opposed?");
+    await stalePage.screenshot({ path: info.outputPath(`replace-ballot-${device}.png`), fullPage: true });
+    await cancelConfirmDialog(stalePage);
+  }
+  expect(
+    (await readMemberVote(page, vote.id)).memberBallots?.find((b) => b.memberId === memberId)?.recorded?.choice,
+  ).toBe("in_favor");
+  await page.getByRole("button", { name: "Abstain", exact: true }).click();
+  await acceptConfirmDialog(page, "Change ballot");
+  await expect(page.getByText(/Recorded: Abstain, cast by you/)).toBeVisible();
+
+  await stalePage.getByRole("button", { name: "Opposed", exact: true }).click();
+  const refused = stalePage.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith(`/votes/${vote.id}/ballots`) && response.request().method() === "POST",
+  );
+  await acceptConfirmDialog(stalePage, "Change ballot");
+  expect((await refused).status()).toBe(409);
+  await expect(stalePage.getByRole("alert")).toContainText("ballot changed");
+  await stalePage.reload();
+  await expect(stalePage.getByText(/Recorded: Abstain, cast by you/)).toBeVisible();
+  await stalePage.getByRole("button", { name: "Opposed", exact: true }).click();
+  await acceptConfirmDialog(stalePage, "Change ballot");
+  await expect(stalePage.getByText(/Recorded: Opposed, cast by you/)).toBeVisible();
+  await stalePage.close();
 
   // Close the vote as staff and read the tally: a replaced ballot must count
   // once, as the voter's final answer.
   await page.context().clearCookies();
   await signInToPortal(page, e2eAdminEmail("portal-vote-replacement"));
+  await page.goto(`/portal/#/groups/${ALL_MEMBERS_GROUP}/votes/${vote.id}`);
+  await page
+    .getByRole("navigation", { name: `Ballot replacement ${suffix} sections` })
+    .getByRole("link", { name: "Ballots", exact: true })
+    .click();
+  await expect(page.getByText(`Replacing Org ${suffix}`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`Replacing Voter ${suffix}`, { exact: true })).toBeVisible();
+  await expect(page.getByText("Opposed", { exact: true })).toBeVisible();
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`ballot-audit-${device}.png`), fullPage: true });
+  }
+  const search = page.getByPlaceholder("Search ballots…");
+  await search.fill(`Replacing Org ${suffix}`);
+  await search.press("Enter");
+  await expect(page.getByText(`Replacing Voter ${suffix}`, { exact: true })).toBeVisible();
+
   const closed = await page.evaluate(
     async ({ groupId, voteId }) => {
       const response = await fetch(`/api/v1/groups/${groupId}/votes/${voteId}/transitions`, {
@@ -255,7 +308,8 @@ test("changing your mind replaces your ballot instead of adding one", async ({ p
     { groupId: ALL_MEMBERS_GROUP, voteId: vote.id },
   );
   expect(results.status, JSON.stringify(results.body)).toBe(200);
-  expect(results.body.result.counts.abstain).toBe(1);
+  expect(results.body.result.counts.opposed).toBe(1);
+  expect(results.body.result.counts.abstain).toBe(0);
   expect(results.body.result.counts.in_favor, "the replaced choice must not still be counted").toBe(0);
 });
 
@@ -293,8 +347,14 @@ test("an election is decided by choosing from the candidate list", async ({ page
   const memberId = memberships[0].memberId;
   expect(await castBallot(page, vote.id, "in_favor", memberId), "a motion choice is not a candidate").toBe(422);
 
-  const candidateId = detail.candidates![0].id;
-  expect(await castBallot(page, vote.id, candidateId, memberId)).toBe(200);
+  await page.getByRole("radio", { name: `Candidate Ada ${suffix}` }).check();
+  await page.getByRole("button", { name: "Cast ballot", exact: true }).click();
+  await expect(page.getByText(new RegExp(`Recorded: Candidate Ada ${suffix}`))).toBeVisible();
+  await page.getByRole("radio", { name: `Candidate Grace ${suffix}` }).check();
+  await page.getByRole("button", { name: "Update ballot", exact: true }).click();
+  await expect(confirmDialog(page)).toContainText(`from Candidate Ada ${suffix} to Candidate Grace ${suffix}?`);
+  await acceptConfirmDialog(page, "Change ballot");
+  await expect(page.getByText(new RegExp(`Recorded: Candidate Grace ${suffix}`))).toBeVisible();
   const after = await readMemberVote(page, vote.id);
   expect(after.memberBallots!.some((ballot) => ballot.hasCastBallot)).toBe(true);
 });

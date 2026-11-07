@@ -1,13 +1,14 @@
+import { eventSettingsUpdateSchema } from "../assets/shared/schemas/event-management";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import { createMcpOauthTestClient } from "./helpers/mcp-oauth";
-import { seedEventAndAdmin } from "./helpers/context";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { filterOpenApiSpecForMcp } from "../functions/_lib/openapi/mcp";
 import { openapi } from "../functions/http-router";
 
 const env = { ...workerEnv, INTERNAL_SIGNING_SECRET: "synthetic-oauth-test-signing-secret-32-plus" };
-const { callTool, authorize, initialize } = createMcpOauthTestClient(env);
+const { call, callTool, authorize, initialize } = createMcpOauthTestClient(env);
 
 function value(result: { content: { type: string; text?: string }[] }) {
   return JSON.parse(result.content.find((item) => item.type === "text")!.text!);
@@ -17,6 +18,188 @@ describe("generic MCP API helpers", () => {
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
+  });
+
+  async function resourceRpc(token: string, method: string, params: Record<string, unknown> = {}) {
+    const response = await call("/api/v1/mcp", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 3, method, params }),
+    });
+    const text = await response.text();
+    expect(response.status, text).toBe(200);
+    return JSON.parse(
+      text.startsWith("event:")
+        ? text
+            .split("\n")
+            .find((line) => line.startsWith("data: "))!
+            .slice(6)
+        : text,
+    );
+  }
+
+  it("discovers the events template and reads it in two protocol calls", async () => {
+    const { access_token } = await authorize(undefined, ["events:read"]);
+    const initialized = await initialize(access_token);
+    expect(await initialized.text()).toContain('"resources"');
+    const discovered = await resourceRpc(access_token, "resources/templates/list");
+    expect(discovered.error).toBeUndefined();
+    expect(discovered.result.resourceTemplates.length).toBeLessThanOrEqual(20);
+    const template = discovered.result.resourceTemplates.find(
+      (item: { name: string }) => item.name === "GET /api/v1/events",
+    );
+    expect(template.uriTemplate).toContain("limit");
+    expect(discovered.result.nextCursor).toBeDefined();
+    const read = await resourceRpc(access_token, "resources/read", { uri: "pkic://api/api/v1/events?limit=1" });
+    expect(read.error).toBeUndefined();
+    const data = JSON.parse(read.result.contents[0].text);
+    expect(data.events).toHaveLength(1);
+    expect(data.page.limit).toBe(1);
+    const next = await resourceRpc(access_token, "resources/templates/list", { cursor: discovered.result.nextCursor });
+    expect(next.result.resourceTemplates[0].name).not.toBe(discovered.result.resourceTemplates[0].name);
+  });
+
+  it("preserves API validation and OAuth scope limits on resource reads", async () => {
+    const { access_token } = await authorize(undefined, ["users:read"]);
+    await env.DB.prepare("UPDATE events SET visibility='invitation_only' WHERE slug='pqc-2026'").run();
+    const read = await resourceRpc(access_token, "resources/read", { uri: "pkic://api/api/v1/events/pqc-2026" });
+    expect(JSON.parse(read.result.contents[0].text).error.code).toBe("EVENT_NOT_FOUND");
+    const invalid = await resourceRpc(access_token, "resources/read", { uri: "pkic://api/api/v1/events?limit=0" });
+    expect(JSON.parse(invalid.result.contents[0].text).error).toBeDefined();
+    for (const uri of [
+      "https://example.com/api/v1/events",
+      "pkic://api/api/v1/auth/oauth/token",
+      "pkic://api/api/v1/missing",
+    ]) {
+      const refused = await resourceRpc(access_token, "resources/read", { uri });
+      expect(refused.error).toBeDefined();
+      expect(refused.result).toBeUndefined();
+    }
+  });
+
+  it("refuses resource reads after the OAuth grant is revoked", async () => {
+    const grant = await authorize(undefined, ["events:read"]);
+    const headers = { cookie: `pkic_session=${grant.userToken}` };
+    const review = await call(`/api/v1/auth/oauth/authorizations/${grant.authorizationId}`, { headers });
+    const { authorization } = (await review.json()) as { authorization: { revision: string } };
+    expect(
+      (
+        await call(`/api/v1/auth/oauth/authorizations/${grant.authorizationId}/revoke`, {
+          method: "POST",
+          headers: { ...headers, "content-type": "application/json" },
+          body: JSON.stringify({ revision: authorization.revision }),
+        })
+      ).status,
+    ).toBe(200);
+    const response = await call("/api/v1/mcp", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${grant.access_token}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 4,
+        method: "resources/read",
+        params: { uri: "pkic://api/api/v1/events?limit=1" },
+      }),
+    });
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain("invalid_token");
+  });
+
+  it.each([["events:read"], ["events:read", "agenda:leads_capture"]] as const)(
+    "lists events in one request call without discovery or contract loading (%j)",
+    async (...scopes) => {
+      const { access_token } = await authorize(undefined, scopes);
+      const result = value(
+        await callTool(access_token, "request", { method: "GET", path: "/api/v1/events", query: { limit: 1 } }),
+      );
+      expect(result.error).toBeUndefined();
+      expect(result.events).toHaveLength(1);
+      expect(result.page.limit).toBe(1);
+    },
+  );
+
+  it("runs the generated events domain tool with the same API permissions and validation", async () => {
+    const { access_token } = await authorize(undefined, ["events:read"]);
+    const list = value(await callTool(access_token, "events", { action: "list", query: { limit: 1 } }));
+    expect(list.events).toHaveLength(1);
+    const invalid = value(await callTool(access_token, "events", { action: "list", query: { limit: 0 } }));
+    expect(invalid.error).toBeDefined();
+    const before = value(await callTool(access_token, "events", { action: "get", path: "/pqc-2026" }));
+    const forbidden = value(
+      await callTool(access_token, "events", {
+        action: "update",
+        path: "/pqc-2026/settings",
+        body: eventSettingsUpdateSchema.parse({ name: "Must not change", expectedUpdatedAt: before.event.updatedAt }),
+      }),
+    );
+    expect(forbidden.error.code).toBe("SCOPE_REQUIRED");
+    const after = value(await callTool(access_token, "events", { action: "get", path: "/pqc-2026" }));
+    expect(after.event.name).toBe("PQC Conference 2026");
+  });
+
+  it("ranks the event collection first in a compact default discovery page", async () => {
+    const { access_token } = await authorize(undefined, ["events:read"]);
+    const result = value(await callTool(access_token, "discover_operations", { q: "events", method: "GET" }));
+    expect(result.page.limit).toBe(5);
+    expect(result.operations).toHaveLength(5);
+    expect(result.operations[0]).toMatchObject({ path: "/api/v1/events", method: "GET" });
+    expect(Object.keys(result.operations[0]).sort()).toEqual(["method", "path", "summary"]);
+    expect(JSON.stringify(result).length).toBeLessThan(1800);
+  });
+
+  it("keeps live event context grants inside the approved OAuth boundary", async () => {
+    const [event] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM events WHERE slug='pqc-2026'");
+    const [user] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM users WHERE normalized_email='admin@pkic.org'",
+    );
+    await env.DB.prepare("UPDATE events SET visibility='invitation_only' WHERE id=?").bind(event.id).run();
+    await env.DB.prepare(
+      "INSERT INTO events(id,slug,name,timezone,visibility,created_at,updated_at) VALUES (?,'other-private','Other private event','UTC','invitation_only',?,?)",
+    )
+      .bind(crypto.randomUUID(), new Date().toISOString(), new Date().toISOString())
+      .run();
+    await env.DB.prepare("DELETE FROM user_roles WHERE user_id=?").bind(user.id).run();
+    await env.DB.prepare(
+      "INSERT INTO permission_grants(id,user_id,permission,context_type,context_id,created_at) VALUES (?,?,'events:read','event',?,?)",
+    )
+      .bind(crypto.randomUUID(), user.id, event.id, new Date().toISOString())
+      .run();
+    const grant = await authorize(undefined, ["events:read"]);
+    const list = value(await callTool(grant.access_token, "events", { action: "list" }));
+    expect(list.events.map((row: { id: string }) => row.id)).toEqual([event.id]);
+    const detail = value(await callTool(grant.access_token, "events", { action: "get", path: "/pqc-2026" }));
+    expect(detail.event.id).toBe(event.id);
+    const other = value(await callTool(grant.access_token, "events", { action: "get", path: "/other-private" }));
+    expect(other.error.code).toBe("EVENT_NOT_FOUND");
+  });
+
+  it("does not turn unrelated OAuth consent into the user's event access", async () => {
+    await env.DB.prepare("UPDATE events SET visibility='invitation_only'").run();
+    const [event] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM events WHERE slug='pqc-2026'");
+    const [user] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM users WHERE normalized_email='admin@pkic.org'",
+    );
+    await env.DB.prepare(
+      "INSERT INTO event_participants(id,event_id,user_id,role,status,created_at,updated_at) VALUES (?,?,?,'attendee','active',?,?)",
+    )
+      .bind(crypto.randomUUID(), event.id, user.id, new Date().toISOString(), new Date().toISOString())
+      .run();
+    const { access_token } = await authorize(undefined, ["organizations:read"]);
+    const result = value(await callTool(access_token, "request", { method: "GET", path: "/api/v1/events" }));
+    expect(result.error).toBeUndefined();
+    expect(result.events).toEqual([]);
+    const detail = value(await callTool(access_token, "request", { method: "GET", path: "/api/v1/events/pqc-2026" }));
+    expect(detail.error.code).toBe("EVENT_NOT_FOUND");
   });
 
   it("includes generated API operations without duplicating their request contracts", () => {

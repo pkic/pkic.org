@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2016-01-05T19:50:25+00:00"
-dsq_thread_id:
-- 4464620153
 keywords:
 - tls
 - vulnerabilities

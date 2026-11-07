@@ -22,9 +22,7 @@ menu:
 
 # The member directory is populated from the portal-managed membership records.
 
-outputs:
-  - html
-  - og-card
+
 ---
 
 {{< members class="members-overview--wide-only" >}}

@@ -24,7 +24,6 @@ heroButton:
 
 wgID: PQC
 color: blue
-sectionNav: true
 
 cascade:
   params:

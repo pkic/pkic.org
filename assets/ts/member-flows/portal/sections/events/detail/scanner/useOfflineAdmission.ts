@@ -25,7 +25,7 @@ export function useOfflineAdmission(
       )
         throw new Error("The scanner context changed. Reconnect before continuing.");
     }
-    const prepared = collector ? null : manifest.current;
+    const prepared = manifest.current;
     const capturedScan = prepared
       ? {
           ...scan,
@@ -39,13 +39,15 @@ export function useOfflineAdmission(
             ...(collector.nativeEventContext ? { nativeEventContext: collector.nativeEventContext } : {}),
           }
         : scan;
-    const local = collector
-      ? {
-          outcome: "unverified" as const,
-          reason: "verification_required" as const,
-          message: "Scan saved on this device. Reconnect to verify and upload.",
-        }
-      : await prepared?.lookup(scan.badgeId, scan.action);
+    const local = prepared
+      ? await prepared.lookup(scan.badgeId, scan.action)
+      : collector
+        ? {
+            outcome: "unverified" as const,
+            reason: "verification_required" as const,
+            message: "Scan saved on this device. Reconnect to verify and upload.",
+          }
+        : undefined;
     const record = { eventId: slug, scan: capturedScan };
     const queuedScan = collector
       ? await queueScan(record, sessionId, collector)

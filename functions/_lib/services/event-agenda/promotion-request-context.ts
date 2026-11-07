@@ -1,3 +1,4 @@
+import { preparePromotionParticipant } from "./promotion-participant";
 import { getUserSessionCookieToken, USER_SESSION_TOKEN_HEADER } from "../../auth/user-session";
 import type { DatabaseLike, D1StatementResult, Env } from "../../types";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
@@ -95,17 +96,19 @@ export async function prepareOwnPromotionRequest(
   initialize = false,
   preparedActor?: PromotionRequestActor,
   referralCondition?: AuthorizationEvidence,
+  targetUserId?: string,
 ) {
   const actor = preparedActor ?? (await preparePromotionRequestActor(db, request, env)),
     entitlement = promotionRequestEntitlement(actor, eventSlug, occurrenceId);
-  const authority = {
+  const participant = preparePromotionParticipant(db, actor, eventSlug, targetUserId, occurrenceId);
+  const authority = participant.authority ?? {
     sql: `WITH promotion_authenticated AS MATERIALIZED(${actor.authorizationEvidence.sql}), promotion_entitled AS MATERIALIZED(${entitlement.sql}) SELECT 1 FROM promotion_authenticated,promotion_entitled LIMIT 1`,
     bindings: [...actor.authorizationEvidence.bindings, ...entitlement.bindings],
   };
   const source = preparePromotionSourceRead(
     db,
     { slug: eventSlug },
-    actor.subjectId,
+    participant.userId,
     occurrenceId,
     referralCondition
       ? {
@@ -117,7 +120,8 @@ export async function prepareOwnPromotionRequest(
   );
   async function decodeContext(loaded: D1StatementResult[]) {
     const current = await actor.decode(loaded.slice(0, actor.statements.length));
-    const basis = await source.decode(loaded.slice(actor.statements.length));
+    participant.decode(loaded.slice(actor.statements.length, actor.statements.length + participant.statements.length));
+    const basis = await source.decode(loaded.slice(actor.statements.length + participant.statements.length));
     if (
       occurrenceId &&
       !basis.assigned &&
@@ -137,16 +141,23 @@ export async function prepareOwnPromotionRequest(
     return { current, basis };
   }
   async function assemble(context: Awaited<ReturnType<typeof decodeContext>>) {
-    const { current, basis } = context;
+    const { basis } = context;
     const material = occurrenceId
-      ? await buildSpeakerPromotionSource(basis, current.userId, origin)
-      : await buildAttendeePromotionSource(basis, current.userId, origin);
-    return { ...material, eventId: basis.visual.event.id, eventSlug: basis.visual.event.slug };
+      ? await buildSpeakerPromotionSource(basis, participant.userId, origin)
+      : await buildAttendeePromotionSource(basis, participant.userId, origin);
+    return {
+      ...material,
+      headshotKeys: basis.headshotKeys,
+      visual: basis.visual,
+      eventId: basis.visual.event.id,
+      eventSlug: basis.visual.event.slug,
+    };
   }
   return {
     actor,
+    subjectUserId: participant.userId,
     authority,
-    statements: [...actor.statements, ...source.statements],
+    statements: [...actor.statements, ...participant.statements, ...source.statements],
     decodeContext,
     assemble,
     async decode(loaded: D1StatementResult[]) {
@@ -162,7 +173,19 @@ export async function readOwnPromotionRequest(
   occurrenceId: string | null,
   origin: string,
   initialize = false,
+  targetUserId?: string,
 ) {
-  const read = await prepareOwnPromotionRequest(db, request, env, eventSlug, occurrenceId, origin, initialize);
+  const read = await prepareOwnPromotionRequest(
+    db,
+    request,
+    env,
+    eventSlug,
+    occurrenceId,
+    origin,
+    initialize,
+    undefined,
+    undefined,
+    targetUserId,
+  );
   return read.decode(await db.batch(read.statements));
 }

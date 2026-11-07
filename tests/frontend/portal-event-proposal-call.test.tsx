@@ -13,6 +13,7 @@ afterEach(cleanup);
 it("saves a website event's CFP deadline through its group contract and permissions", async () => {
   const event = eventDetailSchema.parse({
     ...responseEvent,
+    registrationPath: null,
     sourceMode: "integration",
     userRetentionDays: null,
     venue: null,

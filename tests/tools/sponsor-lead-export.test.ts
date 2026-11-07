@@ -51,6 +51,10 @@ describe("sponsor lead export", () => {
     try {
       const csv = await exportSponsorLeads(db, "event", "sponsor", "operator");
       expect(csv).toContain("attendee@example.test");
+      expect(csv.split("\r\n")[0]).toBe("Name,Email,Organization,Personal email address,Captured at");
+      expect(csv).not.toContain("Attendee ID");
+      expect(csv).not.toMatch(/(?:^|,)attendee(?:,|$)/m);
+      expect(csv).not.toMatch(/(?:^|,)operator(?:,|$)/m);
       expect(csv).toContain(`"'=HYPERLINK(""bad"") Example"`);
       expect(csvResponse(csv, "leads.csv").headers.get("cache-control")).toBe("no-store");
       sqlite.exec("UPDATE users SET email='updated@example.test' WHERE id='attendee'");

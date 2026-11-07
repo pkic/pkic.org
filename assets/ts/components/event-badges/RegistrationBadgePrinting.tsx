@@ -12,13 +12,15 @@ import {
 import { badgePrintingResponseSchema } from "../../../shared/schemas/route-contracts-event-badges";
 import { getJson, postJson } from "../../shared/api-client";
 import { Button } from "../../ui/Button";
-import { PageHeader } from "../../ui/PageHeader";
+import { BadgeOutputProgress } from "./BadgeOutputProgress";
+import { formatNumber } from "../../../shared/format-number";
+import { BadgePrintCommand } from "./BadgePrintCommand";
 import { ErrorAlert } from "../ErrorAlert";
 import { BadgePrintPreview } from "./BadgePrintPreview";
 import type { PrintableBadgePrint } from "./badge-print-artifacts";
 import { loadBadgePrintPopulation, type BadgePrintScope, type BadgePrintPopulationRow } from "./badge-print-population";
 
-/** One compact data request per 1000 attendees. HTML/SVG rendering stays entirely in the browser. */
+/** Compact data batches; only visual output generates QR artwork. */
 export function RegistrationBadgePrinting({
   slug,
   eventId,
@@ -36,6 +38,7 @@ export function RegistrationBadgePrinting({
 }) {
   const [printed, setPrinted] = useState<PrintableBadgePrint[]>([]);
   const [busy, setBusy] = useState(true);
+  const [progress, setProgress] = useState("Finding attendees…");
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const active = useRef(true);
@@ -76,7 +79,9 @@ export function RegistrationBadgePrinting({
     setPrinted([]);
     void (async () => {
       try {
-        const rows = await loadBadgePrintPopulation(scope, controller.signal, () => {});
+        const rows = await loadBadgePrintPopulation(scope, controller.signal, (count) =>
+          setProgress(`Finding attendees… ${formatNumber(count)} found`),
+        );
         if (controller.signal.aborted) return;
         requireCurrent();
         if (!requests.current.length) {
@@ -98,19 +103,32 @@ export function RegistrationBadgePrinting({
           requireCurrent();
           validateBatch(response, request, rows);
           prepared.push(response);
+          setProgress(
+            `Preparing attendee data… ${formatNumber(prepared.reduce((count, batch) => count + batch.labels.length, 0))} of ${formatNumber(rows.length)}`,
+          );
         }
-        const badges = await Promise.all(
-          prepared
-            .flatMap((batch) => batch.labels)
-            .map(async (label) => ({
-              ...label,
-              displayName: label.displayName ?? "Attendee name unavailable",
-              svg: composeBadgePrintSvg(
-                await QRCode.toString(label.credential, { type: "svg", errorCorrectionLevel: "M", margin: 4 }),
-                label.credential,
-              ),
-            })),
-        );
+        const labels = prepared.flatMap((batch) => batch.labels);
+        const badges: PrintableBadgePrint[] = [];
+        for (let index = 0; index < labels.length; index++) {
+          const label = labels[index];
+          badges.push({
+            ...label,
+            displayName: label.displayName ?? "Attendee name unavailable",
+            svg:
+              action === "label_csv" || action === "labels" || action === "label_pdf"
+                ? ""
+                : composeBadgePrintSvg(
+                    await QRCode.toString(label.credential, { type: "svg", errorCorrectionLevel: "M", margin: 4 }),
+                    label.credential,
+                  ),
+          });
+          if ((action === "preview" || action === "badges" || action === "badge_pdf") && (index + 1) % 50 === 0) {
+            setProgress(`Preparing artwork… ${formatNumber(index + 1)} of ${formatNumber(labels.length)}`);
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            if (controller.signal.aborted) return;
+            requireCurrent();
+          }
+        }
         if (controller.signal.aborted) return;
         requireCurrent();
         responses.current = prepared;
@@ -129,7 +147,7 @@ export function RegistrationBadgePrinting({
       controller.abort();
       responses.current = [];
     };
-  }, [scope, eventId, slug, retry, endpoint, requireCurrent]);
+  }, [scope, eventId, slug, retry, endpoint, requireCurrent, action]);
 
   async function beforeRelease() {
     try {
@@ -153,32 +171,60 @@ export function RegistrationBadgePrinting({
       return false;
     }
   }
-  return (
-    <div class="pk-stack">
-      <PageHeader
-        title={scope.kind === "selected" ? "Print selected badges or labels" : "Print matching badges or labels"}
+  const title =
+    action === "label_csv"
+      ? "Download labels CSV"
+      : action === "label_pdf"
+        ? "Download labels PDF"
+        : action === "badge_pdf"
+          ? "Download badges PDF"
+          : action === "badges"
+            ? "Print badges"
+            : "Print labels";
+  const output =
+    !error &&
+    printed.length > 0 &&
+    (action === "preview" ? (
+      <BadgePrintPreview
+        badges={printed}
+        printing={BADGE_LABEL_PRINTING_CONTEXT}
+        beforeRelease={beforeRelease}
+        loadPrintingContext={() => getJson(`${endpoint}/printing`, badgePrintingResponseSchema)}
       />
-      {busy && <p role="status">Loading labels…</p>}
-      {error && <ErrorAlert error={error} />}
-      {!busy && !error && !printed.length && <p>No matching registrations to print.</p>}
-
-      <div class="pk-cluster">
+    ) : (
+      <BadgePrintCommand
+        assertCurrent={requireCurrent}
+        badges={printed}
+        action={action}
+        beforeRelease={beforeRelease}
+        loadPrintingContext={() => getJson(`${endpoint}/printing`, badgePrintingResponseSchema)}
+        onProgress={setProgress}
+        onComplete={onBack}
+        onError={setError}
+      />
+    ));
+  if (action === "preview")
+    return (
+      <div class="pk-stack">
         {error && (
-          <Button disabled={busy} onClick={() => setRetry((value) => value + 1)}>
-            Reload labels
-          </Button>
+          <>
+            <ErrorAlert error={error} />
+            <Button onClick={() => setRetry((value) => value + 1)}>Reload labels</Button>
+          </>
         )}
-        <Button onClick={onBack}>Back to registrations</Button>
+        {output}
       </div>
-      {printed.length > 0 && (
-        <BadgePrintPreview
-          badges={printed}
-          action={action}
-          printing={BADGE_LABEL_PRINTING_CONTEXT}
-          beforeRelease={beforeRelease}
-          loadPrintingContext={() => getJson(`${endpoint}/printing`, badgePrintingResponseSchema)}
-        />
-      )}
-    </div>
+    );
+  return (
+    <BadgeOutputProgress
+      title={title}
+      progress={progress}
+      error={error}
+      empty={!busy && !printed.length}
+      onRetry={() => setRetry((value) => value + 1)}
+      onClose={onBack}
+    >
+      {output}
+    </BadgeOutputProgress>
   );
 }

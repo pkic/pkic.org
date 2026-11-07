@@ -4,9 +4,7 @@ url: /_event-flow-shells/proposal-manage/
 robots: noindex
 sitemap:
   disable: true
-build:
-  list: never
-  publishResources: false
+
 ---
 
 ## Manage your proposal

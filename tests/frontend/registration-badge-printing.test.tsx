@@ -30,8 +30,9 @@ import { badgePrintPreset } from "../../assets/shared/badge-print-layout";
 import { confirmAction } from "../../assets/ts/components/ConfirmDialog";
 
 vi.mock("../../assets/ts/components/ConfirmDialog", () => ({ confirmAction: vi.fn(async () => true) }));
-vi.mock("qrcode", () => ({
+vi.mock("qrcode", async (load) => ({
   default: {
+    create: (await load<typeof import("qrcode")>()).create,
     toString: vi.fn(
       async () => '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 37 37"><path d="M4 4h1v1H4z"/></svg>',
     ),
@@ -399,9 +400,10 @@ it("prints exact canonical front/back sheets and label stock without changing QR
   expect(document.querySelector("style")?.textContent).toContain(".badge-print-slot-0{left:");
   expect(document.querySelector("style")?.textContent).toContain(".badge-print-slot-1{left:");
   expect(a4).toContain("A &lt; B");
-  const image = document.querySelector("img")!;
-  const label = decodeURIComponent(image.getAttribute("src")!.split(",")[1]);
-  expect(label).toContain(encodeURIComponent(badges[0].svg));
+  const image = document.querySelector("symbol image")!;
+  expect(decodeURIComponent(image.getAttribute("href")!.split(",")[1])).toBe(badges[0].svg);
+  expect(document.querySelectorAll("symbol")).toHaveLength(1);
+  expect(document.querySelectorAll('use[href="#badge-label-0"]')).toHaveLength(2);
   expect(badgePrintHtml(badges, badgePrintPreset("avery_5160"), printing, "name_qr")).toContain("size:215.9mm 279.4mm");
 });
 it("checks release authority after asynchronous SVG archive preparation", async () => {
@@ -480,32 +482,101 @@ it("includes explicitly selected pending and cancelled registrations without cha
   expect(result.map((item) => item.status)).toEqual(["pending_email_confirmation", "cancelled"]);
 });
 
-it.each([true, false])(
-  "downloads label CSV directly only while the live print context remains valid: %s",
-  async (authorized) => {
-    let reads = 0;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
-        const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
-        reads++;
-        if (reads > 1 && !authorized)
-          return json({ error: { code: "FORBIDDEN", message: "Print access changed" } }, 403);
-        return json(batchResponse(body));
-      }),
-    );
-    const host = await mountPrinting([row(1)], () => true, "label_csv");
-    await vi.waitFor(() => expect(reads).toBe(2));
-    if (authorized) {
-      await vi.waitFor(() => expect(downloadBadgeArtifact).toHaveBeenCalledTimes(1));
-      expect(vi.mocked(downloadBadgeArtifact).mock.calls[0]).toEqual([
-        expect.stringContaining("ABCDEFGH"),
-        "text/csv;charset=utf-8",
-        "attendee-labels.csv",
-      ]);
-    } else {
-      await vi.waitFor(() => expect(host.querySelector("iframe")).toBeNull());
-      expect(downloadBadgeArtifact).not.toHaveBeenCalled();
-    }
-  },
-);
+it.each([true, false])("downloads fresh CSV without rendering QR artwork or a preview: %s", async (authorized) => {
+  const fetch = vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+    const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
+    if (!authorized) return json({ error: { code: "FORBIDDEN", message: "Print access changed" } }, 403);
+    return json(batchResponse(body));
+  });
+  vi.stubGlobal("fetch", fetch);
+  const qr = vi.spyOn(QR, "toString");
+  const host = await mountPrinting([row(1)], () => true, "label_csv");
+  if (authorized) {
+    await vi.waitFor(() => expect(downloadBadgeArtifact).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(downloadBadgeArtifact).mock.calls[0]).toEqual([
+      expect.stringContaining("ABCDEFGH"),
+      "text/csv;charset=utf-8",
+      "attendee-labels.csv",
+    ]);
+  } else {
+    await vi.waitFor(() => expect(host.textContent).toContain("Print access changed"));
+    expect(downloadBadgeArtifact).not.toHaveBeenCalled();
+  }
+  expect(fetch).toHaveBeenCalledTimes(authorized ? 2 : 1);
+  expect(qr).not.toHaveBeenCalled();
+  expect(host.querySelector("iframe")).toBeNull();
+});
+
+it("does not release CSV after the session changes while attendee data is loading", async () => {
+  let allowed = true;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+      const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
+      allowed = false;
+      return json(batchResponse(body));
+    }),
+  );
+  const host = await mountPrinting([row(1)], () => allowed, "label_csv");
+  await vi.waitFor(() => expect(host.textContent).toContain("Sign in again"));
+  expect(downloadBadgeArtifact).not.toHaveBeenCalled();
+  expect(host.querySelector("iframe")).toBeNull();
+});
+
+it("does not download prepared CSV when event-management access is revoked before release", async () => {
+  const fetch = vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+    const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
+    if (fetch.mock.calls.length > 1)
+      return json({ error: { code: "FORBIDDEN", message: "Event management required" } }, 403);
+    return json(batchResponse(body));
+  });
+  vi.stubGlobal("fetch", fetch);
+  const host = await mountPrinting([row(1)], () => true, "label_csv");
+  await vi.waitFor(() => expect(host.textContent).toContain("Event management required"));
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(downloadBadgeArtifact).not.toHaveBeenCalled();
+  expect(QR.toString).not.toHaveBeenCalled();
+  expect(host.querySelector("iframe")).toBeNull();
+});
+
+it("refuses CSV when an earlier batch changes while preparing later attendees", async () => {
+  const fetch = vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+    const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
+    const response = batchResponse(body);
+    if (fetch.mock.calls.length === 3) response.labels[0].firstName = "Changed";
+    return json(response);
+  });
+  vi.stubGlobal("fetch", fetch);
+  const host = await mountPrinting(
+    Array.from({ length: 1001 }, (_, index) => row(index + 1)),
+    () => true,
+    "label_csv",
+  );
+  await vi.waitFor(() => expect(host.textContent).toContain("attendee details or badge codes changed"));
+  expect(fetch).toHaveBeenCalledTimes(3);
+  expect(downloadBadgeArtifact).not.toHaveBeenCalled();
+  expect(QR.toString).not.toHaveBeenCalled();
+  expect(host.querySelector("iframe")).toBeNull();
+});
+
+it("downloads 3,001 attendees after rechecking four compact batches without QR or document work", async () => {
+  const fetch = vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+    const body = badgeLabelBatchRequestSchema.parse(JSON.parse(String(init.body)));
+    return json(batchResponse(body));
+  });
+  vi.stubGlobal("fetch", fetch);
+  const host = await mountPrinting(
+    Array.from({ length: 3001 }, (_, index) => row(index + 1)),
+    () => true,
+    "label_csv",
+  );
+  await vi.waitFor(() => expect(downloadBadgeArtifact).toHaveBeenCalledTimes(1));
+  expect(fetch).toHaveBeenCalledTimes(8);
+  expect(
+    fetch.mock.calls.slice(4).map(([, init]) => badgeLabelBatchRequestSchema.parse(JSON.parse(String(init?.body)))),
+  ).toEqual(
+    fetch.mock.calls.slice(0, 4).map(([, init]) => badgeLabelBatchRequestSchema.parse(JSON.parse(String(init?.body)))),
+  );
+  expect(QR.toString).not.toHaveBeenCalled();
+  expect(host.querySelector("iframe")).toBeNull();
+});

@@ -3,8 +3,7 @@ title: Online services temporarily unavailable
 robots: noindex
 sitemap:
   disable: true
-build:
-  list: never
+
 ---
 
 Our online services are temporarily paused. The public website remains available.

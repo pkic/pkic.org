@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2016-07-20T20:47:02+00:00"
-dsq_thread_id:
-- 5001214862
 keywords:
 - code signing
 - microsoft

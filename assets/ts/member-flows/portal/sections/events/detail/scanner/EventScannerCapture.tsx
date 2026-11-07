@@ -9,12 +9,12 @@ import { ScannerWorkspace } from "./ScannerWorkspace";
 import { useScannerImmersiveLifecycle } from "./useScannerImmersiveLifecycle";
 import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import { scannerContextLabel } from "./ScannerCaptureContext";
-import { useScannerAutoStart } from "./useScannerAutoStart";
+import { useScannerAutoStart, useScannerCaptureActive } from "./useScannerAutoStart";
 import { ScannerConnectionStatus } from "./ScannerConnectionStatus";
 import { useScannerConnection } from "./useScannerConnection";
 import { useScannerPreferences } from "./useScannerPreferences";
 import { useScannerSound } from "./useScannerSound";
-import { scannerInitialAction } from "./ScannerModeSelect";
+import { useScannerAction } from "./ScannerModeSelect";
 import { portalSession } from "../../../../state";
 import { useScannerSessionFence } from "./useScannerSessionFence";
 import { ScannerLeadExport } from "./ScannerLeadExport";
@@ -24,7 +24,7 @@ import { ScannerCaptureControls, ScannerManualControls, scannerStartMessage } fr
 import { useScannerPreparation } from "./useScannerPreparation";
 import { ScannerCamera } from "./ScannerCamera";
 import { ScannerRecentScans } from "./ScannerRecentScans";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import {
   scanActionSchema,
   eventScanCaptureIntentForRoomsSchema,
@@ -38,12 +38,13 @@ import { pendingScanCount } from "./scan-outbox";
 import { useScannerOutboxSync } from "./useScannerOutboxSync";
 import "./EventScanner.css";
 import { FastScannerView } from "./FastScannerView";
-import { enterScannerFullscreen } from "./immersive-scanner";
+import { useScannerPresentation } from "./useScannerPresentation";
 import { useScanCooldown } from "./useScanCooldown";
 import { useScannerSyncHistory } from "./useScannerSyncHistory";
 import { scannerPreparationRefusal } from "./scanner-offline-context";
 export function EventScannerCapture({
   slug,
+  printHref,
   operatorUserId,
   occurrenceId = null,
   sponsorId,
@@ -55,9 +56,7 @@ export function EventScannerCapture({
 }: EventScannerProps) {
   const refusePreparation = scannerPreparationRefusal(portalSession.value, operatorUserId);
   const [badgeId, setBadge] = useState("");
-  const [action, setAction] = useState<EventScanRequest["action"]>(
-    scannerInitialAction(allowedActions, collectorContext?.action, Boolean(sponsorId)),
-  );
+  const [action, setAction] = useScannerAction(allowedActions, collectorContext?.action, !!sponsorId);
   const [scannerTab, setScannerTab] = useHashQueryParam("scannerTab", "scan", ["scan", "recent", "diagnostics"]);
   const recentVisible = scannerTab === "recent" && !collectorContext;
   const [consentConfirmed, setConsent] = useState(false);
@@ -67,15 +66,15 @@ export function EventScannerCapture({
   const { deviceId } = scannerDevice;
   const [operationId, setOperation] = useState(() => crypto.randomUUID());
   const authorityPaused = useRef(false);
-  const [fastMode, setFastMode] = useState(false);
+  const [fastMode, setFastMode] = useScannerCaptureActive();
   const preferences = useScannerPreferences();
-  const feedbackPause = preferences.feedbackPause;
   const online = useScannerConnection();
   const {
     result,
     lastResult,
     clearLastResult,
     failed,
+    captureStatus,
     setResult,
     message,
     setMessage,
@@ -85,21 +84,21 @@ export function EventScannerCapture({
     failure,
   } = useScannerFeedback({
     enabled: fastMode,
-    durationMs: feedbackPause,
+    durationMs: preferences.feedbackPause,
     collector: Boolean(collectorContext),
     currentOperation: lastOperation,
     committedOperation: lastCommittedOperation,
     authorityPaused,
   });
   const offline = !online || Boolean(collectorContext);
-  const sound = useScannerSound(preferences.sound, result ?? lastResult, action, failed, offline);
   const [busy, setBusy] = useState(false);
   const manualCapturePending = useRef(false);
-  const cooldown = useScanCooldown(feedbackPause);
+  const cooldown = useScanCooldown(preferences.feedbackPause);
   const [preview, setPreview] = useState(false);
   const scannerShell = useRef<HTMLDivElement>(null);
+  const { presentation, enter: enterPresentation, toggle: togglePresentation } = useScannerPresentation(scannerShell);
   const badgeCamera = useScannerCamera((raw) => void scanCredential(raw, true));
-  const manual = useScannerManualEntry(fastMode, badgeCamera.stop, () => void camera());
+  const manual = useScannerManualEntry(fastMode, badgeCamera.stop, () => void camera(), recentVisible);
   const { open: manualOpen, focusRequested: manualFocusRequested, paused: manualPaused } = manual;
   const preparation = useScannerPreparation({
     slug,
@@ -130,6 +129,7 @@ export function EventScannerCapture({
   } = preparation.location;
   const { eligibilityManifest, manifestReady, manifestPreparing, manifestError } = preparation.eligibility;
   const { offlineAdmission, offlinePreparation } = preparation;
+  const sound = useScannerSound(preferences.sound, result ?? lastResult, action, failed, Boolean(targetId));
   const screenAwake = useScannerImmersiveLifecycle(
     fastMode,
     scannerShell,
@@ -142,9 +142,8 @@ export function EventScannerCapture({
       badgeCamera.stop();
       cooldown.reset();
     },
+    presentation === "fullscreen",
   );
-  const scannerLifecycle = useRef({ manualPaused, badgeCamera });
-  scannerLifecycle.current = { manualPaused, badgeCamera };
   useScannerHardware(fastMode && !manualOpen, (credential) => void scanCredential(credential));
   const form = useContractForm(
     eventScanCaptureIntentForRoomsSchema(targetRooms.map((room) => room.id)),
@@ -191,7 +190,6 @@ export function EventScannerCapture({
       stopCamera: badgeCamera.stop,
       refreshHistory: syncHistory.refresh,
     });
-  /** Leave the displayed scan: no camera stream, no operation awaiting a receipt, no result on screen. */
   function clearCurrentScan() {
     badgeCamera.stop();
     lastOperation.current = null;
@@ -253,7 +251,9 @@ export function EventScannerCapture({
     try {
       lastOperation.current = checked.data.operationId;
       const saved = await persistCapture(checked.data);
-      setUploadStatus(collectorContext ? "Saved offline · not yet verified" : "Uploading scans in the background…");
+      setUploadStatus(
+        collectorContext ? "Saved on this device · upload pending" : "Uploading scans in the background…",
+      );
       setPending(await pendingScanCount(operatorUserId));
       showProvisionalMessage(saved.scan.operationId, "Scan saved. Checking eligibility…");
       showLocalEligibility(saved.scan, saved.local ?? unverifiedSavedFeedback);
@@ -279,7 +279,6 @@ export function EventScannerCapture({
       setBadge(raw);
       manual.setOpen(true);
       manual.setFocusRequested(true);
-      badgeCamera.stop();
       setFastMode(false);
       if (current.action === "lead") setConsent(false);
       setMessage("Badge detected. Review and confirm before recording.");
@@ -324,7 +323,9 @@ export function EventScannerCapture({
     showProvisionalMessage(operation, "Checking eligibility…");
     try {
       const saved = await persistCapture(parsed.data);
-      setUploadStatus(collectorContext ? "Saved offline · not yet verified" : "Uploading scans in the background…");
+      setUploadStatus(
+        collectorContext ? "Saved on this device · upload pending" : "Uploading scans in the background…",
+      );
       setPending(await pendingScanCount(operatorUserId));
       showLocalEligibility(saved.scan, saved.local ?? unverifiedSavedFeedback);
       resetCaptureFields();
@@ -349,7 +350,7 @@ export function EventScannerCapture({
     sound.unlock();
     manualPaused.current = false;
     if (!allowedActions.includes(action) || !scannerDevice.ready) return;
-    if (scannerShell.current) enterScannerFullscreen(scannerShell.current);
+    enterPresentation();
     lastOperation.current = null;
     setResult(null);
     setMessage(scannerStartMessage(manifestReady, Boolean(collectorContext), action));
@@ -383,12 +384,6 @@ export function EventScannerCapture({
     manual.setOpen(false);
     setScannerTab("recent");
   }
-  useEffect(() => {
-    if (recentVisible) {
-      scannerLifecycle.current.badgeCamera.stop();
-      scannerLifecycle.current.manualPaused.current = true;
-    }
-  }, [recentVisible]);
   const contextLabel = scannerContextLabel({ ...preparation.location, action, sponsorName });
   const manualControls = {
     handlers: form.handlers,
@@ -429,6 +424,7 @@ export function EventScannerCapture({
       ready={pendingReadyScope === `${slug}:${operatorUserId}`}
       collector={Boolean(collectorContext)}
       uploadStatus={uploadStatus}
+      error={failed ? message : scannerDevice.error}
     />
   );
   const mode = {
@@ -474,6 +470,7 @@ export function EventScannerCapture({
                 collector={collectorContext}
                 onCheckSignIn={onCheckSignIn}
                 setup={{
+                  printHref,
                   operatorUserId,
                   sponsorOnly: action === "lead",
                   explicitTarget: Boolean(occurrenceId),
@@ -549,13 +546,17 @@ export function EventScannerCapture({
       />
       {fastMode && (
         <FastScannerView
+          presentation={presentation}
+          onPresentation={togglePresentation}
           canRecordAttendance={!collectorContext && allowedActions.includes("attendance")}
           context={contextLabel}
           lastResult={lastResult}
           connectionStatus={connection}
           soundLabel={sound.label}
+          onTourSound={sound.test}
           onSound={() => sound.toggle(preferences.setSound)}
           result={result}
+          status={captureStatus}
           preparation={collectorContext ? undefined : preparationStatus}
           mode={action}
           pending={pending}
@@ -587,7 +588,7 @@ export function EventScannerCapture({
       <ScannerCamera
         video={badgeCamera.video}
         cameraActive={badgeCamera.active}
-        fastMode={fastMode}
+        fastMode={fastMode && presentation === "fullscreen"}
         preview={preview}
       />
     </div>

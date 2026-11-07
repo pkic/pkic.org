@@ -2,8 +2,6 @@
 authors:
 - Jeremy Rowley
 date: "2015-02-19T23:52:18+00:00"
-dsq_thread_id:
-- 3531096319
 keywords:
 - webtrust
 - ca/browser forum

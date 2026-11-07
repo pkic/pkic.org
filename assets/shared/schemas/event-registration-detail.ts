@@ -94,15 +94,35 @@ export const eventRegistrationAdmitResponseSchema = successResponseSchema.extend
   admittedDayDates: z.array(dayDateSchema),
 });
 
+/**
+ * How a manager admits a registration for its selected option. `within_capacity`
+ * takes a free place and is refused when that option is full; `vip` and `capacity_exempt` admit
+ * beyond capacity.
+ */
+export const REGISTRATION_ADMISSION_MODES = ["within_capacity", "vip", "capacity_exempt"] as const;
+export const registrationAdmissionModeSchema = z.enum(REGISTRATION_ADMISSION_MODES);
+/**
+ * `within_capacity` admits someone off the waiting list, so it acts only for a
+ * registration still waiting (or holding a live offer) on every selected day;
+ * a lapsed offer or a registration that never joined the waitlist cannot use it.
+ * It enforces capacity, not queue order: a manager may admit any active waiter
+ * into a free place, including one the promotion job would offer to someone
+ * earlier in the queue. Places already offered are counted and cannot be taken.
+ */
+export function admissionRequiresActiveWaitlist(mode: (typeof REGISTRATION_ADMISSION_MODES)[number]): boolean {
+  return mode === "within_capacity";
+}
+export type RegistrationAdmissionMode = z.infer<typeof registrationAdmissionModeSchema>;
+
 export const eventRegistrationAdmitSchema = z.object({
-  mode: z.enum(["vip", "capacity_exempt"]).default("vip"),
+  mode: registrationAdmissionModeSchema.default("vip"),
   reason: trimmedString(3, 1000),
   dayDates: z.array(dayDateSchema).min(1).max(31).optional(),
 });
 
 /** Group managers must explicitly select both the admission mode and event days. */
 export const eventRegistrationSelectedDayAdmitSchema = eventRegistrationAdmitSchema.extend({
-  mode: z.enum(["vip", "capacity_exempt"]),
+  mode: registrationAdmissionModeSchema,
   dayDates: z.array(dayDateSchema).min(1).max(31),
 });
 

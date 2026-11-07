@@ -48,6 +48,7 @@ export function useScannerPreparation({
     action,
   );
   const status = {
+    occurrenceId: location.targetId,
     snapshot: eligibility.eligibilityManifest.current,
     stale: Boolean(
       eligibility.eligibilityManifest.current && Date.now() >= eligibility.eligibilityManifest.current.validUntil,

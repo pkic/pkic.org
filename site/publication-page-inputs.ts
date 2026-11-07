@@ -15,7 +15,7 @@ import { isPrivateEventFlowPath } from "../assets/shared/event-flow-paths";
 
 type SocialContent = Pick<
   SiteContentPage,
-  "workingGroup" | "hero" | "taxonomy" | "blog" | "socialCard" | "pageAccent" | "meta" | "contribution"
+  "workingGroup" | "hero" | "taxonomy" | "blog" | "socialCard" | "pageAccent" | "meta" | "contribution" | "keywords"
 >;
 
 /** The public layout consumes this same projection that participates in route keys. */
@@ -73,6 +73,7 @@ export async function publicationPageInputs({
     canonicalUrl: new URL(route, PUBLICATION_SITE_ORIGIN).href,
     title,
     description,
+    keywords: content?.keywords,
     privatePage,
     accent: content?.workingGroup?.accent ?? accent,
     workingGroup: Boolean(content?.workingGroup),

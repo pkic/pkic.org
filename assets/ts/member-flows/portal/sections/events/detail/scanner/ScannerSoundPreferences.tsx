@@ -28,7 +28,7 @@ export function ScannerSoundPreferences({
       </Field>
       <p class="pk-muted">Rising tones: success. Low tones: needs attention. Two equal tones: not yet verified.</p>
       <div class="pk-cluster">
-        <Button type="button" variant="secondary" onClick={sound.test} disabled={!preferences.sound}>
+        <Button type="button" variant="secondary" onClick={() => sound.test()} disabled={!preferences.sound}>
           Test sound
         </Button>
       </div>

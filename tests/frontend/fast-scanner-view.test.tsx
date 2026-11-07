@@ -25,6 +25,22 @@ const props = {
   onPreview: () => {},
   onExit: () => {},
 };
+it.each(["scan", "print"] as const)("supports the %s role in both scanner presentations", (purpose) => {
+  const embedded = render(
+    <FastScannerView {...props} purpose={purpose} presentation="embedded" result={null} onPresentation={() => {}} />,
+  );
+  expect(embedded).toContain('role="region"');
+  expect(
+    new DOMParser().parseFromString(embedded, "text/html").body.firstElementChild?.hasAttribute("aria-modal"),
+  ).toBe(false);
+  expect(embedded).toContain("Full screen");
+  const fullscreen = render(
+    <FastScannerView {...props} purpose={purpose} presentation="fullscreen" result={null} onPresentation={() => {}} />,
+  );
+  expect(fullscreen).toContain('role="dialog"');
+  expect(fullscreen).toContain('aria-modal="true"');
+  expect(fullscreen).not.toContain("Embedded view");
+});
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -32,7 +48,7 @@ afterEach(() => {
 describe("shared supporting scanner warning labels", () => {
   it.each([
     ["wrong_location", "Known badge · location notice"],
-    ["wrong_attendance_mode", "Known badge · attendance notice"],
+    ["wrong_attendance_mode", "Check registration for this date or attendance mode"],
     ["missing_registration", "Known badge · not registered"],
   ] as const)("renders %s honestly in both scanner views", (reason, label) => {
     const result = eventScanResponseSchema.parse({
@@ -366,4 +382,68 @@ it("shows compact setup feedback without a fullscreen mark while retaining actua
   expect(html).not.toContain("pk-event-scanner__mark");
   expect(html).toContain("Unable to save scan. Retry.");
   expect(html).toContain("2 scans awaiting upload");
+});
+
+it.each([
+  { role: "entry", mode: "attendance" as const },
+  { role: "exit", mode: "checkout" as const },
+  { role: "lead", mode: "lead" as const },
+  { role: "print", mode: "attendance" as const, purpose: "print" as const },
+  {
+    role: "session",
+    mode: "attendance" as const,
+    preparation: {
+      action: "attendance" as const,
+      occurrenceId: "example-session",
+      ready: false,
+      preparing: true,
+      error: "",
+    },
+  },
+])("preserves the $role identity through ready and warning feedback", ({ role, ...modeProps }) => {
+  const ready = new DOMParser().parseFromString(
+    render(<FastScannerView {...props} {...modeProps} result={null} />),
+    "text/html",
+  ).body.firstElementChild!;
+  const warning = new DOMParser().parseFromString(
+    render(
+      <FastScannerView
+        {...props}
+        {...modeProps}
+        result={{
+          operationId: "example",
+          outcome: "warning",
+          reason: "wrong_location",
+          recorded: false,
+          attendanceRecorded: false,
+        }}
+      />,
+    ),
+    "text/html",
+  ).body.firstElementChild!;
+  expect(ready.getAttribute("data-scanner-role")).toBe(role);
+  expect(warning.getAttribute("data-scanner-role")).toBe(role);
+  expect(warning.classList.contains("pk-fast-scanner--warning")).toBe(true);
+});
+
+it("gives session and venue entry different mode icons", () => {
+  const icon = (session: boolean) =>
+    new DOMParser()
+      .parseFromString(
+        render(
+          <FastScannerView
+            {...props}
+            mode="attendance"
+            result={null}
+            preparation={
+              session
+                ? { action: "attendance", ready: true, preparing: false, error: "", occurrenceId: "session" }
+                : undefined
+            }
+          />,
+        ),
+        "text/html",
+      )
+      .querySelector(".pk-fast-scanner__mark svg")!.innerHTML;
+  expect(icon(true)).not.toBe(icon(false));
 });

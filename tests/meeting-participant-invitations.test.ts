@@ -13,7 +13,7 @@ import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
  * the same moment from mailing the group twice.
  */
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   cancelGroupEventSeries,
   createGroupEventSeries,
@@ -23,6 +23,9 @@ import {
 } from "../functions/_lib/services/event-series";
 import { recordCalendarRsvpEvent } from "../functions/_lib/services/calendar-rsvp";
 import { verifySignedRsvpAddressFull } from "../functions/_lib/email/rsvp";
+import { emailInstant } from "../functions/_lib/email/plain-text";
+import { formatDateTimeInZone } from "../assets/shared/format-date";
+import { renderEmail, renderSubject } from "../functions/_lib/email/render";
 import { AppError } from "../functions/_lib/errors";
 import type { AuthAdmin, StatementLike } from "../functions/_lib/types";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
@@ -63,6 +66,33 @@ function outboxRows(): Promise<OutboxRow[]> {
   );
 }
 
+// Preserve migration-seeded templates before resetDb clears email template versions.
+const meetingTemplates = new Map<string, { subject: string; body: string }>();
+beforeAll(async () => {
+  const templates = await queryAll<{ template_key: string; subject: string; body: string }>(
+    env.DB,
+    `SELECT template_key, subject_template AS subject, body FROM email_template_versions
+     WHERE template_key IN ('meeting-participant-invitation', 'meeting-occurrence-updated', 'meeting-occurrence-cancelled')
+       AND status = 'active'`,
+  );
+  for (const template of templates) meetingTemplates.set(template.template_key, template);
+});
+
+async function expectMeetingEmailClock(row: OutboxRow, templateKey: string, times: Record<string, string>) {
+  const data = JSON.parse(row.payload_json);
+  const template = meetingTemplates.get(templateKey)!;
+  const subject = renderSubject(template.subject, "Meeting", data);
+  const rendered = await renderEmail(template.body, data, "{{{body_html}}}");
+  expect(subject).toContain(formatDateTimeInZone(times.startsAt, "Europe/Amsterdam"));
+  for (const [field, instant] of Object.entries(times)) {
+    expect(data[field]).toEqual(emailInstant(instant, "Europe/Amsterdam"));
+    expect(rendered.text).toContain(formatDateTimeInZone(instant, "Europe/Amsterdam"));
+    expect(rendered.text).not.toContain(instant);
+    expect(subject).not.toContain(instant);
+  }
+  expect(rendered.html).not.toContain("[object Object]");
+}
+
 describe("meeting participant invitations", () => {
   let admin: AuthAdmin;
   let seriesId: string;
@@ -92,7 +122,7 @@ describe("meeting participant invitations", () => {
       },
       startsAt,
       recurrenceRule: "FREQ=WEEKLY;COUNT=2",
-      timezone: "UTC",
+      timezone: "Europe/Amsterdam",
       durationMinutes: 60,
       location: "Online",
       providerType: "external_url",
@@ -132,6 +162,14 @@ describe("meeting participant invitations", () => {
       "first-participant@example.test",
       "second-participant@example.test",
     ]);
+    const [occurrence] = await queryAll<{ starts_at: string }>(
+      env.DB,
+      "SELECT starts_at FROM event_occurrences WHERE id = ?",
+      occurrenceId,
+    );
+    await expectMeetingEmailClock(queued[0], "meeting-participant-invitation", {
+      startsAt: occurrence.starts_at,
+    });
     const urls = queued.map((row) => JSON.parse(row.payload_json).joinUrl as string);
     expect(urls).toHaveLength(2);
     expect(new Set(urls).size).toBe(2);
@@ -521,6 +559,11 @@ describe("meeting participant invitations", () => {
       await seatParticipant("moved@example.test");
       await sendMeetingParticipantInvitations(env.DB, admin, GROUP_ID, seriesId, occurrenceId, APP_BASE_URL, NOTIFY);
 
+      const [previous] = await queryAll<{ starts_at: string; ends_at: string }>(
+        env.DB,
+        "SELECT starts_at, ends_at FROM event_occurrences WHERE id = ?",
+        occurrenceId,
+      );
       const movedStart = new Date(Date.now() + 10_800_000).toISOString();
       const movedEnd = new Date(Date.now() + 14_400_000).toISOString();
       const moved = await updateSeriesOccurrence(
@@ -544,7 +587,13 @@ describe("meeting participant invitations", () => {
       expect(ics).toContain("METHOD:REQUEST");
       expect(ics).toContain(`UID:${occurrenceId}@pkic.org`);
       expect(ics).toContain("SEQUENCE:1");
-      expect(JSON.parse(updates[0].payload_json).startsAt).toBe(movedStart);
+      expect(JSON.parse(updates[0].payload_json).timeChanged).toBe(true);
+      await expectMeetingEmailClock(updates[0], "meeting-occurrence-updated", {
+        startsAt: movedStart,
+        endsAt: movedEnd,
+        previousStartsAt: previous.starts_at,
+        previousEndsAt: previous.ends_at,
+      });
 
       // A change that alters nothing a calendar shows — the provider link —
       // is not announced.
@@ -584,6 +633,7 @@ describe("meeting participant invitations", () => {
         "SELECT recipient_email, idempotency_key, payload_json FROM email_outbox WHERE template_key = 'meeting-occurrence-cancelled'",
       );
       expect(notices.map((row) => row.recipient_email)).toEqual(["cancelled@example.test"]);
+      await expectMeetingEmailClock(notices[0], "meeting-occurrence-cancelled", { startsAt: cancelled.startsAt });
       const calendar = calendarOf(notices[0]);
       expect(calendar.method).toBe("CANCEL");
       expect(calendar.icsFiles[0].content).toContain("METHOD:CANCEL");
@@ -613,6 +663,18 @@ describe("meeting participant invitations", () => {
           "SELECT recipient_email FROM email_outbox WHERE template_key = 'meeting-occurrence-cancelled'",
         ),
       ).toEqual([{ recipient_email: "series-cancel@example.test" }]);
+      const [notice] = await queryAll<OutboxRow>(
+        env.DB,
+        "SELECT recipient_email, idempotency_key, payload_json FROM email_outbox WHERE template_key = 'meeting-occurrence-cancelled'",
+      );
+      const [occurrence] = await queryAll<{ starts_at: string }>(
+        env.DB,
+        "SELECT starts_at FROM event_occurrences WHERE id = ?",
+        occurrenceId,
+      );
+      await expectMeetingEmailClock(notice, "meeting-occurrence-cancelled", {
+        startsAt: occurrence.starts_at,
+      });
       // A stale revision is refused rather than cancelling on top of a change.
       await expect(
         cancelGroupEventSeries(env.DB, admin, GROUP_ID, seriesId, series[0].updated_at, NOTIFY),

@@ -164,7 +164,9 @@ export async function openManual(title = "Enter badge code") {
     Object.defineProperty(dialog, "close", { configurable: true, value: () => dialog.removeAttribute("open") });
     await act(async () =>
       Array.from(host.querySelectorAll("button"))
-        .find((button) => button.textContent?.trim() === "Find attendee or badge")!
+        .find(
+          (button) => (button.getAttribute("aria-label") ?? button.textContent?.trim()) === "Find attendee or badge",
+        )!
         .click(),
     );
     return dialog.querySelector<HTMLInputElement>('input[name="badgeId"]')!;
@@ -179,7 +181,9 @@ export async function openManual(title = "Enter badge code") {
   if (!host.querySelector('.pk-fast-scanner input[name="badgeId"]')) {
     await act(async () =>
       Array.from(host.querySelectorAll("button"))
-        .find((button) => button.textContent?.trim() === "Find attendee or badge")!
+        .find(
+          (button) => (button.getAttribute("aria-label") ?? button.textContent?.trim()) === "Find attendee or badge",
+        )!
         .click(),
     );
   }

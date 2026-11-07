@@ -1,5 +1,15 @@
 /** Only canonical, sanitized print-renderer output belongs in this adapter. */
 export function badgePrintPreviewDocument(html: string): { html: string; css: string } {
+  // Label documents already use stylesheet classes. Avoid constructing and serializing
+  // thousands of pages in a second DOM before the iframe parses the same document.
+  if (!/\sstyle\s*=/i.test(html)) {
+    const rules: string[] = [];
+    const document = html.replace(/<style>([\s\S]*?)<\/style>/gi, (_match, css: string) => {
+      rules.push(css);
+      return "";
+    });
+    return { html: document, css: rules.join("\n") };
+  }
   const fragment = document.createElement("template");
   fragment.innerHTML = html;
   const rules: string[] = [];
@@ -44,7 +54,22 @@ export function badgePreviewFontDescriptors(style: CSSStyleDeclaration): FontFac
 }
 
 export async function waitBadgePrintPreviewImages(frame: HTMLIFrameElement, document: Document): Promise<boolean> {
-  await Promise.all(Array.from(document.images, (image) => image.decode()));
+  const realm = frame.contentWindow as (Window & typeof globalThis) | null;
+  if (!realm) return false;
+  const vectors = [
+    ...new Set(Array.from(document.querySelectorAll("svg image"), (image) => image.getAttribute("href"))),
+  ];
+  await Promise.all([
+    ...Array.from(document.images, (image) => image.decode()),
+    ...vectors
+      .filter((source): source is string => Boolean(source?.startsWith("data:image/")))
+      .map((source) => {
+        const image = new realm.Image();
+        image.src = source;
+        return image.decode();
+      }),
+    document.fonts?.ready,
+  ]);
   return frame.isConnected && frame.contentDocument === document;
 }
 
@@ -60,6 +85,19 @@ export async function applyBadgePrintPreviewStyles(frame: HTMLIFrameElement, css
     throw new Error("This browser cannot display the print preview. Download the HTML print file to preview it.");
   }
   sheet.replaceSync(css);
+  await loadBadgePrintFonts(document, sheet, realm);
+  if (frame.contentDocument !== document || !frame.isConnected) return false;
+  document.adoptedStyleSheets = [sheet];
+  return waitBadgePrintPreviewImages(frame, document);
+}
+
+/** Load embedded fonts explicitly before either previewing or opening native printing. */
+export async function loadBadgePrintFonts(
+  document: Document,
+  sheet: CSSStyleSheet,
+  realm: Window & typeof globalThis,
+  registered: FontFace[] = [],
+) {
   for (let index = sheet.cssRules.length - 1; index >= 0; index--) {
     const rule = sheet.cssRules[index];
     if (rule.type !== CSSRule.FONT_FACE_RULE) continue;
@@ -72,9 +110,7 @@ export async function applyBadgePrintPreviewStyles(frame: HTMLIFrameElement, css
     const font = new realm.FontFace(family, bytes, badgePreviewFontDescriptors(fontRule.style));
     await font.load();
     document.fonts.add(font);
+    registered.push(font);
     sheet.deleteRule(index);
   }
-  if (frame.contentDocument !== document || !frame.isConnected) return false;
-  document.adoptedStyleSheets = [sheet];
-  return waitBadgePrintPreviewImages(frame, document);
 }

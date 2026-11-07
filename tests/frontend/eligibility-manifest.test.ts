@@ -55,6 +55,7 @@ async function fixture() {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 function stubManifestStorage(saved: Map<string, unknown>) {
   const open = vi.fn((name: string) => {
@@ -321,13 +322,27 @@ describe("local scoped eligibility manifest", () => {
       /admission|capacity/i,
     );
   });
-  it("rejects profile fields and lifetimes over fifteen minutes before indexing/persistence", async () => {
+  it("verifies a prepared badge hours offline and expires exactly at the day boundary", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-06T08:00:00.000Z"));
+    const snapshot = await fixture();
+    snapshot.expiresAt = "2026-11-07T00:00:00.000Z";
+    snapshot.validUntil = Date.parse(snapshot.expiresAt);
+    const prepared = buildEligibilityManifest(snapshot);
+    vi.setSystemTime(new Date("2026-11-06T22:00:00.000Z"));
+    expect((await prepared.lookup(badge, "attendance")).outcome).toBe("eligible");
+    vi.setSystemTime(new Date(snapshot.expiresAt));
+    expect((await prepared.lookup(badge, "attendance")).outcome).toBe("unverified");
+  });
+  it("rejects profile fields and lifetimes over the maximum local day before indexing/persistence", async () => {
     const snapshot = await fixture();
     expect(() => buildEligibilityManifest({ ...snapshot, email: "synthetic@example.test" })).toThrow();
     expect(() =>
       buildEligibilityManifest({ ...snapshot, entries: [{ ...snapshot.entries[0], name: "Synthetic attendee" }] }),
     ).toThrow();
-    expect(() => buildEligibilityManifest({ ...snapshot, validUntil: snapshot.writtenAt + 900001 })).toThrow();
+    expect(() =>
+      buildEligibilityManifest({ ...snapshot, validUntil: snapshot.writtenAt + 26 * 60 * 60_000 + 1 }),
+    ).toThrow();
   });
   it("binds downloaded and cached manifests to the enrolled epoch and device", async () => {
     const snapshot = await fixture();
@@ -347,6 +362,18 @@ describe("local scoped eligibility manifest", () => {
     await expect(
       prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled),
     ).resolves.toBeTruthy();
+    fetcher.mockClear();
+    const restored = await prepareEligibilityManifest(
+      "synthetic-event",
+      snapshot.operatorUserId,
+      null,
+      enrolled,
+      undefined,
+      null,
+      "cache",
+    );
+    expect((await restored.lookup(badge, "attendance")).outcome).toBe("eligible");
+    expect(fetcher).not.toHaveBeenCalled();
     fetcher.mockRejectedValueOnce(new Error("Offline"));
     await expect(
       prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, enrolled),

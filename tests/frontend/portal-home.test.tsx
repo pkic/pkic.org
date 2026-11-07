@@ -211,7 +211,10 @@ describe("portal landing", () => {
     expect(meetings?.getAttribute("aria-label")).toBe("Upcoming meetings");
     expect(meetings?.textContent).toContain("Monthly sync");
     expect(meetings?.textContent).toContain("Every other Friday");
-    expect(meetings?.textContent).toContain("Next (your time):");
+    const meetingText = meetings?.textContent ?? "";
+    expect(meetingText).toContain("Your time:");
+    expect(meetingText).toContain("Scheduled:");
+    expect(meetingText.indexOf("Your time:")).toBeLessThan(meetingText.indexOf("Scheduled:"));
     const personalCalendar = panelNamed(container, "Upcoming meetings").querySelector(
       'a[title="Download the full series calendar (.ics)"]',
     );

@@ -5,6 +5,7 @@ import {
   type EventScanResponse,
 } from "../../../../../../../shared/schemas/event-participation-scanning";
 import { drainScanOutbox, pendingScanCount, requestScanOutboxBackgroundSync } from "./scan-outbox";
+import { scannerReceiptMatches } from "./scanner-receipt";
 import { scannerWorkerMessageListener } from "./scanner-worker-messages";
 
 /** Own the page's bounded foreground drain and reconnect/worker wake-up lifecycle. */
@@ -69,6 +70,7 @@ export function useScannerOutboxSync({
     setSyncing(true);
     try {
       if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
+      let uploadFailure = "";
       const drained = await drainScanOutbox(async (record) => {
         const response = await fetch(
           `/api/v1/events/${encodeURIComponent(record.eventId)}/scans${record.kind === "failure" ? "/failures" : ""}`,
@@ -81,9 +83,18 @@ export function useScannerOutboxSync({
           },
         );
         if (response.ok) {
-          const receipt = eventScanResponseSchema.parse(await response.clone().json());
-          if (record.kind === "scan") presentReceipt(receipt);
+          const receipt = eventScanResponseSchema.safeParse(
+            await response
+              .clone()
+              .json()
+              .catch(() => null),
+          );
+          if (receipt.success && scannerReceiptMatches(receipt.data, record.scan)) {
+            if (record.kind === "scan") presentReceipt(receipt.data);
+          } else uploadFailure = "Scan upload was not confirmed. Saved on this device; retrying automatically.";
         }
+        if (!response.ok)
+          uploadFailure = `Scan upload failed (HTTP ${response.status}). Saved on this device; retrying automatically.`;
         return response;
       }, operatorUserId);
       if (drained.state === "authentication_required") {
@@ -108,11 +119,13 @@ export function useScannerOutboxSync({
           ? "A retained scan uses an unsupported capture format. It has not been deleted. Open Diagnostics for recovery."
           : authorityPaused.current
             ? "Sign in again to upload pending scans."
-            : remaining === 0
-              ? "All pending scans uploaded."
-              : drained.state === "retry"
-                ? "Uploads will resume when connected."
-                : "Uploading scans in the background…",
+            : uploadFailure
+              ? uploadFailure
+              : remaining === 0
+                ? "All pending scans uploaded."
+                : drained.state === "retry"
+                  ? "Uploads will resume when connected."
+                  : "Uploading scans in the background…",
       );
     } catch {
       if (isCurrent()) setUploadStatus("Sync unavailable. Scans remain saved on this device; retrying automatically.");

@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2014-02-20T22:30:12+00:00"
-dsq_thread_id:
-- 2295077894
 keywords:
 - google
 - attack

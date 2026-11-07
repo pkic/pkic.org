@@ -267,9 +267,16 @@ export function groupManagementCandidateAuthorizationEvidence(
 export function groupReadCandidateAuthorizationEvidence(
   actor: AuthAdmin,
   groupIdExpression = "g.id",
+  memberSelection?: AuthorizationEvidence,
 ): AuthorizationEvidence {
   const alternatives = ["groups:read", "groups:write"].map((permission) =>
-    groupAuthorizationEvidence(actor, { sql: `SELECT ${groupIdExpression}`, bindings: [] }, permission, "effective"),
+    groupAuthorizationEvidence(
+      actor,
+      { sql: `SELECT ${groupIdExpression}`, bindings: [] },
+      permission,
+      "effective",
+      memberSelection,
+    ),
   );
   return {
     sql: alternatives.map((evidence) => `SELECT 1 FROM (${evidence.sql})`).join(" UNION ALL "),

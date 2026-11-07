@@ -1,5 +1,12 @@
+import {
+  sponsorshipCreateSchema,
+  sponsorshipResponseSchema,
+  sponsorshipStageUpdateSchema,
+} from "../../assets/shared/schemas/sponsorship-management";
+import { logoUploadResponseSchema } from "../../assets/shared/schemas/images";
+import { signInToPortal } from "./helpers/portal-auth";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
@@ -18,7 +25,6 @@ import {
   sessionHistoryCorrectionSchema,
 } from "../../assets/shared/schemas/event-session-history";
 import {
-  promotionArtifactQuerySchema,
   promotionFormatSchema,
   promotionKitSaveSchema,
   promotionKitSchema,
@@ -29,7 +35,6 @@ import {
   organizationCreateResponseSchema,
 } from "../../assets/shared/schemas/organization-management";
 import { eventDetailResponseSchema } from "../../assets/shared/schemas/event-management";
-import { runScheduledWork } from "./helpers/scheduled-work";
 
 const slug = "pqc-conference-amsterdam-nl";
 const agendaApi = `/api/v1/events/${slug}/agenda`;
@@ -52,6 +57,7 @@ function protectedArtifactHeaders(response: APIResponse) {
 
 test("every delivered long-panel promotion export has complete evidence and refuses its stale revision", async ({
   page,
+  browser,
 }, info) => {
   test.setTimeout(360_000);
   await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-preview"));
@@ -72,6 +78,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
   ];
   const people = [];
   for (const [index, name] of names.entries()) {
+    const email = `promotion-${randomUUID()}@example.test`;
     // Use the existing audited staff provisioning API. Immediate activation
     // is explicit; no test grants itself mailbox/domain authority or writes D1.
     const response = await page.request.post("/api/v1/organizations", {
@@ -79,14 +86,39 @@ test("every delivered long-panel promotion export has complete evidence and refu
         name: affiliations[index],
         membershipCategory: "F",
         memberSince: "2026-01-15",
-        identities: [{ name, email: `promotion-${randomUUID()}@example.test`, jobTitle: roles[index] }],
+        identities: [{ name, email, jobTitle: roles[index] }],
         activationReason: "Activate synthetic panel fixtures for reviewed promotion export inspection.",
       }),
     });
     expect(response.status(), await response.text()).toBe(201);
     const organization = organizationCreateResponseSchema.parse(await response.json()).organization;
     expect(organization.identities).toHaveLength(1);
-    people.push({ id: organization.identities[0]!.userId, identityId: organization.identities[0]!.identityId });
+    if (index === 0) {
+      const logo =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="60"><path d="M10 10H70V25H25V50H10ZM90 10H180V25H105V50H90Z" fill="#125c3c"/></svg>';
+      const uploaded = await page.request.put(`/api/v1/organizations/${organization.id}/logo`, {
+        headers: { "content-type": "image/svg+xml" },
+        data: logo,
+      });
+      expect(uploaded.status(), await uploaded.text()).toBe(200);
+      logoUploadResponseSchema.parse(await uploaded.json());
+      const created = await page.request.post("/api/v1/sponsors", {
+        data: sponsorshipCreateSchema.parse({
+          sponsorType: "consortium",
+          organizationId: organization.id,
+          tier: "Diamond",
+          renewalDate: "2027-12-31",
+        }),
+      });
+      expect(created.status(), await created.text()).toBe(201);
+      const sponsor = sponsorshipResponseSchema.parse(await created.json()).sponsorship;
+      const activated = await page.request.patch(`/api/v1/sponsors/${sponsor.id}/stage`, {
+        data: sponsorshipStageUpdateSchema.parse({ toStage: "active" }),
+      });
+      expect(activated.status(), await activated.text()).toBe(200);
+      sponsorshipResponseSchema.parse(await activated.json());
+    }
+    people.push({ id: organization.identities[0]!.userId, identityId: organization.identities[0]!.identityId, email });
   }
   expect(new Set(people.map((person) => person.id)).size).toBe(3);
   let snapshot = agendaSnapshotSchema.parse(await (await page.request.get(agendaApi)).json());
@@ -153,6 +185,8 @@ test("every delivered long-panel promotion export has complete evidence and refu
       "Identify the evidence needed to approve a cryptographic migration without losing certificate lifecycle accountability.",
       "Compare operational boundaries across independent organizations and preserve clear ownership when trust services change.",
       "Choose observable migration and recovery controls that teams can explain, audit and maintain together.",
+      "Agree on supplier readiness evidence and clear accountability before accepting a migration roadmap.",
+      "Remove this optional fifth takeaway from my personal materials.",
     ],
     callToAction: "Register for this event",
     campaign: `export-${randomUUID()}`,
@@ -179,6 +213,16 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await page.goto(
     `/portal/#/groups/${encodeURIComponent(event.ownerGroupId)}/events/${encodeURIComponent(event.id)}/agenda`,
   );
+  for (const [device, width, height] of [
+    ["desktop", 1280, 900],
+    ["phone", 375, 812],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(page.getByRole("tablist", { name: "Agenda views", exact: true })).toBeVisible();
+    await page.getByRole("tablist", { name: "Agenda views", exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`agenda-spacing-${device}.png`) });
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page
     .getByRole("tablist", { name: "Agenda views", exact: true })
     .getByRole("tab", { name: "Schedule", exact: true })
@@ -191,7 +235,17 @@ test("every delivered long-panel promotion export has complete evidence and refu
     .getByRole("row")
     .filter({ has: page.getByText(title, { exact: true }) });
   await runRowAction(page, row, "Speaker promotion kit");
-  await page.getByRole("button", { name: "Prepare kits for all speakers", exact: true }).click();
+  await expect(page).toHaveURL(/promotionSession=/);
+  await page.goBack();
+  await expect(page.getByRole("tablist", { name: "Agenda views", exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByRole("button", { name: "Sharing actions", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Sharing actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Return to agenda", exact: true }).click();
+  await expect(page.getByRole("tablist", { name: "Agenda views", exact: true })).toBeVisible();
+  await runRowAction(page, row, "Speaker promotion kit");
+  await page.getByRole("button", { name: "Sharing actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Prepare kits for all speakers", exact: true }).click();
   const bulk = page.getByRole("dialog", { name: "Prepare speaker promotion kits", exact: true });
   await expect(bulk).toBeVisible();
   await page.goBack();
@@ -200,7 +254,8 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await expect(bulk).toBeVisible();
   await bulk.getByRole("button", { name: "Close bulk promotion preparation", exact: true }).click();
   await expect(bulk).not.toBeVisible();
-  await page.getByRole("button", { name: "Edit shared promotion copy", exact: true }).click();
+  await page.getByRole("button", { name: "Sharing actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit shared promotion copy", exact: true }).click();
   const sharedCopy = page.getByRole("dialog", { name: "Shared promotion copy", exact: true });
   await expect(sharedCopy).toBeVisible();
   await page.goBack();
@@ -209,9 +264,12 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await expect(sharedCopy).toBeVisible();
   await sharedCopy.getByRole("button", { name: "Close shared promotion copy", exact: true }).click();
   await expect(sharedCopy).not.toBeVisible();
-  await page.getByRole("button", { name: "Personalize promotion materials", exact: true }).click();
+  await page.getByRole("button", { name: "Customize tall post", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Personalize promotion materials", exact: true });
   const shortDescription = editor.getByRole("textbox", { name: "Your short description", exact: true });
+  const takeawayInput = editor.getByRole("textbox", { name: "Your key takeaways", exact: true });
+  await expect(takeawayInput).toHaveValue(copy.takeaways.join("\n"));
+  await takeawayInput.fill(copy.takeaways.slice(0, 4).join("\n"));
   const previousDescription = await shortDescription.inputValue();
   await shortDescription.fill("Keep the personal draft through browser Back and Forward.");
   await page.goBack();
@@ -224,7 +282,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
     ["phone", 375, 812],
   ] as const) {
     await page.setViewportSize({ width, height });
-    await editor.getByLabel("Session content", { exact: true }).scrollIntoViewIfNeeded();
+    await takeawayInput.scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath(`promotion-editor-${device}.png`) });
   }
 
@@ -233,10 +291,11 @@ test("every delivered long-panel promotion export has complete evidence and refu
     .check();
   await page.getByRole("button", { name: "Save my materials", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Personalize promotion materials", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Prepare downloads", exact: true }).click();
   const kitResponse = await page.request.get(kitApi);
   expect(kitResponse.status(), await kitResponse.text()).toBe(200);
   const kit = promotionKitSchema.parse(await kitResponse.json());
+  expect(kit.composition?.takeaways).toEqual(copy.takeaways.slice(0, 4));
+  expect(kit.copy.takeaways).toEqual(copy.takeaways);
   expect(kit.publishedRevision).toBe(snapshot.publishedRevision);
   expect(kit.formats).toEqual(promotionFormatSchema.options);
   const registration = new URL(kit.registrationUrl);
@@ -256,74 +315,140 @@ test("every delivered long-panel promotion export has complete evidence and refu
   await mkdir(directory, { recursive: true });
   const records = [];
   const urls = [];
-  const expectedPdfText = [title, ...copy.takeaways, ...names, ...affiliations, ...roles, copy.callToAction];
-  const fetchReady = async (url: string) => {
-    let response = await page.request.get(url);
-    await expect
-      .poll(
-        async () => {
-          if (response.status() === 200) return true;
-          expect(response.status()).toBe(409);
-          expect(["PROMOTION_RENDER_PENDING", "PROMOTION_PREVIEW_PENDING"]).toContain(
-            apiErrorPayloadSchema.parse(await response.json()).error.code,
-          );
-          await runScheduledWork(page);
-          response = await page.request.get(url);
-          return response.status() === 200;
-        },
-        { timeout: 120_000, intervals: [1000, 2000, 5000] },
-      )
-      .toBe(true);
-    return response;
+  const expectedPdfText = [
+    title,
+    ...copy.takeaways.slice(0, 4),
+    ...names,
+    ...affiliations,
+    ...roles,
+    "Our sponsors",
+    "PKI Consortium · Diamond",
+  ];
+  const labels = {
+    portrait: "tall post (JPEG)",
+    square: "square post (JPEG)",
+    landscape: "wide post (JPEG)",
+    carousel: "carousel (PDF)",
   };
-  for (const format of promotionFormatSchema.options) {
-    // Exercise the scheduler through the local runtime trigger; artifact requests remain reads.
-    const probe = promotionArtifactQuerySchema.parse({
-      format,
-      revision: kit.publishedRevision,
-      fingerprint: kit.fingerprint,
-      download: "false",
+  await expect(page.locator(".pk-promotion-tile img")).toHaveCount(4);
+  await expect
+    .poll(() =>
+      page
+        .locator(".pk-promotion-tile img")
+        .evaluateAll((images) =>
+          images.every((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0),
+        ),
+    )
+    .toBe(true);
+  for (const [device, width, height] of [
+    ["desktop", 1280, 900],
+    ["phone", 375, 812],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.locator(".pk-promotion-gallery").scrollIntoViewIfNeeded();
+    const spacing = await page.locator(".pk-agenda-editor").evaluate((editor) => {
+      const section = editor.parentElement!;
+      const tabs = section.previousElementSibling!;
+      return {
+        actual: section.getBoundingClientRect().top - tabs.getBoundingClientRect().bottom,
+        expected: Number.parseFloat(getComputedStyle(section.parentElement!).rowGap),
+      };
     });
-    await fetchReady(`${kitApi}/artifact?${new URLSearchParams({ ...probe, revision: String(probe.revision) })}`);
-    const label = format === "carousel" ? "Carousel PDF" : `${format} images`;
-    const link = page.getByRole("link", { name: label, exact: true });
-    await expect(link).toBeVisible({ timeout: 120_000 });
-    if (format === "carousel") {
-      const completed = page.waitForEvent("download");
-      await link.click();
-      const downloaded = await completed;
-      expect(downloaded.suggestedFilename()).toBe("promotion-carousel.pdf");
-      await downloaded.saveAs(join(directory, "browser-download.pdf"));
+    expect(spacing.expected).toBeGreaterThan(0);
+    expect(spacing.actual).toBeCloseTo(spacing.expected, 0);
+    await page.screenshot({ path: info.outputPath(`promotion-gallery-${device}.png`) });
+    const enlarge = page.getByRole("button", { name: "Enlarge tall post", exact: true });
+    await enlarge.click();
+    await expect(page.getByRole("dialog", { name: "Tall post", exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`promotion-enlarged-${device}.png`) });
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "Tall post", exact: true })).toHaveCount(0);
+    await expect(enlarge).toBeFocused();
+    await page.getByRole("button", { name: "Enlarge carousel", exact: true }).click();
+    const carousel = page.getByRole("dialog", { name: "Carousel", exact: true });
+    const slideNavigation = carousel.getByRole("toolbar", { name: "Slide navigation" });
+    await expect(slideNavigation).toBeVisible();
+    const viewport = carousel.getByRole("region", { name: "Carousel", exact: true });
+    await carousel.getByRole("button", { name: "Next slide", exact: true }).click();
+    await expect(slideNavigation.getByRole("status")).toContainText("2 of");
+    await viewport.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(slideNavigation.getByRole("status")).toContainText("3 of");
+    if (device === "phone") {
+      const touch = await page.context().newCDPSession(page);
+      const box = await viewport.boundingBox();
+      if (!box) throw new Error("Carousel viewport is missing");
+      await touch.send("Input.synthesizeScrollGesture", {
+        x: box.x + box.width * 0.2,
+        y: box.y + box.height / 2,
+        xDistance: box.width * 0.6,
+        yDistance: 0,
+        gestureSourceType: "touch",
+        preventFling: true,
+      });
+      await touch.detach();
+    } else {
+      await viewport.evaluate((element) => element.scrollBy({ left: -element.clientWidth }));
     }
-    const href = await link.getAttribute("href");
-    if (!href) throw new Error("The delivered export requires its real portal link");
-    const artifactUrl = new URL(href, page.url());
-    expect(artifactUrl.searchParams.get("revision")).toBe(String(kit.publishedRevision));
-    expect(artifactUrl.searchParams.get("format")).toBe(format);
-    const response = await fetchReady(href);
-    const responseHeaders = protectedArtifactHeaders(response);
+    await expect(slideNavigation.getByRole("status")).toContainText("2 of");
+    await expect
+      .poll(() => viewport.evaluate((element) => Math.abs(element.scrollLeft - element.clientWidth)))
+      .toBeLessThan(1);
+    await page.screenshot({ path: info.outputPath(`promotion-carousel-${device}.png`) });
+    await viewport.evaluate((element) => element.scrollTo({ left: element.scrollWidth - element.clientWidth }));
+    await expect
+      .poll(() =>
+        viewport.evaluate((element) => Math.abs(element.scrollWidth - element.clientWidth - element.scrollLeft)),
+      )
+      .toBeLessThan(1);
+    const fit = await viewport.evaluate((element) => ({
+      height: element.getBoundingClientRect().height,
+      bodyHeight:
+        element.parentElement!.clientHeight -
+        Number.parseFloat(getComputedStyle(element.parentElement!).paddingTop) -
+        Number.parseFloat(getComputedStyle(element.parentElement!).paddingBottom),
+    }));
+    expect(fit.height).toBeLessThanOrEqual(fit.bodyHeight + 1);
+    await page.screenshot({ path: info.outputPath(`promotion-sponsors-${device}.png`) });
+    await page.keyboard.press("Escape");
+    await expect(carousel).not.toBeVisible();
+  }
+  const kitBeforeDownload = promotionKitSchema.parse(await (await page.request.get(kitApi)).json());
+  expect(kitBeforeDownload.artifacts).toHaveLength(0);
+  for (const format of promotionFormatSchema.options) {
+    const action = page.getByRole("button", { name: `Download ${labels[format]}`, exact: true });
+    await expect(action).toBeEnabled();
+    const completed = page.waitForEvent("download", { timeout: 120_000 });
+    await action.click();
+    const downloaded = await completed;
+    const filename = downloaded.suggestedFilename();
+    expect(filename).toMatch(new RegExp(`^promotion-${format}\\.(pdf|jpg|zip)$`));
+    const file = join(directory, filename);
+    await downloaded.saveAs(file);
+    const contentType = filename.endsWith(".pdf")
+      ? "application/pdf"
+      : filename.endsWith(".zip")
+        ? "application/zip"
+        : "image/jpeg";
     const evidence = await inspectPromotionExport({
       directory: join(directory, format),
       format,
-      contentType: response.headers()["content-type"]!,
-      bytes: await response.body(),
+      contentType,
+      bytes: await readFile(file),
       registrationUrl: kit.registrationUrl,
       expectedPdfText,
+      excludedPdfText: [copy.takeaways[4]!],
     });
-    records.push({
-      url: artifactUrl.href,
-      publishedRevision: kit.publishedRevision,
-      templateVersion: kit.templateVersion,
-      responseHeaders,
-      ...evidence,
-    });
-    urls.push(href);
+    records.push({ publishedRevision: kit.publishedRevision, templateVersion: kit.templateVersion, ...evidence });
+    urls.push(
+      `${kitApi}/artifact?${new URLSearchParams({ format, revision: String(kit.publishedRevision), fingerprint: kit.fingerprint!, representation: "artwork" })}`,
+    );
   }
   expect(records.find((record) => record.format === "landscape")!.pageCount).toBeGreaterThan(1);
   expect(records.find((record) => record.format === "carousel")!.pageCount).toBeGreaterThan(4);
   for (const [device, width, height] of [
     ["desktop", 1280, 900],
-    ["phone", 390, 844],
+    ["phone", 375, 812],
   ] as const) {
     await page.setViewportSize({ width, height });
     await page.evaluate(async () => {
@@ -333,10 +458,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await page.screenshot({ path: join(directory, `kit-${device}.png`), fullPage: true });
   }
-  const previewUrl = new URL(
-    (await page.getByRole("img", { name: "Preview of your promotion materials", exact: true }).getAttribute("src"))!,
-    page.url(),
-  ).href;
+  const previewUrl = urls[0]!;
   const manifest = {
     eventSlug: slug,
     occurrenceId: occurrence.id,
@@ -374,22 +496,15 @@ test("every delivered long-panel promotion export has complete evidence and refu
   expect(fresh.registrationUrl).toBe(kit.registrationUrl);
   expect(fresh.metrics.clicks).toBe(0);
   expect(fresh.metrics.confirmedRegistrations).toBe(0);
-  const freshQuery = promotionArtifactQuerySchema.parse({
-    format: "carousel",
-    revision: fresh.publishedRevision,
-    fingerprint: fresh.fingerprint,
-  });
-  const freshUrl = `${kitApi}/artifact?${new URLSearchParams({ ...freshQuery, revision: String(freshQuery.revision) })}`;
-  const queued = await page.request.post(`${kitApi}/renders`, {
+  const freshUrl = `${kitApi}/artifact`;
+  const freshArtifact = await page.request.post(freshUrl, {
     data: {
       fingerprint: fresh.fingerprint,
       publishedRevision: fresh.publishedRevision,
       compositionRevision: fresh.compositionRevision,
-      formats: ["carousel"],
     },
   });
-  expect(queued.status(), await queued.text()).toBe(200);
-  const freshArtifact = await fetchReady(freshUrl);
+  expect(freshArtifact.status(), await freshArtifact.text()).toBe(200);
   const freshResponseHeaders = protectedArtifactHeaders(freshArtifact);
   const freshEvidence = await inspectPromotionExport({
     directory: join(directory, "fresh-carousel"),
@@ -398,6 +513,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
     bytes: await freshArtifact.body(),
     registrationUrl: fresh.registrationUrl,
     expectedPdfText: [`${title} · revised`, ...expectedPdfText.slice(1)],
+    excludedPdfText: [copy.takeaways[4]!],
   });
   await writeFile(
     join(directory, "stale-refusals.json"),
@@ -419,4 +535,73 @@ test("every delivered long-panel promotion export has complete evidence and refu
       2,
     ),
   );
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("button", { name: "Sharing actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: `Open ${names[0]}’s materials`, exact: true }).click();
+  const participantMaterials = page.getByRole("dialog", { name: "Promotion materials", exact: true });
+  await expect(participantMaterials).toBeVisible();
+  await expect(participantMaterials.locator(".pk-promotion-tile img")).toHaveCount(4);
+  await expect
+    .poll(() =>
+      participantMaterials
+        .locator(".pk-promotion-tile img")
+        .evaluateAll((images) =>
+          images.every((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0),
+        ),
+    )
+    .toBe(true);
+  await expect(participantMaterials.getByRole("button", { name: "Customize tall post", exact: true })).toHaveCount(0);
+  const selectedKitResponse = await page.request.get(`${kitApi}?userId=${people[0]!.id}`);
+  expect(selectedKitResponse.status(), await selectedKitResponse.text()).toBe(200);
+  const selectedKit = promotionKitSchema.parse(await selectedKitResponse.json());
+  expect(selectedKit.registrationUrl).not.toBe(fresh.registrationUrl);
+  const delegatedDownload = page.waitForEvent("download");
+  await participantMaterials.getByRole("button", { name: "Download carousel (PDF)", exact: true }).click();
+  const delegatedPdf = await delegatedDownload;
+  expect(delegatedPdf.suggestedFilename()).toBe("promotion-carousel.pdf");
+  for (const [device, width, height] of [
+    ["desktop", 1280, 900],
+    ["phone", 375, 812],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`organizer-participant-materials-${device}.png`) });
+  }
+  await participantMaterials.getByRole("button", { name: "Close promotion materials", exact: true }).click();
+  await expect(participantMaterials).toHaveCount(0);
+  await page.goBack();
+  await expect(participantMaterials).toBeVisible();
+  await page.goForward();
+  await expect(participantMaterials).toHaveCount(0);
+  const participantContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
+  const participant = await participantContext.newPage();
+  try {
+    await signInToPortal(participant, people[0]!.email);
+    await participant.goto(`/portal/#/events/${slug}/promotion`);
+    await expect(participant.getByRole("heading", { name: "Share", exact: true })).toBeVisible();
+    await expect(participant.locator(".pk-promotion-tile img")).toHaveCount(4);
+    await expect(participant.getByRole("button", { name: "Customize tall post", exact: true })).toBeVisible();
+    const ownResponse = await participant.request.get(kitApi);
+    expect(ownResponse.status(), await ownResponse.text()).toBe(200);
+    const ownKit = promotionKitSchema.parse(await ownResponse.json());
+    expect(ownKit.fingerprint).toBe(selectedKit.fingerprint);
+    await expect
+      .poll(() =>
+        participant
+          .locator(".pk-promotion-tile img")
+          .evaluateAll((images) =>
+            images.every((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0),
+          ),
+      )
+      .toBe(true);
+    for (const [device, width, height] of [
+      ["desktop", 1280, 900],
+      ["phone", 375, 812],
+    ] as const) {
+      await participant.setViewportSize({ width, height });
+      await participant.locator(".pk-promotion-gallery").scrollIntoViewIfNeeded();
+      await participant.screenshot({ path: info.outputPath(`speaker-share-${device}.png`) });
+    }
+  } finally {
+    await participantContext.close();
+  }
 });

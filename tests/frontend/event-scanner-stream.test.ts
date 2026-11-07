@@ -82,3 +82,18 @@ describe("continuous phone badge scanning", () => {
     },
   );
 });
+
+it("confirms recorded attendance independently of an attendance-mode warning", () => {
+  expect(
+    scanFeedbackLabel(
+      {
+        operationId: crypto.randomUUID(),
+        outcome: "warning",
+        reason: "wrong_attendance_mode",
+        recorded: true,
+        attendanceRecorded: true,
+      },
+      "attendance",
+    ),
+  ).toContain("Attendance recorded");
+});

@@ -18,6 +18,16 @@
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
+import { featureTokenGroups } from "../assets/design/tokens.ts";
+
+const generatedTokenSheets = new Set(
+  [
+    "tokens.generated.css",
+    "tokens.public.generated.css",
+    "tokens.template.generated.css",
+    ...Object.keys(featureTokenGroups).map((feature) => `tokens.${feature}.generated.css`),
+  ].map((name) => `assets/design/${name}`),
+);
 
 const root = process.cwd();
 
@@ -118,7 +128,6 @@ const scanned = [
   "assets/ts/components/UserPicker.tsx",
   "assets/ts/components/EnumSelect.tsx",
   "assets/ts/components/FilterSelect.tsx",
-  "assets/js/session-registration.js",
   "assets/js",
   "assets/ts/member-flows/portal/sections/management/GroupStatistics.tsx",
   "assets/ts/member-flows/portal/sections/management/GroupCreateForm.tsx",
@@ -329,13 +338,7 @@ function inspect(file) {
   const rel = relative(root, file);
   // The generated stylesheet is the one place literals are correct: it is the
   // rendered output of the token module, which is where they are defined.
-  const isGeneratedTokens =
-    rel === "assets/design/tokens.generated.css" ||
-    rel === "assets/design/tokens.public.generated.css" ||
-    rel === "assets/design/tokens.agenda.generated.css" ||
-    rel === "assets/design/tokens.scanner.generated.css" ||
-    rel === "assets/design/tokens.event.generated.css" ||
-    rel === "assets/design/tokens.template.generated.css";
+  const isGeneratedTokens = generatedTokenSheets.has(rel);
   const isTokenSource = rel.startsWith("assets/design/") && /\.ts$/.test(rel);
 
   readFileSync(file, "utf8")

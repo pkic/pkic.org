@@ -204,7 +204,7 @@ export function DayAttendanceManager({
     if (targets.length === 0) return;
     const confirmed = await confirmAction({
       title: `Admit ${nameDays(targets)} from the waitlist?`,
-      body: "The attendee receives a place for their selected option on each of these days.",
+      body: "The attendee receives a free place for their selected option on each of these days. This may admit them ahead of people waiting longer; places already offered to someone else are not affected.",
       consequences: ["One registration update email is sent for the change."],
       confirmLabel: "Admit from waitlist",
       tone: "primary",
@@ -215,8 +215,8 @@ export function DayAttendanceManager({
         postJson(
           `${registrationEndpoint}/admissions`,
           {
-            mode: "capacity_exempt",
-            reason: "Event manager approved attendance admission",
+            mode: "within_capacity",
+            reason: "Event manager admitted from the waitlist",
             dayDates: targets.map((day) => day.dayDate),
           },
           eventRegistrationAdmitResponseSchema,

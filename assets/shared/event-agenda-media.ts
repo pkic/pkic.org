@@ -62,3 +62,31 @@ export function agendaOccurrenceRequiredEquipment(occurrence: {
     ? [...new Set(withAgendaMediaCapabilities(equipment, occurrence.plannedMedia))]
     : [...equipment];
 }
+
+/** How long before a session starts its online join opens, so remote viewers are in place for the start. */
+export const ONLINE_JOIN_LEAD_MS = 15 * 60_000;
+
+/**
+ * Whether "Join online" leads to the session itself at `now`: from shortly before it starts until it ends.
+ * Outside that window the location's stream shows another session, so the action is not offered.
+ */
+export function sessionOnlineJoinOpen(
+  startAt: string | null | undefined,
+  endAt: string | null | undefined,
+  now: number,
+): boolean {
+  const start = Date.parse(startAt ?? "");
+  const end = Date.parse(endAt ?? "");
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return false;
+  return now >= start - ONLINE_JOIN_LEAD_MS && now < end;
+}
+
+/** The next instant after `now` at which {@link sessionOnlineJoinOpen} changes, or null when it no longer will. */
+export function nextOnlineJoinBoundary(
+  startAt: string | null | undefined,
+  endAt: string | null | undefined,
+  now: number,
+): number | null {
+  const edges = [Date.parse(startAt ?? "") - ONLINE_JOIN_LEAD_MS, Date.parse(endAt ?? "")];
+  return edges.filter((edge) => Number.isFinite(edge) && edge > now).sort((a, b) => a - b)[0] ?? null;
+}

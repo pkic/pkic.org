@@ -2,8 +2,6 @@
 authors:
 - Wayne Thayer
 date: "2014-07-18T18:20:43+00:00"
-dsq_thread_id:
-- 2854428591
 keywords:
 - microsoft
 - attack

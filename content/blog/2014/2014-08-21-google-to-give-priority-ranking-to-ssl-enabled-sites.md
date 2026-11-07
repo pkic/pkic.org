@@ -2,8 +2,6 @@
 authors:
 - Chris Bailey
 date: "2014-08-21T17:30:22+00:00"
-dsq_thread_id:
-- 2940447125
 keywords:
 - ssl
 - https

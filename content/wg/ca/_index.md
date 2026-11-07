@@ -21,7 +21,6 @@ heroButton:
 
 wgID: CA
 color: green
-sectionNav: true
 
 cascade:
   params:

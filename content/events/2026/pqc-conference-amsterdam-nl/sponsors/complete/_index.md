@@ -1,8 +1,7 @@
 ---
 title: Thank You — Sponsorship Received
 description: Your sponsorship of the Post-Quantum Cryptography Conference Amsterdam 2026 has been received.
-layout: single
-noindex: true
+robots: noindex
 
 ---
 

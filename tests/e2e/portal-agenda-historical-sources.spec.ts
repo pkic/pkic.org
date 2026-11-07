@@ -58,7 +58,7 @@ const sources = [
     name: "Kuala Lumpur 2025",
     key: "kuala-lumpur",
     source: "content/events/2025/pqc-conference-kuala-lumpur-my/_index.md",
-    fileDigest: "57e182eadb0e1f620685143e3db4908a0809bd745ffbcbb9ca4e20ee277a0943",
+    fileDigest: "b5b1140c4bc9ecf7271b3af1cce32f17ded10d3c13f01611df560b0be8cad39a",
     sourceDigest: "617c0613f9fc27e32001e7c03b2fa4ef51a9ee3552704bc28089cf4d47394c3c",
     timezone: "Asia/Kuala_Lumpur",
     first: "2025-10-28",

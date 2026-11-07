@@ -2,8 +2,6 @@
 authors:
 - Wayne Thayer
 date: "2015-04-20T15:15:10+00:00"
-dsq_thread_id:
-- 3692533089
 keywords:
 - announcement
 - google

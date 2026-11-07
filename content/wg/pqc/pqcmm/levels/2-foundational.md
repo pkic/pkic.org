@@ -6,7 +6,6 @@ description: A product at Level 2 has quantum-safe algorithms supported in core 
 summary: Level 2 means PQC is production-ready and standards-compliant. This is the minimum threshold for new production deployments.
 
 weight: 30
-sectionNav: true
 ---
 
 ## What Level 2 Means

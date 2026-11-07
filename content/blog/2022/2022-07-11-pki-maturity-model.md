@@ -4,7 +4,7 @@ summary: The PKI Consortium recently established the PKI Maturity Model Working 
 authors: [Roman Cinkais]
 date: 2022-07-11T08:00:00+00:00
 categories:
-keyword: [pki, maturity, model, assessment, improvement, evaluation, comparison, performance, capability, ability]
+keywords: [pki, maturity, model, assessment, improvement, evaluation, comparison, performance, capability, ability]
 tags: [PKIC, PKIMM, Maturity model]
 
 authorProfiles:

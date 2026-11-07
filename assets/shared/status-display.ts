@@ -78,6 +78,9 @@ const STATUS_TONE = {
   delivery_unknown: "warn",
   failed: "danger",
   bounced: "danger",
+  bouncing: "danger",
+  delayed: "warn",
+  blocked: "danger",
   retrying: "warn",
   // scheduled job runs
   succeeded: "ok",

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { ScannerTaskNavigation, useScannerTaskLaunch } from "./ScannerTaskNavigation";
+import { useContext, useEffect, useRef, useState } from "preact/hooks";
 import type { EligibilityManifest } from "./eligibility-manifest";
 
 /** A task choice waits for its own preparation, never a previous room's cached readiness. */
@@ -22,6 +23,7 @@ export function useScannerAutoStart({
   onStart: () => void;
 }) {
   const [pending, setPending] = useState(false);
+  useScannerTaskLaunch("scan", () => setPending(true));
   const start = useRef(onStart);
   start.current = onStart;
   useEffect(() => {
@@ -38,4 +40,10 @@ export function useScannerAutoStart({
     start.current();
   }, [pending, ready, preparing, manifestReady, manifest, targetId, roomId, error]);
   return { pending, request: () => setPending(true), cancel: () => setPending(false) };
+}
+
+/** Keep the viewport immersive while the newly selected scanner prepares. */
+export function useScannerCaptureActive() {
+  const navigation = useContext(ScannerTaskNavigation);
+  return useState(Boolean(navigation?.launch && navigation.launch !== "print"));
 }

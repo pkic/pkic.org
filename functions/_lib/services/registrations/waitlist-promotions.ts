@@ -1,10 +1,10 @@
 import { eventDayOptionAccessSql } from "../event-participation/session-access";
-import { all, run } from "../../db/queries";
-import { first } from "../../db/queries";
+import { all, first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { listEventDays } from "../event-days";
 import { listDayWaitlistForRegistration } from "./day-waitlist-queries";
+import { prepareLapsedDayOfferRequeue } from "./day-waitlist-policy";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailEvent } from "./status-notifications";
 import { promoteDayWaitlistIfCapacity } from "./day-waitlist";
 import {
@@ -12,6 +12,7 @@ import {
   ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL,
 } from "./day-waitlist-capacity";
 import type { DatabaseLike, StatementLike } from "../../types";
+import { outboxIdForOperation } from "../../email/outbox-queue";
 
 export interface WaitlistPromotionEvent extends RegistrationStatusEmailEvent {
   capacity_in_person?: number | null;
@@ -102,6 +103,9 @@ export async function promoteEventWaitlistWithNotifications(
               offerExpiresAt: promotion.offer_expires_at,
             },
           ];
+          const offerKey =
+            `waitlist-offer:${payload.event.id}:${promotion.registration_id}:` +
+            `${promotion.event_day_id}:${promotion.offer_expires_at}`;
           const email = await prepareRegistrationStatusEmail(db, {
             event: payload.event,
             registrationId: promotion.registration_id,
@@ -109,12 +113,8 @@ export async function promoteEventWaitlistWithNotifications(
             templateKey: "registration_waitlist_offer",
             subject: `A spot is available — ${payload.event.name}`,
             noticeKind: "waitlist_offer",
-            outboxId:
-              `waitlist-offer:${payload.event.id}:${promotion.registration_id}:` +
-              `${promotion.event_day_id}:${promotion.offer_expires_at}`,
-            idempotencyKey:
-              `waitlist-offer:${payload.event.id}:${promotion.registration_id}:` +
-              `${promotion.event_day_id}:${promotion.offer_expires_at}`,
+            outboxId: await outboxIdForOperation(offerKey),
+            idempotencyKey: offerKey,
             dayWaitlist,
           });
           statements.push(email.statement);
@@ -148,14 +148,7 @@ export async function runWaitlistPromotionCycle(
   db: DatabaseLike,
   payload: { appBaseUrl: string; claimWindowHours: number; limit: number },
 ): Promise<WaitlistPromotionCycleResult> {
-  await run(
-    db,
-    `UPDATE event_day_waitlist_entries
-     SET status = 'expired', updated_at = datetime('now')
-     WHERE status = 'offered'
-       AND offer_expires_at IS NOT NULL
-       AND datetime(offer_expires_at) <= datetime('now')`,
-  );
+  await prepareLapsedDayOfferRequeue(db, { now: nowIso() }).run();
 
   const availableCapacitySql = eventAttendanceOptionHasAvailableCapacitySql(
     "ed",

@@ -3,6 +3,32 @@
 @layer tokens {
   :root {
     --pk-grad-state-ok: linear-gradient(135deg, #0b2a1c, color-mix(in oklab, #198754 85%, #000));
-    --pk-grad-state-attention: linear-gradient(135deg, #5b2c0d, color-mix(in oklab, #ed7d31 70%, #000));
+    --pk-scanner-status-stroke: 4px;
+    --pk-scanner-field-dark-green: #0b2a1c;
+    --pk-scanner-field-green: #125c3c;
+    --pk-scanner-field-blue: #20506e;
+    --pk-scanner-field-orange: #b0581f;
+    --pk-scanner-field-entry-green-end: 60%;
+    --pk-scanner-field-entry-blue-start: 80%;
+    --pk-scanner-field-entry-blue-end: 90%;
+    --pk-scanner-field-entry-orange-start: 100%;
+    --pk-scanner-field-exit-green-end: 8%;
+    --pk-scanner-field-exit-blue-start: 18%;
+    --pk-scanner-field-exit-blue-end: 80%;
+    --pk-scanner-field-exit-orange-start: 100%;
+    --pk-scanner-field-session-green-end: 30%;
+    --pk-scanner-field-session-blue-start: 50%;
+    --pk-scanner-field-session-blue-end: 85%;
+    --pk-scanner-field-session-orange-start: 100%;
+    --pk-scanner-field-lead-green-end: 8%;
+    --pk-scanner-field-lead-blue-start: 25%;
+    --pk-scanner-field-lead-blue-end: 45%;
+    --pk-scanner-field-lead-orange-start: 75%;
+    --pk-scanner-field-print-green-end: 5%;
+    --pk-scanner-field-print-blue-start: 15%;
+    --pk-scanner-field-print-blue-end: 20%;
+    --pk-scanner-field-print-orange-start: 40%;
+    --pk-grad-state-warning: linear-gradient(135deg, color-mix(in oklab, #ffc000 28%, #000), color-mix(in oklab, #ffc000 48%, #000));
+    --pk-grad-state-error: linear-gradient(135deg, color-mix(in oklab, #dc3545 38%, #000), color-mix(in oklab, #dc3545 80%, #000));
   }
 }

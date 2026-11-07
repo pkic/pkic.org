@@ -19,12 +19,17 @@ import {
   agendaSnapshotSchema,
 } from "../../../assets/shared/schemas/event-agenda";
 import {
+  registrationConfirmInfoResponseSchema,
   registrationConfirmQuerySchema,
   registrationConfirmResponseSchema,
   registrationConfirmSchema,
   registrationCreateSchema,
   registrationSubmissionResponseSchema,
 } from "../../../assets/shared/schemas/registration";
+import {
+  registrationEmailProofVerifySchema,
+  registrationEmailProofVerifyResponseSchema,
+} from "../../../assets/shared/schemas/registration-email-proof";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
 import { clientIpForIdentity } from "./portal-auth";
 import { publishE2eSite } from "./site-publication";
@@ -109,12 +114,12 @@ export async function createRegistrationEvent(
   });
   expect(registration.status()).toBe(200);
   groupEventRegistrationSettingsResponseSchema.parse(await registration.json());
-  return { slug, eventId: event.id };
+  return { slug, eventId: event.id, ownerGroupId: owner.ownerGroupId };
 }
 
 /** A fresh public event keeps the state journey independent from other agenda tests. */
 export async function prepareParticipationStates(staff: Page) {
-  const { slug, eventId } = await createRegistrationEvent(staff, "participation-states");
+  const { slug, eventId, ownerGroupId } = await createRegistrationEvent(staff, "participation-states");
   const base = `/api/v1/events/${slug}/agenda`;
   let agenda = agendaSnapshotSchema.parse(await (await staff.request.get(base)).json());
   const roomResponse = await staff.request.post(`${base}/rooms`, {
@@ -161,7 +166,7 @@ export async function prepareParticipationStates(staff: Page) {
   expect(agenda.publishedRevision).toBe(agenda.revision);
   if (!agenda.publicAgendaPath) throw new Error("Approved public agenda path missing");
   const release = await publishE2eSite(staff, agenda.publicAgendaPath);
-  return { slug, eventId, base, agenda, room, release, closedAt };
+  return { slug, eventId, ownerGroupId, base, agenda, room, release, closedAt };
 }
 
 /**
@@ -173,7 +178,11 @@ export async function registerStateAttendee(
   page: Page,
   fixture: Awaited<ReturnType<typeof createRegistrationEvent>>,
   email: string,
-  { staticRelease = true, organization }: { staticRelease?: boolean; organization?: string } = {},
+  {
+    staticRelease = true,
+    organization,
+    identityId,
+  }: { staticRelease?: boolean; organization?: string; identityId?: string } = {},
 ) {
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
   const placementResponse = await page.request.get(
@@ -182,7 +191,7 @@ export async function registerStateAttendee(
   expect(placementResponse.status()).toBe(200);
   const placement = eventFormsResponseSchema.parse(await placementResponse.json());
   expect(placement.event.id).toBe(fixture.eventId);
-  expect(placement.eventDays).toHaveLength(1);
+  expect(placement.eventDays.length).toBeGreaterThan(0);
   const answers: z.infer<typeof registrationCreateSchema>["customAnswers"] = {};
   const knownAnswers: Record<string, string> = {
     country: "US",
@@ -195,9 +204,9 @@ export async function registerStateAttendee(
   const submitted = await page.request.post(`/api/v1/events/${fixture.slug}/registrations`, {
     data: registrationCreateSchema.parse({
       email,
+      identityId,
       firstName: "Synthetic",
       lastName: "Attendee",
-      attendanceType: "in_person",
       dayAttendance: placement.eventDays.map((day) => ({ dayDate: day.dayDate, attendanceType: "in_person" })),
       customAnswers: answers,
       consents: placement.requiredTerms.map(({ termKey, version }) => ({ termKey, version })),
@@ -219,8 +228,31 @@ export async function registerStateAttendee(
   } else {
     const query = new URL(confirmationUrl).searchParams;
     const capability = registrationConfirmQuerySchema.parse({ id: query.get("id"), token: query.get("token") });
+    const body = registrationConfirmSchema.parse(capability);
+    if (organization) {
+      const api = `/api/v1/events/${fixture.slug}/registrations`;
+      const info = await page.request.get(`${api}/confirm-info`, { params: capability });
+      expect(info.status()).toBe(200);
+      const { organizationProof } = registrationConfirmInfoResponseSchema.parse(await info.json());
+      if (!organizationProof) throw new Error("The synthetic work address needs its organization proof");
+      const chosen = await page.request.post(`${api}/proof/verify`, {
+        data: registrationEmailProofVerifySchema.parse({
+          token: organizationProof,
+          affiliation: { organizationId: null, organizationName: organization, jobTitle: "Attendee" },
+        }),
+      });
+      expect(chosen.status(), await chosen.text()).toBe(200);
+      const selected = registrationEmailProofVerifyResponseSchema.parse(await chosen.json()).affiliation;
+      if (!selected?.contextToken) throw new Error("The organization selection needs its verified context");
+      body.organization = {
+        name: organization,
+        organizationId: null,
+        jobTitle: "Attendee",
+        contextToken: selected.contextToken,
+      };
+    }
     const confirmed = await page.request.post(`/api/v1/events/${fixture.slug}/registrations/confirm-email`, {
-      data: registrationConfirmSchema.parse(capability),
+      data: registrationConfirmSchema.parse(body),
     });
     expect(confirmed.status(), await confirmed.text()).toBe(200);
     expect(registrationConfirmResponseSchema.parse(await confirmed.json())).toMatchObject({ stage: "confirmed" });

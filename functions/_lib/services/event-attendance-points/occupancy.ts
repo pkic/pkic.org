@@ -1,8 +1,8 @@
 /**
- * Live venue counts per event day from staff badge scans and attendee self
- * check-ins together. Checked in counts everyone with a venue check-in that
+ * Live venue counts per event day from physical venue/session observations and eligible lead scans.
+ * Checked in counts everyone with evidence of physical presence that
  * day; checked out counts those whose latest venue scan is a check-out; on
- * site is the difference. A check-out changes only these counts.
+ * site is the difference. Evidence uses its observation time, regardless of upload order.
  */
 import { dayOccupancy } from "../../../../assets/shared/attendance-points";
 import { eventClockCity } from "../../../../assets/shared/event-clock";

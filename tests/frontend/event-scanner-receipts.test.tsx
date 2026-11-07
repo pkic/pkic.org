@@ -19,10 +19,10 @@ describe("scanner foreground receipt and drain lifecycle", () => {
     }));
     await submit();
     const scan = eventScanCaptureIntentSchema.parse(mocks.persist.mock.calls[0]![0]);
-    await vi.waitFor(() =>
-      expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Use a reader or paste a code"),
-    );
-    expect(host.querySelector(".pk-fast-scanner__last")?.textContent).toContain("scan saved on device");
+    await vi.waitFor(() => expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready for entry"), {
+      timeout: 1500,
+    });
+    expect(host.querySelector(".pk-fast-scanner__trail")?.textContent).toContain("scan saved on device");
     await act(async () => {
       worker.dispatchEvent(
         new MessageEvent("message", {
@@ -36,8 +36,8 @@ describe("scanner foreground receipt and drain lifecycle", () => {
         }),
       );
     });
-    expect(host.querySelector(".pk-fast-scanner__last")?.textContent).toContain("Badge not valid");
-    expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Use a reader or paste a code");
+    expect(host.querySelector(".pk-fast-scanner__trail")?.textContent).toContain("Badge not valid");
+    expect(host.querySelector(".pk-fast-scanner__label")?.textContent).toBe("Ready for entry");
   });
   it.each([false, true])(
     "replaces provisional helper text with a matching foreground receipt (continuous=%s)",
@@ -46,7 +46,10 @@ describe("scanner foreground receipt and drain lifecycle", () => {
       let upload: (() => Promise<Response>) | undefined;
       let captured: EventScanRequest | undefined;
       mocks.persist.mockImplementation(async (scan) => {
-        captured = eventScanRequestSchema.parse(scan);
+        captured = eventScanRequestSchema.parse({
+          ...scan,
+          scannerSession: { epochId: "99999999-9999-4999-8999-999999999999", sequence: 1 },
+        });
         return {
           scan: captured,
           local: {
@@ -70,6 +73,11 @@ describe("scanner foreground receipt and drain lifecycle", () => {
               reason: "verification_required",
               recorded: true,
               attendanceRecorded: false,
+              scannerReceipt: {
+                ...request.scannerSession!,
+                operationId: request.operationId,
+                receivedAt: "2026-11-06T12:00:00.000Z",
+              },
             }),
           ),
           { status: 200 },

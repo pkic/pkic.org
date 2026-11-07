@@ -11,8 +11,10 @@ import { renderToString } from "preact-render-to-string";
 import { EventRegistrationForm } from "../../assets/ts/site/EventRegistrationForm";
 import { registrationCreateSchema } from "../../assets/shared/schemas/registration";
 import {
+  registrationProofPersonPatchSchema,
   registrationEmailProofStartSchema,
   registrationEmailProofVerifyResponseSchema,
+  type RegistrationEmailProofVerifyResponse,
 } from "../../assets/shared/schemas/registration-email-proof";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { chooseCard, controlFor } from "./helpers/labeled-control";
@@ -30,7 +32,9 @@ function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
 
-function installApi(workEmail = false, scheduled = true): Captured[] {
+type SavedPerson = NonNullable<RegistrationEmailProofVerifyResponse["person"]>;
+
+function installApi(workEmail = false, scheduled = true, person: SavedPerson | null = null): Captured[] {
   const requests: Captured[] = [];
   vi.stubGlobal(
     "fetch",
@@ -77,7 +81,7 @@ function installApi(workEmail = false, scheduled = true): Captured[] {
             registrationEmailProofVerifyResponseSchema.parse({
               email: workEmail ? "attendee@example.test" : "ada@gmail.com",
               unaffiliatedAttestation: !workEmail,
-              person: null,
+              person,
               asksOrganization: workEmail,
               affiliation: workEmail
                 ? {
@@ -98,6 +102,10 @@ function installApi(workEmail = false, scheduled = true): Captured[] {
             }),
           ),
         );
+      if (url.pathname === `${REGISTRATIONS}/proof/person`) {
+        const names = registrationProofPersonPatchSchema.parse(JSON.parse(String(init.body)));
+        return Promise.resolve(json({ person: { ...person, firstName: names.firstName, lastName: names.lastName } }));
+      }
       if (url.pathname === REGISTRATIONS)
         return Promise.resolve(
           json({
@@ -142,10 +150,10 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-async function loadPage(workEmail = false, scheduled = true): Promise<Captured[]> {
+async function loadPage(workEmail = false, scheduled = true, person: SavedPerson | null = null): Promise<Captured[]> {
   document.body.innerHTML = renderToString(<EventRegistrationForm />);
   document.querySelector<HTMLElement>("[data-event-registration]")!.dataset.eventSlug = "pqc-2026";
-  const requests = installApi(workEmail, scheduled);
+  const requests = installApi(workEmail, scheduled, person);
   await act(async () => {
     await import("../../assets/ts/event-flows/registration-page");
   });
@@ -161,6 +169,40 @@ describe("registration email-first entry", () => {
     expect(document.querySelector<HTMLInputElement>('input[type="email"]')).toBeNull();
     expect(requests.some((request) => request.path === REGISTRATIONS)).toBe(false);
   });
+
+  it.each([null, "", "saved@example.test"])(
+    "requires saving a corrected existing name (%s) before continuing",
+    async (firstName) => {
+      history.replaceState({}, "", "/events/2026/pqc-2026/register/#verify=synthetic-proof-0123456789abcdefghijklmnop");
+      const requests = await loadPage(false, true, {
+        userId: "00000000-0000-4000-8000-000000000033",
+        firstName,
+        lastName: "Fixture",
+      });
+      expect(document.querySelector('[aria-invalid="true"]')).toBeNull();
+      const next = document.querySelector<HTMLButtonElement>("[data-step-next]")!;
+      await act(() => next.click());
+      await settle();
+      const editor = document.querySelector("dialog")!;
+      const first = controlFor(editor, "First name");
+      expect(first.getAttribute("aria-invalid")).toBe("true");
+      await act(() => {
+        first.value = "Zoë";
+        first.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => button("Save my details").click());
+      await settle();
+      const correction = requests.find((request) => request.path === `${REGISTRATIONS}/proof/person`)!;
+      expect(registrationProofPersonPatchSchema.parse(correction.body)).toMatchObject({
+        firstName: "Zoë",
+        lastName: "Fixture",
+      });
+      expect(document.querySelector<HTMLInputElement>('input[type="hidden"][name="firstName"]')!.value).toBe("Zoë");
+      await act(() => next.click());
+      await settle();
+      expect(document.querySelector<HTMLElement>('[data-step="2"]')!.hidden).toBe(false);
+    },
+  );
 
   it("opens on the email alone and sends a verification link before asking anything else", async () => {
     const requests = await loadPage();

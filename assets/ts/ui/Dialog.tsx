@@ -66,10 +66,12 @@ export interface DialogProps {
   onCancel: () => void;
   /**
    * A viewer — an enlarged picture, a monitor — has nothing to confirm. It
-   * drops the footer and closes through its header control and Escape,
-   * so it needs `closeLabel`.
+   * drops the default footer and closes through its header control and Escape,
+   * so it needs `closeLabel`. Scoped commands can use `footerActions`.
    */
   viewer?: boolean;
+  /** Scoped viewer commands rendered in the shared footer. */
+  footerActions?: ComponentChildren;
   /**
    * `wide` is an editor for a list of things — a sequence of messages, a set
    * of polls — with room for a list beside its detail. It keeps one height
@@ -104,6 +106,7 @@ export function Dialog({
   onConfirm,
   onCancel,
   viewer = false,
+  footerActions,
   size = "default",
   children,
 }: DialogProps) {
@@ -250,7 +253,9 @@ export function Dialog({
         )}
       </div>
 
-      {viewer ? null : (
+      {footerActions ? (
+        <div class="pk-dialog__foot">{footerActions}</div>
+      ) : viewer ? null : (
         <div class="pk-dialog__foot">
           {cancelLabel === null ? null : (
             <Button variant="ghost" onClick={cancel}>

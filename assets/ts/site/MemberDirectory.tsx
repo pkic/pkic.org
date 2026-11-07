@@ -93,7 +93,7 @@ export function DirectoryGrid({ members, prefix }: { members: DirectoryMember[];
   return (
     <div class="members-layout">
       {/* When the rail appears is a property of the rail, so it lives with
-          the rest of its shape in `_members-directory.scss` rather than as a
+          the rest of its shape in `member-directory.css` rather than as a
           responsive display class here. */}
       <nav class="members-az-sidebar" aria-label="Jump to letter">
         {hasNum && (

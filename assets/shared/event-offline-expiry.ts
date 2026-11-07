@@ -1,7 +1,15 @@
 import { instantToDateTimeLocal } from "./timezone";
 
+/** Covers the longest local calendar day, including a daylight-saving fallback. */
+export const SCANNER_OFFLINE_MAXIMUM_MS = 26 * 60 * 60_000;
+export const SCANNER_ELIGIBILITY_REFRESH_MS = 2 * 60_000;
+
 /** Never let event-wide eligibility survive a change of the event's calendar day. */
-export function offlineEligibilityExpiresAt(serverNow: string, timeZone: string, maximumMs = 15 * 60_000): string {
+export function offlineEligibilityExpiresAt(
+  serverNow: string,
+  timeZone: string,
+  maximumMs = SCANNER_OFFLINE_MAXIMUM_MS,
+): string {
   const start = Date.parse(serverNow);
   const day = instantToDateTimeLocal(serverNow, timeZone).slice(0, 10);
   let low = start;

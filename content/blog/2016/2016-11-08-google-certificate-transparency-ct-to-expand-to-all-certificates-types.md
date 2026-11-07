@@ -2,8 +2,6 @@
 authors:
 - Jeremy Rowley
 date: "2016-11-08T17:50:31+00:00"
-dsq_thread_id:
-- 5288911081
 keywords:
 - tls
 - ietf

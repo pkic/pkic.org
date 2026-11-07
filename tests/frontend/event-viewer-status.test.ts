@@ -13,6 +13,7 @@ function participation(overrides: Partial<EventParticipation> = {}): EventPartic
     calendarAvailable: false,
     proposals: 0,
     speakerProposals: 0,
+    speakerSessions: 0,
     proposalStates: [],
     speakerStates: [],
     ...overrides,

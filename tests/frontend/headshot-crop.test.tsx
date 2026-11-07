@@ -1,7 +1,7 @@
 import { render } from "preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HeadshotDialogTemplates } from "../../assets/ts/site/HeadshotDialogTemplates";
-import { cropHeadshot } from "../../assets/ts/shared/headshot/crop";
+import { cropHeadshot, cropImage } from "../../assets/ts/shared/headshot/crop";
 
 const drawImage = vi.fn();
 let dimensions = { width: 1600, height: 800 };
@@ -133,4 +133,39 @@ describe("headshot cropping", () => {
     document.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true }));
     expect(await result).toBeNull();
   });
+});
+
+it.each([
+  [1376, 768],
+  [1672, 941],
+  [1600, 1600],
+])("crops a %i × %i source to 16:9 without stretching", async (width, height) => {
+  dimensions = { width, height };
+  const result = cropImage(new File(["image"], "header.jpg"), {
+    width: 1200,
+    height: 675,
+    title: "Crop event header",
+    confirmLabel: "Use crop",
+  });
+  await vi.waitFor(() => expect(document.querySelector("dialog[open]")).not.toBeNull());
+  const [, , cropWidth, cropHeight] = sourceCrop();
+  expect(cropWidth / cropHeight).toBeCloseTo(16 / 9);
+  expect(cropWidth).toBeGreaterThanOrEqual(1200);
+  expect(document.querySelector("canvas")!.width).toBe(1200);
+  expect(document.querySelector("canvas")!.height).toBe(675);
+  cancel();
+  expect(await result).toBeNull();
+});
+
+it("refuses a source that would require enlarging the crop", async () => {
+  dimensions = { width: 800, height: 800 };
+  await expect(
+    cropImage(new File(["image"], "small.jpg"), {
+      width: 1200,
+      height: 675,
+      title: "Crop event header",
+      confirmLabel: "Use crop",
+    }),
+  ).rejects.toThrow("1200 × 675");
+  expect(document.querySelector("dialog")).toBeNull();
 });

@@ -173,8 +173,8 @@ it.each([401, 403, 503])(
     else expect(mocks.clearPreparation).not.toHaveBeenCalled();
   },
 );
-it.each(["online", "retry", "local-session-change"])(
-  "clears collection before %s refresh or invalidation",
+it.each(["online", "focus", "retry", "local-session-change"])(
+  "keeps offline capture until an authoritative response during %s recovery",
   async (trigger) => {
     fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
     await mount();
@@ -186,13 +186,20 @@ it.each(["online", "retry", "local-session-change"])(
           finish = resolve;
         }),
     );
+    if (trigger === "online" || trigger === "focus") vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
     await act(() => {
-      if (trigger === "online") window.dispatchEvent(new Event("online"));
+      if (trigger === "focus") window.dispatchEvent(new Event("focus"));
+      else if (trigger === "online") window.dispatchEvent(new Event("online"));
       else if (trigger === "retry") host.querySelector("button")!.click();
       else for (const callback of mocks.sessionListeners) callback();
     });
-    await vi.waitFor(() => expect(scannerTransportUnavailable.value).toBe(false));
-    await vi.waitFor(() => expect(host.textContent).not.toContain("Prepared offline scanner"));
+    if (trigger === "online" || trigger === "focus") {
+      expect(scannerTransportUnavailable.value).toBe(true);
+      expect(host.textContent).toContain("Prepared offline scanner");
+    } else {
+      await vi.waitFor(() => expect(scannerTransportUnavailable.value).toBe(false));
+      await vi.waitFor(() => expect(host.textContent).not.toContain("Prepared offline scanner"));
+    }
     expect(portalSession.value).toBeNull();
     if (trigger !== "local-session-change") {
       await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));

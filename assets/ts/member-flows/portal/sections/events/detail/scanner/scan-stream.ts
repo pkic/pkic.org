@@ -82,7 +82,7 @@ export function scanEligibilityLabel(result: EventScanResponse): string {
   if (result.reason === "consent_required") return "Consent required";
   if (result.outcome === "warning") {
     if (result.reason === "wrong_location") return "Known badge · location notice";
-    if (result.reason === "wrong_attendance_mode") return "Known badge · attendance notice";
+    if (result.reason === "wrong_attendance_mode") return "Check registration for this date or attendance mode";
     return result.reason === "missing_registration" ? "Known badge · not registered" : "Known badge · notice";
   }
   return scanOutcomeLabels[result.outcome];
@@ -106,5 +106,6 @@ export function scanFeedbackLabel(result: EventScanResponse | null, action: Even
   }
   if (result.outcome === "denied" && action === "checkout") return "Checkout not recorded";
   if (result.outcome === "unverified") return "Verification pending";
-  return scanEligibilityLabel(result);
+  const eligibility = scanEligibilityLabel(result);
+  return result.attendanceRecorded ? `Attendance recorded · ${eligibility}` : eligibility;
 }

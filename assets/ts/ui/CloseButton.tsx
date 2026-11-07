@@ -21,13 +21,21 @@ export interface CloseButtonProps extends Omit<
   label: CloseLabel;
   /** Sits over an image, so it carries its own contrasting backdrop. */
   overMedia?: boolean;
+  /** Match adjacent filled controls on a colored surface. */
+  variant?: "ghost" | "secondary";
 }
 
-export function CloseButton({ label, overMedia = false, class: className, ...rest }: CloseButtonProps) {
+export function CloseButton({
+  label,
+  overMedia = false,
+  variant = "ghost",
+  class: className,
+  ...rest
+}: CloseButtonProps) {
   return (
     <Button
       {...rest}
-      variant="ghost"
+      variant={variant}
       icon
       class={closeControlClasses(overMedia, className)}
       aria-label={label}

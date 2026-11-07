@@ -2,8 +2,6 @@
 authors:
 - CA Security Council
 date: "2013-03-22T17:19:51+00:00"
-dsq_thread_id:
-- 1939516730
 keywords:
 - casc
 - icann

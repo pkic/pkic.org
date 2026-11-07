@@ -1,0 +1,7 @@
+/* GENERATED FILE — source: assets/design/tokens.ts. */
+@layer legacy, tokens, base, components, utilities;
+@layer tokens {
+  :root {
+    --pk-tour-highlight: #5a9bd5;
+  }
+}

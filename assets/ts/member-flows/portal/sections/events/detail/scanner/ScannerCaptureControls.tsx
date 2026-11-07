@@ -83,9 +83,9 @@ export function ScannerCaptureControls({
   return (
     <>
       {collector ? (
-        <Alert tone="warn" title="Offline · unverified until synced">
+        <Alert tone="info" title="Offline scanning">
           <div class="pk-stack pk-stack--snug">
-            <p>Scans are saved on this device and checked when you reconnect.</p>
+            <p>Badge checks use prepared data. Scans save on this device and upload when connected.</p>
             {onCheckSignIn && (
               <div class="pk-cluster">
                 <Button type="button" variant="secondary" onClick={onCheckSignIn}>
@@ -199,9 +199,9 @@ export function ScannerManualControls({
 
 export function scannerStartMessage(prepared: boolean, offline: boolean, action: EventScanRequest["action"]): string {
   if (action === "lead") return "Ready to capture sponsor leads";
-  return offline
-    ? "Saved offline · not yet verified"
-    : prepared
-      ? "Ready to scan"
-      : "Unverified scanning. Admission requires verification.";
+  return prepared
+    ? "Ready to scan"
+    : offline
+      ? "Prepared badge data is unavailable. Reconnect to refresh."
+      : "Preparing badge checks…";
 }

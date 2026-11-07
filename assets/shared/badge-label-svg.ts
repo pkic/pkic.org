@@ -1,4 +1,6 @@
 import { splitBadgePrintSvg } from "./badge-print-svg";
+import { badgeCredentialSchema, formatBadgeCredential, type BadgeCredential } from "./schemas/badge-credential";
+import { qrModulePath } from "./qr-modules";
 import { BADGE_TEXT_FIT_CHARACTER_EM } from "./badge-template-text-fit";
 import { BROTHER_DK_1208_PAPER, isBrotherDk1208Paper } from "./badge-label-policy";
 import type { badgePrintResponseSchema } from "./schemas/route-contracts-event-badges";
@@ -7,7 +9,7 @@ import type { z } from "zod";
 export type BadgeLabelContent = Pick<
   z.infer<typeof badgePrintResponseSchema>,
   "svg" | "displayName" | "firstName" | "lastName" | "jobTitle" | "organization"
->;
+> & { credential?: BadgeCredential };
 
 function escapeXml(value: string): string {
   return value.replace(
@@ -71,14 +73,23 @@ export function badgeLabelSvg(badge: BadgeLabelContent, widthMm = 90.3, heightMm
   const name = firstName || badge.lastName?.trim() || "Attendee name unavailable";
   const surname = firstName ? (badge.lastName ?? "") : "";
   const qr = parts?.qr ?? badge.svg;
+  const embedded = badgeCredentialSchema.safeParse(parts?.code);
+  const credential = badgeCredentialSchema.safeParse(badge.credential ?? parts?.code);
+  if (credential.success && embedded.success && credential.data !== embedded.data)
+    throw new Error("The label and QR code do not match. Reload the attendee data.");
+  // Canonical short codes can draw their modules directly: no nested SVG image decoding per copy.
+  const vector = credential.success ? qrModulePath(credential.data) : null;
+  const qrArtwork = vector
+    ? `<svg x="57.5" y="1.5" width="30" height="30" viewBox="0 0 ${vector.size} ${vector.size}"><path fill="#000" d="${vector.path}"/></svg>`
+    : `<image x="57.5" y="1.5" width="30" height="30" href="data:image/svg+xml;charset=utf-8,${escapeXml(encodeURIComponent(qr))}"/>`;
   const first = textBand(name, 1.5, textWidth, 11, 9.2, true);
   const last = textBand(surname, 12.5, textWidth, 8, 6.2);
   const job = textBand(badge.jobTitle ?? "", 24, textWidth, 5.2, 3.2, true);
   const organizationTop = job.svg ? job.endY + 0.7 : 24;
   const organization = textBand(badge.organization ?? "", organizationTop, textWidth, 36 - organizationTop, 3.1);
   const text = first.svg + last.svg + job.svg + organization.svg;
-  const code = parts
-    ? `<text x="72.5" y="35" text-anchor="middle" font-family="monospace" font-size="2.85">${escapeXml(parts.code)}</text>`
+  const code = credential.success
+    ? `<text x="72.5" y="35" text-anchor="middle" font-family="monospace" font-size="2.85">${formatBadgeCredential(credential.data)}</text>`
     : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}mm" height="${heightMm}mm" viewBox="0 0 ${widthMm} ${heightMm}" role="img" aria-label="${escapeXml(badge.displayName ?? name)}"><rect width="${widthMm}" height="${heightMm}" fill="#fff"/><g transform="${transform}" fill="#000" font-family="Arial,Helvetica,sans-serif">${text}<image x="57.5" y="1.5" width="30" height="30" href="data:image/svg+xml;charset=utf-8,${escapeXml(encodeURIComponent(qr))}"/>${code}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}mm" height="${heightMm}mm" viewBox="0 0 ${widthMm} ${heightMm}" role="img" aria-label="${escapeXml(badge.displayName ?? name)}"><rect width="${widthMm}" height="${heightMm}" fill="#fff"/><g transform="${transform}" fill="#000" font-family="Arial,Helvetica,sans-serif">${text}${qrArtwork}${code}</g></svg>`;
 }

@@ -86,7 +86,7 @@ export function CollectionCard({
   actions,
 }: CollectionCardProps) {
   return (
-    <article class={`pk-collection-card${cover?.class ? ` ${cover.class}` : ""}`}>
+    <CollectionCardSurface class={cover?.class}>
       <div class={`pk-collection-card__media${imageSrc ? "" : " pk-collection-card__media--cover"}`}>
         {imageSrc ? (
           <img src={imageSrc} alt="" loading="lazy" decoding="async" width="600" height="240" />
@@ -109,13 +109,8 @@ export function CollectionCard({
           </div>
         )}
       </div>
-      {(fact || actions) && (
-        <div class="pk-collection-card__footer" data-density="compact">
-          <span class="pk-collection-card__fact">{fact}</span>
-          {actions && <span class="pk-collection-card__actions">{actions}</span>}
-        </div>
-      )}
-    </article>
+      <CollectionCardFooter fact={fact} actions={actions} />
+    </CollectionCardSurface>
   );
 }
 
@@ -147,4 +142,20 @@ export function CollectionStatusLine({ items }: { items: readonly CollectionStat
       ))}
     </span>
   );
+}
+
+/** Shared card footer: identifying detail first, scoped controls at the end. */
+export function CollectionCardFooter({ fact, actions }: { fact?: ComponentChildren; actions?: ComponentChildren }) {
+  if (!fact && !actions) return null;
+  return (
+    <div class="pk-collection-card__footer" data-density="compact">
+      <span class="pk-collection-card__fact">{fact}</span>
+      {actions && <span class="pk-collection-card__actions">{actions}</span>}
+    </div>
+  );
+}
+
+/** Shared surface for collection records and interactive media previews. */
+export function CollectionCardSurface({ children, class: className }: { children: ComponentChildren; class?: string }) {
+  return <article class={["pk-collection-card", className].filter(Boolean).join(" ")}>{children}</article>;
 }

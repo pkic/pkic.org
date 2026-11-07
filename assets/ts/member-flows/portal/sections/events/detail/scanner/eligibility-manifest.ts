@@ -1,3 +1,4 @@
+import { SCANNER_OFFLINE_MAXIMUM_MS } from "../../../../../../../shared/event-offline-expiry";
 import { readActiveUserSession } from "../../../../../../shared/pending-user-logout";
 import type { NativeEventCaptureContext } from "../../../../../../../shared/schemas/event-attendance-capture";
 import { scannerUploadSuspended } from "../../../../../../shared/pending-user-logout";
@@ -21,8 +22,8 @@ const cachedManifestSchema = offlineEligibilityResponseSchema
   })
   .strict()
   .refine(
-    (value) => value.validUntil >= value.writtenAt && value.validUntil - value.writtenAt <= 15 * 60 * 1000,
-    "Eligibility snapshot lifetime must not exceed 15 minutes",
+    (value) => value.validUntil >= value.writtenAt && value.validUntil - value.writtenAt <= SCANNER_OFFLINE_MAXIMUM_MS,
+    "Eligibility snapshot lifetime must not exceed one local calendar day",
   );
 type CachedManifest = z.infer<typeof cachedManifestSchema>;
 export type LocalEligibility = Pick<EventScanResponse, "outcome" | "reason"> & { message: string; userId?: string };
@@ -239,6 +240,7 @@ export async function prepareEligibilityManifest(
   enrollment: { epochId: string; deviceId: string },
   signal?: AbortSignal,
   roomId: string | null = null,
+  source: "refresh" | "cache" = "refresh",
 ): Promise<EligibilityManifest> {
   const session = await readActiveUserSession();
   const sessionId = session?.sessionId;
@@ -252,6 +254,20 @@ export async function prepareEligibilityManifest(
   } catch {
     // An unavailable cache must not prevent an authorized network refresh.
   }
+  const restore = (error: unknown = new Error("No matching prepared eligibility snapshot")) => {
+    const saved = cachedManifestSchema.safeParse(fallback);
+    if (
+      !saved.success ||
+      saved.data.operatorUserId !== operatorUserId ||
+      saved.data.epochId !== enrollment.epochId ||
+      saved.data.deviceId !== enrollment.deviceId ||
+      saved.data.occurrenceId !== occurrenceId ||
+      (saved.data.roomId ?? null) !== roomId
+    )
+      throw error;
+    return buildEligibilityManifest(saved.data);
+  };
+  if (source === "cache") return restore();
   try {
     let cursor: string | null = null;
     let snapshot: CachedManifest | undefined;
@@ -300,7 +316,10 @@ export async function prepareEligibilityManifest(
           validUntil: Math.max(
             now,
             requestedAt +
-              Math.min(15 * 60 * 1000, Math.max(0, Date.parse(page.expiresAt) - Date.parse(page.serverNow))),
+              Math.min(
+                SCANNER_OFFLINE_MAXIMUM_MS,
+                Math.max(0, Date.parse(page.expiresAt) - Date.parse(page.serverNow)),
+              ),
           ),
         };
       } else snapshot.entries.push(...page.entries);
@@ -328,16 +347,6 @@ export async function prepareEligibilityManifest(
       throw error;
     if (await scannerUploadSuspended(operatorUserId, sessionId))
       throw new Error("SCANNER_SIGNED_OUT", { cause: error });
-    const saved = cachedManifestSchema.safeParse(fallback);
-    if (
-      !saved.success ||
-      saved.data.operatorUserId !== operatorUserId ||
-      saved.data.epochId !== enrollment.epochId ||
-      saved.data.deviceId !== enrollment.deviceId ||
-      saved.data.occurrenceId !== occurrenceId ||
-      (saved.data.roomId ?? null) !== roomId
-    )
-      throw error;
-    return buildEligibilityManifest(saved.data);
+    return restore(error);
   }
 }

@@ -2,8 +2,6 @@
 authors:
 - Bruce Morton
 date: "2014-01-06T20:00:12+00:00"
-dsq_thread_id:
-- 2095825837
 keywords:
 - code signing
 - https
