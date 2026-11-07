@@ -61,10 +61,14 @@ describe("fresh remote migration orchestration", () => {
     try {
       apply("production");
       expect(execute.mock.calls[0][1]).toContain("list");
-      const lastGuardedMigration = "0039_event_promotion_kits.sql";
+      const lastGuardedMigration = "0041_incorrect_representation_group_erasure.sql";
       expect(imported).toEqual(migrationNames.filter((name) => name <= lastGuardedMigration));
       expect(normallyApplied).toEqual(migrationNames.filter((name) => name > lastGuardedMigration));
       expect(imported).toContain("0038_event_agenda_platform.sql");
+      expect(db.prepare("SELECT count(*) AS count FROM group_membership_erasures").get()).toEqual({ count: 0 });
+      const importedBeforeRetry = imported.length;
+      apply("production");
+      expect(imported).toHaveLength(importedBeforeRetry);
       expect(db.prepare("SELECT name FROM d1_migrations ORDER BY name").all()).toEqual(
         migrationNames.map((name) => ({ name })),
       );
