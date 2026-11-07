@@ -1,3 +1,5 @@
+import { lazy, Suspense } from "preact/compat";
+import { useDialogQueryState } from "../../../../../hooks/useDialogQueryState";
 import { eventPlaceSummary } from "../../../../../../shared/event-place";
 import { JoinPrompt } from "../../JoinPrompt";
 /**
@@ -11,7 +13,7 @@ import { JoinPrompt } from "../../JoinPrompt";
 import { Badge } from "../../../../../components/Badge";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../components/Spinner";
-import { ButtonLink } from "../../../../../ui/Button";
+import { Button, ButtonLink } from "../../../../../ui/Button";
 import { agendaTimeZones } from "../../../../../../shared/agenda-time-display";
 import { contractClock, eventClock } from "../../../../../../shared/event-clock";
 import {
@@ -44,6 +46,11 @@ import { PersonalAddressPrompt } from "../../../../../components/events/Personal
 import { CheckInCard } from "./CheckInCard";
 
 const href = usePortalHashLocation.hrefs;
+const InviteColleagueDialog = lazy(() =>
+  import("../../../../../components/event-invites/RegistrationInviteForm").then((module) => ({
+    default: module.InviteColleagueDialog,
+  })),
+);
 
 const SESSION_STATUS_LABELS = {
   saved: "Saved",
@@ -153,12 +160,20 @@ function LiveNowCard({ slug, sessions }: { slug: string; sessions: readonly Agen
   );
 }
 
-function TicketCard({ event, ended }: { event: ParticipantEventDetail; ended: boolean }) {
+export function TicketCard({
+  event,
+  ended,
+  showEnded = false,
+}: {
+  event: ParticipantEventDetail;
+  ended: boolean;
+  showEnded?: boolean;
+}) {
   const standing = eventRegistrationStanding(event);
   const base = `/events/${encodeURIComponent(event.slug)}`;
   if (!standing.registered) {
     // The hero already says an event has ended; there is nothing left to register for.
-    if (ended) return null;
+    if (ended && !showEnded) return null;
     const offer = registrationOffer(event, ended);
     return (
       <EventCard
@@ -232,6 +247,7 @@ function ProposalsCard({ event }: { event: ParticipantEventDetail }) {
 export function EventHome({ event }: { event: ParticipantEventDetail }) {
   const phase = eventPhase(event.startsAt, event.endsAt);
   const ended = phase.kind === "ended";
+  const [inviting, showInvitation, closeInvitation] = useDialogQueryState("inviteColleague");
   const current =
     (phase.kind === "live" || phase.kind === "upcoming") && eventRegistrationStanding(event).status === "registered";
   const now = useEventNow(event.slug, current);
@@ -260,6 +276,19 @@ export function EventHome({ event }: { event: ParticipantEventDetail }) {
         ))}
       <TicketCard event={event} ended={ended} />
       <ProposalsCard event={event} />
+      {!ended && eventRegistrationStanding(event).status === "registered" && (
+        <EventCard eyebrow="Invitations" title="Bring a colleague">
+          <p>Know someone who would benefit from this event?</p>
+          <div class="pk-cluster">
+            <Button onClick={showInvitation}>Invite a colleague</Button>
+          </div>
+        </EventCard>
+      )}
+      {inviting && !ended && eventRegistrationStanding(event).status === "registered" && (
+        <Suspense fallback={<Spinner label="Loading invitation form…" />}>
+          <InviteColleagueDialog eventSlug={event.slug} onClose={() => void closeInvitation()} />
+        </Suspense>
+      )}
       <SupportCard source={`event:${event.slug}`} />
       <JoinPrompt />
     </div>

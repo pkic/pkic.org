@@ -208,7 +208,7 @@ describe("portal-wide bottom tabs", () => {
 describe("event bottom tabs", () => {
   it("shows an attendee's tabs, opens More as a sheet, and files pages without a tab under More", async () => {
     await act(() => render(<ParticipantEvent event={event(registered)} tab="more" />, host));
-    expect(tabLabels("Event app")).toEqual(["Home", "Agenda", "My agenda", "Ticket", "More"]);
+    expect(tabLabels("Event app")).toEqual(["Home", "Agenda", "Registration", "Ticket", "More"]);
     const bar = host.querySelector('nav[aria-label="Event app"]')!;
     // More opens the sheet; on a page without a tab it is the current one.
     const more = bar.querySelector<HTMLButtonElement>('button[data-app-tab="more"]')!;
@@ -216,7 +216,9 @@ describe("event bottom tabs", () => {
     expect(more.getAttribute("aria-haspopup")).toBe("dialog");
     // Agenda stays in the app: the whole program, and the same view pre-filtered to the reader's sessions.
     expect(bar.querySelector('[data-app-tab="program"]')?.getAttribute("href")).toBe("#/events/summit/agenda");
-    expect(bar.querySelector('[data-app-tab="agenda"]')?.getAttribute("href")).toBe("#/events/summit/agenda?mine=1");
+    expect(host.querySelector('[data-event-more="agenda"]')?.getAttribute("href")).toBe(
+      "#/events/summit/agenda?mine=1",
+    );
     expect(bar.querySelector('[data-app-tab="ticket"]')?.getAttribute("href")).toBe("#/events/summit/ticket");
     // Each tab has a decorative glyph over its label; the label stays the accessible name.
     for (const tab of bar.querySelectorAll("a, button"))
@@ -233,8 +235,8 @@ describe("event bottom tabs", () => {
     expect(host.querySelector('[data-event-more="promotion"]')?.getAttribute("href")).toBe("#/events/summit/promotion");
     // The desktop tabs remain the page's one "Event" navigation.
     expect(host.querySelectorAll('nav[aria-label="Event"]')).toHaveLength(1);
-    expect(host.querySelector('[data-event-more="registration"]')?.getAttribute("href")).toBe(
-      `#/events/summit/registrations/${registrationId}`,
+    expect(bar.querySelector('[data-app-tab="registration"]')?.getAttribute("href")).toBe(
+      "#/events/summit/registration",
     );
     expect(host.querySelector('[data-event-more="scanner"]')).toBeNull();
     expect(host.querySelector('[data-event-more="proposals"]')).toBeNull();
@@ -242,6 +244,28 @@ describe("event bottom tabs", () => {
 });
 
 describe("event home", () => {
+  it("offers the registration destination and its existing card to a reader without a registration", async () => {
+    await act(() => render(<ParticipantEvent event={event()} tab="registration" />, host));
+    expect(host.querySelector('nav[aria-label="Event"] a[href="#/events/summit/registration"]')).not.toBeNull();
+    expect(host.querySelector('nav[aria-label="Event app"] a[href="#/events/summit/registration"]')).not.toBeNull();
+    expect(host.querySelector(".pk-event-card")?.textContent).toContain("You're not registered yet");
+    expect(host.querySelector('.pk-event-card a[href="#/events/summit/register/"]')).not.toBeNull();
+  });
+
+  it("explains closed registration on the registration destination", async () => {
+    await act(() =>
+      render(
+        <ParticipantEvent
+          event={event({ registrationPolicy: "invitation_only", registrationPath: null })}
+          tab="registration"
+        />,
+        host,
+      ),
+    );
+    expect(host.querySelector(".pk-event-card")?.textContent).toContain("by invitation only");
+    expect(host.querySelector('.pk-event-card a[href="#/events/summit/register/"]')).toBeNull();
+  });
+
   it("opens with the event hero and offers registration to a reader who is not registered", async () => {
     await act(() => render(<ParticipantEvent event={event()} />, host));
     expect(host.querySelector(".pk-event-hero__title")?.textContent).toBe("Summit");
@@ -310,7 +334,7 @@ describe("event home", () => {
       ),
     );
     expect(host.querySelector(".pk-event-hero__status")?.textContent).toBe("Ended");
-    expect(host.textContent).not.toContain("Registration");
+    expect(host.querySelector(".pk-event-home")?.textContent).not.toContain("Not registered");
     expect(host.textContent).not.toContain("has ended");
   });
 
@@ -486,7 +510,7 @@ describe("event home", () => {
 describe("event app agenda and pages", () => {
   it.each([
     ["/events/summit/agenda", "Agenda", "program"],
-    ["/events/summit/agenda?mine=1", "My agenda", "agenda"],
+    ["/events/summit/agenda?mine=1", "My agenda", "more"],
   ])("opens %s as the %s tab under the persistent event hero", async (location, title, tab) => {
     currentLocation.value = location;
     await act(() => render(<ParticipantEvent event={event(registered)} tab="agenda" />, host));

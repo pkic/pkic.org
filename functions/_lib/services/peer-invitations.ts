@@ -1,12 +1,11 @@
 import type { z } from "zod";
+import { getUserSessionToken } from "../auth/user-session-token";
 import type { registrationInviteCreateSchema } from "../../../assets/shared/schemas/registration";
-import { getBearerToken } from "../auth/session-engine";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import { getConfig, resolveAppBaseUrl } from "../config";
-import { requireInternalSecret } from "../request";
 import { buildEventEmailVariables, getEventBySlug } from "./events";
-import { getRegistrationByManageToken } from "./registrations";
+import { resolvePeerInvitationAuthority } from "./peer-invitation-authority";
 import { bulkCreateInvites } from "./invite-bulk";
 import { countInvitesByInviter } from "./invites";
 import { createReferralCode } from "./referrals";
@@ -72,20 +71,16 @@ export async function createPeerInvitations(
   body: PeerInviteBody,
   inviteType: "attendee" | "speaker",
 ): Promise<PeerInviteCreationResult> {
-  const manageToken = getBearerToken(request);
-  if (!manageToken) throw new AppError(401, "AUTH_REQUIRED", "Registration manage token required");
+  if (!getUserSessionToken(request)) throw new AppError(401, "AUTH_REQUIRED", "Sign in to invite a colleague");
   const event = await getEventBySlug(env.DB, eventSlug);
-  const registration = await getRegistrationByManageToken(env.DB, manageToken, requireInternalSecret(env));
-  if (registration.event_id !== event.id) {
-    throw new AppError(403, "EVENT_MISMATCH", "Token is not valid for this event");
-  }
+  const { registration, db } = await resolvePeerInvitationAuthority(env, request, event.id);
 
   const config = getConfig(env, request);
   const maxAllowed =
     inviteType === "attendee"
       ? (event.invite_limit_attendee ?? config.inviteLimitPerAttendee)
       : (event.invite_limit_speaker_nomination ?? config.inviteLimitSpeakerNomination);
-  const currentCount = await countInvitesByInviter(env.DB, event.id, registration.user_id, inviteType);
+  const currentCount = await countInvitesByInviter(db, event.id, registration.user_id, inviteType);
   if (currentCount + body.invites.length > maxAllowed) {
     throw new AppError(
       429,
@@ -99,7 +94,7 @@ export async function createPeerInvitations(
     last_name: string | null;
     organization_name: string | null;
   }>(
-    env.DB,
+    db,
     `SELECT u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name
        FROM registrations r JOIN users u ON u.id = r.user_id
       WHERE r.id = ?`,
@@ -109,10 +104,16 @@ export async function createPeerInvitations(
   const appBaseUrl = resolveAppBaseUrl(env, request);
   const referralCode =
     inviteType === "attendee"
-      ? await registrationReferralCode(env, event.id, registration.id, registration.user_id, config.referralCodeLength)
+      ? await registrationReferralCode(
+          { ...env, DB: db },
+          event.id,
+          registration.id,
+          registration.user_id,
+          config.referralCodeLength,
+        )
       : undefined;
 
-  const outcomes = await bulkCreateInvites(env.DB, inviteType, {
+  const outcomes = await bulkCreateInvites(db, inviteType, {
     event,
     expiresAt: body.expiresAt,
     inviter: { userId: registration.user_id, registrationId: registration.id },

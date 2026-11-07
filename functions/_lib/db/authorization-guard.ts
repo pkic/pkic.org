@@ -57,9 +57,17 @@ export function guardAuthorizedDatabase(
   db: DatabaseLike,
   evidence: AuthorizationEvidence,
   authorizationChangedError: () => Error,
+  options: { preserveNestedGuardFailures?: boolean } = {},
 ): DatabaseLike {
   return guardDatabaseBatches(db, (statements, readOnly) =>
-    executeAuthorizedDatabaseBatch(db, evidence, statements, readOnly, authorizationChangedError),
+    executeAuthorizedDatabaseBatch(
+      db,
+      evidence,
+      statements,
+      readOnly,
+      authorizationChangedError,
+      options.preserveNestedGuardFailures,
+    ),
   );
 }
 
@@ -70,6 +78,7 @@ export async function executeAuthorizedDatabaseBatch(
   statements: StatementLike[],
   readOnly: boolean,
   authorizationChangedError: () => Error,
+  preserveNestedGuardFailures = false,
 ) {
   try {
     // Owner-approved (2026-10-21): replica lag in permission/session revocation
@@ -82,7 +91,18 @@ export async function executeAuthorizedDatabaseBatch(
     if (readOnly && authorization?.results?.[0]?.authorized !== 1) throw authorizationChangedError();
     return results;
   } catch (error) {
-    if (isAuthorizationGuardFailure(error)) throw authorizationChangedError();
+    if (isAuthorizationGuardFailure(error)) {
+      if (preserveNestedGuardFailures) {
+        // A nested business guard may have refused the batch while this
+        // caller's authority remains valid. Preserve that refusal for its owner.
+        const own = await db
+          .prepare(`SELECT EXISTS (${evidence.sql}) AS authorized`)
+          .bind(...evidence.bindings)
+          .first<{ authorized: number }>();
+        if (own?.authorized === 1) throw error;
+      }
+      throw authorizationChangedError();
+    }
     throw error;
   }
 }

@@ -17,12 +17,15 @@ import type { EventFormsResponse } from "../shared/types";
 import { IconClock } from "../ui/MediaIcons";
 import { AttendanceIcon } from "./AttendanceIcon";
 import type { FieldControlProps } from "../ui/Field";
+import type { RegistrationManageReadResponse } from "../../shared/schemas/registration";
 
 type EventDay = EventFormsResponse["eventDays"][number];
 type AttendanceOptionRead = EventDay["attendanceOptions"][number];
+type DayWaitlistStatus = RegistrationManageReadResponse["dayWaitlist"][number]["status"];
 
 /** The value a controlled picker reports for "not attending this day". */
 export const NOT_ATTENDING = "";
+export const ATTENDANCE_EDIT_LABEL = "Change attendance";
 
 /** What choosing a full option means: a badge on the option, and a line under the day once it is chosen. */
 export const ATTENDANCE_WAITLIST_COPY = {
@@ -36,6 +39,10 @@ interface DayAttendancePickerProps {
   lowCapacityThreshold?: number;
   value?: Readonly<Record<string, string>>;
   onChange?: (dayDate: string, attendanceType: string) => void;
+  readOnly?: boolean;
+  /** Opens the existing editor without applying the clicked attendance choice. */
+  onEdit?: () => void;
+  waitlist?: Readonly<Record<string, DayWaitlistStatus>>;
 }
 
 type MatrixRow = { option: AttendanceOptionRead } | { day: EventDay };
@@ -60,6 +67,8 @@ function MatrixCell({
   threshold,
   invalid,
   onSelect,
+  readOnly,
+  waitlistStatus,
 }: {
   day: EventDay;
   row: AttendanceOptionRead;
@@ -68,6 +77,8 @@ function MatrixCell({
   threshold: number;
   invalid?: boolean | "true" | "false" | "grammar" | "spelling";
   onSelect: () => void;
+  readOnly: boolean;
+  waitlistStatus?: DayWaitlistStatus;
 }) {
   const option = row.value === NOT_ATTENDING ? row : day.attendanceOptions.find((option) => option.value === row.value);
   if (!option)
@@ -83,44 +94,68 @@ function MatrixCell({
       </span>
     );
   const waiting = full(option);
+  const status = selected && readOnly ? waitlistStatus : undefined;
+  const statusLabel =
+    status === "waiting"
+      ? "On the waiting list"
+      : status === "offered"
+        ? "Place offered"
+        : status === "expired"
+          ? "Offer expired"
+          : null;
   const limited =
     !waiting && threshold > 0 && option.spotsRemainingPercent != null && option.spotsRemainingPercent <= threshold;
   return (
-    <div class="pk-attendance-matrix__cell" data-selected={selected || undefined} data-waitlist={waiting || undefined}>
-      <Radio
-        class="pk-attendance-matrix__choice"
-        id={`${id}-${day.dayDate}-${option.value ? `method-${option.value}` : "not-attending"}`}
-        name={`dayAttendance.${day.dayDate}`}
-        value={option.value}
-        data-day-label={day.label?.trim() || day.dayDate}
-        data-option-label={option.label}
-        data-waitlist={waiting ? "" : undefined}
-        checked={selected}
-        aria-invalid={invalid}
-        onChange={onSelect}
-        aria-describedby={waiting ? `${id}-waitlist-${day.dayDate}-${option.value}` : undefined}
-        label={
-          <>
-            <span class="pk-sr-only">
-              {option.label} — {day.label?.trim() || day.dayDate}
-              {waiting ? " — joins waitlist" : ""}
-            </span>
-            {waiting && (
-              <>
-                <span class="pk-attendance-matrix__full-marker" aria-hidden="true">
-                  <IconClock width="12" height="12" />
-                </span>
-              </>
-            )}
-            {limited && (
-              <span class="pk-attendance-matrix__limited" aria-label="Limited spots remaining">
-                Few left
+    <div
+      class="pk-attendance-matrix__cell"
+      data-selected={selected || undefined}
+      data-waitlist={(readOnly ? status === "waiting" || status === "expired" : waiting) || undefined}
+    >
+      {readOnly ? (
+        <span
+          class="pk-attendance-matrix__readonly"
+          role="img"
+          aria-label={`${option.label} — ${day.label?.trim() || day.dayDate}: ${selected ? (statusLabel ?? "Selected") : "Not selected"}`}
+        >
+          <span class="pk-attendance-matrix__indicator" data-selected={selected || undefined} aria-hidden="true" />
+          {statusLabel && <span class="pk-attendance-matrix__status">{statusLabel}</span>}
+        </span>
+      ) : (
+        <Radio
+          class="pk-attendance-matrix__choice"
+          id={`${id}-${day.dayDate}-${option.value ? `method-${option.value}` : "not-attending"}`}
+          name={`dayAttendance.${day.dayDate}`}
+          value={option.value}
+          data-day-label={day.label?.trim() || day.dayDate}
+          data-option-label={option.label}
+          data-waitlist={waiting ? "" : undefined}
+          checked={selected}
+          aria-invalid={invalid}
+          onChange={onSelect}
+          aria-describedby={waiting ? `${id}-waitlist-${day.dayDate}-${option.value}` : undefined}
+          label={
+            <>
+              <span class="pk-sr-only">
+                {option.label} — {day.label?.trim() || day.dayDate}
+                {waiting ? " — joins waitlist" : ""}
               </span>
-            )}
-          </>
-        }
-      />
-      {waiting && (
+              {waiting && (
+                <>
+                  <span class="pk-attendance-matrix__full-marker" aria-hidden="true">
+                    <IconClock width="12" height="12" />
+                  </span>
+                </>
+              )}
+              {limited && (
+                <span class="pk-attendance-matrix__limited" aria-label="Limited spots remaining">
+                  Few left
+                </span>
+              )}
+            </>
+          }
+        />
+      )}
+      {waiting && !readOnly && (
         <span class="pk-sr-only" id={`${id}-waitlist-${day.dayDate}-${option.value}`}>
           {ATTENDANCE_WAITLIST_COPY.line(option.label)}
         </span>
@@ -136,6 +171,9 @@ export function DayAttendancePicker({
   lowCapacityThreshold = 0,
   value,
   onChange,
+  readOnly = false,
+  onEdit,
+  waitlist = {},
 }: DayAttendancePickerProps) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
@@ -156,7 +194,9 @@ export function DayAttendancePicker({
       day.attendanceOptions.some((candidate) => candidate.value === option.value && full(candidate)),
     );
   const waiting = days.filter((day) =>
-    day.attendanceOptions.some((option) => option.value === selected[day.dayDate] && full(option)),
+    readOnly
+      ? waitlist[day.dayDate] === "waiting"
+      : day.attendanceOptions.some((option) => option.value === selected[day.dayDate] && full(option)),
   );
   const hasUnavailable = days.some((day) =>
     options.some(
@@ -183,11 +223,13 @@ export function DayAttendancePicker({
     <MatrixCell
       day={day}
       row={option}
-      selected={selected[day.dayDate] === option.value}
+      selected={(selected[day.dayDate] ?? (readOnly ? NOT_ATTENDING : undefined)) === option.value}
       id={id}
       threshold={lowCapacityThreshold}
       invalid={control?.["aria-invalid"]}
       onSelect={() => select(day, option)}
+      readOnly={readOnly}
+      waitlistStatus={waitlist[day.dayDate]}
     />
   );
   const columns: DataTableColumn<MatrixRow>[] = transposed
@@ -201,7 +243,12 @@ export function DayAttendancePicker({
         ...options.map((option): DataTableColumn<MatrixRow> => ({
           id: `method:${option.value}`,
           header: option.label,
-          headerContent: (
+          headerContent: readOnly ? (
+            <span class="pk-attendance-matrix__mode-button">
+              <AttendanceIcon type={option.value} icon={option.icon} />
+              {option.label}
+            </span>
+          ) : (
             <Button
               variant="ghost"
               class="pk-attendance-matrix__mode-button"
@@ -270,11 +317,13 @@ export function DayAttendancePicker({
       aria-describedby={control?.["aria-describedby"]}
       tabIndex={control?.["aria-invalid"] ? -1 : undefined}
     >
-      <p class="pk-small">
-        {transposed
-          ? "Pick one option per day. Tap a mode’s column header to use it for every available day."
-          : "Pick one option per day. Click an option’s name to use it for every available day."}
-      </p>
+      {!readOnly && (
+        <p class="pk-small">
+          {transposed
+            ? "Pick one option per day. Tap a mode’s column header to use it for every available day."
+            : "Pick one option per day. Click an option’s name to use it for every available day."}
+        </p>
+      )}
       <DataTable
         caption="Attendance by day"
         narrowLayout="columns"
@@ -282,15 +331,19 @@ export function DayAttendancePicker({
         rows={transposed ? days.map((day) => ({ day })) : options.map((option) => ({ option }))}
         rowKey={(row) => ("day" in row ? `day:${row.day.dayDate}` : `method:${row.option.value}`)}
         rowAction={
-          transposed
-            ? undefined
-            : (row) =>
-                "option" in row
-                  ? {
-                      label: `Choose ${row.option.label} for every available day`,
-                      onSelect: () => selectEveryDay(row.option),
-                    }
-                  : undefined
+          readOnly
+            ? onEdit
+              ? () => ({ label: ATTENDANCE_EDIT_LABEL, title: ATTENDANCE_EDIT_LABEL, onSelect: onEdit })
+              : undefined
+            : transposed
+              ? undefined
+              : (row) =>
+                  "option" in row
+                    ? {
+                        label: `Choose ${row.option.label} for every available day`,
+                        onSelect: () => selectEveryDay(row.option),
+                      }
+                    : undefined
         }
       />
       {(hasFull || hasUnavailable) && (
@@ -315,7 +368,9 @@ export function DayAttendancePicker({
                 )}`
           }
         >
-          We’ll email you when a seat opens.
+          {readOnly
+            ? "You are on the waiting list. We’ll email you when a place is available."
+            : "We’ll email you when a seat opens."}
           {waiting.every(
             (day) =>
               selected[day.dayDate] === "in_person" &&

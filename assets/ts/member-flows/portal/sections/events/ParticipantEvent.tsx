@@ -28,7 +28,8 @@ import { ParticipantEventNavigation, ParticipantLeadScanner } from "./Participan
 import { Alert } from "../../../../ui/Alert";
 import { usePortalHashLocation } from "../../hash-location";
 import { portalHashParam } from "../../hash-route";
-import { EventAppHero, EventHome } from "./app/EventHome";
+import { EventAppHero, EventHome, TicketCard } from "./app/EventHome";
+import { eventPhase } from "./app/event-timing";
 import { SectionHeading } from "../../../../ui/SectionHeading";
 import { EventTicket } from "./app/EventTicket";
 import { EventMore } from "./app/EventMore";
@@ -100,29 +101,26 @@ export function ParticipantEvent({
   const registrationId = event.participation?.registrationId;
   const hasProposals = hasEventProposals(event);
   const active =
-    kind === "registration"
+    kind === "registration" || tab === "registration" || tab === "register"
       ? "registration"
       : kind === "proposal" || tab === "submissions"
         ? "proposals"
-        : tab === "register"
-          ? "register"
-          : tab === "agenda"
-            ? mine
-              ? "agenda"
-              : "program"
-            : tab === "promotion"
-              ? "promotion"
-              : tab === "lead-scanner"
-                ? "lead-scanner"
-                : tab === "session-management"
-                  ? "session-management"
-                  : (tab === "ticket" && !ticketless) || tab === "more" || tab === "virtual" || tab === "check-in"
-                    ? tab
-                    : "overview";
+        : tab === "agenda"
+          ? mine
+            ? "agenda"
+            : "program"
+          : tab === "promotion"
+            ? "promotion"
+            : tab === "lead-scanner"
+              ? "lead-scanner"
+              : tab === "session-management"
+                ? "session-management"
+                : (tab === "ticket" && !ticketless) || tab === "more" || tab === "virtual" || tab === "check-in"
+                  ? tab
+                  : "overview";
   const tabs = [
     { id: "overview", label: "Overview", href: href(base) },
     { id: "program", label: "Agenda", href: href(eventAgendaRoute(event.slug)) },
-    ...(tab === "register" ? [{ id: "register", label: "Register", href: href(base + "/register/") }] : []),
     ...(eventRegistrationStanding(event).status === "registered"
       ? [{ id: "agenda", label: "My agenda", href: href(eventAgendaRoute(event.slug, { mine: true })) }]
       : []),
@@ -132,15 +130,11 @@ export function ParticipantEvent({
           { id: "virtual", label: "Virtual room", href: href(eventVirtualRoomRoute(event.slug)) },
         ]
       : []),
-    ...(registrationId
-      ? [
-          {
-            id: "registration",
-            label: "Registration",
-            href: href(eventParticipantRecordPath(event.slug, "registration", registrationId)),
-          },
-        ]
-      : []),
+    {
+      id: "registration",
+      label: "Registration",
+      href: href(base + "/registration"),
+    },
     ...(hasEventPromotionMaterials(event)
       ? [{ id: "promotion", label: "Share", href: href(base + "/promotion") }]
       : []),
@@ -163,7 +157,7 @@ export function ParticipantEvent({
     <>
       <EventAppHero event={event} />
       {navigation}
-      {active !== "overview" && active !== "register" && (
+      {active !== "overview" && tab !== "register" && (
         <SectionHeading level={3} class={kind === "proposal" ? undefined : "pk-participant-event__page-title"}>
           {kind === "proposal" ? (recordTitle ?? "Proposal") : (PAGE_LABELS[active] ?? "Proposals")}
         </SectionHeading>
@@ -186,6 +180,14 @@ export function ParticipantEvent({
         <Suspense fallback={<Spinner label="Loading registration…" />}>
           <EventRegister event={event} onRegistered={onRegistered} />
         </Suspense>
+      ) : tab === "registration" ? (
+        registrationId ? (
+          <ParticipantRegistration registrationId={registrationId} eventId={event.id} slug={event.slug} />
+        ) : (
+          <div class="pk-event-home pk-grid pk-grid--cards">
+            <TicketCard event={event} ended={eventPhase(event.startsAt, event.endsAt).kind === "ended"} showEnded />
+          </div>
+        )
       ) : tab === "agenda" ? (
         <Suspense fallback={<Spinner />}>
           <MyAgenda
@@ -259,9 +261,9 @@ function ParticipantProposals({ event }: { event: EventDetail }) {
             <a href={href(eventParticipantRecordPath(event.slug, "proposal", proposal.id))}>{proposal.title}</a>
           ),
         },
-        { header: "Proposal status", cell: (proposal) => <Badge status={proposal.status} /> },
+        { header: "Status", cell: (proposal) => <Badge status={proposal.status} /> },
         {
-          header: "Your participation",
+          header: "Participation",
           cell: (proposal) =>
             proposal.speakerStatus === "confirmed" ? (
               <PlainStatus status={proposal.speakerStatus} />
@@ -271,7 +273,7 @@ function ParticipantProposals({ event }: { event: EventDetail }) {
               "—"
             ),
         },
-        { header: "Your role", cell: (proposal) => (proposal.role === "submitter" ? "Submitter" : "Speaker") },
+        { header: "Role", cell: (proposal) => (proposal.role === "submitter" ? "Submitter" : "Speaker") },
       ]}
     />
   );

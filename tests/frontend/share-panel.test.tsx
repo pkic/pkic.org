@@ -6,6 +6,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { registrationInviteCreateSchema } from "../../assets/shared/schemas/registration";
 import { renderSharePanel, refreshSharePanelBadge } from "../../assets/ts/shared/widgets/share-panel";
+import { InviteColleagueDialog } from "../../assets/ts/components/event-invites/RegistrationInviteForm";
 import { controlFor } from "./helpers/labeled-control";
 
 const SHARE_URL = "https://pkic.test/r/AbC123";
@@ -103,10 +104,8 @@ function button(container: HTMLElement, text: string): HTMLButtonElement {
   return found;
 }
 
-function labeledInput(container: HTMLElement, ariaLabel: string): HTMLInputElement {
-  const input = container.querySelector<HTMLInputElement>(`[aria-label="${ariaLabel}"]`);
-  if (!input) throw new Error(`No control named "${ariaLabel}"`);
-  return input;
+function labeledInput(container: HTMLElement, label: string): HTMLInputElement {
+  return controlFor(container, label);
 }
 
 async function click(target: HTMLElement): Promise<void> {
@@ -133,6 +132,35 @@ afterEach(() => {
     container.remove();
   }
   vi.unstubAllGlobals();
+});
+
+describe("colleague invitation dialog", () => {
+  it("reuses the invitation form, validates before sending, and queues only on explicit send", async () => {
+    const requests = installApi();
+    const closed = vi.fn();
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    await act(() => render(<InviteColleagueDialog eventSlug="pki-summit" onClose={closed} />, container));
+    const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.querySelector("form")?.noValidate).toBe(true);
+    expect(requests).toHaveLength(0);
+    await click(button(dialog, "Send invites"));
+    expect(requests).toHaveLength(0);
+    expect(labeledInput(dialog, "Invite 1 email address").getAttribute("aria-invalid")).toBe("true");
+    await typeInto(labeledInput(dialog, "Invite 1 first name (optional)"), "Alice");
+    await typeInto(labeledInput(dialog, "Invite 1 email address"), "alice@example.com");
+    await click(button(dialog, "Send invites"));
+    expect(requests).toHaveLength(1);
+    expect(requests[0].authorization).toBeNull();
+    expect(registrationInviteCreateSchema.parse(requests[0].body).invites).toEqual([
+      { firstName: "Alice", email: "alice@example.com" },
+    ]);
+    expect(dialog.textContent).toContain("Queued 1 invitation.");
+    await click(button(dialog, "Done"));
+    expect(closed).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("share panel", () => {
@@ -225,9 +253,7 @@ describe("share panel", () => {
     expect(body.invites).toEqual([{ email: "alice@example.com", firstName: "Alice" }]);
 
     const announced = Array.from(container.querySelectorAll('[role="status"], [role="alert"]'));
-    expect(
-      announced.some((node) => node.textContent === "Sent 1 invitation. They'll receive a registration link shortly."),
-    ).toBe(true);
+    expect(announced.some((node) => node.textContent === "Queued 1 invitation.")).toBe(true);
   });
 
   it("reports a rejected send in an alert and keeps the typed rows", async () => {
@@ -251,7 +277,7 @@ describe("share panel", () => {
     await click(button(container, "Invite by email"));
     await click(button(container, "Send invites"));
 
-    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Please enter at least one email address.");
+    expect(labeledInput(container, "Invite 1 email address").getAttribute("aria-invalid")).toBe("true");
     expect(requests).toHaveLength(0);
   });
 

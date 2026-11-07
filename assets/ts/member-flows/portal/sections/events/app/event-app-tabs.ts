@@ -17,7 +17,6 @@ import { usePortalHashLocation } from "../../../hash-location";
 import type { AppTab } from "../../../shell/AppTabBar";
 import type { PortalSession } from "../../../types";
 import { canOpenGroupWorkspace } from "../event-destination";
-import { eventParticipantRecordPath } from "../event-participant-paths";
 import { eventRegistrationStanding, eventVenueLines, type ParticipantEventDetail } from "./event-app-model";
 import { participantScannerAccess } from "./participant-scanner-access";
 import { eventPhase } from "./event-timing";
@@ -134,13 +133,12 @@ export function eventAppDestinations(event: EventAppSubject, session: PortalSess
       ),
       icon: "leads",
     });
-  if (standing.registrationId)
-    destinations.push({
-      id: "registration",
-      label: "Registration",
-      href: href(eventParticipantRecordPath(event.slug, "registration", standing.registrationId)),
-      icon: "registration",
-    });
+  destinations.push({
+    id: "registration",
+    label: "Registration",
+    href: href(base + "/registration"),
+    icon: "registration",
+  });
   // Every registered attendee may watch the live streams; the room itself says when none is on.
   if (standing.registered)
     destinations.push({
@@ -188,15 +186,14 @@ export interface EventAppNavigation {
  * At most five bottom tabs: Home and Agenda; then the reader's most pressing
  * job — the badge scanner for this event's own staff, otherwise the lead
  * scanner for a sponsor's representative, otherwise check-in for an
- * attendee on an event day, otherwise My agenda; then the
- * ticket for a registered reader, or My agenda when the scanner took its
- * place; then More. Whatever loses its tab stays one swipe away in More.
+ * attendee on an event day; Registration remains visible for everyone.
+ * Ticket takes the remaining place when no scanner is needed.
  */
 export function eventAppNavigation(event: EventAppSubject, session: PortalSession | null): EventAppNavigation {
   const destinations = eventAppDestinations(event, session);
   const find = (id: string) => destinations.find((destination) => destination.id === id);
-  const primary = find("scanner") ?? find("lead-scanner") ?? find("check-in") ?? find("agenda");
-  const secondary = find("ticket") ?? (primary?.id === "agenda" ? undefined : find("agenda"));
+  const primary = find("scanner") ?? find("lead-scanner") ?? find("check-in") ?? find("registration");
+  const secondary = primary?.id === "registration" ? find("ticket") : find("registration");
   const promoted = [primary, secondary].filter((destination): destination is EventAppDestination =>
     Boolean(destination),
   );

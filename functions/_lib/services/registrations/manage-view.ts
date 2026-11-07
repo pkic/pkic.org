@@ -1,4 +1,4 @@
-import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
+import { REGISTRATION_DISPLAY_ORGANIZATION_SQL, REGISTRATION_DISPLAY_JOB_TITLE_SQL } from "./selected-identity";
 import { batchFirst, batchRows } from "../../db/pagination";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
@@ -59,7 +59,7 @@ export async function buildRegistrationManageView(
     db
       .prepare(
         `SELECT u.id, u.email, u.first_name, u.last_name, ${verifiedAddressesJsonSql("u.id")} AS verified_addresses,
-             ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title, u.headshot_r2_key
+             ${REGISTRATION_DISPLAY_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_DISPLAY_JOB_TITLE_SQL} AS job_title, u.headshot_r2_key
              FROM registrations r JOIN users u ON u.id = r.user_id
               WHERE r.id = ?`,
       )
@@ -126,6 +126,6 @@ export async function buildRegistrationManageView(
     dayAttendance,
     dayWaitlist,
     waitlistHandledLast: !holdsWorkAddress(parseVerifiedAddresses(user.verified_addresses)),
-    pendingOrganizationName: user.organization_name ? null : (pendingOrganizationName ?? null),
+    pendingOrganizationName: registration.registration_identity_id ? null : (pendingOrganizationName ?? null),
   });
 }

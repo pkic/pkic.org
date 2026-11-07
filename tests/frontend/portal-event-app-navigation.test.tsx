@@ -10,12 +10,7 @@ import {
 } from "../../assets/ts/member-flows/portal/sections/events/app/event-app-tabs";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
-import {
-  participantEventFixture,
-  participantEventId,
-  participantRegistrationId,
-  registeredParticipant,
-} from "../helpers/participant-event";
+import { participantEventFixture, participantEventId, registeredParticipant } from "../helpers/participant-event";
 
 vi.mock("wouter", () => ({
   Link: ({ children, href, ...props }: JSX.HTMLAttributes<HTMLAnchorElement> & { href: string }) => (
@@ -74,14 +69,12 @@ afterEach(() => {
 });
 
 describe("event app tab selection", () => {
-  it("gives a registered attendee My agenda and Ticket, and keeps everything else under More", () => {
+  it("gives a registered attendee Registration and Ticket, and keeps My agenda under More", () => {
     const { tabs, more } = navigation(registeredParticipant);
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "My agenda", "Ticket"]);
-    expect(ids(more)).toEqual(["registration", "virtual", "calendar", "promotion", "venue", "event-page"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Registration", "Ticket"]);
+    expect(ids(more)).toEqual(["agenda", "virtual", "calendar", "promotion", "venue", "event-page"]);
     expect(more.find((item) => item.id === "virtual")?.href).toBe("#/events/summit/virtual");
-    expect(more.find((item) => item.id === "registration")?.href).toBe(
-      `#/events/summit/registrations/${participantRegistrationId}`,
-    );
+    expect(tabs.find((item) => item.id === "registration")?.href).toBe("#/events/summit/registration");
     expect(more.find((item) => item.id === "calendar")?.href).toBe("#/events/summit/agenda?mine=1&view=calendar");
   });
 
@@ -103,10 +96,10 @@ describe("event app tab selection", () => {
       endsAt: new Date(Date.now() + 3_600_000).toISOString(),
     };
     const { tabs, more } = navigation({ ...registeredParticipant, ...running });
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "Scan", "Ticket"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Scan", "Registration"]);
     expect(tabs.find((tab) => tab.id === "check-in")?.href).toBe("#/events/summit/check-in");
     expect(ids(more)).toContain("agenda");
-    expect(labels(navigation(running).tabs)).toEqual(["Home", "Agenda"]);
+    expect(labels(navigation(running).tabs)).toEqual(["Home", "Agenda", "Registration"]);
     // Someone joining online has no code to scan.
     const online = {
       ...registeredParticipant.viewer,
@@ -115,14 +108,15 @@ describe("event app tab selection", () => {
     expect(labels(navigation({ ...registeredParticipant, ...running, viewer: online }).tabs)).toEqual([
       "Home",
       "Agenda",
-      "My agenda",
+      "Registration",
       "Ticket",
     ]);
   });
 
   it("gives a reader without a registration no Ticket tab", () => {
     const { tabs, more } = navigation({ city: null, country: null });
-    expect(labels(tabs)).toEqual(["Home", "Agenda"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Registration"]);
+    expect(tabs.find((tab) => tab.id === "registration")?.href).toBe("#/events/summit/registration");
     // Nothing about the venue to show, so no venue tile either.
     expect(ids(more)).toEqual(["event-page"]);
   });
@@ -130,7 +124,7 @@ describe("event app tab selection", () => {
   it("puts the lead scanner on a sponsor representative's bar and moves My agenda to More", () => {
     authority([leadGrant]);
     const { tabs, more } = navigation({ ...registeredParticipant, scannerAccess: sponsorDiscovery });
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "Leads", "Ticket"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Leads", "Registration"]);
     expect(tabs.find((tab) => tab.id === "lead-scanner")?.href).toBe(`#/events/summit/sponsors/${sponsorId}/scanner`);
     expect(tabs.find((tab) => tab.id === "lead-scanner")?.icon).toBe("leads");
     expect(ids(more)).toContain("agenda");
@@ -146,7 +140,7 @@ describe("event app tab selection", () => {
       },
     });
     // Personal agenda and calendar tools require a confirmed event registration.
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "Leads"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Leads", "Registration"]);
     expect(tabs.find((tab) => tab.id === "lead-scanner")?.href).toBe("#/events/summit/lead-scanner");
   });
 
@@ -156,17 +150,16 @@ describe("event app tab selection", () => {
       ...registeredParticipant,
       scannerAccess: { ...sponsorDiscovery, canScan: true },
     });
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "Scan", "Ticket"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Scan", "Registration"]);
     expect(tabs.find((tab) => tab.id === "scanner")?.href).toBe("#/events/summit/scanner");
     expect(tabs.find((tab) => tab.id === "scanner")?.icon).toBe("scan");
-    expect(ids(more).slice(0, 2)).toEqual(["agenda", "lead-scanner"]);
-    expect(labels(more).slice(0, 2)).toEqual(["My agenda", "Lead scanner"]);
+    expect(ids(more)).toEqual(expect.arrayContaining(["agenda", "lead-scanner", "ticket"]));
   });
 
   it("offers no scanner from discovery alone or from another event's grant", () => {
     authority([{ ...badgeGrant, contextId: groupId }]);
     const { tabs, more } = navigation({ scannerAccess: { ...sponsorDiscovery, canScan: true } });
-    expect(labels(tabs)).toEqual(["Home", "Agenda"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Registration"]);
     expect(ids(more)).not.toContain("scanner");
     expect(ids(more)).not.toContain("lead-scanner");
   });
@@ -193,7 +186,7 @@ describe("event app tab selection", () => {
     expect(eventAppTabFor("scanner", tabs)).toBe("scanner");
     expect(eventAppTabFor("lead-scanner", tabs)).toBe("more");
     expect(eventAppTabFor("overview", tabs)).toBe("home");
-    expect(eventAppTabFor("registration", tabs)).toBe("more");
+    expect(eventAppTabFor("registration", tabs)).toBe("registration");
   });
 });
 
@@ -221,7 +214,7 @@ describe("event app More sheet", () => {
     expect(document.getElementById(sheet.getAttribute("aria-labelledby")!)?.textContent).toBe("More");
     const tiles = [...sheet.querySelectorAll<HTMLAnchorElement>("[data-event-more]")];
     expect(tiles.map((tile) => tile.textContent)).toEqual([
-      "Registration",
+      "My agenda",
       "Virtual room",
       "Calendar and reminders",
       "Share",
@@ -252,7 +245,7 @@ describe("event app More sheet", () => {
     });
     expect(sheet.open).toBe(false);
     await act(() => more.click());
-    await act(() => sheet.querySelector<HTMLAnchorElement>('[data-event-more="registration"]')!.click());
+    await act(() => sheet.querySelector<HTMLAnchorElement>('[data-event-more="agenda"]')!.click());
     expect(sheet.open).toBe(false);
   });
 
@@ -311,7 +304,7 @@ describe("event app More sheet", () => {
       "Home",
       "Agenda",
       "Leads",
-      "Ticket",
+      "Registration",
       "More",
     ]);
     await act(() => bar.querySelector<HTMLButtonElement>('[data-app-tab="more"]')!.click());
