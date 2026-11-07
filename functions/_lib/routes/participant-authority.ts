@@ -4,6 +4,9 @@ import { requireIdentityFromRequest } from "../auth/user-session";
 import { requestDb, type AdminContext } from "../db/context";
 import type { ParticipantAuthority } from "../services/participant-authority";
 
+/** Request facilities used by both signed-in participants and capability-link guests. */
+export type ParticipantContext = Pick<AdminContext, "env" | "req" | "executionCtx" | "var" | "get" | "set">;
+
 /** Shared handlers accept either a verified session identity or the public link parameter. */
 export type ParticipantRouteData<Schema extends { request: { params: z.ZodObject } }> = Omit<
   ValidatedData<Schema>,

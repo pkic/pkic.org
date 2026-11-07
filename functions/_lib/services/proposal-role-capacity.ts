@@ -43,10 +43,7 @@ export function participantRoleForProposalRole(role: ProposalSpeakerRole): Propo
 // An unanswered invitation and a late response awaiting review retain the same reservation.
 // Confirmation controls agenda credit; only a decline removes existing participation.
 export function proposalParticipantStatus(proposalStatus: string, speakerStatus: string): "active" | "inactive" {
-  return proposalStatus === "accepted" &&
-    (speakerStatus === "confirmed" || speakerStatus === "invited" || speakerStatus === "pending")
-    ? "active"
-    : "inactive";
+  return proposalStatus === "accepted" && speakerStatus !== "declined" ? "active" : "inactive";
 }
 
 async function listProposalRoleSourcesAfterChange(
@@ -196,8 +193,7 @@ export async function prepareProposalRoleCapacityForProposalStatus(
   ];
   const sharedCapacityGuards: EventDayCapacityGuardPlan = new Map();
   for (const speaker of speakers) {
-    const active =
-      payload.nextStatus === "active" && proposalParticipantStatus("accepted", speaker.status) === "active";
+    const active = payload.nextStatus === "active" && speaker.status !== "declined";
     statements.push(
       ...(await prepareProposalRoleCapacityAfterSourceChange(db, {
         eventId: payload.eventId,

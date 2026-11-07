@@ -65,7 +65,7 @@ export async function onRequestGet(
     const db = requestDb(c);
     const token = data.params.token;
     const context = await getSpeakerByManageToken(db, token, requireInternalSecret(c.env), {
-      allowExpiredReadOrConfirmation: true,
+      allowExpiredSession: true,
     });
     const { speaker, proposal } = context;
 
@@ -129,10 +129,12 @@ export async function onRequestProfilePatch(
   try {
     const body = data.body;
     const token = data.params.token;
+    const selectingIdentity = body.actingIdentityId !== undefined || body.continuationToken !== undefined;
     const { speaker, proposal, user } = await getSpeakerByManageToken(
       requestDb(c),
       token,
       requireInternalSecret(c.env),
+      { allowExpiredSession: selectingIdentity },
     );
 
     if (speaker.status === "declined") {
@@ -203,10 +205,13 @@ export async function onRequestProfilePatch(
         signingSecret: requireInternalSecret(c.env),
         expectedManageLinkSecret: speaker.manage_link_secret,
         accountAuthority,
+        allowExpiredSession: selectingIdentity,
       },
     );
 
-    const saved = await getSpeakerByManageToken(requestDb(c), token, requireInternalSecret(c.env));
+    const saved = await getSpeakerByManageToken(requestDb(c), token, requireInternalSecret(c.env), {
+      allowExpiredSession: selectingIdentity,
+    });
     const personalDetailsEditable = Boolean(
       accountAuthority ??
       speakerAccountAuthority({

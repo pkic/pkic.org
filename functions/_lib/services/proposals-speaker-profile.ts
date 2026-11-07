@@ -42,7 +42,8 @@ export function prepareSpeakerSelfAuthorityGuard(
     userId: string;
     inviteGeneration: number;
     expectedManageLinkSecret?: string | null;
-    allowExpiredConfirmation?: boolean;
+    allowExpiredSession?: boolean;
+    allowLateResponseWithdrawal?: boolean;
   },
 ) {
   const capability = typeof authority === "string" ? parseCapabilityToken(authority, "speaker_manage") : null;
@@ -54,7 +55,7 @@ export function prepareSpeakerSelfAuthorityGuard(
           JOIN session_proposals sp ON sp.id=ps.proposal_id AND sp.deleted_at IS NULL
           JOIN events e ON e.id=sp.event_id
           WHERE ps.id=? AND ps.proposal_id=? AND ps.user_id=? AND ps.invite_generation=?
-            AND (${!capability && context.allowExpiredConfirmation ? "1" : "0"} OR ps.status NOT IN ('invited','pending') OR (${activeEffectiveInviteExpirySql(
+            AND (${!capability && context.allowExpiredSession ? "1" : "0"} OR (${!capability && context.allowLateResponseWithdrawal ? "ps.status='pending' AND ps.response_invite_generation=ps.invite_generation" : "0"}) OR ps.status NOT IN ('invited','pending') OR (${activeEffectiveInviteExpirySql(
               effectiveProposalSpeakerInviteExpirySql("ps", "e"),
               "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
             )}))

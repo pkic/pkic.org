@@ -1,3 +1,5 @@
+import { personDisplayName } from "../../../assets/shared/person-display";
+import { anotherProposalSpeakerRemainsSql, requireAnotherProposalSpeaker } from "./proposal-speaker-retention";
 import { prepareSpeakerSelfAuthorityGuard } from "./proposals-speaker-profile";
 import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { speakerInvitedAddressOwnedSql } from "./proposal-speaker-invited-address";
@@ -90,7 +92,9 @@ export async function declineSpeakerParticipation(
   signingSecret: string,
   payload: { reason?: string | null; appBaseUrl: string },
 ): Promise<{ outboxIds: string[] }> {
-  const { speaker, proposal, user } = await getSpeakerByManageToken(db, manageToken, signingSecret);
+  const { speaker, proposal, user } = await getSpeakerByManageToken(db, manageToken, signingSecret, {
+    allowLateResponseWithdrawal: true,
+  });
 
   if (speaker.status === "declined") {
     return { outboxIds: [] };
@@ -99,18 +103,7 @@ export async function declineSpeakerParticipation(
     throw new AppError(409, "PROPOSAL_CLOSED", "Speaker participation cannot be changed on a closed proposal");
   }
 
-  const nonDeclined = await first<{ total: number }>(
-    db,
-    "SELECT COUNT(*) AS total FROM proposal_speakers WHERE proposal_id = ? AND status <> 'declined'",
-    [proposal.id],
-  );
-  if (Number(nonDeclined?.total ?? 0) <= 1) {
-    throw new AppError(
-      409,
-      "LAST_SPEAKER_REQUIRED",
-      "A proposal must retain at least one speaker. Add another speaker or withdraw the proposal instead.",
-    );
-  }
+  await requireAnotherProposalSpeaker(db, proposal.id);
 
   const now = nowIso();
   const event = await getEventById(db, proposal.event_id);
@@ -120,7 +113,7 @@ export async function declineSpeakerParticipation(
     proposal,
     speaker: {
       userId: speaker.user_id,
-      name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email,
+      name: personDisplayName({ firstName: user.first_name, lastName: user.last_name }, "A speaker"),
     },
     appBaseUrl: payload.appBaseUrl,
     at: now,
@@ -129,7 +122,7 @@ export async function declineSpeakerParticipation(
     event,
     proposal,
     speaker,
-    speakerName: [user.first_name, user.last_name].filter(Boolean).join(" "),
+    speakerName: personDisplayName({ firstName: user.first_name, lastName: user.last_name }, "A speaker"),
     speakerEmail: speaker.invited_email ?? user.email,
     reason: payload.reason ?? null,
     appBaseUrl: payload.appBaseUrl,
@@ -142,6 +135,7 @@ export async function declineSpeakerParticipation(
         userId: speaker.user_id,
         inviteGeneration: speaker.invite_generation,
         expectedManageLinkSecret: speaker.manage_link_secret,
+        allowLateResponseWithdrawal: true,
       }),
       db
         .prepare(
@@ -149,8 +143,7 @@ export async function declineSpeakerParticipation(
            SET status = 'declined', declined_at = ?, decline_reason = ?
            WHERE id = ? AND proposal_id = ? AND user_id = ? AND role = ? AND status = ? AND invite_generation = ?
              AND ${typeof manageToken === "string" ? "1" : speakerInvitedAddressOwnedSql("proposal_speakers")}
-             AND (SELECT COUNT(*) FROM proposal_speakers
-                  WHERE proposal_id = ? AND status <> 'declined') > 1
+             AND ${anotherProposalSpeakerRemainsSql}
              AND EXISTS (
                SELECT 1 FROM session_proposals
                WHERE id = ? AND status = ? AND updated_at = ? AND deleted_at IS NULL
@@ -207,18 +200,7 @@ export async function declineSpeakerParticipation(
       );
     if (!isAuditChangeGuardFailure(error) && !isEventParticipantSourceConflict(error)) throw error;
 
-    const currentCount = await first<{ total: number }>(
-      db,
-      "SELECT COUNT(*) AS total FROM proposal_speakers WHERE proposal_id = ? AND status <> 'declined'",
-      [proposal.id],
-    );
-    if (Number(currentCount?.total ?? 0) <= 1) {
-      throw new AppError(
-        409,
-        "LAST_SPEAKER_REQUIRED",
-        "A proposal must retain at least one speaker. Add another speaker or withdraw the proposal instead.",
-      );
-    }
+    await requireAnotherProposalSpeaker(db, proposal.id);
     throw new AppError(409, "PROPOSAL_SPEAKER_CONFLICT", "Proposal speaker changed while the decline was processed");
   }
   return { outboxIds: proposerNotice.outboxId ? [proposerNotice.outboxId] : [] };

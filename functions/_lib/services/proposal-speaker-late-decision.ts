@@ -1,3 +1,5 @@
+import { personDisplayName } from "../../../assets/shared/person-display";
+import { anotherProposalSpeakerRemainsSql, requireAnotherProposalSpeaker } from "./proposal-speaker-retention";
 import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { isLateSpeakerResponseAwaitingReview } from "../../../assets/shared/proposal-speaker-acceptance";
 import { requireUserBackedAuthAdmin } from "../auth/admin-identity";
@@ -38,14 +40,22 @@ export async function rejectLateSpeakerParticipation(
     !isProposalSpeakerRosterEditableStatus(proposal.status)
   )
     throw new AppError(409, "SPEAKER_REVIEW_NOT_PENDING", "This speaker has no late response awaiting review.");
+  await requireAnotherProposalSpeaker(db, proposal.id);
   const at = nowIso();
-  const notices = await prepareSpeakerResponseNotices(db, context, { late: true, rejected: true, appBaseUrl, at });
+  const event = await getEventById(db, proposal.event_id);
+  const notices = await prepareSpeakerResponseNotices(db, context, {
+    late: true,
+    rejected: true,
+    appBaseUrl,
+    at,
+    event,
+  });
   const agendaRemoval = await prepareDeclinedSpeakerAgendaRemoval(db, {
-    event: await getEventById(db, proposal.event_id),
+    event,
     proposal,
     speaker: {
       userId: speaker.user_id,
-      name: [context.user.first_name, context.user.last_name].filter(Boolean).join(" ") || "A speaker",
+      name: personDisplayName({ firstName: context.user.first_name, lastName: context.user.last_name }, "A speaker"),
     },
     at,
     appBaseUrl,
@@ -58,12 +68,14 @@ export async function rejectLateSpeakerParticipation(
       db
         .prepare(`UPDATE proposal_speakers SET status='declined',declined_at=?,decline_reason='Late participation was not approved'
         WHERE id=? AND status='pending' AND invite_generation=? AND response_invite_generation=invite_generation AND terms_accepted_at IS ?
+          AND ${anotherProposalSpeakerRemainsSql}
           AND EXISTS(SELECT 1 FROM session_proposals WHERE id=? AND status=? AND updated_at=? AND deleted_at IS NULL)`)
         .bind(
           at,
           speaker.id,
           speaker.invite_generation,
           speaker.terms_accepted_at,
+          proposal.id,
           proposal.id,
           proposal.status,
           proposal.updated_at,
@@ -89,6 +101,7 @@ export async function rejectLateSpeakerParticipation(
     ]);
   } catch (error) {
     if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
+    if (isAuditChangeGuardFailure(error)) await requireAnotherProposalSpeaker(db, proposal.id);
     if (
       isAuditChangeGuardFailure(error) ||
       isAuthorizationGuardFailure(error) ||
@@ -102,5 +115,5 @@ export async function rejectLateSpeakerParticipation(
       );
     throw error;
   }
-  return notices.map((notice) => notice.id);
+  return notices.flatMap((notice) => notice.ids);
 }

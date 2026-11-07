@@ -22,6 +22,7 @@ export interface ProposalSpeakerWriteContext extends ProposalSpeakerAuthoritySna
   expectedActingIdentitySelectedAt?: string | null;
   authority?: ParticipantAuthority;
   expectedManageLinkSecret?: string | null;
+  allowExpiredSession?: boolean;
 }
 
 export function proposalSpeakerAuthorityCondition(context: ProposalSpeakerAuthoritySnapshot): {

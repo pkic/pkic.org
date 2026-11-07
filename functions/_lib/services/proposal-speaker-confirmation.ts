@@ -1,3 +1,4 @@
+import { prepareLateSpeakerConsentGuard } from "./proposal-speaker-consent";
 import { isLateSpeakerResponseAwaitingReview } from "../../../assets/shared/proposal-speaker-acceptance";
 import { prepareSpeakerResponseNotices } from "./proposal-speaker-response-notice";
 import { isAgendaScheduleGuardFailure } from "./event-agenda/schedule-guards";
@@ -58,7 +59,7 @@ export async function confirmSpeakerParticipation(
     appBaseUrl: string;
   },
 ): Promise<{ status: "confirmed" | "pending"; outboxIds: string[] }> {
-  const context = await getSpeakerByManageToken(db, authority, signingSecret, { allowExpiredReadOrConfirmation: true });
+  const context = await getSpeakerByManageToken(db, authority, signingSecret, { allowExpiredSession: true });
   const outboxIds = await confirmParticipation(db, context, { kind: "speaker", authority, signingSecret, payload });
   const awaitingReview = isLateSpeakerResponseAwaitingReview(
     context.speaker.status,
@@ -135,7 +136,9 @@ async function confirmParticipation(
     new AppError(
       409,
       "SPEAKER_REPRESENTATION_REQUIRED",
-      "Confirm your speaker identity before confirming participation.",
+      reviewingLateResponse
+        ? "The speaker’s representation is no longer available. Send a new invitation and ask the speaker to choose a current identity before approval."
+        : "Confirm your speaker identity before confirming participation.",
     );
   const now = nowIso();
   const organizerIdentity = onBehalf ? await prepareOrganizerSpeakerIdentity(db, context, now) : null;
@@ -164,6 +167,9 @@ async function confirmParticipation(
     throw representationRequired();
   const requiredTerms = await getRequiredTerms(db, proposal.event_id, "speaker");
   if (confirmation.kind === "speaker") await validateRequiredConsents(requiredTerms, confirmation.payload.consents);
+  const lateConsentGuard = reviewingLateResponse
+    ? await prepareLateSpeakerConsentGuard(db, proposal.event_id, speaker.user_id)
+    : null;
   const notification =
     confirmation.kind === "manager" && organizerIdentity
       ? await prepareOrganizerSpeakerNotification(
@@ -214,7 +220,7 @@ async function confirmParticipation(
             userId: speaker.user_id,
             inviteGeneration: speaker.invite_generation,
             expectedManageLinkSecret: speaker.manage_link_secret,
-            allowExpiredConfirmation: true,
+            allowExpiredSession: true,
           }),
       ...(manager
         ? [
@@ -243,9 +249,8 @@ async function confirmParticipation(
       ...(representation ? [prepareAuthorizationGuard(db, representation)] : []),
       ...(!onBehalf && mailbox ? [prepareAuthorizationGuard(db, mailbox)] : []),
       ...(organizerIdentity?.guards ?? []),
-      ...(!reviewingLateResponse
-        ? [prepareActiveTermsSnapshotGuard(db, proposal.event_id, requiredTerms, "speaker")]
-        : []),
+      prepareActiveTermsSnapshotGuard(db, proposal.event_id, requiredTerms, "speaker"),
+      ...(lateConsentGuard ? [lateConsentGuard] : []),
       ...(confirmation.kind === "speaker"
         ? await prepareConsentStatements(db, {
             proposalId: proposal.id,
@@ -344,6 +349,7 @@ async function confirmParticipation(
       );
     if (
       manager &&
+      !reviewingLateResponse &&
       isAuthorizationGuardFailure(error) &&
       (await first(
         db,
@@ -368,5 +374,5 @@ async function confirmParticipation(
     }
     throw error;
   }
-  return [...(notification ? [notification.id] : []), ...notices.map((notice) => notice.id)];
+  return [...(notification ? [notification.id] : []), ...notices.flatMap((notice) => notice.ids)];
 }

@@ -1,3 +1,4 @@
+import { isLateSpeakerResponseAwaitingReview } from "../../../assets/shared/proposal-speaker-acceptance";
 import type { ParticipantAuthority } from "./participant-authority";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
@@ -40,11 +41,22 @@ export async function getSpeakerByManageToken(
   db: DatabaseLike,
   manageToken: ParticipantAuthority,
   signingSecret: string,
-  options: { allowExpiredReadOrConfirmation?: boolean } = {},
+  options: { allowExpiredSession?: boolean; allowLateResponseWithdrawal?: boolean } = {},
 ): Promise<SpeakerWithContext> {
   if (typeof manageToken !== "string") {
     const context = await getSpeakerByProposalUser(db, manageToken.resourceId, manageToken.userId);
-    if (context.inviteExpired && !options.allowExpiredReadOrConfirmation)
+    if (
+      context.inviteExpired &&
+      !options.allowExpiredSession &&
+      !(
+        options.allowLateResponseWithdrawal &&
+        isLateSpeakerResponseAwaitingReview(
+          context.speaker.status,
+          context.speaker.response_invite_generation,
+          context.speaker.invite_generation,
+        )
+      )
+    )
       throw new AppError(410, "SPEAKER_INVITATION_EXPIRED", "Speaker invitation has expired");
     const verified = await first(
       db,

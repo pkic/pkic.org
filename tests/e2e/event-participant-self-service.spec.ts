@@ -673,8 +673,9 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await expect(page.getByText(nextOrganization, { exact: false })).toBeVisible();
 });
 
-for (const late of [false, true]) {
-  test(`proposer and invited speaker manage their own event records (${late ? "late review" : "normal response"})`, async ({
+for (const scenario of ["normal response", "late review", "late withdrawal"]) {
+  const late = scenario !== "normal response";
+  test(`proposer and invited speaker manage their own event records (${scenario})`, async ({
     page,
     browser,
   }, testInfo) => {
@@ -691,8 +692,8 @@ for (const late of [false, true]) {
       abstract:
         "A sufficiently detailed proposal describing how participants can manage their event records directly in the portal.",
     });
-    // Leave time to save the identity while the invitation is live; only confirmation is late.
-    const invitationDeadline = new Date(Date.now() + 120000).toISOString();
+    // Expire before the speaker first opens the page, including their initial identity selection.
+    const invitationDeadline = new Date(Date.now() + 10000).toISOString();
     expect(
       await inviteCoSpeaker(page, proposal.accessToken, {
         email: speakerEmail,
@@ -728,6 +729,7 @@ for (const late of [false, true]) {
     const speaker = await context.newPage();
     try {
       await signInToPortal(speaker, speakerEmail);
+      if (late) await expect.poll(() => Date.now(), { timeout: 15000 }).toBeGreaterThan(Date.parse(invitationDeadline));
       await speaker.goto(`/portal/#/events/${PROPOSAL_EVENT_SLUG}/proposals/${proposal.proposalId}`);
       await expect(
         speaker.getByRole("button", { name: "Confirm willingness to participate", exact: true }),
@@ -766,8 +768,6 @@ for (const late of [false, true]) {
       expect(selected.profile.actingIdentitySelection).toBe("individual");
       expect(selected.profile.actingIdentitySelectedAt).not.toBeNull();
       await expect(speaker.getByText("Speaker identity saved.", { exact: true })).toBeVisible();
-      if (late)
-        await expect.poll(() => Date.now(), { timeout: 150000 }).toBeGreaterThan(Date.parse(invitationDeadline));
       await speaker.getByRole("button", { name: "Confirm willingness to participate", exact: true }).click();
       if (late) {
         await expect(speaker.getByText(SPEAKER_PARTICIPATION_COPY.pending, { exact: true })).toBeVisible();
@@ -777,6 +777,18 @@ for (const late of [false, true]) {
         for (const width of [1280, 375]) {
           await speaker.setViewportSize({ width, height: 900 });
           await speaker.screenshot({ path: testInfo.outputPath(`late-speaker-${width}.png`), fullPage: true });
+        }
+        if (scenario === "late withdrawal") {
+          await speaker.getByRole("button", { name: "Participation actions", exact: true }).click();
+          await speaker.getByRole("menuitem", { name: "Decline participation…", exact: true }).click();
+          await acceptConfirmDialog(speaker, "Decline participation");
+          await expect(speaker.getByText("Participation declined.", { exact: true })).toBeVisible();
+          await expect(speaker.getByText(SPEAKER_PARTICIPATION_COPY.pending, { exact: true })).toHaveCount(0);
+          for (const width of [1280, 375]) {
+            await speaker.setViewportSize({ width, height: 900 });
+            await speaker.screenshot({ path: testInfo.outputPath(`late-withdrawal-${width}.png`), fullPage: true });
+          }
+          return;
         }
         const managerContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
         try {

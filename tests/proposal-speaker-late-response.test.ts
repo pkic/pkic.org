@@ -1,20 +1,27 @@
+import { prepareSpeakerResponseNotices } from "../functions/_lib/services/proposal-speaker-response-notice";
+import { getSpeakerByProposalUser } from "../functions/_lib/services/proposals-speaker-capability";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { callApi } from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
-import { selectIndividualSpeakerRepresentation } from "./helpers/proposal-proof";
-import {
-  setupProposalSpeakerCapacityWorkflow,
-  inviteSpeakerAndSubmitCapacityProposal,
-} from "./helpers/proposal-speaker-capacity";
+import { setupProposalSpeakerCapacityWorkflow } from "./helpers/proposal-speaker-capacity";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { declineSpeakerParticipation } from "../functions/_lib/services/proposal-speaker-decline";
 import { confirmSpeakerParticipation } from "../functions/_lib/services/proposal-speaker-confirmation";
 import { speakerParticipationResponseSchema } from "../assets/shared/schemas/speaker-self-service";
 
-const consents = [{ termKey: "speaker-terms", version: "v1" }];
+import {
+  createSpeakerResponseFixture,
+  respondToSpeakerInvitation,
+  expireSpeakerInvitation,
+  speakerResponseState,
+  speakerResponseNotices,
+  decideSpeakerResponse,
+  speakerResponseConsents,
+} from "./helpers/speaker-response";
+const consents = speakerResponseConsents;
 const at = "2026-12-01T09:00:00.000Z";
 
 describe("speaker willingness and late review", () => {
@@ -27,48 +34,14 @@ describe("speaker willingness and late review", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 202 })));
   });
   afterEach(() => vi.unstubAllGlobals());
-  async function fixture() {
-    const seeded = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
-    await selectIndividualSpeakerRepresentation({
-      environment: env,
-      eventSlug: "pqc-2026",
-      email: "cospeaker@example.test",
-      consents,
-      speakerManagementToken: seeded.speakerManageToken,
-    });
-    const token = await createAdminSession(env.DB, seeded.coSpeakerUserId, crypto.randomUUID());
-    return { ...seeded, token };
-  }
+  const fixture = () => createSpeakerResponseFixture(adminSessionToken);
   type Fixture = Awaited<ReturnType<typeof fixture>>;
-  const respond = (f: Fixture, body: unknown = { status: "confirmed", consents }) =>
-    callApi(env, `/api/v1/proposals/${f.proposalId}/participation`, {
-      method: "PATCH",
-      headers: { authorization: `Bearer ${f.token}`, "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
+  const respond = respondToSpeakerInvitation;
+  const expire = expireSpeakerInvitation;
+  const state = speakerResponseState;
+  const notices = speakerResponseNotices;
   const decide = (f: Fixture, decision = "approve", token = adminSessionToken) =>
-    callApi(env, `/api/v1/proposals/${f.proposalId}/speakers/${f.coSpeakerUserId}/acceptance`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ decision }),
-    });
-  const expire = (f: Fixture) =>
-    env.DB.prepare(
-      "UPDATE proposal_speakers SET invite_expires_at='2020-01-01T00:00:00.000Z' WHERE proposal_id=? AND user_id=?",
-    )
-      .bind(f.proposalId, f.coSpeakerUserId)
-      .run();
-  const state = (f: Fixture) =>
-    env.DB.prepare(
-      "SELECT status,confirmed_at,terms_accepted_at,invite_generation,response_invite_generation FROM proposal_speakers WHERE proposal_id=? AND user_id=?",
-    )
-      .bind(f.proposalId, f.coSpeakerUserId)
-      .first();
-  const notices = () =>
-    queryAll<{ recipient_user_id: string; payload_json: string }>(
-      env.DB,
-      "SELECT recipient_user_id,payload_json FROM email_outbox WHERE template_key='proposal_speaker_response' ORDER BY recipient_user_id",
-    );
+    decideSpeakerResponse(f, token, decision);
   async function proposalState(f: Fixture) {
     const row = await env.DB.prepare("SELECT status,proposer_user_id FROM session_proposals WHERE id=?")
       .bind(f.proposalId)
@@ -184,8 +157,19 @@ describe("speaker willingness and late review", () => {
     expect(queued.map((row) => row.recipient_user_id)).toEqual(expect.arrayContaining(ids));
     expect(queued.map((row) => row.recipient_user_id)).not.toContain("response-scorer");
     expect(queued.every((row) => !JSON.stringify(JSON.parse(row.payload_json).speakerName).includes("@"))).toBe(true);
+    const chunks = await prepareSpeakerResponseNotices(
+      env.DB,
+      await getSpeakerByProposalUser(env.DB, f.proposalId, f.coSpeakerUserId),
+      {
+        late: true,
+        appBaseUrl: "https://app.test",
+        at: new Date().toISOString(),
+      },
+    );
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].ids).toHaveLength(queued.length);
   });
-  it("refuses expired session profile edits and declines while allowing a late confirmation", async () => {
+  it("allows late confirmation and withdrawal after review starts while refusing unrelated expired edits", async () => {
     const f = await fixture();
     await expire(f);
     const profile = await callApi(env, `/api/v1/proposals/${f.proposalId}/participation/profile`, {
@@ -196,6 +180,8 @@ describe("speaker willingness and late review", () => {
     expect(profile.status).toBe(410);
     expect((await respond(f, { status: "declined" })).status).toBe(410);
     expect((await respond(f)).status).toBe(200);
+    expect((await respond(f, { status: "declined" })).status).toBe(200);
+    expect(await state(f)).toMatchObject({ status: "declined" });
   });
   it("reports a revoked decline authority as an authorization failure and rolls back", async () => {
     const f = await fixture();
