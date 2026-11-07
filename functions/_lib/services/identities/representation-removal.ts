@@ -1,4 +1,4 @@
-import { prepareIncorrectRepresentationGroupErasure } from "./group-seat-erasure";
+import { prepareIncorrectRepresentationErasure } from "./incorrect-representation-erasure";
 import { prepareReconcileMailingListSubscriptionsStatement } from "../mailing-list-subscriptions";
 import { primaryIdentityIdSql } from "./affiliation-projection";
 import { proposalSpeakerIdentityIdSql } from "../proposal-speaker-profile-projection";
@@ -65,7 +65,7 @@ export function prepareIncorrectRepresentationRemoval(
       : []),
     db.prepare("DELETE FROM organization_link_notices WHERE identity_id=? AND user_id=?").bind(identityId, ownerId),
     db.prepare("DELETE FROM affiliation_reviews WHERE resolved_identity_id=? AND user_id=?").bind(identityId, ownerId),
-    ...prepareIncorrectRepresentationGroupErasure(
+    ...prepareIncorrectRepresentationErasure(
       db,
       {
         identityId,

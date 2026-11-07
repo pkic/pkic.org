@@ -3,7 +3,7 @@ import { prepareAuditLogAfterOneChange, selectAuditDetails, serializeAuditDetail
 import { groupErasureAuditSelection, groupErasurePreimageSelection } from "./group-erasure-preimage";
 
 /** One indivisible statement sequence: capture, erase, guarded identity deletion/audit, release marker. */
-export function prepareIncorrectRepresentationGroupErasure(
+export function prepareIncorrectRepresentationErasure(
   db: DatabaseLike,
   input: {
     identityId: string;
@@ -19,9 +19,8 @@ export function prepareIncorrectRepresentationGroupErasure(
   const preimage = groupErasurePreimageSelection(identityId, ownerId);
   const audit = groupErasureAuditSelection(identityId, serializeAuditDetails(auditDetails));
   return [
-    // The existing marker's JSON column holds the complete erasure preimage, including cascade effects.
     db
-      .prepare(`INSERT INTO group_membership_erasures(identity_id,created_at,erased_seats_json)
+      .prepare(`INSERT INTO group_membership_erasures(identity_id,created_at,preimage_json)
       SELECT ?,?,(${preimage.sql})`)
       .bind(identityId, at, ...preimage.bindings),
     // Incorrect grants are erased, never transferred; capture them before the delete.

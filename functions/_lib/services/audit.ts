@@ -68,6 +68,9 @@ function normalizeAuditDetails(details: unknown): unknown {
 }
 
 export function serializeAuditDetails(details: unknown): string {
+  if (details instanceof AuditDetailsSelection) {
+    throw new TypeError("Audit SQL selections require a guarded audit writer");
+  }
   return stringifyJson(normalizeAuditDetails(details));
 }
 

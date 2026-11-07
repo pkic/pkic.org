@@ -12,6 +12,7 @@ import {
   type IdentityCorrectionFixture,
 } from "./helpers/identity-correction";
 import { getPublicGroupDirectory } from "../functions/_lib/services/groups/public-directory";
+import { readPublishedPeople } from "../functions/_lib/services/people/published-person";
 import { resetDb } from "./helpers/reset-db";
 
 beforeEach(resetDb);
@@ -383,3 +384,71 @@ it.each([false, true])(
     await noMarkers();
   },
 );
+
+it.each([false, true])("republishes erased former leadership only for public leadership (%s)", async (isPublic) => {
+  const f = await proposalIdentityFixture();
+  const groupId = await group();
+  await env.DB.prepare("UPDATE groups SET public_roster=0,public_leadership=? WHERE id=?")
+    .bind(Number(isPublic), groupId)
+    .run();
+  const former = await seat(f, groupId);
+  const roleId = await leadership(f, groupId, f.identityId, former.memberId!, "role-group_lead");
+  await env.DB.prepare("UPDATE user_roles SET title='Former chair',revoked_at=? WHERE id=?")
+    .bind(former.at, roleId)
+    .run();
+  await env.DB.prepare("UPDATE group_memberships SET left_at=? WHERE id=?").bind(former.at, former.id).run();
+  await env.DB.prepare("UPDATE identities SET ended_at=? WHERE id=?").bind(former.at, f.identityId).run();
+  await env.DB.prepare("INSERT INTO person_profile_slugs(slug,user_id,created_at) VALUES(?,?,?)")
+    .bind(crypto.randomUUID(), f.userId, former.at)
+    .run();
+  const before = (await readPublishedPeople(env.DB, [f.userId], "public"))[f.userId];
+  expect(before.groups.some((term) => term.title === "Former chair")).toBe(isPublic);
+  const response = await change(f, "delete");
+  expect(response.status, await response.clone().text()).toBe(200);
+  const after = (await readPublishedPeople(env.DB, [f.userId], "public"))[f.userId];
+  expect(after.groups.some((term) => term.title === "Former chair")).toBe(false);
+  const requests = await env.DB.prepare("SELECT count(*) AS count FROM site_publication_requests WHERE resource_id=?")
+    .bind(f.identityId)
+    .first<number>("count");
+  expect(Number(requests) > 0).toBe(isPublic);
+  await noMarkers();
+});
+
+it("audits actual trigger effects outside the predicted descendant tree", async () => {
+  const f = await proposalIdentityFixture();
+  const root = await seat(f, await group());
+  const sibling = await seat(f, await group(), f.secondIdentityId);
+  const untouched = await seat(f, await group(), f.secondIdentityId);
+  const deputy = await leadership(f, sibling.groupId, f.secondIdentityId, sibling.memberId!, "role-group_deputy_lead");
+  // Model an evolved trigger: auditing must follow its actual writes without a second cascade policy.
+  await env.DB.prepare(`CREATE TRIGGER test_erasure_extra_seat AFTER UPDATE OF left_at ON group_memberships
+    WHEN OLD.id='${root.id}' AND OLD.left_at IS NULL AND NEW.left_at IS NOT NULL
+    BEGIN
+      UPDATE group_memberships SET left_at=NEW.left_at,updated_at=NEW.updated_at WHERE id='${sibling.id}';
+    END`).run();
+  try {
+    const response = await change(f, "delete");
+    expect(response.status, await response.clone().text()).toBe(200);
+    const audit = await env.DB.prepare(
+      "SELECT details_json FROM audit_log WHERE entity_id=? AND action='incorrect_representation_removed'",
+    )
+      .bind(f.identityId)
+      .first<string>("details_json");
+    expect(JSON.parse(audit!)).toMatchObject({
+      endedGroupSeats: {
+        from: [{ seatId: sibling.id, leftAt: null }],
+        to: [{ seatId: sibling.id, leftAt: expect.any(String) }],
+      },
+      revokedGroupRoles: {
+        from: [{ roleAssignmentId: deputy, revokedAt: null }],
+        to: [{ roleAssignmentId: deputy, revokedAt: expect.any(String) }],
+      },
+    });
+    expect(
+      await env.DB.prepare("SELECT left_at FROM group_memberships WHERE id=?").bind(untouched.id).first("left_at"),
+    ).toBeNull();
+    await noMarkers();
+  } finally {
+    await env.DB.prepare("DROP TRIGGER test_erasure_extra_seat").run();
+  }
+});

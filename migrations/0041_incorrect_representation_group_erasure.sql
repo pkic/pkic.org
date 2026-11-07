@@ -5,7 +5,7 @@
 CREATE TABLE group_membership_erasures (
   identity_id TEXT NOT NULL PRIMARY KEY,
   created_at TEXT NOT NULL,
-  erased_seats_json TEXT NOT NULL
+  preimage_json TEXT NOT NULL
 );
 
 DROP TRIGGER trg_group_memberships_prevent_delete;

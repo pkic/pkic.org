@@ -1,4 +1,4 @@
-/** The same affected seats used by publication and correction audit preimages. */
+/** Affected seats for publication before a group-seat change. */
 export function groupSeatChangeDefinitions(selection: { sql: string; definitions?: string }) {
   return `${selection.definitions ? `${selection.definitions},` : ""} selected AS MATERIALIZED (${selection.sql}),
       descendants(id,user_id) AS (

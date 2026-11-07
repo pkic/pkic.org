@@ -1,6 +1,3 @@
-import { groupSeatChangeDefinitions } from "../groups/seat-change-selection";
-import { LEADERSHIP_ROLE_PREDICATE_SQL } from "../groups/leadership-sql";
-
 /** Complete persisted seat fields, including former roster titles and provenance. */
 function seatSnapshotSql() {
   return `json_object('seatId',seat.id,'groupId',seat.group_id,'userId',seat.user_id,
@@ -22,25 +19,18 @@ function snapshotArray(rowSql: string, fromSql: string, orderSql: string) {
     (SELECT ${rowSql} AS snapshot ${fromSql} ORDER BY ${orderSql}))`;
 }
 
-/** Snapshot the trigger's exact cascade, including seats held through other identities. */
+/** Capture candidates for this user's trigger effects without predicting the cascade. */
 export function groupErasurePreimageSelection(identityId: string, userId: string) {
-  const affected = groupSeatChangeDefinitions({
-    sql: `SELECT id,group_id,user_id,member_id,left_at,(left_at IS NULL) AS closes,1 AS membership_changed
-      FROM group_memberships WHERE identity_id=(SELECT identity_id FROM removal_context)
-        AND user_id=(SELECT user_id FROM removal_context)`,
-  });
-  const erased = `FROM group_memberships seat JOIN selected ON selected.id=seat.id`;
-  const ended = `FROM group_memberships seat JOIN affected ON affected.id=seat.id
-    WHERE seat.identity_id<>(SELECT identity_id FROM removal_context) AND seat.left_at IS NULL`;
+  const erased = `FROM group_memberships seat WHERE seat.identity_id=(SELECT identity_id FROM removal_context)
+    AND seat.user_id=(SELECT user_id FROM removal_context)`;
+  const ended = `FROM group_memberships seat WHERE seat.user_id=(SELECT user_id FROM removal_context)
+    AND seat.identity_id<>(SELECT identity_id FROM removal_context) AND seat.left_at IS NULL`;
   const removedRoles = `FROM user_roles ur WHERE ur.identity_id=(SELECT identity_id FROM removal_context)
     AND ur.user_id=(SELECT user_id FROM removal_context)`;
   const revokedRoles = `FROM user_roles ur WHERE ur.user_id=(SELECT user_id FROM removal_context)
-    AND ur.identity_id IS NOT (SELECT identity_id FROM removal_context)
-    AND ur.revoked_at IS NULL AND ${LEADERSHIP_ROLE_PREDICATE_SQL} AND ur.context_type='group'
-    AND EXISTS(SELECT 1 FROM affected WHERE affected.closes=1 AND affected.group_id=ur.context_id
-      AND affected.user_id=ur.user_id AND affected.member_id=ur.member_id)`;
+    AND ur.identity_id IS NOT (SELECT identity_id FROM removal_context) AND ur.revoked_at IS NULL`;
   return {
-    sql: `WITH RECURSIVE removal_context AS (SELECT ? AS identity_id,? AS user_id),${affected}
+    sql: `WITH removal_context AS (SELECT ? AS identity_id,? AS user_id)
       SELECT json_object(
         'erasedGroupSeats',${snapshotArray(seatSnapshotSql(), erased, "seat.id")},
         'endedGroupSeats',${snapshotArray(seatSnapshotSql(), ended, "seat.id")},
@@ -50,27 +40,29 @@ export function groupErasurePreimageSelection(identityId: string, userId: string
   };
 }
 
-/** Pair the captured preimage with actual committed seat/role states for the audit delta. */
+/** Pair only actual trigger transitions with their captured preimages. */
 export function groupErasureAuditSelection(identityId: string, serializedDetails: string) {
+  const delta = (name: string, selection: string) => `'$.${name}',json_object(
+    'from',${snapshotArray("before", `FROM ${selection}`, "id")},
+    'to',${snapshotArray("after", `FROM ${selection}`, "id")})`;
   return {
-    sql: `SELECT json_set(?,
-      '$.erasedGroupSeats',json_object('from',json_extract(erased_seats_json,'$.erasedGroupSeats'),'to',NULL),
-      '$.endedGroupSeats',json_object('from',json_extract(erased_seats_json,'$.endedGroupSeats'),'to',
-        ${snapshotArray(
-          seatSnapshotSql(),
-          `FROM group_memberships seat
-          WHERE seat.id IN (SELECT json_extract(value,'$.seatId') FROM json_each(erased_seats_json,'$.endedGroupSeats'))`,
-          "seat.id",
-        )}),
-      '$.removedIdentityRoles',json_object('from',json_extract(erased_seats_json,'$.removedIdentityRoles'),'to',NULL),
-      '$.revokedGroupRoles',json_object('from',json_extract(erased_seats_json,'$.revokedGroupRoles'),'to',
-        ${snapshotArray(
-          roleSnapshotSql(),
-          `FROM user_roles ur
-          WHERE ur.id IN (SELECT json_extract(value,'$.roleAssignmentId') FROM json_each(erased_seats_json,'$.revokedGroupRoles'))`,
-          "ur.id",
-        )}))
-      FROM group_membership_erasures WHERE identity_id=?`,
-    bindings: [serializedDetails, identityId],
+    sql: `WITH preimage AS MATERIALIZED (
+        SELECT preimage_json FROM group_membership_erasures WHERE identity_id=?),
+      ended_seats AS MATERIALIZED (
+        SELECT seat.id,value AS before,${seatSnapshotSql()} AS after
+        FROM preimage,json_each(preimage_json,'$.endedGroupSeats')
+        JOIN group_memberships seat ON seat.id=json_extract(value,'$.seatId')
+        WHERE seat.left_at IS NOT json_extract(value,'$.leftAt')),
+      revoked_roles AS MATERIALIZED (
+        SELECT ur.id,value AS before,${roleSnapshotSql()} AS after
+        FROM preimage,json_each(preimage_json,'$.revokedGroupRoles')
+        JOIN user_roles ur ON ur.id=json_extract(value,'$.roleAssignmentId')
+        WHERE ur.revoked_at IS NOT json_extract(value,'$.revokedAt'))
+      SELECT json_set(?,
+        '$.erasedGroupSeats',json_object('from',json_extract(preimage_json,'$.erasedGroupSeats'),'to',NULL),
+        ${delta("endedGroupSeats", "ended_seats")},
+        '$.removedIdentityRoles',json_object('from',json_extract(preimage_json,'$.removedIdentityRoles'),'to',NULL),
+        ${delta("revokedGroupRoles", "revoked_roles")}) FROM preimage`,
+    bindings: [identityId, serializedDetails],
   };
 }

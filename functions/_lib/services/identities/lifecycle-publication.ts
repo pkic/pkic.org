@@ -28,8 +28,15 @@ export function identityLifecyclePublicationCondition(identityId: string, includ
           AND (identity.hidden_from_public_profile=0
             OR EXISTS(SELECT 1 ${PUBLIC_SEAT_SOURCE_SQL} AND membership.identity_id=identity.id AND membership.left_at IS NULL)
             OR EXISTS(SELECT 1 ${PUBLIC_LEADERSHIP_SOURCE_SQL} AND ur.identity_id=identity.id AND ur.revoked_at IS NULL))))
+      ${
+        includeGroupHistory
+          ? `OR EXISTS(SELECT 1 ${PUBLIC_PERSON_PROFILE_HOLDER_SOURCE_SQL}
+        AND EXISTS(SELECT 1 ${PUBLIC_LEADERSHIP_SOURCE_SQL}
+          AND ur.user_id=person.id AND ur.identity_id=?))`
+          : ""
+      }
       OR ${groups.sql}`,
-    bindings: [identityId, identityId, ...groups.bindings],
+    bindings: [identityId, identityId, ...(includeGroupHistory ? [identityId] : []), ...groups.bindings],
   };
 }
 
