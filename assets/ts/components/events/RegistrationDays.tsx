@@ -1,27 +1,21 @@
 /**
- * The registration's days: the shared day summary, and the two ways to change
- * them.
- *
- * In-person seats are limited and paid for, so a registration holding one
- * leads with "Can't make it in person?" — a short guided dialog that releases
- * seats to the waiting list. Other changes (joining in person, switching a day
- * between online and on demand) open the same day picker the registration form
- * uses. Moving a day to in-person goes through the server's waiting list like
- * any registration; a waiting day is kept as in-person, so saving it unchanged
- * keeps its place in the queue.
+ * One attendance picker for the registration summary and its explicit editor.
+ * Opening editing preserves the saved choices; only Save submits a change.
+ * Existing release links retain their guided seat-release dialog.
  */
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import { registrationManageSchema, type RegistrationManageReadResponse } from "../../../shared/schemas/registration";
 import { useContractForm } from "../../hooks/useContractForm";
 import { Button } from "../../ui/Button";
-import { DayAttendancePicker, NOT_ATTENDING } from "../DayAttendancePicker";
+import { DayAttendancePicker, NOT_ATTENDING, ATTENDANCE_EDIT_LABEL } from "../DayAttendancePicker";
 import { RegistrationDayStatusSummary } from "../RegistrationDayStatusSummary";
 import { registrationDays, type RegistrationDayView } from "./registration-day-changes";
 import { ReleaseSeatDialog, releasableDays } from "./ReleaseSeatDialog";
 import { PersonalAddressPrompt } from "./PersonalAddressPrompt";
 import "./RegistrationDays.css";
 import { SectionHeading } from "../../ui/SectionHeading";
+import { IconPencil } from "../icons";
 
 type DayAttendance = Array<{ dayDate: string; attendanceType: string }>;
 
@@ -39,9 +33,14 @@ function DaysForm({
   data: RegistrationManageReadResponse;
   days: RegistrationDayView[];
   busy: boolean;
-  onSave: (dayAttendance: DayAttendance) => void;
+  onSave: (dayAttendance: DayAttendance) => Promise<boolean>;
   onDiscard: () => void;
 }) {
+  const submitting = useRef(false);
+  const formElement = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    formElement.current?.querySelector<HTMLInputElement>('input[type="radio"]:checked')?.focus();
+  }, []);
   const [draft, setDraft] = useState<Record<string, string>>(() =>
     Object.fromEntries(days.map((day) => [day.dayDate, currentType(day) ?? NOT_ATTENDING])),
   );
@@ -69,19 +68,28 @@ function DaysForm({
   return (
     <form
       class="pk-reg-days__form"
+      ref={formElement}
       noValidate
       {...form.handlers}
       onSubmit={(event) => {
         event.preventDefault();
+        if (busy || submitting.current) return;
+        const checked = form.submit();
+        if (!checked.data) return;
         // No day left is not a day change: the caller treats it as cancelling.
-        onSave(form.submit().data?.dayAttendance ?? []);
+        submitting.current = true;
+        void onSave(checked.data.dayAttendance ?? []).finally(() => {
+          submitting.current = false;
+        });
       }}
     >
-      <DayAttendancePicker
-        days={data.eventDays}
-        value={draft}
-        onChange={(dayDate, attendanceType) => setDraft((current) => ({ ...current, [dayDate]: attendanceType }))}
-      />
+      <div inert={busy}>
+        <DayAttendancePicker
+          days={data.eventDays}
+          value={draft}
+          onChange={(dayDate, attendanceType) => setDraft((current) => ({ ...current, [dayDate]: attendanceType }))}
+        />
+      </div>
       {joining && (
         <p class="pk-small">
           Some options have limited places. If your choice is full, you join its waiting list and we email you when a
@@ -118,7 +126,7 @@ export function RegistrationDays({
   busy: boolean;
   /** False when the registration is cancelled or awaits confirmation: the days are read-only. */
   editable: boolean;
-  onSave: (dayAttendance: DayAttendance) => void;
+  onSave: (dayAttendance: DayAttendance) => Promise<boolean>;
   onClaim: (dayDates: string[]) => void;
   /** Opens the release dialog on arrival with this day chosen, for a link such as "No, I can't make it". */
   focusDay?: string | null;
@@ -131,43 +139,57 @@ export function RegistrationDays({
 
   return (
     <section class="pk-reg-days" aria-label="Your days">
-      <SectionHeading level={3} class="pk-reg-days__title">
-        Your days
-      </SectionHeading>
+      <div class="pk-cluster pk-cluster--nowrap">
+        <SectionHeading level={3} class="pk-reg-days__title">
+          {editing ? ATTENDANCE_EDIT_LABEL : "Your days"}
+        </SectionHeading>
+        {editable && !editing && (
+          <Button
+            variant="ghost"
+            icon
+            aria-label={ATTENDANCE_EDIT_LABEL}
+            title={ATTENDANCE_EDIT_LABEL}
+            disabled={busy}
+            onClick={() => setEditing(true)}
+          >
+            <IconPencil />
+          </Button>
+        )}
+      </div>
       {editing ? (
         <DaysForm
           data={data}
           days={days}
           busy={busy}
-          onSave={(dayAttendance) => {
-            setEditing(false);
-            onSave(dayAttendance);
+          onSave={async (dayAttendance) => {
+            const saved = await onSave(dayAttendance);
+            if (saved) setEditing(false);
+            return saved;
           }}
           onDiscard={() => setEditing(false)}
         />
       ) : (
         <>
-          <RegistrationDayStatusSummary
-            dayAttendance={data.dayAttendance}
-            dayWaitlist={data.dayWaitlist}
-            busy={busy}
-            cancelled={data.registration.status === "cancelled"}
-            onClaim={editable ? onClaim : undefined}
-          />
+          {data.registration.status === "registered" && !data.dayWaitlist.some((day) => day.status === "offered") ? (
+            <DayAttendancePicker
+              days={data.eventDays}
+              readOnly
+              onEdit={editable && !busy ? () => setEditing(true) : undefined}
+              value={Object.fromEntries(data.dayAttendance.map((day) => [day.dayDate, day.attendanceType]))}
+              waitlist={Object.fromEntries(data.dayWaitlist.map((day) => [day.dayDate, day.status]))}
+            />
+          ) : (
+            <RegistrationDayStatusSummary
+              dayAttendance={data.dayAttendance}
+              dayWaitlist={data.dayWaitlist}
+              busy={busy}
+              cancelled={data.registration.status === "cancelled"}
+              onClaim={editable ? onClaim : undefined}
+            />
+          )}
+
           {data.dayWaitlist.some((entry) => entry.status === "waiting") && (
             <PersonalAddressPrompt withoutWorkAddress={data.waitlistHandledLast} waiting />
-          )}
-          {editable && (
-            <div class="pk-cluster">
-              {seats.length > 0 && (
-                <Button disabled={busy} onClick={() => setReleasing(true)}>
-                  Can't make it in person?
-                </Button>
-              )}
-              <Button variant="ghost" disabled={busy} onClick={() => setEditing(true)}>
-                Change my days
-              </Button>
-            </div>
           )}
         </>
       )}
@@ -179,7 +201,7 @@ export function RegistrationDays({
           onCancel={() => setReleasing(false)}
           onRelease={(dayAttendance) => {
             setReleasing(false);
-            onSave(registrationManageSchema.parse({ action: "update", dayAttendance }).dayAttendance ?? []);
+            void onSave(registrationManageSchema.parse({ action: "update", dayAttendance }).dayAttendance ?? []);
           }}
         />
       )}

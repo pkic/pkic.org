@@ -7,6 +7,7 @@ import type { ServerCatalog } from "./server-catalog";
  * named: the identity chooser, the account menu and the person's own record.
  */
 export const PERSONAL_IDENTITY_LABEL = "Personal";
+export const REGISTRATION_ORGANIZATION_VERIFICATION_LABEL = "Organization link awaiting approval";
 
 /** "Organization · Job title · address", or "Personal" for the identity without one; the address is optional. */
 export function actingIdentityLabel(
@@ -26,16 +27,6 @@ export function orderedForChoice<T extends { organizationId: string | null; memb
 ): T[] {
   const rank = (identity: T) => (identity.organizationId ? (identity.membershipCategory ? 0 : 1) : 2);
   return [...identities].sort((a, b) => rank(a) - rank(b));
-}
-
-/** What a registration names as its representation: an organization still in staff review reads as such, not as Personal. */
-export function registrationRepresentationLabel(
-  identity: Pick<ActingIdentity, "organizationName" | "jobTitle">,
-  pendingOrganizationName: string | null,
-): string {
-  return !identity.organizationName && pendingOrganizationName
-    ? [pendingOrganizationName, identity.jobTitle, "awaiting review"].filter(Boolean).join(" · ")
-    : actingIdentityLabel(identity);
 }
 
 /** The caller supplies an endpoint whose authority owns the identity collection. */

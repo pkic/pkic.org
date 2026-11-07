@@ -1,4 +1,5 @@
 /** The same owned-identity picker and add flow, embedded in registration self-service. */
+import type { ComponentChildren } from "preact";
 import { createPortal } from "preact/compat";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { RegistrationManageReadResponse } from "../../../shared/schemas/registration";
@@ -22,9 +23,12 @@ type Session = ReturnType<typeof userAuthSessionResponseSchema.parse>;
 export function RegistrationIdentityChange({
   data,
   onChanged,
+  children,
 }: {
   data: RegistrationManageReadResponse;
   onChanged: () => void | Promise<void>;
+  /** Multiple field pencils share this one dialog and its update flow. */
+  children?: (edit: (label: string) => ComponentChildren) => ComponentChildren;
 }) {
   const [open, show, close] = useDialogQueryState("representation");
   const [session, setSession] = useState<Session | null>(null);
@@ -74,19 +78,22 @@ export function RegistrationIdentityChange({
       setError("Your changes were saved, but the registration could not be refreshed. Try refreshing again.");
     }
   }
+  const edit = (label: string = "Change representation") => (
+    <Button
+      variant="ghost"
+      icon
+      aria-label={label}
+      title={label}
+      loading={loading}
+      disabled={refreshPending}
+      onClick={show}
+    >
+      <IconPencil />
+    </Button>
+  );
   return (
     <>
-      <Button
-        variant="ghost"
-        icon
-        aria-label="Change representation"
-        title="Change representation"
-        loading={loading}
-        disabled={refreshPending}
-        onClick={show}
-      >
-        <IconPencil />
-      </Button>
+      {children ? children(edit) : edit()}
       {!open && error && <Alert tone="danger">{error}</Alert>}
       {!open && refreshPending && (
         <Button type="button" onClick={() => void refresh()}>

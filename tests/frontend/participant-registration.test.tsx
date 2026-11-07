@@ -1,14 +1,7 @@
 // @vitest-environment jsdom
 /**
- * The attendee's own registration page in the portal.
- *
- * It opened as a form with "Save changes" and "Cancel registration" side by
- * side, and "Cancel registration" read as "go back without saving". What is
- * asserted here is the separation the page now keeps: it opens read-only,
- * editing is an explicit command whose way out is "Discard changes", each
- * day carries its own change (an in-person seat leads with "Can't make it in
- * person?"), and cancelling sits apart at the end behind the shared
- * confirmation.
+ * Attendee registration details, explicit editing, and confirmation safeguards.
+ * Attendance drafts survive failed saves; discarding never writes a change.
  */
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -20,8 +13,6 @@ import {
 } from "../../assets/shared/schemas/registration";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { ParticipantRegistration } from "../../assets/ts/components/events/ParticipantRegistration";
-import { RegistrationIdentityChange } from "../../assets/ts/components/events/RegistrationIdentityChange";
-import { registrationIdentityChangeSchema } from "../../assets/shared/schemas/registration-identity";
 import { REGISTRATION_ID, ENDPOINT, EVENT, readResponse, FORMS } from "./helpers/participant-registration-fixtures";
 import { confirmationButton, openConfirmation } from "./helpers/confirm-dialog";
 
@@ -69,7 +60,7 @@ async function settle(): Promise<void> {
   });
 }
 
-async function mount(): Promise<HTMLElement> {
+async function mount(focusDay?: string): Promise<HTMLElement> {
   const container = document.createElement("div");
   document.body.append(container);
   mounted.push(container);
@@ -77,7 +68,12 @@ async function mount(): Promise<HTMLElement> {
     render(
       <>
         <ConfirmDialogHost />
-        <ParticipantRegistration registrationId={REGISTRATION_ID} eventId={EVENT.id} slug={EVENT.slug} />
+        <ParticipantRegistration
+          registrationId={REGISTRATION_ID}
+          eventId={EVENT.id}
+          slug={EVENT.slug}
+          focusDay={focusDay}
+        />
       </>,
       container,
     ),
@@ -90,7 +86,7 @@ async function mount(): Promise<HTMLElement> {
 function button(root: ParentNode, label: string): HTMLButtonElement | null {
   return (
     [...root.querySelectorAll<HTMLButtonElement>("button")].find(
-      (b) => b.textContent?.trim() === label && !b.closest("[hidden]"),
+      (b) => (b.getAttribute("aria-label") ?? b.textContent?.trim()) === label && !b.closest("[hidden]"),
     ) ?? null
   );
 }
@@ -106,6 +102,14 @@ async function click(target: HTMLElement | null): Promise<void> {
   await settle();
 }
 
+async function requestCancellation(root: ParentNode): Promise<void> {
+  await click(root.querySelector<HTMLButtonElement>('button[aria-label="Registration actions"]'));
+  const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+    (node) => node.textContent?.trim() === "Cancel my registration…",
+  );
+  await click(item ?? null);
+}
+
 afterEach(() => {
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
@@ -116,56 +120,32 @@ afterEach(() => {
 });
 
 describe("ParticipantRegistration", () => {
-  it("retries a failed refresh without saving the representation twice", async () => {
-    const identity = {
-      id: "00000000-0000-4000-8000-000000000042",
-      organizationId: null,
-      organizationName: null,
-      jobTitle: null,
-    };
-    const fetch = vi.fn(
-      async (_url: string, init?: RequestInit) =>
-        new Response(
-          JSON.stringify(
-            init?.method === "PUT"
-              ? { success: true, identity, badgeVersion: "2026-01-01T00:00:00.000Z" }
-              : {
-                  success: true,
-                  sessionId: "00000000-0000-4000-8000-000000000045",
-                  expiresAt: "2099-12-31T23:59:59.000Z",
-                  idleExpiresAt: "2099-12-31T23:59:59.000Z",
-                  identity: { id: "00000000-0000-4000-8000-000000000041", email: "ada@example.test" },
-                  eventParticipation: true,
-                  actingIdentityId: identity.id,
-                  actingIdentities: [identity],
-                },
-          ),
-          { headers: { "content-type": "application/json" } },
-        ),
+  it("opens the overview with identity, verified email and attendance, linking to existing destinations", async () => {
+    installApi(
+      readResponse({
+        dayWaitlist: [{ dayDate: "2026-12-01", status: "waiting", priorityLane: "general", offerExpiresAt: null }],
+      }),
     );
-    vi.stubGlobal("fetch", fetch);
-    const changed = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
-    const container = document.createElement("div");
-    document.body.append(container);
-    mounted.push(container);
-    await act(() =>
-      render(
-        <RegistrationIdentityChange data={readResponse({ identityId: identity.id })} onChanged={changed} />,
-        container,
-      ),
+    const page = await mount();
+    expect(facts(page).Name).toBe("Ada Lovelace");
+    expect(facts(page).Organization).toContain("Analytical Engines");
+    expect(page.querySelectorAll('input[type="radio"]')).toHaveLength(0);
+    expect(page.textContent).toContain("On the waiting list");
+    expect(button(page, "Change attendance")).not.toBeNull();
+    expect(page.querySelector(`a[href="#/events/${EVENT.slug}/ticket"]`)).toBeNull();
+    expect(page.querySelector('button[aria-label="Registration actions"]')).not.toBeNull();
+  });
+  it("explains email ownership without editing the registration", async () => {
+    const requests = installApi();
+    const container = await mount();
+    const opener = button(container, "About changing your email address");
+    await click(opener);
+    expect(document.querySelector("dialog[open]")?.textContent).toContain(
+      "To change your email address, change the identity you’re registered with. The new address must belong to you. You can’t use this option to transfer your seat to someone else.",
     );
-    await click(container.querySelector('button[aria-label="Change representation"]'));
-    await click(button(document, "Save changes"));
-    await vi.waitFor(() => expect(container.textContent).toContain("could not be refreshed"));
-    const writes = fetch.mock.calls.filter(([, init]) => init?.method === "PUT");
-    expect(writes).toHaveLength(1);
-    expect(registrationIdentityChangeSchema.parse(JSON.parse(String(writes[0]![1]?.body)))).toMatchObject({
-      identityId: identity.id,
-    });
-    await click(button(container, "Retry refresh"));
-    expect(changed).toHaveBeenCalledTimes(2);
-    expect(fetch.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
-    expect(button(container, "Retry refresh")).toBeNull();
+    expect(requests.every((request) => request.method === "GET")).toBe(true);
+    await click(button(document.querySelector("dialog[open]")!, "Close"));
+    expect(document.querySelector("dialog[open]")).toBeNull();
   });
   it("opens read-only, with the registration's details as a description list", async () => {
     installApi();
@@ -173,36 +153,38 @@ describe("ParticipantRegistration", () => {
 
     expect(container.querySelectorAll("input, select, textarea")).toHaveLength(0);
     // The page header and tab already name the page; the panel adds no third "Registration".
-    expect(container.querySelector(".pk-panel__header")).toBeNull();
+    expect(container.querySelector(".pk-panel__title")?.textContent).toBe("Your details");
     expect(facts(container)).toMatchObject({
       Name: "Ada Lovelace",
       "Email address": expect.stringContaining("ada@example.test"),
-      Representation: "Analytical Engines · Engineer",
+      Organization: "Analytical Engines",
+      "Job title": "Engineer",
       "Dietary requirements": "Vegetarian",
     });
     // A confirmed address carries a tick after it instead of a separate "Email confirmed" line.
     expect(container.querySelector(".pk-verified-value__mark")?.textContent).toBe("confirmed");
+    expect(container.querySelectorAll(".pk-verified-value__mark")).toHaveLength(1);
     expect(container.textContent).not.toContain("Email confirmed");
     // A normal registration needs no "Registered" badge: the days below already say it.
     expect(container.textContent).not.toContain("Registered");
     // The confirmed-days summary already states each day; the fact list does not repeat it.
     expect(facts(container)).not.toHaveProperty("Day 1");
-    expect(button(container, "Edit details")?.classList.contains("pk-btn--primary")).toBe(true);
+    expect(button(container, "Edit registration details")?.classList.contains("pk-btn--ghost")).toBe(true);
     expect(button(container, "Save changes")).toBeNull();
-    // Each day is a card with its state in words and the change it allows.
-    // The shared day summary states the days in words, grouped by what they amount to.
-    const summary = container.querySelector('[aria-label="Your registration, day by day"]');
-    expect(summary?.textContent).toContain("In-person");
-    expect(button(container, "Can't make it in person?")).not.toBeNull();
+    const summary = container.querySelector('[aria-label="Attendance choices"]');
+    expect(summary?.querySelectorAll("[data-selected]")).toHaveLength(2);
+    expect(button(container, "Change attendance")).not.toBeNull();
+    expect(button(container, "Edit job title")).not.toBeNull();
     // Cancelling is findable on the page, set apart and quiet, never the main action.
-    expect(button(container, "Cancel my registration…")?.classList.contains("pk-btn--danger-quiet")).toBe(true);
+    expect(button(container, "Cancel my registration…")).toBeNull();
+    expect(container.querySelector('button[aria-label="Registration actions"]')).not.toBeNull();
   });
 
   it("swaps the read view for the form on Edit, and Discard resets the draft and returns", async () => {
     const requests = installApi();
     const container = await mount();
 
-    await click(button(container, "Edit details"));
+    await click(button(container, "Edit registration details"));
     const lastName = container.querySelector<HTMLInputElement>('input[name="lastName"]');
     expect(lastName?.value).toBe("Lovelace");
     expect(button(container, "Save changes")?.type).toBe("submit");
@@ -216,10 +198,10 @@ describe("ParticipantRegistration", () => {
     });
     await click(button(container, "Discard changes"));
 
-    await vi.waitFor(() => expect(button(container, "Edit details")).not.toBeNull());
+    await vi.waitFor(() => expect(button(container, "Edit registration details")).not.toBeNull());
     expect(container.querySelectorAll("input, select, textarea")).toHaveLength(0);
     expect(facts(container)["Name"]).toBe("Ada Lovelace");
-    await click(button(container, "Edit details"));
+    await click(button(container, "Edit registration details"));
     expect(container.querySelector<HTMLInputElement>('input[name="lastName"]')?.value).toBe("Lovelace");
     expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
   });
@@ -228,9 +210,12 @@ describe("ParticipantRegistration", () => {
     installApi();
     const container = await mount();
 
-    await click(button(container, "Edit details"));
+    await click(button(container, "Edit registration details"));
     expect(container.querySelector('input[name="organizationName"], input[name="jobTitle"]')).toBeNull();
-    expect(facts(container)).toMatchObject({ Representation: "Analytical Engines · Engineer" });
+    expect(facts(container)).toMatchObject({
+      Organization: "Analytical Engines",
+      "Job title": "Engineer",
+    });
     const manage = Array.from(container.querySelectorAll("a")).find((link) => link.textContent === "Manage identities");
     expect(manage?.getAttribute("href")).toBe("/portal/#/users/current");
   });
@@ -238,39 +223,48 @@ describe("ParticipantRegistration", () => {
   it("names an organization awaiting staff review instead of showing Personal", async () => {
     installApi(
       readResponse({
-        user: { ...readResponse().user, organization_name: null, job_title: "Engineer" },
+        user: { ...readResponse().user, organization_name: "Analytical Engines", job_title: "Engineer" },
         pendingOrganizationName: "Analytical Engines",
       }),
     );
     const container = await mount();
 
-    expect(facts(container)).toMatchObject({ Representation: "Analytical Engines · Engineer · awaiting review" });
+    expect(facts(container)).toMatchObject({
+      Organization: "Analytical Engines",
+      "Job title": "Engineer",
+    });
+    expect(facts(container)["Representation status"]).toBeUndefined();
+    const status = button(container, "Organization link awaiting approval");
+    expect(status).not.toBeNull();
+    await click(status);
+    expect(document.body.textContent).toContain("This does not affect your conference registration");
+    await click(button(document.body, "Close"));
   });
 
   it("preserves the registration update draft through browser Back and Forward", async () => {
     const requests = installApi();
     const container = await mount();
-    await click(button(container, "Edit details"));
+    await click(button(container, "Edit registration details"));
     const lastName = container.querySelector<HTMLInputElement>('input[name="lastName"]')!;
     await act(() => {
       lastName.value = "Draft name";
       lastName.dispatchEvent(new Event("input", { bubbles: true }));
       history.back();
     });
-    await vi.waitFor(() => expect(button(container, "Edit details")).not.toBeNull());
+    await vi.waitFor(() => expect(button(container, "Edit registration details")).not.toBeNull());
     await act(() => history.forward());
     await vi.waitFor(() => expect(button(container, "Save changes")).not.toBeNull());
     expect(container.querySelector<HTMLInputElement>('input[name="lastName"]')!.value).toBe("Draft name");
     expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
     await click(button(container, "Discard changes"));
-    await vi.waitFor(() => expect(button(container, "Edit details")).not.toBeNull());
+    await vi.waitFor(() => expect(button(container, "Edit registration details")).not.toBeNull());
   });
 
   it("saves through the shared contract and returns to the read view with the outcome", async () => {
     const requests = installApi();
     const container = await mount();
 
-    await click(button(container, "Edit details"));
+    await click(button(container, "Edit registration details"));
     const lastName = container.querySelector<HTMLInputElement>('input[name="lastName"]');
     await act(async () => {
       lastName!.value = "Byron";
@@ -296,14 +290,14 @@ describe("ParticipantRegistration", () => {
     const requests = installApi();
     const container = await mount();
 
-    await click(button(container, "Cancel my registration…"));
+    await requestCancellation(container);
     expect(openConfirmation()?.textContent).toContain("Cancel your registration?");
     expect(openConfirmation()?.textContent).toContain("restore");
     await click(confirmationButton("Keep registration"));
     expect(openConfirmation()).toBeNull();
     expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
 
-    await click(button(container, "Cancel my registration…"));
+    await requestCancellation(container);
     await click(confirmationButton("Cancel registration"));
     await settle();
 
@@ -320,7 +314,7 @@ describe("ParticipantRegistration", () => {
     );
     const container = await mount();
 
-    expect(button(container, "Edit details")).toBeNull();
+    expect(button(container, "Edit registration details")).toBeNull();
     expect(button(container, "Cancel my registration…")).toBeNull();
     expect(button(container, "Can't make it in person?")).toBeNull();
     const restore = button(container, "Restore registration");
@@ -353,7 +347,7 @@ describe("ParticipantRegistration", () => {
       claimDayWaitlistOffers: ["2026-12-01"],
     });
   });
-  it("groups identical confirmed days into one line and marks a waiting day apart", async () => {
+  it("shows confirmed selections and marks the actual waiting day in the shared matrix", async () => {
     const day = readResponse().eventDays[0]!;
     installApi(
       readResponse({
@@ -367,9 +361,29 @@ describe("ParticipantRegistration", () => {
       }),
     );
     const container = await mount();
-    const rows = [...container.querySelectorAll<HTMLElement>(".pk-day-status__row")];
-    expect(rows.map((row) => row.dataset.kind)).toEqual(["waiting", "confirmed"]);
-    expect(rows[0]!.textContent).toContain("On the waiting list: In-person");
+    expect(container.querySelectorAll(".pk-attendance-matrix__cell[data-selected]")).toHaveLength(3);
+    expect(container.querySelectorAll(".pk-attendance-matrix__cell[data-selected][data-waitlist]")).toHaveLength(1);
+    expect(container.textContent).toContain("On the waiting list");
+  });
+
+  it("keeps the attendance draft editable when saving fails", async () => {
+    const requests = installApi(readResponse(), {
+      refusePatch: { error: { code: "TEMPORARY_FAILURE", message: "Try saving again." } },
+    });
+    const container = await mount();
+    await click(button(container, "Change attendance"));
+    await click(container.querySelector<HTMLInputElement>('input[type="radio"][value="on_demand"]'));
+    await act(async () => {
+      container
+        .querySelector("form.pk-reg-days__form")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+    expect(requests.filter(({ method }) => method === "PATCH")).toHaveLength(1);
+    expect(container.querySelector<HTMLInputElement>('input[type="radio"][value="on_demand"]')?.checked).toBe(true);
+    expect(button(container, "Save my days")).not.toBeNull();
+    expect(button(container, "Discard changes")).not.toBeNull();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Try saving again.");
   });
 
   it("keeps a waiting day in the queue when the days are saved unchanged", async () => {
@@ -385,7 +399,7 @@ describe("ParticipantRegistration", () => {
       }),
     );
     const container = await mount();
-    await click(button(container, "Change my days"));
+    await click(button(container, "Change attendance"));
     await act(async () => {
       container
         .querySelector("form.pk-reg-days__form")!
@@ -412,13 +426,11 @@ describe("ParticipantRegistration", () => {
         ],
       }),
     );
-    const container = await mount();
-
-    await click(button(container, "Can't make it in person?"));
+    await mount("2026-12-01");
     const dialog = openConfirmation()!;
     const confirm = () => [...dialog.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Release"));
     expect(confirm()?.disabled).toBe(true);
-    await click(dialog.querySelector<HTMLInputElement>('input[name="releaseDay"][value="2026-12-01"]'));
+    expect(dialog.querySelector<HTMLInputElement>('input[name="releaseDay"][value="2026-12-01"]')?.checked).toBe(true);
     await click(dialog.querySelector<HTMLInputElement>('input[name="joinInstead"][value="on_demand"]'));
     expect(confirm()?.disabled).toBe(false);
     await click(confirm()!);
@@ -449,8 +461,7 @@ describe("ParticipantRegistration", () => {
         dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "moon_base", optionLabel: "Moon base", label: null }],
       }),
     );
-    const container = await mount();
-    await click(button(container, "Can't make it in person?"));
+    await mount("2026-12-01");
     const dialog = openConfirmation()!;
     await click(dialog.querySelector<HTMLInputElement>('input[name="joinInstead"][value="live_lounge"]'));
     await click([...dialog.querySelectorAll("button")].find((item) => item.textContent?.startsWith("Release"))!);
@@ -468,15 +479,14 @@ describe("ParticipantRegistration", () => {
       const requests = installApi(data, {
         forms: eventFormsResponseSchema.parse({ ...FORMS, eventDays: data.eventDays }),
       });
-      const container = await mount();
+      const container = await mount(editor === "release" ? "2026-12-01" : undefined);
 
       if (editor === "release") {
-        await click(button(container, "Can't make it in person?"));
         const dialog = openConfirmation()!;
         await click(dialog.querySelector<HTMLInputElement>('input[name="joinInstead"][value=""]'));
         await click([...dialog.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Release"))!);
       } else {
-        await click(button(container, "Edit details"));
+        await click(button(container, "Edit registration details"));
         await click(container.querySelector<HTMLInputElement>('input[name^="dayAttendance."][value=""]'));
         await act(() => {
           container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -501,7 +511,7 @@ describe("ParticipantRegistration", () => {
   });
 
   async function submitDetails(container: HTMLElement): Promise<void> {
-    await click(button(container, "Edit details"));
+    await click(button(container, "Edit registration details"));
     await act(async () => {
       container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });

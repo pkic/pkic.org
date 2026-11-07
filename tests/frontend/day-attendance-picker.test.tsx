@@ -43,6 +43,49 @@ async function click(control: HTMLElement) {
 }
 
 describe("day attendance matrix", () => {
+  it("shows actual waitlist standing without allowing changes or treating a full confirmed day as waitlisted", async () => {
+    const picker = mount(
+      <DayAttendancePicker
+        readOnly
+        days={[
+          day({ attendanceOptions: [{ value: "in_person", label: "In person", spotsRemainingPercent: 0 }] }),
+          day({
+            dayDate: "2027-09-02",
+            attendanceOptions: [{ value: "in_person", label: "In person", spotsRemainingPercent: 0 }],
+          }),
+        ]}
+        value={{ "2027-09-01": "in_person", "2027-09-02": "in_person" }}
+        waitlist={{ "2027-09-02": "waiting" }}
+      />,
+    );
+    expect(picker.querySelectorAll('input[type="radio"]')).toHaveLength(0);
+    expect(picker.querySelector('[aria-label="In person — Day one: Selected"]')).not.toBeNull();
+    expect(picker.querySelector('[aria-label="In person — Day one: On the waiting list"]')).not.toBeNull();
+    expect(picker.textContent).toContain("You are on the waiting list");
+    expect(await axeViolations(picker)).toEqual([]);
+  });
+  it("opens the existing editor from a read-only row without selecting or saving a choice", async () => {
+    const onEdit = vi.fn();
+    const onChange = vi.fn();
+    const picker = mount(
+      <DayAttendancePicker
+        readOnly
+        onEdit={onEdit}
+        onChange={onChange}
+        days={[day()]}
+        value={{ "2027-09-01": "in_person" }}
+      />,
+    );
+    const target = picker.querySelector<HTMLButtonElement>("tbody tr:nth-child(2) .pk-table__row-link")!;
+    expect(target.title).toBe("Change attendance");
+    await click(target);
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(picker.querySelectorAll('input[type="radio"]')).toHaveLength(0);
+    expect(picker.querySelector('[aria-label="In person — Day one: Selected"]')).not.toBeNull();
+    expect(await axeViolations(picker)).toEqual([]);
+  });
+
   it("names the table and every native day choice, with the whole label as its target", async () => {
     const picker = mount(<DayAttendancePicker days={[day(), day({ dayDate: "2027-09-02", label: "Day two" })]} />);
     expect(picker.querySelector("caption")?.textContent).toBe("Attendance by day");

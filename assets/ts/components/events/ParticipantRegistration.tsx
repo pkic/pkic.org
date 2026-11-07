@@ -15,14 +15,13 @@ import { Spinner } from "../Spinner";
 import { confirmAction } from "../ConfirmDialog";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
-import { Panel, PanelBody } from "../../ui/Panel";
+import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import type { EventFormsResponse } from "../../shared/types";
 import { ParticipantRegistrationDetails } from "./ParticipantRegistrationDetails";
 import { ParticipantRegistrationForm, type RegistrationChange } from "./ParticipantRegistrationForm";
-import { CopyLinkRow } from "../../shared/widgets/copy-link-row";
 import { RegistrationDays } from "./RegistrationDays";
-import { SectionHeading } from "../../ui/SectionHeading";
 import { useDialogQueryState } from "../../hooks/useDialogQueryState";
+import { Menu } from "../../ui/Menu";
 
 export function ParticipantRegistration({
   registrationId,
@@ -96,6 +95,13 @@ function RegistrationRecord({
   const cancelled = status === "cancelled";
   const restorable = cancelled && data.registration.cancellation_reason_code !== "unauthorized_registration";
 
+  function editDetails() {
+    setMessage("");
+    setError("");
+    setEditorMounted(true);
+    showEditor();
+  }
+
   /** Sends one change and returns to the read view on success; rejects with the refusal. */
   async function save(change: RegistrationChange, outcome?: string): Promise<void> {
     // Giving up every day uses the same explicit cancellation confirmation from either editor.
@@ -114,14 +120,16 @@ function RegistrationRecord({
   }
 
   /** A read-view command: one request at a time, its refusal said in words. */
-  async function run(command: () => Promise<void>): Promise<void> {
+  async function run(command: () => Promise<void>): Promise<boolean> {
     setBusy(true);
     setError("");
     setMessage("");
     try {
       await command();
+      return true;
     } catch (cause) {
       setError(refusalSentence(cause));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -148,8 +156,10 @@ function RegistrationRecord({
     setMessage("A new confirmation link has been requested. Check your email before continuing.");
   }
 
-  async function saveDays(dayAttendance: Array<{ dayDate: string; attendanceType: string }>): Promise<void> {
-    await run(() => save({ action: "update", dayAttendance }, "Your days are updated. Thank you for letting us know."));
+  async function saveDays(dayAttendance: Array<{ dayDate: string; attendanceType: string }>): Promise<boolean> {
+    return run(() =>
+      save({ action: "update", dayAttendance }, "Your days are updated. Thank you for letting us know."),
+    );
   }
 
   function claimSeats(dayDates: string[]): void {
@@ -167,6 +177,27 @@ function RegistrationRecord({
 
   return (
     <Panel aria-label="Registration">
+      {!editing && (
+        <PanelHeader
+          title="Your details"
+          menu={
+            !cancelled && (
+              <Menu
+                label="Registration actions"
+                items={[
+                  {
+                    id: "cancel",
+                    label: "Cancel my registration…",
+                    danger: true,
+                    disabled: busy,
+                    onSelect: () => void cancelRegistration(),
+                  },
+                ]}
+              />
+            )
+          }
+        />
+      )}
       <PanelBody>
         <div class="pk-stack pk-stack--loose">
           {error && <Alert tone="danger">{error}</Alert>}
@@ -201,65 +232,25 @@ function RegistrationRecord({
                 onRestore={() => void run(() => save({ action: "update" }))}
                 onResend={() => void run(resendConfirmation)}
               />
+              <section class="pk-stack pk-stack--snug" aria-label="Your details">
+                <ParticipantRegistrationDetails
+                  data={data}
+                  form={forms.form}
+                  daysSummarized
+                  onEditDetails={cancelled ? undefined : editDetails}
+                  onIdentityChanged={async () => {
+                    await reload();
+                  }}
+                />
+              </section>
               <RegistrationDays
                 data={data}
                 busy={busy}
                 editable={status === "registered"}
                 focusDay={focusDay}
-                onSave={(dayAttendance) => void saveDays(dayAttendance)}
+                onSave={saveDays}
                 onClaim={claimSeats}
               />
-              <section class="pk-stack pk-stack--snug" aria-label="Your details">
-                <SectionHeading level={3}>Your details</SectionHeading>
-                <ParticipantRegistrationDetails
-                  data={data}
-                  form={forms.form}
-                  daysSummarized
-                  onIdentityChanged={async () => {
-                    await reload();
-                  }}
-                />
-                {!cancelled && (
-                  <div class="pk-cluster">
-                    <Button
-                      variant="primary"
-                      disabled={busy}
-                      onClick={() => {
-                        setMessage("");
-                        setError("");
-                        setEditorMounted(true);
-                        showEditor();
-                      }}
-                    >
-                      Edit details
-                    </Button>
-                  </div>
-                )}
-              </section>
-              {data.shareUrl && !cancelled && (
-                <section class="pk-stack pk-stack--snug" aria-label="Invite a colleague">
-                  <SectionHeading level={3}>Invite a colleague</SectionHeading>
-                  <CopyLinkRow
-                    url={data.shareUrl}
-                    label="Your personal invitation link"
-                    help="Anyone who registers through it is credited to you."
-                  />
-                </section>
-              )}
-              {!cancelled && (
-                <section class="pk-stack pk-stack--snug" aria-label="Cancel registration">
-                  <SectionHeading level={3}>Not coming at all?</SectionHeading>
-                  <p class="pk-small pk-muted">
-                    Cancel and your place goes to someone on the waiting list. To skip only one day, change that day
-                    above instead.
-                  </p>
-                  <div class="pk-cluster">
-                    <Button variant="danger-quiet" disabled={busy} onClick={() => void cancelRegistration()}>
-                      Cancel my registration…
-                    </Button>
-                  </div>
-                </section>
-              )}
             </>
           )}
         </div>
