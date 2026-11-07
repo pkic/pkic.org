@@ -20,6 +20,8 @@ import type { ScannerQueueRecord } from "../../assets/shared/schemas/event-scann
 export const badgeCode = badgeCredentialSchema.parse("ABCDEFGHJKLMNPQR");
 const mocks = vi.hoisted(() => ({
   ready: false,
+  error: "",
+  decoderStatus: "Camera prepared",
   state: "open",
   persist: vi.fn(),
   audit: vi.fn(async (record: unknown) => record),
@@ -54,7 +56,7 @@ vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useS
   useScannerDevice: () => ({
     deviceId: "22222222-2222-4222-8222-222222222222",
     ready: mocks.ready,
-    error: "",
+    error: mocks.error,
     epoch: mocks.state === "preparing" ? null : { state: mocks.state },
     setEpoch: vi.fn((epoch) => {
       mocks.state = epoch.state;
@@ -63,7 +65,7 @@ vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useS
   }),
 }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useScannerDecoderPreparation", () => ({
-  useScannerDecoderPreparation: () => "Camera prepared",
+  useScannerDecoderPreparation: () => mocks.decoderStatus,
 }));
 vi.mock(
   "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useEligibilityManifest",
@@ -120,6 +122,8 @@ afterEach(async () => {
   mocks.sessionListeners.clear();
   mocks.cameraScan = null;
   mocks.snapshot = null;
+  mocks.error = "";
+  mocks.decoderStatus = "Camera prepared";
   mocks.drain.mockImplementation(async () => ({ uploaded: 0, state: "complete" }));
   vi.clearAllMocks();
   vi.unstubAllGlobals();

@@ -1,4 +1,3 @@
-import { useScannerDecoderPreparation } from "./useScannerDecoderPreparation";
 import { Button } from "../../../../../../ui/Button";
 import { useState } from "preact/hooks";
 import { startNextScannerEpoch, freezeScannerEpoch, closeScannerEpoch } from "./scanner-device-ledger";
@@ -20,7 +19,6 @@ export function ScannerSessionControls({
   sync: () => Promise<void>;
   message: (value: string) => void;
 }) {
-  const decoderStatus = useScannerDecoderPreparation(`${slug}:${operatorUserId}`);
   const [preparing, setPreparing] = useState(false);
   async function close() {
     capturePause(true);
@@ -54,8 +52,6 @@ export function ScannerSessionControls({
   }
   return (
     <>
-      <p role="status">{decoderStatus}</p>
-      {scanner.error && <p role="status">{scanner.error}</p>}
       {!scanner.epoch && !scanner.error && <p role="status">Preparing scanner session…</p>}
       {scanner.epoch && (
         <p role="status">

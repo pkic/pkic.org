@@ -16,6 +16,15 @@ import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { formatDateTime } from "../../assets/shared/format-date";
 describe("scanner device enrollment and manual capture boundary", () => {
+  it("keeps camera and enrollment failures in the visible sync panel", async () => {
+    mocks.error = "Could not enroll this scanner";
+    mocks.decoderStatus = "Offline camera files are not prepared";
+    await mount(false);
+    const diagnostics = await openDiagnostics();
+    const status = diagnostics.querySelector('[aria-label="Sync and offline status"]')!;
+    expect(status.textContent).toContain(mocks.decoderStatus);
+    expect(status.querySelector('[role="alert"]')?.textContent).toContain(mocks.error);
+  });
   it("keeps capture disabled until persistent device enrollment is ready", async () => {
     await mount(false);
     expect(host.textContent).toContain("Preparing scanner for this session");
