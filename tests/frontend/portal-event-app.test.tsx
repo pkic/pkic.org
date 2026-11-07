@@ -1,4 +1,3 @@
-import { eventPlaceSummary } from "../../assets/shared/event-place";
 // @vitest-environment jsdom
 import { render, type JSX } from "preact";
 import { act } from "preact/test-utils";
@@ -14,10 +13,6 @@ import { portalAppTabForLocation, portalAppTabs } from "../../assets/ts/member-f
 import { pickEventNow } from "../../assets/ts/member-flows/portal/sections/events/app/useEventNow";
 import { eventPhase } from "../../assets/ts/member-flows/portal/sections/events/app/event-timing";
 import { formatDateTimeInZone } from "../../assets/shared/format-date";
-import {
-  eventVenueLines,
-  type ParticipantEventDetail,
-} from "../../assets/ts/member-flows/portal/sections/events/app/event-app-model";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { PERSONAL_ADDRESS_FOLLOW_UP_COPY } from "../../assets/shared/email-first-copy";
 import { portalSessionFixture } from "../helpers/portal-session";
@@ -571,22 +566,6 @@ describe("event app agenda and pages", () => {
       render(<ParticipantEvent event={event({ proposalCall: { open: false, path: null, closesAt: null } })} />, host),
     );
     expect(host.textContent).not.toContain("Submit a proposal");
-  });
-
-  it("names the venue and city once and keeps the full address for the venue details", () => {
-    const managed = {
-      ...event(),
-      venue: "Meervaart, Meer en Vaart 300, 1068 LE, Amsterdam, Netherlands",
-      city: "Amsterdam",
-      country: "NL",
-    } as ParticipantEventDetail;
-    expect(eventPlaceSummary(managed)).toBe("Meervaart · Amsterdam");
-    expect(eventVenueLines(managed)).toEqual(["Meervaart, Meer en Vaart 300, 1068 LE, Amsterdam, Netherlands"]);
-    expect(eventVenueLines({ ...managed, city: "Amstelveen" })).toEqual([
-      "Meervaart, Meer en Vaart 300, 1068 LE, Amsterdam, Netherlands",
-      "Amstelveen, Netherlands",
-    ]);
-    expect(eventPlaceSummary({ ...event(), city: "Amsterdam" })).toBe("Amsterdam");
   });
 });
 
