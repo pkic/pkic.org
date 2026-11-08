@@ -601,16 +601,13 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await invitation.getByRole("button", { name: "Add row", exact: true }).click();
   await invitation.getByLabel("Invite 2 first name (optional)", { exact: true }).fill("Casey");
   await invitation.getByRole("button", { name: "Send invites", exact: true }).click();
-  await expect(invitation.getByLabel("Invite 2 email address", { exact: true })).toHaveAttribute(
-    "aria-invalid",
-    "true",
-  );
+  await expect(invitation.getByLabel(/^Invite 2 email address/)).toHaveAttribute("aria-invalid", "true");
   const colleagueEmail = `colleague-${crypto.randomUUID()}@example.test`;
-  await invitation.getByLabel("Invite 2 email address", { exact: true }).fill(colleagueEmail);
+  await invitation.getByLabel(/^Invite 2 email address/).fill(colleagueEmail);
   const invitedSince = await capturedEmailCount();
   for (const width of [1440, 375]) {
     await page.setViewportSize({ width, height: 900 });
-    await page.screenshot({ path: testInfo.outputPath(`invitation-${width}.png`), fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath(`invitation-${width}.png`) });
   }
   const sentInvitation = page.waitForResponse(
     (response) => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/invites"),
@@ -622,7 +619,7 @@ test("attendee manages a registration and downloads a personal event calendar", 
   expect(peerInviteResultSchema.parse(await invited.json()).created).toEqual([{ email: colleagueEmail }]);
   await invitation.getByRole("button", { name: "Done", exact: true }).click();
   await expect(invitation).not.toBeVisible();
-  await waitForCapturedEmail(colleagueEmail, "Invitation", { since: invitedSince });
+  await waitForCapturedEmail(colleagueEmail, "invited", { since: invitedSince });
   await page.getByRole("link", { name: "Manage registration", exact: true }).click();
   await expect(page).toHaveURL(/\/registration$/);
   // The registration opens read-only: its details are facts, not fields (the invitation link is a read-only copy field).
@@ -664,7 +661,11 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await expect(registration.getByText(/Updated-Attendee/)).toBeVisible();
   await expect(registration.getByText(/Discarded-Name/)).toHaveCount(0);
   // Saving no days asks for cancellation; declining keeps the user's draft.
-  await registration.getByRole("button", { name: "Change attendance", exact: true }).click();
+  await registration
+    .getByRole("row")
+    .filter({ hasText: "On-demand" })
+    .getByRole("button", { name: "Change attendance", exact: true })
+    .click();
   await registration.getByRole("button", { name: "Choose Not attending for every available day", exact: true }).click();
   await registration.getByRole("button", { name: "Save my days", exact: true }).click();
   await page.getByRole("button", { name: "Keep registration", exact: true }).click();
@@ -677,6 +678,10 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await page.keyboard.press("Escape");
   for (const width of [1440, 375]) {
     await page.setViewportSize({ width, height: 900 });
+    await page.mouse.move(0, 0);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: testInfo.outputPath(`registration-${width}.png`), fullPage: true });
   }
   // Cancelling is a record action behind the confirmation.
