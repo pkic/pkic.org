@@ -311,8 +311,6 @@ export async function createMemberApplication(
   const organizationDomain = isIndividual
     ? null
     : (selection?.domain ?? existingDomainClaim?.domain ?? workEmailDomain(input.applicantEmail));
-  if (existingDomainClaim && !selection?.domain && !input.applicantIdentityId)
-    throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose the organization for this email domain first.");
   const newOrganizationName = !isIndividual && selection?.domain && !organizationId ? input.organizationName : null;
   const statusUrl = `${input.appBaseUrl}/application-status/?id=${encodeURIComponent(id)}&token=${encodeURIComponent(manageToken)}`;
 

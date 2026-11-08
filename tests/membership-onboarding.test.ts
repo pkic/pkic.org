@@ -152,7 +152,7 @@ describe("Post-approval onboarding", () => {
     );
   });
 
-  it("does not approve a selected organization after its shared-domain evidence disappears", async () => {
+  it("approves a reviewed organization selection after its shared-domain evidence changes", async () => {
     const { id } = await createReviewedApplication();
     const owner = await insertOrganization(env.DB, "Other Company");
     const selected = await insertOrganization(env.DB, "Acme Corp");
@@ -167,11 +167,19 @@ describe("Post-approval onboarding", () => {
       env.DB.prepare("UPDATE member_applications SET organization_id=? WHERE id=?").bind(selected, id),
     ]);
     const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
-    expect(response.status).toBe(409);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await response.json()).toMatchObject({ organizationId: selected });
     expect(await env.DB.prepare("SELECT stage FROM member_applications WHERE id=?").bind(id).first("stage")).toBe(
-      "processing",
+      "approved",
     );
-    expect(await queryAll(env.DB, "SELECT id FROM members WHERE organization_id=?", [selected])).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM members WHERE organization_id=?", [selected])).toHaveLength(1);
+    expect(
+      await queryAll<{ organization_id: string }>(
+        env.DB,
+        "SELECT organization_id FROM organization_domain_claims WHERE domain=? ORDER BY organization_id",
+        ["acme.test"],
+      ),
+    ).toEqual([owner, selected].sort().map((organization_id) => ({ organization_id })));
   });
 
   it("refuses approving an organization's application until its applicant's job title is recorded", async () => {
