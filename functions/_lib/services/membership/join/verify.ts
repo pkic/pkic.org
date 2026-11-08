@@ -12,14 +12,24 @@ import { workEmailDomain } from "../../../email-domains/classification";
 import { prepareOneTimeAuditLog } from "../../audit";
 import { prepareUserSession } from "../../../auth/user-session";
 import { AppError } from "../../../errors";
-import { issueMemberJoinApplicationToken, verifyMemberJoinVerificationToken } from "./capabilities";
+import {
+  issueMemberJoinApplicationToken,
+  verifyMemberJoinVerificationToken,
+  type MemberJoinApplicationCapabilityPayload,
+} from "./capabilities";
 import { resolveOpenJoinApplication } from "./open-application";
 import { readJoinVerification } from "./verification-read";
 import { prepareEligibleMemberRead } from "../../../auth/identity-capacities";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../db/authorization-guard";
+import {
+  isAuthorizationGuardFailure,
+  isStateGuardFailure,
+  prepareAuthorizationGuard,
+  prepareStateGuard,
+} from "../../../db/authorization-guard";
 import { resolveDomainOrganization } from "../../../../../assets/shared/organization-domain";
 import { verifiedEmailDomainResolutionEvidence } from "../../identities/verified-email-domain";
 import { verifiedAffiliationPreview } from "../../identities/verified-affiliation-preview";
+import { observedDomainClaimsEvidence } from "../../identities/affiliation-evidence";
 import { normalizeOrgName } from "../../../../../assets/shared/organization-name";
 
 async function issueApplicationContinuation(
@@ -27,13 +37,7 @@ async function issueApplicationContinuation(
   payload: Awaited<ReturnType<typeof verifyMemberJoinVerificationToken>>,
   ttlSeconds: number,
   applicantUserId: string | null,
-  organization?: {
-    id?: string;
-    name: string;
-    domain: string;
-    claimIds: string[];
-    pendingApplications: Array<{ id: string; updatedAt: string }>;
-  },
+  organization?: MemberJoinApplicationCapabilityPayload["organization"],
 ): Promise<MemberJoinVerifyResponse> {
   return {
     status: "application_ready",
@@ -90,9 +94,12 @@ export async function verifyMemberJoin(
   }
   const facts = observed.affiliation?.basis.facts;
   const organizations = facts
-    ? observed.affiliation!.basis.organizations.filter(
-        (organization) => resolveDomainOrganization(facts, { organizationId: organization.id }).kind === "organization",
-      )
+    ? observed.affiliation!.basis.organizations.filter((organization) => {
+        const resolution = resolveDomainOrganization(facts, { organizationId: organization.id });
+        return (
+          resolution.kind === "organization" && (capability.applicantKind === "organization" || resolution.isMember)
+        );
+      })
     : [];
   if (input.organizationName) {
     if (!input.domain || !observed.affiliation || capability.applicantKind !== "organization")
@@ -112,8 +119,6 @@ export async function verifyMemberJoin(
       )
     )
       return { status: "organization_application_in_progress" };
-    const open = await resolveOpenJoinApplication(input.signingSecret, observed.openApplication);
-    if (open?.kind === "own") return { status: "application_in_progress", statusPath: open.statusPath };
     return issueApplicationContinuation(
       input.signingSecret,
       capability,
@@ -132,16 +137,14 @@ export async function verifyMemberJoin(
   if (input.organizationId && !organizations.some((organization) => organization.id === input.organizationId))
     throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose an organization from the updated list.");
   const affiliationPreview = observed.affiliation
-    ? verifiedAffiliationPreview(observed.affiliation.basis, observed.affiliation.address, {
-        pendingApplicationReview: true,
-      })
+    ? verifiedAffiliationPreview(observed.affiliation.basis, observed.affiliation.address)
     : null;
   if (
     facts &&
     affiliationPreview &&
     !input.organizationId &&
     (organizations.length > 0 ||
-      input.domain ||
+      (capability.applicantKind === "organization" && input.domain) ||
       (capability.applicantKind === "organization" &&
         (facts.heldByApplication || affiliationPreview.domains.length > 1)))
   ) {
@@ -152,7 +155,12 @@ export async function verifyMemberJoin(
       organizations: organizations.map(({ id, name }) => ({ id, name })),
     };
   }
-  if (facts && !input.organizationId && resolveDomainOrganization(facts).kind === "ambiguous")
+  if (
+    capability.applicantKind === "organization" &&
+    facts &&
+    !input.organizationId &&
+    resolveDomainOrganization(facts).kind === "ambiguous"
+  )
     return { status: "support_required" };
   const domain = observed.claim?.domain ?? workEmailDomain(capability.email) ?? emailDomainOf(capability.email);
   const provedUserId = provedMailboxUserId(observed.ownership);
@@ -162,8 +170,6 @@ export async function verifyMemberJoin(
       const selected = organizations.find((organization) => organization.id === input.organizationId);
       if (!selected || capability.applicantKind !== "organization" || !observed.affiliation)
         return { status: "support_required" };
-      const open = await resolveOpenJoinApplication(input.signingSecret, observed.openApplication);
-      if (open?.kind === "own") return { status: "application_in_progress", statusPath: open.statusPath };
       return issueApplicationContinuation(input.signingSecret, capability, input.applicationTtlSeconds, provedUserId, {
         id: selected.id,
         name: selected.name,
@@ -174,9 +180,7 @@ export async function verifyMemberJoin(
           .map((claim) => ({ id: claim.applicationId!, updatedAt: claim.applicationUpdatedAt! })),
       });
     }
-    const open = await resolveOpenJoinApplication(input.signingSecret, observed.openApplication);
-    if (open?.kind === "own") return { status: "application_in_progress", statusPath: open.statusPath };
-    if (open?.kind === "organization" && capability.applicantKind === "organization") {
+    if (observed.openApplication.organizationHeld && capability.applicantKind === "organization") {
       return { status: "organization_application_in_progress" };
     }
     if (capability.applicantKind === "individual" && observed.state?.individual_conflict) {
@@ -221,16 +225,14 @@ export async function verifyMemberJoin(
         method: "magic_link",
         verifiedAt,
       }),
+      ...observedDomainClaimsEvidence(capability.email, observed.affiliation?.basis.claims ?? []).map((evidence) =>
+        prepareStateGuard(db, evidence),
+      ),
       ...(organizations.length === 1
         ? [
-            prepareAuthorizationGuard(
+            prepareStateGuard(
               db,
-              verifiedEmailDomainResolutionEvidence(
-                domain,
-                claimedMember.organization_id,
-                true,
-                Boolean(facts?.heldByApplication),
-              ),
+              verifiedEmailDomainResolutionEvidence(domain, claimedMember.organization_id, true, true),
             ),
           ]
         : []),
@@ -270,7 +272,7 @@ export async function verifyMemberJoin(
     member = projection.decode(results.slice(-projection.statements.length));
   } catch (error) {
     if (isEmailReservationConflict(error)) return { status: "support_required" };
-    if (isAuthorizationGuardFailure(error))
+    if (isAuthorizationGuardFailure(error) || isStateGuardFailure(error))
       throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose an organization from the updated list.");
     if (
       error instanceof Error &&

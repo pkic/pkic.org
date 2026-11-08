@@ -63,25 +63,14 @@ export const organizationDomainsListResponseSchema = paginatedResponseSchema("do
  */
 export const organizationDomainClaimPreviewSchema = z.object({
   domain: z.string(),
-  /** Another organization claims or has a verified affiliation on the domain. */
+  /** Another organization claims or has a verified affiliation on the domain, or an application holds it. */
   shared: z.boolean(),
-  /** People with a verified address on the domain and no relationship with the organization yet. */
-  peopleToLink: z.number().int().nonnegative(),
 });
 export type OrganizationDomainClaimPreview = z.infer<typeof organizationDomainClaimPreviewSchema>;
 export const organizationDomainClaimPreviewResponseSchema = z.object({ preview: organizationDomainClaimPreviewSchema });
 
-export const organizationDomainLinkingSchema = z.object({
-  /** People joined while the claim was saved. */
-  peopleLinked: z.number().int().nonnegative(),
-  /** More people remain; the scheduler links them in bounded passes. */
-  continuing: z.boolean(),
-});
-export type OrganizationDomainLinking = z.infer<typeof organizationDomainLinkingSchema>;
-
 export const organizationDomainClaimResponseSchema = z.object({
   domain: organizationDomainSchema,
-  linking: organizationDomainLinkingSchema,
 });
 
 export const organizationDomainsListRouteSchema = {
@@ -102,7 +91,7 @@ export const organizationDomainClaimCreateRouteSchema = {
   ...requiresPermissions("organizations:write"),
   summary: "Claim an email domain for an organization",
   description:
-    "Records an organization's claim to a domain. A domain claimed by several organizations requires an explicit choice; otherwise verified addresses may be linked automatically. Free and disposable mail, public suffixes, and domains held by pending applications cannot be claimed.",
+    "Records an organization's claim to a domain, including domains shared with other organizations or pending applications. Each person must explicitly confirm their affiliation. Free and disposable mail domains and public suffixes cannot be claimed.",
   request: {
     params: organizationManagementParamsSchema,
     body: { required: true, content: { "application/json": { schema: organizationDomainClaimCreateSchema } } },
@@ -112,7 +101,7 @@ export const organizationDomainClaimCreateRouteSchema = {
     ...authErrors({
       badRequest: "Invalid domain or reason.",
       notFound: "Organization not found.",
-      conflict: "This organization already claims the domain, the domain is held, or the organization was merged.",
+      conflict: "This organization already claims the domain, the claim changed, or the organization was merged.",
       unprocessable: "Free and disposable mail domains and public suffixes cannot be claimed.",
     }),
   },
@@ -123,14 +112,14 @@ export const organizationDomainClaimPreviewRouteSchema = {
   ...requiresPermissions("organizations:write"),
   summary: "Preview claiming an email domain for an organization",
   description:
-    "Refused exactly as the claim would be. Otherwise says how many people with a verified address on the domain the claim would automatically link to the organization.",
+    "Refused exactly as the claim would be. Otherwise reports whether another organization or pending application shares the domain. People must confirm their affiliation after a claim.",
   request: { params: organizationDomainParamsSchema },
   responses: {
     ...ok("What the claim would do.", organizationDomainClaimPreviewResponseSchema),
     ...authErrors({
       badRequest: "Invalid domain.",
       notFound: "Organization not found.",
-      conflict: "This organization already claims the domain, the domain is held, or the organization was merged.",
+      conflict: "This organization already claims the domain, the claim changed, or the organization was merged.",
       unprocessable: "Free and disposable mail domains cannot be claimed.",
     }),
   },
@@ -141,7 +130,7 @@ export const organizationDomainClaimDeleteRouteSchema = {
   ...requiresPermissions("organizations:write"),
   summary: "Remove an organization's claim on an email domain",
   description:
-    "People already linked keep their identities; new verified addresses on the domain no longer join the organization through the claim.",
+    "People already linked keep their identities; the removed claim no longer supports new affiliation choices.",
   request: { params: organizationDomainParamsSchema },
   responses: {
     ...ok("Claim removed.", successResponseSchema),

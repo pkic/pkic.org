@@ -77,6 +77,7 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "portal-application-stages-decline",
   "portal-application-stages-communications",
   "portal-join-categories",
+  "individual-claimed-domain",
   "portal-member-access",
   "portal-permission-boundaries",
   "portal-identity-security",

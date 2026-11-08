@@ -27,7 +27,6 @@ export const SCHEDULED_JOB_KEYS = [
   "meeting_invitations",
   "event_email_campaigns",
   "live_session_erasures",
-  "organization_domain_linking",
   "person_profile_addresses",
   "standing_chair_terms",
   "standing_event_speakers",

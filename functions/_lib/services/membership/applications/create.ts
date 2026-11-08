@@ -33,7 +33,6 @@ import {
   getOrganizationDomainClaim,
   getOrganizationDomainClaimForEmail,
   prepareClaimDomainForApplication,
-  prepareClaimDomainForOrganization,
 } from "../organization-domain-claims";
 import { prepareMembershipCategoryRead, requireMembershipCategoryResult } from "../categories";
 import { prepareMembershipWorkflowVersionRead } from "../workflows/catalog";
@@ -57,11 +56,17 @@ import { prepareVerifyOwnedEmailStatements } from "../../email-verification";
 import { normalizeEmail } from "../../../validation";
 import { firstNameSchema, lastNameSchema } from "../../../../../assets/shared/schemas/api-common";
 import type { DatabaseLike, StatementLike } from "../../../types";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../db/authorization-guard";
+import {
+  isAuthorizationGuardFailure,
+  isStateGuardFailure,
+  prepareAuthorizationGuard,
+  prepareStateGuard,
+} from "../../../db/authorization-guard";
 import { verifiedEmailDomainResolutionEvidence } from "../../identities/verified-email-domain";
 import { organizationDomainCandidates } from "../../../email-domains/classification";
 import { normalizeOrgName } from "../../../../../assets/shared/organization-name";
-import { buildResolveOrganizationStatements } from "../provisioning";
+import type { MemberJoinApplicationCapabilityPayload } from "../join/capabilities";
+import { first } from "../../../db/queries";
 
 /**
  * Refuses an application whose outcome is already decided before review: the
@@ -178,9 +183,7 @@ export interface CreateMemberApplicationInput {
   applicantIdentityId?: string | null;
   /** The organization of that identity, matched by id rather than by name. */
   organizationId?: string | null;
-  selectedOrganizationDomain?: string;
-  selectedDomainClaimIds?: string[];
-  selectedPendingApplications?: Array<{ id: string; updatedAt: string }>;
+  selectedOrganization?: MemberJoinApplicationCapabilityPayload["organization"];
   /**
    * Answers copied from that identity (title, first link, bio). They replace
    * whatever the request sent under those keys and are kept as the
@@ -212,9 +215,13 @@ async function translateDomainClaimConflict(
   if (isFormSubmissionContextConflict(error)) {
     throw formSubmissionContextChangedError();
   }
-  if (domain) {
+  if (
+    domain &&
+    error instanceof Error &&
+    error.message.includes("UNIQUE constraint failed: organization_domain_claims")
+  ) {
     const claim = await getOrganizationDomainClaim(db, domain);
-    if (claim && claim.applicationId !== applicationId) {
+    if (claim?.applicationId && claim.applicationId !== applicationId) {
       throw new AppError(409, APPLICATION_ALREADY_PENDING, ORGANIZATION_DOMAIN_APPLICATION_PENDING_MESSAGE, {
         formErrors: [ORGANIZATION_DOMAIN_APPLICATION_PENDING_MESSAGE],
         fieldErrors: {},
@@ -228,6 +235,10 @@ export async function createMemberApplication(
   db: DatabaseLike,
   input: CreateMemberApplicationInput,
 ): Promise<CreateMemberApplicationResult> {
+  const selection = input.selectedOrganization;
+  const organizationId = selection?.id ?? input.organizationId;
+  if (selection && input.organizationName !== selection.name)
+    throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Confirm your organization again before applying.");
   const categoryRead = prepareMembershipCategoryRead(db, input.membershipCategory);
   const workflowRead = prepareMembershipWorkflowVersionRead(db, {
     sql: "SELECT workflow_version_id FROM membership_categories WHERE code = ?",
@@ -305,26 +316,23 @@ export async function createMemberApplication(
   await refuseConflictingApplication(db, {
     isIndividual,
     organizationName: isIndividual ? null : (input.organizationName ?? null),
-    organizationId: isIndividual ? null : (input.organizationId ?? null),
+    organizationId: isIndividual ? null : (organizationId ?? null),
     applicantUserId: input.applicantUserId,
     applicantEmail: input.applicantEmail,
   });
   // An organization application holds the domain its address links through (normally the registrable domain).
-  const existingDomainClaim = isIndividual
-    ? null
-    : input.selectedOrganizationDomain
-      ? await getOrganizationDomainClaim(db, input.selectedOrganizationDomain)
-      : await getOrganizationDomainClaimForEmail(db, input.applicantEmail);
+  const existingDomainClaim =
+    isIndividual || selection ? null : await getOrganizationDomainClaimForEmail(db, input.applicantEmail);
   const organizationDomain = isIndividual
     ? null
-    : (input.selectedOrganizationDomain ?? existingDomainClaim?.domain ?? workEmailDomain(input.applicantEmail));
-  if (existingDomainClaim && !input.selectedOrganizationDomain)
+    : (selection?.domain ?? existingDomainClaim?.domain ?? workEmailDomain(input.applicantEmail));
+  if (existingDomainClaim && !selection?.domain && !input.applicantIdentityId)
     throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose the organization for this email domain first.");
-  const newOrganization =
-    !isIndividual && input.selectedOrganizationDomain && !input.organizationId && input.organizationName
-      ? await buildResolveOrganizationStatements(db, { organizationName: input.organizationName }, now)
-      : null;
-  if (newOrganization && !newOrganization.organizationWasCreated)
+  const newOrganizationName = !isIndividual && selection?.domain && !organizationId ? input.organizationName : null;
+  if (
+    newOrganizationName &&
+    (await first(db, "SELECT id FROM organizations WHERE normalized_name=?", [normalizeOrgName(newOrganizationName)]))
+  )
     throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose the existing organization instead.");
   const statusUrl = `${input.appBaseUrl}/application-status/?id=${encodeURIComponent(id)}&token=${encodeURIComponent(manageToken)}`;
 
@@ -332,55 +340,48 @@ export async function createMemberApplication(
   const applicantUserId = input.applicantUserId ?? applicantAccount?.user.id ?? null;
   const statements: StatementLike[] = [
     ...(applicantAccount?.statements ?? []),
-    ...(organizationDomain && !input.selectedOrganizationDomain
+    ...(organizationDomain && !selection?.domain && !input.applicantIdentityId
       ? [
-          prepareAuthorizationGuard(db, {
+          prepareStateGuard(db, {
             sql: "SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=?)",
             bindings: [organizationDomain],
           }),
         ]
       : []),
-    ...(input.selectedOrganizationDomain && input.selectedDomainClaimIds
+    ...(selection
       ? [
-          prepareAuthorizationGuard(db, {
+          prepareStateGuard(db, {
             sql: `SELECT 1 WHERE NOT EXISTS (SELECT id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
         EXCEPT SELECT value FROM json_each(?)) AND NOT EXISTS (SELECT value FROM json_each(?)
         EXCEPT SELECT id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?)))
         AND NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?)) AND length(domain)>?)`,
             bindings: [
               JSON.stringify(organizationDomainCandidates(input.applicantEmail)),
-              JSON.stringify(input.selectedDomainClaimIds),
-              JSON.stringify(input.selectedDomainClaimIds),
+              JSON.stringify(selection.claimIds),
+              JSON.stringify(selection.claimIds),
               JSON.stringify(organizationDomainCandidates(input.applicantEmail)),
               JSON.stringify(organizationDomainCandidates(input.applicantEmail)),
-              input.selectedOrganizationDomain.length,
+              selection.domain.length,
             ],
           }),
         ]
       : []),
-    ...(input.selectedPendingApplications
+    ...(selection
       ? [
-          prepareAuthorizationGuard(db, {
+          prepareStateGuard(db, {
             sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM json_each(?) observed WHERE NOT EXISTS (
         SELECT 1 FROM member_applications application WHERE application.id=json_extract(observed.value,'$.id')
           AND application.updated_at=json_extract(observed.value,'$.updatedAt')))`,
-            bindings: [JSON.stringify(input.selectedPendingApplications)],
+            bindings: [JSON.stringify(selection.pendingApplications)],
           }),
         ]
       : []),
-    ...(newOrganization
+    ...(newOrganizationName
       ? [
-          prepareAuthorizationGuard(db, {
-            sql: `SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM organizations WHERE normalized_name=?)
-        AND NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
-          AND length(domain)>?)`,
-            bindings: [
-              normalizeOrgName(input.organizationName!),
-              JSON.stringify(organizationDomainCandidates(input.applicantEmail)),
-              organizationDomain!.length,
-            ],
+          prepareStateGuard(db, {
+            sql: "SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM organizations WHERE normalized_name=?)",
+            bindings: [normalizeOrgName(newOrganizationName)],
           }),
-          ...newOrganization.statements,
         ]
       : []),
     ...(input.applicantUserId
@@ -408,7 +409,7 @@ export async function createMemberApplication(
             sql: `SELECT 1 FROM identities
                    WHERE id = ? AND user_id = ? AND organization_id IS ?
                      AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
-            bindings: [input.applicantIdentityId, input.applicantUserId, input.organizationId ?? null],
+            bindings: [input.applicantIdentityId, input.applicantUserId, organizationId ?? null],
           }),
         ]
       : []),
@@ -427,9 +428,7 @@ export async function createMemberApplication(
         input.applicantEmail,
         input.applicantName,
         isIndividual ? null : (input.organizationName ?? null),
-        isIndividual || !input.selectedOrganizationDomain
-          ? null
-          : (input.organizationId ?? newOrganization?.organizationId ?? null),
+        isIndividual ? null : (organizationId ?? null),
         organizationDomain,
         input.membershipCategory,
         formSubmission.id,
@@ -444,47 +443,20 @@ export async function createMemberApplication(
   statements.push(...prepareMembershipWorkflowPin(db, id, category, workflow, 1, now));
 
   if (organizationDomain) {
-    if (newOrganization) {
-      if (existingDomainClaim) {
-        statements.push(
-          prepareAuthorizationGuard(db, {
-            sql: "SELECT 1 FROM organization_domain_claims WHERE id=? AND domain=? AND organization_id IS ? AND application_id IS ?",
-            bindings: [
-              existingDomainClaim.id,
-              organizationDomain,
-              existingDomainClaim.organizationId,
-              existingDomainClaim.applicationId,
-            ],
-          }),
-          db
-            .prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
-            VALUES (?,?,?,?,?)`)
-            .bind(uuid(), organizationDomain, newOrganization.organizationId, now, now),
-        );
-      } else {
-        statements.push(
-          (await prepareClaimDomainForOrganization(
-            db,
-            { domain: organizationDomain, organizationId: newOrganization.organizationId, now },
-            null,
-          ))!,
-        );
-      }
-    } else if (existingDomainClaim && input.organizationId && input.selectedOrganizationDomain) {
-      const derived = verifiedEmailDomainResolutionEvidence(organizationDomain, input.organizationId, false, true);
+    if (organizationId && selection?.domain) {
+      const derived = verifiedEmailDomainResolutionEvidence(organizationDomain, organizationId, false, true);
       statements.push(
-        prepareAuthorizationGuard(db, {
+        prepareStateGuard(db, {
           sql: `SELECT 1 FROM organizations organization WHERE organization.id=? AND organization.name=?
           AND organization.merged_into_organization_id IS NULL AND (
             EXISTS (SELECT 1 FROM organization_domain_claims claim WHERE claim.domain=?
               AND claim.organization_id=organization.id AND claim.application_id IS NULL)
             OR EXISTS (${derived.sql}))`,
-          bindings: [input.organizationId, input.organizationName, organizationDomain, ...derived.bindings],
+          bindings: [organizationId, input.organizationName, organizationDomain, ...derived.bindings],
         }),
       );
-    } else {
-      statements.push(prepareClaimDomainForApplication(db, organizationDomain, id, now));
     }
+    statements.push(prepareClaimDomainForApplication(db, organizationDomain, id, now));
   }
 
   statements.push(
@@ -529,6 +501,8 @@ export async function createMemberApplication(
   try {
     await db.batch(statements);
   } catch (error) {
+    if (isStateGuardFailure(error))
+      throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Confirm your organization again before applying.");
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(
         409,

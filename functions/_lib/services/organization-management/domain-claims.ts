@@ -9,12 +9,11 @@ import type {
   OrganizationDomain,
   OrganizationDomainClaimCreate,
   OrganizationDomainClaimPreview,
-  OrganizationDomainLinking,
   OrganizationDomainsListQuery,
 } from "../../../../assets/shared/schemas/organization-domains";
 import { first } from "../../db/queries";
 import { batchFirst, queryPage } from "../../db/pagination";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
+import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { workEmailDomain } from "../../email-domains/classification";
@@ -25,7 +24,7 @@ import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChan
 import { identityOrganizationEmailDomainSql } from "../identities/affiliation-projection";
 import { prepareClaimDomainForOrganization } from "../membership/organization-domain-claims";
 import { authorizedOrganizationMutationDb } from "./authorization";
-import { previewDomainLinking } from "./domain-link-runs";
+import { domainOwnershipFactMatchesSql, FACT_ORGANIZATION } from "../identities/verified-email-domain";
 
 interface DomainRow {
   domain: string;
@@ -132,7 +131,7 @@ export async function claimOrganizationDomain(
   actor: UserBackedAuthAdmin,
   organizationId: string,
   input: OrganizationDomainClaimCreate,
-): Promise<{ domain: OrganizationDomain; linking: OrganizationDomainLinking }> {
+): Promise<{ domain: OrganizationDomain }> {
   const existingClaim = await assertClaimable(db, organizationId, input.domain);
   const at = nowIso();
   const authorizedDb = authorizedOrganizationMutationDb(db, actor, "organizations:write");
@@ -144,13 +143,13 @@ export async function claimOrganizationDomain(
   let savedDomain: DomainRow | null;
   try {
     const results = await authorizedDb.batch([
-      prepareAuthorizationGuard(authorizedDb, {
+      prepareStateGuard(authorizedDb, {
         sql: "SELECT 1 FROM organizations WHERE id=? AND merged_into_organization_id IS NULL",
         bindings: [organizationId],
       }),
       ...(existingClaim
         ? [
-            prepareAuthorizationGuard(authorizedDb, {
+            prepareStateGuard(authorizedDb, {
               sql: "SELECT 1 FROM organization_domain_claims WHERE id=? AND domain=? AND application_id IS ? AND organization_id IS ?",
               bindings: [existingClaim.id, input.domain, existingClaim.applicationId, existingClaim.organizationId],
             }),
@@ -174,27 +173,34 @@ export async function claimOrganizationDomain(
     ]);
     savedDomain = batchFirst<DomainRow>(results[results.length - 1]);
   } catch (error) {
-    if (isAuthorizationGuardFailure(error))
+    if (isStateGuardFailure(error))
       throw new AppError(409, "ORGANIZATION_CHANGED", "The organization changed while the domain was being saved.");
     if (isDomainClaimRace(error))
       throw new AppError(409, "ORGANIZATION_DOMAIN_IN_USE", `${input.domain} was claimed while this was being saved`);
     throw error;
   }
   if (!savedDomain) throw new AppError(500, "ORGANIZATION_DOMAIN_NOT_FOUND", "The saved domain could not be read.");
-  return { domain: toDomain(savedDomain), linking: { peopleLinked: 0, continuing: false } };
+  return { domain: toDomain(savedDomain) };
 }
 
-/** What claiming `domain` would do: refused as a claim would be, else how many people it reaches. */
+/** A claim requires confirmation from each person; preview whether its domain is shared. */
 export async function previewOrganizationDomainClaim(
   db: DatabaseLike,
   organizationId: string,
   domain: string,
 ): Promise<OrganizationDomainClaimPreview> {
   const existingClaim = await assertClaimable(db, organizationId, domain);
-  return {
-    domain,
-    ...(existingClaim ? { shared: true, peopleToLink: 0 } : await previewDomainLinking(db, organizationId, domain)),
-  };
+  const shared = existingClaim
+    ? true
+    : Boolean(
+        await first(
+          db,
+          `SELECT 1 FROM identities fact WHERE fact.organization_id IS NOT NULL
+      AND ${domainOwnershipFactMatchesSql()} AND ${FACT_ORGANIZATION} IS NOT ? LIMIT 1`,
+          [domain, domain, organizationId],
+        ),
+      );
+  return { domain, shared };
 }
 
 export async function releaseOrganizationDomain(

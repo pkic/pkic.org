@@ -113,7 +113,7 @@ async function confirmRegistrationWithNotificationOnce(
     signingSecret: payload.signingSecret,
     organization: payload.organization,
   });
-  if (workEmailDomain(prepared.verifiedAddress.normalizedEmail) && !payload.organization?.contextToken)
+  if (workEmailDomain(prepared.verifiedEmail) && !payload.organization?.contextToken)
     throw new AppError(
       422,
       "REGISTRATION_REPRESENTATION_REQUIRED",

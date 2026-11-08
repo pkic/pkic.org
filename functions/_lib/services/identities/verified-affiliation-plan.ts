@@ -73,7 +73,7 @@ export async function planVerifiedAffiliation(
     },
     basis,
   );
-  const domainToLink = plan.organizationWasCreated ? basis.domain : selectedNewSubdomain;
+  const domainToLink = selectedNewSubdomain;
   const domainStatements: StatementLike[] = [];
   if (domainToLink) {
     const domain = domainToLink;

@@ -1,6 +1,6 @@
 import { prepareApplicationEditEvidenceGuard } from "./edit-evidence";
 import { preparePermissionsAuthorizationGuard } from "../../../auth/permissions";
-import { isAuthorizationGuardFailure } from "../../../db/authorization-guard";
+import { isAuthorizationGuardFailure, isStateGuardFailure, prepareStateGuard } from "../../../db/authorization-guard";
 import { getRequestedApplicationGroups } from "./queries";
 import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
 import { mailboxKind, organizationDomainCandidates } from "../../../email-domains/classification";
@@ -37,7 +37,6 @@ import {
 } from "../../forms";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../../audit";
 import {
-  getOrganizationDomainClaim,
   organizationLinkDomain,
   prepareClaimDomainForApplication,
   prepareReleaseApplicationDomainClaim,
@@ -334,7 +333,13 @@ export async function updateMembershipApplication(
     if (application.stage !== "declined" && application.stage !== "withdrawn") {
       dependentStatements.push(...prepareReleaseApplicationDomainClaim(db, application.id));
       if (nextOrganizationDomain) {
-        dependentStatements.push(prepareClaimDomainForApplication(db, nextOrganizationDomain, application.id, now));
+        dependentStatements.push(
+          prepareStateGuard(db, {
+            sql: "SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND application_id IS NOT ?)",
+            bindings: [nextOrganizationDomain, application.id],
+          }),
+          prepareClaimDomainForApplication(db, nextOrganizationDomain, application.id, now),
+        );
       }
     }
   }
@@ -465,6 +470,8 @@ export async function updateMembershipApplication(
       ...dependentStatements,
     ]);
   } catch (error) {
+    if (isStateGuardFailure(error))
+      throw new AppError(409, "ORGANIZATION_DOMAIN_IN_USE", "This organization domain is already claimed");
     if (isAuthorizationGuardFailure(error))
       throw new AppError(
         409,
@@ -476,12 +483,6 @@ export async function updateMembershipApplication(
     }
     if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "APPLICATION_CHANGED", "Application changed while this edit was being prepared");
-    }
-    if (organizationDomainChanged && nextOrganizationDomain) {
-      const claim = await getOrganizationDomainClaim(db, nextOrganizationDomain);
-      if (claim && claim.applicationId !== applicationId) {
-        throw new AppError(409, "ORGANIZATION_DOMAIN_IN_USE", "This organization domain is already claimed");
-      }
     }
     throw error;
   }

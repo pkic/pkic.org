@@ -136,7 +136,7 @@ describe("organization named on registration confirmation", () => {
       JOIN organizations organization ON organization.id=claim.organization_id WHERE claim.domain=?`,
         ["unknown-works.example"],
       ),
-    ).toEqual([{ name: "Unknown Works" }]);
+    ).toEqual([]);
   });
 
   it("links a newly named organization to a domain already claimed by another organization", async () => {
@@ -170,7 +170,7 @@ describe("organization named on registration confirmation", () => {
       JOIN organizations organization ON organization.id=claim.organization_id WHERE claim.domain=? ORDER BY organization.name`,
         ["new-shared.example"],
       ),
-    ).toEqual([{ name: "Existing Organization" }, { name: "New Organization" }]);
+    ).toEqual([{ name: "Existing Organization" }]);
   });
 
   it("refuses an organization named without a job title, before anything is linked", async () => {

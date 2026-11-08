@@ -29,3 +29,10 @@ WHEN (NEW.application_id IS NULL AND NEW.organization_id IS NULL) OR (NEW.applic
 BEGIN SELECT RAISE(ABORT, 'DOMAIN_CLAIM_OWNER_INVALID'); END;
 
 ALTER TABLE member_applications ADD COLUMN organization_id TEXT REFERENCES organizations(id);
+
+-- Retire automatic affiliation work; future affiliations require the person's choice.
+UPDATE organization_domain_link_runs
+SET completed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+WHERE completed_at IS NULL;
+DELETE FROM scheduled_jobs WHERE job_key = 'organization_domain_linking';

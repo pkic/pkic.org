@@ -1,5 +1,9 @@
 import { applicationHoldRequestSchema } from "../../../../../assets/shared/schemas/membership-application-management";
-import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../../db/authorization-guard";
+import {
+  prepareAuthorizationGuard,
+  isAuthorizationGuardFailure,
+  isStateGuardFailure,
+} from "../../../db/authorization-guard";
 /**
  * Membership application stage machine. Split out of the former
  * member-applications.ts (PR #1 review §1.5).
@@ -284,6 +288,12 @@ export async function executePreparedApplicationStageTransition(
   try {
     results = await db.batch(prepared.statements);
   } catch (error) {
+    if (isStateGuardFailure(error))
+      throw new AppError(
+        409,
+        "ORGANIZATION_AFFILIATION_CHANGED",
+        "The organization or domain claim changed. Reload the application and retry.",
+      );
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(
         409,

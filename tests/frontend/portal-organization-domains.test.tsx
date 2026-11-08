@@ -70,7 +70,7 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-const preview = { preview: { domain: "acme.example", shared: false, peopleToLink: 3 } };
+const preview = { preview: { domain: "acme.example", shared: false } };
 
 function stub(previewResponse: Response = json(preview), claimResponse: Response = json({}, 500)): void {
   vi.stubGlobal(
@@ -180,7 +180,6 @@ describe("organization email domains", () => {
       json(
         {
           domain: { domain: "acme.example", status: "claimed", people: 3, claimedAt: "2026-10-10T00:00:00.000Z" },
-          linking: { peopleLinked: 3, continuing: false },
         },
         201,
       ),
@@ -203,11 +202,10 @@ describe("organization email domains", () => {
 
   it("explains that people choose their organization when the domain is shared", async () => {
     stub(
-      json({ preview: { domain: "acme.example", shared: true, peopleToLink: 0 } }),
+      json({ preview: { domain: "acme.example", shared: true } }),
       json(
         {
           domain: { domain: "acme.example", status: "claimed", people: 0, claimedAt: null },
-          linking: { peopleLinked: 0, continuing: false },
         },
         201,
       ),

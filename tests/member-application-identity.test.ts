@@ -18,6 +18,7 @@ import {
   membershipApplicationDescriptionAnswers,
   requiredMembershipApplicationAnswers,
   seedMembershipApplicationForm,
+  seedMemberApplication,
   verifiedMemberApplicationPayload,
 } from "./helpers/member-applications";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
@@ -133,6 +134,47 @@ describe("membership application as a signed-in identity", () => {
       "I work on PKI interoperability.",
     );
   });
+
+  it.each(["own", "another", "pending"])(
+    "accepts an owned organization identity on a domain with a %s claim",
+    async (kind) => {
+      const userId = await person("applicant@identity-claim.test");
+      const organizationId = await insertOrganization(env.DB, "Identity Organization");
+      const identityId = await identity(userId, organizationId);
+      if (kind === "pending") {
+        await seedMemberApplication({
+          applicantEmail: "other@identity-claim.test",
+          organizationName: "Other Applicant Organization",
+          organizationDomain: "identity-claim.test",
+        });
+      } else {
+        const claimant = kind === "own" ? organizationId : await insertOrganization(env.DB, "Other Organization");
+        await env.DB.prepare(
+          "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
+        )
+          .bind(
+            crypto.randomUUID(),
+            "identity-claim.test",
+            claimant,
+            new Date().toISOString(),
+            new Date().toISOString(),
+          )
+          .run();
+      }
+      const response = await applyAs(userId, identityId, "F", { about_organization: "We build PKI services." });
+      expect(response.status, await response.clone().text()).toBe(201);
+      expect(
+        await queryAll(env.DB, "SELECT organization_id FROM member_applications WHERE applicant_user_id=?", [userId]),
+      ).toEqual([{ organization_id: organizationId }]);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT claim.id FROM organization_domain_claims claim JOIN member_applications application ON application.id=claim.application_id WHERE application.applicant_user_id=?",
+          [userId],
+        ),
+      ).toHaveLength(1);
+    },
+  );
 
   it("asks for a bio before applying when the identity has none", async () => {
     const userId = await person("nobio@example.test");

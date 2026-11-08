@@ -3,7 +3,11 @@ import {
   evaluateMembershipWorkflow,
 } from "../../../../../assets/shared/membership-workflow-evaluation";
 import { isApplicationTerminalStage } from "../../../../../assets/shared/schemas/member-applications";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../db/authorization-guard";
+import {
+  isAuthorizationGuardFailure,
+  isStateGuardFailure,
+  prepareAuthorizationGuard,
+} from "../../../db/authorization-guard";
 import { AppError } from "../../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../../types";
 import { uuid } from "../../../utils/ids";
@@ -202,6 +206,7 @@ export async function commitMembershipWorkflow(
   } catch (error) {
     if (
       isAuthorizationGuardFailure(error) ||
+      isStateGuardFailure(error) ||
       isAuditChangeGuardFailure(error) ||
       (error instanceof Error && error.message.includes("member_application_events.to_stage"))
     ) {

@@ -229,6 +229,42 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
     expect(rows[0].stage).toBe("submitted");
   });
 
+  it.each(["organization", "application"])(
+    "refuses moving an application onto a domain held by another %s and rolls back the edit",
+    async (kind) => {
+      const { id } = await createApplication();
+      if (kind === "application") {
+        await seedMemberApplication({
+          applicantEmail: "other@occupied.test",
+          organizationName: "Other Organization",
+          organizationDomain: "occupied.test",
+        });
+      } else {
+        const organization = await insertOrganization(env.DB, "Claimed Organization");
+        await env.DB.prepare(
+          "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
+        )
+          .bind(crypto.randomUUID(), "occupied.test", organization, new Date().toISOString(), new Date().toISOString())
+          .run();
+      }
+      const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ applicantEmail: "corrected@occupied.test", applicantName: "Changed Name" }),
+      });
+      expect(response.status, await response.clone().text()).toBe(409);
+      expect(await response.json()).toMatchObject({ error: { code: "ORGANIZATION_DOMAIN_IN_USE" } });
+      expect(
+        await queryAll(env.DB, "SELECT applicant_name,organization_domain FROM member_applications WHERE id=?", [id]),
+      ).toEqual([{ applicant_name: "Applicant Name", organization_domain: "example.test" }]);
+      expect(
+        await queryAll(env.DB, "SELECT domain FROM organization_domain_claims WHERE application_id=?", [id]),
+      ).toEqual([{ domain: "example.test" }]);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='application_edited' AND entity_id=?", [id]),
+      ).toEqual([]);
+    },
+  );
+
   it("preserves the selected domain during edits and rejects an incompatible email", async () => {
     const { id } = await createApplication({ applicant_email: "person@division.example.test" });
     const selected = await insertOrganization(env.DB, "Selected organization");

@@ -40,8 +40,8 @@ export interface PreparedRegistrationConfirmation {
   manageToken: string;
   recipientEmail: string;
   statements: StatementLike[];
-  /** The address this confirmation proves, for the organization link that follows the commit. */
-  verifiedAddress: { userId: string; normalizedEmail: string };
+  /** The proved mailbox determines whether an explicit work-organization confirmation is required. */
+  verifiedEmail: string;
   affiliationConfirmed: boolean;
   organizationOutcome?: RegistrationOrganizationOutcome;
 }
@@ -363,7 +363,7 @@ export async function prepareConfirmRegistrationByToken(
     manageToken,
     recipientEmail: inviteEmail ?? user.normalized_email,
     statements: updateStatements,
-    verifiedAddress: { userId: registration.user_id, normalizedEmail: verifiedEmail },
+    verifiedEmail,
   };
 }
 

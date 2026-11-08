@@ -76,8 +76,6 @@ async function createThroughVerifiedEmail(c: any, rawBody: unknown) {
       "Membership application capability does not match the verified email",
     );
   }
-  if (joinCapability.organization && body.organizationName !== joinCapability.organization.name)
-    throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Confirm your organization again before applying.");
   return createMemberApplication(env.DB, {
     applicantEmail: joinCapability.email,
     applicantName: body.applicantName,
@@ -88,10 +86,7 @@ async function createThroughVerifiedEmail(c: any, rawBody: unknown) {
     joinCapabilityId: joinCapability.capabilityId,
     applicantKind: joinCapability.applicantKind,
     applicantUserId: joinCapability.applicantUserId,
-    organizationId: joinCapability.organization?.id,
-    selectedOrganizationDomain: joinCapability.organization?.domain,
-    selectedDomainClaimIds: joinCapability.organization?.claimIds,
-    selectedPendingApplications: joinCapability.organization?.pendingApplications,
+    selectedOrganization: joinCapability.organization,
   });
 }
 

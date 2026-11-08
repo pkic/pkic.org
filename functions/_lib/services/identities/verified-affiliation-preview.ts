@@ -9,7 +9,6 @@ export function verifiedAffiliationPreview(
   basis: VerifiedAffiliationBasis,
   address: { email: string; id?: string | null },
   options: {
-    pendingApplicationReview?: boolean;
     /** The mailbox is not recorded for the person yet, so no identity can already use it. */
     unrecordedAddress?: boolean;
   } = {},

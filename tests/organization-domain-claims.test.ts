@@ -12,6 +12,7 @@ import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { seedMemberApplication } from "./helpers/member-applications";
 import { insertOrganization, insertUser } from "./helpers/membership";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { resetDb } from "./helpers/reset-db";
 import {
   prepareReleaseApplicationDomainClaim,
@@ -271,6 +272,28 @@ describe("staff manage an organization's email domains", () => {
     expect(await queryAll(env.DB, "SELECT action FROM audit_log WHERE action LIKE 'organization_domain_%'")).toEqual([
       { action: "organization_domain_claimed" },
     ]);
+  });
+
+  it("reports a concurrent claim change as stale business state and rolls back the mutation", async () => {
+    const original = await insertOrganization(env.DB, "Original Claimant");
+    const selected = await insertOrganization(env.DB, "Selected Claimant");
+    await claimDomain(original, "claim-race.example");
+    const racingDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("INSERT INTO authorization_guards") && sql.includes("application_id IS ?"),
+      () => env.DB.prepare("DELETE FROM organization_domain_claims WHERE domain=?").bind("claim-race.example").run(),
+    );
+    const response = await callApi({ ...env, DB: racingDb }, `/api/v1/organizations/${selected}/domains`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ domain: "claim-race.example", reason: "Staff verified shared use" }),
+    });
+    expect(response.status, await response.clone().text()).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "ORGANIZATION_CHANGED" } });
+    expect(
+      await queryAll(env.DB, "SELECT domain FROM organization_domain_claims WHERE organization_id=?", [selected]),
+    ).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='organization_domain_claimed'")).toEqual([]);
   });
 
   it("removes only a claim the organization holds and requires organization permissions", async () => {

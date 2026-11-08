@@ -238,9 +238,11 @@ export async function prepareVerifiedOrganizationAffiliation(
     bindings: [input.userId, ...address.bindings, ...input.proofEvidence.bindings],
   };
   const claim = observed
-    ? (observed.claims.find(
-        (item) => item.domain === domain && item.organizationId === input.organizationChoice?.organizationId,
-      ) ?? observed.claim)
+    ? confirmedSelection
+      ? (observed.claims.find(
+          (item) => item.domain === domain && item.organizationId === input.organizationChoice?.organizationId,
+        ) ?? null)
+      : observed.claim
     : await getOrganizationDomainClaim(db, domain);
   if (
     !confirmedSelection &&

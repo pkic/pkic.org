@@ -10,7 +10,7 @@
  */
 import { organizationDomainCandidates, workEmailDomain } from "../../email-domains/classification";
 import { first } from "../../db/queries";
-import { prepareAuthorizationGuard } from "../../db/authorization-guard";
+import { prepareStateGuard } from "../../db/authorization-guard";
 import { uuid } from "../../utils/ids";
 import type { DatabaseLike, StatementLike } from "../../types";
 
@@ -109,7 +109,7 @@ export async function prepareTransferApplicationDomainClaim(
   );
   if (applicationClaim) {
     return [
-      prepareAuthorizationGuard(db, {
+      prepareStateGuard(db, {
         sql: "SELECT 1 FROM organization_domain_claims WHERE id=? AND domain=? AND application_id=?",
         bindings: [applicationClaim.id, params.domain, params.applicationId],
       }),
@@ -125,7 +125,7 @@ export async function prepareTransferApplicationDomainClaim(
     ];
   }
   return [
-    prepareAuthorizationGuard(db, {
+    prepareStateGuard(db, {
       sql: "SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?",
       bindings: [params.domain, params.organizationId],
     }),

@@ -24,7 +24,7 @@ import {
   organizationAlreadyMemberMessage,
 } from "../../../../../assets/shared/membership-application-refusals";
 import { readMembershipApplicationConflicts } from "./conflicts";
-import { prepareAuthorizationGuard } from "../../../db/authorization-guard";
+import { prepareStateGuard } from "../../../db/authorization-guard";
 import { verifiedEmailDomainResolutionEvidence } from "../../identities/verified-email-domain";
 
 export interface ApproveApplicationResult {
@@ -178,10 +178,18 @@ export async function buildApplicationApproval(
   const statements: StatementLike[] = [
     ...(selectedEvidence
       ? [
-          prepareAuthorizationGuard(db, {
+          prepareStateGuard(db, {
             sql: `SELECT 1 WHERE EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=?
-        AND organization_id=? AND application_id IS NULL) OR EXISTS (${selectedEvidence.sql})`,
-            bindings: [application.organization_domain!, organizationId!, ...selectedEvidence.bindings],
+        AND organization_id=? AND application_id IS NULL) OR EXISTS (${selectedEvidence.sql})
+        OR EXISTS (SELECT 1 FROM identities WHERE user_id=? AND organization_id=?
+          AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL)`,
+            bindings: [
+              application.organization_domain!,
+              organizationId!,
+              ...selectedEvidence.bindings,
+              application.applicant_user_id,
+              organizationId!,
+            ],
           }),
         ]
       : []),

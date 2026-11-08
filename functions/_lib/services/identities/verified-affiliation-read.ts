@@ -26,7 +26,7 @@ export function prepareVerifiedAffiliationRead(
     domain?: string;
     unaffiliatedAttestation?: boolean;
   },
-  mailboxProof?: { verifiedAt: string; pendingApplicationReview?: boolean },
+  mailboxProof?: { verifiedAt: string },
 ) {
   const subject = typeof userId === "string" ? { sql: "?", bindings: [userId] } : userId;
   const candidates = organizationDomainCandidates(input.email);

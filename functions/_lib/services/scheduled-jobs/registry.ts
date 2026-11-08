@@ -32,7 +32,6 @@ import { runScheduledDueWork } from "../scheduled-due-work";
 import { runSponsorshipDueWork } from "../sponsorship-scheduled-jobs";
 import { runVotesDueWork } from "../votes-scheduled-jobs";
 import { runWeeklyWgChairDigest } from "../wg-chair-digest";
-import { runDomainLinking } from "../organization-management/domain-link-runs";
 import { runAutomaticMeetingInvitations } from "../event-series/automatic-invitations";
 import { issueContributorProfileAddresses } from "../people/profile-addresses";
 import { resolveAppBaseUrl } from "../../config";
@@ -309,16 +308,6 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
     }),
   },
 
-  {
-    key: "organization_domain_linking",
-    leaseSeconds: DEFAULT_LEASE_SECONDS,
-    requiredPermissions: ["organizations:write"],
-    run: async ({ env, d1QueryBudget }) => {
-      const summary = await runDomainLinking(env.DB, d1QueryBudget);
-      // A large domain keeps going in the next pass instead of waiting out the interval.
-      return summary.remaining ? { summary, nextRunAt: nowIso() } : { summary };
-    },
-  },
   {
     key: "person_profile_addresses",
     leaseSeconds: DEFAULT_LEASE_SECONDS,

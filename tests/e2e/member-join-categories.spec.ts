@@ -1,3 +1,8 @@
+import {
+  organizationCreateSchema,
+  organizationCreateResponseSchema,
+} from "../../assets/shared/schemas/organization-management";
+import { organizationDomainClaimCreateSchema } from "../../assets/shared/schemas/organization-domains";
 import { completeSyntheticMembershipReview, createMember } from "./helpers/member-provisioning";
 /**
  * Membership joining across category kinds and domain outcomes.
@@ -121,12 +126,31 @@ test("an organization applicant submits in a category other than the default", a
   await expect(page.getByRole("heading", { name: /Thanks, Alex Applicant!/ })).toBeVisible();
 });
 
-test("an individual must describe themselves and can submit without an organization description", async ({ page }) => {
+test("an individual can submit on a claimed nonmember domain without an organization chooser", async ({
+  page,
+}, testInfo) => {
   const suffix = uniqueSuffix();
-  await openVerifiedApplicationForm(page, `individual-description-${suffix}@university-${suffix}.test`, {
+  const domain = `university-${suffix}.test`;
+  await signInToPortal(page, e2eAdminEmail("individual-claimed-domain"));
+  const created = await page.request.post("/api/v1/organizations", {
+    data: organizationCreateSchema.parse({ name: `Nonmember University ${suffix}` }),
+  });
+  expect(created.status(), await created.text()).toBe(201);
+  const { organization } = organizationCreateResponseSchema.parse(await created.json());
+  const claimed = await page.request.post(`/api/v1/organizations/${organization.id}/domains`, {
+    data: organizationDomainClaimCreateSchema.parse({ domain, reason: "Synthetic university domain" }),
+  });
+  expect(claimed.status(), await claimed.text()).toBe(201);
+  await page.context().clearCookies();
+  await openVerifiedApplicationForm(page, `individual-description-${suffix}@${domain}`, {
     unaffiliated: true,
   });
-  await page.locator("#membership-category-h6").check();
+  await expect(page.getByRole("heading", { name: "Choose your organization" })).toHaveCount(0);
+  await page.getByLabel(/H6 —/).check();
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: testInfo.outputPath(`individual-claimed-domain-${width}.png`) });
+  }
   await page.getByLabel("First name").fill("Individual");
   await page.getByLabel("Last name").fill("Applicant");
   await page.locator('[name="custom.reason"]').fill("I contribute to PKI interoperability.");
@@ -143,6 +167,7 @@ test("an individual must describe themselves and can submit without an organizat
   );
   await page.getByRole("button", { name: "Submit membership application" }).click();
   expect((await submission).status()).toBe(201);
+  await expect(page.getByRole("heading", { name: /Thanks, Individual Applicant!/ })).toBeVisible();
 });
 
 test("a signed-in member is shown their membership instead of a new application", async ({ page }, testInfo) => {

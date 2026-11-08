@@ -362,7 +362,7 @@ describe("verified-email-first membership join", () => {
   });
 
   it.each(["shared-create.example", "division.shared-create.example"])(
-    "adds a new organization and links the selected domain %s while applying",
+    "holds the selected domain %s for the new application until approval",
     async (domain) => {
       const testEnv = makeEnv();
       const member = await insertOrganization(testEnv.DB, "Existing Member");
@@ -409,11 +409,7 @@ describe("verified-email-first membership join", () => {
         JOIN organizations organization ON organization.id=claim.organization_id WHERE claim.domain=? ORDER BY organization.name`,
           [domain],
         ),
-      ).toEqual(
-        domain === "shared-create.example"
-          ? [{ name: "Existing Member" }, { name: "New Organization" }]
-          : [{ name: "New Organization" }],
-      );
+      ).toEqual(domain === "shared-create.example" ? [{ name: "Existing Member" }] : []);
     },
   );
 
@@ -459,7 +455,7 @@ describe("verified-email-first membership join", () => {
       JOIN organizations organization ON organization.id=claim.organization_id WHERE claim.domain=?`,
         ["division.unclaimed-company.example"],
       ),
-    ).toEqual([{ name: "New Division" }]);
+    ).toEqual([]);
   });
 
   it("rolls back a new organization when the chosen domain changes before application submission", async () => {
@@ -610,7 +606,7 @@ describe("verified-email-first membership join", () => {
     expect(retry.status).toBe("organization_selection_required");
   });
 
-  it("does not grant membership when a conflicting verified affiliation appears during verification", async () => {
+  it("honors an explicit member choice if another verified affiliation appears during verification", async () => {
     const testEnv = makeEnv();
     const first = await insertOrganization(testEnv.DB, "First Organization");
     const second = await insertOrganization(testEnv.DB, "Second Organization");
@@ -632,13 +628,9 @@ describe("verified-email-first membership join", () => {
           .run(),
     );
     const result = await verifyJoin({ ...testEnv, DB: racingDb }, token);
-    expect(result.status).toBe(409);
-    expect(
-      await queryAll(testEnv.DB, "SELECT id FROM users WHERE normalized_email=?", ["person@derived-race.example"]),
-    ).toEqual([]);
-    expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toEqual([]);
-    const retry = memberJoinVerifyResponseSchema.parse(await (await verifyJoin(testEnv, token)).json());
-    expect(retry.status).toBe("organization_selection_required");
+    expect(result.status, await result.clone().text()).toBe(200);
+    expect(memberJoinVerifyResponseSchema.parse(await result.json()).status).toBe("organization_access_ready");
+    expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toHaveLength(1);
   });
 
   it("binds a verified secondary work mailbox to the same person instead of their primary personal mailbox", async () => {
@@ -1044,15 +1036,15 @@ describe("verified-email-first membership join", () => {
         "SELECT application_id FROM organization_domain_claims WHERE domain=? AND application_id IS NOT NULL",
         ["pending-shared.example"],
       ),
-    ).toEqual([{ application_id: pending }]);
+    ).toEqual(expect.arrayContaining([{ application_id: pending }, { application_id: expect.any(String) }]));
     expect(
-      await queryAll(
-        testEnv.DB,
-        `SELECT organization.name FROM organization_domain_claims claim
-      JOIN organizations organization ON organization.id=claim.organization_id WHERE claim.domain=?`,
-        ["pending-shared.example"],
-      ),
-    ).toEqual([{ name: "Different Organization" }]);
+      await queryAll(testEnv.DB, "SELECT application_id FROM organization_domain_claims WHERE domain=?", [
+        "pending-shared.example",
+      ]),
+    ).toHaveLength(2);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM organizations WHERE name=?", ["Different Organization"])).toEqual(
+      [],
+    );
   });
 
   it("lets a person choose an existing member while another application uses the domain", async () => {

@@ -40,7 +40,7 @@ export async function readJoinVerification(
         db,
         owner,
         { email, emailId: null, domain: selection?.domain, organizationName: selection?.organizationName },
-        { verifiedAt: nowIso(), pendingApplicationReview: true },
+        { verifiedAt: nowIso() },
       )
     : null;
   const reads: SqlSelection[] = [

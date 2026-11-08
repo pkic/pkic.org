@@ -26,12 +26,21 @@ describe("shared organization domain migration", () => {
         INSERT INTO organization_domain_claims (id,domain,organization_id,created_at,updated_at)
           VALUES ('root','work.example','first','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z');
       `);
+      db.exec(`INSERT INTO organization_domain_link_runs
+        (id,organization_id,domain,created_at,updated_at) VALUES
+        ('legacy-run','first','work.example','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')`);
       const before = db.prepare("SELECT id,email FROM users WHERE id='person'").get();
       const migrationSql = readFileSync(resolve(directory, migration), "utf8");
       const originalClaims = db.prepare("SELECT * FROM organization_domain_claims").all();
       db.exec("BEGIN");
       expect(() => db.exec(`${migrationSql}\nINSERT INTO nonexistent_recovery_test VALUES (1);`)).toThrow();
       db.exec("ROLLBACK");
+      expect(db.prepare("SELECT completed_at FROM organization_domain_link_runs WHERE id='legacy-run'").get()).toEqual({
+        completed_at: null,
+      });
+      expect(
+        db.prepare("SELECT job_key FROM scheduled_jobs WHERE job_key='organization_domain_linking'").get(),
+      ).toBeDefined();
       expect(db.prepare("SELECT * FROM organization_domain_claims").all()).toEqual(originalClaims);
       expect(() =>
         db.exec(`INSERT INTO organization_domain_claims
@@ -39,6 +48,12 @@ describe("shared organization domain migration", () => {
         ('rollback','work.example','second','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')`),
       ).toThrow();
       db.exec(migrationSql);
+      expect(db.prepare("SELECT completed_at FROM organization_domain_link_runs WHERE id='legacy-run'").get()).toEqual({
+        completed_at: expect.stringMatching(/Z$/),
+      });
+      expect(
+        db.prepare("SELECT job_key FROM scheduled_jobs WHERE job_key='organization_domain_linking'").get(),
+      ).toBeUndefined();
       expect(db.prepare("PRAGMA foreign_key_list(member_applications)").all()).toContainEqual(
         expect.objectContaining({ from: "organization_id", table: "organizations", to: "id" }),
       );
