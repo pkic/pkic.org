@@ -103,6 +103,20 @@ describe("affiliation offer card", () => {
     expect(document.body.textContent).toContain("Add identity");
     expect(writes).toEqual([]);
   });
+  it("lets an independent person dismiss a shared-domain offer", async () => {
+    const writes = stubOffer({
+      kind: "choose_organization",
+      emailId: null,
+      domain: "shared.example",
+      writtenOrganizationName: null,
+    });
+    const host = mount(<AffiliationOfferCard />);
+    await settle();
+    await click(host, "I am independent");
+    expect(writes.map((write) => write.path)).toEqual(["/api/v1/users/current/identities/offer/dismissals"]);
+    expect(affiliationOfferDismissalSchema.parse(writes[0].body).organizationId).toBeNull();
+    expect(host.querySelector("button")).toBeNull();
+  });
   it("offers the organization the work address belongs to and joins it through the existing join", async () => {
     const writes = stubOffer({
       kind: "organization",

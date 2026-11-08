@@ -138,7 +138,7 @@ export async function claimOrganizationDomain(
   const insert = await prepareClaimDomainForOrganization(
     authorizedDb,
     { domain: input.domain, organizationId, now: at },
-    null,
+    true,
   );
   let savedDomain: DomainRow | null;
   try {
@@ -236,12 +236,6 @@ export async function releaseOrganizationDomain(
   } catch (error) {
     if (isAuditChangeGuardFailure(error))
       throw new AppError(404, "ORGANIZATION_DOMAIN_NOT_FOUND", "This organization does not claim that domain");
-    if (error instanceof Error && error.message.includes("FOREIGN KEY constraint failed"))
-      throw new AppError(
-        409,
-        "ORGANIZATION_DOMAIN_CHANGED",
-        "The domain changed while it was being removed. Try again.",
-      );
     throw error;
   }
 }

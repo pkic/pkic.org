@@ -20,6 +20,7 @@ export const MembersJoinVerifyPost = openApiRoute(memberJoinVerifyRouteSchema, a
     organizationId: data.body.organizationId,
     organizationName: data.body.organizationName,
     domain: data.body.domain,
+    continueAsIndividual: data.body.continueAsIndividual,
     signingSecret: http.secret,
     applicationTtlSeconds: 15 * 60,
     sessionTtlHours: resolveMemberSessionTtlHours(c.env.MEMBER_SESSION_TTL_HOURS),

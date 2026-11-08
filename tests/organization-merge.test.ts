@@ -15,6 +15,8 @@ import { callApi } from "./helpers/app";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
+import { seedMemberApplication } from "./helpers/member-applications";
+import { readMembershipApplicationConflicts } from "../functions/_lib/services/membership/applications/conflicts";
 import { resetDb } from "./helpers/reset-db";
 
 async function claimDomain(organizationId: string, domain: string): Promise<void> {
@@ -107,6 +109,30 @@ describe("merging a duplicate organization", () => {
       body: JSON.stringify(body),
     });
   }
+
+  it("moves pending applications so duplicate checks follow the merge target", async () => {
+    const target = await insertOrganization(env.DB, "Application Target");
+    const source = await insertOrganization(env.DB, "Application Source");
+    const applicationId = await seedMemberApplication({ organizationName: "Application Source" });
+    await env.DB.prepare("UPDATE member_applications SET organization_id=? WHERE id=?")
+      .bind(source, applicationId)
+      .run();
+    const response = await merge(target, { sourceOrganizationId: source });
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(
+      await env.DB.prepare("SELECT organization_id FROM member_applications WHERE id=?")
+        .bind(applicationId)
+        .first("organization_id"),
+    ).toBe(target);
+    const conflicts = await readMembershipApplicationConflicts(env.DB, {
+      isIndividual: false,
+      organizationId: target,
+      organizationName: "Application Target",
+      applicantEmail: "colleague@example.test",
+      applicantUserId: null,
+    });
+    expect(conflicts.pendingOrganization).toBeTruthy();
+  });
 
   it.each(["target", "source", "other"])(
     "consolidates a shared domain when the primary claim belongs to %s",

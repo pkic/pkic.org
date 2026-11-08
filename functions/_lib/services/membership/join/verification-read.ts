@@ -1,4 +1,4 @@
-import { batchFirst } from "../../../db/pagination";
+import { batchFirst, batchRows } from "../../../db/pagination";
 import type { SqlSelection } from "../../../db/sql-value";
 import type { DatabaseLike } from "../../../types";
 import { eligibleMembershipSelection, type MemberEligibleUserRow } from "../../../auth/identity-capacities";
@@ -8,7 +8,7 @@ import { identityCreationSelections } from "../../identities/creation-read";
 import { verifiedOwnedEmailSelection } from "../../identities/owned-email";
 import { organizationDomainClaimForEmailSelection } from "../organization-domain-claims";
 import { individualMembershipConflictPredicate } from "../capacity-query";
-import { workEmailDomain } from "../../../email-domains/classification";
+import { organizationDomainCandidates, workEmailDomain } from "../../../email-domains/classification";
 import { nowIso } from "../../../utils/time";
 import { prepareVerifiedAffiliationRead } from "../../identities/verified-affiliation-read";
 import {
@@ -72,6 +72,12 @@ export async function readJoinVerification(
     verifiedOwnedEmailSelection(owner, email),
     ownOpenApplicationSelection(email, owner),
     organizationOpenApplicationSelection(claim),
+    {
+      sql: `SELECT organization_id FROM members WHERE status='active' AND organization_id IN (
+        SELECT organization_id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
+      ) LIMIT 129`,
+      bindings: [JSON.stringify(organizationDomainCandidates(email))],
+    },
   ];
   const results = await db.batch([
     ...reads.map((read) => db.prepare(read.sql).bind(...read.bindings)),
@@ -97,6 +103,9 @@ export async function readJoinVerification(
       own: batchFirst<OwnOpenApplicationRow>(results[11]),
       organizationHeld: batchFirst<{ id: string }>(results[12]) !== null,
     },
+    activeMemberOrganizationIds: new Set(
+      batchRows<{ organization_id: string }>(results[13]).map((row) => row.organization_id),
+    ),
     affiliation: affiliation?.decode(results.slice(reads.length)) ?? null,
   };
 }

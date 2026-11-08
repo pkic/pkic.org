@@ -5,7 +5,7 @@ import { TooltipPreview } from "./TooltipPreview";
 import { proposalSections } from "./sections-proposals";
 import { ServerSelectPreview } from "./ServerSelectPreview";
 import { RegistrationFieldsPreview } from "./RegistrationFieldsPreview";
-import { VerifiedOrganizationPreview } from "./VerifiedOrganizationPreview";
+import { OrganizationReviewDomainPreview, VerifiedOrganizationPreview } from "./VerifiedOrganizationPreview";
 import { ContentVersionNoticePreview } from "./ContentVersionNoticePreview";
 import { ModelNavigationPreview } from "./ModelNavigationPreview";
 import { contentContributionPreview } from "./ContentContributionPreview";
@@ -291,6 +291,12 @@ export const patternSections: PreviewSection[] = [
     title: "Questionnaire fields",
     note: "Questionnaire controls with restored tags and ratings, shared by public and portal registration.",
     render: () => <RegistrationFieldsPreview />,
+  },
+  {
+    id: "organization-review-domain",
+    title: "Organization before domain selection",
+    note: "Review guidance waits until an email domain is selected.",
+    render: () => <OrganizationReviewDomainPreview />,
   },
   {
     id: "verified-organization",

@@ -9,6 +9,7 @@ import { buildApplicationApproval } from "../functions/_lib/services/membership/
 import { getMemberApplicationById } from "../functions/_lib/services/membership/applications/queries";
 import { transitionApplicationStage } from "../functions/_lib/services/membership/applications/transition";
 import { createMemberApplication } from "../functions/_lib/services/membership/applications/create";
+import { domainClaimsObservationFingerprint } from "../functions/_lib/services/identities/affiliation-evidence";
 import { nowIso } from "../functions/_lib/utils/time";
 import { callApi } from "./helpers/app";
 import { createTestRateLimiter, queryAll } from "./helpers/context";
@@ -126,6 +127,120 @@ describe("membership domain claim lifecycle", () => {
     },
   );
 
+  it("previews a subdomain without signing in or consuming the individual join proof", async () => {
+    const member = await insertOrganization(env.DB, "Preview Member");
+    await seedOrganizationAggregate(env.DB, member);
+    await claim(member);
+    const token = await signStatelessCapabilityToken({
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      purpose: "member_join_verify",
+      resourceId: encodeCapabilityPayload(newMemberJoinCapabilityPayload(`applicant@eu.${domain}`, "individual")),
+      ttlSeconds: 900,
+    });
+    const preview = await callApi(
+      testEnv,
+      "/api/v1/members/join/affiliations",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, domain: `eu.${domain}` }),
+      },
+      { maxRoundTrips: 1 },
+    );
+    expect(preview.status, await preview.clone().text()).toBe(200);
+    expect(preview.headers.get("set-cookie")).toBeNull();
+    expect(await queryAll(env.DB, "SELECT id FROM sessions")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='membership_join_link_consumed'")).toEqual([]);
+    const chooser = await post("/api/v1/members/join/verify", { token });
+    expect(await chooser.json()).toMatchObject({
+      status: "organization_selection_required",
+      canApplyAsIndividual: true,
+    });
+    const continued = await post("/api/v1/members/join/verify", { token, continueAsIndividual: true });
+    expect(await continued.json()).toMatchObject({ status: "application_ready", applicantKind: "individual" });
+    expect(continued.headers.get("set-cookie")).toBeNull();
+    expect(await queryAll(env.DB, "SELECT id FROM sessions")).toEqual([]);
+  });
+
+  it("lets an individual apply on a lapsed member's domain", async () => {
+    const member = await insertOrganization(env.DB, "Lapsed Member");
+    await seedOrganizationAggregate(env.DB, member);
+    await claim(member);
+    await env.DB.prepare("UPDATE members SET status='inactive' WHERE organization_id=?").bind(member).run();
+    const response = await post("/api/v1/members/join/verify", { token: await verification("individual") });
+    expect(await response.json()).toMatchObject({ status: "application_ready", applicantKind: "individual" });
+  });
+
+  it.each(["ended", "blocked"])(
+    "approves the durable organization selection after its derived evidence is %s",
+    async (state) => {
+      const selected = await insertOrganization(env.DB, "Selected Organization");
+      await derived(selected);
+      const id = await apply({ organizationId: selected });
+      await env.DB.prepare("UPDATE identities SET ended_at=?,blocked_at=? WHERE organization_id=?")
+        .bind(nowIso(), state === "blocked" ? nowIso() : null, selected)
+        .run();
+      expect((await approve(id)).organizationId).toBe(selected);
+    },
+  );
+
+  it.each([false, true])(
+    "avoids a redundant application hold and can approve after claim release (%s)",
+    async (released) => {
+      const selected = await insertOrganization(env.DB, "Claimed Applicant");
+      await claim(selected);
+      const id = await apply({ organizationId: selected });
+      expect(
+        await queryAll(env.DB, "SELECT application_id,organization_id FROM organization_domain_claims WHERE domain=?", [
+          domain,
+        ]),
+      ).toEqual([{ application_id: null, organization_id: selected }]);
+      if (released)
+        await env.DB.prepare("DELETE FROM organization_domain_claims WHERE organization_id=?").bind(selected).run();
+      expect((await approve(id)).organizationId).toBe(selected);
+    },
+  );
+
+  it("rejects a promoted observed claim even when its id is unchanged", async () => {
+    const pending = await insertOrganization(env.DB, "Promoted Organization");
+    const applicationId = crypto.randomUUID();
+    // Use a real pending application so all observed claim ownership fields are covered.
+    const { seedMemberApplication } = await import("./helpers/member-applications");
+    await seedMemberApplication({ id: applicationId, applicantEmail: `pending@${domain}`, organizationDomain: domain });
+    const response = await post("/api/v1/members/join/verify", {
+      token: await verification(),
+      organizationName: "New Organization",
+      domain,
+    });
+    const continuation = memberJoinVerifyResponseSchema.parse(await response.json());
+    if (continuation.status !== "application_ready") throw new Error("Expected application continuation");
+    const racingDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("INSERT INTO member_applications"),
+      () =>
+        env.DB.prepare(
+          "UPDATE organization_domain_claims SET application_id=NULL,organization_id=? WHERE application_id=?",
+        )
+          .bind(pending, applicationId)
+          .run(),
+    );
+    const submitted = await callApi({ ...testEnv, DB: racingDb }, "/api/v1/members/applications", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        applicantEmail: continuation.applicantEmail,
+        applicantName: "Review Applicant",
+        membershipCategory: "F",
+        organizationName: continuation.organizationName,
+        joinToken: continuation.joinToken,
+        answers,
+      }),
+    });
+    expect(submitted.status).toBe(409);
+    expect(await submitted.json()).toMatchObject({ error: { code: "ORGANIZATION_AFFILIATION_CHANGED" } });
+    expect(await queryAll(env.DB, "SELECT id FROM member_applications WHERE id<>?", [applicationId])).toEqual([]);
+  });
+
   it("honors an explicit member choice despite another organization's blocked domain fact", async () => {
     const member = await insertOrganization(env.DB, "Member Organization");
     await seedOrganizationAggregate(env.DB, member);
@@ -208,9 +323,16 @@ describe("membership domain claim lifecycle", () => {
 
   it("preserves an unrelated batch failure when the domain already has an approved claim", async () => {
     await claim(await insertOrganization(env.DB, "Existing Claimant"));
-    const claimIds = (
-      await queryAll<{ id: string }>(env.DB, "SELECT id FROM organization_domain_claims WHERE domain=?", [domain])
-    ).map((item) => item.id);
+    const claims = await queryAll<{
+      id: string;
+      domain: string;
+      applicationId: string | null;
+      organizationId: string | null;
+    }>(
+      env.DB,
+      "SELECT id, domain, application_id AS applicationId, organization_id AS organizationId, NULL AS applicationName, NULL AS applicationUpdatedAt FROM organization_domain_claims WHERE domain=?",
+      [domain],
+    );
     const failure = new Error("UNIQUE constraint failed: organizations.slug");
     const failingDb = mutateBeforeMatchingQuery(
       env.DB,
@@ -229,7 +351,11 @@ describe("membership domain claim lifecycle", () => {
         appBaseUrl: "https://app.test",
         joinCapabilityId: crypto.randomUUID(),
         organizationName: "New Organization",
-        selectedOrganization: { name: "New Organization", domain, claimIds, pendingApplications: [] },
+        selectedOrganization: {
+          name: "New Organization",
+          domain,
+          claimsFingerprint: await domainClaimsObservationFingerprint(claims),
+        },
         answers,
       }),
     ).rejects.toBe(failure);
@@ -250,7 +376,11 @@ describe("membership domain claim lifecycle", () => {
         appBaseUrl: "https://app.test",
         joinCapabilityId: crypto.randomUUID(),
         organizationName: "Changed Name",
-        selectedOrganization: { name: "Signed Name", domain, claimIds: [], pendingApplications: [] },
+        selectedOrganization: {
+          name: "Signed Name",
+          domain,
+          claimsFingerprint: await domainClaimsObservationFingerprint([]),
+        },
       }),
     ).rejects.toMatchObject({ code: "ORGANIZATION_AFFILIATION_CHANGED" });
     expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toEqual([]);

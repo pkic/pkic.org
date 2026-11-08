@@ -180,7 +180,7 @@ describe("membership application as a signed-in identity", () => {
           "SELECT claim.id FROM organization_domain_claims claim JOIN member_applications application ON application.id=claim.application_id WHERE application.applicant_user_id=?",
           [userId],
         ),
-      ).toHaveLength(1);
+      ).toHaveLength(kind === "own" ? 0 : 1);
     },
   );
 

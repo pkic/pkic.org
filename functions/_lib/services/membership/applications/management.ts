@@ -2,6 +2,7 @@ import { prepareApplicationEditEvidenceGuard } from "./edit-evidence";
 import { preparePermissionsAuthorizationGuard } from "../../../auth/permissions";
 import { isAuthorizationGuardFailure, isStateGuardFailure, prepareStateGuard } from "../../../db/authorization-guard";
 import { getRequestedApplicationGroups } from "./queries";
+import { isApplicationTerminalStage } from "../../../../../assets/shared/schemas/member-applications";
 import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
 import { mailboxKind, organizationDomainCandidates } from "../../../email-domains/classification";
 /**
@@ -331,7 +332,7 @@ export async function updateMembershipApplication(
     setClauses.push("organization_domain = ?");
     values.push(nextOrganizationDomain);
     if (application.stage !== "declined" && application.stage !== "withdrawn") {
-      dependentStatements.push(...prepareReleaseApplicationDomainClaim(db, application.id));
+      dependentStatements.push(prepareReleaseApplicationDomainClaim(db, application.id));
       if (nextOrganizationDomain) {
         dependentStatements.push(
           prepareStateGuard(db, {
@@ -347,7 +348,17 @@ export async function updateMembershipApplication(
   if (input.organizationName !== undefined && input.organizationName !== application.organization_name) {
     setClauses.push("organization_name = ?");
     values.push(nextOrganizationName);
-    if (application.organization_id) setClauses.push("organization_id = NULL");
+    if (application.organization_id) {
+      setClauses.push("organization_id = NULL");
+      // A corrected organization becomes provisional even if its previous selection needed no application claim.
+      if (
+        !nextIsIndividual &&
+        nextOrganizationDomain &&
+        !organizationDomainChanged &&
+        !isApplicationTerminalStage(application.stage)
+      )
+        dependentStatements.push(prepareClaimDomainForApplication(db, nextOrganizationDomain, application.id, now));
+    }
     changedFields.push("organizationName");
   } else if (
     nextIsIndividual !== currentCategory.isIndividual &&

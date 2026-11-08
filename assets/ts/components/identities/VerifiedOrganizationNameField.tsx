@@ -23,7 +23,7 @@ export function VerifiedOrganizationNameField({
       label="Organization name"
       required
       help={
-        reviewRequired
+        reviewRequired && domain
           ? `This organization will be linked to ${domain}. If it already has a pending application, its affiliation requires review.`
           : domain
             ? `This organization will be linked to your verified email domain ${domain}.`

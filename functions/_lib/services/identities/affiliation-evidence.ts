@@ -1,5 +1,8 @@
 import { organizationDomainCandidates } from "../../email-domains/classification";
-import type { VerifiedAffiliationBasis } from "./verified-affiliation-basis";
+import { verifiedAffiliationBasisSchema, type VerifiedAffiliationBasis } from "./verified-affiliation-basis";
+import type { D1StatementResult } from "../../types";
+import { batchRows } from "../../db/pagination";
+import { sha256Hex } from "../../utils/crypto";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { ownedIdentityEmailEvidence } from "./owned-email";
 
@@ -82,11 +85,11 @@ export function observedDomainClaimsEvidence(
   return [
     {
       sql: `SELECT 1 WHERE NOT EXISTS (
-      SELECT id,organization_id,application_id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
-      EXCEPT SELECT json_extract(value,'$.id'),json_extract(value,'$.organizationId'),json_extract(value,'$.applicationId') FROM json_each(?)
+      SELECT id,domain,organization_id,application_id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
+      EXCEPT SELECT json_extract(value,'$.id'),json_extract(value,'$.domain'),json_extract(value,'$.organizationId'),json_extract(value,'$.applicationId') FROM json_each(?)
     ) AND NOT EXISTS (
-      SELECT json_extract(value,'$.id'),json_extract(value,'$.organizationId'),json_extract(value,'$.applicationId') FROM json_each(?)
-      EXCEPT SELECT id,organization_id,application_id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
+      SELECT json_extract(value,'$.id'),json_extract(value,'$.domain'),json_extract(value,'$.organizationId'),json_extract(value,'$.applicationId') FROM json_each(?)
+      EXCEPT SELECT id,domain,organization_id,application_id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
     )`,
       bindings: [domains, observed, observed, domains],
     },
@@ -99,4 +102,25 @@ export function observedDomainClaimsEvidence(
       bindings: [applications],
     },
   ];
+}
+
+/** Canonical bounded claim observation, shared by affiliation reads and application continuations. */
+export function domainClaimsObservationSelection(email: string) {
+  return {
+    sql: `SELECT claim.id,claim.domain,claim.application_id AS applicationId,claim.organization_id AS organizationId,
+      application.organization_name AS applicationName, application.updated_at AS applicationUpdatedAt,
+      EXISTS(SELECT 1 FROM members member WHERE member.organization_id=claim.organization_id) AS member
+      FROM organization_domain_claims claim JOIN json_each(?) requested ON requested.value=claim.domain
+      LEFT JOIN member_applications application ON application.id=claim.application_id
+      ORDER BY length(claim.domain) DESC,claim.id LIMIT 129`,
+    bindings: [JSON.stringify(organizationDomainCandidates(email))],
+  };
+}
+
+export function decodeDomainClaimsObservation(result: D1StatementResult) {
+  return verifiedAffiliationBasisSchema.shape.claims.parse(batchRows(result));
+}
+
+export function domainClaimsObservationFingerprint(claims: VerifiedAffiliationBasis["claims"]) {
+  return sha256Hex(JSON.stringify(verifiedAffiliationBasisSchema.shape.claims.parse(claims)));
 }

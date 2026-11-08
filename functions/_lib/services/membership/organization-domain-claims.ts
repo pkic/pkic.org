@@ -1,8 +1,8 @@
 /**
  * Canonical organization-domain ownership boundary.
  *
- * Each application or organization has its own claim row. Callers that need
- * to decide affiliation must consider every claim for the domain.
+ * Provisional applications hold their own claim; selected organizations can
+ * reuse an approved claim. Affiliation decisions consider every domain claim.
  *
  * A claim normally holds a registrable domain (`ibm.com`) and covers every
  * address on its subdomains; a subdomain claimed explicitly
@@ -89,13 +89,17 @@ export function prepareClaimDomainForApplication(
     .prepare(
       `INSERT INTO organization_domain_claims
          (id, domain, application_id, organization_id, created_at, updated_at)
-       VALUES (?, ?, ?, NULL, ?, ?)`,
+       SELECT ?, ?, ?, NULL, ?, ? WHERE NOT EXISTS (
+         SELECT 1 FROM organization_domain_claims claim
+         JOIN member_applications application ON application.id=?
+         WHERE claim.domain=? AND claim.organization_id=application.organization_id AND claim.application_id IS NULL
+       ) AND NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE application_id=? AND domain=?)`,
     )
-    .bind(uuid(), domain, applicationId, now, now);
+    .bind(uuid(), domain, applicationId, now, now, applicationId, domain, applicationId, domain);
 }
 
-export function prepareReleaseApplicationDomainClaim(db: DatabaseLike, applicationId: string): StatementLike[] {
-  return [db.prepare("DELETE FROM organization_domain_claims WHERE application_id = ?").bind(applicationId)];
+export function prepareReleaseApplicationDomainClaim(db: DatabaseLike, applicationId: string): StatementLike {
+  return db.prepare("DELETE FROM organization_domain_claims WHERE application_id = ?").bind(applicationId);
 }
 
 export async function prepareTransferApplicationDomainClaim(
@@ -126,19 +130,24 @@ export async function prepareTransferApplicationDomainClaim(
   }
   return [
     prepareStateGuard(db, {
-      sql: "SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?",
-      bindings: [params.domain, params.organizationId],
+      sql: `SELECT 1 WHERE EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?)
+        OR EXISTS (SELECT 1 FROM member_applications WHERE id=? AND organization_id=? AND organization_domain=?)`,
+      bindings: [params.domain, params.organizationId, params.applicationId, params.organizationId, params.domain],
     }),
+    db
+      .prepare(`INSERT INTO organization_domain_claims (id,domain,application_id,organization_id,created_at,updated_at)
+      SELECT ?,?,NULL,?,?,? WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?)`)
+      .bind(uuid(), params.domain, params.organizationId, params.now, params.now, params.domain, params.organizationId),
   ];
 }
 
 export async function prepareClaimDomainForOrganization(
   db: DatabaseLike,
   params: { domain: string; organizationId: string; now: string },
-  observedClaim?: OrganizationDomainClaim | null,
+  skipExistingClaimRead = false,
 ): Promise<StatementLike | null> {
   if (
-    observedClaim === undefined &&
+    !skipExistingClaimRead &&
     (await first<{ id: string }>(db, "SELECT id FROM organization_domain_claims WHERE domain=? AND organization_id=?", [
       params.domain,
       params.organizationId,

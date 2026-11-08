@@ -17,7 +17,9 @@ const joinDraftSchema = z.object({
   checked: z.array(z.string()),
   // Unsent answers may be incomplete or exceed the submission contract.
   answers: z.record(z.string(), z.unknown()),
-  choice: memberJoinVerifySchema.pick({ organizationId: true, organizationName: true, domain: true }).optional(),
+  choice: memberJoinVerifySchema
+    .pick({ organizationId: true, organizationName: true, domain: true, continueAsIndividual: true })
+    .optional(),
 });
 type JoinDraft = z.infer<typeof joinDraftSchema>;
 

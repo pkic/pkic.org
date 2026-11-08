@@ -375,6 +375,9 @@ export async function mergeOrganizations(
       .prepare("UPDATE organization_domain_claims SET organization_id = ?, updated_at = ? WHERE organization_id = ?")
       .bind(target.id, at, source.id),
     authorizedDb
+      .prepare("UPDATE member_applications SET organization_id = ?, updated_at = ? WHERE organization_id = ?")
+      .bind(target.id, at, source.id),
+    authorizedDb
       .prepare("UPDATE sponsorships SET organization_id = ?, updated_at = ? WHERE organization_id = ?")
       .bind(target.id, at, source.id),
     authorizedDb

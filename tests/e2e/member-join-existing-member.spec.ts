@@ -1,5 +1,7 @@
 /** Returning members should reach sign-in, not another application. @covers join.1.0 */
 import { expect, test } from "@playwright/test";
+import { memberApplicationCreateSchema } from "../../assets/shared/schemas/member-applications";
+import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { memberJoinVerifyResponseSchema } from "../../assets/shared/schemas/member-join";
 import {
   organizationCreateSchema,
@@ -114,6 +116,29 @@ test("a verified address on a shared domain chooses its member organization", as
   await choice.selectOption({ label: `Shared Second ${suffix}` });
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.locator("[data-join-organization-access]")).toBeVisible();
+  await page.context().clearCookies();
+  const independentEmail = `independent-${suffix}@${domain}`;
+  const beforeIndependent = await capturedEmailCount();
+  await page.goto("/join/");
+  await page.getByRole("radio", { name: EMAIL_FIRST_COPY.join.personal.title, exact: true }).check();
+  await page.getByLabel(EMAIL_FIRST_COPY.join.personal.label).fill(independentEmail);
+  await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.personal.action, exact: true }).click();
+  const individualProof = await waitForCapturedEmail(independentEmail, "Verify your email address", {
+    since: beforeIndependent,
+  });
+  await openMembershipVerificationLink(page, extractEmailUrl(individualProof, "/join/"));
+  const independent = page.getByRole("button", { name: "Continue as an individual", exact: true });
+  await expect(independent).toBeVisible();
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 812 });
+    await independent.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: test.info().outputPath(`individual-choice-${width}.png`) });
+  }
+  await independent.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("[data-join-application-form]")).toBeVisible();
+  await expect(page.locator("[data-verified-application-kind]")).toHaveText("Individual application");
+  expect((await page.context().cookies()).some((cookie) => cookie.name === "pkic_session")).toBe(false);
 });
 
 test("a verified address can apply for a nonmember organization on a shared domain", async ({ page }) => {
@@ -143,6 +168,43 @@ test("a verified address can apply for a nonmember organization on a shared doma
   await expect(organizationName).toHaveValue(name);
   await expect(organizationName).toHaveAttribute("readonly", "");
   await expect(page.locator("[data-join-application-form]")).toBeVisible();
+  await page.getByLabel("First name", { exact: true }).fill("Casey");
+  await page.getByLabel("Last name", { exact: true }).fill("Applicant");
+  await page.getByLabel(/F —/).check();
+  await page.getByLabel(/^Job title/).fill("Engineer");
+  await page.getByLabel(/^Why do you want to join/).fill("Contribute to PKI interoperability.");
+  await page.getByLabel(/^About yourself/).fill("I work on PKI standards.");
+  await page.getByLabel(/^About your organization/).fill("We develop PKI services.");
+  const agreements = page.locator('[data-join-application-form] input[type="checkbox"][required]');
+  for (const agreement of await agreements.all()) await agreement.check();
+  await page.route(
+    "**/api/v1/members/applications",
+    async (route) => {
+      memberApplicationCreateSchema.parse(route.request().postDataJSON());
+      await route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: {
+            code: "ORGANIZATION_AFFILIATION_CHANGED",
+            message: "Confirm your organization again before applying.",
+          },
+        }),
+      });
+    },
+    { times: 1 },
+  );
+  await page.getByRole("button", { name: "Submit membership application", exact: true }).click();
+  const chooser = page.getByRole("combobox", { name: "Organization (required)", exact: true });
+  await expect(chooser).toBeVisible();
+  await expect(page.getByText("Confirm your organization again before applying.", { exact: true })).toBeVisible();
+  await chooser.selectOption({ label: name });
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByLabel("First name", { exact: true })).toHaveValue("Casey");
+  await expect(page.getByLabel(/^Why do you want to join/)).toHaveValue("Contribute to PKI interoperability.");
+  for (const agreement of await agreements.all()) await agreement.check();
+  await page.getByRole("button", { name: "Submit membership application", exact: true }).click();
+  await expect(page.getByRole("link", { name: /Check application status/ })).toBeVisible();
 });
 
 test("a verified address adds an organization on a dedicated subdomain", async ({ page }, info) => {

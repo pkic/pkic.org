@@ -224,9 +224,14 @@ export function AffiliationOfferCard() {
         <PanelBody class="pk-stack pk-stack--snug">
           <p>More than one organization uses @{offer.domain}. Choose the one you represent.</p>
           <WrittenName offer={offer} />
-          <Button variant="primary" onClick={() => setChoosing(true)}>
-            Choose organization
-          </Button>
+          <div class="pk-cluster">
+            <Button variant="primary" disabled={busy} onClick={() => setChoosing(true)}>
+              Choose organization
+            </Button>
+            <Button disabled={busy} onClick={() => void dismiss(null, "Your organization choice was saved")}>
+              I am independent
+            </Button>
+          </div>
           <IdentityCreateDialog
             open={choosing}
             onClose={() => setChoosing(false)}

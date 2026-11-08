@@ -114,18 +114,24 @@ export async function readAffiliationOffer(db: DatabaseLike, userId: string): Pr
       [userId],
     ),
   ]);
+  if (dismissals.some((dismissal) => dismissal.organization_id === null)) return null;
   const writtenOrganizationName = written?.organization_name ?? null;
   const relatedIds = new Set(related.map((row) => row.organization_id));
   const dismissed = new Set(dismissals.map((row) => row.organization_id));
   let hasWorkAddress = false;
+  let choiceOffer: AffiliationOffer | null = null;
   for (const address of addresses) {
     const { domain, resolution, facts } = await resolveEmailDomainOrganization(db, address.normalized_email);
     if (!domain) continue;
     hasWorkAddress = true;
     if (resolution.kind === "ambiguous") {
       const candidates = facts ? [...facts.claimed, ...facts.derived] : [];
-      if (!candidates.some((candidate) => relatedIds.has(candidate.organizationId)))
-        return { kind: "choose_organization", emailId: address.id, domain, writtenOrganizationName };
+      if (
+        !choiceOffer &&
+        !candidates.some((candidate) => relatedIds.has(candidate.organizationId)) &&
+        candidates.some((candidate) => !dismissed.has(candidate.organizationId))
+      )
+        choiceOffer = { kind: "choose_organization", emailId: address.id, domain, writtenOrganizationName };
       continue;
     }
     if (resolution.kind !== "organization") continue;
@@ -138,6 +144,7 @@ export async function readAffiliationOffer(db: DatabaseLike, userId: string): Pr
     if (!organization) continue;
     return { kind: "organization", organization, emailId: address.id, domain, writtenOrganizationName };
   }
+  if (choiceOffer) return choiceOffer;
   const holdsOrganization = related.some((row) => Boolean(row.active));
   if (hasWorkAddress || holdsOrganization || dismissed.has(null) || addresses.length === 0) return null;
   return {

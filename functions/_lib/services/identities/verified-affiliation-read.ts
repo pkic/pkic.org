@@ -13,6 +13,7 @@ import {
   requireWorkOrganizationDomain,
   verifiedRepresentationDomainCandidates,
 } from "./verified-email-domain";
+import { domainClaimsObservationSelection } from "./affiliation-evidence";
 import { verifiedAffiliationBasisSchema } from "./verified-affiliation-basis";
 
 type Basis = z.infer<typeof verifiedAffiliationBasisSchema>;
@@ -33,6 +34,7 @@ export function prepareVerifiedAffiliationRead(
   const domains = JSON.stringify(candidates);
   const matches = domainOwnershipFactMatchesSql("requested.value");
   const slug = slugifyOr(input.organizationName ?? "", "member");
+  const claimRead = domainClaimsObservationSelection(input.email);
   const statements = [
     mailboxProof
       ? db
@@ -42,14 +44,7 @@ export function prepareVerifiedAffiliationRead(
       : db
           .prepare(`${OWN_ADDRESSES_SQL} SELECT ${OWN_ADDRESS_COLUMNS} FROM addresses WHERE id IS ? LIMIT 1`)
           .bind(userId, userId, input.emailId),
-    db
-      .prepare(`SELECT claim.id,claim.domain,claim.application_id AS applicationId,claim.organization_id AS organizationId,
-      application.organization_name AS applicationName, application.updated_at AS applicationUpdatedAt,
-      EXISTS(SELECT 1 FROM members member WHERE member.organization_id=claim.organization_id) AS member
-      FROM organization_domain_claims claim JOIN json_each(?) requested ON requested.value=claim.domain
-      LEFT JOIN member_applications application ON application.id=claim.application_id
-      ORDER BY length(claim.domain) DESC,claim.id LIMIT 129`)
-      .bind(domains),
+    db.prepare(claimRead.sql).bind(...claimRead.bindings),
     db
       .prepare(`WITH facts AS (
       SELECT requested.value AS domain,${FACT_ORGANIZATION} AS id,

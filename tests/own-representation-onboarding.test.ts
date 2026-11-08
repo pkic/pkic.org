@@ -108,6 +108,43 @@ describe("email-first own representation", () => {
       expect(claims.results.map((item) => item.organization_id).sort()).toEqual(first ? [first] : []);
     },
   );
+  it.each(["independent", "all", "one"])("honors %s dismissals on a shared domain", async (mode) => {
+    const p = await person();
+    const first = await insertOrganization(env.DB, "Dismissed First");
+    const second = await insertOrganization(env.DB, "Dismissed Second");
+    await claim("northstar-work.test", first);
+    await claim("northstar-work.test", second);
+    for (const organizationId of mode === "independent" ? [null] : mode === "all" ? [first, second] : [first]) {
+      const response = await callApi(env, "/api/v1/users/current/identities/offer/dismissals", {
+        method: "POST",
+        headers: { authorization: `Bearer ${p.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ organizationId }),
+      });
+      expect(response.status, await response.clone().text()).toBe(201);
+    }
+    const response = await callApi(env, "/api/v1/users/current/identities/offer", {
+      headers: { authorization: `Bearer ${p.token}` },
+    });
+    expect(await response.json()).toMatchObject({ offer: mode === "one" ? { kind: "choose_organization" } : null });
+  });
+
+  it("prefers a concrete organization on a later verified address over an ambiguous offer", async () => {
+    const p = await person();
+    await claim("northstar-work.test", await insertOrganization(env.DB, "Shared First"));
+    await claim("northstar-work.test", await insertOrganization(env.DB, "Shared Second"));
+    const concrete = await insertOrganization(env.DB, "Concrete Organization");
+    await claim("concrete-work.test", concrete);
+    await env.DB.prepare(
+      "INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at) VALUES (?,?,?,?,?,?)",
+    )
+      .bind(crypto.randomUUID(), p.userId, "person@concrete-work.test", "person@concrete-work.test", nowIso(), nowIso())
+      .run();
+    const response = await callApi(env, "/api/v1/users/current/identities/offer", {
+      headers: { authorization: `Bearer ${p.token}` },
+    });
+    expect(await response.json()).toMatchObject({ offer: { kind: "organization", organization: { id: concrete } } });
+  });
+
   it.each(["first", "second"])("lets a verified user choose the %s organization on a shared domain", async (choice) => {
     const p = await person();
     const first = await insertOrganization(env.DB, "First Organization");

@@ -68,7 +68,7 @@ describe("staff manage an organization's email domains", () => {
       );
       const statements =
         decision === "release"
-          ? prepareReleaseApplicationDomainClaim(env.DB, applicationId)
+          ? [prepareReleaseApplicationDomainClaim(env.DB, applicationId)]
           : await prepareTransferApplicationDomainClaim(env.DB, {
               domain: "pending-shared.example",
               applicationId,
@@ -294,6 +294,24 @@ describe("staff manage an organization's email domains", () => {
       await queryAll(env.DB, "SELECT domain FROM organization_domain_claims WHERE organization_id=?", [selected]),
     ).toEqual([]);
     expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='organization_domain_claimed'")).toEqual([]);
+  });
+
+  it("preserves unrelated foreign key errors and rolls the release back", async () => {
+    const organization = await insertOrganization(env.DB, "Release Organization");
+    await claimDomain(organization, "release-error.example");
+    await env.DB.prepare(`CREATE TRIGGER synthetic_release_audit_failure BEFORE INSERT ON audit_log
+      WHEN NEW.action='organization_domain_released' BEGIN SELECT RAISE(ABORT, 'FOREIGN KEY constraint failed'); END`).run();
+    try {
+      const response = await call(`/api/v1/organizations/${organization}/domains/release-error.example`, {
+        method: "DELETE",
+      });
+      expect(response.status).toBe(500);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM organization_domain_claims WHERE organization_id=?", [organization]),
+      ).toHaveLength(1);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER synthetic_release_audit_failure").run();
+    }
   });
 
   it("removes only a claim the organization holds and requires organization permissions", async () => {

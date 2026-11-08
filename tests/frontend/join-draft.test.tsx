@@ -200,6 +200,53 @@ describe("a verified application kept for this tab", () => {
     },
   );
 
+  it.each(["IDENTITY_DOMAIN_MISMATCH", "ORGANIZATION_AFFILIATION_CHANGED"])(
+    "refreshes a stale saved choice once and preserves its refusal and answers (%s)",
+    async (code) => {
+      rememberJoinToken(organizationContext.joinToken);
+      rememberJoinChoice({ organizationName: "Saved Organization", domain: "example-corp.test" });
+      const before = applicationForm();
+      before.querySelector<HTMLInputElement>('[name="firstName"]')!.value = "Jane";
+      saveJoinAnswers(before);
+      document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
+      const requests: Array<ReturnType<typeof memberJoinVerifySchema.parse>> = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+          requests.push(memberJoinVerifySchema.parse(JSON.parse(String(init?.body))));
+          if (requests.length === 1)
+            return Response.json(
+              { error: { code, message: "Choose your organization again." } },
+              { status: code === "IDENTITY_DOMAIN_MISMATCH" ? 422 : 409 },
+            );
+          return Response.json({
+            status: "organization_selection_required",
+            domain: "example-corp.test",
+            organizations: [],
+            affiliation: {
+              email: organizationContext.applicantEmail,
+              domain: "example-corp.test",
+              domains: [],
+              organization: null,
+              organizations: [],
+            },
+          });
+        }),
+      );
+      vi.resetModules();
+      await import("../../assets/ts/member-flows/join-form");
+      await vi.waitFor(() =>
+        expect(document.querySelector("[data-flow-status]")?.textContent).toContain("Choose your organization again."),
+      );
+      expect(requests).toHaveLength(2);
+      expect(requests[1].domain).toBeUndefined();
+      expect(rememberedJoinChoice()).toBeUndefined();
+      const restored = applicationForm();
+      expect(restoreJoinAnswers(restored, () => undefined)).toBe(true);
+      expect(restored.querySelector<HTMLInputElement>('[name="firstName"]')!.value).toBe("Jane");
+    },
+  );
+
   it("offers a refresh without claiming saved answers for a first verification link", async () => {
     history.replaceState({}, "", `/join/#verify=${organizationContext.joinToken}`);
     document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);

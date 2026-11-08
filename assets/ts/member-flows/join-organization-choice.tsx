@@ -18,6 +18,7 @@ export function JoinOrganizationChoice({
   onChoose,
   onResolve,
   onAdd,
+  onIndividual,
 }: {
   token: string;
   domain: string;
@@ -29,6 +30,7 @@ export function JoinOrganizationChoice({
   onChoose: (id: string) => Promise<void>;
   onResolve: (domain?: string) => Promise<typeof affiliation>;
   onAdd: (name: string, domain: string) => Promise<void>;
+  onIndividual?: () => Promise<void>;
 }) {
   const [organizationId, setOrganizationId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -74,23 +76,37 @@ export function JoinOrganizationChoice({
                 </option>
               ))}
             </Select>
-            <Button
-              type="button"
-              variant="secondary"
-              icon
-              aria-label="Add organization"
-              title="Add organization"
-              disabled={busy}
-              onClick={() => setAdding(true)}
-            >
-              <IconPlus />
-            </Button>
+            {!onIndividual && (
+              <Button
+                type="button"
+                variant="secondary"
+                icon
+                aria-label="Add organization"
+                title="Add organization"
+                disabled={busy}
+                onClick={() => setAdding(true)}
+              >
+                <IconPlus />
+              </Button>
+            )}
           </InputGroup>
         )}
       </Field>
       {organizations.length > 0 && (
         <Button type="submit" variant="primary" loading={busy}>
           Continue
+        </Button>
+      )}
+      {onIndividual && (
+        <Button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void onIndividual().finally(() => setBusy(false));
+          }}
+        >
+          Continue as an individual
         </Button>
       )}
       {createPortal(

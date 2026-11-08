@@ -24,8 +24,6 @@ import {
   organizationAlreadyMemberMessage,
 } from "../../../../../assets/shared/membership-application-refusals";
 import { readMembershipApplicationConflicts } from "./conflicts";
-import { prepareStateGuard } from "../../../db/authorization-guard";
-import { verifiedEmailDomainResolutionEvidence } from "../../identities/verified-email-domain";
 
 export interface ApproveApplicationResult {
   applicationId: string;
@@ -171,28 +169,7 @@ export async function buildApplicationApproval(
 
   const now = nowIso();
   const fromStage = application.stage;
-  const selectedEvidence =
-    application.organization_id && application.organization_domain && organizationId
-      ? verifiedEmailDomainResolutionEvidence(application.organization_domain, organizationId, false, true)
-      : null;
   const statements: StatementLike[] = [
-    ...(selectedEvidence
-      ? [
-          prepareStateGuard(db, {
-            sql: `SELECT 1 WHERE EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=?
-        AND organization_id=? AND application_id IS NULL) OR EXISTS (${selectedEvidence.sql})
-        OR EXISTS (SELECT 1 FROM identities WHERE user_id=? AND organization_id=?
-          AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL)`,
-            bindings: [
-              application.organization_domain!,
-              organizationId!,
-              ...selectedEvidence.bindings,
-              application.applicant_user_id,
-              organizationId!,
-            ],
-          }),
-        ]
-      : []),
     ...provisioning.statements,
     // "About yourself" is the applicant's biography. It belongs to the identity
     // they now act as, whether provisioning created it or reused a personal

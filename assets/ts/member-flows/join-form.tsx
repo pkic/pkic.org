@@ -46,11 +46,13 @@ import {
 } from "../../shared/schemas/member-applications";
 import { z } from "zod";
 import {
+  memberJoinAffiliationPreviewSchema,
   memberJoinStartResponseSchema,
   memberJoinStartSchema,
   memberJoinVerifyResponseSchema,
   memberJoinVerifySchema,
 } from "../../shared/schemas/member-join";
+import { identityAffiliationPreviewResponseSchema } from "../../shared/schemas/identity-affiliation";
 import { ButtonLink } from "../ui/Button";
 import { EmailFirstStep } from "../components/EmailFirstStep";
 // This module writes design-system class names into markup it builds itself,
@@ -402,6 +404,17 @@ async function main(): Promise<void> {
           forgetJoinDraft();
           showSuccessPanel(root, applicationForm, result.applicationId, result.manageToken, applicantName);
         } catch (error) {
+          if (
+            !identity &&
+            error instanceof ApiClientError &&
+            ["ORGANIZATION_AFFILIATION_CHANGED", "ORGANIZATION_NAME_IN_USE"].includes(error.code)
+          ) {
+            saveJoinAnswers(applicationForm);
+            applicationContext = null;
+            rememberJoinChoice();
+            await verifyFromLocation(undefined, undefined, false, error.message);
+            return;
+          }
           applicationValidation.refuse(error);
           legalValidation?.refuse(error);
           setStatus(statusEl, normalizeValidation(error).globalMessage, true);
@@ -416,15 +429,20 @@ async function main(): Promise<void> {
     });
   });
 
-  const verifyFromLocation = async (organizationId?: string, added?: { name: string; domain: string }) => {
+  const verifyFromLocation = async (
+    organizationId?: string,
+    added?: { name: string; domain: string },
+    continueAsIndividual = false,
+    recoveryMessage?: string,
+  ) => {
     const linked = new URLSearchParams(window.location.hash.slice(1)).get("verify");
     // The link's token leaves the address bar; this tab keeps it so a reload continues the application.
     if (linked) history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
     const token = linked ?? rememberedJoinToken();
     if (!token) return;
     const choice =
-      organizationId || added
-        ? { organizationId, organizationName: added?.name, domain: added?.domain }
+      organizationId || added || continueAsIndividual
+        ? { organizationId, organizationName: added?.name, domain: added?.domain, continueAsIndividual }
         : linked
           ? undefined
           : rememberedJoinChoice();
@@ -444,21 +462,22 @@ async function main(): Promise<void> {
             affiliation={result.affiliation}
             organizations={result.organizations}
             onChoose={verifyFromLocation}
+            onIndividual={
+              result.canApplyAsIndividual ? () => verifyFromLocation(undefined, undefined, true) : undefined
+            }
             onAdd={(name, domain) => verifyFromLocation(undefined, { name, domain })}
             onResolve={async (domain) => {
-              const resolved = await postJson(
-                `${API_BASE}/members/join/verify`,
-                memberJoinVerifySchema.parse({ token, domain }),
-                memberJoinVerifyResponseSchema,
+              return postJson(
+                `${API_BASE}/members/join/affiliations`,
+                memberJoinAffiliationPreviewSchema.parse({ token, domain }),
+                identityAffiliationPreviewResponseSchema,
               );
-              if (resolved.status !== "organization_selection_required")
-                throw new Error("Confirm your organization again.");
-              return resolved.affiliation;
             }}
           />,
           organizationChoiceSection,
         );
         showSection(organizationChoiceSection);
+        if (recoveryMessage) setStatus(statusEl, recoveryMessage, true);
         return;
       }
       if (result.status === "application_ready") {
@@ -479,7 +498,8 @@ async function main(): Promise<void> {
           organizationName.readOnly = Boolean(result.organizationName);
           if (result.organizationName) organizationName.value = result.organizationName;
         }
-        if (restored) {
+        if (recoveryMessage) setStatus(statusEl, recoveryMessage, true);
+        else if (restored) {
           setStatus(statusEl, "We restored the answers you entered earlier. Agreements need accepting again.");
         }
         return;
@@ -499,10 +519,24 @@ async function main(): Promise<void> {
         showSection(supportSection);
       }
     } catch (error) {
-      if (error instanceof ApiClientError && error.code === "ORGANIZATION_AFFILIATION_CHANGED") {
+      if (
+        error instanceof ApiClientError &&
+        ["ORGANIZATION_AFFILIATION_CHANGED", "IDENTITY_DOMAIN_MISMATCH"].includes(error.code ?? "") &&
+        choice &&
+        !recoveryMessage
+      ) {
         rememberJoinToken(token);
         rememberJoinChoice();
-        await verifyFromLocation();
+        await verifyFromLocation(undefined, undefined, false, error.message);
+        return;
+      }
+      if (
+        error instanceof ApiClientError &&
+        ["ORGANIZATION_AFFILIATION_CHANGED", "IDENTITY_DOMAIN_MISMATCH", "ORGANIZATION_NAME_IN_USE"].includes(
+          error.code ?? "",
+        )
+      ) {
+        setStatus(statusEl, error.message, true);
         return;
       }
       if (!(error instanceof ApiClientError) || ![404, 409, 410].includes(error.status)) {

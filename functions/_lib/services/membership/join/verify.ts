@@ -29,8 +29,16 @@ import {
 import { resolveDomainOrganization } from "../../../../../assets/shared/organization-domain";
 import { verifiedEmailDomainResolutionEvidence } from "../../identities/verified-email-domain";
 import { verifiedAffiliationPreview } from "../../identities/verified-affiliation-preview";
-import { observedDomainClaimsEvidence } from "../../identities/affiliation-evidence";
-import { normalizeOrgName } from "../../../../../assets/shared/organization-name";
+import {
+  domainClaimsObservationFingerprint,
+  observedDomainClaimsEvidence,
+} from "../../identities/affiliation-evidence";
+import type { VerifiedAffiliationBasis } from "../../identities/verified-affiliation-basis";
+import { normalizeOrgName, ORGANIZATION_NAME_IN_USE_MESSAGE } from "../../../../../assets/shared/organization-name";
+
+async function applicationOrganizationSelection(basis: VerifiedAffiliationBasis, name: string, id?: string) {
+  return { id, name, domain: basis.domain, claimsFingerprint: await domainClaimsObservationFingerprint(basis.claims) };
+}
 
 async function issueApplicationContinuation(
   signingSecret: string,
@@ -59,6 +67,7 @@ export async function verifyMemberJoin(
     organizationId?: string;
     organizationName?: string;
     domain?: string;
+    continueAsIndividual?: boolean;
     signingSecret: string;
     applicationTtlSeconds: number;
     sessionTtlHours: number;
@@ -92,12 +101,20 @@ export async function verifyMemberJoin(
     const open = await resolveOpenJoinApplication(input.signingSecret, observed.openApplication);
     if (open?.kind === "own") return { status: "application_in_progress", statusPath: open.statusPath };
   }
+  const provedUserId = provedMailboxUserId(observed.ownership);
+  if (input.continueAsIndividual) {
+    if (capability.applicantKind !== "individual" || input.organizationId || input.organizationName || input.domain)
+      throw new AppError(422, "MEMBERSHIP_CATEGORY_TYPE_MISMATCH", "Choose an individual application path.");
+    if (observed.state?.individual_conflict) return { status: "support_required" };
+    return issueApplicationContinuation(input.signingSecret, capability, input.applicationTtlSeconds, provedUserId);
+  }
   const facts = observed.affiliation?.basis.facts;
   const organizations = facts
     ? observed.affiliation!.basis.organizations.filter((organization) => {
         const resolution = resolveDomainOrganization(facts, { organizationId: organization.id });
         return (
-          resolution.kind === "organization" && (capability.applicantKind === "organization" || resolution.isMember)
+          resolution.kind === "organization" &&
+          (capability.applicantKind === "organization" || observed.activeMemberOrganizationIds.has(organization.id))
         );
       })
     : [];
@@ -109,7 +126,7 @@ export async function verifyMemberJoin(
         (organization) => organization.normalized_name === normalizeOrgName(input.organizationName!),
       )
     )
-      throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose the existing organization instead.");
+      throw new AppError(409, "ORGANIZATION_NAME_IN_USE", ORGANIZATION_NAME_IN_USE_MESSAGE);
     if (
       observed.affiliation.basis.claims.some(
         (claim) =>
@@ -124,14 +141,7 @@ export async function verifyMemberJoin(
       capability,
       input.applicationTtlSeconds,
       provedMailboxUserId(observed.ownership),
-      {
-        name: input.organizationName,
-        domain: observed.affiliation.basis.domain,
-        claimIds: observed.affiliation.basis.claims.map((claim) => claim.id),
-        pendingApplications: observed.affiliation.basis.claims
-          .filter((claim) => claim.applicationId)
-          .map((claim) => ({ id: claim.applicationId!, updatedAt: claim.applicationUpdatedAt! })),
-      },
+      await applicationOrganizationSelection(observed.affiliation.basis, input.organizationName),
     );
   }
   if (input.organizationId && !organizations.some((organization) => organization.id === input.organizationId))
@@ -153,6 +163,7 @@ export async function verifyMemberJoin(
       domain: observed.affiliation!.basis.domain,
       affiliation: affiliationPreview,
       organizations: organizations.map(({ id, name }) => ({ id, name })),
+      canApplyAsIndividual: capability.applicantKind === "individual",
     };
   }
   if (
@@ -163,22 +174,19 @@ export async function verifyMemberJoin(
   )
     return { status: "support_required" };
   const domain = observed.claim?.domain ?? workEmailDomain(capability.email) ?? emailDomainOf(capability.email);
-  const provedUserId = provedMailboxUserId(observed.ownership);
-  const claimedMember = observed.member;
+  const claimedMember = input.organizationId ? observed.member : null;
   if (!claimedMember) {
     if (input.organizationId) {
       const selected = organizations.find((organization) => organization.id === input.organizationId);
       if (!selected || capability.applicantKind !== "organization" || !observed.affiliation)
         return { status: "support_required" };
-      return issueApplicationContinuation(input.signingSecret, capability, input.applicationTtlSeconds, provedUserId, {
-        id: selected.id,
-        name: selected.name,
-        domain: observed.affiliation.basis.domain,
-        claimIds: observed.affiliation.basis.claims.map((claim) => claim.id),
-        pendingApplications: observed.affiliation.basis.claims
-          .filter((claim) => claim.applicationId)
-          .map((claim) => ({ id: claim.applicationId!, updatedAt: claim.applicationUpdatedAt! })),
-      });
+      return issueApplicationContinuation(
+        input.signingSecret,
+        capability,
+        input.applicationTtlSeconds,
+        provedUserId,
+        await applicationOrganizationSelection(observed.affiliation.basis, selected.name, selected.id),
+      );
     }
     if (observed.openApplication.organizationHeld && capability.applicantKind === "organization") {
       return { status: "organization_application_in_progress" };

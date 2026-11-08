@@ -22,6 +22,7 @@ export const memberJoinVerifySchema = z.object({
   organizationId: databaseIdSchema.optional(),
   organizationName: organizationNameSchema.optional(),
   domain: emailDomainNameSchema.optional(),
+  continueAsIndividual: z.boolean().optional(),
 });
 export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
   z.object({
@@ -41,6 +42,7 @@ export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
     status: z.literal("organization_selection_required"),
     domain: emailDomainNameSchema,
     affiliation: identityAffiliationPreviewResponseSchema,
+    canApplyAsIndividual: z.boolean().default(false),
     organizations: z
       .array(
         z.object({
@@ -91,5 +93,21 @@ export const memberJoinVerifyRouteSchema = {
     "404": { description: "Invalid verification link." },
     "409": { description: "Verification link already used." },
     "410": { description: "Verification link expired." },
+  },
+};
+
+export const memberJoinAffiliationPreviewSchema = memberJoinVerifySchema.pick({ token: true, domain: true });
+export const memberJoinAffiliationPreviewRouteSchema = {
+  ...publicOperation(),
+  tags: ["Members"],
+  summary: "Preview organizations for a verified join email",
+  request: {
+    body: { content: { "application/json": { schema: memberJoinAffiliationPreviewSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Read-only affiliation preview.",
+      content: { "application/json": { schema: identityAffiliationPreviewResponseSchema } },
+    },
   },
 };

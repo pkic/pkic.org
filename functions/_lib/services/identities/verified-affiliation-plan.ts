@@ -83,7 +83,7 @@ export async function planVerifiedAffiliation(
           AND NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?)`,
         bindings: [plan.organizationId, domain, plan.organizationId],
       }),
-      (await prepareClaimDomainForOrganization(db, { domain, organizationId: plan.organizationId, now: at }, null))!,
+      (await prepareClaimDomainForOrganization(db, { domain, organizationId: plan.organizationId, now: at }, true))!,
       prepareAuditLog(
         db,
         "user",

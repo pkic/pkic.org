@@ -26,8 +26,7 @@ const memberJoinApplicationCapabilityPayloadSchema = memberJoinCapabilityPayload
       id: databaseIdSchema.optional(),
       name: organizationNameSchema,
       domain: emailDomainNameSchema,
-      claimIds: z.array(databaseIdSchema).max(128),
-      pendingApplications: z.array(z.object({ id: databaseIdSchema, updatedAt: z.string() })).max(128),
+      claimsFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     })
     .optional(),
 });
