@@ -24,6 +24,8 @@ import {
   organizationAlreadyMemberMessage,
 } from "../../../../../assets/shared/membership-application-refusals";
 import { readMembershipApplicationConflicts } from "./conflicts";
+import { prepareAuthorizationGuard } from "../../../db/authorization-guard";
+import { verifiedEmailDomainResolutionEvidence } from "../../identities/verified-email-domain";
 
 export interface ApproveApplicationResult {
   applicationId: string;
@@ -82,7 +84,7 @@ async function refuseDecidedApproval(
   const conflicts = await readMembershipApplicationConflicts(db, {
     isIndividual,
     organizationName: application.organization_name,
-    organizationId: null,
+    organizationId: application.organization_id,
     applicantUserId: application.applicant_user_id,
     applicantEmail: application.applicant_email,
     applicationId: application.id,
@@ -145,6 +147,7 @@ export async function buildApplicationApproval(
   // built, same as provisioning.ts's own pattern.
   const provisioning = await buildProvisionOrganizationMembership(db, {
     organizationName: isIndividual ? null : application.organization_name,
+    organizationId: isIndividual ? null : application.organization_id,
     organizationDomain: isIndividual ? null : application.organization_domain,
     domainClaimApplicationId: isIndividual ? null : application.id,
     membershipCategory: application.membership_category,
@@ -168,7 +171,20 @@ export async function buildApplicationApproval(
 
   const now = nowIso();
   const fromStage = application.stage;
+  const selectedEvidence =
+    application.organization_id && application.organization_domain && organizationId
+      ? verifiedEmailDomainResolutionEvidence(application.organization_domain, organizationId, false, true)
+      : null;
   const statements: StatementLike[] = [
+    ...(selectedEvidence
+      ? [
+          prepareAuthorizationGuard(db, {
+            sql: `SELECT 1 WHERE EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=?
+        AND organization_id=? AND application_id IS NULL) OR EXISTS (${selectedEvidence.sql})`,
+            bindings: [application.organization_domain!, organizationId!, ...selectedEvidence.bindings],
+          }),
+        ]
+      : []),
     ...provisioning.statements,
     // "About yourself" is the applicant's biography. It belongs to the identity
     // they now act as, whether provisioning created it or reused a personal

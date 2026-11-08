@@ -90,6 +90,7 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "portal-vote-participation",
   "portal-vote-replacement",
   "portal-vote-election",
+  "shared-organization-domains",
   "portal-vote-window",
   "portal-vote-eligibility",
   "portal-proposal-states",

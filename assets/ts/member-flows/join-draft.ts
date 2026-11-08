@@ -7,6 +7,7 @@
  */
 import { z } from "zod";
 import { readCustomFieldValues } from "../shared/widgets/custom-fields";
+import { memberJoinVerifySchema } from "../../shared/schemas/member-join";
 
 const STORAGE_KEY = "pkic.join.verifiedApplication";
 
@@ -16,6 +17,7 @@ const joinDraftSchema = z.object({
   checked: z.array(z.string()),
   // Unsent answers may be incomplete or exceed the submission contract.
   answers: z.record(z.string(), z.unknown()),
+  choice: memberJoinVerifySchema.pick({ organizationId: true, organizationName: true, domain: true }).optional(),
 });
 type JoinDraft = z.infer<typeof joinDraftSchema>;
 
@@ -42,6 +44,15 @@ function write(draft: JoinDraft | null): void {
 /** The verification token kept from an earlier visit in this tab, if any. */
 export function rememberedJoinToken(): string | null {
   return read()?.token ?? null;
+}
+
+export function rememberedJoinChoice() {
+  return read()?.choice;
+}
+
+export function rememberJoinChoice(choice?: z.infer<typeof joinDraftSchema>["choice"]): void {
+  const current = read();
+  if (current) write({ ...current, choice });
 }
 
 function hasAnswers(draft: JoinDraft): boolean {

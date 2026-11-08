@@ -9,6 +9,8 @@ import {
   forgetJoinDraft,
   hasJoinAnswers,
   rememberJoinToken,
+  rememberJoinChoice,
+  rememberedJoinChoice,
   rememberedJoinToken,
   restoreJoinAnswers,
   saveJoinAnswers,
@@ -32,6 +34,7 @@ import {
   renderMembershipApplicationQuestions,
 } from "./join-application-fields";
 import type { SessionActingIdentity } from "../../shared/session-acting-identity";
+import { JoinOrganizationChoice } from "./join-organization-choice";
 import { JoinSignedInApplicant, joinRefusalFor, readSignedInApplicant } from "./join-signed-in";
 import type { JoinRefusal, SignedInApplicant } from "./join-signed-in";
 import {
@@ -205,6 +208,10 @@ async function main(): Promise<void> {
   let applicationFields: MembershipApplicationField[] = [];
   let applicationFormFields: MembershipApplicationField[] = [];
   let definitionPromise: Promise<MemberApplicationFormResponse> | null = null;
+  const organizationChoiceSection = document.createElement("section");
+  organizationChoiceSection.hidden = true;
+  organizationChoiceSection.tabIndex = -1;
+  root.append(organizationChoiceSection);
 
   const getApplicationDefinition = () => {
     definitionPromise ??= getJson(`${API_BASE}/members/applications/form`, memberApplicationFormResponseSchema);
@@ -233,6 +240,7 @@ async function main(): Promise<void> {
       inProgressSection,
       organizationInProgressSection,
       supportSection,
+      organizationChoiceSection,
       applicationForm,
     ]) {
       candidate.hidden = candidate !== section;
@@ -408,20 +416,54 @@ async function main(): Promise<void> {
     });
   });
 
-  const verifyFromLocation = async () => {
+  const verifyFromLocation = async (organizationId?: string, added?: { name: string; domain: string }) => {
     const linked = new URLSearchParams(window.location.hash.slice(1)).get("verify");
     // The link's token leaves the address bar; this tab keeps it so a reload continues the application.
     if (linked) history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
     const token = linked ?? rememberedJoinToken();
     if (!token) return;
+    const choice =
+      organizationId || added
+        ? { organizationId, organizationName: added?.name, domain: added?.domain }
+        : linked
+          ? undefined
+          : rememberedJoinChoice();
     try {
       const result = await postJson(
         `${API_BASE}/members/join/verify`,
-        memberJoinVerifySchema.parse({ token }),
+        memberJoinVerifySchema.parse({ token, ...choice }),
         memberJoinVerifyResponseSchema,
       );
+      if (result.status === "organization_selection_required") {
+        rememberJoinToken(token);
+        rememberJoinChoice();
+        render(
+          <JoinOrganizationChoice
+            token={token}
+            domain={result.domain}
+            affiliation={result.affiliation}
+            organizations={result.organizations}
+            onChoose={verifyFromLocation}
+            onAdd={(name, domain) => verifyFromLocation(undefined, { name, domain })}
+            onResolve={async (domain) => {
+              const resolved = await postJson(
+                `${API_BASE}/members/join/verify`,
+                memberJoinVerifySchema.parse({ token, domain }),
+                memberJoinVerifyResponseSchema,
+              );
+              if (resolved.status !== "organization_selection_required")
+                throw new Error("Confirm your organization again.");
+              return resolved.affiliation;
+            }}
+          />,
+          organizationChoiceSection,
+        );
+        showSection(organizationChoiceSection);
+        return;
+      }
       if (result.status === "application_ready") {
         rememberJoinToken(token);
+        rememberJoinChoice(choice);
         applicationContext = result;
         // A failed load leaves the kept answers alone for the next reload.
         if (!(await loadApplication(result.applicantKind))) return;
@@ -432,6 +474,11 @@ async function main(): Promise<void> {
           renderQuestionsFor(selected ?? categories[0], answers);
         });
         restoringAnswers = false;
+        const organizationName = applicationForm.querySelector<HTMLInputElement>('[name="organizationName"]');
+        if (organizationName) {
+          organizationName.readOnly = Boolean(result.organizationName);
+          if (result.organizationName) organizationName.value = result.organizationName;
+        }
         if (restored) {
           setStatus(statusEl, "We restored the answers you entered earlier. Agreements need accepting again.");
         }
@@ -452,6 +499,12 @@ async function main(): Promise<void> {
         showSection(supportSection);
       }
     } catch (error) {
+      if (error instanceof ApiClientError && error.code === "ORGANIZATION_AFFILIATION_CHANGED") {
+        rememberJoinToken(token);
+        rememberJoinChoice();
+        await verifyFromLocation();
+        return;
+      }
       if (!(error instanceof ApiClientError) || ![404, 409, 410].includes(error.status)) {
         // Retry the newly opened proof after a reload, never a previous applicant's draft.
         if (linked) rememberJoinToken(linked);

@@ -119,9 +119,15 @@ export async function readAffiliationOffer(db: DatabaseLike, userId: string): Pr
   const dismissed = new Set(dismissals.map((row) => row.organization_id));
   let hasWorkAddress = false;
   for (const address of addresses) {
-    const { domain, resolution } = await resolveEmailDomainOrganization(db, address.normalized_email);
+    const { domain, resolution, facts } = await resolveEmailDomainOrganization(db, address.normalized_email);
     if (!domain) continue;
     hasWorkAddress = true;
+    if (resolution.kind === "ambiguous") {
+      const candidates = facts ? [...facts.claimed, ...facts.derived] : [];
+      if (!candidates.some((candidate) => relatedIds.has(candidate.organizationId)))
+        return { kind: "choose_organization", emailId: address.id, domain, writtenOrganizationName };
+      continue;
+    }
     if (resolution.kind !== "organization") continue;
     if (relatedIds.has(resolution.organizationId) || dismissed.has(resolution.organizationId)) continue;
     const organization = await first<{ id: string; name: string }>(

@@ -15,7 +15,7 @@ import { Alert } from "../../ui/Alert";
 type Resolved = z.infer<typeof identityAffiliationPreviewResponseSchema>;
 const organizationFields = identityAffiliationPrepareBaseSchema
   .pick({ organizationName: true, domain: true })
-  .required({ organizationName: true });
+  .required({ organizationName: true, domain: true });
 export function VerifiedOrganizationCreateDialog({
   initial,
   open,
@@ -31,6 +31,7 @@ export function VerifiedOrganizationCreateDialog({
 }) {
   const [resolved, setResolved] = useState(initial);
   const [name, setName] = useState("");
+  const [chosenDomain, setChosenDomain] = useState(initial.domains.length > 1 ? "" : initial.domain);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const active = useRef(true);
@@ -41,7 +42,7 @@ export function VerifiedOrganizationCreateDialog({
     },
     [],
   );
-  const form = useContractForm(organizationFields, { organizationName: name, domain: resolved.domain || undefined });
+  const form = useContractForm(organizationFields, { organizationName: name, domain: chosenDomain });
   const refuse = form.refuse;
   const changeDomain = useCallback(
     async (domain: string) => {
@@ -50,7 +51,10 @@ export function VerifiedOrganizationCreateDialog({
       setError("");
       try {
         const result = await resolve(domain);
-        if (active.current && request.current === currentRequest) setResolved(result);
+        if (active.current && request.current === currentRequest) {
+          setResolved(result);
+          setChosenDomain(domain);
+        }
       } catch (cause) {
         if (active.current && request.current === currentRequest) setError(refuse(cause));
       } finally {
@@ -59,21 +63,14 @@ export function VerifiedOrganizationCreateDialog({
     },
     [resolve, refuse],
   );
-  const initialized = useRef(false);
   useEffect(() => {
     if (!open) {
       request.current++;
       setBusy(false);
       setResolved(initial);
-      initialized.current = false;
+      setChosenDomain(initial.domains.length > 1 ? "" : initial.domain);
     }
   }, [initial, open]);
-  useEffect(() => {
-    if (!open || initialized.current) return;
-    initialized.current = true;
-    const specific = initial.domains.find((item) => item.canLink);
-    if (specific && specific.domain !== initial.domain) void changeDomain(specific.domain);
-  }, [open, initial, changeDomain]);
   function selectOrganization() {
     if (busy) return;
     const checked = form.submit();
@@ -102,16 +99,20 @@ export function VerifiedOrganizationCreateDialog({
         {resolved.domains.length > 1 && (
           <Field
             label="Email domain"
-            help="Choose which verified email domain this organization is associated with."
+            required
+            help="Is a subdomain dedicated to this organization? Choose the domain to link to it."
             {...form.of("domain")}
           >
             {(control) => (
               <Select
                 {...control}
-                value={resolved.domain}
+                value={chosenDomain}
                 disabled={busy}
-                onChange={(event) => void changeDomain(event.currentTarget.value)}
+                onChange={(event) => {
+                  if (event.currentTarget.value) void changeDomain(event.currentTarget.value);
+                }}
               >
+                <option value="">Choose an email domain</option>
                 {resolved.domains.map((item) => (
                   <option key={item.domain} value={item.domain}>
                     {item.domain}
@@ -122,7 +123,7 @@ export function VerifiedOrganizationCreateDialog({
           </Field>
         )}
         <VerifiedOrganizationNameField
-          domain={resolved.domain}
+          domain={chosenDomain}
           value={name}
           disabled={busy}
           onChange={setName}

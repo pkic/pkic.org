@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { memberJoinApplicantKindSchema } from "../../../../../assets/shared/schemas/member-join";
-import { normalizedEmailSchema } from "../../../../../assets/shared/schemas/api-common";
+import { normalizedEmailSchema, organizationNameSchema } from "../../../../../assets/shared/schemas/api-common";
+import { emailDomainNameSchema } from "../../../../../assets/shared/schemas/email-domains";
 import { databaseIdSchema } from "../../../../../assets/shared/schemas/identifiers";
 import {
   queuedCapabilityToken,
@@ -20,6 +21,15 @@ export type MemberJoinCapabilityPayload = z.infer<typeof memberJoinCapabilityPay
 
 const memberJoinApplicationCapabilityPayloadSchema = memberJoinCapabilityPayloadSchema.extend({
   applicantUserId: databaseIdSchema.nullable(),
+  organization: z
+    .object({
+      id: databaseIdSchema.optional(),
+      name: organizationNameSchema,
+      domain: emailDomainNameSchema,
+      claimIds: z.array(databaseIdSchema).max(128),
+      pendingApplications: z.array(z.object({ id: databaseIdSchema, updatedAt: z.string() })).max(128),
+    })
+    .optional(),
 });
 export type MemberJoinApplicationCapabilityPayload = z.infer<typeof memberJoinApplicationCapabilityPayloadSchema>;
 

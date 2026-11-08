@@ -32,6 +32,7 @@ import {
   getOrganizationDomainClaim,
   organizationLinkDomain,
   prepareClaimDomainForApplication,
+  prepareClaimDomainForOrganization,
 } from "../organization-domain-claims";
 import { requireMembershipCategory } from "../categories";
 import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
@@ -55,6 +56,10 @@ import { normalizeEmail } from "../../../validation";
 import { firstNameSchema, lastNameSchema } from "../../../../../assets/shared/schemas/api-common";
 import type { DatabaseLike, StatementLike } from "../../../types";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../db/authorization-guard";
+import { verifiedEmailDomainResolutionEvidence } from "../../identities/verified-email-domain";
+import { organizationDomainCandidates } from "../../../email-domains/classification";
+import { normalizeOrgName } from "../../../../../assets/shared/organization-name";
+import { buildResolveOrganizationStatements } from "../provisioning";
 
 /**
  * Refuses an application whose outcome is already decided before review: the
@@ -166,6 +171,9 @@ export interface CreateMemberApplicationInput {
   applicantIdentityId?: string | null;
   /** The organization of that identity, matched by id rather than by name. */
   organizationId?: string | null;
+  selectedOrganizationDomain?: string;
+  selectedDomainClaimIds?: string[];
+  selectedPendingApplications?: Array<{ id: string; updatedAt: string }>;
   /**
    * Answers copied from that identity (title, first link, bio). They replace
    * whatever the request sent under those keys and are kept as the
@@ -272,13 +280,75 @@ export async function createMemberApplication(
     applicantEmail: input.applicantEmail,
   });
   // An organization application holds the domain its address links through (normally the registrable domain).
-  const organizationDomain = isIndividual ? null : await organizationLinkDomain(db, input.applicantEmail);
+  const organizationDomain = isIndividual
+    ? null
+    : (input.selectedOrganizationDomain ?? (await organizationLinkDomain(db, input.applicantEmail)));
+  const existingDomainClaim = organizationDomain ? await getOrganizationDomainClaim(db, organizationDomain) : null;
+  if (existingDomainClaim && !input.selectedOrganizationDomain)
+    throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose the organization for this email domain first.");
+  const newOrganization =
+    !isIndividual && input.selectedOrganizationDomain && !input.organizationId && input.organizationName
+      ? await buildResolveOrganizationStatements(db, { organizationName: input.organizationName }, now)
+      : null;
+  if (newOrganization && !newOrganization.organizationWasCreated)
+    throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose the existing organization instead.");
   const statusUrl = `${input.appBaseUrl}/application-status/?id=${encodeURIComponent(id)}&token=${encodeURIComponent(manageToken)}`;
 
   const applicantAccount = await prepareApplicantAccount(db, input);
   const applicantUserId = input.applicantUserId ?? applicantAccount?.user.id ?? null;
   const statements: StatementLike[] = [
     ...(applicantAccount?.statements ?? []),
+    ...(organizationDomain && !input.selectedOrganizationDomain
+      ? [
+          prepareAuthorizationGuard(db, {
+            sql: "SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=?)",
+            bindings: [organizationDomain],
+          }),
+        ]
+      : []),
+    ...(input.selectedOrganizationDomain && input.selectedDomainClaimIds
+      ? [
+          prepareAuthorizationGuard(db, {
+            sql: `SELECT 1 WHERE NOT EXISTS (SELECT id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
+        EXCEPT SELECT value FROM json_each(?)) AND NOT EXISTS (SELECT value FROM json_each(?)
+        EXCEPT SELECT id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?)))
+        AND NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?)) AND length(domain)>?)`,
+            bindings: [
+              JSON.stringify(organizationDomainCandidates(input.applicantEmail)),
+              JSON.stringify(input.selectedDomainClaimIds),
+              JSON.stringify(input.selectedDomainClaimIds),
+              JSON.stringify(organizationDomainCandidates(input.applicantEmail)),
+              JSON.stringify(organizationDomainCandidates(input.applicantEmail)),
+              input.selectedOrganizationDomain.length,
+            ],
+          }),
+        ]
+      : []),
+    ...(input.selectedPendingApplications
+      ? [
+          prepareAuthorizationGuard(db, {
+            sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM json_each(?) observed WHERE NOT EXISTS (
+        SELECT 1 FROM member_applications application WHERE application.id=json_extract(observed.value,'$.id')
+          AND application.updated_at=json_extract(observed.value,'$.updatedAt')))`,
+            bindings: [JSON.stringify(input.selectedPendingApplications)],
+          }),
+        ]
+      : []),
+    ...(newOrganization
+      ? [
+          prepareAuthorizationGuard(db, {
+            sql: `SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM organizations WHERE normalized_name=?)
+        AND NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
+          AND length(domain)>?)`,
+            bindings: [
+              normalizeOrgName(input.organizationName!),
+              JSON.stringify(organizationDomainCandidates(input.applicantEmail)),
+              organizationDomain!.length,
+            ],
+          }),
+          ...newOrganization.statements,
+        ]
+      : []),
     ...(input.applicantUserId
       ? [
           prepareAuthorizationGuard(db, {
@@ -312,10 +382,10 @@ export async function createMemberApplication(
     db
       .prepare(
         `INSERT INTO member_applications
-           (id, applicant_user_id, applicant_email, applicant_name, organization_name, organization_domain,
+           (id, applicant_user_id, applicant_email, applicant_name, organization_name, organization_id, organization_domain,
             membership_category, form_submission_id, join_capability_id, stage, stage_entered_at,
             manage_token_hash, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?, ?, ?)`,
       )
       .bind(
         id,
@@ -323,6 +393,9 @@ export async function createMemberApplication(
         input.applicantEmail,
         input.applicantName,
         isIndividual ? null : (input.organizationName ?? null),
+        isIndividual || !input.selectedOrganizationDomain
+          ? null
+          : (input.organizationId ?? newOrganization?.organizationId ?? null),
         organizationDomain,
         input.membershipCategory,
         formSubmission.id,
@@ -337,7 +410,47 @@ export async function createMemberApplication(
   statements.push(...prepareMembershipWorkflowPin(db, id, category, workflow, 1, now));
 
   if (organizationDomain) {
-    statements.push(prepareClaimDomainForApplication(db, organizationDomain, id, now));
+    if (newOrganization) {
+      if (existingDomainClaim) {
+        statements.push(
+          prepareAuthorizationGuard(db, {
+            sql: "SELECT 1 FROM organization_domain_claims WHERE id=? AND domain=? AND organization_id IS ? AND application_id IS ?",
+            bindings: [
+              existingDomainClaim.id,
+              organizationDomain,
+              existingDomainClaim.organizationId,
+              existingDomainClaim.applicationId,
+            ],
+          }),
+          db
+            .prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
+            VALUES (?,?,?,?,?)`)
+            .bind(uuid(), organizationDomain, newOrganization.organizationId, now, now),
+        );
+      } else {
+        statements.push(
+          (await prepareClaimDomainForOrganization(
+            db,
+            { domain: organizationDomain, organizationId: newOrganization.organizationId, now },
+            null,
+          ))!,
+        );
+      }
+    } else if (existingDomainClaim && input.organizationId && input.selectedOrganizationDomain) {
+      const derived = verifiedEmailDomainResolutionEvidence(organizationDomain, input.organizationId, false, true);
+      statements.push(
+        prepareAuthorizationGuard(db, {
+          sql: `SELECT 1 FROM organizations organization WHERE organization.id=? AND organization.name=?
+          AND organization.merged_into_organization_id IS NULL AND (
+            EXISTS (SELECT 1 FROM organization_domain_claims claim WHERE claim.domain=?
+              AND claim.organization_id=organization.id AND claim.application_id IS NULL)
+            OR EXISTS (${derived.sql}))`,
+          bindings: [input.organizationId, input.organizationName, organizationDomain, ...derived.bindings],
+        }),
+      );
+    } else {
+      statements.push(prepareClaimDomainForApplication(db, organizationDomain, id, now));
+    }
   }
 
   statements.push(

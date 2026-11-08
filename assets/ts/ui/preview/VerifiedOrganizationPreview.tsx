@@ -23,7 +23,14 @@ export function VerifiedOrganizationPreview() {
   const controller = useRef<VerifiedOrganizationController>({});
   return (
     <VerifiedOrganizationDetails
-      initial={initial}
+      initial={{
+        ...initial,
+        organization: null,
+        organizations: [
+          ...initial.organizations,
+          { id: "00000000-0000-4000-8000-000000000012", name: "Example Labs", identityId: null, jobTitle: null },
+        ],
+      }}
       emailId={null}
       controller={controller.current}
       resolve={async (domain) => ({ ...initial, domain: domain ?? initial.domain })}

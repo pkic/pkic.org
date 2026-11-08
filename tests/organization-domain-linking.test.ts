@@ -4,7 +4,10 @@ import {
   affiliationOfferDismissalSchema,
   affiliationOfferResponseSchema,
 } from "../assets/shared/schemas/affiliation-offer";
-import { linkVerifiedAddressToDomainOrganization } from "../functions/_lib/services/identities/email-domain-link";
+import {
+  linkVerifiedAddressToDomainOrganization,
+  prepareVerifiedAddressDomainOrganizationLink,
+} from "../functions/_lib/services/identities/email-domain-link";
 import { getUserDetail } from "../functions/_lib/services/user-management-detail";
 import { nowIso } from "../functions/_lib/utils/time";
 import { callApi } from "./helpers/app";
@@ -82,6 +85,30 @@ function organizationsOf(userId: string) {
 
 describe("a verified work address and the organization that owns its domain", () => {
   beforeEach(resetDb);
+
+  it("does not automatically link when a second claim appears before commit", async () => {
+    const first = await insertOrganization(env.DB, "First Organization");
+    const second = await insertOrganization(env.DB, "Second Organization");
+    await claimDomain(first, "shared-work.example");
+    const { userId } = await signedIn("person@shared-work.example");
+    const prepared = await prepareVerifiedAddressDomainOrganizationLink(env.DB, {
+      userId,
+      normalizedEmail: "person@shared-work.example",
+      emailId: null,
+      at: nowIso(),
+    });
+    expect(prepared).not.toBeNull();
+    const rootId = await env.DB.prepare("SELECT id FROM organization_domain_claims WHERE domain=?")
+      .bind("shared-work.example")
+      .first<string>("id");
+    await env.DB.prepare(
+      `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
+    )
+      .bind(crypto.randomUUID(), rootId, second, nowIso(), nowIso())
+      .run();
+    await expect(env.DB.batch(prepared!.statements)).rejects.toThrow();
+    expect(await organizationsOf(userId)).toEqual([]);
+  });
 
   it("joins a non-member organization automatically, once, and closes the person's own review", async () => {
     const organizationId = await insertOrganization(env.DB, "Open Claimed Co");

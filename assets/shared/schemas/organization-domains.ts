@@ -11,7 +11,6 @@
 import { z } from "zod";
 import { successResponseSchema, trimmedString } from "./api-common";
 import { emailDomainNameSchema } from "./email-domains";
-import { databaseIdSchema } from "./identifiers";
 import { organizationManagementParamsSchema } from "./organization-management";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { authErrors, created, ok, requiresPermissions } from "./route-contract";
@@ -60,10 +59,12 @@ export const organizationDomainsListResponseSchema = paginatedResponseSchema("do
 
 /**
  * What a claim does to the people who verified an address on the domain
- * earlier: both member and non-member organizations affiliate them automatically.
+ * earlier. Shared domains require people to choose an organization.
  */
 export const organizationDomainClaimPreviewSchema = z.object({
   domain: z.string(),
+  /** Another organization claims or has a verified affiliation on the domain. */
+  shared: z.boolean(),
   /** People with a verified address on the domain and no relationship with the organization yet. */
   peopleToLink: z.number().int().nonnegative(),
 });
@@ -81,12 +82,6 @@ export type OrganizationDomainLinking = z.infer<typeof organizationDomainLinking
 export const organizationDomainClaimResponseSchema = z.object({
   domain: organizationDomainSchema,
   linking: organizationDomainLinkingSchema,
-});
-
-/** The organization that already claims a domain, so staff can merge instead. */
-export const organizationDomainClaimedElsewhereDetailsSchema = z.object({
-  organizationId: databaseIdSchema,
-  organizationName: z.string(),
 });
 
 export const organizationDomainsListRouteSchema = {
@@ -107,7 +102,7 @@ export const organizationDomainClaimCreateRouteSchema = {
   ...requiresPermissions("organizations:write"),
   summary: "Claim an email domain for an organization",
   description:
-    "Records that verified addresses on the domain and its subdomains belong to this organization and links everyone who already verified one, through the same rule as a fresh verification (in bounded scheduled passes for a large domain). Refused for free or disposable mail and public suffixes, for a domain another organization claims (merge the organizations instead; the refusal names it), and for a domain a pending application holds.",
+    "Records an organization's claim to a domain. A domain claimed by several organizations requires an explicit choice; otherwise verified addresses may be linked automatically. Free and disposable mail, public suffixes, and domains held by pending applications cannot be claimed.",
   request: {
     params: organizationManagementParamsSchema,
     body: { required: true, content: { "application/json": { schema: organizationDomainClaimCreateSchema } } },
@@ -117,7 +112,7 @@ export const organizationDomainClaimCreateRouteSchema = {
     ...authErrors({
       badRequest: "Invalid domain or reason.",
       notFound: "Organization not found.",
-      conflict: "The domain is already claimed or held, or the organization was merged.",
+      conflict: "This organization already claims the domain, the domain is held, or the organization was merged.",
       unprocessable: "Free and disposable mail domains and public suffixes cannot be claimed.",
     }),
   },
@@ -135,7 +130,7 @@ export const organizationDomainClaimPreviewRouteSchema = {
     ...authErrors({
       badRequest: "Invalid domain.",
       notFound: "Organization not found.",
-      conflict: "The domain is already claimed or held, or the organization was merged.",
+      conflict: "This organization already claims the domain, the domain is held, or the organization was merged.",
       unprocessable: "Free and disposable mail domains cannot be claimed.",
     }),
   },

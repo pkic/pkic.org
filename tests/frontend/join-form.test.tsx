@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { JoinOrganizationChoice } from "../../assets/ts/member-flows/join-organization-choice";
 import { renderToString } from "preact-render-to-string";
 import { JoinFlow } from "../../assets/ts/site/JoinFlow";
 import { focusSubmitError } from "../../assets/ts/shared/form/submit";
@@ -16,6 +17,9 @@ import {
   renderMembershipApplicationQuestions,
 } from "../../assets/ts/member-flows/join-application-fields";
 import { buildApplicationPayload, applicantNamePartsSchema } from "../../assets/ts/member-flows/join-form";
+import { render } from "preact";
+import { act } from "preact/test-utils";
+import { vi } from "vitest";
 import { filterApplicationFieldsForApplicantKind } from "../../assets/shared/schemas/membership-application-form";
 import { memberApplicationCreateSchemaForCategory } from "../../assets/shared/schemas/member-applications";
 import type { MemberApplicationFormResponse } from "../../assets/shared/schemas/member-applications";
@@ -109,6 +113,58 @@ function buildForm(overrides: Partial<Record<string, string>> = {}): HTMLFormEle
 describe("join-form helpers", () => {
   afterEach(() => {
     document.body.innerHTML = "";
+  });
+
+  it("requires an explicit organization choice before continuing", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const choose = vi.fn(async (_id: string) => {});
+    const first = "00000000-0000-4000-8000-000000000001";
+    await act(async () =>
+      render(
+        <JoinOrganizationChoice
+          token={"a".repeat(40)}
+          domain="shared.example"
+          affiliation={{
+            email: "person@shared.example",
+            domain: "shared.example",
+            domains: [{ domain: "shared.example", canLink: false, organizationName: null }],
+            organization: null,
+            organizations: [],
+          }}
+          organizations={[
+            { id: first, name: "First" },
+            { id: "00000000-0000-4000-8000-000000000002", name: "Second" },
+          ]}
+          onChoose={choose}
+          onResolve={async () => ({
+            email: "person@shared.example",
+            domain: "shared.example",
+            domains: [],
+            organization: null,
+            organizations: [],
+          })}
+          onAdd={vi.fn(async () => {})}
+        />,
+        host,
+      ),
+    );
+    const form = host.querySelector("form")!;
+    expect(form.textContent).toContain("@shared.example");
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(choose).not.toHaveBeenCalled();
+    const select = host.querySelector("select")!;
+    await act(async () => {
+      select.value = first;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(choose).toHaveBeenCalledWith(first);
+    await act(async () => render(null, host));
   });
 
   it("builds the application payload for an organization category", () => {

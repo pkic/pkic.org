@@ -20,7 +20,7 @@ import {
   proposalProofToken as TOKEN,
 } from "./helpers/proposal-proof-response";
 
-import { mountProposalIdentityStep } from "./helpers/proposal-identity-fixture";
+import { chooseProposalOrganization, mountProposalIdentityStep } from "./helpers/proposal-identity-fixture";
 
 let host: HTMLDivElement | undefined;
 let selection: ProposalEntrySelection | null;
@@ -143,6 +143,7 @@ describe("verified event entry", () => {
     expect(host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')?.required).toBe(true);
     expect(host!.textContent).toContain("Your representation is saved when you submit your proposal.");
     expect(host!.textContent).not.toContain("This new representation");
+    await chooseProposalOrganization(host!, "00000000-0000-4000-8000-000000000044");
     await vi.waitFor(() => expect(selection?.missingDetails).toEqual({ organizationName: "Example Organization" }));
     await act(() => {
       Array.from(host!.querySelectorAll("button"))
@@ -360,6 +361,7 @@ describe("verified event entry", () => {
     expect(host!.querySelector(".pk-datalist")?.textContent).not.toContain("Ada");
     expect(host!.querySelector("select")?.textContent).toContain("Example Organization");
     expect(host!.querySelector('[role="combobox"]')).toBeNull();
+    await chooseProposalOrganization(host!, "00000000-0000-4000-8000-000000000044");
     expect(selection?.person.organizationName).toBe("Example Organization");
   });
   it("keeps known names read-only while new affiliation drafts appear only in missing-detail inputs", async () => {

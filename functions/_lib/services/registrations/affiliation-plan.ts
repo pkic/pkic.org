@@ -7,6 +7,7 @@ import type { DatabaseLike } from "../../types";
 import type { VerifiedAffiliationBasis } from "../identities/verified-affiliation-basis";
 import { planVerifiedAffiliation } from "../identities/verified-affiliation-plan";
 import { prepareRegistrationOrganizationReview } from "./organization-review";
+import { normalizeOrgName } from "../../../../assets/shared/organization-name";
 
 /** A membership reservation delays affiliation, while verified attendees can still register. */
 export async function planRegistrationAffiliation(
@@ -16,7 +17,14 @@ export async function planRegistrationAffiliation(
   basis: VerifiedAffiliationBasis,
   at: string,
 ) {
-  const pendingClaim = basis.claims.find((claim) => claim.applicationId);
+  const pendingClaim = input.organizationName
+    ? basis.claims.find(
+        (claim) =>
+          claim.applicationId &&
+          claim.applicationName &&
+          normalizeOrgName(claim.applicationName) === normalizeOrgName(input.organizationName!),
+      )
+    : undefined;
   if (!pendingClaim) {
     try {
       return {

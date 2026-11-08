@@ -3,9 +3,7 @@
  * record's domains, validated by the claim contract the route parses.
  *
  * Before the claim is saved, staff see how many people who already verified
- * an address on the domain it reaches, and confirm. A domain another
- * organization already claims means the two records are one organization;
- * the refusal names it, and the form offers that record's merge instead.
+ * an address on the domain it reaches, and confirm.
  */
 import { useState } from "preact/hooks";
 import type { OrganizationDetail } from "../../../../../shared/schemas/organization-management";
@@ -13,15 +11,12 @@ import {
   organizationDomainClaimPreviewResponseSchema,
   organizationDomainClaimRequestSchema,
   organizationDomainClaimResponseSchema,
-  type OrganizationDomainClaimPreview,
-  organizationDomainClaimedElsewhereDetailsSchema,
 } from "../../../../../shared/schemas/organization-domains";
-import { formatNumber } from "../../../../../shared/format-number";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useContractForm } from "../../../../hooks/useContractForm";
-import { ApiClientError, getJson, postJson } from "../../../../shared/api-client";
+import { getJson, postJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
 import { Button, ButtonLink } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
@@ -32,17 +27,9 @@ import { toast } from "../../ui";
 import { OrganizationRecordHero } from "./OrganizationRecordHero";
 import { OrganizationRecordTrail, organizationRecordHref, useOrganizationRecord } from "./OrganizationRecordTrail";
 
-/** Who the claim reaches: people already verified on the domain join. */
-export function domainClaimReach(preview: OrganizationDomainClaimPreview, organizationName: string): string {
-  const people = `${formatNumber(preview.peopleToLink)} ${preview.peopleToLink === 1 ? "person" : "people"}`;
-  return `${people} with a verified address on @${preview.domain} will be linked to ${organizationName}`;
-}
-
-/** The organization a refused claim names, when the domain is claimed elsewhere. */
-function claimedElsewhere(error: unknown) {
-  if (!(error instanceof ApiClientError) || error.code !== "ORGANIZATION_DOMAIN_CLAIMED_ELSEWHERE") return null;
-  const parsed = organizationDomainClaimedElsewhereDetailsSchema.safeParse(error.details);
-  return parsed.success ? parsed.data : null;
+/** A claim makes the organization available for people to choose. */
+export function domainClaimReach(): string {
+  return "People with this email domain will choose their organization.";
 }
 
 function ClaimForm({ organization }: { organization: OrganizationDetail }) {
@@ -51,7 +38,6 @@ function ClaimForm({ organization }: { organization: OrganizationDetail }) {
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [owner, setOwner] = useState<{ organizationId: string; organizationName: string } | null>(null);
   const form = useContractForm(organizationDomainClaimRequestSchema, {
     organizationId: organization.id,
     domain,
@@ -62,7 +48,6 @@ function ClaimForm({ organization }: { organization: OrganizationDetail }) {
   async function submit(event: Event): Promise<void> {
     event.preventDefault();
     setError("");
-    setOwner(null);
     const checked = form.submit();
     if (!checked.data) {
       setError(checked.formMessage ?? "");
@@ -79,22 +64,18 @@ function ClaimForm({ organization }: { organization: OrganizationDetail }) {
       );
       const confirmed = await confirmAction({
         title: `Claim @${preview.domain} for ${organization.name}?`,
-        body: "Verified addresses on this domain join the organization from now on.",
-        consequences: [domainClaimReach(preview, organization.name)],
+        body: preview.shared
+          ? "Another organization also uses this domain."
+          : "People who verify an address on this domain can choose this organization.",
+        consequences: [domainClaimReach()],
         confirmLabel: "Claim domain",
         cancelLabel: "Keep editing",
       });
       if (!confirmed) return;
       const response = await postJson(endpoint, body, organizationDomainClaimResponseSchema);
-      toast(
-        response.linking.continuing
-          ? `${organization.name} claims @${response.domain.domain}; linking its people continues in the background`
-          : `${organization.name} claims @${response.domain.domain}`,
-        "success",
-      );
+      toast(`${organization.name} claims @${response.domain.domain}`, "success");
       navigate(domainsHref);
     } catch (caught) {
-      setOwner(claimedElsewhere(caught));
       setError(form.refuse(caught));
     } finally {
       setSaving(false);
@@ -109,7 +90,7 @@ function ClaimForm({ organization }: { organization: OrganizationDetail }) {
           <Field
             label="Domain"
             required
-            help={`Verified addresses on it and its subdomains join ${organization.name}. Free and disposable mail never can.`}
+            help="A domain may be shared by more than one organization. Free and disposable mail cannot be claimed."
             {...form.of("domain")}
           >
             {(control) => (
@@ -134,16 +115,7 @@ function ClaimForm({ organization }: { organization: OrganizationDetail }) {
               />
             )}
           </Field>
-          {owner ? (
-            <Alert tone="warn" title={`${owner.organizationName} already claims this domain`}>
-              The two records are probably one organization.{" "}
-              <a href={usePortalHashLocation.hrefs(organizationRecordHref(owner.organizationId, "/merge"))}>
-                Merge {owner.organizationName} into the organization that stays
-              </a>
-            </Alert>
-          ) : (
-            error && <Alert tone="danger">{error}</Alert>
-          )}
+          {error && <Alert tone="danger">{error}</Alert>}
           <div class="pk-cluster">
             <Button type="submit" variant="primary" loading={saving}>
               Claim domain

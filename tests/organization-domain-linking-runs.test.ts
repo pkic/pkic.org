@@ -1,9 +1,5 @@
 /**
- * Claiming a domain reaches the people who verified an address on it
- * earlier, through the same rule as a fresh verification: staff see how many
- * before confirming, approved member and non-member domains affiliate them as a
- * system decision, and a large domain is
- * finished by the scheduler in bounded, resumable passes.
+ * Domain claims offer verified people a choice instead of affiliating them automatically.
  */
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -58,7 +54,7 @@ function organizationsOf(userId: string) {
   );
 }
 
-describe("a domain claim links the people who verified an address on it", () => {
+describe("a domain claim requires verified people to choose", () => {
   let token: string;
   let adminId: string;
 
@@ -81,7 +77,26 @@ describe("a domain claim links the people who verified an address on it", () => 
     });
   }
 
-  it("says how many people a claim reaches, then joins them as a system decision", async () => {
+  it("previews a conflicting derived organization as shared without promising automatic links", async () => {
+    const first = await insertOrganization(env.DB, "First Organization");
+    const second = await insertOrganization(env.DB, "Second Organization");
+    const userId = await person("person@shared-derived.example");
+    const at = nowIso();
+    await env.DB.prepare(`INSERT INTO identities
+      (id,user_id,organization_id,verified_email_domain,source,invited_at,started_at,created_at,updated_at)
+      VALUES (?,?,?,'shared-derived.example','verified_email',?,?,?,?)`)
+      .bind(crypto.randomUUID(), userId, first, at, at, at, at)
+      .run();
+    const response = await call(`/api/v1/organizations/${second}/domains/shared-derived.example`);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(organizationDomainClaimPreviewResponseSchema.parse(await response.json()).preview).toEqual({
+      domain: "shared-derived.example",
+      shared: true,
+      peopleToLink: 0,
+    });
+  });
+
+  it("does not link people automatically when a domain is claimed", async () => {
     const acme = await insertOrganization(env.DB, "Acme");
     const ana = await person("ana@acme.example");
     const bo = await person("bo@gmail.com");
@@ -98,7 +113,8 @@ describe("a domain claim links the people who verified an address on it", () => 
     expect(preview.status, await preview.clone().text()).toBe(200);
     expect(organizationDomainClaimPreviewResponseSchema.parse(await preview.json()).preview).toEqual({
       domain: "acme.example",
-      peopleToLink: 2,
+      shared: false,
+      peopleToLink: 0,
     });
 
     const claimed = await call(
@@ -107,11 +123,11 @@ describe("a domain claim links the people who verified an address on it", () => 
     );
     expect(claimed.status, await claimed.clone().text()).toBe(201);
     expect(organizationDomainClaimResponseSchema.parse(await claimed.json())).toMatchObject({
-      domain: { domain: "acme.example", status: "claimed", people: 2 },
-      linking: { peopleLinked: 2, continuing: false },
+      domain: { domain: "acme.example", status: "claimed", people: 0 },
+      linking: { peopleLinked: 0, continuing: false },
     });
-    expect(await organizationsOf(ana)).toEqual([{ organization_id: acme }]);
-    expect(await organizationsOf(bo)).toEqual([{ organization_id: acme }]);
+    expect(await organizationsOf(ana)).toEqual([]);
+    expect(await organizationsOf(bo)).toEqual([]);
     expect(await organizationsOf(unverified)).toEqual([]);
     expect(await organizationsOf(dismissed)).toEqual([]);
     expect(
@@ -121,14 +137,10 @@ describe("a domain claim links the people who verified an address on it", () => 
           WHERE action IN ('organization_domain_person_linked', 'organization_domain_linking_completed')
           ORDER BY action`,
       ),
-    ).toEqual([
-      { actor_type: "system", action: "organization_domain_linking_completed" },
-      { actor_type: "system", action: "organization_domain_person_linked" },
-      { actor_type: "system", action: "organization_domain_person_linked" },
-    ]);
+    ).toEqual([{ actor_type: "system", action: "organization_domain_linking_completed" }]);
   });
 
-  it("reaches addresses on the domain's subdomains, except below a more specific claim", async () => {
+  it("does not automatically link addresses on subdomains", async () => {
     const group = await insertOrganization(env.DB, "Example Group");
     const research = await insertOrganization(env.DB, "Example Research");
     await env.DB.prepare(
@@ -141,42 +153,42 @@ describe("a domain claim links the people who verified an address on it", () => 
     const lab = await person("bo@lab.research.example.co.uk");
 
     const preview = await call(`/api/v1/organizations/${group}/domains/example.co.uk`);
-    expect(organizationDomainClaimPreviewResponseSchema.parse(await preview.json()).preview.peopleToLink).toBe(1);
+    expect(organizationDomainClaimPreviewResponseSchema.parse(await preview.json()).preview.peopleToLink).toBe(0);
     const claimed = await call(`/api/v1/organizations/${group}/domains`, {
       domain: "example.co.uk",
       reason: "Their web site",
     });
     expect(claimed.status, await claimed.clone().text()).toBe(201);
-    expect(organizationDomainClaimResponseSchema.parse(await claimed.json()).linking.peopleLinked).toBe(1);
-    expect(await organizationsOf(mail)).toEqual([{ organization_id: group }]);
+    expect(organizationDomainClaimResponseSchema.parse(await claimed.json()).linking.peopleLinked).toBe(0);
+    expect(await organizationsOf(mail)).toEqual([]);
     expect(await organizationsOf(lab)).toEqual([]);
   });
 
-  it("automatically affiliates verified people when a member organization claims its domain", async () => {
+  it("offers a member organization after its domain is claimed", async () => {
     const member = await insertOrganization(env.DB, "Member Co");
     await seedOrganizationAggregate(env.DB, member);
     const eva = await person("eva@member.example");
 
     const preview = await call(`/api/v1/organizations/${member}/domains/member.example`);
     expect(organizationDomainClaimPreviewResponseSchema.parse(await preview.json()).preview).toMatchObject({
-      peopleToLink: 1,
+      peopleToLink: 0,
     });
     const claimed = await call(`/api/v1/organizations/${member}/domains`, {
       domain: "member.example",
       reason: "Membership application",
     });
-    expect(organizationDomainClaimResponseSchema.parse(await claimed.json()).linking.peopleLinked).toBe(1);
-    expect(await organizationsOf(eva)).toEqual([{ organization_id: member }]);
+    expect(organizationDomainClaimResponseSchema.parse(await claimed.json()).linking.peopleLinked).toBe(0);
+    expect(await organizationsOf(eva)).toEqual([]);
 
     const evaToken = await createMemberSession(env.DB, eva, "domain-linking-eva-token", undefined, null);
     const offer = await call("/api/v1/users/current/identities/offer", undefined, evaToken);
     expect(affiliationOfferResponseSchema.parse(await offer.json()).offer).toMatchObject({
-      kind: "linked",
+      kind: "organization",
       organization: { id: member },
     });
   });
 
-  it("finishes a large domain in bounded passes that resume from the cursor, and ends when the claim goes", async () => {
+  it("retires old link runs without affiliating people", async () => {
     const acme = await insertOrganization(env.DB, "Acme");
     const people = [await person("a1@big.example"), await person("a2@big.example"), await person("a3@big.example")];
     const at = nowIso();
@@ -195,17 +207,17 @@ describe("a domain claim links the people who verified an address on it", () => 
       ).bind(acme, adminId, at, at),
     ]);
 
-    expect(await advanceDomainLinkRun(env.DB, "run-big", 2)).toEqual({ complete: false, examined: 2, linked: 2 });
+    expect(await advanceDomainLinkRun(env.DB, "run-big", 2)).toEqual({ complete: true, examined: 0, linked: 0 });
     const summary = await runDomainLinking(env.DB);
-    expect(summary).toMatchObject({ runs: 2, examined: 1, linked: 1, remaining: false });
-    for (const userId of people) expect(await organizationsOf(userId)).toEqual([{ organization_id: acme }]);
+    expect(summary).toMatchObject({ runs: 1, examined: 0, linked: 0, remaining: false });
+    for (const userId of people) expect(await organizationsOf(userId)).toEqual([]);
     expect(
       await queryAll(
         env.DB,
         "SELECT id, examined, linked, completed_at IS NOT NULL AS done FROM organization_domain_link_runs ORDER BY id",
       ),
     ).toEqual([
-      { id: "run-big", examined: 3, linked: 3, done: 1 },
+      { id: "run-big", examined: 0, linked: 0, done: 1 },
       { id: "run-released", examined: 0, linked: 0, done: 1 },
     ]);
   });

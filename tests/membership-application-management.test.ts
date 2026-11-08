@@ -34,6 +34,7 @@ import {
 } from "../assets/shared/schemas/membership-application-management";
 import { membershipCategoryCatalogResponseSchema } from "../assets/shared/schemas/membership-categories";
 import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
+import { insertOrganization } from "./helpers/membership";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -226,6 +227,39 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
     // duplicate-application detection (Fix 1's subject) doesn't desync.
     expect(rows[0].organization_domain).toBe("newdomain.test");
     expect(rows[0].stage).toBe("submitted");
+  });
+
+  it("preserves the selected domain during edits and rejects an incompatible email", async () => {
+    const { id } = await createApplication({ applicant_email: "person@division.example.test" });
+    const selected = await insertOrganization(env.DB, "Selected organization");
+    const other = await insertOrganization(env.DB, "Other organization");
+    await env.DB.prepare("UPDATE member_applications SET organization_id = ? WHERE id = ?").bind(selected, id).run();
+    await env.DB.prepare(
+      "INSERT INTO organization_domain_claims (id, domain, organization_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+    )
+      .bind(crypto.randomUUID(), "division.example.test", other, new Date().toISOString(), new Date().toISOString())
+      .run();
+
+    const path = `/api/v1/members/applications/${id}`;
+    const update = await call(adminToken, path, {
+      method: "PATCH",
+      body: JSON.stringify({ applicantName: "New Name" }),
+    });
+    expect(update.status).toBe(200);
+    const incompatible = await call(adminToken, path, {
+      method: "PATCH",
+      body: JSON.stringify({ applicantEmail: "person@unrelated.test" }),
+    });
+    expect(incompatible.status).toBe(409);
+    const rows = await queryAll<{ organization_domain: string; applicant_email: string }>(
+      env.DB,
+      "SELECT organization_domain, applicant_email FROM member_applications WHERE id = ?",
+      id,
+    );
+    expect(rows[0]).toMatchObject({
+      organization_domain: "example.test",
+      applicant_email: "person@division.example.test",
+    });
   });
 
   it("fails closed when answer edits encounter a weakened workflow policy field", async () => {

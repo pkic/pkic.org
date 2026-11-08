@@ -44,8 +44,11 @@ export function prepareVerifiedAffiliationRead(
           .bind(userId, userId, input.emailId),
     db
       .prepare(`SELECT claim.id,claim.domain,claim.application_id AS applicationId,claim.organization_id AS organizationId,
+      application.organization_name AS applicationName, application.updated_at AS applicationUpdatedAt,
       EXISTS(SELECT 1 FROM members member WHERE member.organization_id=claim.organization_id) AS member
-      FROM organization_domain_claims claim JOIN json_each(?) requested ON requested.value=claim.domain ORDER BY length(claim.domain) DESC`)
+      FROM organization_domain_claims claim JOIN json_each(?) requested ON requested.value=claim.domain
+      LEFT JOIN member_applications application ON application.id=claim.application_id
+      ORDER BY length(claim.domain) DESC,claim.id LIMIT 129`)
       .bind(domains),
     db
       .prepare(`WITH facts AS (
@@ -68,7 +71,7 @@ export function prepareVerifiedAffiliationRead(
         UNION SELECT ${FACT_ORGANIZATION} FROM identities fact JOIN json_each(?) requested ON ${matches}
         UNION SELECT organization_id FROM identities WHERE user_id=(${subject.sql})
           AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
-      ) LIMIT 257`)
+      ) ORDER BY organization.name,organization.id LIMIT 257`)
       .bind(normalizeOrgName(input.organizationName ?? ""), domains, domains, ...subject.bindings),
     db
       .prepare(`SELECT id,organization_id,email_id,updated_at,invited_at,started_at,ended_at,blocked_at,job_title
@@ -96,8 +99,16 @@ export function prepareVerifiedAffiliationRead(
         domain: string;
         applicationId: string | null;
         organizationId: string | null;
+        applicationName: string | null;
+        applicationUpdatedAt: string | null;
         member: number;
       }>(results[1]);
+      if (claims.length > 128)
+        throw new AppError(
+          409,
+          "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED",
+          "Contact the PKI Consortium to choose your organization.",
+        );
 
       if (input.domain && !verifiedRepresentationDomainCandidates(address.email, claims).includes(input.domain))
         throw new AppError(422, "IDENTITY_DOMAIN_MISMATCH", "Choose a domain of your verified work email address.");
@@ -121,10 +132,10 @@ export function prepareVerifiedAffiliationRead(
         claim,
         claims,
         facts: {
-          claimed: claim?.organizationId
-            ? { organizationId: claim.organizationId, isMember: Boolean(claim.member) }
-            : null,
-          heldByApplication: Boolean(claim && !claim.organizationId),
+          claimed: claims
+            .filter((item) => item.domain === domain && item.organizationId !== null)
+            .map((item) => ({ organizationId: item.organizationId!, isMember: Boolean(item.member) })),
+          heldByApplication: claims.some((item) => item.domain === domain && item.applicationId !== null),
           derived: derived.map((fact) => ({
             organizationId: fact.id,
             isMember: Boolean(fact.member),

@@ -40,6 +40,12 @@ export const affiliationOfferSchema = z.discriminatedUnion("kind", [
     writtenOrganizationName: z.string().nullable(),
   }),
   z.object({
+    kind: z.literal("choose_organization"),
+    emailId: databaseIdSchema.nullable(),
+    domain: z.string(),
+    writtenOrganizationName: z.string().nullable(),
+  }),
+  z.object({
     kind: z.literal("work_address"),
     /** The free or consumer domains their verified addresses are on. */
     freeDomains: z.array(z.string()),

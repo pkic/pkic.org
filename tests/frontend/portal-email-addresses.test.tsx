@@ -327,7 +327,7 @@ describe("email addresses on the user record", () => {
     window.location.hash = "#/email-verifications?token=pkc1_verification-token";
     const responses: unknown[] = [
       { email: "ana@member.example", accountEmail: "ana@gmail.com", consolidatesUnverifiedAccount: false },
-      { email: "ana@member.example", joinedOrganization: null, offeredOrganization: { id: workId, name: "Member Co" } },
+      { email: "ana@member.example", offeredOrganization: { id: workId, name: "Member Co" } },
     ];
     stub(() => json(responses.shift()));
     const host = mount(<EmailVerificationConfirmation />);
@@ -340,8 +340,10 @@ describe("email addresses on the user record", () => {
     const [, redeemed] = writes("POST");
     expect(redeemed?.path).toBe("/api/v1/auth/email-verifications");
     expect(ownEmailAddressVerificationSchema.parse(redeemed!.body)).toEqual({ token: "pkc1_verification-token" });
-    const signIn = Array.from(host.querySelectorAll("a")).find((link) => link.textContent?.includes("Sign in to join"));
-    expect(signIn?.textContent).toBe("Sign in to join Member Co");
+    const signIn = Array.from(host.querySelectorAll("a")).find((link) =>
+      link.textContent?.includes("Sign in to review"),
+    );
+    expect(signIn?.textContent).toBe("Sign in to review Member Co");
     // The spent link leaves the address bar.
     expect(window.location.hash).toBe("#/email-verifications");
   });
@@ -349,7 +351,7 @@ describe("email addresses on the user record", () => {
     window.location.hash = "#/email-verifications?token=pkc1_consolidation-token";
     const responses = [
       { email: "ana@member.example", accountEmail: "ana@gmail.com", consolidatesUnverifiedAccount: true },
-      { email: "ana@member.example", joinedOrganization: null, offeredOrganization: null },
+      { email: "ana@member.example", offeredOrganization: null },
     ];
     stub(() => json(responses.shift()));
     const host = mount(<EmailVerificationConfirmation />);

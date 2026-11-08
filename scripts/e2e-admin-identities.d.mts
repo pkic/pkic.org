@@ -86,6 +86,7 @@ export const E2E_ADMIN_SCOPES: readonly [
   "portal-vote-participation",
   "portal-vote-replacement",
   "portal-vote-election",
+  "shared-organization-domains",
   "portal-vote-window",
   "portal-vote-eligibility",
   "portal-proposal-states",

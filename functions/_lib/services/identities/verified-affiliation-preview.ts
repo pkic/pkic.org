@@ -1,6 +1,6 @@
 import { resolveDomainOrganization } from "../../../../assets/shared/organization-domain";
 import { identityAffiliationPreviewResponseSchema } from "../../../../assets/shared/schemas/identity-affiliation";
-import { verifiedDomainOrganizationId, verifiedRepresentationDomainCandidates } from "./verified-email-domain";
+import { verifiedRepresentationDomainCandidates } from "./verified-email-domain";
 import { workEmailDomain } from "../../email-domains/classification";
 import type { VerifiedAffiliationBasis } from "./verified-affiliation-basis";
 import { nowIso } from "../../utils/time";
@@ -25,22 +25,15 @@ export function verifiedAffiliationPreview(
       identity.email_id === (address.id ?? null),
   );
   // The mapping supplies the chooser's default without excluding other proved organizations.
-  const resolution = resolveDomainOrganization(
-    basis.facts,
-    basis.facts.claimed ? { organizationId: basis.facts.claimed.organizationId } : undefined,
-  );
+  const resolution = resolveDomainOrganization(basis.facts);
   const pendingClaim = resolution.kind === "held" || basis.claims.some((claim) => claim.applicationId);
-  if (pendingClaim && !options.pendingApplicationReview && !owned.length)
-    verifiedDomainOrganizationId(basis.domain, { kind: "held" });
-  const deferAffiliation = pendingClaim && options.pendingApplicationReview;
-  const organizationId = deferAffiliation
-    ? null
-    : resolution.kind === "organization"
+  const organizationId =
+    resolution.kind === "organization"
       ? resolution.organizationId
-      : owned.length === 1
+      : resolution.kind !== "ambiguous" && owned.length === 1
         ? owned[0].organization_id
         : null;
-  const organizations = (deferAffiliation ? [] : basis.organizations).filter((organization) => {
+  const organizations = basis.organizations.filter((organization) => {
     return (
       owned.some((identity) => identity.organization_id === organization.id) ||
       resolveDomainOrganization(basis.facts, { organizationId: organization.id }).kind === "organization"
@@ -48,18 +41,20 @@ export function verifiedAffiliationPreview(
   });
   const organization = organizations.find((item) => item.id === organizationId) ?? null;
   const rootDomain = workEmailDomain(address.email);
-  const mayLinkSubdomains = !basis.claims.some((item) => item.applicationId);
   return identityAffiliationPreviewResponseSchema.parse({
     reviewRequired: pendingClaim ? true : undefined,
     email: address.email,
     domain: basis.domain,
     organization: organization ? { id: organization.id, name: organization.name } : null,
     domains: verifiedRepresentationDomainCandidates(address.email, basis.claims).map((domain) => {
-      const claim = basis.claims.find((item) => item.domain === domain);
+      const claims = basis.claims.filter((item) => item.domain === domain);
       return {
         domain,
-        canLink: !claim && domain !== rootDomain && mayLinkSubdomains,
-        organizationName: basis.organizations.find((item) => item.id === claim?.organizationId)?.name ?? null,
+        canLink: claims.length === 0 && domain !== rootDomain,
+        organizationName:
+          claims.length === 1
+            ? (basis.organizations.find((item) => item.id === claims[0]?.organizationId)?.name ?? null)
+            : null,
       };
     }),
     organizations: organizations.map(({ id, name }) => {

@@ -3,7 +3,7 @@ import { preparePermissionsAuthorizationGuard } from "../../../auth/permissions"
 import { isAuthorizationGuardFailure } from "../../../db/authorization-guard";
 import { getRequestedApplicationGroups } from "./queries";
 import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
-import { mailboxKind } from "../../../email-domains/classification";
+import { mailboxKind, organizationDomainCandidates } from "../../../email-domains/classification";
 /**
  * Staff listing/detail queries for member_applications. This management view
  * includes every lifecycle state and staff-only communications and notes.
@@ -304,7 +304,22 @@ export async function updateMembershipApplication(
   // Keep the denormalized application snapshot and canonical claim registry
   // in lockstep. The delete + replacement insert joins the application
   // update below in one batch, so a conflicting domain rolls everything back.
-  const nextOrganizationDomain = nextIsIndividual ? null : await organizationLinkDomain(db, nextApplicantEmail);
+  if (
+    !nextIsIndividual &&
+    application.organization_id &&
+    application.organization_domain &&
+    !organizationDomainCandidates(nextApplicantEmail).includes(application.organization_domain)
+  )
+    throw new AppError(
+      409,
+      "ORGANIZATION_AFFILIATION_CHANGED",
+      "Confirm the organization for the new email domain before changing this application.",
+    );
+  const nextOrganizationDomain = nextIsIndividual
+    ? null
+    : application.organization_id && application.organization_domain
+      ? application.organization_domain
+      : await organizationLinkDomain(db, nextApplicantEmail);
   const organizationDomainChanged = nextOrganizationDomain !== application.organization_domain;
   if (organizationDomainChanged) {
     if (application.stage === "approved") {
@@ -317,7 +332,7 @@ export async function updateMembershipApplication(
     setClauses.push("organization_domain = ?");
     values.push(nextOrganizationDomain);
     if (application.stage !== "declined" && application.stage !== "withdrawn") {
-      dependentStatements.push(prepareReleaseApplicationDomainClaim(db, application.id));
+      dependentStatements.push(...prepareReleaseApplicationDomainClaim(db, application.id));
       if (nextOrganizationDomain) {
         dependentStatements.push(prepareClaimDomainForApplication(db, nextOrganizationDomain, application.id, now));
       }
@@ -327,6 +342,7 @@ export async function updateMembershipApplication(
   if (input.organizationName !== undefined && input.organizationName !== application.organization_name) {
     setClauses.push("organization_name = ?");
     values.push(nextOrganizationName);
+    if (application.organization_id) setClauses.push("organization_id = NULL");
     changedFields.push("organizationName");
   } else if (
     nextIsIndividual !== currentCategory.isIndividual &&
@@ -339,6 +355,7 @@ export async function updateMembershipApplication(
     // categories never carry an organization_name).
     setClauses.push("organization_name = ?");
     values.push(null);
+    if (application.organization_id) setClauses.push("organization_id = NULL");
   }
 
   if (input.answers) {

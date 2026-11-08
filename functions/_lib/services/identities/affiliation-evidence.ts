@@ -1,3 +1,5 @@
+import { organizationDomainCandidates } from "../../email-domains/classification";
+import type { VerifiedAffiliationBasis } from "./verified-affiliation-basis";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { ownedIdentityEmailEvidence } from "./owned-email";
 
@@ -59,4 +61,42 @@ export function observedOrganizationMembershipEvidence(
                   OR EXISTS (SELECT 1 FROM members WHERE id=? AND organization_id=?)`,
     bindings: [memberId, organizationId, memberId, organizationId],
   };
+}
+
+/** Pins the complete domain and pending-application observations through the atomic write. */
+export function observedDomainClaimsEvidence(
+  normalizedEmail: string,
+  claims: VerifiedAffiliationBasis["claims"],
+): AuthorizationEvidence[] {
+  const observed = JSON.stringify(claims);
+  const domains = JSON.stringify(organizationDomainCandidates(normalizedEmail));
+  const applications = JSON.stringify(
+    claims
+      .filter((claim) => claim.applicationId)
+      .map((claim) => ({
+        id: claim.applicationId,
+        name: claim.applicationName ?? null,
+        updatedAt: claim.applicationUpdatedAt ?? null,
+      })),
+  );
+  return [
+    {
+      sql: `SELECT 1 WHERE NOT EXISTS (
+      SELECT id,organization_id,application_id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
+      EXCEPT SELECT json_extract(value,'$.id'),json_extract(value,'$.organizationId'),json_extract(value,'$.applicationId') FROM json_each(?)
+    ) AND NOT EXISTS (
+      SELECT json_extract(value,'$.id'),json_extract(value,'$.organizationId'),json_extract(value,'$.applicationId') FROM json_each(?)
+      EXCEPT SELECT id,organization_id,application_id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
+    )`,
+      bindings: [domains, observed, observed, domains],
+    },
+    {
+      sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM json_each(?) observed WHERE NOT EXISTS (
+      SELECT 1 FROM member_applications application WHERE application.id=json_extract(observed.value,'$.id')
+        AND application.organization_name IS json_extract(observed.value,'$.name')
+        AND application.updated_at IS json_extract(observed.value,'$.updatedAt')
+    ))`,
+      bindings: [applications],
+    },
+  ];
 }

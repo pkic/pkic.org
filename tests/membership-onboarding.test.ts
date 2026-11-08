@@ -113,6 +113,67 @@ describe("Post-approval onboarding", () => {
     await seedWorkingGroup("ca", "ca@lists.pkic.org");
   });
 
+  it("approves the selected organization by ID after its name changes on a shared domain", async () => {
+    const { id } = await createReviewedApplication();
+    const owner = await insertOrganization(env.DB, "Other Company");
+    const selected = await insertOrganization(env.DB, "Acme Corp");
+    const at = new Date().toISOString();
+    const claim = await env.DB.prepare("SELECT id FROM organization_domain_claims WHERE application_id=?")
+      .bind(id)
+      .first<string>("id");
+    await env.DB.batch([
+      env.DB.prepare("UPDATE organization_domain_claims SET application_id=NULL,organization_id=? WHERE id=?").bind(
+        owner,
+        claim,
+      ),
+      env.DB.prepare(
+        `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
+      ).bind(crypto.randomUUID(), claim, selected, at, at),
+      env.DB.prepare("UPDATE member_applications SET organization_id=? WHERE id=?").bind(selected, id),
+      env.DB.prepare("UPDATE organizations SET name=?,normalized_name=? WHERE id=?").bind(
+        "Renamed Acme",
+        normalizeOrgName("Renamed Acme"),
+        selected,
+      ),
+    ]);
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await response.json()).toMatchObject({ organizationId: selected });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT organization_id FROM organization_domain_claims WHERE domain=? ORDER BY organization_id",
+        ["acme.test"],
+      ),
+    ).toEqual(
+      [{ organization_id: owner }, { organization_id: selected }].sort((a, b) =>
+        a.organization_id.localeCompare(b.organization_id),
+      ),
+    );
+  });
+
+  it("does not approve a selected organization after its shared-domain evidence disappears", async () => {
+    const { id } = await createReviewedApplication();
+    const owner = await insertOrganization(env.DB, "Other Company");
+    const selected = await insertOrganization(env.DB, "Acme Corp");
+    const claim = await env.DB.prepare("SELECT id FROM organization_domain_claims WHERE application_id=?")
+      .bind(id)
+      .first<string>("id");
+    await env.DB.batch([
+      env.DB.prepare("UPDATE organization_domain_claims SET application_id=NULL,organization_id=? WHERE id=?").bind(
+        owner,
+        claim,
+      ),
+      env.DB.prepare("UPDATE member_applications SET organization_id=? WHERE id=?").bind(selected, id),
+    ]);
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
+    expect(response.status).toBe(409);
+    expect(await env.DB.prepare("SELECT stage FROM member_applications WHERE id=?").bind(id).first("stage")).toBe(
+      "processing",
+    );
+    expect(await queryAll(env.DB, "SELECT id FROM members WHERE organization_id=?", [selected])).toEqual([]);
+  });
+
   it("refuses approving an organization's application until its applicant's job title is recorded", async () => {
     const { id } = await createReviewedApplication({}, { working_groups: ["pqc"], job_title: null });
     const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });

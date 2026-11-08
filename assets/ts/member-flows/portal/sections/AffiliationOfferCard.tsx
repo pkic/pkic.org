@@ -34,6 +34,7 @@ import { usePortalHashLocation } from "../hash-location";
 import { portalSession } from "../state";
 import { toast } from "../ui";
 import { addEmailAddressPath } from "../../../shared/email-address-paths";
+import { IdentityCreateDialog } from "../../../components/identities/IdentityCreateDialog";
 
 const OFFER_ENDPOINT = "/api/v1/users/current/identities/offer";
 
@@ -110,6 +111,7 @@ export function AffiliationOfferCard() {
   const loaded = useData(() => getJson(OFFER_ENDPOINT, affiliationOfferResponseSchema), []);
   const [busy, setBusy] = useState(false);
   const [answered, setAnswered] = useState(false);
+  const [choosing, setChoosing] = useState(false);
   const offer = loaded.data?.offer ?? null;
   // An optional question: when it cannot be read, the page simply does not ask it.
   if (answered || !offer) return null;
@@ -185,7 +187,7 @@ export function AffiliationOfferCard() {
         <PanelHeader title="Your organization" />
         <PanelBody class="pk-stack pk-stack--snug">
           <p>
-            You’ll be linked to <strong>{offer.organization.name}</strong> (from your @{offer.domain} email).
+            Do you represent <strong>{offer.organization.name}</strong> using your @{offer.domain} email?
           </p>
           <WrittenName offer={offer} />
           <OrganizationAnswer
@@ -195,6 +197,9 @@ export function AffiliationOfferCard() {
             busy={busy}
             confirmLabel={`Join ${offer.organization.name}`}
           >
+            <Button type="button" disabled={busy} onClick={() => setChoosing(true)}>
+              Choose another organization
+            </Button>
             <Button
               disabled={busy}
               onClick={() => void dismiss(offer.organization.id, `${offer.organization.name} won’t be offered again`)}
@@ -202,6 +207,31 @@ export function AffiliationOfferCard() {
               Not my organization
             </Button>
           </OrganizationAnswer>
+          <IdentityCreateDialog
+            open={choosing}
+            onClose={() => setChoosing(false)}
+            onCreated={async () => setAnswered(true)}
+          />
+        </PanelBody>
+      </Panel>
+    );
+  }
+
+  if (offer.kind === "choose_organization") {
+    return (
+      <Panel aria-label="Your organization">
+        <PanelHeader title="Your organization" />
+        <PanelBody class="pk-stack pk-stack--snug">
+          <p>More than one organization uses @{offer.domain}. Choose the one you represent.</p>
+          <WrittenName offer={offer} />
+          <Button variant="primary" onClick={() => setChoosing(true)}>
+            Choose organization
+          </Button>
+          <IdentityCreateDialog
+            open={choosing}
+            onClose={() => setChoosing(false)}
+            onCreated={async () => setAnswered(true)}
+          />
         </PanelBody>
       </Panel>
     );

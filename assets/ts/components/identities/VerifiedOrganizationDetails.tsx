@@ -44,7 +44,8 @@ export function VerifiedOrganizationDetails({
   onDraftChange?: (draft: { organizationName: string; jobTitle: string }) => void;
 }) {
   const [resolved, setResolved] = useState(initial);
-  const [organizationId, setOrganizationId] = useState<string | null>(initial.organization?.id ?? null);
+  const [domainConfirmed, setDomainConfirmed] = useState(initial.domains.length <= 1);
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [organizationName, setOrganizationName] = useState("");
   const [adding, showAdding, closeAdding] = useDialogQueryState("organization");
   const [jobTitle, setJobTitle] = useState("");
@@ -52,13 +53,12 @@ export function VerifiedOrganizationDetails({
   const [error, setError] = useState("");
   const [formId] = useState(() => nextDomId("representation"));
   const prepared = useRef<{ key: string; token?: string; expiresAt: number } | null>(null);
-  const selectedDomain = resolved.domains.find((item) => item.domain === resolved.domain);
   const existingJobTitle = resolved.organizations.find((item) => item.id === organizationId)?.jobTitle ?? null;
   const body = {
     phase: "prepare" as const,
     email: resolved.email,
     emailId,
-    domain: resolved.domain || undefined,
+    domain: domainConfirmed ? resolved.domain || undefined : undefined,
     organizationId,
     organizationName: organizationId ? undefined : organizationName || undefined,
     jobTitle: existingJobTitle ?? jobTitle,
@@ -101,16 +101,14 @@ export function VerifiedOrganizationDetails({
       setBusy(false);
     }
   };
-  async function changeDomain(
-    domain: string,
-    keepNewOrganization = organizationId === null && Boolean(organizationName),
-  ) {
+  async function changeDomain(domain: string) {
     setBusy(true);
     setError("");
     try {
       const result = await resolve(domain);
       setResolved(result);
-      setOrganizationId(keepNewOrganization ? null : (result.organization?.id ?? null));
+      setDomainConfirmed(true);
+      setOrganizationId(null);
     } catch (cause) {
       setError(detailsForm.refuse(cause));
     } finally {
@@ -130,22 +128,20 @@ export function VerifiedOrganizationDetails({
       {resolved && resolved.domains.length > 1 && (
         <Field
           label="Email domain"
-          help={
-            selectedDomain?.canLink
-              ? `Future verified email addresses at ${resolved.domain} will link to this organization.`
-              : selectedDomain?.organizationName
-                ? `Already linked to ${selectedDomain.organizationName}.`
-                : `Your work email was verified for ${resolved.domain}.`
-          }
+          required
+          help="Is a subdomain dedicated to your organization? Choose the domain that applies."
           {...detailsForm.of("domain")}
         >
           {(control) => (
             <Select
               {...control}
-              value={resolved.domain}
+              value={domainConfirmed ? resolved.domain : ""}
               disabled={busy}
-              onChange={(event) => void changeDomain(event.currentTarget.value)}
+              onChange={(event) => {
+                if (event.currentTarget.value) void changeDomain(event.currentTarget.value);
+              }}
             >
+              <option value="">Choose an email domain</option>
               {resolved.domains.map((item) => (
                 <option key={item.domain} value={item.domain}>
                   {item.domain}
@@ -157,7 +153,7 @@ export function VerifiedOrganizationDetails({
       )}
       {resolved.organizations.length === 0 ? (
         <VerifiedOrganizationNameField
-          domain={resolved.domain}
+          domain={domainConfirmed ? resolved.domain : ""}
           reviewRequired={resolved.reviewRequired}
           value={organizationName}
           disabled={busy}
@@ -169,9 +165,11 @@ export function VerifiedOrganizationDetails({
           label="Organization"
           required
           help={
-            resolved.domain
-              ? `Organizations linked to your verified email domain, ${resolved.domain}, and organizations you already represent using this address are listed. Use + to add your organization if it is missing.`
-              : "Use + to add your organization."
+            !domainConfirmed
+              ? "Choose an email domain first, or use + to add your organization."
+              : resolved.domain
+                ? `Organizations linked to your verified email domain, ${resolved.domain}, and organizations you already represent using this address are listed. Use + to add your organization if it is missing.`
+                : "Use + to add your organization."
           }
           {...detailsForm.of(organizationId ? "organizationId" : "organizationName")}
         >
@@ -180,7 +178,7 @@ export function VerifiedOrganizationDetails({
               <Select
                 {...control}
                 value={organizationId ?? ""}
-                disabled={busy}
+                disabled={busy || !domainConfirmed}
                 onChange={(event) => setOrganizationId(event.currentTarget.value || null)}
               >
                 {resolved.organizations.map((organization) => (
@@ -215,6 +213,7 @@ export function VerifiedOrganizationDetails({
             onClose={() => void closeAdding()}
             onUse={(organization) => {
               setResolved(organization.resolved);
+              setDomainConfirmed(true);
               setOrganizationId(null);
               setOrganizationName(organization.name);
               void closeAdding();

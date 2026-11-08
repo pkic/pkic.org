@@ -6,6 +6,8 @@ import { JoinFlow } from "../../assets/ts/site/JoinFlow";
 import {
   forgetJoinDraft,
   rememberJoinToken,
+  rememberJoinChoice,
+  rememberedJoinChoice,
   rememberedJoinToken,
   restoreJoinAnswers,
   saveJoinAnswers,
@@ -20,6 +22,16 @@ const organizationContext = {
 };
 
 describe("a verified application kept for this tab", () => {
+  it("restores the verified organization selection only for the same link", () => {
+    rememberJoinToken("token-1");
+    rememberJoinChoice({ organizationName: "Example Organization", domain: "division.example.test" });
+    expect(rememberedJoinChoice()).toEqual({
+      organizationName: "Example Organization",
+      domain: "division.example.test",
+    });
+    rememberJoinToken("token-2");
+    expect(rememberedJoinChoice()).toBeUndefined();
+  });
   afterEach(() => {
     document.body.innerHTML = "";
     sessionStorage.clear();

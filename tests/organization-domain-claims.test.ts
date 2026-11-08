@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   organizationDomainClaimCreateSchema,
   organizationDomainClaimResponseSchema,
-  organizationDomainClaimedElsewhereDetailsSchema,
   organizationDomainsListResponseSchema,
 } from "../assets/shared/schemas/organization-domains";
 import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
@@ -14,6 +13,10 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { seedMemberApplication } from "./helpers/member-applications";
 import { insertOrganization, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import {
+  prepareReleaseApplicationDomainClaim,
+  prepareTransferApplicationDomainClaim,
+} from "../functions/_lib/services/membership/organization-domain-claims";
 
 async function claimDomain(organizationId: string, domain: string): Promise<void> {
   await env.DB.prepare(
@@ -42,6 +45,46 @@ async function linkedPerson(organizationId: string, email: string): Promise<stri
 }
 
 describe("staff manage an organization's email domains", () => {
+  it.each(["release", "approve"])(
+    "preserves additional claims when a pending application is decided (%s)",
+    async (decision) => {
+      const applicationId = await seedMemberApplication({
+        applicantEmail: "person@pending-shared.example",
+        organizationDomain: "pending-shared.example",
+      });
+      const first = await insertOrganization(env.DB, "First Organization");
+      const second = await insertOrganization(env.DB, "Second Organization");
+      const claimId = await env.DB.prepare("SELECT id FROM organization_domain_claims WHERE application_id=?")
+        .bind(applicationId)
+        .first<string>("id");
+      const at = nowIso();
+      await env.DB.batch(
+        [first, second].map((organizationId) =>
+          env.DB.prepare(
+            `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
+          ).bind(crypto.randomUUID(), claimId, organizationId, at, at),
+        ),
+      );
+      const statements =
+        decision === "release"
+          ? prepareReleaseApplicationDomainClaim(env.DB, applicationId)
+          : await prepareTransferApplicationDomainClaim(env.DB, {
+              domain: "pending-shared.example",
+              applicationId,
+              organizationId: first,
+              now: at,
+            });
+      await env.DB.batch(statements);
+      const rows = await queryAll<{ organization_id: string; application_id: string | null }>(
+        env.DB,
+        "SELECT organization_id,application_id FROM organization_domain_claims WHERE domain=? ORDER BY organization_id",
+        ["pending-shared.example"],
+      );
+      expect(rows).toEqual(
+        [first, second].sort().map((organization_id) => ({ organization_id, application_id: null })),
+      );
+    },
+  );
   let token: string;
 
   beforeEach(async () => {
@@ -122,10 +165,80 @@ describe("staff manage an organization's email domains", () => {
     expect(await domainsOf(acme)).toEqual([{ domain: "acme.example", status: "derived", people: 1, claimedAt: null }]);
   });
 
-  it("refuses free, ISP and disposable mail, public suffixes, a domain another organization claims (naming it for a merge) and a held domain", async () => {
+  it("allows organizations to share a domain without automatically affiliating its verified users", async () => {
+    const first = await insertOrganization(env.DB, "First Organization");
+    const second = await insertOrganization(env.DB, "Second Organization");
+    await claimDomain(first, "shared-work.example");
+    const person = await insertUser(env.DB, "person@shared-work.example");
+    await env.DB.prepare(
+      "UPDATE users SET email_verified_at = ?, email_verification_method = 'magic_link' WHERE id = ?",
+    )
+      .bind(nowIso(), person)
+      .run();
+
+    const added = await call(`/api/v1/organizations/${second}/domains`, {
+      body: { domain: "shared-work.example", reason: "Both organizations use this domain" },
+    });
+    expect(added.status, await added.clone().text()).toBe(201);
+    expect((await domainsOf(first)).map((item) => item.domain)).toContain("shared-work.example");
+    expect((await domainsOf(second)).map((item) => item.domain)).toContain("shared-work.example");
+    expect(await queryAll(env.DB, "SELECT organization_id FROM identities WHERE user_id = ?", [person])).toEqual([]);
+  });
+
+  it.each(["first", "second"])("removes the %s shared claim without removing the other", async (removed) => {
+    const first = await insertOrganization(env.DB, "First Organization");
+    const second = await insertOrganization(env.DB, "Second Organization");
+    await claimDomain(first, "shared-work.example");
+    const added = await call(`/api/v1/organizations/${second}/domains`, {
+      body: { domain: "shared-work.example", reason: "Both organizations use this domain" },
+    });
+    expect(added.status, await added.clone().text()).toBe(201);
+    const removeId = removed === "first" ? first : second;
+    const keepId = removed === "first" ? second : first;
+    const response = await call(`/api/v1/organizations/${removeId}/domains/shared-work.example`, { method: "DELETE" });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect((await domainsOf(removeId)).map((item) => item.domain)).not.toContain("shared-work.example");
+    expect((await domainsOf(keepId)).map((item) => item.domain)).toContain("shared-work.example");
+    expect(
+      await queryAll(env.DB, "SELECT organization_id FROM organization_domain_claims WHERE domain=?", [
+        "shared-work.example",
+      ]),
+    ).toEqual([{ organization_id: keepId }]);
+  });
+
+  it("enforces distinct claimants and allows a pending application to share its domain", async () => {
+    const first = await insertOrganization(env.DB, "First Organization");
+    const second = await insertOrganization(env.DB, "Second Organization");
+    await claimDomain(first, "shared-work.example");
+    await seedMemberApplication({ applicantEmail: "applicant@pending.example" });
+    const roots = await queryAll<{ id: string; domain: string }>(
+      env.DB,
+      "SELECT id,domain FROM organization_domain_claims WHERE domain IN (?,?)",
+      ["shared-work.example", "pending.example"],
+    );
+    const rootId = roots.find((item) => item.domain === "shared-work.example")!.id;
+    const pendingId = roots.find((item) => item.domain === "pending.example")!.id;
+    const insert = (root: string, organization: string) =>
+      env.DB.prepare(
+        `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
+      )
+        .bind(crypto.randomUUID(), root, organization, nowIso(), nowIso())
+        .run();
+    await expect(insert(rootId, first)).rejects.toThrow();
+    await insert(pendingId, second);
+    await insert(rootId, second);
+    await expect(insert(rootId, second)).rejects.toThrow();
+    await env.DB.prepare("DELETE FROM organization_domain_claims WHERE id=?").bind(rootId).run();
+    expect(
+      await queryAll(env.DB, "SELECT organization_id FROM organization_domain_claims WHERE domain=?", [
+        "shared-work.example",
+      ]),
+    ).toEqual([{ organization_id: second }]);
+  });
+
+  it("refuses ineligible and duplicate claims while allowing a pending domain to be shared", async () => {
     const acme = await insertOrganization(env.DB, "Acme");
-    const duplicate = await insertOrganization(env.DB, "Acme Duplicate");
-    await claimDomain(duplicate, "acme.example");
+    await claimDomain(acme, "acme.example");
     await seedMemberApplication({ applicantEmail: "applicant@pending.example" });
     const claim = (domain: string) =>
       call(`/api/v1/organizations/${acme}/domains`, { body: { domain, reason: "Staff knowledge" } });
@@ -139,22 +252,25 @@ describe("staff manage an organization's email domains", () => {
       expect(apiValidationErrorDetailsSchema.parse(body.error.details).fieldErrors?.domain).toHaveLength(1);
     }
 
-    const elsewhere = await claim("acme.example");
-    expect(elsewhere.status).toBe(409);
-    const refusal = (await elsewhere.json()) as { error: { code: string; details: unknown } };
-    expect(refusal.error.code).toBe("ORGANIZATION_DOMAIN_CLAIMED_ELSEWHERE");
-    expect(organizationDomainClaimedElsewhereDetailsSchema.parse(refusal.error.details)).toEqual({
-      organizationId: duplicate,
-      organizationName: "Acme Duplicate",
-    });
+    const duplicate = await claim("acme.example");
+    expect(duplicate.status).toBe(409);
+    expect(((await duplicate.json()) as { error: { code: string } }).error.code).toBe(
+      "ORGANIZATION_DOMAIN_ALREADY_CLAIMED",
+    );
 
     const held = await claim("pending.example");
-    expect(held.status).toBe(409);
-    expect(((await held.json()) as { error: { code: string } }).error.code).toBe("ORGANIZATION_DOMAIN_IN_USE");
+    expect(held.status, await held.clone().text()).toBe(201);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT application_id IS NOT NULL AS held FROM organization_domain_claims WHERE domain=? AND application_id IS NOT NULL",
+        ["pending.example"],
+      ),
+    ).toEqual([{ held: 1 }]);
 
-    expect(await queryAll(env.DB, "SELECT action FROM audit_log WHERE action LIKE 'organization_domain_%'")).toEqual(
-      [],
-    );
+    expect(await queryAll(env.DB, "SELECT action FROM audit_log WHERE action LIKE 'organization_domain_%'")).toEqual([
+      { action: "organization_domain_claimed" },
+    ]);
   });
 
   it("removes only a claim the organization holds and requires organization permissions", async () => {

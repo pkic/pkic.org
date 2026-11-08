@@ -1,10 +1,8 @@
 /**
  * Canonical organization-domain ownership boundary.
  *
- * A domain has exactly one row throughout its lifecycle. Pending membership
- * applications own it through application_id; approval transfers the row to
- * organization_id. Keeping both states in one table makes duplicate-domain
- * rejection a database invariant instead of a race-prone pair of reads.
+ * Each application or organization has its own claim row. Callers that need
+ * to decide affiliation must consider every claim for the domain.
  *
  * A claim normally holds a registrable domain (`ibm.com`) and covers every
  * address on its subdomains; a subdomain claimed explicitly
@@ -12,7 +10,7 @@
  */
 import { organizationDomainCandidates, workEmailDomain } from "../../email-domains/classification";
 import { first } from "../../db/queries";
-import { AppError } from "../../errors";
+import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { uuid } from "../../utils/ids";
 import type { DatabaseLike, StatementLike } from "../../types";
 
@@ -47,7 +45,7 @@ export async function getOrganizationDomainClaim(
     db,
     `SELECT id, domain, application_id, organization_id
      FROM organization_domain_claims
-     WHERE domain = ?`,
+     WHERE domain = ? ORDER BY application_id IS NULL, id LIMIT 1`,
     [domain],
   );
   return row ? toClaim(row) : null;
@@ -67,7 +65,7 @@ export async function getOrganizationDomainClaimForEmail(
 export function organizationDomainClaimForEmailSelection(email: string) {
   return {
     sql: `SELECT id,domain,application_id,organization_id FROM organization_domain_claims
-    WHERE domain IN(SELECT value FROM json_each(?)) ORDER BY length(domain) DESC LIMIT 1`,
+    WHERE domain IN(SELECT value FROM json_each(?)) ORDER BY length(domain) DESC, application_id IS NULL, id LIMIT 1`,
     bindings: [JSON.stringify(organizationDomainCandidates(email))],
   };
 }
@@ -96,43 +94,60 @@ export function prepareClaimDomainForApplication(
     .bind(uuid(), domain, applicationId, now, now);
 }
 
-export function prepareReleaseApplicationDomainClaim(db: DatabaseLike, applicationId: string): StatementLike {
-  return db.prepare("DELETE FROM organization_domain_claims WHERE application_id = ?").bind(applicationId);
+export function prepareReleaseApplicationDomainClaim(db: DatabaseLike, applicationId: string): StatementLike[] {
+  return [db.prepare("DELETE FROM organization_domain_claims WHERE application_id = ?").bind(applicationId)];
 }
 
 export async function prepareTransferApplicationDomainClaim(
   db: DatabaseLike,
   params: { domain: string; applicationId: string; organizationId: string; now: string },
-): Promise<StatementLike> {
-  const claim = await getOrganizationDomainClaim(db, params.domain);
-  if (!claim || claim.applicationId !== params.applicationId) {
-    throw new AppError(409, "DOMAIN_CLAIM_LOST", "The application no longer owns its organization domain");
+): Promise<StatementLike[]> {
+  const applicationClaim = await first<{ id: string }>(
+    db,
+    "SELECT id FROM organization_domain_claims WHERE domain=? AND application_id=?",
+    [params.domain, params.applicationId],
+  );
+  if (applicationClaim) {
+    return [
+      prepareAuthorizationGuard(db, {
+        sql: "SELECT 1 FROM organization_domain_claims WHERE id=? AND domain=? AND application_id=?",
+        bindings: [applicationClaim.id, params.domain, params.applicationId],
+      }),
+      db
+        .prepare(`DELETE FROM organization_domain_claims WHERE id=? AND application_id=? AND EXISTS (
+        SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?)`)
+        .bind(applicationClaim.id, params.applicationId, params.domain, params.organizationId),
+      db
+        .prepare(
+          `UPDATE organization_domain_claims SET application_id=NULL, organization_id=?, updated_at=? WHERE id=? AND application_id=?`,
+        )
+        .bind(params.organizationId, params.now, applicationClaim.id, params.applicationId),
+    ];
   }
-  return db
-    .prepare(
-      `UPDATE organization_domain_claims
-       SET application_id = NULL, organization_id = ?, updated_at = ?
-       WHERE domain = ? AND application_id = ?`,
-    )
-    .bind(params.organizationId, params.now, params.domain, params.applicationId);
+  return [
+    prepareAuthorizationGuard(db, {
+      sql: "SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?",
+      bindings: [params.domain, params.organizationId],
+    }),
+  ];
 }
 
 export async function prepareClaimDomainForOrganization(
   db: DatabaseLike,
   params: { domain: string; organizationId: string; now: string },
-  /** The caller must guard this observation in its atomic write when supplied. */
   observedClaim?: OrganizationDomainClaim | null,
 ): Promise<StatementLike | null> {
-  const claim = observedClaim === undefined ? await getOrganizationDomainClaim(db, params.domain) : observedClaim;
-  if (claim) {
-    if (claim.organizationId === params.organizationId) return null;
-    throw new AppError(409, "ORGANIZATION_DOMAIN_IN_USE", "This organization domain is already claimed");
-  }
+  if (
+    observedClaim === undefined &&
+    (await first<{ id: string }>(db, "SELECT id FROM organization_domain_claims WHERE domain=? AND organization_id=?", [
+      params.domain,
+      params.organizationId,
+    ]))
+  )
+    return null;
   return db
-    .prepare(
-      `INSERT INTO organization_domain_claims
-         (id, domain, application_id, organization_id, created_at, updated_at)
-       VALUES (?, ?, NULL, ?, ?, ?)`,
-    )
+    .prepare(`INSERT INTO organization_domain_claims
+    (id,domain,application_id,organization_id,created_at,updated_at)
+    VALUES (?,?,NULL,?,?,?)`)
     .bind(uuid(), params.domain, params.organizationId, params.now, params.now);
 }

@@ -6,6 +6,8 @@ const observedDomainClaimSchema = z.object({
   domain: z.string(),
   applicationId: z.string().nullable(),
   organizationId: z.string().nullable(),
+  applicationName: z.string().nullable().optional(),
+  applicationUpdatedAt: z.string().nullable().optional(),
 });
 
 export const verifiedAffiliationBasisSchema = z.object({
@@ -13,7 +15,7 @@ export const verifiedAffiliationBasisSchema = z.object({
   claim: observedDomainClaimSchema.nullable(),
   claims: z.array(observedDomainClaimSchema).max(128),
   facts: z.object({
-    claimed: z.object({ organizationId: z.string(), isMember: z.boolean() }).nullable(),
+    claimed: z.array(z.object({ organizationId: z.string(), isMember: z.boolean() })).max(128),
     heldByApplication: z.boolean(),
     derived: z
       .array(

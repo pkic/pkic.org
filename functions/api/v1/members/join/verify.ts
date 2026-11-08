@@ -17,6 +17,9 @@ export const MembersJoinVerifyPost = openApiRoute(memberJoinVerifyRouteSchema, a
   const http = await prepareMagicLinkVerificationHttp(c, RATE_LIMIT_NAMESPACE);
   const result = await verifyMemberJoin(http.db, {
     token: data.body.token,
+    organizationId: data.body.organizationId,
+    organizationName: data.body.organizationName,
+    domain: data.body.domain,
     signingSecret: http.secret,
     applicationTtlSeconds: 15 * 60,
     sessionTtlHours: resolveMemberSessionTtlHours(c.env.MEMBER_SESSION_TTL_HOURS),

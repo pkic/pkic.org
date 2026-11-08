@@ -364,7 +364,11 @@ describe("registration contact step", () => {
     const organization: ConfirmOrganizationController = {};
     const form = await mount(contactStep(() => {}, organization));
     const choice = controlFor(form, "Organization") as HTMLSelectElement;
-    expect(choice.value).toBe(ORGANIZATION_ID);
+    expect(choice.value).toBe("");
+    await act(() => {
+      choice.value = ORGANIZATION_ID;
+      choice.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     const title = controlFor(form, "Job title");
     await act(() => {
       title.value = "Researcher";

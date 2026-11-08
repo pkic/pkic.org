@@ -16,25 +16,49 @@ import { issueMemberJoinApplicationToken, verifyMemberJoinVerificationToken } fr
 import { resolveOpenJoinApplication } from "./open-application";
 import { readJoinVerification } from "./verification-read";
 import { prepareEligibleMemberRead } from "../../../auth/identity-capacities";
-import { prepareAuthorizationGuard } from "../../../db/authorization-guard";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../db/authorization-guard";
+import { resolveDomainOrganization } from "../../../../../assets/shared/organization-domain";
+import { verifiedEmailDomainResolutionEvidence } from "../../identities/verified-email-domain";
+import { verifiedAffiliationPreview } from "../../identities/verified-affiliation-preview";
+import { normalizeOrgName } from "../../../../../assets/shared/organization-name";
 
 async function issueApplicationContinuation(
   signingSecret: string,
   payload: Awaited<ReturnType<typeof verifyMemberJoinVerificationToken>>,
   ttlSeconds: number,
   applicantUserId: string | null,
+  organization?: {
+    id?: string;
+    name: string;
+    domain: string;
+    claimIds: string[];
+    pendingApplications: Array<{ id: string; updatedAt: string }>;
+  },
 ): Promise<MemberJoinVerifyResponse> {
   return {
     status: "application_ready",
     applicantEmail: payload.email,
     applicantKind: payload.applicantKind,
-    joinToken: await issueMemberJoinApplicationToken(signingSecret, { ...payload, applicantUserId }, ttlSeconds),
+    ...(organization ? { organizationName: organization.name } : {}),
+    joinToken: await issueMemberJoinApplicationToken(
+      signingSecret,
+      { ...payload, applicantUserId, organization },
+      ttlSeconds,
+    ),
   };
 }
 
 export async function verifyMemberJoin(
   db: DatabaseLike,
-  input: { token: string; signingSecret: string; applicationTtlSeconds: number; sessionTtlHours: number },
+  input: {
+    token: string;
+    organizationId?: string;
+    organizationName?: string;
+    domain?: string;
+    signingSecret: string;
+    applicationTtlSeconds: number;
+    sessionTtlHours: number;
+  },
 ): Promise<
   | MemberJoinVerifyResponse
   | {
@@ -50,15 +74,106 @@ export async function verifyMemberJoin(
   const capability = await verifyMemberJoinVerificationToken(input.signingSecret, input.token);
   // A valid mailbox proof can show sign-in guidance even if a previous visit
   // already consumed the join link. It must never mint another session.
-  const observed = await readJoinVerification(db, capability.email, capability.capabilityId);
+  if (input.organizationId && input.organizationName)
+    throw new AppError(422, "IDENTITY_ORGANIZATION_RESOLVED", "Choose an organization or add one.");
+  const observed = await readJoinVerification(db, capability.email, capability.capabilityId, input.organizationId, {
+    domain: input.domain,
+    organizationName: input.organizationName,
+  });
   if (observed.existingMembership) return { status: "already_member" };
   if (observed.consumed) {
     throw new AppError(409, "MEMBER_JOIN_LINK_USED", "Membership verification link already used");
   }
+  if (observed.openApplication.own) {
+    const open = await resolveOpenJoinApplication(input.signingSecret, observed.openApplication);
+    if (open?.kind === "own") return { status: "application_in_progress", statusPath: open.statusPath };
+  }
+  const facts = observed.affiliation?.basis.facts;
+  const organizations = facts
+    ? observed.affiliation!.basis.organizations.filter(
+        (organization) => resolveDomainOrganization(facts, { organizationId: organization.id }).kind === "organization",
+      )
+    : [];
+  if (input.organizationName) {
+    if (!input.domain || !observed.affiliation || capability.applicantKind !== "organization")
+      throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Confirm the organization and email domain again.");
+    if (
+      observed.affiliation.basis.organizations.some(
+        (organization) => organization.normalized_name === normalizeOrgName(input.organizationName!),
+      )
+    )
+      throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose the existing organization instead.");
+    if (
+      observed.affiliation.basis.claims.some(
+        (claim) =>
+          claim.applicationId &&
+          claim.applicationName &&
+          normalizeOrgName(claim.applicationName) === normalizeOrgName(input.organizationName!),
+      )
+    )
+      return { status: "organization_application_in_progress" };
+    const open = await resolveOpenJoinApplication(input.signingSecret, observed.openApplication);
+    if (open?.kind === "own") return { status: "application_in_progress", statusPath: open.statusPath };
+    return issueApplicationContinuation(
+      input.signingSecret,
+      capability,
+      input.applicationTtlSeconds,
+      provedMailboxUserId(observed.ownership),
+      {
+        name: input.organizationName,
+        domain: observed.affiliation.basis.domain,
+        claimIds: observed.affiliation.basis.claims.map((claim) => claim.id),
+        pendingApplications: observed.affiliation.basis.claims
+          .filter((claim) => claim.applicationId)
+          .map((claim) => ({ id: claim.applicationId!, updatedAt: claim.applicationUpdatedAt! })),
+      },
+    );
+  }
+  if (input.organizationId && !organizations.some((organization) => organization.id === input.organizationId))
+    throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose an organization from the updated list.");
+  const affiliationPreview = observed.affiliation
+    ? verifiedAffiliationPreview(observed.affiliation.basis, observed.affiliation.address, {
+        pendingApplicationReview: true,
+      })
+    : null;
+  if (
+    facts &&
+    affiliationPreview &&
+    !input.organizationId &&
+    (organizations.length > 0 ||
+      input.domain ||
+      (capability.applicantKind === "organization" &&
+        (facts.heldByApplication || affiliationPreview.domains.length > 1)))
+  ) {
+    return {
+      status: "organization_selection_required",
+      domain: observed.affiliation!.basis.domain,
+      affiliation: affiliationPreview,
+      organizations: organizations.map(({ id, name }) => ({ id, name })),
+    };
+  }
+  if (facts && !input.organizationId && resolveDomainOrganization(facts).kind === "ambiguous")
+    return { status: "support_required" };
   const domain = observed.claim?.domain ?? workEmailDomain(capability.email) ?? emailDomainOf(capability.email);
   const provedUserId = provedMailboxUserId(observed.ownership);
   const claimedMember = observed.member;
   if (!claimedMember) {
+    if (input.organizationId) {
+      const selected = organizations.find((organization) => organization.id === input.organizationId);
+      if (!selected || capability.applicantKind !== "organization" || !observed.affiliation)
+        return { status: "support_required" };
+      const open = await resolveOpenJoinApplication(input.signingSecret, observed.openApplication);
+      if (open?.kind === "own") return { status: "application_in_progress", statusPath: open.statusPath };
+      return issueApplicationContinuation(input.signingSecret, capability, input.applicationTtlSeconds, provedUserId, {
+        id: selected.id,
+        name: selected.name,
+        domain: observed.affiliation.basis.domain,
+        claimIds: observed.affiliation.basis.claims.map((claim) => claim.id),
+        pendingApplications: observed.affiliation.basis.claims
+          .filter((claim) => claim.applicationId)
+          .map((claim) => ({ id: claim.applicationId!, updatedAt: claim.applicationUpdatedAt! })),
+      });
+    }
     const open = await resolveOpenJoinApplication(input.signingSecret, observed.openApplication);
     if (open?.kind === "own") return { status: "application_in_progress", statusPath: open.statusPath };
     if (open?.kind === "organization" && capability.applicantKind === "organization") {
@@ -88,7 +203,7 @@ export async function verifyMemberJoin(
     },
     {
       domain,
-      member: observed.claim?.application_id ? null : { id: claimedMember.member_id },
+      member: { id: claimedMember.member_id },
       person: observed.person,
       address: observed.address,
       creation: observed.creation,
@@ -106,6 +221,19 @@ export async function verifyMemberJoin(
         method: "magic_link",
         verifiedAt,
       }),
+      ...(organizations.length === 1
+        ? [
+            prepareAuthorizationGuard(
+              db,
+              verifiedEmailDomainResolutionEvidence(
+                domain,
+                claimedMember.organization_id,
+                true,
+                Boolean(facts?.heldByApplication),
+              ),
+            ),
+          ]
+        : []),
       ...identity.statements,
       prepareAuditLog(
         db,
@@ -142,6 +270,8 @@ export async function verifyMemberJoin(
     member = projection.decode(results.slice(-projection.statements.length));
   } catch (error) {
     if (isEmailReservationConflict(error)) return { status: "support_required" };
+    if (isAuthorizationGuardFailure(error))
+      throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose an organization from the updated list.");
     if (
       error instanceof Error &&
       (error.message.includes("uq_audit_log_idempotency_key") || error.message.includes("audit_log.idempotency_key"))

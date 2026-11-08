@@ -1,10 +1,13 @@
 import { protectsPublicAction } from "./abuse-protection";
 import { z } from "zod";
-import { normalizedEmailSchema } from "./api-common";
+import { normalizedEmailSchema, organizationNameSchema } from "./api-common";
 import { sameOriginPathSchema } from "./urls";
 import { authMemberSchema } from "./member-auth";
 import { publicOperation } from "./route-contract";
 import { screensWorkEmailDomain, workEmailStepSchema } from "./work-email";
+import { databaseIdSchema } from "./identifiers";
+import { emailDomainNameSchema } from "./email-domains";
+import { identityAffiliationPreviewResponseSchema } from "./identity-affiliation";
 
 export const memberJoinApplicantKindSchema = z.enum(["organization", "individual"]);
 export type MemberJoinApplicantKind = z.infer<typeof memberJoinApplicantKindSchema>;
@@ -14,12 +17,18 @@ export const memberJoinStartSchema = workEmailStepSchema;
 
 export const memberJoinStartResponseSchema = z.object({ status: z.literal("verification_sent") });
 
-export const memberJoinVerifySchema = z.object({ token: z.string().min(32).max(1024) });
+export const memberJoinVerifySchema = z.object({
+  token: z.string().min(32).max(1024),
+  organizationId: databaseIdSchema.optional(),
+  organizationName: organizationNameSchema.optional(),
+  domain: emailDomainNameSchema.optional(),
+});
 export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("application_ready"),
     applicantEmail: normalizedEmailSchema,
     applicantKind: memberJoinApplicantKindSchema,
+    organizationName: organizationNameSchema.optional(),
     joinToken: z.string().min(32).max(1024),
   }),
   z.object({
@@ -28,6 +37,19 @@ export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
     member: authMemberSchema,
   }),
   z.object({ status: z.literal("support_required") }),
+  z.object({
+    status: z.literal("organization_selection_required"),
+    domain: emailDomainNameSchema,
+    affiliation: identityAffiliationPreviewResponseSchema,
+    organizations: z
+      .array(
+        z.object({
+          id: databaseIdSchema,
+          name: z.string(),
+        }),
+      )
+      .max(256),
+  }),
   z.object({ status: z.literal("already_member") }),
   /** The proved address already has an open application; the path is a status-only link to it. */
   z.object({ status: z.literal("application_in_progress"), statusPath: sameOriginPathSchema }),

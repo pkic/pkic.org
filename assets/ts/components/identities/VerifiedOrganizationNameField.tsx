@@ -1,5 +1,4 @@
 /** The same verified-domain organization field in the direct form and the add dialog. */
-import { REGISTRATION_ORGANIZATION_COPY } from "../../../shared/email-first-copy";
 import type { FieldPresentation } from "../../hooks/useContractForm";
 import { Field } from "../../ui/Field";
 import { TextInput } from "../../ui/TextControl";
@@ -25,9 +24,9 @@ export function VerifiedOrganizationNameField({
       required
       help={
         reviewRequired
-          ? REGISTRATION_ORGANIZATION_COPY.pendingReviewHelp
+          ? `This organization will be linked to ${domain}. If it already has a pending application, its affiliation requires review.`
           : domain
-            ? `This organization will be associated with your verified email domain ${domain}.`
+            ? `This organization will be linked to your verified email domain ${domain}.`
             : undefined
       }
       {...validation}

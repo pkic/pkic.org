@@ -33,7 +33,6 @@ import {
 } from "./transition-guard";
 import { prepareVerifyPrimaryEmailStatements } from "../email-verification";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
-import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
 
 export interface PreparedRegistrationConfirmation {
   stage: "confirmed";
@@ -402,7 +401,6 @@ export async function confirmRegistrationByToken(
       [prepared.registration.id],
     );
     if (!registration) throw new AppError(500, "REGISTRATION_CONFIRM_FAILED", "Registration update failed");
-    if (!prepared.affiliationConfirmed) await linkVerifiedAddressToDomainOrganization(db, prepared.verifiedAddress);
     return { registration, manageToken: prepared.manageToken };
   }
   throw new AppError(409, "INVITE_CHANGED", "Linked invite state changed; please retry confirmation");

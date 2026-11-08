@@ -1,14 +1,6 @@
 /**
- * A domain claim reaches the people who verified an address on it earlier.
- *
- * Claiming a domain opens one link run. Each pass walks the people with a
- * verified address on the domain in user-id order, after the run's cursor,
- * and hands each one to the same rule a fresh verification uses
- * (`linkVerifiedAddressToDomainOrganization`): the organization is
- * joined, audited as a system decision. The claim
- * runs the first pass at once; the `organization_domain_linking` scheduled
- * job finishes larger domains in bounded chunks and can resume after any
- * failure. A run whose claim was released or moved simply ends.
+ * Finish existing domain-link runs without automatically affiliating people.
+ * A verified address supports an organization offer; the person must choose.
  */
 import { all, first } from "../../db/queries";
 import { hasD1QueryCapacity, type D1QueryBudget } from "../../db/query-budget";
@@ -16,15 +8,14 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
-import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
-import { getOrganizationDomainClaim } from "../membership/organization-domain-claims";
 import { hostWithinDomainSql } from "../../email-domains/sql";
 import { requestJobWake } from "../scheduled-jobs/dispatcher";
+import { domainOwnershipFactMatchesSql, FACT_ORGANIZATION } from "../identities/verified-email-domain";
 
 /** People examined per pass of one run. */
 export const DOMAIN_LINK_CHUNK = 10;
-/** Reserve canonical activation, permission guards, group reconciliation, audit, and outbox statements. */
-const QUERIES_PER_PERSON = 60;
+/** One read and one completion batch per previously scheduled run. */
+const QUERIES_PER_RUN = 2;
 const RUNS_PER_JOB_PASS = 4;
 
 /**
@@ -56,20 +47,20 @@ const CANDIDATES_SQL = `WITH addresses AS (
      GROUP BY user_id
   )`;
 
-/** How many verified people a claim would automatically affiliate. */
+/** A claim never automatically affiliates verified people. */
 export async function previewDomainLinking(
   db: DatabaseLike,
   organizationId: string,
   domain: string,
-): Promise<{ peopleToLink: number }> {
-  const count = await first<{ count: number }>(db, `${CANDIDATES_SQL} SELECT COUNT(*) AS count FROM candidates`, [
-    domain,
-    domain,
-    organizationId,
-    organizationId,
-    domain,
-  ]);
-  return { peopleToLink: Number(count?.count ?? 0) };
+): Promise<{ peopleToLink: number; shared: boolean }> {
+  const count = await first<{ count: number; shared: number }>(
+    db,
+    `${CANDIDATES_SQL}
+    SELECT COUNT(*) AS count, EXISTS (SELECT 1 FROM identities fact WHERE fact.organization_id IS NOT NULL
+      AND ${domainOwnershipFactMatchesSql()} AND ${FACT_ORGANIZATION} IS NOT ?) AS shared FROM candidates`,
+    [domain, domain, organizationId, organizationId, domain, domain, domain, organizationId],
+  );
+  return { peopleToLink: 0, shared: Boolean(count?.shared) };
 }
 
 /** Opens the link run in the claim's own command. */
@@ -117,11 +108,11 @@ function prepareRunCompletion(db: DatabaseLike, run: LinkRun, at: string, reason
   ];
 }
 
-/** One bounded pass of a run; returns whether the run is complete. */
+/** Retire a previously scheduled run without making an affiliation decision. */
 export async function advanceDomainLinkRun(
   db: DatabaseLike,
   runId: string,
-  limit = DOMAIN_LINK_CHUNK,
+  _limit = DOMAIN_LINK_CHUNK,
 ): Promise<{ complete: boolean; examined: number; linked: number }> {
   const run = await first<LinkRun>(
     db,
@@ -130,49 +121,8 @@ export async function advanceDomainLinkRun(
     [runId],
   );
   if (!run) return { complete: true, examined: 0, linked: 0 };
-  const claim = await getOrganizationDomainClaim(db, run.domain);
-  if (claim?.organizationId !== run.organization_id) {
-    await db.batch(prepareRunCompletion(db, run, nowIso(), "claim_released"));
-    return { complete: true, examined: 0, linked: 0 };
-  }
-  const people = await all<{ user_id: string; normalized_email: string }>(
-    db,
-    `${CANDIDATES_SQL} SELECT user_id, normalized_email FROM candidates
-      WHERE user_id > ? ORDER BY user_id LIMIT ?`,
-    [run.domain, run.domain, run.organization_id, run.organization_id, run.domain, run.cursor_user_id ?? "", limit],
-  );
-  let linked = 0;
-  for (const person of people) {
-    const joined = await linkVerifiedAddressToDomainOrganization(db, {
-      userId: person.user_id,
-      normalizedEmail: person.normalized_email,
-      systemDecision: {
-        action: "organization_domain_person_linked",
-        details: { runId: run.id, domain: run.domain },
-      },
-      // A subdomain address another organization claims more specifically stays with that claim.
-      onlyOrganizationId: run.organization_id,
-    });
-    if (joined) linked += 1;
-  }
-  const at = nowIso();
-  const advanced: LinkRun = {
-    ...run,
-    cursor_user_id: people.at(-1)?.user_id ?? run.cursor_user_id,
-    examined: run.examined + people.length,
-    linked: run.linked + linked,
-  };
-  const complete = people.length < limit;
-  await db.batch([
-    db
-      .prepare(
-        `UPDATE organization_domain_link_runs SET cursor_user_id = ?, examined = ?, linked = ?, updated_at = ?
-          WHERE id = ? AND completed_at IS NULL`,
-      )
-      .bind(advanced.cursor_user_id, advanced.examined, advanced.linked, at, run.id),
-    ...(complete ? prepareRunCompletion(db, advanced, at, "all_people_examined") : []),
-  ]);
-  return { complete, examined: people.length, linked };
+  await db.batch(prepareRunCompletion(db, run, nowIso(), "user_confirmation_required"));
+  return { complete: true, examined: 0, linked: 0 };
 }
 
 /** Runs the claim's first pass at once and leaves the rest to the scheduler. */
@@ -197,7 +147,7 @@ export async function runDomainLinking(
   );
   const summary = { runs: 0, examined: 0, linked: 0, budgetLimited: false, remaining: false };
   for (const run of runs) {
-    if (!hasD1QueryCapacity(budget, DOMAIN_LINK_CHUNK * QUERIES_PER_PERSON)) {
+    if (!hasD1QueryCapacity(budget, QUERIES_PER_RUN)) {
       summary.budgetLimited = true;
       break;
     }

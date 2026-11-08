@@ -112,7 +112,8 @@ test("verified approved-domain registration affiliates once and an organization 
         await first.fill("Synthetic");
         await last.fill("Attendee");
         const chooser = formPage.getByRole("combobox", { name: /^Organization/ });
-        await expect(chooser).toHaveValue(ownerIdentity.organizationId!);
+        await expect(chooser).toHaveValue("");
+        await chooser.selectOption(ownerIdentity.organizationId!);
         await formPage.setViewportSize({ width: 1280, height: 900 });
         await formPage.screenshot({ path: testInfo.outputPath("public-organization-choice-desktop.png") });
         await formPage.setViewportSize({ width: 375, height: 812 });
@@ -134,7 +135,7 @@ test("verified approved-domain registration affiliates once and an organization 
       },
     });
     expect(initial.request.identityId).toBeUndefined();
-    // The verified domain supplies the default; the registrant sees and confirms the organization.
+    // The registrant explicitly confirms the organization on the verified domain.
     expect(initial.result.status).toBe("registered");
     await expect(attendee.getByRole("heading", { name: /You're registered/i })).toBeVisible();
     const confirmedEmail = await waitForCapturedEmail(email, "registration is confirmed", { since });
@@ -332,9 +333,7 @@ test("a proved work address requires organization confirmation and an incorrect 
     await dialog.getByRole("button", { name: "Check verification", exact: true }).click();
     if (index === 1) {
       const organization = dialog.getByRole("combobox", { name: /^Organization/ });
-      await expect(organization).toHaveValue(
-        before.identities.find((identity) => identity.organizationName === names[0])!.organizationId!,
-      );
+      await expect(organization).toHaveValue("");
     }
     if (index === 0) {
       await expect(dialog.getByRole("combobox", { name: /^Organization/ })).toHaveCount(0);
@@ -351,8 +350,8 @@ test("a proved work address requires organization confirmation and an incorrect 
       await dialog.getByRole("button", { name: "Add organization", exact: true }).click();
       const addOrganization = page.getByRole("dialog", { name: "Add organization", exact: true });
       await addOrganization.getByRole("textbox", { name: /^Organization name/ }).fill(name);
-      const scope = addOrganization.getByRole("combobox", { name: "Email domain", exact: true });
-      await expect(scope).toHaveValue(`us.${domain}`);
+      const scope = addOrganization.getByRole("combobox", { name: /^Email domain/ });
+      await expect(scope).toHaveValue("");
       await scope.selectOption(domain);
       await expect(addOrganization.getByRole("textbox", { name: /^Organization name/ })).toHaveValue(name);
       await scope.selectOption(`us.${domain}`);
@@ -506,7 +505,7 @@ test("a pending membership domain can register while affiliation awaits review",
     organization: name,
     onContactReady: async (contact) => {
       await expect(contact.getByRole("textbox", { name: /^Organization name/ })).toHaveAccessibleDescription(
-        REGISTRATION_ORGANIZATION_COPY.pendingReviewHelp,
+        /linked to .*pending application.*review/i,
       );
       for (const [width, height, device] of [
         [1280, 900, "desktop"],

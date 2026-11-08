@@ -88,6 +88,62 @@ async function claim(domain: string, organizationId: string) {
     .run();
 }
 describe("email-first own representation", () => {
+  it.each([false, true])("claims the verified domain for a new organization (already claimed: %s)", async (shared) => {
+    const p = await person("person@shared-claim.test");
+    const first = shared ? await insertOrganization(env.DB, "Original Organization") : null;
+    if (first) await claim("shared-claim.test", first);
+    const response = await create(p, await prepare(p, false, "New Organization", "shared-claim.test"));
+    expect(response.status, await response.clone().text()).toBe(201);
+    const identity = identityMutationResponseSchema.parse(await response.json());
+    const organizationId = await env.DB.prepare("SELECT organization_id FROM identities WHERE id=?")
+      .bind(identity.identityId)
+      .first("organization_id");
+    const claims = await env.DB.prepare("SELECT organization_id FROM organization_domain_claims WHERE domain=?")
+      .bind("shared-claim.test")
+      .all<{ organization_id: string }>();
+    expect(claims.results.map((item) => item.organization_id).sort()).toEqual(
+      [organizationId, ...(first ? [first] : [])].sort(),
+    );
+  });
+  it.each(["first", "second"])("lets a verified user choose the %s organization on a shared domain", async (choice) => {
+    const p = await person();
+    const first = await insertOrganization(env.DB, "First Organization");
+    const second = await insertOrganization(env.DB, "Second Organization");
+    const claimId = crypto.randomUUID();
+    const at = nowIso();
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
+        VALUES (?,'northstar-work.test',?,?,?)`).bind(claimId, first, at, at),
+      env.DB.prepare(
+        `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
+      ).bind(crypto.randomUUID(), claimId, second, at, at),
+    ]);
+    const offer = await callApi(env, "/api/v1/users/current/identities/offer", {
+      headers: { authorization: `Bearer ${p.token}` },
+    });
+    expect(await offer.json()).toMatchObject({ offer: { kind: "choose_organization", domain: "northstar-work.test" } });
+    const resolvedResponse = await preview(p, { phase: "resolve", email: p.email, emailId: null });
+    expect(resolvedResponse.status, await resolvedResponse.clone().text()).toBe(200);
+    const resolved = identityAffiliationPreviewResponseSchema.parse(await resolvedResponse.json());
+    expect(resolved.organization).toBeNull();
+    expect(resolved.organizations.map((item) => item.id).sort()).toEqual([first, second].sort());
+    const organizationId = choice === "first" ? first : second;
+    const preparedResponse = await preview(p, {
+      phase: "prepare",
+      email: p.email,
+      emailId: null,
+      organizationId,
+      jobTitle: "Engineer",
+    });
+    expect(preparedResponse.status, await preparedResponse.clone().text()).toBe(200);
+    const prepared = identityAffiliationPreviewResponseSchema.parse(await preparedResponse.json());
+    const created = await create(p, prepared.contextToken!);
+    expect(created.status, await created.clone().text()).toBe(201);
+    const result = identityMutationResponseSchema.parse(await created.json());
+    expect(
+      await env.DB.prepare("SELECT organization_id FROM identities WHERE id=?").bind(result.identityId).first(),
+    ).toEqual({ organization_id: organizationId });
+  });
   it("creates a missing personal identity only for a verified address owned by the signed-in person", async () => {
     const p = await person("personal@gmail.com");
     await env.DB.prepare("DELETE FROM identities WHERE user_id=?").bind(p.userId).run();
@@ -193,7 +249,7 @@ describe("email-first own representation", () => {
     const second = await create(colleague, await prepare(colleague, true));
     expect(second.status, await second.clone().text()).toBe(201);
     expect((await env.DB.prepare("SELECT id FROM organizations").all()).results).toHaveLength(1);
-    expect((await env.DB.prepare("SELECT id FROM organization_domain_claims").all()).results).toHaveLength(0);
+    expect((await env.DB.prepare("SELECT id FROM organization_domain_claims").all()).results).toHaveLength(1);
     expect((await env.DB.prepare("SELECT id FROM members").all()).results).toHaveLength(0);
   });
   it.each([
@@ -235,6 +291,30 @@ describe("email-first own representation", () => {
 });
 
 describe("confirmed organizations sharing a work domain", () => {
+  it("rejects a prepared choice if another organization claims the domain before it is saved", async () => {
+    const p = await person();
+    const first = await insertOrganization(env.DB, "First Organization");
+    const second = await insertOrganization(env.DB, "Second Organization");
+    await claim("northstar-work.test", first);
+    const contextToken = await prepare(p, true);
+    const rootId = await env.DB.prepare("SELECT id FROM organization_domain_claims WHERE domain=?")
+      .bind("northstar-work.test")
+      .first<string>("id");
+    await env.DB.prepare(
+      `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
+    )
+      .bind(crypto.randomUUID(), rootId, second, nowIso(), nowIso())
+      .run();
+    const response = await create(p, contextToken);
+    expect(response.status).toBe(409);
+    expect(
+      (
+        await env.DB.prepare("SELECT id FROM identities WHERE user_id=? AND organization_id IS NOT NULL")
+          .bind(p.userId)
+          .all()
+      ).results,
+    ).toEqual([]);
+  });
   it("completes a missing job title on the canonical existing representation", async () => {
     const p = await person();
     const made = await create(p, await prepare(p, false, "Existing representation"));
@@ -247,7 +327,7 @@ describe("confirmed organizations sharing a work domain", () => {
       await env.DB.prepare("SELECT job_title FROM identities WHERE id=?").bind(identityId).first("job_title"),
     ).toBe("Security engineer");
   });
-  it("creates a separate organization and lets a colleague explicitly choose it without a domain claim", async () => {
+  it("creates a separate organization and lets a colleague explicitly choose it on the shared domain", async () => {
     const first = await person();
     const firstCreated = await create(first, await prepare(first, false, "Northstar Parent"));
     expect(firstCreated.status).toBe(201);
@@ -281,7 +361,7 @@ describe("confirmed organizations sharing a work domain", () => {
     expect(
       await env.DB.prepare("SELECT organization_id,job_title FROM identities WHERE id=?").bind(identityId).first(),
     ).toEqual({ organization_id: subsidiary.id, job_title: "Research engineer" });
-    expect((await env.DB.prepare("SELECT id FROM organization_domain_claims").all()).results).toHaveLength(0);
+    expect((await env.DB.prepare("SELECT id FROM organization_domain_claims").all()).results).toHaveLength(2);
     expect((await env.DB.prepare("SELECT id FROM members").all()).results).toHaveLength(0);
   });
   it("allows another named organization beside a claimed domain without changing its owner", async () => {
@@ -367,6 +447,64 @@ describe("removing an incorrect representation", () => {
 });
 
 describe("verified subdomain organization mappings", () => {
+  it("links a different organization to the same domain as a pending application", async () => {
+    const applicationId = await seedMemberApplication({
+      applicantEmail: "owner@pending-shared.test",
+      organizationDomain: "pending-shared.test",
+      organizationName: "Pending Organization",
+    });
+    const p = await person("person@pending-shared.test");
+    const result = await create(p, await prepare(p, false, "Different Organization", "pending-shared.test"));
+    expect(result.status, await result.clone().text()).toBe(201);
+    expect(
+      await env.DB.prepare("SELECT application_id FROM organization_domain_claims WHERE domain=?")
+        .bind("pending-shared.test")
+        .first("application_id"),
+    ).toBe(applicationId);
+    expect(
+      await env.DB.prepare(`SELECT organization.name FROM organization_domain_claims claim
+      JOIN organizations organization ON organization.id=claim.organization_id WHERE claim.domain=?`)
+        .bind("pending-shared.test")
+        .first("name"),
+    ).toBe("Different Organization");
+  });
+
+  it("rejects a new organization if a pending application changes after preparation", async () => {
+    const applicationId = await seedMemberApplication({
+      applicantEmail: "owner@pending-race.test",
+      organizationDomain: "pending-race.test",
+      organizationName: "Pending Organization",
+    });
+    const p = await person("person@pending-race.test");
+    const context = await prepare(p, false, "Different Organization", "pending-race.test");
+    await env.DB.prepare("UPDATE member_applications SET organization_name=?,updated_at=? WHERE id=?")
+      .bind("Different Organization", "2099-01-01T00:00:00.000Z", applicationId)
+      .run();
+    expect((await create(p, context)).status).toBe(409);
+    expect(
+      await env.DB.prepare("SELECT id FROM organizations WHERE name=?").bind("Different Organization").first(),
+    ).toBeNull();
+  });
+  it("shares the parent domain when the user chooses it instead of the subdomain", async () => {
+    const parent = await insertOrganization(env.DB, "Parent Organization");
+    await claim("parent-choice.test", parent);
+    const p = await person("person@division.parent-choice.test");
+    const result = await create(p, await prepare(p, false, "Other Organization", "parent-choice.test"));
+    expect(result.status, await result.clone().text()).toBe(201);
+    const { identityId } = identityMutationResponseSchema.parse(await result.json());
+    const organizationId = await env.DB.prepare("SELECT organization_id FROM identities WHERE id=?")
+      .bind(identityId)
+      .first("organization_id");
+    const claims = await env.DB.prepare("SELECT organization_id FROM organization_domain_claims WHERE domain=?")
+      .bind("parent-choice.test")
+      .all<{ organization_id: string }>();
+    expect(claims.results.map((item) => item.organization_id).sort()).toEqual([parent, organizationId].sort());
+    expect(
+      await env.DB.prepare("SELECT id FROM organization_domain_claims WHERE domain=?")
+        .bind("division.parent-choice.test")
+        .first(),
+    ).toBeNull();
+  });
   it("lets a verified user map an unclaimed subdomain while preserving the parent and more specific claims", async () => {
     const parent = await insertOrganization(env.DB, "IBM");
     const lab = await insertOrganization(env.DB, "IBM Laboratory");
@@ -444,7 +582,7 @@ describe("verified subdomain organization mappings", () => {
     expect(await env.DB.prepare("SELECT count(*) AS count FROM organization_domain_claims").first("count")).toBe(0);
     expect(await env.DB.prepare("SELECT id FROM organizations WHERE name='Revoked Division'").first("id")).toBeNull();
   });
-  it("does not let a subdomain bypass a pending parent application", async () => {
+  it("allows a different organization to claim its subdomain alongside a pending parent application", async () => {
     await seedMemberApplication({
       applicantEmail: "applicant@held-company.test",
       organizationDomain: "held-company.test",
@@ -459,8 +597,15 @@ describe("verified subdomain organization mappings", () => {
       organizationName: "Held Subsidiary",
       jobTitle: "Engineer",
     });
-    expect(response.status, await response.clone().text()).toBe(409);
-    expect(await env.DB.prepare("SELECT id FROM organizations WHERE name='Held Subsidiary'").first("id")).toBeNull();
+    expect(response.status, await response.clone().text()).toBe(200);
+    const prepared = identityAffiliationPreviewResponseSchema.parse(await response.json());
+    const created = await create(p, prepared.contextToken!);
+    expect(created.status, await created.clone().text()).toBe(201);
+    expect(
+      await env.DB.prepare("SELECT domain FROM organization_domain_claims WHERE domain=?")
+        .bind("us.held-company.test")
+        .first("domain"),
+    ).toBe("us.held-company.test");
   });
   it("rolls back a prepared mapping if a parent application holds the domain before commit", async () => {
     const p = await person("person@us.held-company.test");
@@ -526,17 +671,24 @@ describe("verified subdomain organization mappings", () => {
         .first("id"),
     ).toBeNull();
   });
-  it("does not establish a future mapping without an explicit domain selection", async () => {
+  it("requires an explicit domain selection when creating an organization for a subdomain", async () => {
     const p = await person("person@us.explicit-company.test");
-    const result = await create(p, await prepare(p, false, "Explicit Company"));
-    expect(result.status, await result.clone().text()).toBe(201);
+    const result = await preview(p, {
+      phase: "prepare",
+      email: p.email,
+      emailId: null,
+      organizationId: null,
+      organizationName: "Explicit Company",
+      jobTitle: "Engineer",
+    });
+    expect(result.status).toBe(422);
     expect(
       await env.DB.prepare(
         "SELECT domain FROM organization_domain_claims WHERE domain='us.explicit-company.test'",
       ).first("domain"),
     ).toBeNull();
   });
-  it("keeps the mapped organization as the default while offering other organizations on that exact subdomain", async () => {
+  it("requires a choice when another organization is confirmed on the mapped subdomain", async () => {
     const first = await person("first@us.choice-company.test");
     const created = identityMutationResponseSchema.parse(
       await (await create(first, await prepare(first, false, "Default US Company", "us.choice-company.test"))).json(),
@@ -551,7 +703,7 @@ describe("verified subdomain organization mappings", () => {
     const third = await person("third@us.choice-company.test");
     const response = await preview(third, { phase: "resolve", email: third.email, emailId: null });
     const choices = identityAffiliationPreviewResponseSchema.parse(await response.json());
-    expect(choices.organization).toEqual({ id: defaultId, name: "Default US Company" });
+    expect(choices.organization).toBeNull();
     expect(choices.organizations.map((organization) => organization.name).sort()).toEqual([
       "Default US Company",
       "Other US Company",

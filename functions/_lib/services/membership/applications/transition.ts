@@ -224,7 +224,7 @@ export function prepareApplicationStageTransition(
 
   const outboxIds: string[] = [];
   if (params.toStage === "declined" || params.toStage === "withdrawn") {
-    statements.push(prepareReleaseApplicationDomainClaim(db, application.id));
+    statements.push(...prepareReleaseApplicationDomainClaim(db, application.id));
   }
   if (email) {
     const preparedEmail = prepareQueueEmailStatement(db, email, now);

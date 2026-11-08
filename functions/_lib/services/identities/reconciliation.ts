@@ -1,4 +1,8 @@
-import { observedOrganizationMembershipEvidence, verifiedDomainIdentityEvidence } from "./affiliation-evidence";
+import {
+  observedOrganizationMembershipEvidence,
+  verifiedDomainIdentityEvidence,
+  observedDomainClaimsEvidence,
+} from "./affiliation-evidence";
 import { prepareIdentityProfileUpdateStatement } from "./profile-statement";
 import { prepareOrganizationIdentityPublication } from "./lifecycle-publication";
 import { preparePendingIdentityActivation } from "./pending-activation";
@@ -201,12 +205,28 @@ export async function prepareVerifiedOrganizationAffiliation(
   identityId: string;
   organizationId: string;
   memberId: string | null;
+  organizationWasCreated: boolean;
   statements: StatementLike[];
   representation: IdentityRepresentation;
 }> {
   if (input.organizationChoice && !observed)
     throw new AppError(409, "IDENTITY_CONTEXT_REQUIRED", "Confirm the organization details again.");
   const confirmedSelection = Boolean(input.organizationChoice);
+  if (
+    confirmedSelection &&
+    input.organizationName &&
+    observed?.claims.some(
+      (claim) =>
+        claim.applicationId &&
+        claim.applicationName &&
+        normalizeOrgName(claim.applicationName) === normalizeOrgName(input.organizationName!),
+    )
+  )
+    throw new AppError(
+      409,
+      "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED",
+      "This organization has a pending membership application.",
+    );
   const normalizedEmail = normalizeEmail(input.normalizedEmail);
   const domain = observed
     ? requireWorkOrganizationDomain(observed.domain)
@@ -217,7 +237,11 @@ export async function prepareVerifiedOrganizationAffiliation(
             AND EXISTS (${address.sql}) AND EXISTS (${input.proofEvidence.sql})`,
     bindings: [input.userId, ...address.bindings, ...input.proofEvidence.bindings],
   };
-  const claim = observed ? observed.claim : await getOrganizationDomainClaim(db, domain);
+  const claim = observed
+    ? (observed.claims.find(
+        (item) => item.domain === domain && item.organizationId === input.organizationChoice?.organizationId,
+      ) ?? observed.claim)
+    : await getOrganizationDomainClaim(db, domain);
   if (
     !confirmedSelection &&
     claim?.organizationId &&
@@ -313,6 +337,7 @@ export async function prepareVerifiedOrganizationAffiliation(
       identityId: existing.id,
       organizationId: organizationId!,
       memberId,
+      organizationWasCreated: false,
       representation: { organizationName: existing.organization_name, jobTitle: title },
       statements: [
         prepareAuthorizationGuard(db, {
@@ -379,7 +404,7 @@ export async function prepareVerifiedOrganizationAffiliation(
       ],
     };
   }
-  if (claim?.applicationId || (claim && !claim.organizationId)) {
+  if (!confirmedSelection && (claim?.applicationId || (claim && !claim.organizationId))) {
     throw new AppError(
       409,
       "ORGANIZATION_DOMAIN_IN_USE",
@@ -398,15 +423,13 @@ export async function prepareVerifiedOrganizationAffiliation(
     );
   }
   const statements: StatementLike[] = [];
-  if (confirmedSelection)
+  if (confirmedSelection) {
     statements.push(
-      prepareAuthorizationGuard(db, {
-        sql: `SELECT 1 WHERE (SELECT id FROM organization_domain_claims WHERE domain=?) IS ?
-        AND (SELECT organization_id FROM organization_domain_claims WHERE domain=?) IS ?
-        AND NOT EXISTS(SELECT 1 FROM organization_domain_claims WHERE domain=? AND application_id IS NOT NULL)`,
-        bindings: [domain, claim?.id ?? null, domain, claim?.organizationId ?? null, domain],
-      }),
+      ...observedDomainClaimsEvidence(normalizedEmail, observed!.claims).map((evidence) =>
+        prepareAuthorizationGuard(db, evidence),
+      ),
     );
+  }
   let organizationWasCreated = false;
   if (!organizationId) {
     if (!input.organizationName?.trim())
@@ -546,5 +569,12 @@ export async function prepareVerifiedOrganizationAffiliation(
     ...prepared.emailOwnership,
     ...prepareAutomaticGroupEnrollmentForUserStatements(db, input.userId, input.at),
   );
-  return { identityId: prepared.identityId, organizationId, memberId, statements, representation };
+  return {
+    identityId: prepared.identityId,
+    organizationId,
+    memberId,
+    organizationWasCreated,
+    statements,
+    representation,
+  };
 }

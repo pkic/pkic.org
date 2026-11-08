@@ -108,6 +108,37 @@ describe("merging a duplicate organization", () => {
     });
   }
 
+  it.each(["target", "source", "other"])(
+    "consolidates a shared domain when the primary claim belongs to %s",
+    async (primary) => {
+      const target = await insertOrganization(env.DB, "Merge Target");
+      const source = await insertOrganization(env.DB, "Merge Source");
+      const other = await insertOrganization(env.DB, "Another Organization");
+      const rootOrganization = primary === "target" ? target : primary === "source" ? source : other;
+      await claimDomain(rootOrganization, "shared-merge.example");
+      const rootId = await env.DB.prepare("SELECT id FROM organization_domain_claims WHERE domain=?")
+        .bind("shared-merge.example")
+        .first<string>("id");
+      const at = nowIso();
+      for (const id of [target, source].filter((id) => id !== rootOrganization))
+        await env.DB.prepare(
+          `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
+        )
+          .bind(crypto.randomUUID(), rootId, id, at, at)
+          .run();
+      const response = await merge(target, { sourceOrganizationId: source });
+      expect(response.status, await response.clone().text()).toBe(201);
+      const rows = await queryAll<{ organization_id: string }>(
+        env.DB,
+        "SELECT organization_id FROM organization_domain_claims WHERE domain=? ORDER BY organization_id",
+        ["shared-merge.example"],
+      );
+      expect(rows.map((row) => row.organization_id).sort()).toEqual(
+        (primary === "other" ? [target, other] : [target]).sort(),
+      );
+    },
+  );
+
   it.each([false, true])(
     "preserves staff-hidden visibility when a merge continues an identity (hidden=%s)",
     async (hidden) => {

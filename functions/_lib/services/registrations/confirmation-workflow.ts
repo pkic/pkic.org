@@ -13,7 +13,6 @@ import { firstReferralCodeQuerySql } from "../referral-code-projection";
 import { nowIso } from "../../utils/time";
 import type { RegistrationConfirmOrganization } from "../../../../assets/shared/schemas/registration";
 import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
-import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
 import { workEmailDomain } from "../../email-domains/classification";
 import { outboxIdForOperation } from "../../email/outbox-queue";
 
@@ -137,8 +136,6 @@ async function confirmRegistrationWithNotificationOnce(
     outboxId: await outboxIdForOperation(idempotencyKey),
   });
   await commitConfirmationIntent(db, prepared, email.statement);
-  // The proved address joins the organization its domain belongs to, when the shared rule links it automatically.
-  if (!prepared.affiliationConfirmed) await linkVerifiedAddressToDomainOrganization(db, prepared.verifiedAddress);
   // Its own atomic command after the confirmation: the committed confirmation is the mailbox proof,
   // and an organization that needs review never undoes the confirmation itself.
   const organizationOutcome = prepared.affiliationConfirmed

@@ -2,8 +2,8 @@
  * The one rule for which organization a verified email address belongs to.
  *
  * A verified work domain can support several explicitly confirmed organizations.
- * Automatic resolution remains conservative. The organization that holds
- * an approved claim on the domain owns it; without a claim, the one
+ * Automatic resolution remains conservative. A single approved claim may
+ * identify an organization; without a claim, the one
  * non-member organization people already reached through a verified address
  * on the domain (a derived domain) does. Free, consumer and disposable
  * domains say nothing about an employer, so an address there is always
@@ -37,8 +37,8 @@ export interface DerivedDomainFact extends DomainOrganizationCandidate {
 }
 
 export interface DomainOwnershipFacts {
-  /** The organization holding an approved claim on the domain. */
-  claimed: DomainOrganizationCandidate | null;
+  /** Organizations holding an approved claim on the domain. */
+  claimed: readonly DomainOrganizationCandidate[];
   /** A pending membership application holds the domain. */
   heldByApplication: boolean;
   /** Every organization a verified address on the domain already reached. */
@@ -59,17 +59,19 @@ export function resolveDomainOrganization(
   facts: DomainOwnershipFacts,
   choice?: { organizationId: string | null },
 ): DomainOrganizationResolution {
-  if (facts.heldByApplication) return { kind: "held" };
   if (choice) {
     if (choice.organizationId === null) return { kind: "none" };
-    if (facts.claimed?.organizationId === choice.organizationId)
-      return { kind: "organization", ...facts.claimed, via: "claim" };
+    const selectedClaim = facts.claimed.find((claim) => claim.organizationId === choice.organizationId);
+    if (selectedClaim) return { kind: "organization", ...selectedClaim, via: "claim" };
     const selected = facts.derived.find((fact) => fact.organizationId === choice.organizationId);
     return selected && selected.active && !selected.disputed && !selected.unknownProvenance && !selected.isMember
       ? { kind: "organization", organizationId: selected.organizationId, isMember: false, via: "derived" }
       : { kind: "ambiguous" };
   }
-  const claimed = facts.claimed;
+  if (facts.heldByApplication)
+    return facts.claimed.length || facts.derived.length ? { kind: "ambiguous" } : { kind: "held" };
+  if (facts.claimed.length > 1) return { kind: "ambiguous" };
+  const claimed = facts.claimed[0];
   if (claimed) {
     const elsewhere = facts.derived.some((fact) => fact.organizationId !== claimed.organizationId);
     return elsewhere

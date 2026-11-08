@@ -45,12 +45,14 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { prepareSitePublicationRequest } from "../site-publication-requests";
 import { firstFreeSlug, slugifyOr } from "../../../../assets/shared/slug";
 import { prepareExistingOrganizationAffiliation } from "./affiliation-reuse";
+import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 
 import { buildProvisioningUser, findProvisioningUser, type ProvisionIdentityInput } from "./provisioning-users";
 export type { ProvisionIdentityInput } from "./provisioning-users";
 
 export interface ProvisionMembershipInput extends ProvisioningGroupSelection {
   organizationName?: string | null;
+  organizationId?: string | null;
   website?: string | null;
   description?: string | null;
   /** The organization's own profile links (canonical links contract). Only applied when the organization is created here. */
@@ -219,6 +221,7 @@ async function buildProvisionIndividualMemberships(
 /** The organization's own fields — all this builder reads, membership aside. */
 export interface OrganizationRecordInput {
   organizationName?: string | null;
+  organizationId?: string | null;
   website?: string | null;
   description?: string | null;
   links?: string[] | null;
@@ -230,6 +233,24 @@ export async function buildResolveOrganizationStatements(
   now: string,
   observed?: { existingOrganizationId: string | null; takenSlugs: readonly string[] },
 ): Promise<{ organizationId: string; organizationWasCreated: boolean; statements: StatementLike[] }> {
+  if (input.organizationId) {
+    const organization = await first<{ id: string }>(
+      db,
+      "SELECT COALESCE(merged_into_organization_id,id) AS id FROM organizations WHERE id=?",
+      [input.organizationId],
+    );
+    if (!organization) throw new AppError(409, "ORGANIZATION_CHANGED", "The selected organization no longer exists.");
+    return {
+      organizationId: organization.id,
+      organizationWasCreated: false,
+      statements: [
+        prepareAuthorizationGuard(db, {
+          sql: "SELECT 1 FROM organizations WHERE id=? AND COALESCE(merged_into_organization_id,id)=?",
+          bindings: [input.organizationId, organization.id],
+        }),
+      ],
+    };
+  }
   const normalizedOrgName = normalizeOrgName(input.organizationName as string);
   // A merged organization's name keeps meaning the organization it was merged into.
   const existingOrg = observed
@@ -357,19 +378,21 @@ async function buildProvisionOrganizationTiedMemberships(
   statements.push(...orgStatements);
 
   if (input.organizationDomain) {
-    const domainStatement = input.domainClaimApplicationId
+    const domainStatements = input.domainClaimApplicationId
       ? await prepareTransferApplicationDomainClaim(db, {
           domain: input.organizationDomain,
           applicationId: input.domainClaimApplicationId,
           organizationId,
           now,
         })
-      : await prepareClaimDomainForOrganization(db, {
-          domain: input.organizationDomain,
-          organizationId,
-          now,
-        });
-    if (domainStatement) statements.push(domainStatement);
+      : [
+          await prepareClaimDomainForOrganization(db, {
+            domain: input.organizationDomain,
+            organizationId,
+            now,
+          }),
+        ];
+    for (const statement of domainStatements) if (statement) statements.push(statement);
   }
 
   const { aggregateId, statements: aggregateStatements } = await buildResolveOrCreateAggregateStatements(
