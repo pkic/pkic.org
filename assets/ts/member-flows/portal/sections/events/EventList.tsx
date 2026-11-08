@@ -2,7 +2,7 @@ import { EventCollectionCard, eventWhen } from "./EventCollectionCard";
 import { CollectionStatusLine } from "../../../../ui/CollectionCard";
 import { DiscoveryViewToggle, useDiscoveryView } from "../DiscoveryView";
 import { formatEventPlace } from "../../../../../shared/event-place";
-import { eventParticipantRecordPath } from "./event-participant-paths";
+import { eventRegistrationPath } from "./event-participant-paths";
 import { useRef } from "preact/hooks";
 import type { z } from "zod";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
@@ -51,17 +51,16 @@ function isAudienceEvent(event: EventRow): event is AudienceEventRow {
  * row also offers its owning workspace when this session can open it.
  */
 function workspaceActions(event: EventRow, navigate: (path: string) => void): MenuItem[] {
-  const registrationId = event.participation?.registrationId;
   const audienceActions: MenuItem[] = isAudienceEvent(event)
     ? [
         // The status row says where the viewer stands; the registration it
         // summarizes opens from here.
-        ...(registrationId
+        ...(event.participation?.registrationId
           ? [
               {
                 id: "registration",
                 label: "Open your registration",
-                onSelect: () => navigate(eventParticipantRecordPath(event.slug, "registration", registrationId)),
+                onSelect: () => navigate(eventRegistrationPath(event.slug)),
               },
             ]
           : []),

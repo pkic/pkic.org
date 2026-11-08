@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { registrationManageSchema, type RegistrationManageReadResponse } from "../../../shared/schemas/registration";
 import { useContractForm } from "../../hooks/useContractForm";
 import { Button } from "../../ui/Button";
-import { DayAttendancePicker, NOT_ATTENDING, ATTENDANCE_EDIT_LABEL } from "../DayAttendancePicker";
+import { DayAttendancePicker, fitsReadOnlyMatrix, NOT_ATTENDING, ATTENDANCE_EDIT_LABEL } from "../DayAttendancePicker";
 import { RegistrationDayStatusSummary } from "../RegistrationDayStatusSummary";
 import { registrationDays, type RegistrationDayView } from "./registration-day-changes";
 import { ReleaseSeatDialog, releasableDays } from "./ReleaseSeatDialog";
@@ -170,17 +170,7 @@ export function RegistrationDays({
         />
       ) : (
         <>
-          {data.registration.status === "registered" &&
-          !data.dayWaitlist.some(
-            (day) => day.status === "offered" || !data.dayAttendance.some((entry) => entry.dayDate === day.dayDate),
-          ) &&
-          data.dayAttendance.every((entry) =>
-            data.eventDays.some(
-              (day) =>
-                day.dayDate === entry.dayDate &&
-                day.attendanceOptions.some((option) => option.value === entry.attendanceType),
-            ),
-          ) ? (
+          {fitsReadOnlyMatrix(data) ? (
             <DayAttendancePicker
               days={data.eventDays}
               readOnly

@@ -42,7 +42,10 @@ export function groupRegistrationDays(
       : [];
   const pending = new Map(
     dayWaitlist
-      .filter((entry) => entry.status === "waiting" || entry.status === "offered" || entry.status === "expired")
+      .filter(
+        (entry): entry is typeof entry & { status: "waiting" | "offered" | "expired" } =>
+          entry.status === "waiting" || entry.status === "offered" || entry.status === "expired",
+      )
       .map((entry) => [entry.dayDate, entry]),
   );
   const groups = new Map<string, DayStatusGroup>();
@@ -70,11 +73,7 @@ export function groupRegistrationDays(
   }
   const selectedDates = new Set(dayAttendance.map((entry) => entry.dayDate));
   for (const [dayDate, queued] of pending) {
-    if (
-      !selectedDates.has(dayDate) &&
-      (queued.status === "waiting" || queued.status === "offered" || queued.status === "expired")
-    )
-      add(queued.status, null, null, dayDate, queued.offerExpiresAt ?? null);
+    if (!selectedDates.has(dayDate)) add(queued.status, null, null, dayDate, queued.offerExpiresAt ?? null);
   }
   const typeRank = (type: string | null) => {
     const index = TYPE_ORDER.indexOf(type ?? "");

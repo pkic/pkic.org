@@ -234,8 +234,8 @@ describe("ParticipantRegistration", () => {
       Organization: "Personal",
       "Job title": "Not provided",
     });
-    expect(facts(container)["Representation status"]).toBeUndefined();
-    const status = button(container, "Organization link awaiting approval");
+    expect(facts(container)["Organization claim awaiting approval"]).toBe("Analytical Engines");
+    const status = button(container, "Organization claim awaiting approval");
     expect(status).not.toBeNull();
     await click(status);
     expect(document.body.textContent).toContain("This does not affect your conference registration");

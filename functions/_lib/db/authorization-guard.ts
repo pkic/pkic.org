@@ -1,6 +1,7 @@
 import { guardDatabaseBatches } from "./guarded-database";
 import type { DatabaseLike, StatementLike } from "../types";
 import { uuid } from "../utils/ids";
+import { isAppError } from "../errors";
 
 export interface AuthorizationEvidence {
   /** Trusted internal SELECT that returns at least one row only while access remains valid. */
@@ -49,6 +50,11 @@ export function isAuthorizationGuardFailure(error: unknown): boolean {
   return error instanceof Error && error.message.includes("AUTHORIZATION_CONTEXT_CHANGED");
 }
 
+/** The database trigger's refusal, distinct from a translated application error. */
+export function isAuthorizationGuardTriggerFailure(error: unknown): boolean {
+  return isAuthorizationGuardFailure(error) && !isAppError(error);
+}
+
 /** Recognize only the intentional state-guard failure, leaving permission errors distinct. */
 export function isStateGuardFailure(error: unknown): boolean {
   return (
@@ -92,10 +98,7 @@ export async function executeAuthorizedDatabaseBatch(
   } catch (error) {
     // Unscoped authorization statements delegate refusal to this scope. State
     // guards and other scoped adapters retain their separate refusal markers.
-    if (
-      error instanceof Error &&
-      (error.message.includes(marker) || error.message.includes("D1_ERROR: AUTHORIZATION_CONTEXT_CHANGED:"))
-    )
+    if (error instanceof Error && (error.message.includes(marker) || isAuthorizationGuardTriggerFailure(error)))
       throw authorizationChangedError();
     throw error;
   }

@@ -50,6 +50,23 @@ type MatrixRow = { option: AttendanceOptionRead } | { day: EventDay };
 const full = (option: AttendanceOptionRead) =>
   option.spotsRemainingPercent != null && option.spotsRemainingPercent <= 0;
 
+/** The matrix can show only saved choices that still have a matching option row. */
+export function fitsReadOnlyMatrix(data: RegistrationManageReadResponse): boolean {
+  return (
+    data.registration.status === "registered" &&
+    !data.dayWaitlist.some(
+      (day) => day.status === "offered" || !data.dayAttendance.some((entry) => entry.dayDate === day.dayDate),
+    ) &&
+    data.dayAttendance.every((entry) =>
+      data.eventDays.some(
+        (day) =>
+          day.dayDate === entry.dayDate &&
+          day.attendanceOptions.some((option) => option.value === entry.attendanceType),
+      ),
+    )
+  );
+}
+
 function DayHeading({ day, compact }: { day: EventDay; compact: boolean }) {
   return (
     <span class="pk-attendance-matrix__date">
@@ -217,9 +234,7 @@ export function DayAttendancePicker({
     <MatrixCell
       day={day}
       row={option}
-      selected={
-        (selected[day.dayDate] ?? (readOnly && !waitlist[day.dayDate] ? NOT_ATTENDING : undefined)) === option.value
-      }
+      selected={(selected[day.dayDate] ?? (readOnly ? NOT_ATTENDING : undefined)) === option.value}
       id={id}
       threshold={lowCapacityThreshold}
       invalid={control?.["aria-invalid"]}

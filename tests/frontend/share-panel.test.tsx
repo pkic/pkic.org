@@ -30,7 +30,7 @@ interface Captured {
  * which is the only way to reach the panel's failure path: it surfaces
  * whatever the client threw rather than a message of its own.
  */
-function installApi(options: { rejects?: boolean } = {}): Captured[] {
+function installApi(options: { rejects?: boolean; fieldError?: boolean } = {}): Captured[] {
   const requests: Captured[] = [];
   vi.stubGlobal(
     "fetch",
@@ -47,6 +47,21 @@ function installApi(options: { rejects?: boolean } = {}): Captured[] {
         body: typeof init.body === "string" ? JSON.parse(init.body) : undefined,
       });
       if (url.pathname !== INVITES_PATH) throw new Error(`Unexpected request: ${url.pathname}`);
+      if (options.fieldError)
+        return Promise.resolve(
+          json(
+            {
+              error: {
+                code: "VALIDATION",
+                message: "Invalid request",
+                details: {
+                  fieldErrors: { "invites.0.email": ["Choose another recipient."] },
+                },
+              },
+            },
+            400,
+          ),
+        );
       if (options.rejects) {
         return Promise.resolve(
           json({ error: { code: "RATE_LIMITED", message: "You have used this event's invite quota." } }, 429),
@@ -149,6 +164,44 @@ it("ignores blank invite rows and maps a nonblank row's validation to its contro
   expect(registrationInviteCreateSchema.parse(requests[0]?.body).invites).toEqual([
     { email: "alice@example.com", firstName: "Alice" },
   ]);
+});
+
+it("keeps touched fields on their invitation row when an earlier blank row is filled", async () => {
+  installApi();
+  const container = mount();
+  await click(button(container, "Invite by email"));
+  await click(button(container, "Add row"));
+  await typeInto(labeledInput(container, "Invite 2 email address"), "invalid");
+  const first = labeledInput(container, "Invite 1 email address");
+  const second = labeledInput(container, "Invite 2 email address");
+  const names = [first.name, second.name];
+  expect(second.getAttribute("aria-invalid")).toBe("true");
+  await typeInto(labeledInput(container, "Invite 1 first name (optional)"), "Casey");
+  expect([first.name, second.name]).toEqual(names);
+  expect(first.getAttribute("aria-invalid")).not.toBe("true");
+  expect(second.getAttribute("aria-invalid")).toBe("true");
+});
+
+it("keeps a server refusal on its invitation when earlier rows change or are removed", async () => {
+  const requests = installApi({ fieldError: true });
+  const container = mount();
+  await click(button(container, "Invite by email"));
+  await click(button(container, "Add row"));
+  await typeInto(labeledInput(container, "Invite 2 email address"), "alice@example.com");
+  await click(button(container, "Send invites"));
+  expect(registrationInviteCreateSchema.parse(requests[0]?.body).invites).toHaveLength(1);
+  const second = labeledInput(container, "Invite 2 email address");
+  expect(second.closest(".pk-field")?.textContent).toContain("Choose another recipient.");
+  await typeInto(labeledInput(container, "Invite 1 first name (optional)"), "Casey");
+  expect(labeledInput(container, "Invite 1 email address").closest(".pk-field")?.textContent).not.toContain(
+    "Choose another recipient.",
+  );
+  expect(second.closest(".pk-field")?.textContent).toContain("Choose another recipient.");
+  await click(container.querySelector<HTMLButtonElement>('[aria-label="Remove invite 1"]')!);
+  expect(labeledInput(container, "Invite 1 email address").value).toBe("alice@example.com");
+  expect(labeledInput(container, "Invite 1 email address").closest(".pk-field")?.textContent).toContain(
+    "Choose another recipient.",
+  );
 });
 
 describe("colleague invitation dialog", () => {

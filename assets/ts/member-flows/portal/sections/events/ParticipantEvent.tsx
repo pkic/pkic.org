@@ -8,7 +8,7 @@ import {
   isMyAgendaQuery,
 } from "../../../../../shared/event-participation-link";
 import type { ComponentChildren } from "preact";
-import { eventParticipantRecordPath } from "./event-participant-paths";
+import { eventProposalPath } from "./event-participant-paths";
 import { useData } from "../../../../hooks/useData";
 import { getJson, ApiClientError } from "../../../../shared/api-client";
 import { eventDetailResponseSchema } from "../../../../../shared/schemas/event-management";
@@ -255,9 +255,7 @@ function ParticipantProposals({ event }: { event: EventDetail }) {
       columns={[
         {
           header: "Proposal",
-          cell: (proposal) => (
-            <a href={href(eventParticipantRecordPath(event.slug, "proposal", proposal.id))}>{proposal.title}</a>
-          ),
+          cell: (proposal) => <a href={href(eventProposalPath(event.slug, proposal.id))}>{proposal.title}</a>,
         },
         { header: "Status", cell: (proposal) => <Badge status={proposal.status} /> },
         {
@@ -340,7 +338,7 @@ function ParticipantProposal({
       </>
     );
   const { submission, speaker, forms, speakerTerms } = loaded.data;
-  const route = eventParticipantRecordPath(event.slug, "proposal", proposalId);
+  const route = eventProposalPath(event.slug, proposalId);
   const active = facet ?? (submission ? "submission" : "participation");
   return (
     <div class="pk-stack">

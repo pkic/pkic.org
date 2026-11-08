@@ -3,7 +3,7 @@ import { EventRegistrationCreate } from "../../../../../components/events/EventR
 import { Panel, PanelBody } from "../../../../../ui/Panel";
 import { ButtonLink } from "../../../../../ui/Button";
 import { usePortalHashLocation } from "../../../hash-location";
-import { eventParticipantRecordPath } from "../event-participant-paths";
+import { eventRegistrationPath } from "../event-participant-paths";
 import { eventRegistrationStanding, registrationOffer, type ParticipantEventDetail } from "./event-app-model";
 import { eventPhase } from "./event-timing";
 
@@ -23,7 +23,7 @@ export function EventRegister({
         <ButtonLink
           href={usePortalHashLocation.hrefs(
             standing.registrationId
-              ? eventParticipantRecordPath(event.slug, "registration", standing.registrationId)
+              ? eventRegistrationPath(event.slug)
               : `/events/${encodeURIComponent(event.slug)}/ticket`,
           )}
         >

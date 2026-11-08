@@ -7,7 +7,7 @@ import type { ServerCatalog } from "./server-catalog";
  * named: the identity chooser, the account menu and the person's own record.
  */
 export const PERSONAL_IDENTITY_LABEL = "Personal";
-export const REGISTRATION_ORGANIZATION_VERIFICATION_LABEL = "Organization link awaiting approval";
+export const REGISTRATION_ORGANIZATION_VERIFICATION_LABEL = "Organization claim awaiting approval";
 
 /** "Organization · Job title · address", or "Personal" for the identity without one; the address is optional. */
 export function actingIdentityLabel(

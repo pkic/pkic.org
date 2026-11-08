@@ -120,6 +120,26 @@ describe("RegistrationDayStatusSummary", () => {
     expect(claimed).toEqual([["2026-09-01"]]);
   });
 
+  it("states an offer without an attendance choice without offering an unsafe claim", async () => {
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() =>
+      render(
+        <RegistrationDayStatusSummary
+          dayAttendance={[]}
+          dayWaitlist={[{ dayDate: "2026-09-01", status: "offered", offerExpiresAt: "2026-09-01T12:00:00.000Z" }]}
+          onClaim={() => {
+            throw new Error("An offer without a selected attendance type cannot be claimed");
+          }}
+        />,
+        container!,
+      ),
+    );
+    expect(container.textContent).toContain("Place offered");
+    expect(container.querySelector("button")).toBeNull();
+    expect(container.textContent).not.toContain("Claim it before");
+  });
+
   it("keeps offers for different configured options separate", async () => {
     container = document.createElement("div");
     document.body.append(container);

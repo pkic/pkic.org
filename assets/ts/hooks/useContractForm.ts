@@ -125,6 +125,8 @@ export interface ContractFormOptions {
    * itself — a respondent control is `custom.<key>` or `custom.<key>[]`.
    */
   fieldOf?: (name: string, control: Control) => string;
+  /** Stable field keys for editable collections whose transport indices can change. */
+  keyOf?: (path: string) => string;
 }
 
 export function useContractForm<Schema extends z.ZodType>(
@@ -132,7 +134,13 @@ export function useContractForm<Schema extends z.ZodType>(
   body: unknown,
   options: ContractFormOptions = {},
 ): ContractForm<z.output<Schema>> {
-  const { fieldOf, quietWhenEmpty = false, revealField, deferUntilSubmit = [] } = options;
+  const {
+    fieldOf,
+    keyOf = (name: string) => name,
+    quietWhenEmpty = false,
+    revealField,
+    deferUntilSubmit = [],
+  } = options;
   const [touched, setTouched] = useState<Record<string, Touch>>({});
   const [refused, setRefused] = useState<Record<string, string>>({});
   const [showAll, setShowAll] = useState(false);
@@ -140,7 +148,9 @@ export function useContractForm<Schema extends z.ZodType>(
 
   const readBody = () => (typeof body === "function" ? body() : body);
   const result = schema.safeParse(readBody());
-  const issues: Record<string, string> = result.success ? {} : normalizeValidation(result.error).fields;
+  const stableFields = (fields: Record<string, string>) =>
+    Object.fromEntries(Object.entries(fields).map(([path, message]) => [keyOf(path), message]));
+  const issues: Record<string, string> = result.success ? {} : stableFields(normalizeValidation(result.error).fields);
 
   // After a refusal the first refused field takes focus — once its mark is
   // on the page, and only then; retyping must not move the caret.
@@ -164,7 +174,7 @@ export function useContractForm<Schema extends z.ZodType>(
           (control instanceof HTMLInputElement && (control.type === "checkbox" || control.type === "radio")))
       )
         return;
-      const name = fieldOf ? fieldOf(control.name, control) : control.name;
+      const name = keyOf(fieldOf ? fieldOf(control.name, control) : control.name);
       setTouched((current) => ({ ...current, [name]: { hasValue: hasValue(control) } }));
       // A field being retyped is no longer the field the server refused.
       setRefused((current) => {
@@ -174,14 +184,15 @@ export function useContractForm<Schema extends z.ZodType>(
         return next;
       });
     },
-    [fieldOf],
+    [fieldOf, keyOf],
   );
 
   const of = (name: string): FieldPresentation => {
+    name = keyOf(name);
     // A server refusal shows whether or not the reader touched the field;
     // the contract's own verdict waits until they have.
     const quiet = quietWhenEmpty && !showAll && touched[name]?.hasValue !== true;
-    const seen = !quiet && (showAll || (!deferUntilSubmit.includes(name) && name in touched));
+    const seen = !quiet && (showAll || (!deferUntilSubmit.some((path) => keyOf(path) === name) && name in touched));
     const message = refused[name] ?? (seen ? issues[name] : undefined);
     if (message) return { state: "invalid", message };
     return seen && touched[name]?.hasValue ? { state: "ok" } : {};
@@ -214,7 +225,7 @@ export function useContractForm<Schema extends z.ZodType>(
       const names = Object.keys(refusal.fields);
       const first = names.find((name) => !names.some((other) => other.startsWith(`${name}.`)));
       if (first) revealField?.(first);
-      setRefused(refusal.fields);
+      setRefused(stableFields(refusal.fields));
       setFocusAt(Date.now());
     }
     return refusal.globalMessage;
@@ -228,7 +239,7 @@ export function useContractForm<Schema extends z.ZodType>(
 
   const errorsWithin = (name: string) =>
     Object.keys({ ...issues, ...refused })
-      .filter((key) => key === name || key.startsWith(`${name}.`))
+      .filter((key) => key === keyOf(name) || key.startsWith(`${keyOf(name)}.`))
       .flatMap((key) => {
         const presentation = of(key);
         return presentation.message ? [presentation.message] : [];

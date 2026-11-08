@@ -140,13 +140,28 @@ export function RegistrationInviteForm({
   const requestPending = useRef(false);
   const populatedRows = rows.filter((row) => row.email.trim() || row.firstName.trim() || row.lastName.trim());
   const submittedRows = populatedRows.length ? populatedRows : rows.slice(0, 1);
-  const contract = useContractForm(registrationInviteCreateSchema, {
-    invites: submittedRows.map((row) => ({
-      email: row.email.trim(),
-      firstName: row.firstName.trim() || undefined,
-      lastName: row.lastName.trim() || undefined,
-    })),
-  });
+  const contract = useContractForm(
+    registrationInviteCreateSchema,
+    {
+      invites: submittedRows.map((row) => ({
+        email: row.email.trim(),
+        firstName: row.firstName.trim() || undefined,
+        lastName: row.lastName.trim() || undefined,
+      })),
+    },
+    {
+      keyOf: (path) =>
+        path.replace(/^invites\.(\d+)(?=\.|$)/, (match, index: string) => {
+          const row = submittedRows[Number(index)];
+          return row ? `inviteRows.${row.id}` : match;
+        }),
+      fieldOf: (name) =>
+        name.replace(/^inviteRows\.(\d+)(?=\.|$)/, (match, id: string) => {
+          const index = submittedRows.findIndex((row) => row.id === Number(id));
+          return index < 0 ? match : `invites.${index}`;
+        }),
+    },
+  );
   useEffect(() => {
     onSendingChange?.(sending);
   }, [sending, onSendingChange]);
@@ -316,9 +331,7 @@ export function RegistrationInviteForm({
                   key={row.id}
                   row={row}
                   position={index + 1}
-                  fieldPrefix={
-                    submittedRows.includes(row) ? `invites.${submittedRows.indexOf(row)}` : `emptyInvite.${row.id}`
-                  }
+                  fieldPrefix={`inviteRows.${row.id}`}
                   showRemove={showRemove}
                   onChange={updateRow}
                   onRemove={removeRow}

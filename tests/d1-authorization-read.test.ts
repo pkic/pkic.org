@@ -19,6 +19,7 @@ import {
   prepareAuthorizationGuard,
   isStateGuardFailure,
   isAuthorizationGuardFailure,
+  isAuthorizationGuardTriggerFailure,
 } from "../functions/_lib/db/authorization-guard";
 import { isReadOnlySql } from "../functions/_lib/db/read-only-sql";
 import { AppError } from "../functions/_lib/errors";
@@ -27,6 +28,15 @@ import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
 beforeEach(resetDb);
+
+it.each(["D1_ERROR: AUTHORIZATION_CONTEXT_CHANGED: SQLITE_CONSTRAINT", "AUTHORIZATION_CONTEXT_CHANGED"])(
+  "recognizes trigger refusals consistently: %s",
+  (message) => {
+    expect(isAuthorizationGuardTriggerFailure(new Error(message))).toBe(true);
+    expect(isAuthorizationGuardTriggerFailure(new AppError(403, "DENIED", message))).toBe(false);
+    expect(isAuthorizationGuardTriggerFailure(new Error("unrelated D1 failure"))).toBe(false);
+  },
+);
 
 it.each([
   ["SELECT 1", true],

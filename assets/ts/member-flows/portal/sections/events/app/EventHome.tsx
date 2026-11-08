@@ -25,7 +25,7 @@ import { viewerTimeZone } from "../../../../../../shared/timezone";
 import { formatNumber } from "../../../../../../shared/format-number";
 import { usePortalHashLocation } from "../../../hash-location";
 import { formatDateRange } from "../../../ui";
-import { eventParticipantRecordPath } from "../event-participant-paths";
+import { eventRegistrationPath } from "../event-participant-paths";
 import { EventCard } from "./EventCard";
 import { EventHero } from "./EventHero";
 import { eventPhase, sessionPhase } from "./event-timing";
@@ -195,11 +195,7 @@ export function TicketCard({
         <ButtonLink variant="primary" href={href(base + "/ticket")}>
           Show ticket
         </ButtonLink>
-        {standing.registrationId && (
-          <a href={href(eventParticipantRecordPath(event.slug, "registration", standing.registrationId))}>
-            Manage registration
-          </a>
-        )}
+        {standing.registrationId && <a href={href(eventRegistrationPath(event.slug))}>Manage registration</a>}
       </div>
     </EventCard>
   );

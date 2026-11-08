@@ -7,8 +7,27 @@ import {
 } from "../assets/shared/schemas/event-registrations";
 import { eventRegistrationDayAttendanceChangeSchema } from "../assets/shared/schemas/event-registration-detail";
 import { eventRegistrationManagementUpdateSchema } from "../assets/shared/schemas/route-contracts-event-registration-management";
+import {
+  attendeeRegistrationParticipationSchema,
+  registrationCreateForTermsSchema,
+  registrationManageSchema,
+} from "../assets/shared/schemas/registration";
 
 describe("event registration status policy", () => {
+  it("requires consent to create a registration but allows updating existing details without new terms", () => {
+    const participation = { dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }], consents: [] };
+    expect(attendeeRegistrationParticipationSchema.safeParse(participation).success).toBe(false);
+    expect(
+      registrationCreateForTermsSchema([]).safeParse({
+        ...participation,
+        firstName: "Ada",
+        lastName: "Example",
+        email: "ada@example.test",
+      }).success,
+    ).toBe(false);
+    expect(registrationManageSchema.safeParse({ action: "update", firstName: "Ada" }).success).toBe(true);
+  });
+
   it("keeps lifecycle statuses available for filtering without exposing a generic force-status mutation", () => {
     for (const status of EVENT_REGISTRATION_STATUSES) {
       expect(eventRegistrationStatusSchema.parse(status)).toBe(status);

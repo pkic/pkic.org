@@ -81,11 +81,11 @@ function GroupRow({
         {group.kind === "expired" && (
           <span class="pk-small">Update and save your attendance to request a place again.</span>
         )}
-        {group.kind === "offered" && group.offerExpiresAt && (
+        {group.kind === "offered" && group.attendanceType && group.offerExpiresAt && (
           <span class="pk-small">Claim it before {formatDateTime(group.offerExpiresAt)}.</span>
         )}
       </span>
-      {group.kind === "offered" && onClaim && (
+      {group.kind === "offered" && group.attendanceType && onClaim && (
         <Button variant="primary" loading={busy} onClick={() => onClaim(group.dayDates)}>
           Claim place
         </Button>

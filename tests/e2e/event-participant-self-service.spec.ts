@@ -605,10 +605,6 @@ test("attendee manages a registration and downloads a personal event calendar", 
   const colleagueEmail = `colleague-${crypto.randomUUID()}@example.test`;
   await invitation.getByLabel(/^Invite 2 email address/).fill(colleagueEmail);
   const invitedSince = await capturedEmailCount();
-  for (const width of [1440, 375]) {
-    await page.setViewportSize({ width, height: 900 });
-    await page.screenshot({ path: testInfo.outputPath(`invitation-${width}.png`) });
-  }
   const sentInvitation = page.waitForResponse(
     (response) => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/invites"),
   );
@@ -676,14 +672,6 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await registration.getByRole("button", { name: "About changing your email address" }).click();
   await expect(page.getByRole("tooltip")).toContainText("must belong to you");
   await page.keyboard.press("Escape");
-  for (const width of [1440, 375]) {
-    await page.setViewportSize({ width, height: 900 });
-    await page.mouse.move(0, 0);
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("tooltip")).toHaveCount(0);
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.screenshot({ path: testInfo.outputPath(`registration-${width}.png`), fullPage: true });
-  }
   // Cancelling is a record action behind the confirmation.
   await registration.getByRole("button", { name: "Registration actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Cancel my registration…", exact: true }).click();
@@ -695,7 +683,6 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await expect(registration.getByText(email, { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: testInfo.outputPath("registration-mobile.png"), fullPage: true });
   // Changing domains returns through the same verified organization chooser.
   // A fresh domain each run, so no earlier run has already given it an organization.
   const nextEmail = `changed@domain-change-${crypto.randomUUID()}.test`;

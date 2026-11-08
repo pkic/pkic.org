@@ -14,7 +14,7 @@ import { ButtonLink } from "../../../../../ui/Button";
 import { Button } from "../../../../../ui/Button";
 import { usePortalHashLocation } from "../../../hash-location";
 import { profile } from "../../../state";
-import { eventParticipantRecordPath } from "../event-participant-paths";
+import { eventRegistrationPath } from "../event-participant-paths";
 import { EventCard } from "./EventCard";
 import { eventRegistrationStanding, type ParticipantEventDetail } from "./event-app-model";
 import { calendarDate, countdownLabel, eventCountdown, greetingFor } from "./event-welcome";
@@ -88,7 +88,7 @@ export function AttendanceCheckCard({ event }: { event: ParticipantEventDetail }
 
   if (!standing.registered || standing.status !== "registered" || !standing.registrationId) return null;
   if (!nextDay) return null;
-  const registration = eventParticipantRecordPath(event.slug, "registration", standing.registrationId);
+  const registration = eventRegistrationPath(event.slug);
   const soon = nextDay === today || nextDay === tomorrow;
 
   if (soon && confirmed)

@@ -20,7 +20,7 @@ import { useData } from "../../../../../hooks/useData";
 import { putJson } from "../../../../../shared/api-client";
 import { EmptyState } from "../../../../../ui/EmptyState";
 import { usePortalHashLocation } from "../../../hash-location";
-import { eventParticipantRecordPath } from "../event-participant-paths";
+import { eventRegistrationPath } from "../event-participant-paths";
 import { EventCard } from "./EventCard";
 import { eventRegistrationStanding, type ParticipantEventDetail } from "./event-app-model";
 import { attendanceStanding, type AttendanceStanding } from "../../../../../shared/viewer-attendance";
@@ -31,15 +31,7 @@ export function EventTicket({ event }: { event: ParticipantEventDetail }) {
   const standing = eventRegistrationStanding(event);
   if (!standing.registrationId)
     return <EmptyState title="You're registered" body="Your ticket appears here once it is ready." />;
-  const details = (
-    <a
-      href={usePortalHashLocation.hrefs(
-        eventParticipantRecordPath(event.slug, "registration", standing.registrationId),
-      )}
-    >
-      Registration details
-    </a>
-  );
+  const details = <a href={usePortalHashLocation.hrefs(eventRegistrationPath(event.slug))}>Registration details</a>;
   if (standing.status !== "registered")
     return (
       <EventCard eyebrow="Registration" title="Confirm your email address">

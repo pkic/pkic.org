@@ -34,23 +34,21 @@ export function registrationAffiliationItems({
   jobTitleEditAction?: ComponentChildren;
 }): DescriptionListItem[] {
   const organization = organizationName || PERSONAL_IDENTITY_LABEL;
-  const representation = pendingOrganizationName ? (
+  const pendingClaim = pendingOrganizationName ? (
     <VerifiedValue
       verified={false}
       pendingLabel={REGISTRATION_ORGANIZATION_VERIFICATION_LABEL}
-      pendingExplanation="Your organization claim is awaiting approval. Your organization and job title come from your identity and appear on your badge only after approval. This does not affect your conference registration or waitlist status."
+      pendingExplanation="Your organization claim is awaiting approval. It will appear on your badge after approval. This does not affect your conference registration or waitlist status."
     >
-      {organization}
+      {pendingOrganizationName}
     </VerifiedValue>
-  ) : (
-    organization
-  );
+  ) : null;
   return [
     {
       term: "Organization",
       value: (
         <span class="pk-cluster pk-cluster--nowrap">
-          {representation}
+          {organization}
           {editAction}
         </span>
       ),
@@ -64,6 +62,7 @@ export function registrationAffiliationItems({
         </span>
       ),
     },
+    ...(pendingClaim ? [{ term: REGISTRATION_ORGANIZATION_VERIFICATION_LABEL, value: pendingClaim }] : []),
   ];
 }
 
