@@ -32,10 +32,12 @@ describe("scanner device enrollment and manual capture boundary", () => {
     await act(async () => mocks.preparationClosed!());
     expect(host.textContent).toMatch(/session has closed/i);
     expect(host.textContent).not.toMatch(/sign in again/i);
+    expect(host.querySelector<HTMLButtonElement>('.pk-fast-scanner form button[type="submit"]')!.disabled).toBe(true);
     await submit();
     await act(async () => mocks.hardwareScan!(badgeCode));
     expect(mocks.persist).not.toHaveBeenCalled();
     const diagnostics = await openDiagnostics();
+    expect(diagnostics.textContent).not.toMatch(/start with unverified feedback/i);
     const previous = mocks.drain.mock.calls.length;
     await act(async () =>
       Array.from(diagnostics.querySelectorAll("button"))
@@ -43,7 +45,13 @@ describe("scanner device enrollment and manual capture boundary", () => {
         .click(),
     );
     expect(mocks.drain).toHaveBeenCalledTimes(previous + 1);
+    expect(diagnostics.textContent).toMatch(/session has closed/i);
     expect(host.textContent).not.toMatch(/sign in again/i);
+    await closeDiagnostics();
+    expect(
+      Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Start scanning")!
+        .disabled,
+    ).toBe(true);
   });
   it("keeps camera and enrollment failures in the visible sync panel", async () => {
     mocks.error = "Could not enroll this scanner";

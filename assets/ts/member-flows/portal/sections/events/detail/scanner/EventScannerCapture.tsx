@@ -127,7 +127,8 @@ export function EventScannerCapture({
     selectRoom,
   } = preparation.location;
   const { eligibilityManifest, manifestReady, manifestPreparing, manifestError } = preparation.eligibility;
-  const { offlineAdmission, offlinePreparation, captureClosed } = preparation;
+  const { offlineAdmission, offlinePreparation, captureClosed, closedMessage } = preparation;
+  const captureReady = scannerDevice.ready && !closedMessage;
   const sound = useScannerSound(preferences.sound, result ?? lastResult, action, failed, Boolean(targetId));
   const screenAwake = useScannerImmersiveLifecycle(
     fastMode,
@@ -232,12 +233,13 @@ export function EventScannerCapture({
   );
   const persistCapture = (scan: EventScanRequest) =>
     persistScannerCapture(scan, slug, offlineAdmission.persist, auditFailure);
+  function captureAllowed() {
+    const blocked = captureClosed.current || authorityPaused.current;
+    if (blocked) setMessage(captureClosed.current ? closedMessage : "Sign in again to upload pending scans.");
+    return scannerDevice.ready && !blocked;
+  }
   async function capture() {
-    if (!scannerDevice.ready || captureClosed.current || manualCapturePending.current) return;
-    if (authorityPaused.current) {
-      setMessage("Sign in again to upload pending scans.");
-      return;
-    }
+    if (!captureAllowed() || manualCapturePending.current) return;
     const checked = form.submit();
     if (!checked.data) {
       if (
@@ -276,7 +278,7 @@ export function EventScannerCapture({
     }
   }
   async function scanCredential(raw: string, fromCamera = false) {
-    if (!scannerDevice.ready || captureClosed.current || authorityPaused.current) return;
+    if (!captureAllowed()) return;
     if (operatorPaused.current || manualPaused.current || manualCapturePending.current) return;
     const current = scannerContext.current;
     if (current.action === "lead" || current.action === "exception") {
@@ -344,15 +346,11 @@ export function EventScannerCapture({
     }
   }
   async function camera() {
-    if (!scannerDevice.ready || captureClosed.current || badgeCamera.starting) return;
-    if (authorityPaused.current) {
-      setMessage("Sign in again to upload pending scans.");
-      return;
-    }
+    if (!captureAllowed() || badgeCamera.starting) return;
     await badgeCamera.start();
   }
   function startScanning() {
-    if (captureClosed.current || !allowedActions.includes(action) || !scannerDevice.ready) return;
+    if (!captureAllowed() || !allowedActions.includes(action)) return;
     sound.unlock();
     manualPaused.current = false;
     enterPresentation();
@@ -364,7 +362,7 @@ export function EventScannerCapture({
     void camera();
   }
   const autoStart = useScannerAutoStart({
-    ready: scannerDevice.ready,
+    ready: captureReady,
     preparing: manifestPreparing,
     manifest: eligibilityManifest,
     manifestReady,
@@ -395,7 +393,7 @@ export function EventScannerCapture({
     handlers: form.handlers,
     action,
     busy,
-    ready: scannerDevice.ready,
+    ready: captureReady,
     open: manualOpen,
     onCapture: () => void capture(),
     consent:
@@ -410,7 +408,7 @@ export function EventScannerCapture({
       badgeId,
       onBadge: setBadge,
       field: form.of("badgeId"),
-      lookup: action !== "lead" ? { slug, online: !offline, disabled: busy || !scannerDevice.ready } : undefined,
+      lookup: action !== "lead" ? { slug, online: !offline, disabled: busy || !captureReady } : undefined,
     },
   };
   const recentScans = (
@@ -482,7 +480,7 @@ export function EventScannerCapture({
                   operatorUserId,
                   sponsorOnly: action === "lead",
                   explicitTarget: Boolean(occurrenceId),
-                  ready: scannerDevice.ready && pendingReadyScope === `${slug}:${operatorUserId}`,
+                  ready: captureReady && pendingReadyScope === `${slug}:${operatorUserId}`,
                   locked:
                     badgeCamera.active ||
                     fastMode ||
@@ -502,7 +500,7 @@ export function EventScannerCapture({
                   onRoom: selectRoom,
                 }}
                 mode={mode}
-                canStart={scannerDevice.ready}
+                canStart={captureReady}
                 preparing={manifestPreparing || !scannerDevice.ready}
                 cameraError={badgeCamera.error}
                 start={() => {
@@ -542,7 +540,9 @@ export function EventScannerCapture({
               syncing,
             }}
             preparation={preparationStatus}
-            unverifiedStart={action !== "lead" && !manifestReady && !manifestPreparing ? startScanning : undefined}
+            unverifiedStart={
+              captureReady && action !== "lead" && !manifestReady && !manifestPreparing ? startScanning : undefined
+            }
           />
         }
         recent={!fastMode && recentScans}

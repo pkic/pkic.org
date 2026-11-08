@@ -41,13 +41,12 @@ export function ScannerSyncStatus({
           <Button
             type="button"
             variant="secondary"
-            loading={syncing}
             onClick={() => {
               void refreshEligibility?.();
               sync();
             }}
           >
-            {syncing ? "Syncing…" : "Sync now"}
+            Sync now
           </Button>
         )}
       </PanelHeader>

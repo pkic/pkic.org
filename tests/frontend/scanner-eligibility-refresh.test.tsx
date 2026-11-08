@@ -30,18 +30,17 @@ let current: ReturnType<typeof useEligibilityManifest>;
 function syncButton() {
   return Array.from(host.querySelectorAll("button")).find((button) => /sync now/i.test(button.textContent!))!;
 }
-function Scanner({ collector = false }: { collector?: boolean }) {
-  const state = useEligibilityManifest(
-    "synthetic",
-    id,
-    null,
-    "attendance",
-    permissionChanged,
-    null,
+function Scanner({ collector = false, syncing = false }: { collector?: boolean; syncing?: boolean }) {
+  const state = useEligibilityManifest({
+    slug: "synthetic",
+    operatorUserId: id,
+    occurrenceId: null,
+    action: "attendance",
+    onPermissionChanged: permissionChanged,
     epoch,
     collector,
-    preparationClosed,
-  );
+    onPreparationClosed: preparationClosed,
+  });
   current = state;
   return (
     <ScannerSyncStatus
@@ -49,6 +48,7 @@ function Scanner({ collector = false }: { collector?: boolean }) {
       uploadStatus=""
       action="attendance"
       sync={upload}
+      syncing={syncing}
       refreshEligibility={state.refresh}
       offline={{ context: null, preparing: false, error: "", retry: () => {} }}
     >
@@ -128,6 +128,9 @@ it.each([
   ["SCANNER_SIGNED_OUT", /sign in again/i],
   ["SCANNER_PERMISSION_CHANGED", /access changed/i],
   ["SCANNER_PREPARATION_CLOSED", /session has closed/i],
+  ["SESSION_ROOM_REQUIRED", /choose the room/i],
+  ["SESSION_ROOM_INVALID", /check the selected room/i],
+  ["SCANNER_ROOM_CONTEXT_CHANGED", /check the selected room/i],
   ["Eligibility snapshot too large", /contact support/i],
   ["Eligibility pagination repeated", /contact support/i],
   ["Eligibility page digest changed", /contact support/i],
@@ -197,3 +200,12 @@ it.each(["Eligibility revision changed", "Eligibility snapshot expired during pr
     await vi.waitFor(() => expect(current.manifestReady).toBe(true));
   },
 );
+
+it("keeps badge refresh available while scan uploads are draining", async () => {
+  await act(async () => render(<Scanner syncing />, host));
+  expect(host.textContent).toMatch(/sync in progress/i);
+  expect(syncButton().disabled).toBe(false);
+  await act(async () => syncButton().click());
+  expect(mocks.prepare).toHaveBeenCalledTimes(2);
+  expect(upload).toHaveBeenCalledOnce();
+});

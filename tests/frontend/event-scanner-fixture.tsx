@@ -1,3 +1,4 @@
+import type { EligibilityManifestOptions } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useEligibilityManifest";
 vi.mock("../../assets/ts/shared/pending-user-logout", () => ({
   scannerUploadSuspended: mocks.suspended,
   subscribeUserSessionState: (listener: () => void) => {
@@ -21,6 +22,7 @@ export const badgeCode = badgeCredentialSchema.parse("ABCDEFGHJKLMNPQR");
 const mocks = vi.hoisted(() => ({
   ready: false,
   refresh: vi.fn(async () => {}),
+  manifestReady: true,
   preparationClosed: null as null | (() => void),
   error: "",
   decoderStatus: "Camera prepared",
@@ -75,13 +77,17 @@ vi.mock(
     ...(await importOriginal<
       typeof import("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useEligibilityManifest")
     >()),
-    useEligibilityManifest: (...args: unknown[]) => {
-      const onClosed = args[8];
+    useEligibilityManifest: ({ onPreparationClosed: onClosed }: EligibilityManifestOptions) => {
       mocks.preparationClosed =
-        typeof onClosed === "function" ? () => onClosed("This scanner session has closed.") : null;
+        typeof onClosed === "function"
+          ? () => {
+              mocks.manifestReady = false;
+              onClosed("This scanner session has closed.");
+            }
+          : null;
       return {
         eligibilityManifest: { current: { occurrenceId: null, roomId: null, ...mocks.snapshot } },
-        manifestReady: true,
+        manifestReady: mocks.manifestReady,
         manifestPreparing: false,
         manifestError: "",
         refresh: mocks.refresh,
@@ -131,6 +137,7 @@ afterEach(async () => {
   mocks.cameraScan = null;
   mocks.snapshot = null;
   mocks.preparationClosed = null;
+  mocks.manifestReady = true;
   mocks.error = "";
   mocks.decoderStatus = "Camera prepared";
   mocks.drain.mockImplementation(async () => ({ uploaded: 0, state: "complete" }));

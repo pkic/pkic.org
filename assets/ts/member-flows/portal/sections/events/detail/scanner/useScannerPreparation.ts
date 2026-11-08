@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { useScannerLocation } from "./useScannerLocation";
 import { useEligibilityManifest, useScannerOfflinePreparation } from "./useEligibilityManifest";
 import { useOfflineAdmission } from "./useOfflineAdmission";
@@ -30,24 +30,27 @@ export function useScannerPreparation({
   onPermissionChanged: () => void;
 }) {
   const captureClosed = useRef(false);
+  const [closedMessage, setClosedMessage] = useState("");
   useEffect(() => {
     captureClosed.current = false;
+    setClosedMessage("");
   }, [epoch?.epochId]);
   const location = useScannerLocation(slug, occurrenceId, action !== "lead", onContextChange, collectorContext);
-  const eligibility = useEligibilityManifest(
+  const eligibility = useEligibilityManifest({
     slug,
     operatorUserId,
-    location.targetId,
+    occurrenceId: location.targetId,
     action,
     onPermissionChanged,
-    location.roomId,
+    roomId: location.roomId,
     epoch,
-    Boolean(collectorContext),
-    (message) => {
+    collector: Boolean(collectorContext),
+    onPreparationClosed: (message) => {
       captureClosed.current = true;
+      setClosedMessage(message);
       onContextChange(message);
     },
-  );
+  });
   const offlineAdmission = useOfflineAdmission(slug, operatorUserId, eligibility.eligibilityManifest, collectorContext);
   const offlinePreparation = useScannerOfflinePreparation(
     collectorContext ? null : session,
@@ -65,8 +68,8 @@ export function useScannerPreparation({
     action,
     preparing: eligibility.manifestPreparing,
     ready: eligibility.manifestReady,
-    error: eligibility.manifestError,
+    error: closedMessage || eligibility.manifestError,
     checkedBadges: eligibility.manifestProgress,
   };
-  return { location, eligibility, offlineAdmission, offlinePreparation, status, captureClosed };
+  return { location, eligibility, offlineAdmission, offlinePreparation, status, captureClosed, closedMessage };
 }

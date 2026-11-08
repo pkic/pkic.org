@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { downloadEligibilitySnapshot } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-download";
-import { eligibilityRefreshRefused } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-refresh-error";
+import {
+  eligibilityRefreshError,
+  eligibilityRefreshRefused,
+} from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-refresh-error";
 import { cachedManifestSchema } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-snapshot";
 import { enrolledOfflineEligibilityQuerySchema } from "../../assets/shared/schemas/event-offline-eligibility";
 import { eligibilityPageDigest } from "../../assets/shared/event-eligibility-digest";
@@ -249,7 +252,25 @@ describe("Conditional eligibility page downloads", () => {
     expect(error).toBeInstanceOf(Error);
     expect(error).toHaveProperty("message", "SCANNER_ROOM_CONTEXT_CHANGED");
     expect(eligibilityRefreshRefused(error)).toBe(false);
+    expect(eligibilityRefreshError(error)).toMatch(/check the selected room or reopen/i);
+    expect(eligibilityRefreshError(error)).not.toMatch(/connection|sign in|support/i);
   });
+
+  it.each(["SESSION_ROOM_REQUIRED", "SESSION_ROOM_INVALID"])(
+    "preserves room setup guidance for %s without refusing access",
+    async (code) => {
+      const snapshot = fixture();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => Response.json({ error: { code, message: "Choose a room." } }, { status: 400 })),
+      );
+      const error = await download(snapshot).catch((error: unknown) => error);
+      expect(error).toHaveProperty("message", code);
+      expect(eligibilityRefreshRefused(error)).toBe(false);
+      expect(eligibilityRefreshError(error)).toMatch(/room/i);
+      expect(eligibilityRefreshError(error)).not.toMatch(/connection|sign in|support|HTTP/i);
+    },
+  );
 
   it("still refuses a changed operator when the room also changes", async () => {
     const snapshot = fixture();

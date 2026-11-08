@@ -23,7 +23,7 @@ type SnapshotScope = Pick<CachedManifest, "operatorUserId" | "occurrenceId" | "r
   Partial<Pick<CachedManifest, "eventId">>;
 
 /** Requests know the event slug; compare the canonical event ID once a response supplies it. */
-export function sameSnapshotIdentity(a: SnapshotScope, b: SnapshotScope): boolean {
+export function sameSnapshotEnrollment(a: SnapshotScope, b: SnapshotScope): boolean {
   return (
     (a.eventId === undefined || b.eventId === undefined || a.eventId === b.eventId) &&
     a.operatorUserId === b.operatorUserId &&
@@ -34,7 +34,7 @@ export function sameSnapshotIdentity(a: SnapshotScope, b: SnapshotScope): boolea
 }
 
 export function sameSnapshotScope(a: SnapshotScope, b: SnapshotScope): boolean {
-  return sameSnapshotIdentity(a, b) && (a.roomId ?? null) === (b.roomId ?? null);
+  return sameSnapshotEnrollment(a, b) && (a.roomId ?? null) === (b.roomId ?? null);
 }
 
 export function snapshotCurrent(snapshot: CachedManifest, now = Date.now()): boolean {

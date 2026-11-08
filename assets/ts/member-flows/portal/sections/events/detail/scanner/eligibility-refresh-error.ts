@@ -19,6 +19,9 @@ export function eligibilityRefreshError(error: unknown): string {
   const message = error instanceof Error ? error.message : "";
   const refusal = refusalMessages.get(message);
   if (refusal) return refusal;
+  if (message === "SESSION_ROOM_REQUIRED") return "Choose the room this scanner is in to prepare badge data.";
+  if (message === "SESSION_ROOM_INVALID" || message === "SCANNER_ROOM_CONTEXT_CHANGED")
+    return "Badge data does not match the scanner room. Check the selected room or reopen the scanner.";
   if (message === "Eligibility revision changed" || message === "Eligibility snapshot expired during preparation")
     return "Badge data changed during refresh. Try again shortly.";
   if (error instanceof ZodError || message.startsWith("Eligibility "))

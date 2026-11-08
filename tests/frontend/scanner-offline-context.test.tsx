@@ -306,15 +306,15 @@ describe("scanner-only offline preparation", () => {
     host = document.createElement("div");
     document.body.append(host);
     function Harness({ current }: { current: typeof session }) {
-      useEligibilityManifest(
+      useEligibilityManifest({
         slug,
-        operator,
+        operatorUserId: operator,
         occurrenceId,
-        "attendance",
-        scannerPreparationRefusal(current, operator),
+        action: "attendance",
+        onPermissionChanged: scannerPreparationRefusal(current, operator),
         roomId,
-        epoch(),
-      );
+        epoch: epoch(),
+      });
       return null;
     }
     await act(() => render(<Harness current={session} />, host!));

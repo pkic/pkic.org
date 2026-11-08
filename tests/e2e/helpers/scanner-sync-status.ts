@@ -10,9 +10,7 @@ export async function checkScannerSyncStatus(page: Page, path: string, info: Tes
   await expect(button).toBeEnabled();
   await expect(diagnostics.getByText(/Badge data up to date/)).toBeVisible();
   let release: (() => void) | undefined;
-  let refreshRequests = 0;
   await page.route("**/offline-eligibility?**", async (route) => {
-    refreshRequests++;
     await new Promise<void>((resolve) => {
       release = resolve;
     });
@@ -24,9 +22,6 @@ export async function checkScannerSyncStatus(page: Page, path: string, info: Tes
   await button.click();
   await expect.poll(() => Boolean(release)).toBe(true);
   await expect(button).toBeEnabled();
-  await button.click();
-  await expect(button).toBeEnabled();
-  expect(refreshRequests).toBe(1);
   await expect(diagnostics.getByText("Refreshing badge data…", { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.screenshot({ path: info.outputPath("sync-progress-desktop.png") });

@@ -14,18 +14,30 @@ import {
   eligibilityRefreshRefused,
 } from "./eligibility-refresh-error";
 
+export interface EligibilityManifestOptions {
+  slug: string;
+  operatorUserId: string;
+  occurrenceId: string | null;
+  action: EventScanRequest["action"];
+  onPermissionChanged: () => void;
+  roomId?: string | null;
+  epoch: ScannerEpoch | null;
+  collector?: boolean;
+  onPreparationClosed?: (message: string) => void;
+}
+
 /** Prepares and refreshes scoped IDs-only data outside the camera path. */
-export function useEligibilityManifest(
-  slug: string,
-  operatorUserId: string,
-  occurrenceId: string | null,
-  action: string,
-  onPermissionChanged: () => void,
-  roomId: string | null = null,
-  epoch: ScannerEpoch | null,
+export function useEligibilityManifest({
+  slug,
+  operatorUserId,
+  occurrenceId,
+  action,
+  onPermissionChanged,
+  roomId = null,
+  epoch,
   collector = false,
-  onPreparationClosed?: (message: string) => void,
-) {
+  onPreparationClosed,
+}: EligibilityManifestOptions) {
   const eligibilityManifest = useRef<EligibilityManifest | null>(null);
   const refusals = useRef({ onPermissionChanged, onPreparationClosed });
   refusals.current = { onPermissionChanged, onPreparationClosed };

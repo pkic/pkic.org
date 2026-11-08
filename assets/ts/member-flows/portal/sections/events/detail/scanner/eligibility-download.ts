@@ -5,7 +5,12 @@ import {
 } from "../../../../../../../shared/schemas/event-offline-eligibility";
 import { eligibilityPageDigest } from "../../../../../../../shared/event-eligibility-digest";
 import { SCANNER_OFFLINE_MAXIMUM_MS } from "../../../../../../../shared/event-offline-expiry";
-import { sameSnapshotIdentity, sameSnapshotScope, snapshotCurrent, type CachedManifest } from "./eligibility-snapshot";
+import {
+  sameSnapshotEnrollment,
+  sameSnapshotScope,
+  snapshotCurrent,
+  type CachedManifest,
+} from "./eligibility-snapshot";
 import { apiErrorPayloadSchema } from "../../../../../../../shared/schemas/api-common";
 
 /** Validate every bounded page, transferring its entries only when they differ from the saved copy. */
@@ -58,6 +63,8 @@ export async function downloadEligibilitySnapshot(
     if (response.status === 403) throw new Error("SCANNER_PERMISSION_CHANGED");
     const refusal = !response.ok ? apiErrorPayloadSchema.safeParse(await response.json().catch(() => null)) : null;
     const code = refusal?.success ? refusal.data.error.code : undefined;
+    if (response.status === 400 && (code === "SESSION_ROOM_REQUIRED" || code === "SESSION_ROOM_INVALID"))
+      throw new Error(code);
     if (response.status === 409 && code === "SCANNER_PREPARATION_CLOSED") throw new Error("SCANNER_PREPARATION_CLOSED");
     if (response.status === 409 && code === "OFFLINE_MANIFEST_CHANGED" && snapshot && !restarted) {
       previous = [];
@@ -71,7 +78,7 @@ export async function downloadEligibilitySnapshot(
     if (!response.ok) throw new Error(`Badge refresh failed (HTTP ${response.status}).`);
     const page = enrolledOfflineEligibilityResponseSchema.parse(await response.json());
     const requestedScope = { operatorUserId, occurrenceId, roomId, ...enrollment, eventId: snapshot?.eventId };
-    if (!sameSnapshotIdentity(page, requestedScope)) throw new Error("SCANNER_PERMISSION_CHANGED");
+    if (!sameSnapshotEnrollment(page, requestedScope)) throw new Error("SCANNER_PERMISSION_CHANGED");
     if (!sameSnapshotScope(page, requestedScope)) throw new Error("SCANNER_ROOM_CONTEXT_CHANGED");
     const pageScope = await eligibilityPageDigest({ ...page, entries: [], nextBadgeId: null });
     if (scopeDigest !== undefined && scopeDigest !== pageScope) throw new Error("Eligibility revision changed");
