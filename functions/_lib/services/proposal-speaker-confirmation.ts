@@ -1,5 +1,8 @@
 import { prepareLateSpeakerConsentGuard } from "./proposal-speaker-consent";
-import { isLateSpeakerResponseAwaitingReview } from "../../../assets/shared/proposal-speaker-acceptance";
+import {
+  isLateSpeakerResponseAwaitingReview,
+  lateSpeakerResponseAwaitingReviewSql,
+} from "../../../assets/shared/proposal-speaker-acceptance";
 import { prepareSpeakerResponseNotices } from "./proposal-speaker-response-notice";
 import { isAgendaScheduleGuardFailure } from "./event-agenda/schedule-guards";
 import { throwAgendaRevisionError } from "./event-agenda/revision";
@@ -182,10 +185,9 @@ async function confirmParticipation(
         )
       : null;
   const notices = await prepareSpeakerResponseNotices(db, context, {
-    late,
+    outcome: reviewingLateResponse ? "approved" : late ? "late" : "confirmed",
     appBaseUrl: confirmation.kind === "manager" ? confirmation.appBaseUrl : confirmation.payload.appBaseUrl,
     at: now,
-    approved: reviewingLateResponse,
   });
   const invitationScope = {
     sql: `SELECT 1 FROM proposal_speakers ps
@@ -225,7 +227,7 @@ async function confirmParticipation(
       ...(manager
         ? [
             prepareAuthorizationGuard(db, {
-              sql: `${invitationScope.sql} AND (((${activeEffectiveInviteExpirySql(effectiveExpiry, databaseNow)}) AND (ps.status<>'pending' OR ps.response_invite_generation IS NULL)) OR (ps.status='pending' AND ps.terms_accepted_at IS NOT NULL AND ps.response_invite_generation=ps.invite_generation))`,
+              sql: `${invitationScope.sql} AND (((${activeEffectiveInviteExpirySql(effectiveExpiry, databaseNow)}) AND (ps.status<>'pending' OR ps.response_invite_generation IS NULL)) OR (${lateSpeakerResponseAwaitingReviewSql("ps")} AND ps.terms_accepted_at IS NOT NULL))`,
               bindings: invitationScope.bindings,
             }),
           ]

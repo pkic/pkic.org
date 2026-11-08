@@ -40,3 +40,10 @@ export function isLateSpeakerResponseAwaitingReview(
 ): boolean {
   return status === "pending" && responseInviteGeneration === inviteGeneration;
 }
+
+/** SQL counterpart of the review policy; callers supply only trusted column aliases. */
+export function lateSpeakerResponseAwaitingReviewSql(speakerAlias: string): string {
+  return `(${speakerAlias}.status = 'pending'
+    AND ${speakerAlias}.response_invite_generation IS NOT NULL
+    AND ${speakerAlias}.response_invite_generation = ${speakerAlias}.invite_generation)`;
+}

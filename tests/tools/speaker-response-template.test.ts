@@ -34,4 +34,23 @@ describe("speaker response decision emails", () => {
     expect(body).toContain("declined your late participation");
     expect(body).not.toContain("declined late participation by Jane Doe");
   });
+  it.each([false, true])("addresses a proposer-speaker directly on willingness (late: %s)", (late) => {
+    const body = compileSimpleTemplate(template.content, { ...variables, recipientIsSpeaker: true, late }, "markdown");
+    expect(body).toContain("You are willing to participate");
+    expect(body).not.toContain("Jane Doe is willing");
+    expect(body).not.toContain("Their willingness");
+    expect(body).toContain(
+      late ? "Participation awaits" : "Your willingness to participate in the proposal is confirmed.",
+    );
+  });
+  it("tells reviewers a withdrawal no longer needs a decision", () => {
+    const values = { ...variables, withdrawn: true };
+    expect(compileSimpleTemplate(template.subjectTemplate, values, "text")).toContain(
+      "Late speaker response withdrawn",
+    );
+    const body = compileSimpleTemplate(template.content, values, "markdown");
+    expect(body).toContain("Jane Doe withdrew their late response");
+    expect(body).toContain("It no longer awaits organizer review.");
+    expect(body).not.toContain("is willing to participate");
+  });
 });

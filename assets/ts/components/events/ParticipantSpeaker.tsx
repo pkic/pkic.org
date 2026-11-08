@@ -271,7 +271,7 @@ export function ParticipantSpeaker({
                             continuationToken: submittedEntry.continuationToken,
                             unaffiliatedAttestation: submittedEntry.unaffiliatedAttestation,
                             independentCapacity: submittedEntry.independentCapacity,
-                            consents: acceptedConsents(),
+                            ...(submittedEntry.continuationToken ? { consents: acceptedConsents() } : {}),
                             ...newAffiliationDetails(submittedEntry),
                           }
                         : {}),

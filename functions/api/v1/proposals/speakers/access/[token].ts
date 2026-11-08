@@ -29,6 +29,7 @@ import {
 } from "../../../../../_lib/services/proposals-speaker-capability";
 import {
   updateSpeakerProfile,
+  isSpeakerIdentitySelectionOnly,
   getProposalCoSpeakers,
   getPresentationUploader,
 } from "../../../../../_lib/services/proposals-speaker-profile";
@@ -129,7 +130,7 @@ export async function onRequestProfilePatch(
   try {
     const body = data.body;
     const token = data.params.token;
-    const selectingIdentity = body.actingIdentityId !== undefined || body.continuationToken !== undefined;
+    const selectingIdentity = isSpeakerIdentitySelectionOnly(body);
     const { speaker, proposal, user } = await getSpeakerByManageToken(
       requestDb(c),
       token,
@@ -205,7 +206,7 @@ export async function onRequestProfilePatch(
         signingSecret: requireInternalSecret(c.env),
         expectedManageLinkSecret: speaker.manage_link_secret,
         accountAuthority,
-        allowExpiredSession: selectingIdentity,
+        responseInviteGeneration: speaker.response_invite_generation,
       },
     );
 

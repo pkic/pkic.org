@@ -14,7 +14,12 @@ import type { SpeakerWithContext } from "./proposals-speaker-capability";
 export async function prepareSpeakerResponseNotices(
   db: DatabaseLike,
   context: SpeakerWithContext,
-  input: { late: boolean; rejected?: boolean; approved?: boolean; appBaseUrl: string; at: string; event?: EventRecord },
+  input: {
+    outcome: "confirmed" | "late" | "approved" | "rejected" | "withdrawn";
+    appBaseUrl: string;
+    at: string;
+    event?: EventRecord;
+  },
 ) {
   const { speaker, proposal } = context;
   const reviewerPage = (afterId = "") =>
@@ -26,12 +31,14 @@ export async function prepareSpeakerResponseNotices(
     });
   const [event, proposer, firstReviewers] = await Promise.all([
     input.event ?? getEventById(db, proposal.event_id),
-    first<{ id: string; email: string; first_name: string | null }>(
-      db,
-      "SELECT id,email,first_name FROM users WHERE id=? AND active=1 AND pii_redacted_at IS NULL",
-      [proposal.proposer_user_id],
-    ),
-    input.late || input.approved ? reviewerPage() : [],
+    input.outcome === "withdrawn"
+      ? null
+      : first<{ id: string; email: string; first_name: string | null }>(
+          db,
+          "SELECT id,email,first_name FROM users WHERE id=? AND active=1 AND pii_redacted_at IS NULL",
+          [proposal.proposer_user_id],
+        ),
+    input.outcome !== "confirmed" ? reviewerPage() : [],
   ]);
   const recipients = new Map(proposer ? [[proposer.id, proposer]] : []);
   const reviewers = new Set<string>();
@@ -45,7 +52,7 @@ export async function prepareSpeakerResponseNotices(
     if (committee.length < 100) break;
     committee = await reviewerPage(committee[committee.length - 1]!.id);
   }
-  if (input.rejected || input.approved)
+  if (input.outcome === "rejected" || input.outcome === "approved")
     recipients.set(context.user.id, {
       id: context.user.id,
       email: context.user.email,
@@ -58,7 +65,7 @@ export async function prepareSpeakerResponseNotices(
   );
   const notifications = await Promise.all(
     Array.from(recipients.values(), async (person) => {
-      const key = `proposal_speaker_response:${speaker.id}:${speaker.invite_generation}:${input.rejected ? "rejected" : input.approved ? "approved" : input.late ? "late" : "confirmed"}:${person.id}`;
+      const key = `proposal_speaker_response:${speaker.id}:${speaker.invite_generation}:${input.outcome}:${person.id}`;
       const recipientIsSpeaker = person.id === speaker.user_id;
       const proposerLink = !recipientIsSpeaker && !reviewers.has(person.id);
       const proposalUrl = recipientIsSpeaker
@@ -83,9 +90,10 @@ export async function prepareSpeakerResponseNotices(
           speakerName: emailPlainText(speakerName),
           proposalTitle: emailPlainText(proposal.title),
           recipientIsSpeaker,
-          approved: input.approved ?? false,
-          rejected: input.rejected ?? false,
-          late: input.late,
+          approved: input.outcome === "approved",
+          rejected: input.outcome === "rejected",
+          withdrawn: input.outcome === "withdrawn",
+          late: input.outcome === "late",
           proposalUrl,
         },
       };

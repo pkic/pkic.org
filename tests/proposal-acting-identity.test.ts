@@ -572,6 +572,7 @@ describe("proposal speaker acting identity", () => {
             proposalUpdatedAt: proposal.updated_at,
             userId: f.userId,
             currentStatus: speaker.status,
+            responseInviteGeneration: speaker.response_invite_generation,
             inviteGeneration: speaker.invite_generation,
             expectedActingIdentityId: speaker.acting_identity_id,
             expectedActingIdentitySelectedAt: speaker.acting_identity_selected_at,

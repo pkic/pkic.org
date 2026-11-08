@@ -764,6 +764,7 @@ for (const scenario of ["normal response", "late review", "late withdrawal"]) {
       const selectedBody = speakerSelfProfilePatchSchema.parse(selectedResponse.request().postDataJSON());
       expect(selectedBody.actingIdentityId).toBeNull();
       expect(selectedBody.unaffiliatedAttestation).toBe(true);
+      expect(selectedBody.consents).toBeUndefined();
       const selected = speakerProfileUpdateResponseSchema.parse(await selectedResponse.json());
       expect(selected.profile.actingIdentitySelection).toBe("individual");
       expect(selected.profile.actingIdentitySelectedAt).not.toBeNull();
@@ -771,6 +772,9 @@ for (const scenario of ["normal response", "late review", "late withdrawal"]) {
       await speaker.getByRole("button", { name: "Confirm willingness to participate", exact: true }).click();
       if (late) {
         await expect(speaker.getByText(SPEAKER_PARTICIPATION_COPY.pending, { exact: true })).toBeVisible();
+        const changeDuringReview = await speaker.request.patch(profilePath, { data: selectedBody });
+        expect(changeDuringReview.status()).toBe(409);
+        expect(await changeDuringReview.json()).toMatchObject({ error: { code: "SPEAKER_RESPONSE_AWAITING_REVIEW" } });
         await expect(
           speaker.getByRole("button", { name: SPEAKER_PARTICIPATION_COPY.confirm, exact: true }),
         ).toHaveCount(0);

@@ -75,7 +75,7 @@ it("requires speaker terms before resolving identity, preserves refusal, and sav
         const selected = speakerSelfProfilePatchSchema.parse(body);
         expect(selected.actingIdentityId).toBeNull();
         expect(selected.unaffiliatedAttestation).toBe(true);
-        expect(selected.consents).toEqual([{ termKey: "speaker-agreement", version: "1" }]);
+        expect(selected.consents).toBeUndefined();
         recorded = true;
         return response({
           success: true,

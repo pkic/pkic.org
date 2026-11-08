@@ -1,3 +1,5 @@
+import { isLateSpeakerResponseAwaitingReview } from "../../../assets/shared/proposal-speaker-acceptance";
+import { prepareSpeakerResponseNotices } from "./proposal-speaker-response-notice";
 import { personDisplayName } from "../../../assets/shared/person-display";
 import { anotherProposalSpeakerRemainsSql, requireAnotherProposalSpeaker } from "./proposal-speaker-retention";
 import { prepareSpeakerSelfAuthorityGuard } from "./proposals-speaker-profile";
@@ -92,9 +94,10 @@ export async function declineSpeakerParticipation(
   signingSecret: string,
   payload: { reason?: string | null; appBaseUrl: string },
 ): Promise<{ outboxIds: string[] }> {
-  const { speaker, proposal, user } = await getSpeakerByManageToken(db, manageToken, signingSecret, {
+  const context = await getSpeakerByManageToken(db, manageToken, signingSecret, {
     allowLateResponseWithdrawal: true,
   });
+  const { speaker, proposal, user } = context;
 
   if (speaker.status === "declined") {
     return { outboxIds: [] };
@@ -127,6 +130,18 @@ export async function declineSpeakerParticipation(
     reason: payload.reason ?? null,
     appBaseUrl: payload.appBaseUrl,
   });
+  const withdrawalNotices = isLateSpeakerResponseAwaitingReview(
+    speaker.status,
+    speaker.response_invite_generation,
+    speaker.invite_generation,
+  )
+    ? await prepareSpeakerResponseNotices(db, context, {
+        outcome: "withdrawn",
+        appBaseUrl: payload.appBaseUrl,
+        at: now,
+        event,
+      })
+    : [];
   try {
     await db.batch([
       prepareSpeakerSelfAuthorityGuard(db, manageToken, {
@@ -181,6 +196,7 @@ export async function declineSpeakerParticipation(
       })),
       ...agendaRemoval,
       ...proposerNotice.statements,
+      ...withdrawalNotices.map((notice) => notice.statement),
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error))
@@ -203,5 +219,10 @@ export async function declineSpeakerParticipation(
     await requireAnotherProposalSpeaker(db, proposal.id);
     throw new AppError(409, "PROPOSAL_SPEAKER_CONFLICT", "Proposal speaker changed while the decline was processed");
   }
-  return { outboxIds: proposerNotice.outboxId ? [proposerNotice.outboxId] : [] };
+  return {
+    outboxIds: [
+      ...(proposerNotice.outboxId ? [proposerNotice.outboxId] : []),
+      ...withdrawalNotices.flatMap((notice) => notice.ids),
+    ],
+  };
 }

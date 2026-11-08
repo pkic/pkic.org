@@ -161,7 +161,7 @@ describe("speaker willingness and late review", () => {
       env.DB,
       await getSpeakerByProposalUser(env.DB, f.proposalId, f.coSpeakerUserId),
       {
-        late: true,
+        outcome: "late",
         appBaseUrl: "https://app.test",
         at: new Date().toISOString(),
       },
@@ -182,6 +182,40 @@ describe("speaker willingness and late review", () => {
     expect((await respond(f)).status).toBe(200);
     expect((await respond(f, { status: "declined" })).status).toBe(200);
     expect(await state(f)).toMatchObject({ status: "declined" });
+  });
+  it("notifies reviewers once when a late response is withdrawn, alongside the proposer's existing decline notice", async () => {
+    const f = await fixture();
+    await expire(f);
+    expect((await respond(f)).status).toBe(200);
+    expect((await respond(f, { status: "declined" })).status).toBe(200);
+    const withdrawn = (await notices()).filter((row) => JSON.parse(row.payload_json).withdrawn);
+    expect(withdrawn.map((row) => row.recipient_user_id)).toEqual([adminUserId]);
+    expect(JSON.parse(withdrawn[0].payload_json).proposalUrl).toContain(`/proposals/${f.proposalId}/speakers`);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='proposal_speaker_declined'"),
+    ).toHaveLength(1);
+    expect((await respond(f, { status: "declined" })).status).toBe(200);
+    expect((await notices()).filter((row) => JSON.parse(row.payload_json).withdrawn)).toEqual(withdrawn);
+  });
+  it("rolls back a withdrawal and its proposer notice if the reviewer notice cannot be queued", async () => {
+    const f = await fixture();
+    await expire(f);
+    await respond(f);
+    const before = await notices();
+    await env.DB.prepare(
+      "CREATE TRIGGER fail_withdrawal_notice BEFORE INSERT ON email_outbox WHEN NEW.template_key='proposal_speaker_response' BEGIN SELECT RAISE(ABORT,'forced withdrawal notice failure'); END;",
+    ).run();
+    try {
+      expect((await respond(f, { status: "declined" })).status).toBe(500);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_withdrawal_notice").run();
+    }
+    expect(await state(f)).toMatchObject({ status: "pending" });
+    expect(await notices()).toEqual(before);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='proposal_speaker_declined'"),
+    ).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='speaker_declined'")).toEqual([]);
   });
   it("reports a revoked decline authority as an authorization failure and rolls back", async () => {
     const f = await fixture();

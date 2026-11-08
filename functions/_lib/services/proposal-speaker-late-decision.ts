@@ -1,7 +1,10 @@
 import { personDisplayName } from "../../../assets/shared/person-display";
 import { anotherProposalSpeakerRemainsSql, requireAnotherProposalSpeaker } from "./proposal-speaker-retention";
 import { isAuthorizationGuardFailure } from "../db/authorization-guard";
-import { isLateSpeakerResponseAwaitingReview } from "../../../assets/shared/proposal-speaker-acceptance";
+import {
+  isLateSpeakerResponseAwaitingReview,
+  lateSpeakerResponseAwaitingReviewSql,
+} from "../../../assets/shared/proposal-speaker-acceptance";
 import { requireUserBackedAuthAdmin } from "../auth/admin-identity";
 import { preparePermissionsAuthorizationGuard } from "../auth/permissions";
 import { AppError } from "../errors";
@@ -44,8 +47,7 @@ export async function rejectLateSpeakerParticipation(
   const at = nowIso();
   const event = await getEventById(db, proposal.event_id);
   const notices = await prepareSpeakerResponseNotices(db, context, {
-    late: true,
-    rejected: true,
+    outcome: "rejected",
     appBaseUrl,
     at,
     event,
@@ -67,7 +69,7 @@ export async function rejectLateSpeakerParticipation(
       ]),
       db
         .prepare(`UPDATE proposal_speakers SET status='declined',declined_at=?,decline_reason='Late participation was not approved'
-        WHERE id=? AND status='pending' AND invite_generation=? AND response_invite_generation=invite_generation AND terms_accepted_at IS ?
+        WHERE id=? AND invite_generation=? AND ${lateSpeakerResponseAwaitingReviewSql("proposal_speakers")} AND terms_accepted_at IS ?
           AND ${anotherProposalSpeakerRemainsSql}
           AND EXISTS(SELECT 1 FROM session_proposals WHERE id=? AND status=? AND updated_at=? AND deleted_at IS NULL)`)
         .bind(

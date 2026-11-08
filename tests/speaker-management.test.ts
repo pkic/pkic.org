@@ -1649,9 +1649,10 @@ describe("speaker self-management endpoints", () => {
       id: string;
       status: string;
       invite_generation: number;
+      response_invite_generation: number | null;
     }>(
       env.DB,
-      "SELECT id, status, invite_generation FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+      "SELECT id, status, invite_generation, response_invite_generation FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
       proposalId,
       coSpeakerUserId,
     );
@@ -1675,6 +1676,7 @@ describe("speaker self-management endpoints", () => {
           proposalUpdatedAt: proposal.updated_at,
           userId: coSpeakerUserId,
           currentStatus: speaker.status,
+          responseInviteGeneration: speaker.response_invite_generation,
           inviteGeneration: speaker.invite_generation,
           accountAuthority: "unclaimed",
         },
@@ -1696,10 +1698,12 @@ describe("speaker self-management endpoints", () => {
       id: string;
       status: string;
       invite_generation: number;
-    }>(env.DB, "SELECT id, status, invite_generation FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
-      proposalId,
-      coSpeakerUserId,
-    ]);
+      response_invite_generation: number | null;
+    }>(
+      env.DB,
+      "SELECT id, status, invite_generation, response_invite_generation FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+      [proposalId, coSpeakerUserId],
+    );
     const [proposal] = await queryAll<{ status: string; updated_at: string }>(
       env.DB,
       "SELECT status, updated_at FROM session_proposals WHERE id = ?",
@@ -1720,6 +1724,7 @@ describe("speaker self-management endpoints", () => {
           proposalUpdatedAt: proposal.updated_at,
           userId: coSpeakerUserId,
           currentStatus: speaker.status,
+          responseInviteGeneration: speaker.response_invite_generation,
           inviteGeneration: speaker.invite_generation,
           accountAuthority: "unclaimed",
         },
@@ -1753,6 +1758,7 @@ describe("speaker self-management endpoints", () => {
           proposalUpdatedAt: proposal.updated_at,
           userId: user.id,
           currentStatus: speaker.status,
+          responseInviteGeneration: speaker.response_invite_generation,
           inviteGeneration: speaker.invite_generation,
           accountAuthority: "unclaimed",
         },
