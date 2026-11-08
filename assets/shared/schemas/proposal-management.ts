@@ -388,7 +388,8 @@ export const speakerSelfProfilePatchSchema = speakerProfilePatchSchema
 export const speakerParticipationPatchSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("confirmed"),
-    consents: z.array(consentItemSchema).min(1).max(20),
+    // The event's live terms decide which consents are required; an event may have none.
+    consents: z.array(consentItemSchema).max(20),
   }),
   z.object({
     status: z.literal("declined"),

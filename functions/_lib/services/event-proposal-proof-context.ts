@@ -191,7 +191,7 @@ export async function prepareEventProposalProofContext(
       : []),
     ...(await prepareInvitationMailboxProof(db, input.payload)),
     prepareAuthorizationGuard(db, {
-      sql: `SELECT 1 FROM proposal_speakers ps JOIN session_proposals sp ON sp.id=ps.proposal_id AND sp.deleted_at IS NULL JOIN events e ON e.id=sp.event_id WHERE ps.id=? AND ps.proposal_id=? AND ps.user_id=? AND ps.invite_generation=? AND ps.manage_link_secret IS ? AND sp.event_id=? AND (ps.status NOT IN ('invited','pending') OR (${activeEffectiveInviteExpirySql(effectiveProposalSpeakerInviteExpirySql("ps", "e"), "strftime('%Y-%m-%dT%H:%M:%fZ','now')")})) AND ${capability ? "? > unixepoch('now')" : "EXISTS(SELECT 1 FROM sessions WHERE id=? AND user_id=ps.user_id AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))"}`,
+      sql: `SELECT 1 FROM proposal_speakers ps JOIN session_proposals sp ON sp.id=ps.proposal_id AND sp.deleted_at IS NULL JOIN events e ON e.id=sp.event_id WHERE ps.id=? AND ps.proposal_id=? AND ps.user_id=? AND ps.invite_generation=? AND ps.manage_link_secret IS ? AND sp.event_id=? AND (${capability ? "0" : "1"} OR ps.status NOT IN ('invited','pending') OR (${activeEffectiveInviteExpirySql(effectiveProposalSpeakerInviteExpirySql("ps", "e"), "strftime('%Y-%m-%dT%H:%M:%fZ','now')")})) AND ${capability ? "? > unixepoch('now')" : "EXISTS(SELECT 1 FROM sessions WHERE id=? AND user_id=ps.user_id AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))"}`,
       bindings: [
         speaker.id,
         proposal.id,

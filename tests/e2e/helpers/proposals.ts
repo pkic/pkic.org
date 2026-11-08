@@ -1,3 +1,5 @@
+import type { z } from "zod";
+import { coSpeakerInviteSchema } from "../../../assets/shared/schemas/proposal-management";
 import { expect, request, type Page } from "@playwright/test";
 import { eventFormsResponseSchema, eventTermsResponseSchema } from "../../../assets/shared/schemas/forms";
 import {
@@ -123,7 +125,7 @@ export async function submitProposal(
 export async function inviteCoSpeaker(
   page: Page,
   token: string,
-  speaker: { email: string; firstName: string; lastName: string; role?: string },
+  speaker: z.input<typeof coSpeakerInviteSchema>,
 ): Promise<number> {
   return page.evaluate(
     async ({ token, speaker }) => {
@@ -134,7 +136,7 @@ export async function inviteCoSpeaker(
       });
       return response.status;
     },
-    { token, speaker },
+    { token, speaker: coSpeakerInviteSchema.parse(speaker) },
   );
 }
 

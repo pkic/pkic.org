@@ -29,6 +29,7 @@ import { TextInput } from "../ui/TextControl";
 import { FormSection } from "../ui/FormSection";
 import { EmailFirstStep } from "./EmailFirstStep";
 import { ADDRESS_IN_USE_COPY, EMAIL_FIRST_COPY } from "../../shared/email-first-copy";
+import { ProposalProofSupportNotice } from "./ProposalProofSupportNotice";
 import { ParticipationRepresentation } from "./ParticipationRepresentation";
 import { ParticipationPersonalDetails } from "./ParticipationPersonalDetails";
 import { ParticipationIdentitySummary } from "./ParticipationIdentitySummary";
@@ -431,6 +432,16 @@ export function EventProposalIdentityStep({
             {ADDRESS_IN_USE_COPY.action}
           </ButtonLink>
         </Alert>
+      )}
+      {identity.supportRequired && (
+        <ProposalProofSupportNotice
+          {...identity.supportRequired}
+          onUsePersonal={() => {
+            identity.setKind("individual");
+            identity.setEmail("");
+            setSent(false);
+          }}
+        />
       )}
       {identity.error && (
         <div ref={errorBanner}>

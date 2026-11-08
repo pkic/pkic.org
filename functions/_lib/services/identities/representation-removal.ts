@@ -1,17 +1,19 @@
+import { prepareIncorrectRepresentationErasure } from "./incorrect-representation-erasure";
+import { prepareReconcileMailingListSubscriptionsStatement } from "../mailing-list-subscriptions";
 import { primaryIdentityIdSql } from "./affiliation-projection";
 import { proposalSpeakerIdentityIdSql } from "../proposal-speaker-profile-projection";
-/** Remove an incorrect association, optionally preserving event work under a valid replacement. */
 import { prepareRepresentationAuthority } from "./representation-authority";
 import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
-import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { ownedIdentityAtEvidence } from "./selection";
 import { prepareBadgeRenderJobsForUser } from "../badge-render-job-statements";
-import { prepareOrganizationIdentityPublication } from "./lifecycle-publication";
+import { identityErasurePublicationCondition, prepareOrganizationIdentityPublication } from "./lifecycle-publication";
 
+/** Remove an incorrect association, optionally preserving event work under a valid replacement. */
 export function prepareIncorrectRepresentationRemoval(
   db: DatabaseLike,
   input: {
@@ -47,7 +49,7 @@ export function prepareIncorrectRepresentationRemoval(
           }),
         ]
       : []),
-    prepareOrganizationIdentityPublication(db, identityId, at),
+    prepareOrganizationIdentityPublication(db, identityId, at, identityErasurePublicationCondition(identityId)),
     ...(replacement
       ? [
           db
@@ -63,31 +65,29 @@ export function prepareIncorrectRepresentationRemoval(
       : []),
     db.prepare("DELETE FROM organization_link_notices WHERE identity_id=? AND user_id=?").bind(identityId, ownerId),
     db.prepare("DELETE FROM affiliation_reviews WHERE resolved_identity_id=? AND user_id=?").bind(identityId, ownerId),
-    // Incorrect organization grants are removed, never carried into the replacement organization.
-    db.prepare("DELETE FROM user_roles WHERE identity_id=? AND user_id=?").bind(identityId, ownerId),
-    db.prepare("DELETE FROM group_memberships WHERE identity_id=? AND user_id=?").bind(identityId, ownerId),
-    // Voting, membership, and successor references deliberately restrict deletion and roll back the whole correction.
-    db
-      .prepare(`DELETE FROM identities WHERE id=?
+    ...prepareIncorrectRepresentationErasure(
+      db,
+      {
+        identityId,
+        ownerId,
+        actorId,
+        at,
+        auditAction: correction ? "incorrect_representation_corrected" : "incorrect_representation_removed",
+        auditDetails: correction ?? {},
+      },
+      // Recorded outcomes and succession references still restrict deletion and roll back the batch.
+      db
+        .prepare(`DELETE FROM identities WHERE id=?
       AND NOT EXISTS(SELECT 1 FROM registrations registration WHERE registration.user_id=? AND (${registrationIdentity})=?)
       AND NOT EXISTS(SELECT 1 FROM proposal_speakers speaker WHERE speaker.user_id=? AND (${speakerIdentity})=?)`)
-      .bind(identityId, ownerId, identityId, ownerId, identityId),
-    prepareAuditLogAfterOneChange(
-      db,
-      "user",
-      actorId,
-      correction ? "incorrect_representation_corrected" : "incorrect_representation_removed",
-      "identity",
-      identityId,
-      correction ?? {},
-      at,
+        .bind(identityId, ownerId, identityId, ownerId, identityId),
     ),
     ...(correction
       ? [
           ...prepareAutomaticGroupEnrollmentForUserStatements(db, ownerId, at),
           prepareBadgeRenderJobsForUser(db, ownerId, at),
         ]
-      : []),
+      : [prepareReconcileMailingListSubscriptionsStatement(db, ownerId, at)]),
   ];
 }
 
@@ -110,7 +110,9 @@ export function incorrectRepresentationRemovalError(cause: unknown, correcting =
     throw new AppError(
       409,
       "IDENTITY_HAS_PROTECTED_HISTORY",
-      "This identity has voting, membership, or succession records that require review before correction.",
+      correcting
+        ? "This identity cannot be corrected because it has protected voting, consultation, membership, or succession records. These records must remain attributed to the original representation."
+        : "This identity cannot be deleted because it has protected voting, consultation, membership, or succession records. End the representation to stop future participation while preserving its history.",
     );
   throw cause;
 }

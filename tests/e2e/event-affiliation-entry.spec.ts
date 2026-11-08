@@ -497,11 +497,15 @@ test("guest event entry creates a nonmember affiliation and an invited known per
       `/api/v1/proposals/${encodeURIComponent(proposalId)}/participation`,
       "PATCH",
     );
-    await resumed.getByRole("button", { name: "Confirm participation", exact: true }).click();
+    await resumed.getByRole("button", { name: "Confirm willingness to participate", exact: true }).click();
     const confirmResponse = await confirmed;
     expect(confirmResponse.status()).toBe(200);
     expect(speakerParticipationPatchSchema.parse(confirmResponse.request().postDataJSON()).status).toBe("confirmed");
-    await expect(resumed.getByText("Participation confirmed.")).toBeVisible();
+    await expect(
+      resumed.getByText(
+        "Your willingness to participate in this proposal is confirmed. Committee acceptance and scheduling are separate decisions.",
+      ),
+    ).toBeVisible();
     await resumed.reload();
     expect((await readSpeaker(resumed, proposalId)).speaker.status).toBe("confirmed");
     // The original proposal keeps its original individual attribution.

@@ -570,6 +570,12 @@ describe("pending invitation management", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     expect(await env.DB.prepare("SELECT id FROM identities WHERE id=?").bind(f.identityId).first()).toBeNull();
     expect(await env.DB.prepare("SELECT id FROM users WHERE id=?").bind(f.invitedUserId).first()).not.toBeNull();
+    const audit = await env.DB.prepare(
+      "SELECT details_json FROM audit_log WHERE entity_id=? AND action='incorrect_representation_removed'",
+    )
+      .bind(f.identityId)
+      .first<string>("details_json");
+    expect(JSON.parse(audit!)).toEqual({});
     expect(
       (
         await callApi(env, "/api/v1/identities/invitations/preview", {

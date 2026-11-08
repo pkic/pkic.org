@@ -119,6 +119,14 @@ export const eventProposalProofIdentityPatchRouteSchema = {
     "200": jsonResponse("The identity's saved profile.", eventProposalProofIdentityPatchResponseSchema),
   },
 };
+/**
+ * Why a proved address cannot continue on its own. An organization domain the
+ * consortium has not yet tied to one organization is confirmed by staff; any
+ * other address needs a person to look at it.
+ */
+export const eventProposalProofSupportReasonSchema = z.enum(["organization_domain_review", "address_review"]);
+export type EventProposalProofSupportReason = z.infer<typeof eventProposalProofSupportReasonSchema>;
+
 export const eventProposalProofVerifyResponseSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("ready"),
@@ -142,7 +150,13 @@ export const eventProposalProofVerifyResponseSchema = z.discriminatedUnion("stat
     speakerManageUrl: httpCapabilityUrlSchema.optional(),
     entryContext: proposalEntryContextSchema.optional(),
   }),
-  z.object({ status: z.literal("support_required") }),
+  /** Nothing was linked or created; the person is told why and what to do next. */
+  z.object({
+    status: z.literal("support_required"),
+    email: normalizedEmailSchema,
+    applicantKind: memberJoinApplicantKindSchema,
+    reason: eventProposalProofSupportReasonSchema,
+  }),
   /** The proved address belongs to another account: sign in with it; nothing was linked or created. */
   z.object({ status: z.literal("sign_in_required"), email: normalizedEmailSchema }),
 ]);

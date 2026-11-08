@@ -175,6 +175,7 @@ describe("proposal speaker capacity conflicts", () => {
 
     await expect(
       confirmSpeakerParticipation(racingDb, speakerManageToken, env.INTERNAL_SIGNING_SECRET!, {
+        appBaseUrl: "https://app.test",
         consents: [{ termKey: "speaker-terms", version: "v1" }],
         ip: null,
         userAgent: null,
@@ -224,6 +225,7 @@ describe("proposal speaker capacity conflicts", () => {
 
     await expect(
       confirmSpeakerParticipation(racingDb, speakerManageToken, env.INTERNAL_SIGNING_SECRET!, {
+        appBaseUrl: "https://app.test",
         consents: [{ termKey: "speaker-terms", version: "v1" }],
         ip: null,
         userAgent: null,
@@ -262,11 +264,12 @@ describe("proposal speaker capacity conflicts", () => {
 
     await expect(
       confirmSpeakerParticipation(env.DB, speakerManageToken, env.INTERNAL_SIGNING_SECRET!, {
+        appBaseUrl: "https://app.test",
         consents: [{ termKey: "speaker-terms", version: "v1" }],
         ip: null,
         userAgent: null,
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toMatchObject({ status: "confirmed" });
     await expect(
       queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
         proposalId,

@@ -5,6 +5,7 @@ import { administratorGrants } from "./helpers/administrator";
 import { selectIndividualSpeakerRepresentation } from "./helpers/proposal-proof";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { queryAll } from "./helpers/context";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { resetDb } from "./helpers/reset-db";
 import { persistConsents } from "../functions/_lib/services/consent";
 import { acceptSpeakerParticipationByManager } from "../functions/_lib/services/proposal-speaker-confirmation";
@@ -84,6 +85,109 @@ describe("organizer speaker acceptance", () => {
     expect(
       await queryAll(env.DB, "SELECT actor_id FROM audit_log WHERE action='speaker_confirmed_by_organizer'"),
     ).toHaveLength(1);
+  });
+
+  it("credits a speaker accepted after placement on the placed session and moves the agenda to a new revision", async () => {
+    const { proposalId, coSpeakerUserId } = await acceptanceFixture();
+    await recordSpeakerConsent(proposalId, coSpeakerUserId);
+    await env.DB.prepare("UPDATE session_proposals SET status='accepted' WHERE id=?").bind(proposalId).run();
+    const occurrenceId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO event_agenda_occurrences (id,event_id,title,admission_policy,capacity,source_key) VALUES (?,?,'Placed talk','reservation',40,?)",
+      ).bind(occurrenceId, eventId, `proposal:${proposalId}`),
+      env.DB.prepare(
+        "INSERT INTO event_agenda_occurrence_speakers(occurrence_id,user_id,role,attendance_mode,room_id) VALUES (?,?,'speaker','physical',NULL)",
+      ).bind(occurrenceId, adminUserId),
+      env.DB.prepare(
+        "INSERT INTO event_agenda_state(event_id,revision,published_revision,updated_at) VALUES (?,3,3,?) ON CONFLICT(event_id) DO UPDATE SET revision=3,published_revision=3",
+      ).bind(eventId, now),
+    ]);
+
+    expect((await acceptRequest(proposalId, coSpeakerUserId)).status).toBe(200);
+
+    expect(
+      await queryAll<{ user_id: string; role: string }>(
+        env.DB,
+        "SELECT user_id, role FROM event_agenda_occurrence_speakers WHERE occurrence_id=? ORDER BY user_id",
+        [occurrenceId],
+      ),
+    ).toEqual(
+      [
+        { user_id: adminUserId, role: "speaker" },
+        { user_id: coSpeakerUserId, role: "co_speaker" },
+      ].sort((left, right) => left.user_id.localeCompare(right.user_id)),
+    );
+    // The published agenda is left as approved; the draft is one revision ahead until the planner approves it.
+    expect(
+      await queryAll(env.DB, "SELECT revision, published_revision FROM event_agenda_state WHERE event_id=?", [eventId]),
+    ).toEqual([{ revision: 4, published_revision: 3 }]);
+    // The organizer accepted, so the agenda change is theirs in the audit trail, not the speaker's.
+    expect(
+      await queryAll(env.DB, "SELECT actor_type, actor_id FROM audit_log WHERE action = 'agenda.speaker_confirmed'"),
+    ).toEqual([{ actor_type: "admin", actor_id: adminUserId }]);
+  });
+
+  it.each([false, true])("keeps content-only agenda confirmation atomic when the agenda races (%s)", async (race) => {
+    const { proposalId, coSpeakerUserId } = await acceptanceFixture();
+    await recordSpeakerConsent(proposalId, coSpeakerUserId);
+    await env.DB.prepare("UPDATE session_proposals SET status='accepted' WHERE id=?").bind(proposalId).run();
+    const at = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO event_agenda_state(event_id,revision,published_revision,updated_at) VALUES (?,3,3,?) ON CONFLICT(event_id) DO UPDATE SET revision=3,published_revision=3",
+      ).bind(eventId, at),
+      env.DB.prepare(
+        "INSERT INTO event_agenda_contents(id,event_id,title,source_key,created_at,updated_at) VALUES (?,?,'Unplaced proposal',?,?,?)",
+      ).bind(crypto.randomUUID(), eventId, `proposal:${proposalId}`, at, at),
+    ]);
+    const db = race
+      ? mutateBeforeMatchingQuery(
+          env.DB,
+          (sql) => sql.includes("INSERT INTO event_agenda_revision_guards"),
+          async () => {
+            await env.DB.prepare("UPDATE event_agenda_state SET revision=revision+1 WHERE event_id=?")
+              .bind(eventId)
+              .run();
+          },
+        )
+      : env.DB;
+    const confirmation = () =>
+      acceptSpeakerParticipationByManager(
+        db,
+        { identityType: "user", id: adminUserId, email: "admin@pkic.org", grants: administratorGrants },
+        proposalId,
+        coSpeakerUserId,
+        "https://app.test",
+      );
+    if (race) await expect(confirmation()).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    else await confirmation();
+    const [content] = await queryAll<{ speaker_user_ids_json: string }>(
+      env.DB,
+      "SELECT speaker_user_ids_json FROM event_agenda_contents WHERE event_id=? AND source_key=?",
+      [eventId, `proposal:${proposalId}`],
+    );
+    expect(JSON.parse(content.speaker_user_ids_json)).toEqual(race ? [] : [coSpeakerUserId]);
+    expect(
+      await queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id=? AND user_id=?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).toEqual([{ status: race ? "invited" : "confirmed" }]);
+    expect(
+      await queryAll(env.DB, "SELECT revision,published_revision FROM event_agenda_state WHERE event_id=?", [eventId]),
+    ).toEqual([{ revision: 4, published_revision: 3 }]);
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='agenda.speaker_confirmed'")).toHaveLength(
+      race ? 0 : 1,
+    );
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM email_outbox WHERE recipient_user_id=? AND template_key='proposal_speaker_confirmed_by_organizer'",
+        [coSpeakerUserId],
+      ),
+    ).toHaveLength(race ? 0 : 1);
   });
 
   it("reuses event speaker consent originally accepted on another proposal", async () => {

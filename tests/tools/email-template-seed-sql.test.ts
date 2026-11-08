@@ -53,6 +53,7 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "proposal_representation_review",
   "proposal_speaker_confirmed_by_organizer",
   "proposal_speaker_declined",
+  "proposal_speaker_response",
   "proposal_submitted",
   "registration_confirm_email",
   "registration_confirmation_reminder",

@@ -572,6 +572,7 @@ describe("proposal speaker acting identity", () => {
             proposalUpdatedAt: proposal.updated_at,
             userId: f.userId,
             currentStatus: speaker.status,
+            responseInviteGeneration: speaker.response_invite_generation,
             inviteGeneration: speaker.invite_generation,
             expectedActingIdentityId: speaker.acting_identity_id,
             expectedActingIdentitySelectedAt: speaker.acting_identity_selected_at,
@@ -631,6 +632,7 @@ describe("proposal speaker acting identity", () => {
       );
       await expect(
         confirmSpeakerParticipation(racedDb, capability, env.INTERNAL_SIGNING_SECRET!, {
+          appBaseUrl: "https://app.test",
           consents: f.body.consents,
           ip: null,
           userAgent: null,
