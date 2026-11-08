@@ -1,5 +1,6 @@
 /** Returning members should reach sign-in, not another application. @covers join.1.0 */
 import { expect, test } from "@playwright/test";
+import { userCreateSchema } from "../../assets/shared/schemas/user-create";
 import { memberApplicationCreateSchema } from "../../assets/shared/schemas/member-applications";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { memberJoinVerifyResponseSchema } from "../../assets/shared/schemas/member-join";
@@ -89,6 +90,11 @@ test("a verified address on a shared domain chooses its member organization", as
   await expect(confirmation.getByText("People with this email domain will choose their organization.")).toBeVisible();
   await confirmation.getByRole("button", { name: "Claim domain", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/organizations/${secondOrganization}/domains$`));
+  const independentEmail = `independent-${suffix}@${domain}`;
+  const independentUser = await page.request.post("/api/v1/users", {
+    data: userCreateSchema.parse({ email: independentEmail, firstName: "Casey", lastName: "Independent" }),
+  });
+  expect(independentUser.status(), await independentUser.text()).toBe(201);
 
   await page.context().clearCookies();
   const email = `colleague-${suffix}@${domain}`;
@@ -117,7 +123,6 @@ test("a verified address on a shared domain chooses its member organization", as
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.locator("[data-join-organization-access]")).toBeVisible();
   await page.context().clearCookies();
-  const independentEmail = `independent-${suffix}@${domain}`;
   const beforeIndependent = await capturedEmailCount();
   await page.goto("/join/");
   await page.getByRole("radio", { name: EMAIL_FIRST_COPY.join.personal.title, exact: true }).check();
@@ -139,6 +144,20 @@ test("a verified address on a shared domain chooses its member organization", as
   await expect(page.locator("[data-join-application-form]")).toBeVisible();
   await expect(page.locator("[data-verified-application-kind]")).toHaveText("Individual application");
   expect((await page.context().cookies()).some((cookie) => cookie.name === "pkic_session")).toBe(false);
+  await signInToPortal(page, independentEmail);
+  await page.goto("/portal/#/home");
+  const offer = page.getByRole("region", { name: "Your organization", exact: true });
+  await expect(offer).toBeVisible();
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 812 });
+    await offer.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: test.info().outputPath(`shared-domain-offer-${width}.png`) });
+  }
+  await offer.getByRole("button", { name: "I am independent", exact: true }).click();
+  await expect(offer).toBeHidden();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Account menu" })).toBeVisible();
+  await expect(offer).toHaveCount(0);
 });
 
 test("a verified address can apply for a nonmember organization on a shared domain", async ({ page }) => {
@@ -171,7 +190,7 @@ test("a verified address can apply for a nonmember organization on a shared doma
   await page.getByLabel("First name", { exact: true }).fill("Casey");
   await page.getByLabel("Last name", { exact: true }).fill("Applicant");
   await page.getByLabel(/F —/).check();
-  await page.getByLabel(/^Job title/).fill("Engineer");
+  await page.getByLabel(/^Role or job title/).fill("Engineer");
   await page.getByLabel(/^Why do you want to join/).fill("Contribute to PKI interoperability.");
   await page.getByLabel(/^About yourself/).fill("I work on PKI standards.");
   await page.getByLabel(/^About your organization/).fill("We develop PKI services.");
