@@ -63,16 +63,16 @@ export function userRecordColumns(tableAlias?: string): string {
  * authentication decision.
  */
 async function findExistingUserByAnyEmail(db: DatabaseLike, normalizedEmail: string): Promise<UserRecord | null> {
-  const direct = await first<UserRecord>(db, `SELECT ${userRecordColumns()} FROM users WHERE normalized_email = ?`, [
-    normalizedEmail,
-  ]);
-  if (direct) return direct;
   return first<UserRecord>(
     db,
-    `SELECT ${userRecordColumns("u")}
+    `SELECT ${userRecordColumns()} FROM users WHERE normalized_email = ?
+     UNION ALL
+     SELECT ${userRecordColumns("u")}
      FROM users u JOIN user_emails ue ON ue.user_id = u.id
-     WHERE ue.normalized_email = ?`,
-    [normalizedEmail],
+     WHERE ue.normalized_email = ?
+       AND NOT EXISTS (SELECT 1 FROM users WHERE normalized_email = ?)
+     LIMIT 1`,
+    [normalizedEmail, normalizedEmail, normalizedEmail],
   );
 }
 
