@@ -72,6 +72,7 @@ test("a verified address on a shared domain chooses its member organization", as
   await signInToPortal(page, e2eAdminEmail("shared-organization-domains"));
   const first = await createMember(page, { organizationName: `Shared First ${suffix}` });
   const second = await createMember(page, { organizationName: `Shared Second ${suffix}` });
+  const later = await createMember(page, { organizationName: `Later Organization ${suffix}` });
   const secondUser = recordProperty(await jsonResponse(page.request, "GET", `/api/v1/users/${second.userId}`), "user");
   const secondIdentity = arrayProperty(secondUser, "identities")[0] as Record<string, unknown>;
   const secondOrganization = stringProperty(secondIdentity, "organizationId");
@@ -163,7 +164,8 @@ test("a verified address on a shared domain chooses its member organization", as
   await openMyProfile(page);
   await page.getByRole("button", { name: "Email addresses actions" }).click();
   await page.getByRole("menuitem", { name: "Add email address" }).click();
-  const aliasEmail = `independent-${suffix}@${second.email.split("@")[1]}`;
+  // Independence dismissed both shared candidates; a new organization must still be offered.
+  const aliasEmail = `independent-${suffix}@${later.email.split("@")[1]}`;
   await page.getByRole("textbox", { name: /^Email address/ }).fill(aliasEmail);
   const beforeAlias = await capturedEmailCount();
   await page.getByRole("button", { name: "Send verification link", exact: true }).click();
@@ -172,7 +174,7 @@ test("a verified address on a shared domain chooses its member organization", as
   await page.getByRole("button", { name: "Verify this address", exact: true }).click();
   await expect(page.getByText(`${aliasEmail} is verified`, { exact: true })).toBeVisible();
   await page.goto("/portal/#/home");
-  const joinOrganization = offer.getByRole("button", { name: `Join Shared Second ${suffix}`, exact: true });
+  const joinOrganization = offer.getByRole("button", { name: `Join Later Organization ${suffix}`, exact: true });
   await expect(joinOrganization).toBeVisible();
   for (const width of [1280, 375]) {
     await page.setViewportSize({ width, height: 812 });
