@@ -205,7 +205,7 @@ describe("membership domain claim lifecycle", () => {
     if (released)
       await env.DB.prepare("DELETE FROM organization_domain_claims WHERE organization_id=?").bind(selected).run();
     if (released) {
-      await expect(approve(id)).rejects.toThrow("NOT NULL constraint failed: authorization_guards.authorized");
+      await expect(approve(id)).rejects.toMatchObject({ status: 409, code: "DOMAIN_CLAIM_LOST" });
       expect(await queryAll(env.DB, "SELECT id FROM members WHERE organization_id=?", [selected])).toEqual([]);
       expect(await queryAll(env.DB, "SELECT id FROM organization_domain_claims WHERE domain=?", [domain])).toEqual([]);
     } else expect((await approve(id)).organizationId).toBe(selected);

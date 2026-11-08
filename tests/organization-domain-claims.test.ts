@@ -14,6 +14,12 @@ import { seedMemberApplication } from "./helpers/member-applications";
 import { insertOrganization, insertUser } from "./helpers/membership";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { resetDb } from "./helpers/reset-db";
+import { prepareStateGuard } from "../functions/_lib/db/authorization-guard";
+import {
+  decodeDomainClaimsObservation,
+  domainClaimsObservationSelection,
+  observedDomainClaimsEvidence,
+} from "../functions/_lib/services/identities/affiliation-evidence";
 import {
   prepareReleaseApplicationDomainClaim,
   prepareTransferApplicationDomainClaim,
@@ -46,6 +52,33 @@ async function linkedPerson(organizationId: string, email: string): Promise<stri
 }
 
 describe("staff manage an organization's email domains", () => {
+  it.each(["empty", "approved", "pending"])(
+    "guards a %s observation without writes for unobserved applications",
+    async (kind) => {
+      const domain = "guarded-work.example";
+      const organizationId = await insertOrganization(env.DB, "Observed Organization");
+      const applicationId =
+        kind === "pending"
+          ? await seedMemberApplication({ applicantEmail: `person@${domain}`, organizationDomain: domain })
+          : null;
+      if (kind === "approved") await claimDomain(organizationId, domain);
+      const read = domainClaimsObservationSelection(`person@${domain}`);
+      const [result] = await env.DB.batch([env.DB.prepare(read.sql).bind(...read.bindings)]);
+      const claims = decodeDomainClaimsObservation(result);
+      const guards = observedDomainClaimsEvidence(`person@${domain}`, claims).map((evidence) =>
+        prepareStateGuard(env.DB, evidence),
+      );
+      expect(guards).toHaveLength(kind === "pending" ? 2 : 1);
+      await env.DB.batch(guards);
+      if (applicationId)
+        await env.DB.prepare("UPDATE member_applications SET organization_name='Changed Organization' WHERE id=?")
+          .bind(applicationId)
+          .run();
+      else await claimDomain(await insertOrganization(env.DB, "Concurrent Claimant"), domain);
+      await expect(env.DB.batch(guards)).rejects.toThrow("authorization_guards.authorized");
+    },
+  );
+
   it.each(["release", "approve"])(
     "preserves additional claims when a pending application is decided (%s)",
     async (decision) => {

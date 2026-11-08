@@ -24,6 +24,22 @@ export function joinLinkConsumedSelection(capabilityId: string): SqlSelection {
   };
 }
 
+/** One mailbox-proof observation for join verification and read-only previews. */
+export function prepareJoinAffiliationRead(
+  db: DatabaseLike,
+  email: string,
+  selection?: { domain?: string; organizationName?: string },
+) {
+  return workEmailDomain(email)
+    ? prepareVerifiedAffiliationRead(
+        db,
+        provedMailboxUserIdSelection(email),
+        { email, emailId: null, domain: selection?.domain, organizationName: selection?.organizationName },
+        { verifiedAt: nowIso() },
+      )
+    : null;
+}
+
 /** Request-owned observations for the existing join planners. Mutation guards remain authoritative. */
 export async function readJoinVerification(
   db: DatabaseLike,
@@ -42,14 +58,7 @@ export async function readJoinVerification(
     bindings: [...claim.bindings, organizationId ?? null, organizationId ?? null, organizationId ?? null],
   };
   const creation = identityCreationSelections(owner, organization);
-  const affiliation = workEmailDomain(email)
-    ? prepareVerifiedAffiliationRead(
-        db,
-        owner,
-        { email, emailId: null, domain: selection?.domain, organizationName: selection?.organizationName },
-        { verifiedAt: nowIso() },
-      )
-    : null;
+  const affiliation = prepareJoinAffiliationRead(db, email, selection);
   const reads: SqlSelection[] = [
     emailOwnershipSelection(email),
     provedMailboxUserSelection(email),

@@ -3,12 +3,8 @@ import type { memberJoinAffiliationPreviewSchema } from "../../../../../assets/s
 import type { DatabaseLike } from "../../../types";
 import { AppError } from "../../../errors";
 import { verifyMemberJoinVerificationToken } from "./capabilities";
-import { joinLinkConsumedSelection } from "./verification-read";
+import { joinLinkConsumedSelection, prepareJoinAffiliationRead } from "./verification-read";
 import { verifiedAffiliationPreview } from "../../identities/verified-affiliation-preview";
-import { prepareVerifiedAffiliationRead } from "../../identities/verified-affiliation-read";
-import { provedMailboxUserIdSelection } from "../../email-ownership";
-import { workEmailDomain } from "../../../email-domains/classification";
-import { nowIso } from "../../../utils/time";
 import { batchFirst } from "../../../db/pagination";
 
 /** Mailbox proof authorizes observation, never a session or a consumed join link. */
@@ -18,14 +14,9 @@ export async function previewMemberJoinAffiliation(
 ) {
   const capability = await verifyMemberJoinVerificationToken(input.signingSecret, input.token);
   const consumed = joinLinkConsumedSelection(capability.capabilityId);
-  const affiliation = workEmailDomain(capability.email)
-    ? prepareVerifiedAffiliationRead(
-        db,
-        provedMailboxUserIdSelection(capability.email),
-        { ...input, email: capability.email, emailId: null },
-        { verifiedAt: nowIso() },
-      )
-    : null;
+  const affiliation = prepareJoinAffiliationRead(db, capability.email, {
+    domain: input.domain,
+  });
   const results = await db.batch([
     db.prepare(consumed.sql).bind(...consumed.bindings),
     ...(affiliation?.statements ?? []),

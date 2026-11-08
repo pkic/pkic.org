@@ -155,11 +155,23 @@ describe("join-form helpers", () => {
       );
       const form = host.querySelector("form")!;
       expect(form.textContent).toContain("@shared.example");
+      const select = host.querySelector("select")!;
+      if (individual) {
+        const describedBy = select.getAttribute("aria-describedby")!;
+        expect(describedBy).toBeTruthy();
+        expect(document.getElementById(describedBy)?.textContent).toContain("only if you want to join it");
+      }
       await act(async () => {
         form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       });
       expect(choose).not.toHaveBeenCalled();
-      const select = host.querySelector("select")!;
+      if (individual) {
+        const button = [...host.querySelectorAll("button")].find(
+          (button) => button.textContent === "Continue as an individual",
+        )!;
+        await act(async () => button.click());
+        expect(continueIndividually).toHaveBeenCalledOnce();
+      }
       await act(async () => {
         select.value = first;
         select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -170,11 +182,6 @@ describe("join-form helpers", () => {
       expect(choose).toHaveBeenCalledWith(first);
       if (individual) {
         expect(select.getAttribute("aria-required")).not.toBe("true");
-        const button = [...host.querySelectorAll("button")].find(
-          (button) => button.textContent === "Continue as an individual",
-        )!;
-        await act(async () => button.click());
-        expect(continueIndividually).toHaveBeenCalledOnce();
       }
       await act(async () => render(null, host));
     },

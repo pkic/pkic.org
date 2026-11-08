@@ -74,16 +74,14 @@ export function observedDomainClaimsEvidence(
 ): AuthorizationEvidence[] {
   const observed = JSON.stringify(claims);
   const domains = JSON.stringify(organizationDomainCandidates(normalizedEmail));
-  const applications = JSON.stringify(
-    claims
-      .filter((claim) => claim.applicationId)
-      .map((claim) => ({
-        id: claim.applicationId,
-        name: claim.applicationName ?? null,
-        updatedAt: claim.applicationUpdatedAt ?? null,
-      })),
-  );
-  return [
+  const applications = claims
+    .filter((claim) => claim.applicationId)
+    .map((claim) => ({
+      id: claim.applicationId,
+      name: claim.applicationName ?? null,
+      updatedAt: claim.applicationUpdatedAt ?? null,
+    }));
+  const evidence: AuthorizationEvidence[] = [
     {
       sql: `SELECT 1 WHERE NOT EXISTS (
       SELECT id,domain,organization_id,application_id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
@@ -94,15 +92,17 @@ export function observedDomainClaimsEvidence(
     )`,
       bindings: [domains, observed, observed, domains],
     },
-    {
+  ];
+  if (applications.length)
+    evidence.push({
       sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM json_each(?) observed WHERE NOT EXISTS (
       SELECT 1 FROM member_applications application WHERE application.id=json_extract(observed.value,'$.id')
         AND application.organization_name IS json_extract(observed.value,'$.name')
         AND application.updated_at IS json_extract(observed.value,'$.updatedAt')
     ))`,
-      bindings: [applications],
-    },
-  ];
+      bindings: [JSON.stringify(applications)],
+    });
+  return evidence;
 }
 
 /** Canonical bounded claim observation, shared by affiliation reads and application continuations. */

@@ -91,8 +91,16 @@ export function prepareOwnAffiliationReviewResolution(
 }
 
 export async function readAffiliationOffer(db: DatabaseLike, userId: string): Promise<AffiliationOffer | null> {
+  return (await observeAffiliationOffer(db, userId)).offer;
+}
+
+/** Retain the offered candidates so an independence answer dismisses only that choice. */
+async function observeAffiliationOffer(
+  db: DatabaseLike,
+  userId: string,
+): Promise<{ offer: AffiliationOffer | null; organizationIds: string[] }> {
   const linked = await readOpenLinkNotice(db, userId);
-  if (linked) return { kind: "linked", ...linked };
+  if (linked) return { offer: { kind: "linked", ...linked }, organizationIds: [] };
   const [addresses, related, dismissals, written] = await Promise.all([
     verifiedAddresses(db, userId),
     all<{ organization_id: string; active: number }>(
@@ -119,6 +127,7 @@ export async function readAffiliationOffer(db: DatabaseLike, userId: string): Pr
   const dismissed = new Set(dismissals.map((row) => row.organization_id));
   let hasWorkAddress = false;
   let choiceOffer: AffiliationOffer | null = null;
+  let choiceOrganizationIds: string[] = [];
   for (const address of addresses) {
     const { domain, resolution, facts } = await resolveEmailDomainOrganization(db, address.normalized_email);
     if (!domain) continue;
@@ -127,11 +136,12 @@ export async function readAffiliationOffer(db: DatabaseLike, userId: string): Pr
       const candidates = facts ? [...facts.claimed, ...facts.derived] : [];
       if (
         !choiceOffer &&
-        !dismissed.has(null) &&
         !candidates.some((candidate) => relatedIds.has(candidate.organizationId)) &&
         candidates.some((candidate) => !dismissed.has(candidate.organizationId))
-      )
+      ) {
         choiceOffer = { kind: "choose_organization", emailId: address.id, domain, writtenOrganizationName };
+        choiceOrganizationIds = [...new Set(candidates.map((candidate) => candidate.organizationId))];
+      }
       continue;
     }
     if (resolution.kind !== "organization") continue;
@@ -142,22 +152,29 @@ export async function readAffiliationOffer(db: DatabaseLike, userId: string): Pr
       [resolution.organizationId],
     );
     if (!organization) continue;
-    return { kind: "organization", organization, emailId: address.id, domain, writtenOrganizationName };
+    return {
+      offer: { kind: "organization", organization, emailId: address.id, domain, writtenOrganizationName },
+      organizationIds: [],
+    };
   }
-  if (choiceOffer) return choiceOffer;
+  if (choiceOffer) return { offer: choiceOffer, organizationIds: choiceOrganizationIds };
   const holdsOrganization = related.some((row) => Boolean(row.active));
-  if (hasWorkAddress || holdsOrganization || dismissed.has(null) || addresses.length === 0) return null;
+  if (hasWorkAddress || holdsOrganization || dismissed.has(null) || addresses.length === 0)
+    return { offer: null, organizationIds: [] };
   return {
-    kind: "work_address",
-    freeDomains: [...new Set(addresses.map((address) => emailDomainOf(address.normalized_email)))].sort(),
-    writtenOrganizationName,
+    offer: {
+      kind: "work_address",
+      freeDomains: [...new Set(addresses.map((address) => emailDomainOf(address.normalized_email)))].sort(),
+      writtenOrganizationName,
+    },
+    organizationIds: [],
   };
 }
 
 /**
  * "Not my organization" for one organization, or "I am independent" when
  * `organizationId` is null. Independence also answers the person's own open
- * profile review: they said no organization applies.
+ * profile review and dismisses the organizations on the current choice card.
  */
 export async function dismissAffiliationOffer(
   db: DatabaseLike,
@@ -169,16 +186,22 @@ export async function dismissAffiliationOffer(
     ]);
     if (!organization) throw new AppError(404, "ORGANIZATION_NOT_FOUND", "Organization not found");
   }
+  const organizationIds =
+    input.organizationId === null
+      ? [null, ...(await observeAffiliationOffer(db, input.userId)).organizationIds]
+      : [input.organizationId];
   const at = nowIso();
   const statements: StatementLike[] = [
-    db
-      .prepare(
-        `INSERT INTO affiliation_offer_dismissals (id, user_id, organization_id, created_at)
+    ...organizationIds.map((organizationId) =>
+      db
+        .prepare(
+          `INSERT INTO affiliation_offer_dismissals (id, user_id, organization_id, created_at)
          SELECT ?, ?, ?, ?
           WHERE NOT EXISTS (SELECT 1 FROM affiliation_offer_dismissals
                              WHERE user_id = ? AND organization_id IS ?)`,
-      )
-      .bind(uuid(), input.userId, input.organizationId, at, input.userId, input.organizationId),
+        )
+        .bind(uuid(), input.userId, organizationId, at, input.userId, organizationId),
+    ),
     prepareAuditLog(db, "user", input.userId, "affiliation_offer_dismissed", "user", input.userId, {
       organizationId: input.organizationId,
       independent: input.organizationId === null,

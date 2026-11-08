@@ -134,6 +134,7 @@ test("a verified address on a shared domain chooses its member organization", as
   await openMembershipVerificationLink(page, extractEmailUrl(individualProof, "/join/"));
   const independent = page.getByRole("button", { name: "Continue as an individual", exact: true });
   await expect(independent).toBeVisible();
+  await expect(page.getByText("Choose an organization only if you want to join it.", { exact: false })).toBeVisible();
   for (const width of [1280, 375]) {
     await page.setViewportSize({ width, height: 812 });
     await independent.scrollIntoViewIfNeeded();

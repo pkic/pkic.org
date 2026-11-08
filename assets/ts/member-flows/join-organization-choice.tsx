@@ -63,7 +63,7 @@ export function JoinOrganizationChoice({
         required={!onIndividual}
         help={
           onIndividual
-            ? undefined
+            ? "Choose an organization only if you want to join it. You can continue as an individual without choosing."
             : organizations.length
               ? "Choose the organization you represent."
               : "Use + to add your organization."

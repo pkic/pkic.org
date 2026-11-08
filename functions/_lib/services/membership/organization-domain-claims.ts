@@ -11,6 +11,7 @@
 import { organizationDomainCandidates, workEmailDomain } from "../../email-domains/classification";
 import { first } from "../../db/queries";
 import { prepareStateGuard } from "../../db/authorization-guard";
+import { AppError } from "../../errors";
 import { uuid } from "../../utils/ids";
 import type { DatabaseLike, StatementLike } from "../../types";
 
@@ -106,26 +107,34 @@ export async function prepareTransferApplicationDomainClaim(
   db: DatabaseLike,
   params: { domain: string; applicationId: string; organizationId: string; now: string },
 ): Promise<StatementLike[]> {
-  const applicationClaim = await first<{ id: string }>(
+  const claim = await first<{ id: string; application_id: string | null }>(
     db,
-    "SELECT id FROM organization_domain_claims WHERE domain=? AND application_id=?",
-    [params.domain, params.applicationId],
+    `SELECT id,application_id FROM organization_domain_claims WHERE domain=?
+      AND (application_id=? OR (organization_id=? AND application_id IS NULL))
+      ORDER BY application_id IS NULL,id LIMIT 1`,
+    [params.domain, params.applicationId, params.organizationId],
   );
-  if (applicationClaim) {
+  if (!claim)
+    throw new AppError(
+      409,
+      "DOMAIN_CLAIM_LOST",
+      "The application's organization domain claim is missing. Restore the domain claim or correct the application's organization before approving.",
+    );
+  if (claim.application_id) {
     return [
       prepareStateGuard(db, {
         sql: "SELECT 1 FROM organization_domain_claims WHERE id=? AND domain=? AND application_id=?",
-        bindings: [applicationClaim.id, params.domain, params.applicationId],
+        bindings: [claim.id, params.domain, params.applicationId],
       }),
       db
         .prepare(`DELETE FROM organization_domain_claims WHERE id=? AND application_id=? AND EXISTS (
         SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?)`)
-        .bind(applicationClaim.id, params.applicationId, params.domain, params.organizationId),
+        .bind(claim.id, params.applicationId, params.domain, params.organizationId),
       db
         .prepare(
           `UPDATE organization_domain_claims SET application_id=NULL, organization_id=?, updated_at=? WHERE id=? AND application_id=?`,
         )
-        .bind(params.organizationId, params.now, applicationClaim.id, params.applicationId),
+        .bind(params.organizationId, params.now, claim.id, params.applicationId),
     ];
   }
   return [
