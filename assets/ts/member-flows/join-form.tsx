@@ -521,21 +521,16 @@ async function main(): Promise<void> {
     } catch (error) {
       if (
         error instanceof ApiClientError &&
-        ["ORGANIZATION_AFFILIATION_CHANGED", "IDENTITY_DOMAIN_MISMATCH"].includes(error.code ?? "") &&
-        choice &&
-        !recoveryMessage
-      ) {
-        rememberJoinToken(token);
-        rememberJoinChoice();
-        await verifyFromLocation(undefined, undefined, false, error.message);
-        return;
-      }
-      if (
-        error instanceof ApiClientError &&
         ["ORGANIZATION_AFFILIATION_CHANGED", "IDENTITY_DOMAIN_MISMATCH", "ORGANIZATION_NAME_IN_USE"].includes(
           error.code ?? "",
         )
       ) {
+        if (choice && !recoveryMessage) {
+          rememberJoinToken(token);
+          rememberJoinChoice();
+          await verifyFromLocation(undefined, undefined, false, error.message);
+          return;
+        }
         setStatus(statusEl, error.message, true);
         return;
       }

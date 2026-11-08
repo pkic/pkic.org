@@ -50,16 +50,24 @@ export function JoinOrganizationChoice({
         }
       }}
     >
-      <h2>Choose your organization</h2>
+      <h2>{onIndividual ? "How would you like to join?" : "Choose your organization"}</h2>
       <p>
-        {organizations.length
-          ? `Choose the organization you represent at @${domain}.`
-          : `Add the organization you represent at @${domain}.`}
+        {onIndividual
+          ? `Choose a member organization at @${domain} to join it, or continue with an individual application.`
+          : organizations.length
+            ? `Choose the organization you represent at @${domain}.`
+            : `Add the organization you represent at @${domain}.`}
       </p>
       <Field
         label="Organization"
-        required
-        help={organizations.length ? "Choose the organization you represent." : "Use + to add your organization."}
+        required={!onIndividual}
+        help={
+          onIndividual
+            ? undefined
+            : organizations.length
+              ? "Choose the organization you represent."
+              : "Use + to add your organization."
+        }
         {...form.of("organizationId")}
       >
         {(control) => (
@@ -94,7 +102,7 @@ export function JoinOrganizationChoice({
       </Field>
       {organizations.length > 0 && (
         <Button type="submit" variant="primary" loading={busy}>
-          Continue
+          {onIndividual ? "Join organization" : "Continue"}
         </Button>
       )}
       {onIndividual && (

@@ -228,7 +228,7 @@ export function AffiliationOfferCard() {
             <Button variant="primary" disabled={busy} onClick={() => setChoosing(true)}>
               Choose organization
             </Button>
-            <Button disabled={busy} onClick={() => void dismiss(null, "Your organization choice was saved")}>
+            <Button disabled={busy} onClick={() => void dismiss(null, "Noted: you take part as yourself")}>
               I am independent
             </Button>
           </div>

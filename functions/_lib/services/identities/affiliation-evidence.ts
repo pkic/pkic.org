@@ -2,6 +2,7 @@ import { organizationDomainCandidates } from "../../email-domains/classification
 import { verifiedAffiliationBasisSchema, type VerifiedAffiliationBasis } from "./verified-affiliation-basis";
 import type { D1StatementResult } from "../../types";
 import { batchRows } from "../../db/pagination";
+import { AppError } from "../../errors";
 import { sha256Hex } from "../../utils/crypto";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { ownedIdentityEmailEvidence } from "./owned-email";
@@ -117,8 +118,19 @@ export function domainClaimsObservationSelection(email: string) {
   };
 }
 
+export function boundedDomainClaimsRows<T>(result: D1StatementResult): T[] {
+  const claims = batchRows<T>(result);
+  if (claims.length > 128)
+    throw new AppError(
+      409,
+      "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED",
+      "Contact the PKI Consortium to choose your organization.",
+    );
+  return claims;
+}
+
 export function decodeDomainClaimsObservation(result: D1StatementResult) {
-  return verifiedAffiliationBasisSchema.shape.claims.parse(batchRows(result));
+  return verifiedAffiliationBasisSchema.shape.claims.parse(boundedDomainClaimsRows(result));
 }
 
 export function domainClaimsObservationFingerprint(claims: VerifiedAffiliationBasis["claims"]) {

@@ -130,14 +130,9 @@ export async function prepareTransferApplicationDomainClaim(
   }
   return [
     prepareStateGuard(db, {
-      sql: `SELECT 1 WHERE EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?)
-        OR EXISTS (SELECT 1 FROM member_applications WHERE id=? AND organization_id=? AND organization_domain=?)`,
-      bindings: [params.domain, params.organizationId, params.applicationId, params.organizationId, params.domain],
+      sql: "SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=? AND application_id IS NULL",
+      bindings: [params.domain, params.organizationId],
     }),
-    db
-      .prepare(`INSERT INTO organization_domain_claims (id,domain,application_id,organization_id,created_at,updated_at)
-      SELECT ?,?,NULL,?,?,? WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?)`)
-      .bind(uuid(), params.domain, params.organizationId, params.now, params.now, params.domain, params.organizationId),
   ];
 }
 

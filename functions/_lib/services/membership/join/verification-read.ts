@@ -17,6 +17,13 @@ import {
   type OwnOpenApplicationRow,
 } from "./open-application";
 
+export function joinLinkConsumedSelection(capabilityId: string): SqlSelection {
+  return {
+    sql: "SELECT id FROM audit_log WHERE idempotency_key=?",
+    bindings: [`membership_join_link_consumed:${capabilityId}`],
+  };
+}
+
 /** Request-owned observations for the existing join planners. Mutation guards remain authoritative. */
 export async function readJoinVerification(
   db: DatabaseLike,
@@ -47,10 +54,7 @@ export async function readJoinVerification(
     emailOwnershipSelection(email),
     provedMailboxUserSelection(email),
     eligibleMembershipSelection(owner),
-    {
-      sql: "SELECT id FROM audit_log WHERE idempotency_key=?",
-      bindings: [`membership_join_link_consumed:${capabilityId}`],
-    },
+    joinLinkConsumedSelection(capabilityId),
     claim,
     {
       sql: `SELECT member.id AS member_id,member.organization_id FROM members member

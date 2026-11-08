@@ -2,7 +2,7 @@
 import { expect, test } from "@playwright/test";
 import { userCreateSchema } from "../../assets/shared/schemas/user-create";
 import { memberApplicationCreateSchema } from "../../assets/shared/schemas/member-applications";
-import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
+import { EMAIL_FIRST_COPY, ORGANIZATION_JOB_TITLE_COPY } from "../../assets/shared/email-first-copy";
 import { memberJoinVerifyResponseSchema } from "../../assets/shared/schemas/member-join";
 import {
   organizationCreateSchema,
@@ -10,7 +10,7 @@ import {
 } from "../../assets/shared/schemas/organization-management";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { approveMemberThroughReview, submitMembershipApplication, uniqueSuffix } from "./helpers/membership";
-import { signInToPortal } from "./helpers/portal-auth";
+import { openMyProfile, signInToPortal } from "./helpers/portal-auth";
 import { openMembershipVerificationLink } from "./helpers/member-join";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 import {
@@ -154,6 +154,34 @@ test("a verified address on a shared domain chooses its member organization", as
     await page.screenshot({ path: test.info().outputPath(`shared-domain-offer-${width}.png`) });
   }
   await offer.getByRole("button", { name: "I am independent", exact: true }).click();
+  await expect(offer).toBeHidden();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Account menu" })).toBeVisible();
+  await expect(offer).toHaveCount(0);
+
+  await openMyProfile(page);
+  await page.getByRole("button", { name: "Email addresses actions" }).click();
+  await page.getByRole("menuitem", { name: "Add email address" }).click();
+  const aliasEmail = `independent-${suffix}@${second.email.split("@")[1]}`;
+  await page.getByRole("textbox", { name: /^Email address/ }).fill(aliasEmail);
+  const beforeAlias = await capturedEmailCount();
+  await page.getByRole("button", { name: "Send verification link", exact: true }).click();
+  const aliasProof = await waitForCapturedEmail(aliasEmail, "Verify your email address", { since: beforeAlias });
+  await page.goto(extractEmailUrl(aliasProof, "/portal/"));
+  await page.getByRole("button", { name: "Verify this address", exact: true }).click();
+  await expect(page.getByText(`${aliasEmail} is verified`, { exact: true })).toBeVisible();
+  await page.goto("/portal/#/home");
+  const joinOrganization = offer.getByRole("button", { name: `Join Shared Second ${suffix}`, exact: true });
+  await expect(joinOrganization).toBeVisible();
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 812 });
+    await offer.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: test.info().outputPath(`organization-after-dismissal-${width}.png`) });
+  }
+  await offer
+    .getByRole("textbox", { name: ORGANIZATION_JOB_TITLE_COPY.label, exact: false })
+    .fill("Security architect");
+  await joinOrganization.click();
   await expect(offer).toBeHidden();
   await page.reload();
   await expect(page.getByRole("button", { name: "Account menu" })).toBeVisible();

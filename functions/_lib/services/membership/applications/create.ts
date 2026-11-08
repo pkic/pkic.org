@@ -307,7 +307,9 @@ export async function createMemberApplication(
   };
   // An organization application holds the domain its address links through (normally the registrable domain).
   const existingDomainClaim =
-    isIndividual || selection ? null : await getOrganizationDomainClaimForEmail(db, input.applicantEmail);
+    !isIndividual && !selection && input.applicantIdentityId
+      ? await getOrganizationDomainClaimForEmail(db, input.applicantEmail)
+      : null;
   const organizationDomain = isIndividual
     ? null
     : (selection?.domain ?? existingDomainClaim?.domain ?? workEmailDomain(input.applicantEmail));
@@ -320,12 +322,7 @@ export async function createMemberApplication(
     ...(applicantAccount?.statements ?? []),
     ...prepareMembershipApplicationConflictGuards(db, conflictInput),
     ...(organizationDomain && !selection?.domain && !input.applicantIdentityId
-      ? [
-          prepareStateGuard(db, {
-            sql: "SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=?)",
-            bindings: [organizationDomain],
-          }),
-        ]
+      ? observedDomainClaimsEvidence(input.applicantEmail, []).map((evidence) => prepareStateGuard(db, evidence))
       : []),
     ...(selection
       ? observedDomainClaimsEvidence(input.applicantEmail, claims).map((evidence) => prepareStateGuard(db, evidence))

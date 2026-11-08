@@ -13,7 +13,7 @@ import {
   requireWorkOrganizationDomain,
   verifiedRepresentationDomainCandidates,
 } from "./verified-email-domain";
-import { domainClaimsObservationSelection } from "./affiliation-evidence";
+import { boundedDomainClaimsRows, domainClaimsObservationSelection } from "./affiliation-evidence";
 import { verifiedAffiliationBasisSchema } from "./verified-affiliation-basis";
 
 type Basis = z.infer<typeof verifiedAffiliationBasisSchema>;
@@ -89,7 +89,7 @@ export function prepareVerifiedAffiliationRead(
           "IDENTITY_EMAIL_UNVERIFIED",
           "Verify this representation email address before continuing.",
         );
-      const claims = batchRows<{
+      const claims = boundedDomainClaimsRows<{
         id: string;
         domain: string;
         applicationId: string | null;
@@ -98,13 +98,6 @@ export function prepareVerifiedAffiliationRead(
         applicationUpdatedAt: string | null;
         member: number;
       }>(results[1]);
-      if (claims.length > 128)
-        throw new AppError(
-          409,
-          "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED",
-          "Contact the PKI Consortium to choose your organization.",
-        );
-
       if (input.domain && !verifiedRepresentationDomainCandidates(address.email, claims).includes(input.domain))
         throw new AppError(422, "IDENTITY_DOMAIN_MISMATCH", "Choose a domain of your verified work email address.");
       const rootDomain = workEmailDomain(address.email);

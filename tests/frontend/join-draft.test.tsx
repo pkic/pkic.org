@@ -200,7 +200,7 @@ describe("a verified application kept for this tab", () => {
     },
   );
 
-  it.each(["IDENTITY_DOMAIN_MISMATCH", "ORGANIZATION_AFFILIATION_CHANGED"])(
+  it.each(["IDENTITY_DOMAIN_MISMATCH", "ORGANIZATION_AFFILIATION_CHANGED", "ORGANIZATION_NAME_IN_USE"])(
     "refreshes a stale saved choice once and preserves its refusal and answers (%s)",
     async (code) => {
       rememberJoinToken(organizationContext.joinToken);

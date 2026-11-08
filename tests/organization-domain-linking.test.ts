@@ -313,6 +313,36 @@ describe("a verified work address and the organization that owns its domain", ()
     ).toEqual([{ resolved_by_user_id: userId, resolved_identity_id: null }]);
   });
 
+  it.each(["work_address", "choose_organization"])(
+    "still offers a concrete organization after dismissing the %s prompt",
+    async (kind) => {
+      const { userId, token } = await signedIn(
+        kind === "work_address" ? "independent@gmail.com" : "independent@shared.example",
+      );
+      if (kind === "choose_organization") {
+        await claimDomain(await insertOrganization(env.DB, "Shared First"), "shared.example");
+        await claimDomain(await insertOrganization(env.DB, "Shared Second"), "shared.example");
+      }
+      expect(await offerOf(token)).toMatchObject({ kind });
+      const dismissal = await call(token, "/api/v1/users/current/identities/offer/dismissals", {
+        organizationId: null,
+      });
+      expect(dismissal.status).toBe(201);
+      expect(await offerOf(token)).toBeNull();
+      const acme = await insertOrganization(env.DB, "Acme");
+      await claimDomain(acme, "acme.example");
+      const at = nowIso();
+      await env.DB.prepare(`INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,verification_method,created_at)
+        VALUES (?,?,'independent@acme.example','independent@acme.example',?,'magic_link',?)`)
+        .bind(crypto.randomUUID(), userId, at, at)
+        .run();
+      expect(await organizationsOf(userId)).toEqual([]);
+      expect(await offerOf(token)).toMatchObject({ kind: "organization", organization: { id: acme } });
+      await call(token, "/api/v1/users/current/identities/offer/dismissals", { organizationId: acme });
+      expect(await offerOf(token)).toBeNull();
+    },
+  );
+
   it("creates nothing for a business domain no organization owns", async () => {
     await insertOrganization(env.DB, "NewCo");
     const { userId, token } = await signedIn("eli@newco.example");

@@ -115,57 +115,70 @@ describe("join-form helpers", () => {
     document.body.innerHTML = "";
   });
 
-  it("requires an explicit organization choice before continuing", async () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const choose = vi.fn(async (_id: string) => {});
-    const first = "00000000-0000-4000-8000-000000000001";
-    await act(async () =>
-      render(
-        <JoinOrganizationChoice
-          token={"a".repeat(40)}
-          domain="shared.example"
-          affiliation={{
-            email: "person@shared.example",
-            domain: "shared.example",
-            domains: [{ domain: "shared.example", canLink: false, organizationName: null }],
-            organization: null,
-            organizations: [],
-          }}
-          organizations={[
-            { id: first, name: "First" },
-            { id: "00000000-0000-4000-8000-000000000002", name: "Second" },
-          ]}
-          onChoose={choose}
-          onResolve={async () => ({
-            email: "person@shared.example",
-            domain: "shared.example",
-            domains: [],
-            organization: null,
-            organizations: [],
-          })}
-          onAdd={vi.fn(async () => {})}
-        />,
-        host,
-      ),
-    );
-    const form = host.querySelector("form")!;
-    expect(form.textContent).toContain("@shared.example");
-    await act(async () => {
-      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    });
-    expect(choose).not.toHaveBeenCalled();
-    const select = host.querySelector("select")!;
-    await act(async () => {
-      select.value = first;
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await act(async () => {
-      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    });
-    expect(choose).toHaveBeenCalledWith(first);
-    await act(async () => render(null, host));
-  });
+  it.each([false, true])(
+    "requires an explicit organization choice before joining (individual option: %s)",
+    async (individual) => {
+      const host = document.createElement("div");
+      document.body.append(host);
+      const choose = vi.fn(async (_id: string) => {});
+      const continueIndividually = vi.fn(async () => {});
+      const first = "00000000-0000-4000-8000-000000000001";
+      await act(async () =>
+        render(
+          <JoinOrganizationChoice
+            token={"a".repeat(40)}
+            domain="shared.example"
+            affiliation={{
+              email: "person@shared.example",
+              domain: "shared.example",
+              domains: [{ domain: "shared.example", canLink: false, organizationName: null }],
+              organization: null,
+              organizations: [],
+            }}
+            organizations={[
+              { id: first, name: "First" },
+              { id: "00000000-0000-4000-8000-000000000002", name: "Second" },
+            ]}
+            onChoose={choose}
+            onIndividual={individual ? continueIndividually : undefined}
+            onResolve={async () => ({
+              email: "person@shared.example",
+              domain: "shared.example",
+              domains: [],
+              organization: null,
+              organizations: [],
+            })}
+            onAdd={vi.fn(async () => {})}
+          />,
+          host,
+        ),
+      );
+      const form = host.querySelector("form")!;
+      expect(form.textContent).toContain("@shared.example");
+      await act(async () => {
+        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      });
+      expect(choose).not.toHaveBeenCalled();
+      const select = host.querySelector("select")!;
+      await act(async () => {
+        select.value = first;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      await act(async () => {
+        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      });
+      expect(choose).toHaveBeenCalledWith(first);
+      if (individual) {
+        expect(select.getAttribute("aria-required")).not.toBe("true");
+        const button = [...host.querySelectorAll("button")].find(
+          (button) => button.textContent === "Continue as an individual",
+        )!;
+        await act(async () => button.click());
+        expect(continueIndividually).toHaveBeenCalledOnce();
+      }
+      await act(async () => render(null, host));
+    },
+  );
 
   it("builds the application payload for an organization category", () => {
     const form = buildForm();

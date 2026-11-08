@@ -1,10 +1,10 @@
 /**
  * The organization question a signed-in person is asked, and their answer.
  *
- * A verified work address automatically affiliates the person with its organization.
- * This module only reads what is left to ask (an automatic link to confirm
- * first) and records "not my organization" or "I am independent"; "not my
- * organization" on an automatic link also ends the identity it created.
+ * A verified work address offers an organization for the person to confirm.
+ * Historical automatic links are confirmed first. This module records
+ * "not my organization" or "I am independent"; declining a historical
+ * automatic link also ends the identity it created.
  */
 import type { AffiliationOffer } from "../../../../assets/shared/schemas/affiliation-offer";
 import { all, first } from "../../db/queries";
@@ -114,7 +114,6 @@ export async function readAffiliationOffer(db: DatabaseLike, userId: string): Pr
       [userId],
     ),
   ]);
-  if (dismissals.some((dismissal) => dismissal.organization_id === null)) return null;
   const writtenOrganizationName = written?.organization_name ?? null;
   const relatedIds = new Set(related.map((row) => row.organization_id));
   const dismissed = new Set(dismissals.map((row) => row.organization_id));
@@ -128,6 +127,7 @@ export async function readAffiliationOffer(db: DatabaseLike, userId: string): Pr
       const candidates = facts ? [...facts.claimed, ...facts.derived] : [];
       if (
         !choiceOffer &&
+        !dismissed.has(null) &&
         !candidates.some((candidate) => relatedIds.has(candidate.organizationId)) &&
         candidates.some((candidate) => !dismissed.has(candidate.organizationId))
       )

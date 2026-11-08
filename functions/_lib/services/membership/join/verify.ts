@@ -140,7 +140,7 @@ export async function verifyMemberJoin(
       input.signingSecret,
       capability,
       input.applicationTtlSeconds,
-      provedMailboxUserId(observed.ownership),
+      provedUserId,
       await applicationOrganizationSelection(observed.affiliation.basis, input.organizationName),
     );
   }
