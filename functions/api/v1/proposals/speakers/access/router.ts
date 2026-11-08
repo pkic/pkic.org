@@ -1,12 +1,9 @@
+import { ProposalSpeakerAccessParticipationPatch } from "./[token]/participation";
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import { methodNotAllowed } from "../../../../../_lib/http";
 import type { RequestDbContext } from "../../../../../_lib/db/context";
-import {
-  ProposalSpeakerAccessGet,
-  ProposalSpeakerAccessParticipationPatch,
-  ProposalSpeakerAccessProfilePatch,
-} from "./[token]";
+import { ProposalSpeakerAccessGet, ProposalSpeakerAccessProfilePatch } from "./[token]";
 import token_Router from "./[token]/router";
 import { ProposalSpeakerIdentitiesGet } from "./[token]/identities";
 

@@ -5,6 +5,17 @@
  * `data.query`. This covers every filter the handler supports, plus
  * pagination, to prove the conversion didn't drop or change behavior.
  */
+import {
+  prepareAuditLogAfterOneChange,
+  prepareAuditLog,
+  prepareOneTimeAuditLog,
+  prepareScopedAuditLog,
+  prepareAuditLogWhen,
+  writeAuditLog,
+  selectAuditDetails,
+  serializeAuditDetails,
+} from "../functions/_lib/services/audit";
+import { insertUser } from "./helpers/membership";
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "./helpers/app";
@@ -397,4 +408,50 @@ describe("GET /api/v1/audit-log", () => {
     const response = await callAppGet("/api/v1/system/audit-log", adminToken);
     expect(response.status).toBe(404);
   });
+});
+
+it.each(["value", "selection"] as const)("preserves SQL-shaped audit data through a %s payload", async (mode) => {
+  await resetDb();
+  const userId = await insertUser(env.DB, "audit-payload@example.test");
+  const payload = { sql: "THIS IS DATA, NOT SQL", bindings: ["ordinary JSON"] };
+  const details = mode === "selection" ? selectAuditDetails("SELECT ?", [serializeAuditDetails(payload)]) : payload;
+  await env.DB.batch([
+    env.DB.prepare("UPDATE users SET first_name='Audited' WHERE id=?").bind(userId),
+    prepareAuditLogAfterOneChange(env.DB, "system", null, "user_updated", "user", userId, details),
+  ]);
+  const stored = await env.DB.prepare("SELECT details_json FROM audit_log WHERE entity_id=? AND action='user_updated'")
+    .bind(userId)
+    .first<string>("details_json");
+  expect(JSON.parse(stored!)).toEqual({
+    sql: { from: null, to: "THIS IS DATA, NOT SQL" },
+    bindings: { from: null, to: ["ordinary JSON"] },
+  });
+});
+
+it("rejects SQL audit selections in every JSON-only writer before writing", async () => {
+  await resetDb();
+  const details = selectAuditDetails("SELECT ?", ["sensitive internal SQL binding"]);
+  const args = [env.DB, "system", null, "user_updated", "user", null, details] as const;
+  const at = "2026-11-07T00:00:00.000Z";
+  const scope = { type: "user", id: "synthetic" };
+  const writers = [
+    () => serializeAuditDetails(details),
+    () => prepareAuditLog(...args),
+    () => prepareScopedAuditLog(env.DB, scope, "system", null, "user_updated", "user", null, details),
+    () => prepareOneTimeAuditLog(...args, at, "synthetic-key"),
+    () =>
+      prepareAuditLogWhen(env.DB, {
+        actorType: "system",
+        actorId: null,
+        action: "user_updated",
+        entityType: "user",
+        entityId: null,
+        details,
+        conditionSql: "SELECT 1",
+        conditionBindings: [],
+      }),
+  ];
+  for (const write of writers) expect(write).toThrow("Audit SQL selections require a guarded audit writer");
+  await expect(writeAuditLog(...args)).rejects.toThrow("Audit SQL selections require a guarded audit writer");
+  expect(await env.DB.prepare("SELECT count(*) AS count FROM audit_log").first("count")).toBe(0);
 });

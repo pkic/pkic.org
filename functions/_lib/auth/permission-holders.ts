@@ -19,7 +19,7 @@ export interface PermissionHolder {
  */
 export function listPermissionHolders(
   db: DatabaseLike,
-  input: { permission: Permission; context: PermissionContext; limit: number },
+  input: { permission: Permission; context: PermissionContext; limit: number; afterId?: string },
 ): Promise<PermissionHolder[]> {
   const scoped = (alias: string) =>
     `((${alias}.context_type IS NULL AND ${alias}.context_id IS NULL)
@@ -28,7 +28,7 @@ export function listPermissionHolders(
     db,
     `SELECT person.id, person.email, person.first_name
        FROM users person
-      WHERE person.active = 1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL
+      WHERE person.id > ? AND person.active = 1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL
         AND (
           EXISTS (
             SELECT 1 FROM user_roles role
@@ -56,6 +56,7 @@ export function listPermissionHolders(
       ORDER BY person.id
       LIMIT ?`,
     [
+      input.afterId ?? "",
       input.permission,
       input.context.type,
       input.context.id,

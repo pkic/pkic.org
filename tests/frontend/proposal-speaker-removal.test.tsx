@@ -133,7 +133,7 @@ describe("proposal speaker removal UI", () => {
         onProfileChanged={onReload}
       />,
     );
-    await runCardAction(root, "Casey Speaker", "Accept on behalf of speaker");
+    await runCardAction(root, "Casey Speaker", "Confirm on behalf of speaker");
     await settle();
     expect(confirmation.confirmAction).toHaveBeenCalled();
     const [path, init] = fetcher.mock.calls[0];
@@ -159,7 +159,7 @@ describe("proposal speaker removal UI", () => {
         />,
       );
       const items = await openCardMenu(root, "Casey Speaker");
-      expect(items.map((item) => item.textContent?.trim())).not.toContain("Accept on behalf of speaker");
+      expect(items.map((item) => item.textContent?.trim())).not.toContain("Confirm on behalf of speaker");
     },
   );
 
@@ -332,8 +332,8 @@ describe("proposal speaker removal UI", () => {
     expect(notify).toHaveBeenCalledWith("Invite another speaker to take over before removing the proposer.", "error");
     expect(root.querySelector("dialog")).toBeNull();
     // The answer is said once, in words with its date, not as a pill.
-    expect(root.textContent?.match(/Accepted/g)).toHaveLength(1);
-    expect(root.querySelector(".pk-speaker-portrait-standing")?.textContent).toMatch(/Accepted \w/);
+    expect(root.textContent?.match(/Participation confirmed/g)).toHaveLength(1);
+    expect(root.querySelector(".pk-speaker-portrait-standing")?.textContent).toMatch(/Participation confirmed \w/);
     expect(root.querySelector(".pk-badge")).toBeNull();
     // The role is read once.
     expect(root.textContent?.match(/Proposer/g)).toHaveLength(1);

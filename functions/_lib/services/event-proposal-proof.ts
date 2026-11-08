@@ -238,6 +238,11 @@ export async function startEventProposalProof(
   return { status: "verification_sent" as const, outboxId: email.id };
 }
 
+const ORGANIZATION_DOMAIN_REVIEW_CODES = new Set([
+  "ORGANIZATION_DOMAIN_IN_USE",
+  "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED",
+]);
+
 export async function verifyEventProposalProof(
   db: DatabaseLike,
   input: {
@@ -290,7 +295,12 @@ export async function verifyEventProposalProof(
   if (!resolved)
     return (await isProposalProofAddressOwnedElsewhere(db, payload.email, payload.context?.userId))
       ? { status: "sign_in_required" as const, email: payload.email }
-      : { status: "support_required" as const };
+      : {
+          status: "support_required" as const,
+          email: payload.email,
+          applicantKind: payload.applicantKind,
+          reason: "address_review" as const,
+        };
   const entryContext = await resumeEventProposalEntry(db, {
     eventId: input.eventId,
     entryContext: payload.entryContext,
@@ -314,14 +324,27 @@ export async function verifyEventProposalProof(
           { verifiedAt: nowIso() },
         )
       : null;
-  const observed = affiliationRead?.decode(await db.batch(affiliationRead.statements));
-  // A new mailbox has no recorded address; that is not the person's primary one, whose identities carry no address id.
-  const affiliation = observed
-    ? verifiedAffiliationPreview(observed.basis, observed.address, {
-        unrecordedAddress:
-          observed.address.id === null && Boolean(resolved.user) && resolved.user?.normalized_email !== payload.email,
-      })
-    : undefined;
+  let observed: ReturnType<NonNullable<typeof affiliationRead>["decode"]> | undefined;
+  let affiliation: ReturnType<typeof verifiedAffiliationPreview> | undefined;
+  try {
+    observed = affiliationRead?.decode(await db.batch(affiliationRead.statements));
+    // A new mailbox has no recorded address; that is not the person's primary one, whose identities carry no address id.
+    affiliation = observed
+      ? verifiedAffiliationPreview(observed.basis, observed.address, {
+          unrecordedAddress:
+            observed.address.id === null && Boolean(resolved.user) && resolved.user?.normalized_email !== payload.email,
+        })
+      : undefined;
+  } catch (error) {
+    // A domain held by an open application, or an ambiguous one, needs the consortium; nothing was linked or created.
+    if (!(error instanceof AppError) || !ORGANIZATION_DOMAIN_REVIEW_CODES.has(error.code)) throw error;
+    return {
+      status: "support_required" as const,
+      email: payload.email,
+      applicantKind: payload.applicantKind,
+      reason: "organization_domain_review" as const,
+    };
+  }
   if (input.affiliation && observed && affiliation) {
     const selection = identityAffiliationPrepareSchema.parse({
       ...input.affiliation,

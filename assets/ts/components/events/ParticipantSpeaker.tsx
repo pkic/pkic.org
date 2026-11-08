@@ -1,3 +1,4 @@
+import { SPEAKER_PARTICIPATION_COPY } from "../../../shared/proposal-speaker-acceptance";
 import { readConsentValues } from "../../shared/widgets/consents";
 import { useCallback, useRef, useState } from "preact/hooks";
 import {
@@ -97,9 +98,10 @@ export function ParticipantSpeaker({
   async function perform(action: () => Promise<unknown>, message: string) {
     setBusy(true);
     setError("");
+    setMessage("");
     try {
       await action();
-      setMessage(message);
+      if (message) setMessage(message);
       await reload();
     } catch (cause) {
       setError(form.refuse(cause));
@@ -143,6 +145,8 @@ export function ParticipantSpeaker({
         />
         <PanelBody>
           <div class="pk-stack">
+            <p>{SPEAKER_PARTICIPATION_COPY.explanation}</p>
+            {data.speaker.awaitingReview && <Alert tone="warn">{SPEAKER_PARTICIPATION_COPY.pending}</Alert>}
             <div class="pk-cluster">
               {data.speaker.status === "confirmed" || data.speaker.status === "invited" ? (
                 <PlainStatus status={data.speaker.status} />
@@ -153,7 +157,7 @@ export function ParticipantSpeaker({
             {!editable && (
               <Alert>Participation changes are unavailable because you declined or the proposal is closed.</Alert>
             )}
-            {editable && data.speaker.status !== "confirmed" && (
+            {editable && data.speaker.status !== "confirmed" && !data.speaker.awaitingReview && (
               <form
                 noValidate
                 {...participation.handlers}
@@ -169,10 +173,14 @@ export function ParticipantSpeaker({
                     setError(checked.formMessage ?? "");
                     return;
                   }
-                  void perform(
-                    () => patchJson(path("participation"), checked.data, speakerParticipationResponseSchema),
-                    "Participation confirmed.",
-                  );
+                  void perform(async () => {
+                    const response = await patchJson(
+                      path("participation"),
+                      checked.data,
+                      speakerParticipationResponseSchema,
+                    );
+                    setMessage(response.status === "pending" ? "" : SPEAKER_PARTICIPATION_COPY.confirmed);
+                  }, "");
                 }}
               >
                 <fieldset class="pk-fieldset pk-stack" disabled={busy}>
@@ -191,7 +199,7 @@ export function ParticipantSpeaker({
                     </p>
                   )}
                   <Button type="submit" loading={busy} disabled={!termsAccepted || !data.currentRepresentation}>
-                    Confirm participation
+                    {SPEAKER_PARTICIPATION_COPY.confirm}
                   </Button>
                 </fieldset>
               </form>
@@ -263,7 +271,7 @@ export function ParticipantSpeaker({
                             continuationToken: submittedEntry.continuationToken,
                             unaffiliatedAttestation: submittedEntry.unaffiliatedAttestation,
                             independentCapacity: submittedEntry.independentCapacity,
-                            consents: acceptedConsents(),
+                            ...(submittedEntry.continuationToken ? { consents: acceptedConsents() } : {}),
                             ...newAffiliationDetails(submittedEntry),
                           }
                         : {}),

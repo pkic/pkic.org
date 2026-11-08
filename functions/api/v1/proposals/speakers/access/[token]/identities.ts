@@ -1,7 +1,7 @@
 import { requireIdentityFromRequest } from "../../../../../../_lib/auth/user-session";
-import type { ParticipantRouteData } from "../../../../../../_lib/routes/participant-authority";
+import type { ParticipantContext, ParticipantRouteData } from "../../../../../../_lib/routes/participant-authority";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
-import { requestDb, markResponseSensitive, type AdminContext } from "../../../../../../_lib/db/context";
+import { requestDb, markResponseSensitive } from "../../../../../../_lib/db/context";
 import { jsonPrivate } from "../../../../../../_lib/http";
 import { AppError } from "../../../../../../_lib/errors";
 import { requireInternalSecret } from "../../../../../../_lib/request";
@@ -11,12 +11,14 @@ import { proposalSpeakerIdentitiesRouteSchema } from "../../../../../../../asset
 import { isProposalSpeakerRosterEditableStatus } from "../../../../../../../assets/shared/schemas/proposal-status";
 
 export async function onRequestGet(
-  c: AdminContext,
+  c: ParticipantContext,
   data: ParticipantRouteData<typeof proposalSpeakerIdentitiesRouteSchema>,
 ) {
   const db = requestDb(c);
   const identity = await requireIdentityFromRequest(db, c.req.raw, c.env);
-  const { speaker, proposal } = await getSpeakerByManageToken(db, data.params.token, requireInternalSecret(c.env));
+  const { speaker, proposal } = await getSpeakerByManageToken(db, data.params.token, requireInternalSecret(c.env), {
+    allowExpiredSession: true,
+  });
   if (identity.userId !== speaker.user_id) {
     throw new AppError(403, "PROPOSAL_IDENTITY_AUTHORITY_REQUIRED", "View only your own speaker identities.");
   }

@@ -29,7 +29,7 @@ test("staff view a user's participation history and upload a photograph", async 
   const email = `staff-headshot-${suffix}@staff-headshot-${suffix}.test`;
 
   await signInToPortal(page, e2eAdminEmail("portal-user-headshot"));
-  await approveMemberThroughReview(page, {
+  const member = await approveMemberThroughReview(page, {
     email,
     name: `Staff Headshot ${suffix}`,
     organizationName: `Staff Headshot Org ${suffix}`,
@@ -117,6 +117,37 @@ test("staff view a user's participation history and upload a photograph", async 
     expect(removeBox.y, "remove is at the portrait corner, not a separate row").toBeLessThan(pictureBox.y + 10);
     await page.screenshot({ path: `test-results/issue-85-portrait-${width}.png` });
   }
+  await page.goto(`/portal/#/users/${member.userId}`);
+  const user = userDetailResponseSchema.parse(
+    await (await page.request.get(`/api/v1/users/${member.userId}`)).json(),
+  ).user;
+  const identity = user.identities.find((entry) => entry.organizationName === `Staff Headshot Org ${suffix}`)!;
+  await page.getByRole("button", { name: `Actions for ${identity.organizationName}`, exact: true }).click();
+  await page.getByRole("menuitem", { name: "Delete identity…", exact: true }).click();
+  const deletion = page.waitForResponse(
+    (response) =>
+      response.request().method() === "DELETE" &&
+      new URL(response.url()).pathname === `/api/v1/users/${member.userId}/identities/${identity.identityId}`,
+  );
+  await page
+    .getByRole("alertdialog", { name: "Delete identity?", exact: true })
+    .getByRole("button", { name: "Delete identity", exact: true })
+    .click();
+  const response = await deletion;
+  expect(response.status(), await response.text()).toBe(200);
+  await expect(page.getByRole("button", { name: `Actions for ${identity.organizationName}`, exact: true })).toHaveCount(
+    0,
+  );
+  const remaining = userDetailResponseSchema.parse(
+    await (await page.request.get(`/api/v1/users/${member.userId}`)).json(),
+  ).user;
+  expect(remaining.identities.some((entry) => entry.identityId === identity.identityId)).toBe(false);
+  await page.reload();
+  await expect(page.getByRole("button", { name: `Actions for ${identity.organizationName}`, exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("heading", { name: `Staff Headshot ${suffix}`, exact: true })).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("incorrect-identity-deleted.png"), fullPage: true });
 });
 
 test("staff read registration and account changes through the shared audit tables", async ({ page, browser }, info) => {

@@ -480,6 +480,7 @@ describe("speaker affiliation mailbox proof", () => {
             proposalUpdatedAt: context.proposal.updated_at,
             userId: f.userId,
             currentStatus: context.speaker.status,
+            responseInviteGeneration: context.speaker.response_invite_generation,
             inviteGeneration: context.speaker.invite_generation,
             expectedActingIdentityId: context.speaker.acting_identity_id,
             expectedActingIdentitySelectedAt: context.speaker.acting_identity_selected_at,
@@ -605,6 +606,7 @@ describe("speaker affiliation mailbox proof", () => {
           proposalUpdatedAt: context.proposal.updated_at,
           userId: f.userId,
           currentStatus: context.speaker.status,
+          responseInviteGeneration: context.speaker.response_invite_generation,
           inviteGeneration: context.speaker.invite_generation,
           expectedActingIdentityId: context.speaker.acting_identity_id,
           expectedActingIdentitySelectedAt: context.speaker.acting_identity_selected_at,
@@ -688,11 +690,12 @@ describe("speaker affiliation mailbox proof", () => {
     const f = await fixture();
     await expect(
       confirmSpeakerParticipation(env.DB, f.token, env.INTERNAL_SIGNING_SECRET!, {
+        appBaseUrl: "https://app.test",
         consents: [],
         ip: null,
         userAgent: null,
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toMatchObject({ status: "confirmed" });
     expect(await speakerState(f.speakerId)).toMatchObject({ status: "confirmed", acting_identity_selected_at: null });
     expect(
       await env.DB.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE entity_id=? AND action='speaker_confirmed'")
@@ -715,6 +718,7 @@ describe("speaker affiliation mailbox proof", () => {
     );
     await expect(
       confirmSpeakerParticipation(racingDb, f.token, env.INTERNAL_SIGNING_SECRET!, {
+        appBaseUrl: "https://app.test",
         consents: [{ termKey: "speaker-terms", version: "v1" }],
         ip: null,
         userAgent: null,
@@ -763,6 +767,7 @@ describe("speaker affiliation mailbox proof", () => {
       });
       await expect(
         confirmSpeakerParticipation(racingDb, f.token, env.INTERNAL_SIGNING_SECRET!, {
+          appBaseUrl: "https://app.test",
           consents: [{ termKey: "speaker-terms", version: "v1" }],
           ip: null,
           userAgent: null,

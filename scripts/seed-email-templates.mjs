@@ -846,7 +846,9 @@ This private link manages only your own speaker profile.
     subjectTemplate: "Speaker participation confirmed — {{eventName}}",
     contentType: "markdown",
     messageType: "transactional",
-    content: `An organizer has confirmed your speaker identity and accepted your participation in **{{proposalTitle}}** at **{{eventName}}** on your behalf.
+    content: `An organizer has confirmed your speaker identity and willingness to participate in the proposal **{{proposalTitle}}** for **{{eventName}}**.
+
+This does not accept the proposal or guarantee inclusion in the program. Committee acceptance and scheduling are separate decisions.
 
 Speaker identity: {{speakerName}}{{#if organizationName}}, {{organizationName}}{{else}} (individual){{/if}}.
 
@@ -978,7 +980,9 @@ Thank you for your interest in contributing to **{{eventName}}**.
 {{speakerLineupText}}
 {{/if}}
 
-You take part in the session only once you accept. Please review the proposal and **confirm or decline your participation**. You will also be prompted to review your speaker profile (bio and headshot) so we can promote the session.
+Please review the proposal and **confirm or decline your willingness to participate in this proposal**. Confirmation does not accept the proposal or guarantee a place in the program. The program committee decides whether to accept the proposal; scheduling is a separate decision.
+
+If the invitation deadline has passed, sign in to respond. A late response awaits approval because a replacement may already have been invited.
 
 <div class="cta"><a href="{{manageUrl}}">Review proposal &amp; confirm participation &rarr;</a></div>
 

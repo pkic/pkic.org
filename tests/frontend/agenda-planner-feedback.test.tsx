@@ -147,7 +147,6 @@ describe("planner feedback", () => {
       </>,
     );
     expect(host.textContent).toContain(pendingSpeakersLabel(1));
-    expect(pendingSpeakersLabel(1)).toBe("1 speaker not yet accepted");
     const labels = [...host.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"));
     expect(labels).toEqual([
       "Move Synthetic talk left",

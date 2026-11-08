@@ -487,7 +487,7 @@ describe("ProposalSpeakersPanel", () => {
       expect(mira.querySelector(".pk-badge")).toBeNull();
       const standing = [...mira.querySelectorAll(".pk-speaker-portrait-standing > dd")].map((dd) => dd.textContent);
       expect(standing[0]).toBe("Speaker");
-      expect(standing[1]).toMatch(/^Accepted .+ · Registered$/);
+      expect(standing[1]).toMatch(/^Participation confirmed .+ · Registered$/);
       // Nothing to chase: no checklist at all.
       expect(mira.querySelector(".pk-attention-list")).toBeNull();
     });
@@ -502,7 +502,7 @@ describe("ProposalSpeakersPanel", () => {
       const checklist = pavel.querySelector('ul.pk-attention-list[aria-label="Still needed for Pavel Petrov"]');
       const items = [...(checklist?.querySelectorAll("li") ?? [])].map((item) => item.textContent);
       expect(items).toHaveLength(2);
-      expect(items[0]).toMatch(/^Not yet accepted \(invitation expires .+\)$/);
+      expect(items[0]).toMatch(/^Participation not confirmed \(invitation expires .+\)$/);
       expect(items[1]).toBe("No bio");
       // The empty photo already says the headshot is missing; the checklist does not repeat it.
       expect(items.join(" ")).not.toContain("headshot");
