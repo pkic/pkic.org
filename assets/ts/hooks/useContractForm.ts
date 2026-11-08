@@ -28,7 +28,8 @@
  * a rule about the whole body, or a field without a visible control — and is
  * null otherwise, so the form's alert never repeats a field's message.
  *
- * Controls are keyed by `name`, which must match the contract's field.
+ * Controls are keyed by `name`. `fieldOf` maps custom controls to contract
+ * paths; `keyOf` maps contract paths to stable control names for editable rows.
  */
 import { useCallback, useEffect, useState } from "preact/hooks";
 import type { z } from "zod";
@@ -87,10 +88,10 @@ function isControl(target: EventTarget | null): target is Control {
 const CONCEALED = "[hidden],dialog:not([open]),[aria-hidden='true']";
 
 /** The contract fields that have a control on the page, and whether that control is in view. */
-function fieldsOnPage(fieldOf: ContractFormOptions["fieldOf"]): Map<string, boolean> {
+function fieldsOnPage(fieldOf: ContractFormOptions["fieldOf"], keyOf: (path: string) => string): Map<string, boolean> {
   const fields = new Map<string, boolean>();
   for (const control of document.querySelectorAll<Control>("input[name],select[name],textarea[name]")) {
-    const name = (fieldOf ? fieldOf(control.name, control) : control.name).replace(/\[\]$/, "");
+    const name = keyOf((fieldOf ? fieldOf(control.name, control) : control.name).replace(/\[\]$/, ""));
     fields.set(name, fields.get(name) === true || !control.closest(CONCEALED));
   }
   return fields;
@@ -129,18 +130,14 @@ export interface ContractFormOptions {
   keyOf?: (path: string) => string;
 }
 
+const identityFieldKey = (path: string): string => path;
+
 export function useContractForm<Schema extends z.ZodType>(
   schema: Schema,
   body: unknown,
   options: ContractFormOptions = {},
 ): ContractForm<z.output<Schema>> {
-  const {
-    fieldOf,
-    keyOf = (name: string) => name,
-    quietWhenEmpty = false,
-    revealField,
-    deferUntilSubmit = [],
-  } = options;
+  const { fieldOf, keyOf = identityFieldKey, quietWhenEmpty = false, revealField, deferUntilSubmit = [] } = options;
   const [touched, setTouched] = useState<Record<string, Touch>>({});
   const [refused, setRefused] = useState<Record<string, string>>({});
   const [showAll, setShowAll] = useState(false);
@@ -203,17 +200,18 @@ export function useContractForm<Schema extends z.ZodType>(
     if (result.success) return { data: result.data as z.output<Schema>, formMessage: null };
     const first = result.error.issues.find((issue) => issue.path.length > 0);
     const firstPath = first?.path.map(String).join(".");
-    if (firstPath !== undefined) revealField?.(firstPath);
+    if (firstPath !== undefined) revealField?.(keyOf(firstPath));
     setShowAll(true);
     setFocusAt(Date.now());
     // A field that shows its own reason is not repeated in the form's alert;
     // only a reason with nowhere to show is.
-    const onPage = fieldsOnPage(fieldOf);
+    const onPage = fieldsOnPage(fieldOf, keyOf);
     const unplaced = result.error.issues.find((issue) => {
       if (issue.path.length === 0) return true;
-      const path = issue.path.map(String).join(".");
+      const path = keyOf(issue.path.map(String).join("."));
       return ![...onPage].some(
-        ([field, inView]) => related(path, field) && (inView || (revealField !== undefined && path === firstPath)),
+        ([field, inView]) =>
+          related(path, field) && (inView || (revealField !== undefined && path === keyOf(firstPath ?? ""))),
       );
     });
     return { data: null, formMessage: unplaced?.message ?? null };
@@ -224,7 +222,7 @@ export function useContractForm<Schema extends z.ZodType>(
     if (Object.keys(refusal.fields).length > 0) {
       const names = Object.keys(refusal.fields);
       const first = names.find((name) => !names.some((other) => other.startsWith(`${name}.`)));
-      if (first) revealField?.(first);
+      if (first) revealField?.(keyOf(first));
       setRefused(stableFields(refusal.fields));
       setFocusAt(Date.now());
     }

@@ -2,7 +2,7 @@
 import { render } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { httpUrlSchema } from "../../assets/shared/schemas/urls";
 import { useContractForm } from "../../assets/ts/hooks/useContractForm";
@@ -100,6 +100,121 @@ afterEach(() => {
 });
 
 describe("useContractForm", () => {
+  it.each([false, true])(
+    "places and reveals stable collection errors (hidden: %s) with keyOf alone",
+    async (hidden) => {
+      const schema = z.object({ invites: z.array(z.object({ email: z.email() })) });
+      const reveal = vi.fn();
+      function Rows() {
+        const [rows, setRows] = useState([
+          { id: 41, email: "first@example.test" },
+          { id: 73, email: "invalid" },
+        ]);
+        const [concealed, setConcealed] = useState(hidden);
+        const form = useContractForm(
+          schema,
+          { invites: rows.map(({ email }) => ({ email })) },
+          {
+            keyOf: (path) =>
+              path.replace(/^invites\.(\d+)(?=\.|$)/, (_, index: string) => `inviteRows.${rows[Number(index)].id}`),
+            revealField: (name) => {
+              reveal(name);
+              setConcealed(false);
+            },
+          },
+        );
+        return (
+          <form noValidate {...form.handlers} onSubmit={(event) => event.preventDefault()}>
+            {rows.map((row) => (
+              <div key={row.id} hidden={concealed}>
+                <Field label={`Email ${row.id}`} {...form.of(`inviteRows.${row.id}.email`)}>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      name={`inviteRows.${row.id}.email`}
+                      value={row.email}
+                      onInput={(event) =>
+                        setRows(
+                          rows.map((entry) =>
+                            entry.id === row.id ? { ...entry, email: event.currentTarget.value } : entry,
+                          ),
+                        )
+                      }
+                    />
+                  )}
+                </Field>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const checked = form.submit();
+                outcome = checked.formMessage ?? "none";
+              }}
+            >
+              Save
+            </button>
+            <button type="button" onClick={() => setRows(rows.slice(1))}>
+              Remove first row
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                form.refuse(
+                  new ApiClientError(
+                    {
+                      error: {
+                        code: "VALIDATION",
+                        message: "Invalid request",
+                        details: { fieldErrors: { "invites.0.email": ["Address refused."] } },
+                      },
+                    },
+                    400,
+                  ),
+                )
+              }
+            >
+              Refuse
+            </button>
+          </form>
+        );
+      }
+      container = document.createElement("div");
+      document.body.append(container);
+      await act(() => render(<Rows />, container!));
+      const save = () => act(() => container!.querySelector("button")!.click());
+      await save();
+      const email = controlFor(container, "Email 73");
+      expect(outcome).toBe("none");
+      expect(reveal).toHaveBeenLastCalledWith("inviteRows.73.email");
+      expect(document.activeElement).toBe(email);
+      await act(() => [...container!.querySelectorAll("button")][1].click());
+      await save();
+      expect(outcome).toBe("none");
+      expect(reveal).toHaveBeenLastCalledWith("inviteRows.73.email");
+      await act(() => [...container!.querySelectorAll("button")][2].click());
+      expect(reveal).toHaveBeenLastCalledWith("inviteRows.73.email");
+      expect(fieldOf(email).textContent).toContain("Address refused.");
+      await typeInto(email, "corrected@example.test");
+      expect(email.getAttribute("aria-invalid")).toBeNull();
+    },
+  );
+
+  it("keeps default touch handlers stable across renders", async () => {
+    const handlers: unknown[] = [];
+    function Stable() {
+      const [revision, setRevision] = useState(0);
+      const form = useContractForm(contract, { name: "Ada", website: null });
+      handlers.push(form.handlers.onInput);
+      return <button onClick={() => setRevision(revision + 1)}>Render again</button>;
+    }
+    container = document.createElement("div");
+    await act(() => render(<Stable />, container!));
+    await act(() => container!.querySelector("button")!.click());
+    expect(handlers).toHaveLength(2);
+    expect(handlers[1]).toBe(handlers[0]);
+  });
+
   it("reads the latest uncontrolled body at submission and applies the contract", async () => {
     let value = "";
     function GetterHarness() {

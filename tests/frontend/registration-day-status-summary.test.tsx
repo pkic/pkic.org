@@ -120,7 +120,7 @@ describe("RegistrationDayStatusSummary", () => {
     expect(claimed).toEqual([["2026-09-01"]]);
   });
 
-  it("states an offer without an attendance choice without offering an unsafe claim", async () => {
+  it("explains how to recover an offer without an attendance choice", async () => {
     container = document.createElement("div");
     document.body.append(container);
     await act(() =>
@@ -135,7 +135,9 @@ describe("RegistrationDayStatusSummary", () => {
         container!,
       ),
     );
-    expect(container.textContent).toContain("Place offered");
+    expect(container.textContent).toContain("Attendance choice needed");
+    expect(container.textContent).toContain("Update and save your attendance to request a place.");
+    expect(container.textContent).not.toContain("Place offered");
     expect(container.querySelector("button")).toBeNull();
     expect(container.textContent).not.toContain("Claim it before");
   });

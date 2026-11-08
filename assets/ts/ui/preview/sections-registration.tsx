@@ -8,7 +8,7 @@ export const registrationSections: PreviewSection[] = [
   {
     id: "registration-review-state",
     title: "Registration review state",
-    note: "Pending organization claims stay separate from identity facts; an offer without a selected option has no claim action.",
+    note: "Pending organization claims stay separate from identity facts; a waitlist entry without a selected option explains how to request a place.",
     render: () => (
       <div class="pk-stack">
         <RegistrationAffiliation organizationName={null} jobTitle={null} pendingOrganizationName="Example Research" />

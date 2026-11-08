@@ -60,11 +60,14 @@ function GroupRow({
     group.kind === "cancelled" || Boolean(group.attendanceType && attendanceIconName(group.attendanceType) !== "none");
   const display =
     group.kind === "confirmed" || group.kind === "cancelled" ? null : REGISTRATION_DAY_WAITLIST_DISPLAY[group.kind];
-  const title = display
-    ? `${display.label}${group.attendanceType ? `: ${option}` : ""}`
-    : group.kind === "cancelled"
-      ? "Cancelled"
-      : option;
+  const needsAttendanceChoice = group.kind === "offered" && !group.attendanceType;
+  const title = needsAttendanceChoice
+    ? "Attendance choice needed"
+    : display
+      ? `${display.label}${group.attendanceType ? `: ${option}` : ""}`
+      : group.kind === "cancelled"
+        ? "Cancelled"
+        : option;
   return (
     <li class="pk-day-status__row" data-kind={group.kind} data-icon={hasIcon ? undefined : "none"}>
       {hasIcon && (
@@ -75,6 +78,7 @@ function GroupRow({
       <span class="pk-day-status__body">
         <span class="pk-day-status__title">{title}</span>
         <span class="pk-day-status__days">{whichDays(group, total)}</span>
+        {needsAttendanceChoice && <span class="pk-small">Update and save your attendance to request a place.</span>}
         {group.kind === "waiting" && (
           <span class="pk-small">You stay registered. We email you when a place is available.</span>
         )}

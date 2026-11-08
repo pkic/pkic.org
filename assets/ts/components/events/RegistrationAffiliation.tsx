@@ -37,7 +37,7 @@ export function registrationAffiliationItems({
   const pendingClaim = pendingOrganizationName ? (
     <VerifiedValue
       verified={false}
-      pendingLabel={REGISTRATION_ORGANIZATION_VERIFICATION_LABEL}
+      pendingLabel="About this claim"
       pendingExplanation="Your organization claim is awaiting approval. It will appear on your badge after approval. This does not affect your conference registration or waitlist status."
     >
       {pendingOrganizationName}

@@ -155,11 +155,6 @@ export function RegistrationInviteForm({
           const row = submittedRows[Number(index)];
           return row ? `inviteRows.${row.id}` : match;
         }),
-      fieldOf: (name) =>
-        name.replace(/^inviteRows\.(\d+)(?=\.|$)/, (match, id: string) => {
-          const index = submittedRows.findIndex((row) => row.id === Number(id));
-          return index < 0 ? match : `invites.${index}`;
-        }),
     },
   );
   useEffect(() => {
