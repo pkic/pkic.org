@@ -50,7 +50,11 @@ import {
   organizationAlreadyMemberMessage,
   organizationApplicationPendingMessage,
 } from "../../../../../assets/shared/membership-application-refusals";
-import { readMembershipApplicationConflicts } from "./conflicts";
+import {
+  readMembershipApplicationConflicts,
+  prepareMembershipApplicationConflictGuards,
+  type MembershipApplicationConflictInput,
+} from "./conflicts";
 import { buildFindOrCreateUserStatement, findUserByEmail, splitPersonName } from "../../users";
 import { prepareVerifyOwnedEmailStatements } from "../../email-verification";
 import { normalizeEmail } from "../../../validation";
@@ -84,13 +88,7 @@ import { first } from "../../../db/queries";
  */
 async function refuseConflictingApplication(
   db: DatabaseLike,
-  input: {
-    isIndividual: boolean;
-    organizationName: string | null;
-    organizationId: string | null;
-    applicantUserId: string | null;
-    applicantEmail: string;
-  },
+  input: MembershipApplicationConflictInput,
 ): Promise<void> {
   const conflicts = await readMembershipApplicationConflicts(db, input);
   const typedOrganization = !input.organizationId && input.organizationName;
@@ -313,13 +311,14 @@ export async function createMemberApplication(
       "The membership category is not eligible for this verified join path",
     );
   }
-  await refuseConflictingApplication(db, {
+  const conflictInput = {
     isIndividual,
     organizationName: isIndividual ? null : (input.organizationName ?? null),
     organizationId: isIndividual ? null : (organizationId ?? null),
     applicantUserId: input.applicantUserId,
     applicantEmail: input.applicantEmail,
-  });
+  };
+  await refuseConflictingApplication(db, conflictInput);
   // An organization application holds the domain its address links through (normally the registrable domain).
   const existingDomainClaim =
     isIndividual || selection ? null : await getOrganizationDomainClaimForEmail(db, input.applicantEmail);
@@ -340,6 +339,7 @@ export async function createMemberApplication(
   const applicantUserId = input.applicantUserId ?? applicantAccount?.user.id ?? null;
   const statements: StatementLike[] = [
     ...(applicantAccount?.statements ?? []),
+    ...prepareMembershipApplicationConflictGuards(db, conflictInput),
     ...(organizationDomain && !selection?.domain && !input.applicantIdentityId
       ? [
           prepareStateGuard(db, {
@@ -501,8 +501,10 @@ export async function createMemberApplication(
   try {
     await db.batch(statements);
   } catch (error) {
-    if (isStateGuardFailure(error))
+    if (isStateGuardFailure(error)) {
+      await refuseConflictingApplication(db, conflictInput);
       throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Confirm your organization again before applying.");
+    }
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(
         409,
