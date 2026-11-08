@@ -74,7 +74,7 @@ describe("replica-compatible authorization batches", () => {
     expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM authorization_guards").first("count")).toBe(0);
   });
 
-  it("preserves a nested guard failure without reading evidence again", async () => {
+  it("delegates an unscoped authorization guard to its scope without reading evidence again", async () => {
     const { db, profile, id } = await fixture();
     const before = (await profile.report()).roundTrips;
     await expect(
@@ -82,7 +82,7 @@ describe("replica-compatible authorization batches", () => {
         db.prepare("UPDATE users SET first_name='Tentative' WHERE id=?").bind(id),
         prepareAuthorizationGuard(db, { sql: "SELECT 1 WHERE 0", bindings: [] }),
       ]),
-    ).rejects.toThrow("AUTHORIZATION_CONTEXT_CHANGED");
+    ).rejects.toMatchObject({ code: "AUTHORIZATION_CONTEXT_CHANGED" });
     expect((await profile.report()).roundTrips - before).toBe(1);
     expect(await env.DB.prepare("SELECT first_name FROM users WHERE id=?").bind(id).first("first_name")).not.toBe(
       "Tentative",
@@ -95,7 +95,7 @@ describe("replica-compatible authorization batches", () => {
       guardAuthorizedDatabase(
         db,
         { sql: "SELECT 1 WHERE ?=1", bindings: [which === owner ? 0 : 1] },
-        () => new AppError(403, which, `${which} refused`),
+        () => new AppError(403, which, `${which} AUTHORIZATION_CONTEXT_CHANGED`),
       );
     const inner = wrap(env.DB, "inner");
     const outer = wrap(inner, "outer");

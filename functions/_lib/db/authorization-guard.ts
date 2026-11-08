@@ -78,7 +78,7 @@ export async function executeAuthorizedDatabaseBatch(
   // A bound invalid JSON path aborts only the failing branch of CASE and puts
   // this batch's unique marker in D1's error. Nested guards retain their own
   // owner even if evidence changes again before the batch rejection arrives.
-  const marker = `AUTHORIZATION_CONTEXT_CHANGED:${uuid()}`;
+  const marker = `AUTHORIZATION_SCOPE_CHANGED:${uuid()}`;
   try {
     // Owner-approved (2026-10-21): replica lag in permission/session revocation
     // is accepted for reads, without a fixed D1 lag bound. Do not replace this
@@ -90,7 +90,13 @@ export async function executeAuthorizedDatabaseBatch(
     if (readOnly && authorization?.results?.[0]?.authorized !== 1) throw authorizationChangedError();
     return results;
   } catch (error) {
-    if (error instanceof Error && error.message.includes(marker)) throw authorizationChangedError();
+    // Unscoped authorization statements delegate refusal to this scope. State
+    // guards and other scoped adapters retain their separate refusal markers.
+    if (
+      error instanceof Error &&
+      (error.message.includes(marker) || error.message.includes("D1_ERROR: AUTHORIZATION_CONTEXT_CHANGED:"))
+    )
+      throw authorizationChangedError();
     throw error;
   }
 }

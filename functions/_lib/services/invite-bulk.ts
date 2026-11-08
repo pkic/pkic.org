@@ -15,7 +15,7 @@ import {
   resolveEventInviteExpiry,
   type InviteEventWindow,
 } from "../invite-validity";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
+import { isStateGuardFailure, prepareStateGuard } from "../db/authorization-guard";
 import { AppError } from "../errors";
 import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
 
@@ -258,7 +258,7 @@ export async function bulkCreateInvites(
     : [];
   const inviterChunks = chunkJsonRows(inviterRows);
   const statements = [
-    prepareAuthorizationGuard(db, eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now)),
+    prepareStateGuard(db, eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now)),
     prepareExpireEffectiveEventInvites(db, { eventId: payload.event.id, inviteType, now }),
     ...chunks.map((chunk) =>
       db
@@ -290,7 +290,7 @@ export async function bulkCreateInvites(
   try {
     results = await db.batch(statements);
   } catch (error) {
-    if (isAuthorizationGuardFailure(error)) {
+    if (isStateGuardFailure(error)) {
       throw new AppError(
         409,
         "EVENT_INVITE_WINDOW_CHANGED",

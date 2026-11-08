@@ -75,7 +75,7 @@ export async function createPeerInvitations(
   );
   const inviterName = displayName(user);
   const appBaseUrl = resolveAppBaseUrl(env, request);
-  const existingReferral = batchFirst<{ code: string }>(referralResult)?.code;
+  const existingReferral = referralResult ? batchFirst<{ code: string }>(referralResult)?.code : undefined;
   const preparedReferral =
     inviteType === "attendee" && !existingReferral
       ? await prepareReferralCodeStatement(env.DB, {
