@@ -186,14 +186,14 @@ export interface EventAppNavigation {
  * At most five bottom tabs: Home and Agenda; then the reader's most pressing
  * job — the badge scanner for this event's own staff, otherwise the lead
  * scanner for a sponsor's representative, otherwise check-in for an
- * attendee on an event day; Registration remains visible for everyone.
- * Ticket takes the remaining place when no scanner is needed.
+ * attendee on an event day. Ticket takes the remaining place for registered
+ * attendees; Registration stays available in More when a scanner is needed.
  */
 export function eventAppNavigation(event: EventAppSubject, session: PortalSession | null): EventAppNavigation {
   const destinations = eventAppDestinations(event, session);
   const find = (id: string) => destinations.find((destination) => destination.id === id);
   const primary = find("scanner") ?? find("lead-scanner") ?? find("check-in") ?? find("registration");
-  const secondary = primary?.id === "registration" ? find("ticket") : find("registration");
+  const secondary = primary?.id === "registration" ? find("ticket") : (find("ticket") ?? find("registration"));
   const promoted = [primary, secondary].filter((destination): destination is EventAppDestination =>
     Boolean(destination),
   );

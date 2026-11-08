@@ -134,6 +134,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("ignores blank invite rows and maps a nonblank row's validation to its controls", async () => {
+  const requests = installApi();
+  const container = mount();
+  await click(button(container, "Invite by email"));
+  await click(button(container, "Add row"));
+  await typeInto(labeledInput(container, "Invite 2 first name (optional)"), "Alice");
+  await click(button(container, "Send invites"));
+  expect(labeledInput(container, "Invite 2 email address").getAttribute("aria-invalid")).toBe("true");
+  expect(labeledInput(container, "Invite 1 email address").getAttribute("aria-invalid")).not.toBe("true");
+  expect(requests).toHaveLength(0);
+  await typeInto(labeledInput(container, "Invite 2 email address"), "alice@example.com");
+  await click(button(container, "Send invites"));
+  expect(registrationInviteCreateSchema.parse(requests[0]?.body).invites).toEqual([
+    { email: "alice@example.com", firstName: "Alice" },
+  ]);
+});
+
 describe("colleague invitation dialog", () => {
   it("reuses the invitation form, validates before sending, and queues only on explicit send", async () => {
     const requests = installApi();

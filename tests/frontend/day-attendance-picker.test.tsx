@@ -60,8 +60,8 @@ describe("day attendance matrix", () => {
     );
     expect(picker.querySelectorAll('input[type="radio"]')).toHaveLength(0);
     expect(picker.querySelector('[aria-label="In person — Day one: Selected"]')).not.toBeNull();
-    expect(picker.querySelector('[aria-label="In person — Day one: On the waiting list"]')).not.toBeNull();
-    expect(picker.textContent).toContain("You are on the waiting list");
+    expect(picker.querySelector('[aria-label="In person — Day one: Waitlisted"]')).not.toBeNull();
+    expect(picker.textContent).toContain("You are on the waitlist");
     expect(await axeViolations(picker)).toEqual([]);
   });
   it("opens the existing editor from a read-only row without selecting or saving a choice", async () => {

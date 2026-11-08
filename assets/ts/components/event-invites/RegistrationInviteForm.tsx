@@ -28,6 +28,7 @@ interface InviteRowData {
 function InviteRow({
   row,
   position,
+  fieldPrefix,
   showRemove,
   onChange,
   onRemove,
@@ -36,6 +37,7 @@ function InviteRow({
 }: {
   row: InviteRowData;
   position: number;
+  fieldPrefix: string;
   showRemove: boolean;
   onChange: (id: number, field: keyof Omit<InviteRowData, "id">, value: string) => void;
   onRemove: (id: number) => void;
@@ -55,22 +57,22 @@ function InviteRow({
   return (
     <div class="pk-stack pk-stack--snug">
       <div class="pk-grid pk-grid--tight">
-        <Field label={`Invite ${position} first name (optional)`} {...contract.of(`invites.${position - 1}.firstName`)}>
+        <Field label={`Invite ${position} first name (optional)`} {...contract.of(`${fieldPrefix}.firstName`)}>
           {(control) => (
             <TextInput
               {...control}
-              name={`invites.${position - 1}.firstName`}
+              name={`${fieldPrefix}.firstName`}
               value={row.firstName}
               onInput={(event) => onChange(row.id, "firstName", event.currentTarget.value)}
               autoComplete="off"
             />
           )}
         </Field>
-        <Field label={`Invite ${position} last name (optional)`} {...contract.of(`invites.${position - 1}.lastName`)}>
+        <Field label={`Invite ${position} last name (optional)`} {...contract.of(`${fieldPrefix}.lastName`)}>
           {(control) => (
             <TextInput
               {...control}
-              name={`invites.${position - 1}.lastName`}
+              name={`${fieldPrefix}.lastName`}
               value={row.lastName}
               onInput={(event) => onChange(row.id, "lastName", event.currentTarget.value)}
               autoComplete="off"
@@ -78,11 +80,11 @@ function InviteRow({
           )}
         </Field>
       </div>
-      <Field label={`Invite ${position} email address`} required {...contract.of(`invites.${position - 1}.email`)}>
+      <Field label={`Invite ${position} email address`} required {...contract.of(`${fieldPrefix}.email`)}>
         {(control) => (
           <TextInput
             {...control}
-            name={`invites.${position - 1}.email`}
+            name={`${fieldPrefix}.email`}
             type="email"
             value={row.email}
             onInput={(event) => onChange(row.id, "email", event.currentTarget.value)}
@@ -136,8 +138,10 @@ export function RegistrationInviteForm({
   const [status, setStatus] = useState<{ message: string; tone: "ok" | "danger" } | null>(null);
   const [sending, setSending] = useState(false);
   const requestPending = useRef(false);
+  const populatedRows = rows.filter((row) => row.email.trim() || row.firstName.trim() || row.lastName.trim());
+  const submittedRows = populatedRows.length ? populatedRows : rows.slice(0, 1);
   const contract = useContractForm(registrationInviteCreateSchema, {
-    invites: rows.map((row) => ({
+    invites: submittedRows.map((row) => ({
       email: row.email.trim(),
       firstName: row.firstName.trim() || undefined,
       lastName: row.lastName.trim() || undefined,
@@ -312,6 +316,9 @@ export function RegistrationInviteForm({
                   key={row.id}
                   row={row}
                   position={index + 1}
+                  fieldPrefix={
+                    submittedRows.includes(row) ? `invites.${submittedRows.indexOf(row)}` : `emptyInvite.${row.id}`
+                  }
                   showRemove={showRemove}
                   onChange={updateRow}
                   onRemove={removeRow}

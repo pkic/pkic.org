@@ -155,7 +155,7 @@ describe("portal event list", () => {
     expect(await axeViolations(card)).toEqual([]);
     // The registration the status summarizes opens from the card's menu.
     await runRowAction(container, "PQC Conference 2026", "Open your registration");
-    expect(navigateMock).toHaveBeenCalledWith("/events/pqc-2026/registrations/30000000-0000-4000-8000-000000000001");
+    expect(navigateMock).toHaveBeenCalledWith("/events/pqc-2026/registration");
   });
 
   it("keeps the list choice a compact record: title, meta values, and actions without labels", async () => {

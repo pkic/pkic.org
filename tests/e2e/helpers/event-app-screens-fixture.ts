@@ -201,9 +201,7 @@ export function eventScreens(fixture: Awaited<ReturnType<typeof prepareEventAppS
     { name: "event-more", path: `${app}/more` },
     { name: "event-virtual-room", path: `${app}/virtual` },
     { name: "event-live-questions", path: `${app}/virtual`, open: selectTab("Questions") },
-    ...(fixture.registrationId
-      ? [{ name: "event-registration", path: `${app}/registrations/${encodeURIComponent(fixture.registrationId)}` }]
-      : []),
+    ...(fixture.registrationId ? [{ name: "event-registration", path: `${app}/registration` }] : []),
     { name: "manage-overview", path: workspace },
     { name: "manage-registrations", path: `${workspace}/registrations` },
     { name: "manage-badge-issuance", path: `${workspace}/registrations/badges/new` },

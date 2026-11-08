@@ -103,9 +103,13 @@ function RegistrationRecord({
   }
 
   /** Sends one change and returns to the read view on success; rejects with the refusal. */
-  async function save(change: RegistrationChange, outcome?: string): Promise<void> {
+  async function save(change: RegistrationChange, outcome?: string): Promise<boolean> {
     // Giving up every day uses the same explicit cancellation confirmation from either editor.
-    if (change.action === "update" && change.dayAttendance?.length === 0) return cancelRegistration();
+    if (change.action === "update" && change.dayAttendance?.length === 0) {
+      if (!(await confirmCancellation())) return false;
+      change = { action: "cancel" };
+      outcome = undefined;
+    }
     setError("");
     setMessage("");
     const result = await patchJson(
@@ -117,16 +121,16 @@ function RegistrationRecord({
     setEditorMounted(false);
     setMessage(result.emailChanged ? outcomeOf(change, true) : (outcome ?? outcomeOf(change, false)));
     await reload();
+    return true;
   }
 
   /** A read-view command: one request at a time, its refusal said in words. */
-  async function run(command: () => Promise<void>): Promise<boolean> {
+  async function run(command: () => Promise<void | boolean>): Promise<boolean> {
     setBusy(true);
     setError("");
     setMessage("");
     try {
-      await command();
-      return true;
+      return (await command()) !== false;
     } catch (cause) {
       setError(refusalSentence(cause));
       return false;
@@ -135,8 +139,8 @@ function RegistrationRecord({
     }
   }
 
-  async function cancelRegistration(): Promise<void> {
-    const confirmed = await confirmAction({
+  async function confirmCancellation(): Promise<boolean> {
+    return confirmAction({
       title: "Cancel your registration?",
       body:
         "Your place at this event is released for someone else. You can restore the registration from this page " +
@@ -144,7 +148,10 @@ function RegistrationRecord({
       confirmLabel: "Cancel registration",
       cancelLabel: "Keep registration",
     });
-    if (confirmed) await run(() => save({ action: "cancel" }));
+  }
+
+  async function cancelRegistration(): Promise<void> {
+    if (await confirmCancellation()) await run(() => save({ action: "cancel" }));
   }
 
   async function resendConfirmation(): Promise<void> {
@@ -215,7 +222,9 @@ function RegistrationRecord({
               <ParticipantRegistrationForm
                 data={data}
                 forms={forms}
-                save={save}
+                save={async (change) => {
+                  await save(change);
+                }}
                 onDiscard={() => {
                   setEditorMounted(false);
                   void closeEditor();

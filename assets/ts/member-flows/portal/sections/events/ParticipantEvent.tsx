@@ -50,7 +50,7 @@ const MySessionManagement = lazy(() =>
 );
 type EventDetail = z.infer<typeof eventDetailResponseSchema>["event"];
 type Selection = {
-  kind?: "registration" | "proposal";
+  kind?: "proposal";
   resourceId?: string;
   tab?: string;
   pointToken?: string;
@@ -101,7 +101,7 @@ export function ParticipantEvent({
   const registrationId = event.participation?.registrationId;
   const hasProposals = hasEventProposals(event);
   const active =
-    kind === "registration" || tab === "registration" || tab === "register"
+    tab === "registration" || tab === "register"
       ? "registration"
       : kind === "proposal" || tab === "submissions"
         ? "proposals"
@@ -167,14 +167,7 @@ export function ParticipantEvent({
   return (
     <div class="pk-stack">
       {kind !== "proposal" && header()}
-      {kind === "registration" && resourceId ? (
-        <ParticipantRegistration
-          registrationId={resourceId}
-          eventId={event.id}
-          slug={event.slug}
-          focusDay={portalHashParam(window.location.hash, "day")}
-        />
-      ) : kind === "proposal" && resourceId ? (
+      {kind === "proposal" && resourceId ? (
         <ParticipantProposal event={event} proposalId={resourceId} facet={tab} header={header} />
       ) : tab === "register" ? (
         <Suspense fallback={<Spinner label="Loading registration…" />}>
@@ -182,7 +175,12 @@ export function ParticipantEvent({
         </Suspense>
       ) : tab === "registration" ? (
         registrationId ? (
-          <ParticipantRegistration registrationId={registrationId} eventId={event.id} slug={event.slug} />
+          <ParticipantRegistration
+            registrationId={registrationId}
+            eventId={event.id}
+            slug={event.slug}
+            focusDay={portalHashParam(window.location.hash, "day")}
+          />
         ) : (
           <div class="pk-event-home pk-grid pk-grid--cards">
             <TicketCard event={event} ended={eventPhase(event.startsAt, event.endsAt).kind === "ended"} showEnded />

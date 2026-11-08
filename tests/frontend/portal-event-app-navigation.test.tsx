@@ -96,7 +96,7 @@ describe("event app tab selection", () => {
       endsAt: new Date(Date.now() + 3_600_000).toISOString(),
     };
     const { tabs, more } = navigation({ ...registeredParticipant, ...running });
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "Scan", "Registration"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Scan", "Ticket"]);
     expect(tabs.find((tab) => tab.id === "check-in")?.href).toBe("#/events/summit/check-in");
     expect(ids(more)).toContain("agenda");
     expect(labels(navigation(running).tabs)).toEqual(["Home", "Agenda", "Registration"]);
@@ -124,7 +124,7 @@ describe("event app tab selection", () => {
   it("puts the lead scanner on a sponsor representative's bar and moves My agenda to More", () => {
     authority([leadGrant]);
     const { tabs, more } = navigation({ ...registeredParticipant, scannerAccess: sponsorDiscovery });
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "Leads", "Registration"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Leads", "Ticket"]);
     expect(tabs.find((tab) => tab.id === "lead-scanner")?.href).toBe(`#/events/summit/sponsors/${sponsorId}/scanner`);
     expect(tabs.find((tab) => tab.id === "lead-scanner")?.icon).toBe("leads");
     expect(ids(more)).toContain("agenda");
@@ -150,10 +150,10 @@ describe("event app tab selection", () => {
       ...registeredParticipant,
       scannerAccess: { ...sponsorDiscovery, canScan: true },
     });
-    expect(labels(tabs)).toEqual(["Home", "Agenda", "Scan", "Registration"]);
+    expect(labels(tabs)).toEqual(["Home", "Agenda", "Scan", "Ticket"]);
     expect(tabs.find((tab) => tab.id === "scanner")?.href).toBe("#/events/summit/scanner");
     expect(tabs.find((tab) => tab.id === "scanner")?.icon).toBe("scan");
-    expect(ids(more)).toEqual(expect.arrayContaining(["agenda", "lead-scanner", "ticket"]));
+    expect(ids(more)).toEqual(expect.arrayContaining(["agenda", "lead-scanner", "registration"]));
   });
 
   it("offers no scanner from discovery alone or from another event's grant", () => {
@@ -304,7 +304,7 @@ describe("event app More sheet", () => {
       "Home",
       "Agenda",
       "Leads",
-      "Registration",
+      "Ticket",
       "More",
     ]);
     await act(() => bar.querySelector<HTMLButtonElement>('[data-app-tab="more"]')!.click());

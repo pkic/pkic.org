@@ -2,10 +2,7 @@ import { first } from "../../db/queries";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
-import {
-  REGISTRATION_DISPLAY_JOB_TITLE_SQL,
-  REGISTRATION_DISPLAY_ORGANIZATION_SQL,
-} from "../registrations/selected-identity";
+import { REGISTRATION_JOB_TITLE_SQL, REGISTRATION_ORGANIZATION_SQL } from "../registrations/selected-identity";
 import {
   loadRegistrationBadgeRole,
   registrationBadgeDisplayRole,
@@ -18,8 +15,8 @@ const canDisplay = canDisplayBadgeContact;
 export const badgePrintMetadataColumns = `r.id AS registrationId,credential.user_id AS userId,r.registration_identity_id AS selectedIdentityId,
   CASE WHEN ${canDisplay} THEN COALESCE(u.preferred_name,u.first_name) ELSE NULL END AS firstName,
   CASE WHEN ${canDisplay} THEN u.last_name ELSE NULL END AS lastName,
-  CASE WHEN ${canDisplay} THEN ${REGISTRATION_DISPLAY_ORGANIZATION_SQL} ELSE NULL END AS organization,
-  CASE WHEN ${canDisplay} THEN ${REGISTRATION_DISPLAY_JOB_TITLE_SQL} ELSE NULL END AS jobTitle`;
+  CASE WHEN ${canDisplay} THEN ${REGISTRATION_ORGANIZATION_SQL} ELSE NULL END AS organization,
+  CASE WHEN ${canDisplay} THEN ${REGISTRATION_JOB_TITLE_SQL} ELSE NULL END AS jobTitle`;
 export const badgePrintMetadataFrom = `FROM event_badge_credentials credential JOIN registrations r ON r.event_id=credential.event_id AND r.user_id=credential.user_id
   JOIN users u ON u.id=credential.user_id`;
 const projection = `SELECT ${badgePrintMetadataColumns} ${badgePrintMetadataFrom} WHERE credential.event_id=? AND credential.id=?`;

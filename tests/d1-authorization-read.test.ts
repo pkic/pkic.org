@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   guardAuthorizedDatabase,
   prepareStateGuard,
+  prepareAuthorizationGuard,
   isStateGuardFailure,
   isAuthorizationGuardFailure,
 } from "../functions/_lib/db/authorization-guard";
@@ -71,6 +72,39 @@ describe("replica-compatible authorization batches", () => {
       "Tentative",
     );
     expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM authorization_guards").first("count")).toBe(0);
+  });
+
+  it("preserves a nested guard failure without reading evidence again", async () => {
+    const { db, profile, id } = await fixture();
+    const before = (await profile.report()).roundTrips;
+    await expect(
+      db.batch([
+        db.prepare("UPDATE users SET first_name='Tentative' WHERE id=?").bind(id),
+        prepareAuthorizationGuard(db, { sql: "SELECT 1 WHERE 0", bindings: [] }),
+      ]),
+    ).rejects.toThrow("AUTHORIZATION_CONTEXT_CHANGED");
+    expect((await profile.report()).roundTrips - before).toBe(1);
+    expect(await env.DB.prepare("SELECT first_name FROM users WHERE id=?").bind(id).first("first_name")).not.toBe(
+      "Tentative",
+    );
+  });
+
+  it.each(["inner", "outer"])("attributes a failed %s wrapper to its own authorization owner", async (owner) => {
+    const id = await insertUser(env.DB);
+    const wrap = (db: Parameters<typeof guardAuthorizedDatabase>[0], which: string) =>
+      guardAuthorizedDatabase(
+        db,
+        { sql: "SELECT 1 WHERE ?=1", bindings: [which === owner ? 0 : 1] },
+        () => new AppError(403, which, `${which} refused`),
+      );
+    const inner = wrap(env.DB, "inner");
+    const outer = wrap(inner, "outer");
+    await expect(outer.prepare("UPDATE users SET first_name='Denied' WHERE id=?").bind(id).run()).rejects.toMatchObject(
+      { code: owner },
+    );
+    expect(await env.DB.prepare("SELECT first_name FROM users WHERE id=?").bind(id).first("first_name")).not.toBe(
+      "Denied",
+    );
   });
 
   it("releases successful state guards and preserves actual permission refusals", async () => {

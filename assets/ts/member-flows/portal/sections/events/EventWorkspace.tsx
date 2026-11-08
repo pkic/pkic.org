@@ -43,7 +43,7 @@ const ProposalPrograms = lazy(() =>
 );
 type EventWorkspaceProps =
   | { view: "list" }
-  | { view: "participant"; slug: string; kind: "registration" | "proposal"; resourceId: string; tab?: string }
+  | { view: "participant"; slug: string; kind: "proposal"; resourceId: string; tab?: string }
   | { view: "detail"; slug: string; tab?: string; subTab?: string; detailSegment?: string }
   | { view: "proposal"; slug: string; resourceId: string; tab?: string; segment?: string }
   | { view: "registration"; slug: string; resourceId: string };
@@ -317,6 +317,7 @@ export function EventWorkspace(props: EventWorkspaceProps) {
           !tab ||
           tab === "overview" ||
           tab === "register" ||
+          tab === "registration" ||
           tab === "submissions" ||
           tab === "agenda" ||
           tab === "promotion" ||

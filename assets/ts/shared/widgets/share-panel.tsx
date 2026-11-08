@@ -189,8 +189,6 @@ function SocialLinks({
   );
 }
 
-// ── Invite row ──────────────────────────────────────────────────────────────
-
 // ── Main share panel ────────────────────────────────────────────────────────
 
 export function SharePanel({ options }: { options: SharePanelOptions }) {

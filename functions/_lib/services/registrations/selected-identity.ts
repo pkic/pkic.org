@@ -97,39 +97,21 @@ export function prepareSelectedRegistrationIdentityGuard(
 
 /**
  * A registration shows the identity it was made as; one made without an
- * identity shows the person's current affiliation. Display callers may include
- * existing submitted review details while the PKIC organization link is pending.
- * The default remains identity-only for affiliation filters and eligibility.
+ * identity shows the person's current affiliation.
  */
-export function registrationOrganizationSql(
-  registration: "r" | "source_registration" | "reg",
-  includePendingReview = false,
-): string {
+export function registrationOrganizationSql(registration: "r" | "source_registration" | "reg"): string {
   const selected = selectedOrAffiliationOrganizationNameSql(
     `${registration}.registration_identity_id`,
     `${registration}.user_id`,
   );
-  return reviewedRegistrationProjection(
-    registration,
-    selected,
-    identityOrganizationNameSql,
-    includePendingReview ? "organization_name" : null,
-  );
+  return reviewedRegistrationProjection(registration, selected, identityOrganizationNameSql);
 }
-export function registrationJobTitleSql(
-  registration: "r" | "source_registration" | "reg",
-  includePendingReview = false,
-): string {
+export function registrationJobTitleSql(registration: "r" | "source_registration" | "reg"): string {
   const selected = selectedOrAffiliationJobTitleSql(
     `${registration}.registration_identity_id`,
     `${registration}.user_id`,
   );
-  return reviewedRegistrationProjection(
-    registration,
-    selected,
-    identityJobTitleSql,
-    includePendingReview ? "job_title" : null,
-  );
+  return reviewedRegistrationProjection(registration, selected, identityJobTitleSql);
 }
 
 /** A review is attribution evidence; never substitute an unrelated current affiliation while it is pending. */
@@ -137,25 +119,14 @@ function reviewedRegistrationProjection(
   registration: "r" | "source_registration" | "reg",
   selected: string,
   identityValue: (id: string) => string,
-  pendingReviewColumn: "organization_name" | "job_title" | null,
 ): string {
   const review = `(SELECT resolved_identity_id FROM affiliation_reviews WHERE source_type='registration' AND source_id=${registration}.id)`;
-  // Submitted text is presentation only. Identity-based affiliation filters and
-  // eligibility keep the default projection, which never treats review text as a link.
-  const value = pendingReviewColumn
-    ? `COALESCE(${identityValue(review)}, (SELECT ${pendingReviewColumn} FROM affiliation_reviews
-        WHERE source_type='registration' AND source_id=${registration}.id AND user_id=${registration}.user_id
-          AND resolved_at IS NULL AND resolved_identity_id IS NULL))`
-    : identityValue(review);
   return `CASE WHEN ${registration}.registration_identity_id IS NULL AND EXISTS
     (SELECT 1 FROM affiliation_reviews WHERE source_type='registration' AND source_id=${registration}.id)
-    THEN ${value} ELSE ${selected} END`;
+    THEN ${identityValue(review)} ELSE ${selected} END`;
 }
 export const REGISTRATION_ORGANIZATION_SQL = registrationOrganizationSql("r");
 export const REGISTRATION_JOB_TITLE_SQL = registrationJobTitleSql("r");
-/** Attendee-visible details may name a submitted organization before its PKIC link is approved. */
-export const REGISTRATION_DISPLAY_ORGANIZATION_SQL = registrationOrganizationSql("r", true);
-export const REGISTRATION_DISPLAY_JOB_TITLE_SQL = registrationJobTitleSql("r", true);
 
 /**
  * The organization and title a registration about to be (or already) stored

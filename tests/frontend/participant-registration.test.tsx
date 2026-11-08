@@ -130,7 +130,7 @@ describe("ParticipantRegistration", () => {
     expect(facts(page).Name).toBe("Ada Lovelace");
     expect(facts(page).Organization).toContain("Analytical Engines");
     expect(page.querySelectorAll('input[type="radio"]')).toHaveLength(0);
-    expect(page.textContent).toContain("On the waiting list");
+    expect(page.textContent).toContain("Waitlisted");
     expect(button(page, "Change attendance")).not.toBeNull();
     expect(page.querySelector(`a[href="#/events/${EVENT.slug}/ticket"]`)).toBeNull();
     expect(page.querySelector('button[aria-label="Registration actions"]')).not.toBeNull();
@@ -140,12 +140,13 @@ describe("ParticipantRegistration", () => {
     const container = await mount();
     const opener = button(container, "About changing your email address");
     await click(opener);
-    expect(document.querySelector("dialog[open]")?.textContent).toContain(
-      "To change your email address, change the identity you’re registered with. The new address must belong to you. You can’t use this option to transfer your seat to someone else.",
-    );
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain("confirm the new address by email");
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain("must belong to you");
     expect(requests.every((request) => request.method === "GET")).toBe(true);
-    await click(button(document.querySelector("dialog[open]")!, "Close"));
-    expect(document.querySelector("dialog[open]")).toBeNull();
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
   });
   it("opens read-only, with the registration's details as a description list", async () => {
     installApi();
@@ -220,25 +221,27 @@ describe("ParticipantRegistration", () => {
     expect(manage?.getAttribute("href")).toBe("/portal/#/users/current");
   });
 
-  it("names an organization awaiting staff review instead of showing Personal", async () => {
+  it("keeps an unapproved organization claim separate from identity details", async () => {
     installApi(
       readResponse({
-        user: { ...readResponse().user, organization_name: "Analytical Engines", job_title: "Engineer" },
+        user: { ...readResponse().user, organization_name: null, job_title: null },
         pendingOrganizationName: "Analytical Engines",
       }),
     );
     const container = await mount();
 
     expect(facts(container)).toMatchObject({
-      Organization: "Analytical Engines",
-      "Job title": "Engineer",
+      Organization: "Personal",
+      "Job title": "Not provided",
     });
     expect(facts(container)["Representation status"]).toBeUndefined();
     const status = button(container, "Organization link awaiting approval");
     expect(status).not.toBeNull();
     await click(status);
     expect(document.body.textContent).toContain("This does not affect your conference registration");
-    await click(button(document.body, "Close"));
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
   });
 
   it("preserves the registration update draft through browser Back and Forward", async () => {
@@ -306,6 +309,57 @@ describe("ParticipantRegistration", () => {
     expect(registrationManageSchema.parse(patches[0]?.body)).toEqual({ action: "cancel" });
   });
 
+  it.each(["declined", "failed"] as const)(
+    "keeps an empty attendance draft when cancellation is %s",
+    async (outcome) => {
+      const requests = installApi(
+        readResponse(),
+        outcome === "failed" ? { refusePatch: { error: { code: "REFUSED", message: "Try again" } } } : {},
+      );
+      const container = await mount();
+      await click(button(container, "Change attendance"));
+      await click(container.querySelector<HTMLInputElement>('input[type="radio"][value=""]'));
+      await click(button(container, "Save my days"));
+      await click(confirmationButton(outcome === "declined" ? "Keep registration" : "Cancel registration"));
+      expect(button(container, "Save my days")).not.toBeNull();
+      expect(container.querySelector<HTMLInputElement>('input[type="radio"][value=""]')?.checked).toBe(true);
+      expect(button(container, "Save my days")?.disabled).toBe(false);
+      const patches = requests.filter(({ method }) => method === "PATCH");
+      expect(patches).toHaveLength(outcome === "declined" ? 0 : 1);
+      if (patches.length) expect(registrationManageSchema.parse(patches[0].body).action).toBe("cancel");
+    },
+  );
+
+  it.each(["retired", "waiting without attendance"])(
+    "shows saved %s days without a misleading matrix selection",
+    async (state) => {
+      installApi(
+        readResponse(
+          state === "retired"
+            ? {
+                dayAttendance: [
+                  { dayDate: "2026-12-01", attendanceType: "moon_base", optionLabel: "Moon base", label: null },
+                ],
+              }
+            : {
+                dayAttendance: [],
+                dayWaitlist: [
+                  { dayDate: "2026-12-01", status: "waiting", priorityLane: "general", offerExpiresAt: null },
+                ],
+              },
+        ),
+      );
+      const container = await mount();
+      expect(container.querySelector('[aria-label="Attendance choices"]')).toBeNull();
+      expect(container.querySelector('[aria-label="Your registration, day by day"]')?.textContent).toContain(
+        state === "retired" ? "Moon base" : "Waitlisted",
+      );
+      expect(container.querySelector('[aria-label="Your registration, day by day"]')?.textContent).not.toContain(
+        "Not attending",
+      );
+    },
+  );
+
   it("offers restore, as the main action, for a cancelled registration and nothing to edit or cancel", async () => {
     const requests = installApi(
       readResponse({
@@ -363,7 +417,7 @@ describe("ParticipantRegistration", () => {
     const container = await mount();
     expect(container.querySelectorAll(".pk-attendance-matrix__cell[data-selected]")).toHaveLength(3);
     expect(container.querySelectorAll(".pk-attendance-matrix__cell[data-selected][data-waitlist]")).toHaveLength(1);
-    expect(container.textContent).toContain("On the waiting list");
+    expect(container.textContent).toContain("Waitlisted");
   });
 
   it("keeps the attendance draft editable when saving fails", async () => {

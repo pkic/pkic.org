@@ -27,7 +27,7 @@ export async function personalEventCalendar(
   if (!registration || registration.user_id !== userId || registration.status !== "registered") {
     throw new AppError(404, "REGISTRATION_NOT_FOUND", "Active registration not found");
   }
-  const manageUrl = `${origin}/portal/#/events/${encodeURIComponent(eventSlug)}/registrations/${encodeURIComponent(registrationId)}`;
+  const manageUrl = `${origin}/portal/#/events/${encodeURIComponent(eventSlug)}/registration`;
   const dayAttendance = await getRegistrationDayAttendance(db, registrationId);
   const organizerEmail = signingSecret
     ? await generateSignedRsvpAddress(registrationId, signingSecret, rsvpEmail)

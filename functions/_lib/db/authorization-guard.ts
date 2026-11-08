@@ -28,17 +28,21 @@ export function prepareStateGuard(db: DatabaseLike, evidence: AuthorizationEvide
 }
 
 /** Build either guard from trusted internal evidence, preserving its failure category. */
-function prepareEvidenceGuard(db: DatabaseLike, evidence: AuthorizationEvidence, failure: "0" | "NULL"): StatementLike {
+function prepareEvidenceGuard(
+  db: DatabaseLike,
+  evidence: AuthorizationEvidence,
+  failure: "0" | "NULL" | { marker: string },
+): StatementLike {
   if (!/^\s*(?:WITH\b|SELECT\b)/i.test(evidence.sql)) {
     throw new Error("Authorization evidence must be an internal SELECT");
   }
   return db
     .prepare(
       `INSERT INTO authorization_guards (id, authorized, created_at)
-       SELECT ?, CASE WHEN EXISTS (${evidence.sql}) THEN 1 ELSE ${failure} END,
+       SELECT ?, CASE WHEN EXISTS (${evidence.sql}) THEN 1 ELSE ${typeof failure === "string" ? failure : "json_extract('null', ?)"} END,
               strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
     )
-    .bind(uuid(), ...evidence.bindings);
+    .bind(uuid(), ...evidence.bindings, ...(typeof failure === "string" ? [] : [failure.marker]));
 }
 
 export function isAuthorizationGuardFailure(error: unknown): boolean {
@@ -57,17 +61,9 @@ export function guardAuthorizedDatabase(
   db: DatabaseLike,
   evidence: AuthorizationEvidence,
   authorizationChangedError: () => Error,
-  options: { preserveNestedGuardFailures?: boolean } = {},
 ): DatabaseLike {
   return guardDatabaseBatches(db, (statements, readOnly) =>
-    executeAuthorizedDatabaseBatch(
-      db,
-      evidence,
-      statements,
-      readOnly,
-      authorizationChangedError,
-      options.preserveNestedGuardFailures,
-    ),
+    executeAuthorizedDatabaseBatch(db, evidence, statements, readOnly, authorizationChangedError),
   );
 }
 
@@ -78,31 +74,23 @@ export async function executeAuthorizedDatabaseBatch(
   statements: StatementLike[],
   readOnly: boolean,
   authorizationChangedError: () => Error,
-  preserveNestedGuardFailures = false,
 ) {
+  // A bound invalid JSON path aborts only the failing branch of CASE and puts
+  // this batch's unique marker in D1's error. Nested guards retain their own
+  // owner even if evidence changes again before the batch rejection arrives.
+  const marker = `AUTHORIZATION_CONTEXT_CHANGED:${uuid()}`;
   try {
     // Owner-approved (2026-10-21): replica lag in permission/session revocation
     // is accepted for reads, without a fixed D1 lag bound. Do not replace this
     // read-only check with a primary write solely to eliminate that lag.
     const guard = readOnly
       ? db.prepare(`SELECT EXISTS (${evidence.sql}) AS authorized`).bind(...evidence.bindings)
-      : prepareAuthorizationGuard(db, evidence);
+      : prepareEvidenceGuard(db, evidence, { marker });
     const [authorization, ...results] = await db.batch([guard, ...statements]);
     if (readOnly && authorization?.results?.[0]?.authorized !== 1) throw authorizationChangedError();
     return results;
   } catch (error) {
-    if (isAuthorizationGuardFailure(error)) {
-      if (preserveNestedGuardFailures) {
-        // A nested business guard may have refused the batch while this
-        // caller's authority remains valid. Preserve that refusal for its owner.
-        const own = await db
-          .prepare(`SELECT EXISTS (${evidence.sql}) AS authorized`)
-          .bind(...evidence.bindings)
-          .first<{ authorized: number }>();
-        if (own?.authorized === 1) throw error;
-      }
-      throw authorizationChangedError();
-    }
+    if (error instanceof Error && error.message.includes(marker)) throw authorizationChangedError();
     throw error;
   }
 }

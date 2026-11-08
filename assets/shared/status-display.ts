@@ -171,3 +171,10 @@ export function statusLabel(status: string): string {
 export function statusTone(status: string): (typeof STATUS_TONE)[keyof typeof STATUS_TONE] {
   return STATUS_TONE[status as keyof typeof STATUS_TONE] ?? "neutral";
 }
+
+/** The same per-day waitlist state in attendance matrices, summaries, and rosters. */
+export const REGISTRATION_DAY_WAITLIST_DISPLAY = {
+  waiting: { label: "Waitlisted", tone: "warn" },
+  offered: { label: "Place offered", tone: "info" },
+  expired: { label: "Offer expired", tone: "warn" },
+} as const;

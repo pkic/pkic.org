@@ -27,7 +27,7 @@ export async function prepareBadgeAttendees(db: DatabaseLike, event: EventReadSe
   const query = badgeAttendeeQuerySchema.parse(raw);
   const name = "TRIM(COALESCE(u.preferred_name,u.first_name,'') || ' ' || COALESCE(u.last_name,''))";
   const search = query.q?.trim()
-    ? buildD1TextSearchFilter(query.q, [name, "u.email", registrationOrganizationSql("reg", true)])
+    ? buildD1TextSearchFilter(query.q, [name, "u.email", registrationOrganizationSql("reg")])
     : null;
   const parsedBadge = badgeCredentialSchema.safeParse(query.q);
   const badgeHash = parsedBadge.success ? await hashBadgeCredential(parsedBadge.data) : null;
@@ -40,7 +40,7 @@ export async function prepareBadgeAttendees(db: DatabaseLike, event: EventReadSe
   const bindings = [...scope.bindings, ...(search?.bindings ?? []), ...(badgeHash && search ? [badgeHash] : [])];
   const statements = buildOffsetPageStatements(db, {
     source: {
-      selectSql: `SELECT u.id,u.email,u.first_name,u.last_name,${registrationOrganizationSql("reg", true)} AS organization_name,${registrationJobTitleSql("reg", true)} AS job_title,u.headshot_r2_key`,
+      selectSql: `SELECT u.id,u.email,u.first_name,u.last_name,${registrationOrganizationSql("reg")} AS organization_name,${registrationJobTitleSql("reg")} AS job_title,u.headshot_r2_key`,
       fromSql: from,
       bindings,
     },

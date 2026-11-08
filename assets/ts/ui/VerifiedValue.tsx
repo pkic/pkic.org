@@ -7,13 +7,10 @@
  */
 
 import type { ComponentChildren } from "preact";
-import { createPortal } from "preact/compat";
-import { useState } from "preact/hooks";
 
 import { IconCheckmark } from "../components/icons";
 import { IconClock } from "./MediaIcons";
-import { Button } from "./Button";
-import { Dialog } from "./Dialog";
+import { Tooltip } from "./Tooltip";
 
 import "./VerifiedValue.css";
 
@@ -31,7 +28,6 @@ export function VerifiedValue({
   /** A compact status control opens this explanation on phones as well as desktop. */
   pendingExplanation?: string;
 }) {
-  const [explaining, setExplaining] = useState(false);
   return (
     <span class="pk-verified-value">
       <span>{children}</span>
@@ -41,31 +37,9 @@ export function VerifiedValue({
           <span class="pk-sr-only">{confirmedLabel.toLowerCase()}</span>
         </span>
       ) : pendingExplanation ? (
-        <>
-          <Button
-            variant="ghost"
-            icon
-            aria-label={pendingLabel}
-            title={pendingLabel}
-            onClick={() => setExplaining(true)}
-          >
-            <IconClock />
-          </Button>
-          {explaining &&
-            createPortal(
-              <Dialog
-                open
-                title={pendingLabel}
-                confirmLabel="Close"
-                cancelLabel={null}
-                onConfirm={() => setExplaining(false)}
-                onCancel={() => setExplaining(false)}
-              >
-                <p>{pendingExplanation}</p>
-              </Dialog>,
-              document.body,
-            )}
-        </>
+        <Tooltip label={pendingLabel} content={pendingExplanation}>
+          <IconClock />
+        </Tooltip>
       ) : (
         <small class="pk-verified-value__pending">{pendingLabel}</small>
       )}

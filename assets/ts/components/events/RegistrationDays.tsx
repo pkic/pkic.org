@@ -92,14 +92,14 @@ function DaysForm({
       </div>
       {joining && (
         <p class="pk-small">
-          Some options have limited places. If your choice is full, you join its waiting list and we email you when a
-          place is available.
+          Some options have limited places. If your choice is full, you join its waitlist and we email you when a place
+          is available.
         </p>
       )}
       {releasing && (
         <p class="pk-small">
-          Your place may go to the next person on the waiting list as soon as you save. If you change your mind later,
-          you join the waiting list again.
+          Your place may go to the next person on the waitlist as soon as you save. If you change your mind later, you
+          join the waitlist again.
         </p>
       )}
       <div class="pk-cluster">
@@ -170,7 +170,17 @@ export function RegistrationDays({
         />
       ) : (
         <>
-          {data.registration.status === "registered" && !data.dayWaitlist.some((day) => day.status === "offered") ? (
+          {data.registration.status === "registered" &&
+          !data.dayWaitlist.some(
+            (day) => day.status === "offered" || !data.dayAttendance.some((entry) => entry.dayDate === day.dayDate),
+          ) &&
+          data.dayAttendance.every((entry) =>
+            data.eventDays.some(
+              (day) =>
+                day.dayDate === entry.dayDate &&
+                day.attendanceOptions.some((option) => option.value === entry.attendanceType),
+            ),
+          ) ? (
             <DayAttendancePicker
               days={data.eventDays}
               readOnly

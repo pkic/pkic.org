@@ -1,8 +1,8 @@
 /**
  * The organization and job title a registration shows, read-only.
  *
- * Details come from the selected identity, or the existing submitted review
- * while its PKIC organization link awaits approval. This view never edits them.
+ * Details come from the selected identity. An organization claim awaiting
+ * approval is review state and does not supply profile or badge details.
  */
 import type { ComponentChildren } from "preact";
 import { ButtonLink } from "../../ui/Button";
@@ -33,17 +33,17 @@ export function registrationAffiliationItems({
   editAction?: ComponentChildren;
   jobTitleEditAction?: ComponentChildren;
 }): DescriptionListItem[] {
-  const organization = organizationName || pendingOrganizationName;
+  const organization = organizationName || PERSONAL_IDENTITY_LABEL;
   const representation = pendingOrganizationName ? (
     <VerifiedValue
       verified={false}
       pendingLabel={REGISTRATION_ORGANIZATION_VERIFICATION_LABEL}
-      pendingExplanation="Your organization link in PKIC is awaiting approval. Your submitted organization and job title can still appear on your badge. This does not affect your conference registration or waiting list status."
+      pendingExplanation="Your organization claim is awaiting approval. Your organization and job title come from your identity and appear on your badge only after approval. This does not affect your conference registration or waitlist status."
     >
       {organization}
     </VerifiedValue>
   ) : (
-    organization || PERSONAL_IDENTITY_LABEL
+    organization
   );
   return [
     {
@@ -71,10 +71,7 @@ export function RegistrationAffiliation(props: RegistrationAffiliationProps) {
   return (
     <div class="pk-stack pk-stack--snug">
       <DescriptionList align="baseline" items={registrationAffiliationItems(props)} />
-      <p class="pk-muted pk-small">
-        Your organization and job title come from your identity or your submitted organization details while its link
-        awaits approval.
-      </p>
+      <p class="pk-muted pk-small">Your organization and job title come from your identity.</p>
       <div class="pk-cluster">
         <ButtonLink href={MANAGE_IDENTITIES_HREF} variant="secondary">
           Manage identities

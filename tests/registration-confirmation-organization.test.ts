@@ -181,7 +181,7 @@ describe("organization named on registration confirmation", () => {
     );
     // The manage page names the organization awaiting review rather than showing the registrant as Personal.
     expect(await buildRegistrationManageView(env.DB, registration, "https://app.test")).toMatchObject({
-      user: { organization_name: "Pending Confirmation Organization" },
+      user: { organization_name: null, job_title: null },
       pendingOrganizationName: "Pending Confirmation Organization",
     });
   });

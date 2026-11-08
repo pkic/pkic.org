@@ -1,3 +1,4 @@
+import { REGISTRATION_DAY_WAITLIST_DISPLAY } from "../../../shared/status-display";
 /**
  * What a registration holds, day by day, on a list row and in a record's
  * header.
@@ -17,12 +18,10 @@ import { Badge, type BadgeTone } from "../../ui/Badge";
 
 /** The words and tone for one day's state. */
 export function registrationDayStatus(day: RegistrationDayState): { label: string; tone: BadgeTone } {
-  if (day.waitlistStatus === "waiting")
-    return { label: day.optionLabel ? `Waitlisted · ${day.optionLabel}` : "Waitlisted", tone: "warn" };
-  if (day.waitlistStatus === "offered")
-    return { label: day.optionLabel ? `Place offered · ${day.optionLabel}` : "Place offered", tone: "info" };
-  if (day.waitlistStatus === "expired")
-    return { label: day.optionLabel ? `Offer expired · ${day.optionLabel}` : "Offer expired", tone: "warn" };
+  if (day.waitlistStatus) {
+    const display = REGISTRATION_DAY_WAITLIST_DISPLAY[day.waitlistStatus];
+    return { label: day.optionLabel ? `${display.label} · ${day.optionLabel}` : display.label, tone: display.tone };
+  }
   if (day.attendanceType === "in_person")
     return { label: day.optionLabel ?? attendanceTypeLabel(day.attendanceType), tone: "ok" };
   return { label: day.optionLabel ?? attendanceTypeLabel(day.attendanceType), tone: "neutral" };

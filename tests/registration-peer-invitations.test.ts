@@ -10,6 +10,7 @@ import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/co
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 
 async function attendee() {
@@ -63,7 +64,11 @@ describe("attendee self-service invitations and notifications", () => {
     "uses the existing invitation records and outbox through a %s",
     async (mode) => {
       const f = await attendee();
-      const response = await invite(mode === "session" ? f.token : f.manageToken);
+      const profile = profileD1Flow(env.DB);
+      const response = await invite(mode === "session" ? f.token : f.manageToken, { ...env, DB: profile.db });
+      const report = await profile.report();
+      expect(report.roundTrips).toBeLessThanOrEqual(mode === "session" ? 11 : 12);
+      expect(report.queries.filter(({ sql }) => sql.includes("INSERT INTO authorization_guards"))).toHaveLength(1);
       expect(response.status, await response.clone().text()).toBe(200);
       expect(peerInviteResultSchema.parse(await response.json()).created).toEqual([
         { email: "colleague@example.test" },
@@ -119,10 +124,32 @@ describe("attendee self-service invitations and notifications", () => {
     );
     const response = await invite(f.token, { ...env, DB: db });
     expect(response.status, await response.clone().text()).toBe(403);
+    expect(await response.json()).toMatchObject({ error: { code: "INVITER_ACCESS_CHANGED" } });
+    expect(await queryAll(env.DB, "SELECT code FROM referral_codes WHERE owner_id=?", [f.registrationId])).toHaveLength(
+      0,
+    );
     expect(await queryAll(env.DB, "SELECT id FROM invites")).toHaveLength(0);
     expect(
       await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email='colleague@example.test'"),
     ).toHaveLength(0);
+  });
+
+  it("keeps a schedule refusal distinct from inviter authorization and rolls back the referral", async () => {
+    const f = await attendee();
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /INSERT(?: OR IGNORE)? INTO invites/i.test(sql),
+      async () => {
+        await env.DB.prepare("UPDATE events SET ends_at='2020-01-01T00:00:00.000Z' WHERE id=?").bind(f.eventId).run();
+      },
+    );
+    const response = await invite(f.token, { ...env, DB: db });
+    expect(response.status, await response.clone().text()).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "EVENT_INVITE_WINDOW_CHANGED" } });
+    expect(await queryAll(env.DB, "SELECT id FROM invites")).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT code FROM referral_codes WHERE owner_id=?", [f.registrationId])).toHaveLength(
+      0,
+    );
   });
 
   it("queues update and cancellation emails through the signed-in registration endpoint", async () => {

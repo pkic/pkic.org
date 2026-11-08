@@ -10,6 +10,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ENDPOINT, FORMS, readResponse } from "./helpers/participant-registration-fixtures";
 import { EventWorkspace } from "../../assets/ts/member-flows/portal/sections/events/EventWorkspace";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
@@ -83,6 +84,7 @@ afterEach(() => {
   container.remove();
   portalSession.value = null;
   vi.unstubAllGlobals();
+  history.replaceState(null, "", "/");
 });
 
 function stubDetail(ownerGroupId: string | null): void {
@@ -100,6 +102,55 @@ function stubDetail(ownerGroupId: string | null): void {
     }),
   );
 }
+
+it.each([false, true])("opens Registration through EventWorkspace for an attendee (staff=%s)", async (staff) => {
+  history.replaceState(
+    null,
+    "",
+    staff ? "/#/events/summit/registration?day=2026-12-01" : "/#/events/summit/registration",
+  );
+  portalSession.value = portalSessionFixture({
+    member: true,
+    staff,
+    grants: staff ? [{ permission: "events:read", contextType: null, contextId: null }] : [],
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), location.origin).pathname;
+      const body =
+        path === ENDPOINT
+          ? readResponse({ event: { ...readResponse().event, id: EVENT_ID, slug: "summit" } })
+          : path.endsWith("/forms/placements/event_registration")
+            ? FORMS
+            : {
+                event: {
+                  ...detailResponse(GROUP_ID).event,
+                  participation: {
+                    registrationId: readResponse().registration.id,
+                    registrationStatus: "registered",
+                    proposals: 0,
+                    speakerProposals: 0,
+                  },
+                },
+              };
+      return new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+    }),
+  );
+  await act(() => render(<EventWorkspace view="detail" slug="summit" tab="registration" />, container));
+  await settle();
+  await vi.waitFor(() => expect(container.querySelector('[aria-label="Your details"]')).not.toBeNull(), {
+    timeout: 5000,
+  });
+  expect(container.textContent).toContain("Ada Lovelace");
+  expect(navigate).not.toHaveBeenCalled();
+  if (staff)
+    expect(
+      [...container.querySelectorAll("dialog")].some((dialog) =>
+        dialog.textContent?.includes("Can't make it in person?"),
+      ),
+    ).toBe(true);
+});
 
 describe("standalone event views redirect to the owning group", () => {
   it("redirects a group-owned event's tab view into the group workspace", async () => {

@@ -278,13 +278,13 @@ describe("permission-derived attendee scanner navigation", () => {
     await act(() => render(<EventWorkspace view="detail" slug="summit" tab="scanner" />, host));
     await vi.waitFor(() => expect(mocks.scanner).toHaveBeenCalled());
     const bar = host.querySelector('nav[aria-label="Event app"]')!;
-    // Registration stays visible alongside Scan; Ticket remains available through More.
-    await vi.waitFor(() => expect(bar.querySelector('[data-app-tab="registration"]')).not.toBeNull());
+    // The scanner keeps no standing of its own; the ticket tab comes from the live participant projection.
+    await vi.waitFor(() => expect(bar.querySelector('[data-app-tab="ticket"]')).not.toBeNull());
     expect([...bar.querySelectorAll("a, button")].map((tab) => tab.textContent)).toEqual([
       "Home",
       "Agenda",
       "Scan",
-      "Registration",
+      "Ticket",
       "More",
     ]);
     expect(bar.querySelector('[aria-current="page"]')?.getAttribute("data-app-tab")).toBe("scanner");

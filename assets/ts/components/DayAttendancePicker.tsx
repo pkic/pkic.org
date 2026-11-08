@@ -1,3 +1,4 @@
+import { REGISTRATION_DAY_WAITLIST_DISPLAY } from "../../shared/status-display";
 import { useId, useRef, useState } from "preact/hooks";
 import { DataTable, type DataTableColumn } from "../ui/DataTable";
 import { Radio } from "../ui/Checkbox";
@@ -95,14 +96,7 @@ function MatrixCell({
     );
   const waiting = full(option);
   const status = selected && readOnly ? waitlistStatus : undefined;
-  const statusLabel =
-    status === "waiting"
-      ? "On the waiting list"
-      : status === "offered"
-        ? "Place offered"
-        : status === "expired"
-          ? "Offer expired"
-          : null;
+  const statusLabel = status && status !== "accepted" ? REGISTRATION_DAY_WAITLIST_DISPLAY[status].label : null;
   const limited =
     !waiting && threshold > 0 && option.spotsRemainingPercent != null && option.spotsRemainingPercent <= threshold;
   return (
@@ -223,7 +217,9 @@ export function DayAttendancePicker({
     <MatrixCell
       day={day}
       row={option}
-      selected={(selected[day.dayDate] ?? (readOnly ? NOT_ATTENDING : undefined)) === option.value}
+      selected={
+        (selected[day.dayDate] ?? (readOnly && !waitlist[day.dayDate] ? NOT_ATTENDING : undefined)) === option.value
+      }
       id={id}
       threshold={lowCapacityThreshold}
       invalid={control?.["aria-invalid"]}
@@ -369,7 +365,7 @@ export function DayAttendancePicker({
           }
         >
           {readOnly
-            ? "You are on the waiting list. We’ll email you when a place is available."
+            ? "You are on the waitlist. We’ll email you when a place is available."
             : "We’ll email you when a seat opens."}
           {waiting.every(
             (day) =>

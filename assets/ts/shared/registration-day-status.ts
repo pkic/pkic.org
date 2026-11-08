@@ -11,7 +11,7 @@ export type DayStatusKind = "offered" | "waiting" | "expired" | "confirmed" | "c
 
 export interface DayStatusGroup {
   kind: DayStatusKind;
-  /** The selected option; null only for a cancelled registration. */
+  /** The selected option; null for a cancelled registration or a waitlisted day without an attendance choice. */
   attendanceType: string | null;
   optionLabel: string | null;
   dayDates: string[];
@@ -48,7 +48,7 @@ export function groupRegistrationDays(
   const groups = new Map<string, DayStatusGroup>();
   const add = (
     kind: DayStatusKind,
-    attendanceType: string,
+    attendanceType: string | null,
     optionLabel: string | null,
     dayDate: string,
     expires: string | null,
@@ -67,6 +67,14 @@ export function groupRegistrationDays(
       add("expired", entry.attendanceType, entry.optionLabel ?? null, entry.dayDate, null);
     else if (queued) add("waiting", entry.attendanceType, entry.optionLabel ?? null, entry.dayDate, null);
     else add("confirmed", entry.attendanceType, entry.optionLabel ?? null, entry.dayDate, null);
+  }
+  const selectedDates = new Set(dayAttendance.map((entry) => entry.dayDate));
+  for (const [dayDate, queued] of pending) {
+    if (
+      !selectedDates.has(dayDate) &&
+      (queued.status === "waiting" || queued.status === "offered" || queued.status === "expired")
+    )
+      add(queued.status, null, null, dayDate, queued.offerExpiresAt ?? null);
   }
   const typeRank = (type: string | null) => {
     const index = TYPE_ORDER.indexOf(type ?? "");

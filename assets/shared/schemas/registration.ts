@@ -235,7 +235,8 @@ export const attendeeRegistrationFieldsSchema = z.object({
     .min(1, "Choose at least one event day and attendance option to register.")
     .max(31),
   customAnswers: submittedFormAnswersSchema.optional(),
-  consents: z.array(consentItemSchema).min(1, "Review and accept the required terms to register.").max(20),
+  // The event's live terms decide which consents are required; an event may have none.
+  consents: z.array(consentItemSchema).max(20),
 });
 export type AttendeeRegistrationFields = z.infer<typeof attendeeRegistrationFieldsSchema>;
 /** Wizard steps use the same fields and attendance policy as the registration request. */

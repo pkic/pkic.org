@@ -1,3 +1,4 @@
+import { REGISTRATION_DAY_WAITLIST_DISPLAY } from "../../shared/status-display";
 /**
  * Where a registration stands, day by day — the one summary every
  * registration screen shows: the public result and confirmation pages, the
@@ -57,16 +58,13 @@ function GroupRow({
   const option = group.optionLabel ?? attendanceTypeLabel(group.attendanceType);
   const hasIcon =
     group.kind === "cancelled" || Boolean(group.attendanceType && attendanceIconName(group.attendanceType) !== "none");
-  const title =
-    group.kind === "offered"
-      ? `A place is available: ${option}`
-      : group.kind === "waiting"
-        ? `On the waiting list: ${option}`
-        : group.kind === "expired"
-          ? `Offer expired: ${option}`
-          : group.kind === "cancelled"
-            ? "Cancelled"
-            : option;
+  const display =
+    group.kind === "confirmed" || group.kind === "cancelled" ? null : REGISTRATION_DAY_WAITLIST_DISPLAY[group.kind];
+  const title = display
+    ? `${display.label}${group.attendanceType ? `: ${option}` : ""}`
+    : group.kind === "cancelled"
+      ? "Cancelled"
+      : option;
   return (
     <li class="pk-day-status__row" data-kind={group.kind} data-icon={hasIcon ? undefined : "none"}>
       {hasIcon && (
@@ -111,8 +109,8 @@ export function RegistrationDayStatusSummary({
   /** Where the screen can act on an offered seat; without it the offer is stated only. */
   onClaim?: (dayDates: string[]) => void;
 }) {
-  if (dayAttendance.length === 0) return null;
   const groups = groupRegistrationDays(dayAttendance, dayWaitlist, { cancelled });
+  if (groups.length === 0) return null;
   return (
     <ul
       class="pk-day-status"

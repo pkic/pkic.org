@@ -1,14 +1,16 @@
 import type { z } from "zod";
-import { getUserSessionToken } from "../auth/user-session-token";
-import type { registrationInviteCreateSchema } from "../../../assets/shared/schemas/registration";
-import { first } from "../db/queries";
+import type {
+  registrationInviteCreateSchema,
+  peerInviteResultSchema,
+} from "../../../assets/shared/schemas/registration";
+import { batchFirst } from "../db/pagination";
 import { AppError } from "../errors";
 import { getConfig, resolveAppBaseUrl } from "../config";
 import { buildEventEmailVariables, getEventBySlug } from "./events";
 import { resolvePeerInvitationAuthority } from "./peer-invitation-authority";
+import { prepareInvitesByInviterCount } from "./invite-creation";
 import { bulkCreateInvites } from "./invite-bulk";
-import { countInvitesByInviter } from "./invites";
-import { createReferralCode } from "./referrals";
+import { prepareReferralCodeStatement } from "./referrals";
 import { firstReferralCodeQuerySql } from "./referral-code-projection";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import type { Env } from "../types";
@@ -19,13 +21,7 @@ import { buildEventInviteRecipientVariables } from "./event-invite-email-variabl
 type PeerInviteBody = z.infer<typeof registrationInviteCreateSchema>;
 
 export interface PeerInviteCreationResult {
-  response: {
-    success: true;
-    created: Array<{ email: string }>;
-    endorsed: Array<{ email: string }>;
-    skipped: Array<{ email: string; reason: string }>;
-    referralCode?: string;
-  };
+  response: z.infer<typeof peerInviteResultSchema>;
   outboxIds: string[];
 }
 
@@ -41,28 +37,6 @@ function displayName(
   return name && user.organization_name ? `${name} (${user.organization_name})` : name;
 }
 
-async function registrationReferralCode(
-  env: Env,
-  eventId: string,
-  registrationId: string,
-  userId: string,
-  length: number,
-): Promise<string> {
-  const existing = await first<{ code: string }>(env.DB, firstReferralCodeQuerySql("registration", "?"), [
-    registrationId,
-  ]);
-  return (
-    existing?.code ??
-    (await createReferralCode(env.DB, {
-      eventId,
-      ownerType: "registration",
-      ownerId: registrationId,
-      createdByUserId: userId,
-      length,
-    }))
-  );
-}
-
 /** Shared attendee-invite/speaker-nomination workflow and D1 bulk boundary. */
 export async function createPeerInvitations(
   env: Env,
@@ -71,7 +45,6 @@ export async function createPeerInvitations(
   body: PeerInviteBody,
   inviteType: "attendee" | "speaker",
 ): Promise<PeerInviteCreationResult> {
-  if (!getUserSessionToken(request)) throw new AppError(401, "AUTH_REQUIRED", "Sign in to invite a colleague");
   const event = await getEventBySlug(env.DB, eventSlug);
   const { registration, db } = await resolvePeerInvitationAuthority(env, request, event.id);
 
@@ -80,7 +53,15 @@ export async function createPeerInvitations(
     inviteType === "attendee"
       ? (event.invite_limit_attendee ?? config.inviteLimitPerAttendee)
       : (event.invite_limit_speaker_nomination ?? config.inviteLimitSpeakerNomination);
-  const currentCount = await countInvitesByInviter(db, event.id, registration.user_id, inviteType);
+  const [countResult, userResult, referralResult] = await env.DB.batch([
+    prepareInvitesByInviterCount(env.DB, event.id, registration.user_id, inviteType),
+    env.DB.prepare(`SELECT u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name
+       FROM registrations r JOIN users u ON u.id = r.user_id WHERE r.id = ?`).bind(registration.id),
+    ...(inviteType === "attendee"
+      ? [env.DB.prepare(firstReferralCodeQuerySql("registration", "?")).bind(registration.id)]
+      : []),
+  ]);
+  const currentCount = Number(batchFirst<{ total: number }>(countResult)?.total ?? 0);
   if (currentCount + body.invites.length > maxAllowed) {
     throw new AppError(
       429,
@@ -89,32 +70,27 @@ export async function createPeerInvitations(
     );
   }
 
-  const user = await first<{
-    first_name: string | null;
-    last_name: string | null;
-    organization_name: string | null;
-  }>(
-    db,
-    `SELECT u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name
-       FROM registrations r JOIN users u ON u.id = r.user_id
-      WHERE r.id = ?`,
-    [registration.id],
+  const user = batchFirst<{ first_name: string | null; last_name: string | null; organization_name: string | null }>(
+    userResult,
   );
   const inviterName = displayName(user);
   const appBaseUrl = resolveAppBaseUrl(env, request);
-  const referralCode =
-    inviteType === "attendee"
-      ? await registrationReferralCode(
-          { ...env, DB: db },
-          event.id,
-          registration.id,
-          registration.user_id,
-          config.referralCodeLength,
-        )
-      : undefined;
+  const existingReferral = batchFirst<{ code: string }>(referralResult)?.code;
+  const preparedReferral =
+    inviteType === "attendee" && !existingReferral
+      ? await prepareReferralCodeStatement(env.DB, {
+          eventId: event.id,
+          ownerType: "registration",
+          ownerId: registration.id,
+          createdByUserId: registration.user_id,
+          length: config.referralCodeLength,
+        })
+      : null;
+  const referralCode = inviteType === "attendee" ? (existingReferral ?? preparedReferral?.code) : undefined;
 
   const outcomes = await bulkCreateInvites(db, inviteType, {
     event,
+    additionalStatements: preparedReferral ? [preparedReferral.statement] : [],
     expiresAt: body.expiresAt,
     inviter: { userId: registration.user_id, registrationId: registration.id },
     maxPrimaryInvites: maxAllowed,

@@ -63,7 +63,6 @@ export async function resolvePeerInvitationAuthority(env: Env, request: Request,
         "INVITER_ACCESS_CHANGED",
         "Your registration or sign-in changed. Refresh before inviting a colleague.",
       ),
-    { preserveNestedGuardFailures: true },
   );
   return { registration, db };
 }

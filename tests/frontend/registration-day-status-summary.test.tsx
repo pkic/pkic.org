@@ -91,8 +91,8 @@ describe("RegistrationDayStatusSummary", () => {
     );
     const rows = [...root.querySelectorAll<HTMLElement>(".pk-day-status__row")];
     expect(rows.map((row) => row.dataset.kind)).toEqual(["offered", "waiting", "confirmed", "confirmed"]);
-    expect(rows[0]!.textContent).toContain("A place is available: In-person");
-    expect(rows[1]!.textContent).toContain("On the waiting list: In-person");
+    expect(rows[0]!.textContent).toContain("Place offered: In-person");
+    expect(rows[1]!.textContent).toContain("Waitlisted: In-person");
     expect(rows[1]!.textContent).toContain("You stay registered");
     expect(rows.map((row) => row.querySelector(".pk-day-status__title")?.textContent).slice(2)).toEqual([
       "In-person",

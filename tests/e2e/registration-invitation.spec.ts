@@ -49,7 +49,7 @@ test("cancelled attendees can restore registration without stale badge or invita
   );
   expect(calendarResponse.status(), await calendarResponse.text()).toBe(200);
   const calendar = (await calendarResponse.text()).replace(/\r?\n[ \t]/g, "");
-  expect(calendar).toContain(`/portal/#/events/${slug}/registrations/${submitted.result.registrationId}`);
+  expect(calendar).toContain(`/portal/#/events/${slug}/registration`);
   expect(calendar).not.toContain("/register/manage/");
   expect(calendar).not.toContain(manageToken!);
   await page.goto(`/portal/#/events/${slug}/ticket`);

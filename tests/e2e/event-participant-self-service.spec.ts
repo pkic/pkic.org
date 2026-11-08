@@ -20,6 +20,8 @@ import {
 } from "../../assets/shared/schemas/speaker-self-service";
 import {
   registrationManageSchema,
+  registrationInviteCreateSchema,
+  peerInviteResultSchema,
   registrationManageUpdateResponseSchema,
   registrationCreateSchema,
   registrationSubmissionResponseSchema,
@@ -593,18 +595,47 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await eventLink.hover();
   await expect(eventLink).toHaveCSS("color", "rgb(255, 255, 255)");
   await eventLink.click();
+  await page.getByRole("button", { name: "Invite a colleague", exact: true }).click();
+  const invitation = page.getByRole("dialog", { name: "Invite a colleague", exact: true });
+  await invitation.getByRole("button", { name: "Add row", exact: true }).click();
+  await invitation.getByRole("button", { name: "Add row", exact: true }).click();
+  await invitation.getByLabel("Invite 2 first name (optional)", { exact: true }).fill("Casey");
+  await invitation.getByRole("button", { name: "Send invites", exact: true }).click();
+  await expect(invitation.getByLabel("Invite 2 email address", { exact: true })).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+  const colleagueEmail = `colleague-${crypto.randomUUID()}@example.test`;
+  await invitation.getByLabel("Invite 2 email address", { exact: true }).fill(colleagueEmail);
+  const invitedSince = await capturedEmailCount();
+  for (const width of [1440, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: testInfo.outputPath(`invitation-${width}.png`), fullPage: true });
+  }
+  const sentInvitation = page.waitForResponse(
+    (response) => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/invites"),
+  );
+  await invitation.getByRole("button", { name: "Send invites", exact: true }).click();
+  const invited = await sentInvitation;
+  expect(invited.status(), await invited.text()).toBe(200);
+  expect(registrationInviteCreateSchema.parse(invited.request().postDataJSON()).invites).toHaveLength(1);
+  expect(peerInviteResultSchema.parse(await invited.json()).created).toEqual([{ email: colleagueEmail }]);
+  await invitation.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(invitation).not.toBeVisible();
+  await waitForCapturedEmail(colleagueEmail, "Invitation", { since: invitedSince });
   await page.getByRole("link", { name: "Manage registration", exact: true }).click();
+  await expect(page).toHaveURL(/\/registration$/);
   // The registration opens read-only: its details are facts, not fields (the invitation link is a read-only copy field).
   const registration = page.getByRole("region", { name: "Registration", exact: true });
   await expect(registration.getByText(email, { exact: true })).toBeVisible();
   await expect(registration.locator("input:not([readonly]):not([type=hidden]), textarea, select")).toHaveCount(0);
-  await registration.getByRole("button", { name: "Edit details", exact: true }).click();
+  await registration.getByRole("button", { name: "Edit registration details", exact: true }).click();
   await expect(page.getByLabel("Email address", { exact: true })).toHaveValue(email);
   await expect(page.getByLabel("Country", { exact: true })).toHaveValue("US");
   await expect(registration.getByRole("button", { name: "Registration actions" })).toHaveCount(0);
   await page.getByLabel("Last name", { exact: true }).fill("Updated-Attendee");
   await page.goBack();
-  await expect(registration.getByRole("button", { name: "Edit details", exact: true })).toBeVisible();
+  await expect(registration.getByRole("button", { name: "Edit registration details", exact: true })).toBeVisible();
   await page.goForward();
   await expect(page.getByLabel("Last name", { exact: true })).toHaveValue("Updated-Attendee");
   const savedResponse = page.waitForResponse(
@@ -626,18 +657,35 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await page.reload();
   await expect(registration.getByText(/Updated-Attendee/)).toBeVisible();
   // Discarding an edit sends nothing and returns to the saved facts.
-  await registration.getByRole("button", { name: "Edit details", exact: true }).click();
+  await registration.getByRole("button", { name: "Edit registration details", exact: true }).click();
   await expect(page.getByLabel("Last name", { exact: true })).toHaveValue("Updated-Attendee");
   await page.getByLabel("Last name", { exact: true }).fill("Discarded-Name");
   await registration.getByRole("button", { name: "Discard changes", exact: true }).click();
   await expect(registration.getByText(/Updated-Attendee/)).toBeVisible();
   await expect(registration.getByText(/Discarded-Name/)).toHaveCount(0);
-  // Cancelling sits apart at the end of the record, behind the confirmation.
-  await registration.getByRole("button", { name: "Cancel my registration…", exact: true }).click();
+  // Saving no days asks for cancellation; declining keeps the user's draft.
+  await registration.getByRole("button", { name: "Change attendance", exact: true }).click();
+  await registration.getByRole("button", { name: "Choose Not attending for every available day", exact: true }).click();
+  await registration.getByRole("button", { name: "Save my days", exact: true }).click();
+  await page.getByRole("button", { name: "Keep registration", exact: true }).click();
+  for (const day of await registration.getByRole("radio", { name: /Not attending/ }).all())
+    await expect(day).toBeChecked();
+  await expect(registration.getByRole("button", { name: "Save my days", exact: true })).toBeEnabled();
+  await registration.getByRole("button", { name: "Discard changes", exact: true }).click();
+  await registration.getByRole("button", { name: "About changing your email address" }).click();
+  await expect(page.getByRole("tooltip")).toContainText("must belong to you");
+  await page.keyboard.press("Escape");
+  for (const width of [1440, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: testInfo.outputPath(`registration-${width}.png`), fullPage: true });
+  }
+  // Cancelling is a record action behind the confirmation.
+  await registration.getByRole("button", { name: "Registration actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Cancel my registration…", exact: true }).click();
   await acceptConfirmDialog(page, "Cancel registration");
   await expect(page.getByRole("button", { name: "Restore registration" })).toBeVisible();
   await page.getByRole("button", { name: "Restore registration" }).click();
-  await expect(registration.getByRole("button", { name: "Edit details", exact: true })).toBeEnabled();
+  await expect(registration.getByRole("button", { name: "Edit registration details", exact: true })).toBeEnabled();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(registration.getByText(email, { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -648,7 +696,7 @@ test("attendee manages a registration and downloads a personal event calendar", 
   const nextEmail = `changed@domain-change-${crypto.randomUUID()}.test`;
   const nextOrganization = `Domain Change Fixture ${crypto.randomUUID().slice(0, 8)}`;
   const beforeEmailChange = await capturedEmailCount();
-  await registration.getByRole("button", { name: "Edit details", exact: true }).click();
+  await registration.getByRole("button", { name: "Edit registration details", exact: true }).click();
   await page.getByLabel("Email address", { exact: true }).fill(nextEmail);
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(registration.getByText(/Check your new email address/)).toBeVisible();

@@ -7,8 +7,6 @@
  * explicit command that swaps this list for the form with the same fields.
  */
 import type { ComponentChildren } from "preact";
-import { createPortal } from "preact/compat";
-import { useState } from "preact/hooks";
 import type { RegistrationManageReadResponse } from "../../../shared/schemas/registration";
 import type { EventFormsResponse } from "../../shared/types";
 import { attendanceTypeLabel } from "../../shared/attendance";
@@ -18,7 +16,7 @@ import { buildFormAnswerRows } from "../forms/form-answers";
 import { isIdentityOwnedFormKey } from "../../../shared/schemas/form-answers";
 import { RegistrationIdentityChange } from "./RegistrationIdentityChange";
 import { registrationAffiliationItems } from "./RegistrationAffiliation";
-import { Dialog } from "../../ui/Dialog";
+import { Tooltip } from "../../ui/Tooltip";
 import { IconInfoCircle, IconPencil } from "../icons";
 import { Button } from "../../ui/Button";
 
@@ -68,7 +66,6 @@ export function ParticipantRegistrationDetails({
   onIdentityChanged?: () => void | Promise<void>;
   onEditDetails?: () => void;
 }) {
-  const [emailHelpOpen, setEmailHelpOpen] = useState(false);
   const name = [data.user.first_name, data.user.last_name].filter(Boolean).join(" ");
   const details = (editAction?: ComponentChildren, jobTitleEditAction?: ComponentChildren) => (
     <div class="pk-stack pk-stack--snug">
@@ -99,15 +96,12 @@ export function ParticipantRegistrationDetails({
             value: (
               <span class="pk-cluster pk-cluster--nowrap">
                 <VerifiedValue verified={data.registration.isEmailVerified}>{data.user.email}</VerifiedValue>
-                <Button
-                  variant="ghost"
-                  icon
-                  aria-label="About changing your email address"
-                  title="About changing your email address"
-                  onClick={() => setEmailHelpOpen(true)}
+                <Tooltip
+                  label="About changing your email address"
+                  content="Edit your registration details to change your email address, then confirm the new address by email. The address must belong to you; changing it does not transfer your place to someone else."
                 >
                   <IconInfoCircle />
-                </Button>
+                </Tooltip>
               </span>
             ),
           },
@@ -122,23 +116,6 @@ export function ParticipantRegistrationDetails({
           ...answerItems(data, form),
         ]}
       />
-      {emailHelpOpen &&
-        createPortal(
-          <Dialog
-            open
-            title="Changing your email address"
-            confirmLabel="Close"
-            cancelLabel={null}
-            onConfirm={() => setEmailHelpOpen(false)}
-            onCancel={() => setEmailHelpOpen(false)}
-          >
-            <p>
-              To change your email address, change the identity you’re registered with. The new address must belong to
-              you. You can’t use this option to transfer your seat to someone else.
-            </p>
-          </Dialog>,
-          document.body,
-        )}
     </div>
   );
   return onIdentityChanged && data.registration.status !== "cancelled" ? (
