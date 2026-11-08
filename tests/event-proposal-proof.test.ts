@@ -178,20 +178,63 @@ describe("event proposal mailbox proof", () => {
     expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toHaveLength(0);
   });
 
-  it("names an organization domain under review so the proposer can choose a next step", async () => {
+  it("lets a proposer confirm a different organization beside a pending application", async () => {
     await seedEventAndAdmin(env.DB);
-    await seedMemberApplication({ applicantEmail: "pending@held-domain.example" });
-    const response = await request("/proof/verify", { token: await start("dana@held-domain.example") });
+    const pending = await seedMemberApplication({ applicantEmail: "pending@held-domain.example" });
+    const token = await start("dana@held-domain.example");
+    const response = await request("/proof/verify", { token });
     expect(response.status).toBe(200);
-    expect(eventProposalProofVerifyResponseSchema.parse(await response.json())).toEqual({
-      status: "support_required",
+    const proof = eventProposalProofVerifyResponseSchema.parse(await response.json());
+    expect(proof).toMatchObject({
+      status: "ready",
       email: "dana@held-domain.example",
       applicantKind: "organization",
-      reason: "organization_domain_review",
+      affiliation: { reviewRequired: true, organization: null, organizations: [] },
     });
     expect(
       await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", ["dana@held-domain.example"]),
     ).toEqual([]);
+    const selected = await request("/proof/verify", {
+      token,
+      affiliation: {
+        organizationId: null,
+        organizationName: "Different Organization",
+        domain: "held-domain.example",
+        jobTitle: "Researcher",
+      },
+    });
+    expect(selected.status, await selected.clone().text()).toBe(200);
+    const prepared = eventProposalProofVerifyResponseSchema.parse(await selected.json());
+    if (prepared.status !== "ready" || !prepared.affiliation?.contextToken)
+      throw new Error("Expected an explicit organization choice");
+    const submitted = await request(
+      "",
+      proposal(
+        { continuationToken: prepared.continuationToken, unaffiliatedAttestation: false },
+        {
+          firstName: "Dana",
+          lastName: "Speaker",
+          organizationName: "Different Organization",
+          jobTitle: "Researcher",
+          organizationContextToken: prepared.affiliation.contextToken,
+        },
+      ),
+    );
+    expect(submitted.status, await submitted.clone().text()).toBe(200);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT claim.application_id,claim.organization_id FROM organization_domain_claims claim WHERE domain=?",
+        ["held-domain.example"],
+      ),
+    ).toEqual([{ application_id: pending, organization_id: null }]);
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT organization.name FROM identities identity JOIN organizations organization ON organization.id=identity.organization_id JOIN users person ON person.id=identity.user_id WHERE person.normalized_email=? AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL`,
+        ["dana@held-domain.example"],
+      ),
+    ).toEqual([{ name: "Different Organization" }]);
   });
 
   it("reuses a known person's names without duplicate input and limits the proof catalog to its owner", async () => {

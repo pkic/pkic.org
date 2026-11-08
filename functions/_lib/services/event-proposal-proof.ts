@@ -336,7 +336,7 @@ export async function verifyEventProposalProof(
         })
       : undefined;
   } catch (error) {
-    // A domain held by an open application, or an ambiguous one, needs the consortium; nothing was linked or created.
+    // Unresolvable organization evidence needs support; nothing was linked or created.
     if (!(error instanceof AppError) || !ORGANIZATION_DOMAIN_REVIEW_CODES.has(error.code)) throw error;
     return {
       status: "support_required" as const,
