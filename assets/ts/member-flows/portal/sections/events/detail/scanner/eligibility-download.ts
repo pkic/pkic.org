@@ -5,7 +5,8 @@ import {
 } from "../../../../../../../shared/schemas/event-offline-eligibility";
 import { eligibilityPageDigest } from "../../../../../../../shared/event-eligibility-digest";
 import { SCANNER_OFFLINE_MAXIMUM_MS } from "../../../../../../../shared/event-offline-expiry";
-import { snapshotCurrent, type CachedManifest } from "./eligibility-snapshot";
+import { sameSnapshotScope, snapshotCurrent, type CachedManifest } from "./eligibility-snapshot";
+import { apiErrorPayloadSchema } from "../../../../../../../shared/schemas/api-common";
 
 /** Validate every bounded page, transferring its entries only when they differ from the saved copy. */
 export async function downloadEligibilitySnapshot(
@@ -18,13 +19,7 @@ export async function downloadEligibilitySnapshot(
   saved?: CachedManifest,
   onProgress?: (checkedBadges: number) => void,
 ): Promise<CachedManifest> {
-  const matching =
-    saved &&
-    saved.operatorUserId === operatorUserId &&
-    saved.occurrenceId === occurrenceId &&
-    (saved.roomId ?? null) === roomId &&
-    saved.epochId === enrollment.epochId &&
-    saved.deviceId === enrollment.deviceId;
+  const matching = saved && sameSnapshotScope(saved, { operatorUserId, occurrenceId, roomId, ...enrollment });
   let previous = matching
     ? [...saved.entries].sort((a, b) => (a.badgeId < b.badgeId ? -1 : a.badgeId > b.badgeId ? 1 : 0))
     : [];
@@ -59,8 +54,12 @@ export async function downloadEligibilitySnapshot(
       cache: "no-store",
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
     });
-    if (response.status === 401 || response.status === 403) throw new Error("SCANNER_PERMISSION_CHANGED");
-    if (response.status === 409 && !restarted) {
+    if (response.status === 401) throw new Error("SCANNER_SIGNED_OUT");
+    if (response.status === 403) throw new Error("SCANNER_PERMISSION_CHANGED");
+    const refusal = !response.ok ? apiErrorPayloadSchema.safeParse(await response.json().catch(() => null)) : null;
+    const code = refusal?.success ? refusal.data.error.code : undefined;
+    if (response.status === 409 && code === "SCANNER_PREPARATION_CLOSED") throw new Error("SCANNER_PREPARATION_CLOSED");
+    if (response.status === 409 && code === "OFFLINE_MANIFEST_CHANGED" && snapshot && !restarted) {
       previous = [];
       previousIndex = 0;
       cursor = null;
@@ -71,14 +70,8 @@ export async function downloadEligibilitySnapshot(
     }
     if (!response.ok) throw new Error(`Badge refresh failed (HTTP ${response.status}).`);
     const page = enrolledOfflineEligibilityResponseSchema.parse(await response.json());
-    if (
-      page.operatorUserId !== operatorUserId ||
-      page.occurrenceId !== occurrenceId ||
-      page.epochId !== enrollment.epochId ||
-      page.deviceId !== enrollment.deviceId
-    )
+    if (!sameSnapshotScope(page, { operatorUserId, occurrenceId, roomId, ...enrollment, eventId: snapshot?.eventId }))
       throw new Error("SCANNER_PERMISSION_CHANGED");
-    if ((page.roomId ?? null) !== roomId) throw new Error("SCANNER_ROOM_CONTEXT_CHANGED");
     const pageScope = await eligibilityPageDigest({ ...page, entries: [], nextBadgeId: null });
     if (scopeDigest !== undefined && scopeDigest !== pageScope) throw new Error("Eligibility revision changed");
     scopeDigest = pageScope;

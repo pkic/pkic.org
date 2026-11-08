@@ -8,6 +8,7 @@ import type { ScannerEpoch } from "./scanner-device-ledger";
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
 import { ScannerCodePreparation, useScannerCodePreparationRetry } from "./scanner-code-preparation";
 import { prepareEligibilityManifest, type EligibilityManifest } from "./eligibility-manifest";
+import { eligibilityRefreshError, eligibilityRefreshRefused } from "./eligibility-refresh-error";
 
 /** Prepares and refreshes scoped IDs-only data outside the camera path. */
 export function useEligibilityManifest(
@@ -71,17 +72,15 @@ export function useEligibilityManifest(
         setManifestError(manifest.refreshError ?? "");
       } catch (error) {
         if (controller.signal.aborted) return;
-        if (error instanceof Error && error.message === "SCANNER_PERMISSION_CHANGED") {
+        if (eligibilityRefreshRefused(error)) {
           eligibilityManifest.current = null;
           onRefusal();
         }
         setManifestReady(Boolean(eligibilityManifest.current));
         setManifestError(
-          error instanceof Error && error.message === "SCANNER_PERMISSION_CHANGED"
-            ? "Scanner access changed. Check sign-in and reopen the scanner."
-            : collector
-              ? "Prepared badge data is unavailable. Connect and refresh before scanning."
-              : "Badge data could not be refreshed. Check your connection and try again.",
+          collector
+            ? "Prepared badge data is unavailable. Connect and refresh before scanning."
+            : eligibilityRefreshError(error),
         );
       } finally {
         refreshing = false;
@@ -128,10 +127,10 @@ export function useScannerOfflinePreparation(
 ) {
   const prepareCode = useContext(ScannerCodePreparation);
   const route = scannerCollectorPath(window.location.hash);
-  const { attempt, retry } = useScannerCodePreparationRetry();
   const [prepared, setPrepared] = useState<ScannerOfflineContext | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState("");
+  const { attempt, retry } = useScannerCodePreparationRetry(() => !preparing && !current);
   const [, tick] = useState(0);
   useEffect(() => {
     const controller = new AbortController();

@@ -456,6 +456,49 @@ describe("local scoped eligibility manifest", () => {
     expect((await result.lookup(badge)).reason).toBe("revoked_badge");
     expect((await buildEligibilityManifest(saved.get(key)).lookup(badge)).reason).toBe("revoked_badge");
   });
+  it.each([false, true])(
+    "replaces older stored data even after the initial cache read fails (%s)",
+    async (readFails) => {
+      const snapshot = { ...(await fixture()), complete: true };
+      const key = JSON.stringify([
+        snapshot.operatorUserId,
+        "synthetic-event",
+        null,
+        null,
+        snapshot.epochId,
+        snapshot.deviceId,
+      ]);
+      const saved = new Map<string, unknown>([[key, snapshot]]);
+      const open = stubManifestStorage(saved);
+      if (readFails)
+        open.mockImplementationOnce(() => {
+          throw new Error("Transient storage error");
+        });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => {
+          // Another tab writes an older-observed snapshot while this download is in flight.
+          saved.set(key, {
+            ...snapshot,
+            snapshotId: crypto.randomUUID(),
+            ...(readFails ? { writtenAt: snapshot.writtenAt - 900001, validUntil: snapshot.writtenAt - 1 } : {}),
+          });
+          const { writtenAt: _, validUntil: __, complete: ___, snapshotId: ____, ...page } = snapshot;
+          const fresh = {
+            ...page,
+            serverNow: new Date(Date.parse(page.serverNow) + 1).toISOString(),
+            entries: [{ ...page.entries[0], revoked: true }],
+            nextBadgeId: null,
+          };
+          return Response.json({ ...fresh, unchanged: false, pageDigest: await eligibilityPageDigest(fresh) });
+        }),
+      );
+      const result = await prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, snapshot);
+      expect(result.refreshError).toBeUndefined();
+      expect((await result.lookup(badge)).reason).toBe("revoked_badge");
+      expect((await buildEligibilityManifest(saved.get(key)).lookup(badge)).reason).toBe("revoked_badge");
+    },
+  );
   it("honors the server expiry boundary even before the local freshness window ends", async () => {
     const snapshot = await fixture();
     const expired = { ...snapshot, expiresAt: new Date(snapshot.writtenAt - 1).toISOString() };

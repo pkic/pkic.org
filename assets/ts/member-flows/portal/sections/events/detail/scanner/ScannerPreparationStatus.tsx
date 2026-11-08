@@ -19,7 +19,6 @@ export function ScannerSyncStatus({
   action,
   sync,
   syncing = false,
-  refreshEligibility,
   children,
 }: {
   pending: number;
@@ -29,7 +28,6 @@ export function ScannerSyncStatus({
   action: EventScanRequest["action"];
   sync?: () => void;
   syncing?: boolean;
-  refreshEligibility?: () => Promise<void>;
   children?: ComponentChildren;
 }) {
   const context = collector ?? offline.context;
@@ -38,15 +36,7 @@ export function ScannerSyncStatus({
     <Panel aria-label="Sync and offline status">
       <PanelHeader title="Sync status">
         {sync && (
-          <Button
-            type="button"
-            variant="secondary"
-            loading={syncing}
-            onClick={() => {
-              sync();
-              void refreshEligibility?.();
-            }}
-          >
+          <Button type="button" variant="secondary" loading={syncing} onClick={sync}>
             {syncing ? "Syncing…" : "Sync now"}
           </Button>
         )}
@@ -115,7 +105,7 @@ export function ScannerPreparationStatus({
       {error && !preparing ? (
         <Alert tone="warn">
           <p>{error}</p>
-          {ready && <p>Using saved registration data; its original expiry still applies.</p>}
+          {ready && <p>Using saved badge data; its original expiry still applies.</p>}
         </Alert>
       ) : (
         <p role="status">
@@ -124,14 +114,14 @@ export function ScannerPreparationStatus({
               ? "Refreshing badge data…"
               : `Refreshing badge data · ${formatNumber(checkedBadges)} badges checked…`
             : ready && stale
-              ? "Using saved registration data. Refresh resumes when connected; scans upload in the background."
+              ? "Using saved badge data. Refresh resumes when connected; scans upload in the background."
               : ready && checkedBadges !== null
                 ? `Badge data up to date · ${formatNumber(checkedBadges)} badges checked.`
                 : ready
                   ? action === "checkout"
                     ? "Badge data ready. Checkout saves locally and uploads in the background."
-                    : "Eligibility data ready. Checks run locally; attendance uploads in the background."
-                  : "Prepare eligibility data before scanning."}
+                    : "Badge data ready. Checks run locally; attendance uploads in the background."
+                  : "Prepare badge data before scanning."}
         </p>
       )}
       <DescriptionList

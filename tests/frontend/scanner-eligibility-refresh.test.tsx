@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { useEligibilityManifest } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useEligibilityManifest";
 import type { ScannerEpoch } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-device-ledger";
 import { SCANNER_ELIGIBILITY_REFRESH_MS } from "../../assets/shared/event-offline-expiry";
+import { ScannerSyncStatus } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerPreparationStatus";
 const mocks = vi.hoisted(() => ({ prepare: vi.fn(async (..._args: unknown[]) => ({ refreshError: "" })) }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-manifest", () => ({
   prepareEligibilityManifest: mocks.prepare,
@@ -94,4 +95,53 @@ it("exposes manual refresh progress and does not hide a cached-fallback failure"
   expect(mocks.prepare).toHaveBeenCalledTimes(2);
   await act(async () => host.querySelector("button")!.click());
   await vi.waitFor(() => expect(host.textContent).toContain("Ready"));
+});
+
+it.each([
+  ["SCANNER_SIGNED_OUT", /sign in again/i],
+  ["SCANNER_PERMISSION_CHANGED", /access changed/i],
+  ["SCANNER_PREPARATION_CLOSED", /session has closed/i],
+  ["Eligibility snapshot too large", /contact support/i],
+  ["Eligibility pagination repeated", /contact support/i],
+  ["Eligibility page digest changed", /contact support/i],
+] as const)("explains the recovery action for %s", async (message, action) => {
+  mocks.prepare.mockRejectedValueOnce(new Error(message));
+  await act(async () => render(<Scanner />, host));
+  await vi.waitFor(() => expect(host.textContent).toMatch(action));
+  expect(host.textContent).not.toMatch(/check your connection/i);
+});
+
+it("keeps uploads available during badge preparation without starting another roster refresh", async () => {
+  const upload = vi.fn();
+  let finish!: (value: { refreshError: string }) => void;
+  mocks.prepare.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  function Status() {
+    const state = useEligibilityManifest("synthetic", id, null, "attendance", () => {}, null, epoch);
+    return (
+      <ScannerSyncStatus
+        pending={1}
+        uploadStatus=""
+        action="attendance"
+        sync={upload}
+        offline={{ context: null, preparing: false, error: "", retry: () => {} }}
+      >
+        <output>{state.manifestPreparing ? "preparing" : "ready"}</output>
+      </ScannerSyncStatus>
+    );
+  }
+  await act(async () => render(<Status />, host));
+  expect(host.textContent).toContain("preparing");
+  await act(() =>
+    Array.from(host.querySelectorAll("button"))
+      .find((button) => /sync now/i.test(button.textContent!))!
+      .click(),
+  );
+  expect(upload).toHaveBeenCalledOnce();
+  expect(mocks.prepare).toHaveBeenCalledOnce();
+  await act(async () => finish({ refreshError: "" }));
 });

@@ -5,8 +5,8 @@ import { useScannerCodePreparationRetry } from "./scanner-code-preparation";
 
 const unavailable = "Offline camera files are not prepared. Use manual entry or a hardware scanner when offline.";
 export function useScannerDecoderPreparation(scope: string) {
-  const { attempt } = useScannerCodePreparationRetry();
   const [status, setStatus] = useState("Preparing offline camera files…");
+  const { attempt } = useScannerCodePreparationRetry(() => status === unavailable);
   useEffect(() => {
     const controller = new AbortController();
     const deadline = window.setTimeout(() => {

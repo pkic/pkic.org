@@ -208,7 +208,7 @@ async function selectReloadedBadge(
 async function scanAttendance(page: Page, credential: string, publishedRevision: number) {
   await openScannerDiagnostics(page);
   await expect(
-    page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
+    page.getByText("Badge data ready. Checks run locally; attendance uploads in the background.", {
       exact: true,
     }),
   ).toBeVisible();
@@ -278,7 +278,7 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   await expect(page.getByRole("tabpanel", { name: "Setup", exact: true })).toBeVisible();
   await openScannerDiagnostics(page);
   await expect(
-    page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
+    page.getByText("Badge data ready. Checks run locally; attendance uploads in the background.", {
       exact: true,
     }),
   ).toBeVisible();

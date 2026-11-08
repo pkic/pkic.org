@@ -120,7 +120,7 @@ export async function openMeasurementScanner(page: Page, publishedRevision: numb
   expect(manifest.publishedRevision).toBe(publishedRevision);
   await openScannerDiagnostics(page);
   await expect(
-    page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
+    page.getByText("Badge data ready. Checks run locally; attendance uploads in the background.", {
       exact: true,
     }),
   ).toBeVisible();

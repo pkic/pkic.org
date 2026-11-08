@@ -59,7 +59,7 @@ export function useScannerOutboxSync({
       };
       const timeout = window.setTimeout(() => finish(false), 2000);
       verificationWaiters.current.set(operationId, finish);
-      if (activeSyncs.current === 0) void sync().catch(() => finish(false));
+      void sync().catch(() => finish(false));
     });
   }
 
@@ -104,32 +104,37 @@ export function useScannerOutboxSync({
     try {
       if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
       let uploadFailure = "";
-      const drained = await drainScanOutbox(async (record) => {
-        const response = await fetch(
-          `/api/v1/events/${encodeURIComponent(record.eventId)}/scans${record.kind === "failure" ? "/failures" : ""}`,
-          {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(record.scan),
-            signal: AbortSignal.timeout(8000),
-          },
-        );
-        if (response.ok) {
-          const receipt = eventScanResponseSchema.safeParse(
-            await response
-              .clone()
-              .json()
-              .catch(() => null),
+      const drained = await drainScanOutbox(
+        async (record) => {
+          const response = await fetch(
+            `/api/v1/events/${encodeURIComponent(record.eventId)}/scans${record.kind === "failure" ? "/failures" : ""}`,
+            {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(record.scan),
+              signal: AbortSignal.timeout(8000),
+            },
           );
-          if (receipt.success && scannerReceiptMatches(receipt.data, record.scan)) {
-            if (record.kind === "scan") received(receipt.data);
-          } else uploadFailure = "Scan upload was not confirmed. Saved on this device; retrying automatically.";
-        }
-        if (!response.ok)
-          uploadFailure = `Scan upload failed (HTTP ${response.status}). Saved on this device; retrying automatically.`;
-        return response;
-      }, operatorUserId);
+          if (response.ok) {
+            const receipt = eventScanResponseSchema.safeParse(
+              await response
+                .clone()
+                .json()
+                .catch(() => null),
+            );
+            if (receipt.success && scannerReceiptMatches(receipt.data, record.scan)) {
+              if (record.kind === "scan") received(receipt.data);
+            } else uploadFailure = "Scan upload was not confirmed. Saved on this device; retrying automatically.";
+          }
+          if (!response.ok)
+            uploadFailure = `Scan upload failed (HTTP ${response.status}). Saved on this device; retrying automatically.`;
+          return response;
+        },
+        operatorUserId,
+        undefined,
+        () => verificationWaiters.current.keys().next().value,
+      );
       if (drained.state === "authentication_required") {
         authorityPaused.current = true;
         setResult(null);
@@ -229,11 +234,9 @@ export function useScannerOutboxSync({
   return {
     syncing,
     pending,
-    setPending,
     scanSaved,
     pendingReadyScope,
     uploadStatus,
-    setUploadStatus,
     sync,
     verifyQueuedScan,
     cancelVerification,

@@ -11,6 +11,7 @@ import {
 function captureMissingBadge() {
   let captured: EventScanRequest | undefined;
   let sequence = 0;
+  const claimed = new Set<string>();
   mocks.persist.mockImplementation(async (scan) => {
     captured = eventScanRequestSchema.parse({
       ...scan,
@@ -22,8 +23,10 @@ function captureMissingBadge() {
     };
   });
   mocks.drain.mockImplementation(async (send) => {
-    if (!captured || !send) return { uploaded: 0, state: "complete" };
-    const response = await send({ kind: "scan", eventId: "synthetic-event", scan: captured });
+    if (!captured || !send || claimed.has(captured.operationId)) return { uploaded: 0, state: "complete" };
+    const scan = captured;
+    claimed.add(scan.operationId);
+    const response = await send({ kind: "scan", eventId: "synthetic-event", scan });
     return { uploaded: response.ok ? 1 : 0, state: response.ok ? "complete" : "retry" };
   });
   return () => captured;
@@ -41,6 +44,53 @@ async function scan(continuous: boolean) {
 }
 
 describe("Online verification after a local badge miss", () => {
+  it("keeps a previous feedback timer from clearing an in-flight badge or locking later scans", async () => {
+    await mount(true, ["attendance"]);
+    let release!: () => void;
+    let sequence = 0;
+    mocks.persist.mockImplementation(async (intent) => {
+      const scan = eventScanRequestSchema.parse({
+        ...intent,
+        scannerSession: {
+          epochId: "99999999-9999-4999-8999-999999999999",
+          sequence: ++sequence,
+        },
+      });
+      if (sequence === 2)
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      return { scan, local: { outcome: "eligible", reason: "eligible", message: "Registered" } };
+    });
+    vi.useFakeTimers();
+    const clock = vi.spyOn(Date, "now");
+    try {
+      await scan(true);
+      await vi.waitFor(() => expect(host.textContent).toContain("Registered"));
+      // The gate's deadline can precede the feedback effect's after-paint reset timer.
+      clock.mockReturnValue(Date.now() + 1001);
+      await act(async () => {
+        mocks.hardwareScan!("ZYXWVUTSRQPNMLKJ");
+      });
+      expect(mocks.persist).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      await act(async () => release());
+      await vi.waitFor(() => expect(host.textContent).toContain("Registered"));
+      await vi.waitFor(() =>
+        expect(host.querySelector('[aria-label="Next badge readiness"]')?.hasAttribute("value")).toBe(true),
+      );
+      clock.mockReturnValue(Date.now() + 1001);
+      await act(async () => {
+        mocks.hardwareScan!(badgeCode);
+      });
+      expect(mocks.persist).toHaveBeenCalledTimes(3);
+    } finally {
+      clock.mockRestore();
+      vi.useRealTimers();
+    }
+  });
   it("still verifies a saved scan when the pending count fails", async () => {
     await mount(true, ["attendance"]);
     captureMissingBadge();

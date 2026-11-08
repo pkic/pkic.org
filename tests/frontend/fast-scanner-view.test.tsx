@@ -69,6 +69,25 @@ describe("shared supporting scanner warning labels", () => {
   });
 });
 describe("continuous scanner presentation", () => {
+  it("keeps an online check neutral until a receipt confirms the badge", () => {
+    const html = render(
+      <FastScannerView
+        {...props}
+        result={null}
+        status={{
+          key: "pending",
+          tone: "unverified",
+          title: "Checking badge online…",
+          record: false,
+        }}
+      />,
+    );
+    const scanner = new DOMParser().parseFromString(html, "text/html").body.firstElementChild!;
+    expect(scanner.classList.contains("pk-fast-scanner--unverified")).toBe(true);
+    expect(scanner.classList.contains("pk-fast-scanner--warning")).toBe(false);
+    expect(scanner.classList.contains("pk-fast-scanner--unknown")).toBe(false);
+    expect(scanner.hasAttribute("data-status-pending")).toBe(true);
+  });
   it("offers admission only with its existing action capability and keeps sponsor capture separate", () => {
     for (const permission of ["agenda:check", "agenda:admit"] as const) {
       const actions = availableScannerActions((value) => value === permission);
@@ -155,7 +174,7 @@ describe("continuous scanner presentation", () => {
       />,
     );
     expect(html).toContain("Scanner operator controls");
-    expect(html).toContain("Using saved registration data");
+    expect(html).toContain("Using saved badge data");
     expect(html).toContain("Last badge refresh");
     expect(html).toContain("Badge data valid until");
     expect(html).toContain(formatDateTime(snapshot.serverNow));

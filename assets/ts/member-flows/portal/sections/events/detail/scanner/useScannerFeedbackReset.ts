@@ -13,7 +13,8 @@ export function useScannerFeedbackReset(
   const hasResult = !!result;
   useEffect(() => {
     if (!enabled || (!hasResult && !failed)) return;
-    const timer = window.setTimeout(() => latest.current(), durationMs);
+    // Reset only the feedback that armed this timer, even before the next effect cleanup.
+    const timer = window.setTimeout(latest.current, durationMs);
     return () => window.clearTimeout(timer);
   }, [enabled, hasResult, result?.operationId, result?.outcome, durationMs, failed]);
 }

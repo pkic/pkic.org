@@ -47,11 +47,13 @@ export function useScannerFeedback({
     setFailed(true);
     setMessage(value);
   }
+  const feedbackOperation = lastOperation.current;
   useScannerFeedbackReset(
     enabled,
     result,
     durationMs,
     () => {
+      if (lastOperation.current !== feedbackOperation) return;
       lastOperation.current = null;
       setResult(null);
       setMessage("Ready to scan");
@@ -113,7 +115,6 @@ export function useScannerFeedback({
     setMessage,
     showProvisionalMessage,
     presentReceipt,
-    showLocalEligibility,
     presentSavedEligibility,
     failure,
   };

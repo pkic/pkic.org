@@ -262,7 +262,10 @@ export function EventScannerCapture({
       lastOperation.current = checked.data.operationId;
       const saved = await persistCapture(checked.data);
       resetCaptureFields();
-      if (!(await presentSavedScan(saved))) return;
+      if (!(await presentSavedScan(saved))) {
+        if (fastMode) cooldown.feedback();
+        return;
+      }
       if (fastMode && manualOpen) {
         cooldown.feedback();
         void camera();
@@ -328,7 +331,10 @@ export function EventScannerCapture({
     showProvisionalMessage(operation, "Checking eligibility…");
     try {
       const saved = await persistCapture(parsed.data);
-      if (!(await presentSavedScan(saved))) return;
+      if (!(await presentSavedScan(saved))) {
+        if (fastMode) cooldown.feedback();
+        return;
+      }
       resetCaptureFields();
       if (fastMode) cooldown.feedback();
     } catch (error) {
@@ -533,7 +539,7 @@ export function EventScannerCapture({
               collector: collectorContext,
               offline: offlinePreparation,
               action,
-              syncing: syncing || manifestPreparing,
+              syncing,
             }}
             preparation={preparationStatus}
             unverifiedStart={action !== "lead" && !manifestReady && !manifestPreparing ? startScanning : undefined}

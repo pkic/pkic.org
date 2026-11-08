@@ -1,7 +1,8 @@
 import { readActiveUserSession } from "../../../../../../shared/pending-user-logout";
 import type { NativeEventCaptureContext } from "../../../../../../../shared/schemas/event-attendance-capture";
 import { scannerUploadSuspended } from "../../../../../../shared/pending-user-logout";
-import { cachedManifestSchema, snapshotCurrent, type CachedManifest } from "./eligibility-snapshot";
+import { cachedManifestSchema, sameSnapshotScope, snapshotCurrent, type CachedManifest } from "./eligibility-snapshot";
+import { eligibilityRefreshError, eligibilityRefreshRefused } from "./eligibility-refresh-error";
 import { downloadEligibilitySnapshot } from "./eligibility-download";
 import type {
   EventScanRequest,
@@ -46,14 +47,11 @@ async function cached(key: string, value?: CachedManifest, expectedSnapshotId?: 
         // A slower tab must not overwrite revocations already learned by another tab.
         if (
           previous.success &&
-          previous.data.eventId === candidate.eventId &&
-          previous.data.operatorUserId === candidate.operatorUserId &&
-          previous.data.epochId === candidate.epochId &&
-          previous.data.deviceId === candidate.deviceId &&
-          previous.data.occurrenceId === candidate.occurrenceId &&
-          (previous.data.roomId ?? null) === (candidate.roomId ?? null) &&
+          sameSnapshotScope(previous.data, candidate) &&
           previous.data.complete &&
-          previous.data.snapshotId !== expectedSnapshotId
+          snapshotCurrent(previous.data) &&
+          previous.data.snapshotId !== expectedSnapshotId &&
+          Date.parse(previous.data.serverNow) >= Date.parse(candidate.serverNow)
         )
           return;
         result = candidate;
@@ -248,14 +246,7 @@ export async function prepareEligibilityManifest(
   }
   const restore = (error: unknown = new Error("No matching prepared eligibility snapshot")) => {
     const saved = cachedManifestSchema.safeParse(fallback);
-    if (
-      !saved.success ||
-      saved.data.operatorUserId !== operatorUserId ||
-      saved.data.epochId !== enrollment.epochId ||
-      saved.data.deviceId !== enrollment.deviceId ||
-      saved.data.occurrenceId !== occurrenceId ||
-      (saved.data.roomId ?? null) !== roomId
-    )
+    if (!saved.success || !sameSnapshotScope(saved.data, { operatorUserId, occurrenceId, roomId, ...enrollment }))
       throw error;
     return buildEligibilityManifest(saved.data);
   };
@@ -283,19 +274,12 @@ export async function prepareEligibilityManifest(
     }
     return buildEligibilityManifest(snapshot);
   } catch (error) {
-    if (
-      signal?.aborted ||
-      (error instanceof Error && ["SCANNER_PERMISSION_CHANGED", "SCANNER_SIGNED_OUT"].includes(error.message))
-    )
-      throw error;
+    if (signal?.aborted || eligibilityRefreshRefused(error)) throw error;
     if (await scannerUploadSuspended(operatorUserId, sessionId))
       throw new Error("SCANNER_SIGNED_OUT", { cause: error });
     return {
       ...restore(error),
-      refreshError:
-        error instanceof Error && /^Badge refresh failed \(HTTP \d{3}\)\.$/.test(error.message)
-          ? error.message
-          : "Badge data could not be refreshed. Check your connection and try again.",
+      refreshError: eligibilityRefreshError(error),
     };
   }
 }

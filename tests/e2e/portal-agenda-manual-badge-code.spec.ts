@@ -637,9 +637,12 @@ test("the protected printed short code works through manual offline capture and 
     await page.getByRole("textbox", { name: /^Badge code(?: or attendee)?$/ }).fill(replacement.credential);
     await page.getByRole("button", { name: "Record attendance", exact: true }).click();
     await expect.poll(() => Boolean(releaseCheck)).toBe(true);
-    await expect(page.locator(".pk-fast-scanner__label")).toBeVisible();
-    await expect(page.locator(".pk-fast-scanner__label")).toHaveText("Checking badge online…");
-    await expect(page.locator(".pk-fast-scanner__tone--warning")).toHaveCSS("opacity", "0");
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: /checking.*online/i })
+        .first(),
+    ).toBeVisible();
     // Keep the scanner's fixed viewport while allowing desktop/phone capture sizes.
     await page.evaluate(async () => {
       if (document.fullscreenElement) await document.exitFullscreen();

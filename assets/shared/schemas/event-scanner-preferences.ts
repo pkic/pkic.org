@@ -9,7 +9,8 @@ export const scannerPreferencesSchema = z
   })
   .strict();
 
-/** Upgrade the former implicit 0.3-second default while preserving explicitly saved current choices. */
+/** Version-less records cannot distinguish the old default from an explicit 0.3-second choice.
+ * Both move to one second; versioned records preserve every explicitly saved choice. */
 export const storedScannerPreferencesSchema = z.union([
   scannerPreferencesSchema.extend({ version: z.literal(2) }),
   scannerPreferencesSchema.omit({ version: true }).transform((previous) =>

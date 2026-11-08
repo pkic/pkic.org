@@ -138,11 +138,22 @@ describe("Conditional eligibility page downloads", () => {
 
   it("restarts without the old fingerprint after a publication reset", async () => {
     const snapshot = fixture();
+    const entries = Array.from({ length: 250 }, (_, i) => ({
+      ...snapshot.entries[0]!,
+      badgeId: `10000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+    }));
     const fetcher = vi
       .fn()
       .mockImplementationOnce(async (url: string) => {
         expect(parseQuery(url).knownDigest).toBeDefined();
-        return new Response(null, { status: 409 });
+        return page(snapshot, { entries, nextBadgeId: entries.at(-1)!.badgeId });
+      })
+      .mockImplementationOnce(async (url: string) => {
+        expect(parseQuery(url).afterBadgeId).toBe(entries.at(-1)!.badgeId);
+        return Response.json(
+          { error: { code: "OFFLINE_MANIFEST_CHANGED", message: "Schedule changed" } },
+          { status: 409 },
+        );
       })
       .mockImplementationOnce(async (url: string) => {
         expect(parseQuery(url).knownDigest).toBeUndefined();
@@ -152,8 +163,19 @@ describe("Conditional eligibility page downloads", () => {
     const result = await download(snapshot);
     expect(result.entries[0]!.revoked).toBe(true);
     expect(result.publishedRevision).toBe(2);
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
+
+  it.each(["SCANNER_PREPARATION_CLOSED", "OFFLINE_MANIFEST_CHANGED", "OTHER_CONFLICT"])(
+    "does not restart a first-page conflict (%s)",
+    async (code) => {
+      const snapshot = fixture();
+      const fetcher = vi.fn(async () => Response.json({ error: { code, message: "Cannot prepare" } }, { status: 409 }));
+      vi.stubGlobal("fetch", fetcher);
+      await expect(download(snapshot)).rejects.toThrow(code === "SCANNER_PREPARATION_CLOSED" ? code : "HTTP 409");
+      expect(fetcher).toHaveBeenCalledOnce();
+    },
+  );
 
   it("checks 1000 badges in bounded pages and transfers only a changed page on refresh", async () => {
     const snapshot = fixture();
@@ -211,7 +233,9 @@ describe("Conditional eligibility page downloads", () => {
       "fetch",
       vi.fn(async () => new Response(null, { status })),
     );
-    await expect(download(snapshot)).rejects.toThrow("SCANNER_PERMISSION_CHANGED");
+    await expect(download(snapshot)).rejects.toThrow(
+      status === 401 ? "SCANNER_SIGNED_OUT" : "SCANNER_PERMISSION_CHANGED",
+    );
   });
 
   it("refuses an unproven unchanged page", async () => {

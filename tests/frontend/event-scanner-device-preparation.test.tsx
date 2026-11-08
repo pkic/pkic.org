@@ -331,7 +331,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
     expect(fast.textContent).toContain("Last badge refresh");
     expect(fast.textContent).toContain(formatDateTime(mocks.snapshot.serverNow));
     expect(fast.textContent).toContain(formatDateTime(mocks.snapshot.expiresAt));
-    expect(fast.textContent).toContain("Using saved registration data");
+    expect(fast.textContent).toContain("Using saved badge data");
   });
   it.each(["eligible", "unknown"] as const)(
     "resets the cleared entry field after capturing a %s badge while retaining feedback",

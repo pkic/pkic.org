@@ -48,7 +48,7 @@ describe("scanner snapshot status metadata", () => {
         snapshot={snapshot}
       />,
     );
-    expect(html).toContain("Using saved registration data");
+    expect(html).toContain("Using saved badge data");
     expect(html).toContain("Refresh unavailable");
     expect(html).toContain('role="alert"');
     expect(html).toContain(formatDateTime(snapshot.serverNow));
@@ -67,7 +67,7 @@ describe("scanner snapshot status metadata", () => {
   });
   it("does not invent a timestamp before a snapshot has been prepared", () => {
     const html = render(<ScannerPreparationStatus action="check" preparing={false} ready={false} error="" />);
-    expect(html).toContain("Prepare eligibility data before scanning");
+    expect(html).toContain("Prepare badge data before scanning");
     expect(html).not.toContain("Last badge refresh");
     expect(html).not.toContain("Badge data valid until");
   });

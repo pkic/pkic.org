@@ -29,6 +29,7 @@ One name for one thing, in code, copy, and documentation. Add a term here when y
 - **Attendee**: a registered person at the event.
 - **Check-in**: confirming an attendee's arrival, by badge scan or by hand.
 - **Printed badge**: the attendee's name badge. In UI code, `Badge` means the status pill; say "printed badge" for the printed one.
+- **Badge data**: the scanner's downloaded event roster for local badge checks, with its original validity period.
 - **Sponsor**: an organization supporting an event at a **sponsor tier**; **sponsor leads** are the contacts it collects.
 - **Staffing**: the people assigned to run an occurrence or room.
 

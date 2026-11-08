@@ -198,7 +198,7 @@ async function openManualBadgeEntry(page: Page) {
 async function expectDoorScannerReady(page: Page) {
   const diagnostics = await openScannerDiagnostics(page);
   await expect(
-    diagnostics.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
+    diagnostics.getByText("Badge data ready. Checks run locally; attendance uploads in the background.", {
       exact: true,
     }),
   ).toBeVisible();

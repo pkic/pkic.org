@@ -78,7 +78,8 @@ function storage(): IDBDatabase {
               ),
             getAll: () => request(() => [...records.values()]),
             delete: (id: string) => request(() => records.delete(id)),
-            openCursor: () => cursor(),
+            openCursor: (id?: string) =>
+              cursor(id ? [...records.values()].filter((row) => (row.scan as Row).operationId === id) : undefined),
             put: (row: Row) => {
               if (name === "scanner-epochs") highWater = Number(row.issuedHighWater);
               else request(() => records.set(String((row.scan as Row).operationId), structuredClone(row)));
@@ -144,6 +145,53 @@ function failure(raw = "  not-a-badge 😀  ") {
   };
 }
 describe("durable rejected scanner attempts", () => {
+  it("claims the awaited operation before a backlog and archives each operation once", async () => {
+    const older = await queueScannerAttempt(failure());
+    const awaited = await queueScannerAttempt(failure());
+    const uploaded: string[] = [];
+    const result = await drainScanOutbox(
+      async (record) => {
+        uploaded.push(record.scan.operationId);
+        return Response.json({
+          operationId: record.scan.operationId,
+          outcome: "unknown",
+          reason: "unsupported_code",
+          recorded: true,
+          attendanceRecorded: false,
+          scannerReceipt: {
+            ...record.scan.scannerSession,
+            operationId: record.scan.operationId,
+            receivedAt: "2026-10-12T10:01:00.000Z",
+          },
+        });
+      },
+      operator,
+      undefined,
+      () => awaited.scan.operationId,
+    );
+    expect(result).toEqual({ uploaded: 2, state: "complete" });
+    expect(uploaded).toEqual([awaited.scan.operationId, older.scan.operationId]);
+    expect(history.size).toBe(2);
+    expect(rows.size).toBe(0);
+    expect(highWater).toBe(2);
+  });
+
+  it.each(["leased", "backoff", "other operator"])("does not bypass %s for a preferred operation", async (state) => {
+    const queued = await queueScannerAttempt(failure());
+    const row = rows.get(queued.scan.operationId)!;
+    rows.set(queued.scan.operationId, {
+      ...row,
+      ...(state === "leased"
+        ? { leaseUntil: Date.now() + 30000, owner: "other-tab" }
+        : state === "backoff"
+          ? { nextAttemptAt: Date.now() + 30000 }
+          : { scan: { ...queued.scan, operatorUserId: device } }),
+    });
+    const upload = vi.fn();
+    await drainScanOutbox(upload, operator, undefined, () => queued.scan.operationId);
+    expect(upload).not.toHaveBeenCalled();
+    expect(rows.size).toBe(1);
+  });
   it("retains the exact raw prefix and epoch sequence after closing and reopening storage", async () => {
     const captured = failure(" " + "😀".repeat(64) + " tail ");
     const queued = await queueScannerAttempt(captured);

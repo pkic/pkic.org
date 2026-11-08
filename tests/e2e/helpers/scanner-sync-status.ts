@@ -1,7 +1,7 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import { enrolledOfflineEligibilityResponseSchema } from "../../../assets/shared/schemas/event-offline-eligibility";
 
-/** Exercise the real Diagnostics refresh while retaining the original roster on server failure. */
+/** Background badge refreshes retain the roster on failure and never block manual scan uploads. */
 export async function checkScannerSyncStatus(page: Page, path: string, info: TestInfo) {
   await page.unroute("**/offline-eligibility?**");
   await page.goto(path);
@@ -10,7 +10,9 @@ export async function checkScannerSyncStatus(page: Page, path: string, info: Tes
   await expect(button).toBeEnabled();
   await expect(diagnostics.getByText(/Badge data up to date/)).toBeVisible();
   let release: (() => void) | undefined;
+  let refreshRequests = 0;
   await page.route("**/offline-eligibility?**", async (route) => {
+    refreshRequests++;
     await new Promise<void>((resolve) => {
       release = resolve;
     });
@@ -19,9 +21,12 @@ export async function checkScannerSyncStatus(page: Page, path: string, info: Tes
   const refreshed = page.waitForResponse((response) =>
     new URL(response.url()).pathname.endsWith("/offline-eligibility"),
   );
-  await button.click();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect.poll(() => Boolean(release)).toBe(true);
-  await expect(diagnostics.getByRole("button", { name: "Syncing…", exact: true })).toHaveAttribute("aria-busy", "true");
+  await expect(button).toBeEnabled();
+  await button.click();
+  await expect(button).toBeEnabled();
+  expect(refreshRequests).toBe(1);
   await expect(diagnostics.getByText("Refreshing badge data…", { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.screenshot({ path: info.outputPath("sync-progress-desktop.png") });
@@ -37,9 +42,9 @@ export async function checkScannerSyncStatus(page: Page, path: string, info: Tes
   await page.route("**/offline-eligibility?**", (route) =>
     route.fulfill({ status: 503, contentType: "application/json", body: "{}" }),
   );
-  await button.click();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect(diagnostics.getByRole("alert")).toContainText("HTTP 503");
-  await expect(diagnostics.getByRole("alert")).toContainText("Using saved registration data");
+  await expect(diagnostics.getByRole("alert")).toContainText("Using saved badge data");
   await expect(button).toBeEnabled();
   await expect(page.getByRole("dialog", { name: "Continuous badge scanner", exact: true })).toHaveCount(0);
   await page.screenshot({ path: info.outputPath("sync-failure-phone.png") });
@@ -47,7 +52,7 @@ export async function checkScannerSyncStatus(page: Page, path: string, info: Tes
   await page.screenshot({ path: info.outputPath("sync-failure-desktop.png") });
   await page.unroute("**/offline-eligibility?**");
   const recovered = page.waitForResponse((result) => new URL(result.url()).pathname.endsWith("/offline-eligibility"));
-  await button.click();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   const restored = enrolledOfflineEligibilityResponseSchema.parse(await (await recovered).json());
   expect(restored.serverNow >= before.serverNow).toBe(true);
   await expect(diagnostics.getByRole("alert")).toHaveCount(0);

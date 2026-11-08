@@ -63,6 +63,12 @@ it("updates a failed cold-start status when the offline worker becomes ready lat
   });
   await vi.waitFor(() => expect(host.textContent).toBe("Offline camera files prepared."));
   expect(prepare).toHaveBeenCalledTimes(2);
+  await act(() => {
+    window.dispatchEvent(new Event("online"));
+    workers.dispatchEvent(new Event("controllerchange"));
+  });
+  expect(prepare).toHaveBeenCalledTimes(2);
+  expect(host.textContent).toBe("Offline camera files prepared.");
 });
 it("bounds a stalled worker registration and removes its deadline on unmount", async () => {
   vi.useFakeTimers();

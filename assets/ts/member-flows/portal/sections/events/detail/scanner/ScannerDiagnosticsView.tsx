@@ -27,7 +27,7 @@ export function ScannerDiagnosticsView({
   preferences: ComponentProps<typeof ScannerSoundPreferences>["preferences"];
   sound: ComponentProps<typeof ScannerSoundPreferences>["sound"];
   status: Omit<ComponentProps<typeof ScannerSyncStatus>, "sync">;
-  preparation: ComponentProps<typeof ScannerPreparationStatus> & { refreshEligibility?: () => Promise<void> };
+  preparation: ComponentProps<typeof ScannerPreparationStatus>;
   unverifiedStart?: Diagnostics["unverifiedStart"];
 }) {
   const decoderStatus = useScannerDecoderPreparation(`${context.slug}:${context.operatorUserId}`);
@@ -36,7 +36,7 @@ export function ScannerDiagnosticsView({
       session={{ ...context, scanner, sync, message: onMessage, capturePause: onCapturePause }}
       sound={<ScannerSoundPreferences preferences={preferences} sound={sound} />}
       syncStatus={
-        <ScannerSyncStatus {...status} refreshEligibility={preparation.refreshEligibility} sync={() => void sync()}>
+        <ScannerSyncStatus {...status} sync={() => void sync()}>
           {scanner.error && <Alert tone="danger">{scanner.error}</Alert>}
           <ScannerPreparationStatus {...preparation} />
           <p role="status">{decoderStatus}</p>

@@ -73,7 +73,7 @@ test("a real browser crash preserves a committed upload lease and reclaims the o
     });
     await openScannerSessionDetails(page);
     await expect(
-      page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
+      page.getByText("Badge data ready. Checks run locally; attendance uploads in the background.", {
         exact: true,
       }),
     ).toBeVisible();
