@@ -209,9 +209,30 @@ it.each(["delete", "correct"] as const)(
     expect(JSON.parse(audit!)).toMatchObject({
       erasedGroupSeats: { from: [{ seatId: old.id, leftAt: old.at }], to: null },
     });
+    expect(JSON.parse(audit!)).not.toHaveProperty("removedIdentityRoles");
     await noMarkers();
   },
 );
+
+it.each(["delete", "correct"] as const)("%s omits erasure deltas when no group history changes", async (action) => {
+  const f = await proposalIdentityFixture();
+  const response = await change(f, action);
+  expect(response.status, await response.clone().text()).toBe(200);
+  const audit = await env.DB.prepare(
+    "SELECT details_json FROM audit_log WHERE entity_id=? AND action IN ('incorrect_representation_removed','incorrect_representation_corrected')",
+  )
+    .bind(f.identityId)
+    .first<string>("details_json");
+  expect(JSON.parse(audit!)).toEqual(
+    action === "correct"
+      ? {
+          replacementIdentityId: { from: null, to: f.secondIdentityId },
+          reason: { from: null, to: "The organization was associated incorrectly." },
+        }
+      : {},
+  );
+  await noMarkers();
+});
 
 it("keeps descendant seats and subscriptions when another active parent seat remains", async () => {
   const f = await proposalIdentityFixture();
@@ -241,10 +262,9 @@ it("keeps descendant seats and subscriptions when another active parent seat rem
   )
     .bind(f.identityId)
     .first<string>("details_json");
-  expect(JSON.parse(audit!)).toMatchObject({
-    endedGroupSeats: { from: [], to: [] },
-    revokedGroupRoles: { from: [], to: [] },
-  });
+  const details = JSON.parse(audit!);
+  expect(details).not.toHaveProperty("endedGroupSeats");
+  expect(details).not.toHaveProperty("revokedGroupRoles");
   await noMarkers();
 });
 

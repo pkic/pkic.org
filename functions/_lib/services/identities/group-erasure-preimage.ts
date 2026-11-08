@@ -57,12 +57,16 @@ export function groupErasureAuditSelection(identityId: string, serializedDetails
         SELECT ur.id,value AS before,${roleSnapshotSql()} AS after
         FROM preimage,json_each(preimage_json,'$.revokedGroupRoles')
         JOIN user_roles ur ON ur.id=json_extract(value,'$.roleAssignmentId')
-        WHERE ur.revoked_at IS NOT json_extract(value,'$.revokedAt'))
-      SELECT json_set(?,
+        WHERE ur.revoked_at IS NOT json_extract(value,'$.revokedAt')),
+      audit_details AS (
+        SELECT json_set(?,
         '$.erasedGroupSeats',json_object('from',json_extract(preimage_json,'$.erasedGroupSeats'),'to',NULL),
         ${delta("endedGroupSeats", "ended_seats")},
         '$.removedIdentityRoles',json_object('from',json_extract(preimage_json,'$.removedIdentityRoles'),'to',NULL),
-        ${delta("revokedGroupRoles", "revoked_roles")}) FROM preimage`,
+        ${delta("revokedGroupRoles", "revoked_roles")}) AS details_json FROM preimage)
+      SELECT json_group_object(key,json(value)) FROM audit_details,json_each(details_json)
+      WHERE key NOT IN ('erasedGroupSeats','endedGroupSeats','removedIdentityRoles','revokedGroupRoles')
+        OR json_array_length(value,'$.from')>0`,
     bindings: [identityId, serializedDetails],
   };
 }
