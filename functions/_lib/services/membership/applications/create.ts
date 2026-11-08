@@ -35,7 +35,8 @@ import {
   prepareClaimDomainForApplication,
   prepareClaimDomainForOrganization,
 } from "../organization-domain-claims";
-import { requireMembershipCategory } from "../categories";
+import { prepareMembershipCategoryRead, requireMembershipCategoryResult } from "../categories";
+import { prepareMembershipWorkflowVersionRead } from "../workflows/catalog";
 import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
 import { mailboxKind, workEmailDomain } from "../../../email-domains/classification";
 import {
@@ -227,8 +228,28 @@ export async function createMemberApplication(
   db: DatabaseLike,
   input: CreateMemberApplicationInput,
 ): Promise<CreateMemberApplicationResult> {
-  const category = await requireMembershipCategory(db, input.membershipCategory);
-  const workflow = await requireCategoryWorkflow(db, category);
+  const categoryRead = prepareMembershipCategoryRead(db, input.membershipCategory);
+  const workflowRead = prepareMembershipWorkflowVersionRead(db, {
+    sql: "SELECT workflow_version_id FROM membership_categories WHERE code = ?",
+    bindings: [input.membershipCategory],
+  });
+  const formRead = prepareGlobalFormDefinition(db, MEMBERSHIP_APPLICATION_FORM_KEY);
+  const groupsRead = prepareApplicationWorkingGroups(db, {
+    sql: "SELECT ? AS code",
+    bindings: [input.membershipCategory],
+  });
+  const results = await db.batch([
+    categoryRead.statement,
+    workflowRead.statement,
+    ...formRead.statements,
+    groupsRead.statement,
+  ]);
+  const category = requireMembershipCategoryResult(categoryRead.decode(results[0]), input.membershipCategory);
+  const workflow = await requireCategoryWorkflow(
+    db,
+    category,
+    category.active && category.workflowVersionId ? workflowRead.decode(results[1]) : null,
+  );
   const isIndividual = category.isIndividual;
   const applicantPolicy = membershipApplicantPolicySchema(category, mailboxKind(input.applicantEmail)).safeParse({
     applicantEmail: input.applicantEmail,
@@ -236,10 +257,7 @@ export async function createMemberApplication(
   });
   if (!applicantPolicy.success)
     throw new AppError(422, "VALIDATION_ERROR", "Check the category requirements", applicantPolicy.error.flatten());
-  const formRead = prepareGlobalFormDefinition(db, MEMBERSHIP_APPLICATION_FORM_KEY);
-  const groupsRead = prepareApplicationWorkingGroups(db, { sql: "SELECT ? AS code", bindings: [category.code] });
-  const formResults = await db.batch([...formRead.statements, groupsRead.statement]);
-  const form = formRead.decode(formResults.slice(0, formRead.statements.length));
+  const form = formRead.decode(results.slice(2, 2 + formRead.statements.length));
   if (!form) {
     throw new AppError(503, "APPLICATION_FORM_UNAVAILABLE", "The membership application form is unavailable");
   }
@@ -249,7 +267,7 @@ export async function createMemberApplication(
     isIndividual,
     eligibleWorkingGroupIds:
       groupsRead
-        .decode(batchRows<ApplicationWorkingGroupRow>(formResults[formRead.statements.length]))
+        .decode(batchRows<ApplicationWorkingGroupRow>(results[2 + formRead.statements.length]))
         .get(category.code) ?? [],
   });
   const knownKeys = new Set(form.fields.map((field) => field.key));

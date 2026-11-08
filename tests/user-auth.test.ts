@@ -98,7 +98,7 @@ describe("canonical user authentication", () => {
     expect(refreshed.staff?.grants.find((grant) => grant.contextType === null)?.contextName).toBeUndefined();
   });
 
-  it("records first mailbox proof before creating a new attendee's organization identity", async () => {
+  it("records mailbox proof without choosing an attendee's organization", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const email = "imported@uk.ibm.example";
     const userId = await insertUser(env.DB, email);
@@ -150,11 +150,10 @@ describe("canonical user authentication", () => {
       "SELECT id,source FROM identities WHERE user_id = ? AND organization_id = ? AND started_at IS NOT NULL",
       [userId, organizationId],
     );
-    expect(identities).toHaveLength(1);
-    expect(identities[0].source).toBe("verified_domain");
+    expect(identities).toEqual([]);
     expect(
       await queryAll(env.DB, "SELECT resolved_identity_id FROM affiliation_reviews WHERE user_id = ?", [userId]),
-    ).toEqual([{ resolved_identity_id: identities[0].id }]);
+    ).toEqual([{ resolved_identity_id: null }]);
   });
 
   it("materializes and renders a user_sign_in capability into one user session with live staff and member capacities", async () => {

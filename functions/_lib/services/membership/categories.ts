@@ -20,7 +20,10 @@ export async function requireMembershipCategory(
   db: DatabaseLike,
   categoryCode: string,
 ): Promise<MembershipCategoryCatalogEntry> {
-  const category = await getMembershipCategory(db, categoryCode);
+  return requireMembershipCategoryResult(await getMembershipCategory(db, categoryCode), categoryCode);
+}
+
+export function requireMembershipCategoryResult(category: MembershipCategoryCatalogEntry | null, categoryCode: string) {
   if (!category) throw new AppError(422, "INVALID_MEMBERSHIP_CATEGORY", `Unknown membership category: ${categoryCode}`);
   return category;
 }
@@ -104,6 +107,18 @@ export async function listMembershipCategories(
 ): Promise<MembershipCategoryCatalogEntry[]> {
   const read = prepareMembershipCategoriesRead(db, availableForApplication);
   return read.decode((await read.statement.all<MembershipCategoryRow>()).results ?? []);
+}
+
+export function prepareMembershipCategoryRead(db: DatabaseLike, categoryCode: string) {
+  return {
+    statement: db
+      .prepare(`SELECT ${MEMBERSHIP_CATEGORY_COLUMNS} FROM membership_categories WHERE code = ?`)
+      .bind(categoryCode),
+    decode(result: { results?: Record<string, unknown>[] }): MembershipCategoryCatalogEntry | null {
+      const row = result.results?.[0] as MembershipCategoryRow | undefined;
+      return row ? toMembershipCategory(row) : null;
+    },
+  };
 }
 
 export async function getMembershipCategory(
