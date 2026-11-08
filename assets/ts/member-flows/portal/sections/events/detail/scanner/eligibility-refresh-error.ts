@@ -6,6 +6,10 @@ const refusalMessages = new Map([
   ["SCANNER_PREPARATION_CLOSED", "This scanner session has closed. Reopen the scanner to prepare badge data."],
 ]);
 
+export function eligibilityPreparationClosed(error: unknown): boolean {
+  return error instanceof Error && error.message === "SCANNER_PREPARATION_CLOSED";
+}
+
 export function eligibilityRefreshRefused(error: unknown): boolean {
   return error instanceof Error && refusalMessages.has(error.message);
 }
@@ -15,6 +19,8 @@ export function eligibilityRefreshError(error: unknown): string {
   const message = error instanceof Error ? error.message : "";
   const refusal = refusalMessages.get(message);
   if (refusal) return refusal;
+  if (message === "Eligibility revision changed" || message === "Eligibility snapshot expired during preparation")
+    return "Badge data changed during refresh. Try again shortly.";
   if (error instanceof ZodError || message.startsWith("Eligibility "))
     return "Badge data could not be verified. Reopen the scanner; if this continues, contact support.";
   if (/^Badge refresh failed \(HTTP \d{3}\)\.$/.test(message)) {

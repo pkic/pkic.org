@@ -20,6 +20,8 @@ import type { ScannerQueueRecord } from "../../assets/shared/schemas/event-scann
 export const badgeCode = badgeCredentialSchema.parse("ABCDEFGHJKLMNPQR");
 const mocks = vi.hoisted(() => ({
   ready: false,
+  refresh: vi.fn(async () => {}),
+  preparationClosed: null as null | (() => void),
   error: "",
   decoderStatus: "Camera prepared",
   state: "open",
@@ -73,12 +75,18 @@ vi.mock(
     ...(await importOriginal<
       typeof import("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useEligibilityManifest")
     >()),
-    useEligibilityManifest: () => ({
-      eligibilityManifest: { current: { occurrenceId: null, roomId: null, ...mocks.snapshot } },
-      manifestReady: true,
-      manifestPreparing: false,
-      manifestError: "",
-    }),
+    useEligibilityManifest: (...args: unknown[]) => {
+      const onClosed = args[8];
+      mocks.preparationClosed =
+        typeof onClosed === "function" ? () => onClosed("This scanner session has closed.") : null;
+      return {
+        eligibilityManifest: { current: { occurrenceId: null, roomId: null, ...mocks.snapshot } },
+        manifestReady: true,
+        manifestPreparing: false,
+        manifestError: "",
+        refresh: mocks.refresh,
+      };
+    },
   }),
 );
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/scan-outbox", () => ({
@@ -122,6 +130,7 @@ afterEach(async () => {
   mocks.sessionListeners.clear();
   mocks.cameraScan = null;
   mocks.snapshot = null;
+  mocks.preparationClosed = null;
   mocks.error = "";
   mocks.decoderStatus = "Camera prepared";
   mocks.drain.mockImplementation(async () => ({ uploaded: 0, state: "complete" }));

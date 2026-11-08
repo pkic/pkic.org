@@ -23,19 +23,46 @@ const epoch: ScannerEpoch = {
   closingOperationId: null,
 };
 const host = document.createElement("div");
+const upload = vi.fn();
+const permissionChanged = vi.fn();
+const preparationClosed = vi.fn();
+let current: ReturnType<typeof useEligibilityManifest>;
+function syncButton() {
+  return Array.from(host.querySelectorAll("button")).find((button) => /sync now/i.test(button.textContent!))!;
+}
 function Scanner({ collector = false }: { collector?: boolean }) {
-  const state = useEligibilityManifest("synthetic", id, null, "attendance", () => {}, null, epoch, collector);
+  const state = useEligibilityManifest(
+    "synthetic",
+    id,
+    null,
+    "attendance",
+    permissionChanged,
+    null,
+    epoch,
+    collector,
+    preparationClosed,
+  );
+  current = state;
   return (
-    <>
-      <button onClick={() => void state.refresh()}>Sync now</button>
+    <ScannerSyncStatus
+      pending={1}
+      uploadStatus=""
+      action="attendance"
+      sync={upload}
+      refreshEligibility={state.refresh}
+      offline={{ context: null, preparing: false, error: "", retry: () => {} }}
+    >
       <output>
         {state.manifestPreparing ? `Checking ${state.manifestProgress ?? 0}` : state.manifestError || "Ready"}
       </output>
-    </>
+    </ScannerSyncStatus>
   );
 }
 afterEach(async () => {
   await act(() => render(null, host));
+  upload.mockReset();
+  permissionChanged.mockReset();
+  preparationClosed.mockReset();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   mocks.prepare.mockReset().mockResolvedValue({ refreshError: "" });
@@ -88,12 +115,12 @@ it("exposes manual refresh progress and does not hide a cached-fallback failure"
       finish = resolve;
     });
   });
-  await act(async () => host.querySelector("button")!.click());
+  await act(async () => syncButton().click());
   expect(host.textContent).toContain("Checking 250");
   await act(async () => finish!({ refreshError: "Badge refresh failed (HTTP 503)." }));
   await vi.waitFor(() => expect(host.textContent).toContain("HTTP 503"));
   expect(mocks.prepare).toHaveBeenCalledTimes(2);
-  await act(async () => host.querySelector("button")!.click());
+  await act(async () => syncButton().click());
   await vi.waitFor(() => expect(host.textContent).toContain("Ready"));
 });
 
@@ -111,8 +138,8 @@ it.each([
   expect(host.textContent).not.toMatch(/check your connection/i);
 });
 
-it("keeps uploads available during badge preparation without starting another roster refresh", async () => {
-  const upload = vi.fn();
+it("keeps uploads available during badge preparation without overlapping roster refreshes", async () => {
+  await act(async () => render(<Scanner />, host));
   let finish!: (value: { refreshError: string }) => void;
   mocks.prepare.mockImplementationOnce(
     () =>
@@ -120,28 +147,53 @@ it("keeps uploads available during badge preparation without starting another ro
         finish = resolve;
       }),
   );
-  function Status() {
-    const state = useEligibilityManifest("synthetic", id, null, "attendance", () => {}, null, epoch);
-    return (
-      <ScannerSyncStatus
-        pending={1}
-        uploadStatus=""
-        action="attendance"
-        sync={upload}
-        offline={{ context: null, preparing: false, error: "", retry: () => {} }}
-      >
-        <output>{state.manifestPreparing ? "preparing" : "ready"}</output>
-      </ScannerSyncStatus>
-    );
-  }
-  await act(async () => render(<Status />, host));
-  expect(host.textContent).toContain("preparing");
-  await act(() =>
-    Array.from(host.querySelectorAll("button"))
-      .find((button) => /sync now/i.test(button.textContent!))!
-      .click(),
-  );
-  expect(upload).toHaveBeenCalledOnce();
-  expect(mocks.prepare).toHaveBeenCalledOnce();
+  await act(async () => syncButton().click());
+  expect(current.manifestPreparing).toBe(true);
+  expect(syncButton().disabled).toBe(false);
+  await act(async () => syncButton().click());
+  expect(upload).toHaveBeenCalledTimes(2);
+  expect(mocks.prepare).toHaveBeenCalledTimes(2);
   await act(async () => finish({ refreshError: "" }));
+  expect(current.manifestPreparing).toBe(false);
 });
+
+it.each([false, true])("separates closed-session handling from sign-in refusals (collector: %s)", async (collector) => {
+  await act(async () => render(<Scanner collector={collector} />, host));
+  await vi.waitFor(() => expect(current.manifestReady).toBe(true));
+  mocks.prepare.mockRejectedValueOnce(new Error("SCANNER_PREPARATION_CLOSED"));
+  await act(async () => syncButton().click());
+  await vi.waitFor(() => expect(current.manifestReady).toBe(false));
+  expect(current.eligibilityManifest.current).toBeNull();
+  expect(preparationClosed).toHaveBeenCalledOnce();
+  expect(permissionChanged).not.toHaveBeenCalled();
+  await vi.waitFor(() => expect(current.manifestError).toMatch(/session has closed/i));
+  expect(current.manifestError).not.toMatch(/sign.in|connect/i);
+});
+
+it.each(["SCANNER_SIGNED_OUT", "SCANNER_PERMISSION_CHANGED"])(
+  "preserves collector recovery guidance for %s",
+  async (message) => {
+    mocks.prepare.mockRejectedValueOnce(new Error(message));
+    await act(async () => render(<Scanner collector />, host));
+    expect(current.manifestReady).toBe(false);
+    expect(permissionChanged).toHaveBeenCalledOnce();
+    expect(preparationClosed).not.toHaveBeenCalled();
+    await vi.waitFor(() =>
+      expect(current.manifestError).toMatch(message === "SCANNER_SIGNED_OUT" ? /sign in again/i : /access changed/i),
+    );
+  },
+);
+
+it.each(["Eligibility revision changed", "Eligibility snapshot expired during preparation"])(
+  "offers retry for transient snapshot failure: %s",
+  async (message) => {
+    mocks.prepare.mockRejectedValueOnce(new Error(message));
+    await act(async () => render(<Scanner />, host));
+    await vi.waitFor(() => expect(current.manifestError).toMatch(/try again/i));
+    expect(current.manifestError).not.toMatch(/support/i);
+    expect(permissionChanged).not.toHaveBeenCalled();
+    expect(preparationClosed).not.toHaveBeenCalled();
+    await act(async () => syncButton().click());
+    await vi.waitFor(() => expect(current.manifestReady).toBe(true));
+  },
+);

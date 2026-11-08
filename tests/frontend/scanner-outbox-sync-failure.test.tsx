@@ -33,6 +33,7 @@ const collector = scannerOfflineContextSchema.parse({
 });
 const host = document.createElement("div");
 const present = vi.fn();
+let current: ReturnType<typeof useScannerOutboxSync>;
 function Harness({ offline }: { offline: boolean }) {
   const state = useScannerOutboxSync({
     slug: "synthetic",
@@ -46,6 +47,7 @@ function Harness({ offline }: { offline: boolean }) {
     stopCamera: () => {},
     refreshHistory: async () => {},
   });
+  current = state;
   return (
     <>
       <ScannerConnectionStatus
@@ -165,4 +167,28 @@ it("does not show success for a response without the exact immutable acknowledgm
   await act(async () => render(<Harness offline={false} />, host));
   await vi.waitFor(() => expect(host.querySelector('[role="status"]')?.textContent).toContain("not confirmed"));
   expect(present).not.toHaveBeenCalled();
+});
+
+it("uses the active drain to verify a newly saved scan", async () => {
+  mocks.count.mockResolvedValue(1);
+  mocks.drain.mockResolvedValueOnce({ uploaded: 0, state: "empty" });
+  await act(async () => render(<Harness offline={false} />, host));
+  let finish!: (value: { uploaded: number; state: string }) => void;
+  mocks.drain.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await act(async () => current.scanSaved());
+  const drains = mocks.drain.mock.calls.length;
+  let verified!: Promise<boolean>;
+  await act(() => {
+    verified = current.verifyQueuedScan(id);
+  });
+  expect(mocks.drain).toHaveBeenCalledTimes(drains);
+  const prefer = mocks.drain.mock.calls.at(-1)![3];
+  expect(prefer()).toBe(id);
+  await act(async () => finish({ uploaded: 0, state: "empty" }));
+  expect(await verified).toBe(false);
 });

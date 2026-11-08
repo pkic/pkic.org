@@ -1,7 +1,7 @@
 import { expect, webkit, type Page, type TestInfo } from "@playwright/test";
 import { openScannerManualEntry, scannerStorage } from "./scanner-recovery-storage";
 
-/** A fresh WebKit install must prepare and capture offline, independently of Chromium's caches. */
+/** Fresh WebKit preparation and offline capture after manual entry has loaded online. */
 export async function checkWebKitOfflineScanner(source: Page, path: string, credential: string, info: TestInfo) {
   const browser = await webkit.launch();
   try {
@@ -18,7 +18,8 @@ export async function checkWebKitOfflineScanner(source: Page, path: string, cred
     await expect(page.getByRole("combobox", { name: "Feedback pause", exact: true })).toHaveValue("1000");
     await page.screenshot({ path: info.outputPath("webkit-offline-ready-phone.png"), fullPage: true });
     // WebKit's automation offline switch also prevents cached worker navigation.
-    // Chromium's preceding journey covers offline reload; WebKit verifies preparation and local capture here.
+    // Open manual entry online first: this does not cover opening it offline or an offline reload.
+    // Chromium's preceding journey covers those steps; WebKit verifies the subsequent local capture.
     await openScannerManualEntry(page);
     await context.setOffline(true);
     await page.getByRole("textbox", { name: /^Badge code(?: or attendee)?$/ }).fill(credential);

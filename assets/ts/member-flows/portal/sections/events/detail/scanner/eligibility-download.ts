@@ -5,7 +5,7 @@ import {
 } from "../../../../../../../shared/schemas/event-offline-eligibility";
 import { eligibilityPageDigest } from "../../../../../../../shared/event-eligibility-digest";
 import { SCANNER_OFFLINE_MAXIMUM_MS } from "../../../../../../../shared/event-offline-expiry";
-import { sameSnapshotScope, snapshotCurrent, type CachedManifest } from "./eligibility-snapshot";
+import { sameSnapshotIdentity, sameSnapshotScope, snapshotCurrent, type CachedManifest } from "./eligibility-snapshot";
 import { apiErrorPayloadSchema } from "../../../../../../../shared/schemas/api-common";
 
 /** Validate every bounded page, transferring its entries only when they differ from the saved copy. */
@@ -70,8 +70,9 @@ export async function downloadEligibilitySnapshot(
     }
     if (!response.ok) throw new Error(`Badge refresh failed (HTTP ${response.status}).`);
     const page = enrolledOfflineEligibilityResponseSchema.parse(await response.json());
-    if (!sameSnapshotScope(page, { operatorUserId, occurrenceId, roomId, ...enrollment, eventId: snapshot?.eventId }))
-      throw new Error("SCANNER_PERMISSION_CHANGED");
+    const requestedScope = { operatorUserId, occurrenceId, roomId, ...enrollment, eventId: snapshot?.eventId };
+    if (!sameSnapshotIdentity(page, requestedScope)) throw new Error("SCANNER_PERMISSION_CHANGED");
+    if (!sameSnapshotScope(page, requestedScope)) throw new Error("SCANNER_ROOM_CONTEXT_CHANGED");
     const pageScope = await eligibilityPageDigest({ ...page, entries: [], nextBadgeId: null });
     if (scopeDigest !== undefined && scopeDigest !== pageScope) throw new Error("Eligibility revision changed");
     scopeDigest = pageScope;

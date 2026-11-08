@@ -16,6 +16,35 @@ import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { formatDateTime } from "../../assets/shared/format-date";
 describe("scanner device enrollment and manual capture boundary", () => {
+  it("refreshes badge data through the diagnostics Sync now action", async () => {
+    await mount(true);
+    const diagnostics = await openDiagnostics();
+    await act(async () =>
+      Array.from(diagnostics.querySelectorAll("button"))
+        .find((button) => button.textContent?.trim() === "Sync now")!
+        .click(),
+    );
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+  });
+  it("stops capture for a closed preparation session while keeping uploads available", async () => {
+    await mount(true, ["attendance"]);
+    await openManual();
+    await act(async () => mocks.preparationClosed!());
+    expect(host.textContent).toMatch(/session has closed/i);
+    expect(host.textContent).not.toMatch(/sign in again/i);
+    await submit();
+    await act(async () => mocks.hardwareScan!(badgeCode));
+    expect(mocks.persist).not.toHaveBeenCalled();
+    const diagnostics = await openDiagnostics();
+    const previous = mocks.drain.mock.calls.length;
+    await act(async () =>
+      Array.from(diagnostics.querySelectorAll("button"))
+        .find((button) => button.textContent?.trim() === "Sync now")!
+        .click(),
+    );
+    expect(mocks.drain).toHaveBeenCalledTimes(previous + 1);
+    expect(host.textContent).not.toMatch(/sign in again/i);
+  });
   it("keeps camera and enrollment failures in the visible sync panel", async () => {
     mocks.error = "Could not enroll this scanner";
     mocks.decoderStatus = "Offline camera files are not prepared";

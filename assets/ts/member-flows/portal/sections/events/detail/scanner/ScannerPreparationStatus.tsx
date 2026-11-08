@@ -18,6 +18,7 @@ export function ScannerSyncStatus({
   offline,
   action,
   sync,
+  refreshEligibility,
   syncing = false,
   children,
 }: {
@@ -27,6 +28,7 @@ export function ScannerSyncStatus({
   offline: { context: ScannerOfflineContext | null; preparing: boolean; error: string; retry: () => void };
   action: EventScanRequest["action"];
   sync?: () => void;
+  refreshEligibility?: () => Promise<void>;
   syncing?: boolean;
   children?: ComponentChildren;
 }) {
@@ -36,7 +38,15 @@ export function ScannerSyncStatus({
     <Panel aria-label="Sync and offline status">
       <PanelHeader title="Sync status">
         {sync && (
-          <Button type="button" variant="secondary" loading={syncing} onClick={sync}>
+          <Button
+            type="button"
+            variant="secondary"
+            loading={syncing}
+            onClick={() => {
+              void refreshEligibility?.();
+              sync();
+            }}
+          >
             {syncing ? "Syncing…" : "Sync now"}
           </Button>
         )}

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "preact/hooks";
 import { useScannerLocation } from "./useScannerLocation";
 import { useEligibilityManifest, useScannerOfflinePreparation } from "./useEligibilityManifest";
 import { useOfflineAdmission } from "./useOfflineAdmission";
@@ -25,9 +26,13 @@ export function useScannerPreparation({
   collectorContext?: ScannerOfflineContext;
   epoch: ScannerEpoch | null;
   session: PortalSession | null;
-  onContextChange: () => void;
+  onContextChange: (message?: string) => void;
   onPermissionChanged: () => void;
 }) {
+  const captureClosed = useRef(false);
+  useEffect(() => {
+    captureClosed.current = false;
+  }, [epoch?.epochId]);
   const location = useScannerLocation(slug, occurrenceId, action !== "lead", onContextChange, collectorContext);
   const eligibility = useEligibilityManifest(
     slug,
@@ -38,6 +43,10 @@ export function useScannerPreparation({
     location.roomId,
     epoch,
     Boolean(collectorContext),
+    (message) => {
+      captureClosed.current = true;
+      onContextChange(message);
+    },
   );
   const offlineAdmission = useOfflineAdmission(slug, operatorUserId, eligibility.eligibilityManifest, collectorContext);
   const offlinePreparation = useScannerOfflinePreparation(
@@ -59,5 +68,5 @@ export function useScannerPreparation({
     error: eligibility.manifestError,
     checkedBadges: eligibility.manifestProgress,
   };
-  return { location, eligibility, offlineAdmission, offlinePreparation, status };
+  return { location, eligibility, offlineAdmission, offlinePreparation, status, captureClosed };
 }

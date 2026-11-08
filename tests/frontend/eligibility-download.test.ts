@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { downloadEligibilitySnapshot } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-download";
+import { eligibilityRefreshRefused } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-refresh-error";
 import { cachedManifestSchema } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-snapshot";
 import { enrolledOfflineEligibilityQuerySchema } from "../../assets/shared/schemas/event-offline-eligibility";
 import { eligibilityPageDigest } from "../../assets/shared/event-eligibility-digest";
@@ -236,6 +237,27 @@ describe("Conditional eligibility page downloads", () => {
     await expect(download(snapshot)).rejects.toThrow(
       status === 401 ? "SCANNER_SIGNED_OUT" : "SCANNER_PERMISSION_CHANGED",
     );
+  });
+
+  it("reports a changed room without refusing scanner access", async () => {
+    const snapshot = fixture();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => page(snapshot, { roomId: crypto.randomUUID() })),
+    );
+    const error = await download(snapshot).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toHaveProperty("message", "SCANNER_ROOM_CONTEXT_CHANGED");
+    expect(eligibilityRefreshRefused(error)).toBe(false);
+  });
+
+  it("still refuses a changed operator when the room also changes", async () => {
+    const snapshot = fixture();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => page(snapshot, { operatorUserId: crypto.randomUUID(), roomId: crypto.randomUUID() })),
+    );
+    await expect(download(snapshot)).rejects.toThrow("SCANNER_PERMISSION_CHANGED");
   });
 
   it("refuses an unproven unchanged page", async () => {

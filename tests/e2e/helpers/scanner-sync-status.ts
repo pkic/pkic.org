@@ -21,7 +21,7 @@ export async function checkScannerSyncStatus(page: Page, path: string, info: Tes
   const refreshed = page.waitForResponse((response) =>
     new URL(response.url()).pathname.endsWith("/offline-eligibility"),
   );
-  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await button.click();
   await expect.poll(() => Boolean(release)).toBe(true);
   await expect(button).toBeEnabled();
   await button.click();
@@ -42,7 +42,7 @@ export async function checkScannerSyncStatus(page: Page, path: string, info: Tes
   await page.route("**/offline-eligibility?**", (route) =>
     route.fulfill({ status: 503, contentType: "application/json", body: "{}" }),
   );
-  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await button.click();
   await expect(diagnostics.getByRole("alert")).toContainText("HTTP 503");
   await expect(diagnostics.getByRole("alert")).toContainText("Using saved badge data");
   await expect(button).toBeEnabled();
@@ -52,7 +52,7 @@ export async function checkScannerSyncStatus(page: Page, path: string, info: Tes
   await page.screenshot({ path: info.outputPath("sync-failure-desktop.png") });
   await page.unroute("**/offline-eligibility?**");
   const recovered = page.waitForResponse((result) => new URL(result.url()).pathname.endsWith("/offline-eligibility"));
-  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await button.click();
   const restored = enrolledOfflineEligibilityResponseSchema.parse(await (await recovered).json());
   expect(restored.serverNow >= before.serverNow).toBe(true);
   await expect(diagnostics.getByRole("alert")).toHaveCount(0);

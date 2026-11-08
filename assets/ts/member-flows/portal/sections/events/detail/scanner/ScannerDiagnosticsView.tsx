@@ -11,6 +11,7 @@ export function ScannerDiagnosticsView({
   context,
   scanner,
   sync,
+  refreshEligibility,
   onMessage,
   onCapturePause,
   preferences,
@@ -22,11 +23,12 @@ export function ScannerDiagnosticsView({
   context: Pick<Session, "sessionId" | "slug" | "operatorUserId" | "sponsorId">;
   scanner: Session["scanner"];
   sync: Session["sync"];
+  refreshEligibility: () => Promise<void>;
   onMessage: Session["message"];
   onCapturePause: Session["capturePause"];
   preferences: ComponentProps<typeof ScannerSoundPreferences>["preferences"];
   sound: ComponentProps<typeof ScannerSoundPreferences>["sound"];
-  status: Omit<ComponentProps<typeof ScannerSyncStatus>, "sync">;
+  status: Omit<ComponentProps<typeof ScannerSyncStatus>, "sync" | "refreshEligibility">;
   preparation: ComponentProps<typeof ScannerPreparationStatus>;
   unverifiedStart?: Diagnostics["unverifiedStart"];
 }) {
@@ -36,7 +38,7 @@ export function ScannerDiagnosticsView({
       session={{ ...context, scanner, sync, message: onMessage, capturePause: onCapturePause }}
       sound={<ScannerSoundPreferences preferences={preferences} sound={sound} />}
       syncStatus={
-        <ScannerSyncStatus {...status} sync={() => void sync()}>
+        <ScannerSyncStatus {...status} sync={() => void sync()} refreshEligibility={refreshEligibility}>
           {scanner.error && <Alert tone="danger">{scanner.error}</Alert>}
           <ScannerPreparationStatus {...preparation} />
           <p role="status">{decoderStatus}</p>

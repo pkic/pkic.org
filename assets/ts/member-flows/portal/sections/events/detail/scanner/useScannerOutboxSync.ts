@@ -59,7 +59,7 @@ export function useScannerOutboxSync({
       };
       const timeout = window.setTimeout(() => finish(false), 2000);
       verificationWaiters.current.set(operationId, finish);
-      void sync().catch(() => finish(false));
+      if (activeSyncs.current === 0) void sync().catch(() => finish(false));
     });
   }
 

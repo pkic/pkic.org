@@ -8,7 +8,11 @@ import type { ScannerEpoch } from "./scanner-device-ledger";
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
 import { ScannerCodePreparation, useScannerCodePreparationRetry } from "./scanner-code-preparation";
 import { prepareEligibilityManifest, type EligibilityManifest } from "./eligibility-manifest";
-import { eligibilityRefreshError, eligibilityRefreshRefused } from "./eligibility-refresh-error";
+import {
+  eligibilityPreparationClosed,
+  eligibilityRefreshError,
+  eligibilityRefreshRefused,
+} from "./eligibility-refresh-error";
 
 /** Prepares and refreshes scoped IDs-only data outside the camera path. */
 export function useEligibilityManifest(
@@ -20,10 +24,11 @@ export function useEligibilityManifest(
   roomId: string | null = null,
   epoch: ScannerEpoch | null,
   collector = false,
+  onPreparationClosed?: (message: string) => void,
 ) {
   const eligibilityManifest = useRef<EligibilityManifest | null>(null);
-  const permissionChanged = useRef(onPermissionChanged);
-  permissionChanged.current = onPermissionChanged;
+  const refusals = useRef({ onPermissionChanged, onPreparationClosed });
+  refusals.current = { onPermissionChanged, onPreparationClosed };
   const [manifestReady, setManifestReady] = useState(false);
   const [manifestPreparing, setManifestPreparing] = useState(false);
   const [manifestError, setManifestError] = useState("");
@@ -50,7 +55,7 @@ export function useEligibilityManifest(
     const prepare = async () => {
       if (refreshing || controller.signal.aborted) return;
       refreshing = true;
-      const onRefusal = permissionChanged.current;
+      const { onPermissionChanged: onRefusal, onPreparationClosed: onClosed } = refusals.current;
       setManifestPreparing(true);
       setManifestProgress(null);
       try {
@@ -74,11 +79,12 @@ export function useEligibilityManifest(
         if (controller.signal.aborted) return;
         if (eligibilityRefreshRefused(error)) {
           eligibilityManifest.current = null;
-          onRefusal();
+          if (eligibilityPreparationClosed(error)) onClosed?.(eligibilityRefreshError(error));
+          else onRefusal();
         }
         setManifestReady(Boolean(eligibilityManifest.current));
         setManifestError(
-          collector
+          collector && !eligibilityRefreshRefused(error)
             ? "Prepared badge data is unavailable. Connect and refresh before scanning."
             : eligibilityRefreshError(error),
         );
@@ -101,6 +107,7 @@ export function useEligibilityManifest(
     document.addEventListener("visibilitychange", visible);
     return () => {
       controller.abort();
+      refreshRequest.current = async () => {};
       window.clearInterval(refresh);
       window.removeEventListener("online", reconnect);
       window.removeEventListener("focus", reconnect);

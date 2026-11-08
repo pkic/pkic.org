@@ -127,7 +127,7 @@ export function EventScannerCapture({
     selectRoom,
   } = preparation.location;
   const { eligibilityManifest, manifestReady, manifestPreparing, manifestError } = preparation.eligibility;
-  const { offlineAdmission, offlinePreparation } = preparation;
+  const { offlineAdmission, offlinePreparation, captureClosed } = preparation;
   const sound = useScannerSound(preferences.sound, result ?? lastResult, action, failed, Boolean(targetId));
   const screenAwake = useScannerImmersiveLifecycle(
     fastMode,
@@ -198,12 +198,13 @@ export function EventScannerCapture({
     stopCamera: badgeCamera.stop,
     refreshHistory: syncHistory.refresh,
   });
-  function clearCurrentScan() {
+  function clearCurrentScan(message?: string) {
     badgeCamera.stop();
     lastOperation.current = null;
     cancelVerification();
     cooldown.reset();
     clearFeedback();
+    if (message) setMessage(message);
   }
   function resetCaptureFields() {
     manual.reset();
@@ -231,12 +232,8 @@ export function EventScannerCapture({
   );
   const persistCapture = (scan: EventScanRequest) =>
     persistScannerCapture(scan, slug, offlineAdmission.persist, auditFailure);
-  async function presentSavedScan(saved: Awaited<ReturnType<typeof persistCapture>>) {
-    await scanSaved();
-    return presentSavedEligibility(saved, verifyQueuedScan);
-  }
   async function capture() {
-    if (!scannerDevice.ready || manualCapturePending.current) return;
+    if (!scannerDevice.ready || captureClosed.current || manualCapturePending.current) return;
     if (authorityPaused.current) {
       setMessage("Sign in again to upload pending scans.");
       return;
@@ -261,8 +258,9 @@ export function EventScannerCapture({
     try {
       lastOperation.current = checked.data.operationId;
       const saved = await persistCapture(checked.data);
+      await scanSaved();
       resetCaptureFields();
-      if (!(await presentSavedScan(saved))) {
+      if (!(await presentSavedEligibility(saved, verifyQueuedScan))) {
         if (fastMode) cooldown.feedback();
         return;
       }
@@ -278,8 +276,8 @@ export function EventScannerCapture({
     }
   }
   async function scanCredential(raw: string, fromCamera = false) {
-    if (!scannerDevice.ready || authorityPaused.current || operatorPaused.current) return;
-    if (manualPaused.current || manualCapturePending.current) return;
+    if (!scannerDevice.ready || captureClosed.current || authorityPaused.current) return;
+    if (operatorPaused.current || manualPaused.current || manualCapturePending.current) return;
     const current = scannerContext.current;
     if (current.action === "lead" || current.action === "exception") {
       badgeCamera.stop();
@@ -331,7 +329,8 @@ export function EventScannerCapture({
     showProvisionalMessage(operation, "Checking eligibility…");
     try {
       const saved = await persistCapture(parsed.data);
-      if (!(await presentSavedScan(saved))) {
+      await scanSaved();
+      if (!(await presentSavedEligibility(saved, verifyQueuedScan))) {
         if (fastMode) cooldown.feedback();
         return;
       }
@@ -345,7 +344,7 @@ export function EventScannerCapture({
     }
   }
   async function camera() {
-    if (!scannerDevice.ready || badgeCamera.starting) return;
+    if (!scannerDevice.ready || captureClosed.current || badgeCamera.starting) return;
     if (authorityPaused.current) {
       setMessage("Sign in again to upload pending scans.");
       return;
@@ -353,9 +352,9 @@ export function EventScannerCapture({
     await badgeCamera.start();
   }
   function startScanning() {
+    if (captureClosed.current || !allowedActions.includes(action) || !scannerDevice.ready) return;
     sound.unlock();
     manualPaused.current = false;
-    if (!allowedActions.includes(action) || !scannerDevice.ready) return;
     enterPresentation();
     lastOperation.current = null;
     setResult(null);
@@ -528,6 +527,7 @@ export function EventScannerCapture({
             context={{ sessionId: portalSession.value?.sessionId, slug, operatorUserId, sponsorId }}
             scanner={scannerDevice}
             sync={sync}
+            refreshEligibility={preparation.eligibility.refresh}
             onMessage={setMessage}
             onCapturePause={(paused) => {
               if (paused) badgeCamera.stop();
