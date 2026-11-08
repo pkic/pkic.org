@@ -3,6 +3,7 @@
  * against. A write commits only while both are still what was read, so a
  * speaker removed, re-invited or closed out meanwhile changes nothing.
  */
+import { lateSpeakerResponseAwaitingReviewSql } from "../../../assets/shared/proposal-speaker-acceptance";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { ParticipantAuthority } from "./participant-authority";
 
@@ -22,6 +23,7 @@ export interface ProposalSpeakerWriteContext extends ProposalSpeakerAuthoritySna
   expectedActingIdentitySelectedAt?: string | null;
   authority?: ParticipantAuthority;
   expectedManageLinkSecret?: string | null;
+  responseInviteGeneration: number | null | undefined;
 }
 
 export function proposalSpeakerAuthorityCondition(context: ProposalSpeakerAuthoritySnapshot): {
@@ -65,6 +67,7 @@ export function prepareProposalSpeakerWriteGuard(
           SET invite_generation = invite_generation
         WHERE id = ? AND proposal_id = ? AND user_id = ? AND status = ? AND invite_generation = ?
           AND acting_identity_id IS ? AND acting_identity_selected_at IS ?
+          AND NOT ${lateSpeakerResponseAwaitingReviewSql("proposal_speakers")}
           AND EXISTS (
             SELECT 1 FROM session_proposals
              WHERE id = ? AND status = ? AND updated_at = ? AND deleted_at IS NULL

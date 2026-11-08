@@ -1,7 +1,7 @@
 /**
  * The invitation an added speaker receives from the canonical template seeder: who
- * proposed them, the session's title and abstract, that they take part only
- * once they accept, and the link to accept or decline. Rendered by the same
+ * proposed them, the session's title and abstract, that willingness does not guarantee a program place,
+ * and the link to confirm or decline. Rendered by the same
  * engine the outbox uses, from the seeded template itself.
  */
 import { describe, expect, it } from "vitest";
@@ -15,7 +15,7 @@ function seededBody(): string {
 }
 
 describe("co-speaker invitation template", () => {
-  it("names the proposer and the session and asks the speaker to accept or decline", () => {
+  it("names the proposer and the session and asks the speaker to confirm willingness or decline", () => {
     const rendered = compileSimpleTemplate(
       seededBody(),
       {
@@ -33,7 +33,9 @@ describe("co-speaker invitation template", () => {
     expect(rendered).toContain("Ada Lovelace (Example Org) has proposed a session for **PQC 2026**");
     expect(rendered).toContain("**Post-Quantum Migration Strategies**");
     expect(rendered).toContain("A practical guide to migrating enterprise PKI.");
-    expect(rendered).toContain("only once you accept");
+    expect(rendered).toContain("willingness to participate in this proposal");
+    expect(rendered).toContain("does not accept the proposal or guarantee a place in the program");
+    expect(rendered).toContain("A late response awaits approval");
     expect(rendered).toContain("decline");
     expect(rendered).toContain(
       'href="https://pkic.org/portal/#/events/pqc-2026/proposals/proposal-1/participation?speaker=user-1"',

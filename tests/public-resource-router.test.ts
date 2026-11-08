@@ -70,6 +70,9 @@ describe("public and integration resource router smoke tests", () => {
     expect(response.status).toBe(200);
     const payload = (await response.json()) as { terms: unknown[] };
     expect(Array.isArray(payload.terms)).toBe(true);
+    // Terms decide consent: a changed term must reach the next reader, so no shared cache holds them.
+    expect(response.headers.get("cache-control") ?? "").not.toMatch(/public/);
+    expect(response.headers.has("cloudflare-cdn-cache-control")).toBe(false);
   });
 
   it("rejects an unsigned calendar RSVP integration request", async () => {

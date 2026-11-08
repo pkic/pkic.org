@@ -389,7 +389,7 @@ async function fillProposalParticipant(
 
 /** Complete the signed-in speaker's participation using their own identity. */
 async function confirmPortalSpeaker(page: Page): Promise<void> {
-  const confirmation = page.getByRole("button", { name: "Confirm participation", exact: true });
+  const confirmation = page.getByRole("button", { name: "Confirm willingness to participate", exact: true });
   await agreeToAllTerms(page);
   if (!(await confirmation.isEnabled())) {
     await page.getByRole("button", { name: "I'm presenting as an individual" }).click();
@@ -398,7 +398,11 @@ async function confirmPortalSpeaker(page: Page): Promise<void> {
     await expect(page.getByText("Speaker identity saved.")).toBeVisible();
   }
   await confirmation.click();
-  await expect(page.getByText("Participation confirmed.")).toBeVisible();
+  await expect(
+    page.getByText(
+      "Your willingness to participate in this proposal is confirmed. Committee acceptance and scheduling are separate decisions.",
+    ),
+  ).toBeVisible();
 }
 
 async function fillProposal(
@@ -853,8 +857,12 @@ test.describe("browser workflows", () => {
     await completeIndependentCapacityDisclosure(page);
     await page.getByRole("button", { name: "Save speaker identity" }).click();
     await expect(page.getByText("Speaker identity saved.")).toBeVisible();
-    await page.getByRole("button", { name: "Confirm participation" }).click();
-    await expect(page.getByText("Participation confirmed.")).toBeVisible();
+    await page.getByRole("button", { name: "Confirm willingness to participate" }).click();
+    await expect(
+      page.getByText(
+        "Your willingness to participate in this proposal is confirmed. Committee acceptance and scheduling are separate decisions.",
+      ),
+    ).toBeVisible();
     await screenshot("04-speaker-participation-confirmed");
 
     const speakerProfile = page.getByRole("region", { name: "Speaker profile" });
@@ -1304,7 +1312,7 @@ test.describe("browser workflows", () => {
     await page.context().clearCookies();
     await signInToPortal(page, "proposal-speaker@example.test");
     await page.goto(speakerManageUrl);
-    const confirmation = page.getByRole("button", { name: "Confirm participation", exact: true });
+    const confirmation = page.getByRole("button", { name: "Confirm willingness to participate", exact: true });
     if (await confirmation.isVisible()) await confirmPortalSpeaker(page);
 
     // Choose a presentation and accept the upload terms.

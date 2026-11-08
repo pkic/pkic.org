@@ -1,3 +1,7 @@
+import {
+  isLateSpeakerResponseAwaitingReview,
+  lateSpeakerResponseAwaitingReviewSql,
+} from "../../../assets/shared/proposal-speaker-acceptance";
 import type { ParticipantAuthority } from "./participant-authority";
 import type { z } from "zod";
 import type { speakerSelfProfilePatchSchema } from "../../../assets/shared/schemas/proposal-management";
@@ -9,7 +13,7 @@ import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "
 import { validateRequiredConsents } from "./consent";
 import { readEventAffiliationContext } from "./identities/event-affiliation-context";
 import { planVerifiedAffiliation } from "./identities/verified-affiliation-plan";
-import { prepareUserProfileStatements, type UserProfilePatch } from "./users";
+import { prepareUserProfileStatements } from "./users";
 import { prepareProposalSpeakerWriteGuard, type ProposalSpeakerWriteContext } from "./proposal-speaker-authority";
 import { proposalSpeakerProfileColumns } from "./proposal-speakers";
 import type { DatabaseLike, StatementLike } from "../types";
@@ -42,6 +46,8 @@ export function prepareSpeakerSelfAuthorityGuard(
     userId: string;
     inviteGeneration: number;
     expectedManageLinkSecret?: string | null;
+    allowExpiredSession?: boolean;
+    allowLateResponseWithdrawal?: boolean;
   },
 ) {
   const capability = typeof authority === "string" ? parseCapabilityToken(authority, "speaker_manage") : null;
@@ -53,7 +59,7 @@ export function prepareSpeakerSelfAuthorityGuard(
           JOIN session_proposals sp ON sp.id=ps.proposal_id AND sp.deleted_at IS NULL
           JOIN events e ON e.id=sp.event_id
           WHERE ps.id=? AND ps.proposal_id=? AND ps.user_id=? AND ps.invite_generation=?
-            AND (ps.status NOT IN ('invited','pending') OR (${activeEffectiveInviteExpirySql(
+            AND (${!capability && context.allowExpiredSession ? "1" : "0"} OR (${!capability && context.allowLateResponseWithdrawal ? lateSpeakerResponseAwaitingReviewSql("ps") : "0"}) OR ps.status NOT IN ('invited','pending') OR (${activeEffectiveInviteExpirySql(
               effectiveProposalSpeakerInviteExpirySql("ps", "e"),
               "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
             )}))
@@ -129,20 +135,18 @@ export async function getPresentationUploader(
   return { firstName: row.first_name, lastName: row.last_name, uploadedAt: row.uploaded_at };
 }
 
+/** An expired session may select an existing representation, without editing a profile or recording consent. */
+export function isSpeakerIdentitySelectionOnly(payload: z.infer<typeof speakerSelfProfilePatchSchema>): boolean {
+  const selectionFields = new Set(["actingIdentityId", "unaffiliatedAttestation", "independentCapacity"]);
+  return (
+    payload.actingIdentityId !== undefined &&
+    Object.entries(payload).every(([key, value]) => value === undefined || selectionFields.has(key))
+  );
+}
+
 export async function updateSpeakerProfile(
   db: DatabaseLike,
-  payload: Pick<UserProfilePatch, "firstName" | "lastName"> &
-    Pick<
-      z.infer<typeof speakerSelfProfilePatchSchema>,
-      | "actingIdentityId"
-      | "continuationToken"
-      | "unaffiliatedAttestation"
-      | "independentCapacity"
-      | "consents"
-      | "organizationName"
-      | "jobTitle"
-      | "organizationContextToken"
-    >,
+  payload: z.infer<typeof speakerSelfProfilePatchSchema>,
   context: ProposalSpeakerWriteContext & {
     selectionAuthority?: { userId: string; sessionId: string };
     signingSecret?: string;
@@ -150,6 +154,18 @@ export async function updateSpeakerProfile(
     accountAuthority?: SpeakerAccountAuthority;
   },
 ): Promise<void> {
+  if (
+    isLateSpeakerResponseAwaitingReview(
+      context.currentStatus,
+      context.responseInviteGeneration,
+      context.inviteGeneration,
+    )
+  )
+    throw new AppError(
+      409,
+      "SPEAKER_RESPONSE_AWAITING_REVIEW",
+      "Your late response is awaiting organizer review. Contact the organizer to change your speaker identity.",
+    );
   const at = nowIso();
   const proofSelection = payload.continuationToken !== undefined;
   if (proofSelection && (!context.signingSecret || !context.authority)) {
@@ -296,7 +312,12 @@ export async function updateSpeakerProfile(
         at,
       })
     : [];
-  const authorityGuard = context.authority ? prepareSpeakerSelfAuthorityGuard(db, context.authority, context) : null;
+  const authorityGuard = context.authority
+    ? prepareSpeakerSelfAuthorityGuard(db, context.authority, {
+        ...context,
+        allowExpiredSession: isSpeakerIdentitySelectionOnly(payload),
+      })
+    : null;
   const selectionSessionGuard =
     selected && !proof && selectionAuthority?.sessionId
       ? prepareAuthorizationGuard(db, {

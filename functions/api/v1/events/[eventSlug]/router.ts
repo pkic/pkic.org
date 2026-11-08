@@ -147,7 +147,7 @@ openapi.get("/proposals", EventProposalsListGet);
 openapi.post("/registrations", EventsEventSlugRegistrationsPost);
 openapi.post("/speakers/invitations", EventSpeakerInvitationsPost);
 openapi.get("/speakers", EventProposalSpeakersListGet);
-openapi.get("/terms", publicReadRoute(TermsGet));
+openapi.get("/terms", TermsGet);
 openapi.get("/sponsors/tiers", EventSponsorTiersGet);
 openapi.put("/sponsors/tiers", EventSponsorTiersPut);
 openapi.get("/team", EventTeamRosterList);

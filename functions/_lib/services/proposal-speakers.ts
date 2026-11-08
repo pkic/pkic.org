@@ -37,6 +37,7 @@ export interface ProposalSpeakerRecord extends ProposalActingIdentityRow {
   declined_at: string | null;
   decline_reason: string | null;
   created_at: string;
+  response_invite_generation?: number | null;
   invite_generation: number;
   invite_expires_at: string | null;
   /** The normalized address the invitation was mailed to; null on rows that predate it and on a proposer's own row. */

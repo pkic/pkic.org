@@ -9,6 +9,7 @@ import {
   eventProposalProofVerifySchema,
   eventProposalProofVerifyResponseSchema,
   eventProposalProofPersonPatchSchema,
+  type EventProposalProofSupportReason,
   eventProposalIdentityJobTitlePatchSchema,
   eventProposalProofIdentityPatchSchema,
   eventProposalProofIdentityPatchResponseSchema,
@@ -103,6 +104,8 @@ export function useProposalEntryIdentity(
   const [error, setError] = useState<string>();
   /** A proved address that signs in to another account; nothing was linked. */
   const [signInEmail, setSignInEmail] = useState<string>();
+  /** A proved address that needs the consortium before it can continue; nothing was linked or created. */
+  const [supportRequired, setSupportRequired] = useState<{ email: string; reason: EventProposalProofSupportReason }>();
   const [email, setEmailState] = useState(invitedEmail);
   /** The terms a confirmed email already recorded: the flow does not ask for them again. */
   const [recordedConsents, setRecordedConsents] = useState<ConsentItem[]>();
@@ -124,6 +127,7 @@ export function useProposalEntryIdentity(
     clearResolution();
     setKindState(value);
     setSignInEmail(undefined);
+    setSupportRequired(undefined);
     // A signed-in individual takes part with the account itself; no organization is selected.
     if (authenticated && knownPerson && value === "individual") {
       setSelected(null);
@@ -132,6 +136,7 @@ export function useProposalEntryIdentity(
   }
   function setEmail(value: string): void {
     clearResolution();
+    setSupportRequired(undefined);
     setEmailState(value);
     setPerson(null);
     if (!proofOwnerToken) {
@@ -144,6 +149,7 @@ export function useProposalEntryIdentity(
   function useDifferentEmail(): void {
     setProofOwnerToken(storedPerson && !speakerManagementToken && !speakerProposalId ? continuationToken : undefined);
     clearResolution();
+    setSupportRequired(undefined);
     setEmailState("");
     setPerson(null);
     setAuthenticated(false);
@@ -222,6 +228,7 @@ export function useProposalEntryIdentity(
     setLoading(true);
     setError(undefined);
     setSignInEmail(undefined);
+    setSupportRequired(undefined);
     try {
       const result =
         initialProof?.token === token
@@ -237,9 +244,12 @@ export function useProposalEntryIdentity(
         setSignInEmail(result.email);
         return;
       }
-      if (result.status !== "ready") {
+      if (result.status === "support_required") {
         proofAttempt.current = null;
-        setError("We need to review this email address before you can continue.");
+        // The address and how it was offered stay, so continuing with another one starts from what was entered.
+        setKindState(result.applicantKind);
+        setEmailState(result.email);
+        setSupportRequired({ email: result.email, reason: result.reason });
         return;
       }
       if (speakerProposalId && result.speakerProposalId !== speakerProposalId) {
@@ -431,6 +441,7 @@ export function useProposalEntryIdentity(
     kind,
     setKind,
     signInEmail,
+    supportRequired,
     person: draftedPerson,
     knownPerson,
     authenticated,

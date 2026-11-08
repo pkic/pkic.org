@@ -325,14 +325,18 @@ test("terms-first proposals and invited speakers verify identity without duplica
     expect(invited.speaker).toMatchObject({ userId: guest.userId, status: "invited" });
     expect(invited.profile.actingIdentityId).toBe(guest.identityId);
     expect(invited.profile.organizationName).toBe(guestIdentity.organizationName);
-    const confirmation = guestPage.getByRole("button", { name: "Confirm participation", exact: true });
+    const confirmation = guestPage.getByRole("button", { name: "Confirm willingness to participate", exact: true });
     await expect(confirmation).toBeDisabled();
     const terms = guestPage.locator("[data-term-key] input[type='checkbox']");
     await expect(terms.first()).toBeVisible();
     for (let i = 0; i < (await terms.count()); i++) await terms.nth(i).check();
     await expect(confirmation).toBeEnabled();
     await confirmation.click();
-    await expect(guestPage.getByText("Participation confirmed.")).toBeVisible();
+    await expect(
+      guestPage.getByText(
+        "Your willingness to participate in this proposal is confirmed. Committee acceptance and scheduling are separate decisions.",
+      ),
+    ).toBeVisible();
     const confirmed = await readGuest();
     expect(confirmed.speaker).toMatchObject({ userId: guest.userId, status: "confirmed" });
     expect(confirmed.profile.actingIdentityId).toBe(guest.identityId);

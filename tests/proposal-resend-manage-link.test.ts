@@ -159,7 +159,7 @@ describe("proposal resend-manage-link endpoint", () => {
     expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
   });
 
-  it("does not recover an expired pending speaker invitation but keeps confirmed speaker recovery available", async () => {
+  it("recovers account sign-in for expired invitations without renewing speaker capabilities", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
@@ -222,7 +222,10 @@ describe("proposal resend-manage-link endpoint", () => {
         env.DB,
         "SELECT recipient_email FROM email_outbox WHERE template_key = 'user_magic_link' ORDER BY recipient_email",
       ),
-    ).resolves.toEqual([{ recipient_email: "confirmed-speaker@example.test" }]);
+    ).resolves.toEqual([
+      { recipient_email: "confirmed-speaker@example.test" },
+      { recipient_email: "expired-speaker@example.test" },
+    ]);
   });
 
   it("rejects an expired proposal management capability", async () => {

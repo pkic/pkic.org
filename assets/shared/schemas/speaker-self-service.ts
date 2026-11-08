@@ -26,6 +26,7 @@ export const speakerSelfServiceAccessSchema = z.object({
   confirmedAt: nullableTimestampSchema,
   declinedAt: nullableTimestampSchema,
   termsAcceptedAt: nullableTimestampSchema,
+  awaitingReview: z.boolean().default(false),
 });
 
 export const speakerSelfServiceProposalSchema = z.object({
@@ -120,7 +121,7 @@ export const speakerProfileUpdateResponseSchema = successResponseSchema.extend({
 });
 
 export const speakerParticipationResponseSchema = successResponseSchema.extend({
-  status: z.enum(["confirmed", "declined"]),
+  status: proposalAccessSpeakerStatusSchema.exclude(["invited"]),
 });
 export const speakerPresentationUploadResponseSchema = successResponseSchema;
 

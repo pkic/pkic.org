@@ -3,6 +3,26 @@ import { IDENTITY_NOTIFICATION_EMAIL_TEMPLATE } from "../../assets/shared/email-
 export const DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES = [
   IDENTITY_NOTIFICATION_EMAIL_TEMPLATE,
   {
+    key: "proposal_speaker_response",
+    contentType: "markdown",
+    messageType: "transactional",
+    subjectTemplate:
+      "{{#if withdrawn}}Late speaker response withdrawn{{else}}{{#if rejected}}Late speaker participation declined{{else}}{{#if approved}}Late speaker participation approved{{else}}{{#if late}}Late speaker response awaits review{{else}}Speaker willingness confirmed{{/if}}{{/if}}{{/if}}{{/if}} — {{eventName}}",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
+
+{{#if withdrawn}}{{#if recipientIsSpeaker}}You withdrew your late response{{else}}{{speakerName}} withdrew their late response{{/if}} for the proposal **{{proposalTitle}}** at **{{eventName}}**. It no longer awaits organizer review.{{else}}{{#if rejected}}{{#if recipientIsSpeaker}}An organizer declined your late participation{{else}}An organizer declined late participation by {{speakerName}}{{/if}} in the proposal **{{proposalTitle}}** for **{{eventName}}**.{{else}}{{#if approved}}{{#if recipientIsSpeaker}}An organizer approved your late participation{{else}}An organizer approved late participation by {{speakerName}}{{/if}} in the proposal **{{proposalTitle}}** for **{{eventName}}**.{{else}}
+
+{{#if recipientIsSpeaker}}You are willing to participate{{else}}{{speakerName}} is willing to participate{{/if}} in the proposal **{{proposalTitle}}** for **{{eventName}}**.
+
+{{#if late}}The response arrived after the invitation deadline. A replacement may already exist. Participation awaits an authorized organizer's approval; existing participation reservations remain until review, and this response adds no agenda credit.{{else}}{{#if recipientIsSpeaker}}Your willingness{{else}}Their willingness{{/if}} to participate in the proposal is confirmed.{{/if}}{{/if}}{{/if}}{{/if}}
+
+Speaker participation does not accept the proposal or guarantee inclusion in the program. Committee acceptance and scheduling are separate decisions.
+
+[{{#if recipientIsSpeaker}}View your participation{{else}}Review the proposal{{/if}}]({{proposalUrl}})
+`,
+  },
+
+  {
     key: "event_proposal_verify",
     subjectTemplate: "Verify your email for {{eventName}}",
     content:
