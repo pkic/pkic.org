@@ -5,11 +5,9 @@
 import { all, first } from "../../db/queries";
 import { hasD1QueryCapacity, type D1QueryBudget } from "../../db/query-budget";
 import type { DatabaseLike, StatementLike } from "../../types";
-import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import { hostWithinDomainSql } from "../../email-domains/sql";
-import { requestJobWake } from "../scheduled-jobs/dispatcher";
 import { domainOwnershipFactMatchesSql, FACT_ORGANIZATION } from "../identities/verified-email-domain";
 
 /** People examined per pass of one run. */
@@ -63,24 +61,6 @@ export async function previewDomainLinking(
   return { peopleToLink: 0, shared: Boolean(count?.shared) };
 }
 
-/** Opens the link run in the claim's own command. */
-export function prepareDomainLinkRun(
-  db: DatabaseLike,
-  input: { organizationId: string; domain: string; requestedByUserId: string; at: string },
-): { runId: string; statement: StatementLike } {
-  const runId = uuid();
-  return {
-    runId,
-    statement: db
-      .prepare(
-        `INSERT INTO organization_domain_link_runs
-           (id, organization_id, domain, requested_by_user_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(runId, input.organizationId, input.domain, input.requestedByUserId, input.at, input.at),
-  };
-}
-
 interface LinkRun {
   id: string;
   organization_id: string;
@@ -123,16 +103,6 @@ export async function advanceDomainLinkRun(
   if (!run) return { complete: true, examined: 0, linked: 0 };
   await db.batch(prepareRunCompletion(db, run, nowIso(), "user_confirmation_required"));
   return { complete: true, examined: 0, linked: 0 };
-}
-
-/** Runs the claim's first pass at once and leaves the rest to the scheduler. */
-export async function startDomainLinkRun(
-  db: DatabaseLike,
-  runId: string,
-): Promise<{ peopleLinked: number; continuing: boolean }> {
-  const pass = await advanceDomainLinkRun(db, runId);
-  if (!pass.complete) await requestJobWake(db, "organization_domain_linking");
-  return { peopleLinked: pass.linked, continuing: !pass.complete };
 }
 
 /** The scheduled job: bounded passes over the oldest open runs. */

@@ -385,7 +385,12 @@ describe("who you are signed in as, and adding an identity", () => {
       dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
     await vi.waitFor(() => expect(dialog.textContent).toContain("Example Org"));
-    expect(dialog.querySelector("select")?.value).toBe(ORGANIZATION_ID);
+    const organization = dialog.querySelector("select")!;
+    expect(organization.value).toBe("");
+    await act(async () => {
+      organization.value = ORGANIZATION_ID;
+      organization.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     const title = dialog.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
     await act(async () => {
       title.value = "Engineer";

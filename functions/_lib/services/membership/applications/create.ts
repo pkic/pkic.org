@@ -13,7 +13,6 @@ import { AppError } from "../../../errors";
 import { prepareAuditLog } from "../../audit";
 import {
   formSubmissionContextChangedError,
-  getGlobalFormByKey,
   isFormSubmissionContextConflict,
   prepareCreateFormSubmission,
   validateCustomAnswersAgainstForm,
@@ -26,17 +25,19 @@ import {
   isMembershipApplicationIdentityFieldKey,
   membershipApplicationFields,
 } from "../../../../../assets/shared/schemas/membership-application-form";
-import { eligibleApplicationWorkingGroupIds } from "../application-groups";
+import { prepareApplicationWorkingGroups, type ApplicationWorkingGroupRow } from "../application-groups";
+import { prepareGlobalFormDefinition } from "../../forms/read";
+import { batchRows } from "../../../db/pagination";
 import { requireMembershipApplicationPolicyFields } from "../application-form";
 import {
   getOrganizationDomainClaim,
-  organizationLinkDomain,
+  getOrganizationDomainClaimForEmail,
   prepareClaimDomainForApplication,
   prepareClaimDomainForOrganization,
 } from "../organization-domain-claims";
 import { requireMembershipCategory } from "../categories";
 import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
-import { mailboxKind } from "../../../email-domains/classification";
+import { mailboxKind, workEmailDomain } from "../../../email-domains/classification";
 import {
   APPLICATION_ALREADY_PENDING,
   APPLICATION_ALREADY_PENDING_MESSAGE,
@@ -138,14 +139,19 @@ async function prepareApplicantAccount(
     (lastName !== null && !lastNameSchema.safeParse(lastName).success)
   )
     return null;
-  const account = await buildFindOrCreateUserStatement(db, {
-    email: input.applicantEmail,
-    firstName: firstName ?? undefined,
-    lastName: lastName ?? undefined,
-    mailboxVerified: true,
-    // The membership identity is created at approval; until then the account only follows the application.
-    identityInBatch: true,
-  });
+  const account = await buildFindOrCreateUserStatement(
+    db,
+    {
+      email: input.applicantEmail,
+      firstName: firstName ?? undefined,
+      lastName: lastName ?? undefined,
+      mailboxVerified: true,
+      // The membership identity is created at approval; until then the account only follows the application.
+      identityInBatch: true,
+    },
+    // The absence observed above is guarded again inside the atomic write.
+    { ownership: null, existing: null },
+  );
   account.statements.push(
     ...prepareVerifyOwnedEmailStatements(db, {
       userId: account.user.id,
@@ -230,7 +236,10 @@ export async function createMemberApplication(
   });
   if (!applicantPolicy.success)
     throw new AppError(422, "VALIDATION_ERROR", "Check the category requirements", applicantPolicy.error.flatten());
-  const form = await getGlobalFormByKey(db, MEMBERSHIP_APPLICATION_FORM_KEY);
+  const formRead = prepareGlobalFormDefinition(db, MEMBERSHIP_APPLICATION_FORM_KEY);
+  const groupsRead = prepareApplicationWorkingGroups(db, { sql: "SELECT ? AS code", bindings: [category.code] });
+  const formResults = await db.batch([...formRead.statements, groupsRead.statement]);
+  const form = formRead.decode(formResults.slice(0, formRead.statements.length));
   if (!form) {
     throw new AppError(503, "APPLICATION_FORM_UNAVAILABLE", "The membership application form is unavailable");
   }
@@ -238,7 +247,10 @@ export async function createMemberApplication(
 
   form.fields = membershipApplicationFields(form.fields, {
     isIndividual,
-    eligibleWorkingGroupIds: await eligibleApplicationWorkingGroupIds(db, category.code),
+    eligibleWorkingGroupIds:
+      groupsRead
+        .decode(batchRows<ApplicationWorkingGroupRow>(formResults[formRead.statements.length]))
+        .get(category.code) ?? [],
   });
   const knownKeys = new Set(form.fields.map((field) => field.key));
   const customAnswers = input.identityAnswers
@@ -280,10 +292,14 @@ export async function createMemberApplication(
     applicantEmail: input.applicantEmail,
   });
   // An organization application holds the domain its address links through (normally the registrable domain).
+  const existingDomainClaim = isIndividual
+    ? null
+    : input.selectedOrganizationDomain
+      ? await getOrganizationDomainClaim(db, input.selectedOrganizationDomain)
+      : await getOrganizationDomainClaimForEmail(db, input.applicantEmail);
   const organizationDomain = isIndividual
     ? null
-    : (input.selectedOrganizationDomain ?? (await organizationLinkDomain(db, input.applicantEmail)));
-  const existingDomainClaim = organizationDomain ? await getOrganizationDomainClaim(db, organizationDomain) : null;
+    : (input.selectedOrganizationDomain ?? existingDomainClaim?.domain ?? workEmailDomain(input.applicantEmail));
   if (existingDomainClaim && !input.selectedOrganizationDomain)
     throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose the organization for this email domain first.");
   const newOrganization =

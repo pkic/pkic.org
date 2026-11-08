@@ -22,6 +22,7 @@ import { eventProposalProofVerifySchema } from "../../assets/shared/schemas/even
 import { completeIndependentCapacityDisclosure } from "./helpers/independent-capacity";
 import { JOB_TITLE_REQUIRED } from "../../assets/shared/schemas/api-common";
 import { proposalProofResponse } from "./helpers/proposal-proof-response";
+import { chooseProposalOrganization } from "./helpers/proposal-identity-fixture";
 
 const PLACEMENTS = "/api/v1/events/pqc-2026/forms/placements/proposal_submission";
 const PROPOSALS = "/api/v1/events/pqc-2026/proposals";
@@ -343,6 +344,7 @@ describe("proposal submission gate", () => {
     });
     await boot();
     await vi.waitFor(() => expect(form.querySelector<HTMLElement>('[data-step="2"]')!.hidden).toBe(false));
+    await chooseProposalOrganization(form, "40000000-0000-4000-8000-000000000002");
     fill(form, { firstName: "Ada", lastName: "Lovelace" });
     for (const name of ["firstName", "lastName"])
       (form.elements.namedItem(name) as HTMLInputElement).dispatchEvent(new Event("input", { bubbles: true }));

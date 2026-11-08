@@ -1,6 +1,6 @@
 import type { DatabaseLike } from "../../types";
 
-interface ApplicationWorkingGroupRow {
+export interface ApplicationWorkingGroupRow {
   category_code: string;
   group_id: string;
 }
@@ -27,10 +27,4 @@ export function prepareApplicationWorkingGroups(db: DatabaseLike, categories: { 
       return groups;
     },
   };
-}
-
-/** Public choices are the active working groups this category can request at application time. */
-export async function eligibleApplicationWorkingGroupIds(db: DatabaseLike, categoryCode: string): Promise<string[]> {
-  const read = prepareApplicationWorkingGroups(db, { sql: "SELECT ? AS code", bindings: [categoryCode] });
-  return read.decode((await read.statement.all<ApplicationWorkingGroupRow>()).results ?? []).get(categoryCode) ?? [];
 }

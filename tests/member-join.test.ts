@@ -1087,6 +1087,35 @@ describe("verified-email-first membership join", () => {
     });
   });
 
+  it("does not create an application when another account claims the verified email before the atomic write", async () => {
+    const testEnv = makeEnv();
+    const email = "person@ownership-race.example";
+    const token = await startAndMaterializeVerification(testEnv, email);
+    const ready = memberJoinVerifyResponseSchema.parse(await (await verifyJoin(testEnv, token)).json());
+    if (ready.status !== "application_ready") throw new Error(`Unexpected ${ready.status}`);
+    const racingDb = mutateBeforeMatchingQuery(
+      testEnv.DB,
+      (sql) => sql.includes("INSERT INTO users"),
+      () => insertUser(testEnv.DB, email),
+    );
+    const response = await postJson({ ...testEnv, DB: racingDb }, "/api/v1/members/applications", {
+      applicantEmail: email,
+      applicantName: "Synthetic Applicant",
+      membershipCategory: "F",
+      organizationName: "Ownership Race Organization",
+      joinToken: ready.joinToken,
+      answers: {
+        reason: "Apply for membership.",
+        ...requiredMembershipApplicationAnswers,
+        ...membershipApplicationDescriptionAnswers("F"),
+      },
+    });
+    expect(response.status).toBe(409);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications WHERE applicant_email=?", [email])).toEqual(
+      [],
+    );
+  });
+
   it("rejects a new membership application when a pending organization changes after selection", async () => {
     const testEnv = makeEnv();
     const pending = await seedMemberApplication({

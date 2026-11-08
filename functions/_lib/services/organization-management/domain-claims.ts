@@ -12,7 +12,7 @@ import type {
   OrganizationDomainLinking,
   OrganizationDomainsListQuery,
 } from "../../../../assets/shared/schemas/organization-domains";
-import { all, first } from "../../db/queries";
+import { first } from "../../db/queries";
 import { batchFirst, queryPage } from "../../db/pagination";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { buildD1TextSearchFilter } from "../../db/search";
@@ -25,7 +25,7 @@ import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChan
 import { identityOrganizationEmailDomainSql } from "../identities/affiliation-projection";
 import { prepareClaimDomainForOrganization } from "../membership/organization-domain-claims";
 import { authorizedOrganizationMutationDb } from "./authorization";
-import { prepareDomainLinkRun, previewDomainLinking, startDomainLinkRun } from "./domain-link-runs";
+import { previewDomainLinking } from "./domain-link-runs";
 
 interface DomainRow {
   domain: string;
@@ -88,15 +88,6 @@ export async function listOrganizationDomains(
   return { domains, page: buildPageInfo(query.limit, query.offset, total, domains.length) };
 }
 
-async function readDomain(db: DatabaseLike, organizationId: string, domain: string): Promise<OrganizationDomain> {
-  const [row] = await all<DomainRow>(
-    db,
-    `${DOMAINS_SQL} SELECT domain, status, people, claimed_at FROM domains WHERE domain = ? LIMIT 1`,
-    [organizationId, organizationId, organizationId, domain],
-  );
-  return toDomain(row!);
-}
-
 const INELIGIBLE_DOMAIN = "Free and disposable mail domains and public suffixes never belong to an organization.";
 
 /** Refuses an ineligible or already-owned domain. */
@@ -150,13 +141,7 @@ export async function claimOrganizationDomain(
     { domain: input.domain, organizationId, now: at },
     null,
   );
-  const run = prepareDomainLinkRun(authorizedDb, {
-    organizationId,
-    domain: input.domain,
-    requestedByUserId: actor.id,
-    at,
-  });
-  let savedDomain: DomainRow | null = null;
+  let savedDomain: DomainRow | null;
   try {
     const results = await authorizedDb.batch([
       prepareAuthorizationGuard(authorizedDb, {
@@ -172,7 +157,6 @@ export async function claimOrganizationDomain(
           ]
         : []),
       insert!,
-      ...(!existingClaim ? [run.statement] : []),
       prepareAuditLog(
         authorizedDb,
         "admin",
@@ -183,16 +167,12 @@ export async function claimOrganizationDomain(
         { domain: { from: null, to: input.domain }, reason: input.reason },
         at,
       ),
-      ...(existingClaim
-        ? [
-            authorizedDb
-              .prepare(`${DOMAINS_SQL}
+      authorizedDb
+        .prepare(`${DOMAINS_SQL}
         SELECT domain,status,people,claimed_at FROM domains WHERE domain=? LIMIT 1`)
-              .bind(organizationId, organizationId, organizationId, input.domain),
-          ]
-        : []),
+        .bind(organizationId, organizationId, organizationId, input.domain),
     ]);
-    if (existingClaim) savedDomain = batchFirst<DomainRow>(results[results.length - 1]);
+    savedDomain = batchFirst<DomainRow>(results[results.length - 1]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error))
       throw new AppError(409, "ORGANIZATION_CHANGED", "The organization changed while the domain was being saved.");
@@ -200,9 +180,8 @@ export async function claimOrganizationDomain(
       throw new AppError(409, "ORGANIZATION_DOMAIN_IN_USE", `${input.domain} was claimed while this was being saved`);
     throw error;
   }
-  // Retire the legacy run without automatically creating affiliations.
-  const linking = existingClaim ? { peopleLinked: 0, continuing: false } : await startDomainLinkRun(db, run.runId);
-  return { domain: savedDomain ? toDomain(savedDomain) : await readDomain(db, organizationId, input.domain), linking };
+  if (!savedDomain) throw new AppError(500, "ORGANIZATION_DOMAIN_NOT_FOUND", "The saved domain could not be read.");
+  return { domain: toDomain(savedDomain), linking: { peopleLinked: 0, continuing: false } };
 }
 
 /** What claiming `domain` would do: refused as a claim would be, else how many people it reaches. */

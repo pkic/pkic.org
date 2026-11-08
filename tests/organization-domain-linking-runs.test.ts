@@ -15,6 +15,7 @@ import {
 } from "../functions/_lib/services/organization-management/domain-link-runs";
 import { nowIso } from "../functions/_lib/utils/time";
 import { callApi } from "./helpers/app";
+import type { D1RoundTripBudget } from "./helpers/d1-round-trip-budget";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
@@ -66,15 +67,20 @@ describe("a domain claim requires verified people to choose", () => {
     token = await createAdminSession(env.DB, adminId, "domain-linking-admin-token");
   });
 
-  function call(path: string, body?: unknown, bearer = token) {
-    return callApi(env, path, {
-      method: body === undefined ? "GET" : "POST",
-      headers: {
-        authorization: `Bearer ${bearer}`,
-        ...(body === undefined ? {} : { "content-type": "application/json" }),
+  function call(path: string, body?: unknown, bearer = token, budget?: D1RoundTripBudget) {
+    return callApi(
+      env,
+      path,
+      {
+        method: body === undefined ? "GET" : "POST",
+        headers: {
+          authorization: `Bearer ${bearer}`,
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
       },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+      budget,
+    );
   }
 
   it("previews a conflicting derived organization as shared without promising automatic links", async () => {
@@ -120,6 +126,8 @@ describe("a domain claim requires verified people to choose", () => {
     const claimed = await call(
       `/api/v1/organizations/${acme}/domains`,
       organizationDomainClaimCreateSchema.parse({ domain: "acme.example", reason: "Their web site" }),
+      token,
+      { maxRoundTrips: 3 },
     );
     expect(claimed.status, await claimed.clone().text()).toBe(201);
     expect(organizationDomainClaimResponseSchema.parse(await claimed.json())).toMatchObject({
@@ -137,7 +145,8 @@ describe("a domain claim requires verified people to choose", () => {
           WHERE action IN ('organization_domain_person_linked', 'organization_domain_linking_completed')
           ORDER BY action`,
       ),
-    ).toEqual([{ actor_type: "system", action: "organization_domain_linking_completed" }]);
+    ).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM organization_domain_link_runs")).toEqual([]);
   });
 
   it("does not automatically link addresses on subdomains", async () => {

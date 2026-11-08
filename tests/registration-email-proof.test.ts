@@ -526,6 +526,7 @@ describe("registration verifies the email address first", () => {
     const applicationId = await seedMemberApplication({
       applicantEmail: "applicant@reserved-work.example",
       organizationDomain: "reserved-work.example",
+      organizationName: "Pending Work Organization",
     });
     const proof = tokenOf(await emailedLink(email));
     const verified = await post("/proof/verify", { token: proof });
@@ -606,7 +607,7 @@ describe("registration verifies the email address first", () => {
     expect(await attribution()).toBe("Unrelated existing organization");
   });
 
-  it("shows the domain default but honors another organization through the same affiliation flow", async () => {
+  it("offers all organizations when another organization claims the same domain", async () => {
     const original = await insertOrganization(env.DB, "Default Domain Organization");
     await env.DB.prepare(
       "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES(?,'shared-choice.test',?,?,?)",
@@ -657,7 +658,8 @@ describe("registration verifies the email address first", () => {
     const choices = registrationEmailProofVerifyResponseSchema.parse(
       await (await post("/proof/verify", { token: secondProof })).json(),
     ).affiliation!;
-    expect(choices.organization?.id).toBe(original);
+    expect(choices.organization).toBeNull();
+    expect(choices.organizations.map((item) => item.id)).toContain(original);
     expect(choices.organizations.map((x) => x.name)).toContain("Chosen Domain Organization");
     const selected = registrationEmailProofVerifyResponseSchema.parse(
       await (
