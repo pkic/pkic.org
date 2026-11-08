@@ -20,6 +20,18 @@ import { organizationIdentityJobTitleSchema } from "./identity-job-title";
 import { jsonErrorResponse, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { requiresSession } from "./route-contract";
+import { emailDomainNameSchema } from "./email-domains";
+
+/** The choice the person actually saw; later claims must not broaden their answer. */
+const affiliationChoiceContextSchema = z.object({
+  emailId: databaseIdSchema.nullable(),
+  domain: emailDomainNameSchema,
+  organizationIds: z.array(databaseIdSchema).max(512),
+});
+
+const affiliationChoiceAnswerSchema = affiliationChoiceContextSchema.extend({
+  kind: z.literal("choose_organization"),
+});
 
 export const affiliationOfferSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -39,10 +51,7 @@ export const affiliationOfferSchema = z.discriminatedUnion("kind", [
     /** What their profile said before organizations became identities, when they wrote something. */
     writtenOrganizationName: z.string().nullable(),
   }),
-  z.object({
-    kind: z.literal("choose_organization"),
-    emailId: databaseIdSchema.nullable(),
-    domain: z.string(),
+  affiliationChoiceAnswerSchema.extend({
     writtenOrganizationName: z.string().nullable(),
   }),
   z.object({
@@ -56,8 +65,18 @@ export type AffiliationOffer = z.infer<typeof affiliationOfferSchema>;
 
 export const affiliationOfferResponseSchema = z.object({ offer: affiliationOfferSchema.nullable() });
 
-/** `organizationId` names the organization that is not theirs; null says they are independent. */
-export const affiliationOfferDismissalSchema = z.object({ organizationId: databaseIdSchema.nullable() });
+/** Independence answers a particular card, never a newly computed offer in another tab. */
+export const affiliationOfferDismissalSchema = z.union([
+  z.object({ organizationId: databaseIdSchema }),
+  z.object({
+    organizationId: z.null(),
+    answeredOffer: z.discriminatedUnion("kind", [
+      affiliationChoiceAnswerSchema,
+      z.object({ kind: z.literal("work_address") }),
+    ]),
+  }),
+]);
+export type AffiliationOfferDismissal = z.infer<typeof affiliationOfferDismissalSchema>;
 
 /** Keeps the organization an address linked them to automatically. */
 /** Keeping an automatic link says what the person does there: an organization identity always has a job title. */

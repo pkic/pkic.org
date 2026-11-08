@@ -9,11 +9,13 @@ import {
   prepareVerifiedAddressDomainOrganizationLink,
 } from "../functions/_lib/services/identities/email-domain-link";
 import { getUserDetail } from "../functions/_lib/services/user-management-detail";
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { nowIso } from "../functions/_lib/utils/time";
 import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { resetDb } from "./helpers/reset-db";
 
 let tokenCounter = 0;
@@ -300,7 +302,7 @@ describe("a verified work address and the organization that owns its domain", ()
     const independent = await call(
       token,
       "/api/v1/users/current/identities/offer/dismissals",
-      affiliationOfferDismissalSchema.parse({ organizationId: null }),
+      affiliationOfferDismissalSchema.parse({ organizationId: null, answeredOffer: await offerOf(token) }),
     );
     expect(independent.status).toBe(201);
     expect(await offerOf(token)).toBeNull();
@@ -329,6 +331,7 @@ describe("a verified work address and the organization that owns its domain", ()
     expect(await offerOf(token)).toMatchObject({ kind });
     const dismissal = await call(token, "/api/v1/users/current/identities/offer/dismissals", {
       organizationId: null,
+      answeredOffer: await offerOf(token),
     });
     expect(dismissal.status).toBe(201);
     expect(await offerOf(token)).toBeNull();
@@ -346,10 +349,167 @@ describe("a verified work address and the organization that owns its domain", ()
         ? { kind: "choose_organization", domain: "acme.example" }
         : { kind: "organization", organization: { id: acme } },
     );
-    await call(token, "/api/v1/users/current/identities/offer/dismissals", { organizationId: shared ? null : acme });
+    await call(token, "/api/v1/users/current/identities/offer/dismissals", {
+      organizationId: shared ? null : acme,
+      answeredOffer: await offerOf(token),
+    });
     expect(await offerOf(token)).toBeNull();
     await claimDomain(await insertOrganization(env.DB, "New Acme Claimant"), "acme.example");
     expect(await offerOf(token)).toMatchObject({ kind: "choose_organization", domain: "acme.example" });
+  });
+
+  it("keeps a newly verified shared domain available after answering a stale work-address card", async () => {
+    const { userId, token } = await signedIn("person@gmail.com");
+    const answeredOffer = await offerOf(token);
+    const first = await insertOrganization(env.DB, "First Shared Organization");
+    const second = await insertOrganization(env.DB, "Second Shared Organization");
+    await claimDomain(first, "shared.example");
+    await claimDomain(second, "shared.example");
+    await env.DB.prepare(`INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at)
+      VALUES (?,?,'person@shared.example','person@shared.example',?,?)`)
+      .bind(crypto.randomUUID(), userId, nowIso(), nowIso())
+      .run();
+    expect(await offerOf(token)).toMatchObject({ kind: "choose_organization" });
+    const response = await call(token, "/api/v1/users/current/identities/offer/dismissals", {
+      organizationId: null,
+      answeredOffer,
+    });
+    expect(response.status).toBe(201);
+    expect(
+      await queryAll(env.DB, "SELECT organization_id FROM affiliation_offer_dismissals WHERE user_id=?", [userId]),
+    ).toEqual([{ organization_id: null }]);
+    expect(await offerOf(token)).toMatchObject({ kind: "choose_organization" });
+  });
+
+  it.each(["changed domain", "unverified", "removed", "another user's address", "joined organization"])(
+    "does not dismiss stale candidates (%s)",
+    async (change) => {
+      const { userId, token } = await signedIn("person@gmail.com");
+      const emailId = crypto.randomUUID();
+      await env.DB.prepare(`INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at)
+        VALUES (?,?,'person@shared.example','person@shared.example',?,?)`)
+        .bind(emailId, userId, nowIso(), nowIso())
+        .run();
+      const first = await insertOrganization(env.DB, "First Shared Organization");
+      const second = await insertOrganization(env.DB, "Second Shared Organization");
+      await claimDomain(first, "shared.example");
+      await claimDomain(second, "shared.example");
+      const answeredOffer = await offerOf(token);
+      if (change === "removed") await env.DB.prepare("DELETE FROM user_emails WHERE id=?").bind(emailId).run();
+      if (change === "unverified")
+        await env.DB.prepare("UPDATE user_emails SET verified_at=NULL WHERE id=?").bind(emailId).run();
+      if (change === "changed domain") {
+        await claimDomain(first, "changed.example");
+        await claimDomain(second, "changed.example");
+        await env.DB.prepare(
+          "UPDATE user_emails SET email='person@changed.example',normalized_email='person@changed.example' WHERE id=?",
+        )
+          .bind(emailId)
+          .run();
+      }
+      if (change === "another user's address")
+        await env.DB.prepare("UPDATE user_emails SET user_id=? WHERE id=?")
+          .bind(await insertUser(env.DB, "other@gmail.com"), emailId)
+          .run();
+      if (change === "joined organization") {
+        const identity = await buildCreateIdentityStatement(env.DB, {
+          userId,
+          organizationId: first,
+          source: "staff",
+          jobTitle: "Engineer",
+          startImmediately: true,
+        });
+        await env.DB.batch([identity.statement]);
+      }
+      const response = await call(token, "/api/v1/users/current/identities/offer/dismissals", {
+        organizationId: null,
+        answeredOffer,
+      });
+      expect(response.status).toBe(201);
+      expect(
+        await queryAll(env.DB, "SELECT organization_id FROM affiliation_offer_dismissals WHERE user_id=?", [userId]),
+      ).toEqual([{ organization_id: null }]);
+    },
+  );
+
+  it("dismisses only the answered candidates, records them in the audit, and remains idempotent", async () => {
+    const { userId, token } = await signedIn("person@shared.example");
+    const first = await insertOrganization(env.DB, "First Shared Organization");
+    const second = await insertOrganization(env.DB, "Second Shared Organization");
+    await claimDomain(first, "shared.example");
+    await claimDomain(second, "shared.example");
+    const answeredOffer = await offerOf(token);
+    const third = await insertOrganization(env.DB, "New Shared Organization");
+    await claimDomain(third, "shared.example");
+    for (let retry = 0; retry < 2; retry++) {
+      const response = await call(token, "/api/v1/users/current/identities/offer/dismissals", {
+        organizationId: null,
+        answeredOffer,
+      });
+      expect(response.status).toBe(201);
+    }
+    const dismissed = await queryAll<{ organization_id: string | null }>(
+      env.DB,
+      "SELECT organization_id FROM affiliation_offer_dismissals WHERE user_id=?",
+      [userId],
+    );
+    expect(dismissed.map((row) => row.organization_id).sort()).toEqual([null, first, second].sort());
+    const audits = await queryAll<{ details: string }>(
+      env.DB,
+      "SELECT details_json AS details FROM audit_log WHERE action='affiliation_offer_dismissed' AND entity_id=?",
+      [userId],
+    );
+    expect(audits).toHaveLength(2);
+    for (const audit of audits) {
+      const details = JSON.parse(audit.details);
+      expect(details).toMatchObject({ organizationId: { to: null }, independent: { to: true } });
+      expect(details.dismissedOrganizationIds.to.sort()).toEqual([first, second].sort());
+    }
+    expect(await offerOf(token)).toMatchObject({ kind: "choose_organization" });
+  });
+
+  it("bounds dismissal statements independently of candidate and verified-address counts", async () => {
+    const { userId, token } = await signedIn("person@shared.example");
+    const ids: string[] = [];
+    for (let index = 0; index < 128; index++) {
+      const id = await insertOrganization(env.DB, `Shared Organization ${index}`);
+      ids.push(id);
+      await claimDomain(id, "shared.example");
+    }
+    for (let index = 0; index < 19; index++) {
+      const email = `person${index}@other-work.example`;
+      await env.DB.prepare(
+        `INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at) VALUES (?,?,?,?,?,?)`,
+      )
+        .bind(crypto.randomUUID(), userId, email, email, nowIso(), nowIso())
+        .run();
+    }
+    const answeredOffer = await offerOf(token);
+    const profile = profileD1Flow(env.DB, { measurePayloadBytes: true });
+    const response = await callApi({ ...env, DB: profile.db }, "/api/v1/users/current/identities/offer/dismissals", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ organizationId: null, answeredOffer }),
+    });
+    expect(response.status, await response.clone().text()).toBe(201);
+    const report = await profile.report();
+    expect(report.roundTrips).toBe(6);
+    expect(report.statements).toBe(13);
+    const dismissalPlan = report.plans.find((plan) => plan.sql.includes("INSERT INTO affiliation_offer_dismissals"));
+    expect(JSON.stringify(dismissalPlan?.plan)).toContain("affiliation_offer_dismissals_organization");
+    expect(JSON.stringify(dismissalPlan?.plan)).toContain("affiliation_offer_dismissals_independent");
+    expect(report.queries.reduce((total, query) => total + (query.requestBytes ?? 0), 0)).toBeLessThan(40_000);
+    expect(report.queries.reduce((total, query) => total + (query.resultBytes ?? 0), 0)).toBeLessThan(40_000);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM affiliation_offer_dismissals WHERE user_id=?", [userId]),
+    ).toHaveLength(ids.length + 1);
+  });
+
+  it("requires the answered card for independence", async () => {
+    const { userId, token } = await signedIn("person@gmail.com");
+    const response = await call(token, "/api/v1/users/current/identities/offer/dismissals", { organizationId: null });
+    expect(response.status).toBe(400);
+    expect(await queryAll(env.DB, "SELECT id FROM affiliation_offer_dismissals WHERE user_id=?", [userId])).toEqual([]);
   });
 
   it("creates nothing for a business domain no organization owns", async () => {

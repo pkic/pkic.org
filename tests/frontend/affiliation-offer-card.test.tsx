@@ -92,6 +92,7 @@ describe("affiliation offer card", () => {
   it("invites a user with a shared domain to choose an organization", async () => {
     const writes = stubOffer({
       kind: "choose_organization",
+      organizationIds: [organizationId],
       emailId: null,
       domain: "shared.example",
       writtenOrganizationName: null,
@@ -106,6 +107,7 @@ describe("affiliation offer card", () => {
   it("lets an independent person dismiss a shared-domain offer", async () => {
     const writes = stubOffer({
       kind: "choose_organization",
+      organizationIds: [organizationId],
       emailId: null,
       domain: "shared.example",
       writtenOrganizationName: null,
@@ -114,7 +116,15 @@ describe("affiliation offer card", () => {
     await settle();
     await click(host, "I am independent");
     expect(writes.map((write) => write.path)).toEqual(["/api/v1/users/current/identities/offer/dismissals"]);
-    expect(affiliationOfferDismissalSchema.parse(writes[0].body).organizationId).toBeNull();
+    expect(affiliationOfferDismissalSchema.parse(writes[0].body)).toEqual({
+      organizationId: null,
+      answeredOffer: {
+        kind: "choose_organization",
+        emailId: null,
+        domain: "shared.example",
+        organizationIds: [organizationId],
+      },
+    });
     expect(host.querySelector("button")).toBeNull();
   });
   it("offers the organization the work address belongs to and joins it through the existing join", async () => {
@@ -186,7 +196,10 @@ describe("affiliation offer card", () => {
     expect(addAddress?.getAttribute("href")).toBe("#/users/current/emails/new");
     await click(host, "I’m independent");
     expect(writes.map((write) => write.path)).toEqual(["/api/v1/users/current/identities/offer/dismissals"]);
-    expect(affiliationOfferDismissalSchema.parse(writes[0]!.body)).toEqual({ organizationId: null });
+    expect(affiliationOfferDismissalSchema.parse(writes[0]!.body)).toEqual({
+      organizationId: null,
+      answeredOffer: { kind: "work_address" },
+    });
   });
 
   it("tells a person about an automatic link once, and either keeps it or says it is not theirs", async () => {

@@ -205,10 +205,24 @@ describe("membership domain claim lifecycle", () => {
     if (released)
       await env.DB.prepare("DELETE FROM organization_domain_claims WHERE organization_id=?").bind(selected).run();
     if (released) {
-      await expect(approve(id)).rejects.toMatchObject({ status: 409, code: "DOMAIN_CLAIM_LOST" });
+      await expect(approve(id)).rejects.toMatchObject({
+        status: 409,
+        code: "DOMAIN_CLAIM_LOST",
+        message: `Claimed Applicant no longer has the email domain ${domain}. Add it under Email domains, or correct the application's organization before approving.`,
+      });
       expect(await queryAll(env.DB, "SELECT id FROM members WHERE organization_id=?", [selected])).toEqual([]);
       expect(await queryAll(env.DB, "SELECT id FROM organization_domain_claims WHERE domain=?", [domain])).toEqual([]);
     } else expect((await approve(id)).organizationId).toBe(selected);
+  });
+
+  it("names the proposed organization and domain when its provisional claim is lost", async () => {
+    const id = await apply({ organizationName: "Proposed Organization" });
+    await env.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id=?").bind(id).run();
+    await expect(approve(id)).rejects.toMatchObject({
+      code: "DOMAIN_CLAIM_LOST",
+      message: `Proposed Organization no longer has the email domain ${domain}. Add it under Email domains, or correct the application's organization before approving.`,
+    });
+    expect(await queryAll(env.DB, "SELECT id FROM organizations WHERE name='Proposed Organization'")).toEqual([]);
   });
 
   it("refuses a new subdomain claim appearing between verification and submission", async () => {

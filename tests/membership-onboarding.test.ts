@@ -209,7 +209,15 @@ describe("Post-approval onboarding", () => {
       );
       expect(response.status, await response.clone().text()).toBe(409);
       expect(await response.json()).toMatchObject({
-        error: { code: timing === "before commit" ? "MEMBERSHIP_WORKFLOW_CHANGED" : "DOMAIN_CLAIM_LOST" },
+        error: {
+          code: timing === "before commit" ? "MEMBERSHIP_WORKFLOW_CHANGED" : "DOMAIN_CLAIM_LOST",
+          ...(timing !== "before commit"
+            ? {
+                message:
+                  "Acme Corp no longer has the email domain acme.test. Add it under Email domains, or correct the application's organization before approving.",
+              }
+            : {}),
+        },
       });
       if (timing === "before final review")
         expect(

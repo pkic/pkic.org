@@ -136,7 +136,10 @@ export function AffiliationOfferCard() {
       () =>
         postJson(
           `${OFFER_ENDPOINT}/dismissals`,
-          affiliationOfferDismissalSchema.parse({ organizationId }),
+          affiliationOfferDismissalSchema.parse({
+            organizationId,
+            ...(organizationId === null ? { answeredOffer: offer } : {}),
+          }),
           successResponseSchema,
         ),
       message,

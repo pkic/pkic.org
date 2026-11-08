@@ -6,7 +6,7 @@
  * "not my organization" or "I am independent"; declining a historical
  * automatic link also ends the identity it created.
  */
-import type { AffiliationOffer } from "../../../../assets/shared/schemas/affiliation-offer";
+import type { AffiliationOffer, AffiliationOfferDismissal } from "../../../../assets/shared/schemas/affiliation-offer";
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -91,16 +91,8 @@ export function prepareOwnAffiliationReviewResolution(
 }
 
 export async function readAffiliationOffer(db: DatabaseLike, userId: string): Promise<AffiliationOffer | null> {
-  return (await observeAffiliationOffer(db, userId)).offer;
-}
-
-/** Retain the offered candidates so an independence answer dismisses only that choice. */
-async function observeAffiliationOffer(
-  db: DatabaseLike,
-  userId: string,
-): Promise<{ offer: AffiliationOffer | null; organizationIds: string[] }> {
   const linked = await readOpenLinkNotice(db, userId);
-  if (linked) return { offer: { kind: "linked", ...linked }, organizationIds: [] };
+  if (linked) return { kind: "linked", ...linked };
   const [addresses, related, dismissals, written] = await Promise.all([
     verifiedAddresses(db, userId),
     all<{ organization_id: string; active: number }>(
@@ -127,7 +119,6 @@ async function observeAffiliationOffer(
   const dismissed = new Set(dismissals.map((row) => row.organization_id));
   let hasWorkAddress = false;
   let choiceOffer: AffiliationOffer | null = null;
-  let choiceOrganizationIds: string[] = [];
   for (const address of addresses) {
     const { domain, resolution, facts } = await resolveEmailDomainOrganization(db, address.normalized_email);
     if (!domain) continue;
@@ -139,8 +130,13 @@ async function observeAffiliationOffer(
         !candidates.some((candidate) => relatedIds.has(candidate.organizationId)) &&
         candidates.some((candidate) => !dismissed.has(candidate.organizationId))
       ) {
-        choiceOffer = { kind: "choose_organization", emailId: address.id, domain, writtenOrganizationName };
-        choiceOrganizationIds = [...new Set(candidates.map((candidate) => candidate.organizationId))];
+        choiceOffer = {
+          kind: "choose_organization",
+          emailId: address.id,
+          domain,
+          writtenOrganizationName,
+          organizationIds: [...new Set(candidates.map((candidate) => candidate.organizationId))],
+        };
       }
       continue;
     }
@@ -153,32 +149,57 @@ async function observeAffiliationOffer(
     );
     if (!organization) continue;
     return {
-      offer: { kind: "organization", organization, emailId: address.id, domain, writtenOrganizationName },
-      organizationIds: [],
+      kind: "organization",
+      organization,
+      emailId: address.id,
+      domain,
+      writtenOrganizationName,
     };
   }
-  if (choiceOffer) return { offer: choiceOffer, organizationIds: choiceOrganizationIds };
+  if (choiceOffer) return choiceOffer;
   const holdsOrganization = related.some((row) => Boolean(row.active));
-  if (hasWorkAddress || holdsOrganization || dismissed.has(null) || addresses.length === 0)
-    return { offer: null, organizationIds: [] };
+  if (hasWorkAddress || holdsOrganization || dismissed.has(null) || addresses.length === 0) return null;
   return {
-    offer: {
-      kind: "work_address",
-      freeDomains: [...new Set(addresses.map((address) => emailDomainOf(address.normalized_email)))].sort(),
-      writtenOrganizationName,
-    },
-    organizationIds: [],
+    kind: "work_address",
+    freeDomains: [...new Set(addresses.map((address) => emailDomainOf(address.normalized_email)))].sort(),
+    writtenOrganizationName,
   };
+}
+
+/** Resolve only the answered address, and retain only candidates present on that card. */
+async function answeredChoiceOrganizationIds(
+  db: DatabaseLike,
+  userId: string,
+  answer: Extract<AffiliationOfferDismissal, { organizationId: null }>["answeredOffer"],
+): Promise<string[]> {
+  if (answer.kind !== "choose_organization") return [];
+  const address = await first<VerifiedAddressRow>(
+    db,
+    `SELECT address.id, address.normalized_email FROM (
+       SELECT NULL AS id, normalized_email FROM users
+         WHERE ? IS NULL AND id=? AND email_verified_at IS NOT NULL
+       UNION ALL
+       SELECT id, normalized_email FROM user_emails
+         WHERE id=? AND user_id=? AND verified_at IS NOT NULL
+     ) address WHERE NOT EXISTS (
+       SELECT 1 FROM identities WHERE user_id=? AND organization_id IN (SELECT value FROM json_each(?)))`,
+    [answer.emailId, userId, answer.emailId, userId, userId, JSON.stringify(answer.organizationIds)],
+  );
+  if (!address) return [];
+  const { domain, resolution, facts } = await resolveEmailDomainOrganization(db, address.normalized_email);
+  if (domain !== answer.domain || resolution.kind !== "ambiguous" || !facts) return [];
+  const currentIds = new Set([...facts.claimed, ...facts.derived].map((candidate) => candidate.organizationId));
+  return [...new Set(answer.organizationIds)].filter((id) => currentIds.has(id));
 }
 
 /**
  * "Not my organization" for one organization, or "I am independent" when
  * `organizationId` is null. Independence also answers the person's own open
- * profile review and dismisses the organizations on the current choice card.
+ * profile review and dismisses only organizations on the answered choice card.
  */
 export async function dismissAffiliationOffer(
   db: DatabaseLike,
-  input: { userId: string; organizationId: string | null },
+  input: AffiliationOfferDismissal & { userId: string },
 ): Promise<void> {
   if (input.organizationId) {
     const organization = await first<{ id: string }>(db, "SELECT id FROM organizations WHERE id = ?", [
@@ -188,23 +209,31 @@ export async function dismissAffiliationOffer(
   }
   const organizationIds =
     input.organizationId === null
-      ? [null, ...(await observeAffiliationOffer(db, input.userId)).organizationIds]
+      ? [null, ...(await answeredChoiceOrganizationIds(db, input.userId, input.answeredOffer))]
       : [input.organizationId];
   const at = nowIso();
   const statements: StatementLike[] = [
-    ...organizationIds.map((organizationId) =>
-      db
-        .prepare(
-          `INSERT INTO affiliation_offer_dismissals (id, user_id, organization_id, created_at)
-         SELECT ?, ?, ?, ?
-          WHERE NOT EXISTS (SELECT 1 FROM affiliation_offer_dismissals
-                             WHERE user_id = ? AND organization_id IS ?)`,
-        )
-        .bind(uuid(), input.userId, organizationId, at, input.userId, organizationId),
-    ),
+    db
+      .prepare(
+        `INSERT INTO affiliation_offer_dismissals (id, user_id, organization_id, created_at)
+       SELECT json_extract(candidate.value, '$.id'), ?, json_extract(candidate.value, '$.organizationId'), ?
+         FROM json_each(?) candidate
+        WHERE NOT EXISTS (SELECT 1 FROM affiliation_offer_dismissals
+          WHERE user_id=? AND organization_id = json_extract(candidate.value, '$.organizationId'))
+          AND (json_extract(candidate.value, '$.organizationId') IS NOT NULL OR NOT EXISTS (
+            SELECT 1 FROM affiliation_offer_dismissals WHERE user_id=? AND organization_id IS NULL))`,
+      )
+      .bind(
+        input.userId,
+        at,
+        JSON.stringify(organizationIds.map((organizationId) => ({ id: uuid(), organizationId }))),
+        input.userId,
+        input.userId,
+      ),
     prepareAuditLog(db, "user", input.userId, "affiliation_offer_dismissed", "user", input.userId, {
       organizationId: input.organizationId,
       independent: input.organizationId === null,
+      dismissedOrganizationIds: organizationIds.filter((id) => id !== null),
     }),
   ];
   // An automatic link to this organization is undone, not just dismissed.

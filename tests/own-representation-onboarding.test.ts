@@ -12,6 +12,7 @@ import {
   identityAffiliationPreviewResponseSchema,
 } from "../assets/shared/schemas/identity-affiliation";
 import { currentUserIdentityCreateSchema, identityMutationResponseSchema } from "../assets/shared/schemas/identity";
+import { affiliationOfferResponseSchema } from "../assets/shared/schemas/affiliation-offer";
 import type { DatabaseLike } from "../functions/_lib/types";
 
 const PREVIEW = "/api/v1/users/current/identities/preview";
@@ -114,11 +115,15 @@ describe("email-first own representation", () => {
     const second = await insertOrganization(env.DB, "Dismissed Second");
     await claim("northstar-work.test", first);
     await claim("northstar-work.test", second);
+    const offerResponse = await callApi(env, "/api/v1/users/current/identities/offer", {
+      headers: { authorization: `Bearer ${p.token}` },
+    });
+    const answeredOffer = affiliationOfferResponseSchema.parse(await offerResponse.json()).offer;
     for (const organizationId of mode === "independent" ? [null] : mode === "all" ? [first, second] : [first]) {
       const response = await callApi(env, "/api/v1/users/current/identities/offer/dismissals", {
         method: "POST",
         headers: { authorization: `Bearer ${p.token}`, "content-type": "application/json" },
-        body: JSON.stringify({ organizationId }),
+        body: JSON.stringify({ organizationId, ...(organizationId === null ? { answeredOffer } : {}) }),
       });
       expect(response.status, await response.clone().text()).toBe(201);
     }
