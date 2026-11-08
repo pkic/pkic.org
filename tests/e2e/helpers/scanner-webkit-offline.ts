@@ -17,11 +17,11 @@ export async function checkWebKitOfflineScanner(source: Page, path: string, cred
     await expect(page.getByText(/Offline scanner prepared until/)).toBeVisible({ timeout: 45000 });
     await expect(page.getByRole("combobox", { name: "Feedback pause", exact: true })).toHaveValue("1000");
     await page.screenshot({ path: info.outputPath("webkit-offline-ready-phone.png"), fullPage: true });
-    await context.setOffline(true);
     // WebKit's automation offline switch also prevents cached worker navigation.
     // Chromium's preceding journey covers offline reload; WebKit verifies preparation and local capture here.
     await openScannerManualEntry(page);
-    await page.getByRole("textbox", { name: "Badge code", exact: true }).fill(credential);
+    await context.setOffline(true);
+    await page.getByRole("textbox", { name: /^Badge code(?: or attendee)?$/ }).fill(credential);
     await page.getByRole("button", { name: "Record attendance", exact: true }).click();
     await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(1);
     expect((await scannerStorage(page)).pending[0]!.scan.badgeId).toBe(credential);
