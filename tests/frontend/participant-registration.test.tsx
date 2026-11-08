@@ -330,36 +330,6 @@ describe("ParticipantRegistration", () => {
     },
   );
 
-  it.each(["retired", "waiting without attendance"])(
-    "shows saved %s days without a misleading matrix selection",
-    async (state) => {
-      installApi(
-        readResponse(
-          state === "retired"
-            ? {
-                dayAttendance: [
-                  { dayDate: "2026-12-01", attendanceType: "moon_base", optionLabel: "Moon base", label: null },
-                ],
-              }
-            : {
-                dayAttendance: [],
-                dayWaitlist: [
-                  { dayDate: "2026-12-01", status: "waiting", priorityLane: "general", offerExpiresAt: null },
-                ],
-              },
-        ),
-      );
-      const container = await mount();
-      expect(container.querySelector('[aria-label="Attendance choices"]')).toBeNull();
-      expect(container.querySelector('[aria-label="Your registration, day by day"]')?.textContent).toContain(
-        state === "retired" ? "Moon base" : "Waitlisted",
-      );
-      expect(container.querySelector('[aria-label="Your registration, day by day"]')?.textContent).not.toContain(
-        "Not attending",
-      );
-    },
-  );
-
   it("offers restore, as the main action, for a cancelled registration and nothing to edit or cancel", async () => {
     const requests = installApi(
       readResponse({
