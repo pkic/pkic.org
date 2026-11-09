@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import {
+  emailOutboxDueSql,
   EMAIL_OUTBOX_DUE_QUERY,
   EMAIL_OUTBOX_EXPIRED_LEASE_QUERY,
 } from "../functions/_lib/email/outbox-delivery-queries";
@@ -63,12 +64,13 @@ describe("durable external-effect due query plans", () => {
   });
 
   it("uses dedicated indexes for email due rows and expired-lease quarantine", async () => {
+    const now = new Date().toISOString();
+    expectBoundedDuePlan(await explain(EMAIL_OUTBOX_DUE_QUERY, [now, 20]), ["idx_email_outbox_due"], "email_outbox");
     expectBoundedDuePlan(
-      await explain(EMAIL_OUTBOX_DUE_QUERY, [new Date().toISOString(), 20]),
+      await explain(emailOutboxDueSql(true), [now, JSON.stringify(["in-flight-message"]), 20]),
       ["idx_email_outbox_due"],
       "email_outbox",
     );
-    const now = new Date().toISOString();
     const expiredPlan = await explain(EMAIL_OUTBOX_EXPIRED_LEASE_QUERY, [now, now, 20, now]);
     expect(expiredPlan).toContain("idx_email_outbox_expired_lease");
     expect(expiredPlan).not.toContain("USE TEMP B-TREE FOR ORDER BY");

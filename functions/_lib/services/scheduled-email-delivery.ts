@@ -1,6 +1,6 @@
 import { getAvailability } from "../availability";
 import { getConfig } from "../config";
-import type { D1QueryBudget } from "../db/query-budget";
+import { hasD1QueryCapacity, type D1QueryBudget } from "../db/query-budget";
 import { drainPendingOutbox } from "../email/outbox";
 import type { Env } from "../types";
 import { nowIso } from "../utils/time";
@@ -25,7 +25,7 @@ export async function runScheduledEmailDelivery(env: Env, budget: D1QueryBudget)
     if (stoppedReason) return false;
     if (getAvailability(env, Date.now(), "email").mode !== "normal") stoppedReason = EMAIL_UNAVAILABLE;
     else if (Date.now() + Math.max(1_000, slowestMessageMs * 2) >= deadline) stoppedReason = "time_limit";
-    else if (budget.remainingQueries() < (active + 1) * QUERIES_PER_MESSAGE_RESERVE + SELECTION_QUERY_RESERVE)
+    else if (!hasD1QueryCapacity(budget, (active + 1) * QUERIES_PER_MESSAGE_RESERVE + SELECTION_QUERY_RESERVE))
       stoppedReason = "d1_query_limit";
     return !stoppedReason;
   };

@@ -11,6 +11,11 @@ type ReminderCycleResult = Awaited<ReturnType<typeof runReminderCycle>>;
 type RsvpEnforcementResult = Awaited<ReturnType<typeof runRsvpEnforcer>>;
 type WaitlistPromotionResult = Awaited<ReturnType<typeof runWaitlistPromotionCycle>>;
 
+// The review digest is opportunistic in this shared pass. Keep room for its
+// recipient read and three fixed updates, plus the storage-deletion selection
+// that follows it, even when earlier work has nearly exhausted the D1 budget.
+const REVIEW_DIGEST_D1_RESERVE = 5;
+
 interface ReminderCycleTotals {
   inviteRemindersQueued: number;
   speakerInviteRemindersQueued: number;
@@ -236,7 +241,7 @@ export async function runScheduledDueWork(
     const notificationLimit = Math.min(
       config.scheduledOutboxLimit,
       invocationBudget?.d1QueryBudget
-        ? Math.floor(Math.max(0, notificationRemainingD1Queries - 5) / 2)
+        ? Math.floor(Math.max(0, notificationRemainingD1Queries - REVIEW_DIGEST_D1_RESERVE) / 2)
         : config.scheduledOutboxLimit,
     );
     if (notificationLimit > 0) {

@@ -428,9 +428,9 @@ async function processInChunks(
   env: Env,
   rows: OutboxRow[],
   chunkSize = 10,
-  context = createOutboxProcessingContext(),
 ): Promise<{ processed: number; failed: number }> {
   if (rows.length === 0) return { processed: 0, failed: 0 };
+  const context = createOutboxProcessingContext();
   let failed = 0;
   let processed = 0;
   for (let i = 0; i < rows.length; i += chunkSize) {
