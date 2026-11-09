@@ -786,6 +786,27 @@ describe("independent embedded email templates", () => {
       },
     );
   }
+  it.each(["markdown", "html", "text"] as const)(
+    "preserves digits immediately after partials in %s messages",
+    async (contentType) => {
+      const embedded = await renderEmail(
+        "{{> first}}2026{{> second}}0",
+        {
+          _partials: {
+            first: { content: "## First fragment", contentType: "markdown" },
+            second: { content: "<strong>Second fragment</strong>", contentType: "html" },
+          },
+        },
+        "",
+        contentType,
+      );
+      expect(embedded.html).toContain("<h2>First fragment</h2>");
+      expect(embedded.html).toContain("<strong>Second fragment</strong>");
+      expect(embedded.text).toContain("2026");
+      expect(embedded.text).toContain("0");
+      expect(embedded.html).not.toContain("PKIC_EMAIL_FRAGMENT_");
+    },
+  );
   it("does not let surrounding Markdown reinterpret a partial's blocks", async () => {
     const fragment = fragments[0];
     const direct = await renderEmail(fragment.content, {}, "", "markdown");

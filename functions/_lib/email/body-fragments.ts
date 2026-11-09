@@ -33,12 +33,12 @@ export function renderEmailBody(
     contentType,
     partial(fragment, values, childDepth) {
       const html = renderEmailBody(fragment.content, values, fragment.contentType, budget, compile, childDepth);
-      const key = `PKIC_EMAIL_FRAGMENT_${nonce}_${fragments.size}`;
+      const key = `PKIC_EMAIL_FRAGMENT_${nonce}_${fragments.size}_`;
       fragments.set(key, html);
       return key;
     },
   });
-  const pattern = new RegExp(`(PKIC_EMAIL_FRAGMENT_${nonce}_\\d+)`, "g");
+  const pattern = new RegExp(`(PKIC_EMAIL_FRAGMENT_${nonce}_\\d+_)`, "g");
   const parts: string[] = [];
   let length = 0;
   for (const sourcePart of compiled.split(pattern)) {
