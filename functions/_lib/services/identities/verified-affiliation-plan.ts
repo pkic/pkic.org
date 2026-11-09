@@ -1,6 +1,5 @@
 import { prepareClaimDomainForOrganization } from "../membership/organization-domain-claims";
-import { prepareAuthorizationGuard } from "../../db/authorization-guard";
-import { organizationDomainCandidates } from "../../email-domains/classification";
+import { prepareStateGuard } from "../../db/authorization-guard";
 import { prepareAuditLog } from "../audit";
 import type { StatementLike } from "../../types";
 import type { z } from "zod";
@@ -11,7 +10,7 @@ import { AppError } from "../../errors";
 import type { identityAffiliationPrepareSchema } from "../../../../assets/shared/schemas/identity-affiliation";
 import type { verifiedAffiliationBasisSchema } from "./verified-affiliation-basis";
 import { prepareVerifiedOrganizationAffiliation } from "./reconciliation";
-import { verifiedRepresentationDomainCandidates } from "./verified-email-domain";
+import { verifiedRepresentationDomainCandidates, verifiedRepresentationDomainEvidence } from "./verified-email-domain";
 export async function planVerifiedAffiliation(
   db: DatabaseLike,
   authority: {
@@ -78,10 +77,10 @@ export async function planVerifiedAffiliation(
   if (domainToLink) {
     const domain = domainToLink;
     domainStatements.push(
-      prepareAuthorizationGuard(db, {
+      prepareStateGuard(db, {
         sql: `SELECT 1 FROM organizations WHERE id=? AND merged_into_organization_id IS NULL
-          AND NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?)`,
-        bindings: [plan.organizationId, domain, plan.organizationId],
+          AND NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=?)`,
+        bindings: [plan.organizationId, domain],
       }),
       (await prepareClaimDomainForOrganization(db, { domain, organizationId: plan.organizationId, now: at }, true))!,
       prepareAuditLog(
@@ -101,14 +100,8 @@ export async function planVerifiedAffiliation(
     ...plan,
     domainToLink,
     statements: [
-      ...(!owned || domainToLink
-        ? [
-            prepareAuthorizationGuard(db, {
-              sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims
-          WHERE domain IN (SELECT value FROM json_each(?)) AND length(domain)>?)`,
-              bindings: [JSON.stringify(organizationDomainCandidates(input.email)), basis.domain.length],
-            }),
-          ]
+      ...(owned && domainToLink
+        ? [prepareStateGuard(db, verifiedRepresentationDomainEvidence(input.email, basis.domain))]
         : []),
       ...plan.statements,
       ...domainStatements,

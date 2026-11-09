@@ -84,3 +84,13 @@ export function resolveDomainOrganization(
     return { kind: "ambiguous" };
   return { kind: "organization", organizationId: only!.organizationId, isMember: false, via: "derived" };
 }
+
+/** Mailbox proof alone cannot grant a new member identity when other organizations share the domain. */
+export function requiresMemberAffiliationReview(facts: DomainOwnershipFacts, organizationId: string): boolean {
+  return (
+    facts.claimed.some((claim) => claim.organizationId === organizationId && claim.isMember) &&
+    (facts.heldByApplication ||
+      facts.claimed.some((claim) => claim.organizationId !== organizationId) ||
+      facts.derived.some((fact) => fact.organizationId !== organizationId && fact.active))
+  );
+}

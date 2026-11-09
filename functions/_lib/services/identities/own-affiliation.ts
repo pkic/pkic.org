@@ -9,7 +9,11 @@ import {
 } from "../../../../assets/shared/schemas/identity-affiliation";
 import { prepareUserSessionRequest } from "../../auth/user-session-request";
 import { userSessionRequestAuthorizationEvidence } from "../../auth/user-session-evidence";
-import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import {
+  prepareAuthorizationGuard,
+  isAuthorizationGuardFailure,
+  isStateGuardFailure,
+} from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike, Env } from "../../types";
 import { nowIso } from "../../utils/time";
@@ -165,6 +169,12 @@ export async function commitOwnAffiliation(
       prepareOwnAffiliationReviewResolution(db, { userId: actor.claims.sub, identityId: plan.identityId, at }),
     ]);
   } catch (error) {
+    if (isStateGuardFailure(error))
+      throw new AppError(
+        409,
+        "ORGANIZATION_AFFILIATION_CHANGED",
+        "The organization changed. Confirm your organization again.",
+      );
     if (isAuthorizationGuardFailure(error) || isAuditChangeGuardFailure(error) || isConcurrentIdentityConflict(error))
       throw new AppError(
         409,

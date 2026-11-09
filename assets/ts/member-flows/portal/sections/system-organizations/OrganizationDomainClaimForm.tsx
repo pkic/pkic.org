@@ -2,8 +2,8 @@
  * Claiming an email domain for an organization: a form of its own under the
  * record's domains, validated by the claim contract the route parses.
  *
- * Before the claim is saved, staff see how many people who already verified
- * an address on the domain it reaches, and confirm.
+ * Before the claim is saved, staff see whether another organization uses
+ * the domain, and confirm.
  */
 import { useState } from "preact/hooks";
 import type { OrganizationDetail } from "../../../../../shared/schemas/organization-management";

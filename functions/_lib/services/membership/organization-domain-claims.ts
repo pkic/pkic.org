@@ -41,13 +41,14 @@ function toClaim(row: OrganizationDomainClaimRow): OrganizationDomainClaim {
 export async function getOrganizationDomainClaim(
   db: DatabaseLike,
   domain: string,
+  organizationId?: string,
 ): Promise<OrganizationDomainClaim | null> {
   const row = await first<OrganizationDomainClaimRow>(
     db,
     `SELECT id, domain, application_id, organization_id
      FROM organization_domain_claims
-     WHERE domain = ? ORDER BY application_id IS NULL, id LIMIT 1`,
-    [domain],
+     WHERE domain = ? ${organizationId ? "AND organization_id = ?" : ""} ORDER BY application_id IS NULL, id LIMIT 1`,
+    organizationId ? [domain, organizationId] : [domain],
   );
   return row ? toClaim(row) : null;
 }

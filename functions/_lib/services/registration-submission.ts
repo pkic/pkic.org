@@ -30,7 +30,7 @@ import {
   type ActiveFormDefinition,
   type CustomAnswerValue,
 } from "./forms";
-import { isAuthorizationGuardFailure } from "../db/authorization-guard";
+import { isAuthorizationGuardFailure, isStateGuardFailure } from "../db/authorization-guard";
 import { prepareVerifyOwnedEmailStatements } from "./email-verification";
 import { normalizeEmail } from "../validation";
 import { prepareVerifiedRegistrationUserGuard, requireRegistrationUserProfile } from "./registrations/authorization";
@@ -276,6 +276,12 @@ export async function commitRegistrationSubmission(
   try {
     await db.batch([...prepared.statements, ...additionalStatements]);
   } catch (error) {
+    if (isStateGuardFailure(error))
+      throw new AppError(
+        409,
+        "ORGANIZATION_AFFILIATION_CHANGED",
+        "The organization changed. Confirm your organization again before registering.",
+      );
     if (
       (error instanceof Error && error.message.includes("EVENT_REGISTRATION_CONTEXT_CHANGED")) ||
       isAuthorizationGuardFailure(error)

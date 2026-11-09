@@ -18,6 +18,15 @@ export function verifiedRepresentationDomainCandidates(email: string, claims: re
   return organizationDomainCandidates(email).filter((domain) => domain.length >= boundary);
 }
 
+/** Preserve the most-specific mapping boundary without pinning unrelated claimants. */
+export function verifiedRepresentationDomainEvidence(email: string, domain: string): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims
+      WHERE domain IN (SELECT value FROM json_each(?)) AND length(domain)>?)`,
+    bindings: [JSON.stringify(organizationDomainCandidates(email)), domain.length],
+  };
+}
+
 function ineligibleDomain(): AppError {
   return new AppError(422, "IDENTITY_DOMAIN_INELIGIBLE", "This email domain cannot establish an organization identity");
 }
@@ -111,6 +120,19 @@ export function verifiedEmailDomainResolutionEvidence(
   };
 }
 
+/** A member's shared domain needs an invitation or review before granting access. */
+export function memberAffiliationApprovalEvidence(domain: string, organizationId: string): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM members WHERE organization_id=?) OR (
+      NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND (organization_id IS NOT ? OR application_id IS NOT NULL))
+      AND NOT EXISTS (SELECT 1 FROM identities fact JOIN users person ON person.id=fact.user_id
+        WHERE fact.verified_email_domain=? AND ${FACT_ORGANIZATION} IS NOT ? AND fact.organization_id IS NOT NULL
+          AND fact.source='verified_email' AND fact.started_at IS NOT NULL AND fact.ended_at IS NULL
+          AND fact.blocked_at IS NULL AND person.active=1))`,
+    bindings: [organizationId, domain, organizationId, domain, organizationId],
+  };
+}
+
 /** Every fact the shared rule needs to decide who owns one domain. */
 export async function loadDomainOwnershipFacts(db: DatabaseLike, domain: string): Promise<DomainOwnershipFacts> {
   const [claims, derived] = await Promise.all([
@@ -132,10 +154,16 @@ export async function loadDomainOwnershipFacts(db: DatabaseLike, domain: string)
       EXISTS(SELECT 1 FROM members WHERE organization_id=COALESCE(organization.merged_into_organization_id, organization.id)) AS member
       FROM identities fact JOIN organizations organization ON organization.id=fact.organization_id
       JOIN users person ON person.id=fact.user_id WHERE ${domainMatches}
-      GROUP BY 1 ORDER BY 1 LIMIT 2`,
+      GROUP BY 1 ORDER BY 1 LIMIT 257`,
       [domain, domain],
     ),
   ]);
+  if (claims.length > 128 || derived.length > 256)
+    throw new AppError(
+      409,
+      "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED",
+      "Contact the PKI Consortium to choose your organization.",
+    );
   return {
     claimed: claims
       .filter((claim) => claim.organization_id !== null)

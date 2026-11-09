@@ -21,23 +21,32 @@ import { resolveOpenJoinApplication } from "./open-application";
 import { readJoinVerification } from "./verification-read";
 import { prepareEligibleMemberRead } from "../../../auth/identity-capacities";
 import {
-  isAuthorizationGuardFailure,
   isStateGuardFailure,
+  isAuthorizationGuardFailure,
   prepareAuthorizationGuard,
   prepareStateGuard,
 } from "../../../db/authorization-guard";
-import { resolveDomainOrganization } from "../../../../../assets/shared/organization-domain";
-import { verifiedEmailDomainResolutionEvidence } from "../../identities/verified-email-domain";
+import {
+  resolveDomainOrganization,
+  requiresMemberAffiliationReview,
+} from "../../../../../assets/shared/organization-domain";
+import { memberAffiliationApprovalEvidence } from "../../identities/verified-email-domain";
 import { verifiedAffiliationPreview } from "../../identities/verified-affiliation-preview";
 import {
   domainClaimsObservationFingerprint,
   observedDomainClaimsEvidence,
+  pendingOrganizationApplicationClaim,
 } from "../../identities/affiliation-evidence";
 import type { VerifiedAffiliationBasis } from "../../identities/verified-affiliation-basis";
 import { normalizeOrgName, ORGANIZATION_NAME_IN_USE_MESSAGE } from "../../../../../assets/shared/organization-name";
 
 async function applicationOrganizationSelection(basis: VerifiedAffiliationBasis, name: string, id?: string) {
-  return { id, name, domain: basis.domain, claimsFingerprint: await domainClaimsObservationFingerprint(basis.claims) };
+  return {
+    id,
+    name,
+    domain: basis.domain,
+    claimsFingerprint: await domainClaimsObservationFingerprint(basis.claims, { id, name, domain: basis.domain }),
+  };
 }
 
 async function issueApplicationContinuation(
@@ -127,14 +136,7 @@ export async function verifyMemberJoin(
       )
     )
       throw new AppError(409, "ORGANIZATION_NAME_IN_USE", ORGANIZATION_NAME_IN_USE_MESSAGE);
-    if (
-      observed.affiliation.basis.claims.some(
-        (claim) =>
-          claim.applicationId &&
-          claim.applicationName &&
-          normalizeOrgName(claim.applicationName) === normalizeOrgName(input.organizationName!),
-      )
-    )
+    if (pendingOrganizationApplicationClaim(observed.affiliation.basis, input.organizationName, "name"))
       return { status: "organization_application_in_progress" };
     return issueApplicationContinuation(
       input.signingSecret,
@@ -197,6 +199,9 @@ export async function verifyMemberJoin(
     return issueApplicationContinuation(input.signingSecret, capability, input.applicationTtlSeconds, provedUserId);
   }
 
+  if (facts && requiresMemberAffiliationReview(facts, claimedMember.organization_id))
+    return { status: "support_required" };
+
   const preparedUser = await buildFindOrCreateUserStatement(
     db,
     { email: capability.email, mailboxVerified: true },
@@ -233,17 +238,12 @@ export async function verifyMemberJoin(
         method: "magic_link",
         verifiedAt,
       }),
-      ...observedDomainClaimsEvidence(capability.email, observed.affiliation?.basis.claims ?? []).map((evidence) =>
-        prepareStateGuard(db, evidence),
-      ),
-      ...(organizations.length === 1
-        ? [
-            prepareStateGuard(
-              db,
-              verifiedEmailDomainResolutionEvidence(domain, claimedMember.organization_id, true, true),
-            ),
-          ]
-        : []),
+      ...observedDomainClaimsEvidence(capability.email, observed.affiliation?.basis.claims ?? [], {
+        id: claimedMember.organization_id,
+        name: organizations.find((organization) => organization.id === claimedMember.organization_id)!.name,
+        domain,
+      }).map((evidence) => prepareStateGuard(db, evidence)),
+      prepareStateGuard(db, memberAffiliationApprovalEvidence(domain, claimedMember.organization_id)),
       ...identity.statements,
       prepareAuditLog(
         db,
@@ -280,7 +280,8 @@ export async function verifyMemberJoin(
     member = projection.decode(results.slice(-projection.statements.length));
   } catch (error) {
     if (isEmailReservationConflict(error)) return { status: "support_required" };
-    if (isAuthorizationGuardFailure(error) || isStateGuardFailure(error))
+    if (isAuthorizationGuardFailure(error)) return { status: "support_required" };
+    if (isStateGuardFailure(error))
       throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose an organization from the updated list.");
     if (
       error instanceof Error &&

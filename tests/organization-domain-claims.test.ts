@@ -52,32 +52,51 @@ async function linkedPerson(organizationId: string, email: string): Promise<stri
 }
 
 describe("staff manage an organization's email domains", () => {
-  it.each(["empty", "approved", "pending"])(
-    "guards a %s observation without writes for unobserved applications",
-    async (kind) => {
-      const domain = "guarded-work.example";
-      const organizationId = await insertOrganization(env.DB, "Observed Organization");
-      const applicationId =
-        kind === "pending"
-          ? await seedMemberApplication({ applicantEmail: `person@${domain}`, organizationDomain: domain })
-          : null;
-      if (kind === "approved") await claimDomain(organizationId, domain);
-      const read = domainClaimsObservationSelection(`person@${domain}`);
-      const [result] = await env.DB.batch([env.DB.prepare(read.sql).bind(...read.bindings)]);
-      const claims = decodeDomainClaimsObservation(result);
-      const guards = observedDomainClaimsEvidence(`person@${domain}`, claims).map((evidence) =>
-        prepareStateGuard(env.DB, evidence),
-      );
-      expect(guards).toHaveLength(kind === "pending" ? 2 : 1);
-      await env.DB.batch(guards);
-      if (applicationId)
-        await env.DB.prepare("UPDATE member_applications SET organization_name='Changed Organization' WHERE id=?")
-          .bind(applicationId)
-          .run();
-      else await claimDomain(await insertOrganization(env.DB, "Concurrent Claimant"), domain);
-      await expect(env.DB.batch(guards)).rejects.toThrow("authorization_guards.authorized");
-    },
-  );
+  it("pins the selected claim while allowing unrelated claims and application edits", async () => {
+    const domain = "guarded-work.example";
+    const organizationId = await insertOrganization(env.DB, "Observed Organization");
+    await claimDomain(organizationId, domain);
+    const applicationId = await seedMemberApplication({
+      applicantEmail: `person@${domain}`,
+      organizationDomain: domain,
+    });
+    const read = domainClaimsObservationSelection(`person@${domain}`);
+    const [result] = await env.DB.batch([env.DB.prepare(read.sql).bind(...read.bindings)]);
+    const claims = decodeDomainClaimsObservation(result);
+    const guards = observedDomainClaimsEvidence(`person@${domain}`, claims, {
+      id: organizationId,
+      name: "Observed Organization",
+      domain,
+    }).map((evidence) => prepareStateGuard(env.DB, evidence));
+    await claimDomain(await insertOrganization(env.DB, "Concurrent Claimant"), domain);
+    await env.DB.prepare("UPDATE member_applications SET organization_name='Corrected Name',updated_at=? WHERE id=?")
+      .bind(nowIso(), applicationId)
+      .run();
+    await env.DB.batch(guards);
+    await env.DB.prepare("DELETE FROM organization_domain_claims WHERE organization_id=?").bind(organizationId).run();
+    await expect(env.DB.batch(guards)).rejects.toThrow("authorization_guards.authorized");
+  });
+
+  it("saves a staff claim even if an unrelated provisional claim is released during the write", async () => {
+    const domain = "concurrent-shared.example";
+    const applicationId = await seedMemberApplication({
+      applicantEmail: `person@${domain}`,
+      organizationDomain: domain,
+    });
+    const organizationId = await insertOrganization(env.DB, "New Claimant");
+    const raced = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("INSERT INTO organization_domain_claims"),
+      () => env.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id=?").bind(applicationId).run(),
+    );
+    const response = await callApi({ ...env, DB: raced }, `/api/v1/organizations/${organizationId}/domains`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ domain, reason: "Staff confirmed the shared domain" }),
+    });
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect((await domainsOf(organizationId)).map((entry) => entry.domain)).toContain(domain);
+  });
 
   it.each(["release", "approve"])(
     "preserves additional claims when a pending application is decided (%s)",
@@ -307,14 +326,17 @@ describe("staff manage an organization's email domains", () => {
     ]);
   });
 
-  it("reports a concurrent claim change as stale business state and rolls back the mutation", async () => {
+  it("reports a concurrently merged target organization as stale business state and rolls back the mutation", async () => {
     const original = await insertOrganization(env.DB, "Original Claimant");
     const selected = await insertOrganization(env.DB, "Selected Claimant");
     await claimDomain(original, "claim-race.example");
     const racingDb = mutateBeforeMatchingQuery(
       env.DB,
-      (sql) => sql.includes("INSERT INTO authorization_guards") && sql.includes("application_id IS ?"),
-      () => env.DB.prepare("DELETE FROM organization_domain_claims WHERE domain=?").bind("claim-race.example").run(),
+      (sql) => sql.includes("INSERT INTO authorization_guards") && sql.includes("merged_into_organization_id IS NULL"),
+      () =>
+        env.DB.prepare("UPDATE organizations SET merged_into_organization_id=? WHERE id=?")
+          .bind(original, selected)
+          .run(),
     );
     const response = await callApi({ ...env, DB: racingDb }, `/api/v1/organizations/${selected}/domains`, {
       method: "POST",

@@ -1,5 +1,5 @@
 import type { RegistrationOrganizationOutcome } from "../../../../assets/shared/schemas/registration";
-import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { isAuthorizationGuardFailure, isStateGuardFailure } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -49,6 +49,12 @@ async function commitConfirmationIntent(
   try {
     await db.batch([...prepared.statements, emailStatement]);
   } catch (error) {
+    if (prepared.affiliationConfirmed && isStateGuardFailure(error))
+      throw new AppError(
+        409,
+        "ORGANIZATION_AFFILIATION_CHANGED",
+        "The organization changed. Confirm your organization again before registering.",
+      );
     if (prepared.affiliationConfirmed && isAuthorizationGuardFailure(error))
       throw new AppError(
         409,

@@ -1,6 +1,6 @@
 import { prepareApplicationEditEvidenceGuard } from "./edit-evidence";
 import { preparePermissionsAuthorizationGuard } from "../../../auth/permissions";
-import { isAuthorizationGuardFailure, isStateGuardFailure, prepareStateGuard } from "../../../db/authorization-guard";
+import { isAuthorizationGuardFailure, isStateGuardFailure } from "../../../db/authorization-guard";
 import { getRequestedApplicationGroups } from "./queries";
 import { isApplicationTerminalStage } from "../../../../../assets/shared/schemas/member-applications";
 import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
@@ -303,7 +303,7 @@ export async function updateMembershipApplication(
 
   // Keep the denormalized application snapshot and canonical claim registry
   // in lockstep. The delete + replacement insert joins the application
-  // update below in one batch, so a conflicting domain rolls everything back.
+  // update below in one batch; other organizations and applications may share the domain.
   if (
     !nextIsIndividual &&
     application.organization_id &&
@@ -334,13 +334,7 @@ export async function updateMembershipApplication(
     if (application.stage !== "declined" && application.stage !== "withdrawn") {
       dependentStatements.push(prepareReleaseApplicationDomainClaim(db, application.id));
       if (nextOrganizationDomain) {
-        dependentStatements.push(
-          prepareStateGuard(db, {
-            sql: "SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND application_id IS NOT ?)",
-            bindings: [nextOrganizationDomain, application.id],
-          }),
-          prepareClaimDomainForApplication(db, nextOrganizationDomain, application.id, now),
-        );
+        dependentStatements.push(prepareClaimDomainForApplication(db, nextOrganizationDomain, application.id, now));
       }
     }
   }

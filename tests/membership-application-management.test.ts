@@ -292,7 +292,7 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
   });
 
   it.each(["organization", "application"])(
-    "refuses moving an application onto a domain held by another %s and rolls back the edit",
+    "moves an application onto a shared domain held by another %s",
     async (kind) => {
       const { id } = await createApplication();
       if (kind === "application") {
@@ -313,17 +313,19 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
         method: "PATCH",
         body: JSON.stringify({ applicantEmail: "corrected@occupied.test", applicantName: "Changed Name" }),
       });
-      expect(response.status, await response.clone().text()).toBe(409);
-      expect(await response.json()).toMatchObject({ error: { code: "ORGANIZATION_DOMAIN_IN_USE" } });
+      expect(response.status, await response.clone().text()).toBe(200);
       expect(
         await queryAll(env.DB, "SELECT applicant_name,organization_domain FROM member_applications WHERE id=?", [id]),
-      ).toEqual([{ applicant_name: "Applicant Name", organization_domain: "example.test" }]);
+      ).toEqual([{ applicant_name: "Changed Name", organization_domain: "occupied.test" }]);
       expect(
         await queryAll(env.DB, "SELECT domain FROM organization_domain_claims WHERE application_id=?", [id]),
-      ).toEqual([{ domain: "example.test" }]);
+      ).toEqual([{ domain: "occupied.test" }]);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM organization_domain_claims WHERE domain='occupied.test'"),
+      ).toHaveLength(2);
       expect(
         await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='application_edited' AND entity_id=?", [id]),
-      ).toEqual([]);
+      ).toHaveLength(1);
     },
   );
 

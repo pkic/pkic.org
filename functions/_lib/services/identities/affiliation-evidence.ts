@@ -1,3 +1,4 @@
+import { normalizeOrgName } from "../../../../assets/shared/organization-name";
 import { organizationDomainCandidates } from "../../email-domains/classification";
 import { verifiedAffiliationBasisSchema, type VerifiedAffiliationBasis } from "./verified-affiliation-basis";
 import type { D1StatementResult } from "../../types";
@@ -5,6 +6,7 @@ import { batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
 import { sha256Hex } from "../../utils/crypto";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
+import { verifiedRepresentationDomainEvidence } from "./verified-email-domain";
 import { ownedIdentityEmailEvidence } from "./owned-email";
 
 export function verifiedDomainIdentityEvidence(input: {
@@ -67,42 +69,60 @@ export function observedOrganizationMembershipEvidence(
   };
 }
 
-/** Pins the complete domain and pending-application observations through the atomic write. */
+/** A new name on a reserved domain needs review, even when its spelling differs. */
+export function pendingOrganizationApplicationClaim(
+  basis: VerifiedAffiliationBasis,
+  organizationName?: string,
+  match: "domain" | "name" = "domain",
+) {
+  if (!organizationName) return undefined;
+  return basis.claims.find(
+    (claim) =>
+      claim.domain === basis.domain &&
+      claim.applicationId &&
+      (match === "domain" ||
+        (claim.applicationName && normalizeOrgName(claim.applicationName) === normalizeOrgName(organizationName))),
+  );
+}
+
+export interface DomainClaimSelection {
+  domain: string;
+  id?: string;
+  name: string;
+}
+
+function selectedDomainClaims(claims: VerifiedAffiliationBasis["claims"], selection: DomainClaimSelection) {
+  return claims.filter((claim) => claim.domain === selection.domain && claim.organizationId === selection.id);
+}
+
+/** Pin only the chosen claim; other claimants do not authorize this decision. */
 export function observedDomainClaimsEvidence(
   normalizedEmail: string,
   claims: VerifiedAffiliationBasis["claims"],
+  selection?: DomainClaimSelection,
 ): AuthorizationEvidence[] {
-  const observed = JSON.stringify(claims);
-  const domains = JSON.stringify(organizationDomainCandidates(normalizedEmail));
-  const applications = claims
-    .filter((claim) => claim.applicationId)
-    .map((claim) => ({
-      id: claim.applicationId,
-      name: claim.applicationName ?? null,
-      updatedAt: claim.applicationUpdatedAt ?? null,
-    }));
-  const evidence: AuthorizationEvidence[] = [
-    {
-      sql: `SELECT 1 WHERE NOT EXISTS (
-      SELECT id,domain,organization_id,application_id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
-      EXCEPT SELECT json_extract(value,'$.id'),json_extract(value,'$.domain'),json_extract(value,'$.organizationId'),json_extract(value,'$.applicationId') FROM json_each(?)
-    ) AND NOT EXISTS (
-      SELECT json_extract(value,'$.id'),json_extract(value,'$.domain'),json_extract(value,'$.organizationId'),json_extract(value,'$.applicationId') FROM json_each(?)
-      EXCEPT SELECT id,domain,organization_id,application_id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
-    )`,
-      bindings: [domains, observed, observed, domains],
-    },
+  if (!selection)
+    return [
+      {
+        sql: "SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?)))",
+        bindings: [JSON.stringify(organizationDomainCandidates(normalizedEmail))],
+      },
+    ];
+  return [
+    verifiedRepresentationDomainEvidence(normalizedEmail, selection.domain),
+    ...selectedDomainClaims(claims, selection).map((claim) => ({
+      sql: "SELECT 1 FROM organization_domain_claims WHERE id=? AND domain=? AND organization_id=? AND application_id IS NULL",
+      bindings: [claim.id, claim.domain, claim.organizationId],
+    })),
   ];
-  if (applications.length)
-    evidence.push({
-      sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM json_each(?) observed WHERE NOT EXISTS (
-      SELECT 1 FROM member_applications application WHERE application.id=json_extract(observed.value,'$.id')
-        AND application.organization_name IS json_extract(observed.value,'$.name')
-        AND application.updated_at IS json_extract(observed.value,'$.updatedAt')
-    ))`,
-      bindings: [JSON.stringify(applications)],
-    });
-  return evidence;
+}
+
+/** New organization creation cannot race a provisional application on the selected domain. */
+export function noPendingOrganizationApplicationEvidence(domain: string): AuthorizationEvidence {
+  return {
+    sql: "SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND application_id IS NOT NULL)",
+    bindings: [domain],
+  };
 }
 
 /** Canonical bounded claim observation, shared by affiliation reads and application continuations. */
@@ -133,6 +153,20 @@ export function decodeDomainClaimsObservation(result: D1StatementResult) {
   return verifiedAffiliationBasisSchema.shape.claims.parse(boundedDomainClaimsRows(result));
 }
 
-export function domainClaimsObservationFingerprint(claims: VerifiedAffiliationBasis["claims"]) {
-  return sha256Hex(JSON.stringify(verifiedAffiliationBasisSchema.shape.claims.parse(claims)));
+export function domainClaimsObservationFingerprint(
+  claims: VerifiedAffiliationBasis["claims"],
+  selection: DomainClaimSelection,
+) {
+  return sha256Hex(
+    JSON.stringify({
+      domain: selection.domain,
+      organizationId: selection.id ?? null,
+      name: normalizeOrgName(selection.name),
+      claims: selectedDomainClaims(claims, selection).map(({ id, domain, organizationId }) => ({
+        id,
+        domain,
+        organizationId,
+      })),
+    }),
+  );
 }

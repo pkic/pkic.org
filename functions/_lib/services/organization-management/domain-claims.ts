@@ -89,7 +89,7 @@ export async function listOrganizationDomains(
 
 const INELIGIBLE_DOMAIN = "Free and disposable mail domains and public suffixes never belong to an organization.";
 
-/** Refuses an ineligible or already-owned domain. */
+/** Refuses an ineligible domain or a duplicate claim by this organization. */
 async function assertClaimable(db: DatabaseLike, organizationId: string, domain: string) {
   // A registrable domain or an explicit subdomain of one; never mail anyone can sign up for.
   if (!workEmailDomain(domain))
@@ -100,26 +100,19 @@ async function assertClaimable(db: DatabaseLike, organizationId: string, domain:
   const results = await db.batch([
     db.prepare("SELECT name,merged_into_organization_id FROM organizations WHERE id=?").bind(organizationId),
     db
-      .prepare(`SELECT claim.id,claim.domain,claim.application_id AS applicationId,claim.organization_id AS organizationId,
-      EXISTS(SELECT 1 FROM organization_domain_claims entry WHERE entry.domain=claim.domain AND entry.organization_id=?) AS owned
-      FROM organization_domain_claims claim WHERE claim.domain=? LIMIT 1`)
-      .bind(organizationId, domain),
+      .prepare(`SELECT
+      EXISTS(SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?) AS owned,
+      EXISTS(SELECT 1 FROM organization_domain_claims WHERE domain=?) AS shared`)
+      .bind(domain, organizationId, domain),
   ]);
   const organization = batchFirst<{ name: string; merged_into_organization_id: string | null }>(results[0]);
   if (!organization) throw new AppError(404, "ORGANIZATION_NOT_FOUND", "Organization not found");
   if (organization.merged_into_organization_id)
     throw new AppError(409, "ORGANIZATION_MERGED", `${organization.name} was merged into another organization`);
-  const claim = batchFirst<{
-    id: string;
-    domain: string;
-    applicationId: string | null;
-    organizationId: string | null;
-    owned: number;
-  }>(results[1]);
-  if (!claim) return null;
-  if (claim.owned)
+  const claims = batchFirst<{ owned: number; shared: number }>(results[1])!;
+  if (claims.owned)
     throw new AppError(409, "ORGANIZATION_DOMAIN_ALREADY_CLAIMED", `This organization already claims ${domain}`);
-  return claim;
+  return Boolean(claims.shared);
 }
 
 function isDomainClaimRace(error: unknown): boolean {
@@ -132,7 +125,7 @@ export async function claimOrganizationDomain(
   organizationId: string,
   input: OrganizationDomainClaimCreate,
 ): Promise<{ domain: OrganizationDomain }> {
-  const existingClaim = await assertClaimable(db, organizationId, input.domain);
+  await assertClaimable(db, organizationId, input.domain);
   const at = nowIso();
   const authorizedDb = authorizedOrganizationMutationDb(db, actor, "organizations:write");
   const insert = await prepareClaimDomainForOrganization(
@@ -147,14 +140,6 @@ export async function claimOrganizationDomain(
         sql: "SELECT 1 FROM organizations WHERE id=? AND merged_into_organization_id IS NULL",
         bindings: [organizationId],
       }),
-      ...(existingClaim
-        ? [
-            prepareStateGuard(authorizedDb, {
-              sql: "SELECT 1 FROM organization_domain_claims WHERE id=? AND domain=? AND application_id IS ? AND organization_id IS ?",
-              bindings: [existingClaim.id, input.domain, existingClaim.applicationId, existingClaim.organizationId],
-            }),
-          ]
-        : []),
       insert!,
       prepareAuditLog(
         authorizedDb,
@@ -189,8 +174,8 @@ export async function previewOrganizationDomainClaim(
   organizationId: string,
   domain: string,
 ): Promise<OrganizationDomainClaimPreview> {
-  const existingClaim = await assertClaimable(db, organizationId, domain);
-  const shared = existingClaim
+  const existingClaims = await assertClaimable(db, organizationId, domain);
+  const shared = existingClaims
     ? true
     : Boolean(
         await first(

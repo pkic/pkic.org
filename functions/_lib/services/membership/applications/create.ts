@@ -238,7 +238,7 @@ export async function createMemberApplication(
     ...(claimsRead ? [db.prepare(claimsRead.sql).bind(...claimsRead.bindings)] : []),
   ]);
   const claims = selection ? decodeDomainClaimsObservation(results[3 + formRead.statements.length]) : [];
-  if (selection && (await domainClaimsObservationFingerprint(claims)) !== selection.claimsFingerprint)
+  if (selection && (await domainClaimsObservationFingerprint(claims, selection)) !== selection.claimsFingerprint)
     throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Confirm your organization again before applying.");
   const category = requireMembershipCategoryResult(categoryRead.decode(results[0]), input.membershipCategory);
   const workflow = await requireCategoryWorkflow(
@@ -325,7 +325,9 @@ export async function createMemberApplication(
       ? observedDomainClaimsEvidence(input.applicantEmail, []).map((evidence) => prepareStateGuard(db, evidence))
       : []),
     ...(selection
-      ? observedDomainClaimsEvidence(input.applicantEmail, claims).map((evidence) => prepareStateGuard(db, evidence))
+      ? observedDomainClaimsEvidence(input.applicantEmail, claims, selection).map((evidence) =>
+          prepareStateGuard(db, evidence),
+        )
       : []),
     ...(newOrganizationName
       ? [

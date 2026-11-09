@@ -9,6 +9,7 @@ const migrationName = "0035_membership_portal_governance.sql";
 const retirementMigrationName = "0037_retire_legacy_account_role.sql";
 const attendanceMigrationName = "0039_event_promotion_kits.sql";
 const groupErasureMigrationName = "0042_incorrect_representation_group_erasure.sql";
+const sharedDomainsMigrationName = "0043_shared_organization_domains.sql";
 const migrationDir = fileURLToPath(new URL("../migrations/", import.meta.url));
 
 function wrangler(args, stdio = "inherit") {
@@ -91,7 +92,12 @@ export function apply(environment) {
 
   // Trigger cutovers share the atomic file-import workaround, including prerequisites.
   let previousCutover = migrationName;
-  for (const cutover of [retirementMigrationName, attendanceMigrationName, groupErasureMigrationName]) {
+  for (const cutover of [
+    retirementMigrationName,
+    attendanceMigrationName,
+    groupErasureMigrationName,
+    sharedDomainsMigrationName,
+  ]) {
     if (pending.includes(cutover)) {
       for (const name of pending.filter((name) => name > previousCutover && name <= cutover)) {
         importMigration(environment, name);

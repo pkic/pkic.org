@@ -67,7 +67,7 @@ test("existing members get sign-in instructions and old join links remain helpfu
   await expect(page.getByRole("button", { name: "Account menu" })).toBeVisible();
 });
 
-test("a verified address on a shared domain chooses its member organization", async ({ page }) => {
+test("a verified address on a shared domain needs approval for member access", async ({ page }) => {
   const suffix = uniqueSuffix();
   await signInToPortal(page, e2eAdminEmail("shared-organization-domains"));
   const first = await createMember(page, { organizationName: `Shared First ${suffix}` });
@@ -124,7 +124,13 @@ test("a verified address on a shared domain chooses its member organization", as
   await page.setViewportSize({ width: 1280, height: 800 });
   await choice.selectOption({ label: `Shared Second ${suffix}` });
   await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(page.locator("[data-join-organization-access]")).toBeVisible();
+  await expect(page.locator("[data-join-support-required]")).toBeVisible();
+  expect((await page.context().cookies()).some((cookie) => cookie.name === "pkic_session")).toBe(false);
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 812 });
+    await page.screenshot({ path: test.info().outputPath(`shared-member-review-required-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.context().clearCookies();
   const beforeIndependent = await capturedEmailCount();
   await page.goto("/join/");
