@@ -178,7 +178,7 @@ describe("event proposal mailbox proof", () => {
     expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toHaveLength(0);
   });
 
-  it("lets a proposer confirm a different organization beside a pending application", async () => {
+  it("requires review for a differently named organization on a reserved domain", async () => {
     await seedEventAndAdmin(env.DB);
     const pending = await seedMemberApplication({ applicantEmail: "pending@held-domain.example" });
     const token = await start("dana@held-domain.example");
@@ -203,24 +203,8 @@ describe("event proposal mailbox proof", () => {
         jobTitle: "Researcher",
       },
     });
-    expect(selected.status, await selected.clone().text()).toBe(200);
-    const prepared = eventProposalProofVerifyResponseSchema.parse(await selected.json());
-    if (prepared.status !== "ready" || !prepared.affiliation?.contextToken)
-      throw new Error("Expected an explicit organization choice");
-    const submitted = await request(
-      "",
-      proposal(
-        { continuationToken: prepared.continuationToken, unaffiliatedAttestation: false },
-        {
-          firstName: "Dana",
-          lastName: "Speaker",
-          organizationName: "Different Organization",
-          jobTitle: "Researcher",
-          organizationContextToken: prepared.affiliation.contextToken,
-        },
-      ),
-    );
-    expect(submitted.status, await submitted.clone().text()).toBe(200);
+    expect(selected.status, await selected.clone().text()).toBe(409);
+    expect(await selected.json()).toMatchObject({ error: { code: "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED" } });
     expect(
       await queryAll(
         env.DB,
@@ -229,12 +213,10 @@ describe("event proposal mailbox proof", () => {
       ),
     ).toEqual([{ application_id: pending, organization_id: null }]);
     expect(
-      await queryAll(
-        env.DB,
-        `SELECT organization.name FROM identities identity JOIN organizations organization ON organization.id=identity.organization_id JOIN users person ON person.id=identity.user_id WHERE person.normalized_email=? AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL`,
-        ["dana@held-domain.example"],
-      ),
-    ).toEqual([{ name: "Different Organization" }]);
+      await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", ["dana@held-domain.example"]),
+    ).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM organizations WHERE name='Different Organization'")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toEqual([]);
   });
 
   it("reuses a known person's names without duplicate input and limits the proof catalog to its owner", async () => {
