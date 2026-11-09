@@ -5,30 +5,60 @@ import { parse } from "yaml";
 import { z } from "zod";
 import type { ModelVersionSource } from "../assets/shared/model-versions";
 
-const textItem = z.object({ id: z.string(), text: z.string() });
-const question = z.object({ id: z.string(), question: z.string(), guidance: z.string().default("") });
+/**
+ * Model text is rendered by the site's own Markdown pipeline, so it may only contain Markdown:
+ * raw HTML and script-capable link protocols fail the build instead of being rewritten.
+ */
+const modelText = z
+  .string()
+  .refine((value) => !/<[A-Za-z!/?]/.test(value), "Model text must be Markdown without raw HTML")
+  .refine(
+    (value) => !/\]\(\s*(?:javascript|vbscript|data):/i.test(value),
+    "Model links must not use script-capable protocols",
+  );
+const itemId = z.string().regex(/^[0-9]+(?:\.[a-z0-9]+)+$/, "Model item identifiers use dotted segments");
+const textItem = z.object({ id: itemId, text: modelText });
+const criterion = textItem.extend({ assessmentQuestionIds: z.array(itemId).optional() });
+const question = z.object({
+  id: itemId,
+  question: modelText,
+  guidance: modelText.default(""),
+  expectedInput: modelText.optional(),
+  purpose: modelText.optional(),
+});
+const section = z.object({
+  title: modelText,
+  body: modelText,
+  placement: z.enum(["after-criteria", "after-assessment", "after-evidence-checklist"]).default("after-criteria"),
+});
 // This is the rendering projection; the canonical model contract remains in pkic/pqcmm.
 export const readableModelSchema = z.object({
-  model: z.object({ id: z.literal("pqcmm"), version: z.string(), description: z.string().default("") }),
-  scoring: z.object({ rule: z.string() }),
+  model: z.object({ id: z.literal("pqcmm"), version: z.string(), description: modelText.default("") }),
+  scoring: z.object({ rule: modelText }),
   levels: z
     .array(
       z.object({
         number: z.number().int().min(0).max(5),
         name: z.string(),
         title: z.string(),
-        description: z.string(),
-        summary: z.string(),
+        description: modelText,
+        summary: modelText,
         sourcePage: z.string().regex(/^\/wg\/pqc\/pqcmm\/levels\/[a-z0-9-]+\/$/),
-        criteria: z.object({ introduction: z.string(), items: z.array(textItem) }),
+        criteria: z.object({ introduction: modelText, items: z.array(criterion) }),
         assessment: z.object({
-          methodology: z.string(),
-          groups: z.array(z.object({ name: z.string(), questions: z.array(question) })),
+          methodology: modelText,
+          groups: z.array(
+            z.object({
+              id: itemId.optional(),
+              name: modelText,
+              kind: z.enum(["assessment", "intake"]).default("assessment"),
+              introduction: modelText.optional(),
+              questions: z.array(question),
+            }),
+          ),
         }),
-        evidenceChecklist: z.object({ introduction: z.string(), items: z.array(textItem) }),
-        sections: z
-          .array(z.object({ title: z.string(), body: z.string(), placement: z.string().optional() }))
-          .default([]),
+        evidenceChecklist: z.object({ introduction: modelText, items: z.array(textItem) }),
+        sections: z.array(section).default([]),
       }),
     )
     .min(1),

@@ -1565,14 +1565,20 @@ test("reclassified model draft preserves feedback and redirects its former versi
   await page.screenshot({ path: testInfo.outputPath("sticky-version-notice.png") });
 
   await expect(page.getByRole("link", { name: "Suggest a change on GitHub", includeHidden: true })).toHaveCount(1);
-  await page.getByRole("heading", { name: "Criterion 3.1.5", exact: true }).evaluate((element) => {
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    const selection = window.getSelection()!;
-    selection.removeAllRanges();
-    selection.addRange(range);
-    document.dispatchEvent(new Event("selectionchange"));
-  });
+  const criterion = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("link", { name: "Link to 3.1.5", exact: true }) });
+  await criterion
+    .getByRole("cell")
+    .nth(1)
+    .evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new Event("selectionchange"));
+    });
   const feedback = page.getByRole("link", { name: "Suggest a change on GitHub", exact: true });
   await expect
     .poll(async () => new URL((await feedback.getAttribute("href"))!).searchParams.get("item-id"))
@@ -1592,7 +1598,8 @@ test("released model history stays readable while the default overview remains u
   page,
 }, testInfo) => {
   await page.goto("/wg/pqc/pqcmm/versions/1.0.1/levels/3-advanced/");
-  await expect(page.getByRole("heading", { name: "Criterion 3.1.5", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Link to 3.1.5", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What Level 3 Means", exact: true })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "Draft 1.1.0" })).toHaveCount(0);
   await expect(page.getByText("Released model 1.0.1.", { exact: false })).toHaveCount(0);
   await expect(page.locator("main > section.pk-section")).toHaveCount(0);

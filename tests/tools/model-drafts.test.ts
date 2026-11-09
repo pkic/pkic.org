@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { modelDraftSchema, modelVersionLinks } from "../../assets/shared/model-versions";
 import { verifyModelVersion } from "../../site/model-version-source";
-import { modelVersionMarkdown } from "../../site/model-version-markdown";
+import { createModelLevelContent } from "../../site/model-level-content";
 
 const bytes = readFileSync("tests/fixtures/model-preview.yaml", "utf8");
 const digest = createHash("sha256").update(bytes).digest("hex");
@@ -55,14 +55,14 @@ describe("registered model drafts", () => {
     );
     expect(modelVersionLinks([draft, other], `${draft.root}missing/`, routes).items[1].href).toBe(other.root);
   });
-  it("renders criteria, checks and evidence while keeping level links inside the selected draft", () => {
+  it("places criteria, checks and evidence from the pinned draft", () => {
     const parsed = verifyModelVersion(bytes, draft);
-    const markdown = modelVersionMarkdown(parsed, draft.root, 1);
-    expect(markdown).toContain("Criterion 1.1.1");
-    expect(markdown).toContain("Question 1.2.1");
-    expect(markdown).toContain("Evidence 1.e.1");
-    expect(markdown).toContain(`${draft.root}levels/1-initial/`);
-    expect(markdown).not.toContain("](/wg/pqc/pqcmm/levels/");
+    const content = createModelLevelContent(parsed.levels[0]!);
+    const call = (part: string) => content.render({ positional: [], props: { part } });
+    expect(call("criteria")).toContain("id: 1.1.1");
+    expect(call("questions")).toContain("id: 1.2.1");
+    expect(call("evidence")).toContain("See [Level 1](/wg/pqc/pqcmm/levels/1-initial/)");
+    expect(content.unplaced()).toEqual(["methodology"]);
   });
 });
 

@@ -15,6 +15,8 @@ import { EventSpeakerManagement } from "../../../assets/ts/site/EventSpeakerMana
 import { EventSpeakerPresentation } from "../../../assets/ts/site/EventSpeakerPresentation";
 import { renderContentAgenda } from "./site-agenda";
 import { buttonVariant, renderContentCards } from "./site-content-cards";
+import { renderContentItemTable } from "./site-content-item-table";
+import { renderModelContent } from "./site-content-model";
 import { renderToStringAsync as render } from "preact-render-to-string";
 import { renderSiteMarkdown } from "./site-markdown-processor";
 import {
@@ -69,6 +71,8 @@ export interface ContentComponentContext {
   eventAssetUrls?: (pattern?: string) => string[];
   listing: (kind: ContentCollectionKind, limit?: number) => SiteListing;
   membershipDocuments?: () => Promise<MembershipDocument[]>;
+  /** Markdown for `{{< model >}}`, supplied only by a page published from a pinned model version. */
+  modelContent?: (call: ContentCall) => string;
   publication?: SitePublicationSnapshot;
   route: string;
   sourcePath: string;
@@ -207,6 +211,9 @@ async function glossary(call: ContentCall): Promise<RenderedCall> {
   terms.sort((a, b) => a.term.localeCompare(b.term));
   return component(await render(<ContentGlossary terms={terms} />));
 }
+
+const modelContent: ContentRenderer = async (call, context) =>
+  component(await renderModelContent(call, context, (markdown) => renderContentMarkdown(markdown, context)));
 
 async function maturity(call: ContentCall): Promise<RenderedCall> {
   const data = objectValue(call.inner);
@@ -391,7 +398,10 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
     );
   },
   ltl: trustLists,
+  "item-table": async (call) => component(await renderContentItemTable(call, inlineMarkdownHtml)),
   "maturity-staircase": maturity,
+  model: modelContent,
+  "model-section": (call, context) => modelContent({ ...call, props: { ...call.props, part: "section" } }, context),
   members: async (call, context) => {
     const island = await memberWall(call, context);
     return component(
