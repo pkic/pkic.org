@@ -62,11 +62,12 @@ export function registrationPopulationFilter(
     dayBindings.push(params.attendance_type);
   }
   const scopedToDay = Boolean(dates.length || params.attendance_type);
-  const dayWaitlist = `EXISTS (SELECT 1 FROM event_day_waitlist_entries w
+  const waitlistExists = (statusClause: string) => `EXISTS (SELECT 1 FROM event_day_waitlist_entries w
     WHERE w.registration_id = r.id ${scopedToDay ? "AND w.event_day_id = ed.id" : ""}
-      AND ${dayWaitlistStatusSql("w")} ${waitlistStatus ? "= ?" : "IN ('waiting', 'offered')"})`;
+      AND ${dayWaitlistStatusSql("w")} ${statusClause})`;
+  const dayWaitlist = waitlistExists("IN ('waiting', 'offered')");
   if (waitlistStatus) {
-    (scopedToDay ? dayConditions : conditions).push(dayWaitlist);
+    (scopedToDay ? dayConditions : conditions).push(waitlistExists("= ?"));
     (scopedToDay ? dayBindings : bindings).push(waitlistStatus);
   }
   if ((dates.length || params.attendance_type) && params.waitlisted)
