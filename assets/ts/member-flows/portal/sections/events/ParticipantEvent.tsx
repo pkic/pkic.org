@@ -255,7 +255,7 @@ function ParticipantProposals({ event }: { event: EventDetail }) {
       caption="Your event proposals"
       columns={[
         {
-          header: "Name",
+          header: "Title",
           cell: (proposal) => (
             <a href={href(eventParticipantRecordPath(event.slug, "proposal", proposal.id))}>{proposal.title}</a>
           ),

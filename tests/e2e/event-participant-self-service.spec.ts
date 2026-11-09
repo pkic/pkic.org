@@ -886,7 +886,7 @@ test("a speaker reopens accepted terms and manages a presentation from its own p
     await signInToPortal(speaker, participantEmail);
     await speaker.goto(`/portal/#/events/${PROPOSAL_EVENT_SLUG}/submissions`);
     await expect(speaker.getByRole("table", { name: "Your event proposals" }).getByRole("columnheader")).toHaveText([
-      "Name",
+      "Title",
       "Status",
       "Participation",
       "Role",

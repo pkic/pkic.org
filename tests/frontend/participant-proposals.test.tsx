@@ -47,7 +47,7 @@ it("names the proposal columns consistently for a speaker", async () => {
   await act(() => render(<ParticipantEvent event={event} tab="submissions" />, host));
   await vi.waitFor(() => expect(host.textContent).toContain("Quantum trust"));
   expect([...host.querySelectorAll("thead th")].map((cell) => cell.textContent?.trim())).toEqual([
-    "Name",
+    "Title",
     "Status",
     "Participation",
     "Role",
