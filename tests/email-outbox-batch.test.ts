@@ -101,11 +101,11 @@ describe("email outbox batch processing", () => {
     const job = SCHEDULED_JOB_DEFINITIONS.find((definition) => definition.key === "email_outbox")!;
     const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 900);
     const result = await job.run({ env: { ...env, DB: db }, d1QueryBudget: budget });
-    expect(result).toMatchObject({ summary: { processed: 105, failed: 0, batches: 11, stoppedReason: "empty" } });
+    expect(result).toMatchObject({ summary: { processed: 105, failed: 0, selections: 2, stoppedReason: "empty" } });
     expect(result).not.toHaveProperty("nextRunAt");
-    // 210 per-message claim/settlement statements, 22 selection/recovery
-    // statements, and six shared template/resource reads across all 11 batches.
-    expect(budget.usedQueries()).toBeLessThanOrEqual(238);
+    // 210 claim/settlement statements, four selection/recovery statements,
+    // and six shared template/resource reads across the entire pool.
+    expect(budget.usedQueries()).toBeLessThanOrEqual(220);
     expect(send).toHaveBeenCalledTimes(105);
     const remaining = await queryAll<{ count: number }>(
       env.DB,
@@ -113,6 +113,43 @@ describe("email outbox batch processing", () => {
       [JSON.stringify(ids)],
     );
     expect(remaining[0].count).toBe(0);
+  });
+
+  it("refills free channels across selections while one send is still pending", async () => {
+    await queueN(env.DB, eventId, 25);
+    let releaseFirst!: () => void;
+    const first = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const deliveredIds = new Set<string>();
+    let active = 0;
+    let peak = 0;
+    const send = vi.fn(async (_url: string, init: RequestInit) => {
+      const payload = JSON.parse(String(init.body));
+      const id = payload.personalizations[0].custom_args.outbox_id as string;
+      expect(deliveredIds.has(id)).toBe(false);
+      deliveredIds.add(id);
+      active++;
+      peak = Math.max(peak, active);
+      if (deliveredIds.size === 1) await first;
+      active--;
+      return new Response(null, { status: 202, headers: { "x-message-id": id } });
+    });
+    vi.stubGlobal("fetch", send);
+    const job = SCHEDULED_JOB_DEFINITIONS.find((definition) => definition.key === "email_outbox")!;
+    const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 900);
+    const running = job.run({ env: { ...env, DB: db, SCHEDULED_OUTBOX_LIMIT: "10" }, d1QueryBudget: budget });
+    try {
+      await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(25));
+      expect(active).toBe(1);
+      expect(peak).toBeGreaterThan(1);
+      expect(peak).toBeLessThanOrEqual(10);
+    } finally {
+      releaseFirst();
+      await running;
+    }
+    expect(await running).toMatchObject({ summary: { processed: 25, failed: 0, stoppedReason: "empty" } });
+    expect(deliveredIds.size).toBe(25);
   });
 
   it("continues past a full batch of obsolete mail to send the ready messages behind it", async () => {
@@ -127,7 +164,7 @@ describe("email outbox batch processing", () => {
     const job = SCHEDULED_JOB_DEFINITIONS.find((definition) => definition.key === "email_outbox")!;
     const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 900);
     const result = await job.run({ env: { ...env, DB: db }, d1QueryBudget: budget });
-    expect(result).toMatchObject({ summary: { processed: 12, batches: 2, stoppedReason: "empty" } });
+    expect(result).toMatchObject({ summary: { processed: 12, selections: 1, stoppedReason: "empty" } });
     expect(send).toHaveBeenCalledTimes(2);
   });
 
@@ -179,7 +216,7 @@ describe("email outbox batch processing", () => {
       const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 900);
       const result = await job.run({ env: { ...env, DB: db }, d1QueryBudget: budget });
       expect(result).toMatchObject({
-        summary: { processed: 10, batches: 1, stoppedReason: "time_limit" },
+        summary: { processed: 10, selections: 1, stoppedReason: "time_limit" },
         nextRunAt: expect.any(String),
       });
       expect(send).toHaveBeenCalledTimes(10);
