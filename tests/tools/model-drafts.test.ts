@@ -57,10 +57,12 @@ describe("registered model drafts", () => {
   });
   it("places criteria, checks and evidence from the pinned draft", () => {
     const parsed = verifyModelVersion(bytes, draft);
-    const content = createModelLevelContent(parsed.levels[0]!);
+    const content = createModelLevelContent(parsed, parsed.levels[0]!);
     const call = (part: string) => content.render({ positional: [], props: { part } });
     expect(call("criteria")).toContain("id: 1.1.1");
-    expect(call("questions")).toContain("id: 1.2.1");
+    const questions = call("questions");
+    expect(questions).toContain("id: 1.2.1");
+    expect(questions).toContain('label: "1"');
     expect(call("evidence")).toContain("See [Level 1](/wg/pqc/pqcmm/levels/1-initial/)");
     expect(content.unplaced()).toEqual(["methodology"]);
   });

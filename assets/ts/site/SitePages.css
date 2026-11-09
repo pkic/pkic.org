@@ -62,7 +62,6 @@
     align-items: start;
   }
 
-  .pk-content-component--criteria,
   .pk-content-component--donation,
   .pk-content-component--sidebar,
   .pk-content-island {
@@ -71,10 +70,6 @@
     border-radius: var(--pk-radius-lg);
     background: var(--pk-surface-raise);
     box-shadow: var(--pk-shadow-1);
-  }
-
-  .pk-content-component--criteria {
-    border-inline-start: var(--pk-2) solid var(--pk-accent);
   }
 
   .pk-content-figure {

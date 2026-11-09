@@ -35,17 +35,22 @@ const model = (overrides: Record<string, unknown> = {}) => ({
     },
   ],
 });
-const level = (overrides?: Record<string, unknown>) => readableModelSchema.parse(model(overrides)).levels[0]!;
+const parsed = (overrides?: Record<string, unknown>) => readableModelSchema.parse(model(overrides));
+const content = (overrides?: Record<string, unknown>) => {
+  const value = parsed(overrides);
+  return createModelLevelContent(value, value.levels[0]!);
+};
 const call = (props: Record<string, string>, inner?: string) => ({ positional: [], props, inner });
 
 describe("model level content placed in authored pages", () => {
   it("keeps intake inputs, purposes and criterion links that the page renders", () => {
-    const content = createModelLevelContent(level());
-    const criteria = content.render(call({ part: "criteria" }));
-    expect(criteria).toMatch(/^\{\{< criteria >\}\}\nA product is at Level 0 when:/);
-    expect(criteria).toContain("Assessed by");
-    expect(criteria).toContain("[0.2.1](#0.2.1)");
-    const intake = content.render(call({ part: "questions", group: "0.2" }));
+    const levelContent = content();
+    const criteria = levelContent.render(call({ part: "criteria" }));
+    expect(criteria).toMatch(/^\{\{< requirements >\}\}/);
+    expect(criteria).toContain("A product is at Level 0 when:");
+    expect(criteria).toContain("Assessed by Supplier Intake Questions [1](#0.2.1)");
+    expect(criteria).not.toContain("includes:");
+    const intake = levelContent.render(call({ part: "questions", group: "0.2" }));
     expect(intake).not.toContain("### Supplier Intake Questions");
     expect(intake).toContain("These are planning inputs.");
     expect(intake).toContain("Expected input");
@@ -53,17 +58,17 @@ describe("model level content placed in authored pages", () => {
   });
 
   it("reports model content the page does not place and rejects placing it twice", () => {
-    const content = createModelLevelContent(level());
-    content.render(call({ part: "criteria" }));
-    expect(content.unplaced()).toEqual(["question group 0.2", 'section "Taxonomy"']);
-    expect(() => content.render(call({ part: "criteria" }))).toThrow(/placed more than once/);
-    expect(() => content.render(call({ part: "summary" }))).toThrow(/Unknown model part/);
+    const levelContent = content();
+    levelContent.render(call({ part: "criteria" }));
+    expect(levelContent.unplaced()).toEqual(["question group 0.2", 'section "Taxonomy"']);
+    expect(() => levelContent.render(call({ part: "criteria" }))).toThrow(/placed more than once/);
+    expect(() => levelContent.render(call({ part: "summary" }))).toThrow(/Unknown model part/);
   });
 
   it("uses an authored fallback until a model version carries the section", () => {
-    const withSection = createModelLevelContent(level());
+    const withSection = content();
     expect(withSection.render(call({ part: "section", title: "Taxonomy" }, "Fallback"))).toBe("- Data in transit");
-    const withoutSection = createModelLevelContent(level({ sections: [] }));
+    const withoutSection = content({ sections: [] });
     expect(withoutSection.render(call({ part: "section", title: "Taxonomy" }, "\nFallback\n"))).toBe("Fallback");
   });
 

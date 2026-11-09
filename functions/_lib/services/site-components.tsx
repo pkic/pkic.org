@@ -15,7 +15,7 @@ import { EventSpeakerManagement } from "../../../assets/ts/site/EventSpeakerMana
 import { EventSpeakerPresentation } from "../../../assets/ts/site/EventSpeakerPresentation";
 import { renderContentAgenda } from "./site-agenda";
 import { buttonVariant, renderContentCards } from "./site-content-cards";
-import { renderContentItemTable } from "./site-content-item-table";
+import { renderContentItemTable, renderContentRequirements } from "./site-content-identified-items";
 import { renderModelContent } from "./site-content-model";
 import { renderToStringAsync as render } from "preact-render-to-string";
 import { renderSiteMarkdown } from "./site-markdown-processor";
@@ -315,7 +315,6 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
         <ContentColumn html={await renderContentMarkdown(call.inner ?? "", context)} options={call.props} />,
       ),
     ),
-  criteria: frame("criteria"),
   "donation-disclaimer": async () =>
     component(
       await render(
@@ -422,6 +421,7 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
       ),
     ),
   "recent-posts": (call, context) => collection("recent-posts", call, context),
+  requirements: async (call) => component(await renderContentRequirements(call, inlineMarkdownHtml)),
   row: async (call, context) =>
     component(await render(<ContentRow html={await renderContentMarkdown(call.inner ?? "", context)} />)),
   "self-assessment": (call, context) =>

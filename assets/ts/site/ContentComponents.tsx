@@ -7,7 +7,7 @@ import "./ContentComponents.css";
 import "./ContentLayout.css";
 import "./ContentGrid.scss";
 
-export type ContentFrameKind = "cards" | "columns" | "criteria" | "donation" | "generic" | "sidebar" | "sub";
+export type ContentFrameKind = "cards" | "columns" | "donation" | "generic" | "sidebar" | "sub";
 
 export function ContentFrame({
   children,
@@ -300,49 +300,6 @@ export function ContentFaq({
           ))}
         </section>
       ))}
-    </div>
-  );
-}
-
-/**
- * Identified items (requirements, questions, evidence) in the shared Markdown table presentation.
- * Each row is a permalink target and carries its identifier for selection feedback.
- */
-export function ContentItemTable({
-  columns,
-  items,
-}: {
-  columns: string[];
-  items: Array<{ cellsHtml: string[]; id: string }>;
-}) {
-  return (
-    <div class="pk-table__scroll pk-table__scroll--prose">
-      <table class="pk-table pk-content-item-table">
-        <thead>
-          <tr>
-            <th scope="col">ID</th>
-            {columns.map((column) => (
-              <th key={column} scope="col">
-                {column}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.id} id={item.id} data-content-item-id={item.id}>
-              <td>
-                <a href={`#${item.id}`} aria-label={`Link to ${item.id}`}>
-                  <code>{item.id}</code>
-                </a>
-              </td>
-              {item.cellsHtml.map((html, index) => (
-                <td key={columns[index]} dangerouslySetInnerHTML={{ __html: html }} />
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }

@@ -45,7 +45,7 @@ export async function loadModelPage(entry: ModelEntry, version: ModelVersion, so
   );
   const level = model?.levels.find((item) => item.sourcePage === sourceRoute);
   if (model && !level) throw new Error(`Model ${version.version} has no level for ${sourceRoute}`);
-  const levelContent = level ? createModelLevelContent(level) : undefined;
+  const levelContent = model && level ? createModelLevelContent(model, level) : undefined;
   const base = await loadSiteContent(sourceRoute, {
     publication,
     parameters: { version: version.status === "draft" ? `${version.version}-draft` : version.version },

@@ -7,9 +7,20 @@ type ModelPart = "criteria" | "methodology" | "questions" | "evidence" | "sectio
 
 const PARTS = new Set<ModelPart>(["criteria", "methodology", "questions", "evidence", "section"]);
 
+/** The position within its list; the full identifier stays the anchor and the cited reference. */
+function position(id: string) {
+  return id.split(".").at(-1)!;
+}
+
+function shortcode(name: string, data: unknown) {
+  return `{{< ${name} >}}\n${stringify(data).trim()}\n{{< /${name} >}}`;
+}
+
 /** Authored Markdown for the shared `item-table` component; identifiers become row permalinks. */
 function itemTable(columns: string[], items: Array<{ id: string; cells: string[] }>) {
-  return items.length ? `{{< item-table >}}\n${stringify({ columns, items }).trim()}\n{{< /item-table >}}` : "";
+  return items.length
+    ? shortcode("item-table", { columns, items: items.map((item) => ({ ...item, label: position(item.id) })) })
+    : "";
 }
 
 function questionGroupMarkdown(group: ModelLevel["assessment"]["groups"][number], withHeading: boolean) {
@@ -26,6 +37,46 @@ function questionGroupMarkdown(group: ModelLevel["assessment"]["groups"][number]
   return [withHeading ? `### ${group.name}` : "", group.introduction ?? "", table].filter(Boolean).join("\n\n");
 }
 
+/** "Assessed by Algorithm Availability 1, 2 and 4" with each number linking to its question. */
+function assessedBy(level: ModelLevel, ids: string[]) {
+  const groups = new Map<string, string[]>();
+  for (const id of ids) {
+    const group = level.assessment.groups.find((entry) => entry.questions.some((question) => question.id === id));
+    const name = group?.name ?? "Question";
+    groups.set(name, [...(groups.get(name) ?? []), `[${group ? position(id) : id}](#${id})`]);
+  }
+  const list = (links: string[]) =>
+    links.length > 1 ? `${links.slice(0, -1).join(", ")} and ${links.at(-1)}` : (links[0] ?? "");
+  return `Assessed by ${[...groups].map(([name, links]) => `${name} ${list(links)}`).join("; ")}`;
+}
+
+function criteriaMarkdown(model: ReadableModel, level: ModelLevel) {
+  const earlier = model.levels.filter((entry) => entry.number > 0 && entry.number < level.number);
+  return shortcode("requirements", {
+    marker: String(level.number),
+    label: `Level ${level.number} · ${level.name}`,
+    introduction: level.criteria.introduction,
+    ...(earlier.length
+      ? {
+          includes: {
+            label: "Includes every requirement of",
+            links: earlier.map((entry) => ({
+              label: `Level ${entry.number} · ${entry.name}`,
+              href: `${entry.sourcePage}#criteria`,
+            })),
+          },
+        }
+      : {}),
+    item: "Criterion",
+    items: level.criteria.items.map((item) => ({
+      id: item.id,
+      label: position(item.id),
+      text: item.text,
+      ...(item.assessmentQuestionIds?.length ? { note: assessedBy(level, item.assessmentQuestionIds) } : {}),
+    })),
+  });
+}
+
 /**
  * Normative level content placed by `{{< model part="…" >}}` in the page's authored Markdown.
  * Guidance stays authored; every criterion, question group, evidence item and model section must be
@@ -33,7 +84,7 @@ function questionGroupMarkdown(group: ModelLevel["assessment"]["groups"][number]
  * Model sections are placed by title with `{{< model-section >}}`; its inner Markdown is the fallback
  * for model versions that do not carry that section yet.
  */
-export function createModelLevelContent(level: ModelLevel) {
+export function createModelLevelContent(model: ReadableModel, level: ModelLevel) {
   const placed = new Set<string>();
   const place = (key: string) => {
     if (placed.has(key)) throw new Error(`Model content ${key} is placed more than once on ${level.sourcePage}`);
@@ -53,17 +104,7 @@ export function createModelLevelContent(level: ModelLevel) {
     }
     if (part === "criteria") {
       place("criteria");
-      const assessedBy = level.criteria.items.some((item) => item.assessmentQuestionIds?.length);
-      const table = itemTable(
-        assessedBy ? ["Criterion", "Assessed by"] : ["Criterion"],
-        level.criteria.items.map((item) => ({
-          id: item.id,
-          cells: assessedBy
-            ? [item.text, (item.assessmentQuestionIds ?? []).map((id) => `[${id}](#${id})`).join(", ")]
-            : [item.text],
-        })),
-      );
-      return `{{< criteria >}}\n${[level.criteria.introduction, table].filter(Boolean).join("\n\n")}\n{{< /criteria >}}`;
+      return criteriaMarkdown(model, level);
     }
     if (part === "methodology") {
       place("methodology");

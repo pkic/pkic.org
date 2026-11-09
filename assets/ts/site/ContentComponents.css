@@ -47,17 +47,6 @@
     margin-block-end: 0;
   }
 
-  .pk-content-item-table tr[id] {
-    scroll-margin-block-start: calc(var(--pkic-navbar-height) + var(--pk-8));
-  }
-
-  .pk-content-item-table tbody tr:target {
-    background: var(--pk-accent-soft);
-  }
-
-  .pk-content-item-table td:first-child {
-    white-space: nowrap;
-  }
 }
 
 @layer utilities {
