@@ -20,6 +20,8 @@ export interface ScheduledJobOutcome {
   nextRunAt?: string;
   /** Free-form counters recorded for observability only. */
   summary?: Record<string, unknown>;
+  /** The run found no work, so a dedicated job leaves the invocation to the next job. */
+  idle?: boolean;
 }
 
 export interface ScheduledJobDefinition {

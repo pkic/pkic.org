@@ -19,7 +19,7 @@ import {
 } from "../functions/_lib/email/outbox";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
-import type { Env } from "../functions/_lib/types";
+import type { DatabaseLike, Env, StatementLike } from "../functions/_lib/types";
 import { newCapabilityLinkSecret, queuedCapabilityToken } from "../functions/_lib/services/capability-links";
 import { buildBadgeAttachment } from "../functions/_lib/email/attachments";
 import { validPngBytes } from "./helpers/raster-images";
@@ -74,6 +74,41 @@ async function queueN(db: typeof env.DB, eventId: string, count: number): Promis
   return ids;
 }
 
+function failingStatement(error: Error): StatementLike {
+  const statement = {
+    bind: () => statement,
+    run: () => Promise.reject(error),
+    all: () => Promise.reject(error),
+    first: () => Promise.reject(error),
+  } as unknown as StatementLike;
+  return statement;
+}
+
+// A badge row belongs to the registration's user, so the code needs a real owner.
+async function queueBadgeRender(eventId: string, email: string) {
+  const userId = crypto.randomUUID();
+  const registrationId = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO users (id,email,normalized_email,created_at,updated_at) VALUES (?,?,?,datetime('now'),datetime('now'))",
+    ).bind(userId, email, email),
+    env.DB.prepare(
+      "INSERT INTO registrations (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,'registered','test',?,datetime('now'),datetime('now'))",
+    ).bind(registrationId, eventId, userId, crypto.randomUUID()),
+  ]);
+  const code = await createReferralCode(env.DB, {
+    eventId,
+    ownerType: "registration",
+    ownerId: registrationId,
+    length: 10,
+  });
+  const job = prepareBadgeRenderJob(env.DB, code, "2000-01-01T00:00:00.000Z");
+  await job.statement.run();
+  return { code, job };
+}
+
+const emailDeliveryJob = () => SCHEDULED_JOB_DEFINITIONS.find((definition) => definition.key === "email_outbox")!;
+
 describe("email outbox batch processing", () => {
   it("keeps unmocked email delivery on a local-only test endpoint", () => {
     expect(new URL(env.SENDGRID_API_BASE!).hostname).toBe("127.0.0.1");
@@ -84,6 +119,10 @@ describe("email outbox batch processing", () => {
 
   beforeEach(async () => {
     await resetDb();
+    // resetDb keeps this reference table, so release a lease an earlier test stalled.
+    await env.DB.prepare(
+      "UPDATE scheduled_jobs SET running_since=NULL,lease_expires_at=NULL,run_token=NULL WHERE job_key='due_work'",
+    ).run();
     const seed = await seedEventAndAdmin(env.DB);
     eventId = seed.eventId;
     const adminRows = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
@@ -231,6 +270,93 @@ describe("email outbox batch processing", () => {
     }
   });
 
+  it("stops and leaves mail queued when delivery claims cannot be written", async () => {
+    await queueN(env.DB, eventId, 12);
+    const send = makeSendgridMock();
+    vi.stubGlobal("fetch", send);
+    const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 900);
+    const claims = vi.fn();
+    const overloaded: DatabaseLike = {
+      ...db,
+      prepare: (sql) => {
+        if (!sql.includes("SET status = 'sending'")) return db.prepare(sql);
+        claims();
+        return failingStatement(new Error("D1 overloaded"));
+      },
+    };
+
+    await expect(emailDeliveryJob().run({ env: { ...env, DB: overloaded }, d1QueryBudget: budget })).rejects.toThrow(
+      "D1 overloaded",
+    );
+
+    expect(claims.mock.calls.length).toBeLessThanOrEqual(10);
+    expect(send).not.toHaveBeenCalled();
+    expect(await queryAll(env.DB, "SELECT DISTINCT status FROM email_outbox")).toEqual([{ status: "queued" }]);
+  });
+
+  it("reads shared templates again after a failed read", async () => {
+    await queueN(env.DB, eventId, 25);
+    const send = makeSendgridMock();
+    vi.stubGlobal("fetch", send);
+    const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 900);
+    let readFailed = false;
+    const flaky: DatabaseLike = {
+      ...db,
+      prepare: (sql) => {
+        if (readFailed || !sql.includes("active_rank")) return db.prepare(sql);
+        readFailed = true;
+        return failingStatement(new Error("D1 overloaded"));
+      },
+    };
+
+    const result = await emailDeliveryJob().run({ env: { ...env, DB: flaky }, d1QueryBudget: budget });
+
+    // Only messages already waiting on the failed read may share its failure.
+    const { failed } = (result as { summary: { failed: number } }).summary;
+    expect(failed).toBeGreaterThan(0);
+    expect(failed).toBeLessThanOrEqual(10);
+    expect(send).toHaveBeenCalledTimes(25 - failed);
+  });
+
+  it("waits for its interval and leaves mail queued during email maintenance", async () => {
+    await queueN(env.DB, eventId, 3);
+    const send = makeSendgridMock();
+    vi.stubGlobal("fetch", send);
+    const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 900);
+
+    const result = await emailDeliveryJob().run({
+      env: { ...env, DB: db, SERVICE_MODE: "maintenance" },
+      d1QueryBudget: budget,
+    });
+
+    expect(result).toMatchObject({ idle: true, summary: { processed: 0, stoppedReason: "email_unavailable" } });
+    expect(result).not.toHaveProperty("nextRunAt");
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("reports an idle run when no mail is due", async () => {
+    const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 900);
+    const result = await emailDeliveryJob().run({ env: { ...env, DB: db }, d1QueryBudget: budget });
+    expect(result).toMatchObject({ idle: true, summary: { processed: 0, stoppedReason: "empty" } });
+  });
+
+  it("renders up to the configured limit in one run and reports idle once none are due", async () => {
+    await queueBadgeRender(eventId, "render-one@example.test");
+    await queueBadgeRender(eventId, "render-two@example.test");
+    await queueBadgeRender(eventId, "render-three@example.test");
+    const job = SCHEDULED_JOB_DEFINITIONS.find((definition) => definition.key === "promotion_rendering")!;
+    const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 900);
+    const jobEnv = { ...env, DB: db, SCHEDULED_RENDER_LIMIT: "2" };
+
+    const busy = await job.run({ env: jobEnv, d1QueryBudget: budget });
+    const { renders } = (busy as { summary: { renders: { processed: number; failed: number } } }).summary;
+    expect(renders.processed + renders.failed).toBe(2);
+    expect(busy).toMatchObject({ idle: false });
+
+    await env.DB.prepare("DELETE FROM event_promotion_renders").run();
+    expect(await job.run({ env: jobEnv, d1QueryBudget: budget })).toMatchObject({ idle: true });
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -291,26 +417,8 @@ describe("email outbox batch processing", () => {
   it("recovers a completed older-renderer badge through its existing job before delivering the waiting email", async () => {
     const fetchMock = makeSendgridMock();
     vi.stubGlobal("fetch", fetchMock);
-    // A badge row belongs to the registration's user, so the code needs a real owner.
-    const userId = crypto.randomUUID();
-    const registrationId = crypto.randomUUID();
-    await env.DB.batch([
-      env.DB.prepare(
-        "INSERT INTO users (id,email,normalized_email,created_at,updated_at) VALUES (?,'waiting@example.test','waiting@example.test',datetime('now'),datetime('now'))",
-      ).bind(userId),
-      env.DB.prepare(
-        "INSERT INTO registrations (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES (?,?,?,'registered','test','synthetic-secret',datetime('now'),datetime('now'))",
-      ).bind(registrationId, eventId, userId),
-    ]);
-    const code = await createReferralCode(env.DB, {
-      eventId,
-      ownerType: "registration",
-      ownerId: registrationId,
-      length: 10,
-    });
+    const { code, job } = await queueBadgeRender(eventId, "waiting@example.test");
     const badge = buildBadgeAttachment({ badgeCode: code, badgeType: "attendee" });
-    const job = prepareBadgeRenderJob(env.DB, code, "2000-01-01T00:00:00.000Z");
-    await job.statement.run();
     await env.DB.prepare("UPDATE event_promotion_renders SET status='rendered',updated_at=? WHERE id=?")
       .bind("2000-01-01T00:00:00.000Z", job.id)
       .run();

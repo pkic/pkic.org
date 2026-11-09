@@ -178,16 +178,18 @@ export async function dispatchScheduledJobs(
 
   let ran = 0;
   let failed = 0;
+  let invocationUsed = false;
   for (const row of runnable) {
     if (getAvailability(env, Date.now(), "background").mode !== "normal") break;
     const definition = byKey.get(row.job_key);
     if (!definition) continue;
-    if (definition.dedicatedInvocation && ran > 0) continue;
+    if (definition.dedicatedInvocation && invocationUsed) continue;
     const token = await claimJob(env.DB, row.job_key, definition.leaseSeconds);
     if (!token) continue;
 
     const startedAt = Date.now();
     logInfo("SCHEDULED_JOB_CLAIMED", { job: row.job_key });
+    let idle = false;
     try {
       const outcome = await runScheduledJobWithD1Budget(
         env,
@@ -196,6 +198,8 @@ export async function dispatchScheduledJobs(
         (jobEnv, d1QueryBudget) => definition.run({ env: jobEnv, d1QueryBudget }),
       );
       const durationMs = Date.now() - startedAt;
+      const result = outcome.status === "completed" && outcome.result ? outcome.result : undefined;
+      idle = result?.idle === true;
       if (outcome.status === "d1_query_budget_exhausted") {
         await recordJobOutcome(env.DB, row.job_key, token, "budget_exhausted", {
           durationMs,
@@ -204,11 +208,16 @@ export async function dispatchScheduledJobs(
       } else {
         await recordJobOutcome(env.DB, row.job_key, token, "succeeded", {
           durationMs,
-          ...(outcome.result && outcome.result.nextRunAt ? { nextRunAt: outcome.result.nextRunAt } : {}),
+          ...(result?.nextRunAt ? { nextRunAt: result.nextRunAt } : {}),
         });
       }
       ran += 1;
-      logInfo("SCHEDULED_JOB_COMPLETED", { job: row.job_key, status: outcome.status, durationMs });
+      logInfo("SCHEDULED_JOB_COMPLETED", {
+        job: row.job_key,
+        status: outcome.status,
+        durationMs,
+        summary: result?.summary,
+      });
     } catch (error) {
       await recordJobOutcome(env.DB, row.job_key, token, "failed", {
         durationMs: Date.now() - startedAt,
@@ -218,6 +227,8 @@ export async function dispatchScheduledJobs(
       failed += 1;
       logInfo("SCHEDULED_JOB_FAILED", { job: row.job_key });
     }
+    if (idle) continue;
+    invocationUsed = true;
     if (definition.dedicatedInvocation) break;
   }
   return { reaped, ran, failed };

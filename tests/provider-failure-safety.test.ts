@@ -58,6 +58,25 @@ describe("bounded provider failure handling", () => {
     expect(cancel).toHaveBeenCalledOnce();
   });
 
+  it("reports a SendGrid request that exceeds its time limit as an unknown delivery", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const timeout = new AbortController();
+    vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeout.signal);
+    const hungRequest = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
+    vi.stubGlobal("fetch", hungRequest);
+
+    const sending = sendViaSendgrid(sendgridEnv, sendgridMessage).catch((caught: unknown) => caught);
+    expect(hungRequest.mock.calls[0]?.[1].signal).toBe(timeout.signal);
+    timeout.abort(new Error("timed out"));
+
+    expect(await sending).toMatchObject({ code: "SENDGRID_DELIVERY_UNKNOWN" });
+  });
+
   it("normalizes a SendGrid network failure without persisting the thrown message", async () => {
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error(`request URL ${PROVIDER_BODY_SENTINEL}`)));

@@ -46,9 +46,21 @@ async function setJob(fields: Record<string, string | number | null>): Promise<v
     .run();
 }
 
+/** Leaves only these jobs runnable, due in the given order. */
+async function dueInOrder(...jobKeys: ScheduledJobDefinition["key"][]): Promise<void> {
+  await env.DB.prepare("UPDATE scheduled_jobs SET paused_at = '2000-01-01T00:00:00.000Z'").run();
+  for (const [index, jobKey] of jobKeys.entries()) {
+    await env.DB.prepare("UPDATE scheduled_jobs SET paused_at = NULL, next_run_at = ? WHERE job_key = ?")
+      .bind(`200${index}-01-01T00:00:00.000Z`, jobKey)
+      .run();
+  }
+}
+
 describe("scheduled job dispatcher", () => {
   beforeEach(async () => {
     await resetDb();
+    // resetDb keeps this reference table, so undo what earlier tests paused.
+    await env.DB.prepare("UPDATE scheduled_jobs SET paused_at = NULL").run();
     await setJob({
       next_run_at: "2000-01-01T00:00:00.000Z",
       running_since: null,
@@ -116,6 +128,49 @@ describe("scheduled job dispatcher", () => {
     await dispatchScheduledJobs(env, definitions, { maxJobsPerPass: 5, d1QueryBudget: 900 });
     expect(delivery).toHaveBeenCalledTimes(1);
     expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands the invocation on only when a dedicated job found no work", async () => {
+    await dueInOrder("promotion_rendering", "email_outbox", "due_work");
+    const rendering = vi.fn(async () => ({ idle: true }));
+    const delivery = vi.fn(async () => ({ summary: { processed: 3 } }));
+    const dueWork = vi.fn(async () => {});
+    const definitions: ScheduledJobDefinition[] = [
+      { key: "promotion_rendering", leaseSeconds: 600, dedicatedInvocation: true, run: rendering },
+      { key: "email_outbox", leaseSeconds: 600, dedicatedInvocation: true, run: delivery },
+      { key: "due_work", leaseSeconds: 600, dedicatedInvocation: true, run: dueWork },
+    ];
+
+    const outcome = await dispatchScheduledJobs(env, definitions, { maxJobsPerPass: 5, d1QueryBudget: 900 });
+
+    expect(rendering).toHaveBeenCalledOnce();
+    expect(delivery).toHaveBeenCalledOnce();
+    expect(dueWork).not.toHaveBeenCalled();
+    expect(outcome.ran).toBe(2);
+  });
+
+  it("logs a job's counters so failed work is visible on a successful run", async () => {
+    await dueInOrder("email_outbox");
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      await dispatchScheduledJobs(
+        env,
+        [
+          {
+            key: "email_outbox",
+            leaseSeconds: 600,
+            run: async () => ({ summary: { processed: 4, failed: 4 } }),
+          },
+        ],
+        { maxJobsPerPass: 5, d1QueryBudget: 900 },
+      );
+      const completed = log.mock.calls
+        .map(([line]) => JSON.parse(String(line)) as { message: string; data: Record<string, unknown> })
+        .find((entry) => entry.message === "SCHEDULED_JOB_COMPLETED");
+      expect(completed?.data.summary).toEqual({ processed: 4, failed: 4 });
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it("claims a due job exactly once, so a concurrent pass cannot double-run it", async () => {

@@ -225,6 +225,7 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
     leaseSeconds: DEFAULT_LEASE_SECONDS,
     requiredPermissions: ["email:manage"],
     run: async ({ env, d1QueryBudget }) => {
+      await purgeExpiredPromotionFiles(env.DB, env);
       await runScheduledDueWork(env, { d1QueryBudget });
     },
   },
@@ -241,9 +242,12 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
     dedicatedInvocation: true,
     requiredPermissions: ["agenda:write"],
     run: async ({ env }) => {
-      await processPendingPromotionRecipients(env.DB, 1);
-      await purgeExpiredPromotionFiles(env.DB, env);
-      return { summary: await processPendingPromotionRenders(env.DB, env, 1) };
+      const recipients = await processPendingPromotionRecipients(env.DB, 1);
+      const renders = await processPendingPromotionRenders(env.DB, env, getConfig(env).scheduledRenderLimit);
+      return {
+        idle: !recipients.prepared && !recipients.failed && !renders.processed && !renders.failed,
+        summary: { recipients, renders },
+      };
     },
   },
   {
