@@ -39,6 +39,8 @@ export interface ScheduledJobDefinition {
    * comfortably exceed the job's normal duration.
    */
   leaseSeconds: number;
+  /** CPU-heavy work must not share the cron invocation with other jobs. */
+  dedicatedInvocation?: boolean;
   run(context: ScheduledJobRunContext): Promise<ScheduledJobOutcome | void>;
 }
 

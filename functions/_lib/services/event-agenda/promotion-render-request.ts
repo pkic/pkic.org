@@ -103,7 +103,7 @@ export async function preparePromotionRenderRequests(
             now,
           ),
       ),
-      prepareJobWake(db, "due_work", authority),
+      prepareJobWake(db, "promotion_rendering", authority),
       db
         .prepare(
           `SELECT id,event_id,occurrence_id,user_id,revision,fingerprint,format,origin,cache_key,status,attempts FROM event_promotion_renders WHERE event_id=${scope.sql} AND user_id=? AND id IN(SELECT value FROM json_each(?)) LIMIT 5`,

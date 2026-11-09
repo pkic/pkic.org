@@ -1,25 +1,15 @@
 import { getConfig, resolveAppBaseUrl } from "../config";
-import { processPendingOutbox } from "../email/outbox";
 import { runReminderCycle } from "./reminders";
 import { runRsvpEnforcer } from "./rsvp-enforcer";
 import { runWaitlistPromotionCycle } from "./registrations/waitlist-promotions";
 import { processPendingStorageDeletions, type StorageDeletionResult } from "./storage-deletion-outbox";
-import { processPendingPromotionRenders } from "./event-agenda/promotion-render-jobs";
 import { queueOrganizationContentReviewDigests } from "./organization-content";
 import type { Env } from "../types";
 import type { D1QueryBudget } from "../db/query-budget";
 
 type ReminderCycleResult = Awaited<ReturnType<typeof runReminderCycle>>;
-type OutboxResult = Awaited<ReturnType<typeof processPendingOutbox>>;
 type RsvpEnforcementResult = Awaited<ReturnType<typeof runRsvpEnforcer>>;
 type WaitlistPromotionResult = Awaited<ReturnType<typeof runWaitlistPromotionCycle>>;
-type RenderResult = Awaited<ReturnType<typeof processPendingPromotionRenders>>;
-
-// The notification drain is deliberately opportunistic in this shared pass.
-// Keep room for the normal outbox, storage-deletion, and render
-// recovery/selection statements that follow it, even when the invocation-wide D1
-// budget is nearly exhausted by the earlier reminder/RSVP/waitlist work.
-const NOTIFICATION_DRAIN_DOWNSTREAM_D1_RESERVE = 5;
 
 interface ReminderCycleTotals {
   inviteRemindersQueued: number;
@@ -35,9 +25,7 @@ interface ScheduledDueWorkPass {
   reminders: ReminderCycleTotals;
   waitlistPromotions: WaitlistPromotionResult;
   rsvpEnforcement: RsvpEnforcementResult;
-  outbox: OutboxResult;
   storageDeletions: StorageDeletionResult;
-  renders: RenderResult;
   durationMs: number;
   elapsedMs: number;
   remainingBudgetMs: number;
@@ -55,9 +43,7 @@ export interface ScheduledDueWorkResult {
   reminders: ReminderCycleTotals;
   waitlistPromotions: WaitlistPromotionResult;
   rsvpEnforcement: RsvpEnforcementResult;
-  outbox: OutboxResult;
   storageDeletions: StorageDeletionResult;
-  renders: RenderResult;
 }
 
 function emptyReminderCycleTotals(): ReminderCycleTotals {
@@ -116,17 +102,7 @@ function addWaitlistPromotionTotals(total: WaitlistPromotionResult, next: Waitli
   total.outboxIds.push(...next.outboxIds);
 }
 
-function addOutboxTotals(total: OutboxResult, next: OutboxResult): void {
-  total.processed += next.processed;
-  total.failed += next.failed;
-}
-
 function addStorageDeletionTotals(total: StorageDeletionResult, next: StorageDeletionResult): void {
-  total.processed += next.processed;
-  total.failed += next.failed;
-}
-
-function addRenderTotals(total: RenderResult, next: RenderResult): void {
   total.processed += next.processed;
   total.failed += next.failed;
 }
@@ -134,35 +110,22 @@ function addRenderTotals(total: RenderResult, next: RenderResult): void {
 function didPassReachWorkLimit(
   reminders: ReminderCycleTotals,
   waitlistPromotions: WaitlistPromotionResult,
-  outbox: OutboxResult,
   storageDeletions: StorageDeletionResult,
-  renders: RenderResult,
   rsvp: RsvpEnforcementResult,
   limits: {
     scheduledReminderLimit: number;
-    scheduledOutboxLimit: number;
     scheduledStorageDeletionLimit: number;
-    scheduledRenderLimit: number;
   },
 ): boolean {
   const filledReminderBatch = limits.scheduledReminderLimit > 0 && reminders.processed >= limits.scheduledReminderLimit;
-  const filledOutboxBatch = limits.scheduledOutboxLimit > 0 && outbox.processed >= limits.scheduledOutboxLimit;
   const filledStorageDeletionBatch =
     limits.scheduledStorageDeletionLimit > 0 &&
     storageDeletions.processed + storageDeletions.failed >= limits.scheduledStorageDeletionLimit;
-  const filledRenderBatch =
-    limits.scheduledRenderLimit > 0 && renders.processed + renders.failed >= limits.scheduledRenderLimit;
   const promotedWaitlist = waitlistPromotions.dayRegistrationOffers > 0;
   const rsvpQueuedEmails = rsvp.warningsSent + rsvp.downgradesProcessed;
   const rsvpProcessedWork = rsvp.bouncesProcessed + rsvp.ignored + rsvpQueuedEmails;
   return (
-    filledReminderBatch ||
-    filledOutboxBatch ||
-    filledStorageDeletionBatch ||
-    filledRenderBatch ||
-    promotedWaitlist ||
-    rsvpProcessedWork > 0 ||
-    rsvp.limitReached
+    filledReminderBatch || filledStorageDeletionBatch || promotedWaitlist || rsvpProcessedWork > 0 || rsvp.limitReached
   );
 }
 
@@ -212,9 +175,7 @@ export async function runScheduledDueWork(
   const config = getConfig(env);
   const startedAt = Date.now();
   // The local cap protects direct/manual callers. When dispatched by the
-  // shared cron registry, its invocation-wide deadline is authoritative so
-  // this first (and largest) job cannot consume time reserved for every
-  // sibling that follows it.
+  // shared cron registry, an explicit caller deadline can shorten that cap.
   const deadline = Math.min(
     startedAt + config.scheduledDueWorkMaxMs,
     invocationBudget?.deadlineAt ?? Number.POSITIVE_INFINITY,
@@ -229,13 +190,10 @@ export async function runScheduledDueWork(
     examined: 0,
     limitReached: false,
   };
-  const outbox: OutboxResult = { processed: 0, failed: 0 };
   const storageDeletions: StorageDeletionResult = { processed: 0, failed: 0 };
-  const renders: RenderResult = { processed: 0, failed: 0 };
   const passes: ScheduledDueWorkPass[] = [];
   const passDurations: number[] = [];
   const passD1Queries: number[] = [];
-  let remainingRenderAllowance = config.scheduledRenderLimit;
   const initialD1Queries = invocationBudget?.d1QueryBudget?.usedQueries() ?? 0;
   let stoppedReason: ScheduledDueWorkResult["stoppedReason"] = "max_passes";
 
@@ -272,23 +230,19 @@ export async function runScheduledDueWork(
       claimWindowHours: config.waitlistClaimWindowHours,
       limit: config.scheduledWaitlistPromotionLimit,
     });
-    // Queue one digest per reviewer/day, then refresh unsent mail from the live queue.
+    // Queue one digest per reviewer/day; the email delivery job drains it.
     const notificationRemainingD1Queries =
       invocationBudget?.d1QueryBudget?.remainingQueries() ?? Number.POSITIVE_INFINITY;
     const notificationLimit = Math.min(
       config.scheduledOutboxLimit,
       invocationBudget?.d1QueryBudget
-        ? Math.floor(Math.max(0, notificationRemainingD1Queries - NOTIFICATION_DRAIN_DOWNSTREAM_D1_RESERVE - 4) / 2)
+        ? Math.floor(Math.max(0, notificationRemainingD1Queries - 5) / 2)
         : config.scheduledOutboxLimit,
     );
     if (notificationLimit > 0) {
       await queueOrganizationContentReviewDigests(env.DB, resolveAppBaseUrl(env), notificationLimit);
     }
-    const outboxPass = await processPendingOutbox(env.DB, env, config.scheduledOutboxLimit);
     const storageDeletionPass = await processPendingStorageDeletions(env.DB, env, config.scheduledStorageDeletionLimit);
-    const renderPassLimit = remainingRenderAllowance;
-    const renderPass = await processPendingPromotionRenders(env.DB, env, renderPassLimit);
-    remainingRenderAllowance = Math.max(0, remainingRenderAllowance - renderPass.processed - renderPass.failed);
     const durationMs = Date.now() - passStartedAt;
     const elapsedMs = Date.now() - startedAt;
     const passQueryCount = (invocationBudget?.d1QueryBudget?.usedQueries() ?? 0) - passStartedD1Queries;
@@ -298,18 +252,14 @@ export async function runScheduledDueWork(
     addReminderCycleTotals(reminders, cycleTotals);
     addWaitlistPromotionTotals(waitlistPromotions, waitlistPass);
     addRsvpEnforcementTotals(rsvpEnforcement, rsvpPass);
-    addOutboxTotals(outbox, outboxPass);
     addStorageDeletionTotals(storageDeletions, storageDeletionPass);
-    addRenderTotals(renders, renderPass);
 
     passes.push({
       pass,
       reminders: cycleTotals,
       waitlistPromotions: waitlistPass,
       rsvpEnforcement: rsvpPass,
-      outbox: outboxPass,
       storageDeletions: storageDeletionPass,
-      renders: renderPass,
       durationMs,
       elapsedMs,
       remainingBudgetMs: Math.max(0, deadline - Date.now()),
@@ -318,11 +268,9 @@ export async function runScheduledDueWork(
     });
 
     if (
-      !didPassReachWorkLimit(cycleTotals, waitlistPass, outboxPass, storageDeletionPass, renderPass, rsvpPass, {
+      !didPassReachWorkLimit(cycleTotals, waitlistPass, storageDeletionPass, rsvpPass, {
         scheduledReminderLimit: config.scheduledReminderLimit,
-        scheduledOutboxLimit: config.scheduledOutboxLimit,
         scheduledStorageDeletionLimit: config.scheduledStorageDeletionLimit,
-        scheduledRenderLimit: remainingRenderAllowance > 0 ? renderPassLimit : 0,
       })
     ) {
       stoppedReason = "caught_up";
@@ -344,8 +292,6 @@ export async function runScheduledDueWork(
     reminders,
     waitlistPromotions,
     rsvpEnforcement,
-    outbox,
     storageDeletions,
-    renders,
   };
 }

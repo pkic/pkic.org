@@ -31,7 +31,7 @@ export async function reapAbandonedRuns(db: DatabaseLike): Promise<number> {
     db,
     `UPDATE scheduled_jobs
         SET last_status = 'abandoned',
-            last_run_at = COALESCE(last_run_at, running_since),
+            last_run_at = running_since,
             consecutive_abandoned = consecutive_abandoned + 1,
             last_error = 'Run did not complete before its lease expired',
             running_since = NULL,
@@ -94,6 +94,7 @@ export function prepareJobClaim(
       .prepare(
         `UPDATE scheduled_jobs
         SET running_since = ${NOW_SQL},
+            last_run_at = ${NOW_SQL},
             lease_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ','now', '+' || ? || ' seconds'),
             run_token = ?,
             wake_requested = 0,
@@ -123,7 +124,6 @@ export async function recordJobOutcome(
         SET last_status = ?1,
             last_error = ?2,
             last_duration_ms = ?3,
-            last_run_at = ${NOW_SQL},
             last_success_at = CASE WHEN ?1 = 'succeeded' THEN ${NOW_SQL} ELSE last_success_at END,
             consecutive_failures = CASE WHEN ?1 = 'succeeded' THEN 0 ELSE consecutive_failures + 1 END,
             consecutive_abandoned = CASE WHEN ?1 = 'succeeded' THEN 0 ELSE consecutive_abandoned END,
@@ -182,10 +182,12 @@ export async function dispatchScheduledJobs(
     if (getAvailability(env, Date.now(), "background").mode !== "normal") break;
     const definition = byKey.get(row.job_key);
     if (!definition) continue;
+    if (definition.dedicatedInvocation && ran > 0) continue;
     const token = await claimJob(env.DB, row.job_key, definition.leaseSeconds);
     if (!token) continue;
 
     const startedAt = Date.now();
+    logInfo("SCHEDULED_JOB_CLAIMED", { job: row.job_key });
     try {
       const outcome = await runScheduledJobWithD1Budget(
         env,
@@ -216,6 +218,7 @@ export async function dispatchScheduledJobs(
       failed += 1;
       logInfo("SCHEDULED_JOB_FAILED", { job: row.job_key });
     }
+    if (definition.dedicatedInvocation) break;
   }
   return { reaped, ran, failed };
 }

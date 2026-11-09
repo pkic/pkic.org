@@ -13,6 +13,8 @@ export const SCHEDULED_JOB_KEYS = [
   "membership_fee_checkouts",
   "member_news_refresh",
   "due_work",
+  "email_outbox",
+  "promotion_rendering",
   "agenda_participation",
   "agenda_reminders",
   "site_publication",

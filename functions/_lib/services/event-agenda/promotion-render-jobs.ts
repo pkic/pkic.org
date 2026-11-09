@@ -247,7 +247,7 @@ export async function processPendingPromotionRenders(
     if (await processPromotionRenderJob(db, env, row.id, undefined, renderBadge)) processed++;
     else failed++;
   }
-  await prepareJobWake(db, "due_work", {
+  await prepareJobWake(db, "promotion_rendering", {
     sql: "SELECT 1 FROM event_promotion_renders WHERE status IN ('queued','retrying') AND next_attempt_at<=? LIMIT 1",
     bindings: [nowIso()],
   }).run();

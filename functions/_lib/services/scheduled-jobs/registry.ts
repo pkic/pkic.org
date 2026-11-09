@@ -1,3 +1,5 @@
+import { processPendingOutbox } from "../../email/outbox";
+import { processPendingPromotionRenders } from "../event-agenda/promotion-render-jobs";
 import { runOauthAuthorizationCompletions, earliestOauthCompletionDue } from "../oauth-authorizations/completion";
 import { runSponsorLogoDueWork, earliestSponsorLogoDue } from "../sponsorship/logo-due-work";
 import { reconcileEventSpeakingStanding } from "../member-standing/event-speaking";
@@ -219,12 +221,31 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
   },
   {
     key: "due_work",
+    dedicatedInvocation: true,
     leaseSeconds: DEFAULT_LEASE_SECONDS,
     requiredPermissions: ["email:manage"],
     run: async ({ env, d1QueryBudget }) => {
+      await runScheduledDueWork(env, { d1QueryBudget });
+    },
+  },
+  {
+    key: "email_outbox",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    dedicatedInvocation: true,
+    requiredPermissions: ["email:manage"],
+    run: async ({ env }) => ({
+      summary: await processPendingOutbox(env.DB, env, Math.max(0, Math.min(10, getConfig(env).scheduledOutboxLimit))),
+    }),
+  },
+  {
+    key: "promotion_rendering",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    dedicatedInvocation: true,
+    requiredPermissions: ["agenda:write"],
+    run: async ({ env }) => {
       await processPendingPromotionRecipients(env.DB, 1);
       await purgeExpiredPromotionFiles(env.DB, env);
-      await runScheduledDueWork(env, { d1QueryBudget });
+      return { summary: await processPendingPromotionRenders(env.DB, env, 1) };
     },
   },
   {
