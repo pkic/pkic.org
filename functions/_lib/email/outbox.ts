@@ -1,4 +1,16 @@
-import type { EmailRenderResources } from "./partials";
+import {
+  OUTBOX_ROW_COLUMNS,
+  emailOutboxDueSql,
+  EMAIL_OUTBOX_DUE_QUERY,
+  EMAIL_OUTBOX_EXPIRED_LEASE_QUERY,
+} from "./outbox-delivery-queries";
+import { runEmailDeliveryPool, type EmailDeliveryAdmission, type EmailDeliveryOutcome } from "./outbox-delivery-pool";
+import {
+  createOutboxProcessingContext,
+  loadRenderResources,
+  resolveTemplateOnce,
+  type OutboxProcessingContext,
+} from "./outbox-processing-context";
 import { assertRequiredEmailActions } from "./required-actions";
 import { validateEmailDeliveryGuard } from "./delivery-guard";
 import { getAvailability } from "../availability";
@@ -9,9 +21,7 @@ import { nowIso } from "../utils/time";
 import { parseJsonSafe, stringifyJson } from "../utils/json";
 import { logError } from "../logging";
 import { resolveAppBaseUrl } from "../config";
-import { resolveTemplate } from "./templates";
 import { renderEmail, renderSubject } from "./render";
-import { loadEmailRenderResources } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
 import { readDirectEmailBody } from "./direct-body";
@@ -67,59 +77,6 @@ interface OutboxRow {
   sent_at: string | null;
   processing_token: string | null;
   lease_expires_at: string | null;
-}
-
-const OUTBOX_ROW_COLUMNS = `id, event_id, template_key, template_version, recipient_user_id, recipient_email,
-  subject, payload_json, message_type, provider, provider_message_id, status, attempts, send_after,
-  last_error, created_at, updated_at, sent_at, processing_token, lease_expires_at`;
-
-export const EMAIL_OUTBOX_DUE_QUERY = `
-  SELECT ${OUTBOX_ROW_COLUMNS}
-    FROM email_outbox INDEXED BY idx_email_outbox_due
-   WHERE status IN ('queued', 'retrying') AND send_after <= ?
-  ORDER BY send_after, created_at, id
-  LIMIT ?`;
-
-export const EMAIL_OUTBOX_EXPIRED_LEASE_QUERY = `
-  UPDATE email_outbox
-     SET status = 'delivery_unknown', attempts = attempts + 1,
-         last_error = 'SENDGRID_DELIVERY_UNKNOWN: Send interrupted before its delivery outcome was persisted',
-         processing_token = NULL, lease_expires_at = NULL, updated_at = ?
-   WHERE id IN (
-     SELECT id
-       FROM email_outbox INDEXED BY idx_email_outbox_expired_lease
-      WHERE status = 'sending' AND lease_expires_at <= ?
-      ORDER BY lease_expires_at, created_at, id
-      LIMIT ?
-   )
-     AND status = 'sending' AND lease_expires_at <= ?`;
-
-type ResolvedEmailTemplate = Awaited<ReturnType<typeof resolveTemplate>>;
-
-interface OutboxProcessingContext {
-  renderResources?: Promise<EmailRenderResources>;
-  templates: Map<string, Promise<ResolvedEmailTemplate>>;
-}
-
-function createOutboxProcessingContext(): OutboxProcessingContext {
-  return { templates: new Map() };
-}
-
-function loadRenderResources(db: DatabaseLike, context: OutboxProcessingContext): Promise<EmailRenderResources> {
-  context.renderResources ??= loadEmailRenderResources(db);
-  return context.renderResources;
-}
-
-function resolveTemplateOnce(
-  db: DatabaseLike,
-  context: OutboxProcessingContext,
-  templateKey: string,
-): Promise<ResolvedEmailTemplate> {
-  const existing = context.templates.get(templateKey);
-  if (existing) return existing;
-  const pending = resolveTemplate(db, templateKey);
-  context.templates.set(templateKey, pending);
-  return pending;
 }
 
 function getOutboxStatusForRetry(attempts: number): "retrying" | "failed" {
@@ -253,19 +210,22 @@ async function quarantineExpiredOutboxLeases(db: DatabaseLike, limit: number): P
   await run(db, EMAIL_OUTBOX_EXPIRED_LEASE_QUERY, [now, now, limit, now]);
 }
 
-async function processOutboxRow(
+type OutboxDeliveryAttempt = { status: Exclude<EmailDeliveryOutcome, "failed"> } | { status: "failed"; error: unknown };
+
+/** Rejects only when the message's state could not be read or recorded. */
+async function attemptOutboxDelivery(
   db: DatabaseLike,
   env: Env,
   row: OutboxRow,
   context: OutboxProcessingContext,
-): Promise<boolean> {
-  if (getAvailability(env, Date.now(), "email").mode !== "normal") return false;
+): Promise<OutboxDeliveryAttempt> {
+  if (getAvailability(env, Date.now(), "email").mode !== "normal") return { status: "skipped" };
   // Selection and delivery are intentionally separate operations. Multiple
   // scheduled/admin/direct processors may therefore select the same queued
   // row. Claim only a due row before contacting SendGrid so one invocation owns
   // the external side effect; future rows remain queued for the due processor.
   const claim = await claimOutboxForSending(db, row.id);
-  if (!claim) return false;
+  if (!claim) return { status: "skipped" };
   const processingToken = claim.token;
 
   let acceptedMessageId: string | null | undefined;
@@ -392,7 +352,7 @@ async function processOutboxRow(
     });
 
     await markOutboxSent(db, row, processingToken, acceptedMessageId, resolvedTemplateVersion);
-    return true;
+    return { status: "accepted" };
   } catch (error) {
     const deliveryUnknown =
       acceptedMessageId !== undefined || (error instanceof AppError && error.code === "SENDGRID_DELIVERY_UNKNOWN");
@@ -405,8 +365,19 @@ async function processOutboxRow(
       if (error instanceof AppError && EMAIL_TEMPLATE_UNAVAILABLE_CODES.has(error.code))
         logError("EMAIL_TEMPLATE_UNAVAILABLE", { outboxId: row.id, templateKey: row.template_key, code: error.code });
     }
-    throw error;
+    return { status: "failed", error };
   }
+}
+
+async function processOutboxRow(
+  db: DatabaseLike,
+  env: Env,
+  row: OutboxRow,
+  context: OutboxProcessingContext,
+): Promise<boolean> {
+  const attempt = await attemptOutboxDelivery(db, env, row, context);
+  if (attempt.status === "failed") throw attempt.error;
+  return attempt.status === "accepted";
 }
 
 /** Sends one queued message now; true when the provider accepted it during this call. */
@@ -479,8 +450,24 @@ export async function processPendingOutbox(
   if (getAvailability(env, Date.now(), "email").mode !== "normal") return { processed: 0, failed: 0 };
   await quarantineExpiredOutboxLeases(db, limit);
   const rows = await all<OutboxRow>(db, EMAIL_OUTBOX_DUE_QUERY, [nowIso(), limit]);
-
   return processInChunks(db, env, rows);
+}
+
+/** Share one render cache across the independently refilled delivery channels. */
+export async function drainPendingOutbox(db: DatabaseLike, env: Env, options: EmailDeliveryAdmission) {
+  const context = createOutboxProcessingContext();
+  return runEmailDeliveryPool<OutboxRow>({
+    ...options,
+    select: async (inFlightIds) => {
+      await quarantineExpiredOutboxLeases(db, options.selectionLimit);
+      return all<OutboxRow>(db, emailOutboxDueSql(true), [
+        nowIso(),
+        JSON.stringify(inFlightIds),
+        options.selectionLimit,
+      ]);
+    },
+    deliver: async (row) => (await attemptOutboxDelivery(db, env, row, context)).status,
+  });
 }
 
 export async function summarizePendingOutbox(

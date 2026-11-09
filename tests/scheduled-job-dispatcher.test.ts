@@ -46,9 +46,21 @@ async function setJob(fields: Record<string, string | number | null>): Promise<v
     .run();
 }
 
+/** Leaves only these jobs runnable, due in the given order. */
+async function dueInOrder(...jobKeys: ScheduledJobDefinition["key"][]): Promise<void> {
+  await env.DB.prepare("UPDATE scheduled_jobs SET paused_at = '2000-01-01T00:00:00.000Z'").run();
+  for (const [index, jobKey] of jobKeys.entries()) {
+    await env.DB.prepare("UPDATE scheduled_jobs SET paused_at = NULL, next_run_at = ? WHERE job_key = ?")
+      .bind(`200${index}-01-01T00:00:00.000Z`, jobKey)
+      .run();
+  }
+}
+
 describe("scheduled job dispatcher", () => {
   beforeEach(async () => {
     await resetDb();
+    // resetDb keeps this reference table, so undo what earlier tests paused.
+    await env.DB.prepare("UPDATE scheduled_jobs SET paused_at = NULL").run();
     await setJob({
       next_run_at: "2000-01-01T00:00:00.000Z",
       running_since: null,
@@ -56,6 +68,8 @@ describe("scheduled job dispatcher", () => {
       run_token: null,
       paused_at: null,
       last_status: null,
+      last_run_at: null,
+      last_success_at: null,
       consecutive_failures: 0,
       consecutive_abandoned: 0,
       wake_requested: 0,
@@ -94,12 +108,79 @@ describe("scheduled job dispatcher", () => {
     }
   });
 
+  it("runs isolated jobs without sharing the CPU budget with siblings", async () => {
+    await env.DB.prepare(
+      "UPDATE scheduled_jobs SET paused_at='2000-01-01T00:00:00.000Z' WHERE job_key NOT IN ('retention','email_outbox')",
+    ).run();
+    await setJob({ next_run_at: "1999-01-01T00:00:00.000Z" });
+    await env.DB.prepare(
+      "UPDATE scheduled_jobs SET paused_at=NULL,next_run_at='2000-01-01T00:00:00.000Z' WHERE job_key='email_outbox'",
+    ).run();
+    const cleanup = vi.fn(async () => {});
+    const delivery = vi.fn(async () => {});
+    const definitions: ScheduledJobDefinition[] = [
+      { key: JOB, leaseSeconds: 600, run: cleanup },
+      { key: "email_outbox", leaseSeconds: 600, dedicatedInvocation: true, run: delivery },
+    ];
+    await dispatchScheduledJobs(env, definitions, { maxJobsPerPass: 5, d1QueryBudget: 900 });
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(delivery).not.toHaveBeenCalled();
+    await dispatchScheduledJobs(env, definitions, { maxJobsPerPass: 5, d1QueryBudget: 900 });
+    expect(delivery).toHaveBeenCalledTimes(1);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands the invocation on only when a dedicated job found no work", async () => {
+    await dueInOrder("promotion_rendering", "email_outbox", "due_work");
+    const rendering = vi.fn(async () => ({ idle: true }));
+    const delivery = vi.fn(async () => ({ summary: { processed: 3 } }));
+    const dueWork = vi.fn(async () => {});
+    const definitions: ScheduledJobDefinition[] = [
+      { key: "promotion_rendering", leaseSeconds: 600, dedicatedInvocation: true, run: rendering },
+      { key: "email_outbox", leaseSeconds: 600, dedicatedInvocation: true, run: delivery },
+      { key: "due_work", leaseSeconds: 600, dedicatedInvocation: true, run: dueWork },
+    ];
+
+    const outcome = await dispatchScheduledJobs(env, definitions, { maxJobsPerPass: 5, d1QueryBudget: 900 });
+
+    expect(rendering).toHaveBeenCalledOnce();
+    expect(delivery).toHaveBeenCalledOnce();
+    expect(dueWork).not.toHaveBeenCalled();
+    expect(outcome.ran).toBe(2);
+  });
+
+  it("logs a job's counters so failed work is visible on a successful run", async () => {
+    await dueInOrder("email_outbox");
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      await dispatchScheduledJobs(
+        env,
+        [
+          {
+            key: "email_outbox",
+            leaseSeconds: 600,
+            run: async () => ({ summary: { processed: 4, failed: 4 } }),
+          },
+        ],
+        { maxJobsPerPass: 5, d1QueryBudget: 900 },
+      );
+      const completed = log.mock.calls
+        .map(([line]) => JSON.parse(String(line)) as { message: string; data: Record<string, unknown> })
+        .find((entry) => entry.message === "SCHEDULED_JOB_COMPLETED");
+      expect(completed?.data.summary).toEqual({ processed: 4, failed: 4 });
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it("claims a due job exactly once, so a concurrent pass cannot double-run it", async () => {
     const first = await claimJob(env.DB, JOB, 600);
     const second = await claimJob(env.DB, JOB, 600);
     expect(first).toBeTruthy();
     expect(second).toBeNull();
-    expect((await jobRow()).running_since).not.toBeNull();
+    const claimed = await jobRow();
+    expect(claimed.running_since).not.toBeNull();
+    expect(claimed.last_run_at).toBe(claimed.running_since);
   });
 
   it("reaps a run whose lease expired, because a terminated invocation records nothing itself", async () => {
@@ -107,12 +188,14 @@ describe("scheduled job dispatcher", () => {
       running_since: "2000-01-01T00:00:00.000Z",
       lease_expires_at: "2000-01-01T00:10:00.000Z",
       run_token: "dead-run",
+      last_run_at: "1999-01-01T00:00:00.000Z",
     });
 
     expect(await reapAbandonedRuns(env.DB)).toBe(1);
 
     const row = await jobRow();
     expect(row.last_status).toBe("abandoned");
+    expect(row.last_run_at).toBe("2000-01-01T00:00:00.000Z");
     expect(row.consecutive_abandoned).toBe(1);
     // Counted apart from failures: dying mid-run is a different defect.
     expect(row.consecutive_failures).toBe(0);

@@ -96,7 +96,7 @@ export async function processPendingPromotionRecipients(db: DatabaseLike, limit 
       failed++;
     }
   }
-  await prepareJobWake(db, "due_work", {
+  await prepareJobWake(db, "promotion_rendering", {
     sql: "SELECT 1 FROM event_promotion_batch_recipients WHERE status='queued' AND next_attempt_at<=? LIMIT 1",
     bindings: [nowIso()],
   }).run();

@@ -20,6 +20,10 @@ export interface SendgridMessage {
   from?: { email: string; name?: string | null };
 }
 
+// A hung request must end inside the scheduled delivery job's settle reserve, so
+// its unknown outcome is recorded before the runtime can end the invocation.
+const SENDGRID_REQUEST_TIMEOUT_MS = 8_000;
+
 function toSendgridMimeType(contentType: string): string {
   return contentType.split(";")[0]?.trim() || "application/octet-stream";
 }
@@ -79,6 +83,7 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
         authorization: `Bearer ${env.SENDGRID_API_KEY}`,
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(SENDGRID_REQUEST_TIMEOUT_MS),
     });
   } catch {
     const details = providerFailureDetails("sendgrid", "send_email", null);

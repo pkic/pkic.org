@@ -20,6 +20,8 @@ export interface ScheduledJobOutcome {
   nextRunAt?: string;
   /** Free-form counters recorded for observability only. */
   summary?: Record<string, unknown>;
+  /** The run found no work, so a dedicated job leaves the invocation to the next job. */
+  idle?: boolean;
 }
 
 export interface ScheduledJobDefinition {
@@ -39,6 +41,8 @@ export interface ScheduledJobDefinition {
    * comfortably exceed the job's normal duration.
    */
   leaseSeconds: number;
+  /** CPU-heavy work must not share the cron invocation with other jobs. */
+  dedicatedInvocation?: boolean;
   run(context: ScheduledJobRunContext): Promise<ScheduledJobOutcome | void>;
 }
 

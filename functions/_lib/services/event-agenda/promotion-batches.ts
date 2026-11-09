@@ -143,7 +143,7 @@ export async function createPromotionBatch(
         JSON.stringify(input.formats),
       ],
     }),
-    prepareJobWake(db, "due_work", allowed),
+    prepareJobWake(db, "promotion_rendering", allowed),
     ...read.statements,
   ]);
   const current = await actor.decode(results.slice(0, actor.statements.length));
