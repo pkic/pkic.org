@@ -8,7 +8,11 @@
  * Approved domains establish affiliation for member and non-member organizations.
  * An organization the person said is not theirs is never joined again.
  */
-import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import {
+  prepareAuthorizationGuard,
+  isAuthorizationGuardFailure,
+  isStateGuardFailure,
+} from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -72,7 +76,12 @@ export async function linkVerifiedAddressToDomainOrganization(
       resolvedReviews: results[prepared.reviewResolutionIndex]?.meta?.changes ?? 0,
     };
   } catch (error) {
-    if (isAuthorizationGuardFailure(error) || isConcurrentIdentityConflict(error) || isAuditChangeGuardFailure(error))
+    if (
+      isStateGuardFailure(error) ||
+      isAuthorizationGuardFailure(error) ||
+      isConcurrentIdentityConflict(error) ||
+      isAuditChangeGuardFailure(error)
+    )
       return null;
     throw error;
   }
