@@ -29,7 +29,6 @@ import { EventHero } from "./EventHero";
 import { eventPhase, sessionPhase } from "./event-timing";
 import { attendanceStanding, attendanceStandingParts } from "../../../../../shared/viewer-attendance";
 import {
-  canInviteColleagues,
   eventManagementPath,
   eventRegistrationStanding,
   registrationOffer,
@@ -42,7 +41,6 @@ import { useEventNow, type AgendaSession } from "./useEventNow";
 import { AttendanceCheckCard, SupportCard, WelcomeBanner } from "./EventWelcome";
 import { WatchLiveCard } from "./virtual-room/WatchLiveCard";
 import { PersonalAddressPrompt } from "../../../../../components/events/PersonalAddressPrompt";
-import { InviteColleagueButton } from "../../../../../components/event-invites/InviteColleagueButton";
 import { CheckInCard } from "./CheckInCard";
 
 const href = usePortalHashLocation.hrefs;
@@ -262,14 +260,6 @@ export function EventHome({ event, now = Date.now() }: { event: ParticipantEvent
         ))}
       <TicketCard event={event} ended={ended} />
       <ProposalsCard event={event} />
-      {canInviteColleagues(event, now) && (
-        <EventCard eyebrow="Invitations" title="Invite a colleague">
-          <p>Send colleagues a personal invitation to register for this event.</p>
-          <div class="pk-cluster">
-            <InviteColleagueButton eventSlug={event.slug} />
-          </div>
-        </EventCard>
-      )}
       <SupportCard source={`event:${event.slug}`} />
       <JoinPrompt />
     </div>

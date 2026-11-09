@@ -899,7 +899,13 @@ test("attendees invite colleagues and confirm a seat release from one day picker
   const registrationId = detail.participation!.registrationId!;
   const base = `/portal/#/events/${fixture.slug}`;
   await page.goto(base);
-  await expect(page.getByRole("button", { name: "Invite a colleague", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Show ticket", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Invite a colleague", exact: true })).toHaveCount(0);
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: info.outputPath(`overview-${width}.png`), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
   await page.goto(`${base}/promotion`);
   await expect(page.getByRole("heading", { name: "Share & Invite", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Share on LinkedIn", exact: true })).toBeVisible();

@@ -61,51 +61,46 @@ function event() {
   });
 }
 
-it.each(["overview", "promotion"])(
-  "opens the same validated invitation flow from %s without a registration link",
-  async (tab) => {
-    await act(() => render(<ParticipantEvent event={event()} tab={tab} />, host));
-    await vi.waitFor(() => expect(host.textContent).toContain("Invite a colleague"));
-    expect(sent).toHaveLength(0);
-    if (tab === "promotion") {
-      expect(host.textContent).toContain("Share & Invite");
-      expect(host.textContent).toContain("Share on LinkedIn");
-    }
-    await act(() => buttonNamed(host, "Invite a colleague").click());
-    await vi.waitFor(() => expect(document.querySelector("dialog[open]")).not.toBeNull());
-    const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
-    await act(() => buttonNamed(dialog, "Send invites").click());
-    expect(sent).toHaveLength(0);
-    expect(controlFor(dialog, "Invite 1 email address").getAttribute("aria-invalid")).toBe("true");
-    await typeInto(controlFor(dialog, "Invite 1 email address"), "colleague@example.test");
-    await act(() => buttonNamed(dialog, "Send invites").click());
-    expect(sent).toHaveLength(1);
-    await vi.waitFor(() => expect(dialog.textContent).toContain("Queued 1 invitation"));
-  },
-);
+it("keeps invitations on Share & Invite and out of Overview", async () => {
+  await act(() => render(<ParticipantEvent event={event()} tab="overview" />, host));
+  await vi.waitFor(() => expect(host.textContent).toContain("Show ticket"));
+  expect(host.textContent).not.toContain("Invite a colleague");
+  await act(() => render(<ParticipantEvent event={event()} tab="promotion" />, host));
+  await vi.waitFor(() => expect(host.textContent).toContain("Invite a colleague"));
+  expect(sent).toHaveLength(0);
+  expect(host.textContent).toContain("Share & Invite");
+  expect(host.textContent).toContain("Share on LinkedIn");
+  await act(() => buttonNamed(host, "Invite a colleague").click());
+  await vi.waitFor(() => expect(document.querySelector("dialog[open]")).not.toBeNull());
+  const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
+  await act(() => buttonNamed(dialog, "Send invites").click());
+  expect(sent).toHaveLength(0);
+  expect(controlFor(dialog, "Invite 1 email address").getAttribute("aria-invalid")).toBe("true");
+  await typeInto(controlFor(dialog, "Invite 1 email address"), "colleague@example.test");
+  await act(() => buttonNamed(dialog, "Send invites").click());
+  expect(sent).toHaveLength(1);
+  await vi.waitFor(() => expect(dialog.textContent).toContain("Queued 1 invitation"));
+});
 
-it.each(["overview", "promotion"])(
-  "hides invitations on %s at and after the start or without a confirmed registration",
-  async (tab) => {
-    const detail = event();
-    for (const now of ["2026-12-01T08:00:00.000Z", "2026-12-03T08:00:00.000Z"]) {
-      vi.setSystemTime(now);
-      await act(() => render(<ParticipantEvent event={detail} tab={tab} />, host));
-      await vi.waitFor(() => expect(host.querySelector(".pk-event-hero")).not.toBeNull());
-      expect([...host.querySelectorAll("button")].some((b) => b.textContent === "Invite a colleague")).toBe(false);
-    }
-    vi.setSystemTime("2026-11-01T00:00:00.000Z");
-    detail.participation!.registrationStatus = "pending_email_confirmation";
-    detail.viewer!.registrationStatus = "pending_email_confirmation";
-    await act(() => render(<ParticipantEvent event={detail} tab={tab} />, host));
+it("hides Share & Invite invitations at and after the start or without a confirmed registration", async () => {
+  const detail = event();
+  for (const now of ["2026-12-01T08:00:00.000Z", "2026-12-03T08:00:00.000Z"]) {
+    vi.setSystemTime(now);
+    await act(() => render(<ParticipantEvent event={detail} tab="promotion" />, host));
+    await vi.waitFor(() => expect(host.querySelector(".pk-event-hero")).not.toBeNull());
     expect([...host.querySelectorAll("button")].some((b) => b.textContent === "Invite a colleague")).toBe(false);
-  },
-);
+  }
+  vi.setSystemTime("2026-11-01T00:00:00.000Z");
+  detail.participation!.registrationStatus = "pending_email_confirmation";
+  detail.viewer!.registrationStatus = "pending_email_confirmation";
+  await act(() => render(<ParticipantEvent event={detail} tab="promotion" />, host));
+  expect([...host.querySelectorAll("button")].some((b) => b.textContent === "Invite a colleague")).toBe(false);
+});
 
-it.each(["overview", "promotion"])("hides invitations on the open %s page when the event starts", async (tab) => {
+it("hides invitations on the open Share & Invite page when the event starts", async () => {
   vi.useFakeTimers();
   vi.setSystemTime("2026-12-01T07:59:50.000Z");
-  await act(() => render(<ParticipantEvent event={event()} tab={tab} />, host));
+  await act(() => render(<ParticipantEvent event={event()} tab="promotion" />, host));
   await vi.waitFor(() => expect(host.textContent).toContain("Invite a colleague"));
   await act(async () => {
     await vi.advanceTimersByTimeAsync(10_251);
