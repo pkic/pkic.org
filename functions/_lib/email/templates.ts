@@ -13,7 +13,7 @@ import type {
 export interface ResolvedEmailTemplate {
   version: number;
   content: string;
-  contentType: string;
+  contentType: EmailContentType;
   subjectTemplate: string | null;
   messageType: EmailMessageType;
   /** The sender the template names; null leaves the environment's configured sender (#106). */

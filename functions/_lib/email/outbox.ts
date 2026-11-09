@@ -1,3 +1,4 @@
+import type { EmailRenderResources } from "./partials";
 import { assertRequiredEmailActions } from "./required-actions";
 import { validateEmailDeliveryGuard } from "./delivery-guard";
 import { getAvailability } from "../availability";
@@ -96,7 +97,7 @@ export const EMAIL_OUTBOX_EXPIRED_LEASE_QUERY = `
 type ResolvedEmailTemplate = Awaited<ReturnType<typeof resolveTemplate>>;
 
 interface OutboxProcessingContext {
-  renderResources?: Promise<{ partials: Record<string, string>; layoutHtml: string }>;
+  renderResources?: Promise<EmailRenderResources>;
   templates: Map<string, Promise<ResolvedEmailTemplate>>;
 }
 
@@ -104,10 +105,7 @@ function createOutboxProcessingContext(): OutboxProcessingContext {
   return { templates: new Map() };
 }
 
-function loadRenderResources(
-  db: DatabaseLike,
-  context: OutboxProcessingContext,
-): Promise<{ partials: Record<string, string>; layoutHtml: string }> {
+function loadRenderResources(db: DatabaseLike, context: OutboxProcessingContext): Promise<EmailRenderResources> {
   context.renderResources ??= loadEmailRenderResources(db);
   return context.renderResources;
 }

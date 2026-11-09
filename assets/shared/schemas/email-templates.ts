@@ -191,10 +191,16 @@ const emailTemplatePreviewDataSchema = z
     }
   });
 
-export const emailTemplatePreviewSchema = z.object({
-  subjectTemplate: z.string().trim().min(1).max(512).optional(),
+/** Embedded templates retain their own format rather than inheriting the enclosing message's format. */
+export const emailTemplateFragmentSchema = z.object({
   content: z.string().min(1).max(500_000),
   contentType: emailContentTypeSchema.default("markdown"),
+});
+export type EmailTemplateFragment = z.infer<typeof emailTemplateFragmentSchema>;
+export type EmailTemplatePartials = Record<string, EmailTemplateFragment>;
+
+export const emailTemplatePreviewSchema = emailTemplateFragmentSchema.extend({
+  subjectTemplate: z.string().trim().min(1).max(512).optional(),
   layoutHtml: z.string().min(1).max(500_000).optional(),
   data: emailTemplatePreviewDataSchema.optional(),
 });

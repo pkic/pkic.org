@@ -1,3 +1,4 @@
+import type { EmailTemplatePartials } from "../../../assets/shared/schemas/email-templates";
 import { conditionVariableNames, parseTemplateCondition } from "./template-conditions";
 import { assertTemplateRenderDepth, consumeTemplateWork, createTemplateRenderBudget } from "./render-limit";
 
@@ -8,10 +9,11 @@ export interface TemplateVariableReference {
 }
 
 /** Inspect every branch and its loop scope without executing any recipient-dependent control flow. */
-export function analyzeTemplateReferences(template: string, partials: Record<string, string> = {}) {
+export function analyzeTemplateReferences(template: string, partials: EmailTemplatePartials = {}) {
   const references = new Map<string, TemplateVariableReference>();
   const invalidTokens: string[] = [];
   const includedPartials = new Set<string>();
+  const activePartials = new Set<string>();
   const budget = createTemplateRenderBudget();
   type Block = { kind: string; token: string; collection?: string };
 
@@ -51,8 +53,16 @@ export function analyzeTemplateReferences(template: string, partials: Record<str
       } else if (expression.startsWith(">")) {
         const name = /^>\s*(\w+)\s*$/.exec(expression)?.[1];
         if (includePartials && name) includedPartials.add(name);
-        if (includePartials && name && Object.hasOwn(partials, name)) inspect(partials[name]!, collection(), false);
-        else if (!name) invalidTokens.push(token);
+        if (includePartials && name && Object.hasOwn(partials, name)) {
+          if (activePartials.has(name)) {
+            invalidTokens.push(token);
+            continue;
+          }
+          activePartials.add(name);
+          assertTemplateRenderDepth(activePartials.size);
+          inspect(partials[name]!.content, collection(), true);
+          activePartials.delete(name);
+        } else if (!name) invalidTokens.push(token);
       } else if (/^[@\w.]+$/.test(expression)) reference(expression);
       else invalidTokens.push(token);
     }
@@ -68,7 +78,7 @@ export function analyzeTemplateReferences(template: string, partials: Record<str
 
 export function templateVariableNames(
   templates: readonly string[],
-  options: { includeLoopBodies?: boolean; partials?: Record<string, string> } = {},
+  options: { includeLoopBodies?: boolean; partials?: EmailTemplatePartials } = {},
 ) {
   return [
     ...new Set(

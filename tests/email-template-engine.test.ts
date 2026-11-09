@@ -1,7 +1,7 @@
 import { analyzeTemplateReferences } from "../functions/_lib/email/template-references";
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { formatDateTimeInZone } from "../assets/shared/format-date";
-import { emailInstant } from "../functions/_lib/email/plain-text";
+import { emailInstant, emailMarkdownText } from "../functions/_lib/email/plain-text";
 import {
   EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS,
   compileSimpleTemplate,
@@ -385,7 +385,7 @@ describe("email template engine (compileSimpleTemplate)", () => {
     it("shares the expansion budget with loops inside partials", () => {
       expectRenderLimit(() =>
         compileSimpleTemplate("{{> list}}", {
-          _partials: { list: "{{#each items}}{{/each}}" },
+          _partials: { list: { content: "{{#each items}}{{/each}}", contentType: "markdown" } },
           items: Array.from({ length: EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS }, () => null),
         }),
       );
@@ -759,5 +759,88 @@ describe("Markdown callout interpolation", () => {
     expect(quote).toContain("Your talk is accepted.");
     expect(quote).toContain("<li>Have fun</li>");
     expect(quote).not.toContain("After the note.");
+  });
+});
+
+describe("independent embedded email templates", () => {
+  const layout = "<main>{{{body_html}}}</main>";
+  const fragments = [
+    { contentType: "markdown", content: "## Details\n\n**Agreement**\n\n- First\n- Second\n\n> A callout" },
+    { contentType: "html", content: "<section><h2>Details</h2><ul><li>First</li><li>Second</li></ul></section>" },
+    { contentType: "text", content: "## Literal heading\n<literal>\n- Literal bullet" },
+  ] as const;
+  for (const fragment of fragments) {
+    it.each(["markdown", "html", "text"] as const)(
+      `renders ${fragment.contentType} partials like direct rendering inside %s messages`,
+      async (contentType) => {
+        const direct = await renderEmail(fragment.content, {}, "", fragment.contentType);
+        const embedded = await renderEmail(
+          "Before\n\n{{> details}}\n\nAfter",
+          { _partials: { details: fragment } },
+          layout,
+          contentType,
+        );
+        expect(embedded.html).toContain(direct.html);
+        expect(embedded.html.match(/<main>/g)).toHaveLength(1);
+        expect(embedded.text).toContain(direct.text);
+      },
+    );
+  }
+  it("does not let surrounding Markdown reinterpret a partial's blocks", async () => {
+    const fragment = fragments[0];
+    const direct = await renderEmail(fragment.content, {}, "", "markdown");
+    const embedded = await renderEmail(
+      "> {{> details}}\n\nAfter",
+      { _partials: { details: fragment } },
+      "",
+      "markdown",
+    );
+    expect(embedded.html).toContain(direct.html);
+    expect(embedded.html).not.toContain("&gt; -");
+  });
+  it("keeps partial output independent inside a surrounding code fence", async () => {
+    const fragment = fragments[0];
+    const direct = await renderEmail(fragment.content, {}, "", "markdown");
+    const embedded = await renderEmail("```\n{{> details}}\n```", { _partials: { details: fragment } }, "", "markdown");
+    expect(embedded.html).toContain(direct.html);
+    expect(embedded.html).not.toContain("PKIC_EMAIL_FRAGMENT_");
+  });
+  it("renders long Markdown values and nested partials once without adding another layout", async () => {
+    const data = {
+      note: emailMarkdownText("**Agreed**\n\n- First\n- Second\n\n> Note"),
+      _partials: {
+        outer: { content: "# Details\n\n{{> inner}}", contentType: "markdown" as const },
+        inner: { content: "{{note}}", contentType: "markdown" as const },
+      },
+    };
+    const direct = await renderEmail("{{note}}", data, "", "markdown");
+    const embedded = await renderEmail("{{> outer}}", data, layout, "markdown");
+    expect(embedded.html).toContain(direct.html);
+    expect(embedded.html.match(/<main>/g)).toHaveLength(1);
+    expect(embedded.html.match(/<li>/g)).toHaveLength(2);
+    const references = analyzeTemplateReferences("{{> outer}}", data._partials);
+    expect(references.references.map((reference) => reference.name)).toContain("note");
+    expect(references.includedPartials).toEqual(["outer", "inner"]);
+  });
+  it("renders partials in the current loop scope without compiling their output again", async () => {
+    const result = await renderEmail(
+      "{{#each people}}{{> person}}{{/each}}",
+      {
+        people: [{ name: "First" }, { name: "Second" }],
+        _partials: { person: { content: "## {{name}}", contentType: "markdown" } },
+      },
+      "",
+      "markdown",
+    );
+    expect(result.html).toContain("<h2>First</h2>");
+    expect(result.html).toContain("<h2>Second</h2>");
+    expect(result.html).not.toContain("{{name}}");
+  });
+  it("refuses recursive partials through the shared depth budget", async () => {
+    const data = { _partials: { recursive: { content: "{{> recursive}}", contentType: "markdown" as const } } };
+    await expect(renderEmail("{{> recursive}}", data, layout)).rejects.toMatchObject({
+      code: "EMAIL_TEMPLATE_RENDER_LIMIT_EXCEEDED",
+    });
+    expect(analyzeTemplateReferences("{{> recursive}}", data._partials).invalidTokens).toContain("{{> recursive}}");
   });
 });

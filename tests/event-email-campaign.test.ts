@@ -479,7 +479,8 @@ describe("event email campaign recipients", () => {
     await seedCampaignTemplates(admin.id);
     const partial = await createTemplateVersion(env.DB, {
       templateKey: "partial_reg_details",
-      content: "Registration: {{email}}.{{#if acceptedTermsText}} Terms agreed: {{acceptedTermsText}}{{/if}}",
+      content:
+        "Registration: {{email}}.\n\n> {{#if acceptedTermsText}}**Terms agreed:**<br>\n> - {{acceptedTermsText}}{{/if}}",
       createdByUserId: admin.id,
     });
     await activateTemplateVersion(env.DB, { templateKey: "partial_reg_details", version: partial.version });
@@ -498,6 +499,11 @@ describe("event email campaign recipients", () => {
       (id,event_id,audience_type,term_key,version,required,display_text,active,created_at)
       VALUES (?,?,'speaker','code-of-conduct','v1',1,'Speaker-only agreement',1,?)`)
       .bind(crypto.randomUUID(), eventId, "2026-11-01T00:00:00.000Z")
+      .run();
+    await env.DB.prepare(
+      "UPDATE event_terms SET display_text='Privacy agreement' WHERE event_id=? AND term_key='privacy-policy'",
+    )
+      .bind(eventId)
       .run();
     for (const [index, email] of ["terms-a@example.test", "terms-b@example.test"].entries()) {
       const userId = await insertUser(env.DB, email);
@@ -520,6 +526,11 @@ describe("event email campaign recipients", () => {
           VALUES (?,?,?,?,'attendee','code-of-conduct','v1',?)`)
           .bind(crypto.randomUUID(), registrationId, eventId, userId, "2026-11-01T00:00:00.000Z")
           .run();
+        await env.DB.prepare(`INSERT INTO consent_acceptances
+          (id,registration_id,event_id,user_id,audience_type,term_key,term_version,accepted_at)
+          VALUES (?,?,?,?,'attendee','privacy-policy','v1',?)`)
+          .bind(crypto.randomUUID(), registrationId, eventId, userId, "2026-11-01T00:00:00.000Z")
+          .run();
       }
     }
     const input = {
@@ -534,6 +545,8 @@ describe("event email campaign recipients", () => {
     const reviewed = eventEmailCampaignPreviewResponseSchema.parse(await preview.json());
     expect(reviewed.recipientCount).toBe(2);
     expect(reviewed.text).toContain("Original agreement");
+    expect(reviewed.html.match(/<li\b/g)).toHaveLength(2);
+    expect(reviewed.html).not.toContain("&gt; -");
     expect(reviewed.text).not.toContain("Replacement agreement");
     expect(reviewed.text).not.toContain("Speaker-only agreement");
     const accepted = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns", {
@@ -557,6 +570,9 @@ describe("event email campaign recipients", () => {
         "markdown",
       );
       expect(rendered.text.includes("Original agreement")).toBe(index === 0);
+      expect(rendered.text.includes("Privacy agreement")).toBe(index === 0);
+      expect(rendered.html.match(/<li\b/g) ?? []).toHaveLength(index === 0 ? 2 : 0);
+      expect(rendered.html).not.toContain("&gt; -");
       expect(rendered.text).not.toContain("Replacement agreement");
       expect(rendered.text).not.toContain("Speaker-only agreement");
       expect(rendered.text).not.toContain("{{acceptedTermsText}}");

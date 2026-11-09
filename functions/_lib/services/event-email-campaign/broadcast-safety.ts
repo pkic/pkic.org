@@ -1,3 +1,4 @@
+import type { EmailTemplatePartials } from "../../../../assets/shared/schemas/email-templates";
 import { AppError } from "../../errors";
 import type { CampaignRecipient, CampaignTemplate, EventEmailCampaignInput } from "./types";
 
@@ -5,7 +6,7 @@ import { analyzeTemplateReferences } from "../../email/template-references";
 
 interface CampaignReferenceOptions {
   recipientVariables?: readonly string[];
-  partials?: Record<string, string>;
+  partials?: EmailTemplatePartials;
 }
 
 export function findBroadcastOnlyTemplateRefs(

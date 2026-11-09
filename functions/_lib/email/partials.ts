@@ -1,3 +1,4 @@
+import type { EmailTemplatePartials } from "../../../assets/shared/schemas/email-templates";
 import type { DatabaseLike } from "../types";
 import {
   requireResolvedTemplates,
@@ -12,7 +13,7 @@ export const EMAIL_PARTIAL_NAMES = ["reg_details", "sponsors_block", "about_pkic
 export const EMAIL_PARTIAL_TEMPLATE_KEYS = EMAIL_PARTIAL_NAMES.map((name) => `partial_${name}`);
 
 export interface EmailRenderResources {
-  partials: Record<string, string>;
+  partials: EmailTemplatePartials;
   layoutHtml: string;
 }
 
@@ -22,16 +23,18 @@ export interface EmailRenderBundle extends EmailRenderResources {
 
 export function emailPartialsFromResolutions(
   resolutions: ReadonlyMap<string, EmailTemplateResolution>,
-): Record<string, string> {
+): EmailTemplatePartials {
   return Object.fromEntries(
     EMAIL_PARTIAL_NAMES.flatMap((name, index) => {
       const resolution = resolutions.get(EMAIL_PARTIAL_TEMPLATE_KEYS[index]);
-      return resolution?.ok ? [[name, resolution.template.content]] : [];
+      return resolution?.ok
+        ? [[name, { content: resolution.template.content, contentType: resolution.template.contentType }]]
+        : [];
     }),
   );
 }
 
-export async function loadEmailPartials(db: DatabaseLike): Promise<Record<string, string>> {
+export async function loadEmailPartials(db: DatabaseLike): Promise<EmailTemplatePartials> {
   return emailPartialsFromResolutions(await resolveTemplateSet(db, EMAIL_PARTIAL_TEMPLATE_KEYS));
 }
 

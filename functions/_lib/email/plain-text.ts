@@ -1,5 +1,5 @@
 import type { EmailContentType } from "../../../assets/shared/schemas/email-templates";
-import { escapeMarkdownText } from "./markdown";
+import { escapeMarkdownText, renderEmailMarkdown } from "./markdown";
 import { formatMeetingEmailTime } from "../../../assets/shared/format-date";
 
 const EMAIL_PLAIN_TEXT_KEY = "__pkicEmailPlainText";
@@ -82,8 +82,9 @@ function resolvePlainText(value: string, mode: EmailContentType | "subject"): st
 
 function resolveMarkdownText(value: string, mode: EmailContentType | "subject"): string {
   if (mode === "subject" || mode === "text") return value;
-  if (mode === "html") return escapeHtmlText(value).replace(/\r?\n/g, "<br>");
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // Escaping opening brackets neutralizes HTML while preserving Markdown block quotes.
+  const markdown = value.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  return mode === "html" ? renderEmailMarkdown(markdown) : markdown;
 }
 
 function resolveValue(value: unknown, mode: EmailContentType | "subject"): unknown {
