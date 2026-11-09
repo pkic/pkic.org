@@ -272,6 +272,33 @@ describe("Vite public-site rendering", () => {
     expect(html).not.toContain(":::alert");
   });
 
+  it("renders FAQ questions as linkable disclosures and identified items with stable anchors", async () => {
+    const context = {
+      assetUrl: (name?: string) => `/content-media/test/${name}`,
+      assetUrls: () => [],
+      data: {},
+      eventData: undefined,
+      listing: () => ({ heading: "Test", items: [], page: 1, pageCount: 1 }),
+      route: "/test/",
+      sourcePath: "content/test.md",
+    };
+    const faq = await renderContentMarkdown(
+      '{{< faq >}}\ngroups:\n  - title: Levels\n    questions:\n      - question: "Are levels cumulative?"\n        open: true\n        answer: "Yes, **always**."\n      - question: "Are levels cumulative?"\n        answer: "Still yes."\n{{< /faq >}}',
+      context,
+    );
+    expect(faq).toMatch(/<details id="are-levels-cumulative" class="pk-content-faq__item" open/);
+    expect(faq).toContain('<details id="are-levels-cumulative-1" class="pk-content-faq__item">');
+    expect(faq).toContain("<strong>always</strong>");
+    const items = await renderContentMarkdown(
+      '{{< requirements >}}\nintroduction: "All of:"\nitem: Criterion\nitems:\n  - id: "1.1.1"\n    label: "1"\n    text: "A statement."\n{{< /requirements >}}\n\n{{< item-table >}}\ncolumns: [Question]\nitems:\n  - id: "1.2.1"\n    label: "1"\n    cells: ["Which one?"]\n{{< /item-table >}}',
+      context,
+    );
+    expect(items).toContain('<li id="1.1.1" data-content-item-id="1.1.1">');
+    expect(items).toContain('aria-label="Criterion 1.1.1"');
+    expect(items).toContain('<tr id="1.2.1" data-content-item-id="1.2.1">');
+    expect(items).toContain('aria-label="Question 1.2.1"');
+  });
+
   it("server-renders the home page through shared Preact components", async () => {
     const response = await SELF.fetch("https://app.test/");
     const html = await response.text();

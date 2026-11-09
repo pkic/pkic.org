@@ -65,3 +65,10 @@ export function objectValue(value: string | undefined): Record<string, unknown> 
   const parsed: unknown = parseYaml(value);
   return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
 }
+
+/** A YAML list of mappings from shortcode data; anything that is not a mapping reads as empty. */
+export function objectList(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value)
+    ? value.map((item) => (item && typeof item === "object" ? (item as Record<string, unknown>) : {}))
+    : [];
+}

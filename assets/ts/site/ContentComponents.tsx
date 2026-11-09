@@ -282,28 +282,6 @@ export function ContentBanner({
   );
 }
 
-export function ContentFaq({
-  groups,
-}: {
-  groups: Array<{ questions?: Array<{ answerHtml?: string; open?: boolean; question?: string }>; title?: string }>;
-}) {
-  return (
-    <div class="pk-content-faq">
-      {groups.map((group, groupIndex) => (
-        <section key={`${group.title ?? "group"}-${groupIndex}`}>
-          {group.title ? <h2>{group.title}</h2> : null}
-          {group.questions?.map((item, itemIndex) => (
-            <article key={`${item.question ?? "question"}-${itemIndex}`}>
-              <h3>{item.question}</h3>
-              {item.answerHtml ? <div dangerouslySetInnerHTML={{ __html: item.answerHtml }} /> : null}
-            </article>
-          ))}
-        </section>
-      ))}
-    </div>
-  );
-}
-
 export function ContentGlossary({ terms }: { terms: Array<{ definitionHtml?: string; term: string }> }) {
   return (
     <dl class="pk-content-glossary">

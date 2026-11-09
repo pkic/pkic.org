@@ -1,13 +1,7 @@
 import { renderToStringAsync as render } from "preact-render-to-string";
 import { ContentItemTable } from "../../../assets/ts/site/ContentItemTable";
 import { ContentRequirements } from "../../../assets/ts/site/ContentRequirements";
-import { objectValue, type ContentCall } from "./site-shortcodes";
-
-function records(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value)
-    ? value.map((item) => (item && typeof item === "object" ? (item as Record<string, unknown>) : {}))
-    : [];
-}
+import { objectList, objectValue, type ContentCall } from "./site-shortcodes";
 
 /** A table of identified items; every row is a permalink target and a feedback item. */
 export async function renderContentItemTable(
@@ -17,7 +11,7 @@ export async function renderContentItemTable(
   const data = objectValue(call.inner);
   const columns = Array.isArray(data.columns) ? data.columns.map(String) : [];
   const items = await Promise.all(
-    records(data.items).map(async (item) => {
+    objectList(data.items).map(async (item) => {
       const cells = Array.isArray(item.cells) ? item.cells : [];
       const id = String(item.id ?? "");
       return {
@@ -40,7 +34,7 @@ export async function renderContentRequirements(
   const data = objectValue(call.inner);
   const includes = data.includes && typeof data.includes === "object" ? (data.includes as Record<string, unknown>) : {};
   const items = await Promise.all(
-    records(data.items).map(async (item) => {
+    objectList(data.items).map(async (item) => {
       const id = String(item.id ?? "");
       return {
         id,
@@ -59,7 +53,7 @@ export async function renderContentRequirements(
       introductionHtml={await inlineMarkdownHtml(String(data.introduction ?? ""))}
       includes={{
         labelHtml: await inlineMarkdownHtml(String(includes.label ?? "")),
-        links: records(includes.links).map((link) => ({
+        links: objectList(includes.links).map((link) => ({
           href: String(link.href ?? ""),
           label: String(link.label ?? ""),
         })),

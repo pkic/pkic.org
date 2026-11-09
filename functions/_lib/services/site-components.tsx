@@ -17,6 +17,7 @@ import { renderContentAgenda } from "./site-agenda";
 import { buttonVariant, renderContentCards } from "./site-content-cards";
 import { renderContentItemTable, renderContentRequirements } from "./site-content-identified-items";
 import { renderModelContent } from "./site-content-model";
+import { renderContentFaq } from "./site-content-faq";
 import { renderToStringAsync as render } from "preact-render-to-string";
 import { renderSiteMarkdown } from "./site-markdown-processor";
 import {
@@ -40,7 +41,6 @@ import {
   ContentMemberWall,
   ContentBanner,
   ContentButtonLink,
-  ContentFaq,
   ContentFigure,
   ContentFrame,
   ContentGallery,
@@ -168,32 +168,6 @@ function island(module?: string, defaults: Record<string, string> = {}): Content
         />,
       ),
     );
-}
-
-async function faq(call: ContentCall): Promise<RenderedCall> {
-  const data = objectValue(call.inner);
-  const rawGroups = Array.isArray(data.groups) ? data.groups : [];
-  const groups = await Promise.all(
-    rawGroups.map(async (value) => {
-      const group = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-      const questions = Array.isArray(group.questions) ? group.questions : [];
-      return {
-        questions: await Promise.all(
-          questions.map(async (questionValue) => {
-            const question =
-              questionValue && typeof questionValue === "object" ? (questionValue as Record<string, unknown>) : {};
-            return {
-              answerHtml: await markdownHtml(question.answer),
-              open: question.open === true,
-              question: typeof question.question === "string" ? question.question : undefined,
-            };
-          }),
-        ),
-        title: typeof group.title === "string" ? group.title : undefined,
-      };
-    }),
-  );
-  return component(await render(<ContentFaq groups={groups} />));
 }
 
 async function glossary(call: ContentCall): Promise<RenderedCall> {
@@ -352,7 +326,7 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
   // The published shortcode only stashes its YAML for the events layout to
   // read; it draws nothing itself, and `eventsIndex()` reads the same block.
   "events-sidebar": async () => component("", true),
-  faq,
+  faq: async (call) => component(await renderContentFaq(call, markdownHtml)),
   figure: async (call, context) => {
     const src = context.assetUrl(call.props.src) ?? call.props.src;
     return component(

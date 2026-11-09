@@ -31,7 +31,7 @@ export function ContentRequirements({
 }) {
   const introductionId = `requirements-${items[0]?.id ?? "set"}`;
   return (
-    <section class="pk-content-requirements" aria-labeledby={introductionId}>
+    <section class="pk-content-requirements" aria-labelledby={introductionId}>
       <div class="pk-content-requirements__head">
         {marker ? (
           <span class="pk-content-requirements__marker" aria-hidden="true">

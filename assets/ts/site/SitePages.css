@@ -203,21 +203,6 @@
     font-size: var(--pk-text-2xl);
   }
 
-  .pk-content-faq {
-    display: grid;
-    gap: var(--pk-6);
-  }
-
-  .pk-content-faq article {
-    padding: var(--pk-4);
-    border-block-end: 1px solid var(--pk-line);
-  }
-
-  .pk-content-faq h3 {
-    color: var(--pk-accent-ink);
-    font-weight: 700;
-  }
-
   .pk-content-glossary,
   .pk-content-maturity {
     display: grid;
