@@ -93,6 +93,7 @@ function buildAttendeeTemplateData(
     attendanceLabel: attendanceData.attendanceLabel,
     dayAttendance: attendanceData.dayAttendance,
     dayWaitlist,
+    acceptedTermsText: emailPlainText(row.acceptedTermsText),
     manageUrl: undefined,
     customAnswerRows,
   };

@@ -1,5 +1,5 @@
-import { selectedAttendanceTypeSql } from "../registrations/day-states";
-import { dayWaitlistStatusSql } from "../registrations/day-waitlist-policy";
+import { loadAcceptedTermsTextForRegistrations } from "../../utils/registration-email";
+import { registrationPopulationFilter } from "../registrations/registration-population-filter";
 import { isInvitationCampaignAudience } from "../../../../assets/shared/schemas/event-email-campaigns";
 import { listInvitationCampaignRecipients } from "./invitation-audience";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "../registrations/selected-identity";
@@ -32,33 +32,6 @@ function campaignFormResponse(response: EventFormResponse | null) {
   };
 }
 
-function dayWaitlistFilterSql(scope: "registration" | "day"): string {
-  const dayClause = scope === "day" ? " AND w.event_day_id = ed.id" : "";
-  return `AND (
-           ? = 'all'
-           OR (? = 'none' AND NOT EXISTS (
-             SELECT 1 FROM event_day_waitlist_entries w
-             WHERE w.registration_id = r.id
-               AND ${dayWaitlistStatusSql("w")} IN ('waiting', 'offered', 'accepted')${dayClause}
-           ))
-           OR (? = 'active' AND EXISTS (
-             SELECT 1 FROM event_day_waitlist_entries w
-             WHERE w.registration_id = r.id
-               AND ${dayWaitlistStatusSql("w")} IN ('waiting', 'offered')${dayClause}
-           ))
-           OR (? IN ('waiting', 'offered', 'accepted') AND EXISTS (
-             SELECT 1 FROM event_day_waitlist_entries w
-             WHERE w.registration_id = r.id
-               AND ${dayWaitlistStatusSql("w")} = ?${dayClause}
-           ))
-         )`;
-}
-
-function dayWaitlistFilterParams(status: CampaignAudienceFilter["dayWaitlistStatus"]): string[] {
-  const normalized = status ?? "all";
-  return [normalized, normalized, normalized, normalized, normalized];
-}
-
 function assertCampaignRecipientLimit(rows: unknown[], maxRecipients: number): void {
   if (rows.length <= maxRecipients) return;
   throw new AppError(
@@ -77,13 +50,18 @@ export function attendeeCampaignSelection(
   const attendeeStatus = filter.attendeeStatus ?? "registered";
   const dayWaitlistStatus = filter.dayWaitlistStatus ?? "all";
   const fetchLimit = maxRecipients === null ? -1 : maxRecipients + 1;
-  const dayFilter = filter.dayDate ? "AND ed.day_date = ?" : "";
-  const dayJoin = filter.dayDate
-    ? "JOIN registration_day_attendance rda ON rda.registration_id = r.id JOIN event_days ed ON ed.id = rda.event_day_id"
-    : "";
-  const attendanceFilter = filter.dayDate
-    ? "AND (? = 'all' OR rda.attendance_type = ?)"
-    : `AND (? = 'all' OR ${selectedAttendanceTypeSql("r")})`;
+  const population = registrationPopulationFilter(
+    event.id,
+    {
+      status: attendeeStatus === "all" ? undefined : attendeeStatus,
+      attendance_type: filter.attendanceType === "all" ? undefined : filter.attendanceType,
+      day_dates: filter.dayDate || undefined,
+      waitlisted: dayWaitlistStatus === "none" ? "false" : dayWaitlistStatus === "active" ? "true" : undefined,
+    },
+    dayWaitlistStatus === "waiting" || dayWaitlistStatus === "offered" || dayWaitlistStatus === "accepted"
+      ? dayWaitlistStatus
+      : undefined,
+  );
 
   return {
     sql: `WITH ranked_recipients AS (
@@ -94,16 +72,8 @@ export function attendeeCampaignSelection(
                     PARTITION BY lower(trim(u.email))
                     ORDER BY datetime(r.created_at) DESC, r.id ASC
                   ) AS recipient_rank
-           FROM registrations r
-           JOIN users u ON u.id = r.user_id
-
-           ${dayJoin}
-           WHERE r.event_id = ?
-             AND (? = 'all' OR r.status = ?)
-             ${dayFilter}
-             ${attendanceFilter}
+           ${population.fromSql}
              AND u.email IS NOT NULL
-             ${dayWaitlistFilterSql(filter.dayDate ? "day" : "registration")}
              AND (? IS NULL OR lower(trim(u.email)) IN (SELECT value FROM json_each(?)))
          )
          SELECT registration_id, manage_link_secret, user_id, email, first_name, last_name, organization_name,
@@ -113,13 +83,7 @@ export function attendeeCampaignSelection(
          ORDER BY lower(email) ASC
          LIMIT ?`,
     bindings: [
-      event.id,
-      attendeeStatus,
-      attendeeStatus,
-      ...(filter.dayDate ? [filter.dayDate] : []),
-      filter.attendanceType ?? "all",
-      filter.attendanceType ?? "all",
-      ...dayWaitlistFilterParams(dayWaitlistStatus),
+      ...population.bindings,
       recipientEmails ? JSON.stringify(recipientEmails) : null,
       recipientEmails ? JSON.stringify(recipientEmails) : null,
       fetchLimit,
@@ -138,7 +102,7 @@ async function listAttendeeRecipients(
   const rows = await all<AttributedAttendeeCampaignRow>(db, selection.sql, selection.bindings);
 
   assertCampaignRecipientLimit(rows, maxRecipients);
-  const [projections, formResponses] = await Promise.all([
+  const [projections, formResponses, acceptedTerms] = await Promise.all([
     projectAttendeeDayState(
       db,
       rows.map((row) => row.registration_id),
@@ -153,9 +117,17 @@ async function listAttendeeRecipients(
         answersJson: row.custom_answers_json,
       })),
     ),
+    loadAcceptedTermsTextForRegistrations(
+      db,
+      rows.map((row) => row.registration_id),
+    ),
   ]);
   return buildAttendeeCampaignRecipients(
-    rows.map((row) => ({ ...row, formResponse: campaignFormResponse(formResponses.get(row.registration_id) ?? null) })),
+    rows.map((row) => ({
+      ...row,
+      acceptedTermsText: acceptedTerms.get(row.registration_id) ?? "",
+      formResponse: campaignFormResponse(formResponses.get(row.registration_id) ?? null),
+    })),
     projections,
   );
 }

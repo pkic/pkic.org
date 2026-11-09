@@ -174,6 +174,7 @@ describe("untrusted Markdown email text", () => {
       [
         {
           registration_id: "registration-1",
+          acceptedTermsText: "",
           manage_link_secret: "secret",
           user_id: "user-1",
           email: "attendee@example.test",
