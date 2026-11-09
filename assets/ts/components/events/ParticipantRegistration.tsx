@@ -20,6 +20,7 @@ import type { EventFormsResponse } from "../../shared/types";
 import { ParticipantRegistrationDetails } from "./ParticipantRegistrationDetails";
 import { ParticipantRegistrationForm, type RegistrationChange } from "./ParticipantRegistrationForm";
 import { CopyLinkRow } from "../../shared/widgets/copy-link-row";
+import { confirmRegistrationDayChanges } from "./confirm-registration-day-changes";
 import { RegistrationDays } from "./RegistrationDays";
 import { SectionHeading } from "../../ui/SectionHeading";
 import { useDialogQueryState } from "../../hooks/useDialogQueryState";
@@ -100,6 +101,8 @@ function RegistrationRecord({
   async function save(change: RegistrationChange, outcome?: string): Promise<void> {
     // Giving up every day uses the same explicit cancellation confirmation from either editor.
     if (change.action === "update" && change.dayAttendance?.length === 0) return cancelRegistration();
+    // The day picker confirms before calling; the full editor uses the same decision here.
+    if (editing && change.dayAttendance && !(await confirmRegistrationDayChanges(data, change.dayAttendance))) return;
     setError("");
     setMessage("");
     const result = await patchJson(
@@ -131,7 +134,7 @@ function RegistrationRecord({
     const confirmed = await confirmAction({
       title: "Cancel your registration?",
       body:
-        "Your place at this event is released for someone else. You can restore the registration from this page " +
+        "Your place at this event goes to the next person on the waiting list. You can restore the registration from this page " +
         "while registration is open, but a released place is not held for you.",
       confirmLabel: "Cancel registration",
       cancelLabel: "Keep registration",

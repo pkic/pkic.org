@@ -5,6 +5,7 @@
  */
 import type { z } from "zod";
 import type { eventDetailResponseSchema } from "../../../../../../shared/schemas/event-management";
+import { eventPhase } from "./event-timing";
 import { formatEventPlace } from "../../../../../../shared/event-place";
 
 export type ParticipantEventDetail = z.infer<typeof eventDetailResponseSchema>["event"];
@@ -29,6 +30,14 @@ export function eventRegistrationStanding(event: {
     status,
     registered: Boolean((registrationId || viewer) && status && status !== "cancelled"),
   };
+}
+
+/** Colleague invitations expire at the start, and require a confirmed registration. */
+export function canInviteColleagues(event: ParticipantEventDetail, now = Date.now()): boolean {
+  return (
+    eventPhase(event.startsAt, event.endsAt, now).kind === "upcoming" &&
+    eventRegistrationStanding(event).status === "registered"
+  );
 }
 
 /**

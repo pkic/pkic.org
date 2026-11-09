@@ -1,29 +1,22 @@
-/**
- * The registration's days: the shared day summary, and the two ways to change
- * them.
- *
- * In-person seats are limited and paid for, so a registration holding one
- * leads with "Can't make it in person?" — a short guided dialog that releases
- * seats to the waiting list. Other changes (joining in person, switching a day
- * between online and on demand) open the same day picker the registration form
- * uses. Moving a day to in-person goes through the server's waiting list like
- * any registration; a waiting day is kept as in-person, so saving it unchanged
- * keeps its place in the queue.
- */
-import { useState } from "preact/hooks";
+/** The registration day summary and its single attendance editor. */
+import { useRef, useState } from "preact/hooks";
 
 import { registrationManageSchema, type RegistrationManageReadResponse } from "../../../shared/schemas/registration";
 import { useContractForm } from "../../hooks/useContractForm";
 import { Button } from "../../ui/Button";
 import { DayAttendancePicker, NOT_ATTENDING } from "../DayAttendancePicker";
 import { RegistrationDayStatusSummary } from "../RegistrationDayStatusSummary";
-import { registrationDays, type RegistrationDayView } from "./registration-day-changes";
-import { ReleaseSeatDialog, releasableDays } from "./ReleaseSeatDialog";
+import {
+  hasLimitedAttendance,
+  registrationDays,
+  releasedRegistrationDays,
+  type RegistrationDayView,
+  type RegistrationDayChoices as DayAttendance,
+} from "./registration-day-changes";
+import { confirmRegistrationDayChanges } from "./confirm-registration-day-changes";
 import { PersonalAddressPrompt } from "./PersonalAddressPrompt";
 import "./RegistrationDays.css";
 import { SectionHeading } from "../../ui/SectionHeading";
-
-type DayAttendance = Array<{ dayDate: string; attendanceType: string }>;
 
 function currentType(day: RegistrationDayView): string | null {
   return day.state.kind === "absent" ? null : day.state.attendanceType;
@@ -35,12 +28,14 @@ function DaysForm({
   busy,
   onSave,
   onDiscard,
+  focusDay,
 }: {
   data: RegistrationManageReadResponse;
   days: RegistrationDayView[];
   busy: boolean;
   onSave: (dayAttendance: DayAttendance) => void;
   onDiscard: () => void;
+  focusDay: string | null;
 }) {
   const [draft, setDraft] = useState<Record<string, string>>(() =>
     Object.fromEntries(days.map((day) => [day.dayDate, currentType(day) ?? NOT_ATTENDING])),
@@ -49,22 +44,26 @@ function DaysForm({
     .filter((day) => draft[day.dayDate])
     .map((day) => ({ dayDate: day.dayDate, attendanceType: draft[day.dayDate]! }));
   const form = useContractForm(registrationManageSchema, { action: "update", dayAttendance });
-  // Only a confirmed seat is released; a day still waiting holds none.
-  const hasLimit = (dayDate: string, value: string | null | undefined) => {
-    const option = data.eventDays
-      .find((day) => day.dayDate === dayDate)
-      ?.attendanceOptions.find((item) => item.value === value);
-    return option?.spotsRemainingPercent != null;
-  };
-  const releasing = days.some(
-    (day) =>
-      day.state.kind === "attending" &&
-      draft[day.dayDate] !== currentType(day) &&
-      hasLimit(day.dayDate, currentType(day)),
-  );
+  const releasedDays = releasedRegistrationDays(data, dayAttendance);
   const joining = days.some(
-    (day) => draft[day.dayDate] !== currentType(day) && hasLimit(day.dayDate, draft[day.dayDate]),
+    (day) => draft[day.dayDate] !== currentType(day) && hasLimitedAttendance(data, day.dayDate, draft[day.dayDate]),
   );
+
+  const confirming = useRef(false);
+
+  async function save() {
+    if (busy || confirming.current) return;
+    const checked = form.submit();
+    if (!checked.data) return;
+    confirming.current = true;
+    try {
+      if (!(await confirmRegistrationDayChanges(data, dayAttendance))) return;
+      // The caller confirms cancellation when no days remain.
+      onSave(checked.data.dayAttendance ?? []);
+    } finally {
+      confirming.current = false;
+    }
+  }
 
   return (
     <form
@@ -73,12 +72,12 @@ function DaysForm({
       {...form.handlers}
       onSubmit={(event) => {
         event.preventDefault();
-        // No day left is not a day change: the caller treats it as cancelling.
-        onSave(form.submit().data?.dayAttendance ?? []);
+        void save();
       }}
     >
       <DayAttendancePicker
         days={data.eventDays}
+        focusDay={focusDay}
         value={draft}
         onChange={(dayDate, attendanceType) => setDraft((current) => ({ ...current, [dayDate]: attendanceType }))}
       />
@@ -88,7 +87,7 @@ function DaysForm({
           place is available.
         </p>
       )}
-      {releasing && (
+      {releasedDays.length > 0 && (
         <p class="pk-small">
           Your place may go to the next person on the waiting list as soon as you save. If you change your mind later,
           you join the waiting list again.
@@ -120,12 +119,10 @@ export function RegistrationDays({
   editable: boolean;
   onSave: (dayAttendance: DayAttendance) => void;
   onClaim: (dayDates: string[]) => void;
-  /** Opens the release dialog on arrival with this day chosen, for a link such as "No, I can't make it". */
+  /** Opens the picker and focuses this day for an attendance email link. */
   focusDay?: string | null;
 }) {
-  const seats = releasableDays(data);
-  const [releasing, setReleasing] = useState(Boolean(focusDay) && editable && seats.length > 0);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(Boolean(focusDay) && editable);
   const days = registrationDays(data);
   if (days.length === 0) return null;
 
@@ -139,6 +136,7 @@ export function RegistrationDays({
           data={data}
           days={days}
           busy={busy}
+          focusDay={focusDay}
           onSave={(dayAttendance) => {
             setEditing(false);
             onSave(dayAttendance);
@@ -159,29 +157,12 @@ export function RegistrationDays({
           )}
           {editable && (
             <div class="pk-cluster">
-              {seats.length > 0 && (
-                <Button disabled={busy} onClick={() => setReleasing(true)}>
-                  Can't make it in person?
-                </Button>
-              )}
-              <Button variant="ghost" disabled={busy} onClick={() => setEditing(true)}>
+              <Button disabled={busy} onClick={() => setEditing(true)}>
                 Change my days
               </Button>
             </div>
           )}
         </>
-      )}
-      {releasing && (
-        <ReleaseSeatDialog
-          data={data}
-          open
-          initialDay={focusDay}
-          onCancel={() => setReleasing(false)}
-          onRelease={(dayAttendance) => {
-            setReleasing(false);
-            onSave(registrationManageSchema.parse({ action: "update", dayAttendance }).dayAttendance ?? []);
-          }}
-        />
       )}
     </section>
   );

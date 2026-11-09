@@ -28,7 +28,8 @@
  * a rule about the whole body, or a field without a visible control — and is
  * null otherwise, so the form's alert never repeats a field's message.
  *
- * Controls are keyed by `name`, which must match the contract's field.
+ * Controls are keyed by `name`. `fieldOf` maps custom controls to contract
+ * paths; `keyOf` maps contract paths to stable control names for editable rows.
  */
 import { useCallback, useEffect, useState } from "preact/hooks";
 import type { z } from "zod";
@@ -87,10 +88,10 @@ function isControl(target: EventTarget | null): target is Control {
 const CONCEALED = "[hidden],dialog:not([open]),[aria-hidden='true']";
 
 /** The contract fields that have a control on the page, and whether that control is in view. */
-function fieldsOnPage(fieldOf: ContractFormOptions["fieldOf"]): Map<string, boolean> {
+function fieldsOnPage(fieldOf: ContractFormOptions["fieldOf"], keyOf: (path: string) => string): Map<string, boolean> {
   const fields = new Map<string, boolean>();
   for (const control of document.querySelectorAll<Control>("input[name],select[name],textarea[name]")) {
-    const name = (fieldOf ? fieldOf(control.name, control) : control.name).replace(/\[\]$/, "");
+    const name = keyOf((fieldOf ? fieldOf(control.name, control) : control.name).replace(/\[\]$/, ""));
     fields.set(name, fields.get(name) === true || !control.closest(CONCEALED));
   }
   return fields;
@@ -125,14 +126,18 @@ export interface ContractFormOptions {
    * itself — a respondent control is `custom.<key>` or `custom.<key>[]`.
    */
   fieldOf?: (name: string, control: Control) => string;
+  /** Stable field keys for editable collections whose transport indices can change. */
+  keyOf?: (path: string) => string;
 }
+
+const identityFieldKey = (path: string): string => path;
 
 export function useContractForm<Schema extends z.ZodType>(
   schema: Schema,
   body: unknown,
   options: ContractFormOptions = {},
 ): ContractForm<z.output<Schema>> {
-  const { fieldOf, quietWhenEmpty = false, revealField, deferUntilSubmit = [] } = options;
+  const { fieldOf, keyOf = identityFieldKey, quietWhenEmpty = false, revealField, deferUntilSubmit = [] } = options;
   const [touched, setTouched] = useState<Record<string, Touch>>({});
   const [refused, setRefused] = useState<Record<string, string>>({});
   const [showAll, setShowAll] = useState(false);
@@ -140,7 +145,9 @@ export function useContractForm<Schema extends z.ZodType>(
 
   const readBody = () => (typeof body === "function" ? body() : body);
   const result = schema.safeParse(readBody());
-  const issues: Record<string, string> = result.success ? {} : normalizeValidation(result.error).fields;
+  const stableFields = (fields: Record<string, string>) =>
+    Object.fromEntries(Object.entries(fields).map(([path, message]) => [keyOf(path), message]));
+  const issues: Record<string, string> = result.success ? {} : stableFields(normalizeValidation(result.error).fields);
 
   // After a refusal the first refused field takes focus — once its mark is
   // on the page, and only then; retyping must not move the caret.
@@ -164,7 +171,7 @@ export function useContractForm<Schema extends z.ZodType>(
           (control instanceof HTMLInputElement && (control.type === "checkbox" || control.type === "radio")))
       )
         return;
-      const name = fieldOf ? fieldOf(control.name, control) : control.name;
+      const name = keyOf(fieldOf ? fieldOf(control.name, control) : control.name);
       setTouched((current) => ({ ...current, [name]: { hasValue: hasValue(control) } }));
       // A field being retyped is no longer the field the server refused.
       setRefused((current) => {
@@ -174,14 +181,15 @@ export function useContractForm<Schema extends z.ZodType>(
         return next;
       });
     },
-    [fieldOf],
+    [fieldOf, keyOf],
   );
 
   const of = (name: string): FieldPresentation => {
+    name = keyOf(name);
     // A server refusal shows whether or not the reader touched the field;
     // the contract's own verdict waits until they have.
     const quiet = quietWhenEmpty && !showAll && touched[name]?.hasValue !== true;
-    const seen = !quiet && (showAll || (!deferUntilSubmit.includes(name) && name in touched));
+    const seen = !quiet && (showAll || (!deferUntilSubmit.some((path) => keyOf(path) === name) && name in touched));
     const message = refused[name] ?? (seen ? issues[name] : undefined);
     if (message) return { state: "invalid", message };
     return seen && touched[name]?.hasValue ? { state: "ok" } : {};
@@ -192,17 +200,18 @@ export function useContractForm<Schema extends z.ZodType>(
     if (result.success) return { data: result.data as z.output<Schema>, formMessage: null };
     const first = result.error.issues.find((issue) => issue.path.length > 0);
     const firstPath = first?.path.map(String).join(".");
-    if (firstPath !== undefined) revealField?.(firstPath);
+    if (firstPath !== undefined) revealField?.(keyOf(firstPath));
     setShowAll(true);
     setFocusAt(Date.now());
     // A field that shows its own reason is not repeated in the form's alert;
     // only a reason with nowhere to show is.
-    const onPage = fieldsOnPage(fieldOf);
+    const onPage = fieldsOnPage(fieldOf, keyOf);
     const unplaced = result.error.issues.find((issue) => {
       if (issue.path.length === 0) return true;
-      const path = issue.path.map(String).join(".");
+      const path = keyOf(issue.path.map(String).join("."));
       return ![...onPage].some(
-        ([field, inView]) => related(path, field) && (inView || (revealField !== undefined && path === firstPath)),
+        ([field, inView]) =>
+          related(path, field) && (inView || (revealField !== undefined && path === keyOf(firstPath ?? ""))),
       );
     });
     return { data: null, formMessage: unplaced?.message ?? null };
@@ -213,8 +222,8 @@ export function useContractForm<Schema extends z.ZodType>(
     if (Object.keys(refusal.fields).length > 0) {
       const names = Object.keys(refusal.fields);
       const first = names.find((name) => !names.some((other) => other.startsWith(`${name}.`)));
-      if (first) revealField?.(first);
-      setRefused(refusal.fields);
+      if (first) revealField?.(keyOf(first));
+      setRefused(stableFields(refusal.fields));
       setFocusAt(Date.now());
     }
     return refusal.globalMessage;
@@ -228,7 +237,7 @@ export function useContractForm<Schema extends z.ZodType>(
 
   const errorsWithin = (name: string) =>
     Object.keys({ ...issues, ...refused })
-      .filter((key) => key === name || key.startsWith(`${name}.`))
+      .filter((key) => key === keyOf(name) || key.startsWith(`${keyOf(name)}.`))
       .flatMap((key) => {
         const presentation = of(key);
         return presentation.message ? [presentation.message] : [];

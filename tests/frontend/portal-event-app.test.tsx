@@ -228,7 +228,7 @@ describe("event bottom tabs", () => {
       "Ticket",
       "Virtual room",
       "Registration",
-      "Share",
+      "Share & Invite",
     ]);
     expect(host.querySelector('[data-event-more="promotion"]')?.getAttribute("href")).toBe("#/events/summit/promotion");
     // The desktop tabs remain the page's one "Event" navigation.

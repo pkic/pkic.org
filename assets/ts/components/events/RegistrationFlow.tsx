@@ -34,7 +34,6 @@ import { EventFlowProgress } from "../../site/EventFlowProgress";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { Field } from "../../ui/Field";
-import { SectionHeading } from "../../ui/SectionHeading";
 import { TextInput } from "../../ui/TextControl";
 import { ConsentList } from "../ConsentCard";
 import { DayAttendancePicker } from "../DayAttendancePicker";
@@ -425,12 +424,7 @@ export function RegistrationFlow(props: Props) {
               <p class="event-flow-step-intro">Help us tailor the program and connect you with relevant people.</p>
             )}
             <div data-custom-fields>
-              {forms.form && fields.length > 0 && (
-                <>
-                  <SectionHeading level={3}>{forms.form.title}</SectionHeading>
-                  {forms.form.description && <p>{forms.form.description}</p>}
-                </>
-              )}
+              {forms.form && fields.length > 0 && <></>}
               <CustomFieldList
                 fields={fields}
                 initialValues={initial?.registration.custom_answers ?? undefined}

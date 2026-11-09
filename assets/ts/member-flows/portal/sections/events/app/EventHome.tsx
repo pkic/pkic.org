@@ -29,6 +29,7 @@ import { EventHero } from "./EventHero";
 import { eventPhase, sessionPhase } from "./event-timing";
 import { attendanceStanding, attendanceStandingParts } from "../../../../../shared/viewer-attendance";
 import {
+  canInviteColleagues,
   eventManagementPath,
   eventRegistrationStanding,
   registrationOffer,
@@ -41,6 +42,7 @@ import { useEventNow, type AgendaSession } from "./useEventNow";
 import { AttendanceCheckCard, SupportCard, WelcomeBanner } from "./EventWelcome";
 import { WatchLiveCard } from "./virtual-room/WatchLiveCard";
 import { PersonalAddressPrompt } from "../../../../../components/events/PersonalAddressPrompt";
+import { InviteColleagueButton } from "../../../../../components/event-invites/InviteColleagueButton";
 import { CheckInCard } from "./CheckInCard";
 
 const href = usePortalHashLocation.hrefs;
@@ -229,12 +231,12 @@ function ProposalsCard({ event }: { event: ParticipantEventDetail }) {
   );
 }
 
-export function EventHome({ event }: { event: ParticipantEventDetail }) {
-  const phase = eventPhase(event.startsAt, event.endsAt);
+export function EventHome({ event, now = Date.now() }: { event: ParticipantEventDetail; now?: number }) {
+  const phase = eventPhase(event.startsAt, event.endsAt, now);
   const ended = phase.kind === "ended";
   const current =
     (phase.kind === "live" || phase.kind === "upcoming") && eventRegistrationStanding(event).status === "registered";
-  const now = useEventNow(event.slug, current);
+  const agendaNow = useEventNow(event.slug, current);
   // Online attendees are sent to the stream first; everyone else still reaches it from a session's Join online.
   const viewer = "viewer" in event ? event.viewer : null;
   const standing = viewer ? attendanceStanding(viewer) : null;
@@ -245,21 +247,29 @@ export function EventHome({ event }: { event: ParticipantEventDetail }) {
       {phase.kind === "live" &&
         eventRegistrationStanding(event).registered &&
         standing?.holdsInPersonSeat !== false && <CheckInCard slug={event.slug} />}
-      {current && watchesOnline && now.data && <WatchLiveCard slug={event.slug} live={now.data.live} />}
+      {current && watchesOnline && agendaNow.data && <WatchLiveCard slug={event.slug} live={agendaNow.data.live} />}
       {!ended && <AttendanceCheckCard event={event} />}
       {current &&
-        (now.loading ? (
+        (agendaNow.loading ? (
           <Spinner label="Loading your agenda…" />
-        ) : now.error ? (
-          <ErrorAlert error={now.error} />
+        ) : agendaNow.error ? (
+          <ErrorAlert error={agendaNow.error} />
         ) : (
           <>
-            <NextSessionCard slug={event.slug} session={now.data?.next ?? null} />
-            <LiveNowCard slug={event.slug} sessions={now.data?.live ?? []} />
+            <NextSessionCard slug={event.slug} session={agendaNow.data?.next ?? null} />
+            <LiveNowCard slug={event.slug} sessions={agendaNow.data?.live ?? []} />
           </>
         ))}
       <TicketCard event={event} ended={ended} />
       <ProposalsCard event={event} />
+      {canInviteColleagues(event, now) && (
+        <EventCard eyebrow="Invitations" title="Invite a colleague">
+          <p>Send colleagues a personal invitation to register for this event.</p>
+          <div class="pk-cluster">
+            <InviteColleagueButton eventSlug={event.slug} />
+          </div>
+        </EventCard>
+      )}
       <SupportCard source={`event:${event.slug}`} />
       <JoinPrompt />
     </div>

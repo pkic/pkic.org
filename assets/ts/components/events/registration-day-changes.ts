@@ -3,7 +3,8 @@
  * in-person seat, or not attending — a day missing from `dayAttendance`,
  * since there is no stored "not attending" type.
  */
-import type { RegistrationManageReadResponse } from "../../../shared/schemas/registration";
+import type { z } from "zod";
+import type { registrationManageSchema, RegistrationManageReadResponse } from "../../../shared/schemas/registration";
 import { eventAttendanceAccessMode } from "../../../shared/event-attendance-access";
 
 export function physicalAttendance(data: RegistrationManageReadResponse, dayDate: string, value: string): boolean {
@@ -43,4 +44,32 @@ export function registrationDays(data: RegistrationManageReadResponse): Registra
               : { kind: "absent" };
       return { dayDate: day.dayDate, label: day.label, state };
     });
+}
+
+export type RegistrationDayChoices = NonNullable<z.output<typeof registrationManageSchema>["dayAttendance"]>;
+
+export function hasLimitedAttendance(
+  data: RegistrationManageReadResponse,
+  dayDate: string,
+  value: string | null | undefined,
+): boolean {
+  return (
+    data.eventDays.find((day) => day.dayDate === dayDate)?.attendanceOptions.find((option) => option.value === value)
+      ?.spotsRemainingPercent != null
+  );
+}
+
+/** Only confirmed seats are released; a waiting or offered day holds none yet. */
+export function releasedRegistrationDays(
+  data: RegistrationManageReadResponse,
+  next: RegistrationDayChoices,
+): RegistrationDayView[] {
+  const choices = new Map(next.map((day) => [day.dayDate, day.attendanceType]));
+  return registrationDays(data).filter(
+    (day) =>
+      day.state.kind === "attending" &&
+      choices.get(day.dayDate) !== day.state.attendanceType &&
+      (physicalAttendance(data, day.dayDate, day.state.attendanceType) ||
+        hasLimitedAttendance(data, day.dayDate, day.state.attendanceType)),
+  );
 }

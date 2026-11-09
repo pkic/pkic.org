@@ -446,8 +446,9 @@ export const registrationManageUpdateResponseSchema = successResponseSchema.exte
 export type RegistrationManageReadResponse = z.infer<typeof registrationManageReadResponseSchema>;
 export type RegistrationManageUpdateResponse = z.infer<typeof registrationManageUpdateResponseSchema>;
 
+export const REGISTRATION_PEER_INVITE_BATCH_LIMIT = 10;
 export const registrationInviteCreateSchema = eventInviteValiditySchema.extend({
-  invites: z.array(inviteeSchema).min(1).max(10),
+  invites: z.array(inviteeSchema).min(1).max(REGISTRATION_PEER_INVITE_BATCH_LIMIT),
 });
 
 export const peerInviteResultSchema = successResponseSchema.extend({
@@ -472,8 +473,8 @@ function peerInviteRouteSchema(summary: string, description: string) {
         content: { "application/json": { schema: peerInviteResultSchema } },
       },
       "400": { description: "Invalid invite payload." },
-      "401": { description: "Registration manage token required." },
-      "403": { description: "The manage token is not valid for this event." },
+      "401": { description: "A signed-in attendee or registration manage capability is required." },
+      "403": { description: "An active registration for this event is required." },
       "429": { description: "Invite quota exceeded." },
     },
   };
@@ -481,11 +482,11 @@ function peerInviteRouteSchema(summary: string, description: string) {
 
 export const attendeePeerInvitesRouteSchema = peerInviteRouteSchema(
   "Create attendee peer invites",
-  "Creates or endorses a bounded set of attendee invitations using the caller's registration manage capability.",
+  "Creates or endorses a bounded set of attendee invitations using the caller's owned registration session or registration manage capability.",
 );
 export const speakerPeerInvitesRouteSchema = peerInviteRouteSchema(
   "Create speaker peer nominations",
-  "Creates or endorses a bounded set of speaker nominations using the caller's registration manage capability.",
+  "Creates or endorses a bounded set of speaker nominations using the caller's owned registration session or registration manage capability.",
 );
 
 export const INVITE_FORWARD_LIMIT = 5;

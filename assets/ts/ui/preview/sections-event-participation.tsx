@@ -1,6 +1,7 @@
 import type { PreviewSection } from "./PreviewShell";
 import { AttendanceSettingsPreview } from "./AttendanceSettingsPreview";
 import { EventCard } from "../../site/EventCard";
+import { InviteColleagueButton } from "../../components/event-invites/InviteColleagueButton";
 import { DayAttendancePicker } from "../../components/DayAttendancePicker";
 import { eventDayReadModelSchema } from "../../../shared/schemas/event-read-models";
 import { ATTENDANCE_ICON_LABELS, type AttendanceIconName } from "../../../shared/event-attendance-icons";
@@ -8,6 +9,16 @@ import "../../../design/tokens.public.generated.css";
 import "../../member-flows/portal/sections/DiscoveryView.css";
 
 export const eventParticipationSections: PreviewSection[] = [
+  {
+    id: "invite-colleague",
+    title: "Invite a colleague",
+    note: "Shared invitation dialog for the event home and Share & Invite.",
+    render: () => (
+      <div data-gallery-open>
+        <InviteColleagueButton eventSlug="synthetic-conference" />
+      </div>
+    ),
+  },
   {
     id: "attendance-settings-view",
     title: "Attendance settings view",

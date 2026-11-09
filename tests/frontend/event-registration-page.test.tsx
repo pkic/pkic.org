@@ -17,6 +17,7 @@ import {
   type RegistrationEmailProofVerifyResponse,
 } from "../../assets/shared/schemas/registration-email-proof";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
+import { FORMS } from "./helpers/participant-registration-fixtures";
 import { chooseCard, controlFor } from "./helpers/labeled-control";
 
 const PLACEMENTS = "/api/v1/events/pqc-2026/forms/placements/event_registration";
@@ -46,7 +47,11 @@ function installApi(workEmail = false, scheduled = true, person: SavedPerson | n
           json({
             event: { id: "20000000-0000-4000-8000-000000000001", slug: "pqc-2026", name: "PQC Conference 2026" },
             purpose: "event_registration",
-            form: null,
+            form: {
+              ...FORMS.form,
+              title: "Administrative registration questions",
+              description: "Internal placement description",
+            },
             registrationPolicy: "public",
             requiredTerms: [
               {
@@ -162,6 +167,12 @@ async function loadPage(workEmail = false, scheduled = true, person: SavedPerson
 }
 
 describe("registration email-first entry", () => {
+  it("shows embedded questions without the administrative form title or description", async () => {
+    await loadPage();
+    expect(document.body.textContent).toContain("Dietary requirements");
+    expect(document.body.textContent).not.toContain("Administrative registration questions");
+    expect(document.body.textContent).not.toContain("Internal placement description");
+  });
   it("explains that registration is unavailable until event days are scheduled", async () => {
     const requests = await loadPage(false, false);
     expect(document.body.textContent).toContain("Registration opens when the event days are scheduled.");

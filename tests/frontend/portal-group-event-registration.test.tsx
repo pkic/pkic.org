@@ -165,8 +165,8 @@ describe("portal group event registration", () => {
     const container = mount(<GroupEventRegistrationPanel groupId={GROUP_ID} event={event} />);
     await settle();
     expect(container.textContent).toContain("Role");
-    expect(container.textContent).toContain("Registration details");
-    expect(container.textContent).toContain("Tell the event team how you plan to participate.");
+    expect(container.textContent).not.toContain("Registration details");
+    expect(container.textContent).not.toContain("Tell the event team how you plan to participate.");
     expect(container.textContent).toContain("I agree to the event terms");
     expect(container.textContent).toContain("Day one");
 

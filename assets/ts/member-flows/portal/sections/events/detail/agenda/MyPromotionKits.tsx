@@ -1,3 +1,4 @@
+import { InviteColleagueButton } from "../../../../../../components/event-invites/InviteColleagueButton";
 import { EmptyState } from "../../../../../../ui/EmptyState";
 import { useData } from "../../../../../../hooks/useData";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
@@ -13,12 +14,14 @@ import { PromotionBadgeTile } from "./PromotionBadgeTile";
 export function MyPromotionKits({
   slug,
   attendeeEligible = false,
+  canInvite = false,
   speakerEligible = true,
   share,
   userId,
 }: {
   slug: string;
   attendeeEligible?: boolean;
+  canInvite?: boolean;
   speakerEligible?: boolean;
   share?: SharePanelOptions;
   userId?: string;
@@ -64,7 +67,12 @@ export function MyPromotionKits({
           leading={badgeUrl && <PromotionBadgeTile badgeUrl={badgeUrl} />}
         />
       )}
-      {share && <SharePanel options={{ ...share, hideBadge: true }} />}
+      {share && (
+        <SharePanel
+          options={{ ...share, hideBadge: true }}
+          inviteAction={canInvite && !userId ? <InviteColleagueButton eventSlug={slug} /> : undefined}
+        />
+      )}
     </div>
   );
 }
