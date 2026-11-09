@@ -10,6 +10,7 @@ import { REGISTRATION_DAY_WAITLIST_DISPLAY } from "../../shared/status-display";
  * offered seat leads, with the claim when the screen can act on it.
  */
 import { formatDateTime, formatDayList } from "../../shared/format-date";
+import { formatNumber } from "../../shared/format-number";
 import { attendanceIconName } from "../../shared/event-attendance-icons";
 import { attendanceTypeLabel } from "../shared/attendance";
 import { groupRegistrationDays, hasWaitingDays, type DayStatusGroup } from "../shared/registration-day-status";
@@ -40,7 +41,7 @@ export function hasPendingRegistrationDayWaitlist(dayWaitlist: RegistrationDayWa
 }
 
 function whichDays(group: DayStatusGroup, total: number): string {
-  if (group.dayDates.length === total && total > 1) return `All ${total} days`;
+  if (group.dayDates.length === total && total > 1) return `All ${formatNumber(total)} days`;
   return formatDayList(group.dayDates);
 }
 
@@ -62,7 +63,7 @@ function GroupRow({
     group.kind === "confirmed" || group.kind === "cancelled" ? null : REGISTRATION_DAY_WAITLIST_DISPLAY[group.kind];
   const needsAttendanceChoice = group.kind === "offered" && !group.attendanceType;
   const title = needsAttendanceChoice
-    ? "Attendance choice needed"
+    ? "Offer needs organizer help"
     : display
       ? `${display.label}${group.attendanceType ? `: ${option}` : ""}`
       : group.kind === "cancelled"
@@ -78,15 +79,22 @@ function GroupRow({
       <span class="pk-day-status__body">
         <span class="pk-day-status__title">{title}</span>
         <span class="pk-day-status__days">{whichDays(group, total)}</span>
-        {needsAttendanceChoice && <span class="pk-small">Update and save your attendance to request a place.</span>}
+        {needsAttendanceChoice && (
+          <span class="pk-small">
+            Your saved attendance choice is missing. Contact the event organizer before changing your attendance;
+            choosing another option may lose this offer.
+          </span>
+        )}
         {group.kind === "waiting" && (
           <span class="pk-small">You stay registered. We email you when a place is available.</span>
         )}
         {group.kind === "expired" && (
           <span class="pk-small">Update and save your attendance to request a place again.</span>
         )}
-        {group.kind === "offered" && group.attendanceType && group.offerExpiresAt && (
-          <span class="pk-small">Claim it before {formatDateTime(group.offerExpiresAt)}.</span>
+        {group.kind === "offered" && group.offerExpiresAt && (
+          <span class="pk-small">
+            {needsAttendanceChoice ? "Offer expires" : "Claim it before"} {formatDateTime(group.offerExpiresAt)}.
+          </span>
         )}
       </span>
       {group.kind === "offered" && group.attendanceType && onClaim && (
@@ -114,6 +122,7 @@ export function RegistrationDayStatusSummary({
   onClaim?: (dayDates: string[]) => void;
 }) {
   const groups = groupRegistrationDays(dayAttendance, dayWaitlist, { cancelled });
+  const totalDays = new Set(groups.flatMap((group) => group.dayDates)).size;
   if (groups.length === 0) return null;
   return (
     <ul
@@ -125,7 +134,7 @@ export function RegistrationDayStatusSummary({
         <GroupRow
           key={JSON.stringify([group.kind, group.attendanceType, group.optionLabel])}
           group={group}
-          total={dayAttendance.length}
+          total={totalDays}
           busy={busy}
           onClaim={onClaim}
         />

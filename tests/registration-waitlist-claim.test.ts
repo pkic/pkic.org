@@ -225,6 +225,29 @@ describe("mounted registration day-waitlist claims", () => {
     expect(await aggregateEffects(fixture.registrationId)).toEqual({ firstName: "Before", outbox: 0, audits: 0 });
   });
 
+  it("keeps an orphaned offer intact when its canonical attendance choice is missing", async () => {
+    const fixture = await seedClaimFixture(["2026-12-01"], ["2026-12-01"]);
+    await env.DB.prepare("DELETE FROM registration_day_attendance WHERE registration_id = ?")
+      .bind(fixture.registrationId)
+      .run();
+    const before = await queryAll<{ status: string; offer_expires_at: string | null; position: number }>(
+      env.DB,
+      "SELECT status, offer_expires_at, position FROM event_day_waitlist_entries WHERE registration_id = ?",
+      [fixture.registrationId],
+    );
+
+    await expectClaimConflict(await callMountedClaim(fixture.token, ["2026-12-01"]));
+
+    expect(await aggregateEffects(fixture.registrationId)).toEqual({ firstName: "Before", outbox: 0, audits: 0 });
+    await expect(
+      queryAll(
+        env.DB,
+        "SELECT status, offer_expires_at, position FROM event_day_waitlist_entries WHERE registration_id = ?",
+        [fixture.registrationId],
+      ),
+    ).resolves.toEqual(before);
+  });
+
   it("rejects a claim whose date is not selected for in-person attendance", async () => {
     const fixture = await seedClaimFixture(["2026-12-01"], ["2026-12-01"]);
 

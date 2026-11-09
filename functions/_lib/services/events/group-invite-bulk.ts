@@ -1,4 +1,6 @@
 import type { AuthAdmin, DatabaseLike } from "../../types";
+import { isAuthorizationGuardTriggerFailure } from "../../db/authorization-guard";
+import { AppError } from "../../errors";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { requireGroupEventProposalContext, prepareGroupEventProposalContextGuard } from "../proposal-group-context";
 import { getEventById, buildEventEmailVariables } from "../events";
@@ -221,6 +223,15 @@ export async function bulkCreateGroupEventSpeakerInvites(
           },
         };
       },
+    }).catch((error: unknown) => {
+      if (isAuthorizationGuardTriggerFailure(error)) {
+        throw new AppError(
+          409,
+          "GROUP_EVENT_PROPOSAL_CONTEXT_CHANGED",
+          "Proposal-program access changed before the invitations could be created. Reload before retrying.",
+        );
+      }
+      throw error;
     }),
   );
 }

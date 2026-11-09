@@ -4,12 +4,13 @@ import { callApi } from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { listGroupEventSpeakerInvites } from "../functions/_lib/services/events/group-invite-management";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery, mutateBeforeNextBatch } from "./helpers/database-races";
 import { createGroupEventInvitationFixture } from "./helpers/group-event-invitations";
 import { createGroup } from "../functions/_lib/services/groups";
+import type { DatabaseLike } from "../functions/_lib/types";
 
-async function request(token: string, path: string, body?: unknown): Promise<Response> {
-  return callApi(env, path, {
+async function request(token: string, path: string, body?: unknown, db: DatabaseLike = env.DB): Promise<Response> {
+  return callApi({ ...env, DB: db }, path, {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -18,6 +19,60 @@ async function request(token: string, path: string, body?: unknown): Promise<Res
 
 describe("group event bulk invitations", () => {
   beforeEach(resetDb);
+
+  it.each(["permission_revoked", "event_moved"] as const)(
+    "refuses speaker bulk invitations atomically when %s after preflight",
+    async (race) => {
+      const fixture = await createGroupEventInvitationFixture(env.DB, `speaker-${race}`);
+      await seedWorkflowEmailTemplates(env.DB, fixture.actor.id);
+      const invites = [{ email: "speaker-race@example.test", firstName: "Synthetic" }];
+      const preview = await request(fixture.token, `${fixture.basePath}/speakers/preview`, { invites });
+      expect(preview.status, await preview.clone().text()).toBe(200);
+      const { previewToken, inviteDigest } = (await preview.json()) as {
+        previewToken: string;
+        inviteDigest: string;
+      };
+      const otherGroup = await createGroup(env.DB, fixture.actor, {
+        typeKey: "working_group",
+        name: `Speaker race destination ${crypto.randomUUID()}`,
+        visibility: "authenticated",
+        eligibilityMode: "open",
+      });
+      let raced = false;
+      const db = mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => sql.includes("INSERT INTO invites"),
+        async () => {
+          raced = true;
+          if (race === "permission_revoked") {
+            await env.DB.prepare("UPDATE user_roles SET revoked_at = ? WHERE user_id = ?")
+              .bind(new Date().toISOString(), fixture.actor.id)
+              .run();
+          } else {
+            await env.DB.prepare("UPDATE events SET owner_group_id = ? WHERE id = ?")
+              .bind(otherGroup.id, fixture.eventId)
+              .run();
+          }
+        },
+      );
+      const response = await request(
+        fixture.token,
+        `${fixture.basePath}/speakers/bulk`,
+        { invites, previewToken, inviteDigest },
+        db,
+      );
+      expect(raced).toBe(true);
+      expect(response.status, await response.clone().text()).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "GROUP_EVENT_PROPOSAL_CONTEXT_CHANGED" },
+      });
+      for (const table of ["invites", "email_outbox"] as const) {
+        await expect(
+          env.DB.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE event_id = ?`).bind(fixture.eventId).first(),
+        ).resolves.toEqual({ count: 0 });
+      }
+    },
+  );
 
   it("uses only nested group routes for preview, attendee creation, and speaker lifecycle", async () => {
     const fixture = await createGroupEventInvitationFixture(env.DB, "bulk-invitations");

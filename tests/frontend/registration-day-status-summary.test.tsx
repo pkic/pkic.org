@@ -76,6 +76,50 @@ describe("RegistrationDayStatusSummary", () => {
     expect(root.querySelector("button")).toBeNull();
   });
 
+  it("counts waitlist-only days when deciding whether a group covers every day", () => {
+    const root = mount(
+      [
+        { dayDate: "2026-09-01", attendanceType: "in_person", label: null },
+        { dayDate: "2026-09-02", attendanceType: "in_person", label: null },
+      ],
+      [
+        { dayDate: "2026-09-03", status: "waiting" },
+        { dayDate: "2026-09-04", status: "waiting" },
+      ],
+    );
+    const rows = [...root.querySelectorAll<HTMLElement>("li")];
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.dataset.kind)).toEqual(["waiting", "confirmed"]);
+    expect(rows.every((row) => !row.textContent?.includes("All 2 days"))).toBe(true);
+    expect(rows[0]!.textContent).toContain("3");
+    expect(rows[0]!.textContent).toContain("4");
+    expect(rows[1]!.textContent).toContain("1");
+    expect(rows[1]!.textContent).toContain("2");
+  });
+
+  it("counts an overlapping waitlist date once", () => {
+    const root = mount(
+      [{ dayDate: "2026-09-01", attendanceType: "in_person", label: null }],
+      [
+        { dayDate: "2026-09-01", status: "waiting" },
+        { dayDate: "2026-09-02", status: "waiting" },
+      ],
+    );
+    expect(root.textContent).not.toContain("All");
+    expect(root.querySelectorAll("li")).toHaveLength(2);
+  });
+
+  it("recognizes a registration made entirely of waitlist-only days", () => {
+    const root = mount(
+      [],
+      [
+        { dayDate: "2026-09-01", status: "waiting" },
+        { dayDate: "2026-09-02", status: "waiting" },
+      ],
+    );
+    expect(root.textContent).toContain("All 2 days");
+  });
+
   it("splits only where days differ, with the offered seat first and the waiting list in words", () => {
     const root = mount(
       [
@@ -120,7 +164,7 @@ describe("RegistrationDayStatusSummary", () => {
     expect(claimed).toEqual([["2026-09-01"]]);
   });
 
-  it("explains how to recover an offer without an attendance choice", async () => {
+  it("preserves the deadline and directs a missing-choice offer to the organizer without risking a new selection", async () => {
     container = document.createElement("div");
     document.body.append(container);
     await act(() =>
@@ -135,11 +179,14 @@ describe("RegistrationDayStatusSummary", () => {
         container!,
       ),
     );
-    expect(container.textContent).toContain("Attendance choice needed");
-    expect(container.textContent).toContain("Update and save your attendance to request a place.");
+    expect(container.textContent).toContain("organizer");
+    expect(container.textContent).toContain("before changing your attendance");
+    expect(container.textContent).toContain("may lose this offer");
+    expect(container.textContent).not.toContain("Update and save");
     expect(container.textContent).not.toContain("Place offered");
     expect(container.querySelector("button")).toBeNull();
     expect(container.textContent).not.toContain("Claim it before");
+    expect(container.textContent).toContain("Offer expires");
   });
 
   it("keeps offers for different configured options separate", async () => {

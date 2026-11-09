@@ -8,16 +8,33 @@ export const registrationSections: PreviewSection[] = [
   {
     id: "registration-review-state",
     title: "Registration review state",
-    note: "Pending organization claims stay separate from identity facts; a waitlist entry without a selected option explains how to request a place.",
+    note: "Pending organization claims stay separate from identity facts; an offer without a saved attendance choice shows its deadline and directs the attendee to the organizer.",
     render: () => (
       <div class="pk-stack">
         <RegistrationAffiliation organizationName={null} jobTitle={null} pendingOrganizationName="Example Research" />
         <RegistrationDayStatusSummary
           dayAttendance={[]}
-          dayWaitlist={[{ dayDate: "2026-12-01", status: "offered" }]}
+          dayWaitlist={[{ dayDate: "2026-12-01", status: "offered", offerExpiresAt: "2026-12-01T12:00:00.000Z" }]}
           onClaim={() => undefined}
         />
       </div>
+    ),
+  },
+  {
+    id: "registration-mixed-days",
+    title: "Registration with waitlist-only days",
+    note: "Each group names its dates when confirmed and waitlist-only days share one registration.",
+    render: () => (
+      <RegistrationDayStatusSummary
+        dayAttendance={[
+          { dayDate: "2026-12-01", attendanceType: "in_person", label: null },
+          { dayDate: "2026-12-02", attendanceType: "in_person", label: null },
+        ]}
+        dayWaitlist={[
+          { dayDate: "2026-12-03", status: "waiting" },
+          { dayDate: "2026-12-04", status: "waiting" },
+        ]}
+      />
     ),
   },
   {
