@@ -81,8 +81,8 @@ function GroupRow({
         <span class="pk-day-status__days">{whichDays(group, total)}</span>
         {needsAttendanceChoice && (
           <span class="pk-small">
-            Your saved attendance choice is missing. Contact the event organizer before changing your attendance;
-            choosing another option may lose this offer.
+            Your saved attendance choice is missing. Contact the event organizer. Saving any attendance change removes
+            this offer.
           </span>
         )}
         {group.kind === "waiting" && (

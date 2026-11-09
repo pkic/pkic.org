@@ -22,8 +22,8 @@ export const registrationSections: PreviewSection[] = [
   },
   {
     id: "registration-mixed-days",
-    title: "Registration with waitlist-only days",
-    note: "Each group names its dates when confirmed and waitlist-only days share one registration.",
+    title: "Registration recovery: missing attendance choices",
+    note: "Recovery from inconsistent data: these waiting days have no saved attendance choices and are removed on the next attendance save.",
     render: () => (
       <RegistrationDayStatusSummary
         dayAttendance={[

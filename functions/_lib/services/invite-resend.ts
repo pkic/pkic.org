@@ -1,7 +1,7 @@
 import { first } from "../db/queries";
 import { prepareQueueEmailStatement } from "../email/outbox";
 import { AppError } from "../errors";
-import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
+import type { AuthAdmin, DatabaseLike } from "../types";
 import { nowIso } from "../utils/time";
 import { sha256Hex } from "../utils/crypto";
 import { newCapabilityLinkSecret } from "../auth/capability-links";
@@ -11,7 +11,7 @@ import { buildInviteEmailQueueRow } from "./invite-email";
 import { isStaleInviteTransition, prepareInviteTransitionGuard } from "./invite-lifecycle";
 import { INVITE_COLUMNS, type InviteRecord } from "./invite-types";
 import { eventInviteWindowEvidence, resolveEventInviteExpiry } from "../invite-validity";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
+import { isStateGuardFailure, prepareStateGuard } from "../db/authorization-guard";
 
 export interface EventInviteResendPayload {
   event: EventRecord;
@@ -21,8 +21,6 @@ export interface EventInviteResendPayload {
   expectedInviteType?: InviteRecord["invite_type"];
   auditScope?: AuditScope;
   expiresAt?: string;
-  /** Route-specific live authorization evidence committed with the resend. */
-  authorizationStatements?: StatementLike[];
 }
 
 export async function resendEventInvite(
@@ -73,9 +71,8 @@ export async function resendEventInvite(
   );
   try {
     await db.batch([
-      prepareAuthorizationGuard(db, eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now)),
+      prepareStateGuard(db, eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now)),
       prepareInviteTransitionGuard(db, invite),
-      ...(payload.authorizationStatements ?? []),
       db
         .prepare(
           `UPDATE invites
@@ -104,7 +101,7 @@ export async function resendEventInvite(
       ),
     ]);
   } catch (error) {
-    if (isAuthorizationGuardFailure(error)) {
+    if (isStateGuardFailure(error)) {
       throw new AppError(
         409,
         "EVENT_INVITE_WINDOW_CHANGED",

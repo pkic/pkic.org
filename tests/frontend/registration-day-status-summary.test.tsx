@@ -6,6 +6,7 @@
  * waiting-list or offered day is its own row that says its state in words —
  * the tint repeats the words, it never carries them alone.
  */
+import { formatDayList } from "../../assets/shared/format-date";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
@@ -91,22 +92,27 @@ describe("RegistrationDayStatusSummary", () => {
     expect(rows).toHaveLength(2);
     expect(rows.map((row) => row.dataset.kind)).toEqual(["waiting", "confirmed"]);
     expect(rows.every((row) => !row.textContent?.includes("All 2 days"))).toBe(true);
-    expect(rows[0]!.textContent).toContain("3");
-    expect(rows[0]!.textContent).toContain("4");
-    expect(rows[1]!.textContent).toContain("1");
-    expect(rows[1]!.textContent).toContain("2");
+    expect(rows[0]!.querySelector(".pk-day-status__days")?.textContent).toBe(
+      formatDayList(["2026-09-03", "2026-09-04"]),
+    );
+    expect(rows[1]!.querySelector(".pk-day-status__days")?.textContent).toBe(
+      formatDayList(["2026-09-01", "2026-09-02"]),
+    );
   });
 
   it("counts an overlapping waitlist date once", () => {
     const root = mount(
-      [{ dayDate: "2026-09-01", attendanceType: "in_person", label: null }],
+      [
+        { dayDate: "2026-09-01", attendanceType: "in_person", label: null },
+        { dayDate: "2026-09-02", attendanceType: "in_person", label: null },
+      ],
       [
         { dayDate: "2026-09-01", status: "waiting" },
         { dayDate: "2026-09-02", status: "waiting" },
       ],
     );
-    expect(root.textContent).not.toContain("All");
-    expect(root.querySelectorAll("li")).toHaveLength(2);
+    expect(root.querySelectorAll("li")).toHaveLength(1);
+    expect(root.querySelector(".pk-day-status__days")?.textContent).toBe("All 2 days");
   });
 
   it("recognizes a registration made entirely of waitlist-only days", () => {
@@ -180,8 +186,7 @@ describe("RegistrationDayStatusSummary", () => {
       ),
     );
     expect(container.textContent).toContain("organizer");
-    expect(container.textContent).toContain("before changing your attendance");
-    expect(container.textContent).toContain("may lose this offer");
+    expect(container.textContent).toContain("Saving any attendance change removes this offer.");
     expect(container.textContent).not.toContain("Update and save");
     expect(container.textContent).not.toContain("Place offered");
     expect(container.querySelector("button")).toBeNull();

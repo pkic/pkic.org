@@ -14,9 +14,8 @@ import {
   guardEventResourceManagementDatabase,
   requireEventResourceManagementContext,
 } from "../event-series/management";
-import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import {
-  prepareGroupEventProposalContextGuard,
+  guardGroupEventProposalDatabase,
   queryGroupEventProposalPage,
   requireGroupEventProposalContext,
 } from "../proposal-group-context";
@@ -131,8 +130,9 @@ export async function resendGroupEventSpeakerInvite(
   expiresAt?: string,
 ) {
   const context = await requireGroupEventProposalContext(db, actor, groupId, eventId, "proposals:manage");
-  const event = await getEventById(db, context.eventId);
-  return resendEventInvite(db, {
+  const guardedDb = guardGroupEventProposalDatabase(db, actor, context, "proposals:manage");
+  const event = await getEventById(guardedDb, context.eventId);
+  return resendEventInvite(guardedDb, {
     event,
     inviteId,
     actor,
@@ -140,12 +140,6 @@ export async function resendGroupEventSpeakerInvite(
     expectedInviteType: "speaker",
     auditScope: { type: "group", id: context.groupId },
     expiresAt,
-    authorizationStatements: [
-      prepareGroupEventProposalContextGuard(db, context),
-      preparePermissionsAuthorizationGuard(db, actor, [
-        { permission: "proposals:manage", context: { type: "event", id: event.id } },
-      ]),
-    ],
   });
 }
 
@@ -157,18 +151,13 @@ export async function revokeGroupEventSpeakerInvite(
   inviteId: string,
 ) {
   const context = await requireGroupEventProposalContext(db, actor, groupId, eventId, "proposals:manage");
-  const event = await getEventById(db, context.eventId);
-  await revokeEventInvite(db, {
+  const guardedDb = guardGroupEventProposalDatabase(db, actor, context, "proposals:manage");
+  const event = await getEventById(guardedDb, context.eventId);
+  await revokeEventInvite(guardedDb, {
     event,
     inviteId,
     actor,
     expectedInviteType: "speaker",
     auditScope: { type: "group", id: context.groupId },
-    authorizationStatements: [
-      prepareGroupEventProposalContextGuard(db, context),
-      preparePermissionsAuthorizationGuard(db, actor, [
-        { permission: "proposals:manage", context: { type: "event", id: event.id } },
-      ]),
-    ],
   });
 }

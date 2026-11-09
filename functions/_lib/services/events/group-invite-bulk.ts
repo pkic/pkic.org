@@ -1,8 +1,5 @@
 import type { AuthAdmin, DatabaseLike } from "../../types";
-import { isAuthorizationGuardTriggerFailure } from "../../db/authorization-guard";
-import { AppError } from "../../errors";
-import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
-import { requireGroupEventProposalContext, prepareGroupEventProposalContextGuard } from "../proposal-group-context";
+import { requireGroupEventProposalContext, guardGroupEventProposalDatabase } from "../proposal-group-context";
 import { getEventById, buildEventEmailVariables } from "../events";
 import { registrationPageUrl, proposalPageUrl, inviteDeclineUrl } from "../frontend-links";
 import { resolveEventInviteExpiry } from "../../invite-validity";
@@ -188,20 +185,15 @@ export async function bulkCreateGroupEventSpeakerInvites(
   signingSecret: string,
 ) {
   const context = await speakerContext(db, actor, groupId, eventId);
-  const event = await getEventById(db, context.eventId);
+  const guardedDb = guardGroupEventProposalDatabase(db, actor, context, "proposals:manage");
+  const event = await getEventById(guardedDb, context.eventId);
   const expiresAt = await checkPreview(event, actor, "speaker", input, signingSecret);
   const emailVariables = buildEventEmailVariables(event, appBaseUrl);
   return resultBuckets(
-    await bulkCreateSpeakerInvites(db, {
+    await bulkCreateSpeakerInvites(guardedDb, {
       event,
       expiresAt,
       invites: invitePayload(input.invites),
-      additionalStatements: [
-        prepareGroupEventProposalContextGuard(db, context),
-        preparePermissionsAuthorizationGuard(db, actor, [
-          { permission: "proposals:manage", context: { type: "event", id: event.id } },
-        ]),
-      ],
       buildEmailRow: ({ email, inviteId, token, invite, linkSecretFingerprint }) => {
         const proposalUrl = proposalPageUrl(appBaseUrl, event, { invite: token, inviteId, source: "speaker_invite" });
         const declineUrl = inviteDeclineUrl(appBaseUrl, event, token, inviteId);
@@ -223,15 +215,6 @@ export async function bulkCreateGroupEventSpeakerInvites(
           },
         };
       },
-    }).catch((error: unknown) => {
-      if (isAuthorizationGuardTriggerFailure(error)) {
-        throw new AppError(
-          409,
-          "GROUP_EVENT_PROPOSAL_CONTEXT_CHANGED",
-          "Proposal-program access changed before the invitations could be created. Reload before retrying.",
-        );
-      }
-      throw error;
     }),
   );
 }

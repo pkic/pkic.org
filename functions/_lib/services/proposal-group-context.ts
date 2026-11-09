@@ -95,19 +95,18 @@ export function prepareGroupEventProposalContextGuard(
   return prepareAuthorizationGuard(db, groupEventProposalContextEvidence(context));
 }
 
-/** Rechecks the exact program tuple and permission in the same D1 batch as a page and count. */
-export async function queryGroupEventProposalPage<T>(
+/** Rechecks program ownership and permission for every protected read and atomic write. */
+export function guardGroupEventProposalDatabase(
   db: DatabaseLike,
   actor: AuthAdmin,
   context: GroupEventProposalContext,
   permission: Permission,
-  query: OffsetPageQuery,
-): Promise<{ rows: T[]; total: number }> {
+): DatabaseLike {
   const program = groupEventProposalContextEvidence(context);
   const authority = permissionsAuthorizationEvidence(actor, [
     { permission, context: { type: "event", id: context.eventId } },
   ]);
-  const guardedDb = guardAuthorizedDatabase(
+  return guardAuthorizedDatabase(
     db,
     {
       sql: `SELECT 1 WHERE EXISTS (${program.sql}) AND EXISTS (${authority.sql})`,
@@ -117,9 +116,20 @@ export async function queryGroupEventProposalPage<T>(
       new AppError(
         409,
         "GROUP_EVENT_PROPOSAL_CONTEXT_CHANGED",
-        "Proposal-program access changed while the invitation list was loading",
+        "Proposal-program access changed. Reload before retrying.",
       ),
   );
+}
+
+/** Rechecks the exact program tuple and permission in the same D1 batch as a page and count. */
+export async function queryGroupEventProposalPage<T>(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  context: GroupEventProposalContext,
+  permission: Permission,
+  query: OffsetPageQuery,
+): Promise<{ rows: T[]; total: number }> {
+  const guardedDb = guardGroupEventProposalDatabase(db, actor, context, permission);
   const [pageResult, countResult] = await guardedDb.batch(buildOffsetPageStatements(guardedDb, query));
   return decodeOffsetPageResults<T>(pageResult, countResult);
 }
