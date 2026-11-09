@@ -258,7 +258,10 @@ export async function bulkCreateInvites(
     : [];
   const inviterChunks = chunkJsonRows(inviterRows);
   const statements = [
-    prepareStateGuard(db, eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now)),
+    prepareStateGuard(
+      db,
+      eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now, Boolean(payload.inviter)),
+    ),
     prepareExpireEffectiveEventInvites(db, { eventId: payload.event.id, inviteType, now }),
     ...chunks.map((chunk) =>
       db

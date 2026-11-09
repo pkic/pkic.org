@@ -5,7 +5,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { httpUrlSchema } from "../../assets/shared/schemas/urls";
-import { useContractForm } from "../../assets/ts/hooks/useContractForm";
+import { useContractForm, type ContractForm } from "../../assets/ts/hooks/useContractForm";
 import { normalizeValidation } from "../../assets/ts/shared/form/validation-map";
 import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { Field } from "../../assets/ts/ui/Field";
@@ -89,6 +89,36 @@ function mount(deferred = false): HTMLDivElement {
 function fieldOf(control: HTMLElement): HTMLElement {
   return control.closest<HTMLElement>(".pk-field")!;
 }
+
+it("keeps touch handlers stable while reading the current row mapping", async () => {
+  let touch: ContractForm<unknown>["handlers"]["onInput"] | undefined;
+  function MappedRow({ row }: { row: string }) {
+    const form = useContractForm(
+      contract,
+      { name: "", website: null },
+      {
+        keyOf: (path) => (path === "name" ? `rows.${row}.name` : path),
+      },
+    );
+    touch = form.handlers.onInput;
+    return (
+      <form {...form.handlers} noValidate>
+        <Field label="Name" {...form.of("name")}>
+          {(control) => <TextInput {...control} name={`rows.${row}.name`} />}
+        </Field>
+      </form>
+    );
+  }
+  container = document.createElement("div");
+  document.body.append(container);
+  await act(() => render(<MappedRow row="first" />, container!));
+  const originalTouch = touch;
+  await act(() => render(<MappedRow row="second" />, container!));
+  expect(touch).toBe(originalTouch);
+  const name = controlFor(container, "Name");
+  await typeInto(name, "Draft");
+  expect(name.getAttribute("aria-invalid")).toBe("true");
+});
 
 afterEach(() => {
   if (container) {

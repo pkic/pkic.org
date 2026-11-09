@@ -3,6 +3,7 @@ import base from "./playwright.config";
 
 /** Routine CI exercises cross-system boundaries; the full suite remains opt-in. */
 const criticalJourneys = [
+  "attendees invite colleagues and confirm a seat release from one day picker",
   "the registration desk switches between immediate labels and full badges",
   "the protected printed short code works through manual offline capture and exact original-operation replay",
   "default badges keep all lead sponsors inside both printed faces",
@@ -25,6 +26,7 @@ const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\
 export default defineConfig({
   ...base,
   testMatch: [
+    "event-participant-self-service.spec.ts",
     "portal-agenda-manual-badge-code.spec.ts",
     "browser-rendering.spec.ts",
     "member-colleague-self-service.spec.ts",

@@ -424,7 +424,6 @@ export function RegistrationFlow(props: Props) {
               <p class="event-flow-step-intro">Help us tailor the program and connect you with relevant people.</p>
             )}
             <div data-custom-fields>
-              {forms.form && fields.length > 0 && <></>}
               <CustomFieldList
                 fields={fields}
                 initialValues={initial?.registration.custom_answers ?? undefined}

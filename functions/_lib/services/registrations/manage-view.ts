@@ -108,7 +108,7 @@ export async function buildRegistrationManageView(
       custom_answers: parseJsonSafe<Record<string, unknown> | null>(registration.custom_answers_json, null),
       isEmailVerified: registration.confirmed_at !== null,
     },
-    event: { id: event.id, slug: event.slug, name: event.name },
+    event: { id: event.id, slug: event.slug, name: event.name, startsAt: event.starts_at },
     user: {
       email: user.email,
       first_name: user.first_name,

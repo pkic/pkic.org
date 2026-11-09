@@ -431,6 +431,8 @@ describe("group form management", () => {
     const container = mount(<GroupFormDetail groupId={GROUP_ID} placementId={PLACEMENT_ID} onChanged={vi.fn()} />);
     await settle();
 
+    expect(container.querySelector("h3")?.textContent).toBe("Architecture survey");
+    expect(container.textContent).toContain("Collect priorities.");
     const answer = container.querySelector<HTMLInputElement>("#custom-priority")!;
     await typeInto(answer, "An answer prepared while the form was open");
     await act(async () => buttonNamed(container, "Submit response").click());

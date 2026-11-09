@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { peerInviteResultSchema } from "../assets/shared/schemas/registration";
+import type { z } from "zod";
+import * as ids from "../functions/_lib/utils/ids";
+import { registrationInviteCreateSchema, peerInviteResultSchema } from "../assets/shared/schemas/registration";
 import { createRegistration } from "../functions/_lib/services/registrations/create";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { nowIso } from "../functions/_lib/utils/time";
@@ -46,11 +48,18 @@ async function attendee() {
   const token = await createMemberSession(env.DB, userId, crypto.randomUUID());
   return { eventId, userId, token, registrationId: created.registration.id, manageToken: created.manageToken };
 }
-function invite(token: string, environment = env) {
+function invite(
+  token: string,
+  environment = env,
+  options: Pick<z.infer<typeof registrationInviteCreateSchema>, "expiresAt"> = {},
+) {
   return callApi(environment, "/api/v1/events/pqc-2026/invites", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ invites: [{ firstName: "Casey", lastName: "Colleague", email: "colleague@example.test" }] }),
+    body: JSON.stringify({
+      ...options,
+      invites: [{ firstName: "Casey", lastName: "Colleague", email: "colleague@example.test" }],
+    }),
   });
 }
 describe("attendee self-service invitations", () => {
@@ -58,7 +67,10 @@ describe("attendee self-service invitations", () => {
     await resetDb();
     stubSuccessfulMxLookup();
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
 
   it.each(["session", "capability"] as const)(
     "uses the existing invitation records and outbox through a %s",
@@ -99,6 +111,90 @@ describe("attendee self-service invitations", () => {
       expect(
         await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email='colleague@example.test'"),
       ).toHaveLength(1);
+    },
+  );
+
+  it.each(["session", "capability"] as const)(
+    "closes %s invitations at the event start despite a later deadline",
+    async (mode) => {
+      const f = await attendee();
+      const startsAt = nowIso();
+      await env.DB.prepare("UPDATE events SET starts_at=? WHERE id=?").bind(startsAt, f.eventId).run();
+      const response = await invite(mode === "session" ? f.token : f.manageToken, env, {
+        expiresAt: "2026-12-02T09:00:00.000Z",
+      });
+      expect(response.status, await response.clone().text()).toBe(403);
+      expect(await response.json()).toMatchObject({ error: { code: "PEER_INVITATIONS_CLOSED" } });
+      expect(await queryAll(env.DB, "SELECT id FROM invites")).toHaveLength(0);
+      expect(
+        await queryAll(env.DB, "SELECT code FROM referral_codes WHERE owner_id=?", [f.registrationId]),
+      ).toHaveLength(0);
+    },
+  );
+
+  it("caps a requested peer deadline at the start", async () => {
+    const f = await attendee();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const response = await invite(f.token, env, { expiresAt: event.ends_at! });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await queryAll(env.DB, "SELECT expires_at FROM invites")).toEqual([{ expires_at: event.starts_at }]);
+  });
+
+  it("rolls back all effects when the event starts before the write", async () => {
+    const f = await attendee();
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /INSERT(?: OR IGNORE)? INTO invites/i.test(sql),
+      async () => {
+        await env.DB.prepare("UPDATE events SET starts_at=? WHERE id=?").bind(nowIso(), f.eventId).run();
+      },
+    );
+    const response = await invite(f.token, { ...env, DB: db });
+    expect(response.status, await response.clone().text()).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "EVENT_INVITE_WINDOW_CHANGED" } });
+    expect(await queryAll(env.DB, "SELECT id FROM invites")).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT code FROM referral_codes WHERE owner_id=?", [f.registrationId])).toHaveLength(
+      0,
+    );
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email='colleague@example.test'"),
+    ).toHaveLength(0);
+  });
+
+  it.each(["owner", "code"] as const)(
+    "retries a concurrent referral %s winner without duplicate emails",
+    async (race) => {
+      const f = await attendee();
+      if (race === "code") vi.spyOn(ids, "randomBase62").mockReturnValueOnce("Collision9");
+      const winningCode = race === "owner" ? "OwnerWin9" : "Collision9";
+      const db = mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => /INSERT(?: OR IGNORE)? INTO invites/i.test(sql),
+        async () => {
+          await env.DB.prepare(`INSERT INTO referral_codes
+        (code,event_id,owner_type,owner_id,created_by_user_id,clicks,conversions,created_at)
+        VALUES(?,?,'registration',?,?,0,0,?)`)
+            .bind(winningCode, f.eventId, race === "owner" ? f.registrationId : crypto.randomUUID(), f.userId, nowIso())
+            .run();
+        },
+      );
+      const response = await invite(f.token, { ...env, DB: db });
+      expect(response.status, await response.clone().text()).toBe(200);
+      const result = peerInviteResultSchema.parse(await response.json());
+      const codes = await queryAll<{ code: string }>(env.DB, "SELECT code FROM referral_codes WHERE owner_id=?", [
+        f.registrationId,
+      ]);
+      expect(codes).toEqual([{ code: result.referralCode }]);
+      if (race === "owner") expect(result.referralCode).toBe(winningCode);
+      else expect(result.referralCode).not.toBe(winningCode);
+      expect(await queryAll(env.DB, "SELECT id FROM invites")).toHaveLength(1);
+      const mail = await queryAll<{ payload_json: string }>(
+        env.DB,
+        "SELECT payload_json FROM email_outbox WHERE recipient_email='colleague@example.test'",
+      );
+      expect(mail).toHaveLength(1);
+      const payload = await deliveredEmailPayload<{ registrationUrl: string }>(env.DB, env, mail[0].payload_json);
+      expect(new URL(payload.registrationUrl).searchParams.get("ref")).toBe(result.referralCode);
     },
   );
 

@@ -3,6 +3,8 @@ import type {
   registrationInviteCreateSchema,
   peerInviteResultSchema,
 } from "../../../assets/shared/schemas/registration";
+import { canSendPeerInvitations } from "../../../assets/shared/peer-invitation-policy";
+import { resolveEventInviteExpiry } from "../invite-validity";
 import { batchFirst } from "../db/pagination";
 import { AppError } from "../errors";
 import { getConfig, resolveAppBaseUrl } from "../config";
@@ -45,9 +47,34 @@ export async function createPeerInvitations(
   body: PeerInviteBody,
   inviteType: "attendee" | "speaker",
 ): Promise<PeerInviteCreationResult> {
+  // Only this primary-key conflict is retryable: the batch has rolled back
+  // either a competing owner code or a random-code collision, including its outbox.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await createPeerInvitationAttempt(env, request, eventSlug, body, inviteType);
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("UNIQUE constraint failed: referral_codes.code"))
+        throw error;
+    }
+  }
+  throw new AppError(409, "REFERRAL_CODE_CONFLICT", "Try sending your invitations again.");
+}
+
+async function createPeerInvitationAttempt(
+  env: Env,
+  request: Request,
+  eventSlug: string,
+  body: PeerInviteBody,
+  inviteType: "attendee" | "speaker",
+): Promise<PeerInviteCreationResult> {
   const event = await getEventBySlug(env.DB, eventSlug);
   const { registration, db } = await resolvePeerInvitationAuthority(env, request, event.id);
 
+  if (!canSendPeerInvitations(registration.status, event.starts_at)) {
+    throw new AppError(403, "PEER_INVITATIONS_CLOSED", "Colleague invitations close when the event starts.");
+  }
+  const requestedExpiry = resolveEventInviteExpiry(event, body.expiresAt);
+  const expiresAt = requestedExpiry > event.starts_at! ? event.starts_at! : requestedExpiry;
   const config = getConfig(env, request);
   const maxAllowed =
     inviteType === "attendee"
@@ -84,6 +111,7 @@ export async function createPeerInvitations(
           ownerId: registration.id,
           createdByUserId: registration.user_id,
           length: config.referralCodeLength,
+          firstForOwner: true,
         })
       : null;
   const referralCode = inviteType === "attendee" ? (existingReferral ?? preparedReferral?.code) : undefined;
@@ -91,7 +119,7 @@ export async function createPeerInvitations(
   const outcomes = await bulkCreateInvites(db, inviteType, {
     event,
     additionalStatements: preparedReferral ? [preparedReferral.statement] : [],
-    expiresAt: body.expiresAt,
+    expiresAt,
     inviter: { userId: registration.user_id, registrationId: registration.id },
     maxPrimaryInvites: maxAllowed,
     invites: body.invites.map((invite) => ({

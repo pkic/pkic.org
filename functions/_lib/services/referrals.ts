@@ -1,3 +1,4 @@
+import { firstReferralCodeQuerySql } from "./referral-code-projection";
 import { AppError } from "../errors";
 import { all, first } from "../db/queries";
 import { randomBase62, uuid } from "../utils/ids";
@@ -43,6 +44,8 @@ export async function prepareReferralCodeStatement(
     createdByUserId?: string | null;
     channelHint?: string | null;
     length: number;
+    /** On a concurrent owner winner, fail on its primary key so the whole command can retry with that code. */
+    firstForOwner?: boolean;
   },
 ): Promise<{ code: string; statement: StatementLike }> {
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -58,9 +61,10 @@ export async function prepareReferralCodeStatement(
         .prepare(
           `INSERT INTO referral_codes (
         code, event_id, owner_type, owner_id, created_by_user_id, channel_hint, clicks, conversions, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)`,
+      ) VALUES (${payload.firstForOwner ? `COALESCE((${firstReferralCodeQuerySql(payload.ownerType, "?")}), ?)` : "?"}, ?, ?, ?, ?, ?, 0, 0, ?)`,
         )
         .bind(
+          ...(payload.firstForOwner ? [payload.ownerId] : []),
           code,
           payload.eventId,
           payload.ownerType,

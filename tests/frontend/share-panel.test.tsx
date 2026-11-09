@@ -6,6 +6,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { registrationInviteCreateSchema } from "../../assets/shared/schemas/registration";
 import { renderSharePanel, refreshSharePanelBadge } from "../../assets/ts/shared/widgets/share-panel";
+import { readResponse } from "./helpers/participant-registration-fixtures";
 import { InviteColleagueDialog } from "../../assets/ts/components/event-invites/RegistrationInviteForm";
 import { controlFor } from "./helpers/labeled-control";
 
@@ -75,6 +76,56 @@ function installApi(options: { rejects?: boolean; fieldError?: boolean } = {}): 
   return requests;
 }
 
+describe("capability invitation eligibility", () => {
+  it.each(["pending_email_confirmation", "cancelled"] as const)(
+    "keeps sharing but hides invitations for %s",
+    (status) => {
+      const panel = mount({ invitation: { status, startsAt: "2099-12-01T09:00:00.000Z" } });
+      expect(panel.querySelector('input[type="email"]')).toBeNull();
+      expect(panel.textContent).not.toContain("Invite colleagues by email");
+      expect(panel.textContent).toContain("Share on LinkedIn");
+    },
+  );
+  it.each(["registered", "pending_email_confirmation"] as const)(
+    "loads %s eligibility on a confirmation share panel",
+    async (status) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() =>
+          Promise.resolve(
+            json(
+              readResponse({
+                registration: { ...readResponse().registration, status },
+                event: { id: "event-1", slug: "pki-summit", name: "PKI Summit", startsAt: "2099-12-01T09:00:00.000Z" },
+              }),
+            ),
+          ),
+        ),
+      );
+      const panel = mount({ invitation: undefined });
+      expect(panel.textContent).not.toContain("Invite colleagues by email");
+      await settle();
+      expect(panel.textContent?.includes("Invite colleagues by email")).toBe(status === "registered");
+      expect(panel.textContent).toContain("Share on LinkedIn");
+    },
+  );
+  it("hides capability invitations when the open page reaches the start", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime("2026-12-01T08:59:59.000Z");
+      const panel = mount({ invitation: { status: "registered", startsAt: "2026-12-01T09:00:00.000Z" } });
+      expect(panel.textContent).toContain("Invite colleagues by email");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_251);
+      });
+      expect(panel.textContent).not.toContain("Invite colleagues by email");
+      expect(panel.textContent).toContain("Share on LinkedIn");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("share panel copy", () => {
   it("names sharing independently of whether email invitations are available", () => {
     for (const options of [{ waitlisted: true }, { manageToken: null, eventSlug: null }, {}]) {
@@ -98,6 +149,7 @@ function mount(options: Partial<Parameters<typeof renderSharePanel>[1]> = {}): H
       lastName: "Lovelace",
       manageToken: "manage-token",
       eventSlug: "pki-summit",
+      invitation: { status: "registered", startsAt: "2099-12-01T09:00:00.000Z" },
       ...options,
     }),
   );

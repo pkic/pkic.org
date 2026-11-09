@@ -316,6 +316,7 @@ async function main(): Promise<void> {
       lastName: user?.last_name ?? undefined,
       manageToken: token,
       eventSlug,
+      invitation: { status: registration.status, startsAt: event.startsAt },
       waitlisted: hasPendingRegistrationDayWaitlist(dayWaitlist ?? []),
     });
   }

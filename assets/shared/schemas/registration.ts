@@ -425,7 +425,7 @@ export const registrationManageReadResponseSchema = successResponseSchema.extend
   registration: registrationManageRegistrationSchema,
   identityId: databaseIdSchema.nullable().optional(),
   badgeVersion: z.string().optional(),
-  event: eventSummarySchema,
+  event: eventSummarySchema.extend({ startsAt: utcInstantSchema.nullable() }),
   user: registrationManageUserSchema,
   eventDays: z.array(eventDayReadModelSchema),
   dayAttendance: registrationDayStateSchema.shape.dayAttendance,

@@ -31,7 +31,7 @@
  * Controls are keyed by `name`. `fieldOf` maps custom controls to contract
  * paths; `keyOf` maps contract paths to stable control names for editable rows.
  */
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { normalizeValidation } from "../shared/form/validation-map";
 import type { FieldState } from "../ui/field-state";
@@ -138,6 +138,8 @@ export function useContractForm<Schema extends z.ZodType>(
   options: ContractFormOptions = {},
 ): ContractForm<z.output<Schema>> {
   const { fieldOf, keyOf = identityFieldKey, quietWhenEmpty = false, revealField, deferUntilSubmit = [] } = options;
+  const fieldKey = useRef(keyOf);
+  fieldKey.current = keyOf;
   const [touched, setTouched] = useState<Record<string, Touch>>({});
   const [refused, setRefused] = useState<Record<string, string>>({});
   const [showAll, setShowAll] = useState(false);
@@ -171,7 +173,7 @@ export function useContractForm<Schema extends z.ZodType>(
           (control instanceof HTMLInputElement && (control.type === "checkbox" || control.type === "radio")))
       )
         return;
-      const name = keyOf(fieldOf ? fieldOf(control.name, control) : control.name);
+      const name = fieldKey.current(fieldOf ? fieldOf(control.name, control) : control.name);
       setTouched((current) => ({ ...current, [name]: { hasValue: hasValue(control) } }));
       // A field being retyped is no longer the field the server refused.
       setRefused((current) => {
@@ -181,7 +183,7 @@ export function useContractForm<Schema extends z.ZodType>(
         return next;
       });
     },
-    [fieldOf, keyOf],
+    [fieldOf],
   );
 
   const of = (name: string): FieldPresentation => {

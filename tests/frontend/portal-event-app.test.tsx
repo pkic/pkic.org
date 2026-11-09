@@ -143,7 +143,7 @@ beforeEach(() => {
               custom_answers: null,
               isEmailVerified: true,
             },
-            event: { id: eventId, slug: "summit", name: "Summit" },
+            event: { id: eventId, slug: "summit", name: "Summit", startsAt: "2026-12-01T09:00:00.000Z" },
             user: {
               email: "femke@example.test",
               first_name: "Femke",
