@@ -73,7 +73,8 @@ export function prepareAcceptedRegistrationTerms(db: DatabaseLike, registrationI
     .prepare(`SELECT ca.registration_id, et.display_text AS title
      FROM consent_acceptances ca
      JOIN event_terms et
-       ON et.event_id = ca.event_id AND et.term_key = ca.term_key AND et.version = ca.term_version
+       ON et.event_id = ca.event_id AND et.audience_type = ca.audience_type
+       AND et.term_key = ca.term_key AND et.version = ca.term_version
      WHERE ${scope.sql} ORDER BY ca.registration_id ASC, ca.term_key ASC`)
     .bind(...scope.bindings);
 }

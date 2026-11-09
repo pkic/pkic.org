@@ -494,6 +494,11 @@ describe("event email campaign recipients", () => {
       VALUES (?,?,'attendee','code-of-conduct','v2',1,'Replacement agreement',1,?)`)
       .bind(crypto.randomUUID(), eventId, "2026-11-01T00:00:00.000Z")
       .run();
+    await env.DB.prepare(`INSERT INTO event_terms
+      (id,event_id,audience_type,term_key,version,required,display_text,active,created_at)
+      VALUES (?,?,'speaker','code-of-conduct','v1',1,'Speaker-only agreement',1,?)`)
+      .bind(crypto.randomUUID(), eventId, "2026-11-01T00:00:00.000Z")
+      .run();
     for (const [index, email] of ["terms-a@example.test", "terms-b@example.test"].entries()) {
       const userId = await insertUser(env.DB, email);
       const registrationId = crypto.randomUUID();
@@ -530,6 +535,7 @@ describe("event email campaign recipients", () => {
     expect(reviewed.recipientCount).toBe(2);
     expect(reviewed.text).toContain("Original agreement");
     expect(reviewed.text).not.toContain("Replacement agreement");
+    expect(reviewed.text).not.toContain("Speaker-only agreement");
     const accepted = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns", {
       ...input,
       previewToken: reviewed.previewToken,
@@ -552,6 +558,7 @@ describe("event email campaign recipients", () => {
       );
       expect(rendered.text.includes("Original agreement")).toBe(index === 0);
       expect(rendered.text).not.toContain("Replacement agreement");
+      expect(rendered.text).not.toContain("Speaker-only agreement");
       expect(rendered.text).not.toContain("{{acceptedTermsText}}");
     }
   });
