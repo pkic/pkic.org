@@ -97,8 +97,7 @@ export async function assembleStaticRelease(source, destination, environment) {
     .replace(/\n# BEGIN PUBLICATION[\s\S]*?# END PUBLICATION\n?/g, "")
     .replace(/ {4}# BEGIN PUBLICATION GLOBAL\n[\s\S]*? {4}# END PUBLICATION GLOBAL\n/g, "");
   const global = `    # BEGIN PUBLICATION GLOBAL\n    X-PKIC-Publication: static; snapshot=${release.snapshotId}\n    Cache-Control: public, max-age=0, must-revalidate\n${environment === "preview" ? "    X-Robots-Tag: noindex, nofollow, noarchive\n" : ""}    # END PUBLICATION GLOBAL\n`;
-  // A duplicate /* block replaces security headers in Cloudflare's parser.
-  // Add publication fields to the existing global rule instead.
+  // Keep publication fields in the existing global rule so additive headers are not duplicated.
   headers = /^\/\*\r?\n/m.test(headers)
     ? headers.replace(/^\/\*\r?\n/m, (rule) => rule + global)
     : `${headers}\n/*\n${global}`;
@@ -122,7 +121,6 @@ export async function assembleStaticRelease(source, destination, environment) {
     .map((file) => `\n/${file}\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive\n`)
     .join("");
   const immutableRules = [
-    "/_assets/*",
     "/_published/media/*",
     "/_published/social/*.jpg",
     "/_published/assessment/*",
@@ -131,7 +129,7 @@ export async function assembleStaticRelease(source, destination, environment) {
   ]
     .map(
       (path) =>
-        `\n${path}\n    ! Cache-Control\n    Cache-Control: public, max-age=31536000, immutable\n${path === "/_assets/*" ? "    Service-Worker-Allowed: /portal/\n" : ""}`,
+        `\n${path}\n    ! Cache-Control\n    Cache-Control: public, max-age=31536000, immutable\n`,
     )
     .join("");
   const rules =

@@ -1,3 +1,4 @@
+import { useScannerCapturePause } from "./useScannerCapturePause";
 import { useScannerManualEntry } from "./useScannerManualEntry";
 import { ScannerDiagnosticsView } from "./ScannerDiagnosticsView";
 import { useScannerFeedback } from "./useScannerFeedback";
@@ -32,9 +33,8 @@ import {
 } from "../../../../../../../shared/schemas/event-participation-scanning";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { ScannerLaunchPanel } from "./ScannerLaunchPanel";
-import { receiptMatchesOperation, unknownScanResponse, unverifiedSavedFeedback } from "./scan-stream";
+import { receiptMatchesOperation, unknownScanResponse } from "./scan-stream";
 import { useScannerCamera } from "./useScannerCamera";
-import { pendingScanCount } from "./scan-outbox";
 import { useScannerOutboxSync } from "./useScannerOutboxSync";
 import "./EventScanner.css";
 import { FastScannerView } from "./FastScannerView";
@@ -72,7 +72,7 @@ export function EventScannerCapture({
   const {
     result,
     lastResult,
-    clearLastResult,
+    clearFeedback,
     failed,
     captureStatus,
     setResult,
@@ -80,7 +80,7 @@ export function EventScannerCapture({
     setMessage,
     showProvisionalMessage,
     presentReceipt,
-    showLocalEligibility,
+    presentSavedEligibility,
     failure,
   } = useScannerFeedback({
     enabled: fastMode,
@@ -109,6 +109,11 @@ export function EventScannerCapture({
     epoch: scannerDevice.epoch,
     session: portalSession.value,
     onContextChange: clearCurrentScan,
+    onPreparationClosed: (code) => {
+      autoStart.cancel();
+      if (code === "SCANNER_PREPARATION_CLOSED" || code === "SCANNER_PREPARATION_CLOSING")
+        void scannerDevice.reconcile();
+    },
     onPermissionChanged: () => {
       refusePreparation();
       authorityPaused.current = true;
@@ -127,8 +132,8 @@ export function EventScannerCapture({
     selectTarget,
     selectRoom,
   } = preparation.location;
-  const { eligibilityManifest, manifestReady, manifestPreparing, manifestError } = preparation.eligibility;
-  const { offlineAdmission, offlinePreparation } = preparation;
+  const { eligibilityManifest, manifestReady, manifestPreparing, closedMessage } = preparation.eligibility;
+  const captureReady = scannerDevice.ready && !closedMessage;
   const sound = useScannerSound(preferences.sound, result ?? lastResult, action, failed, Boolean(targetId));
   const screenAwake = useScannerImmersiveLifecycle(
     fastMode,
@@ -162,7 +167,8 @@ export function EventScannerCapture({
     { deferUntilSubmit: online && !collectorContext && action !== "lead" ? ["badgeId"] : [] },
   );
   const syncHistory = useScannerSyncHistory(operatorUserId, slug);
-  const operatorPaused = useRef(false);
+  const capturePause = useScannerCapturePause(badgeCamera.stop, () => autoStart.cancel());
+  const operatorPaused = capturePause.paused;
   useScannerSessionFence(
     operatorUserId,
     () => {
@@ -177,24 +183,35 @@ export function EventScannerCapture({
   );
   const scannerContext = useRef({ targetId, action, operatorUserId, deviceId, roomId, rooms: targetRooms });
   scannerContext.current = { targetId, action, operatorUserId, deviceId, roomId, rooms: targetRooms };
-  const { pending, setPending, pendingReadyScope, uploadStatus, setUploadStatus, sync, syncing, cancelRetries } =
-    useScannerOutboxSync({
-      slug,
-      operatorUserId,
-      collectorContext,
-      authorityPaused,
-      currentOperation: () => lastOperation.current ?? lastResult?.operationId ?? null,
-      presentReceipt,
-      setResult,
-      setMessage,
-      stopCamera: badgeCamera.stop,
-      refreshHistory: syncHistory.refresh,
-    });
-  function clearCurrentScan() {
+  const {
+    pending,
+    scanSaved,
+    pendingReadyScope,
+    uploadStatus,
+    sync,
+    syncing,
+    cancelRetries,
+    verifyQueuedScan,
+    cancelVerification,
+  } = useScannerOutboxSync({
+    slug,
+    operatorUserId,
+    collectorContext,
+    authorityPaused,
+    currentOperation: () => lastOperation.current ?? lastResult?.operationId ?? null,
+    presentReceipt,
+    setResult,
+    setMessage,
+    stopCamera: badgeCamera.stop,
+    refreshHistory: syncHistory.refresh,
+  });
+  function clearCurrentScan(message?: string) {
     badgeCamera.stop();
     lastOperation.current = null;
-    setResult(null);
-    clearLastResult();
+    cancelVerification();
+    cooldown.reset();
+    clearFeedback();
+    if (message) setMessage(message);
   }
   function resetCaptureFields() {
     manual.reset();
@@ -215,22 +232,24 @@ export function EventScannerCapture({
     }),
     collectorContext,
     {
-      saved: async () => {
-        setPending(await pendingScanCount(operatorUserId));
-        void sync();
-      },
+      saved: scanSaved,
       unsaved: () =>
         failure("This attempt was not saved. Keep the scanned value and retry when device storage is available."),
     },
   );
   const persistCapture = (scan: EventScanRequest) =>
-    persistScannerCapture(scan, slug, offlineAdmission.persist, auditFailure);
+    persistScannerCapture(scan, slug, preparation.offlineAdmission.persist, auditFailure);
+  function captureAllowed() {
+    return scannerDevice.ready && !closedMessage && !authorityPaused.current;
+  }
+  /** User gestures report refusals; passive decoder checks stay silent. */
+  function requestCapture() {
+    if (captureAllowed()) return true;
+    if (closedMessage || authorityPaused.current) setMessage(closedMessage || "Sign in again to upload pending scans.");
+    return false;
+  }
   async function capture() {
-    if (!scannerDevice.ready || manualCapturePending.current) return;
-    if (authorityPaused.current) {
-      setMessage("Sign in again to upload pending scans.");
-      return;
-    }
+    if (!requestCapture() || manualCapturePending.current) return;
     const checked = form.submit();
     if (!checked.data) {
       if (
@@ -251,16 +270,11 @@ export function EventScannerCapture({
     try {
       lastOperation.current = checked.data.operationId;
       const saved = await persistCapture(checked.data);
-      setUploadStatus(
-        collectorContext ? "Saved on this device · upload pending" : "Uploading scans in the background…",
-      );
-      setPending(await pendingScanCount(operatorUserId));
-      showProvisionalMessage(saved.scan.operationId, "Scan saved. Checking eligibility…");
-      showLocalEligibility(saved.scan, saved.local ?? unverifiedSavedFeedback);
-      void sync();
+      await scanSaved();
       resetCaptureFields();
+      if (!(await presentSavedEligibility(saved, verifyQueuedScan))) return;
       if (fastMode && manualOpen) {
-        manualPaused.current = false;
+        cooldown.feedback();
         void camera();
       }
     } catch (error) {
@@ -271,7 +285,8 @@ export function EventScannerCapture({
     }
   }
   async function scanCredential(raw: string, fromCamera = false) {
-    if (!scannerDevice.ready || authorityPaused.current || operatorPaused.current || manualPaused.current) return;
+    if (!captureAllowed()) return;
+    if (operatorPaused.current || manualPaused.current || manualCapturePending.current) return;
     const current = scannerContext.current;
     if (current.action === "lead" || current.action === "exception") {
       badgeCamera.stop();
@@ -323,33 +338,25 @@ export function EventScannerCapture({
     showProvisionalMessage(operation, "Checking eligibility…");
     try {
       const saved = await persistCapture(parsed.data);
-      setUploadStatus(
-        collectorContext ? "Saved on this device · upload pending" : "Uploading scans in the background…",
-      );
-      setPending(await pendingScanCount(operatorUserId));
-      showLocalEligibility(saved.scan, saved.local ?? unverifiedSavedFeedback);
+      await scanSaved();
+      if (!(await presentSavedEligibility(saved, verifyQueuedScan))) return;
       resetCaptureFields();
       if (fastMode) cooldown.feedback();
-      void sync();
     } catch (error) {
       setBadge(raw);
-      if (fastMode) cooldown.feedback();
+      if (fastMode && receiptMatchesOperation(operation, lastOperation.current)) cooldown.feedback();
       if (receiptMatchesOperation(operation, lastOperation.current))
         failure(error instanceof Error ? error.message : "Unable to save scan. Retry.");
     }
   }
   async function camera() {
-    if (!scannerDevice.ready || badgeCamera.starting) return;
-    if (authorityPaused.current) {
-      setMessage("Sign in again to upload pending scans.");
-      return;
-    }
+    if (!requestCapture() || badgeCamera.starting) return;
     await badgeCamera.start();
   }
   function startScanning() {
+    if (!requestCapture() || !allowedActions.includes(action)) return;
     sound.unlock();
     manualPaused.current = false;
-    if (!allowedActions.includes(action) || !scannerDevice.ready) return;
     enterPresentation();
     lastOperation.current = null;
     setResult(null);
@@ -359,18 +366,19 @@ export function EventScannerCapture({
     void camera();
   }
   const autoStart = useScannerAutoStart({
-    ready: scannerDevice.ready,
+    ready: captureReady,
     preparing: manifestPreparing,
     manifest: eligibilityManifest,
     manifestReady,
     targetId,
     roomId,
     onStart: startScanning,
-    error: manifestError,
+    error: preparation.status.error,
   });
   const preparationStatus = { ...preparation.status, lastSync: syncHistory.lastSync };
   function stopContinuousScanning() {
     autoStart.cancel();
+    cancelVerification();
     badgeCamera.stop();
     cooldown.reset();
     lastOperation.current = null;
@@ -389,7 +397,7 @@ export function EventScannerCapture({
     handlers: form.handlers,
     action,
     busy,
-    ready: scannerDevice.ready,
+    ready: captureReady,
     open: manualOpen,
     onCapture: () => void capture(),
     consent:
@@ -404,7 +412,7 @@ export function EventScannerCapture({
       badgeId,
       onBadge: setBadge,
       field: form.of("badgeId"),
-      lookup: action !== "lead" ? { slug, online: !offline, disabled: busy || !scannerDevice.ready } : undefined,
+      lookup: action !== "lead" ? { slug, online: !offline, disabled: busy || !captureReady } : undefined,
     },
   };
   const recentScans = (
@@ -458,12 +466,14 @@ export function EventScannerCapture({
               collectorContext || action === "lead" || occurrenceId ? { contextLabel, target, timeZone } : undefined
             }
             feedback={
-              result || pending > 0 || message !== "Ready to scan" ? { result, action, message, pending } : undefined
+              result || pending > 0 || message !== "Ready to scan"
+                ? { result, action, message, pending, status: captureStatus }
+                : undefined
             }
             form={form}
             busy={busy}
             capture={() => void capture()}
-            pendingStart={autoStart.pending ? manifestError || "Preparing scanner…" : undefined}
+            pendingStart={autoStart.pending ? preparation.status.error || "Preparing scanner…" : undefined}
             cancelStart={() => autoStart.cancel()}
             controls={
               <ScannerCaptureControls
@@ -474,7 +484,7 @@ export function EventScannerCapture({
                   operatorUserId,
                   sponsorOnly: action === "lead",
                   explicitTarget: Boolean(occurrenceId),
-                  ready: scannerDevice.ready && pendingReadyScope === `${slug}:${operatorUserId}`,
+                  ready: captureReady && pendingReadyScope === `${slug}:${operatorUserId}`,
                   locked:
                     badgeCamera.active ||
                     fastMode ||
@@ -494,7 +504,7 @@ export function EventScannerCapture({
                   onRoom: selectRoom,
                 }}
                 mode={mode}
-                canStart={scannerDevice.ready}
+                canStart={captureReady}
                 preparing={manifestPreparing || !scannerDevice.ready}
                 cameraError={badgeCamera.error}
                 start={() => {
@@ -514,32 +524,26 @@ export function EventScannerCapture({
         }
         diagnostics={
           <ScannerDiagnosticsView
-            mode={mode}
-            onStart={() => {
-              setScannerTab("scan");
-              startScanning();
-            }}
             preferences={preferences}
             sound={sound}
             context={{ sessionId: portalSession.value?.sessionId, slug, operatorUserId, sponsorId }}
             scanner={scannerDevice}
             sync={sync}
+            refreshEligibility={preparation.eligibility.refresh}
             onMessage={setMessage}
-            onCapturePause={(paused) => {
-              if (paused) badgeCamera.stop();
-              operatorPaused.current = paused;
-            }}
+            onCapturePause={capturePause.pauseSession}
             status={{
               pending,
-              lastSync: syncHistory.lastSync,
               uploadStatus,
               collector: collectorContext,
-              offline: offlinePreparation,
+              offline: preparation.offlinePreparation,
               action,
               syncing,
             }}
             preparation={preparationStatus}
-            unverifiedStart={action !== "lead" && !manifestReady && !manifestPreparing ? startScanning : undefined}
+            unverifiedStart={
+              captureReady && action !== "lead" && !manifestReady && !manifestPreparing ? startScanning : undefined
+            }
           />
         }
         recent={!fastMode && recentScans}
@@ -562,11 +566,9 @@ export function EventScannerCapture({
           pending={pending}
           message={message}
           uploadStatus={uploadStatus}
-          cooldown={cooldown}
+          cooldown={{ ...cooldown, saving: cooldown.saving || busy }}
           screenAwake={screenAwake}
-          onOperatorPause={(paused) => {
-            operatorPaused.current = paused;
-          }}
+          onOperatorPause={capturePause.setPaused}
           cameraActive={badgeCamera.active}
           cameraStarting={badgeCamera.starting}
           cameraError={badgeCamera.error}

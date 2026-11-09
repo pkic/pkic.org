@@ -112,7 +112,7 @@ test("offline supporting scanner captures registered and unregistered attendance
   await expect(page.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
   await openScannerDiagnostics(page);
   await expect(
-    page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
+    page.getByText("Badge data ready. Checks run locally; attendance uploads in the background.", {
       exact: true,
     }),
   ).toBeVisible();

@@ -51,6 +51,25 @@ it("reports success only after the controlled decoder preparation completes", as
   await act(async () => resolve(true));
   expect(host.textContent).toBe("Offline camera files prepared.");
 });
+
+it("updates a failed cold-start status when the offline worker becomes ready later", async () => {
+  const workers = Object.assign(new EventTarget(), { register: vi.fn(async () => ({})) });
+  vi.stubGlobal("navigator", { serviceWorker: workers });
+  prepare.mockResolvedValueOnce(false).mockResolvedValue(true);
+  await act(async () => render(<Harness />, host));
+  await vi.waitFor(() => expect(host.textContent).toContain("Offline camera files are not prepared"));
+  await act(() => {
+    workers.dispatchEvent(new Event("controllerchange"));
+  });
+  await vi.waitFor(() => expect(host.textContent).toBe("Offline camera files prepared."));
+  expect(prepare).toHaveBeenCalledTimes(2);
+  await act(() => {
+    window.dispatchEvent(new Event("online"));
+    workers.dispatchEvent(new Event("controllerchange"));
+  });
+  expect(prepare).toHaveBeenCalledTimes(2);
+  expect(host.textContent).toBe("Offline camera files prepared.");
+});
 it("bounds a stalled worker registration and removes its deadline on unmount", async () => {
   vi.useFakeTimers();
   vi.stubGlobal("navigator", { serviceWorker: { register: vi.fn(() => new Promise(() => {})) } });

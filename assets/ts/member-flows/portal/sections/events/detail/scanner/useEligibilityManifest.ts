@@ -6,32 +6,67 @@ import type { EventScanRequest } from "../../../../../../../shared/schemas/event
 import type { PortalSession } from "../../../../types";
 import type { ScannerEpoch } from "./scanner-device-ledger";
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
-import { ScannerCodePreparation } from "./scanner-code-preparation";
+import { ScannerCodePreparation, useScannerCodePreparationRetry } from "./scanner-code-preparation";
 import { prepareEligibilityManifest, type EligibilityManifest } from "./eligibility-manifest";
+import {
+  SCANNER_PREPARATION_CLOSED_MESSAGE,
+  SCANNER_PREPARATION_CLOSING_MESSAGE,
+  eligibilityPreparationStopped,
+  eligibilityRefreshError,
+  eligibilityRefreshRefused,
+} from "./eligibility-refresh-error";
+
+export interface EligibilityManifestOptions {
+  slug: string;
+  operatorUserId: string;
+  occurrenceId: string | null;
+  action: EventScanRequest["action"];
+  onPermissionChanged: () => void;
+  roomId?: string | null;
+  epoch: ScannerEpoch | null;
+  collector?: boolean;
+  onPreparationClosed?: (message: string, code: string) => void;
+}
 
 /** Prepares and refreshes scoped IDs-only data outside the camera path. */
-export function useEligibilityManifest(
-  slug: string,
-  operatorUserId: string,
-  occurrenceId: string | null,
-  action: string,
-  onPermissionChanged: () => void,
-  roomId: string | null = null,
-  epoch: ScannerEpoch | null,
+export function useEligibilityManifest({
+  slug,
+  operatorUserId,
+  occurrenceId,
+  action,
+  onPermissionChanged,
+  roomId = null,
+  epoch,
   collector = false,
-) {
+  onPreparationClosed,
+}: EligibilityManifestOptions) {
   const eligibilityManifest = useRef<EligibilityManifest | null>(null);
-  const permissionChanged = useRef(onPermissionChanged);
-  permissionChanged.current = onPermissionChanged;
+  const refusals = useRef({ onPermissionChanged, onPreparationClosed });
+  refusals.current = { onPermissionChanged, onPreparationClosed };
   const [manifestReady, setManifestReady] = useState(false);
   const [manifestPreparing, setManifestPreparing] = useState(false);
   const [manifestError, setManifestError] = useState("");
+  const [closedMessage, setClosedMessage] = useState("");
+  const closedEpochId = useRef<string | null>(null);
+  useEffect(() => {
+    closedEpochId.current = null;
+    setClosedMessage("");
+  }, [epoch?.epochId]);
+  const [manifestProgress, setManifestProgress] = useState<number | null>(null);
+  const refreshRequest = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
     const controller = new AbortController();
     eligibilityManifest.current = null;
     setManifestReady(false);
     setManifestPreparing(false);
     setManifestError("");
+    setManifestProgress(null);
+    if (epoch?.state === "closed" || epoch?.state === "closing") {
+      closedEpochId.current = epoch.epochId;
+      setClosedMessage(
+        epoch.state === "closing" ? SCANNER_PREPARATION_CLOSING_MESSAGE : SCANNER_PREPARATION_CLOSED_MESSAGE,
+      );
+    }
     if (!epoch?.epochId || epoch.state !== "open") return;
     if (
       action !== "check" &&
@@ -44,10 +79,11 @@ export function useEligibilityManifest(
     const enrollment = { epochId: epoch.epochId, deviceId: epoch.deviceId };
     let refreshing = false;
     const prepare = async () => {
-      if (refreshing || controller.signal.aborted) return;
+      if (refreshing || controller.signal.aborted || closedEpochId.current === enrollment.epochId) return;
       refreshing = true;
-      const onRefusal = permissionChanged.current;
+      const { onPermissionChanged: onRefusal, onPreparationClosed: onClosed } = refusals.current;
       setManifestPreparing(true);
+      setManifestProgress(null);
       try {
         const manifest = await prepareEligibilityManifest(
           slug,
@@ -57,26 +93,41 @@ export function useEligibilityManifest(
           controller.signal,
           roomId,
           collector ? "cache" : "refresh",
+          (checked) => {
+            if (!controller.signal.aborted) setManifestProgress(checked);
+          },
         );
         if (controller.signal.aborted) return;
         eligibilityManifest.current = manifest;
         setManifestReady(true);
-        setManifestError("");
+        setManifestError(manifest.storageError ?? manifest.refreshError ?? "");
       } catch (error) {
         if (controller.signal.aborted) return;
-        if (error instanceof Error && error.message === "SCANNER_PERMISSION_CHANGED") {
+        if (eligibilityRefreshRefused(error)) {
           eligibilityManifest.current = null;
+          if (error instanceof Error && eligibilityPreparationStopped(error.message)) {
+            closedEpochId.current = enrollment.epochId;
+            const message = eligibilityRefreshError(error);
+            setClosedMessage(message);
+            setManifestError("");
+            setManifestReady(false);
+            onClosed?.(message, error.message);
+            return;
+          }
           onRefusal();
         }
         setManifestReady(Boolean(eligibilityManifest.current));
         setManifestError(
-          "Eligibility data could not be refreshed. Using the last saved registration data where available.",
+          collector && !eligibilityRefreshRefused(error)
+            ? "Prepared badge data is unavailable. Connect and refresh before scanning."
+            : eligibilityRefreshError(error),
         );
       } finally {
         refreshing = false;
         if (!controller.signal.aborted) setManifestPreparing(false);
       }
     };
+    refreshRequest.current = prepare;
     void prepare();
     const reconnect = () => {
       if (!collector && navigator.onLine) void prepare();
@@ -90,13 +141,22 @@ export function useEligibilityManifest(
     document.addEventListener("visibilitychange", visible);
     return () => {
       controller.abort();
+      refreshRequest.current = async () => {};
       window.clearInterval(refresh);
       window.removeEventListener("online", reconnect);
       window.removeEventListener("focus", reconnect);
       document.removeEventListener("visibilitychange", visible);
     };
   }, [slug, operatorUserId, occurrenceId, action, roomId, epoch?.epochId, epoch?.state, epoch?.deviceId, collector]);
-  return { eligibilityManifest, manifestReady, manifestPreparing, manifestError };
+  return {
+    eligibilityManifest,
+    manifestReady,
+    manifestPreparing,
+    manifestError: closedMessage || manifestError,
+    closedMessage,
+    manifestProgress,
+    refresh: () => refreshRequest.current(),
+  };
 }
 
 /** Save only after a canonical session, open epoch and current manifest have prepared this view. */
@@ -109,10 +169,10 @@ export function useScannerOfflinePreparation(
 ) {
   const prepareCode = useContext(ScannerCodePreparation);
   const route = scannerCollectorPath(window.location.hash);
-  const [retry, setRetry] = useState(0);
   const [prepared, setPrepared] = useState<ScannerOfflineContext | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState("");
+  const { attempt, retry } = useScannerCodePreparationRetry(() => !preparing && !current);
   const [, tick] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
@@ -136,7 +196,7 @@ export function useScannerOfflinePreparation(
         });
     }
     return () => controller.abort();
-  }, [slug, action, session, epoch, manifest, prepareCode, retry, route]);
+  }, [slug, action, session, epoch, manifest, prepareCode, attempt, route]);
   useEffect(() => {
     if (!prepared) return;
     const timer = window.setInterval(() => tick((value) => value + 1), 1000);
@@ -159,5 +219,5 @@ export function useScannerOfflinePreparation(
     scannerContextCurrent(prepared)
       ? prepared
       : null;
-  return { context: current, preparing, error, retry: () => setRetry((value) => value + 1) };
+  return { context: current, preparing, error, retry };
 }

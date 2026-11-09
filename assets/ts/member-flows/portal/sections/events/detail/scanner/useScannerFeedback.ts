@@ -4,7 +4,7 @@ import type {
   EventScanRequest,
 } from "../../../../../../../shared/schemas/event-participation-scanning";
 import type { LocalEligibility } from "./eligibility-manifest";
-import { receiptMatchesOperation, localScanResponse } from "./scan-stream";
+import { receiptMatchesOperation, localScanResponse, unverifiedSavedFeedback } from "./scan-stream";
 import { useScannerFeedbackReset } from "./useScannerFeedbackReset";
 export function useScannerFeedback({
   enabled,
@@ -36,7 +36,9 @@ export function useScannerFeedback({
     updateMessage(value);
   }
   const [failed, setFailed] = useState(false);
+  const [checking, setChecking] = useState<string | null>(null);
   function setResult(value: EventScanResponse | null) {
+    setChecking(null);
     setFailed(false);
     updateResult(value);
     if (value) setLastResult(value);
@@ -45,11 +47,13 @@ export function useScannerFeedback({
     setFailed(true);
     setMessage(value);
   }
+  const feedbackOperation = lastOperation.current;
   useScannerFeedbackReset(
     enabled,
     result,
     durationMs,
     () => {
+      if (lastOperation.current !== feedbackOperation) return;
       lastOperation.current = null;
       setResult(null);
       setMessage("Ready to scan");
@@ -74,20 +78,44 @@ export function useScannerFeedback({
     setResult(localScanResponse(scan.operationId, local));
     showProvisionalMessage(scan.operationId, local.message);
   }
+  /** A local miss is provisional; only the queued operation's server receipt can confirm failure. */
+  async function presentSavedEligibility(
+    saved: { scan: EventScanRequest; local?: LocalEligibility },
+    verifyQueuedScan: (operationId: string) => Promise<boolean>,
+  ) {
+    const local = saved.local ?? unverifiedSavedFeedback;
+    if (lastCommittedOperation.current === saved.scan.operationId)
+      return receiptMatchesOperation(saved.scan.operationId, lastOperation.current);
+    if (!receiptMatchesOperation(saved.scan.operationId, lastOperation.current)) return false;
+    if (!collector && (local.outcome === "unknown" || local.outcome === "unverified")) {
+      setChecking(saved.scan.operationId);
+      showProvisionalMessage(saved.scan.operationId, "Checking badge online…");
+      if (!(await verifyQueuedScan(saved.scan.operationId)))
+        showLocalEligibility(saved.scan, local.outcome === "unverified" ? local : unverifiedSavedFeedback);
+    } else {
+      showLocalEligibility(saved.scan, local);
+    }
+    return receiptMatchesOperation(saved.scan.operationId, lastOperation.current);
+  }
   return {
     result,
     lastResult,
-    clearLastResult: () => setLastResult(null),
+    clearFeedback: () => {
+      setResult(null);
+      setLastResult(null);
+    },
     failed,
     captureStatus: failed
       ? { key: "capture-failure", tone: "denied" as const, title: "Scan not recorded", detail: message, record: false }
-      : undefined,
+      : checking
+        ? { key: checking, tone: "unverified" as const, title: "Checking badge online…", record: false }
+        : undefined,
     setResult,
     message,
     setMessage,
     showProvisionalMessage,
     presentReceipt,
-    showLocalEligibility,
+    presentSavedEligibility,
     failure,
   };
 }

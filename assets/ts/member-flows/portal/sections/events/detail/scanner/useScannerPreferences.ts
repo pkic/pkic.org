@@ -1,11 +1,14 @@
 import { useState } from "preact/hooks";
-import { scannerPreferencesSchema } from "../../../../../../../shared/schemas/event-scanner-preferences";
+import {
+  scannerPreferencesSchema,
+  storedScannerPreferencesSchema,
+} from "../../../../../../../shared/schemas/event-scanner-preferences";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 
 const key = "pkic-scanner-preferences";
 function readPreferences() {
   try {
-    return scannerPreferencesSchema.parse(JSON.parse(localStorage.getItem(key) ?? "{}"));
+    return storedScannerPreferencesSchema.parse(JSON.parse(localStorage.getItem(key) ?? "{}"));
   } catch {
     return scannerPreferencesSchema.parse({});
   }

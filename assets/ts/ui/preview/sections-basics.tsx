@@ -43,6 +43,7 @@ export const basicSections: PreviewSection[] = [
         <div class="pk-preview__shelf">
           <Button disabled>Disabled</Button>
           <Button loading>Loading</Button>
+          <Button aria-busy="true">Refresh · in progress…</Button>
           <Button icon aria-label="Settings">
             ⚙️
           </Button>

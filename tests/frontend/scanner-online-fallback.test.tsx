@@ -1,0 +1,352 @@
+import { render } from "preact";
+import { useRef } from "preact/hooks";
+import { useScannerFeedback } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useScannerFeedback";
+import { badgeCode, mocks, host, mount, submit } from "./event-scanner-fixture";
+import { act } from "preact/test-utils";
+import { describe, expect, it, vi } from "vitest";
+import { pendingScanCount } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scan-outbox";
+import {
+  eventScanRequestSchema,
+  eventScanResponseSchema,
+  type EventScanRequest,
+} from "../../assets/shared/schemas/event-participation-scanning";
+
+function captureMissingBadge() {
+  let captured: EventScanRequest | undefined;
+  let sequence = 0;
+  const claimed = new Set<string>();
+  mocks.persist.mockImplementation(async (scan) => {
+    captured = eventScanRequestSchema.parse({
+      ...scan,
+      scannerSession: { epochId: "99999999-9999-4999-8999-999999999999", sequence: ++sequence },
+    });
+    return {
+      scan: captured,
+      local: { outcome: "unknown", reason: "unknown_credential", message: "Unknown saved badge" },
+    };
+  });
+  mocks.drain.mockImplementation(async (send) => {
+    if (!captured || !send || claimed.has(captured.operationId)) return { uploaded: 0, state: "complete" };
+    const scan = captured;
+    claimed.add(scan.operationId);
+    const response = await send({ kind: "scan", eventId: "synthetic-event", scan });
+    return { uploaded: response.ok ? 1 : 0, state: response.ok ? "complete" : "retry" };
+  });
+  return () => captured;
+}
+async function scan(continuous: boolean) {
+  if (!continuous) return submit({ waitForIdle: false });
+  await act(async () => {
+    Array.from(host.querySelectorAll("button"))
+      .find((button) => button.textContent?.trim() === "Start scanning")!
+      .click();
+  });
+  await act(async () => {
+    mocks.hardwareScan!(badgeCode);
+  });
+}
+
+describe("Online verification after a local badge miss", () => {
+  it("keeps an offline collector's complete-roster miss without attempting online verification", async () => {
+    let feedback!: ReturnType<typeof useScannerFeedback>;
+    const operationId = crypto.randomUUID();
+    const verify = vi.fn(async () => false);
+    function Collector() {
+      feedback = useScannerFeedback({
+        enabled: false,
+        durationMs: 10000,
+        collector: true,
+        currentOperation: useRef(operationId),
+        committedOperation: useRef(null),
+        authorityPaused: useRef(false),
+      });
+      return <output>{feedback.result?.outcome}</output>;
+    }
+    const container = document.createElement("div");
+    try {
+      await act(async () => render(<Collector />, container));
+      const scan = eventScanRequestSchema.parse({
+        operationId,
+        operatorUserId: "11111111-1111-4111-8111-111111111111",
+        deviceId: "22222222-2222-4222-8222-222222222222",
+        badgeId: badgeCode,
+        scannedValue: badgeCode,
+        scannedValueTruncated: false,
+        occurrenceId: null,
+        action: "attendance",
+        observedAt: new Date().toISOString(),
+      });
+      await act(async () => {
+        await feedback.presentSavedEligibility(
+          {
+            scan,
+            local: { outcome: "unknown", reason: "unknown_credential", message: "Unknown badge in saved badge data" },
+          },
+          verify,
+        );
+      });
+      expect(feedback.result?.outcome).toBe("unknown");
+      expect(feedback.captureStatus).toBeUndefined();
+      expect(verify).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => render(null, container));
+    }
+  });
+  it("does not re-arm a reset cooldown when verification is canceled", async () => {
+    localStorage.setItem("pkic-scanner-preferences", JSON.stringify({ feedbackPause: 10000, sound: false }));
+    await mount(true, ["attendance"]);
+    captureMissingBadge();
+    const fetcher = vi.fn(async () => new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", fetcher);
+    await scan(true);
+    await vi.waitFor(() => expect(host.textContent).toContain("Checking badge online"));
+    await act(async () =>
+      Array.from(host.querySelectorAll("button"))
+        .find((button) => button.textContent?.trim() === "Close scanner")!
+        .click(),
+    );
+    await act(async () =>
+      Array.from(host.querySelectorAll("button"))
+        .find((button) => button.textContent?.trim() === "Start scanning")!
+        .click(),
+    );
+    await act(async () => mocks.hardwareScan!("ZYXWVUTSRQPNMLKJ"));
+    await vi.waitFor(() => expect(mocks.persist).toHaveBeenCalledTimes(2));
+    localStorage.removeItem("pkic-scanner-preferences");
+  });
+  it("keeps a previous feedback timer from clearing an in-flight badge or locking later scans", async () => {
+    await mount(true, ["attendance"]);
+    let release!: () => void;
+    let sequence = 0;
+    mocks.persist.mockImplementation(async (intent) => {
+      const scan = eventScanRequestSchema.parse({
+        ...intent,
+        scannerSession: {
+          epochId: "99999999-9999-4999-8999-999999999999",
+          sequence: ++sequence,
+        },
+      });
+      if (sequence === 2)
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      return { scan, local: { outcome: "eligible", reason: "eligible", message: "Registered" } };
+    });
+    vi.useFakeTimers();
+    const clock = vi.spyOn(Date, "now");
+    try {
+      await scan(true);
+      await vi.waitFor(() => expect(host.textContent).toContain("Registered"));
+      // The gate's deadline can precede the feedback effect's after-paint reset timer.
+      clock.mockReturnValue(Date.now() + 1001);
+      await act(async () => {
+        mocks.hardwareScan!("ZYXWVUTSRQPNMLKJ");
+      });
+      expect(mocks.persist).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      await act(async () => release());
+      await vi.waitFor(() => expect(host.textContent).toContain("Registered"));
+      await vi.waitFor(() =>
+        expect(host.querySelector('[aria-label="Next badge readiness"]')?.hasAttribute("value")).toBe(true),
+      );
+      clock.mockReturnValue(Date.now() + 1001);
+      await act(async () => {
+        mocks.hardwareScan!(badgeCode);
+      });
+      expect(mocks.persist).toHaveBeenCalledTimes(3);
+    } finally {
+      clock.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+  it("still verifies a saved scan when the pending count fails", async () => {
+    await mount(true, ["attendance"]);
+    captureMissingBadge();
+    vi.mocked(pendingScanCount).mockRejectedValueOnce(new Error("Count failed"));
+    const fetcher = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const request = eventScanRequestSchema.parse(JSON.parse(String(init?.body)));
+      return Response.json({
+        operationId: request.operationId,
+        outcome: "eligible",
+        reason: "eligible",
+        recorded: true,
+        attendanceRecorded: true,
+        scannerReceipt: {
+          ...request.scannerSession!,
+          operationId: request.operationId,
+          receivedAt: "2026-11-06T12:00:00.000Z",
+        },
+      });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    await scan(true);
+    await vi.waitFor(() => expect(host.textContent).toContain("attendance recorded"));
+    expect(host.textContent).not.toContain("Scan not recorded");
+    expect(mocks.persist).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts another badge after the verification and feedback deadlines while the first upload is pending", async () => {
+    await mount(true, ["attendance"]);
+    captureMissingBadge();
+    const requests: EventScanRequest[] = [];
+    const releases: Array<() => void> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const request = eventScanRequestSchema.parse(JSON.parse(String(init?.body)));
+        requests.push(request);
+        return new Promise<Response>((resolve) => {
+          releases.push(() =>
+            resolve(
+              Response.json({
+                operationId: request.operationId,
+                outcome: "eligible",
+                reason: "eligible",
+                recorded: true,
+                attendanceRecorded: true,
+                scannerReceipt: {
+                  ...request.scannerSession!,
+                  operationId: request.operationId,
+                  receivedAt: "2026-11-06T12:00:00.000Z",
+                },
+              }),
+            ),
+          );
+        });
+      }),
+    );
+    vi.useFakeTimers();
+    try {
+      await scan(true);
+      expect(requests).toHaveLength(1);
+      const nextBadge = "ZYXWVUTSRQPNMLKJ";
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1999);
+        mocks.hardwareScan!(nextBadge);
+      });
+      expect(mocks.persist).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+        mocks.hardwareScan!(nextBadge);
+      });
+      expect(mocks.persist).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+        mocks.hardwareScan!(nextBadge);
+      });
+      expect(mocks.persist).toHaveBeenCalledTimes(2);
+      await vi.waitFor(() => expect(requests).toHaveLength(2));
+      expect(requests[1]!.badgeId).toBe(nextBadge);
+      expect(requests[1]!.operationId).not.toBe(requests[0]!.operationId);
+      expect(requests[1]!.scannerSession!.sequence).toBe(2);
+      // Neither request has resolved: accepting the next badge does not discard the first upload.
+      await act(async () => {
+        releases.forEach((release) => release());
+      });
+    } finally {
+      releases.forEach((release) => release());
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([false, true])("waits for the server before reporting a result (continuous=%s)", async (continuous) => {
+    await mount(true, ["attendance"]);
+    const captured = captureMissingBadge();
+    let release: (() => void) | undefined;
+    const fetcher = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const request = eventScanRequestSchema.parse(JSON.parse(String(init?.body)));
+      expect(request).toEqual(captured());
+      return new Promise<Response>((resolve) => {
+        release = () =>
+          resolve(
+            Response.json(
+              eventScanResponseSchema.parse({
+                operationId: request.operationId,
+                outcome: "eligible",
+                reason: "eligible",
+                recorded: true,
+                attendanceRecorded: true,
+                scannerReceipt: {
+                  ...request.scannerSession!,
+                  operationId: request.operationId,
+                  receivedAt: "2026-11-06T12:00:00.000Z",
+                },
+              }),
+            ),
+          );
+      });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    await scan(continuous);
+    await vi.waitFor(() => expect(release).toBeDefined());
+    await vi.waitFor(() => expect(host.textContent).toContain("Checking badge online"));
+    expect(host.textContent).not.toContain("Unknown badge");
+    expect(host.querySelector(".pk-event-scanner--unknown")).toBeNull();
+    await act(async () => {
+      release!();
+    });
+    await vi.waitFor(() => expect(host.textContent).toContain("attendance recorded"));
+    expect(host.textContent).not.toContain("Unknown badge");
+    expect(mocks.persist).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports an unknown badge only after the server confirms the miss", async () => {
+    await mount(true, ["attendance"]);
+    captureMissingBadge();
+    let release: (() => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const request = eventScanRequestSchema.parse(JSON.parse(String(init?.body)));
+        return new Promise<Response>((resolve) => {
+          release = () =>
+            resolve(
+              Response.json(
+                eventScanResponseSchema.parse({
+                  operationId: request.operationId,
+                  outcome: "unknown",
+                  reason: "unknown_credential",
+                  recorded: true,
+                  attendanceRecorded: false,
+                  scannerReceipt: {
+                    ...request.scannerSession!,
+                    operationId: request.operationId,
+                    receivedAt: "2026-11-06T12:00:00.000Z",
+                  },
+                }),
+              ),
+            );
+        });
+      }),
+    );
+    await scan(true);
+    await vi.waitFor(() => expect(release).toBeDefined());
+    expect(host.textContent).not.toContain("Unknown badge");
+    await act(async () => {
+      release!();
+    });
+    await vi.waitFor(() => expect(host.textContent).toContain("Unknown badge"));
+    expect(mocks.persist).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the miss unverified when the online attempt fails", async () => {
+    vi.stubGlobal("navigator", { onLine: false, serviceWorker: new EventTarget() });
+    await mount(true, ["attendance"]);
+    captureMissingBadge();
+    const fetcher = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      eventScanRequestSchema.parse(JSON.parse(String(init?.body)));
+      throw new TypeError("Disconnected");
+    });
+    vi.stubGlobal("fetch", fetcher);
+    await scan(true);
+    await vi.waitFor(() => expect(host.textContent).toContain("Verification pending"));
+    expect(host.textContent).not.toContain("Unknown badge");
+    expect(host.querySelector(".pk-event-scanner--unknown")).toBeNull();
+    expect(mocks.persist).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});

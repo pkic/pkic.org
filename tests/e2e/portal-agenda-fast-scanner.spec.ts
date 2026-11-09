@@ -1,3 +1,8 @@
+import {
+  scannerDeviceSessionEnrollmentResponseSchema,
+  scannerDeviceSessionClosingSchema,
+  scannerDeviceSessionStatusSchema,
+} from "../../assets/shared/schemas/event-scanner-devices";
 import { SCAN_STORAGE_VERSION } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
@@ -11,7 +16,7 @@ import {
 } from "../../assets/shared/schemas/route-contracts-event-badges";
 import { confirmRegistration, ownDomainEmail, registerInBrowser } from "./helpers/registration";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
-import { queuedScanSchema } from "./helpers/scanner-recovery-storage";
+import { openScannerSessionDetails, queuedScanSchema } from "./helpers/scanner-recovery-storage";
 
 test("phone scanner guides staff through venue, search, offline entry and diagnostics", async ({
   page,
@@ -20,7 +25,12 @@ test("phone scanner guides staff through venue, search, offline entry and diagno
   await context.clearPermissions();
   await page.setViewportSize({ width: 1440, height: 900 });
   await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-fast-scanner-idle"));
+  const enrolled = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith("/scanner/devices/sessions") && response.request().method() === "POST",
+  );
   await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/scanner");
+  const enrollment = scannerDeviceSessionEnrollmentResponseSchema.parse(await (await enrolled).json());
   const entrance = page.getByRole("button", { name: "Venue entrance Check people in", exact: true });
   await expect(entrance).toBeEnabled();
   await expect(page.getByLabel("Scan mode", { exact: true })).toBeHidden();
@@ -49,6 +59,31 @@ test("phone scanner guides staff through venue, search, offline entry and diagno
   await page.getByLabel("Feedback pause", { exact: true }).selectOption("300");
   await page.reload();
   await expect(page.getByLabel("Feedback pause", { exact: true })).toHaveValue("300");
+  const closed = await page.request.post(
+    `/api/v1/events/pqc-conference-amsterdam-nl/scanner/devices/sessions/${enrollment.epochId}/closing`,
+    {
+      data: scannerDeviceSessionClosingSchema.parse({
+        operationId: randomUUID(),
+        highWaterSequence: 0,
+        pendingCount: 0,
+        recoveryCount: 0,
+      }),
+    },
+  );
+  expect(closed.status()).toBe(200);
+  expect(scannerDeviceSessionStatusSchema.parse(await closed.json()).closedAt).not.toBeNull();
+  await page.getByRole("button", { name: "Sync now", exact: true }).click();
+  await openScannerSessionDetails(page);
+  const nextSession = page.getByRole("button", { name: "Start next scanner session", exact: true });
+  await expect(nextSession).toBeVisible();
+  await expect(page.getByRole("button", { name: "Close scanner session", exact: true })).toBeDisabled();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.screenshot({ path: testInfo.outputPath("server-closed-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: testInfo.outputPath("server-closed-phone.png"), fullPage: true });
+  await nextSession.click();
+  await expect(page.getByRole("button", { name: "Close scanner session", exact: true })).toBeEnabled();
+  await expect(page.getByRole("dialog", { name: "Continuous badge scanner", exact: true })).toHaveCount(0);
   await page.getByRole("tab", { name: "Scan", exact: true }).click();
   await page.getByRole("button", { name: "Sessions Choose a room", exact: true }).click();
   const rooms = page.getByRole("dialog", { name: "Choose a room", exact: true });
@@ -121,7 +156,7 @@ test("continuous local eligibility checks queue a burst while attempt uploads ar
   });
   await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/scanner");
   await page.getByRole("tab", { name: "Diagnostics", exact: true }).click();
-  await expect(page.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
+  await expect(page.getByLabel("Scan mode", { exact: true })).toHaveCount(0);
   await page.getByLabel("Feedback pause", { exact: true }).selectOption("1000");
   await page.getByRole("tab", { name: "Scan", exact: true }).click();
   await page.getByRole("button", { name: "Venue entrance Check people in", exact: true }).click();

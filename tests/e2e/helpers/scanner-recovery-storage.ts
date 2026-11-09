@@ -74,6 +74,9 @@ function scannerDiagnostics(page: Page) {
 }
 
 export async function openScannerDiagnostics(page: Page) {
+  const scanner = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+  if (await scanner.isVisible())
+    await scanner.getByRole("button", { name: "Close scanner", exact: true }).first().click();
   const diagnostics = scannerDiagnostics(page);
   if (!(await diagnostics.isVisible())) await page.getByRole("tab", { name: "Diagnostics", exact: true }).click();
   await expect(diagnostics).toBeVisible();
@@ -87,7 +90,7 @@ export async function closeScannerDiagnostics(page: Page): Promise<void> {
 }
 
 export async function openScannerManualEntry(page: Page): Promise<void> {
-  const code = page.getByRole("textbox", { name: "Badge code", exact: true });
+  const code = page.getByRole("textbox", { name: /^Badge code(?: or attendee)?$/ });
   if (!(await code.isVisible())) {
     await closeScannerDiagnostics(page);
     const continuous = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
@@ -114,9 +117,19 @@ export async function openScannerManualEntry(page: Page): Promise<void> {
 }
 
 export async function openScannerRecovery(page: Page): Promise<void> {
-  const diagnostics = await openScannerDiagnostics(page);
+  const diagnostics = await openScannerSessionDetails(page);
   await expect(diagnostics.getByRole("heading", { name: "Recovery backup", exact: true })).toBeVisible();
   await expect(diagnostics.getByRole("button", { name: "Download recovery file (JSON)", exact: true })).toBeVisible();
+}
+
+export async function openScannerSessionDetails(page: Page) {
+  const diagnostics = await openScannerDiagnostics(page);
+  if (!(await diagnostics.getByRole("button", { name: "Close scanner session", exact: true }).isVisible()))
+    await diagnostics
+      .locator("summary")
+      .filter({ hasText: /^Scanner session$/ })
+      .click();
+  return diagnostics;
 }
 
 /** Parse the actual download through the same canonical recovery-file contract. */

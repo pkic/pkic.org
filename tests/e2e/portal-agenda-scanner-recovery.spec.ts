@@ -25,6 +25,7 @@ import {
   scannerEligibilityCount,
   signOutThroughPortal,
   openScannerDiagnostics,
+  openScannerSessionDetails,
   openScannerManualEntry,
   openScannerRecovery,
   scannerStorage,
@@ -64,14 +65,14 @@ test("real pending scanner storage survives reload and logout without crossing a
   await page.goto(scannerPath);
   const snapshot = enrolledOfflineEligibilityResponseSchema.parse(await (await preparing).json());
   expect(snapshot.operatorUserId).toBe(owner.identity.id);
-  await expect(page.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
-  const diagnostics = await openScannerDiagnostics(page);
-  await expectScannerSyncTime(page, "No retained acknowledgment");
-  await expect(page.getByText("Last eligibility check", { exact: true })).toBeVisible();
-  await expect(page.getByText("Snapshot expires", { exact: true })).toBeVisible();
+  const diagnostics = await openScannerSessionDetails(page);
+  await expect(diagnostics.getByLabel("Scan mode", { exact: true })).toHaveCount(0);
+  await expectScannerSyncTime(page, "No recent upload");
+  await expect(page.getByText("Last badge refresh", { exact: true })).toBeVisible();
+  await expect(page.getByText("Badge data valid until", { exact: true })).toBeVisible();
   for (const [label, timestamp] of [
-    ["Last eligibility check", snapshot.serverNow],
-    ["Snapshot expires", snapshot.expiresAt],
+    ["Last badge refresh", snapshot.serverNow],
+    ["Badge data valid until", snapshot.expiresAt],
   ]) {
     await expect(definitionFor(page, label)).toHaveText(formatDateTime(timestamp));
   }
@@ -83,7 +84,7 @@ test("real pending scanner storage survives reload and logout without crossing a
     }),
   ).toBeVisible();
   // The diagnostics tab lists its sections open; there is no disclosure left to expand.
-  await expect(diagnostics.getByRole("heading", { name: "Eligibility data", exact: true })).toBeVisible();
+  await expect(diagnostics.getByRole("heading", { name: "Sync status", exact: true })).toBeVisible();
   for (const [name, width, height] of [
     ["desktop", 1280, 900],
     ["phone", 390, 844],
@@ -103,9 +104,9 @@ test("real pending scanner storage survives reload and logout without crossing a
   await openScannerManualEntry(page);
   await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
   await page.getByRole("button", { name: "Record attendance", exact: true }).click();
-  await expect(page.getByText("1 scans awaiting upload", { exact: true })).toBeVisible();
-  const manual = page.getByRole("dialog", { name: "Enter badge code", exact: true });
-  await expect(manual).not.toBeVisible();
+  await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(1);
+  const manual = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+  await expect(page.getByRole("textbox", { name: "Badge code", exact: true })).not.toBeVisible();
   await openScannerManualEntry(page);
   const clearedBadge = manual.getByLabel("Badge code", { exact: true });
   await expect(clearedBadge).toHaveValue("");
@@ -113,7 +114,7 @@ test("real pending scanner storage survives reload and logout without crossing a
   const badgeField = manual.locator(".pk-field").filter({ has: page.getByLabel("Badge code", { exact: true }) });
   await expect(badgeField).not.toHaveClass(/pk-field--invalid/);
   await expect(badgeField.getByRole("alert")).toHaveCount(0);
-  await manual.getByRole("button", { name: "Cancel", exact: true }).click();
+  await manual.getByRole("button", { name: "Close scanner", exact: true }).first().click();
   await expect(manual).not.toBeVisible();
   const stored = await scannerStorage(page);
   expect(stored.pending).toHaveLength(1);
@@ -196,7 +197,7 @@ test("real pending scanner storage survives reload and logout without crossing a
   expect(checkedOther.sessionId).toBe(other.sessionId);
   expect(checkedOther.identity.id).toBe(other.identity.id);
   await expect(page.getByRole("tablist", { name: "Badge scanner views", exact: true })).toBeVisible();
-  await openScannerDiagnostics(page);
+  await openScannerSessionDetails(page);
   await expect(page.locator(".pk-event-scanner")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Close scanner session", exact: true })).toBeEnabled();
   await openScannerRecovery(page);
@@ -204,7 +205,7 @@ test("real pending scanner storage survives reload and logout without crossing a
     page.getByText("0 uploaded scans available for this event and your account.", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("0 pending scans included in recovery downloads.", { exact: true })).toBeVisible();
-  await expectScannerSyncTime(page, "No retained acknowledgment");
+  await expectScannerSyncTime(page, "No recent upload");
   const otherBackup = await downloadScannerRecovery(page);
   expect(otherBackup.operatorUserId).toBe(other.identity.id);
   expect(otherBackup.pending).toHaveLength(0);
@@ -245,6 +246,7 @@ test("real pending scanner storage survives reload and logout without crossing a
   );
   await signInAsE2eStaff(page, ownerEmail);
   await page.goto(scannerPath);
+  await openScannerDiagnostics(page);
   await page.getByRole("button", { name: "Sync now", exact: true }).click();
   const uploaded = await uploading;
   expect(enrolledEventScanRequestSchema.parse(uploaded.request().postDataJSON())).toEqual(original);
@@ -310,8 +312,7 @@ test("real pending scanner storage survives reload and logout without crossing a
   try {
     const recoveredPage = await recoveryContext.newPage();
     await recoveredPage.goto(new URL(scannerPath, page.url()).href);
-    await expect(recoveredPage.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
-    await openScannerDiagnostics(recoveredPage);
+    await openScannerSessionDetails(recoveredPage);
     await expect(recoveredPage.getByRole("button", { name: "Close scanner session", exact: true })).toBeEnabled();
     await openScannerRecovery(recoveredPage);
     const freshBackup = await downloadScannerRecovery(recoveredPage);
@@ -319,7 +320,7 @@ test("real pending scanner storage survives reload and logout without crossing a
     expect(freshBackup.pending).toHaveLength(0);
     expect(freshBackup.scannerEpochs).toHaveLength(1);
     expect(freshBackup.scannerEpochs[0].deviceId).not.toBe(original.deviceId);
-    await expectScannerSyncTime(recoveredPage, "No retained acknowledgment");
+    await expectScannerSyncTime(recoveredPage, "No recent upload");
     const beforeImport = await scannerStorage(recoveredPage);
     expect(beforeImport.pending).toHaveLength(0);
     expect(beforeImport.history).toHaveLength(0);

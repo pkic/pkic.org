@@ -4,7 +4,7 @@ import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/
 import { Button } from "../../../../../../ui/Button";
 import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Field } from "../../../../../../ui/Field";
-import { SectionHeading } from "../../../../../../ui/SectionHeading";
+import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { Alert } from "../../../../../../ui/Alert";
 import { ScannerSetup } from "./ScannerSetup";
 import { ScannerManualEntry } from "./ScannerManualEntry";
@@ -13,47 +13,49 @@ import type { EventScanRequest } from "../../../../../../../shared/schemas/event
 import { Dialog } from "../../../../../../ui/Dialog";
 import { ScannerSessionControls } from "./ScannerSessionControls";
 import { ScannerPacing } from "./ScannerPacing";
-import { ScannerPreparationStatus } from "./ScannerPreparationStatus";
+import { ScannerRecovery } from "./ScannerRecovery";
 
 export function ScannerDiagnostics({
   session,
   pacing,
-  preparation,
   unverifiedStart,
   sound,
   syncStatus,
 }: {
-  session: ComponentProps<typeof ScannerSessionControls>;
+  session: ComponentProps<typeof ScannerSessionControls> & { sessionId?: string };
   pacing: ComponentProps<typeof ScannerPacing>;
-  preparation: ComponentProps<typeof ScannerPreparationStatus>;
   unverifiedStart?: () => void;
   sound?: ComponentChildren;
   syncStatus?: ComponentChildren;
 }) {
+  const { sessionId, ...sessionControls } = session;
   return (
     <section aria-label="Recovery and diagnostics" class="pk-stack">
       {syncStatus}
-      <div class="pk-stack pk-stack--snug">
-        <SectionHeading level={3}>Scanner session</SectionHeading>
-        <ScannerSessionControls {...session} />
-      </div>
-      <div class="pk-stack pk-stack--snug">
-        <SectionHeading level={3}>Feedback</SectionHeading>
-        <p class="pk-muted">These preferences save automatically in this browser.</p>
-        {sound}
-        <ScannerPacing {...pacing} />
-        {unverifiedStart && (
-          <div class="pk-cluster">
-            <Button type="button" variant="secondary" onClick={unverifiedStart}>
-              Start with unverified feedback
-            </Button>
+      <Panel>
+        <PanelHeader title="Feedback" />
+        <PanelBody class="pk-stack">
+          <p class="pk-muted">These preferences save automatically in this browser.</p>
+          <div class="pk-grid pk-grid--cards">
+            {sound}
+            <ScannerPacing {...pacing} />
           </div>
-        )}
-      </div>
-      <div class="pk-stack pk-stack--snug">
-        <SectionHeading level={3}>Eligibility data</SectionHeading>
-        <ScannerPreparationStatus {...preparation} />
-      </div>
+          {unverifiedStart && (
+            <div class="pk-cluster">
+              <Button type="button" variant="secondary" onClick={unverifiedStart}>
+                Start with unverified feedback
+              </Button>
+            </div>
+          )}
+        </PanelBody>
+      </Panel>
+      <ScannerRecovery
+        slug={session.slug}
+        operatorUserId={session.operatorUserId}
+        sessionId={sessionId}
+        sponsorId={session.sponsorId}
+        sessionControls={<ScannerSessionControls {...sessionControls} />}
+      />
     </section>
   );
 }

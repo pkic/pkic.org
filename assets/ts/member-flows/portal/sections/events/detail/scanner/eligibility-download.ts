@@ -1,0 +1,142 @@
+import { EligibilityRefreshFailure, eligibilityPreparationStopped } from "./eligibility-refresh-error";
+import {
+  enrolledOfflineEligibilityQuerySchema,
+  OFFLINE_ELIGIBILITY_PAGE_SIZE,
+  enrolledOfflineEligibilityResponseSchema,
+} from "../../../../../../../shared/schemas/event-offline-eligibility";
+import { eligibilityPageDigest, eligibilityScopeKey } from "../../../../../../../shared/event-eligibility-digest";
+import { SCANNER_OFFLINE_MAXIMUM_MS } from "../../../../../../../shared/event-offline-expiry";
+import {
+  sameSnapshotEnrollment,
+  sameSnapshotScope,
+  snapshotCurrent,
+  type CachedManifest,
+} from "./eligibility-snapshot";
+import { apiErrorPayloadSchema } from "../../../../../../../shared/schemas/api-common";
+
+/** Validate every bounded page, transferring its entries only when they differ from the saved copy. */
+export async function downloadEligibilitySnapshot(
+  slug: string,
+  operatorUserId: string,
+  occurrenceId: string | null,
+  roomId: string | null,
+  enrollment: { epochId: string; deviceId: string },
+  signal?: AbortSignal,
+  saved?: CachedManifest,
+  onProgress?: (checkedBadges: number) => void,
+): Promise<CachedManifest> {
+  const matching = saved && sameSnapshotScope(saved, { operatorUserId, occurrenceId, roomId, ...enrollment });
+  let previous = matching
+    ? [...saved.entries].sort((a, b) => (a.badgeId < b.badgeId ? -1 : a.badgeId > b.badgeId ? 1 : 0))
+    : [];
+  let previousIndex = 0;
+  let cursor: string | null = null;
+  let snapshot: CachedManifest | undefined;
+  let scopeKey: string | undefined;
+  let restarted = false;
+  let reuseDigests = Boolean(matching && saved.scopeDate && saved.snapshotId);
+  const savedScope = reuseDigests ? eligibilityScopeKey(saved) : undefined;
+  for (let pageNumber = 0; pageNumber < 1000; pageNumber++) {
+    while (previousIndex < previous.length && cursor !== null && previous[previousIndex]!.badgeId <= cursor)
+      previousIndex++;
+    const knownEntries = previous.slice(previousIndex, previousIndex + OFFLINE_ELIGIBILITY_PAGE_SIZE);
+    const knownNext =
+      previous.length > previousIndex + OFFLINE_ELIGIBILITY_PAGE_SIZE ? knownEntries.at(-1)!.badgeId : null;
+    const knownDigest =
+      reuseDigests && saved
+        ? await eligibilityPageDigest({ ...saved, entries: knownEntries, nextBadgeId: knownNext })
+        : undefined;
+    const query = new URLSearchParams({ epochId: enrollment.epochId, deviceId: enrollment.deviceId });
+    if (occurrenceId) query.set("occurrenceId", occurrenceId);
+    if (roomId) query.set("roomId", roomId);
+    if (cursor) query.set("afterBadgeId", cursor);
+    if (knownDigest) query.set("knownDigest", knownDigest);
+    if (snapshot) {
+      if (snapshot.scopeDate) query.set("scopeDate", snapshot.scopeDate);
+      if (snapshot.publishedRevision !== null) query.set("publishedRevision", String(snapshot.publishedRevision));
+    }
+    enrolledOfflineEligibilityQuerySchema.parse(Object.fromEntries(query));
+    const requestedAt = Date.now();
+    const response = await fetch(`/api/v1/events/${encodeURIComponent(slug)}/offline-eligibility?${query}`, {
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
+    });
+    if (response.status === 401) throw new Error("SCANNER_SIGNED_OUT");
+    if (response.status === 403) throw new Error("SCANNER_PERMISSION_CHANGED");
+    const refusal = !response.ok ? apiErrorPayloadSchema.safeParse(await response.json().catch(() => null)) : null;
+    const code = refusal?.success ? refusal.data.error.code : undefined;
+    if (response.status === 400 && (code === "SESSION_ROOM_REQUIRED" || code === "SESSION_ROOM_INVALID"))
+      throw new Error(code);
+    if (response.status === 409 && eligibilityPreparationStopped(code)) throw new Error(code);
+    if (response.status === 409 && code === "OFFLINE_MANIFEST_CHANGED" && snapshot && !restarted) {
+      previous = [];
+      previousIndex = 0;
+      cursor = null;
+      snapshot = undefined;
+      scopeKey = undefined;
+      restarted = true;
+      reuseDigests = false;
+      continue;
+    }
+    if (code === "OFFLINE_MANIFEST_CHANGED") throw new EligibilityRefreshFailure("changed", code);
+    if (!response.ok)
+      throw new EligibilityRefreshFailure("http", `Badge refresh failed (HTTP ${response.status}).`, response.status);
+    const page = enrolledOfflineEligibilityResponseSchema.parse(await response.json());
+    const requestedScope = { operatorUserId, occurrenceId, roomId, ...enrollment, eventId: snapshot?.eventId };
+    if (!sameSnapshotEnrollment(page, requestedScope)) throw new Error("SCANNER_PERMISSION_CHANGED");
+    if (!sameSnapshotScope(page, requestedScope)) throw new Error("SCANNER_ROOM_CONTEXT_CHANGED");
+    const pageScope = eligibilityScopeKey(page);
+    if (pageScope !== savedScope) reuseDigests = false;
+    if (scopeKey !== undefined && scopeKey !== pageScope)
+      throw new EligibilityRefreshFailure("changed", "Eligibility revision changed");
+    scopeKey = pageScope;
+    if (
+      page.unchanged &&
+      (!knownDigest ||
+        page.pageDigest !== knownDigest ||
+        page.entries.length !== 0 ||
+        pageScope !== savedScope ||
+        page.nextBadgeId !== knownNext)
+    )
+      throw new EligibilityRefreshFailure("invalid", "Eligibility page was not verified");
+    const entries = page.unchanged ? knownEntries : page.entries;
+    if (!page.unchanged && (await eligibilityPageDigest({ ...page, entries })) !== page.pageDigest)
+      throw new EligibilityRefreshFailure("invalid", "Eligibility page digest changed");
+    let lastId: string = cursor ?? "";
+    for (const entry of entries) {
+      if (entry.badgeId <= lastId) throw new EligibilityRefreshFailure("invalid", "Eligibility pagination repeated");
+      lastId = entry.badgeId;
+    }
+    if (page.nextBadgeId !== null && (entries.length !== OFFLINE_ELIGIBILITY_PAGE_SIZE || page.nextBadgeId !== lastId))
+      throw new EligibilityRefreshFailure("invalid", "Eligibility pagination repeated");
+    const now = Date.now();
+    const validUntil = Math.max(
+      now,
+      requestedAt +
+        Math.min(SCANNER_OFFLINE_MAXIMUM_MS, Math.max(0, Date.parse(page.expiresAt) - Date.parse(page.serverNow))),
+    );
+    if (!snapshot) {
+      const { nextBadgeId: _, pageDigest: __, unchanged: ___, ...metadata } = page;
+      snapshot = {
+        ...metadata,
+        snapshotId: crypto.randomUUID(),
+        entries: [],
+        complete: false,
+        writtenAt: now,
+        validUntil,
+      };
+    } else snapshot.validUntil = Math.min(snapshot.validUntil, validUntil);
+    snapshot.entries.push(...entries);
+    onProgress?.(snapshot.entries.length);
+    if (snapshot.entries.length > 100000)
+      throw new EligibilityRefreshFailure("invalid", "Eligibility snapshot too large");
+    cursor = page.nextBadgeId;
+    if (cursor !== null) continue;
+    if (!snapshotCurrent(snapshot))
+      throw new EligibilityRefreshFailure("changed", "Eligibility snapshot expired during preparation");
+    snapshot.complete = true;
+    return snapshot;
+  }
+  throw new EligibilityRefreshFailure("invalid", "Eligibility snapshot too large");
+}

@@ -86,32 +86,41 @@ export async function queueScannerAttempt(
   }
 }
 
-async function claimScan(db: IDBDatabase, owner: string, operatorUserId?: string): Promise<QueuedScan | null> {
+async function claimScan(
+  db: IDBDatabase,
+  owner: string,
+  operatorUserId?: string,
+  preferredOperationId?: string,
+): Promise<QueuedScan | null> {
   const transaction = db.transaction(STORE, "readwrite");
   const done = completion(transaction);
   const store = transaction.objectStore(STORE);
-  const cursor = store.openCursor();
   const selected = await new Promise<QueuedScan | null>((resolve, reject) => {
-    cursor.onerror = () => reject(cursor.error ?? new Error("IndexedDB cursor failed"));
-    cursor.onsuccess = () => {
-      const current = cursor.result;
-      if (!current) {
-        resolve(null);
-        return;
-      }
-      const value = current.value as QueuedScan;
-      if (
-        (value.nextAttemptAt ?? 0) > Date.now() ||
-        value.leaseUntil > Date.now() ||
-        (operatorUserId && value.scan.operatorUserId !== operatorUserId)
-      ) {
-        current.continue();
-        return;
-      }
-      const claimed = { ...value, owner, leaseUntil: Date.now() + 30_000 };
-      current.update(claimed);
-      resolve(claimed);
+    const select = (preferred: boolean) => {
+      const cursor = preferred ? store.openCursor(IDBKeyRange.only(preferredOperationId!)) : store.openCursor();
+      cursor.onerror = () => reject(cursor.error ?? new Error("IndexedDB cursor failed"));
+      cursor.onsuccess = () => {
+        const current = cursor.result;
+        if (!current) {
+          if (preferred) return select(false);
+          resolve(null);
+          return;
+        }
+        const value = current.value as QueuedScan;
+        if (
+          (value.nextAttemptAt ?? 0) > Date.now() ||
+          value.leaseUntil > Date.now() ||
+          (operatorUserId && value.scan.operatorUserId !== operatorUserId)
+        ) {
+          current.continue();
+          return;
+        }
+        const claimed = { ...value, owner, leaseUntil: Date.now() + 30_000 };
+        current.update(claimed);
+        resolve(claimed);
+      };
     };
+    select(Boolean(preferredOperationId));
   });
   await done;
   return selected;
@@ -124,6 +133,7 @@ export async function drainScanOutbox(
   upload: (record: ScannerQueueRecord) => Promise<Response>,
   operatorUserId?: string,
   sessionId?: string,
+  preferredOperation: () => string | undefined = () => undefined,
 ): Promise<ScanDrainResult> {
   const active = await readActiveUserSession();
   if (
@@ -141,7 +151,7 @@ export async function drainScanOutbox(
     for (let count = 0; count < 100; count++) {
       if (await scannerUploadSuspended(operatorUserId, active.sessionId))
         return { uploaded, state: "authentication_required" };
-      const queued = await claimScan(db, owner, operatorUserId);
+      const queued = await claimScan(db, owner, operatorUserId, preferredOperation());
       if (!queued) {
         const deferred = await request<QueuedScan[]>(db.transaction(STORE).objectStore(STORE).getAll());
         const own = deferred.filter((item) => !operatorUserId || item.scan.operatorUserId === operatorUserId);

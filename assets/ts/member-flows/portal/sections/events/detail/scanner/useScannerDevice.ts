@@ -49,5 +49,17 @@ export function useScannerDevice(
       active = false;
     };
   }, [slug, operatorUserId, sponsorId, scope]);
-  return { deviceId, epoch, setEpoch, error, ready: epoch?.state === "open" };
+  async function reconcile() {
+    if (!deviceId || collector) return;
+    try {
+      const refreshed = await prepareScannerEpoch(slug, operatorUserId, deviceId, sponsorId);
+      setEpoch((current) => (current?.epochId === refreshed.epochId ? refreshed : current));
+      setError("");
+    } catch {
+      setError(
+        "Scanner session status could not be refreshed. Reconnect and reopen the scanner; pending scans remain on this device.",
+      );
+    }
+  }
+  return { deviceId, epoch, setEpoch, reconcile, error, ready: epoch?.state === "open" };
 }

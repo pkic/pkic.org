@@ -1,10 +1,6 @@
-const encoder = new TextEncoder();
+export { sha256Hex } from "../../../assets/shared/sha256";
 
-export async function sha256Hex(input: string | BufferSource): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", typeof input === "string" ? encoder.encode(input) : input);
-  const bytes = new Uint8Array(digest);
-  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
+const encoder = new TextEncoder();
 
 /** Compares arbitrary strings without exposing an early-exit prefix or length comparison. */
 export async function constantTimeEqual(left: string, right: string): Promise<boolean> {
