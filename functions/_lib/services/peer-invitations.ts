@@ -70,11 +70,12 @@ async function createPeerInvitationAttempt(
   const event = await getEventBySlug(env.DB, eventSlug);
   const { registration, db } = await resolvePeerInvitationAuthority(env, request, event.id);
 
-  if (!canSendPeerInvitations(registration.status, event.starts_at)) {
+  if (inviteType === "attendee" && !canSendPeerInvitations(registration.status, event.starts_at)) {
     throw new AppError(403, "PEER_INVITATIONS_CLOSED", "Colleague invitations close when the event starts.");
   }
   const requestedExpiry = resolveEventInviteExpiry(event, body.expiresAt);
-  const expiresAt = requestedExpiry > event.starts_at! ? event.starts_at! : requestedExpiry;
+  const expiresAt =
+    inviteType === "attendee" && requestedExpiry > event.starts_at! ? event.starts_at! : requestedExpiry;
   const config = getConfig(env, request);
   const maxAllowed =
     inviteType === "attendee"

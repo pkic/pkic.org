@@ -260,7 +260,13 @@ export async function bulkCreateInvites(
   const statements = [
     prepareStateGuard(
       db,
-      eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now, Boolean(payload.inviter)),
+      eventInviteWindowEvidence(
+        payload.event.id,
+        payload.event,
+        expiresAt,
+        now,
+        inviteType === "attendee" && Boolean(payload.inviter),
+      ),
     ),
     prepareExpireEffectiveEventInvites(db, { eventId: payload.event.id, inviteType, now }),
     ...chunks.map((chunk) =>
