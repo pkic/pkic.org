@@ -101,15 +101,18 @@ export function ConsentList({
   return (
     <div class="pk pk-stack pk-stack--snug">
       {terms.length ? (
-        terms.map((term) => (
-          <ConsentCard
-            key={`${term.termKey}:${term.version}`}
-            term={term}
-            presentation={presentationOf?.(term.termKey)}
-            recorded={isTermAccepted(term, recorded)}
-            locked={lockRecorded && isTermAccepted(term, recorded)}
-          />
-        ))
+        terms.map((term) => {
+          const accepted = isTermAccepted(term, recorded);
+          return (
+            <ConsentCard
+              key={`${term.termKey}:${term.version}`}
+              term={term}
+              presentation={presentationOf?.(term.termKey)}
+              recorded={accepted}
+              locked={lockRecorded && accepted}
+            />
+          );
+        })
       ) : (
         <p>No required consents for this flow.</p>
       )}

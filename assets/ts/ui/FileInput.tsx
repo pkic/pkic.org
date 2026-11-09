@@ -24,7 +24,8 @@
  */
 
 import type { ComponentChildren, JSX } from "preact";
-import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
+import { useResetKeyEffect } from "../hooks/useResetKeyEffect";
 
 import { Button } from "./Button";
 import "./FileInput.css";
@@ -63,15 +64,12 @@ export function FileInput({
   ...rest
 }: FileInputProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const previousResetKey = useRef(resetKey);
   const [fileName, setFileName] = useState<string | null>(null);
-  useLayoutEffect(() => {
-    if (previousResetKey.current === resetKey) return;
-    previousResetKey.current = resetKey;
+  useResetKeyEffect(resetKey, () => {
     if (inputRef.current) inputRef.current.value = "";
     setFileName(null);
     onFileChange?.(null);
-  }, [resetKey, onFileChange]);
+  });
 
   function select(file: File | null): void {
     setFileName(file?.name ?? null);

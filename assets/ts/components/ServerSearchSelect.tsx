@@ -1,11 +1,7 @@
 import { Button } from "../ui/Button";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
-import {
-  buildCollectionResetKey,
-  useCollectionResetPending,
-  useServerCollection,
-  type CollectionLoader,
-} from "../hooks/useServerCollection";
+import { buildCollectionResetKey, useServerCollection, type CollectionLoader } from "../hooks/useServerCollection";
+import { useResetKeyEffect } from "../hooks/useResetKeyEffect";
 import { getJson } from "../shared/api-client";
 import type { ServerCatalog } from "../shared/server-catalog";
 import { Alert } from "../ui/Alert";
@@ -133,7 +129,7 @@ export function ServerSearchSelect<Item, Response>({
     setOpen(false);
     setActiveIndex(-1);
   }, [cancelDebounce]);
-  const resetPending = useCollectionResetPending(resetKey, resetSelection);
+  const resetPending = useResetKeyEffect(resetKey, resetSelection);
 
   const collection = useServerCollection({
     endpoint: catalog.endpoint,

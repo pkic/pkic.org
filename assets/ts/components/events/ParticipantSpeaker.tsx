@@ -56,6 +56,7 @@ export function ParticipantSpeaker({
     accepted: savedTerms,
     unaccepted: newTerms,
     missingRequired,
+    availableOptional,
   } = splitTermsByAcceptance(terms, data.acceptedConsents);
   const consents =
     data.speaker.status === "invited"
@@ -170,10 +171,15 @@ export function ParticipantSpeaker({
                     </Alert>
                   )}
                   {savedTerms.length > 0 && (
-                    <fieldset class="pk-fieldset pk-stack" disabled>
+                    <fieldset class="pk-fieldset pk-stack">
                       <legend>Speaker terms and conditions</legend>
-                      <ConsentList terms={savedTerms} recorded={data.acceptedConsents} />
+                      <ConsentList terms={savedTerms} recorded={data.acceptedConsents} lockRecorded />
                     </fieldset>
+                  )}
+                  {editable && missingRequired.length === 0 && availableOptional.length > 0 && (
+                    <p class="pk-muted">
+                      Optional speaker terms are available. Choose another representation below to review them.
+                    </p>
                   )}
                 </div>
               )}
@@ -207,9 +213,9 @@ export function ParticipantSpeaker({
                   {savedTerms.length > 0 && (
                     <>
                       <p>You already agreed to these terms for this event.</p>
-                      <fieldset class="pk-fieldset pk-stack" disabled>
+                      <fieldset class="pk-fieldset pk-stack">
                         <legend>Previously accepted terms</legend>
-                        <ConsentList terms={savedTerms} recorded={data.acceptedConsents} />
+                        <ConsentList terms={savedTerms} recorded={data.acceptedConsents} lockRecorded />
                       </fieldset>
                     </>
                   )}

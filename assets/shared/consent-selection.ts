@@ -7,9 +7,18 @@ export function isTermAccepted(term: ConsentItem, accepted: readonly ConsentItem
 
 /** Optional choices remain available without making an otherwise complete agreement need attention. */
 export function splitTermsByAcceptance(terms: readonly RequiredTerm[], consents: readonly ConsentItem[]) {
-  const accepted = terms.filter((term) => isTermAccepted(term, consents));
-  const unaccepted = terms.filter((term) => !isTermAccepted(term, consents));
-  return { accepted, unaccepted, missingRequired: unaccepted.filter((term) => term.required) };
+  const accepted: RequiredTerm[] = [];
+  const unaccepted: RequiredTerm[] = [];
+  const missingRequired: RequiredTerm[] = [];
+  const availableOptional: RequiredTerm[] = [];
+  for (const term of terms) {
+    if (isTermAccepted(term, consents)) accepted.push(term);
+    else {
+      unaccepted.push(term);
+      (term.required ? missingRequired : availableOptional).push(term);
+    }
+  }
+  return { accepted, unaccepted, missingRequired, availableOptional };
 }
 
 /** One active-term and required-acceptance policy for every registration embedding and the server. */

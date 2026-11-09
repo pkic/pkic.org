@@ -414,6 +414,7 @@ it("leaves optional terms open without requiring another review and locks saved 
   );
   expect(host.textContent).not.toContain("Some current speaker terms have not been accepted.");
   expect(host.textContent).not.toContain("Review speaker terms and identity");
+  expect(host.textContent).toContain("Optional speaker terms are available.");
   const change = [...host.querySelectorAll("button")].find(
     (button) => button.textContent === "Choose another representation",
   )!;
