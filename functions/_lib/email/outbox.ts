@@ -1,3 +1,10 @@
+import {
+  OUTBOX_ROW_COLUMNS,
+  emailOutboxDueSql,
+  EMAIL_OUTBOX_DUE_QUERY,
+  EMAIL_OUTBOX_EXPIRED_LEASE_QUERY,
+} from "./outbox-delivery-queries";
+import { runEmailDeliveryPool, type EmailDeliveryAdmission } from "./outbox-delivery-pool";
 import { assertRequiredEmailActions } from "./required-actions";
 import { validateEmailDeliveryGuard } from "./delivery-guard";
 import { getAvailability } from "../availability";
@@ -67,34 +74,6 @@ interface OutboxRow {
   processing_token: string | null;
   lease_expires_at: string | null;
 }
-
-const OUTBOX_ROW_COLUMNS = `id, event_id, template_key, template_version, recipient_user_id, recipient_email,
-  subject, payload_json, message_type, provider, provider_message_id, status, attempts, send_after,
-  last_error, created_at, updated_at, sent_at, processing_token, lease_expires_at`;
-
-function emailOutboxDueSql(excludeInFlight = false) {
-  return `SELECT ${OUTBOX_ROW_COLUMNS}
-    FROM email_outbox INDEXED BY idx_email_outbox_due
-   WHERE status IN ('queued', 'retrying') AND send_after <= ?
-     ${excludeInFlight ? "AND id NOT IN (SELECT value FROM json_each(?))" : ""}
-  ORDER BY send_after, created_at, id
-  LIMIT ?`;
-}
-export const EMAIL_OUTBOX_DUE_QUERY = emailOutboxDueSql();
-
-export const EMAIL_OUTBOX_EXPIRED_LEASE_QUERY = `
-  UPDATE email_outbox
-     SET status = 'delivery_unknown', attempts = attempts + 1,
-         last_error = 'SENDGRID_DELIVERY_UNKNOWN: Send interrupted before its delivery outcome was persisted',
-         processing_token = NULL, lease_expires_at = NULL, updated_at = ?
-   WHERE id IN (
-     SELECT id
-       FROM email_outbox INDEXED BY idx_email_outbox_expired_lease
-      WHERE status = 'sending' AND lease_expires_at <= ?
-      ORDER BY lease_expires_at, created_at, id
-      LIMIT ?
-   )
-     AND status = 'sending' AND lease_expires_at <= ?`;
 
 type ResolvedEmailTemplate = Awaited<ReturnType<typeof resolveTemplate>>;
 
@@ -487,74 +466,22 @@ export async function processPendingOutbox(
   return processInChunks(db, env, rows);
 }
 
-/** Ten independently progressing slots share one bounded selection buffer and render cache. */
-export async function drainPendingOutbox(
-  db: DatabaseLike,
-  env: Env,
-  options: {
-    selectionLimit: number;
-    maySelect: () => boolean;
-    startMessage: () => boolean;
-    finishMessage: (durationMs: number) => void;
-  },
-) {
+/** Share one render cache across the independently refilled delivery channels. */
+export async function drainPendingOutbox(db: DatabaseLike, env: Env, options: EmailDeliveryAdmission) {
   const context = createOutboxProcessingContext();
-  const inFlight = new Set<string>();
-  let buffer: OutboxRow[] = [];
-  let refill: Promise<void> | undefined;
-  let exhausted = false;
-  let selections = 0;
-  let processed = 0;
-  let failed = 0;
-  let yielded = false;
-  const takeNext = async (): Promise<OutboxRow | undefined> => {
-    while (!buffer.length) {
-      if (exhausted || selections >= 100) return;
-      if (!refill) {
-        if (!options.maySelect() || getAvailability(env, Date.now(), "email").mode !== "normal") return;
-        refill = (async () => {
-          await quarantineExpiredOutboxLeases(db, options.selectionLimit);
-          buffer = await all<OutboxRow>(db, emailOutboxDueSql(true), [
-            nowIso(),
-            JSON.stringify([...inFlight]),
-            options.selectionLimit,
-          ]);
-          selections++;
-          exhausted = buffer.length < options.selectionLimit;
-        })();
-      }
-      const pending = refill;
-      await pending;
-      if (refill === pending) refill = undefined;
-    }
-    return buffer.shift();
-  };
-  const channel = async () => {
-    for (;;) {
-      const row = await takeNext();
-      if (!row) return;
-      if (!options.startMessage()) {
-        yielded = true;
-        return;
-      }
-      inFlight.add(row.id);
-      const startedAt = Date.now();
-      try {
-        if (await processOutboxRow(db, env, row, context)) processed++;
-      } catch {
-        failed++;
-        processed++;
-      } finally {
-        inFlight.delete(row.id);
-        options.finishMessage(Date.now() - startedAt);
-      }
-    }
-  };
-  // Await every channel even if a selection fails: accepted sends must still settle.
-  const results = await Promise.allSettled(Array.from({ length: 10 }, channel));
-  const rejected = results.find((result) => result.status === "rejected");
-  if (rejected?.status === "rejected") throw rejected.reason;
-  return { processed, failed, selections, exhausted: exhausted && !buffer.length && !yielded };
+  return runEmailDeliveryPool<OutboxRow>({
+    ...options,
+    maySelect: () => options.maySelect() && getAvailability(env, Date.now(), "email").mode === "normal",
+    select: async (inFlightIds) => {
+      await quarantineExpiredOutboxLeases(db, options.selectionLimit);
+      return all<OutboxRow>(db, emailOutboxDueSql(true), [
+        nowIso(),
+        JSON.stringify(inFlightIds),
+        options.selectionLimit,
+      ]);
+    },
+    deliver: (row) => processOutboxRow(db, env, row, context),
+  });
 }
 
 export async function summarizePendingOutbox(

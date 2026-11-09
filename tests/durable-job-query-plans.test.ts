@@ -2,7 +2,10 @@ import { MEMBERSHIP_WORKFLOW_DUE_QUERY } from "../functions/_lib/services/member
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
-import { EMAIL_OUTBOX_DUE_QUERY, EMAIL_OUTBOX_EXPIRED_LEASE_QUERY } from "../functions/_lib/email/outbox";
+import {
+  EMAIL_OUTBOX_DUE_QUERY,
+  EMAIL_OUTBOX_EXPIRED_LEASE_QUERY,
+} from "../functions/_lib/email/outbox-delivery-queries";
 import { GOOGLE_GROUPS_DUE_QUERY } from "../functions/_lib/services/google-groups";
 import { STORAGE_DELETION_DUE_QUERY } from "../functions/_lib/services/storage-deletion-outbox";
 import { WG_CHAIR_DIGEST_CHANGE_EVENTS_QUERY } from "../functions/_lib/services/wg-chair-digest";
