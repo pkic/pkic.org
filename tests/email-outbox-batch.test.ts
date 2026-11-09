@@ -26,7 +26,7 @@ import { validPngBytes } from "./helpers/raster-images";
 
 const env = workerEnv as unknown as Env;
 
-function makeSendgridMock(statusCode = 202, messageIdSuffix = ""): ReturnType<typeof vi.fn> {
+function makeSendgridMock(statusCode = 202, messageIdSuffix = "") {
   let callCount = 0;
   return vi.fn().mockImplementation(() => {
     callCount += 1;
@@ -91,7 +91,7 @@ describe("email outbox batch processing", () => {
     await seedRequiredTemplates(env.DB, adminId);
   });
 
-  it("drains a bounded batch through the dedicated scheduler job while due work is leased", async () => {
+  it("drains successive batches until the ready queue is empty while due work is leased", async () => {
     await env.DB.prepare(
       "UPDATE scheduled_jobs SET running_since='2026-11-09T00:00:00.000Z',lease_expires_at='2999-01-01T00:00:00.000Z',run_token='stalled' WHERE job_key='due_work'",
     ).run();
@@ -101,15 +101,95 @@ describe("email outbox batch processing", () => {
     const job = SCHEDULED_JOB_DEFINITIONS.find((definition) => definition.key === "email_outbox")!;
     const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 900);
     const result = await job.run({ env: { ...env, DB: db }, d1QueryBudget: budget });
-    expect(result).toMatchObject({ summary: { processed: 100, failed: 0 }, nextRunAt: expect.any(String) });
+    expect(result).toMatchObject({ summary: { processed: 105, failed: 0, batches: 11, stoppedReason: "empty" } });
+    expect(result).not.toHaveProperty("nextRunAt");
     expect(budget.usedQueries()).toBeLessThan(900);
-    expect(send).toHaveBeenCalledTimes(100);
+    expect(send).toHaveBeenCalledTimes(105);
     const remaining = await queryAll<{ count: number }>(
       env.DB,
       "SELECT count(*) AS count FROM email_outbox WHERE status='queued' AND id IN (SELECT value FROM json_each(?))",
       [JSON.stringify(ids)],
     );
-    expect(remaining[0].count).toBe(5);
+    expect(remaining[0].count).toBe(0);
+  });
+
+  it("continues past a full batch of obsolete mail to send the ready messages behind it", async () => {
+    const ids = await queueN(env.DB, eventId, 12);
+    await env.DB.prepare(
+      "UPDATE email_outbox SET payload_json=json_set(payload_json,'$.__deliveryGuard',json(?)) WHERE id IN (SELECT value FROM json_each(?))",
+    )
+      .bind(JSON.stringify({ id: "missing-notification", version: 1 }), JSON.stringify(ids.slice(0, 10)))
+      .run();
+    const send = makeSendgridMock();
+    vi.stubGlobal("fetch", send);
+    const job = SCHEDULED_JOB_DEFINITIONS.find((definition) => definition.key === "email_outbox")!;
+    const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 900);
+    const result = await job.run({ env: { ...env, DB: db }, d1QueryBudget: budget });
+    expect(result).toMatchObject({ summary: { processed: 12, batches: 2, stoppedReason: "empty" } });
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it("yields with unclaimed mail remaining after spending its database budget", async () => {
+    await queueN(env.DB, eventId, 100);
+    const send = makeSendgridMock();
+    vi.stubGlobal("fetch", send);
+    const job = SCHEDULED_JOB_DEFINITIONS.find((definition) => definition.key === "email_outbox")!;
+    const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 120);
+    const result = await job.run({ env: { ...env, DB: db }, d1QueryBudget: budget });
+    expect(result).toMatchObject({
+      summary: { stoppedReason: "d1_query_limit", failed: 0 },
+      nextRunAt: expect.any(String),
+    });
+    expect(send.mock.calls.length).toBeGreaterThan(0);
+    expect(send.mock.calls.length).toBeLessThan(100);
+    expect(budget.usedQueries()).toBeLessThan(120);
+    const rows = await queryAll<{ status: string }>(env.DB, "SELECT DISTINCT status FROM email_outbox");
+    expect(rows).toContainEqual({ status: "queued" });
+    expect(rows).not.toContainEqual({ status: "sending" });
+  });
+
+  it("leaves mail unclaimed and requests another run when its database budget is too low", async () => {
+    await queueN(env.DB, eventId, 3);
+    const send = makeSendgridMock();
+    vi.stubGlobal("fetch", send);
+    const job = SCHEDULED_JOB_DEFINITIONS.find((definition) => definition.key === "email_outbox")!;
+    const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 10);
+    const result = await job.run({ env: { ...env, DB: db }, d1QueryBudget: budget });
+    expect(result).toMatchObject({
+      summary: { processed: 0, stoppedReason: "d1_query_limit" },
+      nextRunAt: expect.any(String),
+    });
+    expect(send).not.toHaveBeenCalled();
+    expect(budget.usedQueries()).toBe(0);
+  });
+
+  it("yields before another slow batch would overrun its elapsed-time reserve", async () => {
+    await queueN(env.DB, eventId, 25);
+    let clock = Date.now();
+    const now = vi.spyOn(Date, "now").mockImplementation(() => clock);
+    const send = makeSendgridMock();
+    vi.stubGlobal("fetch", () => {
+      clock += 1_000;
+      return send();
+    });
+    try {
+      const job = SCHEDULED_JOB_DEFINITIONS.find((definition) => definition.key === "email_outbox")!;
+      const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 900);
+      const result = await job.run({ env: { ...env, DB: db }, d1QueryBudget: budget });
+      expect(result).toMatchObject({
+        summary: { processed: 10, batches: 1, stoppedReason: "time_limit" },
+        nextRunAt: expect.any(String),
+      });
+      expect(send).toHaveBeenCalledTimes(10);
+      const rows = await queryAll<{ status: string; count: number }>(
+        env.DB,
+        "SELECT status,count(*) AS count FROM email_outbox GROUP BY status",
+      );
+      expect(rows).toContainEqual({ status: "queued", count: 15 });
+      expect(rows.some((row) => row.status === "sending")).toBe(false);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   afterEach(() => {

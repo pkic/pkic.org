@@ -1,4 +1,4 @@
-import { processPendingOutbox } from "../../email/outbox";
+import { runScheduledEmailDelivery } from "../scheduled-email-delivery";
 import { processPendingPromotionRenders } from "../event-agenda/promotion-render-jobs";
 import { runOauthAuthorizationCompletions, earliestOauthCompletionDue } from "../oauth-authorizations/completion";
 import { runSponsorLogoDueWork, earliestSponsorLogoDue } from "../sponsorship/logo-due-work";
@@ -233,14 +233,7 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
     leaseSeconds: DEFAULT_LEASE_SECONDS,
     dedicatedInvocation: true,
     requiredPermissions: ["email:manage"],
-    run: async ({ env }) => {
-      const limit = Math.max(0, Math.min(100, getConfig(env).scheduledOutboxLimit));
-      const summary = await processPendingOutbox(env.DB, env, limit);
-      return {
-        summary,
-        ...(limit > 0 && summary.processed >= limit ? { nextRunAt: nowIso() } : {}),
-      };
-    },
+    run: async ({ env, d1QueryBudget }) => runScheduledEmailDelivery(env, d1QueryBudget),
   },
   {
     key: "promotion_rendering",

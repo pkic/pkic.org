@@ -478,11 +478,16 @@ export async function processPendingOutbox(
   env: Env,
   limit = 20,
 ): Promise<{ processed: number; failed: number }> {
-  if (getAvailability(env, Date.now(), "email").mode !== "normal") return { processed: 0, failed: 0 };
+  const { processed, failed } = await processPendingOutboxBatch(db, env, limit);
+  return { processed, failed };
+}
+
+/** Selection counts distinguish an empty queue from mail deferred by delivery guards. */
+export async function processPendingOutboxBatch(db: DatabaseLike, env: Env, limit: number) {
+  if (getAvailability(env, Date.now(), "email").mode !== "normal") return { processed: 0, failed: 0, selected: 0 };
   await quarantineExpiredOutboxLeases(db, limit);
   const rows = await all<OutboxRow>(db, EMAIL_OUTBOX_DUE_QUERY, [nowIso(), limit]);
-
-  return processInChunks(db, env, rows);
+  return { ...(await processInChunks(db, env, rows)), selected: rows.length };
 }
 
 export async function summarizePendingOutbox(
