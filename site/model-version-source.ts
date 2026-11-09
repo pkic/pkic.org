@@ -1,20 +1,41 @@
 import { createHash } from "node:crypto";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { marked } from "marked";
 import { parse } from "yaml";
 import { z } from "zod";
 import type { ModelVersionSource } from "../assets/shared/model-versions";
 
+/** Every link and image target Markdown resolves, including reference definitions and autolinks. */
+function linkTargets(value: string): string[] {
+  const tokens = marked.lexer(value);
+  const targets = Object.values(tokens.links).map((link) => link.href);
+  // Synchronous: the callback returns nothing, so there are no promises to await.
+  void marked.walkTokens(tokens, (token) => {
+    if (token.type === "link" || token.type === "image") targets.push(token.href);
+  });
+  return targets;
+}
+
+/** Relative targets and web or mail links only; character references could hide a scheme. */
+function safeLinkTarget(target: string) {
+  // Browsers ignore whitespace and control characters inside a scheme.
+  const compact = [...target].filter((character) => character > " ").join("");
+  if (/&(?:#[0-9a-z]+|[a-z][a-z0-9]*);/i.test(compact)) return false;
+  const scheme = /^([^/?#]*?):/.exec(compact)?.[1]?.toLowerCase();
+  return scheme === undefined || ["http", "https", "mailto"].includes(scheme);
+}
+
 /**
  * Model text is rendered by the site's own Markdown pipeline, so it may only contain Markdown:
- * raw HTML and script-capable link protocols fail the build instead of being rewritten.
+ * raw HTML and links outside the allowed protocols fail the build instead of being rewritten.
  */
 const modelText = z
   .string()
   .refine((value) => !/<[A-Za-z!/?]/.test(value), "Model text must be Markdown without raw HTML")
   .refine(
-    (value) => !/\]\(\s*(?:javascript|vbscript|data):/i.test(value),
-    "Model links must not use script-capable protocols",
+    (value) => linkTargets(value).every(safeLinkTarget),
+    "Model links must be relative or use http, https or mailto, not script-capable protocols",
   );
 const itemId = z.string().regex(/^[0-9]+(?:\.[a-z0-9]+)+$/, "Model item identifiers use dotted segments");
 const textItem = z.object({ id: itemId, text: modelText });

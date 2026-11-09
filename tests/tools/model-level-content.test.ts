@@ -76,9 +76,20 @@ describe("model level content placed in authored pages", () => {
     ["<script>alert(1)</script>", /raw HTML/],
     ['<img src="x" onerror="alert(1)">', /raw HTML/],
     ["[Unsafe](javascript:alert%281%29)", /script-capable/],
+    ["[Unsafe][ref]\n\n[ref]: javascript:alert(1)", /script-capable/],
+    ["[Unsafe](java&#115;cript:alert(1))", /script-capable/],
+    ["[Unsafe](javascript&#58;alert(1))", /script-capable/],
+    ["![Unsafe](data:text/html;base64,PHNjcmlwdD4=)", /script-capable/],
   ])("fails closed on model text %s instead of rewriting it", (text, message) => {
     const value = model();
     value.levels[0]!.criteria.items[0]!.text = text;
     expect(() => readableModelSchema.parse(value)).toThrow(message);
+  });
+
+  it("accepts relative, anchor, web and mail links in model text", () => {
+    const value = model();
+    value.levels[0]!.criteria.items[0]!.text =
+      "See [Level 1](/wg/pqc/pqcmm/levels/1-initial/), [question 1](#1.2.1), [NIST](https://csrc.nist.gov/?a=1&b=2) and [us](mailto:pqc@pkic.org).";
+    expect(() => readableModelSchema.parse(value)).not.toThrow();
   });
 });

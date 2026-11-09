@@ -96,8 +96,8 @@ export function createModelLevelContent(model: ReadableModel, level: ModelLevel)
     if (!PARTS.has(part)) throw new Error(`Unknown model part "${String(part)}" on ${level.sourcePage}`);
     if (part === "section") {
       const title = call.props.title;
-      const section = level.sections.find((entry) => entry.title === title);
       if (!title) throw new Error(`A model section needs a title on ${level.sourcePage}`);
+      const section = level.sections.find((entry) => entry.title === title);
       if (!section) return call.inner?.trim() ?? "";
       place(`section "${title}"`);
       return section.body;
