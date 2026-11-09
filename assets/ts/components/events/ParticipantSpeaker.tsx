@@ -1,5 +1,6 @@
 import { SPEAKER_PARTICIPATION_COPY } from "../../../shared/proposal-speaker-acceptance";
 import { readConsentValues } from "../../shared/widgets/consents";
+import { isTermAccepted, splitTermsByAcceptance } from "../../../shared/consent-selection";
 import { useCallback, useRef, useState } from "preact/hooks";
 import {
   speakerSelfProfilePatchSchema,
@@ -51,21 +52,14 @@ export function ParticipantSpeaker({
   const access = { resourceId: data.proposal.id };
   const path = (...segments: string[]) => proposalSpeakerAccessPath("/api/v1", access, ...segments);
   const [selectedConsents, setConsents] = useState<typeof data.acceptedConsents>([]);
-  const savedTerms = terms.filter((term) =>
-    data.acceptedConsents.some((value) => value.termKey === term.termKey && value.version === term.version),
-  );
-  const newTerms = terms.filter((term) => !savedTerms.includes(term));
+  const {
+    accepted: savedTerms,
+    unaccepted: newTerms,
+    missingRequired,
+  } = splitTermsByAcceptance(terms, data.acceptedConsents);
   const consents =
     data.speaker.status === "invited"
-      ? [
-          ...data.acceptedConsents,
-          ...selectedConsents.filter(
-            (value) =>
-              !data.acceptedConsents.some(
-                (saved) => saved.termKey === value.termKey && saved.version === value.version,
-              ),
-          ),
-        ]
+      ? [...data.acceptedConsents, ...selectedConsents.filter((value) => !isTermAccepted(value, data.acceptedConsents))]
       : data.acceptedConsents;
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -85,10 +79,7 @@ export function ParticipantSpeaker({
       : profileRoot.current
         ? readConsentValues(profileRoot.current)
         : data.acceptedConsents;
-  const termsAccepted = terms.every(
-    (term) =>
-      !term.required || consents.some((value) => value.termKey === term.termKey && value.version === term.version),
-  );
+  const termsAccepted = splitTermsByAcceptance(terms, consents).missingRequired.length === 0;
   // The identity choice is the only proposal-side profile write; the identity's own profile is edited on the identity.
   const form = useContractForm(speakerSelfProfilePatchSchema, {});
   const participation = useContractForm(speakerParticipationPatchSchema, { status: "confirmed", consents });
@@ -170,7 +161,7 @@ export function ParticipantSpeaker({
               !identityChanged &&
               terms.length > 0 && (
                 <div class="pk-stack">
-                  {newTerms.length > 0 && (
+                  {missingRequired.length > 0 && (
                     <Alert>
                       Some current speaker terms have not been accepted.
                       {editable
@@ -223,13 +214,7 @@ export function ParticipantSpeaker({
                     </>
                   )}
                   {newTerms.map((term) => (
-                    <ConsentCard
-                      term={term}
-                      key={term.termKey}
-                      recorded={consents.some(
-                        (value) => value.termKey === term.termKey && value.version === term.version,
-                      )}
-                    />
+                    <ConsentCard term={term} key={term.termKey} recorded={isTermAccepted(term, consents)} />
                   ))}
                   {!data.currentRepresentation && (
                     <p class="pk-small pk-muted">

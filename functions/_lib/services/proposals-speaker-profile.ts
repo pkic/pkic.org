@@ -4,7 +4,10 @@ import {
 } from "../../../assets/shared/proposal-speaker-acceptance";
 import type { ParticipantAuthority } from "./participant-authority";
 import type { z } from "zod";
-import type { speakerSelfProfilePatchSchema } from "../../../assets/shared/schemas/proposal-management";
+import type {
+  speakerSelfProfilePatchSchema,
+  ProposalAccessSpeakerStatus,
+} from "../../../assets/shared/schemas/proposal-management";
 import { speakerInvitedAddressOwnedSql } from "./proposal-speaker-invited-address";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
@@ -88,7 +91,7 @@ export function prepareSpeakerSelfAuthorityGuard(
 export interface ProposalCoSpeakerRow {
   first_name: string | null;
   last_name: string | null;
-  status: string;
+  status: ProposalAccessSpeakerStatus;
   account_claimed: 0 | 1;
 }
 

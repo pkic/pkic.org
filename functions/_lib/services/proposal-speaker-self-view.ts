@@ -1,5 +1,5 @@
 import { isLateSpeakerResponseAwaitingReview } from "../../../assets/shared/proposal-speaker-acceptance";
-import { speakerSelfServiceReadResponseSchema } from "../../../assets/shared/schemas/speaker-self-service";
+import type { SpeakerSelfServiceReadResponse } from "../../../assets/shared/schemas/speaker-self-service";
 import { proposalSpeakerAccessPath } from "../../../assets/shared/proposal-access-paths";
 import { batchRows, batchFirst } from "../db/pagination";
 import type { ConsentItem } from "../../../assets/shared/schemas/registration";
@@ -19,27 +19,19 @@ import { speakerPresentationPageUrl } from "./frontend-links";
 import { prepareCurrentSpeakerConsents } from "./proposal-speaker-consent";
 import { AppError } from "../errors";
 
-export async function loadSpeakerSelfServiceView(
+export async function loadSpeakerParticipationView(
   db: DatabaseLike,
   context: SpeakerWithContext,
-  {
-    token,
-    appBaseUrl,
-    personalDetailsEditable,
-  }: { token: ParticipantAuthority; appBaseUrl: string; personalDetailsEditable: boolean | Promise<boolean> },
-) {
+  { token, appBaseUrl }: { token: ParticipantAuthority; appBaseUrl: string },
+): Promise<Omit<SpeakerSelfServiceReadResponse, "profile">> {
   const { speaker, proposal } = context;
-  const [[coSpeakersResult, uploaderResult, termsResult, eventResult, consentsResult], canEditPersonalDetails] =
-    await Promise.all([
-      db.batch([
-        prepareProposalCoSpeakers(db, proposal.id, speaker.user_id),
-        preparePresentationUploader(db, proposal.id),
-        prepareRequiredTerms(db, proposal.event_id, "presentation"),
-        prepareEventById(db, proposal.event_id),
-        prepareCurrentSpeakerConsents(db, proposal.event_id, speaker.user_id),
-      ]),
-      personalDetailsEditable,
-    ]);
+  const [coSpeakersResult, uploaderResult, termsResult, eventResult, consentsResult] = await db.batch([
+    prepareProposalCoSpeakers(db, proposal.id, speaker.user_id),
+    preparePresentationUploader(db, proposal.id),
+    prepareRequiredTerms(db, proposal.event_id, "presentation"),
+    prepareEventById(db, proposal.event_id),
+    prepareCurrentSpeakerConsents(db, proposal.event_id, speaker.user_id),
+  ]);
   const coSpeakers = proposalCoSpeakersReadModel(batchRows<ProposalCoSpeakerRow>(coSpeakersResult));
   const presentationUploader = batchFirst<PresentationUploaderRow>(uploaderResult);
   const presentationTerms = batchRows<EventTermRecord>(termsResult);
@@ -47,7 +39,7 @@ export async function loadSpeakerSelfServiceView(
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
   const acceptedConsents = batchRows<ConsentItem>(consentsResult);
   const presentationUrl = typeof token === "string" ? speakerPresentationPageUrl(appBaseUrl, event, token) : null;
-  return speakerSelfServiceReadResponseSchema.parse({
+  return {
     speaker: {
       userId: speaker.user_id,
       role: speaker.role,
@@ -76,9 +68,8 @@ export async function loadSpeakerSelfServiceView(
     },
     presentationTerms: presentationTerms.map(requiredTermReadModel),
     acceptedConsents,
-    profile: speakerProfileView(context, token, appBaseUrl, canEditPersonalDetails),
     currentRepresentation: context.currentRepresentation,
-  });
+  };
 }
 
 export function speakerProfileView(

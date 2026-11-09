@@ -1,5 +1,5 @@
 import {
-  loadSpeakerSelfServiceView,
+  loadSpeakerParticipationView,
   speakerProfileView,
 } from "../../../../../_lib/services/proposal-speaker-self-view";
 import { assertInvitedSpeakerClaimSelection } from "../../../../../_lib/services/event-proposal-proof-redemption";
@@ -34,7 +34,10 @@ import { requireInternalSecret } from "../../../../../_lib/request";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { isProposalSpeakerRosterEditableStatus } from "../../../../../../assets/shared/schemas/proposal-status";
 import { requestDb } from "../../../../../_lib/db/context";
-import { speakerProfileUpdateResponseSchema } from "../../../../../../assets/shared/schemas/speaker-self-service";
+import {
+  speakerProfileUpdateResponseSchema,
+  speakerSelfServiceReadResponseSchema,
+} from "../../../../../../assets/shared/schemas/speaker-self-service";
 import {
   proposalSpeakerProfileUpdateRouteSchema,
   proposalSpeakerSelfServiceReadRouteSchema,
@@ -57,16 +60,18 @@ export async function onRequestGet(
     const context = await getSpeakerByManageToken(db, token, requireInternalSecret(c.env), {
       allowExpiredSession: true,
     });
-    const accountAuthority = resolveSpeakerAccountAuthority(db, c.req.raw, c.env, {
-      authority: token,
-      userId: context.user.id,
-      accountClaimed: context.user.account_claimed,
-    });
+    const [view, accountAuthority] = await Promise.all([
+      loadSpeakerParticipationView(db, context, { token, appBaseUrl }),
+      resolveSpeakerAccountAuthority(db, c.req.raw, c.env, {
+        authority: token,
+        userId: context.user.id,
+        accountClaimed: context.user.account_claimed,
+      }),
+    ]);
     return json(
-      await loadSpeakerSelfServiceView(db, context, {
-        token,
-        appBaseUrl,
-        personalDetailsEditable: accountAuthority.then(Boolean),
+      speakerSelfServiceReadResponseSchema.parse({
+        ...view,
+        profile: speakerProfileView(context, token, appBaseUrl, Boolean(accountAuthority)),
       }),
     );
   } catch (error) {

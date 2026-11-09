@@ -915,6 +915,17 @@ test("a speaker reopens accepted terms and manages a presentation from its own p
         }),
       ).toBeChecked();
     await speaker.screenshot({ path: info.outputPath("saved-speaker-terms.png"), fullPage: true });
+    await speaker.getByRole("button", { name: "Choose another representation", exact: true }).click();
+    for (const term of terms) {
+      const agreement = speaker.getByRole("checkbox", {
+        name: term.displayText?.trim() || term.termKey.replace(/[-_]/g, " "),
+        exact: true,
+      });
+      await expect(agreement).toBeChecked();
+      await expect(agreement).toBeDisabled();
+    }
+    await speaker.screenshot({ path: info.outputPath("identity-saved-terms.png"), fullPage: true });
+    await speaker.getByRole("button", { name: "Cancel", exact: true }).click();
     const presentations = tabs.getByRole("link", { name: "Presentations", exact: true });
     await presentations.focus();
     await presentations.press("Enter");

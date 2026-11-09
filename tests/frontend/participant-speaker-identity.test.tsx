@@ -388,3 +388,45 @@ it("labels event agreements as already accepted when opening another invitation"
   expect(recording.checked).toBe(false);
   expect(recording.matches(":disabled")).toBe(false);
 });
+
+it("leaves optional terms open without requiring another review and locks saved agreements during an identity change", async () => {
+  host = document.createElement("div");
+  document.body.append(host);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => response({ identities: [] })),
+  );
+  const saved = participantSpeakerFixture();
+  saved.speaker.status = "confirmed";
+  saved.profile.actingIdentitySelection = "individual";
+  saved.profile.actingIdentitySelectedAt = at;
+  saved.acceptedConsents = [
+    { termKey: "privacy", version: "1" },
+    { termKey: "newsletter", version: "1" },
+  ];
+  const terms = [
+    { termKey: "privacy", version: "1", required: true, contentRef: null },
+    { termKey: "newsletter", version: "1", required: false, contentRef: null },
+    { termKey: "recording", version: "2", required: false, contentRef: null },
+  ];
+  await act(() =>
+    render(<ParticipantSpeaker data={saved} eventSlug="pqc-2026" terms={terms} reload={async () => {}} />, host),
+  );
+  expect(host.textContent).not.toContain("Some current speaker terms have not been accepted.");
+  expect(host.textContent).not.toContain("Review speaker terms and identity");
+  const change = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Choose another representation",
+  )!;
+  await act(() => change.click());
+  for (const value of ["privacy:1", "newsletter:1"]) {
+    const checkbox = host.querySelector<HTMLInputElement>(`input[value="${value}"]`)!;
+    expect(checkbox.checked).toBe(true);
+    expect(checkbox.disabled).toBe(true);
+    await act(() => checkbox.click());
+    expect(checkbox.checked).toBe(true);
+  }
+  const optional = host.querySelector<HTMLInputElement>('input[value="recording:2"]')!;
+  expect(optional.checked).toBe(false);
+  expect(optional.disabled).toBe(false);
+  expect(host.textContent).not.toContain("Accept the speaker terms above to choose your speaker identity.");
+});

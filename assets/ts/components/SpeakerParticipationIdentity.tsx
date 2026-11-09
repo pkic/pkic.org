@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useState } from "preact/hooks";
+import { splitTermsByAcceptance } from "../../shared/consent-selection";
 import type { z } from "zod";
 import type { RequiredTerm } from "../../shared/schemas/forms";
 import type { ConsentItem } from "../../shared/schemas/registration";
@@ -101,6 +102,7 @@ export function SpeakerParticipationIdentity({
     if (changing) onEditing();
   }, [changing, onEditing]);
   const accepted = termsReady && (invited ? termsAccepted : localTermsAccepted);
+  const needsTermsReview = splitTermsByAcceptance(terms, data.acceptedConsents).missingRequired.length > 0;
   function changeRepresentation(add: boolean) {
     setAdding(add);
     setLocalTermsAccepted(termsAccepted);
@@ -117,16 +119,10 @@ export function SpeakerParticipationIdentity({
                 <div
                   onInput={() => {
                     const selected = consents();
-                    setLocalTermsAccepted(
-                      terms.every(
-                        (term) =>
-                          !term.required ||
-                          selected.some((value) => value.termKey === term.termKey && value.version === term.version),
-                      ),
-                    );
+                    setLocalTermsAccepted(splitTermsByAcceptance(terms, selected).missingRequired.length === 0);
                   }}
                 >
-                  <ConsentList terms={terms} recorded={recorded} />
+                  <ConsentList terms={terms} recorded={recorded} lockRecorded />
                 </div>
               )}
             </Field>
@@ -178,15 +174,7 @@ export function SpeakerParticipationIdentity({
           >
             <div class="pk-cluster">
               <Button type="button" variant="secondary" onClick={() => changeRepresentation(false)}>
-                {!invited &&
-                terms.some(
-                  (term) =>
-                    !data.acceptedConsents.some(
-                      (value) => value.termKey === term.termKey && value.version === term.version,
-                    ),
-                )
-                  ? "Review speaker terms and identity"
-                  : "Choose another representation"}
+                {!invited && needsTermsReview ? "Review speaker terms and identity" : "Choose another representation"}
               </Button>
               <Button
                 type="button"

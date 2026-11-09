@@ -63,11 +63,15 @@ export function FileInput({
   ...rest
 }: FileInputProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const previousResetKey = useRef(resetKey);
   const [fileName, setFileName] = useState<string | null>(null);
   useLayoutEffect(() => {
+    if (previousResetKey.current === resetKey) return;
+    previousResetKey.current = resetKey;
     if (inputRef.current) inputRef.current.value = "";
     setFileName(null);
-  }, [resetKey]);
+    onFileChange?.(null);
+  }, [resetKey, onFileChange]);
 
   function select(file: File | null): void {
     setFileName(file?.name ?? null);

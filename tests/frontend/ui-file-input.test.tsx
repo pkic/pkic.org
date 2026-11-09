@@ -63,6 +63,7 @@ describe("FileInput", () => {
   it("resets a processed file without replacing the input or losing focus", () => {
     const onFileChange = vi.fn();
     const container = mount(<FileInput resetKey={0} onFileChange={onFileChange} />);
+    expect(onFileChange).not.toHaveBeenCalled();
     const input = fileInput(container);
     choose(input, "slides.pdf");
     input.focus();
@@ -72,9 +73,20 @@ describe("FileInput", () => {
     expect(fileInput(container)).toBe(input);
     expect(document.activeElement).toBe(input);
     expect(container.textContent).not.toContain("slides.pdf");
-    expect(onFileChange).toHaveBeenCalledTimes(1);
-    choose(input, "slides.pdf");
     expect(onFileChange).toHaveBeenCalledTimes(2);
+    expect(onFileChange).toHaveBeenLastCalledWith(null);
+    choose(input, "slides.pdf");
+    expect(onFileChange).toHaveBeenCalledTimes(3);
+  });
+
+  it("preserves a choice when an unchanged reset key gets a new callback", () => {
+    const container = mount(<FileInput onFileChange={vi.fn()} />);
+    const input = fileInput(container);
+    choose(input, "slides.pdf");
+    const onFileChange = vi.fn();
+    void act(() => render(<FileInput onFileChange={onFileChange} />, container));
+    expect(onFileChange).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("slides.pdf");
   });
 
   it("is the element the field's label names, and is still a file input", () => {
