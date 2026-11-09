@@ -99,7 +99,7 @@ describe("email template storage", () => {
     });
   });
 
-  it("loads required render templates in one query without requiring unrelated partials", async () => {
+  it("loads required render templates and partial formats in one query", async () => {
     await seedEventAndAdmin(env.DB);
     const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
     for (const [templateKey, content] of [
@@ -113,6 +113,14 @@ describe("email template storage", () => {
       });
       await activateTemplateVersion(env.DB, { templateKey, version: version.version });
     }
+
+    const partial = await createTemplateVersion(env.DB, {
+      templateKey: "partial_reg_details",
+      content: "<h2>Registration details</h2>",
+      contentType: "html",
+      createdByUserId: admin.id,
+    });
+    await activateTemplateVersion(env.DB, { templateKey: "partial_reg_details", version: partial.version });
 
     let prepareCount = 0;
     const countedDb: DatabaseLike = {
@@ -130,6 +138,6 @@ describe("email template storage", () => {
     expect(prepareCount).toBe(1);
     expect(bundle.layoutHtml).toBe("<main>{{{body_html}}}</main>");
     expect(bundle.templates.get("render_bundle_body")?.content).toBe("Bundle body");
-    expect(bundle.partials).toEqual({});
+    expect(bundle.partials).toEqual({ reg_details: { content: "<h2>Registration details</h2>", contentType: "html" } });
   });
 });

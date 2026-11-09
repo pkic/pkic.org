@@ -1,3 +1,5 @@
+import { marked } from "marked";
+
 /**
  * Renders untrusted plain text literally when it is interpolated into a
  * trusted Markdown email template. Template-authored Markdown and trusted
@@ -11,4 +13,9 @@ export function escapeMarkdownText(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/([\\`*_[\]{}()#+.!|~=-])/g, "\\$1")
     .replace(/:/g, "\\:");
+}
+
+/** The same Markdown conversion is used by full bodies, embedded templates, and rich text values. */
+export function renderEmailMarkdown(value: string): string {
+  return marked.parse(value, { gfm: true, breaks: false, async: false });
 }

@@ -72,21 +72,26 @@ describe("untrusted Markdown email text", () => {
     );
   });
 
-  it("retains authorized Markdown while neutralizing raw HTML", async () => {
-    const rendered = await renderEmail(
-      "{{note}}",
-      {
-        note: emailMarkdownText(
-          '**Approved** [details](https://app.test/details) <img src="https://attacker.invalid/pixel.gif">',
-        ),
-      },
-      LAYOUT,
-    );
-    expect(rendered.html).toContain("<strong>Approved</strong>");
-    expect(rendered.html).toContain('href="https://app.test/details"');
-    expect(rendered.html).not.toMatch(/<img\b/i);
-    expect(rendered.text).toContain("attacker.invalid/pixel.gif");
-  });
+  it.each(["markdown", "html"] as const)(
+    "retains authorized Markdown while neutralizing raw HTML in %s",
+    async (mode) => {
+      const rendered = await renderEmail(
+        "{{note}}",
+        {
+          note: emailMarkdownText(
+            '> **Approved** [details](https://app.test/details) <img src="https://attacker.invalid/pixel.gif">',
+          ),
+        },
+        LAYOUT,
+        mode,
+      );
+      expect(rendered.html).toContain("<strong>Approved</strong>");
+      expect(rendered.html).toContain("<blockquote");
+      expect(rendered.html).toContain('href="https://app.test/details"');
+      expect(rendered.html).not.toMatch(/<img\b/i);
+      expect(rendered.text).toContain("attacker.invalid/pixel.gif");
+    },
+  );
 
   it("protects generic invitation names after durable-outbox serialization", async () => {
     const row = buildInviteEmailQueueRow({
@@ -174,7 +179,8 @@ describe("untrusted Markdown email text", () => {
       [
         {
           registration_id: "registration-1",
-          acceptedTermsText: "",
+          acceptedTermsText:
+            "Code of conduct.  \n> - Privacy agreement.  \n> - <script>window.untrusted = true</script>",
           manage_link_secret: "secret",
           user_id: "user-1",
           email: "attendee@example.test",
@@ -234,6 +240,13 @@ describe("untrusted Markdown email text", () => {
       ),
     ) as Record<string, unknown>;
 
+    const terms = await renderEmail("> **Terms agreed:**\n> - {{acceptedTermsText}}", payload, LAYOUT, "markdown");
+    expect(terms.html.match(/<li\b/g)).toHaveLength(3);
+    expect(terms.html.match(/<ul>/g)).toHaveLength(1);
+    expect(terms.html.match(/<blockquote/g)).toHaveLength(1);
+    expect(terms.html).not.toContain("&gt; -");
+    expect(terms.html).not.toContain("<script>");
+    expect(terms.text).toContain("Privacy agreement.");
     for (const contentType of ["markdown", "html"] as const) {
       const rendered = await renderEmail(
         "{{organizationName}} {{jobTitle}} {{interests}} [Register]({{registrationUrl}})",
