@@ -233,9 +233,14 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
     leaseSeconds: DEFAULT_LEASE_SECONDS,
     dedicatedInvocation: true,
     requiredPermissions: ["email:manage"],
-    run: async ({ env }) => ({
-      summary: await processPendingOutbox(env.DB, env, Math.max(0, Math.min(10, getConfig(env).scheduledOutboxLimit))),
-    }),
+    run: async ({ env }) => {
+      const limit = Math.max(0, Math.min(100, getConfig(env).scheduledOutboxLimit));
+      const summary = await processPendingOutbox(env.DB, env, limit);
+      return {
+        summary,
+        ...(limit > 0 && summary.processed >= limit ? { nextRunAt: nowIso() } : {}),
+      };
+    },
   },
   {
     key: "promotion_rendering",

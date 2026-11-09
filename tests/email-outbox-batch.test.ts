@@ -95,20 +95,21 @@ describe("email outbox batch processing", () => {
     await env.DB.prepare(
       "UPDATE scheduled_jobs SET running_since='2026-11-09T00:00:00.000Z',lease_expires_at='2999-01-01T00:00:00.000Z',run_token='stalled' WHERE job_key='due_work'",
     ).run();
-    const ids = await queueN(env.DB, eventId, 12);
+    const ids = await queueN(env.DB, eventId, 105);
     const send = makeSendgridMock();
     vi.stubGlobal("fetch", send);
     const job = SCHEDULED_JOB_DEFINITIONS.find((definition) => definition.key === "email_outbox")!;
     const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 900);
     const result = await job.run({ env: { ...env, DB: db }, d1QueryBudget: budget });
-    expect(result).toMatchObject({ summary: { processed: 10, failed: 0 } });
-    expect(send).toHaveBeenCalledTimes(10);
+    expect(result).toMatchObject({ summary: { processed: 100, failed: 0 }, nextRunAt: expect.any(String) });
+    expect(budget.usedQueries()).toBeLessThan(900);
+    expect(send).toHaveBeenCalledTimes(100);
     const remaining = await queryAll<{ count: number }>(
       env.DB,
       "SELECT count(*) AS count FROM email_outbox WHERE status='queued' AND id IN (SELECT value FROM json_each(?))",
       [JSON.stringify(ids)],
     );
-    expect(remaining[0].count).toBe(2);
+    expect(remaining[0].count).toBe(5);
   });
 
   afterEach(() => {
