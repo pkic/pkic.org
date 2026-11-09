@@ -118,7 +118,12 @@ describe("manage read endpoints", () => {
     expect(payload.registration).not.toHaveProperty("confirmation_link_secret");
     expect(payload.registration).not.toHaveProperty("transition_revision");
     expect(payload.registration).not.toHaveProperty("source_ref");
-    expect(payload.event).toEqual({ id: eventId, slug: "pqc-2026", name: "PQC Conference 2026" });
+    expect(payload.event).toEqual({
+      id: eventId,
+      slug: "pqc-2026",
+      name: "PQC Conference 2026",
+      startsAt: "2026-12-01T08:00:00.000Z",
+    });
     expect(payload.user).not.toHaveProperty("id");
     expect(payload).not.toHaveProperty("manageToken");
   });
