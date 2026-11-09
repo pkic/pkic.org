@@ -115,17 +115,20 @@ export async function prepareTransferApplicationDomainClaim(
     [params.domain, params.applicationId, params.organizationId],
   );
   if (!claim) {
-    const organization = await first<{ name: string }>(
+    const organization = await first<{ name: string; organization_id: string | null }>(
       db,
-      `SELECT COALESCE(organization.name, application.organization_name) AS name
+      `SELECT organization.id AS organization_id, COALESCE(organization.name, application.organization_name) AS name
        FROM member_applications application LEFT JOIN organizations organization ON organization.id=?
        WHERE application.id=?`,
       [params.organizationId, params.applicationId],
     );
+    const recovery = organization?.organization_id
+      ? "Add it under Email domains, or correct the application's organization before approving."
+      : "Correct and save the application's organization name to claim the domain again before approving.";
     throw new AppError(
       409,
       "DOMAIN_CLAIM_LOST",
-      `${organization?.name ?? "The application's organization"} no longer has the email domain ${params.domain}. Add it under Email domains, or correct the application's organization before approving.`,
+      `${organization?.name ?? "The application's organization"} no longer has the email domain ${params.domain}. ${recovery}`,
     );
   }
   if (claim.application_id) {

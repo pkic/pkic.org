@@ -194,7 +194,7 @@ describe("affiliation offer card", () => {
       (link) => link.textContent?.trim() === "Add your work address",
     );
     expect(addAddress?.getAttribute("href")).toBe("#/users/current/emails/new");
-    await click(host, "I’m independent");
+    await click(host, "I am independent");
     expect(writes.map((write) => write.path)).toEqual(["/api/v1/users/current/identities/offer/dismissals"]);
     expect(affiliationOfferDismissalSchema.parse(writes[0]!.body)).toEqual({
       organizationId: null,

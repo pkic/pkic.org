@@ -263,7 +263,7 @@ export function AffiliationOfferCard() {
             Add your work address
           </ButtonLink>
           <Button loading={busy} onClick={() => void dismiss(null, "Noted: you take part as yourself")}>
-            I’m independent
+            I am independent
           </Button>
         </div>
       </PanelBody>

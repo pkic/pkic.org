@@ -220,7 +220,7 @@ describe("membership domain claim lifecycle", () => {
     await env.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id=?").bind(id).run();
     await expect(approve(id)).rejects.toMatchObject({
       code: "DOMAIN_CLAIM_LOST",
-      message: `Proposed Organization no longer has the email domain ${domain}. Add it under Email domains, or correct the application's organization before approving.`,
+      message: `Proposed Organization no longer has the email domain ${domain}. Correct and save the application's organization name to claim the domain again before approving.`,
     });
     expect(await queryAll(env.DB, "SELECT id FROM organizations WHERE name='Proposed Organization'")).toEqual([]);
   });

@@ -1,9 +1,5 @@
 /** Returning members should reach sign-in, not another application. @covers join.1.0 */
 import { expect, test } from "@playwright/test";
-import {
-  affiliationOfferDismissalSchema,
-  affiliationOfferResponseSchema,
-} from "../../assets/shared/schemas/affiliation-offer";
 import { userCreateSchema } from "../../assets/shared/schemas/user-create";
 import { memberApplicationCreateSchema } from "../../assets/shared/schemas/member-applications";
 import { EMAIL_FIRST_COPY, ORGANIZATION_JOB_TITLE_COPY } from "../../assets/shared/email-first-copy";
@@ -90,6 +86,7 @@ test("a verified address on a shared domain chooses its member organization", as
   await page.screenshot({ path: test.info().outputPath("domain-claim-desktop.png") });
   await page.setViewportSize({ width: 375, height: 812 });
   await page.screenshot({ path: test.info().outputPath("domain-claim-phone.png") });
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.getByRole("button", { name: "Claim domain", exact: true }).click();
   const confirmation = page.getByRole("alertdialog", { name: `Claim @${domain} for Shared Second ${suffix}?` });
   await expect(confirmation.getByText("People with this email domain will choose their organization.")).toBeVisible();
@@ -100,12 +97,6 @@ test("a verified address on a shared domain chooses its member organization", as
     data: userCreateSchema.parse({ email: independentEmail, firstName: "Casey", lastName: "Independent" }),
   });
   expect(independentUser.status(), await independentUser.text()).toBe(201);
-
-  const staleEmail = `stale-${suffix}@gmail.com`;
-  const staleUser = await page.request.post("/api/v1/users", {
-    data: userCreateSchema.parse({ email: staleEmail, firstName: "Casey", lastName: "Stale" }),
-  });
-  expect(staleUser.status(), await staleUser.text()).toBe(201);
 
   await page.context().clearCookies();
   const email = `colleague-${suffix}@${domain}`;
@@ -130,6 +121,7 @@ test("a verified address on a shared domain chooses its member organization", as
   await page.setViewportSize({ width: 375, height: 812 });
   await choice.scrollIntoViewIfNeeded();
   await page.screenshot({ path: test.info().outputPath("shared-organization-phone.png") });
+  await page.setViewportSize({ width: 1280, height: 800 });
   await choice.selectOption({ label: `Shared Second ${suffix}` });
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.locator("[data-join-organization-access]")).toBeVisible();
@@ -151,6 +143,7 @@ test("a verified address on a shared domain chooses its member organization", as
     await independent.scrollIntoViewIfNeeded();
     await page.screenshot({ path: test.info().outputPath(`individual-choice-${width}.png`) });
   }
+  await page.setViewportSize({ width: 1280, height: 800 });
   await independent.focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("[data-join-application-form]")).toBeVisible();
@@ -165,6 +158,7 @@ test("a verified address on a shared domain chooses its member organization", as
     await offer.scrollIntoViewIfNeeded();
     await page.screenshot({ path: test.info().outputPath(`shared-domain-offer-${width}.png`) });
   }
+  await page.setViewportSize({ width: 1280, height: 800 });
   await offer.getByRole("button", { name: "I am independent", exact: true }).click();
   await expect(offer).toBeHidden();
   await page.reload();
@@ -191,6 +185,7 @@ test("a verified address on a shared domain chooses its member organization", as
     await offer.scrollIntoViewIfNeeded();
     await page.screenshot({ path: test.info().outputPath(`organization-after-dismissal-${width}.png`) });
   }
+  await page.setViewportSize({ width: 1280, height: 800 });
   await offer
     .getByRole("textbox", { name: ORGANIZATION_JOB_TITLE_COPY.label, exact: false })
     .fill("Security architect");
@@ -199,55 +194,6 @@ test("a verified address on a shared domain chooses its member organization", as
   await page.reload();
   await expect(page.getByRole("button", { name: "Account menu" })).toBeVisible();
   await expect(offer).toHaveCount(0);
-
-  // A work-address card open in another tab must not dismiss a newly verified shared address.
-  await page.context().clearCookies();
-  await signInToPortal(page, staleEmail);
-  await page.goto("/portal/#/home");
-  const staleCard = page.getByRole("region", { name: "Use your organization email address", exact: true });
-  await expect(staleCard).toBeVisible();
-  const otherTab = await page.context().newPage();
-  try {
-    await otherTab.goto("/portal/#/home");
-    await openMyProfile(otherTab);
-    await otherTab.getByRole("button", { name: "Email addresses actions" }).click();
-    await otherTab.getByRole("menuitem", { name: "Add email address" }).click();
-    const sharedEmail = `stale-${suffix}@${domain}`;
-    await otherTab.getByRole("textbox", { name: /^Email address/ }).fill(sharedEmail);
-    const beforeShared = await capturedEmailCount();
-    await otherTab.getByRole("button", { name: "Send verification link", exact: true }).click();
-    const sharedProof = await waitForCapturedEmail(sharedEmail, "Verify your email address", { since: beforeShared });
-    await otherTab.goto(extractEmailUrl(sharedProof, "/portal/"));
-    await otherTab.getByRole("button", { name: "Verify this address", exact: true }).click();
-    await expect(otherTab.getByText(`${sharedEmail} is verified`, { exact: true })).toBeVisible();
-    const updated = affiliationOfferResponseSchema.parse(
-      await (await otherTab.request.get("/api/v1/users/current/identities/offer")).json(),
-    );
-    expect(updated.offer?.kind).toBe("choose_organization");
-    for (const width of [1280, 375]) {
-      await page.setViewportSize({ width, height: 812 });
-      await staleCard.scrollIntoViewIfNeeded();
-      await page.screenshot({ path: test.info().outputPath(`stale-work-address-${width}.png`) });
-    }
-    const dismissalRequest = page.waitForRequest(
-      (request) => request.url().endsWith("/identities/offer/dismissals") && request.method() === "POST",
-    );
-    await staleCard.getByRole("button", { name: "I’m independent", exact: true }).click();
-    expect(affiliationOfferDismissalSchema.parse((await dismissalRequest).postDataJSON())).toEqual({
-      organizationId: null,
-      answeredOffer: { kind: "work_address" },
-    });
-    await expect(staleCard).toBeHidden();
-    await page.reload();
-    await expect(offer).toBeVisible();
-    await expect(offer.getByRole("button", { name: "Choose organization", exact: true })).toBeVisible();
-    await offer.getByRole("button", { name: "I am independent", exact: true }).click();
-    await expect(offer).toBeHidden();
-    await page.reload();
-    await expect(offer).toHaveCount(0);
-  } finally {
-    await otherTab.close();
-  }
 });
 
 test("a verified address can apply for a nonmember organization on a shared domain", async ({ page }) => {

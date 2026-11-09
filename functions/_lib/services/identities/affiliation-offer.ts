@@ -15,7 +15,8 @@ import { nowIso } from "../../utils/time";
 import { emailDomainOf } from "../../../../assets/shared/schemas/email-domains";
 import { prepareAuditLog } from "../audit";
 import { prepareLinkNoticeDeclined, readOpenLinkNotice } from "./organization-link-notices";
-import { resolveEmailDomainOrganization } from "./verified-email-domain";
+import { loadDomainOwnershipFacts, resolveEmailDomainOrganization } from "./verified-email-domain";
+import { organizationLinkDomain } from "../membership/organization-domain-claims";
 
 /** A person rarely verifies more than a handful of addresses; the offer looks at no more than this many. */
 const ADDRESS_LIMIT = 20;
@@ -25,16 +26,21 @@ interface VerifiedAddressRow {
   normalized_email: string;
 }
 
-async function verifiedAddresses(db: DatabaseLike, userId: string): Promise<VerifiedAddressRow[]> {
-  return all<VerifiedAddressRow>(
-    db,
-    `SELECT NULL AS id, normalized_email, 0 AS preference, '' AS sort_id FROM users
-      WHERE id = ? AND email_verified_at IS NOT NULL
+function verifiedAddressesSelection(userId: string, filter?: { emailId: string | null }) {
+  return {
+    sql: `SELECT NULL AS id, normalized_email, 0 AS preference, '' AS sort_id FROM users
+      WHERE id = ? AND email_verified_at IS NOT NULL ${filter ? "AND ? IS NULL" : ""}
      UNION ALL
      SELECT id, normalized_email, 1, id FROM user_emails WHERE user_id = ? AND verified_at IS NOT NULL
+       ${filter ? "AND id = ?" : ""}
      ORDER BY preference, sort_id LIMIT ${ADDRESS_LIMIT}`,
-    [userId, userId],
-  );
+    bindings: filter ? [userId, filter.emailId, userId, filter.emailId] : [userId, userId],
+  };
+}
+
+async function verifiedAddresses(db: DatabaseLike, userId: string): Promise<VerifiedAddressRow[]> {
+  const read = verifiedAddressesSelection(userId);
+  return all<VerifiedAddressRow>(db, read.sql, read.bindings);
 }
 
 const OWN_REVIEW_IDENTITY_MATCH_SQL = `EXISTS (SELECT 1 FROM identities
@@ -173,21 +179,17 @@ async function answeredChoiceOrganizationIds(
   answer: Extract<AffiliationOfferDismissal, { organizationId: null }>["answeredOffer"],
 ): Promise<string[]> {
   if (answer.kind !== "choose_organization") return [];
-  const address = await first<VerifiedAddressRow>(
-    db,
-    `SELECT address.id, address.normalized_email FROM (
-       SELECT NULL AS id, normalized_email FROM users
-         WHERE ? IS NULL AND id=? AND email_verified_at IS NOT NULL
-       UNION ALL
-       SELECT id, normalized_email FROM user_emails
-         WHERE id=? AND user_id=? AND verified_at IS NOT NULL
-     ) address WHERE NOT EXISTS (
+  const read = verifiedAddressesSelection(userId, { emailId: answer.emailId });
+  const [address, facts] = await Promise.all([
+    first<VerifiedAddressRow>(
+      db,
+      `SELECT address.id, address.normalized_email FROM (${read.sql}) address WHERE NOT EXISTS (
        SELECT 1 FROM identities WHERE user_id=? AND organization_id IN (SELECT value FROM json_each(?)))`,
-    [answer.emailId, userId, answer.emailId, userId, userId, JSON.stringify(answer.organizationIds)],
-  );
-  if (!address) return [];
-  const { domain, resolution, facts } = await resolveEmailDomainOrganization(db, address.normalized_email);
-  if (domain !== answer.domain || resolution.kind !== "ambiguous" || !facts) return [];
+      [...read.bindings, userId, JSON.stringify(answer.organizationIds)],
+    ),
+    loadDomainOwnershipFacts(db, answer.domain),
+  ]);
+  if (!address || (await organizationLinkDomain(db, address.normalized_email)) !== answer.domain) return [];
   const currentIds = new Set([...facts.claimed, ...facts.derived].map((candidate) => candidate.organizationId));
   return [...new Set(answer.organizationIds)].filter((id) => currentIds.has(id));
 }

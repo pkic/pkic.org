@@ -432,6 +432,41 @@ describe("a verified work address and the organization that owns its domain", ()
     },
   );
 
+  it.each([false, true])("dismisses surviving candidates when a shared domain narrows (alias: %s)", async (alias) => {
+    const { userId, token } = await signedIn(alias ? "person@gmail.com" : "person@shared.example");
+    if (alias)
+      await env.DB.prepare(`INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at)
+      VALUES (?,?,'person@shared.example','person@shared.example',?,?)`)
+        .bind(crypto.randomUUID(), userId, nowIso(), nowIso())
+        .run();
+    const first = await insertOrganization(env.DB, "Remaining Organization");
+    const second = await insertOrganization(env.DB, "Former Organization");
+    await claimDomain(first, "shared.example");
+    await claimDomain(second, "shared.example");
+    const answeredOffer = await offerOf(token);
+    expect(answeredOffer?.kind).toBe("choose_organization");
+    await env.DB.prepare("DELETE FROM organization_domain_claims WHERE organization_id=?").bind(second).run();
+    expect(await offerOf(token)).toMatchObject({ kind: "organization", organization: { id: first } });
+    const response = await call(token, "/api/v1/users/current/identities/offer/dismissals", {
+      organizationId: null,
+      answeredOffer,
+    });
+    expect(response.status).toBe(201);
+    const dismissed = await queryAll<{ organization_id: string | null }>(
+      env.DB,
+      "SELECT organization_id FROM affiliation_offer_dismissals WHERE user_id=?",
+      [userId],
+    );
+    expect(dismissed.map((row) => row.organization_id).sort()).toEqual([null, first].sort());
+    expect(await offerOf(token)).toBeNull();
+    expect(
+      await linkVerifiedAddressToDomainOrganization(env.DB, {
+        userId,
+        normalizedEmail: "person@shared.example",
+      }),
+    ).toBeNull();
+  });
+
   it("dismisses only the answered candidates, records them in the audit, and remains idempotent", async () => {
     const { userId, token } = await signedIn("person@shared.example");
     const first = await insertOrganization(env.DB, "First Shared Organization");
@@ -468,22 +503,29 @@ describe("a verified work address and the organization that owns its domain", ()
     expect(await offerOf(token)).toMatchObject({ kind: "choose_organization" });
   });
 
-  it("bounds dismissal statements independently of candidate and verified-address counts", async () => {
+  it("bounds dismissal writes independently of candidate and verified-address counts", async () => {
     const { userId, token } = await signedIn("person@shared.example");
-    const ids: string[] = [];
-    for (let index = 0; index < 128; index++) {
-      const id = await insertOrganization(env.DB, `Shared Organization ${index}`);
-      ids.push(id);
-      await claimDomain(id, "shared.example");
-    }
-    for (let index = 0; index < 19; index++) {
-      const email = `person${index}@other-work.example`;
-      await env.DB.prepare(
-        `INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at) VALUES (?,?,?,?,?,?)`,
-      )
-        .bind(crypto.randomUUID(), userId, email, email, nowIso(), nowIso())
-        .run();
-    }
+    const at = nowIso();
+    const ids = Array.from({ length: 128 }, () => crypto.randomUUID());
+    const organizations = ids.map((id, index) => ({ id, name: `Shared Organization ${index}` }));
+    const addresses = Array.from({ length: 19 }, (_, index) => ({
+      id: crypto.randomUUID(),
+      email: `person${index}@other-work.example`,
+    }));
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO organizations(id,name,normalized_name,created_at,updated_at)
+        SELECT json_extract(value,'$.id'), json_extract(value,'$.name'), lower(json_extract(value,'$.name')), ?, ?
+        FROM json_each(?)`).bind(at, at, JSON.stringify(organizations)),
+      env.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
+        SELECT lower(hex(randomblob(16))), 'shared.example', value, ?, ? FROM json_each(?)`).bind(
+        at,
+        at,
+        JSON.stringify(ids),
+      ),
+      env.DB.prepare(`INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at)
+        SELECT json_extract(value,'$.id'), ?, json_extract(value,'$.email'), json_extract(value,'$.email'), ?, ?
+        FROM json_each(?)`).bind(userId, at, at, JSON.stringify(addresses)),
+    ]);
     const answeredOffer = await offerOf(token);
     const profile = profileD1Flow(env.DB, { measurePayloadBytes: true });
     const response = await callApi({ ...env, DB: profile.db }, "/api/v1/users/current/identities/offer/dismissals", {
@@ -493,8 +535,14 @@ describe("a verified work address and the organization that owns its domain", ()
     });
     expect(response.status, await response.clone().text()).toBe(201);
     const report = await profile.report();
-    expect(report.roundTrips).toBe(6);
-    expect(report.statements).toBe(13);
+    const mutation = report.queries.filter((query) => query.sql.includes("INSERT INTO affiliation_offer_dismissals"));
+    expect(mutation).toHaveLength(1);
+    expect(mutation[0].operation).toBe("batch");
+    expect(report.executedSql.filter((sql) => sql.startsWith("INSERT INTO affiliation_offer_dismissals"))).toHaveLength(
+      1,
+    );
+    expect(report.executedSql.filter((sql) => sql.startsWith("INSERT INTO audit_log"))).toHaveLength(1);
+    expect(mutation[0].sql).toContain("UPDATE affiliation_reviews");
     const dismissalPlan = report.plans.find((plan) => plan.sql.includes("INSERT INTO affiliation_offer_dismissals"));
     expect(JSON.stringify(dismissalPlan?.plan)).toContain("affiliation_offer_dismissals_organization");
     expect(JSON.stringify(dismissalPlan?.plan)).toContain("affiliation_offer_dismissals_independent");

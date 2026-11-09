@@ -146,6 +146,32 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
     },
   );
 
+  it("restores a lost provisional domain claim when staff correct a proposed organization name", async () => {
+    const { id } = await createApplication({ organization_name: "Proposed Organization" });
+    await env.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id=?").bind(id).run();
+    const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ organizationName: "Corrected Proposed Organization" }),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT domain,organization_id FROM organization_domain_claims WHERE application_id=?", [
+        id,
+      ]),
+    ).toEqual([{ domain: "example.test", organization_id: null }]);
+    expect(await queryAll(env.DB, "SELECT id FROM organizations WHERE name='Corrected Proposed Organization'")).toEqual(
+      [],
+    );
+    const retry = await call(adminToken, `/api/v1/members/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ organizationName: "Another Corrected Name" }),
+    });
+    expect(retry.status).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM organization_domain_claims WHERE application_id=?", [id]),
+    ).toHaveLength(1);
+  });
+
   it("returns the same configured active requirement in list and detail, and clears it for terminal applications", async () => {
     const { id } = await createApplication({ stage: "processing" });
     await pinReviewedStaffWorkflow(env.DB, id, "F", false);

@@ -348,17 +348,15 @@ export async function updateMembershipApplication(
   if (input.organizationName !== undefined && input.organizationName !== application.organization_name) {
     setClauses.push("organization_name = ?");
     values.push(nextOrganizationName);
-    if (application.organization_id) {
-      setClauses.push("organization_id = NULL");
-      // A corrected organization becomes provisional even if its previous selection needed no application claim.
-      if (
-        !nextIsIndividual &&
-        nextOrganizationDomain &&
-        !organizationDomainChanged &&
-        !isApplicationTerminalStage(application.stage)
-      )
-        dependentStatements.push(prepareClaimDomainForApplication(db, nextOrganizationDomain, application.id, now));
-    }
+    if (application.organization_id) setClauses.push("organization_id = NULL");
+    // A name correction restores a provisional claim, including one lost during review.
+    if (
+      !nextIsIndividual &&
+      nextOrganizationDomain &&
+      !organizationDomainChanged &&
+      !isApplicationTerminalStage(application.stage)
+    )
+      dependentStatements.push(prepareClaimDomainForApplication(db, nextOrganizationDomain, application.id, now));
     changedFields.push("organizationName");
   } else if (
     nextIsIndividual !== currentCategory.isIndividual &&
