@@ -158,7 +158,7 @@ describe("ParticipantRegistration", () => {
     expect(button(container, "Retry refresh")).toBeNull();
   });
   it("opens read-only, with the registration's details as a description list", async () => {
-    installApi();
+    installApi(readResponse({ shareUrl: "https://example.test/r/SHARE1" }));
     const container = await mount();
 
     expect(container.querySelectorAll("input, select, textarea")).toHaveLength(0);
@@ -185,6 +185,8 @@ describe("ParticipantRegistration", () => {
     expect(summary?.textContent).toContain("In-person");
     expect(button(container, "Change my days")).not.toBeNull();
     expect(button(container, "Can't make it in person?")).toBeNull();
+    // The personal link and colleague invitations live together on Share & Invite.
+    expect(button(container, "Copy link")).toBeNull();
     // Cancelling is findable on the page, set apart and quiet, never the main action.
     expect(button(container, "Cancel my registration…")?.classList.contains("pk-btn--danger-quiet")).toBe(true);
   });

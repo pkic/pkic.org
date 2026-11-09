@@ -19,7 +19,6 @@ import { Panel, PanelBody } from "../../ui/Panel";
 import type { EventFormsResponse } from "../../shared/types";
 import { ParticipantRegistrationDetails } from "./ParticipantRegistrationDetails";
 import { ParticipantRegistrationForm, type RegistrationChange } from "./ParticipantRegistrationForm";
-import { CopyLinkRow } from "../../shared/widgets/copy-link-row";
 import { confirmRegistrationDayChanges } from "./confirm-registration-day-changes";
 import { RegistrationDays } from "./RegistrationDays";
 import { SectionHeading } from "../../ui/SectionHeading";
@@ -239,16 +238,6 @@ function RegistrationRecord({
                   </div>
                 )}
               </section>
-              {data.shareUrl && !cancelled && (
-                <section class="pk-stack pk-stack--snug" aria-label="Invite a colleague">
-                  <SectionHeading level={3}>Invite a colleague</SectionHeading>
-                  <CopyLinkRow
-                    url={data.shareUrl}
-                    label="Your personal invitation link"
-                    help="Anyone who registers through it is credited to you."
-                  />
-                </section>
-              )}
               {!cancelled && (
                 <section class="pk-stack pk-stack--snug" aria-label="Cancel registration">
                   <SectionHeading level={3}>Not coming at all?</SectionHeading>
