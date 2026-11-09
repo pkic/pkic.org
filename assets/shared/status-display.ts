@@ -132,6 +132,8 @@ const STATUS_TONE = {
 
 const STATUS_LABEL: Record<string, string> = {
   not_registered: "Not registered",
+  waiting: "Waitlisted",
+  offered: "Place offered",
   pending_email_confirmation: "Pending confirmation",
   approval_pending: "Awaiting approval",
   under_review: "Under review",
@@ -174,7 +176,7 @@ export function statusTone(status: string): (typeof STATUS_TONE)[keyof typeof ST
 
 /** The same per-day waitlist state in attendance matrices, summaries, and rosters. */
 export const REGISTRATION_DAY_WAITLIST_DISPLAY = {
-  waiting: { label: "Waitlisted", tone: "warn" },
-  offered: { label: "Place offered", tone: "info" },
-  expired: { label: "Offer expired", tone: "warn" },
+  waiting: { label: statusLabel("waiting"), tone: statusTone("waiting") },
+  offered: { label: statusLabel("offered"), tone: statusTone("offered") },
+  expired: { label: "Offer expired", tone: statusTone("expired") },
 } as const;

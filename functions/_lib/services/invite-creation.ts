@@ -11,13 +11,13 @@ import { INVITE_COLUMNS, type InviteInviterInfo, type InviteRecord } from "./inv
 import {
   activeEffectiveInviteExpirySql,
   effectiveInviteExpirySql,
-  eventInviteWindowEvidence,
+  prepareEventInviteWindowGuard,
   inviteExpirySeconds,
   prepareExpireEffectiveEventInvites,
   resolveEventInviteExpiry,
   type InviteEventWindow,
 } from "../invite-validity";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
+import { isStateGuardFailure } from "../db/authorization-guard";
 import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
 import { affiliationOrganizationNameSql } from "./identities/affiliation-projection";
 
@@ -34,32 +34,6 @@ export function formatInviterList(inviters: InviteInviterInfo[]): string {
 
   const others = inviters.length - 2;
   return `${label(inviters[0])}, ${label(inviters[1])} and ${others} ${others === 1 ? "other" : "others"}`;
-}
-
-export async function countInvitesByInviter(
-  db: DatabaseLike,
-  eventId: string,
-  inviterUserId: string,
-  inviteType: "attendee" | "speaker" = "attendee",
-): Promise<number> {
-  // Count only primary invites (invite rows where this user is the original inviter).
-  // Co-invites (endorsements of someone already invited) do not consume invite quota
-  // since they do not trigger new emails.
-  const row = await prepareInvitesByInviterCount(db, eventId, inviterUserId, inviteType).first<{ total: number }>();
-
-  return Number(row?.total ?? 0);
-}
-
-/** Shared quota preflight for individual and batched invitation reads. */
-export function prepareInvitesByInviterCount(
-  db: DatabaseLike,
-  eventId: string,
-  inviterUserId: string,
-  inviteType: "attendee" | "speaker",
-) {
-  return db
-    .prepare(`SELECT COUNT(*) AS total FROM invites WHERE event_id=? AND inviter_user_id=? AND invite_type=?`)
-    .bind(eventId, inviterUserId, inviteType);
 }
 
 export async function isUnsubscribed(db: DatabaseLike, email: string, eventId: string): Promise<boolean> {
@@ -233,7 +207,7 @@ export async function createInvite(
   };
 
   const statements: StatementLike[] = [
-    prepareAuthorizationGuard(db, eventInviteWindowEvidence(payload.eventId, event, expiresAt, now)),
+    prepareEventInviteWindowGuard(db, payload.eventId, event, expiresAt, now),
     prepareExpireEffectiveEventInvites(db, {
       eventId: payload.eventId,
       inviteType: payload.inviteType,
@@ -302,7 +276,7 @@ export async function createInvite(
   try {
     await db.batch(statements);
   } catch (error) {
-    if (isAuthorizationGuardFailure(error)) {
+    if (isStateGuardFailure(error)) {
       throw new AppError(
         409,
         "EVENT_INVITE_WINDOW_CHANGED",

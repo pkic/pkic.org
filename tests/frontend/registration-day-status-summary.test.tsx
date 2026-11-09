@@ -73,6 +73,7 @@ describe("RegistrationDayStatusSummary", () => {
       [{ dayDate: "2026-09-01", status: "expired" }],
     );
     expect(root.textContent).toContain("Offer expired: Moon base");
+    expect(root.querySelector('[data-kind="expired"]')?.getAttribute("data-tone")).toBe("neutral");
     expect(root.textContent).toContain("Update and save your attendance to request a place again.");
     expect(root.querySelector("button")).toBeNull();
   });

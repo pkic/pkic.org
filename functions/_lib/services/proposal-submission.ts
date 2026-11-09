@@ -31,11 +31,11 @@ import {
   type ActiveFormDefinition,
   type CustomAnswerValue,
 } from "./forms";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
+import { isAuthorizationGuardFailure, isStateGuardFailure } from "../db/authorization-guard";
 import { AppError } from "../errors";
 import { proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
 import { formatProposalSpeakerLineup } from "./proposal-invite-person";
-import { eventInviteWindowEvidence, resolveEventInviteExpiry } from "../invite-validity";
+import { prepareEventInviteWindowGuard, resolveEventInviteExpiry } from "../invite-validity";
 import { nowIso } from "../utils/time";
 import { isEmailReservationConflict } from "./user-emails";
 import { proposalTermsDigest } from "./event-proposal-proof-capabilities";
@@ -98,12 +98,7 @@ export async function submitProposal(
   const coSpeakerExpiresAt =
     input.body.speakers.length > 0 ? resolveEventInviteExpiry(input.event, undefined, inviteNow) : null;
   if (coSpeakerExpiresAt) {
-    statements.push(
-      prepareAuthorizationGuard(
-        db,
-        eventInviteWindowEvidence(input.event.id, input.event, coSpeakerExpiresAt, inviteNow),
-      ),
-    );
+    statements.push(prepareEventInviteWindowGuard(db, input.event.id, input.event, coSpeakerExpiresAt, inviteNow));
   }
   const submitter = await prepareProposalSubmitter(db, {
     eventId: input.event.id,
@@ -345,6 +340,12 @@ export async function submitProposal(
   try {
     await db.batch(statements);
   } catch (error) {
+    if (isStateGuardFailure(error))
+      throw new AppError(
+        409,
+        "EVENT_INVITE_WINDOW_CHANGED",
+        "The event schedule changed. Review the deadline and try again.",
+      );
     if (
       isAuthorizationGuardFailure(error) &&
       (await proposalTermsDigest(await getRequiredTerms(db, input.event.id, "speaker"))) !==

@@ -659,11 +659,7 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await expect(registration.getByText(/Updated-Attendee/)).toBeVisible();
   await expect(registration.getByText(/Discarded-Name/)).toHaveCount(0);
   // Saving no days asks for cancellation; declining keeps the user's draft.
-  await registration
-    .getByRole("row")
-    .filter({ hasText: "On-demand" })
-    .getByRole("button", { name: "Change attendance", exact: true })
-    .click();
+  await registration.getByRole("button", { name: "Change attendance", exact: true }).click();
   await registration.getByRole("button", { name: "Choose Not attending for every available day", exact: true }).click();
   await registration.getByRole("button", { name: "Save my days", exact: true }).click();
   await page.getByRole("button", { name: "Keep registration", exact: true }).click();

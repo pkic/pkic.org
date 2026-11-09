@@ -3,19 +3,15 @@ import type {
   registrationInviteCreateSchema,
   peerInviteResultSchema,
 } from "../../../assets/shared/schemas/registration";
-import { batchFirst } from "../db/pagination";
 import { AppError } from "../errors";
 import { getConfig, resolveAppBaseUrl } from "../config";
-import { buildEventEmailVariables, getEventBySlug } from "./events";
+import { buildEventEmailVariables } from "./events";
 import { resolvePeerInvitationAuthority } from "./peer-invitation-authority";
-import { prepareInvitesByInviterCount } from "./invite-creation";
 import { bulkCreateInvites } from "./invite-bulk";
 import { prepareReferralCodeStatement } from "./referrals";
-import { firstReferralCodeQuerySql } from "./referral-code-projection";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import type { Env } from "../types";
 import { emailPlainText } from "../email/plain-text";
-import { REGISTRATION_ORGANIZATION_SQL } from "./registrations/selected-identity";
 import { buildEventInviteRecipientVariables } from "./event-invite-email-variables";
 
 type PeerInviteBody = z.infer<typeof registrationInviteCreateSchema>;
@@ -45,23 +41,14 @@ export async function createPeerInvitations(
   body: PeerInviteBody,
   inviteType: "attendee" | "speaker",
 ): Promise<PeerInviteCreationResult> {
-  const event = await getEventBySlug(env.DB, eventSlug);
-  const { registration, db } = await resolvePeerInvitationAuthority(env, request, event.id);
+  const { registration, event, db } = await resolvePeerInvitationAuthority(env, request, eventSlug, inviteType);
 
   const config = getConfig(env, request);
   const maxAllowed =
     inviteType === "attendee"
       ? (event.invite_limit_attendee ?? config.inviteLimitPerAttendee)
       : (event.invite_limit_speaker_nomination ?? config.inviteLimitSpeakerNomination);
-  const [countResult, userResult, referralResult] = await env.DB.batch([
-    prepareInvitesByInviterCount(env.DB, event.id, registration.user_id, inviteType),
-    env.DB.prepare(`SELECT u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name
-       FROM registrations r JOIN users u ON u.id = r.user_id WHERE r.id = ?`).bind(registration.id),
-    ...(inviteType === "attendee"
-      ? [env.DB.prepare(firstReferralCodeQuerySql("registration", "?")).bind(registration.id)]
-      : []),
-  ]);
-  const currentCount = Number(batchFirst<{ total: number }>(countResult)?.total ?? 0);
+  const currentCount = Number(registration.invite_count);
   if (currentCount + body.invites.length > maxAllowed) {
     throw new AppError(
       429,
@@ -70,12 +57,9 @@ export async function createPeerInvitations(
     );
   }
 
-  const user = batchFirst<{ first_name: string | null; last_name: string | null; organization_name: string | null }>(
-    userResult,
-  );
-  const inviterName = displayName(user);
+  const inviterName = displayName(registration);
   const appBaseUrl = resolveAppBaseUrl(env, request);
-  const existingReferral = referralResult ? batchFirst<{ code: string }>(referralResult)?.code : undefined;
+  const existingReferral = registration.referral_code;
   const preparedReferral =
     inviteType === "attendee" && !existingReferral
       ? await prepareReferralCodeStatement(env.DB, {

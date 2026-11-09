@@ -113,7 +113,7 @@ const UNDATED_SEAT: AttendanceStanding = {
 
 /**
  * What the code on the badge is for, on the days it applies to: the entrance
- * on confirmed in-person days only. A day on the waiting list or joined
+ * on confirmed in-person days only. A day on the waitlist or joined
  * online has no seat behind the code, so the card says so instead.
  */
 function TicketUse({ standing, children }: { standing: AttendanceStanding; children: ComponentChildren }) {
@@ -129,7 +129,7 @@ function TicketUse({ standing, children }: { standing: AttendanceStanding; child
         </p>
         {(standing.waitlisted.length > 0 || standing.expired.length > 0 || online) && (
           <p>
-            {standing.waitlisted.length ? `You're on the waiting list for ${formatDayList(standing.waitlisted)}. ` : ""}
+            {standing.waitlisted.length ? `You're on the waitlist for ${formatDayList(standing.waitlisted)}. ` : ""}
             {standing.expired.length ? `Your offer expired for ${formatDayList(standing.expired)}. ` : ""}
             {online}
           </p>
@@ -143,16 +143,16 @@ function TicketUse({ standing, children }: { standing: AttendanceStanding; child
         <p>
           Your offer expired for {formatDayList(standing.expired)}. Update your registration to request a place again.
         </p>
-        {standing.waitlisted.length > 0 && <p>You're on the waiting list for {formatDayList(standing.waitlisted)}.</p>}
+        {standing.waitlisted.length > 0 && <p>You're on the waitlist for {formatDayList(standing.waitlisted)}.</p>}
         {online && <p>{online}</p>}
         <div class="pk-cluster">{children}</div>
       </EventCard>
     );
   if (standing.waitlistedInPerson.length)
     return (
-      <EventCard eyebrow="Waiting list" title="No in-person seat yet">
+      <EventCard eyebrow="Waitlist" title="No in-person seat yet">
         <p>
-          {`You're on the waiting list for ${formatDayList(standing.waitlistedInPerson)}.`} This code gets you in once a
+          {`You're on the waitlist for ${formatDayList(standing.waitlistedInPerson)}.`} This code gets you in once a
           seat is yours, and we email you when one is offered.
         </p>
         {online && <p>{online}</p>}
@@ -161,10 +161,8 @@ function TicketUse({ standing, children }: { standing: AttendanceStanding; child
     );
   if (standing.waitlisted.length)
     return (
-      <EventCard eyebrow="Waiting list">
-        <p>
-          You're on the waiting list for {formatDayList(standing.waitlisted)}. We'll email you when a place is offered.
-        </p>
+      <EventCard eyebrow="Waitlist">
+        <p>You're on the waitlist for {formatDayList(standing.waitlisted)}. We'll email you when a place is offered.</p>
         <div class="pk-cluster">{children}</div>
       </EventCard>
     );

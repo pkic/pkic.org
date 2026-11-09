@@ -4,7 +4,7 @@ import { DonationPrompt } from "../../../../../shared/donation/DonationPrompt";
  * with where the event stands, the question in-person attendees most need to
  * answer ("will we see you?"), and a standing invitation to support the work.
  *
- * In-person seats are limited and there is a waiting list, so the attendance
+ * In-person seats are limited and there is a waitlist, so the attendance
  * check is asked plainly and early, and "no" leads straight to that day's
  * choices on the registration page rather than to a form to search through.
  */
@@ -104,7 +104,7 @@ export function AttendanceCheckCard({ event }: { event: ParticipantEventDetail }
   if (soon)
     return (
       <EventCard eyebrow="Quick question" title={`Will we see you ${nextDay === today ? "today" : "tomorrow"}?`}>
-        <p>In-person seats are limited. If you can't come, your seat goes to someone on the waiting list.</p>
+        <p>In-person seats are limited. If you can't come, your seat goes to someone on the waitlist.</p>
         <div class="pk-cluster">
           <Button
             variant="primary"
@@ -122,7 +122,7 @@ export function AttendanceCheckCard({ event }: { event: ParticipantEventDetail }
 
   return (
     <EventCard eyebrow="Plans changed?" title="Can't attend in person?">
-      <p>Release your seat so someone on the waiting list can take it. You can still join online.</p>
+      <p>Release your seat so someone on the waitlist can take it. You can still join online.</p>
       <div class="pk-cluster">
         <ButtonLink href={href(registration)}>Update my days</ButtonLink>
       </div>

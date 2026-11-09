@@ -3,7 +3,7 @@ import {
   eventOccurrenceGuestInviteSchema,
   eventOccurrenceGuestsListQuerySchema,
 } from "../../../../assets/shared/schemas/event-series";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
+import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -13,7 +13,7 @@ import { newCapabilityLinkSecret } from "../../auth/capability-links";
 import {
   activeEffectiveInviteExpirySql,
   effectiveMeetingGuestInviteExpirySql,
-  eventInviteWindowEvidence,
+  prepareEventInviteWindowGuard,
   eventOccurrenceInviteWindowEvidence,
   resolveEventInviteExpiry,
   type InviteEventWindow,
@@ -167,12 +167,12 @@ export async function inviteOccurrenceGuest(
   });
   try {
     await commitEventResourceManagementBatch(db, actor, context, "manage", [
-      prepareAuthorizationGuard(
-        db,
-        input.seriesWide
-          ? eventInviteWindowEvidence(series.eventId, inviteWindow, expiresAt, now)
-          : eventOccurrenceInviteWindowEvidence(seriesId, occurrenceId, inviteWindow, expiresAt, now),
-      ),
+      input.seriesWide
+        ? prepareEventInviteWindowGuard(db, series.eventId, inviteWindow, expiresAt, now)
+        : prepareStateGuard(
+            db,
+            eventOccurrenceInviteWindowEvidence(seriesId, occurrenceId, inviteWindow, expiresAt, now),
+          ),
       existing
         ? db
             .prepare(
@@ -239,7 +239,7 @@ export async function inviteOccurrenceGuest(
       delivery.statement,
     ]);
   } catch (error) {
-    if (isAuthorizationGuardFailure(error)) {
+    if (isStateGuardFailure(error)) {
       throw new AppError(409, "EVENT_GUEST_WINDOW_CHANGED", "The guest invitation window changed while saving");
     }
     if (isAuditChangeGuardFailure(error)) {

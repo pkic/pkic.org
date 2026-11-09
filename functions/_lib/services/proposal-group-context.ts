@@ -4,15 +4,11 @@ import {
   requirePermission,
   type Permission,
 } from "../auth/permissions";
-import {
-  guardAuthorizedDatabase,
-  prepareAuthorizationGuard,
-  type AuthorizationEvidence,
-} from "../db/authorization-guard";
+import { guardAuthorizedDatabase, type AuthorizationEvidence } from "../db/authorization-guard";
 import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../db/pagination";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
-import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
+import type { AuthAdmin, DatabaseLike } from "../types";
 
 /**
  * The proposal program is owned by exactly one group, but program
@@ -81,18 +77,6 @@ function groupEventProposalContextEvidence(context: GroupEventProposalContext): 
       ? [context.groupId, context.groupId, context.eventId, context.proposalId]
       : [context.groupId, context.groupId, context.eventId],
   };
-}
-
-/**
- * Rechecks the immutable path tuple in the same D1 batch as a proposal write.
- * Permission-specific guards remain in the proposal use case, so canonical
- * proposal commands and group event workflows share the same domain transition.
- */
-export function prepareGroupEventProposalContextGuard(
-  db: DatabaseLike,
-  context: GroupEventProposalContext,
-): StatementLike {
-  return prepareAuthorizationGuard(db, groupEventProposalContextEvidence(context));
 }
 
 /** Rechecks program ownership and permission for every protected read and atomic write. */

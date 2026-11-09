@@ -67,7 +67,7 @@ export function ParticipantRegistrationDetails({
   onEditDetails?: () => void;
 }) {
   const name = [data.user.first_name, data.user.last_name].filter(Boolean).join(" ");
-  const details = (editAction?: ComponentChildren, jobTitleEditAction?: ComponentChildren) => (
+  const details = (editAction?: ComponentChildren) => (
     <div class="pk-stack pk-stack--snug">
       <DescriptionList
         align="baseline"
@@ -110,7 +110,6 @@ export function ParticipantRegistrationDetails({
             jobTitle: data.user.job_title,
             pendingOrganizationName: data.pendingOrganizationName,
             editAction,
-            jobTitleEditAction,
           }),
           ...(daysSummarized ? [] : dayAttendanceItems(data)),
           ...answerItems(data, form),
@@ -120,7 +119,7 @@ export function ParticipantRegistrationDetails({
   );
   return onIdentityChanged && data.registration.status !== "cancelled" ? (
     <RegistrationIdentityChange data={data} onChanged={onIdentityChanged}>
-      {(edit) => details(edit("Change representation"), edit("Edit job title"))}
+      {(edit) => details(edit("Change representation"))}
     </RegistrationIdentityChange>
   ) : (
     details()

@@ -42,6 +42,22 @@ export const eventParticipationSections: PreviewSection[] = [
     ),
   },
   {
+    id: "attendance-saved",
+    title: "Saved attendance",
+    note: "The registration heading owns the single edit action. Saved cells show standing without selection controls or a join-waitlist legend.",
+    render: () => (
+      <DayAttendancePicker
+        readOnly
+        days={attendanceDays(3, [0, 1])}
+        value={{
+          [attendanceDays(3)[0].dayDate]: "in_person",
+          [attendanceDays(3)[1].dayDate]: "in_person",
+        }}
+        waitlist={{ [attendanceDays(3)[1].dayDate]: "waiting" }}
+      />
+    ),
+  },
+  {
     id: "attendance-options",
     title: "Attendance options",
     render: () => <DayAttendancePicker days={attendanceDays(3)} />,

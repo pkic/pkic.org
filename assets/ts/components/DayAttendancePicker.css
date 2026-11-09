@@ -96,7 +96,13 @@
   }
   .pk-attendance-matrix__status {
     font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+  }
+  .pk-attendance-matrix__cell[data-tone="warn"] .pk-attendance-matrix__status {
     color: var(--pk-warn-ink);
+  }
+  .pk-attendance-matrix__cell[data-tone="info"] .pk-attendance-matrix__status {
+    color: var(--pk-info-ink);
   }
   .pk-attendance-matrix td label.pk-attendance-matrix__choice {
     position: absolute;
@@ -117,6 +123,13 @@
   .pk-attendance-matrix td:has(.pk-attendance-matrix__cell[data-selected]) {
     background: var(--pk-accent-soft);
   }
+  .pk-attendance-matrix td:has(.pk-attendance-matrix__cell[data-selected][data-tone="info"]) {
+    background: var(--pk-info-soft);
+  }
+  .pk-attendance-matrix td:has(.pk-attendance-matrix__cell[data-selected][data-tone="neutral"]) {
+    background: var(--pk-surface-sunk);
+  }
+  .pk-attendance-matrix td:has(.pk-attendance-matrix__cell[data-selected][data-tone="warn"]),
   .pk-attendance-matrix td:has(.pk-attendance-matrix__cell[data-selected][data-waitlist]) {
     background: var(--pk-warn-soft);
   }

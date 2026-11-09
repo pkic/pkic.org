@@ -28,10 +28,8 @@ export function registrationAffiliationItems({
   jobTitle,
   pendingOrganizationName = null,
   editAction,
-  jobTitleEditAction,
 }: RegistrationAffiliationProps & {
   editAction?: ComponentChildren;
-  jobTitleEditAction?: ComponentChildren;
 }): DescriptionListItem[] {
   const organization = organizationName || PERSONAL_IDENTITY_LABEL;
   const pendingClaim = pendingOrganizationName ? (
@@ -57,8 +55,7 @@ export function registrationAffiliationItems({
       term: "Job title",
       value: (
         <span class="pk-cluster pk-cluster--nowrap">
-          {jobTitle || "Not provided"}
-          {jobTitleEditAction}
+          {jobTitle || (pendingOrganizationName ? "Awaiting organization approval" : "Not provided")}
         </span>
       ),
     },

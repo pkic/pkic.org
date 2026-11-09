@@ -473,7 +473,7 @@ describe("event home", () => {
       await vi.waitFor(() => expect(host.querySelector("iframe.pk-badge-face__frame")).not.toBeNull());
       const card = host.querySelector(".pk-event-card");
       expect(card?.textContent).toContain("No in-person seat yet");
-      expect(card?.textContent).toMatch(/waiting list for Tue.*1.* and Wed.*2/);
+      expect(card?.textContent).toMatch(/waitlist for Tue.*1.* and Wed.*2/);
       expect(card?.textContent).toMatch(/On Thu.*3 you join online/);
       expect(host.textContent).not.toContain("Show this QR code at the entrance");
       // The explanation comes before the badge, so the code is not read as admission.

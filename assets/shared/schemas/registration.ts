@@ -474,7 +474,10 @@ function peerInviteRouteSchema(summary: string, description: string) {
       },
       "400": { description: "Invalid invite payload." },
       "401": { description: "A signed-in attendee or registration manage capability is required." },
-      "403": { description: "The manage token is not valid for this event." },
+      "403": {
+        description:
+          "The manage token is not valid for this event, or the caller has no active registration or sign-in.",
+      },
       "429": { description: "Invite quota exceeded." },
     },
   };

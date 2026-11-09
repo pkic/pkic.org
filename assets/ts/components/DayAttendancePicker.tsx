@@ -41,8 +41,6 @@ interface DayAttendancePickerProps {
   value?: Readonly<Record<string, string>>;
   onChange?: (dayDate: string, attendanceType: string) => void;
   readOnly?: boolean;
-  /** Opens the existing editor without applying the clicked attendance choice. */
-  onEdit?: () => void;
   waitlist?: Readonly<Record<string, DayWaitlistStatus>>;
 }
 
@@ -55,7 +53,10 @@ export function fitsReadOnlyMatrix(data: RegistrationManageReadResponse): boolea
   return (
     data.registration.status === "registered" &&
     !data.dayWaitlist.some(
-      (day) => day.status === "offered" || !data.dayAttendance.some((entry) => entry.dayDate === day.dayDate),
+      (day) =>
+        day.status === "offered" ||
+        day.status === "expired" ||
+        !data.dayAttendance.some((entry) => entry.dayDate === day.dayDate),
     ) &&
     data.dayAttendance.every((entry) =>
       data.eventDays.some(
@@ -113,14 +114,16 @@ function MatrixCell({
     );
   const waiting = full(option);
   const status = selected && readOnly ? waitlistStatus : undefined;
-  const statusLabel = status && status !== "accepted" ? REGISTRATION_DAY_WAITLIST_DISPLAY[status].label : null;
+  const display = status && status !== "accepted" ? REGISTRATION_DAY_WAITLIST_DISPLAY[status] : null;
+  const statusLabel = display?.label;
   const limited =
     !waiting && threshold > 0 && option.spotsRemainingPercent != null && option.spotsRemainingPercent <= threshold;
   return (
     <div
       class="pk-attendance-matrix__cell"
       data-selected={selected || undefined}
-      data-waitlist={(readOnly ? status === "waiting" || status === "expired" : waiting) || undefined}
+      data-waitlist={(!readOnly && waiting) || undefined}
+      data-tone={display?.tone}
     >
       {readOnly ? (
         <span
@@ -183,7 +186,6 @@ export function DayAttendancePicker({
   value,
   onChange,
   readOnly = false,
-  onEdit,
   waitlist = {},
 }: DayAttendancePickerProps) {
   const id = useId();
@@ -342,24 +344,20 @@ export function DayAttendancePicker({
         rows={transposed ? days.map((day) => ({ day })) : options.map((option) => ({ option }))}
         rowKey={(row) => ("day" in row ? `day:${row.day.dayDate}` : `method:${row.option.value}`)}
         rowAction={
-          readOnly
-            ? onEdit
-              ? () => ({ label: ATTENDANCE_EDIT_LABEL, title: ATTENDANCE_EDIT_LABEL, onSelect: onEdit })
-              : undefined
-            : transposed
-              ? undefined
-              : (row) =>
-                  "option" in row
-                    ? {
-                        label: `Choose ${row.option.label} for every available day`,
-                        onSelect: () => selectEveryDay(row.option),
-                      }
-                    : undefined
+          readOnly || transposed
+            ? undefined
+            : (row) =>
+                "option" in row
+                  ? {
+                      label: `Choose ${row.option.label} for every available day`,
+                      onSelect: () => selectEveryDay(row.option),
+                    }
+                  : undefined
         }
       />
-      {(hasFull || hasUnavailable) && (
+      {((hasFull && !readOnly) || hasUnavailable) && (
         <p class="pk-attendance-matrix__legend">
-          {hasFull && (
+          {hasFull && !readOnly && (
             <>
               <IconClock width="14" height="14" /> Full · joins waitlist
             </>

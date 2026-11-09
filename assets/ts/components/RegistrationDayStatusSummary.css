@@ -31,13 +31,12 @@
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .pk-day-status__row[data-kind="waiting"],
-  .pk-day-status__row[data-kind="expired"] {
+  .pk-day-status__row[data-tone="warn"] {
     border-left-color: var(--pk-warn);
     background: var(--pk-warn-soft);
   }
 
-  .pk-day-status__row[data-kind="offered"] {
+  .pk-day-status__row[data-tone="info"] {
     border-left-color: var(--pk-info);
     background: var(--pk-info-soft);
   }
@@ -62,10 +61,24 @@
     color: var(--pk-accent-ink);
   }
 
-  .pk-day-status__row[data-kind="waiting"] .pk-day-status__icon,
-  .pk-day-status__row[data-kind="expired"] .pk-day-status__icon {
+  .pk-day-status__row[data-tone="warn"] .pk-day-status__icon {
     background: var(--pk-surface);
     color: var(--pk-warn-ink);
+  }
+
+  .pk-day-status__row[data-tone="neutral"] {
+    border-left-color: var(--pk-line);
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-day-status__row[data-tone="neutral"] .pk-day-status__icon {
+    background: var(--pk-surface);
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-day-status__row[data-tone="info"] .pk-day-status__icon {
+    background: var(--pk-surface);
+    color: var(--pk-info-ink);
   }
 
   .pk-day-status__body {

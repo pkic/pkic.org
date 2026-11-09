@@ -1,5 +1,5 @@
 import { AppError } from "./errors";
-import type { AuthorizationEvidence } from "./db/authorization-guard";
+import { prepareStateGuard, type AuthorizationEvidence } from "./db/authorization-guard";
 import type { DatabaseLike, StatementLike } from "./types";
 import { nowIso } from "./utils/time";
 
@@ -132,7 +132,7 @@ export function effectiveStoredInviteExpiry(event: InviteEventWindow, storedExpi
 }
 
 /** Rechecks the event window in the same D1 batch that persists an invite mutation. */
-export function eventInviteWindowEvidence(
+function eventInviteWindowEvidence(
   eventId: string,
   event: InviteEventWindow,
   expiresAt: string,
@@ -153,6 +153,17 @@ export function eventInviteWindowEvidence(
             AND ? <= ends_at`,
     bindings: [eventId, event.starts_at, event.ends_at, expiresAt, now, expiresAt],
   };
+}
+
+/** Event scheduling is business state, including inside an authorization scope. */
+export function prepareEventInviteWindowGuard(
+  db: DatabaseLike,
+  eventId: string,
+  event: InviteEventWindow,
+  expiresAt: string,
+  now: string,
+): StatementLike {
+  return prepareStateGuard(db, eventInviteWindowEvidence(eventId, event, expiresAt, now));
 }
 
 /** Rechecks an occurrence-scoped guest deadline in the invitation D1 batch. */

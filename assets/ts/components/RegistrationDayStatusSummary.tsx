@@ -70,7 +70,12 @@ function GroupRow({
         ? "Cancelled"
         : option;
   return (
-    <li class="pk-day-status__row" data-kind={group.kind} data-icon={hasIcon ? undefined : "none"}>
+    <li
+      class="pk-day-status__row"
+      data-kind={group.kind}
+      data-tone={display?.tone}
+      data-icon={hasIcon ? undefined : "none"}
+    >
       {hasIcon && (
         <span class="pk-day-status__icon">
           {group.kind === "cancelled" ? <IconRemove /> : <AttendanceIcon type={group.attendanceType} />}

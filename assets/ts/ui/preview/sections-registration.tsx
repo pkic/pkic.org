@@ -13,6 +13,10 @@ export const registrationSections: PreviewSection[] = [
       <div class="pk-stack">
         <RegistrationAffiliation organizationName={null} jobTitle={null} pendingOrganizationName="Example Research" />
         <RegistrationDayStatusSummary
+          dayAttendance={[{ dayDate: "2026-12-02", attendanceType: "in_person", label: null }]}
+          dayWaitlist={[{ dayDate: "2026-12-02", status: "expired" }]}
+        />
+        <RegistrationDayStatusSummary
           dayAttendance={[]}
           dayWaitlist={[{ dayDate: "2026-12-01", status: "offered", offerExpiresAt: "2026-12-01T12:00:00.000Z" }]}
           onClaim={() => undefined}

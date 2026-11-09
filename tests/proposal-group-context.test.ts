@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createGroupManagedEvent } from "../functions/_lib/services/events/group-management";
 import {
-  prepareGroupEventProposalContextGuard,
+  guardGroupEventProposalDatabase,
   requireGroupEventProposalContext,
 } from "../functions/_lib/services/proposal-group-context";
 import { createProposal } from "../functions/_lib/services/proposals";
@@ -23,6 +23,7 @@ async function userActor(label: string, role = "user"): Promise<AuthAdmin> {
 }
 
 async function setupProposalContext(): Promise<{
+  administrator: AuthAdmin;
   ownerGroupId: string;
   otherGroupId: string;
   eventId: string;
@@ -73,6 +74,7 @@ async function setupProposalContext(): Promise<{
     abstract: "A sufficiently detailed proposal abstract for context tests.",
   });
   return {
+    administrator,
     ownerGroupId: owner.id,
     otherGroupId: other.id,
     eventId: event.eventId,
@@ -164,18 +166,22 @@ describe("group event proposal context", () => {
     );
 
     await expect(
-      racingDb.batch([
-        prepareGroupEventProposalContextGuard(env.DB, {
+      guardGroupEventProposalDatabase(
+        racingDb,
+        context.administrator,
+        {
           groupId: context.ownerGroupId,
           eventId: context.eventId,
           proposalId: context.proposalId,
-        }),
+        },
+        "proposals:manage",
+      ).batch([
         env.DB.prepare("UPDATE session_proposals SET title = ? WHERE id = ?").bind(
           "Must not commit",
           context.proposalId,
         ),
       ]),
-    ).rejects.toThrow("AUTHORIZATION_CONTEXT_CHANGED");
+    ).rejects.toMatchObject({ code: "GROUP_EVENT_PROPOSAL_CONTEXT_CHANGED" });
 
     await expect(
       env.DB.prepare("SELECT title FROM session_proposals WHERE id = ?").bind(context.proposalId).first(),

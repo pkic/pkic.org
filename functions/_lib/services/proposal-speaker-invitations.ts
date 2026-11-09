@@ -13,8 +13,12 @@ import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/partici
 import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/schemas/proposal-status";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { AppError } from "../errors";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
-import { effectiveStoredInviteExpiry, eventInviteWindowEvidence, resolveEventInviteExpiry } from "../invite-validity";
+import { isAuthorizationGuardFailure, isStateGuardFailure } from "../db/authorization-guard";
+import {
+  effectiveStoredInviteExpiry,
+  prepareEventInviteWindowGuard,
+  resolveEventInviteExpiry,
+} from "../invite-validity";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import {
   eventParticipantSourceConflictError,
@@ -123,7 +127,7 @@ async function inviteProposalSpeakerOnce(
   const actor = payload.auditActor ?? { type: "user" as const, id: payload.proposal.proposer_user_id };
   const statements: StatementLike[] = [
     ...(payload.permissionGuard ? [payload.permissionGuard] : []),
-    prepareAuthorizationGuard(db, eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now)),
+    prepareEventInviteWindowGuard(db, payload.event.id, payload.event, expiresAt, now),
   ];
   statements.push(...preparedUser.statements);
   statements.push(
@@ -152,6 +156,12 @@ async function inviteProposalSpeakerOnce(
   try {
     await db.batch(withProposalWriteContextGuard(payload.authorization, statements));
   } catch (error) {
+    if (isStateGuardFailure(error))
+      throw new AppError(
+        409,
+        "EVENT_INVITE_WINDOW_CHANGED",
+        "The event schedule changed. Review the deadline and try again.",
+      );
     if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
     if (isEventParticipantSourceConflict(error)) throw eventParticipantSourceConflictError();
     if (isAuthorizationGuardFailure(error) && !preparedSpeaker.alreadyPresent) {

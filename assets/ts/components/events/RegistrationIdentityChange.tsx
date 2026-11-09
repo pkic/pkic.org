@@ -27,7 +27,7 @@ export function RegistrationIdentityChange({
 }: {
   data: RegistrationManageReadResponse;
   onChanged: () => void | Promise<void>;
-  /** Multiple field pencils share this one dialog and its update flow. */
+  /** Places the representation control beside the saved organization. */
   children?: (edit: (label: string) => ComponentChildren) => ComponentChildren;
 }) {
   const [open, show, close] = useDialogQueryState("representation");

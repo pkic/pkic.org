@@ -9,13 +9,13 @@ import type { DatabaseLike, StatementLike } from "../types";
 import {
   activeEffectiveInviteExpirySql,
   effectiveInviteExpirySql,
-  eventInviteWindowEvidence,
+  prepareEventInviteWindowGuard,
   inviteExpirySeconds,
   prepareExpireEffectiveEventInvites,
   resolveEventInviteExpiry,
   type InviteEventWindow,
 } from "../invite-validity";
-import { isStateGuardFailure, prepareStateGuard } from "../db/authorization-guard";
+import { isStateGuardFailure } from "../db/authorization-guard";
 import { AppError } from "../errors";
 import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "./proposal-status-policy";
 
@@ -154,16 +154,7 @@ export async function bulkCreateInvites(
   const expiresAt = resolveEventInviteExpiry(payload.event, payload.expiresAt, now);
   const normalizedEmails = payload.invites.map((invite) => normalizeEmail(invite.inviteeEmail));
   const emailsJson = JSON.stringify([...new Set(normalizedEmails)]);
-  const batchResults = (await db.batch([
-    db
-      .prepare(
-        `SELECT email FROM unsubscribes
-         WHERE email IN (SELECT value FROM json_each(?1))
-           AND channel = 'invites'
-           AND ((scope_type = 'global' AND scope_ref IS NULL) OR (scope_type = 'event' AND scope_ref = ?2))`,
-      )
-      .bind(emailsJson, payload.event.id),
-    db.prepare(ELIGIBILITY_QUERY[inviteType]).bind(emailsJson, payload.event.id),
+  const activeInvites = () =>
     db
       .prepare(
         `SELECT i.invitee_email
@@ -175,14 +166,30 @@ export async function bulkCreateInvites(
            AND i.invitee_email IN (SELECT value FROM json_each(?3))
            AND ${activeEffectiveInviteExpirySql(effectiveInviteExpirySql("i", "e"), "?4")}`,
       )
-      .bind(payload.event.id, inviteType, emailsJson, now),
+      .bind(payload.event.id, inviteType, emailsJson, now);
+  const batchResults = (await db.batch([
+    db
+      .prepare(
+        `SELECT email AS normalized_email, 'invitee_unsubscribed' AS reason FROM unsubscribes
+         WHERE email IN (SELECT value FROM json_each(?1))
+           AND channel = 'invites'
+           AND ((scope_type = 'global' AND scope_ref IS NULL) OR (scope_type = 'event' AND scope_ref = ?2))
+         UNION ALL ${ELIGIBILITY_QUERY[inviteType]}`,
+      )
+      .bind(emailsJson, payload.event.id),
+    activeInvites(),
   ])) as Array<{ results?: Array<Record<string, string>> }>;
 
-  const unsubscribed = new Set((batchResults[0].results ?? []).map((row) => row.email));
-  const ineligible = new Map(
-    (batchResults[1].results ?? []).map((row) => [row.normalized_email, row.reason ?? "invitee_ineligible"]),
+  const exclusions = batchResults[0].results ?? [];
+  const unsubscribed = new Set(
+    exclusions.filter((row) => row.reason === "invitee_unsubscribed").map((row) => row.normalized_email),
   );
-  const alreadyInvited = new Set((batchResults[2].results ?? []).map((row) => row.invitee_email));
+  const ineligible = new Map(
+    exclusions
+      .filter((row) => row.reason !== "invitee_unsubscribed")
+      .map((row) => [row.normalized_email, row.reason ?? "invitee_ineligible"]),
+  );
+  const alreadyInvited = new Set((batchResults[1].results ?? []).map((row) => row.invitee_email));
   const classified = new Set<string>();
   const outcomes: BulkInviteOutcome[] = [];
   const toCreate: Array<{ outcomeIndex: number; email: string; invite: BulkInviteInput }> = [];
@@ -258,7 +265,7 @@ export async function bulkCreateInvites(
     : [];
   const inviterChunks = chunkJsonRows(inviterRows);
   const statements = [
-    prepareStateGuard(db, eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now)),
+    prepareEventInviteWindowGuard(db, payload.event.id, payload.event, expiresAt, now),
     prepareExpireEffectiveEventInvites(db, { eventId: payload.event.id, inviteType, now }),
     ...chunks.map((chunk) =>
       db
@@ -285,6 +292,7 @@ export async function bulkCreateInvites(
     ),
     ...emailChunks.map((chunk) => chunk.statement),
     ...(payload.additionalStatements ?? []),
+    activeInvites(),
   ];
   let results;
   try {
@@ -313,28 +321,10 @@ export async function bulkCreateInvites(
     }
   }
 
-  // A RETURNING miss can mean either a concurrent winner or a quota rejection.
-  // Only those unresolved rows need a follow-up read; the ordinary bulk path
-  // stays at three classification reads plus its chunked writes.
   const insertedEmails = new Set(prepared.filter((row) => insertedIds.has(row.id)).map((row) => row.email));
-  const finalActive = new Set([...alreadyInvited, ...insertedEmails]);
-  const unresolvedEmails = [...new Set(prepared.filter((row) => !insertedIds.has(row.id)).map((row) => row.email))];
-  if (unresolvedEmails.length > 0) {
-    const active = await db
-      .prepare(
-        `SELECT i.invitee_email
-         FROM invites i
-         JOIN events e ON e.id = i.event_id
-         WHERE i.event_id = ?1
-           AND i.invite_type = ?2
-           AND i.status = 'sent'
-           AND i.invitee_email IN (SELECT value FROM json_each(?3))
-           AND ${activeEffectiveInviteExpirySql(effectiveInviteExpirySql("i", "e"), "?4")}`,
-      )
-      .bind(payload.event.id, inviteType, JSON.stringify(unresolvedEmails), now)
-      .all<{ invitee_email: string }>();
-    for (const row of active.results) finalActive.add(row.invitee_email);
-  }
+  // Classification shares the guarded atomic write. A later permission change
+  // cannot turn a committed invitation into an apparent request failure.
+  const finalActive = new Set((results.at(-1)?.results ?? []).map((row) => String(row.invitee_email)));
   const createdEmails = new Set<string>();
   for (const outcome of outcomes) {
     if (outcome.status === "skipped") continue;

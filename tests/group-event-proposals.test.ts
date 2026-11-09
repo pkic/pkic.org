@@ -13,9 +13,9 @@ import { preparePermissionsAuthorizationGuard } from "../functions/_lib/auth/per
 import { editProposalSpeaker } from "../functions/_lib/services/proposal-speaker-management";
 import { removeProposalSpeakerByManager } from "../functions/_lib/services/proposal-speaker-removal";
 import { sendProposalSpeakerReminders } from "../functions/_lib/services/proposal-reminders";
-import { prepareGroupEventProposalContextGuard } from "../functions/_lib/services/proposal-group-context";
+import { guardGroupEventProposalDatabase } from "../functions/_lib/services/proposal-group-context";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
-import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
+import type { AuthAdmin } from "../functions/_lib/types";
 import { eventProposalsResponseSchema } from "../assets/shared/schemas/event-proposals";
 import { proposalCommentsListResponseSchema } from "../assets/shared/schemas/proposal-comments";
 import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
@@ -227,14 +227,6 @@ async function proposalManager(fixture: Fixture): Promise<AuthAdmin> {
     ...manager,
     grants: [{ permission: "proposals:manage", contextType: "event", contextId: fixture.eventId }],
   };
-}
-
-function proposalContextGuard(db: DatabaseLike, fixture: Fixture) {
-  return prepareGroupEventProposalContextGuard(db, {
-    groupId: fixture.ownerGroupId,
-    eventId: fixture.eventId,
-    proposalId: fixture.proposalId,
-  });
 }
 
 function revokeProposalManagement(fixture: Fixture, actor: AuthAdmin): Promise<unknown> {
@@ -674,7 +666,6 @@ describe("event proposal collection and canonical proposal resource routes", () 
         appBaseUrl: "https://app.test",
         email: "revoked-before-invite@example.test",
         role: "speaker",
-        authorization: { contextGuard: proposalContextGuard(racingDb, fixture) },
         permissionGuard: preparePermissionsAuthorizationGuard(racingDb, actor, [
           { permission: "proposals:manage", context: { type: "event", id: fixture.eventId } },
         ]),
@@ -708,13 +699,12 @@ describe("event proposal collection and canonical proposal resource routes", () 
         appBaseUrl: "https://app.test",
         email: "rescheduled-before-invite@example.test",
         role: "speaker",
-        authorization: { contextGuard: proposalContextGuard(racingDb, fixture) },
         permissionGuard: preparePermissionsAuthorizationGuard(racingDb, actor, [
           { permission: "proposals:manage", context: { type: "event", id: fixture.eventId } },
         ]),
         auditActor: { type: "admin", id: actor.id },
       }),
-    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_CHANGED" });
+    ).rejects.toMatchObject({ status: 409, code: "EVENT_INVITE_WINDOW_CHANGED" });
     await expect(
       queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", ["rescheduled-before-invite@example.test"]),
     ).resolves.toHaveLength(0);
@@ -767,7 +757,6 @@ describe("event proposal collection and canonical proposal resource routes", () 
         speakerId,
         { role: "moderator" },
         "https://app.test",
-        { contextGuard: proposalContextGuard(racingEditDb, fixture) },
       ),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
     await expect(
@@ -788,7 +777,6 @@ describe("event proposal collection and canonical proposal resource routes", () 
         kind: "profile",
         actor: secondActor,
         appBaseUrl: "https://app.test",
-        authorization: { contextGuard: proposalContextGuard(racingReminderDb, fixture) },
       }),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
     await expect(queryAll(env.DB, "SELECT id FROM email_outbox")).resolves.toEqual(outboxBefore);
@@ -806,7 +794,6 @@ describe("event proposal collection and canonical proposal resource routes", () 
         kind: "profile",
         actor: thirdActor,
         appBaseUrl: "https://app.test",
-        authorization: { contextGuard: proposalContextGuard(racingRosterDb, fixture) },
       }),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
     await expect(queryAll(env.DB, "SELECT id FROM email_outbox")).resolves.toEqual(outboxBefore);
@@ -824,7 +811,6 @@ describe("event proposal collection and canonical proposal resource routes", () 
         proposalId: fixture.proposalId,
         userId: removedSpeakerId,
         appBaseUrl: "https://app.test",
-        authorization: { contextGuard: proposalContextGuard(racingRemovalDb, fixture) },
       }),
     ).rejects.toMatchObject({ status: 409 });
     await expect(
@@ -1247,12 +1233,6 @@ describe("event proposal collection and canonical proposal resource routes", () 
         .run(),
     );
     const { finalizeProposalWithNotifications } = await import("../functions/_lib/services/proposal-decisions");
-    const { prepareGroupEventProposalContextGuard } = await import("../functions/_lib/services/proposal-group-context");
-    const context = {
-      groupId: fixture.ownerGroupId,
-      eventId: fixture.eventId,
-      proposalId: fixture.proposalId,
-    };
     const authActor: AuthAdmin = {
       identityType: "user",
       id: actor.id,
@@ -1274,7 +1254,6 @@ describe("event proposal collection and canonical proposal resource routes", () 
           resolveSpeakerManageUrl: async () => "https://app.test/speaker",
           resolveProposalManageUrl: async () => "https://app.test/proposal",
         },
-        { contextGuard: prepareGroupEventProposalContextGuard(env.DB, context) },
       ),
     ).rejects.toMatchObject({ code: "PROPOSAL_FINALIZATION_AUTHORIZATION_CHANGED" });
     await expect(
@@ -1298,7 +1277,6 @@ describe("event proposal collection and canonical proposal resource routes", () 
         .run(),
     );
     const { finalizeProposalWithNotifications } = await import("../functions/_lib/services/proposal-decisions");
-    const { prepareGroupEventProposalContextGuard } = await import("../functions/_lib/services/proposal-group-context");
     const authActor: AuthAdmin = {
       identityType: "user",
       id: actor.id,
@@ -1308,7 +1286,16 @@ describe("event proposal collection and canonical proposal resource routes", () 
 
     await expect(
       finalizeProposalWithNotifications(
-        racingDb,
+        guardGroupEventProposalDatabase(
+          racingDb,
+          authActor,
+          {
+            groupId: fixture.ownerGroupId,
+            eventId: fixture.eventId,
+            proposalId: fixture.proposalId,
+          },
+          "proposals:manage",
+        ),
         {
           proposalId: fixture.proposalId,
           actor: authActor,
@@ -1320,15 +1307,8 @@ describe("event proposal collection and canonical proposal resource routes", () 
           resolveSpeakerManageUrl: async () => "https://app.test/speaker",
           resolveProposalManageUrl: async () => "https://app.test/proposal",
         },
-        {
-          contextGuard: prepareGroupEventProposalContextGuard(env.DB, {
-            groupId: fixture.ownerGroupId,
-            eventId: fixture.eventId,
-            proposalId: fixture.proposalId,
-          }),
-        },
       ),
-    ).rejects.toMatchObject({ code: "PROPOSAL_FINALIZATION_AUTHORIZATION_CHANGED" });
+    ).rejects.toMatchObject({ code: "GROUP_EVENT_PROPOSAL_CONTEXT_CHANGED" });
     await expect(
       queryAll(env.DB, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [fixture.proposalId]),
     ).resolves.toHaveLength(0);

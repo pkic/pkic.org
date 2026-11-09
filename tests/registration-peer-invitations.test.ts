@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { peerInviteResultSchema } from "../assets/shared/schemas/registration";
 import { createRegistration } from "../functions/_lib/services/registrations/create";
 import { getEventBySlug } from "../functions/_lib/services/events";
+import { verifyUserSessionToken } from "../functions/_lib/auth/user-session-token";
+import { signJwt } from "../functions/_lib/utils/jwt";
+import { createInvite } from "../functions/_lib/services/invite-creation";
+import type { DatabaseLike } from "../functions/_lib/types";
 import { nowIso } from "../functions/_lib/utils/time";
 import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
@@ -67,7 +71,7 @@ describe("attendee self-service invitations and notifications", () => {
       const profile = profileD1Flow(env.DB);
       const response = await invite(mode === "session" ? f.token : f.manageToken, { ...env, DB: profile.db });
       const report = await profile.report();
-      expect(report.roundTrips).toBeLessThanOrEqual(mode === "session" ? 11 : 12);
+      expect(report.roundTrips).toBeLessThanOrEqual(mode === "session" ? 9 : 11);
       expect(report.queries.filter(({ sql }) => sql.includes("INSERT INTO authorization_guards"))).toHaveLength(1);
       expect(response.status, await response.clone().text()).toBe(200);
       expect(peerInviteResultSchema.parse(await response.json()).created).toEqual([
@@ -132,6 +136,107 @@ describe("attendee self-service invitations and notifications", () => {
     expect(
       await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email='colleague@example.test'"),
     ).toHaveLength(0);
+  });
+
+  it.each(["idle deadline", "email sign-in removal"] as const)(
+    "rolls back invitations when the session loses its %s before the write",
+    async (race) => {
+      const f = await attendee();
+      const verified = await verifyUserSessionToken(env.INTERNAL_SIGNING_SECRET!, f.token);
+      if (!verified.ok) throw new Error("Fixture session is invalid");
+      // Legacy sessions derive their idle deadline from their live creation time.
+      const token = await signJwt(env.INTERNAL_SIGNING_SECRET!, {
+        typ: "user-session",
+        sub: f.userId,
+        sid: verified.claims.sid,
+        exp: verified.claims.exp,
+      });
+      const db = mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => /INSERT(?: OR IGNORE)? INTO invites/i.test(sql),
+        async () => {
+          if (race === "idle deadline") {
+            await env.DB.prepare("UPDATE sessions SET created_at='2020-01-01T00:00:00.000Z' WHERE user_id=?")
+              .bind(f.userId)
+              .run();
+          } else {
+            // The session is bound to a mailbox permission that disappeared after preflight.
+            await env.DB.prepare(`INSERT INTO session_email_authentication(session_id,email_id,normalized_email,permission_revision,created_at)
+            SELECT id, ?, 'removed@example.test', ?, ? FROM sessions WHERE user_id=?`)
+              .bind(null, crypto.randomUUID(), nowIso(), f.userId)
+              .run();
+          }
+        },
+      );
+      const response = await invite(token, { ...env, DB: db });
+      expect(response.status, await response.clone().text()).toBe(403);
+      expect(await response.json()).toMatchObject({ error: { code: "INVITER_ACCESS_CHANGED" } });
+      expect(await queryAll(env.DB, "SELECT id FROM invites")).toHaveLength(0);
+      expect(
+        await queryAll(env.DB, "SELECT code FROM referral_codes WHERE owner_id=?", [f.registrationId]),
+      ).toHaveLength(0);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email='colleague@example.test'"),
+      ).toHaveLength(0);
+    },
+  );
+
+  it("returns committed outcomes and dispatches emails after a concurrent winner and immediate session revocation", async () => {
+    const f = await attendee();
+    let committing = false;
+    const racing = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /INSERT(?: OR IGNORE)? INTO invites/i.test(sql),
+      async () => {
+        await createInvite(env.DB, {
+          eventId: f.eventId,
+          inviteType: "attendee",
+          inviteeEmail: "concurrent@example.test",
+        });
+        committing = true;
+      },
+    );
+    const db: DatabaseLike = {
+      prepare: racing.prepare,
+      async batch(statements) {
+        const results = await racing.batch(statements);
+        if (committing) {
+          committing = false;
+          await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?").bind(nowIso(), f.userId).run();
+        }
+        return results;
+      },
+    };
+    const response = await callApi({ ...env, DB: db }, "/api/v1/events/pqc-2026/invites", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${f.token}` },
+      body: JSON.stringify({ invites: [{ email: "concurrent@example.test" }, { email: "created@example.test" }] }),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(peerInviteResultSchema.parse(await response.json())).toMatchObject({
+      created: [{ email: "created@example.test" }],
+      endorsed: [{ email: "concurrent@example.test" }],
+      skipped: [],
+    });
+    expect(
+      await queryAll(env.DB, "SELECT attempts FROM email_outbox WHERE recipient_email='created@example.test'"),
+    ).toEqual([{ attempts: 1 }]);
+  });
+
+  it("refuses a manage capability rotated before the combined invitation snapshot", async () => {
+    const f = await attendee();
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("AS invite_count"),
+      async () => {
+        await env.DB.prepare("UPDATE registrations SET manage_link_secret=? WHERE id=?")
+          .bind(crypto.randomUUID(), f.registrationId)
+          .run();
+      },
+    );
+    const response = await invite(f.manageToken, { ...env, DB: db });
+    expect(response.status).toBe(403);
+    expect(await queryAll(env.DB, "SELECT id FROM invites")).toHaveLength(0);
   });
 
   it("keeps a schedule refusal distinct from inviter authorization and rolls back the referral", async () => {

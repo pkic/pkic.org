@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sponsorshipEventsListResponseSchema } from "../../assets/shared/schemas/sponsorship-management";
+import { REGISTRATION_DAY_WAITLIST_DISPLAY } from "../../assets/shared/status-display";
 import { Badge, statusTone, statusLabel } from "../../assets/ts/components/Badge";
 import { ErrorAlert, friendlyErrorMessage } from "../../assets/ts/components/ErrorAlert";
 import { useHashQueryParam } from "../../assets/ts/hooks/useHashQueryParam";
@@ -172,4 +173,12 @@ describe("a response the page could not read", () => {
     );
     expect(friendlyErrorMessage("Nothing matched that search.")).toBe("Nothing matched that search.");
   });
+});
+
+it("shares canonical waitlist tones while describing expired day offers precisely", () => {
+  for (const [status, display] of Object.entries(REGISTRATION_DAY_WAITLIST_DISPLAY)) {
+    expect(display.tone).toBe(statusTone(status));
+    if (status !== "expired") expect(display.label).toBe(statusLabel(status));
+  }
+  expect(REGISTRATION_DAY_WAITLIST_DISPLAY.expired.label).toBe("Offer expired");
 });

@@ -174,7 +174,6 @@ export function RegistrationDays({
             <DayAttendancePicker
               days={data.eventDays}
               readOnly
-              onEdit={editable && !busy ? () => setEditing(true) : undefined}
               value={Object.fromEntries(data.dayAttendance.map((day) => [day.dayDate, day.attendanceType]))}
               waitlist={Object.fromEntries(data.dayWaitlist.map((day) => [day.dayDate, day.status]))}
             />

@@ -163,26 +163,6 @@ describe("DataTable", () => {
     expect(link.title).toBe("Marit Halvorsen");
   });
 
-  it("keeps an explicit row action hint when hovering a cell", () => {
-    const onSelect = vi.fn();
-    const container = mount(
-      <DataTable
-        caption="Members"
-        columns={columns}
-        rows={[rows[0]]}
-        rowKey={(row) => row.id}
-        rowAction={() => ({ label: "Edit member", title: "Edit member", onSelect })}
-      />,
-    );
-    const target = container.querySelector<HTMLButtonElement>(".pk-table__row-link")!;
-    void act(() => {
-      target.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
-    });
-    expect(target.title).toBe("Edit member");
-    void act(() => target.click());
-    expect(onSelect).toHaveBeenCalledTimes(1);
-  });
-
   it("marks only the sorted column with aria-sort", () => {
     const container = mount(
       <DataTable

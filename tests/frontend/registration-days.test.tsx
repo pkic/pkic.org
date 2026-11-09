@@ -38,3 +38,17 @@ it.each(["retired", "waiting without attendance"])(
     expect(summary?.textContent).not.toContain("Not attending");
   },
 );
+
+it("keeps expired-offer recovery visible beside the saved attendance", () => {
+  const data = readResponse({
+    dayWaitlist: [{ dayDate: "2026-12-01", status: "expired", priorityLane: "general", offerExpiresAt: null }],
+  });
+  container = document.createElement("div");
+  document.body.append(container);
+  void act(() =>
+    render(<RegistrationDays data={data} busy={false} editable onSave={vi.fn()} onClaim={vi.fn()} />, container!),
+  );
+  expect(container.querySelector('[aria-label="Attendance choices"]')).toBeNull();
+  expect(container.textContent).toContain("Offer expired");
+  expect(container.textContent).toContain("Update and save your attendance to request a place again");
+});

@@ -175,7 +175,9 @@ describe("ParticipantRegistration", () => {
     const summary = container.querySelector('[aria-label="Attendance choices"]');
     expect(summary?.querySelectorAll("[data-selected]")).toHaveLength(2);
     expect(button(container, "Change attendance")).not.toBeNull();
-    expect(button(container, "Edit job title")).not.toBeNull();
+    expect(button(container, "Edit job title")).toBeNull();
+    expect(button(container, "Change representation")).not.toBeNull();
+    expect(container.querySelectorAll('button[aria-label="Change attendance"]')).toHaveLength(1);
     // Cancelling is findable on the page, set apart and quiet, never the main action.
     expect(button(container, "Cancel my registration…")).toBeNull();
     expect(container.querySelector('button[aria-label="Registration actions"]')).not.toBeNull();
@@ -232,7 +234,7 @@ describe("ParticipantRegistration", () => {
 
     expect(facts(container)).toMatchObject({
       Organization: "Personal",
-      "Job title": "Not provided",
+      "Job title": "Awaiting organization approval",
     });
     expect(facts(container)["Organization claim awaiting approval"]).toBe("Analytical Engines");
     const status = button(container, "About this claim");
@@ -386,7 +388,7 @@ describe("ParticipantRegistration", () => {
     );
     const container = await mount();
     expect(container.querySelectorAll(".pk-attendance-matrix__cell[data-selected]")).toHaveLength(3);
-    expect(container.querySelectorAll(".pk-attendance-matrix__cell[data-selected][data-waitlist]")).toHaveLength(1);
+    expect(container.querySelectorAll('[role="img"][aria-label$=": Waitlisted"]')).toHaveLength(1);
     expect(container.textContent).toContain("Waitlisted");
   });
 

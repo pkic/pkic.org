@@ -10,8 +10,8 @@ import type { EventRecord } from "./events";
 import { buildInviteEmailQueueRow } from "./invite-email";
 import { isStaleInviteTransition, prepareInviteTransitionGuard } from "./invite-lifecycle";
 import { INVITE_COLUMNS, type InviteRecord } from "./invite-types";
-import { eventInviteWindowEvidence, resolveEventInviteExpiry } from "../invite-validity";
-import { isStateGuardFailure, prepareStateGuard } from "../db/authorization-guard";
+import { prepareEventInviteWindowGuard, resolveEventInviteExpiry } from "../invite-validity";
+import { isStateGuardFailure } from "../db/authorization-guard";
 
 export interface EventInviteResendPayload {
   event: EventRecord;
@@ -71,7 +71,7 @@ export async function resendEventInvite(
   );
   try {
     await db.batch([
-      prepareStateGuard(db, eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now)),
+      prepareEventInviteWindowGuard(db, payload.event.id, payload.event, expiresAt, now),
       prepareInviteTransitionGuard(db, invite),
       db
         .prepare(

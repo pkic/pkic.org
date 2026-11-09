@@ -64,17 +64,12 @@ describe("RegistrationIdentityChange", () => {
     await act(() =>
       render(
         <RegistrationIdentityChange data={readResponse({ identityId: identity.id })} onChanged={changed}>
-          {(edit) => (
-            <>
-              {edit("Change representation")}
-              {edit("Edit job title")}
-            </>
-          )}
+          {(edit) => edit("Change representation")}
         </RegistrationIdentityChange>,
         container,
       ),
     );
-    await click(container.querySelector('button[aria-label="Edit job title"]'));
+    await click(container.querySelector('button[aria-label="Change representation"]'));
     expect(document.querySelectorAll("dialog[open]")).toHaveLength(1);
     expect(fetch.mock.calls.filter(([url]) => url === "/api/v1/auth/session")).toHaveLength(1);
     expect(fetch.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);

@@ -115,8 +115,6 @@ export interface DataTableColumn<Row> {
  */
 export interface DataTableRowAction {
   label: string;
-  /** Explicit action hint; otherwise hovering reveals the full cell value. */
-  title?: string;
   /** A navigation. Preferred: it is a link, so it can be opened in a new tab. */
   href?: string;
   /** A selection that stays on the page. Used when there is no URL for it. */
@@ -207,13 +205,7 @@ function RowActionControl({ action, primary }: { action: DataTableRowAction; pri
   };
   if (action.href) {
     return (
-      <a
-        {...target}
-        href={action.href}
-        aria-label={action.label}
-        title={action.title}
-        onMouseMove={action.title ? undefined : updateRowActionTooltip}
-      >
+      <a {...target} href={action.href} aria-label={action.label} onMouseMove={updateRowActionTooltip}>
         <span class="pk-table__sr">{action.label}</span>
       </a>
     );
@@ -224,8 +216,7 @@ function RowActionControl({ action, primary }: { action: DataTableRowAction; pri
       {...target}
       aria-label={action.label}
       onClick={action.onSelect}
-      title={action.title}
-      onMouseMove={action.title ? undefined : updateRowActionTooltip}
+      onMouseMove={updateRowActionTooltip}
     >
       <span class="pk-table__sr">{action.label}</span>
     </button>

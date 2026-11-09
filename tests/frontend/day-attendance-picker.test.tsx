@@ -62,26 +62,12 @@ describe("day attendance matrix", () => {
     expect(picker.querySelector('[aria-label="In person — Day one: Selected"]')).not.toBeNull();
     expect(picker.querySelector('[aria-label="In person — Day one: Waitlisted"]')).not.toBeNull();
     expect(picker.textContent).toContain("You are on the waitlist");
+    expect(picker.textContent).not.toContain("Full · joins waitlist");
     expect(await axeViolations(picker)).toEqual([]);
   });
-  it("opens the existing editor from a read-only row without selecting or saving a choice", async () => {
-    const onEdit = vi.fn();
-    const onChange = vi.fn();
-    const picker = mount(
-      <DayAttendancePicker
-        readOnly
-        onEdit={onEdit}
-        onChange={onChange}
-        days={[day()]}
-        value={{ "2027-09-01": "in_person" }}
-      />,
-    );
-    const target = picker.querySelector<HTMLButtonElement>("tbody tr:nth-child(2) .pk-table__row-link")!;
-    expect(target.title).toBe("Change attendance");
-    await click(target);
-    expect(onEdit).toHaveBeenCalledTimes(1);
-    expect(onChange).not.toHaveBeenCalled();
-    expect(picker.querySelectorAll('input[type="radio"]')).toHaveLength(0);
+  it("keeps the read-only matrix free of repeated editor controls", async () => {
+    const picker = mount(<DayAttendancePicker readOnly days={[day()]} value={{ "2027-09-01": "in_person" }} />);
+    expect(picker.querySelectorAll("button, input")).toHaveLength(0);
     expect(picker.querySelector('[aria-label="In person — Day one: Selected"]')).not.toBeNull();
     expect(await axeViolations(picker)).toEqual([]);
   });
