@@ -58,7 +58,7 @@ export function Button({
       class={classes}
       disabled={Boolean(disabled)}
       aria-disabled={loading ? "true" : undefined}
-      aria-busy={loading ? "true" : undefined}
+      aria-busy={loading ? "true" : rest["aria-busy"]}
       onClick={inert ? undefined : rest.onClick}
     >
       {loading && <span class="pk-btn__spinner" aria-hidden="true" />}

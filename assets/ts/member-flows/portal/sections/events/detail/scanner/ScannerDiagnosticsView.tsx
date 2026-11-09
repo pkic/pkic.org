@@ -38,7 +38,12 @@ export function ScannerDiagnosticsView({
       session={{ ...context, scanner, sync, message: onMessage, capturePause: onCapturePause }}
       sound={<ScannerSoundPreferences preferences={preferences} sound={sound} />}
       syncStatus={
-        <ScannerSyncStatus {...status} sync={() => void sync()} refreshEligibility={refreshEligibility}>
+        <ScannerSyncStatus
+          {...status}
+          preparing={preparation.preparing}
+          sync={() => void sync()}
+          refreshEligibility={refreshEligibility}
+        >
           {scanner.error && <Alert tone="danger">{scanner.error}</Alert>}
           <ScannerPreparationStatus {...preparation} />
           <p role="status">{decoderStatus}</p>

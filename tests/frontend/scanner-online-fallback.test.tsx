@@ -1,3 +1,6 @@
+import { render } from "preact";
+import { useRef } from "preact/hooks";
+import { useScannerFeedback } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useScannerFeedback";
 import { badgeCode, mocks, host, mount, submit } from "./event-scanner-fixture";
 import { act } from "preact/test-utils";
 import { describe, expect, it, vi } from "vitest";
@@ -44,6 +47,73 @@ async function scan(continuous: boolean) {
 }
 
 describe("Online verification after a local badge miss", () => {
+  it("keeps an offline collector's complete-roster miss without attempting online verification", async () => {
+    let feedback!: ReturnType<typeof useScannerFeedback>;
+    const operationId = crypto.randomUUID();
+    const verify = vi.fn(async () => false);
+    function Collector() {
+      feedback = useScannerFeedback({
+        enabled: false,
+        durationMs: 10000,
+        collector: true,
+        currentOperation: useRef(operationId),
+        committedOperation: useRef(null),
+        authorityPaused: useRef(false),
+      });
+      return <output>{feedback.result?.outcome}</output>;
+    }
+    const container = document.createElement("div");
+    try {
+      await act(async () => render(<Collector />, container));
+      const scan = eventScanRequestSchema.parse({
+        operationId,
+        operatorUserId: "11111111-1111-4111-8111-111111111111",
+        deviceId: "22222222-2222-4222-8222-222222222222",
+        badgeId: badgeCode,
+        scannedValue: badgeCode,
+        scannedValueTruncated: false,
+        occurrenceId: null,
+        action: "attendance",
+        observedAt: new Date().toISOString(),
+      });
+      await act(async () => {
+        await feedback.presentSavedEligibility(
+          {
+            scan,
+            local: { outcome: "unknown", reason: "unknown_credential", message: "Unknown badge in saved badge data" },
+          },
+          verify,
+        );
+      });
+      expect(feedback.result?.outcome).toBe("unknown");
+      expect(feedback.captureStatus).toBeUndefined();
+      expect(verify).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => render(null, container));
+    }
+  });
+  it("does not re-arm a reset cooldown when verification is canceled", async () => {
+    localStorage.setItem("pkic-scanner-preferences", JSON.stringify({ feedbackPause: 10000, sound: false }));
+    await mount(true, ["attendance"]);
+    captureMissingBadge();
+    const fetcher = vi.fn(async () => new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", fetcher);
+    await scan(true);
+    await vi.waitFor(() => expect(host.textContent).toContain("Checking badge online"));
+    await act(async () =>
+      Array.from(host.querySelectorAll("button"))
+        .find((button) => button.textContent?.trim() === "Close scanner")!
+        .click(),
+    );
+    await act(async () =>
+      Array.from(host.querySelectorAll("button"))
+        .find((button) => button.textContent?.trim() === "Start scanning")!
+        .click(),
+    );
+    await act(async () => mocks.hardwareScan!("ZYXWVUTSRQPNMLKJ"));
+    await vi.waitFor(() => expect(mocks.persist).toHaveBeenCalledTimes(2));
+    localStorage.removeItem("pkic-scanner-preferences");
+  });
   it("keeps a previous feedback timer from clearing an in-flight badge or locking later scans", async () => {
     await mount(true, ["attendance"]);
     let release!: () => void;

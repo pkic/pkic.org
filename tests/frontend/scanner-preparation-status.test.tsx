@@ -5,6 +5,19 @@ import { ScannerPreparationStatus } from "../../assets/ts/member-flows/portal/se
 
 const snapshot = { serverNow: "2026-12-01T09:00:00.000Z", expiresAt: "2026-12-01T09:15:00.000Z" };
 describe("scanner snapshot status metadata", () => {
+  it("does not claim that memory-only badge data was saved", () => {
+    const html = render(
+      <ScannerPreparationStatus
+        action="attendance"
+        preparing={false}
+        ready
+        sessionOnly
+        error="Current badge data could not be saved"
+      />,
+    );
+    expect(html).toContain("could not be saved");
+    expect(html).not.toContain("Using saved badge data");
+  });
   it("shows the two server snapshot times through shared date formatting without claiming upload synchronization", () => {
     const html = render(
       <ScannerPreparationStatus action="attendance" preparing={false} ready error="" snapshot={snapshot} />,
@@ -48,7 +61,8 @@ describe("scanner snapshot status metadata", () => {
         snapshot={snapshot}
       />,
     );
-    expect(html).toContain("Using saved badge data");
+    expect(html).toContain("Saved badge data has expired");
+    expect(html).not.toContain("original expiry still applies");
     expect(html).toContain("Refresh unavailable");
     expect(html).toContain('role="alert"');
     expect(html).toContain(formatDateTime(snapshot.serverNow));

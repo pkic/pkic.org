@@ -20,6 +20,7 @@ export function ScannerSyncStatus({
   sync,
   refreshEligibility,
   syncing = false,
+  preparing = false,
   children,
 }: {
   pending: number;
@@ -30,6 +31,7 @@ export function ScannerSyncStatus({
   sync?: () => void;
   refreshEligibility?: () => Promise<void>;
   syncing?: boolean;
+  preparing?: boolean;
   children?: ComponentChildren;
 }) {
   const context = collector ?? offline.context;
@@ -41,12 +43,14 @@ export function ScannerSyncStatus({
           <Button
             type="button"
             variant="secondary"
+            aria-label="Sync now"
+            aria-busy={syncing || preparing}
             onClick={() => {
               void refreshEligibility?.();
               if (!syncing) sync();
             }}
           >
-            Sync now
+            {syncing || preparing ? "Sync now · in progress…" : "Sync now"}
           </Button>
         )}
       </PanelHeader>
@@ -95,6 +99,7 @@ export function ScannerPreparationStatus({
   ready,
   error,
   stale = false,
+  sessionOnly = false,
   snapshot,
   lastSync,
   checkedBadges = null,
@@ -105,6 +110,7 @@ export function ScannerPreparationStatus({
   ready: boolean;
   error: string;
   stale?: boolean;
+  sessionOnly?: boolean;
   lastSync?: string | null;
   checkedBadges?: number | null;
   snapshot?: Pick<EligibilityManifest, "serverNow" | "expiresAt"> | null;
@@ -114,7 +120,13 @@ export function ScannerPreparationStatus({
       {error && !preparing ? (
         <Alert tone="warn">
           <p>{error}</p>
-          {ready && <p>Using saved badge data; its original expiry still applies.</p>}
+          {ready && !sessionOnly && (
+            <p>
+              {stale
+                ? "Saved badge data has expired. Badge checks need online verification until a refresh succeeds."
+                : "Using saved badge data; its original expiry still applies."}
+            </p>
+          )}
         </Alert>
       ) : (
         <p role="status">

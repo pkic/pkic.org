@@ -10,7 +10,8 @@ import { ScannerCodePreparation, useScannerCodePreparationRetry } from "./scanne
 import { prepareEligibilityManifest, type EligibilityManifest } from "./eligibility-manifest";
 import {
   SCANNER_PREPARATION_CLOSED_MESSAGE,
-  eligibilityPreparationClosed,
+  SCANNER_PREPARATION_CLOSING_MESSAGE,
+  eligibilityPreparationStopped,
   eligibilityRefreshError,
   eligibilityRefreshRefused,
 } from "./eligibility-refresh-error";
@@ -24,7 +25,7 @@ export interface EligibilityManifestOptions {
   roomId?: string | null;
   epoch: ScannerEpoch | null;
   collector?: boolean;
-  onPreparationClosed?: (message: string) => void;
+  onPreparationClosed?: (message: string, code: string) => void;
 }
 
 /** Prepares and refreshes scoped IDs-only data outside the camera path. */
@@ -60,9 +61,11 @@ export function useEligibilityManifest({
     setManifestPreparing(false);
     setManifestError("");
     setManifestProgress(null);
-    if (epoch?.state === "closed") {
+    if (epoch?.state === "closed" || epoch?.state === "closing") {
       closedEpochId.current = epoch.epochId;
-      setClosedMessage(SCANNER_PREPARATION_CLOSED_MESSAGE);
+      setClosedMessage(
+        epoch.state === "closing" ? SCANNER_PREPARATION_CLOSING_MESSAGE : SCANNER_PREPARATION_CLOSED_MESSAGE,
+      );
     }
     if (!epoch?.epochId || epoch.state !== "open") return;
     if (
@@ -97,18 +100,18 @@ export function useEligibilityManifest({
         if (controller.signal.aborted) return;
         eligibilityManifest.current = manifest;
         setManifestReady(true);
-        setManifestError(manifest.refreshError ?? "");
+        setManifestError(manifest.storageError ?? manifest.refreshError ?? "");
       } catch (error) {
         if (controller.signal.aborted) return;
         if (eligibilityRefreshRefused(error)) {
           eligibilityManifest.current = null;
-          if (eligibilityPreparationClosed(error)) {
+          if (error instanceof Error && eligibilityPreparationStopped(error.message)) {
             closedEpochId.current = enrollment.epochId;
             const message = eligibilityRefreshError(error);
             setClosedMessage(message);
             setManifestError("");
             setManifestReady(false);
-            onClosed?.(message);
+            onClosed?.(message, error.message);
             return;
           }
           onRefusal();

@@ -109,7 +109,11 @@ export function EventScannerCapture({
     epoch: scannerDevice.epoch,
     session: portalSession.value,
     onContextChange: clearCurrentScan,
-    onPreparationClosed: () => autoStart.cancel(),
+    onPreparationClosed: (code) => {
+      autoStart.cancel();
+      if (code === "SCANNER_PREPARATION_CLOSED" || code === "SCANNER_PREPARATION_CLOSING")
+        void scannerDevice.reconcile();
+    },
     onPermissionChanged: () => {
       refusePreparation();
       authorityPaused.current = true;
@@ -236,12 +240,16 @@ export function EventScannerCapture({
   const persistCapture = (scan: EventScanRequest) =>
     persistScannerCapture(scan, slug, preparation.offlineAdmission.persist, auditFailure);
   function captureAllowed() {
-    const blocked = Boolean(closedMessage) || authorityPaused.current;
-    if (blocked) setMessage(closedMessage || "Sign in again to upload pending scans.");
-    return scannerDevice.ready && !blocked;
+    return scannerDevice.ready && !closedMessage && !authorityPaused.current;
+  }
+  /** User gestures report refusals; passive decoder checks stay silent. */
+  function requestCapture() {
+    if (captureAllowed()) return true;
+    if (closedMessage || authorityPaused.current) setMessage(closedMessage || "Sign in again to upload pending scans.");
+    return false;
   }
   async function capture() {
-    if (!captureAllowed() || manualCapturePending.current) return;
+    if (!requestCapture() || manualCapturePending.current) return;
     const checked = form.submit();
     if (!checked.data) {
       if (
@@ -264,10 +272,7 @@ export function EventScannerCapture({
       const saved = await persistCapture(checked.data);
       await scanSaved();
       resetCaptureFields();
-      if (!(await presentSavedEligibility(saved, verifyQueuedScan))) {
-        if (fastMode) cooldown.feedback();
-        return;
-      }
+      if (!(await presentSavedEligibility(saved, verifyQueuedScan))) return;
       if (fastMode && manualOpen) {
         cooldown.feedback();
         void camera();
@@ -334,25 +339,22 @@ export function EventScannerCapture({
     try {
       const saved = await persistCapture(parsed.data);
       await scanSaved();
-      if (!(await presentSavedEligibility(saved, verifyQueuedScan))) {
-        if (fastMode) cooldown.feedback();
-        return;
-      }
+      if (!(await presentSavedEligibility(saved, verifyQueuedScan))) return;
       resetCaptureFields();
       if (fastMode) cooldown.feedback();
     } catch (error) {
       setBadge(raw);
-      if (fastMode) cooldown.feedback();
+      if (fastMode && receiptMatchesOperation(operation, lastOperation.current)) cooldown.feedback();
       if (receiptMatchesOperation(operation, lastOperation.current))
         failure(error instanceof Error ? error.message : "Unable to save scan. Retry.");
     }
   }
   async function camera() {
-    if (!captureAllowed() || badgeCamera.starting) return;
+    if (!requestCapture() || badgeCamera.starting) return;
     await badgeCamera.start();
   }
   function startScanning() {
-    if (!captureAllowed() || !allowedActions.includes(action)) return;
+    if (!requestCapture() || !allowedActions.includes(action)) return;
     sound.unlock();
     manualPaused.current = false;
     enterPresentation();

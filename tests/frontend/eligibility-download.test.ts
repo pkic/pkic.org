@@ -64,6 +64,57 @@ afterEach(() => {
 });
 
 describe("Conditional eligibility page downloads", () => {
+  it("rejects an unchanged-page claim when the returned scope differs", async () => {
+    const snapshot = fixture();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const query = parseQuery(url);
+        return Response.json({ ...(await (await page(snapshot, {}, query.knownDigest)).json()), publishedRevision: 2 });
+      }),
+    );
+    await expect(download(snapshot)).rejects.toThrow("not verified");
+  });
+  it("stops fingerprinting saved pages when the returned scope differs", async () => {
+    const snapshot = fixture();
+    snapshot.entries = Array.from({ length: 251 }, (_, i) => ({
+      ...snapshot.entries[0]!,
+      badgeId: `10000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+    }));
+    const fetcher = vi.fn(async (url: string) => {
+      const query = parseQuery(url);
+      if (!query.afterBadgeId) {
+        expect(query.knownDigest).toBeDefined();
+        return page(snapshot, {
+          publishedRevision: 2,
+          entries: snapshot.entries.slice(0, 250),
+          nextBadgeId: snapshot.entries[249]!.badgeId,
+        });
+      }
+      expect(query.knownDigest).toBeUndefined();
+      return page(snapshot, { publishedRevision: 2, entries: snapshot.entries.slice(250) });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    expect((await download(snapshot)).entries).toEqual(snapshot.entries);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("reports repeated publication conflicts as retryable after the single restart", async () => {
+    const snapshot = fixture();
+    const entries = Array.from({ length: 250 }, (_, i) => ({
+      ...snapshot.entries[0]!,
+      badgeId: `10000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+    }));
+    const fetcher = vi.fn(async (url: string) => {
+      const query = parseQuery(url);
+      return query.afterBadgeId
+        ? Response.json({ error: { code: "OFFLINE_MANIFEST_CHANGED", message: "Changed" } }, { status: 409 })
+        : page(snapshot, { entries, nextBadgeId: entries.at(-1)!.badgeId });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const error = await download(snapshot).catch((error: unknown) => error);
+    expect(eligibilityRefreshError(error)).toMatch(/changed during refresh.*try again/i);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
   it("replaces a pre-upgrade roster with a complete download before reusing digests", async () => {
     const snapshot = fixture();
     const { scopeDate: _, snapshotId: __, ...legacy } = snapshot;
@@ -176,7 +227,7 @@ describe("Conditional eligibility page downloads", () => {
       const snapshot = fixture();
       const fetcher = vi.fn(async () => Response.json({ error: { code, message: "Cannot prepare" } }, { status: 409 }));
       vi.stubGlobal("fetch", fetcher);
-      await expect(download(snapshot)).rejects.toThrow(code === "SCANNER_PREPARATION_CLOSED" ? code : "HTTP 409");
+      await expect(download(snapshot)).rejects.toThrow(code === "OTHER_CONFLICT" ? "HTTP 409" : code);
       expect(fetcher).toHaveBeenCalledOnce();
     },
   );

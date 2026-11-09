@@ -34,6 +34,19 @@ afterEach(() => {
   }
 });
 
+it("preserves an explicitly busy but still actionable button", () => {
+  const clicked = vi.fn();
+  const container = mount(
+    <Button aria-busy="true" onClick={clicked}>
+      Refresh badge data
+    </Button>,
+  );
+  const button = container.querySelector("button")!;
+  expect(button.getAttribute("aria-busy")).toBe("true");
+  button.click();
+  expect(clicked).toHaveBeenCalledOnce();
+});
+
 describe("Button", () => {
   it("defaults to a non-submitting button so it cannot post a form by accident", () => {
     expect(buttonIn(mount(<Button>Save</Button>)).type).toBe("button");

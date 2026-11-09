@@ -39,7 +39,7 @@ describe("one complete D1 call for offline eligibility", () => {
       .run();
     const otherToken = await createAdminSession(env.DB, other, crypto.randomUUID());
     const notOwner = await manifest(otherToken);
-    expect(notOwner.status).toBe(409);
+    expect(notOwner.status).toBe(403);
     expect(await notOwner.text()).not.toContain(evidence.credentialHash);
     await env.DB.prepare("UPDATE permission_grants SET revoked_at=? WHERE id=?").bind(nowIso(), grantId).run();
     expect((await manifest(otherToken)).status).toBe(403);
@@ -61,6 +61,22 @@ describe("one complete D1 call for offline eligibility", () => {
     expect(await revoked.text()).not.toContain(evidence.credentialHash);
   });
 
+  it.each([false, true])(
+    "reports actual session closure independently from enrollment and ownership (closed: %s)",
+    async (closed) => {
+      await env.DB.prepare(
+        "UPDATE event_scanner_device_sessions SET high_water_sequence=0,closing_operation_id=?,closing_declared_at=?,closed_at=? WHERE id=?",
+      )
+        .bind(crypto.randomUUID(), nowIso(), closed ? nowIso() : null, fixture.epochId)
+        .run();
+      const response = await manifest();
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({
+        error: { code: closed ? "SCANNER_PREPARATION_CLOSED" : "SCANNER_PREPARATION_CLOSING" },
+      });
+    },
+  );
+
   it.each(["capture_closed_at", "active_run_id"] as const)(
     "refuses evidence while retention fences %s",
     async (column) => {
@@ -71,7 +87,7 @@ describe("one complete D1 call for offline eligibility", () => {
         .run();
       const response = await manifest();
       expect(response.status).toBe(409);
-      expect(await response.json()).toMatchObject({ error: { code: "SCANNER_PREPARATION_CLOSED" } });
+      expect(await response.json()).toMatchObject({ error: { code: "SCANNER_CAPTURE_CLOSED" } });
     },
   );
 

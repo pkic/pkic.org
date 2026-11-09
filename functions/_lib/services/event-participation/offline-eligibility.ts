@@ -130,15 +130,13 @@ export function prepareOfflineEligibility(db: DatabaseLike, event: EventReadSele
       if (query.scopeDate !== undefined && query.scopeDate !== scopeDate)
         throw new AppError(409, "OFFLINE_MANIFEST_CHANGED", "The eligibility date changed. Refresh the manifest.");
       const rows = batchRows<ManifestEntry>(results[2]);
-      const page = offlineEligibilityResponseSchema.parse({
+      const page = offlineEligibilityResponseSchema.omit({ pageDigest: true, unchanged: true }).parse({
         eventId: state.id,
         operatorUserId,
         occurrenceId: query.occurrenceId ?? null,
         roomId,
         revision: state.revision,
         scopeDate,
-        pageDigest: "0".repeat(64),
-        unchanged: false,
         publishedRevision: state.published_revision ?? null,
         ...(nativeEventContext ? { nativeEventContext } : {}),
         serverNow,
@@ -172,7 +170,12 @@ export function prepareOfflineEligibility(db: DatabaseLike, event: EventReadSele
       });
       const pageDigest = await eligibilityPageDigest(page);
       const unchanged = pageDigest === query.knownDigest;
-      return { ...page, pageDigest, unchanged, entries: unchanged ? [] : page.entries };
+      return offlineEligibilityResponseSchema.parse({
+        ...page,
+        pageDigest,
+        unchanged,
+        entries: unchanged ? [] : page.entries,
+      });
     },
   };
 }

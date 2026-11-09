@@ -247,6 +247,9 @@ describe("scanner device enrollment and manual capture boundary", () => {
       "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
     );
     expect(consent.checked).toBe(false);
+    const guidance = host.textContent;
+    await act(async () => mocks.hardwareScan!(badgeCode));
+    expect(host.textContent).toBe(guidance);
     await act(async () => dialog.querySelector<HTMLButtonElement>(".pk-dialog__foot .pk-btn--primary")!.click());
     expect(mocks.persist).not.toHaveBeenCalled();
     expect(host.textContent).toContain("Sign in again to upload pending scans.");

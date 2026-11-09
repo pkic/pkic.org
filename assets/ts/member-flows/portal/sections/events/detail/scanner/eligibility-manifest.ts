@@ -1,3 +1,4 @@
+import { sha256Hex } from "../../../../../../../shared/sha256";
 import { readActiveUserSession } from "../../../../../../shared/pending-user-logout";
 import type { NativeEventCaptureContext } from "../../../../../../../shared/schemas/event-attendance-capture";
 import { scannerUploadSuspended } from "../../../../../../shared/pending-user-logout";
@@ -12,6 +13,7 @@ import type {
 export type LocalEligibility = Pick<EventScanResponse, "outcome" | "reason"> & { message: string; userId?: string };
 export interface EligibilityManifest {
   refreshError?: string;
+  storageError?: string;
   enrollment?: Pick<CachedManifest, "eventId" | "deviceId" | "epochId" | "writtenAt">;
   operatorUserId: string;
   occurrenceId: string | null;
@@ -129,19 +131,18 @@ export function buildEligibilityManifest(raw: unknown): EligibilityManifest {
     async lookup(credential, action = "check") {
       const startedAt = Date.now();
       const currentBeforeHash = observeTime(startedAt);
-      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(credential));
+      const hash = await sha256Hex(credential);
       const checkedAt = Date.now();
       const clockConsistent = checkedAt >= startedAt;
       const currentAfterHash = observeTime(checkedAt);
       const current = currentBeforeHash && clockConsistent && currentAfterHash;
-      const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
       const entry = entries.get(hash);
       const badgeExpiresAt = entry?.expiresAt ? Date.parse(entry.expiresAt) : null;
       // Only the server snapshot can establish that a credential was already expired.
       if (badgeExpiresAt !== null && badgeExpiresAt <= Date.parse(snapshot.serverNow))
         return { outcome: "denied", reason: "expired_badge", message: "Badge expired at the last server check." };
       if (entry?.revoked)
-        return { outcome: "denied", reason: "revoked_badge", message: "Badge revoked in the saved snapshot." };
+        return { outcome: "denied", reason: "revoked_badge", message: "Badge revoked in the saved badge data." };
       if (!current)
         return {
           outcome: "unverified",
@@ -149,12 +150,12 @@ export function buildEligibilityManifest(raw: unknown): EligibilityManifest {
           ...(entry ? { userId: entry.userId } : {}),
           message:
             checkedAt < snapshot.writtenAt
-              ? "Device clock precedes the saved snapshot. Verification pending."
+              ? "Device clock precedes the saved badge data. Verification pending."
               : clockUncertain
-                ? "Device clock changed since the saved snapshot. Verification pending."
+                ? "Device clock changed since the saved badge data. Verification pending."
                 : entry
-                  ? "Known badge in an expired snapshot. Current registration and later revocations require online verification."
-                  : "Eligibility snapshot expired. This badge requires online verification.",
+                  ? "Known badge in expired badge data. Current registration and later revocations require online verification."
+                  : "Badge data expired. This badge requires online verification.",
         };
       if (
         entry &&
@@ -168,12 +169,16 @@ export function buildEligibilityManifest(raw: unknown): EligibilityManifest {
           message: "Badge expiry requires online verification. This device cannot confirm later changes.",
         };
       if (!entry && snapshot.complete)
-        return { outcome: "unknown", reason: "unknown_credential", message: "Unknown badge for this event snapshot." };
+        return {
+          outcome: "unknown",
+          reason: "unknown_credential",
+          message: "Unknown badge for this event in saved badge data.",
+        };
       if (!entry)
         return {
           outcome: "unverified",
           reason: "verification_required",
-          message: "Badge is outside this eligibility snapshot. Verify online or refresh the snapshot.",
+          message: "Badge is outside the saved badge data. Verify online or refresh badge data.",
         };
       if (action === "checkout")
         return {
@@ -265,14 +270,21 @@ export async function prepareEligibilityManifest(
     );
     if (await scannerUploadSuspended(operatorUserId, sessionId)) throw new Error("SCANNER_SIGNED_OUT");
     if (signal?.aborted) throw new DOMException("Eligibility preparation canceled", "AbortError");
-    const snapshot = cachedManifestSchema.parse(
-      await cached(key, downloaded, saved.success ? saved.data.snapshotId : undefined),
-    );
+    let snapshot = downloaded;
+    let storageError: string | undefined;
+    try {
+      snapshot = cachedManifestSchema.parse(
+        await cached(key, downloaded, saved.success ? saved.data.snapshotId : undefined),
+      );
+    } catch {
+      storageError =
+        "Current badge data is ready for this session but could not be saved. Free device storage and refresh before going offline.";
+    }
     if (await scannerUploadSuspended(operatorUserId, sessionId)) {
       await clearOperatorEligibilityManifests(operatorUserId);
       throw new Error("SCANNER_SIGNED_OUT");
     }
-    return buildEligibilityManifest(snapshot);
+    return { ...buildEligibilityManifest(snapshot), ...(storageError ? { storageError } : {}) };
   } catch (error) {
     if (signal?.aborted || eligibilityRefreshRefused(error)) throw error;
     if (await scannerUploadSuspended(operatorUserId, sessionId))

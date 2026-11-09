@@ -1,3 +1,4 @@
+import { EligibilityRefreshFailure } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-refresh-error";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
@@ -60,6 +61,7 @@ function Scanner({
       action="attendance"
       sync={upload}
       syncing={syncing}
+      preparing={state.manifestPreparing}
       refreshEligibility={state.refresh}
       offline={{ context: null, preparing: false, error: "", retry: () => {} }}
     >
@@ -146,7 +148,14 @@ it.each([
   ["Eligibility pagination repeated", /contact support/i],
   ["Eligibility page digest changed", /contact support/i],
 ] as const)("explains the recovery action for %s", async (message, action) => {
-  mocks.prepare.mockRejectedValueOnce(new Error(message));
+  mocks.prepare.mockRejectedValueOnce(
+    message.startsWith("Eligibility ")
+      ? new EligibilityRefreshFailure(
+          message.includes("revision") || message.includes("expired") ? "changed" : "invalid",
+          message,
+        )
+      : new Error(message),
+  );
   await act(async () => render(<Scanner />, host));
   await vi.waitFor(() => expect(host.textContent).toMatch(action));
   expect(host.textContent).not.toMatch(/check your connection/i);
@@ -163,6 +172,8 @@ it("keeps uploads available during badge preparation without overlapping roster 
   );
   await act(async () => syncButton().click());
   expect(current.manifestPreparing).toBe(true);
+  expect(syncButton().getAttribute("aria-busy")).toBe("true");
+  expect(syncButton().textContent).toMatch(/in progress/i);
   expect(syncButton().disabled).toBe(false);
   await act(async () => syncButton().click());
   expect(upload).toHaveBeenCalledTimes(2);
@@ -187,7 +198,14 @@ it.each([false, true])("separates closed-session handling from sign-in refusals 
 it.each(["SCANNER_SIGNED_OUT", "SCANNER_PERMISSION_CHANGED"])(
   "preserves collector recovery guidance for %s",
   async (message) => {
-    mocks.prepare.mockRejectedValueOnce(new Error(message));
+    mocks.prepare.mockRejectedValueOnce(
+      message.startsWith("Eligibility ")
+        ? new EligibilityRefreshFailure(
+            message.includes("revision") || message.includes("expired") ? "changed" : "invalid",
+            message,
+          )
+        : new Error(message),
+    );
     await act(async () => render(<Scanner collector />, host));
     expect(current.manifestReady).toBe(false);
     expect(permissionChanged).toHaveBeenCalledOnce();
@@ -201,7 +219,14 @@ it.each(["SCANNER_SIGNED_OUT", "SCANNER_PERMISSION_CHANGED"])(
 it.each(["Eligibility revision changed", "Eligibility snapshot expired during preparation"])(
   "offers retry for transient snapshot failure: %s",
   async (message) => {
-    mocks.prepare.mockRejectedValueOnce(new Error(message));
+    mocks.prepare.mockRejectedValueOnce(
+      message.startsWith("Eligibility ")
+        ? new EligibilityRefreshFailure(
+            message.includes("revision") || message.includes("expired") ? "changed" : "invalid",
+            message,
+          )
+        : new Error(message),
+    );
     await act(async () => render(<Scanner />, host));
     await vi.waitFor(() => expect(current.manifestError).toMatch(/try again/i));
     expect(current.manifestError).not.toMatch(/support/i);
@@ -266,4 +291,10 @@ it("explains how to recover when reopening an already closed epoch", async () =>
   expect(mocks.prepare).not.toHaveBeenCalled();
   expect(current.closedMessage).toMatch(/open diagnostics and start the next scanner session/i);
   expect(current.manifestReady).toBe(false);
+});
+
+it("offers closing recovery for a frozen local epoch", async () => {
+  await act(async () => render(<Scanner scannerEpoch={{ ...epoch, state: "closing" }} />, host));
+  expect(current.closedMessage).toMatch(/retry closing/i);
+  expect(mocks.prepare).not.toHaveBeenCalled();
 });

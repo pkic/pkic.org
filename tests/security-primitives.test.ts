@@ -1,3 +1,4 @@
+import { sha256Hex } from "../assets/shared/sha256";
 import { z } from "zod";
 import {
   encodeCapabilityPayload,
@@ -19,6 +20,15 @@ import { signJwt, verifyJwt } from "../functions/_lib/utils/jwt";
 
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const WEBP_BYTES = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+
+describe("shared SHA-256", () => {
+  it("matches standard vectors for strings and bounded binary views", async () => {
+    await expect(sha256Hex("")).resolves.toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    const expected = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+    await expect(sha256Hex("abc")).resolves.toBe(expected);
+    await expect(sha256Hex(new Uint8Array([0, 97, 98, 99, 0]).subarray(1, 4))).resolves.toBe(expected);
+  });
+});
 
 describe("shared cookie parsing", () => {
   it("decodes valid values while ignoring a malformed pair instead of throwing", () => {

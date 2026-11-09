@@ -66,6 +66,7 @@ vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useS
     return {
       deviceId: "22222222-2222-4222-8222-222222222222",
       ready: mocks.ready,
+      reconcile: vi.fn(async () => {}),
       error: mocks.error,
       epoch: mocks.state === "preparing" ? null : { state: mocks.state, epochId: mocks.epochId },
       setEpoch: vi.fn((epoch) => {
@@ -95,7 +96,7 @@ vi.mock(
               mocks.manifestPreparing = false;
               mocks.closedMessage = "This scanner session has closed.";
               refresh((value) => value + 1);
-              onClosed("This scanner session has closed.");
+              onClosed("This scanner session has closed.", "SCANNER_PREPARATION_CLOSED");
             }
           : null;
       return {

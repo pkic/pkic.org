@@ -81,6 +81,20 @@ afterEach(() => {
 });
 
 describe("scanner-only offline preparation", () => {
+  it("refuses offline preparation when current badge data exists only in memory", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    const prepared = await saveScannerOfflineContext({
+      prepareCode: mocks.warm,
+      slug,
+      session,
+      epoch: epoch(),
+      manifest: { ...manifest(), storageError: "Device storage failed" },
+      action: "attendance",
+    });
+    expect(prepared).toBeNull();
+    expect(mocks.warm).not.toHaveBeenCalled();
+    expect(mocks.rows[0]).not.toHaveProperty("collectorContext");
+  });
   it("prepares through the local day independently of portal idle expiry", async () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
     mocks.warm.mockResolvedValue(true);

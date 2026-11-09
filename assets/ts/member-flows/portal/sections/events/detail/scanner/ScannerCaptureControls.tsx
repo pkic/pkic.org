@@ -28,6 +28,7 @@ export function ScannerDiagnostics({
   sound?: ComponentChildren;
   syncStatus?: ComponentChildren;
 }) {
+  const { sessionId, ...sessionControls } = session;
   return (
     <section aria-label="Recovery and diagnostics" class="pk-stack">
       {syncStatus}
@@ -51,9 +52,9 @@ export function ScannerDiagnostics({
       <ScannerRecovery
         slug={session.slug}
         operatorUserId={session.operatorUserId}
-        sessionId={session.sessionId}
+        sessionId={sessionId}
         sponsorId={session.sponsorId}
-        sessionControls={<ScannerSessionControls {...session} />}
+        sessionControls={<ScannerSessionControls {...sessionControls} />}
       />
     </section>
   );

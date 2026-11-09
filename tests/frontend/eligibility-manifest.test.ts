@@ -124,6 +124,32 @@ function stubManifestStorage(saved: Map<string, unknown>) {
   return open;
 }
 describe("local scoped eligibility manifest", () => {
+  it.each([false, true])("keeps fresh badge data in memory after a failed write (saved: %s)", async (withSaved) => {
+    const snapshot = { ...(await fixture()), complete: true };
+    const key = JSON.stringify([snapshot.operatorUserId, "synthetic", null, null, snapshot.epochId, snapshot.deviceId]);
+    const saved = new Map<string, unknown>(withSaved ? [[key, { ...snapshot, validUntil: 0 }]] : []);
+    stubManifestStorage(saved);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        // Reads worked, but persistence becomes unavailable after the download.
+        vi.stubGlobal("indexedDB", {
+          open: () => {
+            throw new DOMException("Quota exceeded", "QuotaExceededError");
+          },
+        });
+        const { complete: _, writtenAt: __, validUntil: ___, snapshotId: ____, ...metadata } = snapshot;
+        const page = { ...metadata, nextBadgeId: null };
+        return Response.json({ ...page, unchanged: false, pageDigest: await eligibilityPageDigest(page) });
+      }),
+    );
+    const manifest = await prepareEligibilityManifest("synthetic", snapshot.operatorUserId, null, snapshot);
+    expect(await manifest.lookup(badge, "attendance")).toMatchObject({ outcome: "eligible" });
+    expect(manifest.validUntil).toBeGreaterThan(Date.now());
+    expect(manifest.storageError).toMatch(/could not be saved/);
+    expect(manifest.refreshError).toBeUndefined();
+    expect(saved.size).toBe(0);
+  });
   it("preserves an unexpired pre-upgrade roster for offline verification", async () => {
     const { scopeDate: _, snapshotId: __, ...legacy } = { ...(await fixture()), complete: true };
     const key = JSON.stringify([legacy.operatorUserId, "synthetic", null, null, legacy.epochId, legacy.deviceId]);
@@ -210,7 +236,7 @@ describe("local scoped eligibility manifest", () => {
     ).toMatchObject({
       outcome: "denied",
       reason: "revoked_badge",
-      message: expect.stringContaining("saved snapshot"),
+      message: expect.stringContaining("saved badge data"),
     });
     expect(
       await buildEligibilityManifest({
@@ -300,7 +326,7 @@ describe("local scoped eligibility manifest", () => {
       outcome: "unverified",
       reason: "verification_required",
       userId: snapshot.entries[0].userId,
-      message: expect.stringContaining("expired snapshot"),
+      message: expect.stringContaining("expired badge data"),
     });
     expect(await buildEligibilityManifest({ ...expired, complete: true }).lookup("23456789ABCDEFGH")).toMatchObject({
       outcome: "unverified",

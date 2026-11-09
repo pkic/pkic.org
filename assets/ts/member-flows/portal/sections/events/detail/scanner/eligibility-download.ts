@@ -1,9 +1,10 @@
+import { EligibilityRefreshFailure, eligibilityPreparationStopped } from "./eligibility-refresh-error";
 import {
   enrolledOfflineEligibilityQuerySchema,
   OFFLINE_ELIGIBILITY_PAGE_SIZE,
   enrolledOfflineEligibilityResponseSchema,
 } from "../../../../../../../shared/schemas/event-offline-eligibility";
-import { eligibilityPageDigest } from "../../../../../../../shared/event-eligibility-digest";
+import { eligibilityPageDigest, eligibilityScopeKey } from "../../../../../../../shared/event-eligibility-digest";
 import { SCANNER_OFFLINE_MAXIMUM_MS } from "../../../../../../../shared/event-offline-expiry";
 import {
   sameSnapshotEnrollment,
@@ -31,8 +32,10 @@ export async function downloadEligibilitySnapshot(
   let previousIndex = 0;
   let cursor: string | null = null;
   let snapshot: CachedManifest | undefined;
-  let scopeDigest: string | undefined;
+  let scopeKey: string | undefined;
   let restarted = false;
+  let reuseDigests = Boolean(matching && saved.scopeDate && saved.snapshotId);
+  const savedScope = reuseDigests ? eligibilityScopeKey(saved) : undefined;
   for (let pageNumber = 0; pageNumber < 1000; pageNumber++) {
     while (previousIndex < previous.length && cursor !== null && previous[previousIndex]!.badgeId <= cursor)
       previousIndex++;
@@ -40,7 +43,7 @@ export async function downloadEligibilitySnapshot(
     const knownNext =
       previous.length > previousIndex + OFFLINE_ELIGIBILITY_PAGE_SIZE ? knownEntries.at(-1)!.badgeId : null;
     const knownDigest =
-      matching && saved.scopeDate && saved.snapshotId && !restarted
+      reuseDigests && saved
         ? await eligibilityPageDigest({ ...saved, entries: knownEntries, nextBadgeId: knownNext })
         : undefined;
     const query = new URLSearchParams({ epochId: enrollment.epochId, deviceId: enrollment.deviceId });
@@ -65,36 +68,48 @@ export async function downloadEligibilitySnapshot(
     const code = refusal?.success ? refusal.data.error.code : undefined;
     if (response.status === 400 && (code === "SESSION_ROOM_REQUIRED" || code === "SESSION_ROOM_INVALID"))
       throw new Error(code);
-    if (response.status === 409 && code === "SCANNER_PREPARATION_CLOSED") throw new Error("SCANNER_PREPARATION_CLOSED");
+    if (response.status === 409 && eligibilityPreparationStopped(code)) throw new Error(code);
     if (response.status === 409 && code === "OFFLINE_MANIFEST_CHANGED" && snapshot && !restarted) {
       previous = [];
       previousIndex = 0;
       cursor = null;
       snapshot = undefined;
-      scopeDigest = undefined;
+      scopeKey = undefined;
       restarted = true;
+      reuseDigests = false;
       continue;
     }
-    if (!response.ok) throw new Error(`Badge refresh failed (HTTP ${response.status}).`);
+    if (code === "OFFLINE_MANIFEST_CHANGED") throw new EligibilityRefreshFailure("changed", code);
+    if (!response.ok)
+      throw new EligibilityRefreshFailure("http", `Badge refresh failed (HTTP ${response.status}).`, response.status);
     const page = enrolledOfflineEligibilityResponseSchema.parse(await response.json());
     const requestedScope = { operatorUserId, occurrenceId, roomId, ...enrollment, eventId: snapshot?.eventId };
     if (!sameSnapshotEnrollment(page, requestedScope)) throw new Error("SCANNER_PERMISSION_CHANGED");
     if (!sameSnapshotScope(page, requestedScope)) throw new Error("SCANNER_ROOM_CONTEXT_CHANGED");
-    const pageScope = await eligibilityPageDigest({ ...page, entries: [], nextBadgeId: null });
-    if (scopeDigest !== undefined && scopeDigest !== pageScope) throw new Error("Eligibility revision changed");
-    scopeDigest = pageScope;
-    if (page.unchanged && (!knownDigest || page.pageDigest !== knownDigest || page.entries.length !== 0))
-      throw new Error("Eligibility page was not verified");
+    const pageScope = eligibilityScopeKey(page);
+    if (pageScope !== savedScope) reuseDigests = false;
+    if (scopeKey !== undefined && scopeKey !== pageScope)
+      throw new EligibilityRefreshFailure("changed", "Eligibility revision changed");
+    scopeKey = pageScope;
+    if (
+      page.unchanged &&
+      (!knownDigest ||
+        page.pageDigest !== knownDigest ||
+        page.entries.length !== 0 ||
+        pageScope !== savedScope ||
+        page.nextBadgeId !== knownNext)
+    )
+      throw new EligibilityRefreshFailure("invalid", "Eligibility page was not verified");
     const entries = page.unchanged ? knownEntries : page.entries;
-    if ((await eligibilityPageDigest({ ...page, entries })) !== page.pageDigest)
-      throw new Error("Eligibility page digest changed");
+    if (!page.unchanged && (await eligibilityPageDigest({ ...page, entries })) !== page.pageDigest)
+      throw new EligibilityRefreshFailure("invalid", "Eligibility page digest changed");
     let lastId: string = cursor ?? "";
     for (const entry of entries) {
-      if (entry.badgeId <= lastId) throw new Error("Eligibility pagination repeated");
+      if (entry.badgeId <= lastId) throw new EligibilityRefreshFailure("invalid", "Eligibility pagination repeated");
       lastId = entry.badgeId;
     }
     if (page.nextBadgeId !== null && (entries.length !== OFFLINE_ELIGIBILITY_PAGE_SIZE || page.nextBadgeId !== lastId))
-      throw new Error("Eligibility pagination repeated");
+      throw new EligibilityRefreshFailure("invalid", "Eligibility pagination repeated");
     const now = Date.now();
     const validUntil = Math.max(
       now,
@@ -114,12 +129,14 @@ export async function downloadEligibilitySnapshot(
     } else snapshot.validUntil = Math.min(snapshot.validUntil, validUntil);
     snapshot.entries.push(...entries);
     onProgress?.(snapshot.entries.length);
-    if (snapshot.entries.length > 100000) throw new Error("Eligibility snapshot too large");
+    if (snapshot.entries.length > 100000)
+      throw new EligibilityRefreshFailure("invalid", "Eligibility snapshot too large");
     cursor = page.nextBadgeId;
     if (cursor !== null) continue;
-    if (!snapshotCurrent(snapshot)) throw new Error("Eligibility snapshot expired during preparation");
+    if (!snapshotCurrent(snapshot))
+      throw new EligibilityRefreshFailure("changed", "Eligibility snapshot expired during preparation");
     snapshot.complete = true;
     return snapshot;
   }
-  throw new Error("Eligibility snapshot too large");
+  throw new EligibilityRefreshFailure("invalid", "Eligibility snapshot too large");
 }

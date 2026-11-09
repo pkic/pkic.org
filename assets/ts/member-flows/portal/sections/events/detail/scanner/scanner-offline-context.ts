@@ -84,6 +84,7 @@ export async function saveScannerOfflineContext(input: {
   )
     return null;
   if (
+    manifest.storageError ||
     input.signal?.aborted ||
     !navigator.onLine ||
     !epoch.epochId ||

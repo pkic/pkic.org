@@ -87,7 +87,7 @@ export function useScannerFeedback({
     if (lastCommittedOperation.current === saved.scan.operationId)
       return receiptMatchesOperation(saved.scan.operationId, lastOperation.current);
     if (!receiptMatchesOperation(saved.scan.operationId, lastOperation.current)) return false;
-    if (local.outcome === "unknown" || local.outcome === "unverified") {
+    if (!collector && (local.outcome === "unknown" || local.outcome === "unverified")) {
       setChecking(saved.scan.operationId);
       showProvisionalMessage(saved.scan.operationId, "Checking badge online…");
       if (!(await verifyQueuedScan(saved.scan.operationId)))

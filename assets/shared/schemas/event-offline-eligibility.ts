@@ -8,15 +8,14 @@ import { agendaAdmissionPolicySchema } from "./event-agenda";
 
 export const OFFLINE_ELIGIBILITY_PAGE_SIZE = 250;
 
+export const eligibilityPageDigestSchema = z.string().regex(/^[a-f0-9]{64}$/);
+
 export const offlineEligibilityQuerySchema = z
   .object({
     occurrenceId: z.string().uuid().optional(),
     roomId: z.string().uuid().optional(),
     afterBadgeId: z.string().uuid().optional(),
-    knownDigest: z
-      .string()
-      .regex(/^[a-f0-9]{64}$/)
-      .optional(),
+    knownDigest: eligibilityPageDigestSchema.optional(),
     scopeDate: eventDayDateSchema.optional(),
     publishedRevision: z.coerce.number().int().nonnegative().optional(),
   })
@@ -29,7 +28,7 @@ export const offlineEligibilityResponseSchema = z
     roomId: z.string().uuid().nullable().optional(),
     revision: z.number().int().nonnegative(),
     scopeDate: eventDayDateSchema,
-    pageDigest: z.string().regex(/^[a-f0-9]{64}$/),
+    pageDigest: eligibilityPageDigestSchema,
     unchanged: z.boolean(),
     publishedRevision: z.number().int().nonnegative().nullable(),
     nativeEventContext: nativeEventCaptureContextSchema.optional(),

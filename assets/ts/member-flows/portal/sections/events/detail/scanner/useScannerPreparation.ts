@@ -28,7 +28,7 @@ export function useScannerPreparation({
   session: PortalSession | null;
   onContextChange: (message?: string) => void;
   onPermissionChanged: () => void;
-  onPreparationClosed: () => void;
+  onPreparationClosed: (code: string) => void;
 }) {
   const location = useScannerLocation(slug, occurrenceId, action !== "lead", onContextChange, collectorContext);
   const eligibility = useEligibilityManifest({
@@ -40,9 +40,9 @@ export function useScannerPreparation({
     roomId: location.roomId,
     epoch,
     collector: Boolean(collectorContext),
-    onPreparationClosed: (message) => {
+    onPreparationClosed: (message, code) => {
       onContextChange(message);
-      onPreparationClosed();
+      onPreparationClosed(code);
     },
   });
   const offlineAdmission = useOfflineAdmission(slug, operatorUserId, eligibility.eligibilityManifest, collectorContext);
@@ -64,6 +64,7 @@ export function useScannerPreparation({
     ready: eligibility.manifestReady,
     error: eligibility.manifestError,
     checkedBadges: eligibility.manifestProgress,
+    sessionOnly: Boolean(eligibility.eligibilityManifest.current?.storageError),
   };
   return { location, eligibility, offlineAdmission, offlinePreparation, status };
 }
