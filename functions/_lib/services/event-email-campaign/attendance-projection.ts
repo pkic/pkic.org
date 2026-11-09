@@ -1,4 +1,4 @@
-import { all } from "../../db/queries";
+import { batchRows } from "../../db/pagination";
 import { stringifyJson } from "../../utils/json";
 import { attendanceOptionLabelSql } from "../event-attendance-option-sql";
 import { dayWaitlistStatusSql } from "../registrations/day-waitlist-policy";
@@ -36,13 +36,9 @@ function indexWaitlistRows(rows: AttendeeDayWaitlistRow[]): Map<string, Attendee
   return byRegistration;
 }
 
-async function listDayAttendance(
-  db: DatabaseLike,
-  registrationIdsJson: string,
-): Promise<Map<string, AttendeeDayAttendance[]>> {
-  const rows = await all<AttendeeDayAttendanceRow>(
-    db,
-    `SELECT rda.registration_id,
+function prepareDayAttendance(db: DatabaseLike, registrationIdsJson: string) {
+  return db
+    .prepare(`SELECT rda.registration_id,
             ed.day_date AS dayDate,
             rda.attendance_type AS attendanceType,
             ed.label AS label,
@@ -50,29 +46,21 @@ async function listDayAttendance(
      FROM registration_day_attendance rda
      JOIN event_days ed ON ed.id = rda.event_day_id
      WHERE rda.registration_id IN (SELECT value FROM json_each(?))
-     ORDER BY rda.registration_id ASC, ed.sort_order ASC, ed.day_date ASC`,
-    [registrationIdsJson],
-  );
-  return indexAttendanceRows(rows);
+     ORDER BY rda.registration_id ASC, ed.sort_order ASC, ed.day_date ASC`)
+    .bind(registrationIdsJson);
 }
 
-async function listDayWaitlist(
-  db: DatabaseLike,
-  registrationIdsJson: string,
-): Promise<Map<string, AttendeeDayWaitlist[]>> {
-  const rows = await all<AttendeeDayWaitlistRow>(
-    db,
-    `SELECT w.registration_id,
+function prepareDayWaitlist(db: DatabaseLike, registrationIdsJson: string) {
+  return db
+    .prepare(`SELECT w.registration_id,
             ed.day_date AS dayDate,
             ${dayWaitlistStatusSql("w")} AS status
      FROM event_day_waitlist_entries w
      JOIN event_days ed ON ed.id = w.event_day_id
      WHERE w.registration_id IN (SELECT value FROM json_each(?))
        AND w.status IN ('waiting', 'offered', 'accepted', 'expired')
-     ORDER BY w.registration_id ASC, ed.sort_order ASC, ed.day_date ASC`,
-    [registrationIdsJson],
-  );
-  return indexWaitlistRows(rows);
+     ORDER BY w.registration_id ASC, ed.sort_order ASC, ed.day_date ASC`)
+    .bind(registrationIdsJson);
 }
 
 export async function projectAttendeeDayState(
@@ -84,9 +72,12 @@ export async function projectAttendeeDayState(
   }
 
   const registrationIdsJson = stringifyJson(registrationIds);
-  const [attendanceByRegistration, waitlistByRegistration] = await Promise.all([
-    listDayAttendance(db, registrationIdsJson),
-    listDayWaitlist(db, registrationIdsJson),
+  const [attendance, waitlist] = await db.batch([
+    prepareDayAttendance(db, registrationIdsJson),
+    prepareDayWaitlist(db, registrationIdsJson),
   ]);
-  return { attendanceByRegistration, waitlistByRegistration };
+  return {
+    attendanceByRegistration: indexAttendanceRows(batchRows<AttendeeDayAttendanceRow>(attendance)),
+    waitlistByRegistration: indexWaitlistRows(batchRows<AttendeeDayWaitlistRow>(waitlist)),
+  };
 }

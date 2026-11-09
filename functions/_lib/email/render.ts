@@ -1,4 +1,5 @@
-import { marked } from "marked";
+import { renderEmailBody, type EmailCompilationContext } from "./body-fragments";
+import type { EmailTemplatePartials } from "../../../assets/shared/schemas/email-templates";
 import { evaluateIfCondition, isTruthy } from "./template-conditions";
 import type { EmailContentType } from "../../../assets/shared/schemas/email-templates";
 import { resolveEmailTemplateData } from "./plain-text";
@@ -244,9 +245,9 @@ function resolveAllConditionals(
  * 6. Partials (PKI Consortium extension):
  *    {{> partial_name}}
  *
- *    Partials are resolved from data._partials (Record<string,string>). Each partial
- *    is compiled with the same data variables, but cannot itself include other partials
- *    (1-level deep only). Unknown partials render as empty string.
+ *    Partials are resolved from data._partials (EmailTemplatePartials). Each partial
+ *    renders independently with the same data and its own content type. Nested rendering
+ *    shares the outer render budget. Unknown partials render as empty string.
  *    Load partials from DB via loadEmailPartials() and inject as data._partials.
  *
  * LIMITATIONS:
@@ -254,7 +255,7 @@ function resolveAllConditionals(
  * - No custom Handlebars helpers
  * - Comparison/logical operators are lowercase only: {{#if EQ ...}} fails
  * - {{#for}} and {{#each array as |item|}} are NOT supported; use {{#each array}}
- * - Partials are 1-level deep only; nested {{> ...}} inside a partial are stripped
+ * - Fragment-only compilation strips nested partials; full email rendering supports bounded nesting.
  *
  * WHY CUSTOM:
  * Cloudflare Workers blocks Handlebars.compile() because it uses eval/new Function().
@@ -265,37 +266,13 @@ function compileSimpleTemplateWithBudget(
   data: Record<string, unknown>,
   budget: TemplateRenderBudget,
   depth: number,
+  context?: EmailCompilationContext,
 ): string {
   assertTemplateRenderDepth(depth);
+  const values = context ? resolveEmailTemplateData(data, context.contentType) : data;
   assertTemplateRenderLength(template.length, budget);
   consumeTemplateWork(budget, template.length);
   let result = template;
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // 0. PARTIALS: {{> name}}
-  //    Resolved from data._partials. Compiled with the same data (minus _partials
-  //    so the recursive call cannot itself process further partials — 1-level only).
-  // ────────────────────────────────────────────────────────────────────────────
-  {
-    const partials = (data._partials ?? {}) as Record<string, string>;
-    if (Object.keys(partials).length > 0) {
-      const dataForPartial = { ...data };
-      delete dataForPartial._partials;
-      result = replaceTemplateBounded(
-        result,
-        /\{\{>\s*(\w+)\s*\}\}/g,
-        (match) => {
-          const name = match[1];
-          const partialContent = partials[name];
-          if (partialContent === undefined) return "";
-          consumeTemplateExpansions(budget, 1);
-          // Compile the partial — recursive call has no _partials, blocking further nesting.
-          return compileSimpleTemplateWithBudget(partialContent, dataForPartial, budget, depth + 1);
-        },
-        budget,
-      );
-    }
-  }
 
   // ────────────────────────────────────────────────────────────────────────────
   // 1. LOOPS: {{#each array}}...{{/each}}
@@ -330,7 +307,7 @@ function compileSimpleTemplateWithBudget(
         }
 
         // Recursively process the loop content (handles nested conditionals)
-        loopContent = compileSimpleTemplateWithBudget(loopContent, loopData, budget, depth + 1);
+        loopContent = compileSimpleTemplateWithBudget(loopContent, loopData, budget, depth + 1, context);
         expandedLength += loopContent.length;
         assertTemplateRenderLength(expandedLength, budget);
         expanded.push(loopContent);
@@ -348,7 +325,34 @@ function compileSimpleTemplateWithBudget(
   //   its own {{/if}} regardless of how deeply nested the blocks are.
   //   Supports all forms: {{#if var}}, {{#if eq}}, {{#if and/or}}, {{#unless}}.
   // ────────────────────────────────────────────────────────────────────────────
-  result = resolveAllConditionals(result, data, budget, depth);
+  result = resolveAllConditionals(result, values, budget, depth);
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // 4. PARTIALS: {{> name}}
+  //    Full email rendering isolates each partial body; source-only compilation stays bounded to one level.
+  // ────────────────────────────────────────────────────────────────────────────
+  {
+    const partials = (data._partials ?? {}) as EmailTemplatePartials;
+    if (Object.keys(partials).length > 0) {
+      const dataForPartial = { ...data };
+      if (!context) delete dataForPartial._partials;
+      result = replaceTemplateBounded(
+        result,
+        /\{\{>\s*(\w+)\s*\}\}/g,
+        (match) => {
+          const name = match[1];
+          const partialContent = partials[name];
+          if (!Object.hasOwn(partials, name) || partialContent === undefined) return "";
+          consumeTemplateExpansions(budget, 1);
+          // Body rendering retains the shared registry and budget for nested partials.
+          return context
+            ? context.partial(partialContent, dataForPartial, depth + 1)
+            : compileSimpleTemplateWithBudget(partialContent.content, dataForPartial, budget, depth + 1);
+        },
+        budget,
+      );
+    }
+  }
 
   // ────────────────────────────────────────────────────────────────────────────
   // 5. VARIABLE SUBSTITUTION: {{variable}}, {{this}}, {{@special}}
@@ -358,17 +362,21 @@ function compileSimpleTemplateWithBudget(
     /\{\{([@\w.]+)\}\}/g,
     (match) => {
       const key = match[1];
-      const value = data[key];
+      const value = values[key];
       if (value === null || value === undefined) {
         return match[0]; // Leave unresolved placeholders as-is
       }
       const text = String(value);
-      if (!budget.markdown || !text.includes("\n")) return text;
+      if (!(context ? context.contentType === "markdown" : budget.markdown) || !text.includes("\n")) return text;
       const lineStart = result.lastIndexOf("\n", match.index - 1) + 1;
       const prefix = result.slice(lineStart, match.index);
       // Continue template-authored quote nesting across every interpolated line.
       const quotePrefix = prefix.match(/^(?: {0,3}>[ \t]*)+/)?.[0];
-      return quotePrefix ? text.replace(/\r?\n/g, `\n${quotePrefix}`) : text;
+      return quotePrefix
+        ? text.replace(/\r?\n/g, (newline, offset: number) =>
+            text.startsWith(quotePrefix, offset + newline.length) ? "\n" : `\n${quotePrefix}`,
+          )
+        : text;
     },
     budget,
   );
@@ -461,34 +469,13 @@ export async function renderEmail(
   // Keep application links environment-specific while serving static branding
   // from a publicly reachable origin when a developer email uses localhost.
   const brandBaseUrl = resolveEmailBrandBaseUrl(baseUrl);
-  const dataWithBase = resolveEmailTemplateData({ ...data, baseUrl, brandBaseUrl }, contentType);
-  const rendered = compileSimpleTemplateWithBudget(template, dataWithBase, budget, 0);
-
-  if (contentType === "html") {
-    // Template is already HTML — wrap in layout but skip markdown processing.
-    const htmlBody = inlineEmailComponentStyles(rendered);
-    const html = wrapHtml(htmlBody, layoutHtml, dataWithBase, baseUrl, budget);
-    const text = stripHtmlToText(htmlBody);
-    return { html, text };
-  }
-
-  if (contentType === "text") {
-    // Plain-text template — wrap a <pre>-based fallback, no markdown processor.
-    const htmlBody = `<pre style="white-space:pre-wrap;font-family:inherit">${rendered.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`;
-    assertTemplateRenderLength(htmlBody.length, budget);
-    const html = wrapHtml(htmlBody, layoutHtml, dataWithBase, baseUrl, budget);
-    return { html, text: stripHtmlToText(rendered) };
-  }
-
-  // Default: markdown
+  const dataWithBase = { ...data, baseUrl, brandBaseUrl };
   const htmlBody = inlineEmailComponentStyles(
-    await marked.parse(rendered, {
-      gfm: true,
-      breaks: false,
-    }),
+    renderEmailBody(template, dataWithBase, contentType, budget, (source, values, depth, context) =>
+      compileSimpleTemplateWithBudget(source, values, budget, depth, context),
+    ),
   );
-  assertTemplateRenderLength(htmlBody.length, budget);
-  const html = wrapHtml(htmlBody, layoutHtml, dataWithBase, baseUrl, budget);
+  const html = wrapHtml(htmlBody, layoutHtml, resolveEmailTemplateData(dataWithBase, "html"), baseUrl, budget);
 
   const text = stripHtmlToText(htmlBody);
 

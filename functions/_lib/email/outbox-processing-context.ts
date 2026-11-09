@@ -1,12 +1,12 @@
 import type { DatabaseLike } from "../types";
-import { loadEmailRenderResources } from "./partials";
+import { loadEmailRenderResources, type EmailRenderResources } from "./partials";
 import { resolveTemplate } from "./templates";
 
 type ResolvedEmailTemplate = Awaited<ReturnType<typeof resolveTemplate>>;
 
 /** Immutable render inputs shared by the messages of one processing run. */
 export interface OutboxProcessingContext {
-  renderResources?: Promise<{ partials: Record<string, string>; layoutHtml: string }>;
+  renderResources?: Promise<EmailRenderResources>;
   templates: Map<string, Promise<ResolvedEmailTemplate>>;
 }
 
@@ -20,10 +20,7 @@ function forgetOnRejection<T>(pending: Promise<T>, forget: () => void): Promise<
   return pending;
 }
 
-export function loadRenderResources(
-  db: DatabaseLike,
-  context: OutboxProcessingContext,
-): Promise<{ partials: Record<string, string>; layoutHtml: string }> {
+export function loadRenderResources(db: DatabaseLike, context: OutboxProcessingContext): Promise<EmailRenderResources> {
   context.renderResources ??= forgetOnRejection(loadEmailRenderResources(db), () => {
     delete context.renderResources;
   });

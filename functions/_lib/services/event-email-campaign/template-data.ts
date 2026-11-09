@@ -7,7 +7,7 @@ import type {
   ResolvedAttendeeCampaignRow,
   ResolvedSpeakerCampaignRow,
 } from "./types";
-import { emailPlainText } from "../../email/plain-text";
+import { emailMarkdownText, emailPlainText } from "../../email/plain-text";
 
 /**
  * Merges recipient-specific form values with canonical campaign data. The
@@ -93,6 +93,7 @@ function buildAttendeeTemplateData(
     attendanceLabel: attendanceData.attendanceLabel,
     dayAttendance: attendanceData.dayAttendance,
     dayWaitlist,
+    acceptedTermsText: emailMarkdownText(row.acceptedTermsText),
     manageUrl: undefined,
     customAnswerRows,
   };

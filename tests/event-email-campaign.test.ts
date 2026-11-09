@@ -21,6 +21,8 @@ import { emailOutboxResponseSchema } from "../assets/shared/schemas/email-outbox
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { getEventBySlug } from "../functions/_lib/services/events";
+import { attendeeCampaignSelection } from "../functions/_lib/services/event-email-campaign/audience";
+import { registrationPopulationFilter } from "../functions/_lib/services/registrations/registration-population-filter";
 import { listCampaignRecipients } from "../functions/_lib/services/event-email-campaign";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -470,6 +472,220 @@ describe("event email campaign recipients", () => {
       }
     },
   );
+
+  it("previews and queues reg_details with recorded accepted terms and empty missing terms", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
+    await seedCampaignTemplates(admin.id);
+    const partial = await createTemplateVersion(env.DB, {
+      templateKey: "partial_reg_details",
+      content:
+        "Registration: {{email}}.\n\n> {{#if acceptedTermsText}}**Terms agreed:**<br>\n> - {{acceptedTermsText}}{{/if}}",
+      createdByUserId: admin.id,
+    });
+    await activateTemplateVersion(env.DB, { templateKey: "partial_reg_details", version: partial.version });
+    const token = await createAdminSession(env.DB, admin.id, "campaign-accepted-terms");
+    await env.DB.prepare(
+      "UPDATE event_terms SET display_text='Original agreement', active=0 WHERE event_id=? AND term_key='code-of-conduct'",
+    )
+      .bind(eventId)
+      .run();
+    await env.DB.prepare(`INSERT INTO event_terms
+      (id,event_id,audience_type,term_key,version,required,display_text,active,created_at)
+      VALUES (?,?,'attendee','code-of-conduct','v2',1,'Replacement agreement',1,?)`)
+      .bind(crypto.randomUUID(), eventId, "2026-11-01T00:00:00.000Z")
+      .run();
+    await env.DB.prepare(`INSERT INTO event_terms
+      (id,event_id,audience_type,term_key,version,required,display_text,active,created_at)
+      VALUES (?,?,'speaker','code-of-conduct','v1',1,'Speaker-only agreement',1,?)`)
+      .bind(crypto.randomUUID(), eventId, "2026-11-01T00:00:00.000Z")
+      .run();
+    await env.DB.prepare(
+      "UPDATE event_terms SET display_text='Privacy agreement' WHERE event_id=? AND term_key='privacy-policy'",
+    )
+      .bind(eventId)
+      .run();
+    for (const [index, email] of ["terms-a@example.test", "terms-b@example.test"].entries()) {
+      const userId = await insertUser(env.DB, email);
+      const registrationId = crypto.randomUUID();
+      await env.DB.prepare(`INSERT INTO registrations
+        (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at)
+        VALUES (?,?,?,'registered','direct',?,?,?)`)
+        .bind(
+          registrationId,
+          eventId,
+          userId,
+          crypto.randomUUID(),
+          "2026-11-01T00:00:00.000Z",
+          "2026-11-01T00:00:00.000Z",
+        )
+        .run();
+      if (index === 0) {
+        await env.DB.prepare(`INSERT INTO consent_acceptances
+          (id,registration_id,event_id,user_id,audience_type,term_key,term_version,accepted_at)
+          VALUES (?,?,?,?,'attendee','code-of-conduct','v1',?)`)
+          .bind(crypto.randomUUID(), registrationId, eventId, userId, "2026-11-01T00:00:00.000Z")
+          .run();
+        await env.DB.prepare(`INSERT INTO consent_acceptances
+          (id,registration_id,event_id,user_id,audience_type,term_key,term_version,accepted_at)
+          VALUES (?,?,?,?,'attendee','privacy-policy','v1',?)`)
+          .bind(crypto.randomUUID(), registrationId, eventId, userId, "2026-11-01T00:00:00.000Z")
+          .run();
+      }
+    }
+    const input = {
+      subjectOverride: "Registration update",
+      bodyContent: "{{> reg_details}}",
+      sendMode: "personal",
+      batchSize: 50,
+      filter: { audience: "attendees" },
+    };
+    const preview = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", input);
+    expect(preview.status, await preview.clone().text()).toBe(200);
+    const reviewed = eventEmailCampaignPreviewResponseSchema.parse(await preview.json());
+    expect(reviewed.recipientCount).toBe(2);
+    expect(reviewed.text).toContain("Original agreement");
+    expect(reviewed.html.match(/<li\b/g)).toHaveLength(2);
+    expect(reviewed.html).not.toContain("&gt; -");
+    expect(reviewed.text).not.toContain("Replacement agreement");
+    expect(reviewed.text).not.toContain("Speaker-only agreement");
+    const accepted = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns", {
+      ...input,
+      previewToken: reviewed.previewToken,
+    });
+    expect(accepted.status, await accepted.clone().text()).toBe(202);
+    const queued = await queryAll<{ recipient_email: string; payload_json: string }>(
+      env.DB,
+      "SELECT recipient_email,payload_json FROM email_outbox WHERE event_id=? ORDER BY recipient_email",
+      [eventId],
+    );
+    expect(queued).toHaveLength(2);
+    const resources = await loadEmailRenderResources(env.DB);
+    for (const [index, row] of queued.entries()) {
+      const data = JSON.parse(row.payload_json) as Record<string, unknown>;
+      const rendered = await renderEmail(
+        readDirectEmailBody(data)!,
+        { ...data, _partials: resources.partials },
+        resources.layoutHtml,
+        "markdown",
+      );
+      expect(rendered.text.includes("Original agreement")).toBe(index === 0);
+      expect(rendered.text.includes("Privacy agreement")).toBe(index === 0);
+      expect(rendered.html.match(/<li\b/g) ?? []).toHaveLength(index === 0 ? 2 : 0);
+      expect(rendered.html).not.toContain("&gt; -");
+      expect(rendered.text).not.toContain("Replacement agreement");
+      expect(rendered.text).not.toContain("Speaker-only agreement");
+      expect(rendered.text).not.toContain("{{acceptedTermsText}}");
+    }
+  });
+
+  it("matches the registration population for mixed attendance and waitlist days", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    for (const [index, date] of ["2026-12-01", "2026-12-02"].entries()) {
+      await env.DB.prepare(`INSERT INTO event_days
+        (id,event_id,day_date,sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?)`)
+        .bind(`filter-day-${index}`, eventId, date, index, "2026-11-01T00:00:00.000Z", "2026-11-01T00:00:00.000Z")
+        .run();
+    }
+    for (const [name, secondType, waitlist] of [
+      ["partial", "not_attending", null],
+      ["mixed", "in_person", "waiting"],
+      ["accepted", "in_person", "accepted"],
+      ["cross-type", "virtual", "offered"],
+      ["fully-waitlisted", "in_person", "waiting"],
+    ] as const) {
+      const id = `filter-${name}`;
+      const userId = await insertUser(env.DB, `${id}@example.test`);
+      await env.DB.prepare(`INSERT INTO registrations
+        (id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at)
+        VALUES (?,?,?,'registered','direct',?,?,?)`)
+        .bind(id, eventId, userId, id, "2026-11-01T00:00:00.000Z", "2026-11-01T00:00:00.000Z")
+        .run();
+      for (const [day, type] of [
+        [0, "in_person"],
+        [1, secondType],
+      ] as const) {
+        await env.DB.prepare(`INSERT INTO registration_day_attendance
+          (id,registration_id,event_day_id,attendance_type,created_at,updated_at) VALUES (?,?,?,?,?,?)`)
+          .bind(`${id}-${day}`, id, `filter-day-${day}`, type, "2026-11-01T00:00:00.000Z", "2026-11-01T00:00:00.000Z")
+          .run();
+        if (waitlist && (day === 1 || name === "fully-waitlisted")) {
+          await env.DB.prepare(`INSERT INTO event_day_waitlist_entries
+            (id,event_id,event_day_id,registration_id,user_id,priority_lane,status,position,created_at,updated_at)
+            VALUES (?,?,?,?,?,'general',?,1,?,?)`)
+            .bind(
+              `${id}-${day}`,
+              eventId,
+              `filter-day-${day}`,
+              id,
+              userId,
+              waitlist,
+              "2026-11-01T00:00:00.000Z",
+              "2026-11-01T00:00:00.000Z",
+            )
+            .run();
+        }
+      }
+    }
+    for (const dayDate of [undefined, "2026-12-01", "2026-12-02"]) {
+      for (const [dayWaitlistStatus, waitlisted] of [
+        ["none", "false"],
+        ["active", "true"],
+      ] as const) {
+        const population = registrationPopulationFilter(eventId, {
+          status: "registered",
+          attendance_type: "in_person",
+          waitlisted,
+          day_dates: dayDate,
+        });
+        const expected = await queryAll<{ id: string }>(
+          env.DB,
+          `SELECT r.id ${population.fromSql} ORDER BY r.id`,
+          population.bindings,
+        );
+        const campaign = attendeeCampaignSelection(
+          event,
+          {
+            audience: "attendees",
+            attendanceType: "in_person",
+            dayDate,
+            dayWaitlistStatus,
+          },
+          100,
+        );
+        const actual = await queryAll<{ registration_id: string }>(env.DB, campaign.sql, campaign.bindings);
+        expect(actual.map((row) => row.registration_id).sort()).toEqual(expected.map((row) => row.id));
+        if (!dayDate && dayWaitlistStatus === "none") {
+          expect(actual.map((row) => row.registration_id).sort()).toEqual([
+            "filter-accepted",
+            "filter-cross-type",
+            "filter-mixed",
+            "filter-partial",
+          ]);
+        }
+      }
+    }
+    for (const dayWaitlistStatus of ["waiting", "offered", "accepted"] as const) {
+      const campaign = attendeeCampaignSelection(
+        event,
+        {
+          audience: "attendees",
+          attendanceType: "in_person",
+          dayWaitlistStatus,
+        },
+        100,
+      );
+      const rows = await queryAll<{ registration_id: string }>(env.DB, campaign.sql, campaign.bindings);
+      expect(rows.map((row) => row.registration_id).sort()).toEqual(
+        dayWaitlistStatus === "waiting"
+          ? ["filter-fully-waitlisted", "filter-mixed"]
+          : dayWaitlistStatus === "accepted"
+            ? ["filter-accepted"]
+            : [],
+      );
+    }
+  });
 
   it("loads attendee details for a large event without per-recipient query batches", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);

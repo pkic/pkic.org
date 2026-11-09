@@ -43,9 +43,9 @@ beforeEach(() => {
     ('expired','one','offered','2000-01-01T00:00:00.000Z'),('declined','one','declined',NULL);`);
 });
 afterEach(() => db.close());
-function matches(query: Record<string, string>) {
+function matches(query: Record<string, string>, waitlistStatus?: Parameters<typeof registrationPopulationFilter>[2]) {
   const filters = eventAttendanceRegistrationsQuerySchema.parse(query);
-  const built = registrationPopulationFilter("event", filters);
+  const built = registrationPopulationFilter("event", filters, waitlistStatus);
   return db
     .prepare(`SELECT r.id ${built.fromSql} ORDER BY r.id`)
     .all(...(built.bindings as string[]))
@@ -100,6 +100,15 @@ describe("attendee day, attendance and waitlist filters", () => {
     expect(matches({ attendance_type: "in_person", waitlisted: "true" })).not.toContain("cross-type");
     expect(matches({ waitlisted: "false" })).not.toContain("cross-type");
     expect(matches({ waitlisted: "false" })).not.toContain("mixed");
+  });
+  it("combines exact waitlist status and active-waitlist filters with matching bindings", () => {
+    db.exec("UPDATE event_day_waitlist_entries SET status='accepted' WHERE registration_id='declined'");
+    const scopes: Array<Record<string, string>> = [{ attendance_type: "in_person" }, { day_dates: "2026-12-01" }];
+    for (const scope of scopes) {
+      expect(matches({ ...scope, waitlisted: "false" }, "accepted")).toEqual(["declined"]);
+      expect(matches({ ...scope, waitlisted: "true" }, "accepted")).toEqual([]);
+      expect(matches({ ...scope, waitlisted: "true" }, "offered")).toEqual(["offered"]);
+    }
   });
   it("uses the identical validated scope for the table, CSV export and badge population", () => {
     const scope = {
