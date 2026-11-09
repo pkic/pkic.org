@@ -1,9 +1,12 @@
 import { ZodError } from "zod";
 
+export const SCANNER_PREPARATION_CLOSED_MESSAGE =
+  "This scanner session has closed. Open Diagnostics and start the next scanner session.";
+
 const refusalMessages = new Map([
   ["SCANNER_SIGNED_OUT", "Sign in again and reopen the scanner to refresh badge data."],
   ["SCANNER_PERMISSION_CHANGED", "Scanner access changed. Check sign-in and reopen the scanner."],
-  ["SCANNER_PREPARATION_CLOSED", "This scanner session has closed. Reopen the scanner to prepare badge data."],
+  ["SCANNER_PREPARATION_CLOSED", SCANNER_PREPARATION_CLOSED_MESSAGE],
 ]);
 
 export function eligibilityPreparationClosed(error: unknown): boolean {

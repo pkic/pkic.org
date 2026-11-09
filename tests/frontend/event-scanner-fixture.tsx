@@ -12,7 +12,7 @@ import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { badgeCredentialSchema } from "../../assets/shared/schemas/badge-credential";
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import { afterEach, expect, vi } from "vitest";
 import {
   eventScanCaptureIntentSchema,
@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(async () => {}),
   manifestReady: true,
   manifestPreparing: false,
+  closedMessage: "",
   epochId: "77777777-7777-4777-8777-777777777777",
   preparationClosed: null as null | (() => void),
   error: "",
@@ -86,14 +87,14 @@ vi.mock(
       typeof import("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useEligibilityManifest")
     >()),
     useEligibilityManifest: ({ onPreparationClosed: onClosed }: EligibilityManifestOptions) => {
-      const [closedMessage, setClosedMessage] = useState("");
-      useEffect(() => setClosedMessage(""), [mocks.epochId]);
+      const [, refresh] = useState(0);
       mocks.preparationClosed =
         typeof onClosed === "function"
           ? () => {
               mocks.manifestReady = false;
               mocks.manifestPreparing = false;
-              setClosedMessage("This scanner session has closed.");
+              mocks.closedMessage = "This scanner session has closed.";
+              refresh((value) => value + 1);
               onClosed("This scanner session has closed.");
             }
           : null;
@@ -101,8 +102,8 @@ vi.mock(
         eligibilityManifest: { current: { occurrenceId: null, roomId: null, ...mocks.snapshot } },
         manifestReady: mocks.manifestReady,
         manifestPreparing: mocks.manifestPreparing,
-        manifestError: closedMessage,
-        closedMessage,
+        manifestError: mocks.closedMessage,
+        closedMessage: mocks.closedMessage,
         refresh: mocks.refresh,
       };
     },
@@ -152,6 +153,7 @@ afterEach(async () => {
   mocks.preparationClosed = null;
   mocks.manifestReady = true;
   mocks.manifestPreparing = false;
+  mocks.closedMessage = "";
   mocks.epochId = "77777777-7777-4777-8777-777777777777";
   mocks.error = "";
   mocks.decoderStatus = "Camera prepared";

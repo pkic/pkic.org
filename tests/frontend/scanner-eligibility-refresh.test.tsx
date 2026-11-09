@@ -34,10 +34,12 @@ function Scanner({
   collector = false,
   syncing = false,
   scannerEpoch = epoch,
+  roomId = null,
 }: {
   collector?: boolean;
   syncing?: boolean;
   scannerEpoch?: ScannerEpoch;
+  roomId?: string | null;
 }) {
   const state = useEligibilityManifest({
     slug: "synthetic",
@@ -46,6 +48,7 @@ function Scanner({
     action: "attendance",
     onPermissionChanged: permissionChanged,
     epoch: scannerEpoch,
+    roomId,
     collector,
     onPreparationClosed: preparationClosed,
   });
@@ -135,7 +138,7 @@ it("exposes manual refresh progress and does not hide a cached-fallback failure"
 it.each([
   ["SCANNER_SIGNED_OUT", /sign in again/i],
   ["SCANNER_PERMISSION_CHANGED", /access changed/i],
-  ["SCANNER_PREPARATION_CLOSED", /session has closed/i],
+  ["SCANNER_PREPARATION_CLOSED", /open diagnostics and start the next scanner session/i],
   ["SESSION_ROOM_REQUIRED", /choose the room/i],
   ["SESSION_ROOM_INVALID", /check the selected room/i],
   ["SCANNER_ROOM_CONTEXT_CHANGED", /check the selected room/i],
@@ -224,7 +227,9 @@ it("keeps badge refresh available while scan uploads are draining", async () => 
   expect(upload).toHaveBeenCalledOnce();
 });
 
-it("retains a closed session through refreshes and clears it only for the next epoch", async () => {
+it("stops refreshing a closed session until the next epoch while allowing uploads", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("navigator", { onLine: true });
   mocks.prepare.mockRejectedValueOnce(new Error("SCANNER_PREPARATION_CLOSED"));
   await act(async () => render(<Scanner />, host));
   await vi.waitFor(() => expect(current.closedMessage).toMatch(/session has closed/i));
@@ -232,12 +237,33 @@ it("retains a closed session through refreshes and clears it only for the next e
   expect(message).toMatch(/session has closed/i);
   expect(current.manifestError).toBe(message);
   await act(async () => syncButton().click());
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(SCANNER_ELIGIBILITY_REFRESH_MS);
+    window.dispatchEvent(new Event("online"));
+    window.dispatchEvent(new Event("focus"));
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await act(async () => render(<Scanner roomId="33333333-3333-4333-8333-333333333333" />, host));
+  await act(async () => syncButton().click());
+  expect(mocks.prepare).toHaveBeenCalledOnce();
+  expect(preparationClosed).toHaveBeenCalledOnce();
+  expect(upload).toHaveBeenCalledTimes(2);
   expect(current.closedMessage).toBe(message);
   expect(current.manifestError).toBe(message);
+  expect(current.manifestReady).toBe(false);
+  expect(current.manifestPreparing).toBe(false);
+  expect(current.eligibilityManifest.current).toBeNull();
   await act(async () =>
     render(<Scanner scannerEpoch={{ ...epoch, epochId: "22222222-2222-4222-8222-222222222222" }} />, host),
   );
   await vi.waitFor(() => expect(current.closedMessage).toBe(""));
   expect(current.manifestError).toBe("");
   expect(current.manifestReady).toBe(true);
+});
+
+it("explains how to recover when reopening an already closed epoch", async () => {
+  await act(async () => render(<Scanner scannerEpoch={{ ...epoch, state: "closed" }} />, host));
+  expect(mocks.prepare).not.toHaveBeenCalled();
+  expect(current.closedMessage).toMatch(/open diagnostics and start the next scanner session/i);
+  expect(current.manifestReady).toBe(false);
 });

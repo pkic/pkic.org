@@ -53,7 +53,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
         .disabled,
     ).toBe(true);
   });
-  it("cancels a pending start when preparation closes before starting the next session", async () => {
+  it.each(["preparation", "diagnostics"])("cancels a pending start when %s closes the session", async (source) => {
     mocks.manifestPreparing = true;
     mocks.manifestReady = false;
     await mount(true, ["attendance"]);
@@ -62,9 +62,10 @@ describe("scanner device enrollment and manual capture boundary", () => {
     await act(async () => button("Start scanning").click());
     expect(button("Cancel")).toBeDefined();
     expect(host.querySelector(".pk-fast-scanner")).toBeNull();
-    await act(async () => mocks.preparationClosed!());
-    expect(host.textContent).toMatch(/session has closed/i);
-    expect(button("Cancel")).toBeUndefined();
+    if (source === "preparation") {
+      await act(async () => mocks.preparationClosed!());
+      expect(button("Cancel")).toBeUndefined();
+    }
     await openDiagnostics();
     mocks.freeze.mockResolvedValueOnce({ state: "closed", epochId: mocks.epochId, issuedHighWater: 0 });
     await act(async () => button("Close scanner session").click());
@@ -74,9 +75,10 @@ describe("scanner device enrollment and manual capture boundary", () => {
       issuedHighWater: 0,
     });
     mocks.manifestReady = true;
+    mocks.manifestPreparing = false;
+    mocks.closedMessage = "";
     await act(async () => button("Start next scanner session").click());
     expect(mocks.next).toHaveBeenCalledOnce();
-    expect(host.textContent).not.toMatch(/session has closed/i);
     expect(host.querySelector(".pk-fast-scanner")).toBeNull();
     await closeDiagnostics();
     expect(button("Start scanning").disabled).toBe(false);

@@ -9,6 +9,7 @@ import { useContext, useEffect, useRef, useState } from "preact/hooks";
 import { ScannerCodePreparation, useScannerCodePreparationRetry } from "./scanner-code-preparation";
 import { prepareEligibilityManifest, type EligibilityManifest } from "./eligibility-manifest";
 import {
+  SCANNER_PREPARATION_CLOSED_MESSAGE,
   eligibilityPreparationClosed,
   eligibilityRefreshError,
   eligibilityRefreshRefused,
@@ -45,7 +46,11 @@ export function useEligibilityManifest({
   const [manifestPreparing, setManifestPreparing] = useState(false);
   const [manifestError, setManifestError] = useState("");
   const [closedMessage, setClosedMessage] = useState("");
-  useEffect(() => setClosedMessage(""), [epoch?.epochId]);
+  const closedEpochId = useRef<string | null>(null);
+  useEffect(() => {
+    closedEpochId.current = null;
+    setClosedMessage("");
+  }, [epoch?.epochId]);
   const [manifestProgress, setManifestProgress] = useState<number | null>(null);
   const refreshRequest = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
@@ -55,6 +60,10 @@ export function useEligibilityManifest({
     setManifestPreparing(false);
     setManifestError("");
     setManifestProgress(null);
+    if (epoch?.state === "closed") {
+      closedEpochId.current = epoch.epochId;
+      setClosedMessage(SCANNER_PREPARATION_CLOSED_MESSAGE);
+    }
     if (!epoch?.epochId || epoch.state !== "open") return;
     if (
       action !== "check" &&
@@ -67,7 +76,7 @@ export function useEligibilityManifest({
     const enrollment = { epochId: epoch.epochId, deviceId: epoch.deviceId };
     let refreshing = false;
     const prepare = async () => {
-      if (refreshing || controller.signal.aborted) return;
+      if (refreshing || controller.signal.aborted || closedEpochId.current === enrollment.epochId) return;
       refreshing = true;
       const { onPermissionChanged: onRefusal, onPreparationClosed: onClosed } = refusals.current;
       setManifestPreparing(true);
@@ -94,6 +103,7 @@ export function useEligibilityManifest({
         if (eligibilityRefreshRefused(error)) {
           eligibilityManifest.current = null;
           if (eligibilityPreparationClosed(error)) {
+            closedEpochId.current = enrollment.epochId;
             const message = eligibilityRefreshError(error);
             setClosedMessage(message);
             setManifestError("");

@@ -1,3 +1,4 @@
+import { useScannerCapturePause } from "./useScannerCapturePause";
 import { useScannerManualEntry } from "./useScannerManualEntry";
 import { ScannerDiagnosticsView } from "./ScannerDiagnosticsView";
 import { useScannerFeedback } from "./useScannerFeedback";
@@ -162,7 +163,8 @@ export function EventScannerCapture({
     { deferUntilSubmit: online && !collectorContext && action !== "lead" ? ["badgeId"] : [] },
   );
   const syncHistory = useScannerSyncHistory(operatorUserId, slug);
-  const operatorPaused = useRef(false);
+  const capturePause = useScannerCapturePause(badgeCamera.stop, () => autoStart.cancel());
+  const operatorPaused = capturePause.paused;
   useScannerSessionFence(
     operatorUserId,
     () => {
@@ -527,10 +529,7 @@ export function EventScannerCapture({
             sync={sync}
             refreshEligibility={preparation.eligibility.refresh}
             onMessage={setMessage}
-            onCapturePause={(paused) => {
-              if (paused) badgeCamera.stop();
-              operatorPaused.current = paused;
-            }}
+            onCapturePause={capturePause.pauseSession}
             status={{
               pending,
               uploadStatus,
@@ -567,9 +566,7 @@ export function EventScannerCapture({
           uploadStatus={uploadStatus}
           cooldown={{ ...cooldown, saving: cooldown.saving || busy }}
           screenAwake={screenAwake}
-          onOperatorPause={(paused) => {
-            operatorPaused.current = paused;
-          }}
+          onOperatorPause={capturePause.setPaused}
           cameraActive={badgeCamera.active}
           cameraStarting={badgeCamera.starting}
           cameraError={badgeCamera.error}
