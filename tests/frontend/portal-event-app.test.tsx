@@ -385,6 +385,8 @@ describe("event home", () => {
     expect(liveList?.textContent).toContain("Blue hall");
     // On an event day the home says whether the attendee is checked in, on the event clock.
     await vi.waitFor(() => expect(host.textContent).toContain("You're checked in"));
+    // Invitations expire at the start, so a live event no longer offers one.
+    expect(host.textContent).not.toContain("Bring a colleague");
     expect(host.textContent).toContain("Since 09:12");
     // Two bounded, server-filtered agenda reads instead of walking the whole program, and today's check-in.
     const from = encodeURIComponent(new Date(NOW).toISOString());

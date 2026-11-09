@@ -244,6 +244,8 @@ export function EventHome({ event }: { event: ParticipantEventDetail }) {
   const phase = eventPhase(event.startsAt, event.endsAt);
   const ended = phase.kind === "ended";
   const [inviting, showInvitation, closeInvitation] = useDialogQueryState("inviteColleague");
+  // Invitations expire when the event starts, so only an upcoming event can still take one.
+  const canInvite = phase.kind === "upcoming" && eventRegistrationStanding(event).status === "registered";
   const current =
     (phase.kind === "live" || phase.kind === "upcoming") && eventRegistrationStanding(event).status === "registered";
   const now = useEventNow(event.slug, current);
@@ -272,7 +274,7 @@ export function EventHome({ event }: { event: ParticipantEventDetail }) {
         ))}
       <TicketCard event={event} ended={ended} />
       <ProposalsCard event={event} />
-      {!ended && eventRegistrationStanding(event).status === "registered" && (
+      {canInvite && (
         <EventCard eyebrow="Invitations" title="Bring a colleague">
           <p>Know someone who would benefit from this event?</p>
           <div class="pk-cluster">
@@ -280,7 +282,7 @@ export function EventHome({ event }: { event: ParticipantEventDetail }) {
           </div>
         </EventCard>
       )}
-      {inviting && !ended && eventRegistrationStanding(event).status === "registered" && (
+      {inviting && canInvite && (
         <Suspense fallback={<Spinner label="Loading invitation form…" />}>
           <InviteColleagueDialog eventSlug={event.slug} onClose={() => void closeInvitation()} />
         </Suspense>
