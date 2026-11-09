@@ -57,7 +57,7 @@ import {
   inviteSpeakerAndSubmitCapacityProposal,
   setupProposalSpeakerCapacityWorkflow,
 } from "./helpers/proposal-speaker-capacity";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery, mutateBeforeNextBatch } from "./helpers/database-races";
 import { prepareRotateUserProposalSpeakerManageSecrets } from "../functions/_lib/services/registrations/manage-capability-revocation";
 import { setSpeakerPresentationReminderPreference } from "../functions/_lib/services/speaker-presentation-reminder-preferences";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
@@ -3023,10 +3023,14 @@ describe("speaker nomination by attendees", () => {
 
   it("does not insert a peer speaker nomination after a concurrent event schedule change", async () => {
     const manageToken = await registerAndConfirmAttendeeDirect();
-    const racingDb = mutateBeforeNextBatch(env.DB, async () => {
-      await env.DB.prepare("UPDATE events SET ends_at = starts_at WHERE slug = 'pqc-2026'").run();
-    });
-    const racingEnv = { ...env, DB: racingDb } as any;
+    const racingDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => /INSERT(?: OR IGNORE)? INTO invites/i.test(sql),
+      async () => {
+        await env.DB.prepare("UPDATE events SET ends_at = starts_at WHERE slug = 'pqc-2026'").run();
+      },
+    );
+    const racingEnv = { ...env, DB: racingDb };
 
     await expect(
       createPeerInvitations(
