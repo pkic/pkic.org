@@ -252,6 +252,15 @@ describe("registration email-first entry", () => {
     }
     await act(() => next.click());
     await settle();
+    const organization = document.querySelector<HTMLSelectElement>("select")!;
+    expect(document.activeElement).toBe(organization);
+    expect(organization.value).toBe("");
+    await act(() => {
+      organization.value = [...organization.options].find((option) => option.value)!.value;
+      organization.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(() => next.click());
+    await settle();
     expect(document.activeElement).toBe(title);
     expect(title.getAttribute("aria-invalid")).toBe("true");
   });

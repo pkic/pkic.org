@@ -10,7 +10,8 @@ import { pinReviewedStaffWorkflow } from "./helpers/membership-workflows";
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "./helpers/app";
+import app, { callApi } from "./helpers/app";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
@@ -112,6 +113,134 @@ describe("Post-approval onboarding", () => {
     await seedWorkingGroup("pqc", "pqc@lists.pkic.org");
     await seedWorkingGroup("ca", "ca@lists.pkic.org");
   });
+
+  it("approves the selected organization by ID after its name changes on a shared domain", async () => {
+    const { id } = await createReviewedApplication();
+    const owner = await insertOrganization(env.DB, "Other Company");
+    const selected = await insertOrganization(env.DB, "Acme Corp");
+    const at = new Date().toISOString();
+    const claim = await env.DB.prepare("SELECT id FROM organization_domain_claims WHERE application_id=?")
+      .bind(id)
+      .first<string>("id");
+    await env.DB.batch([
+      env.DB.prepare("UPDATE organization_domain_claims SET application_id=NULL,organization_id=? WHERE id=?").bind(
+        owner,
+        claim,
+      ),
+      env.DB.prepare(
+        `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
+      ).bind(crypto.randomUUID(), claim, selected, at, at),
+      env.DB.prepare("UPDATE member_applications SET organization_id=? WHERE id=?").bind(selected, id),
+      env.DB.prepare("UPDATE organizations SET name=?,normalized_name=? WHERE id=?").bind(
+        "Renamed Acme",
+        normalizeOrgName("Renamed Acme"),
+        selected,
+      ),
+    ]);
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await response.json()).toMatchObject({ organizationId: selected });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT organization_id FROM organization_domain_claims WHERE domain=? ORDER BY organization_id",
+        ["acme.test"],
+      ),
+    ).toEqual(
+      [{ organization_id: owner }, { organization_id: selected }].sort((a, b) =>
+        a.organization_id.localeCompare(b.organization_id),
+      ),
+    );
+  });
+
+  it.each(["before approval", "before commit", "before final review"])(
+    "refuses a reused claim removed %s and rolls back provisioning",
+    async (timing) => {
+      const { id } = await createReviewedApplication();
+      if (timing === "before final review")
+        await env.DB.prepare(
+          "UPDATE membership_application_steps SET state='active',completed_at=NULL WHERE application_id=?",
+        )
+          .bind(id)
+          .run();
+      const owner = await insertOrganization(env.DB, "Other Company");
+      const selected = await insertOrganization(env.DB, "Acme Corp");
+      const at = new Date().toISOString();
+      const claim = await env.DB.prepare("SELECT id FROM organization_domain_claims WHERE application_id=?")
+        .bind(id)
+        .first<string>("id");
+      await env.DB.batch([
+        env.DB.prepare("UPDATE organization_domain_claims SET application_id=NULL,organization_id=? WHERE id=?").bind(
+          owner,
+          claim,
+        ),
+        env.DB.prepare(
+          "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,'acme.test',?,?,?)",
+        ).bind(crypto.randomUUID(), selected, at, at),
+        env.DB.prepare("UPDATE member_applications SET organization_id=? WHERE id=?").bind(selected, id),
+      ]);
+      const removeClaim = () =>
+        env.DB.prepare("DELETE FROM organization_domain_claims WHERE organization_id=?").bind(selected).run();
+      if (timing !== "before commit") await removeClaim();
+      const db =
+        timing === "before commit"
+          ? mutateBeforeMatchingQuery(env.DB, (sql) => sql.includes("INSERT OR IGNORE INTO members"), removeClaim)
+          : env.DB;
+      const before = await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log UNION ALL SELECT id FROM email_outbox UNION ALL SELECT id FROM member_application_events",
+      );
+      const revision = await env.DB.prepare(
+        "SELECT revision FROM membership_application_workflows WHERE application_id=? AND superseded_at IS NULL",
+      )
+        .bind(id)
+        .first<number>("revision");
+      const response = await callApi(
+        { ...env, DB: db },
+        `/api/v1/members/applications/${id}/${timing === "before final review" ? "reviews/completion" : "approve"}`,
+        {
+          method: "POST",
+          headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+          body:
+            timing === "before final review"
+              ? JSON.stringify({ expectedRevision: revision, reason: "Complete the reviewed application" })
+              : undefined,
+        },
+      );
+      expect(response.status, await response.clone().text()).toBe(409);
+      expect(await response.json()).toMatchObject({
+        error: {
+          code: timing === "before commit" ? "MEMBERSHIP_WORKFLOW_CHANGED" : "DOMAIN_CLAIM_LOST",
+          ...(timing !== "before commit"
+            ? {
+                message:
+                  "Acme Corp no longer has the email domain acme.test. Add it under Email domains, or correct the application's organization before approving.",
+              }
+            : {}),
+        },
+      });
+      if (timing === "before final review")
+        expect(
+          await env.DB.prepare("SELECT state,completed_at FROM membership_application_steps WHERE application_id=?")
+            .bind(id)
+            .first(),
+        ).toMatchObject({ state: "active", completed_at: null });
+      expect(await env.DB.prepare("SELECT stage FROM member_applications WHERE id=?").bind(id).first("stage")).toBe(
+        "processing",
+      );
+      expect(await queryAll(env.DB, "SELECT id FROM members WHERE organization_id=?", [selected])).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT id FROM identities WHERE organization_id=?", [selected])).toEqual([]);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT id FROM audit_log UNION ALL SELECT id FROM email_outbox UNION ALL SELECT id FROM member_application_events",
+        ),
+      ).toEqual(before);
+      expect(
+        await queryAll(env.DB, "SELECT organization_id FROM organization_domain_claims WHERE domain='acme.test'"),
+      ).toEqual([{ organization_id: owner }]);
+    },
+  );
 
   it("refuses approving an organization's application until its applicant's job title is recorded", async () => {
     const { id } = await createReviewedApplication({}, { working_groups: ["pqc"], job_title: null });

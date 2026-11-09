@@ -5,10 +5,16 @@ import { AppError } from "../../../errors";
 import type { DatabaseLike, StatementLike } from "../../../types";
 import { getMembershipWorkflowVersion } from "./catalog";
 
-export async function requireCategoryWorkflow(db: DatabaseLike, category: MembershipCategoryCatalogEntry) {
+export async function requireCategoryWorkflow(
+  db: DatabaseLike,
+  category: MembershipCategoryCatalogEntry,
+  observed?: MembershipWorkflowVersion | null,
+) {
   if (!category.active || !category.workflowVersionId)
     throw new AppError(409, "MEMBERSHIP_CATEGORY_UNAVAILABLE", "This category is not accepting applications.");
-  const version = await getMembershipWorkflowVersion(db, category.workflowVersionId);
+  const version =
+    observed === undefined ? await getMembershipWorkflowVersion(db, category.workflowVersionId) : observed;
+  if (!version) throw new AppError(404, "MEMBERSHIP_WORKFLOW_NOT_FOUND", "Membership workflow version not found");
   if (version.status !== "published" || version.archivedAt)
     throw new AppError(409, "MEMBERSHIP_WORKFLOW_UNPUBLISHED", "The selected category has no published workflow.");
   return version;

@@ -34,6 +34,7 @@ import {
 } from "../assets/shared/schemas/membership-application-management";
 import { membershipCategoryCatalogResponseSchema } from "../assets/shared/schemas/membership-categories";
 import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
+import { insertOrganization } from "./helpers/membership";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -107,6 +108,68 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
       grants: administratorGrants,
     };
     adminToken = await createAdminSession(env.DB, adminId, "membership-application-management-token");
+  });
+
+  it.each([false, true])(
+    "keeps a renamed selected organization provisional when it already had an application claim (%s)",
+    async (hasApplicationClaim) => {
+      const selected = await insertOrganization(env.DB, "Selected Organization");
+      const { id } = await createApplication({ organization_name: "Selected Organization" });
+      await env.DB.prepare("UPDATE member_applications SET organization_id=? WHERE id=?").bind(selected, id).run();
+      await env.DB.prepare(
+        "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
+      )
+        .bind(crypto.randomUUID(), "example.test", selected, new Date().toISOString(), new Date().toISOString())
+        .run();
+      if (!hasApplicationClaim)
+        await env.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id=?").bind(id).run();
+      const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ organizationName: "Corrected Organization" }),
+      });
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(
+        await env.DB.prepare("SELECT organization_id FROM member_applications WHERE id=?")
+          .bind(id)
+          .first("organization_id"),
+      ).toBeNull();
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT application_id,organization_id FROM organization_domain_claims WHERE application_id=?",
+          [id],
+        ),
+      ).toEqual([{ application_id: id, organization_id: null }]);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM organization_domain_claims WHERE organization_id=?", [selected]),
+      ).toHaveLength(1);
+    },
+  );
+
+  it("restores a lost provisional domain claim when staff correct a proposed organization name", async () => {
+    const { id } = await createApplication({ organization_name: "Proposed Organization" });
+    await env.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id=?").bind(id).run();
+    const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ organizationName: "Corrected Proposed Organization" }),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT domain,organization_id FROM organization_domain_claims WHERE application_id=?", [
+        id,
+      ]),
+    ).toEqual([{ domain: "example.test", organization_id: null }]);
+    expect(await queryAll(env.DB, "SELECT id FROM organizations WHERE name='Corrected Proposed Organization'")).toEqual(
+      [],
+    );
+    const retry = await call(adminToken, `/api/v1/members/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ organizationName: "Another Corrected Name" }),
+    });
+    expect(retry.status).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM organization_domain_claims WHERE application_id=?", [id]),
+    ).toHaveLength(1);
   });
 
   it("returns the same configured active requirement in list and detail, and clears it for terminal applications", async () => {
@@ -226,6 +289,77 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
     // duplicate-application detection (Fix 1's subject) doesn't desync.
     expect(rows[0].organization_domain).toBe("newdomain.test");
     expect(rows[0].stage).toBe("submitted");
+  });
+
+  it.each(["organization", "application"])(
+    "moves an application onto a shared domain held by another %s",
+    async (kind) => {
+      const { id } = await createApplication();
+      if (kind === "application") {
+        await seedMemberApplication({
+          applicantEmail: "other@occupied.test",
+          organizationName: "Other Organization",
+          organizationDomain: "occupied.test",
+        });
+      } else {
+        const organization = await insertOrganization(env.DB, "Claimed Organization");
+        await env.DB.prepare(
+          "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
+        )
+          .bind(crypto.randomUUID(), "occupied.test", organization, new Date().toISOString(), new Date().toISOString())
+          .run();
+      }
+      const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ applicantEmail: "corrected@occupied.test", applicantName: "Changed Name" }),
+      });
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(
+        await queryAll(env.DB, "SELECT applicant_name,organization_domain FROM member_applications WHERE id=?", [id]),
+      ).toEqual([{ applicant_name: "Changed Name", organization_domain: "occupied.test" }]);
+      expect(
+        await queryAll(env.DB, "SELECT domain FROM organization_domain_claims WHERE application_id=?", [id]),
+      ).toEqual([{ domain: "occupied.test" }]);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM organization_domain_claims WHERE domain='occupied.test'"),
+      ).toHaveLength(2);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='application_edited' AND entity_id=?", [id]),
+      ).toHaveLength(1);
+    },
+  );
+
+  it("preserves the selected domain during edits and rejects an incompatible email", async () => {
+    const { id } = await createApplication({ applicant_email: "person@division.example.test" });
+    const selected = await insertOrganization(env.DB, "Selected organization");
+    const other = await insertOrganization(env.DB, "Other organization");
+    await env.DB.prepare("UPDATE member_applications SET organization_id = ? WHERE id = ?").bind(selected, id).run();
+    await env.DB.prepare(
+      "INSERT INTO organization_domain_claims (id, domain, organization_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+    )
+      .bind(crypto.randomUUID(), "division.example.test", other, new Date().toISOString(), new Date().toISOString())
+      .run();
+
+    const path = `/api/v1/members/applications/${id}`;
+    const update = await call(adminToken, path, {
+      method: "PATCH",
+      body: JSON.stringify({ applicantName: "New Name" }),
+    });
+    expect(update.status).toBe(200);
+    const incompatible = await call(adminToken, path, {
+      method: "PATCH",
+      body: JSON.stringify({ applicantEmail: "person@unrelated.test" }),
+    });
+    expect(incompatible.status).toBe(409);
+    const rows = await queryAll<{ organization_domain: string; applicant_email: string }>(
+      env.DB,
+      "SELECT organization_domain, applicant_email FROM member_applications WHERE id = ?",
+      id,
+    );
+    expect(rows[0]).toMatchObject({
+      organization_domain: "example.test",
+      applicant_email: "person@division.example.test",
+    });
   });
 
   it("fails closed when answer edits encounter a weakened workflow policy field", async () => {

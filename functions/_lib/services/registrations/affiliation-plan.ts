@@ -16,64 +16,31 @@ export async function planRegistrationAffiliation(
   basis: VerifiedAffiliationBasis,
   at: string,
 ) {
-  const pendingClaim = basis.claims.find((claim) => claim.applicationId);
-  if (!pendingClaim) {
-    try {
-      return {
-        ...(await planVerifiedAffiliation(db, authority, input, basis, at)),
-        outcome: "linked" as const,
-        prepareReview: undefined,
-      };
-    } catch (error) {
-      if (
-        !(error instanceof AppError) ||
-        error.code !== "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED" ||
-        !input.organizationName
-      )
-        throw error;
-      const organizationName = input.organizationName;
-      return {
-        identityId: null,
-        representation: { organizationName: null, jobTitle: null },
-        outcome: "review_required" as const,
-        statements: [prepareAuthorizationGuard(db, authority.proofEvidence)],
-        prepareReview: (registrationId: string) =>
-          prepareRegistrationOrganizationReview(db, {
-            registrationId,
-            userId: authority.userId,
-            organization: { name: organizationName, jobTitle: input.jobTitle },
-            domain: basis.domain,
-            at,
-          }),
-      };
-    }
+  try {
+    return {
+      ...(await planVerifiedAffiliation(db, authority, input, basis, at)),
+      outcome: "linked" as const,
+      prepareReview: undefined,
+    };
+  } catch (error) {
+    const organizationName =
+      input.organizationName ??
+      basis.organizations.find((organization) => organization.id === input.organizationId)?.name;
+    if (!(error instanceof AppError) || error.code !== "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED" || !organizationName)
+      throw error;
+    return {
+      identityId: null,
+      representation: { organizationName: null, jobTitle: null },
+      outcome: "review_required" as const,
+      statements: [prepareAuthorizationGuard(db, authority.proofEvidence)],
+      prepareReview: (registrationId: string) =>
+        prepareRegistrationOrganizationReview(db, {
+          registrationId,
+          userId: authority.userId,
+          organization: { name: organizationName, jobTitle: input.jobTitle },
+          domain: basis.domain,
+          at,
+        }),
+    };
   }
-  if (input.organizationId !== null || !input.organizationName)
-    throw new AppError(422, "ORGANIZATION_NAME_REQUIRED", "Provide the organization name for review.");
-  const organizationName = input.organizationName;
-  return {
-    identityId: null,
-    representation: { organizationName: null, jobTitle: null },
-    outcome: "review_required" as const,
-    statements: [
-      prepareAuthorizationGuard(db, {
-        sql: `SELECT 1 WHERE EXISTS (${authority.proofEvidence.sql}) AND EXISTS (
-          SELECT 1 FROM organization_domain_claims WHERE id=? AND domain=? AND application_id=? AND organization_id IS NULL)`,
-        bindings: [
-          ...authority.proofEvidence.bindings,
-          pendingClaim.id,
-          pendingClaim.domain,
-          pendingClaim.applicationId,
-        ],
-      }),
-    ],
-    prepareReview: (registrationId: string) =>
-      prepareRegistrationOrganizationReview(db, {
-        registrationId,
-        userId: authority.userId,
-        organization: { name: organizationName, jobTitle: input.jobTitle },
-        domain: basis.domain,
-        at,
-      }),
-  };
 }

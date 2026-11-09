@@ -82,6 +82,53 @@ describe("shared identity mailbox retry", () => {
 });
 
 describe("verified organization domain selection", () => {
+  it.each(["work.example", "sub.work.example"])("requires a domain choice and explains linking %s", async (domain) => {
+    const initial = {
+      email: "person@sub.work.example",
+      domain: "work.example",
+      domains: [
+        { domain: "work.example", canLink: false, organizationName: null },
+        { domain: "sub.work.example", canLink: true, organizationName: null },
+      ],
+      organization: null,
+      organizations: [],
+    };
+    const onUse = vi.fn();
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(() =>
+      render(
+        <VerifiedOrganizationCreateDialog
+          initial={initial}
+          open
+          resolve={async (selected) => ({ ...initial, domain: selected! })}
+          onUse={onUse}
+          onClose={vi.fn()}
+        />,
+        host,
+      ),
+    );
+    const name = controlFor(host, "Organization name") as HTMLInputElement;
+    await act(() => {
+      name.value = "Example Organization";
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const confirm = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent === "Use organization",
+    )!;
+    await act(() => confirm.click());
+    expect(onUse).not.toHaveBeenCalled();
+    const select = controlFor(host, "Email domain") as HTMLSelectElement;
+    await act(() => {
+      select.value = domain;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await vi.waitFor(() => expect(host.textContent).toContain(`linked to your verified email domain ${domain}`));
+    await act(() => confirm.click());
+    expect(onUse).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Example Organization", resolved: expect.objectContaining({ domain }) }),
+    );
+  });
   it("ignores a response from before the dialog was closed and reopened", async () => {
     const initial = {
       email: "person@work.example",
@@ -99,12 +146,22 @@ describe("verified organization domain selection", () => {
     host = document.createElement("div");
     document.body.append(host);
     await act(() => render(<VerifiedOrganizationCreateDialog {...props} open />, host));
+    const selectDomain = async (value: string) => {
+      const select = controlFor(host, "Email domain") as HTMLSelectElement;
+      await act(() => {
+        select.value = value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    };
+    expect((controlFor(host, "Email domain") as HTMLSelectElement).value).toBe("");
+    await selectDomain("sub.work.example");
     await vi.waitFor(() => expect(pending).toHaveLength(1));
     await act(() => render(<VerifiedOrganizationCreateDialog {...props} open={false} />, host));
     await act(() => render(<VerifiedOrganizationCreateDialog {...props} open />, host));
+    await selectDomain("sub.work.example");
     await vi.waitFor(() => expect(pending).toHaveLength(2));
     await act(async () => pending[0]!({ ...initial, domain: "sub.work.example" }));
-    expect((controlFor(host, "Email domain") as HTMLSelectElement).value).toBe("work.example");
+    expect((controlFor(host, "Email domain") as HTMLSelectElement).value).toBe("");
     await act(async () => pending[1]!({ ...initial, domain: "sub.work.example" }));
     await vi.waitFor(() =>
       expect((controlFor(host, "Email domain") as HTMLSelectElement).value).toBe("sub.work.example"),

@@ -21,6 +21,7 @@ export interface MemberApplicationRow {
   applicant_email: string;
   applicant_name: string;
   organization_name: string | null;
+  organization_id: string | null;
   organization_domain: string | null;
   membership_category: string;
   form_submission_id: string | null;
@@ -39,7 +40,7 @@ export interface MemberApplicationRow {
 export async function getMemberApplicationById(db: DatabaseLike, id: string): Promise<MemberApplicationRow | null> {
   return first<MemberApplicationRow>(
     db,
-    `SELECT id, applicant_user_id, join_capability_id, member_id, applicant_email, applicant_name, organization_name, organization_domain,
+    `SELECT id, applicant_user_id, join_capability_id, member_id, applicant_email, applicant_name, organization_name, organization_id, organization_domain,
             membership_category, form_submission_id, stage, stage_entered_at, transition_revision,
             on_hold_subtype, on_hold_reminder_sent_at, review_notes, assigned_to_user_id, manage_token_hash,
             created_at, updated_at

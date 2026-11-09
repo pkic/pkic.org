@@ -2,7 +2,7 @@
 /**
  * An organization's email domains: a view under the record that names where
  * linked people came from, a confirmed removal of a claim, and a claim form
- * that offers the merge when another organization already claims the domain.
+ * that explains when another organization already claims the domain.
  */
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
@@ -23,7 +23,6 @@ vi.mock("../../assets/ts/components/ConfirmDialog", () => ({
 }));
 
 const organizationId = "00000000-0000-4000-8000-000000000040";
-const duplicateId = "00000000-0000-4000-8000-000000000041";
 const mounted: HTMLElement[] = [];
 const requests: Array<{ method: string; path: string; body: unknown }> = [];
 
@@ -71,7 +70,7 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-const preview = { preview: { domain: "acme.example", peopleToLink: 3 } };
+const preview = { preview: { domain: "acme.example", shared: false } };
 
 function stub(previewResponse: Response = json(preview), claimResponse: Response = json({}, 500)): void {
   vi.stubGlobal(
@@ -175,13 +174,12 @@ describe("organization email domains", () => {
     await settle();
   }
 
-  it("says how many people the claim links before sending a claim the contract accepts", async () => {
+  it("explains that people choose their organization before sending a claim", async () => {
     stub(
       json(preview),
       json(
         {
           domain: { domain: "acme.example", status: "claimed", people: 3, claimedAt: "2026-10-10T00:00:00.000Z" },
-          linking: { peopleLinked: 3, continuing: false },
         },
         201,
       ),
@@ -191,7 +189,7 @@ describe("organization email domains", () => {
     await submitClaim(host);
 
     expect(confirmAction.mock.calls[0]?.[0].consequences).toEqual([
-      "3 people with a verified address on @acme.example will be linked to Acme",
+      "People with this email domain will choose their organization.",
     ]);
     const sent = requests.find((request) => request.method === "POST")!;
     expect(sent.path).toBe(`/api/v1/organizations/${organizationId}/domains`);
@@ -202,26 +200,23 @@ describe("organization email domains", () => {
     expect(navigate).toHaveBeenCalledWith(`/organizations/${organizationId}/domains`);
   });
 
-  it("offers the merge instead of a claim when another organization claims the domain", async () => {
+  it("explains that people choose their organization when the domain is shared", async () => {
     stub(
+      json({ preview: { domain: "acme.example", shared: true } }),
       json(
         {
-          error: {
-            code: "ORGANIZATION_DOMAIN_CLAIMED_ELSEWHERE",
-            message: "Acme Duplicate already claims acme.example; merge the organizations instead",
-            details: { organizationId: duplicateId, organizationName: "Acme Duplicate" },
-          },
+          domain: { domain: "acme.example", status: "claimed", people: 0, claimedAt: null },
         },
-        409,
+        201,
       ),
     );
     const host = mount(<OrganizationDomainClaimForm organizationId={organizationId} />);
     await settle();
     await submitClaim(host);
 
-    expect(confirmAction).not.toHaveBeenCalled();
-    expect(requests.some((request) => request.method === "POST")).toBe(false);
-    const merge = Array.from(host.querySelectorAll("a")).find((link) => link.textContent?.includes("Merge"));
-    expect(merge?.getAttribute("href")).toContain(`/organizations/${duplicateId}/merge`);
+    expect(confirmAction.mock.calls[0]?.[0].consequences).toEqual([
+      "People with this email domain will choose their organization.",
+    ]);
+    expect(requests.some((request) => request.method === "POST")).toBe(true);
   });
 });

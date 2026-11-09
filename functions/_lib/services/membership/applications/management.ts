@@ -1,9 +1,10 @@
 import { prepareApplicationEditEvidenceGuard } from "./edit-evidence";
 import { preparePermissionsAuthorizationGuard } from "../../../auth/permissions";
-import { isAuthorizationGuardFailure } from "../../../db/authorization-guard";
+import { isAuthorizationGuardFailure, isStateGuardFailure } from "../../../db/authorization-guard";
 import { getRequestedApplicationGroups } from "./queries";
+import { isApplicationTerminalStage } from "../../../../../assets/shared/schemas/member-applications";
 import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
-import { mailboxKind } from "../../../email-domains/classification";
+import { mailboxKind, organizationDomainCandidates } from "../../../email-domains/classification";
 /**
  * Staff listing/detail queries for member_applications. This management view
  * includes every lifecycle state and staff-only communications and notes.
@@ -37,7 +38,6 @@ import {
 } from "../../forms";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../../audit";
 import {
-  getOrganizationDomainClaim,
   organizationLinkDomain,
   prepareClaimDomainForApplication,
   prepareReleaseApplicationDomainClaim,
@@ -303,8 +303,23 @@ export async function updateMembershipApplication(
 
   // Keep the denormalized application snapshot and canonical claim registry
   // in lockstep. The delete + replacement insert joins the application
-  // update below in one batch, so a conflicting domain rolls everything back.
-  const nextOrganizationDomain = nextIsIndividual ? null : await organizationLinkDomain(db, nextApplicantEmail);
+  // update below in one batch; other organizations and applications may share the domain.
+  if (
+    !nextIsIndividual &&
+    application.organization_id &&
+    application.organization_domain &&
+    !organizationDomainCandidates(nextApplicantEmail).includes(application.organization_domain)
+  )
+    throw new AppError(
+      409,
+      "ORGANIZATION_AFFILIATION_CHANGED",
+      "Confirm the organization for the new email domain before changing this application.",
+    );
+  const nextOrganizationDomain = nextIsIndividual
+    ? null
+    : application.organization_id && application.organization_domain
+      ? application.organization_domain
+      : await organizationLinkDomain(db, nextApplicantEmail);
   const organizationDomainChanged = nextOrganizationDomain !== application.organization_domain;
   if (organizationDomainChanged) {
     if (application.stage === "approved") {
@@ -327,6 +342,15 @@ export async function updateMembershipApplication(
   if (input.organizationName !== undefined && input.organizationName !== application.organization_name) {
     setClauses.push("organization_name = ?");
     values.push(nextOrganizationName);
+    if (application.organization_id) setClauses.push("organization_id = NULL");
+    // A name correction restores a provisional claim, including one lost during review.
+    if (
+      !nextIsIndividual &&
+      nextOrganizationDomain &&
+      !organizationDomainChanged &&
+      !isApplicationTerminalStage(application.stage)
+    )
+      dependentStatements.push(prepareClaimDomainForApplication(db, nextOrganizationDomain, application.id, now));
     changedFields.push("organizationName");
   } else if (
     nextIsIndividual !== currentCategory.isIndividual &&
@@ -339,6 +363,7 @@ export async function updateMembershipApplication(
     // categories never carry an organization_name).
     setClauses.push("organization_name = ?");
     values.push(null);
+    if (application.organization_id) setClauses.push("organization_id = NULL");
   }
 
   if (input.answers) {
@@ -448,6 +473,8 @@ export async function updateMembershipApplication(
       ...dependentStatements,
     ]);
   } catch (error) {
+    if (isStateGuardFailure(error))
+      throw new AppError(409, "ORGANIZATION_DOMAIN_IN_USE", "This organization domain is already claimed");
     if (isAuthorizationGuardFailure(error))
       throw new AppError(
         409,
@@ -459,12 +486,6 @@ export async function updateMembershipApplication(
     }
     if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "APPLICATION_CHANGED", "Application changed while this edit was being prepared");
-    }
-    if (organizationDomainChanged && nextOrganizationDomain) {
-      const claim = await getOrganizationDomainClaim(db, nextOrganizationDomain);
-      if (claim && claim.applicationId !== applicationId) {
-        throw new AppError(409, "ORGANIZATION_DOMAIN_IN_USE", "This organization domain is already claimed");
-      }
     }
     throw error;
   }

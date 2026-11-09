@@ -27,7 +27,7 @@ export const CurrentUserAffiliationOfferDismissalPost = openApiRoute(
   async (c: AdminContext, data) => {
     const db = requestDb(c);
     const actor = await requireIdentityFromRequest(db, c.req.raw, c.env);
-    await dismissAffiliationOffer(db, { userId: actor.userId, organizationId: data.body.organizationId });
+    await dismissAffiliationOffer(db, { ...data.body, userId: actor.userId });
     return jsonPrivate(successResponseSchema.parse({ success: true }), 201);
   },
 );

@@ -31,7 +31,7 @@ import {
   type ActiveFormDefinition,
   type CustomAnswerValue,
 } from "./forms";
-import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
+import { isAuthorizationGuardFailure, isStateGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { AppError } from "../errors";
 import { proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
 import { formatProposalSpeakerLineup } from "./proposal-invite-person";
@@ -345,6 +345,12 @@ export async function submitProposal(
   try {
     await db.batch(statements);
   } catch (error) {
+    if (isStateGuardFailure(error))
+      throw new AppError(
+        409,
+        "ORGANIZATION_AFFILIATION_CHANGED",
+        "The organization changed. Confirm your organization again before submitting.",
+      );
     if (
       isAuthorizationGuardFailure(error) &&
       (await proposalTermsDigest(await getRequiredTerms(db, input.event.id, "speaker"))) !==

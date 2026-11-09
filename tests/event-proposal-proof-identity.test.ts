@@ -177,6 +177,7 @@ describe("shared verified organization choice in a public proposal", () => {
         ),
       });
       expect(saved.status, await saved.clone().text()).toBe(race ? 409 : 200);
+      if (race) expect(await saved.json()).toMatchObject({ error: { code: "ORGANIZATION_AFFILIATION_CHANGED" } });
       const created = await queryAll<{ id: string }>(
         env.DB,
         "SELECT id FROM organizations WHERE name='Division organization'",

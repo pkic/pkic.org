@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { callApi } from "./helpers/app";
 import { createTestRateLimiter, queryAll } from "./helpers/context";
+import type { DatabaseLike } from "../functions/_lib/types";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { resetDb } from "./helpers/reset-db";
 import { createMemberSession } from "./helpers/auth";
 import {
@@ -18,6 +20,7 @@ import {
   membershipApplicationDescriptionAnswers,
   requiredMembershipApplicationAnswers,
   seedMembershipApplicationForm,
+  seedMemberApplication,
   verifiedMemberApplicationPayload,
 } from "./helpers/member-applications";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
@@ -61,9 +64,15 @@ async function identity(
   return created.identityId;
 }
 
-async function applyAs(userId: string, identityId: string, membershipCategory: string, answers = {}) {
+async function applyAs(
+  userId: string,
+  identityId: string,
+  membershipCategory: string,
+  answers = {},
+  db: DatabaseLike = env.DB,
+) {
   const token = await createMemberSession(env.DB, userId, `session-${crypto.randomUUID()}`, undefined, identityId);
-  return callApi(testEnv, "/api/v1/members/applications", {
+  return callApi({ ...testEnv, DB: db }, "/api/v1/members/applications", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
     body: JSON.stringify(
@@ -133,6 +142,89 @@ describe("membership application as a signed-in identity", () => {
       "I work on PKI interoperability.",
     );
   });
+
+  it.each(["own", "another", "pending"])(
+    "accepts an owned organization identity on a domain with a %s claim",
+    async (kind) => {
+      const userId = await person("applicant@identity-claim.test");
+      const organizationId = await insertOrganization(env.DB, "Identity Organization");
+      const identityId = await identity(userId, organizationId);
+      if (kind === "pending") {
+        await seedMemberApplication({
+          applicantEmail: "other@identity-claim.test",
+          organizationName: "Other Applicant Organization",
+          organizationDomain: "identity-claim.test",
+        });
+      } else {
+        const claimant = kind === "own" ? organizationId : await insertOrganization(env.DB, "Other Organization");
+        await env.DB.prepare(
+          "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
+        )
+          .bind(
+            crypto.randomUUID(),
+            "identity-claim.test",
+            claimant,
+            new Date().toISOString(),
+            new Date().toISOString(),
+          )
+          .run();
+      }
+      const response = await applyAs(userId, identityId, "F", { about_organization: "We build PKI services." });
+      expect(response.status, await response.clone().text()).toBe(201);
+      expect(
+        await queryAll(env.DB, "SELECT organization_id FROM member_applications WHERE applicant_user_id=?", [userId]),
+      ).toEqual([{ organization_id: organizationId }]);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT claim.id FROM organization_domain_claims claim JOIN member_applications application ON application.id=claim.application_id WHERE application.applicant_user_id=?",
+          [userId],
+        ),
+      ).toHaveLength(kind === "own" ? 0 : 1);
+    },
+  );
+
+  it.each(["name", "id"])(
+    "rolls back a signed-in submission when another application matches its organization by %s after preflight",
+    async (match) => {
+      const userId = await person("applicant@portal-race.test");
+      const organizationId = await insertOrganization(env.DB, "Portal Race Organization");
+      const identityId = await identity(userId, organizationId);
+      let winner: string | undefined;
+      const racingDb = mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => sql.includes("INSERT INTO member_applications"),
+        async () => {
+          winner = await seedMemberApplication({
+            applicantEmail: "colleague@portal-race.test",
+            organizationName: match === "id" ? "Former Organization Name" : "Portal Race Organization",
+            organizationDomain: "portal-race.test",
+          });
+          if (match === "id")
+            await env.DB.prepare("UPDATE member_applications SET organization_id=? WHERE id=?")
+              .bind(organizationId, winner)
+              .run();
+        },
+      );
+      const response = await applyAs(
+        userId,
+        identityId,
+        "F",
+        { about_organization: "We build PKI services." },
+        racingDb,
+      );
+      expect(response.status, await response.clone().text()).toBe(409);
+      expect(await refusalCode(response)).toBe(APPLICATION_ALREADY_PENDING);
+      expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toEqual([{ id: winner }]);
+      expect(await queryAll(env.DB, "SELECT id FROM form_submissions")).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='member_application_submitted'")).toEqual(
+        [],
+      );
+      expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='application-received'")).toEqual(
+        [],
+      );
+    },
+  );
 
   it("asks for a bio before applying when the identity has none", async () => {
     const userId = await person("nobio@example.test");

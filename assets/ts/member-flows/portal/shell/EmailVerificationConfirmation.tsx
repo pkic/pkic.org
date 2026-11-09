@@ -5,6 +5,7 @@ import {
   ownEmailAddressVerificationPreviewResponseSchema,
   ownEmailAddressVerificationResponseSchema,
   ownEmailAddressVerificationSchema,
+  type OwnEmailAddressVerificationResponse,
 } from "../../../../shared/schemas/own-email-addresses";
 import { ApiClientError, postJson } from "../../../shared/api-client";
 import { Alert } from "../../../ui/Alert";
@@ -15,12 +16,6 @@ import "./Login.css";
 
 const ENDPOINT = "/api/v1/auth/email-verifications";
 const ACCOUNT_HREF = "/portal/#/users/current";
-
-type Verified = {
-  email: string;
-  joinedOrganization: { name: string } | null;
-  offeredOrganization: { name: string } | null;
-};
 
 function linkError(error: unknown): string {
   // The mailbox is proved but belongs to another account: say so, and what to do next.
@@ -41,7 +36,7 @@ export function EmailVerificationConfirmation() {
   const [error, setError] = useState<string | null>(parsed.success ? null : "This verification link is incomplete.");
   const [loading, setLoading] = useState(parsed.success);
   const [verifying, setVerifying] = useState(false);
-  const [verified, setVerified] = useState<Verified | null>(null);
+  const [verified, setVerified] = useState<OwnEmailAddressVerificationResponse | null>(null);
 
   useEffect(() => {
     const previewInput = ownEmailAddressVerificationSchema.safeParse({ token });
@@ -131,17 +126,15 @@ export function EmailVerificationConfirmation() {
               )}
               {verified && (
                 <Alert tone="ok" title={`${verified.email} is verified`}>
-                  {verified.joinedOrganization
-                    ? `You now represent ${verified.joinedOrganization.name} through this address.`
-                    : verified.offeredOrganization
-                      ? `This address belongs to ${verified.offeredOrganization.name}. Sign in to join it.`
-                      : "You can manage this verified address from your profile."}
+                  {verified.offeredOrganization
+                    ? `You can use this address to represent ${verified.offeredOrganization.name}. Sign in to review the organization.`
+                    : "You can manage this verified address from your profile."}
                 </Alert>
               )}
               {!loading && (error || verified) && (
                 <ButtonLink href={ACCOUNT_HREF} variant={verified?.offeredOrganization ? "primary" : "secondary"}>
                   {verified?.offeredOrganization
-                    ? `Sign in to join ${verified.offeredOrganization.name}`
+                    ? `Sign in to review ${verified.offeredOrganization.name}`
                     : "Open portal"}
                 </ButtonLink>
               )}

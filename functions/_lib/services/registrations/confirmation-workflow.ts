@@ -1,5 +1,5 @@
 import type { RegistrationOrganizationOutcome } from "../../../../assets/shared/schemas/registration";
-import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { isAuthorizationGuardFailure, isStateGuardFailure } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -13,7 +13,6 @@ import { firstReferralCodeQuerySql } from "../referral-code-projection";
 import { nowIso } from "../../utils/time";
 import type { RegistrationConfirmOrganization } from "../../../../assets/shared/schemas/registration";
 import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
-import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
 import { workEmailDomain } from "../../email-domains/classification";
 import { outboxIdForOperation } from "../../email/outbox-queue";
 
@@ -50,6 +49,12 @@ async function commitConfirmationIntent(
   try {
     await db.batch([...prepared.statements, emailStatement]);
   } catch (error) {
+    if (prepared.affiliationConfirmed && isStateGuardFailure(error))
+      throw new AppError(
+        409,
+        "ORGANIZATION_AFFILIATION_CHANGED",
+        "The organization changed. Confirm your organization again before registering.",
+      );
     if (prepared.affiliationConfirmed && isAuthorizationGuardFailure(error))
       throw new AppError(
         409,
@@ -114,7 +119,7 @@ async function confirmRegistrationWithNotificationOnce(
     signingSecret: payload.signingSecret,
     organization: payload.organization,
   });
-  if (workEmailDomain(prepared.verifiedAddress.normalizedEmail) && !payload.organization?.contextToken)
+  if (workEmailDomain(prepared.verifiedEmail) && !payload.organization?.contextToken)
     throw new AppError(
       422,
       "REGISTRATION_REPRESENTATION_REQUIRED",
@@ -137,8 +142,6 @@ async function confirmRegistrationWithNotificationOnce(
     outboxId: await outboxIdForOperation(idempotencyKey),
   });
   await commitConfirmationIntent(db, prepared, email.statement);
-  // The proved address joins the organization its domain belongs to, when the shared rule links it automatically.
-  if (!prepared.affiliationConfirmed) await linkVerifiedAddressToDomainOrganization(db, prepared.verifiedAddress);
   // Its own atomic command after the confirmation: the committed confirmation is the mailbox proof,
   // and an organization that needs review never undoes the confirmation itself.
   const organizationOutcome = prepared.affiliationConfirmed

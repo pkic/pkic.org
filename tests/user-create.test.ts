@@ -10,6 +10,9 @@ import { createAdminSession } from "./helpers/auth";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { resetDb } from "./helpers/reset-db";
+import { findUserByEmail } from "../functions/_lib/services/users";
+import { insertUser } from "./helpers/membership";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 
 let token: string;
 let actorId: string;
@@ -30,6 +33,22 @@ function request(body: unknown, authenticated = true) {
   });
 }
 describe("staff user creation", () => {
+  it("resolves primary and secondary emails, including missing addresses, in one read", async () => {
+    const userId = await insertUser(env.DB, "owner@example.test");
+    await env.DB.prepare(`INSERT INTO user_emails (id,user_id,email,normalized_email,created_at)
+      VALUES (?,?,'alias@example.test','alias@example.test',?)`)
+      .bind(crypto.randomUUID(), userId, "2026-01-01T00:00:00.000Z")
+      .run();
+    for (const [email, expected] of [
+      ["Owner@Example.test", userId],
+      ["alias@example.test", userId],
+      ["missing@example.test", null],
+    ] as const) {
+      const profile = profileD1Flow(env.DB);
+      expect((await findUserByEmail(profile.db, email))?.id ?? null).toBe(expected);
+      expect(profile.summary().roundTrips).toBe(1);
+    }
+  });
   it("creates an ordinary unverified account atomically with its audit entry", async () => {
     const response = await request({ email: "New.Person@Example.test", firstName: "New", lastName: "Person" });
     expect(response.status).toBe(201);

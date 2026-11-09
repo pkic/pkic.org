@@ -30,7 +30,6 @@ import { registrationConfirmationUrl, registrationManageCapability } from "./cap
 import { readRegistrationAffiliation } from "./selected-identity";
 import type { VerifiedRegistrationIdentityContext } from "./types";
 import { nowIso } from "../../utils/time";
-import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
 import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
 import { findRegistrationGroup, prepareGroupEventRegistrationGuard } from "./authorization";
 import { eventTakesRegistrations } from "./email-proof";
@@ -91,24 +90,16 @@ function requireRegistrationPolicy(
 }
 
 /**
- * After a verified registration commits, as the confirmation did: the proved
- * address joins the organization its domain belongs to when the shared rule
- * links it, and an organization the form asked for is linked or queued for
- * review in its own command, never undoing the registration.
+ * After a verified registration commits, link the organization chosen on the
+ * form or queue it for review without undoing the registration.
  */
 async function linkVerifiedRegistrant(
   db: DatabaseLike,
   input: {
     registrationId: string;
-    userId: string;
-    normalizedEmail: string;
     organization?: RegistrationConfirmOrganization;
   },
 ): Promise<RegistrationOrganizationOutcome | null> {
-  await linkVerifiedAddressToDomainOrganization(db, {
-    userId: input.userId,
-    normalizedEmail: input.normalizedEmail,
-  });
   return input.organization
     ? linkConfirmedRegistrationOrganization(db, {
         registrationId: input.registrationId,
@@ -332,8 +323,6 @@ export async function submitEventRegistration(
     : metadata.mailboxVerified
       ? await linkVerifiedRegistrant(db, {
           registrationId: registration.id,
-          userId: user.id,
-          normalizedEmail: body.email,
           organization: body.organization,
         })
       : null;

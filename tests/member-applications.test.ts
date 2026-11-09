@@ -74,6 +74,24 @@ describe("POST /api/v1/members/applications", () => {
     await seedMembershipApplicationForm();
   });
 
+  it.each(["retired", "archived"])("refuses an application when its category workflow is %s", async (state) => {
+    const at = "2026-01-01T00:00:00.000Z";
+    if (state === "retired") {
+      await env.DB.prepare("UPDATE membership_categories SET retired_at=? WHERE code='A'").bind(at).run();
+    } else {
+      await env.DB.prepare(`INSERT INTO membership_workflow_archives(version_id,archived_at,reason)
+        SELECT workflow_version_id,?,? FROM membership_categories WHERE code='A'`)
+        .bind(at, "Synthetic test")
+        .run();
+    }
+    const response = await callApi(makeEnv(), await applicationRequest(validPayload));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: { code: state === "retired" ? "MEMBERSHIP_CATEGORY_UNAVAILABLE" : "MEMBERSHIP_WORKFLOW_UNPUBLISHED" },
+    });
+    expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toEqual([]);
+  });
+
   it("accepts an individual application without required organization-only answers", async () => {
     await env.DB.prepare(
       "UPDATE form_fields SET required = 1 WHERE key IN ('organization_website', 'about_organization')",

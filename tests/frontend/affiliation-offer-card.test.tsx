@@ -89,6 +89,44 @@ async function enterJobTitle(host: HTMLElement, value: string): Promise<void> {
 }
 
 describe("affiliation offer card", () => {
+  it("invites a user with a shared domain to choose an organization", async () => {
+    const writes = stubOffer({
+      kind: "choose_organization",
+      organizationIds: [organizationId],
+      emailId: null,
+      domain: "shared.example",
+      writtenOrganizationName: null,
+    });
+    const host = mount(<AffiliationOfferCard />);
+    await settle();
+    expect(host.textContent).toContain("More than one organization uses @shared.example");
+    await click(host, "Choose organization");
+    expect(document.body.textContent).toContain("Add identity");
+    expect(writes).toEqual([]);
+  });
+  it("lets an independent person dismiss a shared-domain offer", async () => {
+    const writes = stubOffer({
+      kind: "choose_organization",
+      organizationIds: [organizationId],
+      emailId: null,
+      domain: "shared.example",
+      writtenOrganizationName: null,
+    });
+    const host = mount(<AffiliationOfferCard />);
+    await settle();
+    await click(host, "I am independent");
+    expect(writes.map((write) => write.path)).toEqual(["/api/v1/users/current/identities/offer/dismissals"]);
+    expect(affiliationOfferDismissalSchema.parse(writes[0].body)).toEqual({
+      organizationId: null,
+      answeredOffer: {
+        kind: "choose_organization",
+        emailId: null,
+        domain: "shared.example",
+        organizationIds: [organizationId],
+      },
+    });
+    expect(host.querySelector("button")).toBeNull();
+  });
   it("offers the organization the work address belongs to and joins it through the existing join", async () => {
     const writes = stubOffer({
       kind: "organization",
@@ -99,7 +137,7 @@ describe("affiliation offer card", () => {
     });
     const host = mount(<AffiliationOfferCard />);
     await settle();
-    expect(host.textContent).toContain("You’ll be linked to IBM (from your @ibm.nl email).");
+    expect(host.textContent).toContain("Do you represent IBM using your @ibm.nl email?");
     expect(host.textContent).toContain("Your profile said “IBM Netherlands”.");
 
     // Joining creates an organization identity, which never goes without a job title.
@@ -132,6 +170,21 @@ describe("affiliation offer card", () => {
     expect(affiliationOfferDismissalSchema.parse(writes[0]!.body)).toEqual({ organizationId });
   });
 
+  it("lets a person choose or add another organization for a single-domain match", async () => {
+    const writes = stubOffer({
+      kind: "organization",
+      organization: { id: organizationId, name: "IBM" },
+      emailId: null,
+      domain: "ibm.nl",
+      writtenOrganizationName: null,
+    });
+    const host = mount(<AffiliationOfferCard />);
+    await settle();
+    await click(host, "Choose another organization");
+    expect(document.body.textContent).toContain("Add identity");
+    expect(writes).toEqual([]);
+  });
+
   it("asks a free-mail person for their organization's address, or to say they are independent", async () => {
     const writes = stubOffer({ kind: "work_address", freeDomains: ["gmail.com"], writtenOrganizationName: null });
     const host = mount(<AffiliationOfferCard />);
@@ -141,9 +194,12 @@ describe("affiliation offer card", () => {
       (link) => link.textContent?.trim() === "Add your work address",
     );
     expect(addAddress?.getAttribute("href")).toBe("#/users/current/emails/new");
-    await click(host, "I’m independent");
+    await click(host, "I am independent");
     expect(writes.map((write) => write.path)).toEqual(["/api/v1/users/current/identities/offer/dismissals"]);
-    expect(affiliationOfferDismissalSchema.parse(writes[0]!.body)).toEqual({ organizationId: null });
+    expect(affiliationOfferDismissalSchema.parse(writes[0]!.body)).toEqual({
+      organizationId: null,
+      answeredOffer: { kind: "work_address" },
+    });
   });
 
   it("tells a person about an automatic link once, and either keeps it or says it is not theirs", async () => {

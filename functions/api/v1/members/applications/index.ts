@@ -86,6 +86,7 @@ async function createThroughVerifiedEmail(c: any, rawBody: unknown) {
     joinCapabilityId: joinCapability.capabilityId,
     applicantKind: joinCapability.applicantKind,
     applicantUserId: joinCapability.applicantUserId,
+    selectedOrganization: joinCapability.organization,
   });
 }
 

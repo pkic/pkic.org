@@ -24,7 +24,7 @@ import {
   eventProposalProofReplayError,
 } from "./event-proposal-proof-redemption";
 import { prepareVerifiedOrganizationAffiliation } from "./identities";
-import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../db/authorization-guard";
+import { prepareAuthorizationGuard, isAuthorizationGuardFailure, isStateGuardFailure } from "../db/authorization-guard";
 import { parseCapabilityToken } from "../auth/capability-token";
 import { activeEffectiveInviteExpirySql, effectiveProposalSpeakerInviteExpirySql } from "../invite-validity";
 import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/schemas/proposal-status";
@@ -384,6 +384,12 @@ export async function updateSpeakerProfile(
   try {
     await db.batch(statements);
   } catch (error) {
+    if (isStateGuardFailure(error))
+      throw new AppError(
+        409,
+        "ORGANIZATION_AFFILIATION_CHANGED",
+        "The organization changed. Confirm your organization again before updating your speaker details.",
+      );
     if (isEventProposalProofReplay(error)) throw eventProposalProofReplayError();
     if (isAuditChangeGuardFailure(error) || isAuthorizationGuardFailure(error)) {
       throw new AppError(

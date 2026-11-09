@@ -367,7 +367,15 @@ export async function mergeOrganizations(
     ),
     ...prepareIdentityMoves(authorizedDb, { mergeId, targetId: target.id, sourceId: source.id, staff: actor, at }),
     authorizedDb
+      .prepare(`DELETE FROM organization_domain_claims
+      WHERE organization_id=? AND EXISTS (SELECT 1 FROM organization_domain_claims kept
+        WHERE kept.domain=organization_domain_claims.domain AND kept.organization_id=?)`)
+      .bind(source.id, target.id),
+    authorizedDb
       .prepare("UPDATE organization_domain_claims SET organization_id = ?, updated_at = ? WHERE organization_id = ?")
+      .bind(target.id, at, source.id),
+    authorizedDb
+      .prepare("UPDATE member_applications SET organization_id = ?, updated_at = ? WHERE organization_id = ?")
       .bind(target.id, at, source.id),
     authorizedDb
       .prepare("UPDATE sponsorships SET organization_id = ?, updated_at = ? WHERE organization_id = ?")

@@ -1,9 +1,10 @@
 /** The production chooser and proposal embedding with synthetic verified-mailbox fixtures. */
-import { useRef } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import {
   VerifiedOrganizationDetails,
   type VerifiedOrganizationController,
 } from "../../components/identities/VerifiedOrganizationDetails";
+import { VerifiedOrganizationNameField } from "../../components/identities/VerifiedOrganizationNameField";
 import { EventProposalIdentityStep } from "../../components/EventProposalIdentityStep";
 import { identityAffiliationPreviewResponseSchema } from "../../../shared/schemas/identity-affiliation";
 
@@ -23,7 +24,14 @@ export function VerifiedOrganizationPreview() {
   const controller = useRef<VerifiedOrganizationController>({});
   return (
     <VerifiedOrganizationDetails
-      initial={initial}
+      initial={{
+        ...initial,
+        organization: null,
+        organizations: [
+          ...initial.organizations,
+          { id: "00000000-0000-4000-8000-000000000012", name: "Example Labs", identityId: null, jobTitle: null },
+        ],
+      }}
       emailId={null}
       controller={controller.current}
       resolve={async (domain) => ({ ...initial, domain: domain ?? initial.domain })}
@@ -61,4 +69,9 @@ export function ProposalIdentityPreview() {
       }}
     />
   );
+}
+
+export function OrganizationReviewDomainPreview() {
+  const [name, setName] = useState("");
+  return <VerifiedOrganizationNameField domain="" reviewRequired value={name} onChange={setName} validation={{}} />;
 }

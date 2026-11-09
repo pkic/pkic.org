@@ -1,5 +1,6 @@
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { insertOrganization } from "./helpers/membership";
+import { seedMemberApplication } from "./helpers/member-applications";
 import { registrationEmailProofVerifyResponseSchema } from "../assets/shared/schemas/registration-email-proof";
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 /**
@@ -182,33 +183,46 @@ describe("confirm-info endpoint", () => {
     expect(await stale.json()).toMatchObject({ error: { code: "REGISTRATION_CHANGED" } });
   });
 
-  it("rolls back confirmation when the verified organization context changes", async () => {
-    await seedEventAndAdmin(env.DB);
-    const { confirmationToken, registrationId } = await registerAttendee();
-    const organization = await confirmationOrganization(confirmationToken);
-    const competitor = await insertOrganization(env.DB, "Concurrent Domain Fixture");
-    const at = new Date().toISOString();
-    await env.DB.prepare(
-      "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
-    )
-      .bind(crypto.randomUUID(), "pkic.org", competitor, at, at)
-      .run();
-    const response = await callApi(env, "/api/v1/events/pqc-2026/registrations/confirm-email", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token: confirmationToken, id: registrationId, organization }),
-    });
-    expect(response.status, await response.clone().text()).toBe(409);
-    expect(await response.json()).toMatchObject({ error: { code: "IDENTITY_CONTEXT_CHANGED" } });
-    expect(
-      await env.DB.prepare("SELECT status,registration_identity_id FROM registrations WHERE id=?")
+  it.each(["shared claim", "pending application"])(
+    "rechecks only relevant organization evidence on confirmation (%s)",
+    async (change) => {
+      await seedEventAndAdmin(env.DB);
+      const { confirmationToken, registrationId } = await registerAttendee();
+      const organization = await confirmationOrganization(confirmationToken);
+      if (change === "shared claim") {
+        const competitor = await insertOrganization(env.DB, "Concurrent Domain Fixture");
+        const at = new Date().toISOString();
+        await env.DB.prepare(
+          "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
+        )
+          .bind(crypto.randomUUID(), "pkic.org", competitor, at, at)
+          .run();
+      } else
+        await seedMemberApplication({
+          applicantEmail: "pending@pkic.org",
+          organizationName: "Pending Domain Fixture",
+          organizationDomain: "pkic.org",
+        });
+      const response = await callApi(env, "/api/v1/events/pqc-2026/registrations/confirm-email", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: confirmationToken, id: registrationId, organization }),
+      });
+      const pending = change === "pending application";
+      expect(response.status, await response.clone().text()).toBe(pending ? 409 : 200);
+      if (pending) expect(await response.json()).toMatchObject({ error: { code: "ORGANIZATION_AFFILIATION_CHANGED" } });
+      const registration = await env.DB.prepare("SELECT status,registration_identity_id FROM registrations WHERE id=?")
         .bind(registrationId)
-        .first(),
-    ).toMatchObject({ status: "pending_email_confirmation", registration_identity_id: null });
-    expect(
-      await env.DB.prepare("SELECT COUNT(*) AS total FROM organizations WHERE name=?").bind(organization.name).first(),
-    ).toMatchObject({ total: 0 });
-  });
+        .first<{ status: string; registration_identity_id: string | null }>();
+      expect(registration?.status).toBe(pending ? "pending_email_confirmation" : "registered");
+      expect(Boolean(registration?.registration_identity_id)).toBe(!pending);
+      expect(
+        await env.DB.prepare("SELECT COUNT(*) AS total FROM organizations WHERE name=?")
+          .bind(organization.name)
+          .first(),
+      ).toMatchObject({ total: pending ? 0 : 1 });
+    },
+  );
 
   it("returns null values for an invalid/unknown token", async () => {
     await seedEventAndAdmin(env.DB);

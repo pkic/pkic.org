@@ -38,6 +38,18 @@ function toWorkflowVersion(row: WorkflowVersionRow): MembershipWorkflowVersion {
     archivedAt: row.archived_at,
   });
 }
+export function prepareMembershipWorkflowVersionRead(db: DatabaseLike, id: { sql: string; bindings: unknown[] }) {
+  return {
+    statement: db
+      .prepare(`${VERSION_SELECT} FROM membership_workflow_versions version WHERE version.id = (${id.sql})`)
+      .bind(...id.bindings),
+    decode(result: { results?: Record<string, unknown>[] }): MembershipWorkflowVersion | null {
+      const row = result.results?.[0] as WorkflowVersionRow | undefined;
+      return row ? toWorkflowVersion(row) : null;
+    },
+  };
+}
+
 export async function getMembershipWorkflowVersion(db: DatabaseLike, id: string): Promise<MembershipWorkflowVersion> {
   const row = await first<WorkflowVersionRow>(
     db,

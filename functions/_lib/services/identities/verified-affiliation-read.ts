@@ -13,6 +13,7 @@ import {
   requireWorkOrganizationDomain,
   verifiedRepresentationDomainCandidates,
 } from "./verified-email-domain";
+import { boundedDomainClaimsRows, domainClaimsObservationSelection } from "./affiliation-evidence";
 import { verifiedAffiliationBasisSchema } from "./verified-affiliation-basis";
 
 type Basis = z.infer<typeof verifiedAffiliationBasisSchema>;
@@ -26,13 +27,14 @@ export function prepareVerifiedAffiliationRead(
     domain?: string;
     unaffiliatedAttestation?: boolean;
   },
-  mailboxProof?: { verifiedAt: string; pendingApplicationReview?: boolean },
+  mailboxProof?: { verifiedAt: string },
 ) {
   const subject = typeof userId === "string" ? { sql: "?", bindings: [userId] } : userId;
   const candidates = organizationDomainCandidates(input.email);
   const domains = JSON.stringify(candidates);
   const matches = domainOwnershipFactMatchesSql("requested.value");
   const slug = slugifyOr(input.organizationName ?? "", "member");
+  const claimRead = domainClaimsObservationSelection(input.email);
   const statements = [
     mailboxProof
       ? db
@@ -42,11 +44,7 @@ export function prepareVerifiedAffiliationRead(
       : db
           .prepare(`${OWN_ADDRESSES_SQL} SELECT ${OWN_ADDRESS_COLUMNS} FROM addresses WHERE id IS ? LIMIT 1`)
           .bind(userId, userId, input.emailId),
-    db
-      .prepare(`SELECT claim.id,claim.domain,claim.application_id AS applicationId,claim.organization_id AS organizationId,
-      EXISTS(SELECT 1 FROM members member WHERE member.organization_id=claim.organization_id) AS member
-      FROM organization_domain_claims claim JOIN json_each(?) requested ON requested.value=claim.domain ORDER BY length(claim.domain) DESC`)
-      .bind(domains),
+    db.prepare(claimRead.sql).bind(...claimRead.bindings),
     db
       .prepare(`WITH facts AS (
       SELECT requested.value AS domain,${FACT_ORGANIZATION} AS id,
@@ -68,7 +66,7 @@ export function prepareVerifiedAffiliationRead(
         UNION SELECT ${FACT_ORGANIZATION} FROM identities fact JOIN json_each(?) requested ON ${matches}
         UNION SELECT organization_id FROM identities WHERE user_id=(${subject.sql})
           AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
-      ) LIMIT 257`)
+      ) ORDER BY organization.name,organization.id LIMIT 257`)
       .bind(normalizeOrgName(input.organizationName ?? ""), domains, domains, ...subject.bindings),
     db
       .prepare(`SELECT id,organization_id,email_id,updated_at,invited_at,started_at,ended_at,blocked_at,job_title
@@ -91,14 +89,15 @@ export function prepareVerifiedAffiliationRead(
           "IDENTITY_EMAIL_UNVERIFIED",
           "Verify this representation email address before continuing.",
         );
-      const claims = batchRows<{
+      const claims = boundedDomainClaimsRows<{
         id: string;
         domain: string;
         applicationId: string | null;
         organizationId: string | null;
+        applicationName: string | null;
+        applicationUpdatedAt: string | null;
         member: number;
       }>(results[1]);
-
       if (input.domain && !verifiedRepresentationDomainCandidates(address.email, claims).includes(input.domain))
         throw new AppError(422, "IDENTITY_DOMAIN_MISMATCH", "Choose a domain of your verified work email address.");
       const rootDomain = workEmailDomain(address.email);
@@ -121,10 +120,10 @@ export function prepareVerifiedAffiliationRead(
         claim,
         claims,
         facts: {
-          claimed: claim?.organizationId
-            ? { organizationId: claim.organizationId, isMember: Boolean(claim.member) }
-            : null,
-          heldByApplication: Boolean(claim && !claim.organizationId),
+          claimed: claims
+            .filter((item) => item.domain === domain && item.organizationId !== null)
+            .map((item) => ({ organizationId: item.organizationId!, isMember: Boolean(item.member) })),
+          heldByApplication: claims.some((item) => item.domain === domain && item.applicationId !== null),
           derived: derived.map((fact) => ({
             organizationId: fact.id,
             isMember: Boolean(fact.member),

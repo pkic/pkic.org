@@ -12,3 +12,6 @@
 export function normalizeOrgName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
+
+export const ORGANIZATION_NAME_IN_USE_MESSAGE =
+  "An organization already uses that name. Use a distinct organization name or contact the PKI Consortium for help.";

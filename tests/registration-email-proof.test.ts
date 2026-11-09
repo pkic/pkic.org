@@ -521,11 +521,12 @@ describe("registration verifies the email address first", () => {
     expect(await response.json()).toMatchObject({ error: { code: "EVENT_DAYS_NOT_SCHEDULED" } });
     expect(await queryAll(env.DB, "SELECT id FROM registrations")).toEqual([]);
   });
-  it.each([false, true])("registers a reserved work domain with affiliation review; stale claim: %s", async (stale) => {
+  it.each([false, true])("registers a reserved work domain with review; released claim: %s", async (released) => {
     const email = "attendee@reserved-work.example";
     const applicationId = await seedMemberApplication({
       applicantEmail: "applicant@reserved-work.example",
       organizationDomain: "reserved-work.example",
+      organizationName: "Pending Work Organization",
     });
     const proof = tokenOf(await emailedLink(email));
     const verified = await post("/proof/verify", { token: proof });
@@ -542,7 +543,7 @@ describe("registration verifies the email address first", () => {
     expect(prepared.status, await prepared.clone().text()).toBe(200);
     const contextToken = registrationEmailProofVerifyResponseSchema.parse(await prepared.json()).affiliation!
       .contextToken!;
-    if (stale)
+    if (released)
       await env.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id=?").bind(applicationId).run();
     const response = await post(
       "",
@@ -550,16 +551,6 @@ describe("registration verifies the email address first", () => {
         organization: { name: "Pending Work Organization", jobTitle: "Engineer", contextToken },
       }),
     );
-    if (stale) {
-      expect(response.status).toBe(409);
-      expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", [email])).toEqual([]);
-      expect(await queryAll(env.DB, "SELECT id FROM registrations")).toEqual([]);
-      expect(await queryAll(env.DB, "SELECT id FROM affiliation_reviews")).toEqual([]);
-      expect(
-        await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='registration_confirmation'"),
-      ).toEqual([]);
-      return;
-    }
     expect(response.status, await response.clone().text()).toBe(200);
     const result = registrationSubmissionResponseSchema.parse(await response.json());
     expect(result).toMatchObject({ status: "registered", organizationOutcome: "review_required" });
@@ -575,9 +566,9 @@ describe("registration verifies the email address first", () => {
     ]);
     expect(await queryAll(env.DB, "SELECT id FROM identities WHERE organization_id IS NOT NULL")).toEqual([]);
     expect(await queryAll(env.DB, "SELECT id FROM organizations")).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT application_id,organization_id FROM organization_domain_claims")).toEqual([
-      { application_id: applicationId, organization_id: null },
-    ]);
+    expect(await queryAll(env.DB, "SELECT application_id,organization_id FROM organization_domain_claims")).toEqual(
+      released ? [] : [{ application_id: applicationId, organization_id: null }],
+    );
     const personId = await env.DB.prepare("SELECT user_id FROM registrations WHERE id=?")
       .bind(result.registrationId)
       .first<string>("user_id");
@@ -606,7 +597,7 @@ describe("registration verifies the email address first", () => {
     expect(await attribution()).toBe("Unrelated existing organization");
   });
 
-  it("shows the domain default but honors another organization through the same affiliation flow", async () => {
+  it("offers all organizations when another organization claims the same domain", async () => {
     const original = await insertOrganization(env.DB, "Default Domain Organization");
     await env.DB.prepare(
       "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES(?,'shared-choice.test',?,?,?)",
@@ -657,7 +648,8 @@ describe("registration verifies the email address first", () => {
     const choices = registrationEmailProofVerifyResponseSchema.parse(
       await (await post("/proof/verify", { token: secondProof })).json(),
     ).affiliation!;
-    expect(choices.organization?.id).toBe(original);
+    expect(choices.organization).toBeNull();
+    expect(choices.organizations.map((item) => item.id)).toContain(original);
     expect(choices.organizations.map((x) => x.name)).toContain("Chosen Domain Organization");
     const selected = registrationEmailProofVerifyResponseSchema.parse(
       await (

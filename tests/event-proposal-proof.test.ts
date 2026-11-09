@@ -178,20 +178,45 @@ describe("event proposal mailbox proof", () => {
     expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toHaveLength(0);
   });
 
-  it("names an organization domain under review so the proposer can choose a next step", async () => {
+  it("requires review for a differently named organization on a reserved domain", async () => {
     await seedEventAndAdmin(env.DB);
-    await seedMemberApplication({ applicantEmail: "pending@held-domain.example" });
-    const response = await request("/proof/verify", { token: await start("dana@held-domain.example") });
+    const pending = await seedMemberApplication({ applicantEmail: "pending@held-domain.example" });
+    const token = await start("dana@held-domain.example");
+    const response = await request("/proof/verify", { token });
     expect(response.status).toBe(200);
-    expect(eventProposalProofVerifyResponseSchema.parse(await response.json())).toEqual({
-      status: "support_required",
+    const proof = eventProposalProofVerifyResponseSchema.parse(await response.json());
+    expect(proof).toMatchObject({
+      status: "ready",
       email: "dana@held-domain.example",
       applicantKind: "organization",
-      reason: "organization_domain_review",
+      affiliation: { reviewRequired: true, organization: null, organizations: [] },
     });
     expect(
       await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", ["dana@held-domain.example"]),
     ).toEqual([]);
+    const selected = await request("/proof/verify", {
+      token,
+      affiliation: {
+        organizationId: null,
+        organizationName: "Different Organization",
+        domain: "held-domain.example",
+        jobTitle: "Researcher",
+      },
+    });
+    expect(selected.status, await selected.clone().text()).toBe(409);
+    expect(await selected.json()).toMatchObject({ error: { code: "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED" } });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT claim.application_id,claim.organization_id FROM organization_domain_claims claim WHERE domain=?",
+        ["held-domain.example"],
+      ),
+    ).toEqual([{ application_id: pending, organization_id: null }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", ["dana@held-domain.example"]),
+    ).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM organizations WHERE name='Different Organization'")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toEqual([]);
   });
 
   it("reuses a known person's names without duplicate input and limits the proof catalog to its owner", async () => {

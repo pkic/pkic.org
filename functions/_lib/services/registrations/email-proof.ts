@@ -192,7 +192,7 @@ export async function verifyRegistrationEmailProof(
           domain: input.affiliation?.domain ?? input.domain,
           organizationName: input.affiliation?.organizationName,
         },
-        { verifiedAt: nowIso(), pendingApplicationReview: true },
+        { verifiedAt: nowIso() },
       );
   const results = await db.batch([
     db.prepare("SELECT id FROM events WHERE id=? AND slug=?").bind(proof.eventId, input.eventSlug),
@@ -204,9 +204,7 @@ export async function verifyRegistrationEmailProof(
   if (proof.binding && !person)
     throw new AppError(409, "REGISTRATION_CHANGED", "Your registration changed. Open the latest confirmation email.");
   const observed = affiliation?.decode(results.slice(2));
-  const preview = observed
-    ? verifiedAffiliationPreview(observed.basis, observed.address, { pendingApplicationReview: true })
-    : null;
+  const preview = observed ? verifiedAffiliationPreview(observed.basis, observed.address) : null;
   if (input.affiliation && observed && preview) {
     const selection = identityAffiliationPrepareSchema.parse({
       ...input.affiliation,

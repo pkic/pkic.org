@@ -145,7 +145,7 @@ export function OrganizationDomains({ organizationId, canWrite }: { organization
           <OrganizationRecordHero organization={organization} />
           <SectionHeading level={3}>Email domains</SectionHeading>
           <p class="pk-muted pk-small">
-            {`People with a verified address on a claimed domain join ${organization.name}. Free and disposable mail never does.`}
+            {`People with a verified address on a claimed domain can join ${organization.name}. People choose their organization when a domain is shared.`}
           </p>
           <DomainsTable organization={organization} canWrite={canWrite} />
         </>

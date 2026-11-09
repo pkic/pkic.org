@@ -61,7 +61,7 @@ describe("fresh remote migration orchestration", () => {
     try {
       apply("production");
       expect(execute.mock.calls[0][1]).toContain("list");
-      const lastGuardedMigration = "0042_incorrect_representation_group_erasure.sql";
+      const lastGuardedMigration = "0043_shared_organization_domains.sql";
       expect(imported).toEqual(migrationNames.filter((name) => name <= lastGuardedMigration));
       expect(normallyApplied).toEqual(migrationNames.filter((name) => name > lastGuardedMigration));
       expect(imported).toContain("0038_event_agenda_platform.sql");

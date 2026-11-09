@@ -1,4 +1,4 @@
-import { batchFirst } from "../../../db/pagination";
+import { batchFirst, batchRows } from "../../../db/pagination";
 import type { SqlSelection } from "../../../db/sql-value";
 import type { DatabaseLike } from "../../../types";
 import { eligibleMembershipSelection, type MemberEligibleUserRow } from "../../../auth/identity-capacities";
@@ -8,26 +8,62 @@ import { identityCreationSelections } from "../../identities/creation-read";
 import { verifiedOwnedEmailSelection } from "../../identities/owned-email";
 import { organizationDomainClaimForEmailSelection } from "../organization-domain-claims";
 import { individualMembershipConflictPredicate } from "../capacity-query";
+import { organizationDomainCandidates, workEmailDomain } from "../../../email-domains/classification";
+import { nowIso } from "../../../utils/time";
+import { prepareVerifiedAffiliationRead } from "../../identities/verified-affiliation-read";
 import {
   organizationOpenApplicationSelection,
   ownOpenApplicationSelection,
   type OwnOpenApplicationRow,
 } from "./open-application";
 
+export function joinLinkConsumedSelection(capabilityId: string): SqlSelection {
+  return {
+    sql: "SELECT id FROM audit_log WHERE idempotency_key=?",
+    bindings: [`membership_join_link_consumed:${capabilityId}`],
+  };
+}
+
+/** One mailbox-proof observation for join verification and read-only previews. */
+export function prepareJoinAffiliationRead(
+  db: DatabaseLike,
+  email: string,
+  selection?: { domain?: string; organizationName?: string },
+) {
+  return workEmailDomain(email)
+    ? prepareVerifiedAffiliationRead(
+        db,
+        provedMailboxUserIdSelection(email),
+        { email, emailId: null, domain: selection?.domain, organizationName: selection?.organizationName },
+        { verifiedAt: nowIso() },
+      )
+    : null;
+}
+
 /** Request-owned observations for the existing join planners. Mutation guards remain authoritative. */
-export async function readJoinVerification(db: DatabaseLike, email: string, capabilityId: string) {
+export async function readJoinVerification(
+  db: DatabaseLike,
+  email: string,
+  capabilityId: string,
+  organizationId?: string,
+  selection?: { domain?: string; organizationName?: string },
+) {
   const owner = provedMailboxUserIdSelection(email);
   const claim = organizationDomainClaimForEmailSelection(email);
-  const organization = { sql: `SELECT organization_id FROM (${claim.sql})`, bindings: claim.bindings };
+  const organization = {
+    sql: `SELECT entry.organization_id FROM organization_domain_claims entry
+      WHERE entry.domain=(SELECT domain FROM (${claim.sql})) AND entry.organization_id IS NOT NULL
+        AND ((? IS NOT NULL AND entry.organization_id=?) OR (? IS NULL AND
+          (SELECT COUNT(*) FROM organization_domain_claims candidate WHERE candidate.domain=entry.domain)=1)) LIMIT 1`,
+    bindings: [...claim.bindings, organizationId ?? null, organizationId ?? null, organizationId ?? null],
+  };
   const creation = identityCreationSelections(owner, organization);
+  const affiliation = prepareJoinAffiliationRead(db, email, selection);
   const reads: SqlSelection[] = [
     emailOwnershipSelection(email),
     provedMailboxUserSelection(email),
     eligibleMembershipSelection(owner),
-    {
-      sql: "SELECT id FROM audit_log WHERE idempotency_key=?",
-      bindings: [`membership_join_link_consumed:${capabilityId}`],
-    },
+    joinLinkConsumedSelection(capabilityId),
     claim,
     {
       sql: `SELECT member.id AS member_id,member.organization_id FROM members member
@@ -49,8 +85,17 @@ export async function readJoinVerification(db: DatabaseLike, email: string, capa
     verifiedOwnedEmailSelection(owner, email),
     ownOpenApplicationSelection(email, owner),
     organizationOpenApplicationSelection(claim),
+    {
+      sql: `SELECT organization_id FROM members WHERE status='active' AND organization_id IN (
+        SELECT organization_id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
+      ) LIMIT 129`,
+      bindings: [JSON.stringify(organizationDomainCandidates(email))],
+    },
   ];
-  const results = await db.batch(reads.map((read) => db.prepare(read.sql).bind(...read.bindings)));
+  const results = await db.batch([
+    ...reads.map((read) => db.prepare(read.sql).bind(...read.bindings)),
+    ...(affiliation?.statements ?? []),
+  ]);
   const address = batchFirst<{ id: string; identity_id: string | null }>(results[10]);
   return {
     ownership: batchFirst<EmailOwnership>(results[0]),
@@ -71,5 +116,9 @@ export async function readJoinVerification(db: DatabaseLike, email: string, capa
       own: batchFirst<OwnOpenApplicationRow>(results[11]),
       organizationHeld: batchFirst<{ id: string }>(results[12]) !== null,
     },
+    activeMemberOrganizationIds: new Set(
+      batchRows<{ organization_id: string }>(results[13]).map((row) => row.organization_id),
+    ),
+    affiliation: affiliation?.decode(results.slice(reads.length)) ?? null,
   };
 }

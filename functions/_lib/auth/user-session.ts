@@ -38,7 +38,6 @@ import {
   verifyEmailAuthCapabilityToken,
 } from "./email-auth-capabilities";
 import { prepareVerifyPrimaryEmailStatements } from "../services/email-verification";
-import { linkVerifiedAddressToDomainOrganization } from "../services/identities/email-domain-link";
 import { findActiveSponsorCapacitiesByUserId } from "./sponsor-capacity";
 import {
   DEFAULT_USER_SESSION_IDLE_TTL_HOURS,
@@ -435,11 +434,6 @@ export async function redeemUserSignInCapability(
           ]
         : []),
     ],
-  });
-  // The proved address joins the organization its domain belongs to, when the shared rule links it automatically.
-  await linkVerifiedAddressToDomainOrganization(db, {
-    userId: identity.id,
-    normalizedEmail: signInIdentity.normalized_sign_in_email,
   });
   const session = await createEstablishedUserSessionResult(db, prepared, {
     identity,

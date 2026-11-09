@@ -82,7 +82,7 @@ async function refuseDecidedApproval(
   const conflicts = await readMembershipApplicationConflicts(db, {
     isIndividual,
     organizationName: application.organization_name,
-    organizationId: null,
+    organizationId: application.organization_id,
     applicantUserId: application.applicant_user_id,
     applicantEmail: application.applicant_email,
     applicationId: application.id,
@@ -145,6 +145,7 @@ export async function buildApplicationApproval(
   // built, same as provisioning.ts's own pattern.
   const provisioning = await buildProvisionOrganizationMembership(db, {
     organizationName: isIndividual ? null : application.organization_name,
+    organizationId: isIndividual ? null : application.organization_id,
     organizationDomain: isIndividual ? null : application.organization_domain,
     domainClaimApplicationId: isIndividual ? null : application.id,
     membershipCategory: application.membership_category,

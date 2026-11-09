@@ -7,10 +7,8 @@ import { prepareMailingListAddressSync } from "./mailing-list-subscriptions/queu
  * bound to the address request and to a fingerprint of its text, delivered through
  * the outbox like a sign-in link. The portal page previews it read-only; linking
  * requires an explicit click and the intended account’s live sign-in; the capability is redeemed once through the shared
- * one-time audit key. A verified work address then joins the
- * organization its domain belongs to through the one shared rule
- * (`prepareVerifiedAddressDomainOrganizationLink`): automatically for a non-member
- * organization, and as the offer for a member organization.
+ * one-time audit key. A verified work address can offer an organization for
+ * the account holder to choose; verification alone does not join it.
  */
 import {
   OWN_EMAIL_ADDRESS_LIMIT,
@@ -38,7 +36,6 @@ import { prepareUnverifiedAccountConsolidation } from "./unverified-account-cons
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { prepareAuditLog } from "./audit";
-import { prepareVerifiedAddressDomainOrganizationLink } from "./identities/email-domain-link";
 import { readAffiliationOffer } from "./identities/affiliation-offer";
 import { capabilityLinkUrl } from "./user-auth-flow";
 
@@ -262,18 +259,12 @@ export async function previewOwnEmailVerification(
   };
 }
 
-export interface OwnEmailVerificationResult {
-  email: string;
-  /** The organization the address joined automatically. */
-  joinedOrganization: { id: string; name: string } | null;
-  /** A member organization the address belongs to, which the person joins themselves once signed in. */
-  offeredOrganization: { id: string; name: string } | null;
-}
+export type OwnEmailVerificationResult =
+  import("../../../assets/shared/schemas/own-email-addresses").OwnEmailAddressVerificationResponse;
 
 /**
- * Redeems mailbox proof only with the intended account's live authorization. The verified address then joins the organization its domain
- * belongs to when that is automatic; a member organization is offered, and
- * the person signs in only to answer that offer.
+ * Redeems mailbox proof only with the intended account's live authorization.
+ * A matching organization is offered for an explicit decision.
  */
 export async function verifyOwnEmailAddress(
   db: DatabaseLike,
@@ -311,14 +302,6 @@ export async function verifyOwnEmailAddress(
       })
     : [];
   const pendingRelease = prepareEmailOwnershipClaim(db, address.normalized_email, userId, ownership);
-  const joined = representationRequest
-    ? null
-    : await prepareVerifiedAddressDomainOrganizationLink(db, {
-        userId,
-        normalizedEmail: address.normalized_email,
-        emailId: address.id,
-        at,
-      });
   await commitEmailAuthRedemption(db, {
     purpose: PURPOSE,
     capabilityId,
@@ -376,21 +359,12 @@ export async function verifyOwnEmailAddress(
         )
         .bind(at, address.id, userId),
       ...(ownership ? [prepareAddressDeliveryTransfer(db, "user_emails", address.id, ownership)] : []),
-      ...(joined?.statements ?? []),
       ...prepareMailingListAddressSync(db, userId, at),
     ],
   });
-  const [joinedOrganization, offer] = await Promise.all([
-    joined
-      ? first<{ id: string; name: string }>(db, "SELECT id, name FROM organizations WHERE id = ?", [
-          joined.organizationId,
-        ])
-      : null,
-    joined || representationRequest ? null : readAffiliationOffer(db, userId),
-  ]);
+  const offer = representationRequest ? null : await readAffiliationOffer(db, userId);
   return {
     email: address.email,
-    joinedOrganization,
     offeredOrganization: offer?.kind === "organization" && offer.emailId === address.id ? offer.organization : null,
   };
 }

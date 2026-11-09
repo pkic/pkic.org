@@ -10,12 +10,21 @@ import { hostWithinDomainSql } from "../../email-domains/sql";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { normalizeEmail } from "../../validation";
-import { getOrganizationDomainClaim, organizationLinkDomain } from "../membership/organization-domain-claims";
+import { organizationLinkDomain } from "../membership/organization-domain-claims";
 
 /** A verified address cannot broaden past an existing more specific organization mapping. */
 export function verifiedRepresentationDomainCandidates(email: string, claims: readonly { domain: string }[]): string[] {
   const boundary = Math.max(0, ...claims.map((claim) => claim.domain.length));
   return organizationDomainCandidates(email).filter((domain) => domain.length >= boundary);
+}
+
+/** Preserve the most-specific mapping boundary without pinning unrelated claimants. */
+export function verifiedRepresentationDomainEvidence(email: string, domain: string): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims
+      WHERE domain IN (SELECT value FROM json_each(?)) AND length(domain)>?)`,
+    bindings: [JSON.stringify(organizationDomainCandidates(email)), domain.length],
+  };
 }
 
 function ineligibleDomain(): AppError {
@@ -67,8 +76,8 @@ export function verifiedEmailDomainResolutionEvidence(
   if (confirmedSelection) {
     if (!organizationId)
       return {
-        sql: "SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM organization_domain_claims WHERE domain=? AND application_id IS NOT NULL)",
-        bindings: [domain],
+        sql: "SELECT 1",
+        bindings: [],
       };
     if (hasAuthoritativeClaim)
       return {
@@ -94,8 +103,10 @@ export function verifiedEmailDomainResolutionEvidence(
     return {
       sql: `SELECT 1 WHERE EXISTS (SELECT 1 FROM organization_domain_claims
           WHERE domain=? AND organization_id=? AND application_id IS NULL)
+        AND NOT EXISTS (SELECT 1 FROM organization_domain_claims
+          WHERE domain=? AND (organization_id IS NOT ? OR application_id IS NOT NULL))
         AND NOT EXISTS (SELECT 1 FROM identities fact WHERE ${domainMatches} AND ${FACT_ORGANIZATION} IS NOT ?)`,
-      bindings: [domain, organizationId, domain, domain, organizationId],
+      bindings: [domain, organizationId, domain, organizationId, domain, domain, organizationId],
     };
   return {
     sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=?)
@@ -109,10 +120,29 @@ export function verifiedEmailDomainResolutionEvidence(
   };
 }
 
+/** A member's shared domain needs an invitation or review before granting access. */
+export function memberAffiliationApprovalEvidence(domain: string, organizationId: string): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM members WHERE organization_id=?) OR (
+      NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND (organization_id IS NOT ? OR application_id IS NOT NULL))
+      AND NOT EXISTS (SELECT 1 FROM identities fact JOIN users person ON person.id=fact.user_id
+        WHERE fact.verified_email_domain=? AND ${FACT_ORGANIZATION} IS NOT ? AND fact.organization_id IS NOT NULL
+          AND fact.source='verified_email' AND fact.started_at IS NOT NULL AND fact.ended_at IS NULL
+          AND fact.blocked_at IS NULL AND person.active=1))`,
+    bindings: [organizationId, domain, organizationId, domain, organizationId],
+  };
+}
+
 /** Every fact the shared rule needs to decide who owns one domain. */
 export async function loadDomainOwnershipFacts(db: DatabaseLike, domain: string): Promise<DomainOwnershipFacts> {
-  const [claim, derived] = await Promise.all([
-    getOrganizationDomainClaim(db, domain),
+  const [claims, derived] = await Promise.all([
+    all<{ organization_id: string | null; application_id: string | null; member: number }>(
+      db,
+      `SELECT claim.organization_id, claim.application_id,
+        EXISTS(SELECT 1 FROM members WHERE organization_id=claim.organization_id) AS member
+       FROM organization_domain_claims claim WHERE claim.domain=? ORDER BY claim.organization_id LIMIT 129`,
+      [domain],
+    ),
     all<{ id: string; active: number; disputed: number; unknown: number; member: number }>(
       db,
       // A merged organization's facts count for the organization it was merged into.
@@ -124,16 +154,24 @@ export async function loadDomainOwnershipFacts(db: DatabaseLike, domain: string)
       EXISTS(SELECT 1 FROM members WHERE organization_id=COALESCE(organization.merged_into_organization_id, organization.id)) AS member
       FROM identities fact JOIN organizations organization ON organization.id=fact.organization_id
       JOIN users person ON person.id=fact.user_id WHERE ${domainMatches}
-      GROUP BY 1 ORDER BY 1 LIMIT 2`,
+      GROUP BY 1 ORDER BY 1 LIMIT 257`,
       [domain, domain],
     ),
   ]);
-  const claimedMember = claim?.organizationId
-    ? await first<{ id: string }>(db, "SELECT id FROM members WHERE organization_id = ?", [claim.organizationId])
-    : null;
+  if (claims.length > 128 || derived.length > 256)
+    throw new AppError(
+      409,
+      "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED",
+      "Contact the PKI Consortium to choose your organization.",
+    );
   return {
-    claimed: claim?.organizationId ? { organizationId: claim.organizationId, isMember: Boolean(claimedMember) } : null,
-    heldByApplication: Boolean(claim && !claim.organizationId),
+    claimed: claims
+      .filter((claim) => claim.organization_id !== null)
+      .map((claim) => ({
+        organizationId: claim.organization_id!,
+        isMember: Boolean(claim.member),
+      })),
+    heldByApplication: claims.some((claim) => claim.application_id !== null),
     derived: derived.map((fact) => ({
       organizationId: fact.id,
       isMember: Boolean(fact.member),
@@ -151,10 +189,11 @@ export async function loadDomainOwnershipFacts(db: DatabaseLike, domain: string)
 export async function resolveEmailDomainOrganization(
   db: DatabaseLike,
   normalizedEmail: string,
-): Promise<{ domain: string | null; resolution: DomainOrganizationResolution }> {
+): Promise<{ domain: string | null; resolution: DomainOrganizationResolution; facts: DomainOwnershipFacts | null }> {
   const domain = await organizationLinkDomain(db, normalizeEmail(normalizedEmail));
-  if (!domain) return { domain: null, resolution: { kind: "none" } };
-  return { domain, resolution: resolveDomainOrganization(await loadDomainOwnershipFacts(db, domain)) };
+  if (!domain) return { domain: null, resolution: { kind: "none" }, facts: null };
+  const facts = await loadDomainOwnershipFacts(db, domain);
+  return { domain, resolution: resolveDomainOrganization(facts), facts };
 }
 
 /** Only call after mailbox proof; exact retained facts resolve a canonical organization, never a name guess. */

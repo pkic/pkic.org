@@ -638,7 +638,6 @@ describe("a person's own email addresses", () => {
     expect(response.status, await response.clone().text()).toBe(200);
     expect(ownEmailAddressVerificationResponseSchema.parse(await response.json())).toEqual({
       email: "ana@representation-work.example",
-      joinedOrganization: null,
       offeredOrganization: null,
     });
     expect(
@@ -653,7 +652,7 @@ describe("a person's own email addresses", () => {
     ).toEqual([{ identity_id: null, verified: 1 }]);
   });
 
-  it("adds an address, verifies it through the emailed link once, and joins the organization its domain belongs to", async () => {
+  it("verifies an address and offers its organization without joining it", async () => {
     const organizationId = await insertOrganization(env.DB, "Open Claimed Co");
     await claimDomain(organizationId, "open-claimed.example");
     const { userId, token } = await signedIn("ana@gmail.com");
@@ -675,20 +674,19 @@ describe("a person's own email addresses", () => {
     expect(verified.status, await verified.clone().text()).toBe(200);
     expect(ownEmailAddressVerificationResponseSchema.parse(await verified.json())).toEqual({
       email: "ana@open-claimed.example",
-      joinedOrganization: { id: organizationId, name: "Open Claimed Co" },
-      offeredOrganization: null,
+      offeredOrganization: { id: organizationId, name: "Open Claimed Co" },
     });
-    // The work address belongs to the identity it established.
+    // Mailbox proof alone does not establish an organization identity.
     expect(
       await queryAll(env.DB, "SELECT identity_id IS NOT NULL AS owned FROM user_emails WHERE id = ?", [added.id]),
-    ).toEqual([{ owned: 1 }]);
+    ).toEqual([{ owned: 0 }]);
     expect(
       await queryAll(
         env.DB,
         "SELECT organization_id, email_id, source FROM identities WHERE user_id = ? AND organization_id IS NOT NULL",
         [userId],
       ),
-    ).toEqual([{ organization_id: organizationId, email_id: added.id, source: "verified_domain" }]);
+    ).toEqual([]);
 
     const replay = await verify(link);
     expect(replay.status).toBe(409);
@@ -700,7 +698,7 @@ describe("a person's own email addresses", () => {
     ]);
   });
 
-  it.each(["identity", "notification"])(
+  it.each(["address", "audit"])(
     "rolls back verification when the %s write fails and lets the same link retry",
     async (failure) => {
       const organizationId = await insertOrganization(env.DB, "Retry Claimed Co");
@@ -708,10 +706,7 @@ describe("a person's own email addresses", () => {
       const { userId, token } = await signedIn("retry@gmail.com");
       const added = await add(token, "retry@retry-claimed.example");
       const link = await verificationToken(added.email);
-      const target =
-        failure === "identity"
-          ? "identities WHEN NEW.organization_id IS NOT NULL"
-          : "email_outbox WHEN NEW.template_key = 'organization-identity-changed'";
+      const target = failure === "address" ? "user_emails" : "audit_log WHEN NEW.action = 'user_email_verified'";
       await env.DB.prepare(`CREATE TRIGGER fail_verification_link BEFORE INSERT ON ${target}
         BEGIN SELECT RAISE(ABORT, 'SYNTHETIC_VERIFICATION_LINK_FAILURE'); END`).run();
       try {
@@ -747,7 +742,7 @@ describe("a person's own email addresses", () => {
       }
       const retried = await verify(link);
       expect(retried.status, await retried.clone().text()).toBe(200);
-      expect(ownEmailAddressVerificationResponseSchema.parse(await retried.json()).joinedOrganization).toEqual({
+      expect(ownEmailAddressVerificationResponseSchema.parse(await retried.json()).offeredOrganization).toEqual({
         id: organizationId,
         name: "Retry Claimed Co",
       });
@@ -757,12 +752,12 @@ describe("a person's own email addresses", () => {
           "SELECT id FROM email_outbox WHERE recipient_user_id = ? AND template_key = 'organization-identity-changed'",
           [userId],
         ),
-      ).toHaveLength(1);
+      ).toHaveLength(0);
       expect((await verify(link)).status).toBe(409);
     },
   );
 
-  it("automatically joins an approved member domain and refuses a forged verification link", async () => {
+  it("offers an approved member domain and refuses a forged verification link", async () => {
     const organizationId = await insertOrganization(env.DB, "Member Co");
     await seedOrganizationAggregate(env.DB, organizationId);
     await claimDomain(organizationId, "member.example");
@@ -775,15 +770,14 @@ describe("a person's own email addresses", () => {
     const verified = await verify(link);
     expect(verified.status, await verified.clone().text()).toBe(200);
     expect(ownEmailAddressVerificationResponseSchema.parse(await verified.json())).toMatchObject({
-      joinedOrganization: { id: organizationId, name: "Member Co" },
-      offeredOrganization: null,
+      offeredOrganization: { id: organizationId, name: "Member Co" },
     });
 
     const offer = await callApi(environment, "/api/v1/users/current/identities/offer", {
       headers: { authorization: `Bearer ${token}` },
     });
     expect(affiliationOfferResponseSchema.parse(await offer.json()).offer).toMatchObject({
-      kind: "linked",
+      kind: "organization",
       organization: { id: organizationId },
       domain: "member.example",
     });
@@ -795,6 +789,12 @@ describe("a person's own email addresses", () => {
     const { userId, token } = await signedIn("di@gmail.com");
     const added = await add(token, "di@work.example");
     await verify(await verificationToken("di@work.example"));
+    const at = nowIso();
+    await env.DB.prepare(`INSERT INTO identities
+      (id,user_id,organization_id,email_id,source,show_on_organization_profile,invited_at,started_at,created_at,updated_at)
+      VALUES (?,?,?,?,'account',0,?,?,?,?)`)
+      .bind(crypto.randomUUID(), userId, organizationId, added.id, at, at, at, at)
+      .run();
 
     const unverified = await add(token, "di@elsewhere.example");
     const refused = await call(
@@ -847,6 +847,11 @@ describe("a person's own email addresses", () => {
     // A second organization identity follows the same address: both are named, before and on refusal.
     const secondId = await insertOrganization(env.DB, "Another Follower Co");
     const at = nowIso();
+    await env.DB.prepare(`INSERT INTO identities
+      (id,user_id,organization_id,email_id,source,show_on_organization_profile,invited_at,started_at,created_at,updated_at)
+      SELECT ?,user_id,?,id,'account',0,?,?,?,? FROM user_emails WHERE id=?`)
+      .bind(crypto.randomUUID(), organizationId, at, at, at, at, work.id)
+      .run();
     await env.DB.prepare(
       `INSERT INTO identities (id, user_id, organization_id, email_id, source, show_on_organization_profile, invited_at,
          started_at, created_at, updated_at)

@@ -105,11 +105,10 @@ export const ownEmailAddressVerificationPreviewResponseSchema = z.object({
 
 export const ownEmailAddressVerificationResponseSchema = z.object({
   email: z.string(),
-  /** The organization the verified work address joined automatically, if any. */
-  joinedOrganization: organizationReferenceSchema.nullable(),
-  /** A member organization the address belongs to; the person signs in to join it themselves. */
+  /** An organization the person can choose to represent. */
   offeredOrganization: organizationReferenceSchema.nullable(),
 });
+export type OwnEmailAddressVerificationResponse = z.infer<typeof ownEmailAddressVerificationResponseSchema>;
 
 export const ownEmailAddressesListRouteSchema = {
   tags: ["Users"],

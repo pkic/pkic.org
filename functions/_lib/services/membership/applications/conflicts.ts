@@ -8,6 +8,8 @@
 import { batchFirst } from "../../../db/pagination";
 import { normalizeOrgName } from "../../../../../assets/shared/organization-name";
 import { APPLICATION_TERMINAL_STAGES } from "../../../../../assets/shared/schemas/member-applications";
+import { prepareStateGuard } from "../../../db/authorization-guard";
+import type { SqlSelection } from "../../../db/sql-value";
 import type { DatabaseLike } from "../../../types";
 
 export interface MembershipApplicationConflictInput {
@@ -30,60 +32,81 @@ export interface MembershipApplicationConflicts {
 
 const OPEN_APPLICATION_SQL = `stage NOT IN (${APPLICATION_TERMINAL_STAGES.map(() => "?").join(", ")})`;
 
-export async function readMembershipApplicationConflicts(
-  db: DatabaseLike,
-  input: MembershipApplicationConflictInput,
-): Promise<MembershipApplicationConflicts> {
+function membershipApplicationConflictSelections(input: MembershipApplicationConflictInput): SqlSelection[] {
   const normalizedName = input.organizationName ? normalizeOrgName(input.organizationName) : null;
   const self = input.applicationId ?? "";
-  const results = await db.batch([
-    db
-      .prepare(
-        `SELECT organization.name FROM organizations organization
+  return [
+    {
+      sql: `SELECT organization.name FROM organizations organization
            JOIN members member ON member.organization_id = organization.id AND member.status = 'active'
           WHERE ? = 0 AND (organization.id = ? OR organization.normalized_name = ?)
           LIMIT 1`,
-      )
-      .bind(input.isIndividual ? 1 : 0, input.organizationId, normalizedName),
+      bindings: [input.isIndividual ? 1 : 0, input.organizationId, normalizedName],
+    },
     // An individual membership held through a personal identity the person still holds.
-    db
-      .prepare(
-        `SELECT member.id FROM identities personal
+    {
+      sql: `SELECT member.id FROM identities personal
            JOIN members member ON member.identity_id = personal.id
             AND member.member_type = 'individual' AND member.status = 'active'
           WHERE ? = 1 AND personal.user_id = ? AND personal.organization_id IS NULL
             AND personal.started_at IS NOT NULL AND personal.ended_at IS NULL AND personal.blocked_at IS NULL
           LIMIT 1`,
-      )
-      .bind(input.isIndividual ? 1 : 0, input.applicantUserId),
+      bindings: [input.isIndividual ? 1 : 0, input.applicantUserId],
+    },
     // Any representation the person holds now; an ended one no longer counts.
-    db
-      .prepare(
-        `SELECT organization.name FROM identities represented
+    {
+      sql: `SELECT organization.name FROM identities represented
            JOIN organizations organization ON organization.id = represented.organization_id
           WHERE ? = 1 AND represented.user_id = ?
             AND represented.started_at IS NOT NULL AND represented.ended_at IS NULL AND represented.blocked_at IS NULL
           ORDER BY represented.started_at, represented.id
           LIMIT 1`,
-      )
-      .bind(input.isIndividual ? 1 : 0, input.applicantUserId),
-    db
-      .prepare(
-        `SELECT id FROM member_applications
+      bindings: [input.isIndividual ? 1 : 0, input.applicantUserId],
+    },
+    {
+      sql: `SELECT id FROM member_applications
           WHERE ${OPEN_APPLICATION_SQL} AND id <> ?
             AND (applicant_user_id = ? OR applicant_email = ?)
           LIMIT 1`,
-      )
-      .bind(...APPLICATION_TERMINAL_STAGES, self, input.applicantUserId, input.applicantEmail),
-    db
-      .prepare(
-        `SELECT organization_name FROM member_applications
+      bindings: [...APPLICATION_TERMINAL_STAGES, self, input.applicantUserId, input.applicantEmail],
+    },
+    {
+      sql: `SELECT organization_name FROM member_applications
           WHERE ${OPEN_APPLICATION_SQL} AND id <> ?
-            AND organization_name IS NOT NULL AND lower(trim(organization_name)) = ?
+            AND organization_name IS NOT NULL AND (organization_id = ? OR lower(trim(organization_name)) = ?)
           LIMIT 1`,
-      )
-      .bind(...APPLICATION_TERMINAL_STAGES, self, input.isIndividual ? null : normalizedName),
-  ]);
+      bindings: [
+        ...APPLICATION_TERMINAL_STAGES,
+        self,
+        input.isIndividual ? null : input.organizationId,
+        input.isIndividual ? null : normalizedName,
+      ],
+    },
+  ];
+}
+
+/** The preflight refusals remain authoritative inside the caller's atomic submission. */
+export function prepareMembershipApplicationConflictGuards(
+  db: DatabaseLike,
+  input: MembershipApplicationConflictInput,
+) {
+  return membershipApplicationConflictSelections(input).map((selection) =>
+    prepareStateGuard(db, {
+      sql: `SELECT 1 WHERE NOT EXISTS (${selection.sql})`,
+      bindings: selection.bindings,
+    }),
+  );
+}
+
+export async function readMembershipApplicationConflicts(
+  db: DatabaseLike,
+  input: MembershipApplicationConflictInput,
+): Promise<MembershipApplicationConflicts> {
+  const results = await db.batch(
+    membershipApplicationConflictSelections(input).map((selection) =>
+      db.prepare(selection.sql).bind(...selection.bindings),
+    ),
+  );
   return {
     memberOrganization: batchFirst<{ name: string }>(results[0])?.name ?? null,
     individualMember: batchFirst(results[1]) !== null,
