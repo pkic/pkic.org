@@ -31,7 +31,10 @@ import {
   presentationDownloadResponse,
   reviewPresentationVersion,
 } from "../functions/_lib/services/presentation-versions";
-import { getPresentationUploader } from "../functions/_lib/services/proposals-speaker-profile";
+import {
+  preparePresentationUploader,
+  type PresentationUploaderRow,
+} from "../functions/_lib/services/proposals-speaker-profile";
 import app from "./helpers/app";
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 import {
@@ -1539,7 +1542,7 @@ describe("presentation versioning", () => {
     )
       .bind(crypto.randomUUID(), proposalId, uploadedAt)
       .run();
-    await expect(getPresentationUploader(env.DB, proposalId)).resolves.toEqual({
+    await expect(preparePresentationUploader(env.DB, proposalId).first<PresentationUploaderRow>()).resolves.toEqual({
       firstName: null,
       lastName: null,
       uploadedAt,

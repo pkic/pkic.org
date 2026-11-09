@@ -125,13 +125,6 @@ export function preparePresentationUploader(db: DatabaseLike, proposalId: string
     .bind(proposalId);
 }
 
-export async function getPresentationUploader(
-  db: DatabaseLike,
-  proposalId: string,
-): Promise<PresentationUploaderRow | null> {
-  return preparePresentationUploader(db, proposalId).first<PresentationUploaderRow>();
-}
-
 /** An expired session may select an existing representation, without editing a profile or recording consent. */
 export function isSpeakerIdentitySelectionOnly(payload: z.infer<typeof speakerSelfProfilePatchSchema>): boolean {
   const selectionFields = new Set(["actingIdentityId", "unaffiliatedAttestation", "independentCapacity"]);

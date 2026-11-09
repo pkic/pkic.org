@@ -8,7 +8,14 @@ import { seedEventAndAdmin, deliveredEmailPayload } from "./helpers/context";
 import { insertIndividualMember, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
-import { createProposal, getProposalById, updateProposalForVerifiedOwner } from "../functions/_lib/services/proposals";
+import {
+  createProposal,
+  getProposalById,
+  getSpeakerByManageToken,
+  updateProposalForVerifiedOwner,
+} from "../functions/_lib/services/proposals";
+import { loadSpeakerSelfServiceView } from "../functions/_lib/services/proposal-speaker-self-view";
+import type { DatabaseLike } from "../functions/_lib/types";
 import { registrationManageReadResponseSchema } from "../assets/shared/schemas/registration";
 import { proposalAccessReadResponseSchema } from "../assets/shared/schemas/proposal-management";
 import { speakerSelfServiceReadResponseSchema } from "../assets/shared/schemas/speaker-self-service";
@@ -53,6 +60,53 @@ function request(path: string, token?: string, body?: unknown) {
 }
 
 describe("session-owned event participation", () => {
+  it("loads the speaker projection while account authority is pending", async () => {
+    const f = await fixture();
+    const token = { resourceId: f.proposalId, userId: f.speaker };
+    const context = await getSpeakerByManageToken(env.DB, token, requireInternalSecret(env), {
+      allowExpiredSession: true,
+    });
+    let resolveAuthority!: (value: boolean) => void;
+    const personalDetailsEditable = new Promise<boolean>((resolve) => {
+      resolveAuthority = resolve;
+    });
+    const db: DatabaseLike = {
+      prepare: (sql) => env.DB.prepare(sql),
+      batch: async (statements) => {
+        const result = await env.DB.batch(statements);
+        resolveAuthority(true);
+        return result;
+      },
+    };
+    const view = await loadSpeakerSelfServiceView(db, context, {
+      token,
+      appBaseUrl: "https://example.test",
+      personalDetailsEditable,
+    });
+    expect(view.profile.personalDetailsEditable).toBe(true);
+  });
+
+  it("refuses the speaker projection when its event is missing", async () => {
+    const f = await fixture();
+    const token = { resourceId: f.proposalId, userId: f.speaker };
+    const context = await getSpeakerByManageToken(env.DB, token, requireInternalSecret(env), {
+      allowExpiredSession: true,
+    });
+    await expect(
+      loadSpeakerSelfServiceView(
+        env.DB,
+        {
+          ...context,
+          proposal: { ...context.proposal, event_id: crypto.randomUUID() },
+        },
+        { token, appBaseUrl: "https://example.test", personalDetailsEditable: false },
+      ),
+    ).rejects.toMatchObject({
+      status: 404,
+      code: "EVENT_NOT_FOUND",
+    });
+  });
+
   it("reads only the identity's registration without issuing a capability", async () => {
     const f = await fixture();
     const path = `/api/v1/registrations/${f.registrationId}`;

@@ -57,7 +57,7 @@ export async function onRequestGet(
     const context = await getSpeakerByManageToken(db, token, requireInternalSecret(c.env), {
       allowExpiredSession: true,
     });
-    const accountAuthority = await resolveSpeakerAccountAuthority(db, c.req.raw, c.env, {
+    const accountAuthority = resolveSpeakerAccountAuthority(db, c.req.raw, c.env, {
       authority: token,
       userId: context.user.id,
       accountClaimed: context.user.account_claimed,
@@ -66,7 +66,7 @@ export async function onRequestGet(
       await loadSpeakerSelfServiceView(db, context, {
         token,
         appBaseUrl,
-        personalDetailsEditable: Boolean(accountAuthority),
+        personalDetailsEditable: accountAuthority.then(Boolean),
       }),
     );
   } catch (error) {

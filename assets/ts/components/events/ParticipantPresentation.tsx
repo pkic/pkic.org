@@ -7,6 +7,7 @@ import {
 import { presentationUploadRequest, DEFAULT_PRESENTATION_TERMS } from "../../../shared/presentation-upload";
 import { proposalSpeakerAccessPath } from "../../../shared/proposal-access-paths";
 import { requestJson } from "../../shared/api-client";
+import { refusalSentence } from "../../shared/form/validation-map";
 import { formatDateTime } from "../../shared/ui";
 import { showHeadshotDisclaimer } from "../../shared/headshot/upload";
 import { Alert } from "../../ui/Alert";
@@ -24,23 +25,25 @@ export function ParticipantPresentation({
 }) {
   const { submitting: busy, error, begin, finish, setError } = useAsyncSubmission();
   const [message, setMessage] = useState("");
+  const [uploadAttempt, setUploadAttempt] = useState(0);
   const path = (...segments: string[]) =>
     proposalSpeakerAccessPath("/api/v1", { resourceId: data.proposal.id }, ...segments);
   const deadlinePassed = Boolean(
     data.proposal.presentationDeadline && Date.parse(data.proposal.presentationDeadline) < Date.now(),
   );
   async function upload(file: File) {
-    const accepted = await showHeadshotDisclaimer({
-      title: "Before you upload your presentation",
-      texts: data.presentationTerms.length
-        ? data.presentationTerms.map((term) => term.displayText ?? term.termKey)
-        : DEFAULT_PRESENTATION_TERMS,
-      confirmText: "Upload presentation",
-    });
-    if (!accepted) return;
-    begin();
+    setError(null);
     setMessage("");
     try {
+      const accepted = await showHeadshotDisclaimer({
+        title: "Before you upload your presentation",
+        texts: data.presentationTerms.length
+          ? data.presentationTerms.map((term) => term.displayText ?? term.termKey)
+          : DEFAULT_PRESENTATION_TERMS,
+        confirmText: "Upload presentation",
+      });
+      if (!accepted) return;
+      begin();
       await requestJson(path("presentation"), speakerPresentationUploadResponseSchema, {
         method: "PUT",
         ...presentationUploadRequest(file),
@@ -48,8 +51,9 @@ export function ParticipantPresentation({
       setMessage("Presentation uploaded.");
       await reload();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to upload the presentation.");
+      setError(refusalSentence(cause));
     } finally {
+      setUploadAttempt((attempt) => attempt + 1);
       finish();
     }
   }
@@ -91,6 +95,7 @@ export function ParticipantPresentation({
                   {...control}
                   accept=".pdf,.ppt,.pptx,.pptm,.odp"
                   disabled={busy || deadlinePassed}
+                  resetKey={uploadAttempt}
                   onFileChange={(file) => {
                     if (file) void upload(file);
                   }}

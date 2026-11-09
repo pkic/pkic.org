@@ -60,6 +60,23 @@ function clearButton(container: HTMLElement): HTMLButtonElement | null {
 }
 
 describe("FileInput", () => {
+  it("resets a processed file without replacing the input or losing focus", () => {
+    const onFileChange = vi.fn();
+    const container = mount(<FileInput resetKey={0} onFileChange={onFileChange} />);
+    const input = fileInput(container);
+    choose(input, "slides.pdf");
+    input.focus();
+    const setValue = vi.spyOn(input, "value", "set");
+    void act(() => render(<FileInput resetKey={1} onFileChange={onFileChange} />, container));
+    expect(setValue).toHaveBeenCalledWith("");
+    expect(fileInput(container)).toBe(input);
+    expect(document.activeElement).toBe(input);
+    expect(container.textContent).not.toContain("slides.pdf");
+    expect(onFileChange).toHaveBeenCalledTimes(1);
+    choose(input, "slides.pdf");
+    expect(onFileChange).toHaveBeenCalledTimes(2);
+  });
+
   it("is the element the field's label names, and is still a file input", () => {
     const container = mount(<Field label="Supporting document">{(control) => <FileInput {...control} />}</Field>);
     const label = container.querySelector("label");

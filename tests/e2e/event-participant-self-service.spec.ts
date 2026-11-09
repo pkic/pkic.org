@@ -928,6 +928,15 @@ test("a speaker reopens accepted terms and manages a presentation from its own p
     expect(await decideProposal(page, proposal.proposalId, "accepted")).toBe(200);
     await speaker.reload();
     const file = Buffer.from("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF");
+    // Declining the disclaimer must allow the same file to be selected again.
+    await uploadThroughControl(speaker, speaker.getByLabel("Presentation file", { exact: true }), {
+      name: "speaker-slides.pdf",
+      mimeType: "application/pdf",
+      buffer: file,
+    });
+    await speaker.getByRole("dialog").press("Escape");
+    await expect(speaker.getByLabel("Presentation file", { exact: true })).toHaveValue("");
+    await expect(speaker.getByLabel("Presentation file", { exact: true })).toBeFocused();
     await uploadThroughControl(speaker, speaker.getByLabel("Presentation file", { exact: true }), {
       name: "speaker-slides.pdf",
       mimeType: "application/pdf",
@@ -937,6 +946,7 @@ test("a speaker reopens accepted terms and manages a presentation from its own p
     await disclaimer.getByRole("checkbox").check();
     await disclaimer.getByRole("button", { name: "Upload presentation", exact: true }).click();
     await expect(speaker.getByText("Presentation uploaded.", { exact: true })).toBeVisible();
+    await expect(speaker.getByLabel("Presentation file", { exact: true })).toHaveValue("");
     const download = speaker.getByRole("link", { name: "Download current presentation", exact: true });
     await expect(download).toBeVisible();
     const downloaded = await speaker.request.get((await download.getAttribute("href")) ?? "");

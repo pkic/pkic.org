@@ -4,10 +4,12 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ParticipantPresentation } from "../../assets/ts/components/events/ParticipantPresentation";
 import { participantSpeakerFixture } from "./helpers/participant-speaker-fixture";
+import { showHeadshotDisclaimer } from "../../assets/ts/shared/headshot/upload";
 
 vi.mock("../../assets/ts/shared/headshot/upload", () => ({ showHeadshotDisclaimer: vi.fn(async () => true) }));
 let host: HTMLDivElement;
 beforeEach(() => {
+  vi.mocked(showHeadshotDisclaimer).mockResolvedValue(true);
   host = document.createElement("div");
   document.body.append(host);
 });
@@ -53,7 +55,13 @@ it("shows a server refusal and releases the upload control for another attempt",
     "fetch",
     vi.fn(async () =>
       Response.json(
-        { error: { code: "UPLOAD_REFUSED", message: "Presentation storage is unavailable." } },
+        {
+          error: {
+            code: "UPLOAD_REFUSED",
+            message: "Upload refused.",
+            details: { formErrors: ["Presentation storage is unavailable."] },
+          },
+        },
         { status: 503 },
       ),
     ),
@@ -66,5 +74,34 @@ it("shows a server refusal and releases the upload control for another attempt",
   });
   await vi.waitFor(() => expect(host.textContent).toContain("Presentation storage is unavailable."));
   expect(input.disabled).toBe(false);
+  expect(host.textContent).not.toContain("slides.pdf");
   expect(reload).not.toHaveBeenCalled();
 });
+
+it.each([false, true])(
+  "clears the picker after disclaimer acceptance is %s, allowing the same file again",
+  async (accepted) => {
+    vi.mocked(showHeadshotDisclaimer).mockResolvedValue(accepted);
+    const fetcher = vi.fn(async () => Response.json({ success: true }));
+    vi.stubGlobal("fetch", fetcher);
+    const reload = vi.fn(async () => {});
+    await act(() => render(<ParticipantPresentation data={acceptedSpeaker()} reload={reload} />, host));
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const setter = vi.spyOn(input, "value", "set");
+    for (let attempt = 0; attempt < 2; attempt++) {
+      Object.defineProperty(input, "files", {
+        value: [new File(["%PDF-1.4"], "slides.pdf", { type: "application/pdf" })],
+        configurable: true,
+      });
+      await act(async () => {
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      await vi.waitFor(() => expect(setter).toHaveBeenCalledTimes(attempt + 1));
+      expect(setter).toHaveBeenLastCalledWith("");
+      expect(input.disabled).toBe(false);
+      expect(host.textContent).not.toContain("slides.pdf");
+    }
+    expect(fetcher).toHaveBeenCalledTimes(accepted ? 2 : 0);
+    expect(reload).toHaveBeenCalledTimes(accepted ? 2 : 0);
+  },
+);

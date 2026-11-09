@@ -50,7 +50,23 @@ export function ParticipantSpeaker({
 }) {
   const access = { resourceId: data.proposal.id };
   const path = (...segments: string[]) => proposalSpeakerAccessPath("/api/v1", access, ...segments);
-  const [consents, setConsents] = useState(data.acceptedConsents);
+  const [selectedConsents, setConsents] = useState<typeof data.acceptedConsents>([]);
+  const savedTerms = terms.filter((term) =>
+    data.acceptedConsents.some((value) => value.termKey === term.termKey && value.version === term.version),
+  );
+  const newTerms = terms.filter((term) => !savedTerms.includes(term));
+  const consents =
+    data.speaker.status === "invited"
+      ? [
+          ...data.acceptedConsents,
+          ...selectedConsents.filter(
+            (value) =>
+              !data.acceptedConsents.some(
+                (saved) => saved.termKey === value.termKey && saved.version === value.version,
+              ),
+          ),
+        ]
+      : data.acceptedConsents;
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState("");
@@ -153,10 +169,22 @@ export function ParticipantSpeaker({
             {(data.speaker.status === "confirmed" || data.speaker.awaitingReview || !editable) &&
               !identityChanged &&
               terms.length > 0 && (
-                <fieldset class="pk-fieldset pk-stack" disabled>
-                  <legend>Speaker terms and conditions</legend>
-                  <ConsentList terms={terms} recorded={data.acceptedConsents} />
-                </fieldset>
+                <div class="pk-stack">
+                  {newTerms.length > 0 && (
+                    <Alert>
+                      Some current speaker terms have not been accepted.
+                      {editable
+                        ? " Use Review speaker terms and identity below to review them."
+                        : " Contact the event organizers if you need to update your agreements."}
+                    </Alert>
+                  )}
+                  {savedTerms.length > 0 && (
+                    <fieldset class="pk-fieldset pk-stack" disabled>
+                      <legend>Speaker terms and conditions</legend>
+                      <ConsentList terms={savedTerms} recorded={data.acceptedConsents} />
+                    </fieldset>
+                  )}
+                </div>
               )}
             {editable && data.speaker.status !== "confirmed" && !data.speaker.awaitingReview && (
               <form
@@ -185,7 +213,16 @@ export function ParticipantSpeaker({
                 }}
               >
                 <fieldset class="pk-fieldset pk-stack" disabled={busy}>
-                  {terms.map((term) => (
+                  {savedTerms.length > 0 && (
+                    <>
+                      <p>You already agreed to these terms for this event.</p>
+                      <fieldset class="pk-fieldset pk-stack" disabled>
+                        <legend>Previously accepted terms</legend>
+                        <ConsentList terms={savedTerms} recorded={data.acceptedConsents} />
+                      </fieldset>
+                    </>
+                  )}
+                  {newTerms.map((term) => (
                     <ConsentCard
                       term={term}
                       key={term.termKey}

@@ -318,3 +318,73 @@ it("requires acceptance of a replacement term version even when an earlier versi
   expect(host.querySelector<HTMLInputElement>("input[data-consent-input]")?.checked).toBe(false);
   expect(host.textContent).toContain("Accept the speaker terms above to choose your speaker identity.");
 });
+
+it("reviews replacement terms and keeps the saved acceptance after reload and Cancel", async () => {
+  host = document.createElement("div");
+  document.body.append(host);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => response({ identities: [] })),
+  );
+  const saved = participantSpeakerFixture();
+  saved.speaker.status = "confirmed";
+  saved.profile.actingIdentitySelection = "individual";
+  saved.profile.actingIdentitySelectedAt = at;
+  const terms = [{ termKey: "privacy", version: "2", required: true, contentRef: null }];
+  const show = async () =>
+    act(() =>
+      render(<ParticipantSpeaker data={saved} eventSlug="pqc-2026" terms={terms} reload={async () => {}} />, host),
+    );
+  const click = async (label: string) =>
+    act(() => {
+      const button = [...host.querySelectorAll("button")].find((item) => item.textContent === label);
+      expect(button, label).toBeDefined();
+      button!.click();
+    });
+  await show();
+  expect(host.textContent).toContain("Some current speaker terms have not been accepted.");
+  expect(host.querySelector("input[data-consent-input]")).toBeNull();
+  await click("Review speaker terms and identity");
+  const checkbox = host.querySelector<HTMLInputElement>("input[data-consent-input]")!;
+  expect(checkbox.matches(":disabled")).toBe(false);
+  await act(() => checkbox.click());
+  // A successful identity save returns fresh receipts and a fresh selection timestamp.
+  saved.acceptedConsents = [{ termKey: "privacy", version: "2" }];
+  saved.profile.actingIdentitySelectedAt = "2026-01-02T00:00:00.000Z";
+  await show();
+  await click("Choose another representation");
+  await click("Cancel");
+  await click("Choose another representation");
+  expect(host.querySelector<HTMLInputElement>("input[data-consent-input]")?.checked).toBe(true);
+  expect(host.textContent).not.toContain("Accept the speaker terms above to choose your speaker identity.");
+});
+
+it("labels event agreements as already accepted when opening another invitation", async () => {
+  host = document.createElement("div");
+  document.body.append(host);
+  const saved = participantSpeakerFixture();
+  saved.profile.actingIdentitySelection = "individual";
+  saved.profile.actingIdentitySelectedAt = at;
+  saved.acceptedConsents = [{ termKey: "privacy", version: "1" }];
+  await act(() =>
+    render(
+      <ParticipantSpeaker
+        data={saved}
+        eventSlug="pqc-2026"
+        terms={[
+          { termKey: "privacy", version: "1", required: true, contentRef: null },
+          { termKey: "recording", version: "2", required: true, contentRef: null },
+        ]}
+        reload={async () => {}}
+      />,
+      host,
+    ),
+  );
+  expect(host.textContent).toContain("You already agreed to these terms for this event.");
+  const privacy = host.querySelector<HTMLInputElement>('input[value="privacy:1"]')!;
+  const recording = host.querySelector<HTMLInputElement>('input[value="recording:2"]')!;
+  expect(privacy.checked).toBe(true);
+  expect(privacy.matches(":disabled")).toBe(true);
+  expect(recording.checked).toBe(false);
+  expect(recording.matches(":disabled")).toBe(false);
+});

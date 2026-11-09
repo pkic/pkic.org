@@ -111,7 +111,7 @@ export const speakerSelfServiceReadResponseSchema = z.object({
   speaker: speakerSelfServiceAccessSchema,
   proposal: speakerSelfServiceProposalSchema,
   presentationTerms: z.array(requiredTermSchema),
-  acceptedConsents: z.array(consentItemSchema).default([]),
+  acceptedConsents: z.array(consentItemSchema),
   profile: speakerSelfServiceProfileSchema,
   currentRepresentation: speakerCurrentRepresentationSchema.nullable(),
 });

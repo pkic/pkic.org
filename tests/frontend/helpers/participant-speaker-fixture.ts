@@ -41,5 +41,6 @@ export function participantSpeakerFixture() {
     },
     currentRepresentation: null,
     presentationTerms: [],
+    acceptedConsents: [],
   });
 }

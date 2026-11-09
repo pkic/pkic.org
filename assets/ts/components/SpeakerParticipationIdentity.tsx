@@ -101,6 +101,12 @@ export function SpeakerParticipationIdentity({
     if (changing) onEditing();
   }, [changing, onEditing]);
   const accepted = termsReady && (invited ? termsAccepted : localTermsAccepted);
+  function changeRepresentation(add: boolean) {
+    setAdding(add);
+    setLocalTermsAccepted(termsAccepted);
+    setRecorded(data.acceptedConsents);
+    setChanging(true);
+  }
   return (
     <div class="pk-stack pk-stack--loose">
       {changing ? (
@@ -171,15 +177,22 @@ export function SpeakerParticipationIdentity({
             available={Boolean(representation)}
           >
             <div class="pk-cluster">
-              <Button type="button" variant="secondary" onClick={() => setChanging(true)}>
-                Choose another representation
+              <Button type="button" variant="secondary" onClick={() => changeRepresentation(false)}>
+                {!invited &&
+                terms.some(
+                  (term) =>
+                    !data.acceptedConsents.some(
+                      (value) => value.termKey === term.termKey && value.version === term.version,
+                    ),
+                )
+                  ? "Review speaker terms and identity"
+                  : "Choose another representation"}
               </Button>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => {
-                  setAdding(true);
-                  setChanging(true);
+                  changeRepresentation(true);
                 }}
               >
                 Add representation
