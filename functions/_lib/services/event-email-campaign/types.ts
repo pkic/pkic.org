@@ -48,6 +48,7 @@ export interface AttendeeCampaignRow {
 }
 
 export type ResolvedAttendeeCampaignRow = Omit<AttendeeCampaignRow, "formResponse"> & {
+  acceptedTermsText: string;
   formResponse: CampaignFormResponseData;
 };
 

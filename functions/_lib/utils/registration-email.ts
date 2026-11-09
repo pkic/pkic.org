@@ -1,3 +1,4 @@
+import { buildD1JsonMembershipFilter } from "../db/json-membership";
 import { formatCustomAnswerValue, isCustomAnswerRecord } from "./custom-answer-display";
 import { resolveEventFormResponse } from "../services/forms";
 import type { DatabaseLike } from "../types";
@@ -63,14 +64,19 @@ export function buildAcceptedTermsText(
  * Use in flows where the original consent list is no longer in scope (e.g.
  * confirm-email, resend, update).
  */
-export function prepareAcceptedRegistrationTerms(db: DatabaseLike, registrationId: string) {
+export function prepareAcceptedRegistrationTerms(db: DatabaseLike, registrationIds: string | readonly string[]) {
+  const scope = buildD1JsonMembershipFilter(
+    "ca.registration_id",
+    typeof registrationIds === "string" ? [registrationIds] : registrationIds,
+  );
   return db
-    .prepare(`SELECT et.display_text AS title
+    .prepare(`SELECT ca.registration_id, et.display_text AS title
      FROM consent_acceptances ca
      JOIN event_terms et
-       ON et.event_id = ca.event_id AND et.term_key = ca.term_key AND et.version = ca.term_version
-     WHERE ca.registration_id = ? ORDER BY ca.term_key ASC`)
-    .bind(registrationId);
+       ON et.event_id = ca.event_id AND et.audience_type = ca.audience_type
+       AND et.term_key = ca.term_key AND et.version = ca.term_version
+     WHERE ${scope.sql} ORDER BY ca.registration_id ASC, ca.term_key ASC`)
+    .bind(...scope.bindings);
 }
 
 export interface AcceptedRegistrationTermRow {
@@ -88,6 +94,24 @@ export async function getAcceptedTermsTextForRegistration(db: DatabaseLike, regi
   return decodeAcceptedRegistrationTerms(
     (await prepareAcceptedRegistrationTerms(db, registrationId).all<AcceptedRegistrationTermRow>()).results,
   );
+}
+
+/** Load recorded acceptance text for one bounded recipient page without per-recipient queries. */
+export async function loadAcceptedTermsTextForRegistrations(
+  db: DatabaseLike,
+  registrationIds: readonly string[],
+): Promise<Map<string, string>> {
+  if (!registrationIds.length) return new Map();
+  const { results } = await prepareAcceptedRegistrationTerms(db, registrationIds).all<
+    AcceptedRegistrationTermRow & { registration_id: string }
+  >();
+  const byRegistration = new Map<string, AcceptedRegistrationTermRow[]>();
+  for (const row of results) {
+    const terms = byRegistration.get(row.registration_id) ?? [];
+    terms.push(row);
+    byRegistration.set(row.registration_id, terms);
+  }
+  return new Map([...byRegistration].map(([id, terms]) => [id, decodeAcceptedRegistrationTerms(terms)]));
 }
 
 /**
