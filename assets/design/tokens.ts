@@ -543,6 +543,7 @@ export const publicationBrand = {
 
 /** Component-only tokens load with their consumers rather than the global entry. */
 export const featureTokenGroups = {
+  content: ["text-lead"],
   tour: ["tour-highlight"],
   agenda: Object.keys(constants).filter((name) => name.startsWith("agenda-")),
   scanner: [

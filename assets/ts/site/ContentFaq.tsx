@@ -1,3 +1,4 @@
+import "../../design/tokens.content.generated.css";
 import "./ContentFaq.css";
 
 export interface ContentFaqGroup {
