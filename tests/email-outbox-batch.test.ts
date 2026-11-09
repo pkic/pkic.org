@@ -103,7 +103,9 @@ describe("email outbox batch processing", () => {
     const result = await job.run({ env: { ...env, DB: db }, d1QueryBudget: budget });
     expect(result).toMatchObject({ summary: { processed: 105, failed: 0, batches: 11, stoppedReason: "empty" } });
     expect(result).not.toHaveProperty("nextRunAt");
-    expect(budget.usedQueries()).toBeLessThan(900);
+    // 210 per-message claim/settlement statements, 22 selection/recovery
+    // statements, and six shared template/resource reads across all 11 batches.
+    expect(budget.usedQueries()).toBeLessThanOrEqual(238);
     expect(send).toHaveBeenCalledTimes(105);
     const remaining = await queryAll<{ count: number }>(
       env.DB,

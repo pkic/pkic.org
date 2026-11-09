@@ -459,9 +459,9 @@ async function processInChunks(
   env: Env,
   rows: OutboxRow[],
   chunkSize = 10,
+  context = createOutboxProcessingContext(),
 ): Promise<{ processed: number; failed: number }> {
   if (rows.length === 0) return { processed: 0, failed: 0 };
-  const context = createOutboxProcessingContext();
   let failed = 0;
   let processed = 0;
   for (let i = 0; i < rows.length; i += chunkSize) {
@@ -478,16 +478,20 @@ export async function processPendingOutbox(
   env: Env,
   limit = 20,
 ): Promise<{ processed: number; failed: number }> {
-  const { processed, failed } = await processPendingOutboxBatch(db, env, limit);
+  const { processed, failed } = await createOutboxBatchProcessor(db, env)(limit);
   return { processed, failed };
 }
 
-/** Selection counts distinguish an empty queue from mail deferred by delivery guards. */
-export async function processPendingOutboxBatch(db: DatabaseLike, env: Env, limit: number) {
-  if (getAvailability(env, Date.now(), "email").mode !== "normal") return { processed: 0, failed: 0, selected: 0 };
-  await quarantineExpiredOutboxLeases(db, limit);
-  const rows = await all<OutboxRow>(db, EMAIL_OUTBOX_DUE_QUERY, [nowIso(), limit]);
-  return { ...(await processInChunks(db, env, rows)), selected: rows.length };
+/** One invocation shares immutable templates across successive, bounded selections. */
+export function createOutboxBatchProcessor(db: DatabaseLike, env: Env) {
+  const context = createOutboxProcessingContext();
+  return async (limit: number) => {
+    if (getAvailability(env, Date.now(), "email").mode !== "normal") return { processed: 0, failed: 0, selected: 0 };
+    await quarantineExpiredOutboxLeases(db, limit);
+    const rows = await all<OutboxRow>(db, EMAIL_OUTBOX_DUE_QUERY, [nowIso(), limit]);
+    // Selection counts distinguish an empty queue from mail deferred by delivery guards.
+    return { ...(await processInChunks(db, env, rows, 10, context)), selected: rows.length };
+  };
 }
 
 export async function summarizePendingOutbox(

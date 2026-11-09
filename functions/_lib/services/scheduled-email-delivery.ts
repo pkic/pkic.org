@@ -1,6 +1,6 @@
 import { getConfig } from "../config";
 import type { D1QueryBudget } from "../db/query-budget";
-import { processPendingOutboxBatch } from "../email/outbox";
+import { createOutboxBatchProcessor } from "../email/outbox";
 import type { Env } from "../types";
 import { nowIso } from "../utils/time";
 
@@ -21,6 +21,7 @@ export async function runScheduledEmailDelivery(env: Env, budget: D1QueryBudget)
   if (!limit) return { summary: { ...summary, stoppedReason: "disabled" } };
   const deadline = Date.now() + MAX_ELAPSED_MS;
   let slowestBatchMs = 0;
+  const processBatch = createOutboxBatchProcessor(env.DB, env);
 
   for (let batch = 0; batch < MAX_BATCHES; batch++) {
     if (Date.now() + Math.max(1_000, slowestBatchMs * 2) >= deadline) {
@@ -32,7 +33,7 @@ export async function runScheduledEmailDelivery(env: Env, budget: D1QueryBudget)
     );
     if (count <= 0) return { summary: { ...summary, stoppedReason: "d1_query_limit" }, nextRunAt: nowIso() };
     const startedAt = Date.now();
-    const result = await processPendingOutboxBatch(env.DB, env, count);
+    const result = await processBatch(count);
     slowestBatchMs = Math.max(slowestBatchMs, Date.now() - startedAt);
     summary.processed += result.processed;
     summary.failed += result.failed;
