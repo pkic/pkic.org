@@ -30,14 +30,22 @@ let current: ReturnType<typeof useEligibilityManifest>;
 function syncButton() {
   return Array.from(host.querySelectorAll("button")).find((button) => /sync now/i.test(button.textContent!))!;
 }
-function Scanner({ collector = false, syncing = false }: { collector?: boolean; syncing?: boolean }) {
+function Scanner({
+  collector = false,
+  syncing = false,
+  scannerEpoch = epoch,
+}: {
+  collector?: boolean;
+  syncing?: boolean;
+  scannerEpoch?: ScannerEpoch;
+}) {
   const state = useEligibilityManifest({
     slug: "synthetic",
     operatorUserId: id,
     occurrenceId: null,
     action: "attendance",
     onPermissionChanged: permissionChanged,
-    epoch,
+    epoch: scannerEpoch,
     collector,
     onPreparationClosed: preparationClosed,
   });
@@ -207,5 +215,29 @@ it("keeps badge refresh available while scan uploads are draining", async () => 
   expect(syncButton().disabled).toBe(false);
   await act(async () => syncButton().click());
   expect(mocks.prepare).toHaveBeenCalledTimes(2);
+  expect(upload).not.toHaveBeenCalled();
+  await act(async () => syncButton().click());
+  expect(mocks.prepare).toHaveBeenCalledTimes(3);
+  expect(upload).not.toHaveBeenCalled();
+  await act(async () => render(<Scanner />, host));
+  await act(async () => syncButton().click());
   expect(upload).toHaveBeenCalledOnce();
+});
+
+it("retains a closed session through refreshes and clears it only for the next epoch", async () => {
+  mocks.prepare.mockRejectedValueOnce(new Error("SCANNER_PREPARATION_CLOSED"));
+  await act(async () => render(<Scanner />, host));
+  await vi.waitFor(() => expect(current.closedMessage).toMatch(/session has closed/i));
+  const message = current.closedMessage;
+  expect(message).toMatch(/session has closed/i);
+  expect(current.manifestError).toBe(message);
+  await act(async () => syncButton().click());
+  expect(current.closedMessage).toBe(message);
+  expect(current.manifestError).toBe(message);
+  await act(async () =>
+    render(<Scanner scannerEpoch={{ ...epoch, epochId: "22222222-2222-4222-8222-222222222222" }} />, host),
+  );
+  await vi.waitFor(() => expect(current.closedMessage).toBe(""));
+  expect(current.manifestError).toBe("");
+  expect(current.manifestReady).toBe(true);
 });

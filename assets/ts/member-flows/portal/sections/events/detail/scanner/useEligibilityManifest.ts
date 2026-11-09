@@ -44,6 +44,8 @@ export function useEligibilityManifest({
   const [manifestReady, setManifestReady] = useState(false);
   const [manifestPreparing, setManifestPreparing] = useState(false);
   const [manifestError, setManifestError] = useState("");
+  const [closedMessage, setClosedMessage] = useState("");
+  useEffect(() => setClosedMessage(""), [epoch?.epochId]);
   const [manifestProgress, setManifestProgress] = useState<number | null>(null);
   const refreshRequest = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
@@ -91,8 +93,15 @@ export function useEligibilityManifest({
         if (controller.signal.aborted) return;
         if (eligibilityRefreshRefused(error)) {
           eligibilityManifest.current = null;
-          if (eligibilityPreparationClosed(error)) onClosed?.(eligibilityRefreshError(error));
-          else onRefusal();
+          if (eligibilityPreparationClosed(error)) {
+            const message = eligibilityRefreshError(error);
+            setClosedMessage(message);
+            setManifestError("");
+            setManifestReady(false);
+            onClosed?.(message);
+            return;
+          }
+          onRefusal();
         }
         setManifestReady(Boolean(eligibilityManifest.current));
         setManifestError(
@@ -130,7 +139,8 @@ export function useEligibilityManifest({
     eligibilityManifest,
     manifestReady,
     manifestPreparing,
-    manifestError,
+    manifestError: closedMessage || manifestError,
+    closedMessage,
     manifestProgress,
     refresh: () => refreshRequest.current(),
   };

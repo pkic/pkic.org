@@ -53,6 +53,37 @@ describe("scanner device enrollment and manual capture boundary", () => {
         .disabled,
     ).toBe(true);
   });
+  it("cancels a pending start when preparation closes before starting the next session", async () => {
+    mocks.manifestPreparing = true;
+    mocks.manifestReady = false;
+    await mount(true, ["attendance"]);
+    const button = (name: string) =>
+      Array.from(host.querySelectorAll("button")).find((control) => control.textContent?.trim() === name)!;
+    await act(async () => button("Start scanning").click());
+    expect(button("Cancel")).toBeDefined();
+    expect(host.querySelector(".pk-fast-scanner")).toBeNull();
+    await act(async () => mocks.preparationClosed!());
+    expect(host.textContent).toMatch(/session has closed/i);
+    expect(button("Cancel")).toBeUndefined();
+    await openDiagnostics();
+    mocks.freeze.mockResolvedValueOnce({ state: "closed", epochId: mocks.epochId, issuedHighWater: 0 });
+    await act(async () => button("Close scanner session").click());
+    mocks.next.mockResolvedValueOnce({
+      state: "open",
+      epochId: "88888888-8888-4888-8888-888888888888",
+      issuedHighWater: 0,
+    });
+    mocks.manifestReady = true;
+    await act(async () => button("Start next scanner session").click());
+    expect(mocks.next).toHaveBeenCalledOnce();
+    expect(host.textContent).not.toMatch(/session has closed/i);
+    expect(host.querySelector(".pk-fast-scanner")).toBeNull();
+    await closeDiagnostics();
+    expect(button("Start scanning").disabled).toBe(false);
+    expect(host.querySelector(".pk-fast-scanner")).toBeNull();
+    await act(async () => button("Start scanning").click());
+    expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
+  });
   it("keeps camera and enrollment failures in the visible sync panel", async () => {
     mocks.error = "Could not enroll this scanner";
     mocks.decoderStatus = "Offline camera files are not prepared";

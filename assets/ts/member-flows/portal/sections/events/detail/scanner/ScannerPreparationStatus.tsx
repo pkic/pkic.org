@@ -43,7 +43,7 @@ export function ScannerSyncStatus({
             variant="secondary"
             onClick={() => {
               void refreshEligibility?.();
-              sync();
+              if (!syncing) sync();
             }}
           >
             Sync now

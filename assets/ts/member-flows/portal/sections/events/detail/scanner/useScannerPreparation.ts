@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "preact/hooks";
 import { useScannerLocation } from "./useScannerLocation";
 import { useEligibilityManifest, useScannerOfflinePreparation } from "./useEligibilityManifest";
 import { useOfflineAdmission } from "./useOfflineAdmission";
@@ -18,6 +17,7 @@ export function useScannerPreparation({
   session,
   onContextChange,
   onPermissionChanged,
+  onPreparationClosed,
 }: {
   slug: string;
   operatorUserId: string;
@@ -28,13 +28,8 @@ export function useScannerPreparation({
   session: PortalSession | null;
   onContextChange: (message?: string) => void;
   onPermissionChanged: () => void;
+  onPreparationClosed: () => void;
 }) {
-  const captureClosed = useRef(false);
-  const [closedMessage, setClosedMessage] = useState("");
-  useEffect(() => {
-    captureClosed.current = false;
-    setClosedMessage("");
-  }, [epoch?.epochId]);
   const location = useScannerLocation(slug, occurrenceId, action !== "lead", onContextChange, collectorContext);
   const eligibility = useEligibilityManifest({
     slug,
@@ -46,9 +41,8 @@ export function useScannerPreparation({
     epoch,
     collector: Boolean(collectorContext),
     onPreparationClosed: (message) => {
-      captureClosed.current = true;
-      setClosedMessage(message);
       onContextChange(message);
+      onPreparationClosed();
     },
   });
   const offlineAdmission = useOfflineAdmission(slug, operatorUserId, eligibility.eligibilityManifest, collectorContext);
@@ -68,8 +62,8 @@ export function useScannerPreparation({
     action,
     preparing: eligibility.manifestPreparing,
     ready: eligibility.manifestReady,
-    error: closedMessage || eligibility.manifestError,
+    error: eligibility.manifestError,
     checkedBadges: eligibility.manifestProgress,
   };
-  return { location, eligibility, offlineAdmission, offlinePreparation, status, captureClosed, closedMessage };
+  return { location, eligibility, offlineAdmission, offlinePreparation, status };
 }

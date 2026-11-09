@@ -12,6 +12,7 @@ import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { badgeCredentialSchema } from "../../assets/shared/schemas/badge-credential";
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
+import { useEffect, useState } from "preact/hooks";
 import { afterEach, expect, vi } from "vitest";
 import {
   eventScanCaptureIntentSchema,
@@ -23,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   ready: false,
   refresh: vi.fn(async () => {}),
   manifestReady: true,
+  manifestPreparing: false,
+  epochId: "77777777-7777-4777-8777-777777777777",
   preparationClosed: null as null | (() => void),
   error: "",
   decoderStatus: "Camera prepared",
@@ -57,16 +60,21 @@ vi.mock("qr-scanner", () => ({
   },
 }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useScannerDevice", () => ({
-  useScannerDevice: () => ({
-    deviceId: "22222222-2222-4222-8222-222222222222",
-    ready: mocks.ready,
-    error: mocks.error,
-    epoch: mocks.state === "preparing" ? null : { state: mocks.state },
-    setEpoch: vi.fn((epoch) => {
-      mocks.state = epoch.state;
-      mocks.ready = epoch.state === "open";
-    }),
-  }),
+  useScannerDevice: () => {
+    const [, refresh] = useState(0);
+    return {
+      deviceId: "22222222-2222-4222-8222-222222222222",
+      ready: mocks.ready,
+      error: mocks.error,
+      epoch: mocks.state === "preparing" ? null : { state: mocks.state, epochId: mocks.epochId },
+      setEpoch: vi.fn((epoch) => {
+        mocks.state = epoch.state;
+        mocks.epochId = epoch.epochId;
+        mocks.ready = epoch.state === "open";
+        refresh((value) => value + 1);
+      }),
+    };
+  },
 }));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useScannerDecoderPreparation", () => ({
   useScannerDecoderPreparation: () => mocks.decoderStatus,
@@ -78,18 +86,23 @@ vi.mock(
       typeof import("../../assets/ts/member-flows/portal/sections/events/detail/scanner/useEligibilityManifest")
     >()),
     useEligibilityManifest: ({ onPreparationClosed: onClosed }: EligibilityManifestOptions) => {
+      const [closedMessage, setClosedMessage] = useState("");
+      useEffect(() => setClosedMessage(""), [mocks.epochId]);
       mocks.preparationClosed =
         typeof onClosed === "function"
           ? () => {
               mocks.manifestReady = false;
+              mocks.manifestPreparing = false;
+              setClosedMessage("This scanner session has closed.");
               onClosed("This scanner session has closed.");
             }
           : null;
       return {
         eligibilityManifest: { current: { occurrenceId: null, roomId: null, ...mocks.snapshot } },
         manifestReady: mocks.manifestReady,
-        manifestPreparing: false,
-        manifestError: "",
+        manifestPreparing: mocks.manifestPreparing,
+        manifestError: closedMessage,
+        closedMessage,
         refresh: mocks.refresh,
       };
     },
@@ -138,6 +151,8 @@ afterEach(async () => {
   mocks.snapshot = null;
   mocks.preparationClosed = null;
   mocks.manifestReady = true;
+  mocks.manifestPreparing = false;
+  mocks.epochId = "77777777-7777-4777-8777-777777777777";
   mocks.error = "";
   mocks.decoderStatus = "Camera prepared";
   mocks.drain.mockImplementation(async () => ({ uploaded: 0, state: "complete" }));

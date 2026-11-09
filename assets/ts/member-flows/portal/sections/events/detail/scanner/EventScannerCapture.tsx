@@ -108,6 +108,7 @@ export function EventScannerCapture({
     epoch: scannerDevice.epoch,
     session: portalSession.value,
     onContextChange: clearCurrentScan,
+    onPreparationClosed: () => autoStart.cancel(),
     onPermissionChanged: () => {
       refusePreparation();
       authorityPaused.current = true;
@@ -126,8 +127,7 @@ export function EventScannerCapture({
     selectTarget,
     selectRoom,
   } = preparation.location;
-  const { eligibilityManifest, manifestReady, manifestPreparing, manifestError } = preparation.eligibility;
-  const { offlineAdmission, offlinePreparation, captureClosed, closedMessage } = preparation;
+  const { eligibilityManifest, manifestReady, manifestPreparing, closedMessage } = preparation.eligibility;
   const captureReady = scannerDevice.ready && !closedMessage;
   const sound = useScannerSound(preferences.sound, result ?? lastResult, action, failed, Boolean(targetId));
   const screenAwake = useScannerImmersiveLifecycle(
@@ -232,10 +232,10 @@ export function EventScannerCapture({
     },
   );
   const persistCapture = (scan: EventScanRequest) =>
-    persistScannerCapture(scan, slug, offlineAdmission.persist, auditFailure);
+    persistScannerCapture(scan, slug, preparation.offlineAdmission.persist, auditFailure);
   function captureAllowed() {
-    const blocked = captureClosed.current || authorityPaused.current;
-    if (blocked) setMessage(captureClosed.current ? closedMessage : "Sign in again to upload pending scans.");
+    const blocked = Boolean(closedMessage) || authorityPaused.current;
+    if (blocked) setMessage(closedMessage || "Sign in again to upload pending scans.");
     return scannerDevice.ready && !blocked;
   }
   async function capture() {
@@ -369,7 +369,7 @@ export function EventScannerCapture({
     targetId,
     roomId,
     onStart: startScanning,
-    error: manifestError,
+    error: preparation.status.error,
   });
   const preparationStatus = { ...preparation.status, lastSync: syncHistory.lastSync };
   function stopContinuousScanning() {
@@ -469,7 +469,7 @@ export function EventScannerCapture({
             form={form}
             busy={busy}
             capture={() => void capture()}
-            pendingStart={autoStart.pending ? manifestError || "Preparing scanner…" : undefined}
+            pendingStart={autoStart.pending ? preparation.status.error || "Preparing scanner…" : undefined}
             cancelStart={() => autoStart.cancel()}
             controls={
               <ScannerCaptureControls
@@ -535,7 +535,7 @@ export function EventScannerCapture({
               pending,
               uploadStatus,
               collector: collectorContext,
-              offline: offlinePreparation,
+              offline: preparation.offlinePreparation,
               action,
               syncing,
             }}
