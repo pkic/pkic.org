@@ -1,3 +1,5 @@
+import { requireInternalSecret } from "../functions/_lib/request";
+import { persistConsents } from "../functions/_lib/services/consent";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { callApi } from "./helpers/app";
@@ -233,6 +235,56 @@ describe("session-owned event participation", () => {
         expect((await request(base + suffix, token)).status).toBe(token ? 404 : 401);
       expect((await request(base, token, { status: "declined" })).status).toBe(token ? 404 : 401);
     }
+  });
+
+  it("returns only the speaker's own agreements to current active event terms", async () => {
+    const f = await fixture();
+    const path = `/api/v1/proposals/${f.proposalId}/participation`;
+    const at = new Date().toISOString();
+    await env.DB.prepare("UPDATE proposal_speakers SET terms_accepted_at = ? WHERE proposal_id = ? AND user_id = ?")
+      .bind(at, f.proposalId, f.speaker)
+      .run();
+    // A summary timestamp alone cannot establish acceptance of any particular version.
+    expect(
+      speakerSelfServiceReadResponseSchema.parse(await (await request(path, f.tokens[1])).json()).acceptedConsents,
+    ).toEqual([]);
+    for (const termKey of ["speaker-privacy", "speaker-recording", "proposer-only"]) {
+      await env.DB.prepare(`INSERT INTO event_terms (id,event_id,audience_type,term_key,version,required,active,created_at)
+        VALUES (?,?,'speaker',?,'1',1,1,?)`)
+        .bind(crypto.randomUUID(), f.eventId, termKey, at)
+        .run();
+    }
+    const accepted = ["speaker-privacy", "speaker-recording"].map((termKey) => ({ termKey, version: "1" }));
+    for (const [userId, consents] of [
+      [f.speaker, accepted],
+      [f.owner, [{ termKey: "proposer-only", version: "1" }]],
+    ] as const) {
+      await persistConsents(env.DB, {
+        eventId: f.eventId,
+        proposalId: f.proposalId,
+        userId,
+        audienceType: "speaker",
+        accepted: [...consents],
+        secret: requireInternalSecret(env),
+        ip: null,
+        userAgent: null,
+      });
+    }
+    const read = async () => {
+      const response = await request(path, f.tokens[1]);
+      expect(response.status).toBe(200);
+      return speakerSelfServiceReadResponseSchema.parse(await response.json()).acceptedConsents;
+    };
+    expect(await read()).toEqual(accepted);
+    // Replacement versions and inactive terms must not appear as accepted.
+    await env.DB.prepare("UPDATE event_terms SET version = '2' WHERE event_id = ? AND term_key = 'speaker-privacy'")
+      .bind(f.eventId)
+      .run();
+    await env.DB.prepare("UPDATE event_terms SET active = 0 WHERE event_id = ? AND term_key = 'speaker-recording'")
+      .bind(f.eventId)
+      .run();
+    expect(await read()).toEqual([]);
+    expect((await request(path, f.tokens[2])).status).toBe(404);
   });
 
   it("does not give participants organizer access", async () => {

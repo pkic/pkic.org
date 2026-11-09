@@ -1,4 +1,7 @@
-import { isLateSpeakerResponseAwaitingReview } from "../../../../../../assets/shared/proposal-speaker-acceptance";
+import {
+  loadSpeakerSelfServiceView,
+  speakerProfileView,
+} from "../../../../../_lib/services/proposal-speaker-self-view";
 import { assertInvitedSpeakerClaimSelection } from "../../../../../_lib/services/event-proposal-proof-redemption";
 /**
  * Proposal-speaker capability endpoint.
@@ -24,33 +27,19 @@ import { handleError, json } from "../../../../../_lib/http";
 import type { ParticipantRouteData } from "../../../../../_lib/routes/participant-authority";
 import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
 import {
-  speakerSelfServiceProfileReadModel,
-  type SpeakerWithContext,
-} from "../../../../../_lib/services/proposals-speaker-capability";
-import {
   updateSpeakerProfile,
   isSpeakerIdentitySelectionOnly,
-  getProposalCoSpeakers,
-  getPresentationUploader,
 } from "../../../../../_lib/services/proposals-speaker-profile";
-import { getRequiredTerms } from "../../../../../_lib/services/events";
-import { speakerPresentationPageUrl } from "../../../../../_lib/services/frontend-links";
 import { requireInternalSecret } from "../../../../../_lib/request";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { isProposalSpeakerRosterEditableStatus } from "../../../../../../assets/shared/schemas/proposal-status";
-import { getEventById } from "../../../../../_lib/services/events";
 import { requestDb } from "../../../../../_lib/db/context";
-import { requiredTermReadModel } from "../../../../../_lib/services/event-read-models";
-import {
-  speakerProfileUpdateResponseSchema,
-  speakerSelfServiceReadResponseSchema,
-} from "../../../../../../assets/shared/schemas/speaker-self-service";
+import { speakerProfileUpdateResponseSchema } from "../../../../../../assets/shared/schemas/speaker-self-service";
 import {
   proposalSpeakerProfileUpdateRouteSchema,
   proposalSpeakerSelfServiceReadRouteSchema,
 } from "../../../../../../assets/shared/schemas/route-contracts-public-proposals";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { proposalSpeakerAccessPath } from "../../../../../../assets/shared/proposal-access-paths";
 import {
   resolveSpeakerAccountAuthority,
   speakerAccountAuthority,
@@ -68,54 +57,16 @@ export async function onRequestGet(
     const context = await getSpeakerByManageToken(db, token, requireInternalSecret(c.env), {
       allowExpiredSession: true,
     });
-    const { speaker, proposal } = context;
-
-    const [coSpeakers, presentationUploader, presentationTerms, event, accountAuthority] = await Promise.all([
-      getProposalCoSpeakers(db, proposal.id, speaker.user_id),
-      getPresentationUploader(db, proposal.id),
-      getRequiredTerms(db, proposal.event_id, "presentation"),
-      getEventById(db, proposal.event_id),
-      resolveSpeakerAccountAuthority(db, c.req.raw, c.env, {
-        authority: token,
-        userId: context.user.id,
-        accountClaimed: context.user.account_claimed,
-      }),
-    ]);
-
-    const presentationUrl =
-      event && typeof token === "string" ? speakerPresentationPageUrl(appBaseUrl, event, token) : null;
-
+    const accountAuthority = await resolveSpeakerAccountAuthority(db, c.req.raw, c.env, {
+      authority: token,
+      userId: context.user.id,
+      accountClaimed: context.user.account_claimed,
+    });
     return json(
-      speakerSelfServiceReadResponseSchema.parse({
-        speaker: {
-          userId: speaker.user_id,
-          role: speaker.role,
-          status: speaker.status,
-          confirmedAt: speaker.confirmed_at,
-          declinedAt: speaker.declined_at,
-          termsAcceptedAt: speaker.terms_accepted_at,
-          awaitingReview: isLateSpeakerResponseAwaitingReview(
-            speaker.status,
-            speaker.response_invite_generation,
-            speaker.invite_generation,
-          ),
-        },
-        proposal: {
-          id: proposal.id,
-          eventId: proposal.event_id,
-          title: proposal.title,
-          proposalType: proposal.proposal_type,
-          status: proposal.status,
-          presentationDeadline: proposal.presentation_deadline ?? null,
-          presentationUploaded: Boolean(presentationUploader),
-          presentationUploadedAt: presentationUploader?.uploadedAt ?? null,
-          presentationUploader: presentationUploader,
-          coSpeakers,
-          presentationUrl,
-        },
-        presentationTerms: presentationTerms.map(requiredTermReadModel),
-        profile: speakerProfileView(context, token, appBaseUrl, Boolean(accountAuthority)),
-        currentRepresentation: context.currentRepresentation,
+      await loadSpeakerSelfServiceView(db, context, {
+        token,
+        appBaseUrl,
+        personalDetailsEditable: Boolean(accountAuthority),
       }),
     );
   } catch (error) {
@@ -232,22 +183,6 @@ export async function onRequestProfilePatch(
   } catch (error) {
     return handleError(error);
   }
-}
-
-function speakerProfileView(
-  context: SpeakerWithContext,
-  token: ParticipantRouteData<typeof proposalSpeakerSelfServiceReadRouteSchema>["params"]["token"],
-  appBaseUrl: string,
-  personalDetailsEditable: boolean,
-) {
-  const { user } = context;
-  return speakerSelfServiceProfileReadModel(
-    context,
-    user.headshot_r2_key
-      ? `${proposalSpeakerAccessPath(`${appBaseUrl}/api/v1`, token, "headshot")}?v=${encodeURIComponent(user.headshot_updated_at ?? "")}`
-      : null,
-    personalDetailsEditable,
-  );
 }
 
 function markSensitive(c: any): void {

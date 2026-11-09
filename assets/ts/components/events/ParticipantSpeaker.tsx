@@ -8,29 +8,22 @@ import {
 import {
   speakerProfileUpdateResponseSchema,
   speakerParticipationResponseSchema,
-  speakerPresentationUploadResponseSchema,
   type SpeakerSelfServiceReadResponse,
 } from "../../../shared/schemas/speaker-self-service";
 import { headshotUploadResponseSchema } from "../../../shared/schemas/registration";
 import { isProposalSpeakerRosterEditableStatus } from "../../../shared/schemas/proposal-status";
 import { proposalSpeakerAccessPath } from "../../../shared/proposal-access-paths";
-import { presentationUploadRequest, DEFAULT_PRESENTATION_TERMS } from "../../../shared/presentation-upload";
 import type { RequiredTerm } from "../../../shared/schemas/forms";
 import { useContractForm } from "../../hooks/useContractForm";
-import { patchJson, requestJson } from "../../shared/api-client";
-import { formatDateTime } from "../../shared/ui";
+import { patchJson } from "../../shared/api-client";
 import { HeadshotTile } from "../../shared/headshot/HeadshotTile";
 import { headshotFormEndpoint } from "../../shared/headshot/endpoints";
-import { showHeadshotDisclaimer } from "../../shared/headshot/upload";
 import { IdentityProfileForm } from "../identities/IdentityProfileForm";
-import { ConsentCard } from "../ConsentCard";
+import { ConsentCard, ConsentList } from "../ConsentCard";
 import { Badge, PlainStatus } from "../Badge";
 import { confirmAction } from "../ConfirmDialog";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
-import { DownloadAction } from "../../ui/DownloadAction";
-import { Field } from "../../ui/Field";
-import { TextInput } from "../../ui/TextControl";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { DescriptionList } from "../../ui/DescriptionList";
 import { LinkList } from "../../ui/LinkList";
@@ -57,12 +50,11 @@ export function ParticipantSpeaker({
 }) {
   const access = { resourceId: data.proposal.id };
   const path = (...segments: string[]) => proposalSpeakerAccessPath("/api/v1", access, ...segments);
-  const [consents, setConsents] = useState<Array<{ termKey: string; version: string }>>([]);
+  const [consents, setConsents] = useState(data.acceptedConsents);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const upload = useRef<HTMLInputElement>(null);
   const [entry, setEntry] = useState<ProposalEntrySelection | null>(null);
   const [identityChanged, setIdentityChanged] = useState(data.profile.actingIdentitySelection === "unrecorded");
   const onEditing = useCallback(() => setIdentityChanged(true), []);
@@ -71,8 +63,12 @@ export function ParticipantSpeaker({
   }, []);
   const profileRoot = useRef<HTMLFormElement>(null);
   const acceptedConsents = () =>
-    // Read during the first render too, before the profile form exists; nothing is checked yet then.
-    data.speaker.status === "invited" ? consents : profileRoot.current ? readConsentValues(profileRoot.current) : [];
+    // Before the profile form mounts, the saved agreements stand.
+    data.speaker.status === "invited"
+      ? consents
+      : profileRoot.current
+        ? readConsentValues(profileRoot.current)
+        : data.acceptedConsents;
   const termsAccepted = terms.every(
     (term) =>
       !term.required || consents.some((value) => value.termKey === term.termKey && value.version === term.version),
@@ -115,9 +111,6 @@ export function ParticipantSpeaker({
     `/api/v1/events/${encodeURIComponent(eventSlug)}/proposals/proof/identities/${encodeURIComponent(identityId)}`;
   const profileLinks = normalizeProfileLinks(data.profile.links);
   const speakerName = [data.profile.firstName, data.profile.lastName].filter(Boolean).join(" ") || data.profile.email;
-  const deadlinePassed = Boolean(
-    data.proposal.presentationDeadline && Date.parse(data.proposal.presentationDeadline) < Date.now(),
-  );
   return (
     <div class="pk-stack">
       {error && <Alert tone="danger">{error}</Alert>}
@@ -157,6 +150,14 @@ export function ParticipantSpeaker({
             {!editable && (
               <Alert>Participation changes are unavailable because you declined or the proposal is closed.</Alert>
             )}
+            {(data.speaker.status === "confirmed" || data.speaker.awaitingReview || !editable) &&
+              !identityChanged &&
+              terms.length > 0 && (
+                <fieldset class="pk-fieldset pk-stack" disabled>
+                  <legend>Speaker terms and conditions</legend>
+                  <ConsentList terms={terms} recorded={data.acceptedConsents} />
+                </fieldset>
+              )}
             {editable && data.speaker.status !== "confirmed" && !data.speaker.awaitingReview && (
               <form
                 noValidate
@@ -369,68 +370,6 @@ export function ParticipantSpeaker({
           </div>
         </PanelBody>
       </Panel>
-      {data.proposal.status === "accepted" && data.speaker.status === "confirmed" && (
-        <Panel key={`${data.proposal.id}:presentation`}>
-          <PanelHeader title="Presentation" />
-          <PanelBody>
-            <div class="pk-stack">
-              {data.proposal.presentationDeadline && (
-                <p>Upload deadline: {formatDateTime(data.proposal.presentationDeadline)}</p>
-              )}
-              {(data.proposal.presentationUploaded || data.proposal.presentationUploader) && (
-                <div class="pk-cluster">
-                  {data.proposal.presentationUploaded && (
-                    <DownloadAction label="Download current presentation" href={path("presentation")} />
-                  )}
-                  {data.proposal.presentationUploader && (
-                    <span>
-                      Uploaded by{" "}
-                      {[data.proposal.presentationUploader.firstName, data.proposal.presentationUploader.lastName]
-                        .filter(Boolean)
-                        .join(" ")}{" "}
-                      on {formatDateTime(data.proposal.presentationUploader.uploadedAt)}.
-                    </span>
-                  )}
-                </div>
-              )}
-              {deadlinePassed && <Alert>The presentation upload deadline has passed.</Alert>}
-              <Field label="Presentation file">
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    ref={upload}
-                    type="file"
-                    accept=".pdf,.ppt,.pptx,.pptm,.odp"
-                    disabled={busy || deadlinePassed}
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      if (!file) return;
-                      void (async () => {
-                        const accepted = await showHeadshotDisclaimer({
-                          title: "Before you upload your presentation",
-                          texts: data.presentationTerms.length
-                            ? data.presentationTerms.map((term) => term.displayText ?? term.termKey)
-                            : DEFAULT_PRESENTATION_TERMS,
-                          confirmText: "Upload presentation",
-                        });
-                        if (accepted)
-                          await perform(
-                            () =>
-                              requestJson(path("presentation"), speakerPresentationUploadResponseSchema, {
-                                method: "PUT",
-                                ...presentationUploadRequest(file),
-                              }),
-                            "Presentation uploaded.",
-                          );
-                      })();
-                    }}
-                  />
-                )}
-              </Field>
-            </div>
-          </PanelBody>
-        </Panel>
-      )}
     </div>
   );
 }

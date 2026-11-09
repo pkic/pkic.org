@@ -20,6 +20,7 @@ import { eventFormsResponseSchema, eventTermsResponseSchema } from "../../../../
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { ParticipantRegistration } from "../../../../components/events/ParticipantRegistration";
 import { ParticipantSubmission } from "../../../../components/events/ParticipantSubmission";
+import { ParticipantPresentation } from "../../../../components/events/ParticipantPresentation";
 import { ParticipantSpeaker } from "../../../../components/events/ParticipantSpeaker";
 import { Spinner } from "../../../../components/Spinner";
 import { Badge, PlainStatus } from "../../../../components/Badge";
@@ -254,14 +255,14 @@ function ParticipantProposals({ event }: { event: EventDetail }) {
       caption="Your event proposals"
       columns={[
         {
-          header: "Proposal",
+          header: "Name",
           cell: (proposal) => (
             <a href={href(eventParticipantRecordPath(event.slug, "proposal", proposal.id))}>{proposal.title}</a>
           ),
         },
-        { header: "Proposal status", cell: (proposal) => <Badge status={proposal.status} /> },
+        { header: "Status", cell: (proposal) => <Badge status={proposal.status} /> },
         {
-          header: "Your participation",
+          header: "Participation",
           cell: (proposal) =>
             proposal.speakerStatus === "confirmed" ? (
               <PlainStatus status={proposal.speakerStatus} />
@@ -271,7 +272,7 @@ function ParticipantProposals({ event }: { event: EventDetail }) {
               "—"
             ),
         },
-        { header: "Your role", cell: (proposal) => (proposal.role === "submitter" ? "Submitter" : "Speaker") },
+        { header: "Role", cell: (proposal) => (proposal.role === "submitter" ? "Submitter" : "Speaker") },
       ]}
     />
   );
@@ -298,7 +299,7 @@ function ParticipantProposal({
   header: (title?: string) => ComponentChildren;
 }) {
   const base = `/api/v1/proposals/${encodeURIComponent(proposalId)}`;
-  const intendedSpeaker = facet === "participation" ? portalHashParam(window.location.hash, "speaker") : null;
+  const intendedSpeaker = portalHashParam(window.location.hash, "speaker");
   const activeUserId = portalSession.value?.identity.id;
   const loaded = useData(async () => {
     if (intendedSpeaker && intendedSpeaker !== activeUserId) {
@@ -355,11 +356,18 @@ function ParticipantProposal({
                 { id: "speakers", label: "Speakers", href: href(route + "/speakers") },
               ]
             : []),
-          ...(speaker ? [{ id: "participation", label: "Speaker profile", href: href(route + "/participation") }] : []),
+          ...(speaker
+            ? [
+                { id: "participation", label: "Speaker profile", href: href(route + "/participation") },
+                { id: "presentations", label: "Presentations", href: href(route + "/presentations") },
+              ]
+            : []),
         ]}
       />
       {active === "participation" && speaker ? (
         <ParticipantSpeaker data={speaker} eventSlug={event.slug} terms={speakerTerms.terms} reload={loaded.reload} />
+      ) : active === "presentations" && speaker ? (
+        <ParticipantPresentation data={speaker} reload={loaded.reload} />
       ) : submission && ["submission", "speakers"].includes(active) ? (
         <ParticipantSubmission data={submission} forms={forms} event={event} facet={active} reload={loaded.reload} />
       ) : (

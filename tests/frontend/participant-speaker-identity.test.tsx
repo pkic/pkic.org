@@ -4,7 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { ParticipantSpeaker } from "../../assets/ts/components/events/ParticipantSpeaker";
-import { speakerSelfServiceReadResponseSchema } from "../../assets/shared/schemas/speaker-self-service";
+import { participantSpeakerFixture } from "./helpers/participant-speaker-fixture";
 import { eventProposalProofVerifySchema } from "../../assets/shared/schemas/event-proposal-proof";
 import { speakerSelfProfilePatchSchema } from "../../assets/shared/schemas/proposal-management";
 import { completeIndependentCapacityDisclosure } from "./helpers/independent-capacity";
@@ -12,46 +12,7 @@ import { completeIndependentCapacityDisclosure } from "./helpers/independent-cap
 vi.mock("../../assets/ts/components/markdown-editor/MarkdownInput", () => ({ MarkdownEditor: () => null }));
 const id = "00000000-0000-4000-8000-000000000041";
 const at = "2026-01-01T00:00:00.000Z";
-const data = speakerSelfServiceReadResponseSchema.parse({
-  speaker: {
-    userId: id,
-    role: "speaker",
-    status: "invited",
-    confirmedAt: null,
-    declinedAt: null,
-    termsAcceptedAt: null,
-  },
-  proposal: {
-    id,
-    title: "Speaker session",
-    proposalType: "talk",
-    status: "submitted",
-    presentationDeadline: null,
-    presentationUploaded: false,
-    presentationUploadedAt: null,
-    presentationUploader: null,
-    coSpeakers: [],
-    presentationUrl: null,
-  },
-  profile: {
-    email: "ada@example.test",
-    firstName: "Ada",
-    lastName: "Lovelace",
-    organizationName: null,
-    jobTitle: null,
-    biography: null,
-    links: [],
-    headshotUploaded: false,
-    headshotUpdatedAt: null,
-    headshotUrl: null,
-    personalDetailsEditable: true,
-    actingIdentityId: null,
-    actingIdentitySelectedAt: null,
-    actingIdentitySelection: "unrecorded",
-  },
-  currentRepresentation: null,
-  presentationTerms: [],
-});
+const data = participantSpeakerFixture();
 let host: HTMLDivElement;
 afterEach(() => {
   render(null, host);
@@ -304,4 +265,56 @@ it("shows late review without offering self-confirmation or promising a program 
   expect(
     [...host.querySelectorAll("button")].some((button) => button.textContent === "Confirm willingness to participate"),
   ).toBe(false);
+});
+
+it.each(["invited", "confirmed", "pending"] as const)(
+  "restores saved term versions for a %s speaker after reopening the proposal",
+  async (status) => {
+    host = document.createElement("div");
+    document.body.append(host);
+    const saved = {
+      ...data,
+      acceptedConsents: [{ termKey: "privacy", version: "1" }],
+      speaker: { ...data.speaker, status, termsAcceptedAt: at, awaitingReview: status === "pending" },
+    };
+    const terms = [
+      { termKey: "privacy", version: "1", required: true, contentRef: null },
+      { termKey: "recording", version: "2", required: false, contentRef: null },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response({ identities: [] })),
+    );
+    for (let visit = 0; visit < 2; visit++) {
+      await act(() =>
+        render(<ParticipantSpeaker data={saved} eventSlug="pqc-2026" terms={terms} reload={async () => {}} />, host),
+      );
+      const checkboxes = [...host.querySelectorAll<HTMLInputElement>("input[data-consent-input]")];
+      expect(checkboxes.length).toBeGreaterThan(0);
+      for (const checkbox of checkboxes) expect(checkbox.checked).toBe(checkbox.value === "privacy:1");
+      await act(() => render(null, host));
+    }
+  },
+);
+
+it("requires acceptance of a replacement term version even when an earlier version was saved", async () => {
+  host = document.createElement("div");
+  document.body.append(host);
+  await act(() =>
+    render(
+      <ParticipantSpeaker
+        data={{
+          ...data,
+          acceptedConsents: [{ termKey: "privacy", version: "1" }],
+          speaker: { ...data.speaker, termsAcceptedAt: at },
+        }}
+        eventSlug="pqc-2026"
+        terms={[{ termKey: "privacy", version: "2", required: true, contentRef: null }]}
+        reload={async () => {}}
+      />,
+      host,
+    ),
+  );
+  expect(host.querySelector<HTMLInputElement>("input[data-consent-input]")?.checked).toBe(false);
+  expect(host.textContent).toContain("Accept the speaker terms above to choose your speaker identity.");
 });

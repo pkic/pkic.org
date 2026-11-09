@@ -1,3 +1,5 @@
+import { participantSpeakerFixture } from "./helpers/participant-speaker-fixture";
+import { parseQueryContext } from "../../assets/ts/shared/query-context";
 import { beforeEach, expect, it, vi } from "vitest";
 import { handoffSpeakerLink } from "../../assets/ts/event-flows/speaker-link-handoff";
 import { loadSpeakerPageData } from "../../assets/ts/event-flows/speaker-link-recovery";
@@ -6,21 +8,36 @@ vi.mock("../../assets/ts/event-flows/speaker-link-recovery", () => ({ loadSpeake
 
 beforeEach(() => vi.resetAllMocks());
 
-it("hands an existing speaker link to the account-owned participation in the event app", async () => {
+it.each([
+  ["[data-event-speaker-manage]", "participation"],
+  ["[data-event-speaker-presentation]", "presentations"],
+] as const)("hands %s to the account-owned %s facet", async (selector, facet) => {
+  const data = participantSpeakerFixture();
   vi.mocked(loadSpeakerPageData).mockResolvedValue({
-    boot: { eventSlug: "conference", apiBase: "/api/v1" },
-    data: { proposal: { id: "proposal-123" }, speaker: { userId: "speaker-123" } },
-  } as never);
+    boot: {
+      eventSlug: "conference",
+      apiBase: "/api/v1",
+      eventPagePath: null,
+      root: document.createElement("div"),
+      form: document.createElement("form"),
+      statusEl: document.createElement("div"),
+      query: parseQueryContext(""),
+    },
+    token: "test-speaker-token",
+    loadingEl: null,
+    contentEl: null,
+    data,
+  });
   const navigate = vi.fn();
-  await handoffSpeakerLink("[data-event-speaker-manage]", navigate);
+  await handoffSpeakerLink(selector, facet, navigate);
   expect(navigate).toHaveBeenCalledWith(
-    "/portal/#/events/conference/proposals/proposal-123/participation?speaker=speaker-123",
+    `/portal/#/events/conference/proposals/${data.proposal.id}/${facet}?speaker=${data.speaker.userId}`,
   );
 });
 
 it("leaves invalid and expired links on the recovery screen", async () => {
   vi.mocked(loadSpeakerPageData).mockResolvedValue(null);
   const navigate = vi.fn();
-  await handoffSpeakerLink("[data-event-speaker-presentation]", navigate);
+  await handoffSpeakerLink("[data-event-speaker-presentation]", "presentations", navigate);
   expect(navigate).not.toHaveBeenCalled();
 });

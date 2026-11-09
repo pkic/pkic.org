@@ -9,7 +9,7 @@ import {
   proposalAccessSpeakerStatusSchema,
   proposalTypeSchema,
 } from "./proposal-management";
-import { speakerRoleSchema } from "./registration";
+import { consentItemSchema, speakerRoleSchema } from "./registration";
 import { proposalStatusSchema } from "./proposal-status";
 import { httpUrlSchema } from "./urls";
 import { publicOperation } from "./route-contract";
@@ -111,6 +111,7 @@ export const speakerSelfServiceReadResponseSchema = z.object({
   speaker: speakerSelfServiceAccessSchema,
   proposal: speakerSelfServiceProposalSchema,
   presentationTerms: z.array(requiredTermSchema),
+  acceptedConsents: z.array(consentItemSchema).default([]),
   profile: speakerSelfServiceProfileSchema,
   currentRepresentation: speakerCurrentRepresentationSchema.nullable(),
 });

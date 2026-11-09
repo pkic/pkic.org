@@ -87,8 +87,8 @@ export function SpeakerParticipationIdentity({
       new URL(location.hash.slice(1), location.origin).searchParams.has("verify"),
   );
   const [changing, setChanging] = useState(data.profile.actingIdentitySelection === "unrecorded" || returning);
-  const [localTermsAccepted, setLocalTermsAccepted] = useState(terms.every((term) => !term.required));
-  const [recorded, setRecorded] = useState<ConsentItem[]>();
+  const [localTermsAccepted, setLocalTermsAccepted] = useState(termsAccepted);
+  const [recorded, setRecorded] = useState<ConsentItem[]>(data.acceptedConsents);
   const recordTerms = useCallback(
     (consents: ConsentItem[]) => {
       setRecorded(consents);
@@ -152,6 +152,8 @@ export function SpeakerParticipationIdentity({
                 onClick={() => {
                   setAdding(false);
                   setChanging(false);
+                  setLocalTermsAccepted(termsAccepted);
+                  setRecorded(data.acceptedConsents);
                   onChange(null);
                   onCancelEditing?.();
                 }}

@@ -9,6 +9,7 @@ import { loadSpeakerPageData } from "./speaker-link-recovery";
 /** Existing emailed links hand off to the account-owned speaker view. */
 export async function handoffSpeakerLink(
   selector: string,
+  facet: "participation" | "presentations" = "participation",
   navigate: (destination: string) => void = (destination) => window.location.replace(destination),
 ): Promise<void> {
   const loaded = await loadSpeakerPageData<SpeakerSelfServiceReadResponse>({
@@ -24,6 +25,6 @@ export async function handoffSpeakerLink(
     return;
   }
   navigate(
-    `${eventPath}/proposals/${encodeURIComponent(data.proposal.id)}/participation?speaker=${encodeURIComponent(data.speaker.userId)}`,
+    `${eventPath}/proposals/${encodeURIComponent(data.proposal.id)}/${facet}?speaker=${encodeURIComponent(data.speaker.userId)}`,
   );
 }
