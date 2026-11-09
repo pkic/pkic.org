@@ -286,8 +286,12 @@ describe("Vite public-site rendering", () => {
       '{{< faq >}}\ngroups:\n  - title: Levels\n    questions:\n      - question: "Are levels cumulative?"\n        open: true\n        answer: "Yes, **always**."\n      - question: "Are levels cumulative?"\n        answer: "Still yes."\n{{< /faq >}}',
       context,
     );
-    expect(faq).toMatch(/<details id="are-levels-cumulative" class="pk-content-faq__item" open/);
-    expect(faq).toContain('<details id="are-levels-cumulative-1" class="pk-content-faq__item">');
+    const disclosures = [...faq.matchAll(/<details ([^>]*)>/g)].map(([, attributes]) => attributes);
+    expect(disclosures).toHaveLength(2);
+    expect(disclosures[0]).toContain('id="are-levels-cumulative"');
+    expect(disclosures[0]).toMatch(/\bopen\b/);
+    expect(disclosures[1]).toContain('id="are-levels-cumulative-1"');
+    expect(disclosures[1]).not.toMatch(/\bopen\b/);
     expect(faq).toContain("<strong>always</strong>");
     const items = await renderContentMarkdown(
       '{{< requirements >}}\nintroduction: "All of:"\nitem: Criterion\nitems:\n  - id: "1.1.1"\n    label: "1"\n    text: "A statement."\n{{< /requirements >}}\n\n{{< item-table >}}\ncolumns: [Question]\nitems:\n  - id: "1.2.1"\n    label: "1"\n    cells: ["Which one?"]\n{{< /item-table >}}',
