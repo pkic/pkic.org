@@ -27,7 +27,7 @@ One name for one thing, in code, copy, and documentation. Add a term here when y
 - **Registration**: a person's place at an event. A full event offers the **waitlist**.
 - **Session hold**: a temporary seat reservation that expires.
 - **Attendee**: a registered person at the event.
-- **Invite a colleague**: the shared email invitation flow for registered attendees before an event starts, available from the event home and **Share & Invite** tab.
+- **Invite a colleague**: the shared email invitation flow for registered attendees before an event starts, available from the **Share & Invite** tab.
 - **Check-in**: confirming an attendee's arrival, by badge scan or by hand.
 - **Printed badge**: the attendee's name badge. In UI code, `Badge` means the status pill; say "printed badge" for the printed one.
 - **Badge data**: the scanner's downloaded event roster for local badge checks, with its original validity period.

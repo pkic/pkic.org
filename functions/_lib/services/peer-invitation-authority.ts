@@ -11,7 +11,12 @@ import type { Env } from "../types";
 import { getRegistrationByManageToken, prepareRegistrationBySelection } from "./registrations/queries";
 import type { RegistrationRecord } from "./registrations/types";
 
-export async function resolvePeerInvitationAuthority(env: Env, request: Request, eventId: string) {
+export async function resolvePeerInvitationAuthority(
+  env: Env,
+  request: Request,
+  eventId: string,
+  inviteType: "attendee" | "speaker",
+) {
   const bearer = getBearerToken(request);
   let registration: RegistrationRecord;
   let sessionId: string | null = null;
@@ -32,7 +37,7 @@ export async function resolvePeerInvitationAuthority(env: Env, request: Request,
     registration = owned;
     sessionId = session.sessionId;
   }
-  if (registration.status !== "registered")
+  if (inviteType === "attendee" && registration.status !== "registered")
     throw new AppError(403, "REGISTRATION_REQUIRED", "A confirmed registration is required to invite a colleague");
   const db = guardAuthorizedDatabase(
     env.DB,

@@ -1,4 +1,4 @@
-/** The existing registration-confirmation invitation form, also used by the attendee modal. */
+/** Shared invitation form for registration capabilities and the signed-in attendee dialog. */
 import type { RefObject } from "preact";
 import { createPortal } from "preact/compat";
 import { useState, useCallback, useId, useRef, useEffect } from "preact/hooks";
@@ -377,7 +377,7 @@ export function RegistrationInviteForm({
   );
 }
 
-/** The confirmation page's invitation form, hosted in the existing dialog. */
+/** Session-based invitation dialog for the portal's Share & Invite tab. */
 export function InviteColleagueDialog({ eventSlug, onClose }: { eventSlug: string; onClose: () => void }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [sending, setSending] = useState(false);

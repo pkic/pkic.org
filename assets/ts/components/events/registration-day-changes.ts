@@ -5,14 +5,6 @@
  */
 import type { z } from "zod";
 import type { registrationManageSchema, RegistrationManageReadResponse } from "../../../shared/schemas/registration";
-import { eventAttendanceAccessMode } from "../../../shared/event-attendance-access";
-
-export function physicalAttendance(data: RegistrationManageReadResponse, dayDate: string, value: string): boolean {
-  const option = data.eventDays
-    .find((day) => day.dayDate === dayDate)
-    ?.attendanceOptions.find((item) => item.value === value);
-  return eventAttendanceAccessMode({ value, accessMode: option?.accessMode }) === "physical";
-}
 
 export type DayState =
   | { kind: "attending"; attendanceType: string }
@@ -69,7 +61,6 @@ export function releasedRegistrationDays(
     (day) =>
       day.state.kind === "attending" &&
       choices.get(day.dayDate) !== day.state.attendanceType &&
-      (physicalAttendance(data, day.dayDate, day.state.attendanceType) ||
-        hasLimitedAttendance(data, day.dayDate, day.state.attendanceType)),
+      hasLimitedAttendance(data, day.dayDate, day.state.attendanceType),
   );
 }

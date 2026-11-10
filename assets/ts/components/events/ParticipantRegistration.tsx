@@ -133,7 +133,7 @@ function RegistrationRecord({
     const confirmed = await confirmAction({
       title: "Cancel your registration?",
       body:
-        "Your place at this event goes to the next person on the waiting list. You can restore the registration from this page " +
+        "Any reserved places will be released for someone else. You can restore the registration from this page " +
         "while registration is open, but a released place is not held for you.",
       confirmLabel: "Cancel registration",
       cancelLabel: "Keep registration",
@@ -242,8 +242,7 @@ function RegistrationRecord({
                 <section class="pk-stack pk-stack--snug" aria-label="Cancel registration">
                   <SectionHeading level={3}>Not coming at all?</SectionHeading>
                   <p class="pk-small pk-muted">
-                    Cancel and your place goes to someone on the waiting list. To skip only one day, change that day
-                    above instead.
+                    Cancel to release any reserved places. To skip only one day, change that day above instead.
                   </p>
                   <div class="pk-cluster">
                     <Button variant="danger-quiet" disabled={busy} onClick={() => void cancelRegistration()}>

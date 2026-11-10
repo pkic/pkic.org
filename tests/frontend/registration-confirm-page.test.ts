@@ -318,14 +318,15 @@ describe("registration confirmation shell", () => {
   it("replaces the form with a named success region and its next steps", async () => {
     window.history.replaceState({}, "", "/events/2026/pqc-2026/register/confirm/?token=live-token");
     const root = mountShell();
-    installApi({
+    const requests = installApi({
       [CONFIRM_INFO]: () => json(confirmInfo({ firstName: "Ada" })),
       "/api/v1/events/pqc-2026/registrations/confirm-email": () =>
         json({
           success: true,
           stage: "confirmed",
           status: "registered",
-          shareUrl: null,
+          startsAt: "2099-12-01T08:00:00.000Z",
+          shareUrl: "https://pkic.org/r/SHARE1",
           dayAttendance: [],
           dayWaitlist: [],
           manageUrl: "https://pkic.org/events/2026/pqc-2026/register/manage/?token=manage-token-0123456789",
@@ -356,6 +357,8 @@ describe("registration confirmation shell", () => {
     expect(heading).toContain("Next steps");
     const manage = [...root.querySelectorAll("a")].find((link) => link.textContent?.startsWith("Manage registration"));
     expect(manage?.getAttribute("href")).toContain("/register/manage/");
+    expect(root.textContent).toContain("Invite colleagues by email");
+    expect(requests.some(({ path }) => path.startsWith("/api/v1/registrations/access/"))).toBe(false);
   });
 
   it("asks a work address with no known organization for it once, and sends it with the confirmation", async () => {
@@ -391,6 +394,7 @@ describe("registration confirmation shell", () => {
           success: true,
           stage: "confirmed",
           status: "registered",
+          startsAt: "2026-12-01T08:00:00.000Z",
           shareUrl: null,
           dayAttendance: [],
           dayWaitlist: [],

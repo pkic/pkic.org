@@ -182,7 +182,7 @@ jobs:
         run: pnpm run test:e2e:ci
 
       - name: Upload Playwright evidence
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-e2e-artifacts-attempt-${{ github.run_attempt }}

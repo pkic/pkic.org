@@ -906,7 +906,30 @@ test("attendees invite colleagues and confirm a seat release from one day picker
     await page.screenshot({ path: info.outputPath(`overview-${width}.png`), fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
+  // Sharing artwork can be absent while a confirmed attendee is still allowed to invite.
+  const eventPath = `**/api/v1/events/${fixture.slug}`;
+  await page.route(eventPath, async (route) => {
+    const response = await route.fetch();
+    const body = eventDetailResponseSchema.parse(await response.json());
+    body.event.participation!.promotion = null;
+    await route.fulfill({ response, json: body });
+  });
   await page.goto(`${base}/promotion`);
+  await page.reload();
+  const inviteWithoutMaterials = page.getByRole("button", { name: "Invite a colleague", exact: true });
+  await expect(inviteWithoutMaterials).toBeVisible();
+  await expect(page.getByRole("link", { name: "Share on LinkedIn", exact: true })).toHaveCount(0);
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: info.outputPath(`invite-without-materials-${width}.png`), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await inviteWithoutMaterials.click();
+  await expect(page.getByRole("dialog", { name: "Invite a colleague", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(inviteWithoutMaterials).toBeFocused();
+  await page.unroute(eventPath);
+  await page.reload();
   await expect(page.getByRole("heading", { name: "Share & Invite", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Share on LinkedIn", exact: true })).toBeVisible();
   const invite = page.getByRole("button", { name: "Invite a colleague", exact: true });
@@ -967,4 +990,16 @@ test("attendees invite colleagues and confirm a seat release from one day picker
   await expect(days.getByRole("button")).toHaveCount(1);
   await page.reload();
   await expect(days).toContainText("On demand");
+  await expect(page.getByRole("region", { name: "Cancel registration", exact: true })).not.toContainText(
+    "waiting list",
+  );
+  await page.getByRole("button", { name: "Cancel my registration…", exact: true }).click();
+  const cancellation = page.getByRole("alertdialog");
+  await expect(cancellation).not.toContainText("next person on the waiting list");
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: info.outputPath(`cancellation-${width}.png`), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await cancellation.getByRole("button", { name: "Keep registration", exact: true }).click();
 });

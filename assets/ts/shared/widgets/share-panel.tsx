@@ -1,13 +1,9 @@
 import { canSendPeerInvitations } from "../../../shared/peer-invitation-policy";
 import { useBoundaryClock } from "../../hooks/useBoundaryClock";
-import {
-  registrationManageReadResponseSchema,
-  type RegistrationManageReadResponse,
-} from "../../../shared/schemas/registration";
+import type { RegistrationConfirmResponse } from "../../../shared/schemas/registration";
 import { DownloadAction } from "../../ui/DownloadAction";
 import { downloadFile } from "../download-file";
-import { useData } from "../../hooks/useData";
-import { getBlob, getJson } from "../api-client";
+import { getBlob } from "../api-client";
 import { personalPromotionImagePath } from "../../../shared/personal-promotion-image";
 /**
  * Renders a personalized sharing panel into a container element.
@@ -61,10 +57,7 @@ export interface SharePanelOptions {
   manageToken?: string | null;
   eventSlug?: string | null;
   /** Current registration and event snapshot required for capability-based invitations. */
-  invitation?: {
-    status: RegistrationManageReadResponse["registration"]["status"];
-    startsAt: RegistrationManageReadResponse["event"]["startsAt"];
-  };
+  invitation?: Pick<RegistrationConfirmResponse, "status" | "startsAt">;
   /**
    * The viewer is themself waiting for an in-person seat. Telling them seats
    * are limited and spots fill fast is their own situation read back to them
@@ -224,19 +217,7 @@ export function SharePanel({
   const ogBadgeUrl = extractOgBadgeUrl(shareUrl, options.badgeVersion);
   const badgeFilename = `attendee-badge-${nameSlug(options.firstName, options.lastName)}.png`;
 
-  // Confirmation/success pages have no registration snapshot yet. Reuse the
-  // capability read before offering email invitations; the manage page passes its existing snapshot.
-  const currentInvitation = useData(async () => {
-    if (options.invitation || !manageToken || !eventSlug) return null;
-    const current = await getJson(
-      `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`,
-      registrationManageReadResponseSchema,
-    );
-    return current.event.slug === eventSlug
-      ? { status: current.registration.status, startsAt: current.event.startsAt }
-      : null;
-  }, [options.invitation, manageToken, eventSlug]);
-  const invitation = options.invitation ?? currentInvitation.data;
+  const invitation = options.invitation;
   const startsAt = invitation?.startsAt;
   const now = useBoundaryClock((at) => (startsAt && Date.parse(startsAt) > at ? Date.parse(startsAt) : null));
   const canInvite = Boolean(manageToken && eventSlug) && canSendPeerInvitations(invitation?.status, startsAt, now);

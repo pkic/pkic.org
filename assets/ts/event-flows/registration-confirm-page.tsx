@@ -196,6 +196,7 @@ function showConfirmedPanel(
       firstName: firstName || undefined,
       manageToken: manageToken ?? null,
       eventSlug: eventSlug || null,
+      invitation: { status: result.status, startsAt: result.startsAt },
       waitlisted: hasPartialDayWaitlist,
     });
   }

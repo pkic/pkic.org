@@ -79,19 +79,22 @@ describe("manage read endpoints", () => {
     }
   });
 
-  it("returns registration state for a valid manage token", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+  it.each(["2026-12-01T08:00:00.000Z", "2026-12-01T08:00:00Z", "2026-12-01 08:00:00"])(
+    "returns registration state with a canonical start for stored %s",
+    async (startsAt) => {
+      const { eventId } = await seedEventAndAdmin(env.DB);
+      await env.DB.prepare("UPDATE events SET starts_at=? WHERE id=?").bind(startsAt, eventId).run();
 
-    const userId = crypto.randomUUID();
-    const registrationId = crypto.randomUUID();
-    const linkSecret = "registration-link-secret";
+      const userId = crypto.randomUUID();
+      const registrationId = crypto.randomUUID();
+      const linkSecret = "registration-link-secret";
 
-    await env.DB.batch([
-      env.DB.prepare(`
+      await env.DB.batch([
+        env.DB.prepare(`
         INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
         VALUES ('${userId}', 'person@example.test', 'person@example.test', 'Pat', 'Lee', datetime('now'), datetime('now'))
       `),
-      env.DB.prepare(`
+        env.DB.prepare(`
         INSERT INTO registrations (
           id, event_id, user_id, status, source_type,
           manage_link_secret, created_at, updated_at
@@ -100,33 +103,34 @@ describe("manage read endpoints", () => {
           '${linkSecret}', datetime('now'), datetime('now')
         )
       `),
-    ]);
-    const token = await issueDatabaseCapability({
-      db: env.DB,
-      signingSecret,
-      purpose: "registration_manage",
-      resourceId: registrationId,
-    });
+      ]);
+      const token = await issueDatabaseCapability({
+        db: env.DB,
+        signingSecret,
+        purpose: "registration_manage",
+        resourceId: registrationId,
+      });
 
-    const response = await callApp(new Request(`https://app.test/api/v1/registrations/access/${token}`));
+      const response = await callApp(new Request(`https://app.test/api/v1/registrations/access/${token}`));
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
-    const payload = registrationManageReadResponseSchema.parse(await response.json());
-    expect(payload.registration.id).toBe(registrationId);
-    expect(payload.registration).not.toHaveProperty("manage_link_secret");
-    expect(payload.registration).not.toHaveProperty("confirmation_link_secret");
-    expect(payload.registration).not.toHaveProperty("transition_revision");
-    expect(payload.registration).not.toHaveProperty("source_ref");
-    expect(payload.event).toEqual({
-      id: eventId,
-      slug: "pqc-2026",
-      name: "PQC Conference 2026",
-      startsAt: "2026-12-01T08:00:00.000Z",
-    });
-    expect(payload.user).not.toHaveProperty("id");
-    expect(payload).not.toHaveProperty("manageToken");
-  });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
+      const payload = registrationManageReadResponseSchema.parse(await response.json());
+      expect(payload.registration.id).toBe(registrationId);
+      expect(payload.registration).not.toHaveProperty("manage_link_secret");
+      expect(payload.registration).not.toHaveProperty("confirmation_link_secret");
+      expect(payload.registration).not.toHaveProperty("transition_revision");
+      expect(payload.registration).not.toHaveProperty("source_ref");
+      expect(payload.event).toEqual({
+        id: eventId,
+        slug: "pqc-2026",
+        name: "PQC Conference 2026",
+        startsAt: "2026-12-01T08:00:00.000Z",
+      });
+      expect(payload.user).not.toHaveProperty("id");
+      expect(payload).not.toHaveProperty("manageToken");
+    },
+  );
 
   it("rejects the stored token hash when it is used as a manage token", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);

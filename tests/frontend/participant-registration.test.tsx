@@ -285,25 +285,37 @@ describe("ParticipantRegistration", () => {
     expect(container.querySelectorAll("input, select, textarea")).toHaveLength(0);
   });
 
-  it("cancels only after the confirmation, and Keep registration sends nothing", async () => {
-    const requests = installApi();
-    const container = await mount();
+  it.each(["on_demand", "in_person"])(
+    "cancels unlimited %s attendance only after confirmation without promising a waiting-list handoff",
+    async (attendanceType) => {
+      const data = readResponse();
+      data.eventDays[0]!.inPersonCapacity = null;
+      data.eventDays[0]!.attendanceOptions = data.eventDays[0]!.attendanceOptions.map((option) => ({
+        ...option,
+        spotsRemainingPercent: null,
+      }));
+      data.dayAttendance[0]!.attendanceType = attendanceType;
+      const requests = installApi(data);
+      const container = await mount();
 
-    await click(button(container, "Cancel my registration…"));
-    expect(openConfirmation()?.textContent).toContain("Cancel your registration?");
-    expect(openConfirmation()?.textContent).toContain("restore");
-    await click(confirmationButton("Keep registration"));
-    expect(openConfirmation()).toBeNull();
-    expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
+      await click(button(container, "Cancel my registration…"));
+      expect(openConfirmation()?.textContent).toContain("Cancel your registration?");
+      expect(openConfirmation()?.textContent).toContain("restore");
+      expect(openConfirmation()?.textContent).not.toContain("waiting list");
+      expect(container.textContent).not.toContain("goes to someone on the waiting list");
+      await click(confirmationButton("Keep registration"));
+      expect(openConfirmation()).toBeNull();
+      expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
 
-    await click(button(container, "Cancel my registration…"));
-    await click(confirmationButton("Cancel registration"));
-    await settle();
+      await click(button(container, "Cancel my registration…"));
+      await click(confirmationButton("Cancel registration"));
+      await settle();
 
-    const patches = requests.filter(({ method }) => method === "PATCH");
-    expect(patches).toHaveLength(1);
-    expect(registrationManageSchema.parse(patches[0]?.body)).toEqual({ action: "cancel" });
-  });
+      const patches = requests.filter(({ method }) => method === "PATCH");
+      expect(patches).toHaveLength(1);
+      expect(registrationManageSchema.parse(patches[0]?.body)).toEqual({ action: "cancel" });
+    },
+  );
 
   it("offers restore, as the main action, for a cancelled registration and nothing to edit or cancel", async () => {
     const requests = installApi(
@@ -446,6 +458,23 @@ describe("ParticipantRegistration", () => {
     ).toEqual([{ dayDate: "2026-12-01", attendanceType: "on_demand" }]);
   });
 
+  it("updates unlimited in-person attendance without a seat-release warning", async () => {
+    const data = readResponse();
+    data.eventDays[0]!.inPersonCapacity = null;
+    data.eventDays[0]!.attendanceOptions[0]!.spotsRemainingPercent = null;
+    const requests = installApi(data);
+    const container = await mount();
+    await click(button(container, "Change my days"));
+    await click(container.querySelector('input[name="dayAttendance.2026-12-01"][value="on_demand"]'));
+    expect(container.textContent).not.toContain("next person on the waiting list");
+    await click(button(container, "Save my days"));
+    expect(openConfirmation()).toBeNull();
+    expect(registrationManageSchema.parse(requests.find(({ method }) => method === "PATCH")?.body)).toEqual({
+      action: "update",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "on_demand" }],
+    });
+  });
+
   it("confirms releasing a custom physical option", async () => {
     const day = readResponse().eventDays[0]!;
     const requests = installApi(
@@ -454,7 +483,7 @@ describe("ParticipantRegistration", () => {
           {
             ...day,
             attendanceOptions: [
-              { value: "moon_base", label: "Moon base", accessMode: "physical" },
+              { value: "moon_base", label: "Moon base", accessMode: "physical", spotsRemainingPercent: 100 },
               { value: "live_lounge", label: "Live lounge", accessMode: "remote" },
             ],
           },

@@ -3005,6 +3005,26 @@ describe("speaker nomination by attendees", () => {
     ).resolves.toEqual([{ expires_at: "2026-12-02T12:00:00.000Z" }]);
   });
 
+  it.each(["pending_email_confirmation", "cancelled"])(
+    "preserves speaker nominations for a %s registration",
+    async (status) => {
+      const token = await registerAndConfirmAttendeeDirect();
+      await env.DB.prepare(
+        "UPDATE registrations SET status=? WHERE event_id=(SELECT id FROM events WHERE slug='pqc-2026')",
+      )
+        .bind(status)
+        .run();
+      const response = await postSpeakerNomination(token, "eligible-nominee@example.test");
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT id FROM invites WHERE invite_type='speaker' AND invitee_email='eligible-nominee@example.test'",
+        ),
+      ).toHaveLength(1);
+    },
+  );
+
   it("rejects past and post-event speaker nomination deadlines", async () => {
     const manageToken = await registerAndConfirmAttendeeDirect();
     for (const [label, expiresAt] of [

@@ -68,7 +68,7 @@ async function createPeerInvitationAttempt(
   inviteType: "attendee" | "speaker",
 ): Promise<PeerInviteCreationResult> {
   const event = await getEventBySlug(env.DB, eventSlug);
-  const { registration, db } = await resolvePeerInvitationAuthority(env, request, event.id);
+  const { registration, db } = await resolvePeerInvitationAuthority(env, request, event.id, inviteType);
 
   if (inviteType === "attendee" && !canSendPeerInvitations(registration.status, event.starts_at)) {
     throw new AppError(403, "PEER_INVITATIONS_CLOSED", "Colleague invitations close when the event starts.");

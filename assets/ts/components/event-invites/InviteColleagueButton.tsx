@@ -9,7 +9,7 @@ const InviteColleagueDialog = lazy(() =>
   })),
 );
 
-/** One invitation entry point shared by the event home and Share & Invite. */
+/** The session-based invitation entry point on Share & Invite. */
 export function InviteColleagueButton({ eventSlug }: { eventSlug: string }) {
   const [inviting, showInvitation, closeInvitation] = useDialogQueryState("inviteColleague");
   return (

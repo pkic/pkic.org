@@ -325,6 +325,7 @@ export type RegistrationOrganizationOutcome = NonNullable<z.infer<typeof registr
 
 const registrationCompletionResponseBaseSchema = successResponseSchema.merge(registrationDayStateSchema).extend({
   status: registrationLifecycleStatusSchema,
+  startsAt: utcInstantSchema.nullable(),
   shareUrl: httpUrlSchema.nullable(),
 });
 

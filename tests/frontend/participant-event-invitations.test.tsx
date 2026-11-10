@@ -85,16 +85,27 @@ it("keeps invitations on Share & Invite and out of Overview", async () => {
 it("hides Share & Invite invitations at and after the start or without a confirmed registration", async () => {
   const detail = event();
   for (const now of ["2026-12-01T08:00:00.000Z", "2026-12-03T08:00:00.000Z"]) {
+    await act(() => render(null, host));
     vi.setSystemTime(now);
     await act(() => render(<ParticipantEvent event={detail} tab="promotion" />, host));
     await vi.waitFor(() => expect(host.querySelector(".pk-event-hero")).not.toBeNull());
     expect([...host.querySelectorAll("button")].some((b) => b.textContent === "Invite a colleague")).toBe(false);
   }
   vi.setSystemTime("2026-11-01T00:00:00.000Z");
+  await act(() => render(null, host));
   detail.participation!.registrationStatus = "pending_email_confirmation";
   detail.viewer!.registrationStatus = "pending_email_confirmation";
   await act(() => render(<ParticipantEvent event={detail} tab="promotion" />, host));
   expect([...host.querySelectorAll("button")].some((b) => b.textContent === "Invite a colleague")).toBe(false);
+});
+
+it("offers invitations without promotion data", async () => {
+  const detail = event();
+  detail.participation!.promotion = null;
+  await act(() => render(<ParticipantEvent event={detail} tab="promotion" />, host));
+  await vi.waitFor(() => expect(host.textContent).toContain("Invite a colleague"));
+  await act(() => buttonNamed(host, "Invite a colleague").click());
+  await vi.waitFor(() => expect(document.querySelector("dialog[open]")).not.toBeNull());
 });
 
 it("hides invitations on the open Share & Invite page when the event starts", async () => {

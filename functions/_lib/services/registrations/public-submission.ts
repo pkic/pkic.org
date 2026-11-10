@@ -29,7 +29,7 @@ import { commitRegistrationSubmission } from "../registration-submission";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
 import { readRegistrationAffiliation } from "./selected-identity";
 import type { VerifiedRegistrationIdentityContext } from "./types";
-import { nowIso } from "../../utils/time";
+import { nowIso, persistedUtcInstant } from "../../utils/time";
 import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
 import { findRegistrationGroup, prepareGroupEventRegistrationGuard } from "./authorization";
 import { eventTakesRegistrations } from "./email-proof";
@@ -331,6 +331,7 @@ export async function submitEventRegistration(
       success: true,
       registrationId: registration.id,
       status: registration.status,
+      startsAt: persistedUtcInstant(event.starts_at),
       manageToken: exposeManageCapability ? prepared.manageToken : null,
       manageUrl: exposeManageCapability ? manageUrl : null,
       shareUrl,

@@ -37,7 +37,7 @@ export function readResponse(overrides: Partial<RegistrationManageReadResponse> 
         inPersonCapacity: 10,
         sortOrder: 1,
         attendanceOptions: [
-          { value: "in_person", label: "In person" },
+          { value: "in_person", label: "In person", spotsRemainingPercent: 100 },
           { value: "on_demand", label: "On demand" },
         ],
       },

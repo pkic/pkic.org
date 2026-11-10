@@ -122,6 +122,7 @@ it("uses the session address, validates event questions, and submits the shared 
           success: true,
           registrationId: "00000000-0000-4000-8000-000000000013",
           status: "registered",
+          startsAt: "2026-12-01T08:00:00.000Z",
           shareUrl: null,
           manageUrl: null,
           manageToken: null,

@@ -12,7 +12,7 @@ export const eventParticipationSections: PreviewSection[] = [
   {
     id: "invite-colleague",
     title: "Invite a colleague",
-    note: "Shared invitation dialog for the event home and Share & Invite.",
+    note: "Invitation dialog for Share & Invite.",
     render: () => (
       <div data-gallery-open>
         <InviteColleagueButton eventSlug="synthetic-conference" />

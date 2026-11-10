@@ -41,6 +41,7 @@ export function MyPromotionKits({
   const sessions = listing.data?.occurrences ?? [];
   const registered = listing.data?.attendeeEligible ?? false;
   const badgeUrl = share && extractOgBadgeUrl(share.shareUrl, share.badgeVersion);
+  const inviteAction = canInvite && !userId ? <InviteColleagueButton eventSlug={slug} /> : undefined;
   return (
     <div class="pk-stack">
       {listing.error && <ErrorAlert error={listing.error} />}
@@ -67,12 +68,11 @@ export function MyPromotionKits({
           leading={badgeUrl && <PromotionBadgeTile badgeUrl={badgeUrl} />}
         />
       )}
-      {share && (
-        <SharePanel
-          options={{ ...share, hideBadge: true }}
-          inviteAction={canInvite && !userId ? <InviteColleagueButton eventSlug={slug} /> : undefined}
-        />
-      )}
+      {share ? (
+        <SharePanel options={{ ...share, hideBadge: true }} inviteAction={inviteAction} />
+      ) : inviteAction ? (
+        <div class="pk-cluster">{inviteAction}</div>
+      ) : null}
     </div>
   );
 }
