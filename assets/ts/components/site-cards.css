@@ -1290,7 +1290,7 @@
     filter: var(--pk-member-logo-hover-filter);
     transition: filter 0.15s;
   }
-  .sponsor-link:hover .blog-sidebar-sponsor-logo {
+  .sponsor-logo-link:hover .blog-sidebar-sponsor-logo {
     filter: var(--pk-member-logo-hover-filter);
   }
 

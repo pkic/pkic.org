@@ -88,7 +88,7 @@
     padding-inline: var(--sponsors-edge-inset);
   }
 
-  .sponsors-tier .sponsor-link {
+  .sponsors-tier .sponsor-logo-link {
     display: flex;
     width: var(--sponsors-logo-width);
     height: var(--sponsors-logo-height);
@@ -125,7 +125,7 @@
     width: 100%;
   }
 
-  .sponsors-list .sponsor-link {
+  .sponsors-list .sponsor-logo-link {
     display: flex;
     max-width: 100%;
     min-width: 0;
