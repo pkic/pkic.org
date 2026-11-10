@@ -111,12 +111,13 @@ export function prepareEventDays(db: DatabaseLike, event: EventReadSelection) {
 
 function eventDayAttendanceCountsSql(includePendingConfirmation: boolean, eventIdSql = "?") {
   const status = includePendingConfirmation ? "IN ('pending_email_confirmation', 'registered')" : "= 'registered'";
+  // Unary plus keeps the day's covering index: with table statistics SQLite otherwise probes every day per registration.
   return `WITH selected_event AS (SELECT ${eventIdSql} AS id)
     SELECT rda.event_day_id, rda.attendance_type, COUNT(*) AS count
     FROM event_days day
     JOIN registration_day_attendance rda ON rda.event_day_id = day.id
     WHERE day.event_id = (SELECT id FROM selected_event)
-      AND rda.registration_id IN (
+      AND +rda.registration_id IN (
         SELECT id FROM registrations
         WHERE event_id = (SELECT id FROM selected_event) AND status ${status}
       )
