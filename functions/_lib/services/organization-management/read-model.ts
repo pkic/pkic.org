@@ -108,11 +108,13 @@ function toOrgSummary(row: OrgSummaryRow) {
   };
 }
 
-/** Current domain connections, without inferring a corporate hierarchy. Trusted SQL expressions only. */
-function organizationConnectionDomainsSql(organizationIdSql: string) {
-  return `SELECT domain FROM organization_domain_claims WHERE organization_id=${organizationIdSql} AND application_id IS NULL
-    UNION SELECT identity.verified_email_domain FROM identities identity JOIN users person ON person.id=identity.user_id
-      WHERE identity.organization_id=${organizationIdSql} AND person.active=1
+/** Current domain connections of one organization or of all of them, without inferring a corporate hierarchy. Trusted SQL expressions only. */
+function organizationConnectionDomainsSql(organizationIdSql?: string) {
+  const organization = (column: string) =>
+    organizationIdSql ? `${column}=${organizationIdSql}` : `${column} IS NOT NULL`;
+  return `SELECT organization_id,domain FROM organization_domain_claims WHERE ${organization("organization_id")} AND application_id IS NULL
+    UNION SELECT identity.organization_id,identity.verified_email_domain FROM identities identity JOIN users person ON person.id=identity.user_id
+      WHERE ${organization("identity.organization_id")} AND person.active=1
         AND identity.verified_email_domain IS NOT NULL AND identity.source='verified_email'
         AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL`;
 }
@@ -123,10 +125,11 @@ export function buildOrganizationsPageQuery(params: OrganizationsListQuery) {
   const conditions = ["o.merged_into_organization_id IS NULL", ...(search ? [search.sql] : [])];
   const whereArgs: unknown[] = [...(search?.bindings ?? [])];
   if (params.relatedToOrganizationId) {
-    conditions.push(`o.id<>? AND EXISTS (
-      WITH source_domains(domain) AS (${organizationConnectionDomainsSql("?")}),
-      related_domains(domain) AS (${organizationConnectionDomainsSql("o.id")})
-      SELECT 1 FROM source_domains source JOIN related_domains related
+    // One pass over every organization's domains; correlating on o.id would repeat it per organization.
+    conditions.push(`o.id<>? AND o.id IN (
+      WITH source_domains(organization_id,domain) AS (${organizationConnectionDomainsSql("?")}),
+      related_domains(organization_id,domain) AS (${organizationConnectionDomainsSql()})
+      SELECT related.organization_id FROM source_domains source JOIN related_domains related
         ON ${hostWithinDomainSql("source.domain", "related.domain")} OR ${hostWithinDomainSql("related.domain", "source.domain")}
     )`);
     whereArgs.push(params.relatedToOrganizationId, params.relatedToOrganizationId, params.relatedToOrganizationId);
