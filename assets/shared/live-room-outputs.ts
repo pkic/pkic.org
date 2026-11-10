@@ -15,6 +15,32 @@ export const LIVE_AUX_OUTPUT_DETAILS: Record<LiveAuxOutput, { label: string; sho
   "stage-display": { label: "Stage display", short: "DSP", purpose: "Speaker-facing" },
 };
 
+/** The broadcast the room puts on air, as the studio and the room's screens name it. */
+export const LIVE_PROGRAM_OUTPUT_DETAILS = { label: "Program", short: "PGM", purpose: "What is on air" } as const;
+/** The room's live stream, as online viewers see it. It is a stream, not an overlay composition. */
+export const LIVE_LIVESTREAM_OUTPUT_DETAILS = {
+  label: "Livestream",
+  short: "LIVE",
+  purpose: "What online viewers see",
+} as const;
+
+/**
+ * What a screen can show: one of its room's overlay outputs, or the room's
+ * livestream full screen. Overlay outputs come first, in the order an
+ * operator meets them.
+ */
+export const LIVE_SCREEN_OUTPUTS = ["program", ...LIVE_AUX_OUTPUTS, "livestream"] as const;
+export type LiveScreenOutput = (typeof LIVE_SCREEN_OUTPUTS)[number];
+export const LIVE_SCREEN_OUTPUT_DETAILS: Record<LiveScreenOutput, { label: string; short: string; purpose: string }> = {
+  program: LIVE_PROGRAM_OUTPUT_DETAILS,
+  ...LIVE_AUX_OUTPUT_DETAILS,
+  livestream: LIVE_LIVESTREAM_OUTPUT_DETAILS,
+};
+/** A screen output drawn by the overlay page, so it takes a layout; the livestream does not. */
+export function screenOutputUsesOverlay(output: LiveScreenOutput): boolean {
+  return output !== "livestream";
+}
+
 /**
  * How a message to the speaker stands out on the stage display, calmest first.
  * Each tone maps to a fixed pair of event-kit colors with readable contrast.
