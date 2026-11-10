@@ -1,9 +1,11 @@
 import { SCREEN_POLICY } from "../../../../assets/shared/event-screen-policy";
 import {
   SCREEN_SESSION_ERROR_CODES,
+  screenAgendaSessionSchema,
   screenOwnViewSchema,
   type ScreenOwnView,
 } from "../../../../assets/shared/schemas/event-screens";
+import { timeZoneSchema } from "../../../../assets/shared/schemas/event-series";
 import { signLiveOverlayToken } from "../../auth/live-session-overlay-token";
 import type { ScreenSessionClaims } from "../../auth/screen-session";
 import { assertSessionActive } from "../../auth/session-engine";
@@ -11,6 +13,7 @@ import { batchFirst } from "../../db/pagination";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { addHours, addMinutes, nowIso } from "../../utils/time";
+import { parseJsonSafe } from "../../utils/json";
 
 const SCREEN_REFUSALS = {
   invalid: SCREEN_SESSION_ERROR_CODES.missing,
@@ -24,6 +27,55 @@ export function screenSessionMissing(): AppError {
 
 export function screenSessionExpired(): AppError {
   return new AppError(401, SCREEN_SESSION_ERROR_CODES.expired, "This screen's sign-in expired. Show a pairing code.");
+}
+
+interface AgendaRow {
+  revision: number;
+  time_zone: string | null;
+  sessions_json: string | null;
+}
+
+/** A published session's field, read from the stored snapshot. */
+const field = (name: string) => `json_extract(item.value,'$.${name}')`;
+
+/**
+ * The screen's room in the published agenda: the public, timed sessions
+ * placed in it (or plenaries placed nowhere, which every room shows) that
+ * overlap the window, earliest first and bounded. The sessions are left out
+ * when the screen already holds the published revision.
+ */
+const AGENDA_SQL = `SELECT state.published_revision AS revision,
+       json_extract(publication.snapshot_json,'$.timeZone') AS time_zone,
+       CASE WHEN state.published_revision IS ? THEN NULL ELSE (
+         SELECT json_group_array(json(entry.session)) FROM (
+           SELECT json_object('id',${field("id")},'title',${field("title")},'startAt',${field("startAt")},'endAt',${field("endAt")}) AS session
+             FROM json_each(publication.snapshot_json,'$.occurrences') item
+            WHERE ${field("visibility")}='public' AND COALESCE(${field("placeholder")},0)=0
+              AND ${field("startAt")}<? AND ${field("endAt")}>? AND ${field("startAt")}<${field("endAt")}
+              AND (${field("roomId")}=screen.room_id
+                   OR EXISTS(SELECT 1 FROM json_each(COALESCE(${field("additionalRoomIds")},'[]')) extra WHERE extra.value=screen.room_id)
+                   OR (${field("kind")}='plenary' AND ${field("roomId")} IS NULL
+                       AND json_array_length(COALESCE(${field("additionalRoomIds")},'[]'))=0))
+            ORDER BY ${field("startAt")},${field("id")} LIMIT ?) entry)
+       END AS sessions_json
+  FROM screen_sessions session JOIN screens screen ON screen.id=session.screen_id
+  JOIN event_agenda_state state ON state.event_id=screen.event_id
+  JOIN event_agenda_publications publication ON publication.event_id=state.event_id AND publication.revision=state.published_revision
+ WHERE session.id=? AND session.screen_id=? AND screen.room_id IS NOT NULL`;
+
+/** The agenda as the contract carries it; a session the contract refuses is left out, never the whole read. */
+function screenAgenda(row: AgendaRow | null, from: string, to: string): ScreenOwnView["agenda"] {
+  if (!row || row.revision === null) return null;
+  const zone = timeZoneSchema.safeParse(row.time_zone);
+  if (!zone.success) return null;
+  const sessions =
+    row.sessions_json === null
+      ? null
+      : parseJsonSafe<unknown[]>(row.sessions_json, []).flatMap((entry) => {
+          const parsed = screenAgendaSessionSchema.safeParse(entry);
+          return parsed.success ? [parsed.data] : [];
+        });
+  return { revision: row.revision, timeZone: zone.data, from, to, sessions };
 }
 
 interface OwnViewRow {
@@ -45,19 +97,23 @@ interface OwnViewRow {
  * A paired screen reads itself in one batch. Its sign-in is renewed when the
  * last renewal is a day old, and its last-seen time moves at most every few
  * minutes; both writes only touch a live session. While assigned, it gets a
- * short-lived overlay access for its room, attributed to who assigned it.
+ * short-lived overlay access for its room, attributed to who assigned it, and
+ * its room's published agenda around now, in the same batch.
  */
 export async function readScreenOwnView(
   db: DatabaseLike,
   secret: string,
   claims: ScreenSessionClaims,
+  agendaRevision: number | null = null,
 ): Promise<{ view: ScreenOwnView; renewedUntil: string | null }> {
   const now = nowIso();
   const renewedUntil = addHours(now, SCREEN_POLICY.sessionDays * 24);
   const renewBefore = addHours(renewedUntil, -SCREEN_POLICY.sessionRenewalHours);
   const seenBefore = addMinutes(now, -SCREEN_POLICY.lastSeenMinutes);
   const live = "id=? AND screen_id=? AND activated_at IS NOT NULL AND revoked_at IS NULL AND expires_at>?";
-  const [, , read] = await db.batch([
+  const agendaFrom = addHours(now, -SCREEN_POLICY.agendaHoursBefore);
+  const agendaTo = addHours(now, SCREEN_POLICY.agendaHoursAfter);
+  const [, , read, agendaRead] = await db.batch([
     db
       .prepare(`UPDATE screen_sessions SET expires_at=? WHERE ${live} AND expires_at<?`)
       .bind(renewedUntil, claims.sid, claims.sub, now, renewBefore),
@@ -75,6 +131,9 @@ export async function readScreenOwnView(
           WHERE session.id=? AND session.screen_id=?`,
       )
       .bind(claims.sid, claims.sub),
+    db
+      .prepare(AGENDA_SQL)
+      .bind(agendaRevision, agendaTo, agendaFrom, SCREEN_POLICY.agendaMaxSessions, claims.sid, claims.sub),
   ]);
   const row = batchFirst<OwnViewRow>(read);
   const session = assertSessionActive(
@@ -107,6 +166,7 @@ export async function readScreenOwnView(
         : null,
     },
     serverNow: now,
+    agenda: assigned ? screenAgenda(batchFirst<AgendaRow>(agendaRead), agendaFrom, agendaTo) : null,
     overlay: assigned
       ? {
           token: await signLiveOverlayToken(secret, {

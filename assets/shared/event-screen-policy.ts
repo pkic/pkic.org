@@ -15,6 +15,16 @@ export const SCREEN_POLICY = {
   lastSeenMinutes: 5,
   /** The overlay access a screen receives for its room lasts this long; the screen asks again before then. */
   overlayAccessMinutes: 15,
+  /** A paired screen reads itself this often: its assignment, fresh overlay access, the clock and its agenda. */
+  readSeconds: 60,
+  /**
+   * The slice of its room's published agenda a screen keeps for running on its
+   * own while offline: from this many hours back to this many ahead, so one
+   * read covers the event's day in any zone, and at most this many sessions.
+   */
+  agendaHoursBefore: 12,
+  agendaHoursAfter: 36,
+  agendaMaxSessions: 200,
 } as const;
 
 export const SCREEN_SESSION_MAX_AGE_SECONDS = SCREEN_POLICY.sessionDays * 24 * 60 * 60;

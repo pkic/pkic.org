@@ -259,6 +259,94 @@ describe("a paired screen", () => {
     expect(view.overlay).toBeNull();
   });
 
+  it("receives its room's published agenda around now, and only when its copy is out of date", async () => {
+    const at = (hours: number) => new Date(Date.now() + hours * 3_600_000).toISOString();
+    const session = (id: string, from: number, to: number, extra: Record<string, unknown> = {}) => ({
+      id,
+      title: `Session ${id}`,
+      startAt: at(from),
+      endAt: at(to),
+      roomId: EVENT.roomId,
+      visibility: "public",
+      kind: "session",
+      ...extra,
+    });
+    const otherRoom = crypto.randomUUID();
+    const snapshot = {
+      timeZone: "Europe/Amsterdam",
+      occurrences: [
+        session("later", 3, 4),
+        session("now", -1, 1),
+        session("plenary", 5, 6, { roomId: null, kind: "plenary" }),
+        session("shared", 7, 8, { roomId: otherRoom, additionalRoomIds: [EVENT.roomId] }),
+        session("elsewhere", 2, 3, { roomId: otherRoom }),
+        session("private", 2, 3, { visibility: "private" }),
+        session("placeholder", 2, 3, { placeholder: true }),
+        session("ended", -20, -14),
+        session("next-week", 24 * 7, 24 * 7 + 1),
+      ],
+    };
+    await env.DB.prepare(
+      "INSERT INTO event_agenda_state(event_id,revision,published_revision,updated_at) VALUES(?,3,3,?)",
+    )
+      .bind(EVENT.id, at(0))
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO event_agenda_publications(id,event_id,revision,snapshot_json,created_by,created_at) VALUES(?,?,3,?,?,?)",
+    )
+      .bind(crypto.randomUUID(), EVENT.id, JSON.stringify(snapshot), users.manager, at(0))
+      .run();
+    // The other event's agenda never reaches this screen.
+    await env.DB.prepare(
+      "INSERT INTO event_agenda_state(event_id,revision,published_revision,updated_at) VALUES(?,1,1,?)",
+    )
+      .bind(OTHER_EVENT.id, at(0))
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO event_agenda_publications(id,event_id,revision,snapshot_json,created_by,created_at) VALUES(?,?,1,?,?,?)",
+    )
+      .bind(
+        crypto.randomUUID(),
+        OTHER_EVENT.id,
+        JSON.stringify({ ...snapshot, occurrences: [session("foreign", 1, 2, { roomId: OTHER_EVENT.roomId })] }),
+        users.manager,
+        at(0),
+      )
+      .run();
+
+    const { cookie } = await pair(assignment);
+    const view = screenReadResponseSchema.parse(await (await readAsScreen(cookie)).json()) as ScreenOwnView;
+    expect(view.agenda?.revision).toBe(3);
+    expect(view.agenda?.timeZone).toBe("Europe/Amsterdam");
+    expect(view.agenda?.sessions?.map((entry) => entry.id)).toEqual(["now", "later", "plenary", "shared"]);
+
+    const current = await callApi(
+      testEnv,
+      `/api/v1/screens/${SCREEN}?agendaRevision=3`,
+      { headers: { cookie } },
+      { maxRoundTrips: 1 },
+    );
+    const unchanged = screenReadResponseSchema.parse(await current.json()) as ScreenOwnView;
+    expect(unchanged.agenda).toMatchObject({ revision: 3, sessions: null });
+    const stale = await callApi(
+      testEnv,
+      `/api/v1/screens/${SCREEN}?agendaRevision=2`,
+      { headers: { cookie } },
+      { maxRoundTrips: 1 },
+    );
+    expect((screenReadResponseSchema.parse(await stale.json()) as ScreenOwnView).agenda?.sessions).toHaveLength(4);
+
+    const unassigned = await callApi(testEnv, `/api/v1/screens/${SCREEN}`, {
+      method: "PATCH",
+      headers: staff("manager"),
+      body: JSON.stringify({ expectedRevision: 0, assignment: null }),
+    });
+    expect(unassigned.status, await unassigned.clone().text()).toBe(200);
+    expect(
+      (screenReadResponseSchema.parse(await (await readAsScreen(cookie)).json()) as ScreenOwnView).agenda,
+    ).toBeNull();
+  });
+
   it("renews its sign-in only once the last renewal is a day old", async () => {
     const { cookie } = await pair();
     expect(setCookie(await readAsScreen(cookie), "pkic_screen_session")).toBeUndefined();

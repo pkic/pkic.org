@@ -2,6 +2,8 @@ import { z } from "zod";
 import { LIVE_SCREEN_OUTPUTS, screenOutputUsesOverlay } from "../live-room-outputs";
 import { eventSlugParamsSchema, slugPattern, trimmedString, utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
+import { timeZoneSchema } from "./event-series";
+import { SCREEN_POLICY } from "../event-screen-policy";
 import { liveOverlayLayoutSlugSchema } from "./live-overlay-layout";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
@@ -147,6 +149,41 @@ export const eventScreensParamsSchema = eventSlugParamsSchema;
 
 // ── A screen reading itself ──
 
+/** The cached agenda's revision, so the read leaves the sessions out when they have not changed. */
+export const screenReadQuerySchema = z
+  .object({ agendaRevision: z.coerce.number().int().nonnegative().optional() })
+  .strict();
+export type ScreenReadQuery = z.infer<typeof screenReadQuerySchema>;
+
+/** One published session of the screen's room, as the screen runs it while offline. */
+export const screenAgendaSessionSchema = z
+  .object({
+    id: z.string().min(1).max(200),
+    title: z.string().max(500),
+    startAt: utcInstantSchema,
+    endAt: utcInstantSchema,
+  })
+  .strict()
+  .refine((session) => session.startAt < session.endAt, { message: "A session ends after it starts." });
+export type ScreenAgendaSession = z.infer<typeof screenAgendaSessionSchema>;
+
+/**
+ * The screen's room in the published agenda around now, in the event's zone.
+ * `sessions` is null when the screen already holds this revision; the window
+ * moves with every read, so a screen asks for the sessions again before its
+ * copy runs out.
+ */
+export const screenAgendaSchema = z
+  .object({
+    revision: z.number().int().nonnegative(),
+    timeZone: timeZoneSchema,
+    from: utcInstantSchema,
+    to: utcInstantSchema,
+    sessions: z.array(screenAgendaSessionSchema).max(SCREEN_POLICY.agendaMaxSessions).nullable(),
+  })
+  .strict();
+export type ScreenAgenda = z.infer<typeof screenAgendaSchema>;
+
 /** What a paired screen shows, its server's clock for countdowns, and short-lived access to its room's overlay. */
 export const screenOwnViewSchema = z
   .object({
@@ -168,6 +205,8 @@ export const screenOwnViewSchema = z
       })
       .strict(),
     serverNow: utcInstantSchema,
+    /** Its room's published agenda; null while unassigned or before the event's agenda is published. */
+    agenda: screenAgendaSchema.nullable(),
     /** Present only while the screen is assigned. */
     overlay: z
       .object({ token: z.string().min(1), expiresAt: utcInstantSchema })

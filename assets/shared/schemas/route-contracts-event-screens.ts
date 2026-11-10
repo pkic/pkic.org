@@ -7,6 +7,7 @@ import {
   eventScreensQuerySchema,
   screenPairingResponseSchema,
   screenParamsSchema,
+  screenReadQuerySchema,
   screenReadResponseSchema,
   screenRecordSchema,
   screenSessionPollResponseSchema,
@@ -84,9 +85,10 @@ export const screenGetRouteSchema = {
   summary: "Read a screen",
   description:
     "A paired screen, with its own sign-in cookie, receives what to show, the server's clock and, while assigned, " +
-    "15 minutes of read-only access to its room's overlay. Staff who manage screens or operate the event's rooms " +
+    "15 minutes of read-only access to its room's overlay, and its room's published agenda around now (the sessions " +
+    "only when `agendaRevision` is not the published one). Staff who manage screens or operate the event's rooms " +
     "receive the screen's record instead. A screen that must pair again receives 401 with a SCREEN_SESSION_* code.",
-  request: { params: screenParamsSchema },
+  request: { params: screenParamsSchema, query: screenReadQuerySchema },
   responses: {
     ...ok("The screen as its viewer may see it", screenReadResponseSchema),
     ...authErrors({ notFound: "Screen not found" }),

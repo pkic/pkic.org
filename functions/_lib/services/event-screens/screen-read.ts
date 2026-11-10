@@ -19,10 +19,11 @@ export async function readScreen(
   env: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
   secret: string,
   screenId: string,
+  agendaRevision: number | null = null,
 ): Promise<{ body: ScreenReadResponse; renewedToken: string | null }> {
   const screenToken = await readScreenSessionToken(secret, request);
   if (screenToken.ok && screenToken.claims.sub === screenId) {
-    const { view, renewedUntil } = await readScreenOwnView(db, secret, screenToken.claims);
+    const { view, renewedUntil } = await readScreenOwnView(db, secret, screenToken.claims, agendaRevision);
     return {
       body: view,
       renewedToken: renewedUntil

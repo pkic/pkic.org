@@ -19,6 +19,7 @@ export const ScreenGet = openApiRoute(screenGetRouteSchema, async (c: AdminConte
     c.env,
     requireInternalSecret(c.env),
     data.params.screenId,
+    data.query.agendaRevision ?? null,
   );
   const response = jsonPrivate(body);
   if (renewedToken) response.headers.append("set-cookie", serializeScreenSessionCookie(renewedToken, c.req.raw));
