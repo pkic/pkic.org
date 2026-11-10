@@ -15,13 +15,24 @@ interface RegistrationDayStateRow {
 }
 
 /**
+ * A registration's waitlist entries, reached through its event's days: entries are indexed by day and
+ * registration, so starting from the registration alone would scan the whole queue once per registration.
+ * Ends in an open WHERE clause so callers append their status condition.
+ */
+export function registrationWaitlistEntriesSql(alias: string): string {
+  return `FROM event_days waitlist_day
+          JOIN event_day_waitlist_entries w ON w.event_day_id = waitlist_day.id AND w.registration_id = ${alias}.id
+          WHERE waitlist_day.event_id = ${alias}.event_id`;
+}
+
+/**
  * A registration that is still waiting for, or has been offered, an in-person
  * seat on at least one day. `alias` is the registrations table's alias in the
  * enclosing query; the fragment is trusted SQL owned by the list services.
  */
 export function activeDayWaitlistExistsSql(alias: string): string {
-  return `EXISTS (SELECT 1 FROM event_day_waitlist_entries w
-                  WHERE w.registration_id = ${alias}.id AND ${dayWaitlistStatusSql("w")} IN ('waiting', 'offered'))`;
+  return `EXISTS (SELECT 1 ${registrationWaitlistEntriesSql(alias)}
+                  AND ${dayWaitlistStatusSql("w")} IN ('waiting', 'offered'))`;
 }
 
 /** Match an option selected on at least one day. */

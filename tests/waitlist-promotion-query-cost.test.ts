@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { promoteDayWaitlistIfCapacity } from "../functions/_lib/services/registrations/day-waitlist";
 import { runWaitlistPromotionCycle } from "../functions/_lib/services/registrations/waitlist-promotions";
+import { registrationPopulationFilter } from "../functions/_lib/services/registrations/registration-population-filter";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { resetDb } from "./helpers/reset-db";
@@ -159,6 +160,24 @@ describe("waitlist promotion query cost", () => {
       registration_id: "registration-open-option",
       capacitySnapshot: { seatsReservedBeforeDecision: 0, limit: 1 },
     });
+  });
+
+  it.each([
+    ["the active queue", { waitlisted: "true" }, undefined],
+    ["one queue status", {}, "waiting"],
+  ] as const)("counts registrations in %s without scanning it per registration", async (_name, params, status) => {
+    await seedDay(eventId, { id: "day-1", capacity: HOLDERS });
+    const population = registrationPopulationFilter(eventId, params, status);
+    const profile = profileD1Flow(env.DB, { measureRowsRead: true });
+
+    const rows = await queryAll<{ total: number }>(
+      profile.db,
+      `SELECT COUNT(*) AS total ${population.fromSql}`,
+      population.bindings,
+    );
+
+    expect(rows).toEqual([{ total: WAITING }]);
+    expect(profile.summary().queries[0]?.rowsRead).toBeLessThan(ROWS_PER_PERSON * (HOLDERS + WAITING));
   });
 
   it("leaves people with a capacity-exempt role out of the physical queue", async () => {
