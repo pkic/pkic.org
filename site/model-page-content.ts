@@ -1,10 +1,7 @@
-import { fromHtml } from "hast-util-from-html";
-import { toHtml } from "hast-util-to-html";
-import type { RootContent } from "hast";
 import { loadSiteContent, publishedSiteRoutes } from "../functions/_lib/services/site-content";
 import type { ModelVersion } from "../assets/shared/model-versions";
 import { modelContributionEntries } from "./model-versions";
-import { modelScopedHref, modelVersionTree } from "./model-version-navigation";
+import { modelScopedHref, modelVersionTree, scopeModelHtml } from "./model-version-navigation";
 import { loadModelLevelSource } from "./model-version-source";
 import { createModelLevelContent } from "./model-level-content";
 import { publication } from "./publication";
@@ -21,19 +18,6 @@ export function modelPageRoutes(entry: ModelEntry): readonly string[] {
   );
   modelPageRouteCache.set(entry, routes);
   return routes;
-}
-
-export function scopeModelHtml(html: string, modelRoot: string, root: string) {
-  const tree = fromHtml(html, { fragment: true });
-  const pending: RootContent[] = [...tree.children];
-  while (pending.length) {
-    const node = pending.pop()!;
-    if (node.type !== "element") continue;
-    const href = node.properties.href;
-    if (typeof href === "string") node.properties.href = modelScopedHref(href, modelRoot, root);
-    pending.push(...node.children);
-  }
-  return toHtml(tree);
 }
 
 export async function loadModelPage(entry: ModelEntry, version: ModelVersion, sourceRoute: string, root: string) {

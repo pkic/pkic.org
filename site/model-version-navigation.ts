@@ -1,3 +1,6 @@
+import { fromHtml } from "hast-util-from-html";
+import { toHtml } from "hast-util-to-html";
+import type { RootContent } from "hast";
 import type { SiteSidebarNode, SiteSidebarTree } from "../assets/shared/site-content";
 import type { ReadableModel } from "./model-version-source";
 
@@ -7,6 +10,20 @@ export function modelScopedHref(href: string, modelRoot: string, root: string): 
   const suffix = href.slice(modelRoot.length);
   if (/^(?:versions|drafts)\//.test(suffix)) return href;
   return `${root}${suffix}`;
+}
+
+/** Rewrites model links in rendered HTML so a reader stays on the version or draft they opened. */
+export function scopeModelHtml(html: string, modelRoot: string, root: string) {
+  const tree = fromHtml(html, { fragment: true });
+  const pending: RootContent[] = [...tree.children];
+  while (pending.length) {
+    const node = pending.pop()!;
+    if (node.type !== "element") continue;
+    const href = node.properties.href;
+    if (typeof href === "string") node.properties.href = modelScopedHref(href, modelRoot, root);
+    pending.push(...node.children);
+  }
+  return toHtml(tree);
 }
 
 export function modelVersionTree(

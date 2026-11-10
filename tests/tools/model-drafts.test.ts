@@ -62,7 +62,12 @@ describe("registered model drafts", () => {
     expect(call("criteria")).toContain("id: 1.1.1");
     const questions = call("questions");
     expect(questions).toContain("id: 1.2.1");
-    expect(questions).not.toContain("label:");
+    const shown = [...questions.matchAll(/\{\{< item-table >\}\}\n([\s\S]*?)\n\{\{< \/item-table >\}\}/g)].flatMap(
+      ([, yaml]) => (parse(yaml!) as { items: Array<{ id: string; label?: string }> }).items,
+    );
+    expect(shown.length).toBeGreaterThan(0);
+    // Questions are cited by their full identifier, so whatever the table shows must be that identifier.
+    for (const item of shown) expect(item.label ?? item.id).toBe(item.id);
     expect(call("evidence")).toContain("See [Level 1](/wg/pqc/pqcmm/levels/1-initial/)");
     expect(content.unplaced()).toEqual(["methodology"]);
   });
