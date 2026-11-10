@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { SCREEN_POLICY, SCREEN_SESSION_MAX_AGE_SECONDS } from "../assets/shared/event-screen-policy";
 import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
 import { screenConnection, screenConnectionDisplay } from "../assets/shared/event-screen-connection";
+import { agendaRoomCreateSchema } from "../assets/shared/schemas/event-agenda";
 import { agendaRoomsListSchema } from "../assets/shared/schemas/event-agenda-room-list";
 import {
   eventScreensListSchema,
@@ -494,9 +495,9 @@ describe("screen staff permissions", () => {
     const rename = await callApi(testEnv, `/api/v1/events/${EVENT.slug}/agenda/rooms/${EVENT.roomId}`, {
       method: "PUT",
       headers: staff("manager"),
-      body: JSON.stringify({ name: "Renamed" }),
+      body: JSON.stringify(agendaRoomCreateSchema.parse({ name: "Renamed", capacity: null, expectedRevision: 0 })),
     });
-    expect([400, 403]).toContain(rename.status);
+    expect(rename.status, await rename.clone().text()).toBe(403);
     expect(
       await env.DB.prepare("SELECT name FROM event_agenda_rooms WHERE id=?").bind(EVENT.roomId).first("name"),
     ).toBe("Main hall");
