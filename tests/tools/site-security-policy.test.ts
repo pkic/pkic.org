@@ -66,6 +66,23 @@ it("lets the portal's virtual room frame YouTube's privacy-enhanced player", () 
   expect(frames).not.toContain("*");
 });
 
+it("lets only the venue screen page load YouTube's player API, and send its origin to the player", async () => {
+  const screen = siteContentSecurityPolicy("/live/screen/");
+  expect(directive(screen, "script-src")?.split(" ")).toEqual([
+    "script-src",
+    "'self'",
+    "'wasm-unsafe-eval'",
+    "https://challenges.cloudflare.com",
+    "https://www.youtube.com",
+  ]);
+  expect(directive(screen, "frame-src")).toContain("https://www.youtube-nocookie.com");
+  for (const path of ["/live/overlay/", "/portal/", "/events/example/"])
+    expect(directive(siteContentSecurityPolicy(path), "script-src")).not.toContain("youtube");
+  expect(siteSecurityHeaders("/live/screen/")["Referrer-Policy"]).toBe("strict-origin-when-cross-origin");
+  const page = await readFile("site/pages/live/screen.astro", "utf8");
+  expect(page).not.toMatch(/name="referrer" content="no-referrer"/u);
+});
+
 it("allows email styling only in the isolated preview document", () => {
   const portal = siteContentSecurityPolicy("/portal/");
   expect(directive(portal, "style-src")).toBe("style-src 'self'");
