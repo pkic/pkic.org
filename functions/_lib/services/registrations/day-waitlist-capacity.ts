@@ -1,7 +1,7 @@
 import { isEventDayCapacityConflict, eventDayCapacityChangedError } from "../../db/event-day-capacity-guard";
 export { isEventDayCapacityConflict, eventDayCapacityChangedError } from "../../db/event-day-capacity-guard";
 import { configuredAttendanceOptions } from "../event-days";
-import { registrationDayHoldsOptionSql } from "../event-attendance-option-sql";
+import { eventDayOptionAccessSql, registrationDayHoldsOptionSql } from "../event-attendance-option-sql";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
@@ -15,9 +15,7 @@ const ROLE_BASED_CAPACITY_EXEMPT_ROLES = [
   "panelist",
   "staff",
 ] as const satisfies readonly EventParticipantRole[];
-export const ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL = ROLE_BASED_CAPACITY_EXEMPT_ROLES.map((role) => `'${role}'`).join(
-  ", ",
-);
+const ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL = ROLE_BASED_CAPACITY_EXEMPT_ROLES.map((role) => `'${role}'`).join(", ");
 
 /** SQL expressions accept only internal aliases and trusted value expressions. */
 export function eventAttendanceOptionCapacitySql(day: string, attendanceType: string): string {
@@ -39,15 +37,74 @@ export function eventAttendanceOptionOccupiedSql(day: string, attendanceType: st
       AND ${registrationDayHoldsOptionSql("capacity_attendance", now)})`;
 }
 
-export function eventAttendanceOptionHasAvailableCapacitySql(day: string, attendanceType: string, now: string): string {
-  const capacity = eventAttendanceOptionCapacitySql(day, attendanceType);
-  const configured = `(CASE WHEN json_valid(${day}.attendance_options_json) THEN
+function eventAttendanceOptionConfiguredSql(day: string, attendanceType: string): string {
+  return `(CASE WHEN json_valid(${day}.attendance_options_json) THEN
     CASE WHEN json_type(${day}.attendance_options_json) = 'array' AND json_array_length(${day}.attendance_options_json) > 0
       THEN EXISTS (SELECT 1 FROM json_each(${day}.attendance_options_json) option
         WHERE CASE WHEN json_valid(option.value) THEN json_extract(option.value, '$.value') END = ${attendanceType})
       ELSE ${attendanceType} IN ('in_person', 'virtual', 'on_demand') END
     ELSE ${attendanceType} IN ('in_person', 'virtual', 'on_demand') END)`;
+}
+
+export function eventAttendanceOptionHasAvailableCapacitySql(day: string, attendanceType: string, now: string): string {
+  const capacity = eventAttendanceOptionCapacitySql(day, attendanceType);
+  const configured = eventAttendanceOptionConfiguredSql(day, attendanceType);
   return `(${configured} AND (${capacity} IS NULL OR ${capacity} <= 0 OR (${eventAttendanceOptionOccupiedSql(day, attendanceType, now)}) < ${capacity}))`;
+}
+
+/**
+ * CTEs providing `open_waitlist_option`, one row per day and attendance option
+ * with someone waiting and a free seat, and `capacity_exempt_user`. Seats are
+ * counted once per option, before any per-person check, so a full option costs
+ * one count however long its queue is. Exempt users are read once, and only
+ * when a seat is open. `dayScope` filters `scoped_day`; it and `now` are trusted SQL.
+ */
+export function openWaitlistOptionCte(dayScope: string, now: string): string {
+  const option = "waiting_option.attendance_type";
+  return `waiting_option AS MATERIALIZED (
+      SELECT DISTINCT scoped_day.id AS event_day_id, held.attendance_type
+      FROM event_days scoped_day
+      JOIN event_day_waitlist_entries waiting
+        ON waiting.event_day_id = scoped_day.id AND waiting.status = 'waiting'
+      JOIN registration_day_attendance held
+        ON held.registration_id = waiting.registration_id AND held.event_day_id = waiting.event_day_id
+      WHERE ${dayScope}
+    ), option_seats AS MATERIALIZED (
+      SELECT ed.id AS event_day_id, ed.event_id, ${option} AS attendance_type,
+             ${eventAttendanceOptionCapacitySql("ed", option)} AS capacity_limit,
+             ${eventAttendanceOptionOccupiedSql("ed", option, now)} AS occupied
+      FROM waiting_option
+      JOIN event_days ed ON ed.id = waiting_option.event_day_id
+      WHERE ${eventAttendanceOptionConfiguredSql("ed", option)}
+    ), open_waitlist_option AS (
+      SELECT event_day_id, event_id, attendance_type, capacity_limit, occupied
+      FROM option_seats
+      WHERE capacity_limit IS NULL OR capacity_limit <= 0 OR occupied < capacity_limit
+    ), capacity_exempt_user AS MATERIALIZED (
+      SELECT DISTINCT role.event_id, role.user_id
+      FROM effective_event_participant_roles role
+      WHERE role.status = 'active' AND role.role IN (${ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL})
+        AND role.event_id IN (SELECT event_id FROM open_waitlist_option)
+    )`;
+}
+
+/**
+ * Whether a waiting entry can be offered a seat, in a statement that includes
+ * `openWaitlistOptionCte`. Arguments are trusted SQL aliases and expressions.
+ */
+export function waitlistEntryCanBeOfferedSql(
+  entry: string,
+  registration: string,
+  day: string,
+  attendanceType: string,
+): string {
+  return `${registration}.status IN ('pending_email_confirmation', 'registered')
+    AND (${entry}.reason_code = 'admin_returned_to_waitlist'
+      OR ${eventDayOptionAccessSql(day, attendanceType)} <> 'physical'
+      OR NOT EXISTS (
+        SELECT 1 FROM capacity_exempt_user exempt
+        WHERE exempt.event_id = ${entry}.event_id AND exempt.user_id = ${entry}.user_id
+      ))`;
 }
 
 function rolePriority(role: string): number {

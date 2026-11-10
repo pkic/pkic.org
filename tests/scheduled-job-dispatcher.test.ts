@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
+import { DEPENDENCY_ERROR_CODE } from "../assets/shared/schemas/dependency-failure";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
+import { AppError } from "../functions/_lib/errors";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
 import {
@@ -73,6 +75,7 @@ describe("scheduled job dispatcher", () => {
       consecutive_failures: 0,
       consecutive_abandoned: 0,
       wake_requested: 0,
+      interval_seconds: 86_400,
     });
   });
 
@@ -204,6 +207,64 @@ describe("scheduled job dispatcher", () => {
     expect(
       (await selectRunnableJobs(env.DB, SCHEDULED_JOB_DEFINITIONS.length)).some((job) => job.job_key === JOB),
     ).toBe(true);
+  });
+
+  it("backs off a job that keeps dying, capped at an hour", async () => {
+    const dead = {
+      running_since: "2000-01-01T00:00:00.000Z",
+      lease_expires_at: "2000-01-01T00:10:00.000Z",
+      run_token: "dead-run",
+    };
+    await setJob({ ...dead, interval_seconds: 300, consecutive_abandoned: 1 });
+    await reapAbandonedRuns(env.DB);
+    const secondDeath = await jobRow();
+    expect(Date.parse(secondDeath.next_run_at) - Date.now()).toBeGreaterThan(590_000);
+    expect(Date.parse(secondDeath.next_run_at) - Date.now()).toBeLessThanOrEqual(600_000);
+    expect(
+      (await selectRunnableJobs(env.DB, SCHEDULED_JOB_DEFINITIONS.length)).map((job) => job.job_key),
+    ).not.toContain(JOB);
+
+    await setJob({ ...dead, interval_seconds: 300, consecutive_abandoned: 762 });
+    await reapAbandonedRuns(env.DB);
+    expect(Date.parse((await jobRow()).next_run_at) - Date.now()).toBeLessThanOrEqual(3_600_000);
+  });
+
+  it("releases the lease when D1 refuses the outcome write once", async () => {
+    await env.DB.prepare("UPDATE scheduled_jobs SET next_run_at = '2999-01-01T00:00:00.000Z'").run();
+    await setJob({ next_run_at: "2000-01-01T00:00:00.000Z" });
+    let refused = 0;
+    const flakyDb = new Proxy(env.DB, {
+      get(target, property) {
+        if (property !== "prepare") return Reflect.get(target, property);
+        return (sql: string) => {
+          if (sql.includes("SET last_status = ?1") && refused === 0) {
+            refused += 1;
+            throw new AppError(503, DEPENDENCY_ERROR_CODE, "Online data is temporarily unavailable.");
+          }
+          return target.prepare(sql);
+        };
+      },
+    });
+
+    const outcome = await dispatchScheduledJobs(
+      { ...env, DB: flakyDb } as never,
+      [
+        {
+          key: JOB,
+          leaseSeconds: 600,
+          run: async () => {
+            throw new Error("job exploded");
+          },
+        },
+      ],
+      { maxJobsPerPass: 1, d1QueryBudget: 900 },
+    );
+
+    expect(refused).toBe(1);
+    expect(outcome).toMatchObject({ ran: 1, failed: 1 });
+    const row = await jobRow();
+    expect(row.last_status).toBe("failed");
+    expect(row.running_since).toBeNull();
   });
 
   it("does not reap a run whose lease is still valid", async () => {

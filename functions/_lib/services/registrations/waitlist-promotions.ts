@@ -1,4 +1,3 @@
-import { eventDayOptionAccessSql } from "../event-participation/session-access";
 import { all, first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
@@ -7,10 +6,7 @@ import { listDayWaitlistForRegistration } from "./day-waitlist-queries";
 import { prepareLapsedDayOfferRequeue } from "./day-waitlist-policy";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailEvent } from "./status-notifications";
 import { promoteDayWaitlistIfCapacity } from "./day-waitlist";
-import {
-  eventAttendanceOptionHasAvailableCapacitySql,
-  ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL,
-} from "./day-waitlist-capacity";
+import { openWaitlistOptionCte, waitlistEntryCanBeOfferedSql } from "./day-waitlist-capacity";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { outboxIdForOperation } from "../../email/outbox-queue";
 
@@ -150,14 +146,13 @@ export async function runWaitlistPromotionCycle(
 ): Promise<WaitlistPromotionCycleResult> {
   await prepareLapsedDayOfferRequeue(db, { now: nowIso() }).run();
 
-  const availableCapacitySql = eventAttendanceOptionHasAvailableCapacitySql(
-    "ed",
-    "selected.attendance_type",
-    "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
-  );
   const events = await all<WaitlistPromotionEvent>(
     db,
-    `SELECT DISTINCT
+    `WITH ${openWaitlistOptionCte(
+      "scoped_day.event_id IN (SELECT id FROM events WHERE ends_at IS NULL OR datetime(ends_at) >= datetime('now'))",
+      "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+    )}
+     SELECT
        e.id,
        e.slug,
        e.name,
@@ -168,33 +163,18 @@ export async function runWaitlistPromotionCycle(
        e.settings_json,
        e.capacity_in_person
      FROM events e
-     WHERE e.id IN (
-       SELECT day.event_id FROM event_day_waitlist_entries candidate
-       JOIN event_days day ON day.id = candidate.event_day_id WHERE candidate.status = 'waiting'
+     WHERE EXISTS (
+       SELECT 1
+       FROM open_waitlist_option open_option
+       JOIN event_days ed ON ed.id = open_option.event_day_id
+       JOIN event_day_waitlist_entries candidate
+         ON candidate.event_day_id = open_option.event_day_id AND candidate.status = 'waiting'
+       JOIN registration_day_attendance selected ON selected.registration_id = candidate.registration_id
+         AND selected.event_day_id = candidate.event_day_id AND selected.attendance_type = open_option.attendance_type
+       JOIN registrations candidate_registration ON candidate_registration.id = candidate.registration_id
+       WHERE open_option.event_id = e.id
+         AND ${waitlistEntryCanBeOfferedSql("candidate", "candidate_registration", "ed", "selected.attendance_type")}
      )
-       AND (e.ends_at IS NULL OR datetime(e.ends_at) >= datetime('now'))
-       AND EXISTS (
-         SELECT 1
-         FROM event_days ed
-         WHERE ed.event_id = e.id
-           AND EXISTS (
-             SELECT 1
-             FROM event_day_waitlist_entries candidate
-             JOIN registrations candidate_registration
-               ON candidate_registration.id = candidate.registration_id
-             JOIN registration_day_attendance selected ON selected.registration_id = candidate.registration_id
-               AND selected.event_day_id = candidate.event_day_id
-             WHERE candidate.event_day_id = ed.id
-               AND ${availableCapacitySql}
-               AND candidate.status = 'waiting'
-               AND candidate_registration.status IN ('pending_email_confirmation', 'registered')
-               AND (candidate.reason_code = 'admin_returned_to_waitlist' OR ${eventDayOptionAccessSql("ed", "selected.attendance_type")} <> 'physical' OR NOT EXISTS (
-                 SELECT 1 FROM effective_event_participant_roles role
-                 WHERE role.event_id = candidate.event_id AND role.user_id = candidate.user_id
-                   AND role.status = 'active' AND role.role IN (${ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL})
-               ))
-           )
-       )
      ORDER BY datetime(COALESCE(e.starts_at, '9999-12-31')) ASC, e.name ASC, e.id ASC
      LIMIT 50`,
   );

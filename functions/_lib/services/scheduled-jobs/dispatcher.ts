@@ -1,6 +1,8 @@
+import { DEPENDENCY_ERROR_CODE } from "../../../../assets/shared/schemas/dependency-failure";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { getAvailability } from "../../availability";
 import { all, run } from "../../db/queries";
+import { AppError } from "../../errors";
 import { logInfo } from "../../logging";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
@@ -16,6 +18,10 @@ import {
 const NOW_SQL = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
 /** Caps exponential backoff so a persistently failing job still retries daily. */
 const MAX_BACKOFF_SECONDS = 86_400;
+/** A dead run already held its lease, and a repeatedly dying job can still have reminders to send. */
+const MAX_ABANDONED_BACKOFF_SECONDS = 3_600;
+/** Pauses before each repeat of an outcome write that D1 could not accept. */
+const OUTCOME_RETRY_DELAYS_MS = [500, 2_000, 5_000] as const;
 
 /**
  * Records runs that died without clearing their lease.
@@ -24,7 +30,8 @@ const MAX_BACKOFF_SECONDS = 86_400;
  * `catch` or `finally` is guaranteed to run and a crashed job cannot report
  * itself. An expired lease is the only reliable signal, so this must run
  * before selection — otherwise the job stays permanently "running" and is
- * never picked up again.
+ * never picked up again. One abandoned run restarts at once; a job that keeps
+ * dying backs off so it does not repeat its load on every lease expiry.
  */
 export async function reapAbandonedRuns(db: DatabaseLike): Promise<number> {
   const result = await run(
@@ -37,7 +44,10 @@ export async function reapAbandonedRuns(db: DatabaseLike): Promise<number> {
             running_since = NULL,
             lease_expires_at = NULL,
             run_token = NULL,
-            next_run_at = ${NOW_SQL},
+            next_run_at = CASE WHEN consecutive_abandoned = 0 THEN ${NOW_SQL} ELSE strftime(
+              '%Y-%m-%dT%H:%M:%fZ','now',
+              '+' || MIN(${MAX_ABANDONED_BACKOFF_SECONDS}, interval_seconds * (1 << MIN(consecutive_abandoned, 10))) || ' seconds'
+            ) END,
             updated_at = ${NOW_SQL}
       WHERE running_since IS NOT NULL
         AND lease_expires_at <= ${NOW_SQL}`,
@@ -145,6 +155,22 @@ export async function recordJobOutcome(
   );
 }
 
+/**
+ * Releases the lease through a brief D1 outage, so one unrecorded outcome does
+ * not hold the job for its whole lease. The run token makes a repeat harmless.
+ */
+async function recordJobOutcomeDurably(...outcome: Parameters<typeof recordJobOutcome>): Promise<void> {
+  for (const delayMs of OUTCOME_RETRY_DELAYS_MS) {
+    try {
+      return await recordJobOutcome(...outcome);
+    } catch (error) {
+      if (!(error instanceof AppError && error.code === DEPENDENCY_ERROR_CODE)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  await recordJobOutcome(...outcome);
+}
+
 /** Marks a job for the next dispatcher pass without waiting for its interval. */
 export function prepareJobWake(
   db: DatabaseLike,
@@ -201,12 +227,12 @@ export async function dispatchScheduledJobs(
       const result = outcome.status === "completed" && outcome.result ? outcome.result : undefined;
       idle = result?.idle === true;
       if (outcome.status === "d1_query_budget_exhausted") {
-        await recordJobOutcome(env.DB, row.job_key, token, "budget_exhausted", {
+        await recordJobOutcomeDurably(env.DB, row.job_key, token, "budget_exhausted", {
           durationMs,
           error: "D1 query budget exhausted before the job completed",
         });
       } else {
-        await recordJobOutcome(env.DB, row.job_key, token, "succeeded", {
+        await recordJobOutcomeDurably(env.DB, row.job_key, token, "succeeded", {
           durationMs,
           ...(result?.nextRunAt ? { nextRunAt: result.nextRunAt } : {}),
         });
@@ -219,7 +245,7 @@ export async function dispatchScheduledJobs(
         summary: result?.summary,
       });
     } catch (error) {
-      await recordJobOutcome(env.DB, row.job_key, token, "failed", {
+      await recordJobOutcomeDurably(env.DB, row.job_key, token, "failed", {
         durationMs: Date.now() - startedAt,
         error: error instanceof Error ? error.message.slice(0, 500) : "Unknown scheduled job failure",
       });
