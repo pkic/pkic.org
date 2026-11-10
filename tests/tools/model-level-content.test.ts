@@ -72,6 +72,14 @@ describe("model level content placed in authored pages", () => {
     expect(withoutSection.render(call({ part: "section", title: "Taxonomy" }, "\nFallback\n"))).toBe("Fallback");
   });
 
+  it("fails when a version lacks a section the page places, unless the placement is optional", () => {
+    const withoutSection = content({ sections: [] });
+    expect(() => withoutSection.render(call({ part: "section", title: "Taxonomy" }))).toThrow(
+      /has no section "Taxonomy"/,
+    );
+    expect(withoutSection.render(call({ part: "section", title: "Taxonomy", optional: "true" }))).toBe("");
+  });
+
   it.each([
     ["<script>alert(1)</script>", /raw HTML/],
     ['<img src="x" onerror="alert(1)">', /raw HTML/],

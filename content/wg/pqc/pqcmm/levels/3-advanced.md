@@ -10,12 +10,7 @@ weight: 40
 
 ## What Level 3 Means
 
-A product at **Level 3** has moved beyond simply offering quantum-safe features — it provides the **cryptographic transparency and architectural flexibility** needed for organizations to manage their migration systematically.
-
-The vendor has catalogued every cryptographic use case in the product, explicitly acknowledged which ones are not yet quantum-safe, and built mechanisms that allow algorithm updates without requiring a complete architectural overhaul.
-
-> Level 3 gives organizations the **visibility to plan** and the **agility to execute** a controlled cryptographic migration.
-{.callout-info}
+{{< model-section title="What Level 3 Means" >}}
 
 ## Criteria
 
@@ -24,23 +19,10 @@ The vendor has catalogued every cryptographic use case in the product, explicitl
 ### Cryptographic Inventory Taxonomy
 
 {{< model-section title="Cryptographic Inventory Taxonomy" >}}
-A Level 3 cryptographic inventory must cover, at minimum, the following categories. For each category, list the algorithms, parameter sets, and components used — or mark the category *not applicable* with a justification:
-
-- Data in transit (e.g., TLS, VPN, application protocols)
-- Data at rest (e.g., disk, database, object storage encryption)
-- Identity, authentication, and certificates
-- Code, firmware, and update signing
-- Key wrapping and key-encryption keys (KEKs)
-- Random number generation and entropy sources
-- Telemetry, logging, and audit-trail integrity
-- Build, CI/CD, and supply-chain signing (where part of the product)
-- Attestation and remote-attestation (where applicable)
-- Backup, archival, and long-term storage
-{{< /model-section >}}
 
 ## Assessment Questions
 
-At Level 3, the assessor must validate inventory completeness and SBOM accuracy using tooling, not just documentation review. The most significant findings at this level are gaps between what tools report and what the vendor discloses. **A complete Level 3 assessment must also work through all [Level 1](/wg/pqc/pqcmm/levels/1-initial/#assessment-questions) and [Level 2](/wg/pqc/pqcmm/levels/2-foundational/#assessment-questions) questions.**
+{{< model-section title="Assessment approach" >}}
 
 {{< model part="methodology" >}}
 

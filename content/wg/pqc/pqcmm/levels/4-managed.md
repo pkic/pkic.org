@@ -10,10 +10,7 @@ weight: 50
 
 ## What Level 4 Means
 
-A product at **Level 4** builds on the visibility and agility of Level 3, adding the precision of a **Cryptographic Bill of Materials (CBOM)**, a demonstrated ability to **disable all non-quantum-safe algorithms entirely** while remaining functional, and clarity about **hybrid and composite algorithm support**.
-
-> Level 4 is the benchmark for **high-assurance deployments**. It provides both the documentation precision needed for compliance and the operational capability to enforce a fully quantum-safe configuration.
-{.callout-info}
+{{< model-section title="What Level 4 Means" >}}
 
 ## Criteria
 
@@ -21,7 +18,7 @@ A product at **Level 4** builds on the visibility and agility of Level 3, adding
 
 ## Assessment Questions
 
-At Level 4, assessors must request and validate the CBOM directly — not just accept that one exists. The assessment must document how the CBOM was generated, how it was validated, and whether the assessor independently cross-checked it. Claims made solely on the basis of vendor documentation without any independent check must be flagged. **A complete Level 4 assessment must also work through all [Level 1](/wg/pqc/pqcmm/levels/1-initial/#assessment-questions), [Level 2](/wg/pqc/pqcmm/levels/2-foundational/#assessment-questions), and [Level 3](/wg/pqc/pqcmm/levels/3-advanced/#assessment-questions) questions.**
+{{< model-section title="Assessment approach" >}}
 
 {{< model part="methodology" >}}
 

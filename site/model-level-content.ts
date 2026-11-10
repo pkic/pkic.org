@@ -79,8 +79,8 @@ function criteriaMarkdown(model: ReadableModel, level: ModelLevel) {
  * Normative level content placed by `{{< model part="…" >}}` in the page's authored Markdown.
  * Guidance stays authored; every criterion, question group, evidence item and model section must be
  * placed exactly once, so content can no longer disappear silently from a published level page.
- * Model sections are placed by title with `{{< model-section >}}`; its inner Markdown is the fallback
- * for model versions that do not carry that section yet.
+ * Model sections are placed by title with `{{< model-section >}}`. A version without that section fails
+ * the build unless the placement is `optional="true"` or carries inner Markdown as a fallback.
  */
 export function createModelLevelContent(model: ReadableModel, level: ModelLevel) {
   const placed = new Set<string>();
@@ -96,7 +96,13 @@ export function createModelLevelContent(model: ReadableModel, level: ModelLevel)
       const title = call.props.title;
       if (!title) throw new Error(`A model section needs a title on ${level.sourcePage}`);
       const section = level.sections.find((entry) => entry.title === title);
-      if (!section) return call.inner?.trim() ?? "";
+      if (!section) {
+        const fallback = call.inner?.trim();
+        if (fallback || call.props.optional === "true") return fallback ?? "";
+        throw new Error(
+          `The model for ${level.sourcePage} has no section "${title}"; add it or mark the placement optional`,
+        );
+      }
       place(`section "${title}"`);
       return section.body;
     }
