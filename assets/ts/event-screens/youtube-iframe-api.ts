@@ -20,6 +20,7 @@ export const YOUTUBE_PLAYER_STATES = {
 
 export interface YouTubePlayer {
   playVideo(): void;
+  mute(): void;
   unMute(): void;
   setVolume(volume: number): void;
   destroy(): void;

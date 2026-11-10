@@ -100,6 +100,7 @@ describe("the livestream screen", () => {
     events: YouTubePlayerEvents;
     destroy: ReturnType<typeof vi.fn>;
     playVideo: ReturnType<typeof vi.fn>;
+    mute: ReturnType<typeof vi.fn>;
   }
   let players: FakePlayer[] = [];
   let host: HTMLElement | undefined;
@@ -147,6 +148,7 @@ describe("the livestream screen", () => {
         Player: class {
           destroy = vi.fn();
           playVideo = vi.fn();
+          mute = vi.fn();
           unMute = vi.fn();
           setVolume = vi.fn();
           constructor(frame: HTMLIFrameElement, options: { events: YouTubePlayerEvents }) {
@@ -225,6 +227,31 @@ describe("the livestream screen", () => {
     expect(reconnecting()).toBe(true);
     await emit("playing");
     expect(reconnecting()).toBe(false);
+  });
+
+  it("starts muted when the browser refuses to start with sound, instead of reconnecting", async () => {
+    const api = fakeApi();
+    api.read.mockResolvedValue(timed(ownView("first-video")));
+    await mountApp(api);
+    await act(() => latest().events.onReady?.({ target: latest() as never }));
+    await emit("unstarted");
+    await advance(5_000);
+    expect(latest().mute).toHaveBeenCalled();
+    await emit("playing");
+    expect(reconnecting()).toBe(false);
+    expect(players).toHaveLength(1);
+    expect(livestreamPlayerReport()).toMatchObject({ status: "playing", muted: true });
+  });
+
+  it("stays with sound when the player starts in time", async () => {
+    const api = fakeApi();
+    api.read.mockResolvedValue(timed(ownView("first-video")));
+    await mountApp(api);
+    await act(() => latest().events.onReady?.({ target: latest() as never }));
+    await emit("playing");
+    await advance(10_000);
+    expect(latest().mute).not.toHaveBeenCalled();
+    expect(livestreamPlayerReport()).toMatchObject({ status: "playing", muted: false });
   });
 
   it("starts the last known stream after a restart while the site is down", async () => {

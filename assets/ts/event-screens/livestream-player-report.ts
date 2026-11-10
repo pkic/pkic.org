@@ -8,6 +8,8 @@ import type { LivestreamPlayerStatus } from "./livestream-health";
 export interface LivestreamPlayerReport {
   status: LivestreamPlayerStatus;
   videoId: string;
+  /** Playing without sound: the browser refused to start it with sound. */
+  muted: boolean;
   /** When the status or the video last changed, as an ISO-8601 UTC instant. */
   changedAt: string;
 }

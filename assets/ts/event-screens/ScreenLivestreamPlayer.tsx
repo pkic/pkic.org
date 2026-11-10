@@ -12,6 +12,8 @@ import { ScreenLivestream } from "./ScreenLivestream";
 import { loadYouTubeIframeApi, YOUTUBE_PLAYER_STATES, type YouTubePlayer } from "./youtube-iframe-api";
 
 const HEALTH_TICK_MS = 1_000;
+/** A player not playing this long after it asked to start with sound was refused it; it starts muted. */
+const AUTOPLAY_WITH_SOUND_MS = 5_000;
 
 const PLAYER_STATES = new Map<number, LivestreamPlayerState>(
   Object.entries(YOUTUBE_PLAYER_STATES).map(([name, value]) => [value, name as LivestreamPlayerState]),
@@ -78,6 +80,8 @@ export function ScreenLivestreamPlayer({
     host.current?.replaceChildren(frame);
     let stopped = false;
     let player: YouTubePlayer | null = null;
+    let played = false;
+    let withSound: ReturnType<typeof setTimeout> | undefined;
     loadYouTubeIframeApi().then(
       (api) => {
         if (stopped) return;
@@ -87,11 +91,19 @@ export function ScreenLivestreamPlayer({
               target.unMute();
               target.setVolume(100);
               target.playVideo();
+              // The browser may refuse to start with sound; muted is better than the reconnecting card.
+              withSound = setTimeout(() => {
+                if (stopped || played) return;
+                target.mute();
+                target.playVideo();
+                report({ type: "muted" });
+              }, AUTOPLAY_WITH_SOUND_MS);
             },
             onStateChange: ({ data, target }) => {
               if (stopped) return;
               const state = PLAYER_STATES.get(data);
               if (!state) return;
+              if (state === "playing") played = true;
               // Nobody pauses a venue screen; carry on.
               if (state === "paused") target.playVideo();
               report({ type: "state", state });
@@ -108,6 +120,7 @@ export function ScreenLivestreamPlayer({
     );
     return () => {
       stopped = true;
+      clearTimeout(withSound);
       try {
         player?.destroy();
       } catch {
@@ -122,9 +135,10 @@ export function ScreenLivestreamPlayer({
     publishLivestreamPlayerReport({
       status: health.status,
       videoId: health.videoId,
+      muted: health.muted,
       changedAt: new Date(health.changedAt).toISOString(),
     });
-  }, [health.status, health.videoId, health.changedAt]);
+  }, [health.status, health.videoId, health.muted, health.changedAt]);
   useEffect(() => () => publishLivestreamPlayerReport(null), []);
 
   return (

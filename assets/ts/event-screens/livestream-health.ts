@@ -3,7 +3,8 @@
  * breaks included, so anything but playing is a fault once it lasts: an
  * error or the end of the stream at once, buffering or not starting after a
  * minute. A fault shows the reconnecting card and recreates the player with
- * backoff until it plays again. Only a fault or another video recreates the
+ * backoff until it plays again. A player the browser will not start with
+ * sound starts muted instead; the next player tries with sound again. Only a fault or another video recreates the
  * player; nothing the server says or fails to say does.
  */
 
@@ -23,6 +24,8 @@ export interface LivestreamHealth {
   status: LivestreamPlayerStatus;
   /** When the status or the video last changed. */
   changedAt: number;
+  /** Playing without sound because the browser refused to start it with sound. */
+  muted: boolean;
   /** From a fault until the player plays again. */
   reconnecting: boolean;
   /** Since when the player has not been playing; null while it plays or after a fault. */
@@ -42,6 +45,7 @@ export type LivestreamHealthEvent =
   | { type: "video"; videoId: string; at: number }
   | { type: "state"; state: LivestreamPlayerState; at: number }
   | { type: "fault"; at: number }
+  | { type: "muted"; at: number }
   | { type: "tick"; at: number };
 
 /** An event as its source reports it, before the screen stamps the time. */
@@ -61,6 +65,7 @@ export function startLivestreamHealth(videoId: string, at: number, generation = 
     videoId,
     status: "loading",
     changedAt: at,
+    muted: false,
     reconnecting: false,
     stalledSince: at,
     faults: 0,
@@ -93,12 +98,16 @@ export function nextLivestreamHealth(health: LivestreamHealth, event: Livestream
         : startLivestreamHealth(event.videoId, event.at, health.generation + 1);
     case "fault":
       return fault(health, event.at);
+    case "muted":
+      return health.muted || health.retryAt !== null ? health : { ...health, muted: true, changedAt: event.at };
     case "tick":
       if (health.retryAt !== null)
         return event.at < health.retryAt
           ? health
           : {
+              // Each new player tries with sound again.
               ...withStatus(health, "loading", event.at),
+              muted: false,
               stalledSince: event.at,
               retryAt: null,
               generation: health.generation + 1,
