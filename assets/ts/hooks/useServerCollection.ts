@@ -2,6 +2,7 @@ import { canRetainData } from "../shared/request-failure";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import type { PageInfo } from "../../shared/schemas/pagination";
+import { useResetKeyEffect } from "./useResetKeyEffect";
 
 export type CollectionLoader = <T>(url: string, signal: AbortSignal, responseSchema: z.ZodType<T>) => Promise<T>;
 
@@ -38,22 +39,8 @@ export function buildCollectionResetKey(endpoint: string, params: Record<string,
 }
 
 /** Resets pagination while making the first request use offset zero immediately. */
-export function useCollectionResetPending(resetKey: string, resetPage: () => void): boolean {
-  const previousResetKey = useRef(resetKey);
-  const resetPending = previousResetKey.current !== resetKey;
-
-  useEffect(() => {
-    if (previousResetKey.current === resetKey) return;
-    previousResetKey.current = resetKey;
-    resetPage();
-  }, [resetKey, resetPage]);
-
-  return resetPending;
-}
-
-/** Resets pagination while making the first request use offset zero immediately. */
 export function useCollectionOffset(resetKey: string, offset: number, resetPage: () => void): number {
-  return useCollectionResetPending(resetKey, resetPage) ? 0 : offset;
+  return useResetKeyEffect(resetKey, resetPage) ? 0 : offset;
 }
 
 export interface LatestRequest {

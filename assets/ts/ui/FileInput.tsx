@@ -25,6 +25,7 @@
 
 import type { ComponentChildren, JSX } from "preact";
 import { useRef, useState } from "preact/hooks";
+import { useResetKeyEffect } from "../hooks/useResetKeyEffect";
 
 import { Button } from "./Button";
 import "./FileInput.css";
@@ -47,6 +48,8 @@ export interface FileInputProps extends Omit<
   preview?: ComponentChildren;
   /** Called with the chosen file, and with null when the selection is emptied. */
   onFileChange?: (file: File | null) => void;
+  /** Change after processing a file to empty the selection without replacing the focused input. */
+  resetKey?: number;
 }
 
 export function FileInput({
@@ -55,12 +58,18 @@ export function FileInput({
   clearLabel = "Clear",
   preview,
   onFileChange,
+  resetKey,
   disabled = false,
   class: className,
   ...rest
 }: FileInputProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  useResetKeyEffect(resetKey, () => {
+    if (inputRef.current) inputRef.current.value = "";
+    setFileName(null);
+    onFileChange?.(null);
+  });
 
   function select(file: File | null): void {
     setFileName(file?.name ?? null);

@@ -8,21 +8,24 @@ import { StateIcon } from "../ui/Field";
 import { IconExternalLink, IconInfoCircle } from "./icons";
 import type { RequiredTerm } from "../shared/types";
 import type { FieldPresentation } from "../hooks/useContractForm";
+import { isTermAccepted } from "../../shared/consent-selection";
 
 /** `recorded` marks a term the person already agreed to in this flow, so they are not asked again. */
 export function ConsentCard({
   term,
   recorded = false,
+  locked = false,
   presentation,
 }: {
   term: RequiredTerm;
   recorded?: boolean;
+  locked?: boolean;
   presentation?: FieldPresentation;
 }) {
   // The person's own choice, once they make one; until then a recorded agreement stands.
   const [choice, setChoice] = useState<boolean>();
   const [invalidState, setInvalid] = useState(false);
-  const checked = choice ?? recorded;
+  const checked = locked ? recorded : (choice ?? recorded);
   const invalid = presentation ? presentation.state === "invalid" : invalidState && !checked;
   const id = `consent-${term.termKey}-${term.version}`.replace(/[^a-zA-Z0-9_-]/g, "-");
   const helpId = `${id}-help`;
@@ -54,6 +57,7 @@ export function ConsentCard({
             value={`${term.termKey}:${term.version}`}
             required={term.required}
             checked={checked}
+            disabled={locked}
             label={label}
             aria-invalid={invalid ? "true" : undefined}
             aria-describedby={describedBy || undefined}
@@ -86,23 +90,29 @@ export function ConsentCard({
 export function ConsentList({
   terms,
   recorded = [],
+  lockRecorded = false,
   presentationOf,
 }: {
   terms: RequiredTerm[];
   recorded?: readonly { termKey: string; version: string }[];
+  lockRecorded?: boolean;
   presentationOf?: (termKey: string) => FieldPresentation;
 }) {
   return (
     <div class="pk pk-stack pk-stack--snug">
       {terms.length ? (
-        terms.map((term) => (
-          <ConsentCard
-            key={`${term.termKey}:${term.version}`}
-            term={term}
-            presentation={presentationOf?.(term.termKey)}
-            recorded={recorded.some((item) => item.termKey === term.termKey && item.version === term.version)}
-          />
-        ))
+        terms.map((term) => {
+          const accepted = isTermAccepted(term, recorded);
+          return (
+            <ConsentCard
+              key={`${term.termKey}:${term.version}`}
+              term={term}
+              presentation={presentationOf?.(term.termKey)}
+              recorded={accepted}
+              locked={lockRecorded && accepted}
+            />
+          );
+        })
       ) : (
         <p>No required consents for this flow.</p>
       )}

@@ -4,9 +4,12 @@ import {
 } from "../../../assets/shared/proposal-speaker-acceptance";
 import type { ParticipantAuthority } from "./participant-authority";
 import type { z } from "zod";
-import type { speakerSelfProfilePatchSchema } from "../../../assets/shared/schemas/proposal-management";
+import type {
+  speakerSelfProfilePatchSchema,
+  ProposalAccessSpeakerStatus,
+} from "../../../assets/shared/schemas/proposal-management";
 import { speakerInvitedAddressOwnedSql } from "./proposal-speaker-invited-address";
-import { all, first } from "../db/queries";
+import { first } from "../db/queries";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
@@ -85,54 +88,44 @@ export function prepareSpeakerSelfAuthorityGuard(
  * named only by the name the proposer typed on an account no one has claimed; an existing person's own name
  * stays theirs until they accept.
  */
-export async function getProposalCoSpeakers(
-  db: DatabaseLike,
-  proposalId: string,
-  excludeUserId: string,
-): Promise<{ firstName: string | null; lastName: string | null; status: string }[]> {
-  const rows = await all<{
-    first_name: string | null;
-    last_name: string | null;
-    status: string;
-    account_claimed: 0 | 1;
-  }>(
-    db,
-    `SELECT ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName"])}, ps.status,
+export interface ProposalCoSpeakerRow {
+  first_name: string | null;
+  last_name: string | null;
+  status: ProposalAccessSpeakerStatus;
+  account_claimed: 0 | 1;
+}
+
+export function prepareProposalCoSpeakers(db: DatabaseLike, proposalId: string, excludeUserId: string) {
+  return db
+    .prepare(`SELECT ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName"])}, ps.status,
             CASE WHEN ${unclaimedAccountSql("u")} THEN 0 ELSE 1 END AS account_claimed
      FROM proposal_speakers ps
      JOIN users u ON u.id = ps.user_id
      WHERE ps.proposal_id = ? AND ps.user_id != ?
-     ORDER BY ps.created_at ASC`,
-    [proposalId, excludeUserId],
-  );
+     ORDER BY ps.created_at ASC`)
+    .bind(proposalId, excludeUserId);
+}
+
+export function proposalCoSpeakersReadModel(rows: ProposalCoSpeakerRow[]) {
   return rows.map((row) => {
     const named = row.status === "confirmed" || !row.account_claimed;
-    return {
-      firstName: named ? row.first_name : null,
-      lastName: named ? row.last_name : null,
-      status: row.status,
-    };
+    return { firstName: named ? row.first_name : null, lastName: named ? row.last_name : null, status: row.status };
   });
 }
 
-export async function getPresentationUploader(
-  db: DatabaseLike,
-  proposalId: string,
-): Promise<{ firstName: string | null; lastName: string | null; uploadedAt: string } | null> {
-  const row = await first<{
-    first_name: string | null;
-    last_name: string | null;
-    uploaded_at: string;
-  }>(
-    db,
-    `SELECT u.first_name, u.last_name, pv.uploaded_at
+export interface PresentationUploaderRow {
+  firstName: string | null;
+  lastName: string | null;
+  uploadedAt: string;
+}
+
+export function preparePresentationUploader(db: DatabaseLike, proposalId: string) {
+  return db
+    .prepare(`SELECT u.first_name AS firstName, u.last_name AS lastName, pv.uploaded_at AS uploadedAt
      FROM presentation_versions pv
      LEFT JOIN users u ON u.id = pv.uploaded_by_user_id
-     WHERE pv.proposal_id = ? AND pv.is_current = 1 AND pv.deleted_at IS NULL`,
-    [proposalId],
-  );
-  if (!row) return null;
-  return { firstName: row.first_name, lastName: row.last_name, uploadedAt: row.uploaded_at };
+     WHERE pv.proposal_id = ? AND pv.is_current = 1 AND pv.deleted_at IS NULL`)
+    .bind(proposalId);
 }
 
 /** An expired session may select an existing representation, without editing a profile or recording consent. */
