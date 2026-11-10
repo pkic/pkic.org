@@ -63,8 +63,9 @@ export function ScreenView({ screenId, display, now }: { screenId: ScreenId; dis
           status={display.marker ? "offline" : "live"}
           roomId={display.roomId}
           broadcast
+          stageAside={<ScreenMarker marker={display.marker} />}
         >
-          <ScreenMarker marker={display.marker} />
+          {display.output === "stage-display" ? null : <ScreenMarker marker={display.marker} placement="corner" />}
         </LiveOverlayPresentation>
       );
   }

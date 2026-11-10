@@ -9,15 +9,7 @@ import "./ScreenStatus.css";
  * A screen's own page while it shows no output: the consortium's mark, not an
  * event's, since an unpaired or unassigned screen belongs to no event yet.
  */
-function ScreenStatusFrame({
-  view,
-  marker = null,
-  children,
-}: {
-  view: string;
-  marker?: Marker;
-  children: ComponentChildren;
-}) {
+function ScreenStatusFrame({ view, children }: { view: string; children: ComponentChildren }) {
   return (
     <LiveOverlayFrame view={view}>
       <div class="pk-screen-status">
@@ -26,7 +18,6 @@ function ScreenStatusFrame({
         </header>
         <div class="pk-screen-status__main">{children}</div>
       </div>
-      <ScreenMarker marker={marker} />
     </LiveOverlayFrame>
   );
 }
@@ -89,7 +80,7 @@ export function ScreenWaiting({
   marker?: Marker;
 }) {
   return (
-    <ScreenStatusFrame view="screen-waiting" marker={marker}>
+    <ScreenStatusFrame view="screen-waiting">
       <div class="pk-screen-status__waiting">
         <p class="pk-screen-status__name">{name}</p>
         <p class="pk-screen-status__muted">{status}</p>
@@ -98,6 +89,7 @@ export function ScreenWaiting({
         <span>
           Screen ID <span class="pk-screen-status__mono">{screenId}</span>
         </span>
+        <ScreenMarker marker={marker} />
       </p>
     </ScreenStatusFrame>
   );

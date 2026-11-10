@@ -1,14 +1,19 @@
 /*
- * Fixed on the 1920 × 1080 frame, in the corner no output places a graphic
- * in. The shared badge is set at a size read from across a room, on the
- * frame's fixed dark ground and ink, like the stage display, whatever the
- * theme around it.
+ * On the 1920 × 1080 frame. At the end of a bottom line it flows with the
+ * line; over a picture it takes the title-safe corner the overlay layouts
+ * keep clear. The shared badge is set at a size read from across a room, on
+ * the frame's fixed dark ground and ink, like the stage display, whatever
+ * the theme around it.
  */
 @layer components {
   .pk-screen-marker {
+    display: inline-flex;
+    vertical-align: middle;
+  }
+  .pk-screen-marker--corner {
     position: absolute;
-    inset-block-end: 24px;
-    inset-inline-end: 24px;
+    inset-block-end: 48px;
+    inset-inline-end: 48px;
   }
   .pk-screen-marker--dot {
     inline-size: 20px;

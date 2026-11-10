@@ -101,6 +101,24 @@ describe("what a screen shows", () => {
     ).toMatchObject({ kind: "output", state: screenStageRunningFixture, marker: null });
   });
 
+  it("runs the agenda only on a stage display; other outputs hold their last frame", () => {
+    const projector = view({ ...assigned.screen.assignment!, output: "projector", layout: "full-frame" });
+    expect(
+      screenDisplay(
+        situation({
+          now: SCREEN_FIXTURE_NOW,
+          view: projector,
+          live: { connected: false, lastUpdateAt: studioEnd - 10 * MINUTE, state: screenStageRunningFixture },
+        }),
+      ),
+    ).toMatchObject({
+      kind: "output",
+      output: "projector",
+      state: screenStageRunningFixture,
+      marker: { kind: "offline-badge" },
+    });
+  });
+
   it("never switches on its own while connected, and needs an agenda to run alone", () => {
     const pastEnd = { now: SCREEN_FIXTURE_NOW };
     expect(screenDisplay(situation(pastEnd))).toMatchObject({ state: screenStageRunningFixture, marker: null });

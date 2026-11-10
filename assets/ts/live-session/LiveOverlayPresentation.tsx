@@ -220,8 +220,8 @@ const PROGRAM_LAYERS: readonly Layer[] = [
 ];
 
 /** The stage display's layers: the speaker-facing screen, the code to check in, and the operators' message on top. */
-const STAGE_DISPLAY_LAYERS = (roomId: string | undefined): readonly Layer[] => [
-  { element: "stageDisplay", draw: (state) => <LiveStageDisplay state={state} roomId={roomId} /> },
+const STAGE_DISPLAY_LAYERS = (roomId: string | undefined, aside: ComponentChildren): readonly Layer[] => [
+  { element: "stageDisplay", draw: (state) => <LiveStageDisplay state={state} roomId={roomId} aside={aside} /> },
   {
     element: "checkIn",
     draw: (state) => (state.stage.checkIn ? <LiveCheckInOverlay checkIn={state.stage.checkIn} /> : null),
@@ -245,6 +245,7 @@ export function LiveOverlayPresentation({
   roomId,
   focus = null,
   broadcast = false,
+  stageAside,
   children,
 }: {
   view: LiveOverlayView;
@@ -260,6 +261,8 @@ export function LiveOverlayPresentation({
   focus?: LiveOverlayElement | null;
   /** A browser source on air: it plays graphic motion even under reduced motion, which only monitors honor. */
   broadcast?: boolean;
+  /** Drawn at the end of the stage display's bottom line by the page that hosts it, such as a screen's status. */
+  stageAside?: ComponentChildren;
   /** Drawn over every layer by the page that hosts the output, such as a screen's connection status. */
   children?: ComponentChildren;
 }) {
@@ -267,7 +270,7 @@ export function LiveOverlayPresentation({
   const state = projection && isLiveAuxOutput(requested) ? liveOutputProjection(projection, requested) : projection;
   const view = liveOutputView(requested);
   const elements = draft ?? resolveLiveOverlayLayout(state?.overlayLayouts ?? [], layout);
-  const layers = view === "stage-display" ? STAGE_DISPLAY_LAYERS(roomId) : PROGRAM_LAYERS;
+  const layers = view === "stage-display" ? STAGE_DISPLAY_LAYERS(roomId, stageAside) : PROGRAM_LAYERS;
   return (
     <LiveOverlayFrame view={requested} status={status}>
       {state

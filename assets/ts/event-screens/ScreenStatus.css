@@ -99,6 +99,7 @@
   /* The closing line under a rule: what staff do, or which screen this is. */
   .pk-screen-status__line {
     display: flex;
+    align-items: center;
     justify-content: space-between;
     gap: 48px;
     margin: 0;

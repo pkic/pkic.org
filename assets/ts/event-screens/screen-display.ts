@@ -58,9 +58,10 @@ export type ScreenDisplay =
 
 /**
  * What the screen shows now. While connected the studio is always in charge.
- * While offline the last state stays, its timers counting; once the studio's
- * session has passed its scheduled end, the screen follows its copy of the
- * room's agenda (auto mode) until the studio is back.
+ * While offline the last state stays, its timers counting. A stage display
+ * whose studio session has passed its scheduled end follows its copy of the
+ * room's agenda (auto mode) until the studio is back; every other output
+ * holds its last frame.
  */
 export function screenDisplay(situation: ScreenSituation): ScreenDisplay {
   const { view, now, live } = situation;
@@ -81,9 +82,9 @@ export function screenDisplay(situation: ScreenSituation): ScreenDisplay {
     roomId: assignment.roomId,
   };
   const ended = live.state !== null && Date.parse(live.state.session.endAt) <= now;
-  if (!live.connected && ended && situation.agenda) {
+  if (assignment.output === "stage-display" && !live.connected && ended && situation.agenda) {
     const auto = screenAutoState(situation.agenda, { id: assignment.roomId, name: assignment.roomName }, now);
-    if (auto) return { ...shown, output: "stage-display", layout: null, state: auto, marker: { kind: "auto" } };
+    if (auto) return { ...shown, state: auto, marker: { kind: "auto" } };
   }
   if (live.state) return { ...shown, state: live.state, marker: screenOfflineMarker(live, now) };
   return { kind: "idle", name, roomName: assignment.roomName, marker: screenOfflineMarker(live, now) };

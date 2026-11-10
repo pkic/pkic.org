@@ -58,6 +58,24 @@ const autoState = screenAutoState(
   SCREEN_FIXTURE_NOW,
 )!;
 
+const display = screenStageRunningFixture.outputs["stage-display"];
+const longTitleState: LiveRoomState = {
+  ...screenStageRunningFixture,
+  outputs: {
+    ...screenStageRunningFixture.outputs,
+    "stage-display": {
+      ...display,
+      schedule: display.schedule && {
+        ...display.schedule,
+        rooms: display.schedule.rooms.map((room) => ({
+          ...room,
+          title: "Migrating a private CA hierarchy to post-quantum algorithms without breaking relying parties",
+        })),
+      },
+    },
+  },
+};
+
 export const eventScreenSections: PreviewSection[] = [
   {
     id: "screen-pairing",
@@ -99,6 +117,12 @@ export const eventScreenSections: PreviewSection[] = [
     title: "Screen: stage display, offline for minutes",
     note: "Past two minutes, the badge says how long the screen has heard nothing.",
     render: () => <StageDisplay state={screenStageRunningFixture} marker={{ kind: "offline-badge", minutes: 6 }} />,
+  },
+  {
+    id: "screen-stage-offline-long-title",
+    title: "Screen: stage display, offline, long title",
+    note: "The badge ends the bottom line; a long Up next title stops short of it.",
+    render: () => <StageDisplay state={longTitleState} marker={{ kind: "offline-badge", minutes: 12 }} />,
   },
   {
     id: "screen-stage-auto",
