@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rm, writeFile, stat } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
@@ -74,10 +74,12 @@ it("reuses a persisted diagram across publications without requiring a browser",
   }
 });
 
-it("extracts a complete rootless Linux renderer and reuses its versioned runtime", async () => {
+it("shares a complete rootless Linux renderer across concurrent publishers and later calls", async () => {
   const root = await mkdtemp(join(tmpdir(), "pkic-diagram-runtime-"));
   try {
-    const first = await linuxDiagramBrowserOptions(root);
+    const [first, concurrent] = await Promise.all([linuxDiagramBrowserOptions(root), linuxDiagramBrowserOptions(root)]);
+    expect(concurrent.executablePath).toBe(first.executablePath);
+    expect(await readdir(root)).toHaveLength(1);
     const binary = await readFile(first.executablePath);
     expect(binary.subarray(0, 4).toString()).toBe("\x7fELF");
     expect((await stat(first.executablePath)).mode & 0o100).not.toBe(0);

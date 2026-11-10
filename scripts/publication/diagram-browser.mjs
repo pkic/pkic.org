@@ -41,7 +41,14 @@ export async function linuxDiagramBrowserOptions(cacheDirectory = publicationCac
         '<?xml version="1.0"?><fontconfig><dir prefix="relative">fonts</dir><cachedir prefix="relative">cache</cachedir></fontconfig>',
       );
       await writeFile(join(temporary, "ready"), version);
-      await rename(temporary, cache);
+      try {
+        await rename(temporary, cache);
+      } catch (error) {
+        // Another publisher may finish the same version while this one extracts.
+        // Reuse only a complete runtime, and keep other filesystem failures visible.
+        if (error.code !== "ENOTEMPTY" && error.code !== "EEXIST") throw error;
+        if ((await readFile(join(cache, "ready"), "utf8")) !== version) throw error;
+      }
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }
