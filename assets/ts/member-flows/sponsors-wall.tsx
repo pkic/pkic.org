@@ -307,7 +307,7 @@ function main(): void {
           // A centered, wrapping group: the cluster utility, rather than the
           // five Bootstrap utilities that used to say the same thing here.
           containerClass={root.dataset.containerClass ?? "pk-cluster pk-cluster--center"}
-          linkClass={root.dataset.linkClass ?? "sponsor-link"}
+          linkClass={root.dataset.linkClass ?? "sponsor-logo-link"}
           logoClass={root.dataset.logoClass ?? "sponsor-logo"}
           label={root.dataset.label}
           labelClass={root.dataset.labelClass}

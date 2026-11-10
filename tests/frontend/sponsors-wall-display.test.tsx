@@ -112,6 +112,16 @@ describe("public sponsor wall", () => {
     expect(root.querySelector("[class*='col']")).toBeNull();
   });
 
+  it("keeps logo links off the class ad blockers hide on every site", async () => {
+    const root = mountShell("level");
+    installApi(() => json(display()));
+
+    await boot();
+
+    expect(root.querySelectorAll("a.sponsor-logo-link")).toHaveLength(3);
+    expect(root.querySelector(".sponsor-link")).toBeNull();
+  });
+
   it("gives every logo an alternative that names the sponsor and its tier", async () => {
     const root = mountShell("level");
     installApi(() => json(display()));
