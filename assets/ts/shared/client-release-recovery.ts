@@ -50,8 +50,7 @@ export function installClientReleaseRecovery(reload = () => window.location.relo
   const safe = () => {
     const route = `${location.pathname}/${location.hash.split("?", 1)[0]}`;
     // These surfaces own cameras, queued scans, live connections, or sign-in transitions.
-    const protectedRoute =
-      /\/(scanner|lead-scanner|scan|attendance|live|live-overlay|studio|verify|join)(?:\/|$)/i.test(route);
+    const protectedRoute = /\/(scanner|lead-scanner|scan|attendance|live|studio|verify|join)(?:\/|$)/i.test(route);
     const editing = document.activeElement?.matches("input, textarea, select, [contenteditable='true']");
     return (
       !edited &&

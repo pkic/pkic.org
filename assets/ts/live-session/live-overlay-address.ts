@@ -12,7 +12,7 @@ export const LIVE_OVERLAY_VIEWS: ReadonlyArray<{ id: LiveOverlayView; label: str
 ];
 
 /** The static overlay page every broadcast browser source opens. */
-export const LIVE_OVERLAY_PATH = "/live-overlay/";
+export const LIVE_OVERLAY_PATH = "/live/overlay/";
 
 const overlayAddressSchema = z.object({
   view: liveOverlayViewSchema,
@@ -24,30 +24,31 @@ const overlayAddressSchema = z.object({
 export type LiveOverlayAddress = z.infer<typeof overlayAddressSchema>;
 
 /**
- * A browser source's address. The output and the layout ride the query, so
- * an operator can read them and set up one source per scene:
- * `/live-overlay/?view=program&layout=lower-third`. The physical room and
- * the access ride the fragment, which a browser never sends to a server, so
- * they stay out of request logs and referrers. The default layout is left
- * out of the query.
+ * A browser source's address, all in the fragment: a browser never sends it
+ * to a server, so the access stays out of request logs and referrers and the
+ * page stays static. The output and layout come first, so an operator can
+ * read them and set up one source per scene:
+ * `/live/overlay/#view=program&layout=lower-third&event=…`. The default
+ * layout is left out.
  */
 export function liveOverlayAddress(origin: string, address: LiveOverlayAddress): string {
-  const query = new URLSearchParams({ view: address.view });
-  if (address.layout !== LIVE_OVERLAY_DEFAULT_LAYOUT) query.set("layout", address.layout);
-  const fragment = new URLSearchParams({ event: address.slug, room: address.roomId, access: address.token });
-  return `${origin}${LIVE_OVERLAY_PATH}?${query}#${fragment}`;
+  const fragment = new URLSearchParams({ view: address.view });
+  if (address.layout !== LIVE_OVERLAY_DEFAULT_LAYOUT) fragment.set("layout", address.layout);
+  fragment.set("event", address.slug);
+  fragment.set("room", address.roomId);
+  fragment.set("access", address.token);
+  return `${origin}${LIVE_OVERLAY_PATH}#${fragment}`;
 }
 
 /**
  * Reads an overlay page's address; null when the output, room or access is
  * missing. A missing or malformed layout name reads as the default one.
  */
-export function parseLiveOverlayAddress(location: { search: string; hash: string }): LiveOverlayAddress | null {
-  const query = new URLSearchParams(location.search);
+export function parseLiveOverlayAddress(location: { hash: string }): LiveOverlayAddress | null {
   const fragment = new URLSearchParams(location.hash.replace(/^#/, ""));
-  const layout = liveOverlayLayoutSlugSchema.safeParse(query.get("layout"));
+  const layout = liveOverlayLayoutSlugSchema.safeParse(fragment.get("layout"));
   const parsed = overlayAddressSchema.safeParse({
-    view: query.get("view"),
+    view: fragment.get("view"),
     layout: layout.success ? layout.data : LIVE_OVERLAY_DEFAULT_LAYOUT,
     slug: fragment.get("event"),
     roomId: fragment.get("room"),
