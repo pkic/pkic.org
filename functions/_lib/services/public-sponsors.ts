@@ -74,22 +74,27 @@ function publicSponsorReadModelCte(
     SELECT sponsor_key, id, name, website, logo_r2_key, sponsorship_logo_r2_key, event_tier
       FROM ranked_event_rows
      WHERE event_rank = 1
-  ), sponsor_keys AS (
-    SELECT sponsor_key FROM consortium_rows
-    UNION
-    SELECT sponsor_key FROM event_rows
   ), sponsor_rows AS (
-    SELECT keys.sponsor_key,
-           COALESCE(consortium.id, event.id) AS id,
-           COALESCE(consortium.name, event.name) AS name,
-           COALESCE(consortium.website, event.website) AS website,
-           COALESCE(consortium.logo_r2_key, event.logo_r2_key) AS logo_r2_key,
-           COALESCE(consortium.sponsorship_logo_r2_key, event.sponsorship_logo_r2_key) AS sponsorship_logo_r2_key,
-           consortium.tier,
-           event.event_tier
-      FROM sponsor_keys keys
-      LEFT JOIN consortium_rows consortium ON consortium.sponsor_key = keys.sponsor_key
-      LEFT JOIN event_rows event ON event.sponsor_key = keys.sponsor_key
+    -- One grouped pass instead of a key union joined back to both sources: D1 refuses
+    -- the extra expansions of consortium_rows and event_rows. Consortium values win.
+    SELECT sponsor_key,
+           COALESCE(MAX(CASE WHEN source = 0 THEN id END), MAX(id)) AS id,
+           COALESCE(MAX(CASE WHEN source = 0 THEN name END), MAX(name)) AS name,
+           COALESCE(MAX(CASE WHEN source = 0 THEN website END), MAX(website)) AS website,
+           COALESCE(MAX(CASE WHEN source = 0 THEN logo_r2_key END), MAX(logo_r2_key)) AS logo_r2_key,
+           COALESCE(MAX(CASE WHEN source = 0 THEN sponsorship_logo_r2_key END), MAX(sponsorship_logo_r2_key))
+             AS sponsorship_logo_r2_key,
+           MAX(tier) AS tier,
+           MAX(event_tier) AS event_tier
+      FROM (
+        SELECT 0 AS source, sponsor_key, id, name, website, logo_r2_key, sponsorship_logo_r2_key,
+               tier, NULL AS event_tier
+          FROM consortium_rows
+        UNION ALL
+        SELECT 1, sponsor_key, id, name, website, logo_r2_key, sponsorship_logo_r2_key, NULL, event_tier
+          FROM event_rows
+      ) merged
+     GROUP BY sponsor_key
   ), enriched_sponsors AS (
     SELECT rows.sponsor_key, rows.id, rows.name, rows.website, rows.logo_r2_key,
            rows.sponsorship_logo_r2_key, rows.tier, rows.event_tier,
