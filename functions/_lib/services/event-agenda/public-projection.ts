@@ -53,7 +53,8 @@ export function publicAgendaProjection(
         displayName: speaker.displayName,
         role: speaker.role,
       })),
-      promotionCopy: item.promotionCopy?.approvedAt ? item.promotionCopy : undefined,
+      // Promotion copy belongs to promotion kits; earlier approved agendas may still carry a frozen copy.
+      promotionCopy: undefined,
       history: item.history
         ? {
             ...item.history,

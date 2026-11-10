@@ -413,7 +413,7 @@ describe("session archive and promotion publication", () => {
     expect(await response.json()).toMatchObject({ error: { code: "MATERIAL_VERSION_CHANGED" } });
     expect(await pdfBindingEffects()).toEqual(authoritative);
   });
-  it("keeps approved history and copy immutable across edits, authorizes own kits and rejects stale artifact revisions", async () => {
+  it("keeps approved history immutable across edits, authorizes own kits and rejects stale artifact revisions", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email='admin@pkic.org'");
     const token = await createAdminSession(env.DB, admin!.id, "history-kit");
@@ -492,13 +492,13 @@ describe("session archive and promotion publication", () => {
     const narrative = await callApi(env, `${resource}/promotion`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ expectedRevision: 2, copy }),
+      body: JSON.stringify({ expectedApprovedAt: null, copy }),
     });
     expect(narrative.status).toBe(200);
     const published = await callApi(env, `${base}/publications`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ expectedRevision: 3 }),
+      body: JSON.stringify({ expectedRevision: 2 }),
     });
     expect(published.status).toBe(200);
     snapshot = agendaSnapshotSchema.parse(await published.json());

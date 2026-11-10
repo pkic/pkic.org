@@ -89,8 +89,8 @@ async function setup() {
       ),
     },
   });
-  agenda = await post(`${resource}/promotion`, {
-    expectedRevision: agenda.revision,
+  await post(`${resource}/promotion`, {
+    expectedApprovedAt: null,
     copy: {
       whyAttend: "Learn how canonical registration status stays distinct from referral activity.",
       takeaways: ["Understand verified registration counts", "Keep promotion activity metrics distinct"],

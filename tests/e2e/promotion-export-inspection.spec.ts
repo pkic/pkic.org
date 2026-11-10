@@ -194,10 +194,9 @@ test("every delivered long-panel promotion export has complete evidence and refu
   };
   const kitApi = `${agendaApi}/occurrences/${occurrence.id}/promotion`;
   const copied = await page.request.post(kitApi, {
-    data: promotionKitSaveSchema.parse({ expectedRevision: snapshot.revision, copy }),
+    data: promotionKitSaveSchema.parse({ expectedApprovedAt: null, copy }),
   });
   expect(copied.status(), await copied.text()).toBe(200);
-  snapshot = agendaSnapshotSchema.parse(await copied.json());
   const approved = await page.request.post(`${agendaApi}/publications`, {
     data: agendaRevisionSchema.parse({ expectedRevision: snapshot.revision }),
   });
@@ -465,7 +464,6 @@ test("every delivered long-panel promotion export has complete evidence and refu
     approvedAt: snapshot.approvedAt,
     kit,
     appearances: frozen.history?.appearances,
-    copy: frozen.promotionCopy,
     records,
     visualReview:
       "pending: inspect every full-size and phone file; automated assertions are not human visual acceptance",
