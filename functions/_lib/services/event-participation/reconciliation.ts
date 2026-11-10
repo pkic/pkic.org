@@ -1,7 +1,7 @@
 import { prepareEventBookingNotifications } from "./booking-notifications";
 import { all } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
-import { nowIso } from "../../utils/time";
+import { addHours, nowIso } from "../../utils/time";
 import { instantToDateTimeLocal } from "../../../../assets/shared/timezone";
 import { publishedSessionsSql } from "./published-schedule";
 import { preparePersonalCalendarEntries } from "./calendar-entries";
@@ -65,37 +65,54 @@ export async function reconcileEventParticipations(
       .run();
     canceled += result.meta?.changes ?? 0;
   }
-  await db.batch([...preparePersonalCalendarEntries(db, eventId), prepareEventBookingNotifications(db, eventId)]);
+  if (canceled > 0 || rows.length < limit)
+    await db.batch([...preparePersonalCalendarEntries(db, eventId), prepareEventBookingNotifications(db, eventId)]);
   return { inspected: rows.length, canceled, cursor: rows.length === limit ? rows.at(-1) : undefined };
 }
+/** Writers reconcile their own change; this sweep only catches what none of them reported, such as a deactivated account. */
+const FULL_SWEEP_INTERVAL_HOURS = 1;
+
 export async function runAgendaParticipationDueWork(db: DatabaseLike, eventLimit = 10) {
-  const events = await all<{ event_id: string; cursor_updated_at: string | null; cursor_id: string | null }>(
+  const events = await all<{
+    event_id: string;
+    cursor_updated_at: string | null;
+    cursor_id: string | null;
+    sweep_due: number;
+    has_waitlist: number;
+  }>(
     db,
-    "SELECT event_id,cursor_updated_at,cursor_id FROM agenda_participation_jobs ORDER BY COALESCE(last_checked_at,requested_at),event_id LIMIT ?",
-    [Math.min(Math.max(eventLimit, 1), 100)],
+    `SELECT job.event_id,job.cursor_updated_at,job.cursor_id,
+       (job.last_checked_at IS NULL OR job.last_checked_at<=? OR job.cursor_id IS NOT NULL) AS sweep_due,
+       EXISTS(SELECT 1 FROM event_agenda_occurrences occurrence
+         JOIN agenda_session_participations claim ON claim.occurrence_id=occurrence.id AND claim.status='waitlisted'
+         WHERE occurrence.event_id=job.event_id) AS has_waitlist
+     FROM agenda_participation_jobs job WHERE sweep_due OR has_waitlist
+     ORDER BY sweep_due DESC,COALESCE(job.last_checked_at,job.requested_at),job.event_id LIMIT ?`,
+    [addHours(nowIso(), -FULL_SWEEP_INTERVAL_HOURS), Math.min(Math.max(eventLimit, 1), 100)],
   );
   let promoted = 0,
     canceled = 0;
   for (const event of events) {
-    const reconciliation = await reconcileEventParticipations(
-      db,
-      event.event_id,
-      100,
-      event.cursor_updated_at && event.cursor_id
-        ? { updatedAt: event.cursor_updated_at, id: event.cursor_id }
-        : undefined,
-    );
-    canceled += reconciliation.canceled;
-    const promotion = await promoteSessionWaitlist(db, event.event_id);
-    promoted += promotion.promoted;
-    await db.batch([
-      ...preparePersonalCalendarEntries(db, event.event_id),
-      db
+    const reconciliation = event.sweep_due
+      ? await reconcileEventParticipations(
+          db,
+          event.event_id,
+          100,
+          event.cursor_updated_at && event.cursor_id
+            ? { updatedAt: event.cursor_updated_at, id: event.cursor_id }
+            : undefined,
+        )
+      : null;
+    canceled += reconciliation?.canceled ?? 0;
+    // Booking windows open and holds expire with no write to report them, so a queue is checked every run.
+    if (event.has_waitlist) promoted += (await promoteSessionWaitlist(db, event.event_id)).promoted;
+    if (reconciliation)
+      await db
         .prepare(
           "UPDATE agenda_participation_jobs SET last_checked_at=?,cursor_updated_at=?,cursor_id=? WHERE event_id=?",
         )
-        .bind(nowIso(), reconciliation.cursor?.updated_at ?? null, reconciliation.cursor?.id ?? null, event.event_id),
-    ]);
+        .bind(nowIso(), reconciliation.cursor?.updated_at ?? null, reconciliation.cursor?.id ?? null, event.event_id)
+        .run();
   }
   return { events: events.length, promoted, canceled };
 }

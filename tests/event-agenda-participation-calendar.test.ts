@@ -34,6 +34,7 @@ import { promoteSessionWaitlist } from "../functions/_lib/services/event-partici
 import {
   prepareParticipationReconciliation,
   reconcileEventParticipations,
+  runAgendaParticipationDueWork,
 } from "../functions/_lib/services/event-participation/reconciliation";
 import { reviewSessionParticipation } from "../functions/_lib/services/event-participation/approval";
 import {
@@ -1363,6 +1364,106 @@ describe("Participation capacity and private calendar lifecycle", () => {
         .bind(secondUser)
         .first("status"),
     ).toBe("canceled");
+  });
+  it("emails the attendee in the same step that revokes their invited seat", async () => {
+    const snapshot = await getAgenda(env.DB, eventId, "calendar-test");
+    snapshot.occurrences[0]!.accessPolicy = "invitation";
+    await env.DB.prepare("UPDATE event_agenda_publications SET snapshot_json=? WHERE event_id=?")
+      .bind(JSON.stringify(snapshot), eventId)
+      .run();
+    await setSessionInvitation(env.DB, eventId, occurrenceId, admin, {
+      userId: secondUser,
+      action: "invite",
+      attendanceMode: "physical",
+      reasonCode: "organizer_invitation",
+    });
+    await setSessionParticipation(env.DB, eventId, occurrenceId, secondUser, {
+      action: "reserve",
+      attendanceMode: "physical",
+    });
+    const bookingEmails = () =>
+      env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM email_outbox WHERE template_key='agenda_session_booking' AND recipient_user_id=?",
+      )
+        .bind(secondUser)
+        .first<number>("count");
+    const before = (await bookingEmails()) ?? 0;
+
+    await setSessionInvitation(env.DB, eventId, occurrenceId, admin, {
+      userId: secondUser,
+      action: "revoke",
+      attendanceMode: "physical",
+      reasonCode: "organizer_invitation",
+    });
+
+    expect(await bookingEmails()).toBe(before + 1);
+  });
+  describe("scheduled participation work", () => {
+    const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3600000).toISOString();
+    const seedJob = (lastCheckedAt: string | null) =>
+      env.DB.prepare(
+        "INSERT INTO agenda_participation_jobs(event_id,requested_at,last_checked_at) VALUES(?,?,?) ON CONFLICT(event_id) DO UPDATE SET requested_at=excluded.requested_at,last_checked_at=excluded.last_checked_at,cursor_id=NULL,cursor_updated_at=NULL",
+      )
+        .bind(eventId, new Date().toISOString(), lastCheckedAt)
+        .run();
+    const calendarRewrites = (profile: ReturnType<typeof profileD1Flow>) =>
+      profile.summary().queries.filter((query) => query.sql.includes("INSERT INTO agenda_calendar_entries")).length;
+    const statusOf = (userId: string) =>
+      env.DB.prepare("SELECT status FROM agenda_session_participations WHERE user_id=?").bind(userId).first("status");
+
+    it("only reads the job list for an event swept within the hour, however recent its last request", async () => {
+      await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, {
+        action: "reserve",
+        attendanceMode: "physical",
+      });
+      await seedJob(hoursAgo(0.5));
+      const profile = profileD1Flow(env.DB);
+
+      await expect(runAgendaParticipationDueWork(profile.db)).resolves.toEqual({ events: 0, promoted: 0, canceled: 0 });
+
+      expect(profile.summary().queries.map((query) => query.sql)).toHaveLength(1);
+    });
+
+    it("still promotes a waitlisted person when the event was swept within the hour", async () => {
+      await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, {
+        action: "reserve",
+        attendanceMode: "physical",
+      });
+      await setSessionParticipation(env.DB, eventId, occurrenceId, secondUser, {
+        action: "reserve",
+        attendanceMode: "physical",
+      });
+      expect(await statusOf(secondUser)).toBe("waitlisted");
+      await env.DB.prepare("UPDATE event_agenda_occurrences SET capacity=2 WHERE id=?").bind(occurrenceId).run();
+      await publish();
+      await seedJob(hoursAgo(0.5));
+
+      await expect(runAgendaParticipationDueWork(env.DB)).resolves.toMatchObject({ promoted: 1, canceled: 0 });
+
+      expect(await statusOf(secondUser)).toBe("reserved");
+    });
+
+    it("sweeps an event not checked for an hour with a single calendar rewrite", async () => {
+      await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, {
+        action: "reserve",
+        attendanceMode: "physical",
+      });
+      await env.DB.prepare("UPDATE users SET active=0 WHERE id=?").bind(firstUser).run();
+      await seedJob(hoursAgo(2));
+      const profile = profileD1Flow(env.DB);
+
+      await expect(runAgendaParticipationDueWork(profile.db)).resolves.toMatchObject({ events: 1, canceled: 1 });
+
+      expect(await statusOf(firstUser)).toBe("canceled");
+      expect(calendarRewrites(profile)).toBe(1);
+      expect(
+        Date.parse(
+          (await env.DB.prepare("SELECT last_checked_at FROM agenda_participation_jobs WHERE event_id=?")
+            .bind(eventId)
+            .first("last_checked_at")) as string,
+        ),
+      ).toBeGreaterThan(Date.parse(hoursAgo(0.1)));
+    });
   });
   it("refuses a closed booking window without losing an existing physical reservation", async () => {
     await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, {

@@ -9,6 +9,7 @@ import {
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
+import { prepareEventBookingNotifications } from "./booking-notifications";
 import { preparePersonalCalendarEntries } from "./calendar-entries";
 import { prepareParticipationWork } from "./reconciliation";
 import { publishedSessionsSql } from "./published-schedule";
@@ -188,6 +189,7 @@ export async function setSessionInvitation(
         .bind(now, eventId, occurrenceId, input.userId),
     );
   statements.push(...preparePersonalCalendarEntries(db, eventId, input.userId), prepareParticipationWork(db, eventId));
+  if (input.action !== "invite") statements.push(prepareEventBookingNotifications(db, eventId, input.userId));
   let result;
   try {
     [result] = await db.batch(statements);
