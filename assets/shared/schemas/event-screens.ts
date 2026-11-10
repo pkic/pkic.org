@@ -5,6 +5,7 @@ import { databaseIdSchema } from "./identifiers";
 import { timeZoneSchema } from "./event-series";
 import { SCREEN_POLICY } from "../event-screen-policy";
 import { liveOverlayLayoutSlugSchema } from "./live-overlay-layout";
+import { liveStreamSchema } from "./event-live-stream";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 /**
@@ -214,6 +215,12 @@ export const screenOwnViewSchema = z
     serverNow: utcInstantSchema,
     /** Its room's published agenda; null while unassigned or before the event's agenda is published. */
     agenda: screenAgendaSchema.nullable(),
+    /**
+     * For a livestream assignment, its room's stream on today's event day in
+     * the event's zone (that day's replacement, else the usual stream); null
+     * for any other output or when the room streams nothing today.
+     */
+    livestream: liveStreamSchema.nullable(),
     /** Present only while the screen is assigned. */
     overlay: z
       .object({ token: z.string().min(1), expiresAt: utcInstantSchema })

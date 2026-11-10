@@ -32,6 +32,7 @@ const view = (assignment: ScreenOwnView["screen"]["assignment"]): ScreenOwnView 
     screen: { id: "K7M2QA", name: "Stage left", assignment },
     serverNow: "2026-12-01T09:00:00.000Z",
     agenda: null,
+    livestream: null,
     overlay: assignment ? { token: "signed", expiresAt: "2026-12-01T09:15:00.000Z" } : null,
   });
 const assigned = view({

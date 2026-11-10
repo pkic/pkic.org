@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SCREEN_POLICY, SCREEN_SESSION_MAX_AGE_SECONDS } from "../assets/shared/event-screen-policy";
 import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
 import { screenConnection, screenConnectionDisplay } from "../assets/shared/event-screen-connection";
@@ -13,6 +13,7 @@ import {
   screenSessionPollResponseSchema,
   type ScreenOwnView,
 } from "../assets/shared/schemas/event-screens";
+import { dateTimeLocalToIso, instantToCalendarDate } from "../assets/shared/timezone";
 import { verifyLiveOverlayToken } from "../functions/_lib/auth/live-session-overlay-token";
 import { signJwt } from "../functions/_lib/utils/jwt";
 import type { Env } from "../functions/_lib/types";
@@ -364,6 +365,49 @@ describe("a paired screen", () => {
     expect(
       (screenReadResponseSchema.parse(await (await readAsScreen(cookie)).json()) as ScreenOwnView).agenda,
     ).toBeNull();
+  });
+
+  it("receives its own room's stream for the event's day, only while assigned the livestream", async () => {
+    const zone = "Europe/Amsterdam";
+    const firstDay = instantToCalendarDate(new Date(Date.now() + 2 * 86_400_000), zone);
+    const secondDay = instantToCalendarDate(new Date(Date.now() + 3 * 86_400_000), zone);
+    const sideRoom = crypto.randomUUID();
+    await env.DB.prepare("INSERT INTO event_agenda_rooms(id,event_id,name) VALUES (?,?,'Side room')")
+      .bind(sideRoom, EVENT.id)
+      .run();
+    const stream = (eventId: string, roomId: string, dayDate: string | null, videoId: string) =>
+      env.DB.prepare(
+        "INSERT INTO event_agenda_room_streams(id,event_id,room_id,day_date,provider,stream_ref,updated_by,updated_at) VALUES(?,?,?,?,'youtube',?,?,?)",
+      )
+        .bind(crypto.randomUUID(), eventId, roomId, dayDate, videoId, users.manager, new Date().toISOString())
+        .run();
+    await stream(EVENT.id, EVENT.roomId, null, "usualStream");
+    await stream(EVENT.id, EVENT.roomId, secondDay, "secondDayVd");
+    await stream(EVENT.id, sideRoom, null, "sideRoomVid");
+    await stream(OTHER_EVENT.id, OTHER_EVENT.roomId, null, "foreignVide");
+
+    const { cookie } = await pair({ roomId: EVENT.roomId, output: "livestream", layout: null });
+    const readAt = async (localTime: string) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        vi.setSystemTime(new Date(dateTimeLocalToIso(localTime, zone)));
+        return (screenReadResponseSchema.parse(await (await readAsScreen(cookie)).json()) as ScreenOwnView).livestream;
+      } finally {
+        vi.useRealTimers();
+      }
+    };
+    expect(await readAt(`${firstDay}T23:30`)).toEqual({ provider: "youtube", videoId: "usualStream" });
+    // Half past midnight in the event's zone is still the first day in UTC; the event's day decides.
+    expect(await readAt(`${secondDay}T00:30`)).toEqual({ provider: "youtube", videoId: "secondDayVd" });
+
+    const reassigned = await callApi(
+      testEnv,
+      `/api/v1/screens/${SCREEN}`,
+      { method: "PATCH", headers: staff("manager"), body: JSON.stringify({ expectedRevision: 0, assignment }) },
+      { maxRoundTrips: 2 },
+    );
+    expect(reassigned.status, await reassigned.clone().text()).toBe(200);
+    expect(await readAt(`${secondDay}T00:30`)).toBeNull();
   });
 
   it("renews its sign-in only once the last renewal is a day old", async () => {

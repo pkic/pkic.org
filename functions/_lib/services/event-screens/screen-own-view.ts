@@ -5,15 +5,18 @@ import {
   screenOwnViewSchema,
   type ScreenOwnView,
 } from "../../../../assets/shared/schemas/event-screens";
+import { locationStreamOn, type LiveStream } from "../../../../assets/shared/schemas/event-live-stream";
 import { timeZoneSchema } from "../../../../assets/shared/schemas/event-series";
+import { instantToCalendarDate } from "../../../../assets/shared/timezone";
 import { signLiveOverlayToken } from "../../auth/live-session-overlay-token";
 import type { ScreenSessionClaims } from "../../auth/screen-session";
 import { assertSessionActive } from "../../auth/session-engine";
-import { batchFirst } from "../../db/pagination";
+import { batchFirst, batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { addHours, addMinutes, nowIso } from "../../utils/time";
 import { parseJsonSafe } from "../../utils/json";
+import { locationStreams, type LiveStreamRow } from "../event-agenda/location-live-streams";
 
 const SCREEN_REFUSALS = {
   invalid: SCREEN_SESSION_ERROR_CODES.missing,
@@ -78,6 +81,24 @@ function screenAgenda(row: AgendaRow | null, from: string, to: string): ScreenOw
   return { revision: row.revision, timeZone: zone.data, from, to, sessions };
 }
 
+/**
+ * The stream configuration of the screen's own room, read only while it is
+ * assigned the livestream. A room holds its usual stream and at most one
+ * replacement per event day, so the rows stay bounded.
+ */
+const LIVESTREAM_SQL = `SELECT stream.day_date,stream.provider,stream.stream_ref
+  FROM screen_sessions session JOIN screens screen ON screen.id=session.screen_id
+  JOIN event_agenda_room_streams stream ON stream.room_id=screen.room_id AND stream.event_id=screen.event_id
+ WHERE session.id=? AND session.screen_id=? AND screen.output='livestream'
+ ORDER BY stream.day_date IS NOT NULL,stream.day_date`;
+
+/** The room's stream on the event day `now` falls on in the event's zone. */
+function screenLivestream(rows: readonly LiveStreamRow[], now: string, timeZone: string | null): LiveStream | null {
+  const zone = timeZoneSchema.safeParse(timeZone);
+  if (!zone.success || rows.length === 0) return null;
+  return locationStreamOn(locationStreams(rows), instantToCalendarDate(now, zone.data));
+}
+
 interface OwnViewRow {
   session_activated_at: string | null;
   session_revoked_at: string | null;
@@ -86,6 +107,7 @@ interface OwnViewRow {
   name: string;
   event_id: string | null;
   event_slug: string | null;
+  event_time_zone: string | null;
   room_id: string | null;
   room_name: string | null;
   output: string | null;
@@ -98,7 +120,8 @@ interface OwnViewRow {
  * last renewal is a day old, and its last-seen time moves at most every few
  * minutes; both writes only touch a live session. While assigned, it gets a
  * short-lived overlay access for its room, attributed to who assigned it, and
- * its room's published agenda around now, in the same batch.
+ * its room's published agenda around now and, for the livestream, the
+ * room's stream today, in the same batch.
  */
 export async function readScreenOwnView(
   db: DatabaseLike,
@@ -113,7 +136,7 @@ export async function readScreenOwnView(
   const live = "id=? AND screen_id=? AND activated_at IS NOT NULL AND revoked_at IS NULL AND expires_at>?";
   const agendaFrom = addHours(now, -SCREEN_POLICY.agendaHoursBefore);
   const agendaTo = addHours(now, SCREEN_POLICY.agendaHoursAfter);
-  const [, , read, agendaRead] = await db.batch([
+  const [, , read, agendaRead, livestreamRead] = await db.batch([
     db
       .prepare(`UPDATE screen_sessions SET expires_at=? WHERE ${live} AND expires_at<?`)
       .bind(renewedUntil, claims.sid, claims.sub, now, renewBefore),
@@ -124,6 +147,7 @@ export async function readScreenOwnView(
       .prepare(
         `SELECT session.activated_at AS session_activated_at,session.revoked_at AS session_revoked_at,
                 session.expires_at AS session_expires_at,screen.id,screen.name,screen.event_id,event.slug AS event_slug,
+                event.timezone AS event_time_zone,
                 screen.room_id,room.name AS room_name,screen.output,screen.layout,screen.assigned_by
            FROM screen_sessions session JOIN screens screen ON screen.id=session.screen_id
            LEFT JOIN events event ON event.id=screen.event_id
@@ -134,6 +158,7 @@ export async function readScreenOwnView(
     db
       .prepare(AGENDA_SQL)
       .bind(agendaRevision, agendaTo, agendaFrom, SCREEN_POLICY.agendaMaxSessions, claims.sid, claims.sub),
+    db.prepare(LIVESTREAM_SQL).bind(claims.sid, claims.sub),
   ]);
   const row = batchFirst<OwnViewRow>(read);
   const session = assertSessionActive(
@@ -167,6 +192,10 @@ export async function readScreenOwnView(
     },
     serverNow: now,
     agenda: assigned ? screenAgenda(batchFirst<AgendaRow>(agendaRead), agendaFrom, agendaTo) : null,
+    livestream:
+      assigned && screen.output === "livestream"
+        ? screenLivestream(batchRows<LiveStreamRow>(livestreamRead), now, screen.event_time_zone)
+        : null,
     overlay: assigned
       ? {
           token: await signLiveOverlayToken(secret, {

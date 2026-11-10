@@ -44,6 +44,7 @@ describe("the screen runtime", () => {
       screen: { id: SCREEN, name: "Foyer, by registration", assignment },
       serverNow: new Date().toISOString(),
       agenda: null,
+      livestream: null,
       overlay: null,
     });
   function fakeApi() {
