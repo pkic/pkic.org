@@ -1,13 +1,13 @@
 import { ownedIdentityLifecycleSql } from "../../services/identities/selection";
-import { activeUserCapacityDefinitions } from "../../services/membership/capacity-query";
+import { activeUserCapacityPairPredicate } from "../../services/membership/capacity-query";
 
 /** Aliases are trusted source names, never request input. Identity eligibility shares the canonical capacity query. */
 export function oauthAuthorizationIdentitySql(alias: string): string {
   return `(${alias}.identity_id IS NULL OR EXISTS(SELECT 1 FROM identities frozen_identity
     WHERE frozen_identity.id=${alias}.identity_id AND frozen_identity.user_id=${alias}.user_id
       AND ${ownedIdentityLifecycleSql("frozen_identity", null)}))
-    AND (${alias}.member_id IS NULL OR EXISTS(WITH ${activeUserCapacityDefinitions(`SELECT ${alias}.user_id`)}
-    SELECT 1 FROM active_user_capacities WHERE identity_id=${alias}.identity_id AND member_id=${alias}.member_id))`;
+    AND (${alias}.member_id IS NULL
+      OR ${activeUserCapacityPairPredicate(`${alias}.user_id`, `${alias}.identity_id`, `${alias}.member_id`)})`;
 }
 export function activeOauthAuthorizationSql(alias: string): string {
   return `${alias}.status='active' AND ${alias}.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
