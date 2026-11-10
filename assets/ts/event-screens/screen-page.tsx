@@ -1,26 +1,51 @@
 /**
  * The venue screen page's entry: reads the screen ID from the fragment and
- * shows the screen's own status. Pairing, assignment and the outputs it
- * shows once assigned build on this page.
+ * runs the screen on a clock corrected to the server's. A render it cannot
+ * recover from hands the device back to its local status page.
  */
-import { render } from "preact";
+import { Component, render, type ComponentChildren } from "preact";
 import "../../design/fonts.css";
+import "../../design/fonts-mono.css";
 import "../../design/tokens.generated.css";
 import "../../design/tokens.event.generated.css";
 import "../../design/utilities.css";
+import { LiveClockContext } from "../live-session/useLiveCountdown";
 import { parseScreenPageAddress } from "./screen-address";
-import { ScreenPairing } from "./ScreenStatus";
+import { createScreenClock } from "./screen-clock";
+import { handOffScreen } from "./screen-handoff";
+import { ScreenApp } from "./ScreenApp";
 import "./screen-page.css";
+
+class ScreenRecovery extends Component<{ children: ComponentChildren }> {
+  componentDidCatch() {
+    handOffScreen();
+  }
+  render() {
+    return this.props.children;
+  }
+}
+
+const clock = createScreenClock();
 
 function mount(): void {
   const host = document.getElementById("live-screen");
   if (!host) return;
   const address = parseScreenPageAddress(window.location);
-  // Without a screen ID there is nothing to pair; the local status page opens this page with one.
+  // Without a screen ID there is nothing to pair; the device's status page opens this page with one.
   render(
     address ? (
       <main data-live-screen>
-        <ScreenPairing screenId={address.screenId} pairing={null} />
+        <ScreenRecovery>
+          <LiveClockContext.Provider value={clock.now}>
+            <ScreenApp
+              key={address.screenId}
+              screenId={address.screenId}
+              storage={window.localStorage}
+              clock={clock}
+              onHandoff={handOffScreen}
+            />
+          </LiveClockContext.Provider>
+        </ScreenRecovery>
       </main>
     ) : null,
     host,

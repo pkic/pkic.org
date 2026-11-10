@@ -1,15 +1,62 @@
 /**
  * Event screen specimens: each view a venue screen shows, on its 1920 × 1080
- * frame scaled to the gallery column. Screenshot one full size by opening
- * it alone (`?only=<id>`) in a 1920 × 1080 window.
+ * frame scaled to the gallery column, drawn through the screen's own display
+ * code on a fixed clock. Screenshot one full size by opening it alone
+ * (`?only=<id>`) in a 1920 × 1080 window.
  */
+import type { ComponentChildren } from "preact";
 import type { PreviewSection } from "./PreviewShell";
 import { ScreenPairing, ScreenWaiting } from "../../event-screens/ScreenStatus";
-import { ScreenOfflineDot } from "../../event-screens/ScreenOfflineDot";
+import { ScreenView } from "../../event-screens/ScreenApp";
+import { screenAutoState } from "../../event-screens/screen-auto-mode";
+import type { ScreenMarker } from "../../event-screens/screen-display";
 import { ScreenLivestream, ScreenLivestreamReconnecting } from "../../event-screens/ScreenLivestream";
-import { LiveOverlayPresentation } from "../../live-session/LiveOverlayPresentation";
-import { SCREEN_FIXTURE, screenStageReadyFixture, screenStageRunningFixture } from "./event-screens-fixtures";
+import { LiveClockContext } from "../../live-session/useLiveCountdown";
+import type { LiveRoomState } from "../../live-session/live-room-state";
+import {
+  SCREEN_FIXTURE,
+  SCREEN_FIXTURE_NOW,
+  screenAgendaFixture,
+  screenStageReadyFixture,
+  screenStageRunningFixture,
+} from "./event-screens-fixtures";
+import "../../../design/fonts-mono.css";
 import "./event-screens-preview.css";
+
+const fixedClock = () => SCREEN_FIXTURE_NOW;
+
+function Screen({ children }: { children: ComponentChildren }) {
+  return (
+    <LiveClockContext.Provider value={fixedClock}>
+      <div class="pk-preview__screen">{children}</div>
+    </LiveClockContext.Provider>
+  );
+}
+
+function StageDisplay({ state, marker }: { state: LiveRoomState; marker: ScreenMarker }) {
+  return (
+    <Screen>
+      <ScreenView
+        screenId={SCREEN_FIXTURE.screenId}
+        now={SCREEN_FIXTURE_NOW}
+        display={{
+          kind: "output",
+          output: "stage-display",
+          layout: null,
+          roomId: SCREEN_FIXTURE.roomId,
+          state,
+          marker,
+        }}
+      />
+    </Screen>
+  );
+}
+
+const autoState = screenAutoState(
+  screenAgendaFixture,
+  { id: SCREEN_FIXTURE.roomId, name: SCREEN_FIXTURE.roomName },
+  SCREEN_FIXTURE_NOW,
+)!;
 
 export const eventScreenSections: PreviewSection[] = [
   {
@@ -17,12 +64,12 @@ export const eventScreenSections: PreviewSection[] = [
     title: "Screen: pairing",
     note: "An unpaired screen, read from across the room by the staff member who pairs it.",
     render: () => (
-      <div class="pk-preview__screen">
+      <Screen>
         <ScreenPairing
           screenId={SCREEN_FIXTURE.screenId}
-          pairing={{ code: SCREEN_FIXTURE.pairingCode, expiresIn: "9:41" }}
+          pairing={{ code: SCREEN_FIXTURE.pairingCode, expiresIn: "09:41" }}
         />
-      </div>
+      </Screen>
     ),
   },
   {
@@ -30,51 +77,51 @@ export const eventScreenSections: PreviewSection[] = [
     title: "Screen: waiting",
     note: "Paired and named, with no assignment yet.",
     render: () => (
-      <div class="pk-preview__screen">
+      <Screen>
         <ScreenWaiting screenId={SCREEN_FIXTURE.screenId} name={SCREEN_FIXTURE.name} />
-      </div>
+      </Screen>
     ),
   },
   {
     id: "screen-stage-display",
-    title: "Screen: stage display, offline",
-    note: "Connection lost: the screen keeps the last state with its timers counting, and the dot says it is offline.",
-    render: () => (
-      <div class="pk-preview__screen">
-        <LiveOverlayPresentation
-          view="stage-display"
-          projection={screenStageRunningFixture}
-          roomId={SCREEN_FIXTURE.roomId}
-        >
-          <ScreenOfflineDot />
-        </LiveOverlayPresentation>
-      </div>
-    ),
+    title: "Screen: stage display",
+    note: "Connected: the studio is in charge.",
+    render: () => <StageDisplay state={screenStageRunningFixture} marker={null} />,
+  },
+  {
+    id: "screen-stage-offline-dot",
+    title: "Screen: stage display, just offline",
+    note: "Under two minutes without word from the server: the last state, its timers counting, and a dot.",
+    render: () => <StageDisplay state={screenStageRunningFixture} marker={{ kind: "offline-dot" }} />,
+  },
+  {
+    id: "screen-stage-offline-badge",
+    title: "Screen: stage display, offline for minutes",
+    note: "Past two minutes, the badge says how long the screen has heard nothing.",
+    render: () => <StageDisplay state={screenStageRunningFixture} marker={{ kind: "offline-badge", minutes: 6 }} />,
+  },
+  {
+    id: "screen-stage-auto",
+    title: "Screen: auto mode",
+    note: "Still offline after the studio's session ended: the screen follows its copy of the room's agenda.",
+    render: () => <StageDisplay state={autoState} marker={{ kind: "auto" }} />,
   },
   {
     id: "screen-stage-ready",
     title: "Screen: stage display, ready",
     note: "Between sessions the studio selects what comes next; the stage display is ready for the next speaker.",
-    render: () => (
-      <div class="pk-preview__screen">
-        <LiveOverlayPresentation
-          view="stage-display"
-          projection={screenStageReadyFixture}
-          roomId={SCREEN_FIXTURE.roomId}
-        />
-      </div>
-    ),
+    render: () => <StageDisplay state={screenStageReadyFixture} marker={null} />,
   },
   {
     id: "screen-livestream",
     title: "Screen: livestream",
     note: "The room's livestream edge to edge at all times, breaks included; the box stands in for the player.",
     render: () => (
-      <div class="pk-preview__screen">
+      <Screen>
         <ScreenLivestream>
           <div class="pk-preview__screen-player">Livestream player</div>
         </ScreenLivestream>
-      </div>
+      </Screen>
     ),
   },
   {
@@ -82,9 +129,9 @@ export const eventScreenSections: PreviewSection[] = [
     title: "Screen: livestream reconnecting",
     note: "Only while the player has failed or the stream ended; the screen keeps retrying.",
     render: () => (
-      <div class="pk-preview__screen">
+      <Screen>
         <ScreenLivestreamReconnecting roomName={SCREEN_FIXTURE.roomName} />
-      </div>
+      </Screen>
     ),
   },
 ];

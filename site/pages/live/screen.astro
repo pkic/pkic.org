@@ -1,7 +1,8 @@
 ---
 /*
  * The page every venue screen opens. The screen ID rides the fragment, which
- * never reaches a server, so the page stays static.
+ * never reaches a server, so the page stays static. The watchdog is its own
+ * bundle so it still runs when the page's code cannot load.
  */
 ---
 <!doctype html>
@@ -15,6 +16,7 @@
   </head>
   <body>
     <div id="live-screen"></div>
+    <script>import "../../../assets/ts/event-screens/screen-watchdog";</script>
     <script>import "../../../assets/ts/event-screens/screen-page";</script>
   </body>
 </html>

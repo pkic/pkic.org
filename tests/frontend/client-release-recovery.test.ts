@@ -275,12 +275,15 @@ it("does not enable automatic refresh without fingerprinted scripts", () => {
   install();
   expect(document.documentElement.hasAttribute("data-client-release-recovery")).toBe(false);
 });
-it.each(["/events/conference/live/", "/live/overlay/"])("never refreshes a live output at %s", async (path) => {
-  history.replaceState(null, "", path);
-  install();
-  await vi.advanceTimersByTimeAsync(300_000);
-  expect(fetchMock).not.toHaveBeenCalled();
-});
+it.each(["/events/conference/live/", "/live/overlay/", "/live/screen/"])(
+  "never refreshes a live output at %s",
+  async (path) => {
+    history.replaceState(null, "", path);
+    install();
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(fetchMock).not.toHaveBeenCalled();
+  },
+);
 it("keeps embedded payment or media frames running", async () => {
   history.replaceState(null, "", "/donate/");
   document.body.innerHTML = '<iframe title="Payment"></iframe>';

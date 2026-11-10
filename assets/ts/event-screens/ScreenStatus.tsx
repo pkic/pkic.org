@@ -1,13 +1,23 @@
 import type { ComponentChildren } from "preact";
 import type { ScreenId } from "../../shared/schemas/event-screens";
 import { LiveOverlayFrame } from "../live-session/LiveOverlayFrame";
+import type { ScreenMarker as Marker } from "./screen-display";
+import { ScreenMarker } from "./ScreenMarker";
 import "./ScreenStatus.css";
 
 /**
  * A screen's own page while it shows no output: the consortium's mark, not an
  * event's, since an unpaired or unassigned screen belongs to no event yet.
  */
-function ScreenStatusFrame({ view, children }: { view: string; children: ComponentChildren }) {
+function ScreenStatusFrame({
+  view,
+  marker = null,
+  children,
+}: {
+  view: string;
+  marker?: Marker;
+  children: ComponentChildren;
+}) {
   return (
     <LiveOverlayFrame view={view}>
       <div class="pk-screen-status">
@@ -16,6 +26,7 @@ function ScreenStatusFrame({ view, children }: { view: string; children: Compone
         </header>
         <div class="pk-screen-status__main">{children}</div>
       </div>
+      <ScreenMarker marker={marker} />
     </LiveOverlayFrame>
   );
 }
@@ -62,13 +73,26 @@ export function ScreenPairing({
   );
 }
 
-/** A paired screen with nothing to show yet: where it stands, so staff can find it in the studio. */
-export function ScreenWaiting({ screenId, name }: { screenId: ScreenId; name: string }) {
+/**
+ * A paired screen with nothing to show: where it stands, so staff can find it
+ * in the studio, and why it shows nothing.
+ */
+export function ScreenWaiting({
+  screenId,
+  name,
+  status = "Not assigned yet",
+  marker = null,
+}: {
+  screenId: ScreenId;
+  name: string;
+  status?: string;
+  marker?: Marker;
+}) {
   return (
-    <ScreenStatusFrame view="screen-waiting">
+    <ScreenStatusFrame view="screen-waiting" marker={marker}>
       <div class="pk-screen-status__waiting">
         <p class="pk-screen-status__name">{name}</p>
-        <p class="pk-screen-status__muted">Not assigned yet</p>
+        <p class="pk-screen-status__muted">{status}</p>
       </div>
       <p class="pk-screen-status__line pk-screen-status__muted">
         <span>

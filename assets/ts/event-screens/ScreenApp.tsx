@@ -1,0 +1,190 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import type { ScreenId } from "../../shared/schemas/event-screens";
+import { formatLiveTimer } from "../../shared/live-timer-policy";
+import { LiveOverlayPresentation } from "../live-session/LiveOverlayPresentation";
+import type { LiveRoomState } from "../live-session/live-room-state";
+import { useLiveTimerNow } from "../live-session/useLiveCountdown";
+import type { ScreenApi } from "./screen-api";
+import { cachedLiveSnapshot, cachedScreenView, liveStateFromCache, writeScreenCache } from "./screen-cache";
+import type { ScreenClock } from "./screen-clock";
+import { screenDisplay, type ScreenDisplay, type ScreenLink } from "./screen-display";
+import { screenHandoffDue, SCREEN_READY_ATTRIBUTE } from "./screen-handoff";
+import { ScreenLiveFeed, type ScreenLiveReport } from "./ScreenLiveFeed";
+import { ScreenMarker } from "./ScreenMarker";
+import { ScreenPairing, ScreenWaiting } from "./ScreenStatus";
+import { useScreenRuntime } from "./useScreenRuntime";
+
+/** The live picture is copied to the device at most this often; the read's copy is written at once. */
+const LIVE_CACHE_EVERY_MS = 5_000;
+
+type HeldLive = ScreenLink & { state: LiveRoomState | null };
+
+/** The display, drawn: status pages, or the room's output with the screen's status in its corner. */
+export function ScreenView({ screenId, display, now }: { screenId: ScreenId; display: ScreenDisplay; now: number }) {
+  switch (display.kind) {
+    case "pairing":
+      return (
+        <ScreenPairing
+          screenId={screenId}
+          pairing={
+            display.pairing && {
+              code: display.pairing.code,
+              expiresIn: formatLiveTimer(Math.max(0, Date.parse(display.pairing.expiresAt) - now), "mm:ss"),
+            }
+          }
+        />
+      );
+    case "waiting":
+      return <ScreenWaiting screenId={screenId} name={display.name} marker={display.marker} />;
+    case "livestream":
+      return (
+        <ScreenWaiting
+          screenId={screenId}
+          name={display.name}
+          status={`${display.roomName} · Livestream`}
+          marker={display.marker}
+        />
+      );
+    case "idle":
+      return (
+        <ScreenWaiting
+          screenId={screenId}
+          name={display.name}
+          status={`${display.roomName} · Waiting for the studio`}
+          marker={display.marker}
+        />
+      );
+    case "output":
+      return (
+        <LiveOverlayPresentation
+          view={display.output}
+          layout={display.layout}
+          projection={display.state}
+          status={display.marker ? "offline" : "live"}
+          roomId={display.roomId}
+          broadcast
+        >
+          <ScreenMarker marker={display.marker} />
+        </LiveOverlayPresentation>
+      );
+  }
+}
+
+/**
+ * A venue screen: pairs, then shows what the studio assigned it, holding its
+ * last good state through any outage and handing the device back to its
+ * local status page only when it has nothing good to show.
+ */
+export function ScreenApp({
+  screenId,
+  storage,
+  clock,
+  api,
+  onHandoff,
+}: {
+  screenId: ScreenId;
+  storage: Storage;
+  clock: ScreenClock;
+  api?: ScreenApi;
+  onHandoff: () => void;
+}) {
+  const runtime = useScreenRuntime({ screenId, storage, clock, api });
+  const { view, agenda, overlayToken, refresh } = runtime;
+  const [live, setLive] = useState<HeldLive>(() => ({
+    connected: false,
+    lastUpdateAt: runtime.cached ? Date.parse(runtime.cached.savedAt) : null,
+    state: liveStateFromCache(runtime.cached?.live ?? null),
+  }));
+  const now = useLiveTimerNow(true);
+  const assignment = view?.screen.assignment ?? null;
+  const feedKey = assignment ? `${assignment.eventSlug}:${assignment.roomId}:${assignment.output}` : null;
+  const lastFeed = useRef(feedKey);
+  useEffect(() => {
+    // Another room or output: the old picture is not this assignment's.
+    if (lastFeed.current !== null && lastFeed.current !== feedKey)
+      setLive((held) => ({ ...held, connected: false, state: null }));
+    lastFeed.current = feedKey;
+  }, [feedKey]);
+
+  const onReport = useCallback(
+    (report: ScreenLiveReport) =>
+      setLive((held) => ({
+        connected: report.connected,
+        lastUpdateAt: held.lastUpdateAt,
+        state: report.state === undefined ? held.state : report.state,
+      })),
+    [],
+  );
+  const persistence = useMemo(
+    () => ({
+      onActivity: () => setLive((held) => ({ ...held, lastUpdateAt: clock.now() })),
+      // Expired access or a changed assignment: read again, which brings fresh access.
+      onRefusal: (code: string) => {
+        if (code !== "LIVE_PROGRAM_SELECTION_CHANGED") void refresh();
+      },
+    }),
+    [clock, refresh],
+  );
+
+  const display = screenDisplay({
+    now,
+    pairingRequired: runtime.pairingRequired,
+    pairing: runtime.pairing,
+    view,
+    agenda,
+    read: runtime.read,
+    live,
+  });
+
+  // The read's copy at once, the live picture at most every few seconds, whatever the pace of its updates.
+  const latest = useRef({ view, agenda, state: live.state });
+  latest.current = { view, agenda, state: live.state };
+  const lastWrite = useRef(0);
+  const pendingWrite = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const writeCopy = useCallback(() => {
+    pendingWrite.current = null;
+    lastWrite.current = Date.now();
+    const { view: kept, agenda: keptAgenda, state } = latest.current;
+    if (!kept) return;
+    writeScreenCache(storage, {
+      version: 1,
+      savedAt: new Date(clock.now()).toISOString(),
+      view: cachedScreenView(kept),
+      agenda: keptAgenda,
+      live: state ? cachedLiveSnapshot(state) : null,
+    });
+  }, [storage, clock]);
+  useEffect(() => {
+    if (view) writeCopy();
+  }, [view, agenda, writeCopy]);
+  useEffect(() => {
+    if (!live.state || pendingWrite.current) return;
+    pendingWrite.current = setTimeout(writeCopy, Math.max(0, LIVE_CACHE_EVERY_MS - (Date.now() - lastWrite.current)));
+  }, [live.state, writeCopy]);
+  useEffect(() => () => clearTimeout(pendingWrite.current ?? undefined), []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute(SCREEN_READY_ATTRIBUTE, "");
+  }, []);
+  const hasGoodState = view !== null || live.state !== null;
+  useEffect(() => {
+    if (screenHandoffDue({ hasGoodState, unreachableSince: runtime.unreachableSince, now })) onHandoff();
+  }, [hasGoodState, runtime.unreachableSince, now, onHandoff]);
+
+  return (
+    <>
+      {assignment && assignment.output !== "livestream" && overlayToken ? (
+        <ScreenLiveFeed
+          key={feedKey}
+          slug={assignment.eventSlug}
+          roomId={assignment.roomId}
+          output={assignment.output}
+          token={overlayToken}
+          persistence={persistence}
+          onReport={onReport}
+        />
+      ) : null}
+      <ScreenView screenId={screenId} display={display} now={now} />
+    </>
+  );
+}

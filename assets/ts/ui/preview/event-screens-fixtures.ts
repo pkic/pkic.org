@@ -11,12 +11,13 @@ import {
 import { liveScheduleProjectionSchema } from "../../../shared/schemas/live-session-schedule";
 import { defaultLiveTimerGraphic } from "../../../shared/schemas/live-session-timer";
 import { applyLiveRoomMessage, type LiveRoomState } from "../../live-session/live-room-state";
+import type { ScreenCachedAgenda } from "../../event-screens/screen-cache";
 
 export const SCREEN_FIXTURE = {
   screenId: "K7M2QA",
   pairingCode: "HJKP4QRT",
   name: "Foyer, by registration",
-  roomId: "room-blue",
+  roomId: "30000000-0000-4000-8000-000000000001",
   roomName: "Blue room",
   timeZone: "Europe/Amsterdam",
 } as const;
@@ -32,7 +33,7 @@ const screenScheduleFixture = liveScheduleProjectionSchema.parse({
       roomId: SCREEN_FIXTURE.roomId,
       roomName: SCREEN_FIXTURE.roomName,
       roomIndex: 1,
-      occurrenceId: "occurrence-next",
+      occurrenceId: "30000000-0000-4000-8000-000000000012",
       title: "Migrating a private CA to post-quantum algorithms",
       startAt: "2026-12-01T09:30:00.000Z",
       endAt: "2026-12-01T10:15:00.000Z",
@@ -51,7 +52,7 @@ const AFTER_NEXT = liveScheduleProjectionSchema.parse({
   rooms: [
     {
       ...screenScheduleFixture.rooms[0]!,
-      occurrenceId: "occurrence-after",
+      occurrenceId: "30000000-0000-4000-8000-000000000013",
       title: "Crypto agility in hardware security modules",
       startAt: "2026-12-01T10:30:00.000Z",
       endAt: "2026-12-01T11:15:00.000Z",
@@ -117,7 +118,7 @@ function stageDisplayState(
 /** A session under way, as the screen keeps showing it after the connection drops. */
 export const screenStageRunningFixture = stageDisplayState(
   {
-    occurrenceId: "occurrence-now",
+    occurrenceId: "30000000-0000-4000-8000-000000000011",
     title: "Certificate lifecycle automation at scale",
     startAt: "2026-12-01T08:45:00.000Z",
     endAt: "2026-12-01T09:25:00.000Z",
@@ -137,3 +138,34 @@ export const screenStageReadyFixture = stageDisplayState(
   45 * 60_000,
   AFTER_NEXT,
 );
+
+/** The instant the specimens are drawn at: between the studio's session and the room's next one. */
+export const SCREEN_FIXTURE_NOW = Date.parse("2026-12-01T09:27:41.000Z");
+
+/** The screen's copy of its room's agenda, as auto mode runs it. */
+export const screenAgendaFixture: ScreenCachedAgenda = {
+  revision: 7,
+  timeZone: SCREEN_FIXTURE.timeZone,
+  from: "2026-11-30T21:00:00.000Z",
+  to: "2026-12-02T21:00:00.000Z",
+  sessions: [
+    {
+      id: "30000000-0000-4000-8000-000000000011",
+      title: "Certificate lifecycle automation at scale",
+      startAt: "2026-12-01T08:45:00.000Z",
+      endAt: "2026-12-01T09:25:00.000Z",
+    },
+    {
+      id: screenScheduleFixture.rooms[0]!.occurrenceId,
+      title: screenScheduleFixture.rooms[0]!.title,
+      startAt: screenScheduleFixture.rooms[0]!.startAt,
+      endAt: screenScheduleFixture.rooms[0]!.endAt,
+    },
+    {
+      id: AFTER_NEXT.rooms[0]!.occurrenceId,
+      title: AFTER_NEXT.rooms[0]!.title,
+      startAt: AFTER_NEXT.rooms[0]!.startAt,
+      endAt: AFTER_NEXT.rooms[0]!.endAt,
+    },
+  ],
+};
