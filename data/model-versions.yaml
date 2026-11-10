@@ -13,7 +13,7 @@ models:
         version: 1.0.1
         status: released
         root: /wg/pqc/pqcmm/versions/1.0.1/
-                commit: d1dcc57d0c838ae1361f5f075ed8d57604ba4a6f
+        commit: d1dcc57d0c838ae1361f5f075ed8d57604ba4a6f
         sha256: 4a5267fe13a6d00bc9ce2d080a9bdd8a11d55869ae470294250c07714ed3b9ef
         tag: v1.0.1
       - id: assessment-methods
