@@ -155,6 +155,26 @@ describe("speaker kit emails", () => {
     expect(await outbox()).toHaveLength(2);
   });
 
+  it("settles a batch whose template was retired so it cannot block later batches", async () => {
+    const f = await kitFixture();
+    await send(f);
+    await renderPendingKits();
+    await stagePendingSpeakerKitEmails(env.DB);
+    await send(f);
+    await send(f, { ...message, kit: { ...message.kit, resend: true } });
+    await renderPendingKits();
+    await env.DB.prepare(
+      "UPDATE email_template_versions SET status='archived' WHERE template_key='email_layout'",
+    ).run();
+
+    const passes = [await stagePendingSpeakerKitEmails(env.DB), await stagePendingSpeakerKitEmails(env.DB)];
+    expect(passes.map(({ processed }) => processed)).toEqual([1, 1]);
+    expect(passes.reduce((sum, pass) => sum + pass.failed, 0)).toBe(1);
+    expect(passes.reduce((sum, pass) => sum + pass.queued, 0)).toBe(0);
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 0, queued: 0, failed: 0 });
+    expect(await outbox()).toHaveLength(1);
+  });
+
   it("delivers a test to the organizer without counting as the speaker's copy", async () => {
     const f = await kitFixture(true);
     const { previewToken } = await preview(f);

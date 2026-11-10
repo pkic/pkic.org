@@ -6,6 +6,7 @@ import { eventEmailCampaignPreviewInputSchema } from "../../../../assets/shared/
 import type { z } from "zod";
 import { batchRows } from "../../db/pagination";
 import { all } from "../../db/queries";
+import { AppError } from "../../errors";
 import { slugifyAttachmentPart, type QueuedEmailAttachment } from "../../email/attachments";
 import { outboxIdForOperation } from "../../email/outbox-queue";
 import { loadEmailRenderBundle } from "../../email/partials";
@@ -149,6 +150,16 @@ function kitRecipient(
   };
 }
 
+/** A template retired after acceptance can never render; a database error can still be retried. */
+async function loadKitEmailBundle(db: DatabaseLike, templateKey: string | undefined) {
+  try {
+    return await loadEmailRenderBundle(db, templateKey ? [templateKey] : []);
+  } catch (error) {
+    if (error instanceof AppError) return null;
+    throw error;
+  }
+}
+
 /**
  * Moves finished kits into the email outbox, one batch per pass. The outbox owns
  * delivery retries from there; a recipient row settles exactly once here.
@@ -224,26 +235,33 @@ export async function stagePendingSpeakerKitEmails(
   }
 
   const templateKey = !campaign.bodyContent ? campaign.templateKey : undefined;
-  const bundle = await loadEmailRenderBundle(db, templateKey ? [templateKey] : []);
-  const template = templateKey ? bundle.templates.get(templateKey)! : null;
+  const bundle = await loadKitEmailBundle(db, templateKey);
+  const settled = bundle
+    ? outcomes
+    : outcomes.map((outcome) =>
+        outcome.status === "queued" ? { ...outcome, status: "failed", outboxId: null } : outcome,
+      );
   const stillPending = {
     sql: "SELECT 1 FROM event_promotion_batch_recipients WHERE batch_id=? AND email_status='pending' LIMIT 1",
     bindings: [head.batch_id],
   };
-  const prepared = await prepareEventEmailCampaignPage(
-    db,
-    event,
-    head.origin,
-    campaign,
-    {
-      template,
-      partials: bundle.partials,
-      messageType: campaign.messageType ?? template?.messageType ?? "promotional",
-      recipients,
-    },
-    head.batch_id,
-    stillPending,
-  );
+  const template = templateKey ? (bundle?.templates.get(templateKey) ?? null) : null;
+  const prepared = bundle
+    ? await prepareEventEmailCampaignPage(
+        db,
+        event,
+        head.origin,
+        campaign,
+        {
+          template,
+          partials: bundle.partials,
+          messageType: campaign.messageType ?? template?.messageType ?? "promotional",
+          recipients,
+        },
+        head.batch_id,
+        stillPending,
+      )
+    : { statements: [] };
   await db.batch([
     ...prepared.statements,
     db
@@ -254,12 +272,12 @@ export async function stagePendingSpeakerKitEmails(
          WHERE recipient.batch_id=? AND recipient.occurrence_id=json_extract(outcome.value,'$.occurrenceId')
            AND recipient.user_id=json_extract(outcome.value,'$.userId') AND recipient.email_status='pending'`,
       )
-      .bind(nowIso(), JSON.stringify(outcomes), head.batch_id),
+      .bind(nowIso(), JSON.stringify(settled), head.batch_id),
     ...(rows.length > page.length ? [prepareJobWake(db, "promotion_rendering")] : []),
   ]);
   return {
     processed: page.length,
-    queued: recipients.length,
-    failed: outcomes.filter((outcome) => outcome.status === "failed").length,
+    queued: bundle ? recipients.length : 0,
+    failed: settled.filter((outcome) => outcome.status === "failed").length,
   };
 }
