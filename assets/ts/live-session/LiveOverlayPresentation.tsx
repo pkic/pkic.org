@@ -15,6 +15,7 @@ import "./LiveSpeakerMessageTones.css";
 import { liveSpeakerMessageFit } from "../../shared/live-room-outputs";
 import { liveQuestionFit } from "../../shared/live-stage-display";
 import { Avatar } from "../ui/Avatar";
+import { LiveOverlayFrame } from "./LiveOverlayFrame";
 import { LiveOverlayLayer } from "./LiveOverlayLayer";
 import { LivePanelistsOverlay } from "./LivePanelistsOverlay";
 import { LiveCheckInOverlay } from "./LiveCheckInOverlay";
@@ -148,11 +149,6 @@ function ReactionsOverlay({ burst }: { burst: LiveRoomState["burst"] }) {
   );
 }
 
-/**
- * Pure presentation shared by the browser source and the operator's monitors;
- * no connection or credentials. An auxiliary output renders its own
- * composition: the projector and stage preview as Program does, the stage
-
 /** The message the operators send the speaker, as its own layer on the stage display. */
 function StageMessageOverlay({ message }: { message: LiveRoomState["speakerMessage"] }) {
   return (
@@ -249,6 +245,7 @@ export function LiveOverlayPresentation({
   roomId,
   focus = null,
   broadcast = false,
+  children,
 }: {
   view: LiveOverlayView;
   /** The layout the source names; an unknown one draws the event's default. */
@@ -263,6 +260,8 @@ export function LiveOverlayPresentation({
   focus?: LiveOverlayElement | null;
   /** A browser source on air: it plays graphic motion even under reduced motion, which only monitors honor. */
   broadcast?: boolean;
+  /** Drawn over every layer by the page that hosts the output, such as a screen's connection status. */
+  children?: ComponentChildren;
 }) {
   const animate = broadcast || !prefersReducedMotion();
   const state = projection && isLiveAuxOutput(requested) ? liveOutputProjection(projection, requested) : projection;
@@ -270,45 +269,44 @@ export function LiveOverlayPresentation({
   const elements = draft ?? resolveLiveOverlayLayout(state?.overlayLayouts ?? [], layout);
   const layers = view === "stage-display" ? STAGE_DISPLAY_LAYERS(roomId) : PROGRAM_LAYERS;
   return (
-    <div class="pk-live-overlay__frame">
-      <div class="pk-live-overlay" data-view={requested} data-status={status}>
-        {state
-          ? layers.map(({ element, draw }) => {
-              const placement = elements[element];
-              if (element === "timer" && placement.visible)
-                return state.stage.timerGraphics.map((graphic, _index, graphics) => {
-                  const stacked = graphics.filter((entry) => entry.placement === "layout");
-                  const count = graphic.placement === "layout" ? stacked.length : 1;
-                  const slotIndex = stacked.findIndex((entry) => entry.timerId === graphic.timerId);
-                  const slot =
-                    graphic.placement === "layout"
-                      ? { ...placement, h: placement.h / count, y: placement.y + (slotIndex * placement.h) / count }
-                      : placement;
-                  return (
-                    <LiveOverlayLayer
-                      key={`timer:${graphic.timerId}`}
-                      element="timer"
-                      dimmed={focus !== null && focus !== "timer"}
-                      placement={liveTimerLayout(graphic, slot)}
-                    >
-                      <TimerOverlay graphic={graphic} state={state} />
-                    </LiveOverlayLayer>
-                  );
-                });
-              const content = placement.visible ? draw(state, { placement, animate }) : null;
-              return content ? (
-                <LiveOverlayLayer
-                  key={element}
-                  element={element}
-                  dimmed={focus !== null && focus !== element}
-                  placement={placement}
-                >
-                  {content}
-                </LiveOverlayLayer>
-              ) : null;
-            })
-          : null}
-      </div>
-    </div>
+    <LiveOverlayFrame view={requested} status={status}>
+      {state
+        ? layers.map(({ element, draw }) => {
+            const placement = elements[element];
+            if (element === "timer" && placement.visible)
+              return state.stage.timerGraphics.map((graphic, _index, graphics) => {
+                const stacked = graphics.filter((entry) => entry.placement === "layout");
+                const count = graphic.placement === "layout" ? stacked.length : 1;
+                const slotIndex = stacked.findIndex((entry) => entry.timerId === graphic.timerId);
+                const slot =
+                  graphic.placement === "layout"
+                    ? { ...placement, h: placement.h / count, y: placement.y + (slotIndex * placement.h) / count }
+                    : placement;
+                return (
+                  <LiveOverlayLayer
+                    key={`timer:${graphic.timerId}`}
+                    element="timer"
+                    dimmed={focus !== null && focus !== "timer"}
+                    placement={liveTimerLayout(graphic, slot)}
+                  >
+                    <TimerOverlay graphic={graphic} state={state} />
+                  </LiveOverlayLayer>
+                );
+              });
+            const content = placement.visible ? draw(state, { placement, animate }) : null;
+            return content ? (
+              <LiveOverlayLayer
+                key={element}
+                element={element}
+                dimmed={focus !== null && focus !== element}
+                placement={placement}
+              >
+                {content}
+              </LiveOverlayLayer>
+            ) : null;
+          })
+        : null}
+      {children}
+    </LiveOverlayFrame>
   );
 }

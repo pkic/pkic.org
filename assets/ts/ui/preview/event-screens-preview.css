@@ -1,0 +1,15 @@
+/* A venue screen's 16:9 frame in the gallery column, and the stand-in for its livestream player. */
+@layer components {
+  .pk-preview__screen {
+    inline-size: 100%;
+    aspect-ratio: 16 / 9;
+    background: var(--pk-chrome-deep);
+  }
+  .pk-preview__screen-player {
+    display: grid;
+    place-items: center;
+    border: 2px dashed color-mix(in srgb, var(--pk-on-solid) 28%, var(--pk-chrome-deep));
+    color: color-mix(in srgb, var(--pk-on-solid) 72%, var(--pk-chrome-deep));
+    font-size: calc(var(--pk-text-3xl) * 1.5);
+  }
+}

@@ -1,0 +1,12 @@
+/* A venue screen fills its display, black around the scaled 1920 × 1080 frame. */
+@layer components {
+  html:has([data-live-screen]),
+  body:has([data-live-screen]) {
+    margin: 0;
+    background: var(--pk-chrome-deep);
+  }
+  main[data-live-screen] {
+    inline-size: 100vw;
+    block-size: 100vh;
+  }
+}

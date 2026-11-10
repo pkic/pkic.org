@@ -1,0 +1,108 @@
+/*
+ * A screen's own status page on the 1920 × 1080 frame: the stage display's
+ * ground and type scale, read from across a foyer, with the consortium's
+ * mark and stripe in place of an event's. Sizes are fixed on the frame,
+ * which scales whole to the screen.
+ */
+@layer components {
+  .pk-screen-status {
+    --screen-muted: color-mix(in srgb, var(--pk-on-solid) 72%, var(--pk-chrome-deep));
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 40px;
+    box-sizing: border-box;
+    inline-size: 1920px;
+    block-size: 1080px;
+    padding: 56px 96px 64px;
+    border-block-start: 12px solid transparent;
+    border-image: var(--pk-stripe) 1;
+    background: var(--pk-chrome-deep);
+    color: var(--pk-on-solid);
+    font-family: var(--pk-font);
+    font-size: calc(var(--pk-text-3xl) * 1.25);
+    line-height: 1.2;
+  }
+  .pk-screen-status__brand > img {
+    display: block;
+    inline-size: auto;
+    block-size: 88px;
+  }
+  .pk-screen-status__main {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 40px;
+    min-block-size: 0;
+  }
+  .pk-screen-status__muted {
+    color: var(--screen-muted);
+  }
+  .pk-screen-status__mono,
+  .pk-screen-status__id,
+  .pk-screen-status__code {
+    font-family: var(--pk-font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Pairing: the code leads, the screen ID beside it; both are typed in the studio. */
+  .pk-screen-status__pairing {
+    display: grid;
+    grid-template-columns: auto auto;
+    align-items: end;
+    align-content: center;
+    justify-content: start;
+    column-gap: 144px;
+    margin: 0;
+  }
+  .pk-screen-status__entry {
+    display: grid;
+    gap: 16px;
+  }
+  .pk-screen-status__entry > dt {
+    color: var(--screen-muted);
+    font-size: calc(var(--pk-text-3xl) * 1.125);
+    font-weight: 500;
+  }
+  .pk-screen-status__entry > dd {
+    margin: 0;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .pk-screen-status__code {
+    display: inline-flex;
+    gap: 0.4em;
+    font-size: calc(var(--pk-text-3xl) * 6);
+    letter-spacing: 0.04em;
+  }
+  .pk-screen-status__id {
+    font-size: calc(var(--pk-text-3xl) * 3);
+    letter-spacing: 0.04em;
+  }
+
+  /* Waiting: where the screen stands, large, so staff can match it to the studio's list. */
+  .pk-screen-status__waiting {
+    display: grid;
+    align-content: center;
+    gap: 24px;
+  }
+  .pk-screen-status__name {
+    margin: 0;
+    font-size: calc(var(--pk-text-3xl) * 3.5);
+    font-weight: 700;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+  }
+  .pk-screen-status__waiting > .pk-screen-status__muted {
+    margin: 0;
+    font-size: calc(var(--pk-text-3xl) * 1.75);
+  }
+
+  /* The closing line under a rule: what staff do, or which screen this is. */
+  .pk-screen-status__line {
+    display: flex;
+    justify-content: space-between;
+    gap: 48px;
+    margin: 0;
+    padding-block-start: 32px;
+    border-block-start: 2px solid color-mix(in srgb, var(--pk-on-solid) 28%, var(--pk-chrome-deep));
+  }
+}

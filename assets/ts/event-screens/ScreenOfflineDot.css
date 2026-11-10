@@ -1,0 +1,13 @@
+/* Fixed on the 1920 × 1080 frame, in the corner no output places a graphic in. */
+@layer components {
+  .pk-screen-offline {
+    position: absolute;
+    inset-block-end: 24px;
+    inset-inline-end: 24px;
+    inline-size: 20px;
+    block-size: 20px;
+    border-radius: var(--pk-radius-pill);
+    background: var(--pk-warn);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--pk-chrome-deep) 70%, transparent);
+  }
+}
