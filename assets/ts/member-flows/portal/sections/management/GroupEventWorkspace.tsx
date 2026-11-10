@@ -7,6 +7,7 @@ import { groupEventWhenAndWhere } from "./group-event-place";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
 import { hasEventAgendaPermission } from "../events/event-agenda-access";
+import { canManageScreens } from "../../../../../shared/event-screen-permissions";
 import { isAuthed, portalSession } from "../../state";
 import type { PortalSession } from "../../types";
 import type { BadgePrintAction } from "../../../../../shared/schemas/event-badge-printing";
@@ -74,6 +75,9 @@ const AgendaEditor = lazy(() =>
 );
 const EventLiveControlRoom = lazy(() =>
   import("../events/detail/live/EventLiveControlRoom").then((module) => ({ default: module.EventLiveControlRoom })),
+);
+const EventScreens = lazy(() =>
+  import("../events/detail/screens/EventScreens").then((module) => ({ default: module.EventScreens })),
 );
 const EventStats = lazy(() => import("../events/detail/EventStats").then((module) => ({ default: module.EventStats })));
 
@@ -408,6 +412,14 @@ export function GroupEventWorkspace({
                     occurrenceId={detailId}
                     sessionPath={(occurrenceId) => `${tabPath("live")}/${encodeURIComponent(occurrenceId)}`}
                     eventPath={tabPath(GROUP_EVENT_OVERVIEW_TAB)}
+                  />
+                </Suspense>
+              )}
+              {activeTab === "screens" && (
+                <Suspense fallback={<Spinner />}>
+                  <EventScreens
+                    slug={event.slug}
+                    canManage={canManageScreens((permission) => hasEventAgendaPermission(event.id, permission))}
                   />
                 </Suspense>
               )}

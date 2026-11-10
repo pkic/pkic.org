@@ -7,6 +7,8 @@ import { asciiEmailDomain, EMAIL_ADDRESS_PATTERN } from "../email-address.ts";
 
 /** Exact base response contract for successful mutations. Extend this for declared domain payloads. */
 export const successResponseSchema = z.object({ success: z.literal(true) }).strict();
+/** A 204 response, which carries no body for the client to read. */
+export const noContentResponseSchema = z.undefined();
 
 /** Canonical API error envelope returned by the Worker HTTP boundary. */
 export const apiErrorPayloadSchema = z.object({

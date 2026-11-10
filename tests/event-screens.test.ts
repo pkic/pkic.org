@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { SCREEN_POLICY, SCREEN_SESSION_MAX_AGE_SECONDS } from "../assets/shared/event-screen-policy";
+import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
 import {
   eventScreensListSchema,
   screenPairingResponseSchema,
@@ -469,6 +470,10 @@ describe("screen staff permissions", () => {
       assignment: { roomId: OTHER_EVENT.roomId, output: "program" },
     });
     expect(otherRoom.status).toBe(422);
+    expect(
+      apiValidationErrorDetailsSchema.parse(((await otherRoom.json()) as { error: { details: unknown } }).error.details)
+        .fieldErrors,
+    ).toHaveProperty(["assignment.roomId"]);
     const livestreamLayout = await patch("manager", {
       expectedRevision: 1,
       assignment: { roomId: EVENT.roomId, output: "livestream", layout: "lower-third" },

@@ -15,7 +15,12 @@ import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "
 import { readEventAdminResource } from "../events/authorized-context";
 import { eventReadIdSql } from "../events/selection";
 import { decodeScreenRecordRow, prepareScreenRecordRead, toScreenRecord, type ScreenRecordRow } from "./screen-record";
-import { prepareScreenRoomCheck, resolveScreenAssignment, screenAssignmentColumns } from "./screen-assignment";
+import {
+  prepareScreenRoomCheck,
+  resolveScreenAssignment,
+  screenAssignmentColumns,
+  screenRoomNotInEvent,
+} from "./screen-assignment";
 import { screenRevisionConflict, screenWriteDatabase } from "./screen-staff-access";
 
 /**
@@ -39,8 +44,7 @@ export async function approveScreenPairing(
       statements,
       async decode(loaded, event, actor) {
         const existing = decodeScreenRecordRow(loaded[0]);
-        if (input.assignment && !batchFirst(loaded[1]))
-          throw new AppError(422, "SCREEN_ROOM_NOT_IN_EVENT", "Choose a room of this event.");
+        if (input.assignment && !batchFirst(loaded[1])) throw screenRoomNotInEvent();
         const assignment = resolveScreenAssignment(
           existing && existing.event_id === event.id ? existing : null,
           input.assignment,

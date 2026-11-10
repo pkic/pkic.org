@@ -6,9 +6,10 @@ import { useState } from "preact/hooks";
 import {
   SCREEN_PAIRING_CODE_LENGTH,
   eventScreenPairingCreateSchema,
-  type EventScreenPairingCreate,
+  type ScreenRecord,
 } from "../../../../../../../shared/schemas/event-screens";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
+import type { CollectionLoader } from "../../../../../../hooks/useServerCollection";
 import { Alert } from "../../../../../../ui/Alert";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
@@ -19,9 +20,8 @@ import {
   ScreenAssignmentFields,
   screenAssignmentBody,
   type ScreenAssignmentDraft,
-  type ScreenLayoutChoice,
-  type ScreenRoomChoice,
 } from "./ScreenAssignmentFields";
+import { pairScreen } from "./screen-requests";
 
 interface PairDraft {
   screenId: string;
@@ -34,16 +34,17 @@ const EMPTY_DRAFT: PairDraft = { screenId: "", pairingCode: "", name: "", assign
 
 export function ScreenPairDialog({
   open,
-  rooms,
-  layouts,
-  onPair,
+  slug,
+  onPaired,
   onClose,
+  load,
 }: {
   open: boolean;
-  rooms: readonly ScreenRoomChoice[];
-  layouts: readonly ScreenLayoutChoice[];
-  onPair: (body: EventScreenPairingCreate) => Promise<void>;
+  slug: string;
+  onPaired: (screen: ScreenRecord) => void | Promise<void>;
   onClose: () => void;
+  /** Reads the room choices; the gallery hands in its own. */
+  load?: CollectionLoader;
 }) {
   const [draft, setDraft] = useState<PairDraft>(EMPTY_DRAFT);
   const [busy, setBusy] = useState(false);
@@ -65,10 +66,11 @@ export function ScreenPairDialog({
     setBusy(true);
     setError("");
     try {
-      await onPair(checked.data);
+      const screen = await pairScreen(slug, checked.data);
       setDraft(EMPTY_DRAFT);
       form.reset();
       onClose();
+      await onPaired(screen);
     } catch (cause) {
       setError(form.refuse(cause));
     } finally {
@@ -118,7 +120,7 @@ export function ScreenPairDialog({
               />
             )}
           </Field>
-          <Field label="Screen ID" required help="Shown under the code." {...form.of("screenId")}>
+          <Field label="Screen ID" required help="Shown next to the code." {...form.of("screenId")}>
             {(control) => (
               <TextInput
                 {...control}
@@ -143,9 +145,9 @@ export function ScreenPairDialog({
           </Field>
         </FormSection>
         <ScreenAssignmentFields
+          slug={slug}
           draft={draft.assignment}
-          rooms={rooms}
-          layouts={layouts}
+          load={load}
           fields={form.of}
           onChange={(patch) => setDraft({ ...draft, assignment: { ...draft.assignment, ...patch } })}
         />

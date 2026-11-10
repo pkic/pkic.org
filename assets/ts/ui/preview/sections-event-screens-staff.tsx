@@ -1,31 +1,27 @@
 /**
- * The event workspace's Screens tab, as staff who manage screens see it:
- * the list read from a fixed page of synthetic screens on a fixed clock, and
- * the pairing dialog opened from its toolbar.
+ * The event workspace's Screens tab: the list and its room choices read
+ * from synthetic fixtures on a fixed clock, and the pairing dialog opened
+ * from its toolbar.
  */
 import type { PreviewSection } from "./PreviewShell";
 import { Tabs } from "../../components/Tabs";
 import type { CollectionLoader } from "../../hooks/useServerCollection";
 import { eventScreensListSchema, type ScreenRecord } from "../../../shared/schemas/event-screens";
-import {
-  EventScreens,
-  type EventScreenCommands,
-} from "../../member-flows/portal/sections/events/detail/screens/EventScreens";
+import { agendaRoomsListSchema } from "../../../shared/schemas/event-agenda-room-list";
+import { EventScreens } from "../../member-flows/portal/sections/events/detail/screens/EventScreens";
 import { ScreenPairDialog } from "../../member-flows/portal/sections/events/detail/screens/ScreenPairDialog";
 import { useState } from "preact/hooks";
 import { Button } from "../Button";
 import { SCREEN_FIXTURE, SCREEN_FIXTURE_NOW } from "./event-screens-fixtures";
 
 const GREEN_ROOM_ID = "30000000-0000-4000-8000-000000000002";
-const ROOMS = [
-  { id: SCREEN_FIXTURE.roomId, name: SCREEN_FIXTURE.roomName },
-  { id: GREEN_ROOM_ID, name: "Green room" },
-];
-const LAYOUTS = [
-  { slug: "full-frame", name: "Full frame" },
-  { slug: "lower-third", name: "Lower third" },
-  { slug: "panel", name: "Panel" },
-];
+const ROOMS = agendaRoomsListSchema.parse({
+  rooms: [
+    { id: SCREEN_FIXTURE.roomId, name: SCREEN_FIXTURE.roomName, capacity: 240 },
+    { id: GREEN_ROOM_ID, name: "Green room", capacity: 80 },
+  ],
+  page: { limit: 25, offset: 0, total: 2, hasMore: false },
+});
 
 const minutesBefore = (minutes: number) => new Date(SCREEN_FIXTURE_NOW - minutes * 60_000).toISOString();
 
@@ -75,21 +71,18 @@ const SCREENS: ScreenRecord[] = [
   screen("T2HN6V", "Spare, storage room", null, { state: "none" }),
 ];
 
-const listOf =
+/** Answers the tab's two reads, the screens and the room choices, from the fixtures above. */
+const fixturesWith =
   (screens: ScreenRecord[]): CollectionLoader =>
-  async (_url, _signal, schema) =>
+  async (url, _signal, schema) =>
     schema.parse(
-      eventScreensListSchema.parse({
-        screens,
-        page: { limit: 25, offset: 0, total: screens.length, hasMore: false },
-      }),
+      url.includes("/agenda/rooms")
+        ? ROOMS
+        : eventScreensListSchema.parse({
+            screens,
+            page: { limit: 25, offset: 0, total: screens.length, hasMore: false },
+          }),
     );
-
-const commands: EventScreenCommands = {
-  pair: async () => undefined,
-  update: async () => undefined,
-  revoke: async () => undefined,
-};
 
 /** The workspace strip around the tab, so the specimen shows where Screens sits. */
 function WorkspaceTabs() {
@@ -109,18 +102,15 @@ function WorkspaceTabs() {
   );
 }
 
-function ScreensTab({ screens }: { screens: ScreenRecord[] }) {
+function ScreensTab({ screens, canManage = true }: { screens: ScreenRecord[]; canManage?: boolean }) {
   return (
     <div class="pk-stack">
       <WorkspaceTabs />
       <EventScreens
         slug="pqc-conference-2026"
-        rooms={ROOMS}
-        layouts={LAYOUTS}
-        canManage
-        commands={commands}
+        canManage={canManage}
         now={SCREEN_FIXTURE_NOW}
-        load={listOf(screens)}
+        load={fixturesWith(screens)}
       />
     </div>
   );
@@ -135,9 +125,9 @@ function PairDialogSpecimen() {
       </Button>
       <ScreenPairDialog
         open={open}
-        rooms={ROOMS}
-        layouts={LAYOUTS}
-        onPair={commands.pair}
+        slug="pqc-conference-2026"
+        load={fixturesWith([])}
+        onPaired={() => undefined}
         onClose={() => setOpen(false)}
       />
     </div>
@@ -150,6 +140,12 @@ export const eventScreenStaffSections: PreviewSection[] = [
     title: "Screens tab",
     note: "Every screen of the event: where it stands, what it shows, and whether it is online.",
     render: () => <ScreensTab screens={SCREENS} />,
+  },
+  {
+    id: "screens-tab-read-only",
+    title: "Screens tab, read-only",
+    note: "A room operator without screen management sees the list without Pair screen or row actions.",
+    render: () => <ScreensTab screens={SCREENS} canManage={false} />,
   },
   {
     id: "screens-tab-empty",

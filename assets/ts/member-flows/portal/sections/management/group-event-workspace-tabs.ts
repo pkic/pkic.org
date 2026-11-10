@@ -1,4 +1,5 @@
 /** The event workspace's tabs and the capability each one needs, in display order. */
+import { canReadScreenStatus } from "../../../../../shared/event-screen-permissions";
 import { hasEventAgendaPermission } from "../events/event-agenda-access";
 import { portalSession } from "../../state";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
@@ -30,6 +31,11 @@ export const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
     key: "live",
     label: "Studio",
     visible: (event) => hasEventAgendaPermission(event.id, "agenda:live_moderate"),
+  },
+  {
+    key: "screens",
+    label: "Screens",
+    visible: (event) => canReadScreenStatus((permission) => hasEventAgendaPermission(event.id, permission)),
   },
   {
     key: "leads",

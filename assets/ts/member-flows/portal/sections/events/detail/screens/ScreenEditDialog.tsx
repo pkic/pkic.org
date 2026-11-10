@@ -1,45 +1,59 @@
-/** Renaming or reassigning a paired screen, from the revision the list showed. */
+/**
+ * Renaming or reassigning a paired screen, from the revision the list showed.
+ * When someone else changed the screen first, the dialog reads it again,
+ * shows the latest values and says so, so nothing is overwritten unseen.
+ */
 import { useState } from "preact/hooks";
-import {
-  screenUpdateSchema,
-  type ScreenRecord,
-  type ScreenUpdate,
-} from "../../../../../../../shared/schemas/event-screens";
+import { screenUpdateSchema, type ScreenRecord } from "../../../../../../../shared/schemas/event-screens";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
+import type { CollectionLoader } from "../../../../../../hooks/useServerCollection";
 import { Alert } from "../../../../../../ui/Alert";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { TextInput } from "../../../../../../ui/TextControl";
-import {
-  ScreenAssignmentFields,
-  screenAssignmentBody,
-  screenAssignmentDraft,
-  type ScreenLayoutChoice,
-  type ScreenRoomChoice,
-} from "./ScreenAssignmentFields";
+import { ScreenAssignmentFields, screenAssignmentBody, screenAssignmentDraft } from "./ScreenAssignmentFields";
+import { isScreenRevisionConflict, readScreenRecord, updateScreen } from "./screen-requests";
+
+const CONFLICT_NOTICE =
+  "Someone changed this screen while you were editing it. Its latest details are shown; save again to replace them.";
 
 export function ScreenEditDialog({
-  screen,
-  rooms,
-  layouts,
-  onSave,
+  slug,
+  screen: initial,
+  onSaved,
+  onChanged,
   onClose,
+  load,
 }: {
+  slug: string;
   screen: ScreenRecord;
-  rooms: readonly ScreenRoomChoice[];
-  layouts: readonly ScreenLayoutChoice[];
-  onSave: (screen: ScreenRecord, body: ScreenUpdate) => Promise<void>;
+  onSaved: (screen: ScreenRecord) => void | Promise<void>;
+  /** The screen changed under the editor; the list reads it again. */
+  onChanged: () => void | Promise<void>;
   onClose: () => void;
+  load?: CollectionLoader;
 }) {
-  const [name, setName] = useState(screen.name);
-  const [assignment, setAssignment] = useState(() => screenAssignmentDraft(screen.assignment));
+  const [screen, setScreen] = useState(initial);
+  const [name, setName] = useState(initial.name);
+  const [assignment, setAssignment] = useState(() => screenAssignmentDraft(initial.assignment));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [conflict, setConflict] = useState(false);
   const form = useContractForm(screenUpdateSchema, {
     expectedRevision: screen.revision,
     name,
     assignment: screenAssignmentBody(assignment),
   });
+
+  async function rebase() {
+    const latest = await readScreenRecord(screen.id);
+    setScreen(latest);
+    setName(latest.name);
+    setAssignment(screenAssignmentDraft(latest.assignment));
+    form.reset();
+    setConflict(true);
+    void onChanged();
+  }
 
   async function submit() {
     const checked = form.submit();
@@ -49,11 +63,19 @@ export function ScreenEditDialog({
     }
     setBusy(true);
     setError("");
+    setConflict(false);
     try {
-      await onSave(screen, checked.data);
+      const saved = await updateScreen(screen.id, checked.data);
       onClose();
+      await onSaved(saved);
     } catch (cause) {
-      setError(form.refuse(cause));
+      if (isScreenRevisionConflict(cause)) {
+        try {
+          await rebase();
+        } catch (reload) {
+          setError(form.refuse(reload));
+        }
+      } else setError(form.refuse(cause));
     } finally {
       setBusy(false);
     }
@@ -72,6 +94,7 @@ export function ScreenEditDialog({
         if (!busy) onClose();
       }}
     >
+      {conflict && <Alert tone="warn">{CONFLICT_NOTICE}</Alert>}
       <form
         noValidate
         class="pk-stack"
@@ -87,14 +110,14 @@ export function ScreenEditDialog({
           )}
         </Field>
         <ScreenAssignmentFields
+          slug={slug}
           draft={assignment}
-          rooms={rooms}
-          layouts={layouts}
+          load={load}
           fields={form.of}
           onChange={(patch) => setAssignment({ ...assignment, ...patch })}
         />
-        {error && <Alert tone="danger">{error}</Alert>}
       </form>
+      {error && <Alert tone="danger">{error}</Alert>}
     </Dialog>
   );
 }

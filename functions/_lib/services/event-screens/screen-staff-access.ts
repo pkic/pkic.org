@@ -1,4 +1,5 @@
 import type { Permission } from "../../../../assets/shared/schemas/permissions";
+import { SCREEN_REVISION_CONFLICT_CODE } from "../../../../assets/shared/schemas/event-screens";
 import { prepareUserBackedAdminFromRequest, requireUserBackedAdminFromRequest } from "../../auth/admin";
 import { guardPermissionMutationDatabase, requireAnyPermission } from "../../auth/permissions";
 import { AppError } from "../../errors";
@@ -62,7 +63,7 @@ export function screenWriteDatabase(
 export function screenRevisionConflict(): AppError {
   return new AppError(
     409,
-    "SCREEN_REVISION_CONFLICT",
+    SCREEN_REVISION_CONFLICT_CODE,
     "The screen changed while you were editing it. Reload and try again.",
   );
 }

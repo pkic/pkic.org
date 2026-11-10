@@ -59,6 +59,9 @@ export const SCREEN_SESSION_ERROR_CODES = {
   expired: "SCREEN_SESSION_EXPIRED",
 } as const;
 
+/** The 409 a rename or reassignment receives when the screen changed since the editor read it. */
+export const SCREEN_REVISION_CONFLICT_CODE = "SCREEN_REVISION_CONFLICT";
+
 // ── Pairing ──
 
 /** An unpaired screen's code, valid until the challenge it proves expires. */

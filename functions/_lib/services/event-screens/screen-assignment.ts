@@ -1,4 +1,5 @@
 import type { ScreenAssignmentInput } from "../../../../assets/shared/schemas/event-screens";
+import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import type { ScreenRecordRow } from "./screen-record";
@@ -58,4 +59,13 @@ export function prepareScreenRoomCheck(
   return db
     .prepare(`SELECT id FROM event_agenda_rooms WHERE id=? AND event_id=${event.sql}`)
     .bind(roomId, ...event.bindings);
+}
+
+/** A room outside the screen's event, refused on the Room field so the editor can mark it. */
+export function screenRoomNotInEvent(): AppError {
+  const message = "Choose a room of this event.";
+  return new AppError(422, "SCREEN_ROOM_NOT_IN_EVENT", message, {
+    formErrors: [],
+    fieldErrors: { "assignment.roomId": [message] },
+  });
 }

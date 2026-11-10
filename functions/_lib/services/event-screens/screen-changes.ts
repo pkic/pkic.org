@@ -10,7 +10,12 @@ import {
   prepareAuditLogWhen,
   prepareScopedAuditLogAfterOneChange,
 } from "../audit";
-import { prepareScreenRoomCheck, resolveScreenAssignment, screenAssignmentColumns } from "./screen-assignment";
+import {
+  prepareScreenRoomCheck,
+  resolveScreenAssignment,
+  screenAssignmentColumns,
+  screenRoomNotInEvent,
+} from "./screen-assignment";
 import { decodeScreenRecordRow, prepareScreenRecordRead, toScreenRecord, type ScreenRecordRow } from "./screen-record";
 import {
   readScreenForStaff,
@@ -53,7 +58,7 @@ export async function updateScreen(
   if (input.assignment !== undefined && input.assignment !== null) {
     if (!row.event_id)
       throw new AppError(409, "SCREEN_EVENT_REQUIRED", "Pair this screen for an event before assigning it.");
-    if (!batchFirst(extra[0])) throw new AppError(422, "SCREEN_ROOM_NOT_IN_EVENT", "Choose a room of this event.");
+    if (!batchFirst(extra[0])) throw screenRoomNotInEvent();
   }
   const assignment = resolveScreenAssignment(row, input.assignment, actor.id);
   const columns = screenAssignmentColumns(assignment);
