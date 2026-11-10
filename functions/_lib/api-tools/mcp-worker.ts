@@ -129,7 +129,8 @@ function apiRequestFromMcp(
     }
     const text = new TextDecoder().decode(result.bytes);
     if (responseType.includes("application/json")) {
-      return JSON.parse(text);
+      const parsed = JSON.parse(text);
+      return response.ok ? parsed : { ...parsed, status: response.status };
     }
 
     return {
