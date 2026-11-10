@@ -12,25 +12,27 @@ export function prepareStaffingUnavailablePairs(
 ) {
   const scope = eventReadIdSql(eventId);
   const eventSql = "(SELECT id FROM availability_event)";
+  // Each arm joins the input row once; D1 refuses the statement when every use re-expands the input CTEs.
+  const selectedEventSql = "available.event_id";
   const sources = [
     {
       from: "event_agenda_occurrences busy JOIN event_agenda_occurrence_speakers person ON person.occurrence_id=busy.id",
       user: "person.user_id",
-      scope: `busy.event_id<>${eventSql}`,
+      scope: `busy.event_id<>${selectedEventSql}`,
       location: "COALESCE(person.room_id,busy.room_id)",
       physical: "person.attendance_mode='physical'",
     },
     {
       from: "event_agenda_shifts busy JOIN event_agenda_assignments person ON person.shift_id=busy.id LEFT JOIN event_agenda_staffing_posts duty_post ON duty_post.event_id=busy.event_id AND duty_post.id=person.post_id LEFT JOIN event_agenda_role_members duty_person ON duty_person.event_id=busy.event_id AND duty_person.user_id=person.user_id",
       user: "person.user_id",
-      scope: `busy.event_id<>${eventSql}`,
+      scope: `busy.event_id<>${selectedEventSql}`,
       location: "CASE WHEN duty_post.id IS NULL THEN busy.room_id ELSE duty_post.room_id END",
       physical: "COALESCE(duty_person.attendance_mode,'physical')='physical'",
     },
     {
       from: "meeting_agenda_speaker_intervals busy",
       user: "busy.user_id",
-      scope: `${eventSql} IS NOT NULL`,
+      scope: `${selectedEventSql} IS NOT NULL`,
       location: "busy.room_id",
       physical: "1=1",
     },
@@ -43,13 +45,13 @@ export function prepareStaffingUnavailablePairs(
       location,
       physical,
     }) => `SELECT DISTINCT json_extract(shift.value,'$.id') AS shiftId,${user} AS userId
-    FROM ${from} JOIN json_each((SELECT shifts FROM availability_input)) shift
+    FROM ${from} CROSS JOIN availability available JOIN json_each(available.shifts) shift
     LEFT JOIN event_agenda_state state ON state.event_id=busy.event_id
-    WHERE ${user} IN(SELECT json_extract(value,'$.userId') FROM json_each((SELECT users FROM availability_input))) AND ${scope} AND busy.start_at IS NOT NULL
+    WHERE ${user} IN(SELECT json_extract(value,'$.userId') FROM json_each(available.users)) AND ${scope} AND busy.start_at IS NOT NULL
       AND julianday(json_extract(shift.value,'$.startAt'))<julianday(busy.end_at)+
-        CASE WHEN ${physical} AND EXISTS(SELECT 1 FROM json_each((SELECT users FROM availability_input)) available_member WHERE json_extract(available_member.value,'$.userId')=${user} AND json_extract(available_member.value,'$.attendanceMode')='physical') AND (busy.event_id<>${eventSql} OR ${location} IS NOT json_extract(shift.value,'$.roomId')) THEN MAX(COALESCE(state.travel_minutes,0),(SELECT travel FROM availability_input))/1440.0 ELSE 0 END
+        CASE WHEN ${physical} AND EXISTS(SELECT 1 FROM json_each(available.users) available_member WHERE json_extract(available_member.value,'$.userId')=${user} AND json_extract(available_member.value,'$.attendanceMode')='physical') AND (busy.event_id<>${selectedEventSql} OR ${location} IS NOT json_extract(shift.value,'$.roomId')) THEN MAX(COALESCE(state.travel_minutes,0),available.travel)/1440.0 ELSE 0 END
       AND julianday(busy.start_at)<julianday(json_extract(shift.value,'$.endAt'))+
-        CASE WHEN ${physical} AND EXISTS(SELECT 1 FROM json_each((SELECT users FROM availability_input)) available_member WHERE json_extract(available_member.value,'$.userId')=${user} AND json_extract(available_member.value,'$.attendanceMode')='physical') AND (busy.event_id<>${eventSql} OR ${location} IS NOT json_extract(shift.value,'$.roomId')) THEN MAX(COALESCE(state.travel_minutes,0),(SELECT travel FROM availability_input))/1440.0 ELSE 0 END`,
+        CASE WHEN ${physical} AND EXISTS(SELECT 1 FROM json_each(available.users) available_member WHERE json_extract(available_member.value,'$.userId')=${user} AND json_extract(available_member.value,'$.attendanceMode')='physical') AND (busy.event_id<>${selectedEventSql} OR ${location} IS NOT json_extract(shift.value,'$.roomId')) THEN MAX(COALESCE(state.travel_minutes,0),available.travel)/1440.0 ELSE 0 END`,
   );
   let input: string;
   let bindings: unknown[];
@@ -92,7 +94,9 @@ export function prepareStaffingUnavailablePairs(
   }
   return db
     .prepare(
-      `WITH availability_event AS(SELECT ${scope.sql} AS id),availability_input AS(${input}) ${statements.join(" UNION ")} LIMIT 400001`,
+      `WITH availability_event AS(SELECT ${scope.sql} AS id),availability_input AS(${input}),
+        availability AS(SELECT event.id AS event_id,input.shifts,input.users,input.travel FROM availability_event event CROSS JOIN availability_input input)
+        ${statements.join(" UNION ")} LIMIT 400001`,
     )
     .bind(...scope.bindings, ...bindings);
 }
