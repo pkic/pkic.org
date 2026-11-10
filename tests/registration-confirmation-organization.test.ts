@@ -122,6 +122,26 @@ describe("organization named on registration confirmation", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
+  it("preserves the confirmation link and email intent when the stored event start is unsupported", async () => {
+    const token = await register("unaffiliated-attendee@gmail.com", true);
+    const state = () =>
+      queryAll(env.DB, "SELECT status,confirmed_at,confirmation_link_secret,manage_link_secret FROM registrations");
+    const emails = () => queryAll(env.DB, "SELECT id FROM email_outbox ORDER BY id");
+    const before = await state();
+    const beforeEmails = await emails();
+    await env.DB.prepare("UPDATE events SET starts_at=? WHERE slug='pqc-2026'").bind("2026-12-01T09:00:00+01:00").run();
+    const response = await callApi(env, "/api/v1/events/pqc-2026/registrations/confirm-email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(registrationConfirmSchema.parse({ token })),
+    });
+    expect(response.status).toBe(500);
+    expect(await state()).toEqual(before);
+    expect(await emails()).toEqual(beforeEmails);
+    await env.DB.prepare("UPDATE events SET starts_at=? WHERE slug='pqc-2026'").bind("2026-12-01T08:00:00.000Z").run();
+    expect((await confirm({ token })).status).toBe("registered");
+  });
+
   it("asks an unknown work domain once and creates the affiliation through the canonical rule", async () => {
     const token = await register("person@unknown-works.example");
     expect((await info(token)).asksOrganization).toBe(true);

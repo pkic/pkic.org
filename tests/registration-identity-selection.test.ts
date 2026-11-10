@@ -272,6 +272,14 @@ async function expectNoRegistrationEffects(userId: string) {
 }
 
 describe("explicit event identity selection", () => {
+  it("refuses an unsupported stored event start before committing registration effects", async () => {
+    const f = await fixture();
+    await env.DB.prepare("UPDATE events SET starts_at=? WHERE slug='pqc-2026'").bind("2026-12-01T09:00:00+01:00").run();
+    const response = await register(f.body, f.token);
+    expect(response.status).toBe(500);
+    await expectNoRegistrationEffects(f.userId);
+  });
+
   it("shows the selected identity's organization and title through management, email and export without changing participation", async () => {
     const f = await fixture();
     const before = await participationCounts(f.userId);

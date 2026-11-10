@@ -117,6 +117,7 @@ export async function submitEventRegistration(
   metadata: EventRegistrationSubmissionMetadata,
 ): Promise<PublicRegistrationSubmissionResult> {
   const event = await getEventBySlug(db, metadata.eventSlug);
+  const startsAt = persistedUtcInstant(event.starts_at);
   await recordHugoEventBasePath(db, event, metadata.eventBasePath);
 
   let invite: InviteRecord | null = null;
@@ -331,7 +332,7 @@ export async function submitEventRegistration(
       success: true,
       registrationId: registration.id,
       status: registration.status,
-      startsAt: persistedUtcInstant(event.starts_at),
+      startsAt,
       manageToken: exposeManageCapability ? prepared.manageToken : null,
       manageUrl: exposeManageCapability ? manageUrl : null,
       shareUrl,

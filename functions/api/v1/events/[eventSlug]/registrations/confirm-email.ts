@@ -25,6 +25,7 @@ async function confirmRegistration(
 ): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
   const event = await getEventBySlug(c.env.DB, eventSlug);
+  const startsAt = persistedUtcInstant(event.starts_at);
   const result = await confirmRegistrationWithNotification(c.env.DB, {
     event,
     token,
@@ -46,7 +47,7 @@ async function confirmRegistration(
       success: true,
       stage: result.stage,
       status: result.registration.status,
-      startsAt: persistedUtcInstant(event.starts_at),
+      startsAt,
       shareUrl: result.shareUrl,
       manageUrl: result.manageUrl,
       manageToken: result.manageToken,
