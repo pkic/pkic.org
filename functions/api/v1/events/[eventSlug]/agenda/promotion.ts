@@ -58,7 +58,7 @@ export const PromotionCopySave = openApiRoute(promotionCopySaveRouteSchema, asyn
       c.env,
       data.params.eventSlug,
       data.params.occurrenceId,
-      data.body.expectedRevision,
+      data.body.expectedApprovedAt,
       data.body.copy,
     ),
   ),

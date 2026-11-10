@@ -19,7 +19,7 @@ export function preparePublicAgendaSnapshot(
     calendarPublic,
     occurrences: snapshot.occurrences
       .filter((item) => publicSessionTiming(item) !== undefined)
-      .map(({ pendingSpeakerCount: _pending, ...item }) => ({
+      .map(({ pendingSpeakerCount: _pending, promotionCopy: _promotionCopy, ...item }) => ({
         ...item,
         ...publicSessionMediaUrls(item.history?.materials ?? []),
         speakers: item.speakers.map(

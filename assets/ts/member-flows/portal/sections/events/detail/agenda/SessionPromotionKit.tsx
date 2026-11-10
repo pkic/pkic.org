@@ -40,7 +40,7 @@ export function SessionPromotionKit({
   const [editing, showEditing, closeEditing] = useDialogQueryState("promotionCopy");
   const base = `/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${encodeURIComponent(occurrence.id)}/promotion`;
   const body = {
-    expectedRevision: snapshot?.revision ?? 0,
+    expectedApprovedAt: occurrence.promotionCopy?.approvedAt ?? null,
     copy: {
       whyAttend,
       takeaways: takeaways
@@ -74,7 +74,7 @@ export function SessionPromotionKit({
   return (
     <>
       <PersonalPromotionKit
-        key={snapshot?.revision}
+        key={`${snapshot?.revision}:${occurrence.promotionCopy?.approvedAt}`}
         base={base}
         title={occurrence.title}
         menu={
@@ -129,7 +129,7 @@ export function SessionPromotionKit({
             class="pk-form"
           >
             <p>
-              Review the narrative, then approve the agenda to release this copy with its schedule and speaker credits.
+              Review the narrative, then approve it. Speaker materials use it right away; the agenda does not change.
             </p>
             <Field label="Why attend" {...form.of("copy.whyAttend")}>
               {(control) => <Textarea {...control} value={whyAttend} onInput={(e) => setWhy(e.currentTarget.value)} />}
