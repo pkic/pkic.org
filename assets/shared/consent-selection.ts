@@ -1,6 +1,26 @@
 import type { ConsentItem } from "./schemas/registration";
 import type { RequiredTerm } from "./schemas/event-read-models";
 
+export function isTermAccepted(term: ConsentItem, accepted: readonly ConsentItem[]): boolean {
+  return accepted.some((item) => item.termKey === term.termKey && item.version === term.version);
+}
+
+/** Optional choices remain available without making an otherwise complete agreement need attention. */
+export function splitTermsByAcceptance(terms: readonly RequiredTerm[], consents: readonly ConsentItem[]) {
+  const accepted: RequiredTerm[] = [];
+  const unaccepted: RequiredTerm[] = [];
+  const missingRequired: RequiredTerm[] = [];
+  const availableOptional: RequiredTerm[] = [];
+  for (const term of terms) {
+    if (isTermAccepted(term, consents)) accepted.push(term);
+    else {
+      unaccepted.push(term);
+      (term.required ? missingRequired : availableOptional).push(term);
+    }
+  }
+  return { accepted, unaccepted, missingRequired, availableOptional };
+}
+
 /** One active-term and required-acceptance policy for every registration embedding and the server. */
 export function consentSelectionRefusal(
   terms: readonly Pick<RequiredTerm, "termKey" | "version" | "required">[],

@@ -1,8 +1,7 @@
 ---
 /*
- * One page for every room's broadcast overlays. The output and layout ride the
- * query; the event, the room and its read-only access ride the fragment,
- * which never reaches a server.
+ * One page for every room's broadcast overlays. The whole address rides the
+ * fragment, which never reaches a server, so the page stays static.
  */
 ---
 <!doctype html>
@@ -16,6 +15,6 @@
   </head>
   <body>
     <div id="live-overlay"></div>
-    <script>import "../../assets/ts/live-session/overlay-page";</script>
+    <script>import "../../../assets/ts/live-session/overlay-page";</script>
   </body>
 </html>

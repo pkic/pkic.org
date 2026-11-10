@@ -1,0 +1,91 @@
+@layer components {
+  .pk-content-faq {
+    display: grid;
+    gap: var(--pk-7);
+    margin-block: var(--pk-5);
+  }
+
+  .pk-content-faq__items {
+    overflow: hidden;
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-lg);
+    background: var(--pk-surface);
+  }
+
+  .pk-content-faq__item + .pk-content-faq__item {
+    border-block-start: 1px solid var(--pk-line);
+  }
+
+  .pk-content-faq__item {
+    scroll-margin-block-start: calc(var(--pkic-navbar-height) + var(--pk-8));
+  }
+
+  .pk-content-faq__item[open] {
+    background: color-mix(in srgb, var(--pk-accent) 4%, var(--pk-surface));
+  }
+
+  .pk-content-faq__question {
+    display: flex;
+    gap: var(--pk-4);
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--pk-4) var(--pk-5);
+    color: var(--pk-ink);
+    font-size: var(--pk-text-lead);
+    font-weight: 600;
+    line-height: 1.4;
+    list-style: none;
+    cursor: pointer;
+  }
+
+  .pk-content-faq__question::-webkit-details-marker {
+    display: none;
+  }
+
+  .pk-content-faq__question::after {
+    flex: none;
+    inline-size: 0.6rem;
+    block-size: 0.6rem;
+    border-block-end: 2px solid var(--pk-accent-ink);
+    border-inline-end: 2px solid var(--pk-accent-ink);
+    content: "";
+    transform: rotate(45deg);
+    transition: transform var(--pk-dur-fast) var(--pk-ease);
+  }
+
+  .pk-content-faq__item[open] > .pk-content-faq__question::after {
+    transform: rotate(225deg);
+  }
+
+  .pk-content-faq__question:hover {
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-content-faq__question:focus-visible {
+    outline: 2px solid var(--pk-accent);
+    outline-offset: -2px;
+  }
+
+  .pk-content-faq__item:target > .pk-content-faq__question {
+    background: var(--pk-accent-soft);
+  }
+
+  .pk-content-faq__answer {
+    padding: 0 var(--pk-5) var(--pk-5);
+    color: var(--pk-ink);
+  }
+
+  .pk-content-faq__answer > :first-child {
+    margin-block-start: 0;
+  }
+
+  .pk-content-faq__answer > :last-child {
+    margin-block-end: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pk-content-faq__question::after {
+      transition: none;
+    }
+  }
+}

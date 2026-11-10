@@ -27,3 +27,19 @@ export async function prepareLateSpeakerConsentGuard(db: DatabaseLike, eventId: 
     );
   return prepareAuthorizationGuard(db, evidence);
 }
+
+/** Only active versions with this speaker's unwithdrawn event agreement can be preselected. */
+export function prepareCurrentSpeakerConsents(db: DatabaseLike, eventId: string, userId: string) {
+  return db
+    .prepare(
+      `SELECT consent.term_key AS termKey, consent.term_version AS version
+    FROM consent_acceptances consent
+    JOIN event_terms term ON term.event_id = consent.event_id
+      AND term.audience_type = consent.audience_type AND term.term_key = consent.term_key
+      AND term.version = consent.term_version AND term.active = 1
+    WHERE consent.event_id = ? AND consent.user_id = ?
+      AND consent.audience_type = 'speaker' AND consent.withdrawn_at IS NULL
+    ORDER BY consent.term_key`,
+    )
+    .bind(eventId, userId);
+}

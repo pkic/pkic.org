@@ -47,6 +47,7 @@ import { eventAnalyticsResponseSchema } from "../assets/shared/schemas/event-ana
 import { eventSummarySchema } from "../assets/shared/schemas/event-read-models";
 import { eventInviteValiditySchema } from "../assets/shared/schemas/event-invite-validity";
 import { registrationInviteCreateSchema } from "../assets/shared/schemas/registration";
+import { speakerSelfServiceReadResponseSchema } from "../assets/shared/schemas/speaker-self-service";
 
 const ID = "11111111-1111-4111-8111-111111111111";
 const SECOND_ID = "22222222-2222-4222-8222-222222222222";
@@ -349,4 +350,9 @@ describe("explicit attendance choices", () => {
     ]).parse(payload);
     expect(completed.dayAttendance).toEqual(payload.dayAttendance);
   });
+});
+
+it("requires explicit saved speaker agreements in the read response", () => {
+  expect(speakerSelfServiceReadResponseSchema.shape.acceptedConsents.safeParse(undefined).success).toBe(false);
+  expect(speakerSelfServiceReadResponseSchema.shape.acceptedConsents.parse([])).toEqual([]);
 });

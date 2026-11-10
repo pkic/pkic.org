@@ -7,7 +7,7 @@ import "./ContentComponents.css";
 import "./ContentLayout.css";
 import "./ContentGrid.scss";
 
-export type ContentFrameKind = "cards" | "columns" | "criteria" | "donation" | "generic" | "sidebar" | "sub";
+export type ContentFrameKind = "cards" | "columns" | "donation" | "generic" | "sidebar" | "sub";
 
 export function ContentFrame({
   children,
@@ -279,28 +279,6 @@ export function ContentBanner({
         ) : null}
       </div>
     </section>
-  );
-}
-
-export function ContentFaq({
-  groups,
-}: {
-  groups: Array<{ questions?: Array<{ answerHtml?: string; open?: boolean; question?: string }>; title?: string }>;
-}) {
-  return (
-    <div class="pk-content-faq">
-      {groups.map((group, groupIndex) => (
-        <section key={`${group.title ?? "group"}-${groupIndex}`}>
-          {group.title ? <h2>{group.title}</h2> : null}
-          {group.questions?.map((item, itemIndex) => (
-            <article key={`${item.question ?? "question"}-${itemIndex}`}>
-              <h3>{item.question}</h3>
-              {item.answerHtml ? <div dangerouslySetInnerHTML={{ __html: item.answerHtml }} /> : null}
-            </article>
-          ))}
-        </section>
-      ))}
-    </div>
   );
 }
 

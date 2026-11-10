@@ -459,7 +459,7 @@ describe("broadcast overlays", () => {
     expect(shown().hasAttribute("data-flash")).toBe(true);
   });
 
-  it("names the output and layout in the query, and the room and access in the fragment only", () => {
+  it("keeps the whole address in the fragment, output and layout first", () => {
     const address = liveOverlayAddress("https://pkic.org", {
       view: "program",
       layout: "lower-third",
@@ -468,9 +468,9 @@ describe("broadcast overlays", () => {
       token: "signed.overlay.access",
     });
     const url = new URL(address);
-    expect(url.pathname).toBe("/live-overlay/");
-    expect(url.search).toBe("?view=program&layout=lower-third");
-    expect(url.search).not.toContain("access");
+    expect(url.pathname).toBe("/live/overlay/");
+    expect(url.search).toBe("");
+    expect(url.hash).toMatch(/^#view=program&layout=lower-third&event=/);
     expect(parseLiveOverlayAddress(url)).toEqual({
       view: "program",
       layout: "lower-third",
@@ -481,10 +481,9 @@ describe("broadcast overlays", () => {
     const fallback = new URL(address.replace("layout=lower-third", "layout=Not%20a%20name"));
     expect(parseLiveOverlayAddress(fallback)?.layout).toBe("full-frame");
     expect(
-      new URL(liveOverlayAddress("https://pkic.org", { ...parseLiveOverlayAddress(url)!, layout: "full-frame" }))
-        .search,
-    ).toBe("?view=program");
-    expect(parseLiveOverlayAddress({ search: "?view=lower-third", hash: url.hash })).toBeNull();
-    expect(parseLiveOverlayAddress({ search: "?view=program", hash: "" })).toBeNull();
+      new URL(liveOverlayAddress("https://pkic.org", { ...parseLiveOverlayAddress(url)!, layout: "full-frame" })).hash,
+    ).not.toContain("layout=");
+    expect(parseLiveOverlayAddress({ hash: url.hash.replace("view=program", "view=lower-third") })).toBeNull();
+    expect(parseLiveOverlayAddress({ hash: "#view=program" })).toBeNull();
   });
 });

@@ -1,6 +1,8 @@
 import { eventParticipantRecordPath } from "../../assets/ts/member-flows/portal/sections/events/event-participant-paths";
 import { eventWorkspacePath } from "./helpers/agenda-workspace";
 import { SPEAKER_PARTICIPATION_COPY } from "../../assets/shared/proposal-speaker-acceptance";
+import { uploadThroughControl } from "./helpers/file-upload";
+import { eventTermsResponseSchema } from "../../assets/shared/schemas/forms";
 import { eventDetailResponseSchema } from "../../assets/shared/schemas/event-management";
 import {
   groupEventRegistrationSettingsResponseSchema,
@@ -30,7 +32,7 @@ import {
 import { speakerSelfProfilePatchSchema } from "../../assets/shared/schemas/proposal-management";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { signInToPortal } from "./helpers/portal-auth";
-import { submitProposal, inviteCoSpeaker, PROPOSAL_EVENT_SLUG } from "./helpers/proposals";
+import { submitProposal, inviteCoSpeaker, decideProposal, PROPOSAL_EVENT_SLUG } from "./helpers/proposals";
 import { registerInBrowser } from "./helpers/registration";
 import { completeIndependentCapacityDisclosure } from "./helpers/independent-capacity";
 
@@ -1002,4 +1004,129 @@ test("attendees invite colleagues and confirm a seat release from one day picker
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
   await cancellation.getByRole("button", { name: "Keep registration", exact: true }).click();
+});
+
+test("a speaker reopens accepted terms and manages a presentation from its own proposal tab", async ({
+  page,
+  browser,
+}, info) => {
+  await signInToPortal(page, e2eAdminEmail("speaker-submission-confirmation"));
+  const participantEmail = `proposal-tabs-${crypto.randomUUID()}@example.test`;
+  const title = "Speaker proposal presentation journey";
+  const proposal = await submitProposal(page, {
+    proposerEmail: participantEmail,
+    firstName: "Synthetic",
+    lastName: "Speaker",
+    title,
+    abstract:
+      "A synthetic proposal verifying saved agreements and presentation uploads through the speaker's portal tabs.",
+  });
+  const termsResponse = await page.request.get(`/api/v1/events/${PROPOSAL_EVENT_SLUG}/terms?audience=speaker`);
+  expect(termsResponse.status()).toBe(200);
+  const { terms } = eventTermsResponseSchema.parse(await termsResponse.json());
+  expect(terms.length).toBeGreaterThan(0);
+  const context = await browser.newContext({ baseURL: new URL(page.url()).origin });
+  try {
+    const speaker = await context.newPage();
+    await signInToPortal(speaker, participantEmail);
+    await speaker.goto(`/portal/#/events/${PROPOSAL_EVENT_SLUG}/submissions`);
+    await expect(speaker.getByRole("table", { name: "Your event proposals" }).getByRole("columnheader")).toHaveText([
+      "Title",
+      "Status",
+      "Participation",
+      "Role",
+    ]);
+    await speaker.screenshot({ path: info.outputPath("proposal-list-desktop.png"), fullPage: true });
+    await speaker.setViewportSize({ width: 375, height: 900 });
+    await speaker.screenshot({ path: info.outputPath("proposal-list-phone.png"), fullPage: true });
+    await speaker.setViewportSize({ width: 1280, height: 900 });
+    await speaker.getByRole("link", { name: title, exact: true }).click();
+    const tabs = speaker.getByRole("navigation", { name: "Proposal", exact: true });
+    await tabs.getByRole("link", { name: "Speaker profile", exact: true }).click();
+    for (const term of terms) {
+      const checkbox = speaker.getByRole("checkbox", {
+        name: term.displayText?.trim() || term.termKey.replace(/[-_]/g, " "),
+        exact: true,
+      });
+      await expect(checkbox).toBeChecked();
+      await expect(checkbox).toBeDisabled();
+    }
+    await speaker.reload();
+    for (const term of terms)
+      await expect(
+        speaker.getByRole("checkbox", {
+          name: term.displayText?.trim() || term.termKey.replace(/[-_]/g, " "),
+          exact: true,
+        }),
+      ).toBeChecked();
+    await speaker.screenshot({ path: info.outputPath("saved-speaker-terms.png"), fullPage: true });
+    await speaker.getByRole("button", { name: "Choose another representation", exact: true }).click();
+    for (const term of terms) {
+      const agreement = speaker.getByRole("checkbox", {
+        name: term.displayText?.trim() || term.termKey.replace(/[-_]/g, " "),
+        exact: true,
+      });
+      await expect(agreement).toBeChecked();
+      await expect(agreement).toBeDisabled();
+    }
+    await speaker.screenshot({ path: info.outputPath("identity-saved-terms.png"), fullPage: true });
+    await speaker.getByRole("button", { name: "Cancel", exact: true }).click();
+    const presentations = tabs.getByRole("link", { name: "Presentations", exact: true });
+    await presentations.focus();
+    await presentations.press("Enter");
+    await expect(
+      speaker.getByText(
+        "Presentations are available after the proposal is accepted and your participation is confirmed.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(speaker.getByLabel("Presentation file", { exact: true })).toHaveCount(0);
+    expect(await decideProposal(page, proposal.proposalId, "accepted")).toBe(200);
+    await speaker.reload();
+    const file = Buffer.from("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF");
+    // Declining the disclaimer must allow the same file to be selected again.
+    await uploadThroughControl(speaker, speaker.getByLabel("Presentation file", { exact: true }), {
+      name: "speaker-slides.pdf",
+      mimeType: "application/pdf",
+      buffer: file,
+    });
+    await speaker.getByRole("dialog").press("Escape");
+    await expect(speaker.getByLabel("Presentation file", { exact: true })).toHaveValue("");
+    await expect(speaker.getByLabel("Presentation file", { exact: true })).toBeFocused();
+    await uploadThroughControl(speaker, speaker.getByLabel("Presentation file", { exact: true }), {
+      name: "speaker-slides.pdf",
+      mimeType: "application/pdf",
+      buffer: file,
+    });
+    const disclaimer = speaker.getByRole("dialog");
+    await disclaimer.getByRole("checkbox").check();
+    await disclaimer.getByRole("button", { name: "Upload presentation", exact: true }).click();
+    await expect(speaker.getByText("Presentation uploaded.", { exact: true })).toBeVisible();
+    await expect(speaker.getByLabel("Presentation file", { exact: true })).toHaveValue("");
+    const download = speaker.getByRole("link", { name: "Download current presentation", exact: true });
+    await expect(download).toBeVisible();
+    const downloaded = await speaker.request.get((await download.getAttribute("href")) ?? "");
+    expect(downloaded.status()).toBe(200);
+    expect(await downloaded.body()).toEqual(file);
+    await speaker.reload();
+    await expect(download).toBeVisible();
+    const saved = speakerSelfServiceReadResponseSchema.parse(
+      await (await speaker.request.get(`/api/v1/proposals/${proposal.proposalId}/participation`)).json(),
+    );
+    expect(saved.proposal.presentationUploaded).toBe(true);
+    expect(saved.acceptedConsents).toEqual(terms.map(({ termKey, version }) => ({ termKey, version })));
+    for (const width of [1280, 375]) {
+      await speaker.setViewportSize({ width, height: 900 });
+      await speaker.screenshot({ path: info.outputPath(`proposal-presentations-${width}.png`), fullPage: true });
+    }
+    await tabs.getByRole("link", { name: "Speaker profile", exact: true }).click();
+    await expect(speaker.getByLabel("Presentation file", { exact: true })).toHaveCount(0);
+    await speaker.screenshot({ path: info.outputPath("saved-speaker-terms-phone.png"), fullPage: true });
+    await speaker.goBack();
+    await expect(download).toBeVisible();
+    await speaker.goForward();
+    await expect(speaker.getByLabel("Presentation file", { exact: true })).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
 });

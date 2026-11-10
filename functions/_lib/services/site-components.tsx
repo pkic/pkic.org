@@ -15,6 +15,9 @@ import { EventSpeakerManagement } from "../../../assets/ts/site/EventSpeakerMana
 import { EventSpeakerPresentation } from "../../../assets/ts/site/EventSpeakerPresentation";
 import { renderContentAgenda } from "./site-agenda";
 import { buttonVariant, renderContentCards } from "./site-content-cards";
+import { renderContentItemTable, renderContentRequirements } from "./site-content-identified-items";
+import { renderModelContent } from "./site-content-model";
+import { renderContentFaq } from "./site-content-faq";
 import { renderToStringAsync as render } from "preact-render-to-string";
 import { renderSiteMarkdown } from "./site-markdown-processor";
 import {
@@ -38,7 +41,6 @@ import {
   ContentMemberWall,
   ContentBanner,
   ContentButtonLink,
-  ContentFaq,
   ContentFigure,
   ContentFrame,
   ContentGallery,
@@ -69,6 +71,8 @@ export interface ContentComponentContext {
   eventAssetUrls?: (pattern?: string) => string[];
   listing: (kind: ContentCollectionKind, limit?: number) => SiteListing;
   membershipDocuments?: () => Promise<MembershipDocument[]>;
+  /** Markdown for `{{< model >}}`, supplied only by a page published from a pinned model version. */
+  modelContent?: (call: ContentCall) => string;
   publication?: SitePublicationSnapshot;
   route: string;
   sourcePath: string;
@@ -166,32 +170,6 @@ function island(module?: string, defaults: Record<string, string> = {}): Content
     );
 }
 
-async function faq(call: ContentCall): Promise<RenderedCall> {
-  const data = objectValue(call.inner);
-  const rawGroups = Array.isArray(data.groups) ? data.groups : [];
-  const groups = await Promise.all(
-    rawGroups.map(async (value) => {
-      const group = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-      const questions = Array.isArray(group.questions) ? group.questions : [];
-      return {
-        questions: await Promise.all(
-          questions.map(async (questionValue) => {
-            const question =
-              questionValue && typeof questionValue === "object" ? (questionValue as Record<string, unknown>) : {};
-            return {
-              answerHtml: await markdownHtml(question.answer),
-              open: question.open === true,
-              question: typeof question.question === "string" ? question.question : undefined,
-            };
-          }),
-        ),
-        title: typeof group.title === "string" ? group.title : undefined,
-      };
-    }),
-  );
-  return component(await render(<ContentFaq groups={groups} />));
-}
-
 async function glossary(call: ContentCall): Promise<RenderedCall> {
   const data = objectValue(call.inner);
   const rawTerms = Array.isArray(data.terms) ? data.terms : [];
@@ -207,6 +185,9 @@ async function glossary(call: ContentCall): Promise<RenderedCall> {
   terms.sort((a, b) => a.term.localeCompare(b.term));
   return component(await render(<ContentGlossary terms={terms} />));
 }
+
+const modelContent: ContentRenderer = async (call, context) =>
+  component(await renderModelContent(call, context, (markdown) => renderContentMarkdown(markdown, context)));
 
 async function maturity(call: ContentCall): Promise<RenderedCall> {
   const data = objectValue(call.inner);
@@ -308,7 +289,6 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
         <ContentColumn html={await renderContentMarkdown(call.inner ?? "", context)} options={call.props} />,
       ),
     ),
-  criteria: frame("criteria"),
   "donation-disclaimer": async () =>
     component(
       await render(
@@ -346,7 +326,7 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
   // The published shortcode only stashes its YAML for the events layout to
   // read; it draws nothing itself, and `eventsIndex()` reads the same block.
   "events-sidebar": async () => component("", true),
-  faq,
+  faq: async (call) => component(await renderContentFaq(call, markdownHtml)),
   figure: async (call, context) => {
     const src = context.assetUrl(call.props.src) ?? call.props.src;
     return component(
@@ -391,7 +371,10 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
     );
   },
   ltl: trustLists,
+  "item-table": async (call) => component(await renderContentItemTable(call, inlineMarkdownHtml)),
   "maturity-staircase": maturity,
+  model: modelContent,
+  "model-section": (call, context) => modelContent({ ...call, props: { ...call.props, part: "section" } }, context),
   members: async (call, context) => {
     const island = await memberWall(call, context);
     return component(
@@ -412,6 +395,7 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
       ),
     ),
   "recent-posts": (call, context) => collection("recent-posts", call, context),
+  requirements: async (call) => component(await renderContentRequirements(call, inlineMarkdownHtml)),
   row: async (call, context) =>
     component(await render(<ContentRow html={await renderContentMarkdown(call.inner ?? "", context)} />)),
   "self-assessment": (call, context) =>

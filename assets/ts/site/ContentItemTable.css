@@ -1,0 +1,77 @@
+@layer components {
+  .pk-content-item-table__scroll {
+    container-type: inline-size;
+  }
+
+  .pk-content-item-table tr[id] {
+    scroll-margin-block-start: calc(var(--pkic-navbar-height) + var(--pk-8));
+  }
+
+  .pk-content-item-table tbody tr:target {
+    background: var(--pk-accent-soft);
+  }
+
+  .pk-content-item-table__id {
+    color: var(--pk-ink-muted);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .pk-content-item-table__id:hover {
+    color: var(--pk-accent-ink);
+    text-decoration: underline;
+  }
+
+  /* A narrow column reads each row as one record: number, lead cell, then labeled details. */
+  @container (max-width: 40rem) {
+    .pk-content-item-table,
+    .pk-content-item-table tbody,
+    .pk-content-item-table tr,
+    .pk-content-item-table td {
+      display: block;
+    }
+
+    .pk-content-item-table thead {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+
+    .pk-content-item-table tr {
+      padding: var(--pk-4);
+      border-block-end: 1px solid var(--pk-line);
+    }
+
+    .pk-content-item-table tr:last-child {
+      border-block-end: 0;
+    }
+
+    .pk-content-item-table td {
+      padding: 0;
+      border: 0;
+    }
+
+    .pk-content-item-table td + td {
+      margin-block-start: var(--pk-3);
+    }
+
+    .pk-content-item-table td:nth-child(2) {
+      font-weight: 600;
+    }
+
+    .pk-content-item-table td[data-label]:not(:nth-child(2))::before {
+      display: block;
+      margin-block-end: var(--pk-1);
+      color: var(--pk-ink-muted);
+      content: attr(data-label);
+      font-size: var(--pk-text-2xs);
+      font-weight: 700;
+      letter-spacing: var(--pk-tracking-label);
+      text-transform: uppercase;
+    }
+  }
+}

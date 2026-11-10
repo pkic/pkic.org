@@ -69,6 +69,7 @@ function speakerData(
     },
     currentRepresentation: null,
     presentationTerms: [],
+    acceptedConsents: [],
   });
 }
 

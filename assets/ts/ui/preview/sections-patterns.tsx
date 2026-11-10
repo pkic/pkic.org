@@ -10,6 +10,7 @@ import { ContentVersionNoticePreview } from "./ContentVersionNoticePreview";
 import { ModelNavigationPreview } from "./ModelNavigationPreview";
 import { contentContributionPreview } from "./ContentContributionPreview";
 import { pictureUploadSection } from "./picture-upload";
+import { consentAgreementsSection } from "./consent-agreements";
 import { contentSections } from "./sections-content";
 import { contactOrganizationSection } from "./contact-organization";
 import { registrationSections } from "./sections-registration";
@@ -268,6 +269,7 @@ const wallLogo = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://ww
 export const patternSections: PreviewSection[] = [
   guidedTourSection,
   pictureUploadSection,
+  consentAgreementsSection,
   contactOrganizationSection,
   ...registrationSections,
   sessionTimingSection,

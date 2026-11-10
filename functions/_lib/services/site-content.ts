@@ -456,6 +456,7 @@ export async function loadSiteContent(
       matchingContentAssetUrls(eventDocument?.sourcePath ?? document.sourcePath, contentMediaPaths, pattern),
     listing: (kind, limit) =>
       contentComponentListing(kind, documents, datedDocuments(document.language), listingItem, limit),
+    modelContent: options.modelContent,
     membershipDocuments: () =>
       readMembershipAgreementDocuments(
         (href) => loadSiteContent(href, options),

@@ -20,7 +20,7 @@ function mount(): void {
   render(
     address ? (
       <LiveProgramOverlay
-        key={`${window.location.search}${window.location.hash}`}
+        key={window.location.hash}
         view={address.view}
         layout={address.layout}
         slug={address.slug}

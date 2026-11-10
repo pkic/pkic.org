@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useState } from "preact/hooks";
+import { splitTermsByAcceptance } from "../../shared/consent-selection";
 import type { z } from "zod";
 import type { RequiredTerm } from "../../shared/schemas/forms";
 import type { ConsentItem } from "../../shared/schemas/registration";
@@ -87,8 +88,8 @@ export function SpeakerParticipationIdentity({
       new URL(location.hash.slice(1), location.origin).searchParams.has("verify"),
   );
   const [changing, setChanging] = useState(data.profile.actingIdentitySelection === "unrecorded" || returning);
-  const [localTermsAccepted, setLocalTermsAccepted] = useState(terms.every((term) => !term.required));
-  const [recorded, setRecorded] = useState<ConsentItem[]>();
+  const [localTermsAccepted, setLocalTermsAccepted] = useState(termsAccepted);
+  const [recorded, setRecorded] = useState<ConsentItem[]>(data.acceptedConsents);
   const recordTerms = useCallback(
     (consents: ConsentItem[]) => {
       setRecorded(consents);
@@ -101,6 +102,13 @@ export function SpeakerParticipationIdentity({
     if (changing) onEditing();
   }, [changing, onEditing]);
   const accepted = termsReady && (invited ? termsAccepted : localTermsAccepted);
+  const needsTermsReview = splitTermsByAcceptance(terms, data.acceptedConsents).missingRequired.length > 0;
+  function changeRepresentation(add: boolean) {
+    setAdding(add);
+    setLocalTermsAccepted(termsAccepted);
+    setRecorded(data.acceptedConsents);
+    setChanging(true);
+  }
   return (
     <div class="pk-stack pk-stack--loose">
       {changing ? (
@@ -111,16 +119,10 @@ export function SpeakerParticipationIdentity({
                 <div
                   onInput={() => {
                     const selected = consents();
-                    setLocalTermsAccepted(
-                      terms.every(
-                        (term) =>
-                          !term.required ||
-                          selected.some((value) => value.termKey === term.termKey && value.version === term.version),
-                      ),
-                    );
+                    setLocalTermsAccepted(splitTermsByAcceptance(terms, selected).missingRequired.length === 0);
                   }}
                 >
-                  <ConsentList terms={terms} recorded={recorded} />
+                  <ConsentList terms={terms} recorded={recorded} lockRecorded />
                 </div>
               )}
             </Field>
@@ -152,6 +154,8 @@ export function SpeakerParticipationIdentity({
                 onClick={() => {
                   setAdding(false);
                   setChanging(false);
+                  setLocalTermsAccepted(termsAccepted);
+                  setRecorded(data.acceptedConsents);
                   onChange(null);
                   onCancelEditing?.();
                 }}
@@ -169,15 +173,14 @@ export function SpeakerParticipationIdentity({
             available={Boolean(representation)}
           >
             <div class="pk-cluster">
-              <Button type="button" variant="secondary" onClick={() => setChanging(true)}>
-                Choose another representation
+              <Button type="button" variant="secondary" onClick={() => changeRepresentation(false)}>
+                {!invited && needsTermsReview ? "Review speaker terms and identity" : "Choose another representation"}
               </Button>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => {
-                  setAdding(true);
-                  setChanging(true);
+                  changeRepresentation(true);
                 }}
               >
                 Add representation

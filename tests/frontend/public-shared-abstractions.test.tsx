@@ -28,6 +28,20 @@ afterEach(() => {
 });
 
 describe("public shared frontend abstractions", () => {
+  it("locks an agreement when its saved receipt arrives, even after an earlier draft was unchecked", () => {
+    const terms = [{ termKey: "privacy", version: "1", required: true, contentRef: null, displayText: "Privacy" }];
+    const container = mount(<ConsentList terms={terms} lockRecorded />);
+    const checkbox = controlFor(container, "Privacy");
+    void act(() => checkbox.click());
+    void act(() => checkbox.click());
+    expect(checkbox.checked).toBe(false);
+    void act(() =>
+      render(<ConsentList terms={terms} recorded={[{ termKey: "privacy", version: "1" }]} lockRecorded />, container),
+    );
+    expect(checkbox.checked).toBe(true);
+    expect(checkbox.disabled).toBe(true);
+  });
+
   it("keeps featured and compact consent cards on the same interactive frame", () => {
     const compact = mount(
       <ConsentCard
