@@ -13,9 +13,8 @@ models:
         version: 1.0.1
         status: released
         root: /wg/pqc/pqcmm/versions/1.0.1/
-        # The 1.0.1 content on main: the release snapshot plus guidance published with it.
-        commit: 4c09711fcd5e41889cf642a50c650cd684ee0a44
-        sha256: 017e4d67f6ae09f930036074d86d849621c8587650ece0cea23e5ae2fbf68d89
+                commit: d1dcc57d0c838ae1361f5f075ed8d57604ba4a6f
+        sha256: 4a5267fe13a6d00bc9ce2d080a9bdd8a11d55869ae470294250c07714ed3b9ef
         tag: v1.0.1
       - id: assessment-methods
         version: 1.1.0
@@ -23,5 +22,5 @@ models:
         root: /wg/pqc/pqcmm/versions/drafts/1.1.0/
         aliases: [/wg/pqc/pqcmm/drafts/1.1.0/, /wg/pqc/pqcmm/drafts/2.0.0/]
         branch: agent/pqcmm-1.1.0-draft
-        commit: 0b4b40937acf8f335962554d4cbea989f48c0819
-        sha256: e153fdef40212f59cf98cfa3d9ad03b2265dabc0d887a50bc738e7605b57e260
+        commit: ddcf9bdceaf9b0852dde6edf04558ede34a8fde7
+        sha256: 8f0cf8e240cf06a9c73e0c4df1ce0133d61284345b3332925263bbb04cdbbca7
