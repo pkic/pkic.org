@@ -10,6 +10,7 @@ import type { ScreenClock } from "./screen-clock";
 import { screenDisplay, type ScreenDisplay, type ScreenLink } from "./screen-display";
 import { screenHandoffDue, SCREEN_READY_ATTRIBUTE } from "./screen-handoff";
 import { ScreenLiveFeed, type ScreenLiveReport } from "./ScreenLiveFeed";
+import { ScreenLivestreamPlayer } from "./ScreenLivestreamPlayer";
 import { ScreenMarker } from "./ScreenMarker";
 import { ScreenPairing, ScreenWaiting } from "./ScreenStatus";
 import { useScreenRuntime } from "./useScreenRuntime";
@@ -37,11 +38,17 @@ export function ScreenView({ screenId, display, now }: { screenId: ScreenId; dis
     case "waiting":
       return <ScreenWaiting screenId={screenId} name={display.name} marker={display.marker} />;
     case "livestream":
-      return (
+      return display.stream ? (
+        <ScreenLivestreamPlayer
+          videoId={display.stream.videoId}
+          roomName={display.roomName}
+          aside={<ScreenMarker marker={display.marker} placement="corner" />}
+        />
+      ) : (
         <ScreenWaiting
           screenId={screenId}
           name={display.name}
-          status={`${display.roomName} · Livestream`}
+          status={`${display.roomName} · No livestream`}
           marker={display.marker}
         />
       );

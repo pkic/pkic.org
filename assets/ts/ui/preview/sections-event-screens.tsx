@@ -10,7 +10,7 @@ import { ScreenPairing, ScreenWaiting } from "../../event-screens/ScreenStatus";
 import { ScreenView } from "../../event-screens/ScreenApp";
 import { screenAutoState } from "../../event-screens/screen-auto-mode";
 import type { ScreenMarker } from "../../event-screens/screen-display";
-import { ScreenLivestream, ScreenLivestreamReconnecting } from "../../event-screens/ScreenLivestream";
+import { ScreenLivestream } from "../../event-screens/ScreenLivestream";
 import { LiveClockContext } from "../../live-session/useLiveCountdown";
 import type { LiveRoomState } from "../../live-session/live-room-state";
 import {
@@ -151,10 +151,12 @@ export const eventScreenSections: PreviewSection[] = [
   {
     id: "screen-livestream-reconnecting",
     title: "Screen: livestream reconnecting",
-    note: "Only while the player has failed or the stream ended; the screen keeps retrying.",
+    note: "Only while the player has failed, stalled or the stream ended; the card covers the player as it retries.",
     render: () => (
       <Screen>
-        <ScreenLivestreamReconnecting roomName={SCREEN_FIXTURE.roomName} />
+        <ScreenLivestream reconnectingRoom={SCREEN_FIXTURE.roomName}>
+          <div class="pk-preview__screen-player">Livestream player</div>
+        </ScreenLivestream>
       </Screen>
     ),
   },

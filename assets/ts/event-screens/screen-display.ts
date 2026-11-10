@@ -1,3 +1,4 @@
+import type { LiveStream } from "../../shared/schemas/event-live-stream";
 import type { ScreenOwnView } from "../../shared/schemas/event-screens";
 import type { LiveOverlayView } from "../../shared/schemas/live-session-room";
 import type { LiveRoomState } from "../live-session/live-room-state";
@@ -45,7 +46,7 @@ export interface ScreenSituation {
 export type ScreenDisplay =
   | { kind: "pairing"; pairing: { code: string; expiresAt: string } | null }
   | { kind: "waiting"; name: string; marker: ScreenMarker }
-  | { kind: "livestream"; name: string; roomName: string; marker: ScreenMarker }
+  | { kind: "livestream"; name: string; roomName: string; stream: LiveStream | null; marker: ScreenMarker }
   | { kind: "idle"; name: string; roomName: string; marker: ScreenMarker }
   | {
       kind: "output";
@@ -61,7 +62,8 @@ export type ScreenDisplay =
  * While offline the last state stays, its timers counting. A stage display
  * whose studio session has passed its scheduled end follows its copy of the
  * room's agenda (auto mode) until the studio is back; every other output
- * holds its last frame.
+ * holds its last frame. A livestream keeps playing its last known stream,
+ * which only YouTube serves.
  */
 export function screenDisplay(situation: ScreenSituation): ScreenDisplay {
   const { view, now, live } = situation;
@@ -73,6 +75,7 @@ export function screenDisplay(situation: ScreenSituation): ScreenDisplay {
       kind: "livestream",
       name,
       roomName: assignment.roomName,
+      stream: view.livestream,
       marker: screenOfflineMarker(situation.read, now),
     };
   const shown = {
