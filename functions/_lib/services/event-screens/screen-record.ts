@@ -4,7 +4,8 @@ import type { D1StatementResult, DatabaseLike, StatementLike } from "../../types
 
 /**
  * The staff read model of a screen: its record, its room's name, and its
- * newest unrevoked, unexpired sign-in (an active one before a pending one).
+ * unexpired active sign-in, else its newest unrevoked approval, kept past its
+ * window so staff can see a code that was never used.
  * The session is picked by one indexed subquery per screen, so a page of
  * screens stays one statement.
  */
@@ -18,7 +19,7 @@ export const SCREEN_RECORD_FROM = `FROM screens screen
   LEFT JOIN screen_sessions session ON session.id=(
     SELECT candidate.id FROM screen_sessions candidate
      WHERE candidate.screen_id=screen.id AND candidate.revoked_at IS NULL
-       AND candidate.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
+       AND (candidate.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') OR candidate.activated_at IS NULL)
      ORDER BY candidate.activated_at IS NULL, candidate.created_at DESC, candidate.id DESC LIMIT 1)`;
 
 export interface ScreenRecordRow {

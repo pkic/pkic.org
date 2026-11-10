@@ -14,10 +14,15 @@ export type ScreenConnection =
   | { kind: "offline"; forMs: number }
   /** Staff approved its pairing code; the screen has not collected its sign-in yet. */
   | { kind: "waiting" }
+  /** The approval's window passed without the screen signing in, as when the code was mistyped. */
+  | { kind: "code-unused" }
   | { kind: "signed-out" };
 
 export function screenConnection(session: ScreenRecord["session"], now: number): ScreenConnection {
-  if (session.state === "pending") return { kind: "waiting" };
+  if (session.state === "pending")
+    return session.expiresAt !== null && Date.parse(session.expiresAt) <= now
+      ? { kind: "code-unused" }
+      : { kind: "waiting" };
   if (session.state !== "active") return { kind: "signed-out" };
   const seen = session.lastSeenAt ?? session.activatedAt;
   const forMs = seen ? Math.max(0, now - Date.parse(seen)) : 0;
@@ -36,6 +41,8 @@ export function screenConnectionDisplay(connection: ScreenConnection): {
       return { label: `Offline · ${formatDuration(connection.forMs)}`, tone: "risk" };
     case "waiting":
       return { label: "Waiting for the screen", tone: "info" };
+    case "code-unused":
+      return { label: "Code not used", tone: "warn" };
     case "signed-out":
       return { label: "Not signed in", tone: "warn" };
   }

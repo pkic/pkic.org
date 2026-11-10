@@ -115,7 +115,11 @@ export const screenRecordSchema = z
       .nullable(),
     /** Compare-and-set token for renaming or reassigning. */
     revision: z.number().int().nonnegative(),
-    /** The screen's newest sign-in that is not revoked. */
+    /**
+     * The screen's current sign-in, else its newest approval that is not
+     * revoked. An approval past `expiresAt` was never collected: the screen
+     * showed another code, or none.
+     */
     session: z
       .object({
         state: screenSessionStateSchema,

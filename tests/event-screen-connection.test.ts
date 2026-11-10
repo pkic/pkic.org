@@ -3,11 +3,15 @@ import { SCREEN_ONLINE_WINDOW_MS, screenConnection } from "../assets/shared/even
 
 const NOW = Date.parse("2026-12-01T09:30:00.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
-const session = (state: "none" | "pending" | "active", lastSeenAt: string | null = null) => ({
+const session = (
+  state: "none" | "pending" | "active",
+  lastSeenAt: string | null = null,
+  expiresAt: string | null = null,
+) => ({
   state,
   activatedAt: state === "active" ? ago(3_600_000) : null,
   lastSeenAt,
-  expiresAt: null,
+  expiresAt,
 });
 
 describe("screenConnection", () => {
@@ -21,7 +25,11 @@ describe("screenConnection", () => {
   });
 
   it("tells an approved screen that has not signed in from one with no sign-in", () => {
-    expect(screenConnection(session("pending"), NOW).kind).toBe("waiting");
+    expect(screenConnection(session("pending", null, ago(-60_000)), NOW).kind).toBe("waiting");
     expect(screenConnection(session("none"), NOW).kind).toBe("signed-out");
+  });
+
+  it("says an approval whose window passed without a sign-in was never used", () => {
+    expect(screenConnection(session("pending", null, ago(0)), NOW).kind).toBe("code-unused");
   });
 });

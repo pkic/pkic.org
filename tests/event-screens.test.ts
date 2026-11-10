@@ -2,6 +2,8 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { SCREEN_POLICY, SCREEN_SESSION_MAX_AGE_SECONDS } from "../assets/shared/event-screen-policy";
 import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
+import { screenConnection, screenConnectionDisplay } from "../assets/shared/event-screen-connection";
+import { agendaRoomsListSchema } from "../assets/shared/schemas/event-agenda-room-list";
 import {
   eventScreensListSchema,
   screenPairingResponseSchema,
@@ -201,6 +203,21 @@ describe("event screen pairing", () => {
     expect(approved.status).toBe(201);
     expect((await poll(challenge.cookie)).status).toBe(202);
     expect((await readAsScreen(first.cookie)).status).toBe(200);
+  });
+
+  it("shows staff an approval the screen never collected once its window passed", async () => {
+    const challenge = await startPairing();
+    const wrong = challenge.code === "AAAAAAAA" ? "BBBBBBBB" : "AAAAAAAA";
+    expect((await approve("manager", { pairingCode: wrong })).status).toBe(201);
+    await env.DB.prepare("UPDATE screen_sessions SET expires_at=? WHERE screen_id=? AND activated_at IS NULL")
+      .bind(new Date(Date.now() - 1000).toISOString(), SCREEN)
+      .run();
+    const list = await callApi(testEnv, `/api/v1/events/${EVENT.slug}/screens`, { headers: staff("manager") });
+    const [listed] = eventScreensListSchema.parse(await list.json()).screens;
+    expect(screenConnectionDisplay(screenConnection(listed!.session, Date.now()))).toEqual({
+      label: "Code not used",
+      tone: "warn",
+    });
   });
 
   it("refuses an expired challenge and replays of a used one", async () => {
@@ -449,6 +466,40 @@ describe("screen staff permissions", () => {
       body: JSON.stringify({ occurrenceId: null, expectedRevision: 0 }),
     });
     expect(response.status).toBe(403);
+  });
+
+  it("lets a screen manager list room names to assign, and nothing else of the agenda", async () => {
+    await env.DB.prepare("UPDATE event_agenda_rooms SET virtual_room_url='https://meet.example.test/hall' WHERE id=?")
+      .bind(EVENT.roomId)
+      .run();
+    const rooms = await callApi(testEnv, `/api/v1/events/${EVENT.slug}/agenda/rooms`, { headers: staff("manager") });
+    expect(rooms.status, await rooms.clone().text()).toBe(200);
+    const listed = agendaRoomsListSchema.parse(await rooms.json()).rooms;
+    expect(listed.map((room) => room.name)).toEqual(["Main hall"]);
+    expect(listed[0]).not.toHaveProperty("virtualRoomUrl");
+    const readerRooms = await callApi(testEnv, `/api/v1/events/${EVENT.slug}/agenda/rooms`, {
+      headers: staff("reader"),
+    });
+    expect(agendaRoomsListSchema.parse(await readerRooms.json()).rooms[0]?.virtualRoomUrl).toBe(
+      "https://meet.example.test/hall",
+    );
+
+    const elsewhere = await callApi(testEnv, `/api/v1/events/${OTHER_EVENT.slug}/agenda/rooms`, {
+      headers: staff("manager"),
+    });
+    expect(elsewhere.status).toBe(403);
+    expect((await callApi(testEnv, `/api/v1/events/${EVENT.slug}/agenda`, { headers: staff("manager") })).status).toBe(
+      403,
+    );
+    const rename = await callApi(testEnv, `/api/v1/events/${EVENT.slug}/agenda/rooms/${EVENT.roomId}`, {
+      method: "PUT",
+      headers: staff("manager"),
+      body: JSON.stringify({ name: "Renamed" }),
+    });
+    expect([400, 403]).toContain(rename.status);
+    expect(
+      await env.DB.prepare("SELECT name FROM event_agenda_rooms WHERE id=?").bind(EVENT.roomId).first("name"),
+    ).toBe("Main hall");
   });
 
   it("renames and reassigns from the current revision only", async () => {
