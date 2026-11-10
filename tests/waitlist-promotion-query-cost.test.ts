@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
+import { CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL } from "../functions/_lib/services/event-days";
 import { promoteDayWaitlistIfCapacity } from "../functions/_lib/services/registrations/day-waitlist";
 import { runWaitlistPromotionCycle } from "../functions/_lib/services/registrations/waitlist-promotions";
 import { registrationPopulationFilter } from "../functions/_lib/services/registrations/registration-population-filter";
@@ -190,5 +191,19 @@ describe("waitlist promotion query cost", () => {
       .run();
 
     await expect(runWaitlistPromotionCycle(env.DB, CYCLE)).resolves.toMatchObject({ eventsScanned: 0 });
+  });
+
+  it("counts day attendance from the covering index once D1 has table statistics", async () => {
+    await seedDay(eventId, { id: "day-1", capacity: HOLDERS });
+    await seedDay(eventId, { id: "day-2", capacity: HOLDERS });
+    await env.DB.prepare("PRAGMA optimize=0x10002").run();
+
+    const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL}`)
+      .bind(eventId)
+      .all<{ detail: string }>();
+
+    expect(plan.results.map((row) => row.detail).join("\n")).toContain(
+      "USING COVERING INDEX registration_day_attendance_capacity_cover",
+    );
   });
 });
