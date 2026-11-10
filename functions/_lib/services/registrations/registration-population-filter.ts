@@ -7,7 +7,7 @@ import { REGISTRATION_ORGANIZATION_SQL } from "./selected-identity";
 import type { EventAttendanceRegistrationsQuery } from "../../../../assets/shared/schemas/event-registrations";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { registrationBadgeDisplayRoleSql } from "./badge-role";
-import { activeDayWaitlistExistsSql } from "./day-states";
+import { activeDayWaitlistExistsSql, registrationWaitlistEntriesSql } from "./day-states";
 
 /** One population predicate for registrations, exports, badges, and communications. */
 export function registrationPopulationFilter(
@@ -62,9 +62,11 @@ export function registrationPopulationFilter(
     dayBindings.push(params.attendance_type);
   }
   const scopedToDay = Boolean(dates.length || params.attendance_type);
-  const waitlistExists = (statusClause: string) => `EXISTS (SELECT 1 FROM event_day_waitlist_entries w
-    WHERE w.registration_id = r.id ${scopedToDay ? "AND w.event_day_id = ed.id" : ""}
-      AND ${dayWaitlistStatusSql("w")} ${statusClause})`;
+  const waitlistEntries = scopedToDay
+    ? "FROM event_day_waitlist_entries w WHERE w.registration_id = r.id AND w.event_day_id = ed.id"
+    : registrationWaitlistEntriesSql("r");
+  const waitlistExists = (statusClause: string) =>
+    `EXISTS (SELECT 1 ${waitlistEntries} AND ${dayWaitlistStatusSql("w")} ${statusClause})`;
   const dayWaitlist = waitlistExists("IN ('waiting', 'offered')");
   if (waitlistStatus) {
     (scopedToDay ? dayConditions : conditions).push(waitlistExists("= ?"));

@@ -38,10 +38,13 @@ function prepareRevocation(db: DatabaseLike, eventId: string, badge: OwnedBadge,
     .bind(now, badge.id, eventId, badge.user_id, badge.credential_hash, badge.created_at, badge.expires_at);
 }
 const receiptKey = (eventId: string, operationId: string) => `badge-issuance:${eventId}:${operationId}`;
-/** One predicate for "this attendee already holds a badge whose print file can be recovered". */
+/**
+ * One predicate for "this attendee already holds a badge whose print file can be recovered".
+ * The unary plus keeps the planner on the attendee index: the expiry index would read every badge of the event per person.
+ */
 export function activeReprintableBadgeWhereSql(alias: string, event: string, user: string, now: string) {
   return `${alias}.event_id=${event} AND ${alias}.user_id=${user} AND ${alias}.revoked_at IS NULL
-    AND ${alias}.expires_at>${now} AND ${alias}.print_credential_json IS NOT NULL`;
+    AND +${alias}.expires_at>${now} AND ${alias}.print_credential_json IS NOT NULL`;
 }
 const ACTIVE_REPRINTABLE_BADGE_SQL = `FROM event_badge_credentials badge WHERE ${activeReprintableBadgeWhereSql("badge", "?", "?", "?")}`;
 
