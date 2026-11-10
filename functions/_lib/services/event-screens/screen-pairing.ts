@@ -21,7 +21,7 @@ import {
   screenAssignmentColumns,
   screenRoomNotInEvent,
 } from "./screen-assignment";
-import { screenRevisionConflict, screenWriteDatabase } from "./screen-staff-access";
+import { requireScreenTransfer, screenRevisionConflict, screenWriteDatabase } from "./screen-staff-access";
 
 /**
  * Staff approve the code a screen shows. One atomic batch adds the screen to
@@ -50,8 +50,15 @@ export async function approveScreenPairing(
           input.assignment,
           actor.id,
         );
+        const transferFrom = requireScreenTransfer(actor, SCREEN_MANAGE_PERMISSION, existing, event.id);
         const now = nowIso();
-        const write = screenWriteDatabase(db, actor, SCREEN_MANAGE_PERMISSION, { type: "event", id: event.id });
+        const write = screenWriteDatabase(
+          db,
+          actor,
+          SCREEN_MANAGE_PERMISSION,
+          { type: "event", id: event.id },
+          transferFrom,
+        );
         const columns = screenAssignmentColumns(assignment);
         try {
           const results = await write.batch([

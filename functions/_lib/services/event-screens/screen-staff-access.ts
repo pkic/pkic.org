@@ -50,13 +50,39 @@ export function screenWriteDatabase(
   actor: UserBackedAuthAdmin,
   permission: Permission,
   context: { type: string; id: string } | undefined,
+  alsoContexts: readonly { type: string; id: string }[] = [],
 ): DatabaseLike {
   return guardPermissionMutationDatabase(
     db,
     actor,
-    [{ permission, ...(context ? { context } : {}) }],
+    [context, ...alsoContexts].map((each) => ({ permission, ...(each ? { context: each } : {}) })),
     () => new AppError(409, "SCREEN_AUTHORIZATION_CHANGED", "Your permission to manage this screen changed."),
   );
+}
+
+/**
+ * Moving a screen out of another event needs the same right there: its ID is
+ * not secret and anyone can show a pairing code for it, so the other event's
+ * staff would otherwise lose their screen to a manager of any event.
+ */
+export function requireScreenTransfer(
+  actor: UserBackedAuthAdmin,
+  permission: Permission,
+  row: Pick<ScreenRecordRow, "event_id"> | null,
+  targetEventId: string,
+): { type: string; id: string }[] {
+  if (!row?.event_id || row.event_id === targetEventId) return [];
+  const from = { type: "event", id: row.event_id };
+  try {
+    requireAnyPermission(actor, [permission], from);
+  } catch {
+    throw new AppError(
+      403,
+      "SCREEN_BELONGS_TO_ANOTHER_EVENT",
+      "This screen belongs to another event. Its organizers can revoke it there, or someone who manages both events can move it.",
+    );
+  }
+  return [from];
 }
 
 /** A lost compare-and-set on the screen's revision; the editor reloads and tries again. */

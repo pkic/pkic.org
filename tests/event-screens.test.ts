@@ -460,6 +460,31 @@ describe("screen staff permissions", () => {
     ).toBe(403);
   });
 
+  it("moves a screen from another event only for someone who manages that event too", async () => {
+    const { cookie } = await pair(assignment);
+    // Anyone can show a code for a known screen ID; a manager of another event approves it there
+    const challenge = await startPairing();
+    const refused = await approve("otherManager", { pairingCode: challenge.code }, OTHER_EVENT.slug);
+    expect(refused.status, await refused.clone().text()).toBe(403);
+    expect(await refused.json()).toMatchObject({ error: { code: "SCREEN_BELONGS_TO_ANOTHER_EVENT" } });
+    expect((await poll(challenge.cookie)).status).toBe(202);
+    expect((await readAsScreen(cookie)).status).toBe(200);
+    const row = await env.DB.prepare("SELECT event_id FROM screens WHERE id=?")
+      .bind(SCREEN)
+      .first<{ event_id: string }>();
+    expect(row?.event_id).toBe(EVENT.id);
+
+    await env.DB.prepare(
+      "INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,created_at) VALUES (?,?,'agenda:screens_manage','event',?,?)",
+    )
+      .bind(crypto.randomUUID(), users.otherManager, EVENT.id, new Date().toISOString())
+      .run();
+    const moved = await approve("otherManager", { pairingCode: challenge.code }, OTHER_EVENT.slug);
+    expect(moved.status, await moved.clone().text()).toBe(201);
+    expect((await poll(challenge.cookie)).status).toBe(201);
+    expect((await readAsScreen(cookie)).status).toBe(401);
+  });
+
   it("does not let a screen manager steer the program", async () => {
     const response = await callApi(testEnv, `/api/v1/events/${EVENT.slug}/agenda/rooms/${EVENT.roomId}/live/program`, {
       method: "POST",
