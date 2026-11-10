@@ -218,7 +218,7 @@ export function prepareApplicationStageTransition(
             AND generation = (SELECT generation FROM membership_application_workflows
               WHERE application_id = ? AND superseded_at IS NULL)
             AND notice_outbox_id IN (SELECT id FROM email_outbox
-              WHERE status IN ('queued', 'retrying', 'cancelled') AND sent_at IS NULL
+              WHERE status IN ('queued', 'retrying', 'failed', 'cancelled') AND sent_at IS NULL
                 AND json_type(payload_json, '$.reviewApplications') = 'object')`,
           )
           .bind(application.id, application.id),

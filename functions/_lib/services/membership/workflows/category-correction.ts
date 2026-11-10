@@ -37,7 +37,7 @@ export function prepareMembershipWorkflowCategoryCorrection(
         `UPDATE membership_application_steps SET state = 'waiting', notice_outbox_id = NULL, opened_at = NULL, deadline_at = NULL
         WHERE application_id = ? AND generation = ? AND completed_at IS NULL
           AND notice_outbox_id IN (SELECT id FROM email_outbox
-            WHERE sent_at IS NULL AND status IN ('queued', 'retrying', 'cancelled'))`,
+            WHERE sent_at IS NULL AND status IN ('queued', 'retrying', 'failed', 'cancelled'))`,
       )
       .bind(applicationId, current.generation),
     db

@@ -11,7 +11,7 @@ import { applicationStageTransitionSchema } from "../assets/shared/schemas/membe
 import { emailOutboxIdSchema } from "../assets/shared/schemas/email-outbox";
 import { renderEmail } from "../functions/_lib/email/render";
 import { reviewDigestSendAt } from "../assets/shared/review-notifications";
-import { processPendingOutbox, processOutboxById } from "../functions/_lib/email/outbox";
+import { processPendingOutbox, processOutboxById, resetFailedOutbox } from "../functions/_lib/email/outbox";
 import type { Env } from "../functions/_lib/types";
 import { requireMembershipCategory } from "../functions/_lib/services/membership/categories";
 import {
@@ -451,24 +451,28 @@ it("refuses a workflow restart during an active send and preserves a sent notice
 });
 
 it.each([
-  ["declined", false],
-  ["declined", true],
-  ["withdrawn", false],
-  ["withdrawn", true],
-  ["on_hold", false],
-  ["on_hold", true],
-] as const)("removes %s applications from unsent digests (shared: %s)", async (stage, shared) => {
+  ["declined", false, "queued"],
+  ["declined", true, "queued"],
+  ["withdrawn", false, "queued"],
+  ["withdrawn", true, "retrying"],
+  ["on_hold", false, "queued"],
+  ["on_hold", true, "queued"],
+  ["declined", false, "failed"],
+  ["declined", true, "failed"],
+  ["withdrawn", false, "failed"],
+  ["withdrawn", true, "failed"],
+  ["on_hold", false, "failed"],
+  ["on_hold", true, "failed"],
+] as const)("removes %s applications from unsent digests (shared: %s, status: %s)", async (stage, shared, status) => {
   const id = await reviewedApplication("Removed Organization");
   await evaluateMembershipApplication(env.DB, id, "https://app.test");
   if (shared) {
     const peer = await reviewedApplication("Remaining Organization");
     await evaluateMembershipApplication(env.DB, peer, "https://app.test");
   }
-  if (stage === "withdrawn" && shared) {
-    await env.DB.prepare(
-      "UPDATE email_outbox SET status = 'retrying' WHERE template_key = 'membership-workflow-review-digest'",
-    ).run();
-  }
+  await env.DB.prepare("UPDATE email_outbox SET status = ? WHERE template_key = 'membership-workflow-review-digest'")
+    .bind(status)
+    .run();
   const [original] = await digests();
   const changeStage = await prepareStageChange(id);
   expect((await changeStage(stage)).status).toBe(200);
@@ -486,6 +490,7 @@ it.each([
   const send = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
   vi.stubGlobal("fetch", send);
   vi.setSystemTime(new Date(original.send_after));
+  if (status === "failed") await resetFailedOutbox(env.DB, [original.id]);
   await processOutboxById(env.DB, env as Env, original.id);
   expect(send).toHaveBeenCalledTimes(shared ? 1 : 0);
   if (shared) {

@@ -27,7 +27,7 @@ export function prepareRemoveMembershipReviewSnapshots(
       .prepare(
         `WITH updated AS MATERIALIZED (
         SELECT id, json_remove(payload_json, ?) AS payload_json FROM email_outbox
-        WHERE id IN (${notices}) AND status IN ('queued', 'retrying')
+        WHERE id IN (${notices}) AND sent_at IS NULL AND status IN ('queued', 'retrying', 'failed')
           AND json_type(payload_json, ?) IS NOT NULL
       )
       UPDATE email_outbox SET
