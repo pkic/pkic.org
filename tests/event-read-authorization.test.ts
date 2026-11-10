@@ -77,7 +77,7 @@ describe("live event-read authorization", () => {
     const { reader, grantId } = await fixture();
     const db = mutateBeforeMatchingQuery(
       env.DB,
-      (sql) => sql.includes("registration_counts AS"),
+      (sql) => sql.includes("AS confirmed_registrations"),
       async () => {
         await env.DB.prepare("UPDATE permission_grants SET revoked_at = ? WHERE id = ?")
           .bind(new Date().toISOString(), grantId)

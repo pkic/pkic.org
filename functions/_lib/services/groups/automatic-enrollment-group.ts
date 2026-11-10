@@ -20,7 +20,7 @@ export function prepareAutomaticGroupEnrollmentForGroupStatements(
   const removal = automaticEnrollmentRemovalSelection(scope);
   const addition = automaticEnrollmentAdditionSelection(scope);
   return [
-    prepareAutomaticEnrollmentWithdrawalPublication(db, scope, at, removal),
+    ...prepareAutomaticEnrollmentWithdrawalPublication(db, scope, at, removal),
     db
       .prepare(`UPDATE group_memberships SET left_at=?,updated_at=?
       WHERE left_at IS NULL AND id IN (${removal.sql})`)

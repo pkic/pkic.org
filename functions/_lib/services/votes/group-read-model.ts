@@ -126,10 +126,9 @@ export function prepareGroupVoteDetailRow(
     .prepare(
       `WITH ${accessibleVotes.sql}
      SELECT ${voteRowProjection("vote")}, GROUP_CONCAT(DISTINCT grant_row.capability) AS granted_capabilities,
-            group_access.member_access, group_access.manager_access
+            accessible.member_access, accessible.manager_access
        FROM accessible_resource accessible
        JOIN votes vote ON vote.id = accessible.resource_id
-       CROSS JOIN group_access
        LEFT JOIN vote_group_grants grant_row ON grant_row.vote_id = vote.id AND grant_row.group_id = ${group.sql}
       WHERE vote.id = ?
       GROUP BY vote.id`,
@@ -199,11 +198,10 @@ export function buildGroupVotesPageQuery(
   return {
     sql: `WITH ${accessibleVotes.sql}
       SELECT ${voteRowProjection("vote")}, GROUP_CONCAT(DISTINCT grant_row.capability) AS granted_capabilities,
-             ${live ? "group_access.member_access" : access.member ? "1" : "0"} AS member_access,
-             ${live ? "group_access.manager_access" : access.manager ? "1" : "0"} AS manager_access
+             ${live ? "accessible.member_access" : access.member ? "1" : "0"} AS member_access,
+             ${live ? "accessible.manager_access" : access.manager ? "1" : "0"} AS manager_access
         FROM accessible_resource accessible
         JOIN votes vote ON vote.id = accessible.resource_id
-        ${live ? "CROSS JOIN group_access" : ""}
         LEFT JOIN vote_group_grants grant_row ON grant_row.vote_id = vote.id AND grant_row.group_id = ?
         ${conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""}
         GROUP BY vote.id`,

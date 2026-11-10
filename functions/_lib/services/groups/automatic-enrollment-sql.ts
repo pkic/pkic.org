@@ -9,28 +9,30 @@ function capacityInput(scope: AutomaticEnrollmentScope) {
   return { sql: `WITH ${definitions}`, definitions, bindings: scope.type === "user" ? [scope.id] : [] };
 }
 
-/** The exact seats reconciliation will end, shared with its committing public preimage. */
+/**
+ * The exact seats reconciliation will end, shared with its committing public preimage.
+ * One capacity join keeps the publication statement that embeds this source within D1's nesting limit.
+ */
 export function automaticEnrollmentRemovalSelection(scope: AutomaticEnrollmentScope) {
   const input = capacityInput(scope);
-  const selectionSql = `SELECT membership.id FROM group_memberships membership
+  const sourceSql = `FROM group_memberships membership
       JOIN groups g ON g.id=membership.group_id
+      LEFT JOIN active_user_capacities capacity
+        ON capacity.user_id=membership.user_id AND capacity.member_id=membership.member_id
+      LEFT JOIN group_membership_category_rules rule ON rule.group_id=g.id
+        AND rule.membership_category_code=capacity.membership_category AND rule.permits_join=1
+      LEFT JOIN group_automatic_enrollment_opt_outs opt_out ON g.allow_automatic_opt_out=1
+        AND opt_out.group_id=g.id AND opt_out.user_id=membership.user_id
       WHERE membership.${scope.type === "user" ? "user_id" : "group_id"}=? AND membership.left_at IS NULL
-        AND (NOT EXISTS (SELECT 1 FROM active_user_capacities capacity
-              WHERE capacity.user_id=membership.user_id AND capacity.member_id=membership.member_id)
-          OR (g.allow_automatic_opt_out=1 AND EXISTS (SELECT 1 FROM group_automatic_enrollment_opt_outs opt_out
-              WHERE opt_out.group_id=g.id AND opt_out.user_id=membership.user_id))
-          OR (g.eligibility_mode='category' AND NOT EXISTS (SELECT 1 FROM active_user_capacities capacity
-              JOIN group_membership_category_rules rule ON rule.group_id=g.id
-                AND rule.membership_category_code=capacity.membership_category AND rule.permits_join=1
-              WHERE capacity.user_id=membership.user_id AND capacity.member_id=membership.member_id))
-          OR (membership.source='automatic_policy' AND NOT EXISTS (SELECT 1 FROM active_user_capacities capacity
-              JOIN group_membership_category_rules rule ON rule.group_id=g.id
-                AND rule.membership_category_code=capacity.membership_category AND rule.permits_join=1 AND rule.automatic_enrollment=1
-              WHERE capacity.user_id=membership.user_id AND capacity.member_id=membership.member_id
-                AND g.active=1 AND g.automatic_enrollment_mode='category')))`;
+      GROUP BY membership.id
+      HAVING COUNT(capacity.member_id)=0
+        OR opt_out.user_id IS NOT NULL
+        OR (g.eligibility_mode='category' AND COUNT(rule.group_id)=0)
+        OR (membership.source='automatic_policy' AND NOT (g.active=1 AND g.automatic_enrollment_mode='category'
+          AND COALESCE(MAX(rule.automatic_enrollment),0)=1))`;
   return {
-    sql: `${input.sql} ${selectionSql}`,
-    selectionSql,
+    sql: `${input.sql} SELECT membership.id ${sourceSql}`,
+    sourceSql,
     definitions: input.definitions,
     bindings: [...input.bindings, scope.id],
   };
