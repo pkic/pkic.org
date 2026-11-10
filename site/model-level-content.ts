@@ -7,7 +7,7 @@ type ModelPart = "criteria" | "methodology" | "questions" | "evidence" | "sectio
 
 const PARTS = new Set<ModelPart>(["criteria", "methodology", "questions", "evidence", "section"]);
 
-/** The position within its list; the full identifier stays the anchor and the cited reference. */
+/** A criterion's position within its level; questions and evidence keep their full identifier. */
 function position(id: string) {
   return id.split(".").at(-1)!;
 }
@@ -18,9 +18,7 @@ function shortcode(name: string, data: unknown) {
 
 /** Authored Markdown for the shared `item-table` component; identifiers become row permalinks. */
 function itemTable(columns: string[], items: Array<{ id: string; cells: string[] }>) {
-  return items.length
-    ? shortcode("item-table", { columns, items: items.map((item) => ({ ...item, label: position(item.id) })) })
-    : "";
+  return items.length ? shortcode("item-table", { columns, items }) : "";
 }
 
 function questionGroupMarkdown(group: ModelLevel["assessment"]["groups"][number], withHeading: boolean) {
@@ -37,13 +35,13 @@ function questionGroupMarkdown(group: ModelLevel["assessment"]["groups"][number]
   return [withHeading ? `### ${group.name}` : "", group.introduction ?? "", table].filter(Boolean).join("\n\n");
 }
 
-/** "Assessed by Algorithm Availability 1, 2 and 4" with each number linking to its question. */
+/** "Assessed by Algorithm Availability 1.2.1, 1.2.2 and 1.2.4" with each identifier linking to its question. */
 function assessedBy(level: ModelLevel, ids: string[]) {
   const groups = new Map<string, string[]>();
   for (const id of ids) {
     const group = level.assessment.groups.find((entry) => entry.questions.some((question) => question.id === id));
     const name = group?.name ?? "Question";
-    groups.set(name, [...(groups.get(name) ?? []), `[${group ? position(id) : id}](#${id})`]);
+    groups.set(name, [...(groups.get(name) ?? []), `[${id}](#${id})`]);
   }
   const list = (links: string[]) =>
     links.length > 1 ? `${links.slice(0, -1).join(", ")} and ${links.at(-1)}` : (links[0] ?? "");

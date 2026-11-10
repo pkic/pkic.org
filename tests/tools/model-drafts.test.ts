@@ -62,7 +62,7 @@ describe("registered model drafts", () => {
     expect(call("criteria")).toContain("id: 1.1.1");
     const questions = call("questions");
     expect(questions).toContain("id: 1.2.1");
-    expect(questions).toContain('label: "1"');
+    expect(questions).not.toContain("label:");
     expect(call("evidence")).toContain("See [Level 1](/wg/pqc/pqcmm/levels/1-initial/)");
     expect(content.unplaced()).toEqual(["methodology"]);
   });

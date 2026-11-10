@@ -3,7 +3,7 @@ import "./ContentItemTable.css";
 export interface ContentItemTableRow {
   /** Stable identifier: the permalink target and the selection-feedback item. */
   id: string;
-  /** Short position shown in the first column, such as "1"; the full identifier stays in the link. */
+  /** Shown in the first column; the identifier itself unless a shorter reference reads better. */
   label: string;
   cellsHtml: string[];
 }
@@ -19,7 +19,7 @@ export function ContentItemTable({ columns, items }: { columns: string[]; items:
       <table class="pk-table pk-content-item-table">
         <thead>
           <tr>
-            <th scope="col">#</th>
+            <th scope="col">ID</th>
             {columns.map((column) => (
               <th key={column} scope="col">
                 {column}
@@ -31,7 +31,12 @@ export function ContentItemTable({ columns, items }: { columns: string[]; items:
           {items.map((item) => (
             <tr key={item.id} id={item.id} data-content-item-id={item.id}>
               <td>
-                <a href={`#${item.id}`} aria-label={`${itemName} ${item.id}`} title={`${itemName} ${item.id}`}>
+                <a
+                  class="pk-content-item-table__id"
+                  href={`#${item.id}`}
+                  aria-label={`${itemName} ${item.id}`}
+                  title={`${itemName} ${item.id}`}
+                >
                   {item.label}
                 </a>
               </td>

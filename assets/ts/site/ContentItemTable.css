@@ -11,14 +11,15 @@
     background: var(--pk-accent-soft);
   }
 
-  .pk-content-item-table td:first-child a {
+  .pk-content-item-table__id {
     color: var(--pk-ink-muted);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     text-decoration: none;
+    white-space: nowrap;
   }
 
-  .pk-content-item-table td:first-child a:hover {
+  .pk-content-item-table__id:hover {
     color: var(--pk-accent-ink);
     text-decoration: underline;
   }

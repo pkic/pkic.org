@@ -48,7 +48,7 @@ describe("model level content placed in authored pages", () => {
     const criteria = levelContent.render(call({ part: "criteria" }));
     expect(criteria).toMatch(/^\{\{< requirements >\}\}/);
     expect(criteria).toContain("A product is at Level 0 when:");
-    expect(criteria).toContain("Assessed by Supplier Intake Questions [1](#0.2.1)");
+    expect(criteria).toContain("Assessed by Supplier Intake Questions [0.2.1](#0.2.1)");
     expect(criteria).not.toContain("includes:");
     const intake = levelContent.render(call({ part: "questions", group: "0.2" }));
     expect(intake).not.toContain("### Supplier Intake Questions");
