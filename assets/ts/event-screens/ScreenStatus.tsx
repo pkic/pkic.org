@@ -57,7 +57,7 @@ export function ScreenPairing({
         </div>
       </dl>
       <p class="pk-screen-status__line">
-        <span>In the studio: Screens → Pair screen</span>
+        <span>In the event workspace: Screens → Pair screen</span>
         {pairing ? <span class="pk-screen-status__muted">Code expires in {pairing.expiresIn}</span> : null}
       </p>
     </ScreenStatusFrame>
