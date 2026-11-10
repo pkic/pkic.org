@@ -171,6 +171,8 @@ export const constants = {
   "text-sm": "0.8125rem",
   "text-md": "0.875rem",
   "text-lg": "1rem",
+  // Statements that outrank surrounding prose without becoming headings, such as requirements.
+  "text-lead": "1.125rem",
   "text-xl": "1.25rem",
   "text-2xl": "1.5rem",
   "text-3xl": "2rem",
@@ -541,6 +543,7 @@ export const publicationBrand = {
 
 /** Component-only tokens load with their consumers rather than the global entry. */
 export const featureTokenGroups = {
+  content: ["text-lead"],
   tour: ["tour-highlight"],
   agenda: Object.keys(constants).filter((name) => name.startsWith("agenda-")),
   scanner: [

@@ -622,6 +622,19 @@
     border-radius: 0 0 1.25rem 1.25rem;
     display: block;
   }
+  /* On a phone the icon sits above the text, so the text keeps the full width. */
+  @media (max-width: 40rem) {
+    .callout-info {
+      font-size: var(--pk-text-lead);
+      padding: var(--pk-5) var(--pk-5) var(--pk-6);
+    }
+    .callout-info::before {
+      position: static !important;
+      width: 2rem;
+      height: 2rem;
+      margin-bottom: var(--pk-3);
+    }
+  }
 
   .highlight > pre {
     padding: 1.5rem;
