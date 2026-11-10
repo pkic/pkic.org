@@ -13,8 +13,9 @@ import { buildUserOrganizationsPageQuery } from "../functions/_lib/services/user
 import { buildOrganizationGroupsPageQuery } from "../functions/_lib/services/organization-activity/group-participation";
 import { buildOrganizationEventsPageQuery } from "../functions/_lib/services/organization-activity/event-participation";
 import { buildOrganizationProposalsPageQuery } from "../functions/_lib/services/organization-activity/proposal-submissions";
+import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { resetDb } from "./helpers/reset-db";
-import { seedEventAndAdmin } from "./helpers/context";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertOrganization, insertUser, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
 
 async function explainOffsetPage(query: OffsetPageQuery) {
@@ -105,9 +106,86 @@ describe("admin list D1 query plans", () => {
     expect(countSql).not.toMatch(
       /organization_names|group_concat|has_event_participation|active_identity_count|LEFT JOIN members|member_category_assignments/i,
     );
-    expect(countSql).toMatch(/NOT \(EXISTS[\s\S]+identities[\s\S]+event_participant_role_sources/i);
+    expect(countSql).toMatch(/NOT \(u\.id IN[\s\S]+identities[\s\S]+event_participant_role_sources/i);
     expect(occurrences(pageSql, /INSTR\(/g)).toBe(occurrences(countSql, /INSTR\(/g));
     expect(countBindings).toEqual(bindings);
+  });
+
+  describe("rows read at directory scale", () => {
+    const PEOPLE = 200;
+    const STAMP = "2026-01-01T00:00:00.000Z";
+    /** One pass over the views, never one pass per person or per organization. */
+    const ROWS_PER_PERSON = 40;
+    const numbered = (select: string) =>
+      `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${PEOPLE}) ${select}`;
+
+    beforeEach(async () => {
+      const { eventId } = await seedEventAndAdmin(env.DB);
+      // Person 2's domain matches person 1's, so organizations 1 and 2 are related. Odd people are members.
+      const domain = "'domain' || CASE WHEN i = 2 THEN 1 ELSE i END || '.test'";
+      await env.DB.batch([
+        env.DB.prepare(
+          numbered(`INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+            SELECT 'user-' || i, 'user' || i || '@' || ${domain}, 'user' || i || '@' || ${domain}, 1, '${STAMP}', '${STAMP}' FROM n`),
+        ),
+        env.DB.prepare(
+          numbered(`INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
+            SELECT 'org-' || i, 'Org ' || i, 'org ' || i, '${STAMP}', '${STAMP}' FROM n`),
+        ),
+        env.DB.prepare(
+          numbered(`INSERT INTO identities (id, user_id, organization_id, source, verified_email_domain, invited_at, started_at, created_at, updated_at)
+            SELECT 'identity-' || i, 'user-' || i, 'org-' || i, 'verified_email', ${domain}, '${STAMP}', '${STAMP}', '${STAMP}', '${STAMP}' FROM n`),
+        ),
+        env.DB.prepare(
+          numbered(`INSERT INTO members (id, member_type, organization_id, status, created_at, updated_at)
+            SELECT 'member-' || i, 'organization', 'org-' || i, 'active', '${STAMP}', '${STAMP}' FROM n WHERE i % 2 = 1`),
+        ),
+        env.DB.prepare(
+          numbered(`INSERT INTO member_category_assignments (member_id, category_code, created_at, updated_at)
+            SELECT 'member-' || i, 'A', '${STAMP}', '${STAMP}' FROM n WHERE i % 2 = 1`),
+        ),
+        env.DB.prepare(
+          numbered(`INSERT INTO event_participants (id, event_id, user_id, role, status, source_type, source_ref, created_at, updated_at)
+            SELECT 'participant-' || i, '${eventId}', 'user-' || i, 'attendee', 'active', 'system', 'seed', '${STAMP}', '${STAMP}' FROM n`),
+        ),
+      ]);
+    });
+
+    async function rowsRead(query: OffsetPageQuery): Promise<{ count: number; rowsRead: number }> {
+      const { countSql, countBindings } = buildOffsetPageSql(query);
+      const profile = profileD1Flow(env.DB, { measureRowsRead: true });
+      const [row] = await queryAll<{ total: number }>(profile.db, countSql, countBindings);
+      return { count: row!.total, rowsRead: profile.summary().queries[0]!.rowsRead! };
+    }
+
+    it("runs the membership and participation views once for a filtered people count", async () => {
+      await expect(
+        rowsRead(buildUsersPageQuery({ type: "event_attendee", limit: 25, offset: 0 } as never)),
+      ).resolves.toMatchObject({
+        count: 100,
+        rowsRead: expect.toSatisfy((rows: number) => rows < ROWS_PER_PERSON * PEOPLE),
+      });
+    });
+
+    it("finds related organizations in one pass over every organization's domains", async () => {
+      await env.DB.batch([
+        env.DB.prepare(
+          numbered(`INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+            SELECT 'staff-' || i, 'staff' || i || '@domain1.test', 'staff' || i || '@domain1.test', 1, '${STAMP}', '${STAMP}' FROM n`),
+        ),
+        env.DB.prepare(
+          numbered(`INSERT INTO identities (id, user_id, organization_id, source, verified_email_domain, invited_at, started_at, created_at, updated_at)
+            SELECT 'staff-identity-' || i, 'staff-' || i, 'org-1', 'verified_email', 'domain1.test', '${STAMP}', '${STAMP}', '${STAMP}', '${STAMP}' FROM n`),
+        ),
+      ]);
+
+      await expect(
+        rowsRead(buildOrganizationsPageQuery({ relatedToOrganizationId: "org-1", limit: 25, offset: 0 } as never)),
+      ).resolves.toMatchObject({
+        count: 1,
+        rowsRead: expect.toSatisfy((rows: number) => rows < ROWS_PER_PERSON * PEOPLE),
+      });
+    });
   });
 
   it("counts canonical groups without participation, child, or leadership projections", async () => {
