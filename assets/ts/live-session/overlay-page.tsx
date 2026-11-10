@@ -5,6 +5,7 @@
  */
 import { render } from "preact";
 import "../../design/fonts.css";
+import "../../design/fonts-mono.css";
 import "../../design/tokens.generated.css";
 import "../../design/tokens.event.generated.css";
 // The shared visually hidden text, which the lower third's affiliation rotation uses for its labels.

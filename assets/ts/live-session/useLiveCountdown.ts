@@ -1,16 +1,22 @@
-import { useEffect, useState } from "preact/hooks";
+import { createContext } from "preact";
+import { useContext, useEffect, useState } from "preact/hooks";
 import { formatLiveTimer, liveTimerShownMs, liveTimerTone, liveTimerValue } from "../../shared/live-timer-policy";
 import type { LiveRoomSession, LiveTimer, LiveTimerGraphic } from "../../shared/schemas/live-session-room";
 
+/** Where countdowns read the time: the device clock, or a page's clock corrected to the server's. */
+export type LiveClock = () => number;
+export const LiveClockContext = createContext<LiveClock>(() => Date.now());
+
 /** The current instant, ticking every second while a timer runs and holding still while it is paused. */
 export function useLiveTimerNow(running: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
+  const clock = useContext(LiveClockContext);
+  const [now, setNow] = useState(() => clock());
   useEffect(() => {
-    setNow(Date.now());
+    setNow(clock());
     if (!running) return;
-    const tick = setInterval(() => setNow(Date.now()), 1000);
+    const tick = setInterval(() => setNow(clock()), 1000);
     return () => clearInterval(tick);
-  }, [running]);
+  }, [running, clock]);
   return now;
 }
 

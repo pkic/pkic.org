@@ -13,13 +13,15 @@ import {
 
 export type LivePresenceMessage = Extract<LiveRoomServerMessage, { type: "presence.changed" | "presence.left" }>;
 import { applyLiveRoomMessage, type LiveRoomState } from "./live-room-state";
+import { persistentRetryDelay, type LivePersistence } from "./live-socket-retry";
 
 /**
  * `connecting` before the first snapshot, `live` while the socket is open,
  * `offline` while it reconnects: the last state stays on screen, read-only.
  * There is no polling fallback; a room that cannot be reached stays offline.
  * A room that refused admission stays offline with the refusal's error code
- * and is not retried.
+ * and is not retried, unless the connection is persistent (a venue screen),
+ * which retries after anything and keeps its last state on screen.
  */
 export type LiveRoomStatus = "connecting" | "live" | "offline";
 
@@ -49,6 +51,7 @@ export function useLiveRoom({
   output,
   createSocket = browserSocket,
   onPresence,
+  persistent,
 }: {
   slug: string;
   occurrenceId: string;
@@ -60,6 +63,8 @@ export function useLiveRoom({
   createSocket?: LiveSocketFactory;
   /** Receives other operators' presence, which bypasses the room state so it never re-renders the whole page. */
   onPresence?: (message: LivePresenceMessage) => void;
+  /** Never give up; the overlay access is read at each attempt, so renewing it does not reconnect. */
+  persistent?: LivePersistence;
 }) {
   const [questionChangeResult, setQuestionChangeResult] = useState<Extract<
     LiveRoomServerMessage,
@@ -81,6 +86,13 @@ export function useLiveRoom({
   factory.current = createSocket;
   const presence = useRef(onPresence);
   presence.current = onPresence;
+  const persistence = useRef(persistent);
+  persistence.current = persistent;
+  const access = useRef(overlayToken);
+  access.current = overlayToken;
+  const keepsTrying = Boolean(persistent);
+  // A persistent connection takes renewed access at its next attempt instead of reconnecting for it.
+  const accessKey = keepsTrying ? null : overlayToken;
 
   useEffect(() => {
     if (!enabled) return;
@@ -89,9 +101,10 @@ export function useLiveRoom({
     let admitted = false;
     let retry: ReturnType<typeof setTimeout> | undefined;
     let keepAlive: ReturnType<typeof setInterval> | undefined;
-    const protocols = [LIVE_ROOM_PROTOCOL, ...(overlayToken ? [LIVE_OVERLAY_PROTOCOL_PREFIX + overlayToken] : [])];
 
     function open() {
+      const token = access.current;
+      const protocols = [LIVE_ROOM_PROTOCOL, ...(token ? [LIVE_OVERLAY_PROTOCOL_PREFIX + token] : [])];
       const current = factory.current(liveRoomSocketUrl(window.location, slug, occurrenceId, output), protocols);
       socket.current = current;
       current.addEventListener("open", () => {
@@ -100,6 +113,7 @@ export function useLiveRoom({
       });
       current.addEventListener("message", (event) => {
         if (stopped || socket.current !== current) return;
+        persistence.current?.onActivity?.();
         if (event.data === "pong") return;
         let parsed;
         try {
@@ -139,10 +153,14 @@ export function useLiveRoom({
         if (stopped) return;
         setStatus("offline");
         const refused = liveRoomRefusalFromClose(event.code, event.reason);
-        if (refused) {
-          setAdmissionRefusal(refused);
+        if (refused) setAdmissionRefusal(refused);
+        if (keepsTrying) {
+          if (refused) persistence.current?.onRefusal?.(refused);
+          retry = setTimeout(open, persistentRetryDelay(attempt));
+          attempt += 1;
           return;
         }
+        if (refused) return;
         // A room that was never reached is not retried forever.
         if (!admitted && attempt >= RETRY_DELAYS_MS.length) return;
         retry = setTimeout(open, RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)]);
@@ -163,7 +181,7 @@ export function useLiveRoom({
       socket.current?.close(1000, "Left the room");
       socket.current = null;
     };
-  }, [slug, occurrenceId, enabled, overlayToken, output]);
+  }, [slug, occurrenceId, enabled, accessKey, keepsTrying, output]);
 
   /** Sends one contract message; false when the room is not connected. */
   const send = useCallback((message: LiveRoomClientMessage): boolean => {
