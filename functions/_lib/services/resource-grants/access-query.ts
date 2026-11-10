@@ -22,7 +22,11 @@ export interface LiveGroupResourceContextAccess {
   managerEvidence: AuthorizationEvidence;
 }
 
-/** Live access evidence for reads that must authorize and fetch data in one D1 statement. */
+/**
+ * Live access evidence for reads that must authorize and fetch data in one D1 statement.
+ * D1 limits how often a statement may expand its nested CTEs, so `group_access` is read once
+ * here and consumers should take the flags from `accessible_resource`.
+ */
 export function buildLiveAccessibleGroupResourceIdsCte<K extends ResourceGrantKind>(
   kind: K,
   groupId: SqlId,
@@ -44,13 +48,13 @@ export function buildLiveAccessibleGroupResourceIdsCte<K extends ResourceGrantKi
   const grantBindings: unknown[] = [];
   if (memberGrants.length > 0) {
     grantAccess.push(
-      `(group_access.member_access = 1 AND shared.capability IN (${memberGrants.map(() => "?").join(", ")}))`,
+      `(group_access.member_access = 1 AND candidate.capability IN (${memberGrants.map(() => "?").join(", ")}))`,
     );
     grantBindings.push(...memberGrants);
   }
   if (managerGrants.length > 0) {
     grantAccess.push(
-      `(group_access.manager_access = 1 AND shared.capability IN (${managerGrants.map(() => "?").join(", ")}))`,
+      `(group_access.manager_access = 1 AND candidate.capability IN (${managerGrants.map(() => "?").join(", ")}))`,
     );
     grantBindings.push(...managerGrants);
   }
@@ -61,21 +65,25 @@ export function buildLiveAccessibleGroupResourceIdsCte<K extends ResourceGrantKi
       SELECT CASE WHEN EXISTS (SELECT 1 FROM group_member_authority) THEN 1 ELSE 0 END,
              CASE WHEN EXISTS (SELECT 1 FROM group_manager_authority) THEN 1 ELSE 0 END
     ),
-    accessible_resource(resource_id) AS (
-      SELECT owned.id
-        FROM ${definition.resourceTable} owned INDEXED BY ${definition.ownerGroupIndex}
-        CROSS JOIN group_access
-       WHERE owned.${definition.ownerGroupColumn} = ${group.sql} AND ${ownerAllowed}
-      ${
-        grantAccess.length > 0
-          ? `UNION
-      SELECT shared.${definition.grantResourceColumn}
-        FROM ${definition.grantTable} shared INDEXED BY ${definition.grantGroupIndex}
-        CROSS JOIN group_access
-       WHERE shared.group_id = ${group.sql}
-         AND (${grantAccess.join(" OR ")})`
-          : ""
-      }
+    accessible_resource(resource_id, member_access, manager_access) AS (
+      SELECT DISTINCT candidate.resource_id, group_access.member_access, group_access.manager_access
+        FROM group_access
+        CROSS JOIN (
+          SELECT owned.id AS resource_id, 1 AS owned, NULL AS capability
+            FROM ${definition.resourceTable} owned INDEXED BY ${definition.ownerGroupIndex}
+           WHERE owned.${definition.ownerGroupColumn} = ${group.sql}
+          ${
+            grantAccess.length > 0
+              ? `UNION ALL
+          SELECT shared.${definition.grantResourceColumn}, 0, shared.capability
+            FROM ${definition.grantTable} shared INDEXED BY ${definition.grantGroupIndex}
+           WHERE shared.group_id = ${group.sql}`
+              : ""
+          }
+        ) candidate
+       WHERE (candidate.owned = 1 AND ${ownerAllowed})${
+         grantAccess.length > 0 ? `\n          OR (candidate.owned = 0 AND (${grantAccess.join(" OR ")}))` : ""
+       }
     )`,
     bindings: [
       ...access.memberEvidence.bindings,

@@ -14,18 +14,17 @@ const env = { ...workerEnv, INTERNAL_SIGNING_SECRET: "synthetic-oauth-test-signi
 const { authorize } = createMcpOauthTestClient(env);
 const takeaway = "Compare the operational evidence each team needs before approving a cryptographic migration.";
 
-async function savedStaleCopies(eventId: string) {
-  const saved = await env.DB.prepare(
-    "SELECT COUNT(*) AS total FROM event_agenda_occurrences WHERE event_id=? AND promotion_copy_json LIKE '%synthetic-stale-save%'",
-  )
-    .bind(eventId)
-    .first<{ total: number }>();
-  return saved!.total;
+async function promotionCopy(occurrenceId: string) {
+  const row = await env.DB.prepare("SELECT promotion_copy_json FROM event_agenda_occurrences WHERE id=?")
+    .bind(occurrenceId)
+    .first<{ promotion_copy_json: string | null }>();
+  return row!.promotion_copy_json;
 }
 
 /** A refused command costs its own batch plus the separate read that re-proves the MCP grant. */
 async function saveStaleCopy(environment: Env, token: string, sessionBase: string) {
   const body = promotionKitSaveSchema.parse({
+    // The fixture copy has no approval, so an expected approval time is stale.
     expectedApprovedAt: "2020-01-01T00:00:00.000Z",
     copy: {
       whyAttend:
@@ -69,6 +68,7 @@ describe("MCP refused writes", () => {
   it("returns the API's refusal instead of a transport failure", async () => {
     const fixture = await promotionFixture();
     const grant = await authorize(undefined, ["agenda:write"]);
+    const before = await promotionCopy(fixture.sessionId);
 
     const response = await saveStaleCopy(env, grant.access_token, fixture.sessionBase);
 
@@ -77,7 +77,7 @@ describe("MCP refused writes", () => {
       status: 409,
       error: { code: "PROMOTION_COPY_CHANGED" },
     });
-    expect(await savedStaleCopies(fixture.eventId)).toBe(0);
+    expect(await promotionCopy(fixture.sessionId)).toBe(before);
   });
 
   it("still challenges the client when authority ended by the time a write was refused", async () => {
