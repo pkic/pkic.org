@@ -58,14 +58,12 @@ export function prepareDirectEventFormSelectionRead(
       const [currentResult, selectedResult, placementResult] = results;
       const resolved = decodePlacedEventForm(batchRows<PlacedEventFormRow>(currentResult));
       const exact = resolved?.placement ?? null;
-      // A group's reusable questions stay group-managed; the already placed
-      // proposal form's submission window belongs to this event.
+      // A group's form selection stays group-managed; the already placed proposal
+      // form's submission window belongs to this event, whatever the form's scope.
       const retainsGroupProposal =
         purpose === "proposal_submission" &&
         Boolean(exact?.ownerGroupId) &&
-        resolved?.form.scope_type === "community" &&
-        resolved.form.scope_ref === exact?.ownerGroupId &&
-        (formKey === undefined || formKey === resolved.form.key);
+        (formKey === undefined || formKey === resolved?.form.key);
       if (exact?.ownerGroupId && !retainsGroupProposal)
         throw new AppError(
           409,
@@ -93,16 +91,8 @@ export function prepareDirectEventFormSelectionRead(
       guards.push(
         prepareAuthorizationGuard(db, {
           sql: `SELECT 1 FROM forms WHERE id=? AND status='active' AND purpose=? AND updated_at=?
-      AND (scope_type='global' OR (scope_type='event' AND scope_ref=?)
-        OR (id=? AND scope_type='community' AND scope_ref=?))`,
-          bindings: [
-            selected.id,
-            purpose,
-            selected.updated_at,
-            eventId,
-            retainsGroupProposal ? selected.id : null,
-            retainsGroupProposal ? exact?.ownerGroupId : null,
-          ],
+      AND (scope_type='global' OR (scope_type='event' AND scope_ref=?) OR id=?)`,
+          bindings: [selected.id, purpose, selected.updated_at, eventId, retainsGroupProposal ? selected.id : null],
         }),
       );
       const selectedPlacement =

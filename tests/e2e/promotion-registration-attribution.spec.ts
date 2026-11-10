@@ -136,7 +136,7 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
   const campaign = `qr-${randomUUID()}`;
   const copyResponse = await page.request.post(kitApi, {
     data: promotionKitSaveSchema.parse({
-      expectedRevision: created.revision,
+      expectedApprovedAt: null,
       copy: {
         whyAttend: "Follow a real promotion link through verified email sign-in and event registration.",
         takeaways: ["Keep the canonical referral through sign-in", "Count confirmed registration once"],

@@ -1,14 +1,17 @@
 import type { DatabaseLike } from "../../types";
 import { prepareSitePublicationRequest } from "../site-publication-requests";
 import type { AutomaticEnrollmentScope } from "./automatic-enrollment-sql";
-import { groupSeatAdditionPublicationCondition, groupSeatChangePublicationCondition } from "./seat-publication";
+import { groupSeatAdditionPublicationCondition, groupSeatWithdrawalPublicationConditions } from "./seat-publication";
 
 type Selection = { sql: string; bindings: unknown[] };
+function automaticEnrollmentDeduplicationKey(scope: AutomaticEnrollmentScope, phase: "add" | "end") {
+  return `automatic-enrollment:${scope.type}:${scope.id}:${phase}:${crypto.randomUUID()}`;
+}
 function publication(
   db: DatabaseLike,
   scope: AutomaticEnrollmentScope,
   at: string,
-  phase: "add" | "end",
+  deduplicationKey: string,
   condition: Selection,
 ) {
   return prepareSitePublicationRequest(
@@ -18,32 +21,25 @@ function publication(
       resourceId: scope.id,
       revision: Date.parse(at),
       reasonCode: scope.type === "group" ? "group_content_changed" : "user_profile_changed",
-      deduplicationKey: `automatic-enrollment:${scope.type}:${scope.id}:${phase}:${crypto.randomUUID()}`,
+      deduplicationKey,
     },
     condition,
   );
 }
+/** One request at most: every statement carries the same deduplication key. */
 export function prepareAutomaticEnrollmentWithdrawalPublication(
   db: DatabaseLike,
   scope: AutomaticEnrollmentScope,
   at: string,
-  removal: Selection & { definitions: string; selectionSql: string },
+  removal: Selection & { definitions: string; sourceSql: string },
 ) {
-  return publication(
-    db,
-    scope,
-    at,
-    "end",
-    groupSeatChangePublicationCondition(
-      {
-        definitions: `${removal.definitions}, enrollment_removed AS MATERIALIZED (${removal.selectionSql})`,
-        sql: `SELECT membership.id,membership.group_id,membership.user_id,membership.member_id,membership.left_at,1 AS closes,1 AS membership_changed
-          FROM group_memberships membership JOIN enrollment_removed removed ON removed.id=membership.id WHERE membership.left_at IS NULL`,
-        bindings: removal.bindings,
-      },
-      true,
-    ),
-  );
+  const deduplicationKey = automaticEnrollmentDeduplicationKey(scope, "end");
+  return groupSeatWithdrawalPublicationConditions({
+    definitions: removal.definitions,
+    sql: `SELECT membership.id,membership.group_id,membership.user_id,membership.member_id,membership.left_at,1 AS closes,1 AS membership_changed
+      ${removal.sourceSql}`,
+    bindings: removal.bindings,
+  }).map((condition) => publication(db, scope, at, deduplicationKey, condition));
 }
 export function prepareAutomaticEnrollmentAdditionPublication(
   db: DatabaseLike,
@@ -51,5 +47,11 @@ export function prepareAutomaticEnrollmentAdditionPublication(
   at: string,
   addition: Selection,
 ) {
-  return publication(db, scope, at, "add", groupSeatAdditionPublicationCondition(addition));
+  return publication(
+    db,
+    scope,
+    at,
+    automaticEnrollmentDeduplicationKey(scope, "add"),
+    groupSeatAdditionPublicationCondition(addition),
+  );
 }

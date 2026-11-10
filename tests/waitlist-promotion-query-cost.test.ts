@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
+import { CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL } from "../functions/_lib/services/event-days";
 import { promoteDayWaitlistIfCapacity } from "../functions/_lib/services/registrations/day-waitlist";
 import { runWaitlistPromotionCycle } from "../functions/_lib/services/registrations/waitlist-promotions";
+import { registrationPopulationFilter } from "../functions/_lib/services/registrations/registration-population-filter";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import { resetDb } from "./helpers/reset-db";
@@ -161,6 +163,24 @@ describe("waitlist promotion query cost", () => {
     });
   });
 
+  it.each([
+    ["the active queue", { waitlisted: "true" }, undefined],
+    ["one queue status", {}, "waiting"],
+  ] as const)("counts registrations in %s without scanning it per registration", async (_name, params, status) => {
+    await seedDay(eventId, { id: "day-1", capacity: HOLDERS });
+    const population = registrationPopulationFilter(eventId, params, status);
+    const profile = profileD1Flow(env.DB, { measureRowsRead: true });
+
+    const rows = await queryAll<{ total: number }>(
+      profile.db,
+      `SELECT COUNT(*) AS total ${population.fromSql}`,
+      population.bindings,
+    );
+
+    expect(rows).toEqual([{ total: WAITING }]);
+    expect(profile.summary().queries[0]?.rowsRead).toBeLessThan(ROWS_PER_PERSON * (HOLDERS + WAITING));
+  });
+
   it("leaves people with a capacity-exempt role out of the physical queue", async () => {
     await seedDay(eventId, { id: "day-1", capacity: 2, holders: 1 }, 1);
     await env.DB.prepare(
@@ -171,5 +191,19 @@ describe("waitlist promotion query cost", () => {
       .run();
 
     await expect(runWaitlistPromotionCycle(env.DB, CYCLE)).resolves.toMatchObject({ eventsScanned: 0 });
+  });
+
+  it("counts day attendance from the covering index once D1 has table statistics", async () => {
+    await seedDay(eventId, { id: "day-1", capacity: HOLDERS });
+    await seedDay(eventId, { id: "day-2", capacity: HOLDERS });
+    await env.DB.prepare("PRAGMA optimize=0x10002").run();
+
+    const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL}`)
+      .bind(eventId)
+      .all<{ detail: string }>();
+
+    expect(plan.results.map((row) => row.detail).join("\n")).toContain(
+      "USING COVERING INDEX registration_day_attendance_capacity_cover",
+    );
   });
 });

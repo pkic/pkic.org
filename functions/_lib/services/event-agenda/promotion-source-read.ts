@@ -10,12 +10,16 @@ import {
 import { preparePromotionReferralCreation } from "./promotion-referral";
 import { prepareAgendaSpeakers, decodeAgendaSpeakers, type AgendaSpeakerRow } from "./speaker-profiles";
 import { storedAgendaSnapshotSchema } from "../../../../assets/shared/schemas/event-agenda-stored";
+import { promotionCopySchema } from "../../../../assets/shared/schemas/event-promotion-copy";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { personDisplayNameSql } from "../people/person-name-sql";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "../registrations/selected-identity";
 import { AppError } from "../../errors";
 
-/** A bounded, current source projection; no stored profile copy is used by the renderer. */
+/**
+ * A bounded, current source projection; no stored profile copy is used by the renderer.
+ * The session comes from the published agenda, and its promotion copy is read live from the occurrence.
+ */
 export function preparePromotionSourceRead(
   db: DatabaseLike,
   event: EventReadSelection,
@@ -43,9 +47,9 @@ export function preparePromotionSourceRead(
     ...personal.statements,
     db
       .prepare(
-        `SELECT json_set(p.snapshot_json,'$.occurrences',json(COALESCE((SELECT json_group_array(json(entry.value)) FROM json_each(p.snapshot_json,'$.occurrences') entry WHERE json_extract(entry.value,'$.visibility')='public' AND json_extract(entry.value,'$.kind')<>'break' AND ${wanted.sql}),'[]')),'$.shifts',json('[]'),'$.roleMembers',json('[]'),'$.assignments',json('[]')) AS snapshot_json,p.revision FROM event_agenda_publications p JOIN event_agenda_state state ON state.event_id=p.event_id AND state.published_revision=p.revision WHERE p.event_id=${scope.sql}`,
+        `SELECT json_set(p.snapshot_json,'$.occurrences',json(COALESCE((SELECT json_group_array(json(entry.value)) FROM json_each(p.snapshot_json,'$.occurrences') entry WHERE json_extract(entry.value,'$.visibility')='public' AND json_extract(entry.value,'$.kind')<>'break' AND ${wanted.sql}),'[]')),'$.shifts',json('[]'),'$.roleMembers',json('[]'),'$.assignments',json('[]')) AS snapshot_json,p.revision,(SELECT draft.promotion_copy_json FROM event_agenda_occurrences draft WHERE draft.id=? AND draft.event_id=p.event_id) AS promotion_copy_json FROM event_agenda_publications p JOIN event_agenda_state state ON state.event_id=p.event_id AND state.published_revision=p.revision WHERE p.event_id=${scope.sql}`,
       )
-      .bind(...wanted.bindings, ...scope.bindings),
+      .bind(...wanted.bindings, occurrenceId, ...scope.bindings),
     db
       .prepare(
         `SELECT EXISTS(SELECT 1 FROM event_agenda_occurrence_speakers speaker JOIN event_agenda_occurrences occurrence ON occurrence.id=speaker.occurrence_id WHERE occurrence.event_id=${scope.sql} AND occurrence.id=? AND speaker.user_id=?) AS assigned,EXISTS(SELECT 1 FROM registrations WHERE event_id=${scope.sql} AND user_id=? AND status='registered') AS registered`,
@@ -86,7 +90,9 @@ export function preparePromotionSourceRead(
       const personalOffset = visual.statements.length;
       const composition = await personal.decode(loaded.slice(personalOffset, personalOffset + 1), design.event.id);
       const offset = personalOffset + 1,
-        publication = batchFirst<{ snapshot_json: string; revision: number }>(loaded[offset]);
+        publication = batchFirst<{ snapshot_json: string; revision: number; promotion_copy_json: string | null }>(
+          loaded[offset],
+        );
       if (!publication && occurrenceId)
         throw new AppError(
           409,
@@ -124,6 +130,9 @@ export function preparePromotionSourceRead(
       const progress = metrics.decode(loaded.slice(offset + 5, offset + 6));
       return {
         publishedRevision: publication?.revision ?? null,
+        promotionCopy: publication?.promotion_copy_json
+          ? promotionCopySchema.parse(JSON.parse(publication.promotion_copy_json))
+          : null,
         visual: design,
         personal: composition,
         agenda,

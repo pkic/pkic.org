@@ -3,14 +3,17 @@
  * An active organization Member representation suppresses individual capacity so
  * participation always has unambiguous IPR attribution.
  */
-/** Trusted internal user SQL only; a nonmember affiliation grants no Member capacity. */
+/**
+ * Trusted internal user SQL only; a nonmember affiliation grants no Member capacity.
+ * The unary plus starts the search from this person's identities, not from every active member.
+ */
 export function activeOrganizationMemberRepresentationPredicate(userIdSql: string): string {
   return `EXISTS (
     SELECT 1 FROM identities represented
     JOIN members represented_member
       ON represented_member.organization_id = represented.organization_id
-     AND represented_member.member_type = 'organization'
-     AND represented_member.status = 'active'
+     AND +represented_member.member_type = 'organization'
+     AND +represented_member.status = 'active'
     JOIN member_category_assignments represented_category ON represented_category.member_id = represented_member.id
     WHERE represented.user_id = ${userIdSql}
       AND represented.organization_id IS NOT NULL
@@ -55,6 +58,45 @@ const ACTIVE_USER_CAPACITIES_BODY = `
     JOIN members member ON member.organization_id = represented.organization_id AND member.status = 'active'
     JOIN organizations organization ON organization.id = member.organization_id
     JOIN member_category_assignments category ON category.member_id = member.id`;
+
+/**
+ * Whether one identity/member pair is among the user's active capacities: the same rules as
+ * ACTIVE_USER_CAPACITIES_BODY, as a correlated predicate without CTEs. D1 refuses statements that expand the
+ * capacity CTEs inside already nested authorization checks. Arguments are trusted SQL expressions.
+ */
+export function activeUserCapacityPairPredicate(userIdSql: string, identityIdSql: string, memberIdSql: string): string {
+  // The representation check is a LEFT JOIN rather than NOT EXISTS so the guard stays within D1's expression depth.
+  return `EXISTS (
+    SELECT 1 FROM users user
+    JOIN identities identity
+      ON identity.id = ${identityIdSql}
+     AND identity.user_id = user.id
+     AND identity.started_at IS NOT NULL
+     AND identity.ended_at IS NULL
+     AND identity.blocked_at IS NULL
+    JOIN members member ON member.id = ${memberIdSql} AND member.status = 'active'
+    JOIN member_category_assignments category ON category.member_id = member.id
+    LEFT JOIN (identities represented
+      JOIN members represented_member
+        ON represented_member.organization_id = represented.organization_id
+       AND +represented_member.member_type = 'organization'
+       AND +represented_member.status = 'active'
+      JOIN member_category_assignments represented_category ON represented_category.member_id = represented_member.id)
+      ON identity.organization_id IS NULL
+     AND represented.user_id = user.id
+     AND represented.organization_id IS NOT NULL
+     AND represented.started_at IS NOT NULL
+     AND represented.ended_at IS NULL
+     AND represented.blocked_at IS NULL
+    WHERE user.id = ${userIdSql}
+      AND user.active = 1
+      AND user.pii_redacted_at IS NULL
+      AND user.merged_into_user_id IS NULL
+      AND ((identity.organization_id IS NULL AND member.identity_id = identity.id
+          AND member.member_type = 'individual' AND represented.id IS NULL)
+        OR (identity.organization_id IS NOT NULL AND member.organization_id = identity.organization_id))
+  )`;
+}
 
 /** CTE definitions without WITH, for composing capacity queries at the top level. */
 export function activeUserCapacityDefinitions(inputSql = "VALUES (?)"): string {

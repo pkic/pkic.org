@@ -37,8 +37,9 @@ function SponsorLogo({
   const [failed, setFailed] = useState(false);
   if (!s.logoUrl || failed) return null;
   const title = titleFor(s, level, eventName);
+  // Not `sponsor-link`: EasyList and AdGuard hide that class on every site.
   return (
-    <ExternalLink href={s.website ?? "#"} title={title} external class="sponsor-link">
+    <ExternalLink href={s.website ?? "#"} title={title} external class="sponsor-logo-link">
       <SiteImage
         src={s.logoUrl}
         alt={title}

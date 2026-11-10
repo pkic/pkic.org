@@ -1,4 +1,5 @@
 import { databaseIdSchema } from "./identifiers";
+import { utcInstantSchema } from "./api-common";
 import { timeZoneSchema } from "./event-series";
 import { z } from "zod";
 import { promotionCopySchema } from "./event-promotion-copy";
@@ -23,7 +24,8 @@ export const promotionRenderRequestSchema = z.strictObject({
   formats: promotionFormatsSchema,
 });
 export const promotionKitSaveSchema = z.object({
-  expectedRevision: z.number().int().min(0),
+  /** The approval time of the copy this edit started from, or null when it had none. */
+  expectedApprovedAt: utcInstantSchema.nullable(),
   copy: promotionCopySchema,
 });
 export const promotionKitSchema = z.object({

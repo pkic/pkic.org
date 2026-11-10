@@ -22,8 +22,8 @@ import { prepareUserGrantCandidates, selectUserGrantCandidates, type ContextGran
 import type { PlainSessionRow } from "./session-engine";
 import {
   MAX_ACTING_IDENTITIES,
-  SESSION_ACTING_IDENTITY_MEMBERSHIP_LABEL_SQL,
-  SESSION_ACTING_IDENTITY_MEMBERSHIP_SQL,
+  SESSION_ACTING_IDENTITY_MEMBERSHIP_COLUMNS_SQL,
+  SESSION_ACTING_IDENTITY_MEMBERSHIP_JOIN_SQL,
   SESSION_ACTING_IDENTITY_ORDER_SQL,
 } from "./session-acting-identities";
 import { ACTIVE_EVENT_SPONSORSHIP_SQL, toSponsorCapacity, type SponsorshipCapacityRow } from "./sponsor-capacity";
@@ -122,9 +122,10 @@ export function prepareUserSessionClaimsBatch(db: DatabaseLike, slice: readonly 
     db
       .prepare(
         `SELECT user_id,id,organization_id,organization_name,job_title,membership_category,membership_label FROM (
-        SELECT identity.user_id,identity.id,identity.organization_id,organization.name AS organization_name,identity.job_title,${SESSION_ACTING_IDENTITY_MEMBERSHIP_SQL} AS membership_category,${SESSION_ACTING_IDENTITY_MEMBERSHIP_LABEL_SQL} AS membership_label,
+        SELECT identity.user_id,identity.id,identity.organization_id,organization.name AS organization_name,identity.job_title,${SESSION_ACTING_IDENTITY_MEMBERSHIP_COLUMNS_SQL},
         row_number() OVER (PARTITION BY identity.user_id ORDER BY ${SESSION_ACTING_IDENTITY_ORDER_SQL}) AS ordinal
         FROM identities identity JOIN json_each(?) requested ON requested.value=identity.user_id LEFT JOIN organizations organization ON organization.id=identity.organization_id
+        ${SESSION_ACTING_IDENTITY_MEMBERSHIP_JOIN_SQL}
         WHERE identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL)
         WHERE ordinal<=? ORDER BY user_id,ordinal`,
       )

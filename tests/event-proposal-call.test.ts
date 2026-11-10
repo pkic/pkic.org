@@ -58,7 +58,7 @@ async function placeProposalForm(eventId: string, window: { opensAt?: string; cl
   ]);
 }
 
-async function groupProposalCall(groupManaged = false) {
+async function groupProposalCall(groupManaged = false, importedForEvent = false) {
   const eventId = await insertEvent({ slug: "group-form-call" });
   const otherEventId = await insertEvent({ slug: "other-group-form-call" });
   const groupId = "20000000-0000-4000-8000-000000000001";
@@ -67,8 +67,14 @@ async function groupProposalCall(groupManaged = false) {
   const updatedAt = at(-10);
   await env.DB.batch([
     env.DB.prepare(
-      "INSERT INTO forms(id,key,scope_type,scope_ref,purpose,status,title,created_at,updated_at) VALUES (?, 'group-proposals', 'community', ?, 'proposal_submission', 'active', 'Group proposals', ?, ?)",
-    ).bind(formId, groupId, updatedAt, updatedAt),
+      "INSERT INTO forms(id,key,scope_type,scope_ref,purpose,status,title,created_at,updated_at) VALUES (?, 'group-proposals', ?, ?, 'proposal_submission', 'active', 'Group proposals', ?, ?)",
+    ).bind(
+      formId,
+      importedForEvent ? "event" : "community",
+      importedForEvent ? eventId : groupId,
+      updatedAt,
+      updatedAt,
+    ),
     env.DB.prepare(
       `INSERT INTO form_fields(id,form_id,key,label,field_type,required,validation_json,sort_order,created_at,updated_at)
        VALUES (?,?,'proposed_topic','Proposed topic','textarea',1,'{"maxLength":2000}',0,?,?)`,
@@ -81,7 +87,7 @@ async function groupProposalCall(groupManaged = false) {
     env.DB.prepare("UPDATE events SET updated_at=?, owner_group_id=?, source_mode=? WHERE id=?").bind(
       updatedAt,
       groupManaged ? groupId : null,
-      "integration",
+      importedForEvent ? "hugo" : "integration",
       eventId,
     ),
   ]);
@@ -315,6 +321,29 @@ describe("event call for proposals", () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({ error: { code: "RESOURCE_CAPABILITY_REQUIRED" } });
   });
+
+  it.each([false, true])(
+    "lets the manager close a form imported for the event before its placement became group-owned (group context: %s)",
+    async (groupManaged) => {
+      const fixture = await groupProposalCall(groupManaged, true);
+      const refused = await fixture.save({ proposalFormKey: null });
+      expect(refused.status).toBe(409);
+      expect((await readEventProposalCall(env.DB, fixture.eventId)).open).toBe(true);
+
+      const closesAt = at(-1);
+      const response = await fixture.save({
+        proposalFormKey: "group-proposals",
+        proposalSubmissionWindow: { opensAt: null, closesAt },
+      });
+      expect(response.status).toBe(200);
+      expect((await readEventProposalCall(env.DB, fixture.eventId)).open).toBe(false);
+      expect(
+        await env.DB.prepare("SELECT owner_group_id, form_id, closes_at FROM form_placements WHERE id=?")
+          .bind(fixture.placementId)
+          .first(),
+      ).toEqual({ owner_group_id: fixture.groupId, form_id: fixture.formId, closes_at: closesAt });
+    },
+  );
 
   it.each([null, "another-proposal-form"])(
     "keeps changing a group-owned form selection in group management (%s)",

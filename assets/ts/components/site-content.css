@@ -2543,7 +2543,7 @@
     gap: var(--sponsors-row-gap) var(--sponsors-logo-gap);
     padding-inline: var(--sponsors-edge-inset);
   }
-  .sponsors .sponsor-link {
+  .sponsors .sponsor-logo-link {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2551,14 +2551,14 @@
     inline-size: var(--sponsors-logo-width);
   }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .sponsors .sponsor-link {
+    :root:not([data-theme="light"]) .sponsors .sponsor-logo-link {
       background: var(--pk-on-solid);
       border-radius: var(--pk-radius-sm);
       padding: var(--pk-2);
       box-sizing: content-box;
     }
   }
-  :root[data-theme="dark"] .sponsors .sponsor-link {
+  :root[data-theme="dark"] .sponsors .sponsor-logo-link {
     background: var(--pk-on-solid);
     border-radius: var(--pk-radius-sm);
     padding: var(--pk-2);

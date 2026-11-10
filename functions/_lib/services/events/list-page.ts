@@ -40,14 +40,15 @@ export async function readEventsListPage(
   );
   const managementQuery = subject ? buildManagedEventsPageQuery(queryViewer, query) : null;
   const audienceSelection = { pages: [audienceQuery] };
-  const selection = { pages: managementQuery ? [audienceQuery, managementQuery] : [audienceQuery] };
   const stats = managementQuery ? buildEventRegistrationStatsQuery({ pages: [managementQuery] }) : null;
   const authentication = auth?.statements ?? [];
   const loaded = await db.batch([
     ...authentication,
     ...buildOffsetPageStatements(db, audienceQuery),
     ...(managementQuery ? buildOffsetPageStatements(db, managementQuery) : []),
-    prepareEventParticipation(db, userId, selection),
+    // One page per statement: D1 refuses both authorized page queries in one statement.
+    prepareEventParticipation(db, userId, audienceSelection),
+    ...(managementQuery ? [prepareEventParticipation(db, userId, { pages: [managementQuery] })] : []),
     prepareViewerEventStates(db, userId, audienceSelection),
     prepareEventAudienceSponsors(db, queryViewer, audienceSelection),
     ...(stats ? [db.prepare(stats.sql).bind(...stats.bindings)] : []),
@@ -57,16 +58,20 @@ export async function readEventsListPage(
   const resources = loaded.slice(authentication.length);
   const audience = decodeOffsetPageResults<EventAudienceRow>(resources[0], resources[1]);
   const management = managementQuery ? decodeOffsetPageResults<EventManagementRow>(resources[2], resources[3]) : null;
-  const offset = managementQuery ? 4 : 2;
-  const participation = decodeEventParticipation(batchRows<EventParticipationRow>(resources[offset]));
-  const viewerStates = decodeViewerEventStates(batchRows<EventViewerStateRow>(resources[offset + 1]));
+  const pageCount = managementQuery ? 4 : 2;
+  const participationCount = managementQuery ? 2 : 1;
+  const participation = decodeEventParticipation(
+    resources.slice(pageCount, pageCount + participationCount).flatMap(batchRows<EventParticipationRow>),
+  );
+  const offset = pageCount + participationCount;
+  const viewerStates = decodeViewerEventStates(batchRows<EventViewerStateRow>(resources[offset]));
   const viewer = {
     ...eventAudienceViewer(resolved?.session ?? null),
     admin: staff,
     scannerGrants: staff?.grants ?? [],
   };
   if (management && staff && hasPermission(staff, "events:read")) {
-    const counts = new Map(batchRows<EventStatsRow>(resources[offset + 3]).map((row) => [row.event_id, row]));
+    const counts = new Map(batchRows<EventStatsRow>(resources[offset + 2]).map((row) => [row.event_id, row]));
     return {
       events: management.rows.map((row) =>
         mapEventManagementSummary(row, counts.get(row.id), participation.get(row.id)),
@@ -79,7 +84,7 @@ export async function readEventsListPage(
   const access = decodeEventAudienceAccess(
     viewer,
     audience.rows.map((row) => row.id),
-    batchRows<EventAudienceSponsorRow>(resources[offset + 2]),
+    batchRows<EventAudienceSponsorRow>(resources[offset + 1]),
   );
   return {
     events: audience.rows.map((row) => ({

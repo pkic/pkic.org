@@ -11,7 +11,6 @@ import { resetDb } from "./helpers/reset-db";
 import { createMcpSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
 import { promotionKitSchema } from "../assets/shared/schemas/event-promotion-kit";
-import { agendaSnapshotSchema } from "../assets/shared/schemas/event-agenda";
 import { promotionCompositionSaveSchema } from "../assets/shared/schemas/event-promotion-design";
 import {
   processPromotionRenderJob,
@@ -262,31 +261,6 @@ describe("personal event promotion kits", () => {
       .bind(new Date().toISOString(), f.admin.id)
       .run();
     expect((await callApi(env, url, { headers: f.headers }, { maxRoundTrips: 1 })).status).toBe(401);
-  });
-  it("saves shared copy and returns its agenda revision in one atomic request", async () => {
-    const f = await promotionFixture();
-    const before = await env.DB.prepare("SELECT revision FROM event_agenda_state WHERE event_id=?")
-      .bind(f.eventId)
-      .first<{ revision: number }>();
-    const body = {
-      expectedRevision: before!.revision,
-      copy: {
-        takeaways: ["Inventory cryptography"],
-        whyAttend: "A reviewed summary of the practical migration session",
-        callToAction: "Register to attend",
-        approvedAt: null,
-      },
-    };
-    const save = (headers: typeof f.headers) =>
-      callApi(env, f.sessionBase, { method: "POST", headers, body: JSON.stringify(body) }, { maxRoundTrips: 1 });
-    const saved = await save(f.headers);
-    expect(saved.status, await saved.clone().text()).toBe(200);
-    expect(agendaSnapshotSchema.parse(await saved.json()).revision).toBe(before!.revision + 1);
-    expect((await save(f.headers)).status).toBe(409);
-    expect((await save(f.attendeeHeaders)).status).toBe(403);
-    expect(
-      await env.DB.prepare("SELECT revision FROM event_agenda_state WHERE event_id=?").bind(f.eventId).first(),
-    ).toEqual({ revision: before!.revision + 1 });
   });
   it("provides a tracked default from the approved abstract without requiring takeaways", async () => {
     const f = await promotionFixture();

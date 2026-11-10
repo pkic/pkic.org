@@ -33,18 +33,18 @@ interface UserRow {
 /** Separates organization names inside the aggregated column; never appears in a name. */
 const NAME_SEPARATOR = "\u001f";
 
-const USER_HAS_MEMBERSHIP = `(EXISTS (
-    SELECT 1
+// Both read views that cannot use a per-person filter, so each runs once for the statement instead of once per person.
+const USER_HAS_MEMBERSHIP = `(u.id IN (
+    SELECT member_identity.user_id
       FROM identities member_identity
       JOIN identity_member_capacities capacity ON capacity.identity_id = member_identity.id
-     WHERE member_identity.user_id = u.id
-       AND capacity.member_status = 'active'
+     WHERE capacity.member_status = 'active'
        AND member_identity.started_at IS NOT NULL
        AND member_identity.ended_at IS NULL
        AND member_identity.blocked_at IS NULL
   ))`;
 
-const USER_HAS_EVENT_PARTICIPATION = "EXISTS (SELECT 1 FROM event_participant_role_sources ep WHERE ep.user_id = u.id)";
+const USER_HAS_EVENT_PARTICIPATION = "(u.id IN (SELECT ep.user_id FROM event_participant_role_sources ep))";
 
 export function buildUsersPageQuery(query: UsersListQuery) {
   const conditions: string[] = [];

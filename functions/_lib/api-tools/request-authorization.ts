@@ -3,9 +3,14 @@ import { prepareUserBackedAdminFromRequest } from "../auth/admin";
 import { guardDatabaseBatches } from "../db/guarded-database";
 import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { AppError } from "../errors";
-import type { DatabaseLike, Env, UserBackedAuthAdmin } from "../types";
+import type { D1StatementResult, DatabaseLike, Env, UserBackedAuthAdmin } from "../types";
 
-/** Transport authority shares the API's snapshot; mutation refusal rolls back that same command. */
+/**
+ * Transport authority shares the API's snapshot; mutation refusal rolls back that same command.
+ * Only authorization outcomes are remembered. Any other batch failure belongs to the API, which
+ * may answer it as a refusal, and leaves `finish` to prove authority in its own read. `finish`
+ * is idempotent: it reads at most once and repeats the first outcome.
+ */
 export async function prepareMcpRequestAuthorization(db: DatabaseLike, request: Request, env: Env) {
   const actor = await prepareUserBackedAdminFromRequest(db, request, env);
   const evidence = actor ? mcpExecutionAuthorizationEvidence(actor) : null;
@@ -22,11 +27,17 @@ export async function prepareMcpRequestAuthorization(db: DatabaseLike, request: 
   };
   const guarded = actor
     ? guardDatabaseBatches(db, async (statements, readOnly) => {
+        const guards = readOnly
+          ? [db.prepare(`SELECT EXISTS(${evidence!.sql}) AS authorized`).bind(...evidence!.bindings)]
+          : [prepareAuthorizationGuard(db, evidence!)];
+        let loaded: D1StatementResult[];
         try {
-          const guards = readOnly
-            ? [db.prepare(`SELECT EXISTS(${evidence!.sql}) AS authorized`).bind(...evidence!.bindings)]
-            : [prepareAuthorizationGuard(db, evidence!)];
-          const loaded = await db.batch([...guards, ...actor.statements, ...statements]);
+          loaded = await db.batch([...guards, ...actor.statements, ...statements]);
+        } catch (error) {
+          if (isAuthorizationGuardFailure(error)) return checkFailure(error);
+          throw error;
+        }
+        try {
           if (readOnly && loaded[0]?.results?.[0]?.authorized !== 1)
             throw new AppError(401, "MCP_AUTHORIZATION_INACTIVE", "Authorize the MCP client again");
           resolvedActor = await actor.decode(loaded.slice(guards.length, guards.length + actor.statements.length));

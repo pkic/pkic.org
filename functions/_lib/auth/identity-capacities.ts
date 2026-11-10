@@ -94,11 +94,18 @@ export const MEMBER_ELIGIBLE_USER_COLUMNS =
   "id, email, normalized_email, active, identity_id, member_id, organization_id, organization_name, " +
   "membership_category, is_ec_member, sort_key";
 
+/**
+ * Every membership a person can act through. This runs on each signed-in
+ * request, so two details stop one person's lookup from reading everyone. The
+ * typed NULLs give both arms the same column affinity, which lets SQLite merge
+ * an outer filter into each arm. The unary plus keeps the planner off the
+ * unselective member_type/status index.
+ */
 export const MEMBER_ELIGIBLE_USER_SELECT = `
   SELECT u.id, COALESCE(selected_email.email, u.email) AS email,
          COALESCE(selected_email.normalized_email, u.normalized_email) AS normalized_email,
          u.active, ${executiveCouncilSeatSql("u.id")} AS is_ec_member, identity.id AS identity_id,
-         m.id AS member_id, NULL AS organization_id, NULL AS organization_name,
+         m.id AS member_id, CAST(NULL AS TEXT) AS organization_id, CAST(NULL AS TEXT) AS organization_name,
          mca.category_code AS membership_category,
          '0_' || identity.started_at AS sort_key
   FROM users u
@@ -112,7 +119,7 @@ export const MEMBER_ELIGIBLE_USER_SELECT = `
     ON selected_email.id = identity.email_id
    AND selected_email.user_id = u.id
    AND selected_email.verified_at IS NOT NULL
-  JOIN members m ON m.identity_id = identity.id AND m.member_type = 'individual' AND m.status = 'active'
+  JOIN members m ON m.identity_id = identity.id AND +m.member_type = 'individual' AND +m.status = 'active'
   JOIN member_category_assignments mca ON mca.member_id = m.id
   WHERE NOT ${activeOrganizationMemberRepresentationPredicate("u.id")}
 

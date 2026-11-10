@@ -11,19 +11,32 @@ export const MAX_ACTING_IDENTITIES = 100;
 export const SESSION_ACTING_IDENTITY_ORDER_SQL =
   "identity.organization_id IS NOT NULL, organization.name COLLATE NOCASE, identity.id";
 
+/**
+ * `identity_member_capacities` for the one identity in scope, active rows only.
+ * Correlating the view itself scans it whole for every identity read, which
+ * this runs on each signed-in request and for every person in a live room.
+ */
+const ACTING_IDENTITY_ACTIVE_CAPACITY_SQL = `
+    SELECT assignment.category_code AS membership_category
+      FROM members member
+      JOIN member_category_assignments assignment ON assignment.member_id = member.id
+     WHERE member.status = 'active' AND member.organization_id = identity.organization_id
+    UNION ALL
+    SELECT assignment.category_code
+      FROM members member
+      JOIN member_category_assignments assignment ON assignment.member_id = member.id
+     WHERE member.status = 'active' AND identity.organization_id IS NULL AND member.identity_id = identity.id`;
+
 /** The active membership an identity holds, if any; an identity of a lapsed or absent membership reads as none. */
 export const SESSION_ACTING_IDENTITY_MEMBERSHIP_SQL = `(SELECT capacity.membership_category
-    FROM identity_member_capacities capacity
+    FROM (${ACTING_IDENTITY_ACTIVE_CAPACITY_SQL}) capacity
     JOIN membership_categories category ON category.code = capacity.membership_category
-   WHERE capacity.identity_id = identity.id AND capacity.member_status = 'active'
    ORDER BY category.display_order, category.code LIMIT 1)`;
 
-/** The consortium's name for that membership category. */
-export const SESSION_ACTING_IDENTITY_MEMBERSHIP_LABEL_SQL = `(SELECT category.label
-    FROM identity_member_capacities capacity
-    JOIN membership_categories category ON category.code = capacity.membership_category
-   WHERE capacity.identity_id = identity.id AND capacity.member_status = 'active'
-   ORDER BY category.display_order, category.code LIMIT 1)`;
+/** Joins that membership's category once per identity, for both its code and its label. */
+export const SESSION_ACTING_IDENTITY_MEMBERSHIP_JOIN_SQL = `LEFT JOIN membership_categories held_category ON held_category.code = ${SESSION_ACTING_IDENTITY_MEMBERSHIP_SQL}`;
+export const SESSION_ACTING_IDENTITY_MEMBERSHIP_COLUMNS_SQL =
+  "held_category.code AS membership_category, held_category.label AS membership_label";
 
 interface ActingIdentityRow {
   id: string;
@@ -44,10 +57,10 @@ export function actingIdentitiesSelection(userId: SqlId) {
   const user = sqlValue(userId);
   return {
     sql: `SELECT identity.id, identity.organization_id, organization.name AS organization_name, identity.job_title,
-            ${SESSION_ACTING_IDENTITY_MEMBERSHIP_SQL} AS membership_category,
-            ${SESSION_ACTING_IDENTITY_MEMBERSHIP_LABEL_SQL} AS membership_label
+            ${SESSION_ACTING_IDENTITY_MEMBERSHIP_COLUMNS_SQL}
        FROM identities identity
        LEFT JOIN organizations organization ON organization.id = identity.organization_id
+       ${SESSION_ACTING_IDENTITY_MEMBERSHIP_JOIN_SQL}
       WHERE identity.user_id = ${user.sql}
         AND identity.started_at IS NOT NULL
         AND identity.ended_at IS NULL

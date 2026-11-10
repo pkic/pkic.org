@@ -25,7 +25,7 @@ export async function buildSpeakerPromotionSource(basis: PromotionSourceBasis, a
       "PROMOTION_REFERRAL_REQUIRED",
       "Prepare your personal promotion link before loading these materials.",
     );
-  const approvedCopy = occurrence.promotionCopy?.approvedAt ? occurrence.promotionCopy : null;
+  const approvedCopy = basis.promotionCopy?.approvedAt ? basis.promotionCopy : null;
   const copy = approvedCopy ?? {
     whyAttend: occurrence.description,
     takeaways: [],
@@ -106,6 +106,7 @@ export async function buildSpeakerPromotionSource(basis: PromotionSourceBasis, a
       template: PROMOTION_TEMPLATE_VERSION,
       agenda,
       occurrence,
+      copy,
       people,
       composition: personal,
       design: visual.design,

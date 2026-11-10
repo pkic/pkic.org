@@ -35,7 +35,7 @@ export const promotionCopySaveRouteSchema = {
   request: { params, body: { content: { "application/json": { schema: promotionKitSaveSchema } } } },
   responses: {
     ...ok("Updated agenda", agendaSnapshotSchema),
-    ...authErrors({ conflict: "Agenda revision changed", notFound: "Session not found" }),
+    ...authErrors({ conflict: "Promotion copy changed", notFound: "Session not found" }),
   },
 };
 export const promotionArtifactGetRouteSchema = {
