@@ -73,7 +73,9 @@ export function useLiveRoomProgram({
       }
       socket = current;
       current.addEventListener("open", () => {
-        attempts = 0;
+        // A refused handshake opens before it closes: a persistent feed only
+        // starts over once the program answers.
+        if (!keepsTrying) attempts = 0;
         ping = setInterval(() => current.send("ping"), 25000);
       });
       current.addEventListener("message", (event) => {
@@ -88,6 +90,7 @@ export function useLiveRoomProgram({
             );
             setStatus("live");
             setError(null);
+            attempts = 0;
           }
         } catch {
           /* A malformed frame grants no state. */

@@ -108,7 +108,9 @@ export function useLiveRoom({
       const current = factory.current(liveRoomSocketUrl(window.location, slug, occurrenceId, output), protocols);
       socket.current = current;
       current.addEventListener("open", () => {
-        attempt = 0;
+        // A refused admission opens before it closes: a persistent feed only
+        // starts over once the room actually answers with its snapshot.
+        if (!keepsTrying) attempt = 0;
         keepAlive = setInterval(() => current.send("ping"), KEEP_ALIVE_MS);
       });
       current.addEventListener("message", (event) => {
@@ -143,6 +145,7 @@ export function useLiveRoom({
         }
         if (message.type === "room.snapshot") {
           admitted = true;
+          attempt = 0;
           setStatus("live");
         }
         setState((previous) => applyLiveRoomMessage(previous, message));
