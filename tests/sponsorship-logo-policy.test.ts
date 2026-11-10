@@ -4,6 +4,7 @@ import { resetDb } from "./helpers/reset-db";
 import { seedEventAndAdmin } from "./helpers/context";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { buildPublicSponsorReadModel } from "../functions/_lib/services/public-sponsors";
+import { SPONSOR_CLOCK_SQL } from "../functions/_lib/services/sponsorship/logo-eligibility";
 import { getSponsorship } from "../functions/_lib/services/sponsorship/read-model";
 import { prepareSponsorshipStageTransition } from "../functions/_lib/services/sponsorship/stage-transition";
 import { updateSponsorship } from "../functions/_lib/services/sponsorship/pipeline";
@@ -70,10 +71,10 @@ async function wall(at = AT, eventId?: string) {
   const model = buildPublicSponsorReadModel({ eventId });
   return (
     await env.DB.prepare(
-      model.sql.replace("strftime('%Y-%m-%dT%H:%M:%fZ','now')", "?") +
+      model.sql.replaceAll(SPONSOR_CLOCK_SQL, `'${at}'`) +
         " SELECT id,tier,event_tier FROM enriched_sponsors WHERE effective_weight>0 ORDER BY id",
     )
-      .bind(at, ...model.bindings)
+      .bind(...model.bindings)
       .all<{ id: string; tier: string | null; event_tier: string | null }>()
   ).results;
 }
