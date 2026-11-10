@@ -2,7 +2,6 @@ import { z } from "zod";
 import { emailMessageTypeSchema, successResponseSchema, utcInstantSchema } from "./api-common";
 import { eventRegistrationStatusFilterSchema } from "./event-registrations";
 import { promotionFormatsSchema } from "./event-promotion-kit";
-import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { attendanceTypeSchema } from "./registration";
 
 export const eventEmailCampaignAudienceSchema = z.enum([
@@ -131,22 +130,6 @@ export type EventEmailCampaignResponse = z.infer<typeof eventEmailCampaignRespon
 export const speakerKitTestResponseSchema = successResponseSchema.extend({
   sessionTitle: z.string(),
 });
-
-/** One organizer send of speaker kits and where its emails stand. */
-export const speakerKitDeliverySchema = z.object({
-  id: z.uuid(),
-  createdAt: utcInstantSchema,
-  formats: promotionFormatsSchema,
-  total: z.number().int().nonnegative(),
-  sent: z.number().int().nonnegative(),
-  pending: z.number().int().nonnegative(),
-  failed: z.number().int().nonnegative(),
-  alreadySent: z.number().int().nonnegative(),
-});
-export type SpeakerKitDelivery = z.infer<typeof speakerKitDeliverySchema>;
-
-export const speakerKitDeliveriesQuerySchema = listQuerySchema(["createdAt"] as const, { limit: 10, maxLimit: 50 });
-export const speakerKitDeliveriesResponseSchema = paginatedResponseSchema("deliveries", speakerKitDeliverySchema);
 
 export const eventEmailCampaignStageResponseSchema = successResponseSchema.extend({
   processedRecipients: z.number().int().nonnegative(),

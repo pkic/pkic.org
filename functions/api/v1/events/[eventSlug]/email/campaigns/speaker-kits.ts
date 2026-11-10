@@ -1,7 +1,4 @@
-import {
-  speakerKitDeliveriesRouteSchema,
-  speakerKitTestRouteSchema,
-} from "../../../../../../../assets/shared/schemas/route-contracts-event-email-campaigns";
+import { speakerKitTestRouteSchema } from "../../../../../../../assets/shared/schemas/route-contracts-event-email-campaigns";
 import { guardPermissionDatabase } from "../../../../../../_lib/auth/permissions";
 import { resolveAppBaseUrl } from "../../../../../../_lib/config";
 import type { AdminContext } from "../../../../../../_lib/db/context";
@@ -9,7 +6,7 @@ import { AppError } from "../../../../../../_lib/errors";
 import { json } from "../../../../../../_lib/http";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
 import { requireInternalSecret } from "../../../../../../_lib/request";
-import { listSpeakerKitDeliveries, sendSpeakerKitTest } from "../../../../../../_lib/services/event-email-campaign";
+import { sendSpeakerKitTest } from "../../../../../../_lib/services/event-email-campaign";
 import { getEventBySlug } from "../../../../../../_lib/services/events";
 import { requireEventPermission } from "../../authorization";
 
@@ -28,10 +25,4 @@ export const SpeakerKitTestCreate = openApiRoute(speakerKitTestRouteSchema, asyn
     signingSecret: requireInternalSecret(c.env),
   });
   return json(result, 202);
-});
-
-export const SpeakerKitDeliveriesList = openApiRoute(speakerKitDeliveriesRouteSchema, async (c: AdminContext, data) => {
-  const authorization = await requireEventPermission(c, data.params.eventSlug, "events:write");
-  const event = await getEventBySlug(authorization.db, data.params.eventSlug);
-  return json(await listSpeakerKitDeliveries(authorization.db, event.id, data.query));
 });

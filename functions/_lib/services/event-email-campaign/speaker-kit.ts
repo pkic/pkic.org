@@ -10,16 +10,21 @@ import { prepareJobWake } from "../scheduled-jobs/dispatcher";
 import { campaignPublishedSessions } from "./audience";
 import type { CampaignEvent } from "./types";
 
-export interface SpeakerKitEmailRequest {
-  test: boolean;
-  campaign: EventEmailCampaignPreviewInput;
-}
-
 interface SpeakerKitBatchIdentity {
   batchId: string;
+  campaignId: string;
   actorId: string;
   appBaseUrl: string;
   at: string;
+}
+
+/** A kit emailed once is not emailed again for that session unless the organizer asks to resend. */
+function notEmailedSql(input: EventEmailCampaignPreviewInput) {
+  return input.kit?.resend
+    ? "1=1"
+    : `NOT EXISTS(SELECT 1 FROM event_promotion_batch_recipients emailed
+        JOIN event_promotion_batches earlier ON earlier.id=emailed.batch_id AND earlier.email_test=0
+        WHERE emailed.occurrence_id=session.occurrence_id AND emailed.user_id=session.user_id AND emailed.email_status='queued')`;
 }
 
 function prepareSpeakerKitBatch(
@@ -29,11 +34,10 @@ function prepareSpeakerKitBatch(
   identity: SpeakerKitBatchIdentity,
   options: { test: boolean; condition: { sql: string; bindings: unknown[] } },
 ) {
-  const email: SpeakerKitEmailRequest = { test: options.test, campaign: input };
   return db
     .prepare(
-      `INSERT INTO event_promotion_batches(id,event_id,requested_by,published_revision,formats_json,origin,created_at,email_json)
-       SELECT ?,state.event_id,?,state.published_revision,?,?,?,?
+      `INSERT INTO event_promotion_batches(id,event_id,requested_by,published_revision,formats_json,origin,created_at,email_campaign_id,email_test)
+       SELECT ?,state.event_id,?,state.published_revision,?,?,?,?,?
        FROM event_agenda_state state
        WHERE state.event_id=? AND EXISTS(${options.condition.sql})
        ON CONFLICT(id) DO NOTHING`,
@@ -44,7 +48,8 @@ function prepareSpeakerKitBatch(
       JSON.stringify(input.kit?.formats),
       identity.appBaseUrl,
       identity.at,
-      JSON.stringify(email),
+      identity.campaignId,
+      options.test ? 1 : 0,
       event.id,
       ...options.condition.bindings,
     );
@@ -55,7 +60,7 @@ export function prepareSpeakerKitAcceptance(
   db: DatabaseLike,
   event: CampaignEvent,
   input: EventEmailCampaignPreviewInput,
-  identity: Omit<SpeakerKitBatchIdentity, "batchId"> & { campaignId: string },
+  identity: Omit<SpeakerKitBatchIdentity, "batchId">,
 ): StatementLike[] {
   const batchId = identity.campaignId;
   const sessions = campaignPublishedSessions(event, input.filter);
@@ -69,7 +74,7 @@ export function prepareSpeakerKitAcceptance(
       .prepare(
         `INSERT INTO event_promotion_batch_recipients(batch_id,occurrence_id,user_id,next_attempt_at,updated_at,email_status)
          SELECT ?,session.occurrence_id,session.user_id,?,?,'pending' FROM (${sessions.sql}) session
-         WHERE changes()=1 AND session.email IS NOT NULL
+         WHERE changes()=1 AND session.email IS NOT NULL AND ${notEmailedSql(input)}
          ON CONFLICT(batch_id,occurrence_id,user_id) DO NOTHING`,
       )
       .bind(batchId, identity.at, identity.at, ...sessions.bindings),
@@ -99,7 +104,7 @@ export async function countSpeakerKitEmails(
   const sessions = campaignPublishedSessions(event, input.filter);
   const row = await first<{ total: number }>(
     db,
-    `SELECT COUNT(*) AS total FROM (${sessions.sql}) WHERE email IS NOT NULL`,
+    `SELECT COUNT(*) AS total FROM (${sessions.sql}) session WHERE session.email IS NOT NULL AND ${notEmailedSql(input)}`,
     sessions.bindings,
   );
   return row?.total ?? 0;

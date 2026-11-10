@@ -5,8 +5,6 @@ import {
   eventEmailCampaignPreviewResponseSchema,
   eventEmailCampaignResponseSchema,
   eventEmailCampaignStageResponseSchema,
-  speakerKitDeliveriesQuerySchema,
-  speakerKitDeliveriesResponseSchema,
   speakerKitTestResponseSchema,
 } from "./event-email-campaigns";
 import { z } from "zod";
@@ -100,15 +98,6 @@ const speakerKitTestResponses = {
   "404": jsonErrorResponse("Event not found or unavailable through this context."),
   "409": jsonErrorResponse("The preview expired or no longer matches the message."),
 };
-const speakerKitDeliveriesResponses = {
-  "200": {
-    description: "Each send of speaker kits, newest first, with where its emails stand.",
-    content: { "application/json": { schema: speakerKitDeliveriesResponseSchema } },
-  },
-  "401": jsonErrorResponse("An authenticated user session is required."),
-  "403": jsonErrorResponse("Event communication permission is required."),
-  "404": jsonErrorResponse("Event not found or unavailable through this context."),
-};
 
 export const speakerKitTestRouteSchema = {
   tags: ["Events", "Email campaigns"],
@@ -125,23 +114,6 @@ export const groupSpeakerKitTestRouteSchema = {
   description: "Requires a fresh preview. Delivers one speaker's message and files to the organizer only.",
   request: { params: groupEventParamsSchema, ...speakerKitTestRequest },
   responses: speakerKitTestResponses,
-};
-
-export const speakerKitDeliveriesRouteSchema = {
-  tags: ["Events", "Email campaigns"],
-  summary: "List speaker kit sends",
-  description: "Reports sent, pending, and failed emails for each organizer send of speaker kits.",
-  request: { params: eventSlugParamsSchema, query: speakerKitDeliveriesQuerySchema },
-  responses: speakerKitDeliveriesResponses,
-  "x-pkic-auth": { required: true, scopes: ["events:write"] },
-};
-
-export const groupSpeakerKitDeliveriesRouteSchema = {
-  tags: ["Groups", "Events", "Email campaigns"],
-  summary: "List managed group event speaker kit sends",
-  description: "Reports sent, pending, and failed emails for each organizer send of speaker kits.",
-  request: { params: groupEventParamsSchema, query: speakerKitDeliveriesQuerySchema },
-  responses: speakerKitDeliveriesResponses,
 };
 
 export const eventEmailCampaignStageRouteSchema = {

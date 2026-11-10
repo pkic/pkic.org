@@ -2,8 +2,8 @@ import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
 import { eventMyAgendaPath } from "../../../../../shared/event-participation-link";
 /** Event messages are composed on their own page under Communications. */
 import { EventEmailCampaign } from "../../../../components/events/EventEmailCampaign";
-import { SpeakerKitDeliveries } from "../../../../components/events/SpeakerKitDeliveries";
 import { ButtonLink } from "../../../../ui/Button";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { usePortalHashLocation } from "../../hash-location";
 import { toast } from "../../ui";
@@ -79,7 +79,10 @@ export function GroupEventCommunications({
         </ButtonLink>
       </PanelHeader>
       <PanelBody>
-        <SpeakerKitDeliveries endpoint={`${eventPath}/email/campaigns/kits`} />
+        <EmptyState
+          title="Email event participants"
+          body="Choose an audience and its filters in the message form, then review the recipients before sending."
+        />
       </PanelBody>
     </Panel>
   );

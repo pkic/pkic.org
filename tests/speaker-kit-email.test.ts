@@ -4,12 +4,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   eventEmailCampaignPreviewResponseSchema,
   eventEmailCampaignResponseSchema,
-  speakerKitDeliveriesResponseSchema,
 } from "../assets/shared/schemas/event-email-campaigns";
 import { loadStoredFileAttachments, parseQueuedEmailAttachments } from "../functions/_lib/email/attachments";
 import { processPendingPromotionRecipients } from "../functions/_lib/services/event-agenda/promotion-batch-dispatch";
 import { processPromotionRenderJob } from "../functions/_lib/services/event-agenda/promotion-render-jobs";
 import { stagePendingSpeakerKitEmails } from "../functions/_lib/services/event-email-campaign";
+import { cleanExpiredCampaignSnapshots } from "../functions/_lib/services/event-email-campaign/dispatch";
 import { readStoredZipEntries } from "../functions/_lib/utils/stored-zip";
 import { callApi } from "./helpers/app";
 import { eventBase, promotionFixture } from "./helpers/promotion-fixture";
@@ -86,12 +86,6 @@ async function outbox() {
   return rows.results;
 }
 
-async function deliveries(f: Fixture) {
-  const response = await callApi(env, `${campaigns}/kits`, { headers: f.headers });
-  expect(response.status, await response.clone().text()).toBe(200);
-  return speakerKitDeliveriesResponseSchema.parse(await response.json()).deliveries;
-}
-
 describe("speaker kit emails", () => {
   beforeEach(() => resetDb());
 
@@ -121,45 +115,17 @@ describe("speaker kit emails", () => {
       "planning-a-quantum-safe-migration-carousel",
     ]);
 
-    await send(f);
-    await renderPendingKits();
-    expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 2, queued: 0, failed: 0 });
-    expect(await outbox()).toHaveLength(2);
+    expect((await preview(f)).recipientCount).toBe(0);
 
-    await send(f, { ...message, kit: { ...message.kit, resend: true } });
+    const resend = { ...message, kit: { ...message.kit, resend: true } };
+    expect((await send(f, resend)).queuedRecipients).toBe(2);
     await renderPendingKits();
     expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 2, queued: 2, failed: 0 });
     expect(await outbox()).toHaveLength(4);
-    expect((await deliveries(f)).map(({ total, pending, alreadySent }) => ({ total, pending, alreadySent }))).toEqual(
-      expect.arrayContaining([
-        { total: 2, pending: 2, alreadySent: 0 },
-        { total: 2, pending: 0, alreadySent: 2 },
-      ]),
-    );
-  });
-
-  it("does not repeat a kit that reached the speaker on a later attempt", async () => {
-    const f = await kitFixture();
-    await send(f);
-    await renderPendingKits();
-    await stagePendingSpeakerKitEmails(env.DB);
-    await env.DB.prepare("UPDATE email_outbox SET status='failed' WHERE idempotency_key LIKE 'speaker-kit:%'").run();
-
-    await send(f);
-    await renderPendingKits();
-    expect((await stagePendingSpeakerKitEmails(env.DB)).queued).toBe(1);
-
-    await send(f);
-    await renderPendingKits();
-    expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 1, queued: 0, failed: 0 });
-    expect(await outbox()).toHaveLength(2);
   });
 
   it("settles a batch whose template was retired so it cannot block later batches", async () => {
     const f = await kitFixture();
-    await send(f);
-    await renderPendingKits();
-    await stagePendingSpeakerKitEmails(env.DB);
     await send(f);
     await send(f, { ...message, kit: { ...message.kit, resend: true } });
     await renderPendingKits();
@@ -169,10 +135,9 @@ describe("speaker kit emails", () => {
 
     const passes = [await stagePendingSpeakerKitEmails(env.DB), await stagePendingSpeakerKitEmails(env.DB)];
     expect(passes.map(({ processed }) => processed)).toEqual([1, 1]);
-    expect(passes.reduce((sum, pass) => sum + pass.failed, 0)).toBe(1);
-    expect(passes.reduce((sum, pass) => sum + pass.queued, 0)).toBe(0);
+    expect(passes.reduce((sum, pass) => sum + pass.failed, 0)).toBe(2);
     expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 0, queued: 0, failed: 0 });
-    expect(await outbox()).toHaveLength(1);
+    expect(await outbox()).toHaveLength(0);
   });
 
   it("delivers a test to the organizer without counting as the speaker's copy", async () => {
@@ -180,15 +145,13 @@ describe("speaker kit emails", () => {
     const { previewToken } = await preview(f);
     const response = await post(f, `${campaigns}/tests`, { ...message, previewToken });
     expect(response.status, await response.clone().text()).toBe(202);
+    // The message stays with its campaign until the kit email reaches the outbox.
+    await env.DB.prepare("UPDATE event_email_campaigns SET expires_at='2000-01-01T00:00:00.000Z'").run();
+    await cleanExpiredCampaignSnapshots(env.DB);
     await renderPendingKits();
     expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 1, queued: 1, failed: 0 });
     expect((await outbox()).map((row) => row.recipient_email)).toEqual(["admin@pkic.org"]);
-    expect(await deliveries(f)).toEqual([]);
-
-    const accepted = await post(f, campaigns, { ...message, previewToken });
-    expect(accepted.status, await accepted.clone().text()).toBe(202);
-    await renderPendingKits();
-    expect((await stagePendingSpeakerKitEmails(env.DB)).queued).toBe(2);
+    expect((await preview(f)).recipientCount).toBe(2);
   });
 
   it("settles as failed without emailing when the agenda changes before the kit is ready", async () => {
@@ -200,7 +163,8 @@ describe("speaker kit emails", () => {
       .run();
     expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 1, queued: 0, failed: 1 });
     expect(await outbox()).toHaveLength(0);
-    expect(await deliveries(f)).toMatchObject([{ total: 1, failed: 1, pending: 0 }]);
+    const kit = await env.DB.prepare("SELECT email_status FROM event_promotion_batch_recipients").first();
+    expect(kit).toEqual({ email_status: "failed" });
   });
 
   it("narrows speakers to the sessions on one day of the event", async () => {
@@ -219,10 +183,8 @@ describe("speaker kit emails", () => {
     expect((await post(f, `${campaigns}/previews`, { ...message, ...change })).status).toBe(400);
   });
 
-  it("keeps the delivery list and tests to event communicators", async () => {
+  it("keeps kit tests to event communicators", async () => {
     const f = await kitFixture();
-    const list = await callApi(env, `${campaigns}/kits`, { headers: f.attendeeHeaders });
-    expect(list.status).toBe(403);
     const test = await callApi(env, `${campaigns}/tests`, {
       method: "POST",
       headers: f.attendeeHeaders,

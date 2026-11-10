@@ -8,7 +8,6 @@ import { batchRows } from "../../db/pagination";
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
 import { slugifyAttachmentPart, type QueuedEmailAttachment } from "../../email/attachments";
-import { outboxIdForOperation } from "../../email/outbox-queue";
 import { loadEmailRenderBundle } from "../../email/partials";
 import { emailPlainText } from "../../email/plain-text";
 import type { DatabaseLike } from "../../types";
@@ -45,7 +44,8 @@ interface PendingKitEmail {
   formats_json: string;
   origin: string;
   requested_by: string;
-  email_json: string;
+  email_test: number;
+  input_json: string | null;
   renders_json: string;
 }
 
@@ -58,13 +58,13 @@ interface KitPerson {
   job_title: string | null;
 }
 
-type EmailOutcome = { occurrenceId: string; userId: string; status: string; outboxId: string | null };
+type EmailOutcome = { occurrenceId: string; userId: string; status: "queued" | "failed" };
 
 /** A kit waits only while a render can still finish; a dead end settles at once as failed. */
 const PENDING_KIT_EMAILS_SQL = `WITH pending AS (
   SELECT recipient.batch_id,recipient.occurrence_id,recipient.user_id,recipient.status,recipient.fingerprint,
     batch.event_id,batch.published_revision,COALESCE(state.published_revision,0) AS live_revision,
-    batch.formats_json,batch.origin,batch.requested_by,batch.email_json,batch.created_at,
+    batch.formats_json,batch.origin,batch.requested_by,batch.email_test,campaign.input_json,batch.created_at,
     (SELECT json_group_array(json_object('format',render.format,'cacheKey',render.cache_key,'status',render.status))
       FROM event_promotion_renders render
       WHERE render.event_id=batch.event_id AND render.occurrence_id=recipient.occurrence_id AND render.user_id=recipient.user_id
@@ -75,10 +75,11 @@ const PENDING_KIT_EMAILS_SQL = `WITH pending AS (
         AND render.status IN('queued','retrying','rendering')) AS unsettled
   FROM event_promotion_batch_recipients recipient
   JOIN event_promotion_batches batch ON batch.id=recipient.batch_id
+  LEFT JOIN event_email_campaigns campaign ON campaign.id=batch.email_campaign_id
   LEFT JOIN event_agenda_state state ON state.event_id=batch.event_id
   WHERE recipient.email_status='pending' AND recipient.status IN('prepared','failed')
 )
-SELECT batch_id,occurrence_id,user_id,status,fingerprint,event_id,published_revision,live_revision,formats_json,origin,requested_by,email_json,renders_json
+SELECT batch_id,occurrence_id,user_id,status,fingerprint,event_id,published_revision,live_revision,formats_json,origin,requested_by,email_test,input_json,renders_json
 FROM pending WHERE status='failed' OR live_revision<>published_revision OR unsettled=0
 ORDER BY created_at,batch_id,occurrence_id,user_id LIMIT ?`;
 
@@ -161,8 +162,8 @@ async function loadKitEmailBundle(db: DatabaseLike, templateKey: string | undefi
 }
 
 /**
- * Moves finished kits into the email outbox, one batch per pass. The outbox owns
- * delivery retries from there; a recipient row settles exactly once here.
+ * Moves finished kits into the email outbox, one batch per pass. The recipient row
+ * only records that its email was queued; the outbox owns delivery from there.
  */
 export async function stagePendingSpeakerKitEmails(
   db: DatabaseLike,
@@ -172,17 +173,11 @@ export async function stagePendingSpeakerKitEmails(
   const head = rows[0];
   if (!head) return { processed: 0, queued: 0, failed: 0 };
   const page = rows.slice(0, limit).filter((row) => row.batch_id === head.batch_id);
-
-  const request = JSON.parse(head.email_json) as { test: boolean; campaign: unknown };
-  const campaign = eventEmailCampaignPreviewInputSchema.parse(request.campaign);
+  const test = head.email_test === 1;
+  const campaign = head.input_json ? eventEmailCampaignPreviewInputSchema.parse(JSON.parse(head.input_json)) : null;
   const formats = promotionFormatsSchema.parse(JSON.parse(head.formats_json));
-  const formatKey = [...formats].sort().join(",");
-  const baseKey = (row: PendingKitEmail) =>
-    request.test
-      ? `speaker-kit-test:${row.batch_id}:${row.occurrence_id}:${row.user_id}`
-      : `speaker-kit:${row.occurrence_id}:${row.user_id}:${row.fingerprint}:${formatKey}`;
 
-  const [people, titles, outbox] = await db.batch([
+  const [people, titles] = await db.batch([
     prepareKitPeopleRead(db, [...new Set([head.requested_by, ...page.map((row) => row.user_id)])]),
     db
       .prepare(
@@ -191,23 +186,11 @@ export async function stagePendingSpeakerKitEmails(
          WHERE publication.event_id=? AND publication.revision=? AND json_extract(entry.value,'$.id') IN(SELECT value FROM json_each(?))`,
       )
       .bind(head.event_id, head.published_revision, JSON.stringify(page.map((row) => row.occurrence_id))),
-    db
-      // A retry or resend carries the base key plus ":<batch>"; every attempt speaks for the kit.
-      .prepare(
-        `SELECT requested.value AS base_key,mail.id,mail.status
-         FROM json_each(?) requested
-         JOIN email_outbox mail ON mail.idempotency_key=requested.value
-           OR (mail.idempotency_key>requested.value||':' AND mail.idempotency_key<requested.value||';')`,
-      )
-      .bind(JSON.stringify(page.map(baseKey))),
   ]);
   const peopleById = new Map(batchRows<KitPerson>(people).map((person) => [person.id, person]));
   const titleById = new Map(batchRows<{ id: string; title: string }>(titles).map((row) => [row.id, row.title]));
-  const earlierByKey = new Map<string, { id: string; status: string }>();
-  for (const attempt of batchRows<{ base_key: string; id: string; status: string }>(outbox)) {
-    const known = earlierByKey.get(attempt.base_key);
-    if (!known || known.status === "failed") earlierByKey.set(attempt.base_key, attempt);
-  }
+  const templateKey = campaign && !campaign.bodyContent ? campaign.templateKey : undefined;
+  const bundle = campaign ? await loadKitEmailBundle(db, templateKey) : null;
 
   const event = await getEventById(db, head.event_id);
   const promotionKitUrl = promotionKitPageUrl(head.origin, event);
@@ -216,68 +199,56 @@ export async function stagePendingSpeakerKitEmails(
   for (const row of page) {
     const identity = { occurrenceId: row.occurrence_id, userId: row.user_id };
     const speaker = peopleById.get(row.user_id);
-    const to = request.test ? peopleById.get(row.requested_by) : speaker;
+    const to = test ? peopleById.get(row.requested_by) : speaker;
     const title = titleById.get(row.occurrence_id);
     const attachments = title ? finishedKitFiles(row, formats, title) : null;
-    if (!speaker || !to?.email || !title || !attachments) {
-      outcomes.push({ ...identity, status: "failed", outboxId: null });
+    if (!bundle || !speaker || !to?.email || !title || !attachments) {
+      outcomes.push({ ...identity, status: "failed" });
       continue;
     }
-    const key = baseKey(row);
-    const earlier = earlierByKey.get(key);
-    if (earlier && earlier.status !== "failed" && !campaign.kit?.resend) {
-      outcomes.push({ ...identity, status: "already_sent", outboxId: earlier.id });
-      continue;
-    }
-    const idempotencyKey = earlier ? `${key}:${row.batch_id}` : key;
+    const idempotencyKey = `speaker-kit:${row.batch_id}:${row.occurrence_id}:${row.user_id}`;
     recipients.push(kitRecipient(speaker, to, title, promotionKitUrl, { idempotencyKey, attachments }));
-    outcomes.push({ ...identity, status: "queued", outboxId: await outboxIdForOperation(idempotencyKey) });
+    outcomes.push({ ...identity, status: "queued" });
   }
 
-  const templateKey = !campaign.bodyContent ? campaign.templateKey : undefined;
-  const bundle = await loadKitEmailBundle(db, templateKey);
-  const settled = bundle
-    ? outcomes
-    : outcomes.map((outcome) =>
-        outcome.status === "queued" ? { ...outcome, status: "failed", outboxId: null } : outcome,
-      );
   const stillPending = {
     sql: "SELECT 1 FROM event_promotion_batch_recipients WHERE batch_id=? AND email_status='pending' LIMIT 1",
     bindings: [head.batch_id],
   };
   const template = templateKey ? (bundle?.templates.get(templateKey) ?? null) : null;
-  const prepared = bundle
-    ? await prepareEventEmailCampaignPage(
-        db,
-        event,
-        head.origin,
-        campaign,
-        {
-          template,
-          partials: bundle.partials,
-          messageType: campaign.messageType ?? template?.messageType ?? "promotional",
-          recipients,
-        },
-        head.batch_id,
-        stillPending,
-      )
-    : { statements: [] };
+  const prepared =
+    campaign && bundle && recipients.length > 0
+      ? await prepareEventEmailCampaignPage(
+          db,
+          event,
+          head.origin,
+          campaign,
+          {
+            template,
+            partials: bundle.partials,
+            messageType: campaign.messageType ?? template?.messageType ?? "promotional",
+            recipients,
+          },
+          head.batch_id,
+          stillPending,
+        )
+      : { statements: [] };
   await db.batch([
     ...prepared.statements,
     db
       .prepare(
         `UPDATE event_promotion_batch_recipients AS recipient
-         SET email_status=json_extract(outcome.value,'$.status'),email_outbox_id=json_extract(outcome.value,'$.outboxId'),updated_at=?
+         SET email_status=json_extract(outcome.value,'$.status'),updated_at=?
          FROM json_each(?) outcome
          WHERE recipient.batch_id=? AND recipient.occurrence_id=json_extract(outcome.value,'$.occurrenceId')
            AND recipient.user_id=json_extract(outcome.value,'$.userId') AND recipient.email_status='pending'`,
       )
-      .bind(nowIso(), JSON.stringify(settled), head.batch_id),
+      .bind(nowIso(), JSON.stringify(outcomes), head.batch_id),
     ...(rows.length > page.length ? [prepareJobWake(db, "promotion_rendering")] : []),
   ]);
   return {
     processed: page.length,
-    queued: bundle ? recipients.length : 0,
-    failed: settled.filter((outcome) => outcome.status === "failed").length,
+    queued: recipients.length,
+    failed: outcomes.length - recipients.length,
   };
 }
