@@ -3,6 +3,8 @@ import {
   personalPromotionImageCacheKey,
   personalPromotionRendererIsCurrent,
 } from "../../../assets/shared/personal-promotion-image";
+import { bytesToBase64 } from "../../../assets/shared/base64";
+import { readStoredZipEntries } from "../utils/stored-zip";
 
 /** Durable outbox refusals consumed by the existing badge-render retry owner. */
 export const BADGE_ATTACHMENT_WAIT_REASONS = {
@@ -18,9 +20,16 @@ export interface QueuedBadgeAttachment {
   renderer?: string;
 }
 
-export type QueuedEmailAttachment = QueuedBadgeAttachment;
+/** A rendered file in storage; the object's own content type names the file type. */
+export interface QueuedStoredFileAttachment {
+  kind: "r2-stored-file";
+  r2Key: string;
+  filenameBase: string;
+}
 
-function slugifyAttachmentPart(value: string): string {
+export type QueuedEmailAttachment = QueuedBadgeAttachment | QueuedStoredFileAttachment;
+
+export function slugifyAttachmentPart(value: string): string {
   return value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -80,8 +89,65 @@ export function parseQueuedEmailAttachments(payload: Record<string, unknown>): Q
       );
     }
 
+    if (candidate.kind === "r2-stored-file") {
+      return (
+        typeof candidate.r2Key === "string" &&
+        candidate.r2Key.length > 0 &&
+        typeof candidate.filenameBase === "string" &&
+        candidate.filenameBase.length > 0
+      );
+    }
+
     return false;
   });
+}
+
+interface LoadedEmailAttachment {
+  filename: string;
+  contentType: string;
+  base64Content: string;
+}
+
+const ZIP_ENTRY_CONTENT_TYPES: Record<string, string> = { jpg: "image/jpeg", png: "image/png" };
+const FILE_EXTENSIONS: Record<string, string> = {
+  "application/pdf": "pdf",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+};
+
+/** Multi-page images are stored as one archive; a speaker receives the images themselves. */
+export async function loadStoredFileAttachments(
+  bucket: Pick<R2Bucket, "get">,
+  attachments: readonly QueuedStoredFileAttachment[],
+): Promise<LoadedEmailAttachment[]> {
+  const loaded: LoadedEmailAttachment[] = [];
+  for (const attachment of attachments) {
+    const stored = await bucket.get(attachment.r2Key);
+    if (!stored) throw new Error("Required promotion file is no longer available");
+    const contentType = stored.httpMetadata?.contentType ?? "";
+    const bytes = new Uint8Array(await stored.arrayBuffer());
+    if (contentType === "application/zip") {
+      readStoredZipEntries(bytes).forEach((entry, index) => {
+        const extension = entry.name.split(".").pop() ?? "";
+        const entryType = ZIP_ENTRY_CONTENT_TYPES[extension];
+        if (!entryType) throw new Error("Promotion archive holds an unexpected file");
+        loaded.push({
+          filename: `${attachment.filenameBase}-${String(index + 1).padStart(2, "0")}.${extension}`,
+          contentType: entryType,
+          base64Content: bytesToBase64(entry.bytes),
+        });
+      });
+      continue;
+    }
+    const extension = FILE_EXTENSIONS[contentType];
+    if (!extension) throw new Error("Promotion file has an unexpected type");
+    loaded.push({
+      filename: `${attachment.filenameBase}.${extension}`,
+      contentType,
+      base64Content: bytesToBase64(bytes),
+    });
+  }
+  return loaded;
 }
 
 export function queuedBadgeRendererIsCurrent(attachment: QueuedBadgeAttachment, actual: string | undefined): boolean {

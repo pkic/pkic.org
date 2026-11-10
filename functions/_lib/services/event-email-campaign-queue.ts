@@ -10,11 +10,11 @@ import { templateVariableNames } from "../email/template-references";
 import { buildPersonalCampaignTemplateData } from "./event-email-campaign/template-data";
 import { chunkRecipients } from "./event-email-campaign/batching";
 import { findBroadcastOnlyTemplateRefs } from "./event-email-campaign/broadcast-safety";
-import type { EventEmailCampaignInput, CampaignDeliveryPage } from "./event-email-campaign/types";
+import type { EventEmailCampaignInput, CampaignDeliveryPage, CampaignRecipient } from "./event-email-campaign/types";
 import { outboxIdForOperation } from "../email/outbox-queue";
 
-async function campaignOutboxIdentity(campaignId: string, email: string) {
-  const idempotencyKey = `event-campaign:${campaignId}:${email}`;
+async function campaignOutboxIdentity(campaignId: string, recipient: CampaignRecipient) {
+  const idempotencyKey = recipient.idempotencyKey ?? `event-campaign:${campaignId}:${recipient.email}`;
   return { outboxId: await outboxIdForOperation(idempotencyKey), idempotencyKey };
 }
 
@@ -65,13 +65,14 @@ export async function prepareEventEmailCampaignPage(
             ).manageUrl
           : undefined;
       rows.push({
-        ...(await campaignOutboxIdentity(campaignId, recipient.email)),
+        ...(await campaignOutboxIdentity(campaignId, recipient)),
         eventId: event.id,
         templateKey,
         recipientEmail: recipient.email,
         recipientUserId: recipient.userId ?? null,
         messageType,
         subject: input.subjectOverride ?? `Update: ${event.name}`,
+        attachments: recipient.attachments,
         capabilityLinkValues: manageUrl ? [manageUrl] : [],
         data: {
           ...buildPersonalCampaignTemplateData(recipient, { ...sharedEventVars, ...routeVars }, defaultVariableNames),
@@ -89,7 +90,7 @@ export async function prepareEventEmailCampaignPage(
       const to = chunk[0];
       if (!to) continue;
       rows.push({
-        ...(await campaignOutboxIdentity(campaignId, to.email)),
+        ...(await campaignOutboxIdentity(campaignId, to)),
         eventId: event.id,
         templateKey,
         recipientEmail: to.email,

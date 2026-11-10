@@ -6,12 +6,13 @@ import type {
 import type { EventRecord } from "../events";
 import type { ResolvedEmailTemplate } from "../../email/templates";
 import type { FormFieldDefinition } from "../../../../assets/shared/schemas/forms";
+import type { QueuedEmailAttachment } from "../../email/attachments";
 
 export type EventEmailCampaignInput = EventEmailCampaignPreviewInput;
 
 export type CampaignEvent = Pick<
   EventRecord,
-  "id" | "slug" | "base_path" | "starts_at" | "settings_json" | "source_mode"
+  "id" | "slug" | "base_path" | "starts_at" | "settings_json" | "source_mode" | "timezone"
 >;
 
 export interface CampaignRecipient {
@@ -23,6 +24,9 @@ export interface CampaignRecipient {
   firstName: string;
   lastName: string;
   templateData: Record<string, unknown>;
+  /** Replaces the per-campaign delivery key when one message must stay unique across campaigns. */
+  idempotencyKey?: string;
+  attachments?: QueuedEmailAttachment[];
 }
 
 /** Form values/labels resolved from the recipient's stored response set. */

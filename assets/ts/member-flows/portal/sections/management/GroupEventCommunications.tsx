@@ -2,8 +2,8 @@ import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
 import { eventMyAgendaPath } from "../../../../../shared/event-participation-link";
 /** Event messages are composed on their own page under Communications. */
 import { EventEmailCampaign } from "../../../../components/events/EventEmailCampaign";
+import { SpeakerKitDeliveries } from "../../../../components/events/SpeakerKitDeliveries";
 import { ButtonLink } from "../../../../ui/Button";
-import { EmptyState } from "../../../../ui/EmptyState";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { usePortalHashLocation } from "../../hash-location";
 import { toast } from "../../ui";
@@ -25,6 +25,7 @@ export function GroupEventCommunications({
 }) {
   const [preset] = useHashQueryParam("campaignPreset", "");
   const planning = preset === "session-planning";
+  const kits = preset === "speaker-kits";
   const agendaUrl = new URL(eventMyAgendaPath(eventSlug), window.location.origin).href;
   const [, navigate] = usePortalHashLocation();
   const eventPath = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}`;
@@ -38,12 +39,17 @@ export function GroupEventCommunications({
             <EventEmailCampaign
               campaignsPath={`${eventPath}/email/campaigns`}
               daysPath={`${eventPath}/days`}
-              initialAudience="attendees"
-              initialSubject={planning ? "Plan your sessions" : undefined}
+              initialAudience={kits ? "speakers" : "attendees"}
+              initialAttachKits={kits}
+              initialSubject={
+                planning ? "Plan your sessions" : kits ? "Your promotion kit for {{sessionTitle}}" : undefined
+              }
               initialBody={
-                planning
-                  ? `Please plan the sessions you would like to attend.\n\nSave favorites to show your interest. A favorite does not register you or reserve a place. Register or request approval where the session indicates it; optional registration and invitation-only access remain separate.\n\n[Open My agenda](${agendaUrl})`
-                  : undefined
+                kits
+                  ? `Hi {{firstName}},\n\nYour session {{sessionTitle}} is on the agenda for {{eventName}}. We attached promotion images you can share with your network. They carry your personal registration link.\n\nWant another format or different wording? [Open your promotion kit]({{promotionKitUrl}}).`
+                  : planning
+                    ? `Please plan the sessions you would like to attend.\n\nSave favorites to show your interest. A favorite does not register you or reserve a place. Register or request approval where the session indicates it; optional registration and invitation-only access remain separate.\n\n[Open My agenda](${agendaUrl})`
+                    : undefined
               }
               notify={toast}
               cancelHref={usePortalHashLocation.hrefs(listPath)}
@@ -66,12 +72,14 @@ export function GroupEventCommunications({
         >
           Ask attendees to plan sessions
         </ButtonLink>
+        <ButtonLink
+          href={usePortalHashLocation.hrefs(`${listPath}/${NEW_CAMPAIGN_SEGMENT}?campaignPreset=speaker-kits`)}
+        >
+          Email speakers their kits
+        </ButtonLink>
       </PanelHeader>
       <PanelBody>
-        <EmptyState
-          title="Email event participants"
-          body="Choose an audience and its filters in the message form, then review the recipients before sending."
-        />
+        <SpeakerKitDeliveries endpoint={`${eventPath}/email/campaigns/kits`} />
       </PanelBody>
     </Panel>
   );

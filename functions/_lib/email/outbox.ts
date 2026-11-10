@@ -27,6 +27,7 @@ import { applyCampaignCustomText } from "./campaign-custom";
 import { readDirectEmailBody } from "./direct-body";
 import {
   BADGE_ATTACHMENT_WAIT_REASONS,
+  loadStoredFileAttachments,
   parseQueuedEmailAttachments,
   queuedBadgeRendererIsCurrent,
 } from "./attachments";
@@ -326,6 +327,12 @@ async function attemptOutboxDelivery(
         if (badgeAttachments.some((attachment) => attachment.required)) throw error;
         // Optional attachments do not hold up their email.
       }
+    }
+
+    const storedFiles = queuedAttachments.filter((a) => a.kind === "r2-stored-file");
+    if (storedFiles.length > 0) {
+      if (!env.ASSETS_BUCKET) throw new Error("Required attachment storage is unavailable");
+      attachments = [...(attachments ?? []), ...(await loadStoredFileAttachments(env.ASSETS_BUCKET, storedFiles))];
     }
 
     const bccRecipients = Array.isArray(payload.__bccRecipients)

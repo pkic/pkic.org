@@ -14,6 +14,7 @@ import { projectAttendeeDayState } from "./attendance-projection";
 import { resolveEventFormResponses, type EventFormResponse } from "../forms";
 import type { DatabaseLike } from "../../types";
 import { proposalSpeakerProfileValueSql } from "../proposal-speakers";
+import { agendaDayWindow, publishedSpeakerSessionsSql } from "../event-agenda/published-speaker-sessions";
 import type {
   AttendeeCampaignRow,
   CampaignAudienceFilter,
@@ -23,7 +24,11 @@ import type {
 } from "./types";
 
 type AttributedAttendeeCampaignRow = AttendeeCampaignRow & { form_placement_id: string | null };
-type AttributedSpeakerCampaignRow = SpeakerCampaignRow & { proposal_id: string; form_placement_id: string | null };
+type AttributedSpeakerCampaignRow = SpeakerCampaignRow & {
+  /** Null for a speaker selected from the agenda, who may have no proposal. */
+  proposal_id: string | null;
+  form_placement_id: string | null;
+};
 
 function campaignFormResponse(response: EventFormResponse | null) {
   return {
@@ -132,17 +137,54 @@ async function listAttendeeRecipients(
   );
 }
 
+/** The audience's published sessions; one definition for the people and for their kits. */
+export function campaignPublishedSessions(event: CampaignEvent, filter: CampaignAudienceFilter) {
+  return publishedSpeakerSessionsSql(
+    { sql: "?", bindings: [event.id] },
+    { day: filter.dayDate ? agendaDayWindow(filter.dayDate, event.timezone) : null },
+  );
+}
+
 export function speakerCampaignSelection(
   event: CampaignEvent,
   filter: CampaignAudienceFilter,
   maxRecipients: number | null,
   recipientEmails?: string[],
 ) {
-  if (filter.dayDate) {
-    throw new AppError(400, "CAMPAIGN_DAY_FILTER_UNSUPPORTED", "Day filter is only supported for attendee audience.");
+  const speakerStatus = filter.speakerStatus ?? "confirmed";
+  const sessions = campaignPublishedSessions(event, filter);
+  const recipientEmailsJson = recipientEmails ? JSON.stringify(recipientEmails) : null;
+  const limit = maxRecipients === null ? -1 : maxRecipients + 1;
+
+  if (speakerStatus === "scheduled") {
+    return {
+      sql: `WITH ranked_recipients AS (
+         SELECT NULL AS proposal_id, NULL AS form_placement_id, u.email, u.first_name, u.last_name,
+                ${selectedOrAffiliationOrganizationNameSql("NULL", "session.user_id")} AS organization_name,
+                ${selectedOrAffiliationJobTitleSql("NULL", "session.user_id")} AS job_title,
+                'scheduled' AS speaker_status, session.session_title AS proposal_title,
+                NULL AS proposal_abstract, NULL AS proposal_type, NULL AS details_json,
+                NULL AS proposal_updated_at, NULL AS speaker_confirmed_at,
+                ROW_NUMBER() OVER (PARTITION BY lower(trim(u.email)) ORDER BY session.occurrence_id ASC) AS recipient_rank
+         FROM (${sessions.sql}) session
+         JOIN users u ON u.id = session.user_id
+         WHERE u.email IS NOT NULL
+           AND (? IS NULL OR lower(trim(u.email)) IN (SELECT value FROM json_each(?)))
+       )
+       SELECT proposal_id, form_placement_id, email, first_name, last_name, organization_name, job_title,
+              speaker_status, proposal_title, proposal_abstract, proposal_type,
+              details_json, proposal_updated_at, speaker_confirmed_at
+       FROM ranked_recipients
+       WHERE recipient_rank = 1
+       ORDER BY lower(email) ASC
+       LIMIT ?`,
+      bindings: [...sessions.bindings, recipientEmailsJson, recipientEmailsJson, limit],
+    };
   }
 
-  const speakerStatus = filter.speakerStatus ?? "confirmed";
+  const onDay = filter.dayDate
+    ? `AND EXISTS (SELECT 1 FROM (${sessions.sql}) session WHERE session.user_id = ps.user_id)`
+    : "";
 
   return {
     sql: `WITH ranked_recipients AS (
@@ -172,6 +214,7 @@ export function speakerCampaignSelection(
        WHERE sp.event_id = ?
          AND ps.status != 'declined'
          AND (? = 'all' OR ps.status = ?)
+         ${onDay}
          AND u.email IS NOT NULL
          AND (? IS NULL OR lower(trim(u.email)) IN (SELECT value FROM json_each(?)))
      )
@@ -186,9 +229,10 @@ export function speakerCampaignSelection(
       event.id,
       speakerStatus,
       speakerStatus,
-      recipientEmails ? JSON.stringify(recipientEmails) : null,
-      recipientEmails ? JSON.stringify(recipientEmails) : null,
-      maxRecipients === null ? -1 : maxRecipients + 1,
+      ...(filter.dayDate ? sessions.bindings : []),
+      recipientEmailsJson,
+      recipientEmailsJson,
+      limit,
     ],
   };
 }
@@ -204,7 +248,8 @@ async function listSpeakerRecipients(
   const rows = await all<AttributedSpeakerCampaignRow>(db, selection.sql, selection.bindings);
 
   assertCampaignRecipientLimit(rows, maxRecipients);
-  const proposalInputs = [...new Map(rows.map((row) => [row.proposal_id, row])).values()];
+  const proposalRows = rows.flatMap((row) => (row.proposal_id ? [{ ...row, proposal_id: row.proposal_id }] : []));
+  const proposalInputs = [...new Map(proposalRows.map((row) => [row.proposal_id, row])).values()];
   const formResponses = await resolveEventFormResponses(
     db,
     proposalInputs.map((row) => ({
@@ -221,7 +266,7 @@ async function listSpeakerRecipients(
     lastName: (row.last_name ?? "").trim(),
     templateData: buildSpeakerTemplateData({
       ...row,
-      formResponse: campaignFormResponse(formResponses.get(row.proposal_id) ?? null),
+      formResponse: campaignFormResponse((row.proposal_id && formResponses.get(row.proposal_id)) || null),
     }),
   }));
 }

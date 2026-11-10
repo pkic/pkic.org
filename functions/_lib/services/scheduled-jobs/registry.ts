@@ -25,6 +25,7 @@ import { runMembershipWorkflows } from "../membership/workflows/scheduled";
 import { processMembershipFeeCheckouts } from "../membership/workflows/fee-checkout";
 import { dispatchEventEmailCampaignPages, cleanExpiredCampaignSnapshots } from "../event-email-campaign/dispatch";
 import { refreshMemberNews } from "../member-news/refresh";
+import { stagePendingSpeakerKitEmails } from "../event-email-campaign/speaker-kit-staging";
 import { getConfig } from "../../config";
 import { runGoogleGroupsSyncPass } from "../membership/scheduled-jobs";
 import { runOnHoldReminders } from "../membership/on-hold-reminders";
@@ -244,9 +245,10 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
     run: async ({ env }) => {
       const recipients = await processPendingPromotionRecipients(env.DB, 1);
       const renders = await processPendingPromotionRenders(env.DB, env, getConfig(env).scheduledRenderLimit);
+      const emails = await stagePendingSpeakerKitEmails(env.DB);
       return {
-        idle: !recipients.prepared && !recipients.failed && !renders.processed && !renders.failed,
-        summary: { recipients, renders },
+        idle: !recipients.prepared && !recipients.failed && !renders.processed && !renders.failed && !emails.processed,
+        summary: { recipients, renders, emails },
       };
     },
   },

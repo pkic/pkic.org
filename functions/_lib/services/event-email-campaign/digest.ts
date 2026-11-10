@@ -11,6 +11,7 @@ export async function computeCampaignDigest(payload: {
   sendMode: "personal" | "bcc_batch";
   batchSize: number;
   filter: CampaignAudienceFilter;
+  kit?: { formats: readonly string[]; resend: boolean };
   recipients?: CampaignRecipient[];
   snapshotId?: string;
 }): Promise<string> {
@@ -23,6 +24,7 @@ export async function computeCampaignDigest(payload: {
     sendMode: payload.sendMode,
     batchSize: payload.batchSize,
     filter: payload.filter,
+    kit: payload.kit,
     recipients: payload.recipients?.map((recipient) => recipient.email),
     snapshotId: payload.snapshotId,
   };

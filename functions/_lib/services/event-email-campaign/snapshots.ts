@@ -14,6 +14,7 @@ import { nowIso } from "../../utils/time";
 import { attendeeCampaignSelection, listCampaignRecipients, speakerCampaignSelection } from "./audience";
 import { computeCampaignDigest } from "./digest";
 import { signCampaignPreviewToken } from "./preview-token";
+import { prepareSpeakerKitAcceptance } from "./speaker-kit";
 import type { CampaignEvent } from "./types";
 
 export interface CampaignSnapshot {
@@ -120,6 +121,7 @@ export async function acceptCampaignSnapshot(
   event: CampaignEvent,
   input: EventEmailCampaignPreviewInput,
   snapshot: CampaignSnapshot,
+  actor: { actorId: string; appBaseUrl: string },
 ) {
   const selection = campaignAudienceSelection(event, input);
   // Compare both sets and accept in the same write. A registration change cannot
@@ -129,18 +131,32 @@ export async function acceptCampaignSnapshot(
   await db.batch([
     db
       .prepare(
-        `UPDATE event_email_campaigns SET status = 'queued', updated_at = ?
+        // A send with kits has nothing left to page through: its render batch owns the emails.
+        `UPDATE event_email_campaigns SET status = ?, updated_at = ?
       WHERE id = ? AND status = 'draft' AND expires_at >= ?
       AND NOT EXISTS (${currentEmails} EXCEPT SELECT email FROM event_email_campaign_recipients WHERE campaign_id = ?)
       AND NOT EXISTS (SELECT email FROM event_email_campaign_recipients WHERE campaign_id = ? EXCEPT ${currentEmails})`,
       )
-      .bind(now, snapshot.id, now, ...selection.bindings, snapshot.id, snapshot.id, ...selection.bindings),
-    db
-      .prepare(
-        `UPDATE scheduled_jobs SET wake_requested = 1 WHERE job_key = 'event_email_campaigns'
+      .bind(
+        input.kit ? "complete" : "queued",
+        now,
+        snapshot.id,
+        now,
+        ...selection.bindings,
+        snapshot.id,
+        snapshot.id,
+        ...selection.bindings,
+      ),
+    ...(input.kit
+      ? prepareSpeakerKitAcceptance(db, event, input, { ...actor, campaignId: snapshot.id, at: now })
+      : [
+          db
+            .prepare(
+              `UPDATE scheduled_jobs SET wake_requested = 1 WHERE job_key = 'event_email_campaigns'
       AND EXISTS (SELECT 1 FROM event_email_campaigns WHERE id = ? AND status = 'queued')`,
-      )
-      .bind(snapshot.id),
+            )
+            .bind(snapshot.id),
+        ]),
   ]);
   const accepted = await first<{ status: string }>(db, "SELECT status FROM event_email_campaigns WHERE id = ?", [
     snapshot.id,

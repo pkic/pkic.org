@@ -12,7 +12,7 @@ export const promotionFormatSchema = z.enum(["landscape", "square", "portrait", 
 export const promotionFingerprintSchema = z.string().regex(/^[a-f0-9]{64}$/);
 export const promotionFormatsSchema = z
   .array(promotionFormatSchema)
-  .min(1)
+  .min(1, "Choose at least one format.")
   .max(promotionFormatSchema.options.length)
   .refine((items) => new Set(items).size === items.length, "Choose each format once.")
   .default([...promotionFormatSchema.options]);

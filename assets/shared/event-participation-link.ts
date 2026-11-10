@@ -45,6 +45,11 @@ export function eventMyAgendaPath(eventSlug: string): string {
   return `/portal/#${eventAgendaRoute(eventSlug, { mine: true })}`;
 }
 
+/** The participant's own promotion materials in the portal, relative to the site origin. */
+export function eventPromotionKitPath(eventSlug: string): string {
+  return `/portal/#/events/${encodeURIComponent(eventSlug)}/promotion`;
+}
+
 export type SessionAccessPolicy = "open" | "invitation";
 
 /**

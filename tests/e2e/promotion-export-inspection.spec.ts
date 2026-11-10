@@ -575,7 +575,7 @@ test("every delivered long-panel promotion export has complete evidence and refu
   try {
     await signInToPortal(participant, people[0]!.email);
     await participant.goto(`/portal/#/events/${slug}/promotion`);
-    await expect(participant.getByRole("heading", { name: "Share", exact: true })).toBeVisible();
+    await expect(participant.getByRole("heading", { name: "Share & Invite", exact: true })).toBeVisible();
     await expect(participant.locator(".pk-promotion-tile img")).toHaveCount(4);
     await expect(participant.getByRole("button", { name: "Customize tall post", exact: true })).toBeVisible();
     const ownResponse = await participant.request.get(kitApi);

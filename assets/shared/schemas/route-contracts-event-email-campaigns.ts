@@ -5,6 +5,9 @@ import {
   eventEmailCampaignPreviewResponseSchema,
   eventEmailCampaignResponseSchema,
   eventEmailCampaignStageResponseSchema,
+  speakerKitDeliveriesQuerySchema,
+  speakerKitDeliveriesResponseSchema,
+  speakerKitTestResponseSchema,
 } from "./event-email-campaigns";
 import { z } from "zod";
 import { groupEventParamsSchema } from "./group-events";
@@ -81,6 +84,64 @@ export const groupEventEmailCampaignCreateRouteSchema = {
     body: { content: { "application/json": { schema: eventEmailCampaignCreateInputSchema } }, required: true },
   },
   responses: createResponses,
+};
+
+const speakerKitTestRequest = {
+  body: { content: { "application/json": { schema: eventEmailCampaignCreateInputSchema } }, required: true },
+};
+const speakerKitTestResponses = {
+  "202": {
+    description: "One speaker's kit is on its way to the signed-in organizer.",
+    content: { "application/json": { schema: speakerKitTestResponseSchema } },
+  },
+  "400": jsonErrorResponse("Invalid campaign content, token, or recipient set."),
+  "401": jsonErrorResponse("An authenticated user session is required."),
+  "403": jsonErrorResponse("Event communication permission is required."),
+  "404": jsonErrorResponse("Event not found or unavailable through this context."),
+  "409": jsonErrorResponse("The preview expired or no longer matches the message."),
+};
+const speakerKitDeliveriesResponses = {
+  "200": {
+    description: "Each send of speaker kits, newest first, with where its emails stand.",
+    content: { "application/json": { schema: speakerKitDeliveriesResponseSchema } },
+  },
+  "401": jsonErrorResponse("An authenticated user session is required."),
+  "403": jsonErrorResponse("Event communication permission is required."),
+  "404": jsonErrorResponse("Event not found or unavailable through this context."),
+};
+
+export const speakerKitTestRouteSchema = {
+  tags: ["Events", "Email campaigns"],
+  summary: "Send a speaker kit test to the signed-in organizer",
+  description: "Requires a fresh preview. Delivers one speaker's message and files to the organizer only.",
+  request: { params: eventSlugParamsSchema, ...speakerKitTestRequest },
+  responses: speakerKitTestResponses,
+  "x-pkic-auth": { required: true, scopes: ["events:write"] },
+};
+
+export const groupSpeakerKitTestRouteSchema = {
+  tags: ["Groups", "Events", "Email campaigns"],
+  summary: "Send a managed group event speaker kit test to the signed-in organizer",
+  description: "Requires a fresh preview. Delivers one speaker's message and files to the organizer only.",
+  request: { params: groupEventParamsSchema, ...speakerKitTestRequest },
+  responses: speakerKitTestResponses,
+};
+
+export const speakerKitDeliveriesRouteSchema = {
+  tags: ["Events", "Email campaigns"],
+  summary: "List speaker kit sends",
+  description: "Reports sent, pending, and failed emails for each organizer send of speaker kits.",
+  request: { params: eventSlugParamsSchema, query: speakerKitDeliveriesQuerySchema },
+  responses: speakerKitDeliveriesResponses,
+  "x-pkic-auth": { required: true, scopes: ["events:write"] },
+};
+
+export const groupSpeakerKitDeliveriesRouteSchema = {
+  tags: ["Groups", "Events", "Email campaigns"],
+  summary: "List managed group event speaker kit sends",
+  description: "Reports sent, pending, and failed emails for each organizer send of speaker kits.",
+  request: { params: groupEventParamsSchema, query: speakerKitDeliveriesQuerySchema },
+  responses: speakerKitDeliveriesResponses,
 };
 
 export const eventEmailCampaignStageRouteSchema = {

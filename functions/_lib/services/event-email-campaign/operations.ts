@@ -8,6 +8,7 @@ import type {
 import {
   eventEmailCampaignPreviewResponseSchema,
   eventEmailCampaignResponseSchema,
+  speakerKitTestResponseSchema,
 } from "../../../../assets/shared/schemas/event-email-campaigns";
 import type { EmailContentType } from "../../../../assets/shared/schemas/email-templates";
 import { loadEmailRenderResources } from "../../email/partials";
@@ -15,7 +16,13 @@ import { renderEmail, renderSubject } from "../../email/render";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { buildEventEmailVariables, type EventRecord } from "../events";
-import { proposalPageUrl, registrationManagePageUrl, registrationPageUrl } from "../frontend-links";
+import {
+  promotionKitPageUrl,
+  proposalPageUrl,
+  registrationManagePageUrl,
+  registrationPageUrl,
+} from "../frontend-links";
+import { countSpeakerKitEmails, queueSpeakerKitTest } from "./speaker-kit";
 import { assertCampaignBroadcastSafety } from "./broadcast-safety";
 import {
   createCampaignSnapshot,
@@ -44,7 +51,11 @@ export async function previewEventEmailCampaign(
   options: EventEmailCampaignOperationOptions,
 ): Promise<EventEmailCampaignPreviewResponse> {
   const campaign = await createCampaignSnapshot(db, event, input, options);
-  const { template, recipients, token, recipient_count: recipientCount } = campaign;
+  const { template, recipients, token } = campaign;
+  const recipientCount =
+    input.kit && campaign.recipient_count > 0
+      ? await countSpeakerKitEmails(db, event, input)
+      : campaign.recipient_count;
 
   if (recipientCount === 0) {
     return eventEmailCampaignPreviewResponseSchema.parse({
@@ -74,6 +85,13 @@ export async function previewEventEmailCampaign(
     recipientCount,
     audience: input.filter.audience,
     ...routeVariables,
+    // The sample recipient's first session stands in for the session each speaker gets.
+    ...(input.kit
+      ? {
+          sessionTitle: sample?.templateData.proposalTitle ?? "",
+          promotionKitUrl: promotionKitPageUrl(options.appBaseUrl, event),
+        }
+      : {}),
   };
   const known = new Set([
     ...Object.keys(canonicalData),
@@ -144,6 +162,49 @@ export async function createEventEmailCampaign(
   input: EventEmailCampaignCreateInput,
   options: EventEmailCampaignOperationOptions,
 ): Promise<EventEmailCampaignResponse> {
+  const snapshot = await verifyCampaignPreview(db, event, input, options);
+  await acceptCampaignSnapshot(db, event, input, snapshot, options);
+  if (input.kit) {
+    const emails = await countSpeakerKitEmails(db, event, input);
+    return eventEmailCampaignResponseSchema.parse({
+      success: true,
+      queuedRecipients: emails,
+      queuedBatches: emails,
+      stagedRecipients: 0,
+      mode: input.sendMode,
+    });
+  }
+  // Stage one bounded page before returning so a small campaign is visible in
+  // the outbox immediately. The persisted cursor lets larger campaigns resume.
+  const staged = await dispatchEventEmailCampaignPage(db, snapshot.id);
+  return eventEmailCampaignResponseSchema.parse({
+    success: true,
+    queuedRecipients: snapshot.recipient_count,
+    queuedBatches:
+      input.sendMode === "bcc_batch" ? Math.ceil(snapshot.recipient_count / input.batchSize) : snapshot.recipient_count,
+    stagedRecipients: staged.queued,
+    mode: input.sendMode,
+  });
+}
+
+export async function sendSpeakerKitTest(
+  db: DatabaseLike,
+  event: EventRecord,
+  input: EventEmailCampaignCreateInput,
+  options: EventEmailCampaignOperationOptions,
+) {
+  if (!input.kit) throw new AppError(400, "CAMPAIGN_KIT_REQUIRED", "Attach the promotion kit before sending a test.");
+  const snapshot = await verifyCampaignPreview(db, event, input, options);
+  const { sessionTitle } = await queueSpeakerKitTest(db, event, input, { ...options, campaignId: snapshot.id });
+  return speakerKitTestResponseSchema.parse({ success: true, sessionTitle });
+}
+
+async function verifyCampaignPreview(
+  db: DatabaseLike,
+  event: EventRecord,
+  input: EventEmailCampaignCreateInput,
+  options: EventEmailCampaignOperationOptions,
+) {
   if (!input.bodyContent && !input.templateKey) {
     throw new AppError(400, "CAMPAIGN_NO_CONTENT", "Provide a message body or select a template before sending.");
   }
@@ -168,16 +229,5 @@ export async function createEventEmailCampaign(
   if (snapshot.recipient_count === 0) {
     throw new AppError(400, "CAMPAIGN_NO_RECIPIENTS", "No recipients matched the selected filters.");
   }
-  await acceptCampaignSnapshot(db, event, input, snapshot);
-  // Stage one bounded page before returning so a small campaign is visible in
-  // the outbox immediately. The persisted cursor lets larger campaigns resume.
-  const staged = await dispatchEventEmailCampaignPage(db, snapshot.id);
-  return eventEmailCampaignResponseSchema.parse({
-    success: true,
-    queuedRecipients: snapshot.recipient_count,
-    queuedBatches:
-      input.sendMode === "bcc_batch" ? Math.ceil(snapshot.recipient_count / input.batchSize) : snapshot.recipient_count,
-    stagedRecipients: staged.queued,
-    mode: input.sendMode,
-  });
+  return snapshot;
 }

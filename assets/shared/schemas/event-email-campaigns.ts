@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { emailMessageTypeSchema, successResponseSchema, utcInstantSchema } from "./api-common";
 import { eventRegistrationStatusFilterSchema } from "./event-registrations";
+import { promotionFormatsSchema } from "./event-promotion-kit";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { attendanceTypeSchema } from "./registration";
 
 export const eventEmailCampaignAudienceSchema = z.enum([
@@ -33,7 +35,13 @@ export const eventEmailCampaignDayWaitlistFilterSchema = z.enum([
 ]);
 export type EventEmailCampaignDayWaitlistFilter = z.infer<typeof eventEmailCampaignDayWaitlistFilterSchema>;
 
-export const eventEmailCampaignSpeakerStatusFilterSchema = z.enum(["all", "confirmed", "invited", "pending"]);
+export const eventEmailCampaignSpeakerStatusFilterSchema = z.enum([
+  "all",
+  "confirmed",
+  "invited",
+  "pending",
+  "scheduled",
+]);
 export type EventEmailCampaignSpeakerStatusFilter = z.infer<typeof eventEmailCampaignSpeakerStatusFilterSchema>;
 
 export const eventEmailCampaignInvitationStatusFilterSchema = z.enum(["all", "sent", "accepted", "expired"]);
@@ -53,7 +61,14 @@ export const eventEmailCampaignFilterSchema = z.object({
 });
 export type EventEmailCampaignFilter = z.infer<typeof eventEmailCampaignFilterSchema>;
 
-export const eventEmailCampaignPreviewInputSchema = z.object({
+/** The rendered files attached to a message; who receives it stays with the filter. */
+export const eventEmailCampaignKitSchema = z.strictObject({
+  formats: promotionFormatsSchema,
+  resend: z.boolean().default(false),
+});
+export type EventEmailCampaignKit = z.infer<typeof eventEmailCampaignKitSchema>;
+
+const eventEmailCampaignContentSchema = z.object({
   templateKey: z.string().trim().min(1).max(200).optional(),
   subjectOverride: z.string().trim().min(1).max(500).optional(),
   customText: z.string().trim().max(100_000).optional(),
@@ -62,18 +77,41 @@ export const eventEmailCampaignPreviewInputSchema = z.object({
   sendMode: eventEmailCampaignSendModeSchema,
   batchSize: z.number().int().min(1).max(500).default(50),
   filter: eventEmailCampaignFilterSchema,
+  kit: eventEmailCampaignKitSchema.optional(),
 });
+
+/** A kit exists only for a session on the published agenda, and each one is personal. */
+function refineCampaignKit(input: z.infer<typeof eventEmailCampaignContentSchema>, context: z.RefinementCtx) {
+  if (!input.kit) return;
+  if (input.filter.audience !== "speakers" || input.filter.speakerStatus !== "scheduled") {
+    context.addIssue({
+      code: "custom",
+      path: ["kit"],
+      message: "Promotion kits can be attached only for speakers scheduled on the agenda.",
+    });
+  }
+  if (input.sendMode !== "personal") {
+    context.addIssue({
+      code: "custom",
+      path: ["sendMode"],
+      message: "Promotion kits must be sent as personal emails.",
+    });
+  }
+}
+
+export const eventEmailCampaignPreviewInputSchema = eventEmailCampaignContentSchema.superRefine(refineCampaignKit);
 export type EventEmailCampaignPreviewInput = z.infer<typeof eventEmailCampaignPreviewInputSchema>;
 
-export const eventEmailCampaignCreateInputSchema = eventEmailCampaignPreviewInputSchema.extend({
-  previewToken: z.string().trim().min(16).max(2048),
-});
+const eventEmailCampaignPreviewTokenSchema = z.string().trim().min(16).max(2048);
+export const eventEmailCampaignCreateInputSchema = eventEmailCampaignContentSchema
+  .extend({ previewToken: eventEmailCampaignPreviewTokenSchema })
+  .superRefine(refineCampaignKit);
 export type EventEmailCampaignCreateInput = z.infer<typeof eventEmailCampaignCreateInputSchema>;
 
 export const eventEmailCampaignPreviewResponseSchema = successResponseSchema.extend({
   recipientCount: z.number().int().nonnegative(),
   batchCount: z.number().int().nonnegative(),
-  previewToken: eventEmailCampaignCreateInputSchema.shape.previewToken,
+  previewToken: eventEmailCampaignPreviewTokenSchema,
   previewExpiresAt: utcInstantSchema,
   sampleRecipients: z.array(z.string().email()),
   subject: z.string(),
@@ -86,9 +124,29 @@ export const eventEmailCampaignResponseSchema = successResponseSchema.extend({
   queuedRecipients: z.number().int().nonnegative(),
   queuedBatches: z.number().int().nonnegative(),
   stagedRecipients: z.number().int().nonnegative(),
-  mode: eventEmailCampaignCreateInputSchema.shape.sendMode,
+  mode: eventEmailCampaignSendModeSchema,
 });
 export type EventEmailCampaignResponse = z.infer<typeof eventEmailCampaignResponseSchema>;
+
+export const speakerKitTestResponseSchema = successResponseSchema.extend({
+  sessionTitle: z.string(),
+});
+
+/** One organizer send of speaker kits and where its emails stand. */
+export const speakerKitDeliverySchema = z.object({
+  id: z.uuid(),
+  createdAt: utcInstantSchema,
+  formats: promotionFormatsSchema,
+  total: z.number().int().nonnegative(),
+  sent: z.number().int().nonnegative(),
+  pending: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  alreadySent: z.number().int().nonnegative(),
+});
+export type SpeakerKitDelivery = z.infer<typeof speakerKitDeliverySchema>;
+
+export const speakerKitDeliveriesQuerySchema = listQuerySchema(["createdAt"] as const, { limit: 10, maxLimit: 50 });
+export const speakerKitDeliveriesResponseSchema = paginatedResponseSchema("deliveries", speakerKitDeliverySchema);
 
 export const eventEmailCampaignStageResponseSchema = successResponseSchema.extend({
   processedRecipients: z.number().int().nonnegative(),
