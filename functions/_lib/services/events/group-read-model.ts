@@ -139,7 +139,7 @@ export function buildGroupEventsPageQuery(
     userId: viewer.userId,
     admin: viewer.admin,
   });
-  const managerAccess = live ? "group_access.manager_access" : access.manager ? "1" : "0";
+  const managerAccess = live ? "accessible.manager_access" : access.manager ? "1" : "0";
   const conditions = ["event.owner_group_id IS NOT NULL", `(${managerAccess} = 1 OR ${audience.sql})`];
   const bindings: unknown[] = [...accessibleEvents.bindings, groupId, ...audience.bindings];
   if (query.collection === "events") {
@@ -180,13 +180,12 @@ export function buildGroupEventsPageQuery(
     sql: `WITH ${NEXT_OCCURRENCE_CTE},
       ${accessibleEvents.sql}
       ${EVENT_SELECT},
-      ${live ? "group_access.member_access" : access.member ? "1" : "0"} AS member_access,
-      ${live ? "group_access.manager_access" : access.manager ? "1" : "0"} AS manager_access
+      ${live ? "accessible.member_access" : access.member ? "1" : "0"} AS member_access,
+      ${live ? "accessible.manager_access" : access.manager ? "1" : "0"} AS manager_access
       FROM accessible_resource accessible
       JOIN events event ON event.id = accessible.resource_id
       LEFT JOIN event_series series ON series.event_id = event.id
       LEFT JOIN next_occurrence ON next_occurrence.series_id = series.id
-      ${live ? "CROSS JOIN group_access" : ""}
       LEFT JOIN event_group_grants grant_row ON grant_row.event_id = event.id AND grant_row.group_id = ?
       WHERE ${conditions.join(" AND ")}
       GROUP BY event.id`,
@@ -232,15 +231,14 @@ export function prepareGroupEventRead(db: DatabaseLike, viewer: GroupResourceVie
     .prepare(
       `WITH ${NEXT_OCCURRENCE_CTE},
      ${accessibleEvents.sql}
-     ${EVENT_SELECT}, group_access.member_access, group_access.manager_access
+     ${EVENT_SELECT}, accessible.member_access, accessible.manager_access
        FROM accessible_resource accessible
        JOIN events event ON event.id = accessible.resource_id
        LEFT JOIN event_series series ON series.event_id = event.id
        LEFT JOIN next_occurrence ON next_occurrence.series_id = series.id
-       CROSS JOIN group_access
        LEFT JOIN event_group_grants grant_row ON grant_row.event_id = event.id AND grant_row.group_id = ?
       WHERE event.id = ? AND event.owner_group_id IS NOT NULL
-        AND (group_access.manager_access = 1 OR ${audience.sql})
+        AND (accessible.manager_access = 1 OR ${audience.sql})
      GROUP BY event.id`,
     )
     .bind(...accessibleEvents.bindings, groupId, eventId, ...audience.bindings);

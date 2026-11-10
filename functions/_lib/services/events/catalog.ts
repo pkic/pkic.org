@@ -267,39 +267,21 @@ export function buildManagedEventsPageQuery(viewer: EventAudienceViewer, query: 
 export function buildEventRegistrationStatsQuery(selection: EventReadSelection) {
   const eventFilter = eventReadSelectionSql("e.id", selection);
   return {
-    sql: `WITH ${eventFilter.withSql ? `${eventFilter.withSql}, ` : ""}page_events AS (
-         SELECT e.id AS event_id
-           FROM events e
-          WHERE ${eventFilter.sql}
-       ),
-       registration_counts AS (
-         SELECT r.event_id,
-                COUNT(*) AS total_registrations,
-                SUM(CASE WHEN r.status = 'registered' THEN 1 ELSE 0 END) AS confirmed_registrations
-           FROM registrations r
-           JOIN page_events pe ON pe.event_id = r.event_id
-          GROUP BY r.event_id
-       ),
-       invite_counts AS (
-         SELECT i.event_id, COUNT(*) AS pending_invites
-           FROM invites i
-           JOIN page_events pe ON pe.event_id = i.event_id
-           JOIN events e ON e.id = i.event_id
-          WHERE i.status = 'sent'
-            AND i.invite_type = 'attendee'
-            AND ${activeEffectiveInviteExpirySql(
-              effectiveInviteExpirySql("i", "e"),
-              "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
-            )}
-          GROUP BY i.event_id
-       )
-       SELECT pe.event_id,
-              COALESCE(rc.total_registrations, 0) AS total_registrations,
-              COALESCE(rc.confirmed_registrations, 0) AS confirmed_registrations,
-              COALESCE(ic.pending_invites, 0) AS pending_invites
-         FROM page_events pe
-         LEFT JOIN registration_counts rc ON rc.event_id = pe.event_id
-         LEFT JOIN invite_counts ic ON ic.event_id = pe.event_id`,
+    // Each count reads the selected page once; D1 refuses the page expanded into several aggregate CTEs.
+    sql: `${eventFilter.withSql ? `WITH ${eventFilter.withSql} ` : ""}SELECT e.id AS event_id,
+              (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id) AS total_registrations,
+              (SELECT COUNT(*) FROM registrations r
+                WHERE r.event_id = e.id AND r.status = 'registered') AS confirmed_registrations,
+              (SELECT COUNT(*) FROM invites i
+                WHERE i.event_id = e.id
+                  AND i.status = 'sent'
+                  AND i.invite_type = 'attendee'
+                  AND ${activeEffectiveInviteExpirySql(
+                    effectiveInviteExpirySql("i", "e"),
+                    "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+                  )}) AS pending_invites
+         FROM events e
+        WHERE ${eventFilter.sql}`,
     bindings: eventFilter.bindings,
   };
 }
