@@ -50,23 +50,50 @@ export function getSessionCookieToken(request: Request, cookieName: string): str
   return parseCookieHeader(cookieHeader).get(cookieName) ?? null;
 }
 
+/**
+ * Session cookies are host-only, HttpOnly and SameSite=Strict, ending with the
+ * browser session unless they name a lifetime. A device that must stay signed
+ * in across restarts names `maxAgeSeconds`; one opened by a top-level
+ * navigation from another site may relax to `Lax`.
+ */
+export interface SessionCookieOptions {
+  sameSite?: "Strict" | "Lax";
+  maxAgeSeconds?: number;
+}
+
 export function serializeSessionCookie(
   cookieName: string,
   cookiePath: string,
   token: string,
   request: Request,
+  options: SessionCookieOptions = {},
 ): string {
-  const parts = [`${cookieName}=${encodeURIComponent(token)}`, `Path=${cookiePath}`, "HttpOnly", "SameSite=Strict"];
+  const parts = [
+    `${cookieName}=${encodeURIComponent(token)}`,
+    `Path=${cookiePath}`,
+    "HttpOnly",
+    `SameSite=${options.sameSite ?? "Strict"}`,
+  ];
+  if (options.maxAgeSeconds !== undefined) {
+    if (!Number.isSafeInteger(options.maxAgeSeconds) || options.maxAgeSeconds < 1)
+      throw new Error("A session cookie's Max-Age must be a positive whole number of seconds");
+    parts.push(`Max-Age=${options.maxAgeSeconds}`);
+  }
   if (isSecureRequest(request)) parts.push("Secure");
   return parts.join("; ");
 }
 
-export function serializeExpiredSessionCookie(cookieName: string, cookiePath: string, request: Request): string {
+export function serializeExpiredSessionCookie(
+  cookieName: string,
+  cookiePath: string,
+  request: Request,
+  options: Pick<SessionCookieOptions, "sameSite"> = {},
+): string {
   const parts = [
     `${cookieName}=`,
     `Path=${cookiePath}`,
     "HttpOnly",
-    "SameSite=Strict",
+    `SameSite=${options.sameSite ?? "Strict"}`,
     "Max-Age=0",
     "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
   ];
@@ -181,23 +208,35 @@ export async function fetchSessionRow(
   };
 }
 
-/** Throws the standardized 401 AUTH_INVALID/AUTH_REVOKED/AUTH_EXPIRED trio — same codes and logic everywhere, message text parameterized by entity label. */
+export interface SessionRefusalCodes {
+  invalid: string;
+  revoked: string;
+  expired: string;
+}
+const AUTH_SESSION_REFUSAL_CODES: SessionRefusalCodes = {
+  invalid: "AUTH_INVALID",
+  revoked: "AUTH_REVOKED",
+  expired: "AUTH_EXPIRED",
+};
+
+/**
+ * Throws the standardized 401 AUTH_INVALID/AUTH_REVOKED/AUTH_EXPIRED trio — same logic everywhere, message
+ * text parameterized by entity label. A subject that is not a person (a screen) names its own codes so its
+ * client can tell "pair again" from a staff sign-in failure.
+ */
 export function assertSessionActive<T extends { revokedAt: string | null; expiresAt: string }>(
   row: T | null,
   entityLabel: string,
+  codes: SessionRefusalCodes = AUTH_SESSION_REFUSAL_CODES,
 ): T {
   if (!row) {
-    throw new AppError(401, "AUTH_INVALID", `Invalid ${entityLabel} session token`);
+    throw new AppError(401, codes.invalid, `Invalid ${entityLabel} session token`);
   }
   if (row.revokedAt) {
-    throw new AppError(
-      401,
-      "AUTH_REVOKED",
-      `${entityLabel[0].toUpperCase()}${entityLabel.slice(1)} session is revoked`,
-    );
+    throw new AppError(401, codes.revoked, `${entityLabel[0].toUpperCase()}${entityLabel.slice(1)} session is revoked`);
   }
   if (new Date(row.expiresAt).getTime() <= Date.now()) {
-    throw new AppError(401, "AUTH_EXPIRED", `${entityLabel[0].toUpperCase()}${entityLabel.slice(1)} session expired`);
+    throw new AppError(401, codes.expired, `${entityLabel[0].toUpperCase()}${entityLabel.slice(1)} session expired`);
   }
   return row;
 }

@@ -10,8 +10,10 @@ export interface LiveOverlayClaims {
   evt: string;
   /** The physical room the continuous source follows. */
   room: string;
-  /** The operator who issued the access, for attribution. */
+  /** The operator who issued the access, for attribution; for a screen, who assigned it. */
   iss: string;
+  /** The paired screen the access was minted for, when a screen holds it. */
+  scr?: string;
   exp: number;
 }
 
@@ -22,13 +24,14 @@ function signingSecret(secret: string | undefined): string {
 
 export async function signLiveOverlayToken(
   secret: string | undefined,
-  access: { eventId: string; roomId: string; issuedBy: string; expiresAt: string },
+  access: { eventId: string; roomId: string; issuedBy: string; expiresAt: string; screenId?: string },
 ): Promise<string> {
   const claims: LiveOverlayClaims = {
     typ: OVERLAY_TOKEN_TYPE,
     evt: access.eventId,
     room: access.roomId,
     iss: access.issuedBy,
+    ...(access.screenId ? { scr: access.screenId } : {}),
     exp: Math.floor(Date.parse(access.expiresAt) / 1000),
   };
   return signJwt(signingSecret(secret), { ...claims });
@@ -53,5 +56,6 @@ export async function verifyLiveOverlayToken(
     return null;
   if (typeof claims.room !== "string" || !claims.room) return null;
   if (typeof claims.iss !== "string" || !claims.iss) return null;
+  if (claims.scr !== undefined && (typeof claims.scr !== "string" || !claims.scr)) return null;
   return claims as LiveOverlayClaims;
 }

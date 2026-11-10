@@ -57,6 +57,10 @@ export const OPENAPI_TAGS: readonly { name: string; description: string }[] = [
   },
   { name: "Event promotion", description: "Revision-bound session promotion kits and authorized export jobs." },
   { name: "Event live settings", description: "Broadcast overlay layouts each event room's browser sources draw." },
+  {
+    name: "Event screens",
+    description: "Physical screens that pair once, stay signed in, and show one output of one room.",
+  },
   { name: "Meeting agendas", description: "Occurrence agendas and reusable versioned meeting formats." },
   { name: "Events", description: "The event catalog and one event's configuration." },
   { name: "Event registrations", description: "Attendee registration, attendance days, and waitlists." },
@@ -129,6 +133,7 @@ export const OPENAPI_TAG_GROUPS: readonly { name: string; tags: string[] }[] = [
       "Event recordings",
       "Event promotion",
       "Event live settings",
+      "Event screens",
       "Meeting agendas",
       "Event registrations",
       "Event proposals",
