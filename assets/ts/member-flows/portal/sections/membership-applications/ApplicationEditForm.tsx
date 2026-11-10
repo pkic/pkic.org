@@ -132,7 +132,7 @@ export function ApplicationEditForm({
             {...contract.of("membershipCategory")}
             label="Category"
             required
-            help="Changing category restarts its review. Previous objections remain; paid fees require staff handling."
+            help="Review progress carries over when both categories use the same workflow and no fee is recorded. Otherwise the review restarts; objections remain and paid fees need staff handling."
           >
             {(control) => (
               <Select

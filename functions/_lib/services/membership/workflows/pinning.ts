@@ -20,6 +20,22 @@ export async function requireCategoryWorkflow(
   return version;
 }
 
+/** Commit only while the observed category revision still offers this published, unarchived version. */
+export function prepareCategoryWorkflowGuard(
+  db: DatabaseLike,
+  category: MembershipCategoryCatalogEntry,
+  version: MembershipWorkflowVersion,
+  explicitVersion = false,
+): StatementLike {
+  return prepareAuthorizationGuard(db, {
+    sql: `SELECT 1 FROM membership_categories category JOIN membership_workflow_versions version
+      ON version.id = ? AND version.published_at IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM membership_workflow_archives archive WHERE archive.version_id = version.id)
+      WHERE category.code = ? AND category.revision = ?${explicitVersion ? "" : " AND category.retired_at IS NULL AND category.workflow_version_id = version.id"}`,
+    bindings: [version.id, category.code, category.revision],
+  });
+}
+
 /** Pin immutable policy and all required step identities with the application submission. */
 export function prepareMembershipWorkflowPin(
   db: DatabaseLike,
@@ -31,13 +47,7 @@ export function prepareMembershipWorkflowPin(
   explicitVersion = false,
 ): StatementLike[] {
   return [
-    prepareAuthorizationGuard(db, {
-      sql: `SELECT 1 FROM membership_categories category JOIN membership_workflow_versions version
-        ON version.id = ? AND version.published_at IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM membership_workflow_archives archive WHERE archive.version_id = version.id)
-        WHERE category.code = ? AND category.revision = ?${explicitVersion ? "" : " AND category.retired_at IS NULL AND category.workflow_version_id = version.id"}`,
-      bindings: [version.id, category.code, category.revision],
-    }),
+    prepareCategoryWorkflowGuard(db, category, version, explicitVersion),
     db
       .prepare(
         `INSERT INTO membership_application_workflows

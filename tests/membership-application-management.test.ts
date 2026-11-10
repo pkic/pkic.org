@@ -27,7 +27,7 @@ import { updateMembershipSettings } from "../functions/_lib/services/membership-
 import { runOnHoldReminders } from "../functions/_lib/services/membership/on-hold-reminders";
 import { updateMembershipApplication } from "../functions/_lib/services/membership/applications/management";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
-import { pinReviewedStaffWorkflow } from "./helpers/membership-workflows";
+import { pinCategoryWorkflow, pinReviewedStaffWorkflow } from "./helpers/membership-workflows";
 import {
   membershipApplicationDetailSchema,
   membershipApplicationsListResponseSchema,
@@ -580,7 +580,88 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
     expect(auditRows[0].actor_id).toBe(adminId);
   });
 
-  it("corrects a pinned category and restarts completed review evidence without deleting history", async () => {
+  it("keeps member and Executive Council review progress when the new category shares the workflow", async () => {
+    const { id } = await createApplication({ stage: "processing" });
+    const version = await pinCategoryWorkflow(env.DB, id, "F");
+    expect(version.definition.steps.map((step) => step.kind)).toEqual(["staff_review", "consensus", "consensus"]);
+    const now = new Date().toISOString();
+    const noticeId = crypto.randomUUID();
+    const snapshot = { summary: "Category F summary", details: "Category F details" };
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO email_outbox (id, template_key, recipient_email, payload_json, message_type, provider, status, send_after, created_at, updated_at)
+        VALUES (?, 'membership-workflow-review-digest', 'ec@lists.example.test', ?, 'transactional', 'test', 'queued', ?, ?, ?)`,
+      ).bind(noticeId, JSON.stringify({ reviewApplications: { [id]: snapshot } }), now, now, now),
+      env.DB.prepare(
+        `UPDATE membership_application_steps SET state = 'complete', completed_at = ?
+        WHERE application_id = ? AND position IN (0, 1)`,
+      ).bind(now, id),
+      env.DB.prepare(
+        "UPDATE membership_application_steps SET state = 'active', notice_outbox_id = ? WHERE application_id = ? AND position = 2",
+      ).bind(noticeId, id),
+      env.DB.prepare("UPDATE membership_application_workflows SET current_position = 2 WHERE application_id = ?").bind(
+        id,
+      ),
+    ]);
+
+    const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ membershipCategory: "A" }),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(membershipApplicationDetailSchema.parse(await response.json())).toMatchObject({
+      membershipCategory: "A",
+      stage: "processing",
+    });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT generation, category_code, current_position, superseded_at FROM membership_application_workflows WHERE application_id = ?",
+        id,
+      ),
+    ).toEqual([{ generation: 1, category_code: "A", current_position: 2, superseded_at: null }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT position, state, completed_at IS NOT NULL AS completed, notice_outbox_id FROM membership_application_steps WHERE application_id = ? ORDER BY position",
+        id,
+      ),
+    ).toEqual([
+      { position: 0, state: "complete", completed: 1, notice_outbox_id: null },
+      { position: 1, state: "complete", completed: 1, notice_outbox_id: null },
+      // The undelivered notice described category F, so the step reopens with a fresh snapshot.
+      { position: 2, state: "waiting", completed: 0, notice_outbox_id: null },
+    ]);
+    const [notice] = await queryAll<{ status: string; payload_json: string }>(
+      env.DB,
+      "SELECT status, payload_json FROM email_outbox WHERE id = ?",
+      noticeId,
+    );
+    expect(notice.status).toBe("cancelled");
+    expect(JSON.parse(notice.payload_json).reviewApplications).toEqual({});
+  });
+
+  it("refuses other corrections alongside a category change once review evidence exists", async () => {
+    const { id } = await createApplication({ stage: "processing" });
+    await pinCategoryWorkflow(env.DB, id, "F");
+    await env.DB.prepare(
+      "UPDATE membership_application_steps SET state = 'complete', completed_at = ? WHERE application_id = ? AND position = 0",
+    )
+      .bind(new Date().toISOString(), id)
+      .run();
+
+    const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ membershipCategory: "A", applicantName: "Renamed Applicant" }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "MEMBERSHIP_REVIEW_RESTART_REQUIRED" } });
+    expect(
+      await queryAll(env.DB, "SELECT membership_category, applicant_name FROM member_applications WHERE id = ?", id),
+    ).toEqual([{ membership_category: "F", applicant_name: "Applicant Name" }]);
+  });
+
+  it("restarts completed review evidence when the new category pins a different workflow", async () => {
     const { id } = await createApplication({ stage: "processing" });
     await pinReviewedStaffWorkflow(env.DB, id);
     const response = await call(adminToken, `/api/v1/members/applications/${id}`, {

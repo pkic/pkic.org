@@ -426,7 +426,10 @@ export async function updateMembershipApplication(
     return getMembershipApplicationDetail(db, applicationId);
   }
 
-  dependentStatements.push(...(await prepareApplicationEditEvidenceGuard(db, application, nextCategory, now)));
+  const otherDetailsChanged = changedFields.some((field) => field !== "membershipCategory");
+  dependentStatements.push(
+    ...(await prepareApplicationEditEvidenceGuard(db, application, nextCategory, otherDetailsChanged, now)),
+  );
   dependentStatements.push(preparePermissionsAuthorizationGuard(db, actor, [{ permission: "membership:write" }]));
   setClauses.push("updated_at = ?");
   values.push(now);
