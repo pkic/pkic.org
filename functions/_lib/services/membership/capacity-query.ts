@@ -3,14 +3,17 @@
  * An active organization Member representation suppresses individual capacity so
  * participation always has unambiguous IPR attribution.
  */
-/** Trusted internal user SQL only; a nonmember affiliation grants no Member capacity. */
+/**
+ * Trusted internal user SQL only; a nonmember affiliation grants no Member capacity.
+ * The unary plus starts the search from this person's identities, not from every active member.
+ */
 export function activeOrganizationMemberRepresentationPredicate(userIdSql: string): string {
   return `EXISTS (
     SELECT 1 FROM identities represented
     JOIN members represented_member
       ON represented_member.organization_id = represented.organization_id
-     AND represented_member.member_type = 'organization'
-     AND represented_member.status = 'active'
+     AND +represented_member.member_type = 'organization'
+     AND +represented_member.status = 'active'
     JOIN member_category_assignments represented_category ON represented_category.member_id = represented_member.id
     WHERE represented.user_id = ${userIdSql}
       AND represented.organization_id IS NOT NULL
