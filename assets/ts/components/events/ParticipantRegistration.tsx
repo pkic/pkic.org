@@ -19,7 +19,7 @@ import { Panel, PanelBody } from "../../ui/Panel";
 import type { EventFormsResponse } from "../../shared/types";
 import { ParticipantRegistrationDetails } from "./ParticipantRegistrationDetails";
 import { ParticipantRegistrationForm, type RegistrationChange } from "./ParticipantRegistrationForm";
-import { CopyLinkRow } from "../../shared/widgets/copy-link-row";
+import { confirmRegistrationDayChanges } from "./confirm-registration-day-changes";
 import { RegistrationDays } from "./RegistrationDays";
 import { SectionHeading } from "../../ui/SectionHeading";
 import { useDialogQueryState } from "../../hooks/useDialogQueryState";
@@ -100,6 +100,8 @@ function RegistrationRecord({
   async function save(change: RegistrationChange, outcome?: string): Promise<void> {
     // Giving up every day uses the same explicit cancellation confirmation from either editor.
     if (change.action === "update" && change.dayAttendance?.length === 0) return cancelRegistration();
+    // The day picker confirms before calling; the full editor uses the same decision here.
+    if (editing && change.dayAttendance && !(await confirmRegistrationDayChanges(data, change.dayAttendance))) return;
     setError("");
     setMessage("");
     const result = await patchJson(
@@ -131,7 +133,7 @@ function RegistrationRecord({
     const confirmed = await confirmAction({
       title: "Cancel your registration?",
       body:
-        "Your place at this event is released for someone else. You can restore the registration from this page " +
+        "Any reserved places will be released for someone else. You can restore the registration from this page " +
         "while registration is open, but a released place is not held for you.",
       confirmLabel: "Cancel registration",
       cancelLabel: "Keep registration",
@@ -236,22 +238,11 @@ function RegistrationRecord({
                   </div>
                 )}
               </section>
-              {data.shareUrl && !cancelled && (
-                <section class="pk-stack pk-stack--snug" aria-label="Invite a colleague">
-                  <SectionHeading level={3}>Invite a colleague</SectionHeading>
-                  <CopyLinkRow
-                    url={data.shareUrl}
-                    label="Your personal invitation link"
-                    help="Anyone who registers through it is credited to you."
-                  />
-                </section>
-              )}
               {!cancelled && (
                 <section class="pk-stack pk-stack--snug" aria-label="Cancel registration">
                   <SectionHeading level={3}>Not coming at all?</SectionHeading>
                   <p class="pk-small pk-muted">
-                    Cancel and your place goes to someone on the waiting list. To skip only one day, change that day
-                    above instead.
+                    Cancel to release any reserved places. To skip only one day, change that day above instead.
                   </p>
                   <div class="pk-cluster">
                     <Button variant="danger-quiet" disabled={busy} onClick={() => void cancelRegistration()}>

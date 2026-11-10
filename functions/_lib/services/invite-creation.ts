@@ -45,15 +45,21 @@ export async function countInvitesByInviter(
   // Count only primary invites (invite rows where this user is the original inviter).
   // Co-invites (endorsements of someone already invited) do not consume invite quota
   // since they do not trigger new emails.
-  const row = await first<{ total: number }>(
-    db,
-    `SELECT COUNT(*) AS total
-     FROM invites
-     WHERE event_id = ? AND inviter_user_id = ? AND invite_type = ?`,
-    [eventId, inviterUserId, inviteType],
-  );
+  const row = await prepareInvitesByInviterCount(db, eventId, inviterUserId, inviteType).first<{ total: number }>();
 
   return Number(row?.total ?? 0);
+}
+
+/** Shared quota preflight for individual and batched invitation reads. */
+export function prepareInvitesByInviterCount(
+  db: DatabaseLike,
+  eventId: string,
+  inviterUserId: string,
+  inviteType: "attendee" | "speaker",
+) {
+  return db
+    .prepare(`SELECT COUNT(*) AS total FROM invites WHERE event_id=? AND inviter_user_id=? AND invite_type=?`)
+    .bind(eventId, inviterUserId, inviteType);
 }
 
 export async function isUnsubscribed(db: DatabaseLike, email: string, eventId: string): Promise<boolean> {

@@ -1,15 +1,18 @@
 import type { z } from "zod";
-import type { registrationInviteCreateSchema } from "../../../assets/shared/schemas/registration";
-import { getBearerToken } from "../auth/session-engine";
-import { first } from "../db/queries";
+import type {
+  registrationInviteCreateSchema,
+  peerInviteResultSchema,
+} from "../../../assets/shared/schemas/registration";
+import { canSendPeerInvitations } from "../../../assets/shared/peer-invitation-policy";
+import { resolveEventInviteExpiry } from "../invite-validity";
+import { batchFirst } from "../db/pagination";
 import { AppError } from "../errors";
 import { getConfig, resolveAppBaseUrl } from "../config";
-import { requireInternalSecret } from "../request";
 import { buildEventEmailVariables, getEventBySlug } from "./events";
-import { getRegistrationByManageToken } from "./registrations";
+import { resolvePeerInvitationAuthority } from "./peer-invitation-authority";
+import { prepareInvitesByInviterCount } from "./invite-creation";
 import { bulkCreateInvites } from "./invite-bulk";
-import { countInvitesByInviter } from "./invites";
-import { createReferralCode } from "./referrals";
+import { prepareReferralCodeStatement } from "./referrals";
 import { firstReferralCodeQuerySql } from "./referral-code-projection";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import type { Env } from "../types";
@@ -20,13 +23,7 @@ import { buildEventInviteRecipientVariables } from "./event-invite-email-variabl
 type PeerInviteBody = z.infer<typeof registrationInviteCreateSchema>;
 
 export interface PeerInviteCreationResult {
-  response: {
-    success: true;
-    created: Array<{ email: string }>;
-    endorsed: Array<{ email: string }>;
-    skipped: Array<{ email: string; reason: string }>;
-    referralCode?: string;
-  };
+  response: z.infer<typeof peerInviteResultSchema>;
   outboxIds: string[];
 }
 
@@ -42,28 +39,6 @@ function displayName(
   return name && user.organization_name ? `${name} (${user.organization_name})` : name;
 }
 
-async function registrationReferralCode(
-  env: Env,
-  eventId: string,
-  registrationId: string,
-  userId: string,
-  length: number,
-): Promise<string> {
-  const existing = await first<{ code: string }>(env.DB, firstReferralCodeQuerySql("registration", "?"), [
-    registrationId,
-  ]);
-  return (
-    existing?.code ??
-    (await createReferralCode(env.DB, {
-      eventId,
-      ownerType: "registration",
-      ownerId: registrationId,
-      createdByUserId: userId,
-      length,
-    }))
-  );
-}
-
 /** Shared attendee-invite/speaker-nomination workflow and D1 bulk boundary. */
 export async function createPeerInvitations(
   env: Env,
@@ -72,20 +47,49 @@ export async function createPeerInvitations(
   body: PeerInviteBody,
   inviteType: "attendee" | "speaker",
 ): Promise<PeerInviteCreationResult> {
-  const manageToken = getBearerToken(request);
-  if (!manageToken) throw new AppError(401, "AUTH_REQUIRED", "Registration manage token required");
-  const event = await getEventBySlug(env.DB, eventSlug);
-  const registration = await getRegistrationByManageToken(env.DB, manageToken, requireInternalSecret(env));
-  if (registration.event_id !== event.id) {
-    throw new AppError(403, "EVENT_MISMATCH", "Token is not valid for this event");
+  // Only this primary-key conflict is retryable: the batch has rolled back
+  // either a competing owner code or a random-code collision, including its outbox.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await createPeerInvitationAttempt(env, request, eventSlug, body, inviteType);
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("UNIQUE constraint failed: referral_codes.code"))
+        throw error;
+    }
   }
+  throw new AppError(409, "REFERRAL_CODE_CONFLICT", "Try sending your invitations again.");
+}
 
+async function createPeerInvitationAttempt(
+  env: Env,
+  request: Request,
+  eventSlug: string,
+  body: PeerInviteBody,
+  inviteType: "attendee" | "speaker",
+): Promise<PeerInviteCreationResult> {
+  const event = await getEventBySlug(env.DB, eventSlug);
+  const { registration, db } = await resolvePeerInvitationAuthority(env, request, event.id, inviteType);
+
+  if (inviteType === "attendee" && !canSendPeerInvitations(registration.status, event.starts_at)) {
+    throw new AppError(403, "PEER_INVITATIONS_CLOSED", "Colleague invitations close when the event starts.");
+  }
+  const requestedExpiry = resolveEventInviteExpiry(event, body.expiresAt);
+  const expiresAt =
+    inviteType === "attendee" && requestedExpiry > event.starts_at! ? event.starts_at! : requestedExpiry;
   const config = getConfig(env, request);
   const maxAllowed =
     inviteType === "attendee"
       ? (event.invite_limit_attendee ?? config.inviteLimitPerAttendee)
       : (event.invite_limit_speaker_nomination ?? config.inviteLimitSpeakerNomination);
-  const currentCount = await countInvitesByInviter(env.DB, event.id, registration.user_id, inviteType);
+  const [countResult, userResult, referralResult] = await env.DB.batch([
+    prepareInvitesByInviterCount(env.DB, event.id, registration.user_id, inviteType),
+    env.DB.prepare(`SELECT u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name
+       FROM registrations r JOIN users u ON u.id = r.user_id WHERE r.id = ?`).bind(registration.id),
+    ...(inviteType === "attendee"
+      ? [env.DB.prepare(firstReferralCodeQuerySql("registration", "?")).bind(registration.id)]
+      : []),
+  ]);
+  const currentCount = Number(batchFirst<{ total: number }>(countResult)?.total ?? 0);
   if (currentCount + body.invites.length > maxAllowed) {
     throw new AppError(
       429,
@@ -94,27 +98,29 @@ export async function createPeerInvitations(
     );
   }
 
-  const user = await first<{
-    first_name: string | null;
-    last_name: string | null;
-    organization_name: string | null;
-  }>(
-    env.DB,
-    `SELECT u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name
-       FROM registrations r JOIN users u ON u.id = r.user_id
-      WHERE r.id = ?`,
-    [registration.id],
+  const user = batchFirst<{ first_name: string | null; last_name: string | null; organization_name: string | null }>(
+    userResult,
   );
   const inviterName = displayName(user);
   const appBaseUrl = resolveAppBaseUrl(env, request);
-  const referralCode =
-    inviteType === "attendee"
-      ? await registrationReferralCode(env, event.id, registration.id, registration.user_id, config.referralCodeLength)
-      : undefined;
+  const existingReferral = referralResult ? batchFirst<{ code: string }>(referralResult)?.code : undefined;
+  const preparedReferral =
+    inviteType === "attendee" && !existingReferral
+      ? await prepareReferralCodeStatement(env.DB, {
+          eventId: event.id,
+          ownerType: "registration",
+          ownerId: registration.id,
+          createdByUserId: registration.user_id,
+          length: config.referralCodeLength,
+          firstForOwner: true,
+        })
+      : null;
+  const referralCode = inviteType === "attendee" ? (existingReferral ?? preparedReferral?.code) : undefined;
 
-  const outcomes = await bulkCreateInvites(env.DB, inviteType, {
+  const outcomes = await bulkCreateInvites(db, inviteType, {
     event,
-    expiresAt: body.expiresAt,
+    additionalStatements: preparedReferral ? [preparedReferral.statement] : [],
+    expiresAt,
     inviter: { userId: registration.user_id, registrationId: registration.id },
     maxPrimaryInvites: maxAllowed,
     invites: body.invites.map((invite) => ({

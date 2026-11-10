@@ -4,7 +4,10 @@ import { renderToString } from "preact-render-to-string";
 import { EventRegistrationManagement } from "../../assets/ts/site/EventRegistrationManagement";
 import { eventFormsResponseSchema } from "../../assets/shared/schemas/forms";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { registrationManageSchema } from "../../assets/shared/schemas/registration";
+import {
+  registrationManageReadResponseSchema,
+  registrationManageSchema,
+} from "../../assets/shared/schemas/registration";
 import { confirmationButton, openConfirmation } from "./helpers/confirm-dialog";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -16,50 +19,52 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 /** The manage read the page boots from, with one offered in-person day. */
 function manageResponse(overrides: { registration?: Record<string, unknown>; shareUrl?: string } = {}): Response {
-  return jsonResponse({
-    success: true,
-    sponsorSharing: { allowed: false, withdrawnAt: null },
-    registration: {
-      id: "00000000-0000-0000-0000-000000000000",
-      event_id: "event-1",
-      status: "registered",
-      cancellation_reason_code: null,
-      attendance_type: "in_person",
-      custom_answers: null,
-      isEmailVerified: true,
-      ...overrides.registration,
-    },
-    event: { id: "event-1", slug: "pqc-2026", name: "PQC Conference" },
-    user: {
-      id: "user-1",
-      email: "claim@example.test",
-      first_name: "Casey",
-      last_name: "Claim",
-      organization_name: null,
-      job_title: null,
-    },
-    eventDays: [
-      {
-        dayDate: "2026-12-01",
-        label: "Day 1",
-        inPersonCapacity: 1,
-        sortOrder: 1,
-        attendanceOptions: [{ value: "in_person", label: "In-person" }],
+  return jsonResponse(
+    registrationManageReadResponseSchema.parse({
+      success: true,
+      sponsorSharing: { allowed: false, withdrawnAt: null },
+      registration: {
+        id: "00000000-0000-0000-0000-000000000000",
+        event_id: "event-1",
+        status: "registered",
+        cancellation_reason_code: null,
+        attendance_type: "in_person",
+        custom_answers: null,
+        isEmailVerified: true,
+        ...overrides.registration,
       },
-    ],
-    dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person", label: "Day 1" }],
-    waitlistHandledLast: false,
-    dayWaitlist: [
-      {
-        dayDate: "2026-12-01",
-        status: "offered",
-        priorityLane: "general",
-        offerExpiresAt: "2026-12-01T10:00:00.000Z",
+      event: { id: "event-1", slug: "pqc-2026", name: "PQC Conference", startsAt: "2026-12-01T08:00:00.000Z" },
+      user: {
+        id: "user-1",
+        email: "claim@example.test",
+        first_name: "Casey",
+        last_name: "Claim",
+        organization_name: null,
+        job_title: null,
       },
-    ],
-    shareUrl: overrides.shareUrl ?? null,
-    headshotUrl: null,
-  });
+      eventDays: [
+        {
+          dayDate: "2026-12-01",
+          label: "Day 1",
+          inPersonCapacity: 1,
+          sortOrder: 1,
+          attendanceOptions: [{ value: "in_person", label: "In-person" }],
+        },
+      ],
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person", label: "Day 1" }],
+      waitlistHandledLast: false,
+      dayWaitlist: [
+        {
+          dayDate: "2026-12-01",
+          status: "offered",
+          priorityLane: "general",
+          offerExpiresAt: "2026-12-01T10:00:00.000Z",
+        },
+      ],
+      shareUrl: overrides.shareUrl ?? null,
+      headshotUrl: null,
+    }),
+  );
 }
 
 /** The manage page markup and address the module boots from, freshly imported. */
@@ -96,49 +101,7 @@ describe("registration waitlist claim UI", () => {
         );
       }
       if (url.includes("/forms?")) return jsonResponse({ error: { code: "NOT_FOUND", message: "No form" } }, 404);
-      return jsonResponse({
-        success: true,
-        sponsorSharing: { allowed: false, withdrawnAt: null },
-        registration: {
-          id: "00000000-0000-0000-0000-000000000000",
-          event_id: "event-1",
-          status: "registered",
-          cancellation_reason_code: null,
-          attendance_type: "in_person",
-          custom_answers: null,
-          isEmailVerified: true,
-        },
-        event: { id: "event-1", slug: "pqc-2026", name: "PQC Conference" },
-        user: {
-          id: "user-1",
-          email: "claim@example.test",
-          first_name: "Casey",
-          last_name: "Claim",
-          organization_name: null,
-          job_title: null,
-        },
-        eventDays: [
-          {
-            dayDate: "2026-12-01",
-            label: "Day 1",
-            inPersonCapacity: 1,
-            sortOrder: 1,
-            attendanceOptions: [{ value: "in_person", label: "In-person" }],
-          },
-        ],
-        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person", label: "Day 1" }],
-        waitlistHandledLast: false,
-        dayWaitlist: [
-          {
-            dayDate: "2026-12-01",
-            status: "offered",
-            priorityLane: "general",
-            offerExpiresAt: "2026-12-01T10:00:00.000Z",
-          },
-        ],
-        shareUrl: null,
-        headshotUrl: null,
-      });
+      return manageResponse();
     });
     vi.stubGlobal("fetch", fetchMock);
 

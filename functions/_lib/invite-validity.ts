@@ -137,6 +137,7 @@ export function eventInviteWindowEvidence(
   event: InviteEventWindow,
   expiresAt: string,
   now: string,
+  beforeStart = false,
 ): AuthorizationEvidence {
   return {
     sql: `SELECT 1
@@ -150,8 +151,9 @@ export function eventInviteWindowEvidence(
             AND ${canonicalUtcInstantSql("ends_at")}
             AND ends_at > starts_at
             AND ? > ?
-            AND ? <= ends_at`,
-    bindings: [eventId, event.starts_at, event.ends_at, expiresAt, now, expiresAt],
+            AND ? <= ends_at
+            ${beforeStart ? "AND starts_at > strftime('%Y-%m-%dT%H:%M:%fZ','now') AND ? <= starts_at" : ""}`,
+    bindings: [eventId, event.starts_at, event.ends_at, expiresAt, now, expiresAt, ...(beforeStart ? [expiresAt] : [])],
   };
 }
 

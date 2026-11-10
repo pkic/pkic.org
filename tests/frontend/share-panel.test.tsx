@@ -6,6 +6,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { registrationInviteCreateSchema } from "../../assets/shared/schemas/registration";
 import { renderSharePanel, refreshSharePanelBadge } from "../../assets/ts/shared/widgets/share-panel";
+import { InviteColleagueDialog } from "../../assets/ts/components/event-invites/RegistrationInviteForm";
 import { controlFor } from "./helpers/labeled-control";
 
 const SHARE_URL = "https://pkic.test/r/AbC123";
@@ -29,7 +30,7 @@ interface Captured {
  * which is the only way to reach the panel's failure path: it surfaces
  * whatever the client threw rather than a message of its own.
  */
-function installApi(options: { rejects?: boolean } = {}): Captured[] {
+function installApi(options: { rejects?: boolean; fieldError?: boolean } = {}): Captured[] {
   const requests: Captured[] = [];
   vi.stubGlobal(
     "fetch",
@@ -46,6 +47,21 @@ function installApi(options: { rejects?: boolean } = {}): Captured[] {
         body: typeof init.body === "string" ? JSON.parse(init.body) : undefined,
       });
       if (url.pathname !== INVITES_PATH) throw new Error(`Unexpected request: ${url.pathname}`);
+      if (options.fieldError)
+        return Promise.resolve(
+          json(
+            {
+              error: {
+                code: "VALIDATION",
+                message: "Invalid request",
+                details: {
+                  fieldErrors: { "invites.0.email": ["Choose another recipient."] },
+                },
+              },
+            },
+            400,
+          ),
+        );
       if (options.rejects) {
         return Promise.resolve(
           json({ error: { code: "RATE_LIMITED", message: "You have used this event's invite quota." } }, 429),
@@ -59,15 +75,52 @@ function installApi(options: { rejects?: boolean } = {}): Captured[] {
   return requests;
 }
 
-describe("share panel urgency", () => {
-  it("does not tell a waitlisted attendee that seats are limited", () => {
-    const waiting = mount({ waitlisted: true });
-    expect(waiting.querySelector("h3")?.textContent).toBe("Invite a colleague");
-    expect(waiting.textContent).not.toContain("seats are limited");
-    expect(waiting.textContent).not.toContain("fill fast");
+describe("capability invitation eligibility", () => {
+  it.each(["pending_email_confirmation", "cancelled"] as const)(
+    "keeps sharing but hides invitations for %s",
+    (status) => {
+      const panel = mount({ invitation: { status, startsAt: "2099-12-01T09:00:00.000Z" } });
+      expect(panel.querySelector('input[type="email"]')).toBeNull();
+      expect(panel.textContent).not.toContain("Invite colleagues by email");
+      expect(panel.textContent).toContain("Share on LinkedIn");
+    },
+  );
+  it.each(["registered", "pending_email_confirmation"] as const)(
+    "uses the supplied %s eligibility without another management read",
+    (status) => {
+      const fetch = vi.fn();
+      vi.stubGlobal("fetch", fetch);
+      const panel = mount({ invitation: { status, startsAt: "2099-12-01T09:00:00.000Z" } });
+      expect(panel.textContent?.includes("Invite colleagues by email")).toBe(status === "registered");
+      expect(panel.textContent).toContain("Share on LinkedIn");
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+  it("hides capability invitations when the open page reaches the start", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime("2026-12-01T08:59:59.000Z");
+      const panel = mount({ invitation: { status: "registered", startsAt: "2026-12-01T09:00:00.000Z" } });
+      expect(panel.textContent).toContain("Invite colleagues by email");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_251);
+      });
+      expect(panel.textContent).not.toContain("Invite colleagues by email");
+      expect(panel.textContent).toContain("Share on LinkedIn");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
 
-    const seated = mount();
-    expect(seated.textContent).toContain("seats are limited");
+describe("share panel copy", () => {
+  it("names sharing independently of whether email invitations are available", () => {
+    for (const options of [{ waitlisted: true }, { manageToken: null, eventSlug: null }, {}]) {
+      const panel = mount(options);
+      expect(panel.querySelector("h3")?.textContent).toBe("Share this event");
+      expect(panel.textContent).not.toContain("seats are limited");
+      expect(panel.textContent).toContain("Share on LinkedIn");
+    }
   });
 });
 
@@ -83,6 +136,7 @@ function mount(options: Partial<Parameters<typeof renderSharePanel>[1]> = {}): H
       lastName: "Lovelace",
       manageToken: "manage-token",
       eventSlug: "pki-summit",
+      invitation: { status: "registered", startsAt: "2099-12-01T09:00:00.000Z" },
       ...options,
     }),
   );
@@ -103,10 +157,8 @@ function button(container: HTMLElement, text: string): HTMLButtonElement {
   return found;
 }
 
-function labeledInput(container: HTMLElement, ariaLabel: string): HTMLInputElement {
-  const input = container.querySelector<HTMLInputElement>(`[aria-label="${ariaLabel}"]`);
-  if (!input) throw new Error(`No control named "${ariaLabel}"`);
-  return input;
+function labeledInput(container: HTMLElement, label: string): HTMLInputElement {
+  return controlFor(container, label);
 }
 
 async function click(target: HTMLElement): Promise<void> {
@@ -133,6 +185,90 @@ afterEach(() => {
     container.remove();
   }
   vi.unstubAllGlobals();
+});
+
+it("ignores blank invite rows and maps a nonblank row's validation to its controls", async () => {
+  const requests = installApi();
+  const container = mount();
+  await click(button(container, "Invite by email"));
+  await click(button(container, "Add row"));
+  await typeInto(labeledInput(container, "Invite 2 first name (optional)"), "Alice");
+  await click(button(container, "Send invites"));
+  expect(labeledInput(container, "Invite 2 email address").getAttribute("aria-invalid")).toBe("true");
+  expect(labeledInput(container, "Invite 1 email address").getAttribute("aria-invalid")).not.toBe("true");
+  expect(requests).toHaveLength(0);
+  await typeInto(labeledInput(container, "Invite 2 email address"), "alice@example.com");
+  await click(button(container, "Send invites"));
+  expect(registrationInviteCreateSchema.parse(requests[0]?.body).invites).toEqual([
+    { email: "alice@example.com", firstName: "Alice" },
+  ]);
+});
+
+it("keeps touched fields on their invitation row when an earlier blank row is filled", async () => {
+  installApi();
+  const container = mount();
+  await click(button(container, "Invite by email"));
+  await click(button(container, "Add row"));
+  await typeInto(labeledInput(container, "Invite 2 email address"), "invalid");
+  const first = labeledInput(container, "Invite 1 email address");
+  const second = labeledInput(container, "Invite 2 email address");
+  const names = [first.name, second.name];
+  expect(second.getAttribute("aria-invalid")).toBe("true");
+  await typeInto(labeledInput(container, "Invite 1 first name (optional)"), "Casey");
+  expect([first.name, second.name]).toEqual(names);
+  expect(first.getAttribute("aria-invalid")).not.toBe("true");
+  expect(second.getAttribute("aria-invalid")).toBe("true");
+});
+
+it("keeps a server refusal on its invitation when earlier rows change or are removed", async () => {
+  const requests = installApi({ fieldError: true });
+  const container = mount();
+  await click(button(container, "Invite by email"));
+  await click(button(container, "Add row"));
+  await typeInto(labeledInput(container, "Invite 2 email address"), "alice@example.com");
+  await click(button(container, "Send invites"));
+  expect(registrationInviteCreateSchema.parse(requests[0]?.body).invites).toHaveLength(1);
+  const second = labeledInput(container, "Invite 2 email address");
+  expect(second.closest(".pk-field")?.textContent).toContain("Choose another recipient.");
+  await typeInto(labeledInput(container, "Invite 1 first name (optional)"), "Casey");
+  expect(labeledInput(container, "Invite 1 email address").closest(".pk-field")?.textContent).not.toContain(
+    "Choose another recipient.",
+  );
+  expect(second.closest(".pk-field")?.textContent).toContain("Choose another recipient.");
+  await click(container.querySelector<HTMLButtonElement>('[aria-label="Remove invite 1"]')!);
+  expect(labeledInput(container, "Invite 1 email address").value).toBe("alice@example.com");
+  expect(labeledInput(container, "Invite 1 email address").closest(".pk-field")?.textContent).toContain(
+    "Choose another recipient.",
+  );
+});
+
+describe("colleague invitation dialog", () => {
+  it("reuses the invitation form, validates before sending, and queues only on explicit send", async () => {
+    const requests = installApi();
+    const closed = vi.fn();
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    await act(() => render(<InviteColleagueDialog eventSlug="pki-summit" onClose={closed} />, container));
+    const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.querySelector("form")?.noValidate).toBe(true);
+    expect(requests).toHaveLength(0);
+    await click(button(dialog, "Send invites"));
+    expect(requests).toHaveLength(0);
+    expect(labeledInput(dialog, "Invite 1 email address").getAttribute("aria-invalid")).toBe("true");
+    await typeInto(labeledInput(dialog, "Invite 1 first name (optional)"), "Alice");
+    await typeInto(labeledInput(dialog, "Invite 1 email address"), "alice@example.com");
+    await click(button(dialog, "Send invites"));
+    expect(requests).toHaveLength(1);
+    expect(requests[0].authorization).toBeNull();
+    expect(registrationInviteCreateSchema.parse(requests[0].body).invites).toEqual([
+      { firstName: "Alice", email: "alice@example.com" },
+    ]);
+    expect(dialog.textContent).toContain("Queued 1 invitation.");
+    await click(button(dialog, "Done"));
+    expect(closed).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("share panel", () => {
@@ -225,9 +361,7 @@ describe("share panel", () => {
     expect(body.invites).toEqual([{ email: "alice@example.com", firstName: "Alice" }]);
 
     const announced = Array.from(container.querySelectorAll('[role="status"], [role="alert"]'));
-    expect(
-      announced.some((node) => node.textContent === "Sent 1 invitation. They'll receive a registration link shortly."),
-    ).toBe(true);
+    expect(announced.some((node) => node.textContent === "Queued 1 invitation.")).toBe(true);
   });
 
   it("reports a rejected send in an alert and keeps the typed rows", async () => {
@@ -251,7 +385,7 @@ describe("share panel", () => {
     await click(button(container, "Invite by email"));
     await click(button(container, "Send invites"));
 
-    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Please enter at least one email address.");
+    expect(labeledInput(container, "Invite 1 email address").getAttribute("aria-invalid")).toBe("true");
     expect(requests).toHaveLength(0);
   });
 

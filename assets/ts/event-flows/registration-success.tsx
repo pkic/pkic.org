@@ -111,6 +111,7 @@ export function showRegistrationSuccess(
       firstName,
       manageToken: result.manageToken,
       eventSlug,
+      invitation: { status: result.status, startsAt: result.startsAt },
       waitlisted: hasPendingRegistrationDayWaitlist(result.dayWaitlist),
     });
   }

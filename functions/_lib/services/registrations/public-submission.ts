@@ -29,7 +29,7 @@ import { commitRegistrationSubmission } from "../registration-submission";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
 import { readRegistrationAffiliation } from "./selected-identity";
 import type { VerifiedRegistrationIdentityContext } from "./types";
-import { nowIso } from "../../utils/time";
+import { nowIso, persistedUtcInstant } from "../../utils/time";
 import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
 import { findRegistrationGroup, prepareGroupEventRegistrationGuard } from "./authorization";
 import { eventTakesRegistrations } from "./email-proof";
@@ -117,6 +117,7 @@ export async function submitEventRegistration(
   metadata: EventRegistrationSubmissionMetadata,
 ): Promise<PublicRegistrationSubmissionResult> {
   const event = await getEventBySlug(db, metadata.eventSlug);
+  const startsAt = persistedUtcInstant(event.starts_at);
   await recordHugoEventBasePath(db, event, metadata.eventBasePath);
 
   let invite: InviteRecord | null = null;
@@ -331,6 +332,7 @@ export async function submitEventRegistration(
       success: true,
       registrationId: registration.id,
       status: registration.status,
+      startsAt,
       manageToken: exposeManageCapability ? prepared.manageToken : null,
       manageUrl: exposeManageCapability ? manageUrl : null,
       shareUrl,

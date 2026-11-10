@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "preact/hooks";
+import { useEffect, useId, useRef, useState } from "preact/hooks";
 import { DataTable, type DataTableColumn } from "../ui/DataTable";
 import { Radio } from "../ui/Checkbox";
 import { Button } from "../ui/Button";
@@ -32,6 +32,8 @@ export const ATTENDANCE_WAITLIST_COPY = {
 
 interface DayAttendancePickerProps {
   control?: FieldControlProps;
+  /** Focus the selected choice for this day when arriving from an attendance email. */
+  focusDay?: string | null;
   days: EventFormsResponse["eventDays"];
   lowCapacityThreshold?: number;
   value?: Readonly<Record<string, string>>;
@@ -132,6 +134,7 @@ function MatrixCell({
 /** One selection model, projected by day on desktop and by method on longer phone schedules. */
 export function DayAttendancePicker({
   control,
+  focusDay,
   days,
   lowCapacityThreshold = 0,
   value,
@@ -139,10 +142,26 @@ export function DayAttendancePicker({
 }: DayAttendancePickerProps) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
+  const focusedDay = useRef<string | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const phone = useMediaQuery("(max-width: 40rem)");
   const transposed = phone && days.length > 3;
   const selected = value ?? draft;
+  useEffect(() => {
+    if (!focusDay) {
+      focusedDay.current = null;
+      return;
+    }
+    if (focusedDay.current === focusDay) return;
+    const choices = Array.from(root.current?.querySelectorAll<HTMLInputElement>("input[type=radio]") ?? []).filter(
+      (input) => input.name === `dayAttendance.${focusDay}`,
+    );
+    const choice = choices.find((input) => input.checked) ?? choices[0];
+    if (!choice) return;
+    focusedDay.current = focusDay;
+    choice.focus();
+    choice?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [focusDay, transposed, days]);
   if (!days.length) return <p class="pk-small">No per-day attendance required for this event.</p>;
   const unique = new Map<string, AttendanceOptionRead>();
   for (const day of days)

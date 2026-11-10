@@ -9,6 +9,7 @@ import {
 } from "../../../../../shared/event-participation-link";
 import type { ComponentChildren } from "preact";
 import { eventParticipantRecordPath } from "./event-participant-paths";
+import { useBoundaryClock } from "../../../../hooks/useBoundaryClock";
 import { useData } from "../../../../hooks/useData";
 import { getJson, ApiClientError } from "../../../../shared/api-client";
 import { eventDetailResponseSchema } from "../../../../../shared/schemas/event-management";
@@ -33,7 +34,7 @@ import { EventAppHero, EventHome } from "./app/EventHome";
 import { SectionHeading } from "../../../../ui/SectionHeading";
 import { EventTicket } from "./app/EventTicket";
 import { EventMore } from "./app/EventMore";
-import { eventRegistrationStanding } from "./app/event-app-model";
+import { canInviteColleagues, eventRegistrationStanding } from "./app/event-app-model";
 import { hasEventProposals, hasEventPromotionMaterials, participantEventAppSubject } from "./app/event-app-tabs";
 
 const EventRegister = lazy(() => import("./app/EventRegister").then((module) => ({ default: module.EventRegister })));
@@ -61,7 +62,7 @@ const PAGE_LABELS: Record<string, string> = {
   registration: "Registration",
   program: "Agenda",
   agenda: "My agenda",
-  promotion: "Share",
+  promotion: "Share & Invite",
   "lead-scanner": "Lead scanner",
   "session-management": "My sessions",
   ticket: "Ticket",
@@ -89,6 +90,12 @@ export function ParticipantEvent({
   onRegistered,
 }: Selection & { event: EventDetail; onRegistered?: () => Promise<void> }) {
   const [location, navigate] = useHashLocation();
+  const now = useBoundaryClock((at) => {
+    const future = [event.startsAt, event.endsAt]
+      .map((stamp) => Date.parse(stamp ?? ""))
+      .filter((instant) => instant > at);
+    return future.length ? Math.min(...future) : null;
+  });
   // One agenda route: the whole program, or with `?mine=1` the same view filtered to the reader's sessions.
   const mine = isMyAgendaQuery(new URLSearchParams(location.split("?", 2)[1] ?? ""));
   const base = `/events/${encodeURIComponent(event.slug)}`;
@@ -143,7 +150,7 @@ export function ParticipantEvent({
         ]
       : []),
     ...(hasEventPromotionMaterials(event)
-      ? [{ id: "promotion", label: "Share", href: href(base + "/promotion") }]
+      ? [{ id: "promotion", label: "Share & Invite", href: href(base + "/promotion") }]
       : []),
     ...(hasProposals
       ? [
@@ -205,6 +212,7 @@ export function ParticipantEvent({
         <Suspense fallback={<Spinner />}>
           <MyPromotionKits
             slug={event.slug}
+            canInvite={canInviteColleagues(event, now)}
             attendeeEligible={eventRegistrationStanding(event).status === "registered"}
             speakerEligible={hasProposals || Boolean(event.participation?.speakerSessions)}
             share={
@@ -236,7 +244,7 @@ export function ParticipantEvent({
       ) : tab === "more" ? (
         <EventMore event={event} />
       ) : (
-        <EventHome event={event} />
+        <EventHome event={event} now={now} />
       )}
     </div>
   );

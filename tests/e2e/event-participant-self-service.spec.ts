@@ -1,3 +1,4 @@
+import { eventParticipantRecordPath } from "../../assets/ts/member-flows/portal/sections/events/event-participant-paths";
 import { eventWorkspacePath } from "./helpers/agenda-workspace";
 import { SPEAKER_PARTICIPATION_COPY } from "../../assets/shared/proposal-speaker-acceptance";
 import { uploadThroughControl } from "./helpers/file-upload";
@@ -46,7 +47,7 @@ import { myProfileUpdateSchema } from "../../assets/shared/schemas/me";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { approveMemberThroughReview } from "./helpers/membership";
-import { createRegistrationEvent } from "./helpers/participation-state-fixture";
+import { createRegistrationEvent, registerStateAttendee } from "./helpers/participation-state-fixture";
 import { capturedEmailCount, waitForCapturedEmail, extractEmailUrl } from "./helpers/sendgrid";
 
 test.use({ actionTimeout: 15_000 });
@@ -860,6 +861,150 @@ for (const scenario of ["normal response", "late review", "late withdrawal"]) {
     }
   });
 }
+
+// Real session, registration, invitation endpoint, and outbox; all data belongs to this scenario.
+test("attendees invite colleagues and confirm a seat release from one day picker", async ({ page }, info) => {
+  const sharingEmail = e2eAdminEmail("attendee-sharing-days");
+  await signInToPortal(page, sharingEmail);
+  const profile = await page.request.patch("/api/v1/users/current", {
+    data: myProfileUpdateSchema.parse({ firstName: "Synthetic", lastName: "Attendee" }),
+  });
+  expect(profile.status(), await profile.text()).toBe(200);
+  const attendanceOptions = [
+    { value: "in_person", label: "In person", accessMode: "physical" as const, capacity: 20 },
+    { value: "virtual", label: "Online", accessMode: "remote" as const },
+    { value: "on_demand", label: "On demand", accessMode: "none" as const },
+  ];
+  const fixture = await createRegistrationEvent(page, "share-and-days", [
+    { date: "2027-09-10", startTime: "09:00", endTime: "17:00", attendanceOptions },
+    { date: "2027-09-11", startTime: "09:00", endTime: "17:00", attendanceOptions },
+  ]);
+  const actor = userAuthSessionResponseSchema.parse(await (await page.request.get("/api/v1/auth/session")).json());
+  const organization = await page.request.post("/api/v1/organizations", {
+    data: organizationCreateSchema.parse({ name: `Synthetic Invitation Services ${crypto.randomUUID()}` }),
+  });
+  expect(organization.status(), await organization.text()).toBe(201);
+  const organizationId = organizationCreateResponseSchema.parse(await organization.json()).organization.id;
+  const represented = await page.request.post(`/api/v1/organizations/${organizationId}/identities`, {
+    data: identityCreateSchema.parse({
+      userReference: "existing_user",
+      userId: actor.identity.id,
+      jobTitle: "Conference attendee",
+      activation: { mode: "immediate", reason: "Synthetic colleague invitation fixture" },
+    }),
+  });
+  expect(represented.status(), await represented.text()).toBe(201);
+  const identityId = identityMutationResponseSchema.parse(await represented.json()).identityId;
+  await registerStateAttendee(page, fixture, sharingEmail, { staticRelease: false, identityId });
+  const response = await page.request.get(`/api/v1/events/${fixture.slug}`);
+  const detail = eventDetailResponseSchema.parse(await response.json()).event;
+  const registrationId = detail.participation!.registrationId!;
+  const base = `/portal/#/events/${fixture.slug}`;
+  await page.goto(base);
+  await expect(page.getByRole("link", { name: "Show ticket", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Invite a colleague", exact: true })).toHaveCount(0);
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: info.outputPath(`overview-${width}.png`), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  // Sharing artwork can be absent while a confirmed attendee is still allowed to invite.
+  const eventPath = `**/api/v1/events/${fixture.slug}`;
+  await page.route(eventPath, async (route) => {
+    const response = await route.fetch();
+    const body = eventDetailResponseSchema.parse(await response.json());
+    body.event.participation!.promotion = null;
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto(`${base}/promotion`);
+  await page.reload();
+  const inviteWithoutMaterials = page.getByRole("button", { name: "Invite a colleague", exact: true });
+  await expect(inviteWithoutMaterials).toBeVisible();
+  await expect(page.getByRole("link", { name: "Share on LinkedIn", exact: true })).toHaveCount(0);
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: info.outputPath(`invite-without-materials-${width}.png`), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await inviteWithoutMaterials.click();
+  await expect(page.getByRole("dialog", { name: "Invite a colleague", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(inviteWithoutMaterials).toBeFocused();
+  await page.unroute(eventPath);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Share & Invite", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Share on LinkedIn", exact: true })).toBeVisible();
+  const invite = page.getByRole("button", { name: "Invite a colleague", exact: true });
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(invite).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`share-${width}.png`), fullPage: true });
+    await invite.click();
+    const dialog = page.getByRole("dialog", { name: "Invite a colleague", exact: true });
+    await expect(dialog.getByLabel(/^Invite 1 email address/)).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`invite-${width}.png`), fullPage: true });
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(invite).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await invite.click();
+  const dialog = page.getByRole("dialog", { name: "Invite a colleague", exact: true });
+  await dialog.getByRole("button", { name: "Send invites", exact: true }).click();
+  await expect(dialog.getByLabel(/^Invite 1 email address/)).toHaveAttribute("aria-invalid", "true");
+  const colleague = `colleague-${crypto.randomUUID()}@synthetic-invitation.test`;
+  await dialog.getByLabel(/^Invite 1 email address/).fill(colleague);
+  await dialog.getByRole("button", { name: "Send invites", exact: true }).click();
+  await expect(dialog).toContainText("Queued 1 invitation");
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
+  await waitForCapturedEmail(colleague, "invited to");
+
+  await page.goto(
+    `/portal/#${eventParticipantRecordPath(fixture.slug, "registration", registrationId)}?day=2027-09-11`,
+  );
+  const days = page.getByRole("region", { name: "Your days", exact: true });
+  await expect(days.getByRole("button", { name: "Save my days", exact: true })).toBeVisible();
+  await expect(days.getByRole("radio", { name: "In person — Workshop day 2", exact: true })).toBeFocused();
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: info.outputPath(`days-${width}.png`), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await days.getByRole("radio", { name: "On demand — Workshop day 2", exact: true }).check();
+  await days.getByRole("button", { name: "Save my days", exact: true }).click();
+  const release = page.getByRole("alertdialog");
+  await expect(release).toContainText("waiting list");
+  await page.screenshot({ path: info.outputPath("release-375.png"), fullPage: true });
+  await release.getByRole("button", { name: "Keep editing", exact: true }).click();
+  await expect(days.getByRole("radio", { name: "On demand — Workshop day 2", exact: true })).toBeChecked();
+  await days.getByRole("button", { name: "Save my days", exact: true }).click();
+  const saved = page.waitForResponse(
+    (r) => r.request().method() === "PATCH" && new URL(r.url()).pathname === `/api/v1/registrations/${registrationId}`,
+  );
+  await release.getByRole("button", { name: "Release seats and save", exact: true }).click();
+  const updated = await saved;
+  expect(updated.status()).toBe(200);
+  expect(registrationManageSchema.parse(updated.request().postDataJSON()).dayAttendance).toEqual([
+    { dayDate: "2027-09-10", attendanceType: "in_person" },
+    { dayDate: "2027-09-11", attendanceType: "on_demand" },
+  ]);
+  await expect(days.getByRole("button", { name: "Change my days", exact: true })).toBeVisible();
+  await expect(days.getByRole("button")).toHaveCount(1);
+  await page.reload();
+  await expect(days).toContainText("On demand");
+  await expect(page.getByRole("region", { name: "Cancel registration", exact: true })).not.toContainText(
+    "waiting list",
+  );
+  await page.getByRole("button", { name: "Cancel my registration…", exact: true }).click();
+  const cancellation = page.getByRole("alertdialog");
+  await expect(cancellation).not.toContainText("next person on the waiting list");
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: info.outputPath(`cancellation-${width}.png`), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await cancellation.getByRole("button", { name: "Keep registration", exact: true }).click();
+});
 
 test("a speaker reopens accepted terms and manages a presentation from its own proposal tab", async ({
   page,

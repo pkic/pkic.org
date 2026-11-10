@@ -151,6 +151,7 @@ describe("portal group event registration", () => {
             success: true,
             registrationId: "40000000-0000-4000-8000-000000000001",
             status: "registered",
+            startsAt: "2026-12-01T08:00:00.000Z",
             dayAttendance: [],
             dayWaitlist: [],
             shareUrl: null,
@@ -165,8 +166,8 @@ describe("portal group event registration", () => {
     const container = mount(<GroupEventRegistrationPanel groupId={GROUP_ID} event={event} />);
     await settle();
     expect(container.textContent).toContain("Role");
-    expect(container.textContent).toContain("Registration details");
-    expect(container.textContent).toContain("Tell the event team how you plan to participate.");
+    expect(container.textContent).not.toContain("Registration details");
+    expect(container.textContent).not.toContain("Tell the event team how you plan to participate.");
     expect(container.textContent).toContain("I agree to the event terms");
     expect(container.textContent).toContain("Day one");
 
@@ -212,6 +213,7 @@ describe("portal group event registration", () => {
               success: true,
               registrationId: "40000000-0000-4000-8000-000000000001",
               status: "registered",
+              startsAt: "2026-12-01T08:00:00.000Z",
               dayAttendance: [],
               dayWaitlist: [],
               shareUrl: null,

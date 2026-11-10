@@ -22,7 +22,7 @@ export function readResponse(overrides: Partial<RegistrationManageReadResponse> 
       isEmailVerified: true,
     },
     identityId: null,
-    event: EVENT,
+    event: { ...EVENT, startsAt: "2026-12-01T09:00:00.000Z" },
     user: {
       email: "ada@example.test",
       first_name: "Ada",
@@ -37,7 +37,7 @@ export function readResponse(overrides: Partial<RegistrationManageReadResponse> 
         inPersonCapacity: 10,
         sortOrder: 1,
         attendanceOptions: [
-          { value: "in_person", label: "In person" },
+          { value: "in_person", label: "In person", spotsRemainingPercent: 100 },
           { value: "on_demand", label: "On demand" },
         ],
       },
