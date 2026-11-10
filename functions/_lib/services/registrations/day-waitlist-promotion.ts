@@ -1,12 +1,10 @@
-import { eventDayOptionAccessSql } from "../event-participation/session-access";
 import { all } from "../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { addHours, nowIso } from "../../utils/time";
 import {
-  eventAttendanceOptionCapacitySql,
-  eventAttendanceOptionOccupiedSql,
   eventAttendanceOptionHasAvailableCapacitySql,
-  ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL,
+  openWaitlistOptionCte,
+  waitlistEntryCanBeOfferedSql,
 } from "./day-waitlist-capacity";
 import type { DayWaitlistRow } from "./day-waitlist-types";
 import { prepareLapsedDayOfferRequeue } from "./day-waitlist-policy";
@@ -29,10 +27,6 @@ export async function promoteDayWaitlistIfCapacity(
   },
 ): Promise<DayWaitlistRow | null> {
   await expireDayWaitlistOffers(db, payload.eventId);
-  const option = "held.attendance_type";
-  const capacity = eventAttendanceOptionCapacitySql("ed", option);
-  const occupied = eventAttendanceOptionOccupiedSql("ed", option, "?");
-  const available = eventAttendanceOptionHasAvailableCapacitySql("ed", option, "?");
   const waiting = await all<
     DayWaitlistRow & {
       attendance_type: string;
@@ -42,24 +36,20 @@ export async function promoteDayWaitlistIfCapacity(
     }
   >(
     db,
-    `SELECT w.id, w.event_id, w.event_day_id, w.registration_id, w.user_id,
+    `WITH ${openWaitlistOptionCte("scoped_day.id = ?3 AND scoped_day.event_id = ?2", "?1")}
+     SELECT w.id, w.event_id, w.event_day_id, w.registration_id, w.user_id,
             w.priority_lane, w.status, w.position, w.offer_expires_at, w.reason_code, held.attendance_type,
-            ${capacity} AS capacity_limit, (${occupied}) AS occupied,
+            open_option.capacity_limit, open_option.occupied,
             ${verifiedAddressesJsonSql("w.user_id")} AS verified_addresses
-     FROM event_day_waitlist_entries w
+     FROM open_waitlist_option open_option
+     JOIN event_days ed ON ed.id = open_option.event_day_id
+     JOIN event_day_waitlist_entries w ON w.event_day_id = open_option.event_day_id AND w.status = 'waiting'
+     JOIN registration_day_attendance held ON held.registration_id = w.registration_id
+       AND held.event_day_id = w.event_day_id AND held.attendance_type = open_option.attendance_type
      JOIN registrations r ON r.id = w.registration_id
-     JOIN registration_day_attendance held ON held.registration_id = w.registration_id AND held.event_day_id = w.event_day_id
-     JOIN event_days ed ON ed.id = w.event_day_id
-     WHERE w.event_id = ? AND w.event_day_id = ? AND w.status = 'waiting'
-       AND r.status IN ('pending_email_confirmation', 'registered')
-       AND ${available}
-       AND (w.reason_code = 'admin_returned_to_waitlist' OR ${eventDayOptionAccessSql("ed", "held.attendance_type")} <> 'physical' OR NOT EXISTS (
-         SELECT 1 FROM effective_event_participant_roles role
-         WHERE role.event_id = w.event_id AND role.user_id = w.user_id
-           AND role.status = 'active' AND role.role IN (${ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL})
-       ))
+     WHERE ${waitlistEntryCanBeOfferedSql("w", "r", "ed", "held.attendance_type")}
      ORDER BY CASE w.priority_lane WHEN 'continuity' THEN 1 ELSE 2 END ASC, w.position ASC`,
-    [nowIso(), payload.eventId, payload.eventDayId, nowIso()],
+    [nowIso(), payload.eventId, payload.eventDayId],
   );
   // Personal-address entries are handled last; each group keeps its lane and position order.
   const candidates = prioritizeWorkAddresses(waiting, (entry) => parseVerifiedAddresses(entry.verified_addresses)).map(

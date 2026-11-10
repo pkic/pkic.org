@@ -8,12 +8,23 @@ interface QuerySample {
   /** JSON UTF-8 estimates, not the platform's RPC wire encoding. */
   requestBytes?: number;
   resultBytes?: number;
+  /** D1's own count; `first` reports no metadata, so it is absent there. */
+  rowsRead?: number;
+}
+
+function rowsReadBy(result: unknown): number | undefined {
+  const readings = (Array.isArray(result) ? result : [result]).map(
+    (item) => (item as { meta?: { rows_read?: number } } | null)?.meta?.rows_read,
+  );
+  return readings.some((reading) => reading === undefined)
+    ? undefined
+    : readings.reduce<number>((total, reading) => total + reading!, 0);
 }
 
 /** Test-only instrumentation: never exports SQL parameter values or user data. */
 export function profileD1Flow(
   database: DatabaseLike,
-  options: { latencyMs?: number; measurePayloadBytes?: boolean } = {},
+  options: { latencyMs?: number; measurePayloadBytes?: boolean; measureRowsRead?: boolean } = {},
 ) {
   const startedAt = performance.now();
   const latencyMs = options.latencyMs ?? 0;
@@ -42,10 +53,12 @@ export function profileD1Flow(
     const start = performance.now();
     const requestBytes = options.measurePayloadBytes ? serializedBytes(request) : undefined;
     let resultBytes: number | undefined;
+    let rowsRead: number | undefined;
     try {
       if (latencyMs > 0) await new Promise((resolve) => setTimeout(resolve, latencyMs));
       const result = await run();
       if (options.measurePayloadBytes) resultBytes = serializedBytes(result);
+      if (options.measureRowsRead) rowsRead = rowsReadBy(result);
       return result;
     } finally {
       queries.push({
@@ -54,6 +67,7 @@ export function profileD1Flow(
         startedAtMs: start - startedAt,
         durationMs: performance.now() - start,
         ...(options.measurePayloadBytes ? { requestBytes, resultBytes } : {}),
+        ...(options.measureRowsRead ? { rowsRead } : {}),
       });
     }
   }
