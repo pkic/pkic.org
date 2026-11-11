@@ -55,6 +55,17 @@ export interface StatCardProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 
    * recognizably the same thing. The label still says it in words.
    */
   icon?: ComponentChildren;
+  /**
+   * Makes the card a toggle that narrows the list below to the rows behind
+   * the number. A button covers the card, the way `href` stretches its link,
+   * so the card is pressable everywhere while the label's tooltip stays
+   * reachable above it. `pressLabel` names the toggle for assistive
+   * technology ("Filter the list: In person"); `pressed` is whether the
+   * list is narrowed that way now. Not combined with `href`.
+   */
+  onPress?: () => void;
+  pressed?: boolean;
+  pressLabel?: string;
 }
 
 export function StatCard({
@@ -67,6 +78,9 @@ export function StatCard({
   tone,
   tooltip,
   icon,
+  onPress,
+  pressed = false,
+  pressLabel,
   class: className,
   ...rest
 }: StatCardProps) {
@@ -76,6 +90,8 @@ export function StatCard({
     href ? "pk-stat-card--link" : null,
     density === "compact" ? "pk-stat-card--compact" : null,
     icon ? "pk-stat-card--icon" : null,
+    onPress ? "pk-stat-card--pressable" : null,
+    onPress && pressed ? "pk-stat-card--pressed" : null,
     className,
   ]
     .filter(Boolean)
@@ -118,6 +134,11 @@ export function StatCard({
           {trend && <span class="pk-stat-card__trend-label">{TREND_LABEL[trend]}, </span>}
           <span>{note}</span>
         </div>
+      )}
+      {onPress && (
+        <button type="button" class="pk-stat-card__press" aria-pressed={pressed} onClick={onPress}>
+          <span class="pk-sr-only">{pressLabel ?? label}</span>
+        </button>
       )}
     </div>
   );

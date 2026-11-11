@@ -33,6 +33,12 @@ export interface CollectionTotal {
   tooltip?: ComponentChildren;
   /** A decorative mark for what the figure counts. */
   icon?: ComponentChildren;
+  /** Narrows the list to the rows the figure counts; see StatCard's `onPress`. */
+  onPress?: () => void;
+  /** Whether the list is narrowed to this figure's rows now. */
+  pressed?: boolean;
+  /** Names the toggle for assistive technology. */
+  pressLabel?: string;
 }
 
 /**
@@ -68,6 +74,9 @@ export function CollectionTotals({ label, items }: { label: string; items: reado
             tone={tone}
             tooltip={item.tooltip}
             icon={item.icon}
+            onPress={item.onPress}
+            pressed={item.pressed}
+            pressLabel={item.pressLabel}
           />
         );
       })}

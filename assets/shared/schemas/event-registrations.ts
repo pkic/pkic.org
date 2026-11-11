@@ -158,17 +158,30 @@ export const registrationAttendanceTypesQuerySchema = z
     );
   }, "Choose up to 10 distinct attendance types.");
 
+/** A bounded, bookmarkable set of registration statuses: "registered,pending_email_confirmation". */
+export const registrationStatusesQuerySchema = z
+  .string()
+  .max(120)
+  .refine((value) => {
+    const statuses = value.split(",");
+    return (
+      z.array(eventRegistrationStatusSchema).min(1).safeParse(statuses).success &&
+      new Set(statuses).size === statuses.length
+    );
+  }, "Choose distinct registration statuses.");
+
 export const eventAttendanceRegistrationsQuerySchema = eventRegistrationsQuerySchema
   .pick({
     q: true,
     limit: true,
     offset: true,
     sort: true,
-    status: true,
     waitlisted: true,
     consent: true,
   })
   .extend({
+    /** Match any of the selected statuses. */
+    status: registrationStatusesQuerySchema.optional(),
     job_title: z.string().trim().min(1).max(200).optional(),
     country: countryCodeSchema.optional(),
     /** Match attendance options selected on at least one day. */

@@ -197,6 +197,61 @@
   }
 
   /*
+   * A card that narrows the list below to its rows. Its button covers the
+   * card through ::after, as the link does; the label's tooltip trigger sits
+   * above it, so the explanation still opens on hover, focus and tap. The
+   * pressed card wears the accent ring: the list is showing its rows.
+   */
+  .pk-stat-card--pressable {
+    position: relative;
+  }
+
+  .pk-stat-card--pressable:hover {
+    border-color: var(--tone);
+  }
+
+  .pk-stat-card--pressable .pk-tooltip {
+    position: relative;
+    z-index: 1;
+  }
+
+  .pk-stat-card--pressed,
+  .pk-stat-card--pressed:hover {
+    border-color: var(--pk-accent);
+    box-shadow: inset 0 0 0 1px var(--pk-accent);
+  }
+
+  /* The system's focus ring, moved from the covering button to the card. */
+  .pk-stat-card--pressable:has(.pk-stat-card__press:focus-visible) {
+    box-shadow: var(--pk-focus);
+  }
+
+  .pk-stat-card--pressed:has(.pk-stat-card__press:focus-visible) {
+    box-shadow:
+      var(--pk-focus),
+      inset 0 0 0 1px var(--pk-accent);
+  }
+
+  .pk-stat-card__press {
+    position: static;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+
+  .pk-stat-card__press::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+
+  .pk .pk-stat-card__press:focus-visible {
+    box-shadow: none;
+  }
+
+  /*
    * The glance density: figure first, label under it, centered.
    *
    * `column-reverse` rather than reordering the markup — the tile is

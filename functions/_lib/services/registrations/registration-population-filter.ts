@@ -43,8 +43,9 @@ export function registrationPopulationFilter(
     bindings.push(params.country);
   }
   if (params.status) {
-    conditions.push("r.status = ?");
-    bindings.push(params.status);
+    const statuses = buildD1JsonMembershipFilter("r.status", params.status.split(","));
+    conditions.push(statuses.sql);
+    bindings.push(...statuses.bindings);
   }
   if (params.created_since) {
     conditions.push("r.created_at >= ?");

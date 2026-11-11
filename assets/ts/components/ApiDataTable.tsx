@@ -27,6 +27,8 @@ export interface ApiTableActions {
   reload: () => Promise<void>;
   resetPage: () => void;
   setFilter?: (param: string, value: string) => void;
+  /** Sets several filters as one change; an empty value clears that filter. */
+  setFilters?: (changes: Readonly<Record<string, string>>) => void;
 }
 
 export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, "data" | "currentSort" | "onSort"> {
@@ -233,15 +235,19 @@ export function ApiDataTable<T, Response = unknown>({
     pager.resetPage();
   }
 
-  function applyFilter(param: string, value: string) {
+  function applyFilters(changes: Readonly<Record<string, string>>) {
     const next = { ...filters };
-    if (value) next[param] = value;
-    else delete next[param];
+    for (const [param, value] of Object.entries(changes)) {
+      if (value) next[param] = value;
+      else delete next[param];
+    }
     setFilters(next);
     if (sortFollowsFilters.current) setSort(defaultSortFor(next));
     onFiltersChange?.(next);
     pager.resetPage();
   }
+
+  const applyFilter = (param: string, value: string) => applyFilters({ [param]: value });
 
   // The column menus and the record cards' toolbar menu share one state.
   const columnControls = useColumnControls(columns, {
@@ -285,7 +291,12 @@ export function ApiDataTable<T, Response = unknown>({
     retainDataOnError,
   });
 
-  const actions: ApiTableActions = { reload: collection.reload, resetPage: pager.resetPage, setFilter: applyFilter };
+  const actions: ApiTableActions = {
+    reload: collection.reload,
+    resetPage: pager.resetPage,
+    setFilter: applyFilter,
+    setFilters: applyFilters,
+  };
   if (actionsRef) actionsRef.current = actions;
 
   const lastNotifiedData = useRef<Response | null>(null);

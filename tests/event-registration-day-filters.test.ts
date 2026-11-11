@@ -107,6 +107,31 @@ it("matches any or every selected attendance type, within the selected days", as
   ).toEqual([f.matching]);
   expect((await f.get("?attendance_type=in_person,in_person")).status).toBe(400);
 });
+it("matches any selected status, so an attendance type can leave cancelled registrations out", async () => {
+  const f = await fixture();
+  const ids = async (query: string) => {
+    const response = await f.get(query);
+    expect(response.status, await response.clone().text()).toBe(200);
+    return eventAttendanceRegistrationsListResponseSchema
+      .parse(await response.json())
+      .registrations.map((row) => row.id)
+      .sort();
+  };
+  expect(await ids("?attendance_type=in_person")).toEqual([f.matching, f.both, f.unrelated, f.cancelled].sort());
+  expect(await ids("?attendance_type=in_person&status=registered,pending_email_confirmation")).toEqual(
+    [f.matching, f.both, f.unrelated].sort(),
+  );
+  const printed = await f.get("/badges/population?attendance_type=in_person&status=cancelled,registered");
+  expect(printed.status, await printed.clone().text()).toBe(200);
+  expect(
+    eventBadgePrintPopulationResponseSchema
+      .parse(await printed.json())
+      .registrations.map((row) => row.id)
+      .sort(),
+  ).toEqual([f.matching, f.both, f.unrelated, f.cancelled].sort());
+  expect((await f.get("?status=registered,registered")).status).toBe(400);
+  expect((await f.get("?status=registered,unknown")).status).toBe(400);
+});
 it("keeps negative type waitlist filters consistent across roster, CSV and print population", async () => {
   const f = await fixture();
   await env.DB.prepare(

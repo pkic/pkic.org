@@ -219,6 +219,37 @@ export const basicSections: PreviewSection[] = [
             tooltip={<strong>People who chose virtual for at least one day, cancelled registrations aside</strong>}
           />
         </div>
+
+        {/* Figures that filter the list below: each card is a toggle; the pressed one is listed. */}
+        <div class="pk-stat-row pk-stat-row--fit" role="group" aria-label="Registration totals">
+          <StatCard
+            label="Registered"
+            value="3,529"
+            note="1 pending · 356 waitlisted · 184 cancelled"
+            onPress={() => undefined}
+            pressLabel="Show all registrations"
+            tooltip={<strong>Everyone who registered, whatever their status</strong>}
+          />
+          <StatCard
+            label="In-person"
+            value="1,268"
+            note="912 not waitlisted · 356 waitlisted"
+            tone="warn"
+            icon={<IconMapPin width="18" height="18" />}
+            onPress={() => undefined}
+            pressed
+            pressLabel="Show in-person only"
+            tooltip={<strong>People who chose in-person for at least one day, cancelled registrations aside</strong>}
+          />
+          <StatCard
+            label="Virtual"
+            value="1,388"
+            icon={<IconVirtual width="18" height="18" />}
+            onPress={() => undefined}
+            pressLabel="Show virtual only"
+            tooltip={<strong>People who chose virtual for at least one day, cancelled registrations aside</strong>}
+          />
+        </div>
       </>
     ),
   },

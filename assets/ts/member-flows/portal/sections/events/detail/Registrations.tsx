@@ -12,7 +12,7 @@ import { fmt, fmtDate, toast } from "../../../ui";
 import type { Registration, RegistrationAttendanceChange } from "../types";
 import { EventEmailCampaign } from "../../../../../components/events/EventEmailCampaign";
 import { RegistrationDayStates } from "../../../../../components/event-registrations/RegistrationDayStates";
-import { RegistrationTotals } from "../../../../../components/event-registrations/RegistrationTotals";
+import { listFilters, RegistrationTotals } from "../../../../../components/event-registrations/RegistrationTotals";
 import { RegistrationRosterActions } from "../../../../../components/event-registrations/RegistrationRosterActions";
 import { EventFormResponses } from "./Forms";
 import {
@@ -215,7 +215,21 @@ export function RegistrationsList({
 
   return (
     <div class="pk pk-stack">
-      {!embedded && stats && <RegistrationTotals stats={stats} />}
+      {!embedded && stats && (
+        <RegistrationTotals
+          stats={stats}
+          // The attendance-change view is not a filter a card can reproduce.
+          filters={
+            query && !attendanceChangeFilter
+              ? {
+                  current: listFilters(query),
+                  apply: (changes) => tableRef.current?.setFilters?.(changes),
+                  byAttendanceType: false,
+                }
+              : undefined
+          }
+        />
+      )}
       <ApiDataTable
         urlState="event-registrations"
         caption="Event registrations"
