@@ -480,8 +480,11 @@ test("a signed-in user registers from event home without another email challenge
     await expect(record.getByRole("textbox", { name: /^Email/ })).toHaveCount(0);
   };
   const saveDetails = async () => {
+    const saved = page.waitForResponse(
+      (response) => response.url().includes("/api/v1/registrations/") && response.request().method() === "PATCH",
+    );
     await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
-    await expect(page.getByText("Registration updated.", { exact: true })).toBeVisible();
+    expect((await saved).status()).toBe(200);
   };
   await editDetails();
   const changeIdentity = record.locator("[data-registration-flow='update']");

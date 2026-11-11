@@ -1,3 +1,6 @@
+import { getEventBySlug } from "../functions/_lib/services/events";
+import { queueRegistrationManageLinkRecovery } from "../functions/_lib/services/registrations/manage-link-recovery";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { insertOrganization } from "./helpers/membership";
 import { seedMemberApplication } from "./helpers/member-applications";
@@ -638,6 +641,63 @@ describe("resend-manage-link endpoint", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  async function setupRepresentationRecipient() {
+    await seedEventAndAdmin(env.DB);
+    const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
+    await seedWorkflowEmailTemplates(env.DB, admin.id);
+    const registered = await registerAttendee();
+    const [{ user_id: userId }] = await queryAll<{ user_id: string }>(
+      env.DB,
+      "SELECT user_id FROM registrations WHERE id=?",
+      [registered.registrationId],
+    );
+    const identity = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId: await insertOrganization(env.DB, "Recovery representation"),
+      source: "account",
+      startImmediately: true,
+    });
+    const emailId = crypto.randomUUID();
+    const at = new Date().toISOString();
+    await env.DB.batch([
+      identity.statement,
+      env.DB.prepare(`INSERT INTO user_emails (id,user_id,email,normalized_email,verified_at,verification_method,created_at)
+        VALUES (?,?,'work@example.test','work@example.test',?,'staff',?)`).bind(emailId, userId, at, at),
+      env.DB.prepare("UPDATE identities SET email_id=? WHERE id=?").bind(emailId, identity.identityId),
+      env.DB.prepare("UPDATE registrations SET registration_identity_id=?,status='registered' WHERE id=?").bind(
+        identity.identityId,
+        registered.registrationId,
+      ),
+    ]);
+    return { ...registered, emailId };
+  }
+
+  it("matches and delivers recovery to the verified representation address", async () => {
+    const f = await setupRepresentationRecipient();
+    expect((await resendManageLink(env, f.email)).status).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'"),
+    ).toHaveLength(0);
+    expect((await resendManageLink(env, "WORK@example.test")).status).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'"),
+    ).toEqual([{ recipient_email: "work@example.test" }]);
+  });
+
+  it("suppresses recovery when the representation address changes before enqueueing", async () => {
+    const f = await setupRepresentationRecipient();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("INSERT") && sql.includes("email_outbox"),
+      () => env.DB.prepare("UPDATE user_emails SET verified_at=NULL WHERE id=?").bind(f.emailId).run(),
+    );
+    expect(await queueRegistrationManageLinkRecovery(db, event, "work@example.test", "https://app.test")).toBeNull();
+    expect(
+      await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'"),
+    ).toHaveLength(0);
   });
 
   it("sends a fresh manage link without invalidating the earlier link", async () => {

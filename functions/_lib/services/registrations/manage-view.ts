@@ -45,6 +45,7 @@ export async function buildRegistrationManageView(
   db: DatabaseLike,
   registration: RegistrationRecord,
   appBaseUrl: string,
+  viewerUserId?: string,
 ) {
   const [
     eventResult,
@@ -101,6 +102,7 @@ export async function buildRegistrationManageView(
     success: true,
     sponsorSharing,
     identityId: registration.registration_identity_id ?? null,
+    canChangeIdentity: viewerUserId === registration.user_id && registration.status !== "cancelled",
     badgeVersion: registration.updated_at,
     registration: {
       id: registration.id,

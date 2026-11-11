@@ -369,8 +369,7 @@ async function main(): Promise<void> {
           editorMounted = false;
           void editorNavigation.close(marker);
         }}
-        save={async (change, changeIdentity) => {
-          await changeIdentity?.();
+        save={async (change) => {
           await patchJson(
             `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
             change,

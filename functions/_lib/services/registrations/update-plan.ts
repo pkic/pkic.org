@@ -36,7 +36,10 @@ import { newCapabilityLinkSecret } from "../capability-links";
 import type { AuthAdmin } from "../../types";
 import { requirePermission, preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 
+import type { RegistrationIdentityChange } from "./change-identity";
+
 export interface RegistrationUpdatePayload {
+  identityChange?: RegistrationIdentityChange;
   action: "update" | "cancel" | "report_unauthorized";
   dayAttendance?: DayAttendanceSelection[];
   /** Offered day seats are accepted only when the caller explicitly names them. */

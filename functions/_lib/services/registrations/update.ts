@@ -1,3 +1,7 @@
+import { AppError } from "../../errors";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { isAuditChangeGuardFailure } from "../audit";
+import { prepareRegistrationIdentityChange } from "./change-identity";
 import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types";
 import type { ChangeRegistrationEmailParams } from "./change-email";
 import { prepareRegistrationEmailChange } from "./change-email";
@@ -31,9 +35,26 @@ async function executeRegistrationUpdate<T>(
   try {
     return await withDayCapacityRetry(async () => {
       const registration = await load();
-      return commit(await buildRegistrationUpdate(db, registration, payload, changedBy));
+      const built = await buildRegistrationUpdate(db, registration, payload, changedBy);
+      if (payload.identityChange) {
+        built.statements.push(...prepareRegistrationIdentityChange(db, registration.id, payload.identityChange));
+        built.registration = {
+          ...built.registration,
+          registration_identity_id: payload.identityChange.change.identityId,
+        };
+        if (!built.notificationChanged) built.notificationRevision += 1;
+        built.notificationChanged = true;
+      }
+      return commit(built);
     });
   } catch (error) {
+    if (payload.identityChange && isAuthorizationGuardFailure(error))
+      throw new AppError(
+        403,
+        "REGISTRATION_IDENTITY_UNAVAILABLE",
+        "Choose an active identity on your own registration.",
+      );
+    if (payload.identityChange && isAuditChangeGuardFailure(error)) throw registrationChangedError();
     if (isFormSubmissionContextConflict(error)) throw formSubmissionContextChangedError();
     if (isEmailReservationConflict(error)) throw emailTakenError();
     if (isRegistrationTransitionConflict(error)) {

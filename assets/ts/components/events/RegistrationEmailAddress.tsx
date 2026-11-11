@@ -9,8 +9,10 @@ import { DescriptionList } from "../../ui/DescriptionList";
 export function RegistrationEmailAddress({ email }: { email: string }) {
   return (
     <div class="pk-stack pk-stack--snug">
-      <DescriptionList items={[{ term: "Email address", value: email }]} />
-      <p class="pk-muted pk-small">Registration emails go to the address of your representation.</p>
+      <DescriptionList items={[{ term: "Current email address", value: email }]} />
+      <p class="pk-muted pk-small">
+        Saving a different representation updates the address used for registration emails.
+      </p>
     </div>
   );
 }

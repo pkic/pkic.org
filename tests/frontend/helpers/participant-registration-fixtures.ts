@@ -22,6 +22,7 @@ export function readResponse(overrides: Partial<RegistrationManageReadResponse> 
       isEmailVerified: true,
     },
     identityId: null,
+    canChangeIdentity: true,
     event: { ...EVENT, startsAt: "2026-12-01T09:00:00.000Z" },
     user: {
       email: "ada@example.test",

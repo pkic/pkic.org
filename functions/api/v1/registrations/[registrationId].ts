@@ -1,3 +1,4 @@
+import { verifyUserSessionRequest } from "../../../_lib/auth/user-session-request";
 import {
   registrationParticipantReadRouteSchema,
   registrationParticipantUpdateRouteSchema,
@@ -29,10 +30,10 @@ async function ownedRegistration(c: AdminContext, registrationId: string) {
 export const RegistrationParticipantGet = openApiRoute(
   registrationParticipantReadRouteSchema,
   async (c: AdminContext, data) => {
-    const { db, registration } = await ownedRegistration(c, data.params.registrationId);
+    const { db, authority, registration } = await ownedRegistration(c, data.params.registrationId);
     return json(
       registrationManageReadResponseSchema.parse(
-        await buildRegistrationManageView(db, registration, resolveAppBaseUrl(c.env, c.req.raw)),
+        await buildRegistrationManageView(db, registration, resolveAppBaseUrl(c.env, c.req.raw), authority.userId),
       ),
     );
   },
@@ -51,6 +52,7 @@ export const RegistrationParticipantPatch = openApiRoute(
       authenticatedActor: { kind: "user", id: authority.userId },
       actorUserId: authority.userId,
       body: data.body,
+      identitySessionClaims: data.body.identityChange ? await verifyUserSessionRequest(c.req.raw, c.env) : undefined,
       appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
       signingSecret: requireInternalSecret(c.env),
       confirmationLinkTtlHours: config.confirmationLinkTtlHours,

@@ -1,3 +1,4 @@
+import type { UserSessionTokenClaims } from "../../auth/user-session-token";
 import { AppError } from "../../errors";
 import { registrationManageSchema } from "../../../../assets/shared/schemas/registration";
 import type { DatabaseLike } from "../../types";
@@ -22,6 +23,7 @@ export interface ManageRegistrationUpdateInput {
   authenticatedActor: { kind: "user"; id: string } | null;
   actorUserId: string;
   body: RegistrationManageBody;
+  identitySessionClaims?: UserSessionTokenClaims;
   appBaseUrl: string;
   signingSecret: string;
   confirmationLinkTtlHours: number;
@@ -53,6 +55,8 @@ export async function updateManagedRegistration(
     const registration = await withdrawRegistrationSponsorSharing(db, input.manageToken, input.signingSecret, current);
     return { registration, outboxId: null, outboxIds: [] };
   }
+  if (body.identityChange && (!input.identitySessionClaims || input.isAdminManageJwt))
+    throw new AppError(403, "REGISTRATION_IDENTITY_UNAVAILABLE", "Sign in to change your own representation.");
   const event = await getEventById(db, current.event_id);
   const validatedForm =
     body.customAnswers !== undefined
@@ -87,6 +91,10 @@ export async function updateManagedRegistration(
 
   const updatePayload = {
     action: body.action,
+    identityChange:
+      body.identityChange && input.identitySessionClaims
+        ? { change: body.identityChange, claims: input.identitySessionClaims }
+        : undefined,
     dayAttendance: body.dayAttendance,
     claimDayWaitlistOffers: body.claimDayWaitlistOffers,
     customAnswersJson: body.customAnswers !== undefined ? JSON.stringify(customAnswers) : undefined,

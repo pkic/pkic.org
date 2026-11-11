@@ -94,18 +94,13 @@ function RegistrationRecord({
   const restorable = cancelled && data.registration.cancellation_reason_code !== "unauthorized_registration";
 
   /** Sends one change and returns to the read view on success; rejects with the refusal. */
-  async function save(
-    change: RegistrationChange,
-    outcome?: string,
-    changeIdentity: (() => Promise<void>) | null = null,
-  ): Promise<void> {
+  async function save(change: RegistrationChange, outcome?: string): Promise<void> {
     // Giving up every day uses the same explicit cancellation confirmation from either editor.
     if (change.action === "update" && change.dayAttendance?.length === 0) return cancelRegistration();
     // The day picker confirms before calling; the full editor uses the same decision here.
     if (editing && change.dayAttendance && !(await confirmRegistrationDayChanges(data, change.dayAttendance))) return;
     setError("");
     setMessage("");
-    await changeIdentity?.();
     await patchJson(endpoint, registrationManageSchema.parse(change), registrationManageUpdateResponseSchema);
     await closeEditor();
     setEditorMounted(false);
@@ -184,7 +179,7 @@ function RegistrationRecord({
               <ParticipantRegistrationForm
                 data={data}
                 forms={forms}
-                save={(change, changeIdentity) => save(change, undefined, changeIdentity)}
+                save={(change) => save(change)}
                 onDiscard={() => {
                   setEditorMounted(false);
                   void closeEditor();

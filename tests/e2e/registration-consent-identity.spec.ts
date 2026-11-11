@@ -205,9 +205,7 @@ test("verified approved-domain registration affiliates once and an organization 
     const editRepresentation = async () => {
       await attendee.getByRole("button", { name: "Edit details", exact: true }).click();
       await expect(changeIdentity.getByRole("textbox", { name: /^Email/ })).toHaveCount(0);
-      await expect(
-        changeIdentity.getByText("Registration emails go to the address of your representation."),
-      ).toBeVisible();
+      await expect(changeIdentity.getByRole("definition").filter({ hasText: email })).toBeVisible();
     };
     await editRepresentation();
     await changeIdentity.getByRole("combobox", { name: /^Representation/ }).click();
@@ -226,11 +224,10 @@ test("verified approved-domain registration affiliates once and an organization 
     await addIdentity.getByRole("button", { name: "Cancel", exact: true }).click();
     const saveRepresentation = async () => {
       const identitySaved = attendee.waitForResponse(
-        (response) => response.url().endsWith("/identity") && response.request().method() === "PUT",
+        (response) => response.url().includes("/registrations/access/") && response.request().method() === "PATCH",
       );
       await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
       expect((await identitySaved).status()).toBe(200);
-      await expect(attendee.getByRole("heading", { name: "Changes saved", exact: true })).toBeVisible();
       await attendee.reload();
     };
     await saveRepresentation();

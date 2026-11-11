@@ -40,7 +40,7 @@ import { DayAttendancePicker } from "../DayAttendancePicker";
 import { RegistrationContactStep } from "../RegistrationContactStep";
 import type { ConfirmOrganizationController } from "../RegistrationConfirmOrganization";
 import { RegistrationEmailAddress } from "./RegistrationEmailAddress";
-import { RegistrationRepresentationField, saveRegistrationIdentity } from "./RegistrationRepresentationField";
+import { RegistrationRepresentationField } from "./RegistrationRepresentationField";
 import { useFormAnswers } from "../forms/useFormAnswers";
 
 export type RegistrationChange = z.output<typeof registrationManageSchema>;
@@ -59,12 +59,8 @@ type Create = {
 type Update = {
   mode: "update";
   data: RegistrationManageReadResponse;
-  /**
-   * Saves the change. `changeIdentity` moves the registration to the newly
-   * chosen identity, or is null when the representation is unchanged; the
-   * host runs it once the change is confirmed, before saving the rest.
-   */
-  save: (change: RegistrationChange, changeIdentity: (() => Promise<void>) | null) => Promise<void>;
+  /** Saves the details and any representation change in one request. */
+  save: (change: RegistrationChange) => Promise<void>;
   onDiscard: () => void;
 };
 type Props = (Create | Update) & { forms: EventFormsResponse };
@@ -114,7 +110,15 @@ export function RegistrationFlow(props: Props) {
       dayAttendance,
       customAnswers: forms.form ? readCustomFieldValues(form) : undefined,
     };
-    if (props.mode === "update") return { ...shared, action: "update" };
+    if (props.mode === "update")
+      return {
+        ...shared,
+        action: "update",
+        identityChange:
+          identityId && identityId !== savedIdentityId.current
+            ? { identityId, expectedIdentityId: savedIdentityId.current }
+            : undefined,
+      };
     const named = organization.current.read?.();
     const liveEntry = registrationEntry(props.context.query);
     return {
@@ -298,17 +302,7 @@ export function RegistrationFlow(props: Props) {
                 if (!checked.data) return setError(checked.formMessage ?? "");
               }
               if (props.mode === "update") {
-                const { registration } = props.data;
-                const chosen = identityId;
-                await props.save(
-                  registrationManageSchema.parse(checked.data),
-                  chosen && chosen !== savedIdentityId.current
-                    ? async () => {
-                        await saveRegistrationIdentity(registration.id, chosen, savedIdentityId.current);
-                        savedIdentityId.current = chosen;
-                      }
-                    : null,
-                );
+                await props.save(registrationManageSchema.parse(checked.data));
               } else {
                 const body = registrationCreateSchema.parse(checked.data);
                 const result = props.submit
