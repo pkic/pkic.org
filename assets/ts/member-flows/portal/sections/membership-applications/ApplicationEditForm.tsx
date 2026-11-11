@@ -132,7 +132,7 @@ export function ApplicationEditForm({
             {...contract.of("membershipCategory")}
             label="Category"
             required
-            help="Changing only the category can keep review progress. If a new review is needed, it restarts automatically. Objections remain; paid fees need staff handling."
+            help="Changing only the category can keep review progress. If it can't, the review restarts automatically. Objections remain; paid fees need staff handling."
           >
             {(control) => (
               <Select
