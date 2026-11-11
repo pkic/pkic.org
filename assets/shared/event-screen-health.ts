@@ -27,6 +27,17 @@ export function screenHealthDisplay(health: ScreenHealth): {
   return { label: "Following the studio", tone: null };
 }
 
+/** What a screen draws, as one comparable value: a change starts its `stateSince` over. */
+export function screenHealthState(health: ScreenHealth): string {
+  return [
+    health.display,
+    health.mode,
+    health.output ?? "",
+    health.player?.status ?? "",
+    health.player?.muted ?? "",
+  ].join("|");
+}
+
 function highest(value: ScreenMetricValue | undefined): number | null {
   if (typeof value === "number") return value;
   if (value === null || typeof value !== "object") return null;

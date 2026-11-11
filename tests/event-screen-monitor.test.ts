@@ -394,4 +394,25 @@ describe("event screen monitor", () => {
     ]);
     expect(snapshot.quality[0]!.samples.length).toBeLessThanOrEqual(2);
   });
+
+  it("keeps when a screen's state began across reports that change nothing it draws", async () => {
+    const paired = await pairedScreen("MONSTA");
+    const screen = await connectScreen(paired.cookie, paired.screenId);
+    const watcher = await connectStaff("manager");
+    await next(watcher.received, "screens.snapshot");
+    const report = async (health: ScreenHealth) => {
+      const before = watcher.received.length;
+      screen.socket.send(JSON.stringify({ type: "screen.health", health }));
+      return (await next(watcher.received, "screens.changed", before)).screen;
+    };
+    const first = await report(HEALTH);
+    expect(first.stateSince).toBe(first.reportedAt);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const same = await report({ ...HEALTH, clockOffsetMs: 90, metrics: { uptime: 3700 } });
+    expect(same.stateSince).toBe(first.stateSince);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const changed = await report({ ...HEALTH, mode: "auto" });
+    expect(changed.stateSince).toBe(changed.reportedAt);
+    expect(changed.stateSince).not.toBe(first.stateSince);
+  });
 });

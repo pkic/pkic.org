@@ -21,9 +21,14 @@ export function listEventScreens(
     const eventId = eventReadIdSql(event);
     const search = query.q ? buildD1TextSearchFilter(query.q, ["screen.name", "screen.id"]) : null;
     const where = `WHERE screen.event_id=${eventId.sql}${query.roomId ? " AND screen.room_id=?" : ""}${
-      search ? ` AND ${search.sql}` : ""
-    }`;
-    const bindings = [...eventId.bindings, ...(query.roomId ? [query.roomId] : []), ...(search?.bindings ?? [])];
+      query.screenIds ? " AND screen.id IN (SELECT value FROM json_each(?))" : ""
+    }${search ? ` AND ${search.sql}` : ""}`;
+    const bindings = [
+      ...eventId.bindings,
+      ...(query.roomId ? [query.roomId] : []),
+      ...(query.screenIds ? [JSON.stringify(query.screenIds)] : []),
+      ...(search?.bindings ?? []),
+    ];
     const statements = buildOffsetPageStatements(db, {
       source: {
         selectSql: SCREEN_RECORD_SELECT,

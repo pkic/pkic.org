@@ -208,6 +208,8 @@ export const screenLiveStatusSchema = z
     disconnectedAt: utcInstantSchema.nullable(),
     /** When its last health report arrived, on the server's clock. */
     reportedAt: utcInstantSchema.nullable(),
+    /** Since when it has drawn what its health says (its mode, display and player status), on the server's clock. */
+    stateSince: utcInstantSchema.nullable(),
     health: screenHealthSchema.nullable(),
   })
   .strict();

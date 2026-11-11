@@ -1,4 +1,5 @@
 import { SCREEN_POLICY } from "../../../../assets/shared/event-screen-policy";
+import { screenHealthState } from "../../../../assets/shared/event-screen-health";
 import { addScreenQualityReading, screenQualityReading } from "../../../../assets/shared/event-screen-quality";
 import {
   SCREEN_MONITOR_LIMITS,
@@ -91,6 +92,7 @@ export class ScreenMonitorStore {
       connectedAt: at,
       disconnectedAt: null,
       reportedAt: previous?.reportedAt ?? null,
+      stateSince: previous?.stateSince ?? null,
       health: previous?.health ?? null,
     });
   }
@@ -108,6 +110,10 @@ export class ScreenMonitorStore {
       connectedAt: previous?.connectedAt ?? at,
       disconnectedAt: null,
       reportedAt: at,
+      stateSince:
+        previous?.health && previous.stateSince && screenHealthState(previous.health) === screenHealthState(health)
+          ? previous.stateSince
+          : at,
       health,
     });
     const quality = addScreenQualityReading(samples(history), screenQualityReading(health), Date.parse(at));

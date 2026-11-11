@@ -649,4 +649,29 @@ describe("screen staff permissions", () => {
     );
     expect(searched.screens).toEqual([]);
   });
+
+  it("lists only the screens asked for by ID, in one D1 call, and refuses a malformed list", async () => {
+    await pair(assignment);
+    for (const [id, name] of [
+      ["GHJ234", "Second"],
+      ["DEF567", "Third"],
+    ])
+      await env.DB.prepare("INSERT INTO screens(id,name,event_id,revision,created_by,created_at) VALUES (?,?,?,0,?,?)")
+        .bind(id, name, EVENT.id, users.manager, new Date().toISOString())
+        .run();
+    const list = await callApi(
+      testEnv,
+      `/api/v1/events/${EVENT.slug}/screens?sort=name&screenIds=DEF567,${SCREEN},QRS567`,
+      { headers: staff("moderator") },
+      { maxRoundTrips: 1 },
+    );
+    expect(list.status, await list.clone().text()).toBe(200);
+    const page = eventScreensListSchema.parse(await list.json());
+    expect(page.screens.map((screen) => screen.id).sort()).toEqual(["DEF567", SCREEN].sort());
+    expect(page.page.total).toBe(2);
+    const malformed = await callApi(testEnv, `/api/v1/events/${EVENT.slug}/screens?screenIds=not-an-id`, {
+      headers: staff("moderator"),
+    });
+    expect(malformed.status).toBe(400);
+  });
 });
