@@ -66,7 +66,7 @@ describe("a screen's issues", () => {
     expect(late(RULES.heartbeatSeconds.warning * 1000)).toBeNull();
     expect(late(RULES.heartbeatSeconds.warning * 1000 + 1)).toEqual(["Not responding", "warning"]);
     expect(late(RULES.heartbeatSeconds.critical * 1000)).toEqual(["Not responding", "warning"]);
-    expect(late(RULES.heartbeatSeconds.critical * 1000 + 1)).toEqual(["Offline", "critical"]);
+    expect(late(RULES.heartbeatSeconds.critical * 1000 + 1)).toEqual(["Not responding", "critical"]);
 
     const disconnected = (milliseconds: number) =>
       issues(online({}, { online: false, disconnectedAt: ms(milliseconds), reportedAt: ms(milliseconds) }), [
@@ -148,14 +148,14 @@ describe("a screen's issues", () => {
     ]);
   });
 
-  it("tiers the age of the latest screenshot, counting from the connection when there is none", () => {
+  it("tiers the age of the latest screenshot, and says nothing until one has arrived", () => {
     const picture = (milliseconds: number) => tierOf(issues(online(), [], ms(milliseconds)), "no-recent-picture");
     expect(picture(RULES.pictureMinutes.warning * 60_000)).toBeNull();
     expect(picture(RULES.pictureMinutes.warning * 60_000 + 1)).toEqual(["No recent picture", "warning"]);
     expect(picture(RULES.pictureMinutes.critical * 60_000)).toEqual(["No recent picture", "warning"]);
     expect(picture(RULES.pictureMinutes.critical * 60_000 + 1)).toEqual(["No recent picture", "critical"]);
-    const fresh = online({}, { connectedAt: ago(1) });
-    expect(screenIssues({ status: fresh, samples: [], screenshotAt: null, now: NOW })).toEqual([]);
+    // A device without the screenshot service never sends one: no picture is not an issue.
+    expect(screenIssues({ status: online(), samples: [], screenshotAt: null, now: NOW })).toEqual([]);
   });
 
   it("warns while the screen runs on its cached agenda, in its health badge's words", () => {

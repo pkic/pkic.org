@@ -18,6 +18,10 @@ import {
 import type { ScreenRecord } from "../../assets/shared/schemas/event-screens";
 import { EventScreens } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/EventScreens";
 import {
+  ScreenMonitorLost,
+  screenCondition,
+} from "../../assets/ts/member-flows/portal/sections/events/detail/screens/ScreenMonitorCard";
+import {
   applyScreenMonitorMessage,
   EMPTY_SCREEN_MONITOR_VIEW,
   staffClockOffset,
@@ -174,6 +178,57 @@ describe("the staff clock", () => {
     ).toContain("Not responding");
     expect(latest!.now).toBeLessThanOrEqual(server + 1_000);
     expect(latest!.issuesOf("K7M2QA")).toEqual([]);
+  });
+
+  it("shows a lost connection and no screen as online until the monitor is back", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const sockets = fakeLiveSockets();
+    let latest: ReturnType<typeof useScreenMonitorController> | undefined;
+    function Probe() {
+      latest = useScreenMonitorController({ slug: SLUG, createSocket: sockets.factory });
+      const { lostSince, now, view } = latest;
+      const record = { id: "K7M2QA", name: "Foyer", session: { state: "active" } } as ScreenRecord;
+      return (
+        <>
+          <ScreenMonitorLost lostSince={lostSince} now={now} />
+          <p id="condition">
+            {screenCondition(record, view?.live.get("K7M2QA"), latest.issuesOf("K7M2QA"), now, lostSince).text}
+          </p>
+        </>
+      );
+    }
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<Probe />, host!));
+    await act(() => sockets.latest().open());
+    const offline = status("K7M2QA", { reportedAt: at(200) });
+    await act(() => {
+      sockets.latest().dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify(
+            message({ type: "screens.snapshot", serverNow: NOW, control: false, screens: [offline], quality: [] }),
+          ),
+        }),
+      );
+    });
+    expect(latest!.lostSince).toBeNull();
+    expect(latest!.issuesOf("K7M2QA").map((issue) => [issue.label, issue.severity])).toEqual([
+      ["Not responding", "critical"],
+    ]);
+    expect(host.querySelector("#condition")!.textContent).toBe("Online · Not responding, following the studio");
+
+    await act(() => sockets.latest().close());
+    // The view's clock moves every five seconds; each step renders.
+    for (let step = 0; step < 13; step += 1)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+    expect(latest!.lostSince).toBe(NOW);
+    expect(latest!.issuesOf("K7M2QA")).toEqual([]);
+    expect(host.querySelector("#condition")!.textContent).toBe("Status unknown · last update 1 min ago");
+    expect(host.querySelector(".pk-alert")!.textContent).toBe(
+      "Connection to the screen monitor lost. Reconnecting… Last update 1 min ago.",
+    );
   });
 
   it("chooses the offset with the least delay among recent messages", () => {

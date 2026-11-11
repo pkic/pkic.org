@@ -116,7 +116,11 @@ export class ScreenMonitorStore {
           : at,
       health,
     });
-    const quality = addScreenQualityReading(samples(history), screenQualityReading(health), Date.parse(at));
+    const quality = addScreenQualityReading(
+      samples(history),
+      screenQualityReading(health, previous?.health),
+      Date.parse(at),
+    );
     await this.storage.put<unknown>({ [STATUS + screenId]: status, [QUALITY + screenId]: quality.samples });
     return { status, sample: quality.sample };
   }
@@ -144,15 +148,18 @@ export class ScreenMonitorStore {
     await this.storage.delete([STATUS + screenId, QUALITY + screenId, SHOT + screenId]);
   }
 
-  /** Drops screens disconnected past the keep window; returns when the next one falls due, if any. */
-  async prune(now: number): Promise<number | null> {
+  /** Drops screens disconnected past the keep window: how many, and when the next one falls due, if any. */
+  async prune(now: number): Promise<{ forgotten: number; next: number | null }> {
     let next: number | null = null;
+    let forgotten = 0;
     for (const status of await this.all()) {
       if (status.online || !status.disconnectedAt) continue;
       const due = Date.parse(status.disconnectedAt) + KEEP_MS;
-      if (due <= now) await this.forget(status.screenId);
-      else next = next === null ? due : Math.min(next, due);
+      if (due <= now) {
+        await this.forget(status.screenId);
+        forgotten += 1;
+      } else next = next === null ? due : Math.min(next, due);
     }
-    return next;
+    return { forgotten, next };
   }
 }

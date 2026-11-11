@@ -157,6 +157,58 @@ describe("a screen's quality samples", () => {
   });
 });
 
+describe("stalls in the quality samples", () => {
+  const livestream = (started: number): ScreenHealth => ({
+    pageVersion: "p",
+    display: "livestream",
+    output: "livestream",
+    mode: "live",
+    player: {
+      status: "playing",
+      muted: false,
+      changedAt: "2026-11-11T10:00:00.000Z",
+      playback: {
+        state: "playing",
+        // The sliding minute still holds the stall in the next calendar minute; it is not what is counted.
+        stalls: { lastMinute: { count: 1, seconds: 2 }, lastHour: { count: 1, seconds: 2 }, started },
+        errorCode: null,
+        loadedFraction: 1,
+        reportedQuality: "auto",
+        liveLagSeconds: null,
+      },
+    },
+    clockOffsetMs: 0,
+    metrics: null,
+  });
+  const at = (time: string) => Date.parse(`2026-11-11T${time}.000Z`);
+
+  it("counts each stall once, in the minute of the report that first carried it", () => {
+    let samples = addScreenQualityReading([], screenQualityReading(livestream(0)), at("10:00:40")).samples;
+    // A stall at 10:00:50, reported at 10:00:55 and still in the sliding minute at 10:01:10.
+    samples = addScreenQualityReading(
+      samples,
+      screenQualityReading(livestream(1), livestream(0)),
+      at("10:00:55"),
+    ).samples;
+    samples = addScreenQualityReading(
+      samples,
+      screenQualityReading(livestream(1), livestream(1)),
+      at("10:01:10"),
+    ).samples;
+    expect(samples.map((sample) => sample.livestreamStalls)).toEqual([1, 0]);
+    // Two more in one minute add up.
+    samples = addScreenQualityReading(
+      samples,
+      screenQualityReading(livestream(3), livestream(1)),
+      at("10:01:25"),
+    ).samples;
+    expect(samples.at(-1)?.livestreamStalls).toBe(2);
+    // A reloaded page counts afresh.
+    expect(screenQualityReading(livestream(1), livestream(5)).livestreamStalls).toBe(1);
+    expect(screenQualityReading({ ...livestream(0), player: null }).livestreamStalls).toBeNull();
+  });
+});
+
 describe("screenshots a screen sends", () => {
   it("accepts a JPEG within the limit and nothing else", () => {
     expect(isScreenScreenshot(Uint8Array.from([0xff, 0xd8, 0xff, 0xdb, 0]))).toBe(true);

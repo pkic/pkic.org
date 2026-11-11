@@ -230,7 +230,7 @@ describe("the livestream screen", () => {
     // The health report reads the error and the stall through the new player, until another video.
     expect(readLivestreamPlayback()).toMatchObject({
       errorCode: 150,
-      stalls: { lastMinute: { count: 1, seconds: (LIVESTREAM_HEALTH_POLICY.retryFirstMs + 1_000) / 1000 } },
+      stalls: { lastMinute: { count: 1, seconds: (LIVESTREAM_HEALTH_POLICY.retryFirstMs + 1_000) / 1000 }, started: 1 },
     });
   });
 

@@ -25,7 +25,7 @@ import { toast } from "../../../../ui";
 import { DiscoveryViewToggle, useDiscoveryView } from "../../../DiscoveryView";
 import { ScreenEditDialog } from "./ScreenEditDialog";
 import { ScreenHealthCell } from "./ScreenHealthCell";
-import { ScreenConditionLine, ScreenMonitorCard, screenCondition } from "./ScreenMonitorCard";
+import { ScreenConditionLine, ScreenMonitorCard, ScreenMonitorLost, screenCondition } from "./ScreenMonitorCard";
 import { useScreenMonitorController, type ScreenMonitorFixture } from "./useScreenMonitorController";
 import { ScreenPairDialog } from "./ScreenPairDialog";
 import { eventScreensPath, revokeScreenSession } from "./screen-requests";
@@ -157,6 +157,9 @@ export function EventScreens({
         resolve={(response) => response.screens}
         resolvePage={(response) => response.page}
         params={attentionIds ? { screenIds: attentionIds } : undefined}
+        inset={
+          controller.lostSince !== null ? <ScreenMonitorLost lostSince={controller.lostSince} now={now} /> : undefined
+        }
         onData={(response) => controller.remember(response.screens)}
         load={load}
         paginate
@@ -200,6 +203,7 @@ export function EventScreens({
                       screen={screen}
                       status={monitor.live.get(screen.id)}
                       issues={controller.issuesOf(screen.id)}
+                      lostSince={controller.lostSince}
                       samples={monitor.quality.get(screen.id) ?? []}
                       screenshot={monitor.screenshots.get(screen.id)}
                       now={now}
@@ -236,7 +240,13 @@ export function EventScreens({
             header: "Status",
             cell: (screen) => (
               <ScreenConditionLine
-                condition={screenCondition(screen, live?.get(screen.id), controller.issuesOf(screen.id), now)}
+                condition={screenCondition(
+                  screen,
+                  live?.get(screen.id),
+                  controller.issuesOf(screen.id),
+                  now,
+                  controller.lostSince,
+                )}
               />
             ),
           },

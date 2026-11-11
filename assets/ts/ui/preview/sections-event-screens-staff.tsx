@@ -72,18 +72,20 @@ export const SCREENS: ScreenRecord[] = [
   screen("T2HN6V", "Spare, storage room", null, { state: "none" }),
 ];
 
-/** Answers the tab's two reads, the screens and the room choices, from the fixtures above. */
+/** Answers the tab's two reads, the screens (only those asked for by ID, when it asks) and the room choices. */
 export const fixturesWith =
   (screens: ScreenRecord[]): CollectionLoader =>
-  async (url, _signal, schema) =>
-    schema.parse(
-      url.includes("/agenda/rooms")
-        ? ROOMS
-        : eventScreensListSchema.parse({
-            screens,
-            page: { limit: 25, offset: 0, total: screens.length, hasMore: false },
-          }),
+  async (url, _signal, schema) => {
+    if (url.includes("/agenda/rooms")) return schema.parse(ROOMS);
+    const ids = new URL(url, "https://gallery.invalid").searchParams.get("screenIds")?.split(",");
+    const listed = ids ? screens.filter((screen) => ids.includes(screen.id)) : screens;
+    return schema.parse(
+      eventScreensListSchema.parse({
+        screens: listed,
+        page: { limit: 25, offset: 0, total: listed.length, hasMore: false },
+      }),
     );
+  };
 
 /** The workspace strip around the tab, so the specimen shows where Screens sits. */
 export function WorkspaceTabs() {

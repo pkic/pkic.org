@@ -14,6 +14,7 @@ import { formatAge } from "../../../../../../../shared/format-date";
 import { LIVE_SCREEN_OUTPUT_DETAILS } from "../../../../../../../shared/live-room-outputs";
 import type { ScreenLiveStatus, ScreenQualitySample } from "../../../../../../../shared/schemas/event-screen-monitor";
 import type { ScreenRecord } from "../../../../../../../shared/schemas/event-screens";
+import { Alert } from "../../../../../../ui/Alert";
 import { CollectionCardFooter, CollectionCardSurface } from "../../../../../../ui/CollectionCard";
 import { useSectionHeading } from "../../../../../../ui/HeadingOutline";
 import type { ScreenMonitorScreenshot } from "./screen-monitor-view";
@@ -41,7 +42,11 @@ export function screenCondition(
   status: ScreenLiveStatus | undefined,
   issues: readonly ScreenIssue[],
   now: number,
+  /** The monitor's last word, while the connection to it is lost: nothing it said counts as now. */
+  lostSince: number | null = null,
 ): { tone: ScreenConditionTone; text: string } {
+  if (lostSince !== null && status)
+    return { tone: "neutral", text: `Status unknown · last update ${formatAge(now - lostSince)}` };
   if (!status) {
     const { label, tone } = screenConnectionDisplay(screenConnection(screen.session, now));
     return { tone: tone === "risk" ? "critical" : tone === "warn" ? "warning" : "neutral", text: label };
@@ -117,11 +122,13 @@ export function ScreenMonitorCard({
   screenshot,
   issues,
   now,
+  lostSince = null,
   actions,
 }: {
   screen: ScreenRecord;
   status: ScreenLiveStatus | undefined;
   issues: readonly ScreenIssue[];
+  lostSince?: number | null;
   samples: readonly ScreenQualitySample[];
   screenshot: ScreenMonitorScreenshot | undefined;
   now: number;
@@ -129,7 +136,7 @@ export function ScreenMonitorCard({
   actions?: ComponentChildren;
 }) {
   const Heading = useSectionHeading(3);
-  const condition = screenCondition(screen, status, issues, now);
+  const condition = screenCondition(screen, status, issues, now, lostSince);
   return (
     <CollectionCardSurface
       class={
@@ -150,5 +157,15 @@ export function ScreenMonitorCard({
       </div>
       <CollectionCardFooter fact={screen.id} actions={actions} />
     </CollectionCardSurface>
+  );
+}
+
+/** Said where the screens are listed while the connection to the monitor is lost. */
+export function ScreenMonitorLost({ lostSince, now }: { lostSince: number | null; now: number }) {
+  if (lostSince === null) return null;
+  return (
+    <Alert tone="warn">
+      Connection to the screen monitor lost. Reconnecting… Last update {formatAge(now - lostSince)}.
+    </Alert>
   );
 }

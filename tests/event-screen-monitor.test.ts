@@ -355,7 +355,7 @@ describe("event screen monitor", () => {
     });
     const playback = {
       state: "playing" as const,
-      stalls: { lastMinute: { count: 2, seconds: 3.5 }, lastHour: { count: 4, seconds: 9 } },
+      stalls: { lastMinute: { count: 2, seconds: 3.5 }, lastHour: { count: 4, seconds: 9 }, started: 2 },
       errorCode: null,
       loadedFraction: 0.4,
       reportedQuality: "hd720",
@@ -415,5 +415,37 @@ describe("event screen monitor", () => {
     const changed = await report({ ...HEALTH, mode: "auto" });
     expect(changed.stateSince).toBe(changed.reportedAt);
     expect(changed.stateSince).not.toBe(first.stateSince);
+  });
+
+  it("forgets a screen gone past the keep window while other sockets stay open", async () => {
+    const paired = await pairedScreen("MONKEP");
+    const screen = await connectScreen(paired.cookie, paired.screenId);
+    const watcher = await connectStaff("manager");
+    await next(watcher.received, "screens.snapshot");
+    const stub = testEnv.EVENT_SCREEN_MONITORS!.getByName(screenMonitorName(EVENT.id));
+    const gone = new Date(Date.now() - (SCREEN_POLICY.monitorKeepDays * 24 + 1) * 3_600_000).toISOString();
+    await runInDurableObject(stub, async (_, state) => {
+      await state.storage.put("status:OLD234", {
+        screenId: "OLD234",
+        online: false,
+        connectedAt: gone,
+        disconnectedAt: gone,
+        reportedAt: gone,
+        stateSince: gone,
+        health: null,
+      });
+      await state.storage.put("quality:OLD234", []);
+    });
+    const before = watcher.received.length;
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    const snapshot = await next(watcher.received, "screens.snapshot", before);
+    expect(snapshot.screens.map((status) => status.screenId)).toEqual(["MONKEP"]);
+    expect(
+      await runInDurableObject(stub, async (_, state) => [
+        await state.storage.get("status:OLD234"),
+        await state.storage.get("quality:OLD234"),
+      ]),
+    ).toEqual([undefined, undefined]);
+    expect(screen.socket.readyState).toBe(WebSocket.OPEN);
   });
 });

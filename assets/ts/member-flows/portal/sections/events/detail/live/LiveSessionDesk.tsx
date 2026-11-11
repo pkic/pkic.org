@@ -22,7 +22,7 @@ import { createLivePresence, livePresenceFocusAt, LivePresenceContext } from "./
 import { LivePanelPresence } from "./presence/LivePresenceTag";
 import { GraphicsPanel, nextInRoom } from "./studio/GraphicsPanel";
 import { monitorPanelView } from "./studio/MonitorPanel";
-import { ScreensPanel } from "./studio/ScreensPanel";
+import { StudioScreensBody } from "./studio/ScreensPanel";
 import { SourcesPanel } from "./studio/SourcesPanel";
 import { SpeakerMessagePanel } from "./studio/SpeakerMessagePanel";
 import { StudioGrid, type StudioPanelView } from "./studio/StudioGrid";
@@ -313,17 +313,7 @@ export function LiveSessionDesk({
               onSelect: () => void roomScreens.controller.notifications.toggle(),
             },
           ],
-          body: roomScreens.controller.view ? (
-            <ScreensPanel
-              screens={roomScreens.screens}
-              monitor={roomScreens.controller.view}
-              issuesOf={roomScreens.controller.issuesOf}
-              now={roomScreens.controller.now}
-              onCommand={roomScreens.controller.command}
-            />
-          ) : (
-            <p class="pk-studio-screens__empty">Screen status is available to staff who manage or operate screens.</p>
-          ),
+          body: <StudioScreensBody roomScreens={roomScreens} />,
         };
     }
   };

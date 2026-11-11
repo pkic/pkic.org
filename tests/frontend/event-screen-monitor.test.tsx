@@ -160,7 +160,7 @@ describe("the screen's monitor connection", () => {
     const sockets = fakeLiveSockets();
     const playback = {
       state: "buffering" as const,
-      stalls: { lastMinute: { count: 1, seconds: 4 }, lastHour: { count: 1, seconds: 4 } },
+      stalls: { lastMinute: { count: 1, seconds: 4 }, lastHour: { count: 1, seconds: 4 }, started: 1 },
       errorCode: null,
       loadedFraction: 0.2,
       reportedQuality: "auto",
@@ -285,7 +285,7 @@ describe("the livestream player's readings", () => {
     const stalls = new LivestreamStallLog();
     expect(livestreamPlayback({ player, stalls, errorCode: 150, now: Date.now() })).toEqual({
       state: "playing",
-      stalls: { lastMinute: { count: 0, seconds: 0 }, lastHour: { count: 0, seconds: 0 } },
+      stalls: { lastMinute: { count: 0, seconds: 0 }, lastHour: { count: 0, seconds: 0 }, started: 0 },
       errorCode: 150,
       loadedFraction: 0.457,
       reportedQuality: "hd1080",

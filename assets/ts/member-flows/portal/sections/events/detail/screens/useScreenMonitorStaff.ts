@@ -56,6 +56,8 @@ export function useScreenMonitorStaff({
   /** The monitor's clock minus this browser's, so ages never depend on how far off this browser's clock is. */
   const [clockOffsetMs, setClockOffsetMs] = useState(0);
   const clockSamples = useRef<number[]>([]);
+  /** The monitor's clock at its latest message, so a lost connection can say how old the view is. */
+  const [lastUpdateAt, setLastUpdateAt] = useState<number | null>(null);
   const socket = useRef<WebSocket | null>(null);
   const factory = useRef(createSocket);
   factory.current = createSocket;
@@ -89,6 +91,7 @@ export function useScreenMonitorStaff({
           clockSamples.current = [...clockSamples.current, message.serverNow - Date.now()].slice(-STAFF_CLOCK_SAMPLES);
           const offset = staffClockOffset(clockSamples.current);
           setClockOffsetMs((current) => (Math.abs(offset - current) < CLOCK_SETTLE_MS ? current : offset));
+          setLastUpdateAt(message.serverNow);
         }
         if (message.type === "screens.snapshot") {
           attempt = 0;
@@ -142,5 +145,5 @@ export function useScreenMonitorStaff({
     current.send(JSON.stringify(screenMonitorStaffMessageSchema.parse({ type, screenId: screen.id, operationId })));
   }, []);
 
-  return { view, control, status, clockOffsetMs, command };
+  return { view, control, status, clockOffsetMs, lastUpdateAt, command };
 }

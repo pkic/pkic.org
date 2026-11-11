@@ -53,16 +53,24 @@ export function screenNetworkReadings(metrics: ScreenDeviceMetrics | null | unde
   };
 }
 
-/** What one health report says about quality. */
-export function screenQualityReading(health: ScreenHealth): Reading {
+/**
+ * What one health report says about quality. Stalls are those that started
+ * since the screen's previous report, so each lands in exactly one minute;
+ * a smaller count than before means the page reloaded and counts afresh.
+ */
+export function screenQualityReading(health: ScreenHealth, previous?: ScreenHealth | null): Reading {
   const { txBitsPerSecond: _tx, ...network } = screenNetworkReadings(health.metrics);
-  return { ...network, livestreamStalls: health.player?.playback?.stalls.lastMinute.count ?? null };
+  const started = health.player?.playback?.stalls.started;
+  const before = previous?.player?.playback?.stalls.started;
+  const livestreamStalls =
+    started === undefined ? null : before === undefined || started < before ? started : started - before;
+  return { ...network, livestreamStalls };
 }
 
 const worst = (a: number | null, b: number | null, pick: (x: number, y: number) => number) =>
   a === null ? b : b === null ? a : pick(a, b);
 
-/** Two reports of one minute: the worst of each, the latest throughput. */
+/** Two reports of one minute: the worst of each, the latest throughput, every stall. */
 function merge(previous: Reading, next: Reading): Reading {
   return {
     internetLatencyMs: worst(previous.internetLatencyMs, next.internetLatencyMs, Math.max),
@@ -70,7 +78,7 @@ function merge(previous: Reading, next: Reading): Reading {
     routerLatencyMs: worst(previous.routerLatencyMs, next.routerLatencyMs, Math.max),
     wifiSignalPercent: worst(previous.wifiSignalPercent, next.wifiSignalPercent, Math.min),
     rxBitsPerSecond: next.rxBitsPerSecond ?? previous.rxBitsPerSecond,
-    livestreamStalls: worst(previous.livestreamStalls, next.livestreamStalls, Math.max),
+    livestreamStalls: worst(previous.livestreamStalls, next.livestreamStalls, (a, b) => a + b),
   };
 }
 

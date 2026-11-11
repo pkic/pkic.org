@@ -91,7 +91,8 @@ export function screenIssues({
   const heardAt = status.reportedAt ?? (status.online ? status.connectedAt : status.disconnectedAt);
   if (heardAt) {
     const silence = tier((level) => age(heardAt, now) > rules.heartbeatSeconds[level] * 1000);
-    add("offline", silence === "critical" || !status.online ? "Offline" : "Not responding", silence, heardAt);
+    // Connected but silent is "not responding"; only a closed connection is "offline".
+    add("offline", status.online ? "Not responding" : "Offline", silence, heardAt);
   }
   // A disconnected screen's last readings say nothing about now.
   if (!status.online) return issues;
@@ -153,13 +154,13 @@ export function screenIssues({
     );
   }
 
-  const pictureSince = screenshotAt ?? status.connectedAt;
-  if (pictureSince)
+  // Only a screen that has sent a screenshot is judged on its age: a device without the screenshot service never sends one.
+  if (screenshotAt)
     add(
       "no-recent-picture",
       "No recent picture",
-      tier((level) => age(pictureSince, now) > rules.pictureMinutes[level] * MINUTE_MS),
-      pictureSince,
+      tier((level) => age(screenshotAt, now) > rules.pictureMinutes[level] * MINUTE_MS),
+      screenshotAt,
     );
 
   if (health?.mode === "auto" || health?.mode === "offline")

@@ -32,6 +32,8 @@ interface Stall {
 export class LivestreamStallLog {
   private stalls: Stall[] = [];
   private playing = false;
+  /** Every stall since this log began; never pruned. */
+  started = 0;
 
   status(status: LivestreamPlayerStatus, at: number): void {
     const open = this.stalls.at(-1);
@@ -40,7 +42,10 @@ export class LivestreamStallLog {
       this.playing = true;
       return;
     }
-    if (this.playing) this.stalls.push({ start: at, end: null });
+    if (this.playing) {
+      this.stalls.push({ start: at, end: null });
+      this.started += 1;
+    }
     this.playing = false;
     this.stalls = this.stalls.filter((stall) => stall.end === null || stall.end > at - HOUR_MS);
   }
@@ -96,6 +101,7 @@ export function livestreamPlayback(input: {
     stalls: {
       lastMinute: input.stalls.summary(now, MINUTE_MS),
       lastHour: input.stalls.summary(now, HOUR_MS),
+      started: input.stalls.started,
     },
     errorCode: input.errorCode,
     loadedFraction: finite(loaded) ? Math.min(1, Math.max(0, Math.round(loaded * 1000) / 1000)) : null,

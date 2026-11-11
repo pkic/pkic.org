@@ -50,10 +50,15 @@ export function useScreenMonitorController({
   const now = fixture?.now ?? clock + staff.clockOffsetMs;
   // A refused connection shows only what the screen list recorded.
   const view = fixture?.view ?? (staff.status === "refused" ? undefined : staff.view);
+  /**
+   * The connection dropped after the monitor had spoken: its last view stays
+   * on screen for its pictures and trends, but nothing in it counts as now.
+   */
+  const lostSince = !fixture && staff.status !== "live" && staff.status !== "refused" ? staff.lastUpdateAt : null;
   const issues = useMemo(() => {
-    const all = view ? screenMonitorIssues(view, now) : new Map<string, ScreenIssue[]>();
+    const all = view && lostSince === null ? screenMonitorIssues(view, now) : new Map<string, ScreenIssue[]>();
     return only ? new Map([...all].filter(([screenId]) => only.has(screenId))) : all;
-  }, [view, now, only]);
+  }, [view, now, only, lostSince]);
   /** Names of the screens this view has listed, for notifications about screens on another page. */
   const names = useRef(new Map<string, string>());
   const notifications = useScreenIssueNotifications({
@@ -73,6 +78,8 @@ export function useScreenMonitorController({
   return {
     view,
     now,
+    /** When the monitor last spoke, on its clock, while the connection is lost; null while it is live. */
+    lostSince,
     issues,
     issuesOf: (screenId: string) => issues.get(screenId) ?? NO_ISSUES,
     command,

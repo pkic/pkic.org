@@ -158,7 +158,14 @@ const stallWindowSchema = z
 export const screenPlaybackSchema = z
   .object({
     state: z.enum(LIVESTREAM_PLAYER_STATES).nullable(),
-    stalls: z.object({ lastMinute: stallWindowSchema, lastHour: stallWindowSchema }).strict(),
+    stalls: z
+      .object({
+        lastMinute: stallWindowSchema,
+        lastHour: stallWindowSchema,
+        /** Every stall since the page started its player, a count that only grows until the page reloads. */
+        started: z.number().int().min(0).max(1_000_000),
+      })
+      .strict(),
     /** The player's last error code (2, 5, 100, 101, 150), until another video arrives. */
     errorCode: z.number().int().min(0).max(100_000).nullable(),
     /** The share of the video the player has buffered, from 0 to 1. */

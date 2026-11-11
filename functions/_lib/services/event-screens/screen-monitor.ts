@@ -337,14 +337,23 @@ export class EventScreenMonitor extends DurableObject<Env> {
     );
   }
 
-  /** The next access recheck while sockets are open, else the next screen to forget. */
+  /**
+   * Forgets screens disconnected past the keep window, whether or not other
+   * sockets are open, so they stop counting toward the event's limit; then
+   * sets the alarm for the next access recheck while sockets are open, or
+   * the next screen to forget, whichever comes first.
+   */
   private async scheduleRefresh(): Promise<void> {
-    const due = this.open().length ? Date.now() + REFRESH_MS : await this.store.prune(Date.now());
+    const now = Date.now();
+    const pruned = await this.store.prune(now);
+    if (pruned.forgotten) await this.broadcastSnapshot();
+    const refresh = this.open().length ? now + REFRESH_MS : null;
+    const due = refresh === null ? pruned.next : pruned.next === null ? refresh : Math.min(refresh, pruned.next);
     const current = await this.ctx.storage.getAlarm();
     if (due === null) {
       if (current !== null) await this.ctx.storage.deleteAlarm();
       return;
     }
-    if (current === null || current > due || current < Date.now()) await this.ctx.storage.setAlarm(due);
+    if (current === null || current > due || current < now) await this.ctx.storage.setAlarm(due);
   }
 }
