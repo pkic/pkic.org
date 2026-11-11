@@ -227,6 +227,7 @@ export function RegistrationsList({
         <RegistrationTotals
           stats={stats}
           attendanceOptions={eventAttendanceOptions(days.data?.days ?? [])}
+          onRetryAttendanceOptions={days.error ? () => void days.reload() : undefined}
           // The attendance-change view is not a filter a card can reproduce.
           filters={
             query && !attendanceChangeFilter

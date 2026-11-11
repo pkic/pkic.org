@@ -102,6 +102,7 @@ export function GroupEventRegistrations({
         <RegistrationTotals
           stats={stats}
           attendanceOptions={eventAttendanceOptions(days.data?.days ?? [])}
+          onRetryAttendanceOptions={days.error ? () => void days.reload() : undefined}
           filters={{
             current: listFilters(query),
             apply: (changes) => tableRef.current?.setFilters?.(changes),

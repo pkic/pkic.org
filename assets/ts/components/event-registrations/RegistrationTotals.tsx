@@ -15,6 +15,8 @@
 import type { ComponentChildren } from "preact";
 import { AttendanceIcon } from "../AttendanceIcon";
 import type { StatCardTone } from "../../ui/StatCard";
+import { Alert } from "../../ui/Alert";
+import { Button } from "../../ui/Button";
 import { CollectionTotals, type CollectionTotal } from "../CollectionTotals";
 import { formatNumber } from "../../../shared/format-number";
 import type { EventAttendanceOption } from "../../../shared/schemas/event-configuration";
@@ -143,12 +145,15 @@ export function RegistrationTotals({
   stats,
   attendanceOptions,
   filters,
+  onRetryAttendanceOptions,
 }: {
   stats: EventAttendanceRegistrationsStats & { bouncedCount?: number };
   /** The attendance options the event's settings offer: one card each, with its wording and icon. */
   attendanceOptions: readonly EventAttendanceOption[];
   /** Makes the cards set the list's filters; without it they are figures only. */
   filters?: RegistrationTotalsFilters;
+  /** The attendance options failed to load: say so, and offer to load them again. */
+  onRetryAttendanceOptions?: () => void;
 }) {
   const withFilter = (item: CollectionTotal, filter: CardFilter | null, pressLabel = `Show ${item.label} only`) =>
     filters && filter ? pressable(item, filter, filters, pressLabel) : item;
@@ -198,5 +203,15 @@ export function RegistrationTotals({
         { bounced: "true" },
       ),
     );
-  return <CollectionTotals label="Registration totals" items={items} />;
+  return (
+    <>
+      <CollectionTotals label="Registration totals" items={items} />
+      {onRetryAttendanceOptions && (
+        <Alert tone="warn" title="Attendance totals are not shown">
+          <p>The event's attendance options could not be loaded.</p>
+          <Button onClick={onRetryAttendanceOptions}>Try again</Button>
+        </Alert>
+      )}
+    </>
+  );
 }

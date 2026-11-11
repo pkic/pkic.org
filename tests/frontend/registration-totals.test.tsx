@@ -163,6 +163,26 @@ describe("RegistrationTotals attendance cards", () => {
   });
 });
 
+describe("RegistrationTotals without attendance options", () => {
+  it("says the options failed to load and loads them again on request", () => {
+    const retry = vi.fn();
+    const container = mount(
+      <RegistrationTotals stats={stats} attendanceOptions={[]} onRetryAttendanceOptions={retry} />,
+    );
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "The event's attendance options could not be loaded.",
+    );
+    const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === "Try again");
+    void act(() => button?.click());
+    expect(retry).toHaveBeenCalledOnce();
+  });
+
+  it("shows no warning while the options are loaded", () => {
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} />);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+});
+
 describe("RegistrationTotals breakdown", () => {
   it("states pending, waitlisted and cancelled the same way on every card", () => {
     const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} />);
