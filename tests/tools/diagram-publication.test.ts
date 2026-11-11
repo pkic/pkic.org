@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rm, writeFile, stat } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
@@ -74,10 +74,12 @@ it("reuses a persisted diagram across publications without requiring a browser",
   }
 });
 
-it("extracts a complete rootless Linux renderer and reuses its versioned runtime", async () => {
+it("shares a complete rootless Linux renderer across concurrent publishers and later calls", async () => {
   const root = await mkdtemp(join(tmpdir(), "pkic-diagram-runtime-"));
   try {
-    const first = await linuxDiagramBrowserOptions(root);
+    const [first, concurrent] = await Promise.all([linuxDiagramBrowserOptions(root), linuxDiagramBrowserOptions(root)]);
+    expect(concurrent.executablePath).toBe(first.executablePath);
+    expect(await readdir(root)).toHaveLength(1);
     const binary = await readFile(first.executablePath);
     expect(binary.subarray(0, 4).toString()).toBe("\x7fELF");
     expect((await stat(first.executablePath)).mode & 0o100).not.toBe(0);
@@ -89,6 +91,26 @@ it("extracts a complete rootless Linux renderer and reuses its versioned runtime
     expect(second.executablePath).toBe(first.executablePath);
     expect((await stat(second.executablePath)).mtimeMs).toBe(modified);
     expect(second.args).not.toContain("--disable-web-security");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it("preserves the rename error and cleans up when an incomplete browser cache has no ready marker", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pkic-diagram-incomplete-"));
+  const require = createRequire(import.meta.url);
+  const chromiumRequire = createRequire(require.resolve("@sparticuz/chromium"));
+  const { version } = chromiumRequire("../package.json");
+  const cache = join(root, `linux-x64-${version}`);
+  try {
+    await mkdir(cache);
+    await writeFile(join(cache, "incomplete"), "Synthetic interrupted extraction");
+    await expect(linuxDiagramBrowserOptions(root)).rejects.toMatchObject({
+      code: expect.stringMatching(/^(ENOTEMPTY|EEXIST)$/),
+      syscall: "rename",
+    });
+    expect(await readdir(root)).toEqual([`linux-x64-${version}`]);
+    expect(await readdir(cache)).toEqual(["incomplete"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -45,3 +45,11 @@ export async function pinReviewedStaffWorkflow(db: DatabaseLike, id: string, cat
       .bind(now, id)
       .run();
 }
+
+/** Pin the category's own published workflow, as submission does. */
+export async function pinCategoryWorkflow(db: DatabaseLike, id: string, categoryCode = "F") {
+  const category = await requireMembershipCategory(db, categoryCode);
+  const version = await getMembershipWorkflowVersion(db, category.workflowVersionId!);
+  await db.batch(prepareMembershipWorkflowPin(db, id, category, version, 1, new Date().toISOString()));
+  return version;
+}

@@ -21,7 +21,10 @@ import { AppError } from "../../../errors";
 import { prepareQueueEmailStatement, type QueueEmailPayload } from "../../../email/outbox";
 import { adminDatabaseUserId } from "../../../auth/admin-identity";
 import { prepareAuditLog } from "../../audit";
-import { prepareRemoveMembershipReviewSnapshots } from "../workflows/review-digest-content";
+import {
+  prepareRemoveMembershipReviewSnapshots,
+  prepareReopenUndeliveredReviewSteps,
+} from "../workflows/review-digest-content";
 import { prepareReleaseApplicationDomainClaim } from "../organization-domain-claims";
 import {
   ON_HOLD_SUBTYPES,
@@ -209,20 +212,7 @@ export function prepareApplicationStageTransition(
     if (params.toStage === "on_hold") {
       // Only undelivered digest requirements restart on resume. Sent notices
       // retain their original review window and historical delivery evidence.
-      statements.push(
-        db
-          .prepare(
-            `UPDATE membership_application_steps
-          SET state = 'waiting', notice_outbox_id = NULL, opened_at = NULL, deadline_at = NULL
-          WHERE application_id = ? AND state = 'active' AND completed_at IS NULL AND opened_at IS NULL
-            AND generation = (SELECT generation FROM membership_application_workflows
-              WHERE application_id = ? AND superseded_at IS NULL)
-            AND notice_outbox_id IN (SELECT id FROM email_outbox
-              WHERE status IN ('queued', 'retrying', 'cancelled') AND sent_at IS NULL
-                AND json_type(payload_json, '$.reviewApplications') = 'object')`,
-          )
-          .bind(application.id, application.id),
-      );
+      statements.push(prepareReopenUndeliveredReviewSteps(db, application.id));
     }
   }
 

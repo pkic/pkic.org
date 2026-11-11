@@ -426,7 +426,15 @@ export async function updateMembershipApplication(
     return getMembershipApplicationDetail(db, applicationId);
   }
 
-  dependentStatements.push(...(await prepareApplicationEditEvidenceGuard(db, application, nextCategory, now)));
+  // Kind changes and domain resolution can alter organization identity or its
+  // claim even in a category-only patch. Those reviews cannot carry over.
+  const otherDetailsChanged =
+    organizationDomainChanged ||
+    currentCategory.isIndividual !== nextCategory.isIndividual ||
+    changedFields.some((field) => field !== "membershipCategory");
+  dependentStatements.push(
+    ...(await prepareApplicationEditEvidenceGuard(db, application, nextCategory, otherDetailsChanged, now)),
+  );
   dependentStatements.push(preparePermissionsAuthorizationGuard(db, actor, [{ permission: "membership:write" }]));
   setClauses.push("updated_at = ?");
   values.push(now);

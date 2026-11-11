@@ -67,6 +67,7 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "portal-sponsor-filters",
   "portal-sponsor-tier-pricing",
   "portal-membership-settings",
+  "membership-category-correction",
   "membership-workflows",
   "membership-workflows-categories",
   "membership-workflows-archive",
