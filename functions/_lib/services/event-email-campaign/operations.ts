@@ -58,6 +58,10 @@ export async function previewEventEmailCampaign(
       : campaign.recipient_count;
 
   if (recipientCount === 0) {
+    const empty =
+      campaign.recipient_count > 0
+        ? 'Every matching speaker already received this kit. To send it again, select "Also email speakers who already received this kit."'
+        : "No recipients matched your filter.";
     return eventEmailCampaignPreviewResponseSchema.parse({
       success: true,
       recipientCount: 0,
@@ -66,8 +70,8 @@ export async function previewEventEmailCampaign(
       previewExpiresAt: token.expiresAt,
       sampleRecipients: [],
       subject: input.subjectOverride ?? `Update: ${event.name}`,
-      html: "<p>No recipients matched your filter.</p>",
-      text: "No recipients matched your filter.",
+      html: `<p>${empty}</p>`,
+      text: empty,
     });
   }
 

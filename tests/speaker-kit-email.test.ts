@@ -115,7 +115,7 @@ describe("speaker kit emails", () => {
       "planning-a-quantum-safe-migration-carousel",
     ]);
 
-    expect((await preview(f)).recipientCount).toBe(0);
+    expect(await preview(f)).toMatchObject({ recipientCount: 0, text: expect.stringContaining("already received") });
 
     const resend = { ...message, kit: { ...message.kit, resend: true } };
     expect((await send(f, resend)).queuedRecipients).toBe(2);
