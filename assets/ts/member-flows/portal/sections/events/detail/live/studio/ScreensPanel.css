@@ -1,0 +1,63 @@
+/*
+ * The studio's Screens panel: one compact row per screen of the room. The
+ * name and connection share the first line, what the screen draws the
+ * second, and its device metrics the third; the row menu sits at the end.
+ */
+@layer components {
+  .pk-studio-screens {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .pk-studio-screens__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "name status actions"
+      "shows shows actions"
+      "detail detail actions";
+    align-items: center;
+    column-gap: var(--pk-3);
+    row-gap: var(--pk-1);
+    padding: var(--pk-2) var(--pk-3);
+    border-block-end: 1px solid var(--pk-line-soft);
+  }
+  .pk-studio-screens__name {
+    grid-area: name;
+    min-inline-size: 0;
+    overflow: hidden;
+    font-weight: 700;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-studio-screens__status {
+    grid-area: status;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+    white-space: nowrap;
+  }
+  .pk-studio-screens__shows {
+    grid-area: shows;
+    min-inline-size: 0;
+    font-size: var(--pk-text-sm);
+  }
+  .pk-studio-screens__detail {
+    grid-area: detail;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-studio-screens__actions {
+    grid-area: actions;
+    align-self: start;
+  }
+  .pk-studio-screens__empty {
+    margin: 0;
+    padding: var(--pk-3);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+}

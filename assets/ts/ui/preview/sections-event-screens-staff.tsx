@@ -25,7 +25,8 @@ const ROOMS = agendaRoomsListSchema.parse({
 
 const minutesBefore = (minutes: number) => new Date(SCREEN_FIXTURE_NOW - minutes * 60_000).toISOString();
 
-function screen(
+/** A screen record of the fixture event, last seen this many minutes before the fixed clock. */
+export function screen(
   id: string,
   name: string,
   assignment: { roomId: string; roomName: string; output: NonNullable<ScreenRecord["assignment"]>["output"] } | null,
@@ -48,9 +49,9 @@ function screen(
   };
 }
 
-const blue = { roomId: SCREEN_FIXTURE.roomId, roomName: SCREEN_FIXTURE.roomName };
-const green = { roomId: GREEN_ROOM_ID, roomName: "Green room" };
-const SCREENS: ScreenRecord[] = [
+export const blue = { roomId: SCREEN_FIXTURE.roomId, roomName: SCREEN_FIXTURE.roomName };
+export const green = { roomId: GREEN_ROOM_ID, roomName: "Green room" };
+export const SCREENS: ScreenRecord[] = [
   screen(
     SCREEN_FIXTURE.screenId,
     SCREEN_FIXTURE.name,
@@ -72,7 +73,7 @@ const SCREENS: ScreenRecord[] = [
 ];
 
 /** Answers the tab's two reads, the screens and the room choices, from the fixtures above. */
-const fixturesWith =
+export const fixturesWith =
   (screens: ScreenRecord[]): CollectionLoader =>
   async (url, _signal, schema) =>
     schema.parse(
@@ -85,7 +86,7 @@ const fixturesWith =
     );
 
 /** The workspace strip around the tab, so the specimen shows where Screens sits. */
-function WorkspaceTabs() {
+export function WorkspaceTabs() {
   return (
     <Tabs
       items={[

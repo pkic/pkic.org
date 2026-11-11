@@ -17,7 +17,12 @@ import { Badge } from "../../../../../../ui/Badge";
 import { EmptyState } from "../../../../../../ui/EmptyState";
 import { RowActions } from "../../../../../../ui/RowActions";
 import { toast } from "../../../../ui";
+import type {
+  ScreenLiveStatus,
+  ScreenMonitorStaffMessage,
+} from "../../../../../../../shared/schemas/event-screen-monitor";
 import { ScreenEditDialog } from "./ScreenEditDialog";
+import { ScreenHealthCell } from "./ScreenHealthCell";
 import { ScreenPairDialog } from "./ScreenPairDialog";
 import { eventScreensPath, revokeScreenSession } from "./screen-requests";
 import "../../../../../../ui/Content.css";
@@ -34,7 +39,9 @@ function ScreenShows({ assignment }: { assignment: ScreenRecord["assignment"] })
   );
 }
 
-function ScreenStatus({ screen, now }: { screen: ScreenRecord; now: number }) {
+function ScreenStatus({ screen, now, live }: { screen: ScreenRecord; now: number; live?: ScreenLiveStatus }) {
+  // A connected socket is the freshest word there is; otherwise the last read decides.
+  if (live?.online) return <>Online</>;
   const { label, tone } = screenConnectionDisplay(screenConnection(screen.session, now));
   return tone ? <Badge tone={tone}>{label}</Badge> : <>{label}</>;
 }
@@ -44,6 +51,8 @@ export function EventScreens({
   canManage,
   now: fixedNow,
   load,
+  live,
+  onCommand,
 }: {
   slug: string;
   /** Pair, edit and revoke; without it the list is read-only. */
@@ -52,6 +61,10 @@ export function EventScreens({
   now?: number;
   /** Reads the list and the room choices; the gallery hands in its own. */
   load?: CollectionLoader;
+  /** Each screen's live report by screen ID; without it the list shows only what the last reads recorded. */
+  live?: ReadonlyMap<string, ScreenLiveStatus>;
+  /** Sends a manager's Identify or Reload to a connected screen. */
+  onCommand?: (type: ScreenMonitorStaffMessage["type"], screen: ScreenRecord) => void;
 }) {
   const clock = useBoundaryClock(nextMinute);
   const now = fixedNow ?? clock;
@@ -107,8 +120,25 @@ export function EventScreens({
             sort: { asc: "name", desc: "-name" },
           },
           { header: "Screen ID", cell: (screen) => <span class="pk-mono">{screen.id}</span>, width: "fit" },
-          { header: "Shows", cell: (screen) => <ScreenShows assignment={screen.assignment} /> },
-          { header: "Status", cell: (screen) => <ScreenStatus screen={screen} now={now} />, width: "fit" },
+          {
+            header: "Shows",
+            cell: (screen) =>
+              live?.get(screen.id)?.online ? (
+                <div class="pk-stack pk-stack--tight">
+                  <span>
+                    <ScreenShows assignment={screen.assignment} />
+                  </span>
+                  <ScreenHealthCell status={live.get(screen.id)} />
+                </div>
+              ) : (
+                <ScreenShows assignment={screen.assignment} />
+              ),
+          },
+          {
+            header: "Status",
+            cell: (screen) => <ScreenStatus screen={screen} now={now} live={live?.get(screen.id)} />,
+            width: "fit",
+          },
           {
             header: "Last seen",
             cell: (screen) => formatDateTime(screen.session.lastSeenAt),
@@ -123,7 +153,28 @@ export function EventScreens({
                     <RowActions
                       subject={screen.name}
                       actions={[
-                        { id: "edit", label: "Edit", onSelect: () => setEditing(screen) },
+                        ...(onCommand
+                          ? [
+                              {
+                                id: "identify",
+                                label: "Identify",
+                                disabled: !live?.get(screen.id)?.online,
+                                onSelect: () => onCommand("screen.identify", screen),
+                              },
+                              {
+                                id: "reload",
+                                label: "Reload",
+                                disabled: !live?.get(screen.id)?.online,
+                                onSelect: () => onCommand("screen.reload", screen),
+                              },
+                            ]
+                          : []),
+                        {
+                          id: "edit",
+                          label: "Edit",
+                          separatorBefore: Boolean(onCommand),
+                          onSelect: () => setEditing(screen),
+                        },
                         {
                           id: "revoke",
                           label: "Revoke",
