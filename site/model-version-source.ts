@@ -48,6 +48,7 @@ const question = z.object({
   purpose: modelText.optional(),
 });
 const section = z.object({
+  id: z.string().optional(),
   title: modelText,
   body: modelText,
   placement: z

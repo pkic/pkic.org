@@ -136,6 +136,18 @@ describe("whole level layout", () => {
     expect(levelContent.unplaced()).toEqual([]);
   });
 
+  it("places sections that share a title when their identifiers differ", () => {
+    const twins = [
+      { id: "0.s.1", title: "Notes", placement: "before-criteria", body: "First." },
+      { id: "0.s.2", title: "Notes", placement: "after-evidence-checklist", body: "Second." },
+    ];
+    const levelContent = content({ sections: twins });
+    const page = levelContent.render(call({ part: "level" }));
+    expect(page).toContain("First.");
+    expect(page).toContain("Second.");
+    expect(levelContent.unplaced()).toEqual([]);
+  });
+
   it("titles assessment questions by their kind", () => {
     const groups = [
       { id: "0.2", name: "Checks", kind: "assessment", questions: [{ id: "0.2.1", question: "Q?", guidance: "G." }] },

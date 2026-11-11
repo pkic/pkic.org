@@ -54,6 +54,7 @@ export async function loadModelPage(entry: ModelEntry, version: ModelVersion, so
     html: scopeModelHtml(base.html, entry.root, root),
     workingGroup: {
       ...base.workingGroup,
+      ...(level ? { title: level.title, description: level.description } : {}),
       route,
       nav: base.workingGroup.nav.map((item) => ({ ...item, href: modelScopedHref(item.href, entry.root, root) })),
       sidebar: tree,

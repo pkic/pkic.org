@@ -84,6 +84,11 @@ function criteriaMarkdown(model: ReadableModel, level: ModelLevel) {
  * model is the only source of level content. Individual parts and `{{< model-section >}}` (by title)
  * remain for pages that need a custom layout.
  */
+/** Sections are tracked by identifier, so two sections may share a title. */
+function sectionKey(section: ModelLevel["sections"][number]) {
+  return `section ${section.id ?? `"${section.title}"`}`;
+}
+
 export function createModelLevelContent(model: ReadableModel, level: ModelLevel) {
   const placed = new Set<string>();
   const place = (key: string) => {
@@ -96,7 +101,7 @@ export function createModelLevelContent(model: ReadableModel, level: ModelLevel)
     return level.sections
       .filter((section) => section.placement === placement)
       .map((section) => {
-        place(`section "${section.title}"`);
+        place(sectionKey(section));
         return `${"#".repeat(depth)} ${section.title}\n\n${section.body}`;
       });
   }
@@ -151,7 +156,7 @@ export function createModelLevelContent(model: ReadableModel, level: ModelLevel)
           `The model for ${level.sourcePage} has no section "${title}"; add it or mark the placement optional`,
         );
       }
-      place(`section "${title}"`);
+      place(sectionKey(section));
       return section.body;
     }
     if (part === "criteria") {
@@ -186,7 +191,7 @@ export function createModelLevelContent(model: ReadableModel, level: ModelLevel)
       ...(level.assessment.methodology ? ["methodology"] : []),
       ...level.assessment.groups.map((group) => `question group ${group.id ?? group.name}`),
       ...(level.evidenceChecklist.items.length || level.evidenceChecklist.introduction ? ["evidence"] : []),
-      ...level.sections.map((section) => `section "${section.title}"`),
+      ...level.sections.map(sectionKey),
     ];
     return expected.filter((key) => !placed.has(key));
   }
