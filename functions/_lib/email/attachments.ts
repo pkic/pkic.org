@@ -4,6 +4,8 @@ import {
   personalPromotionRendererIsCurrent,
 } from "../../../assets/shared/personal-promotion-image";
 import { bytesToBase64 } from "../../../assets/shared/base64";
+import { all } from "../db/queries";
+import type { DatabaseLike } from "../types";
 import { readStoredZipEntries } from "../utils/stored-zip";
 
 /** Durable outbox refusals consumed by the existing badge-render retry owner. */
@@ -20,14 +22,29 @@ export interface QueuedBadgeAttachment {
   renderer?: string;
 }
 
-/** A rendered file in storage; the object's own content type names the file type. */
-export interface QueuedStoredFileAttachment {
-  kind: "r2-stored-file";
+/**
+ * One format of a speaker's promotion kit. It names the kit, not a file, so a kit
+ * rendered again before sending still attaches its current file.
+ */
+export interface QueuedPromotionKitAttachment {
+  kind: "promotion-kit-file";
+  eventId: string;
+  occurrenceId: string;
+  userId: string;
+  format: string;
+  filenameBase: string;
+}
+
+/** A file in storage; the object's own content type names the file type. */
+export interface StoredFileAttachment {
   r2Key: string;
   filenameBase: string;
 }
 
-export type QueuedEmailAttachment = QueuedBadgeAttachment | QueuedStoredFileAttachment;
+export type QueuedEmailAttachment = QueuedBadgeAttachment | QueuedPromotionKitAttachment;
+
+/** A retryable refusal: the outbox tries again while the kit finishes rendering. */
+export const PROMOTION_KIT_NOT_READY = "Required promotion file is not ready";
 
 export function slugifyAttachmentPart(value: string): string {
   return value
@@ -89,12 +106,9 @@ export function parseQueuedEmailAttachments(payload: Record<string, unknown>): Q
       );
     }
 
-    if (candidate.kind === "r2-stored-file") {
-      return (
-        typeof candidate.r2Key === "string" &&
-        candidate.r2Key.length > 0 &&
-        typeof candidate.filenameBase === "string" &&
-        candidate.filenameBase.length > 0
+    if (candidate.kind === "promotion-kit-file") {
+      return ["eventId", "occurrenceId", "userId", "format", "filenameBase"].every(
+        (key) => typeof candidate[key] === "string" && (candidate[key] as string).length > 0,
       );
     }
 
@@ -118,12 +132,12 @@ const FILE_EXTENSIONS: Record<string, string> = {
 /** Multi-page images are stored as one archive; a speaker receives the images themselves. */
 export async function loadStoredFileAttachments(
   bucket: Pick<R2Bucket, "get">,
-  attachments: readonly QueuedStoredFileAttachment[],
+  attachments: readonly StoredFileAttachment[],
 ): Promise<LoadedEmailAttachment[]> {
   const loaded: LoadedEmailAttachment[] = [];
   for (const attachment of attachments) {
     const stored = await bucket.get(attachment.r2Key);
-    if (!stored) throw new Error("Required promotion file is no longer available");
+    if (!stored) throw new Error(PROMOTION_KIT_NOT_READY);
     const contentType = stored.httpMetadata?.contentType ?? "";
     const bytes = new Uint8Array(await stored.arrayBuffer());
     if (contentType === "application/zip") {
@@ -148,6 +162,33 @@ export async function loadStoredFileAttachments(
     });
   }
   return loaded;
+}
+
+/** Resolves each kit format to its current rendered file, in one bounded read. */
+export async function loadPromotionKitAttachments(
+  db: DatabaseLike,
+  bucket: Pick<R2Bucket, "get">,
+  attachments: readonly QueuedPromotionKitAttachment[],
+): Promise<LoadedEmailAttachment[]> {
+  const current = await all<{ position: number; cache_key: string }>(
+    db,
+    `SELECT kit.key AS position,(SELECT render.cache_key FROM event_promotion_renders render
+        WHERE render.event_id=json_extract(kit.value,'$.eventId') AND render.user_id=json_extract(kit.value,'$.userId')
+          AND render.occurrence_id=json_extract(kit.value,'$.occurrenceId') AND render.format=json_extract(kit.value,'$.format')
+          AND render.status='rendered'
+        ORDER BY render.requested_at DESC LIMIT 1) AS cache_key
+     FROM json_each(?) kit`,
+    [JSON.stringify(attachments)],
+  );
+  const keys = new Map(current.map((row) => [row.position, row.cache_key]));
+  return loadStoredFileAttachments(
+    bucket,
+    attachments.map((attachment, index) => {
+      const r2Key = keys.get(index);
+      if (!r2Key) throw new Error(PROMOTION_KIT_NOT_READY);
+      return { r2Key, filenameBase: attachment.filenameBase };
+    }),
+  );
 }
 
 export function queuedBadgeRendererIsCurrent(attachment: QueuedBadgeAttachment, actual: string | undefined): boolean {

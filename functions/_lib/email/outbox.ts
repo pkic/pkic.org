@@ -27,7 +27,7 @@ import { applyCampaignCustomText } from "./campaign-custom";
 import { readDirectEmailBody } from "./direct-body";
 import {
   BADGE_ATTACHMENT_WAIT_REASONS,
-  loadStoredFileAttachments,
+  loadPromotionKitAttachments,
   parseQueuedEmailAttachments,
   queuedBadgeRendererIsCurrent,
 } from "./attachments";
@@ -329,10 +329,10 @@ async function attemptOutboxDelivery(
       }
     }
 
-    const storedFiles = queuedAttachments.filter((a) => a.kind === "r2-stored-file");
-    if (storedFiles.length > 0) {
+    const kitFiles = queuedAttachments.filter((a) => a.kind === "promotion-kit-file");
+    if (kitFiles.length > 0) {
       if (!env.ASSETS_BUCKET) throw new Error("Required attachment storage is unavailable");
-      attachments = [...(attachments ?? []), ...(await loadStoredFileAttachments(env.ASSETS_BUCKET, storedFiles))];
+      attachments = [...(attachments ?? []), ...(await loadPromotionKitAttachments(db, env.ASSETS_BUCKET, kitFiles))];
     }
 
     const bccRecipients = Array.isArray(payload.__bccRecipients)

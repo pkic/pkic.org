@@ -1,11 +1,13 @@
 import { env } from "cloudflare:workers";
 import { downloadZip } from "client-zip";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   eventEmailCampaignPreviewResponseSchema,
   eventEmailCampaignResponseSchema,
 } from "../assets/shared/schemas/event-email-campaigns";
 import { loadStoredFileAttachments, parseQueuedEmailAttachments } from "../functions/_lib/email/attachments";
+import { processOutboxById } from "../functions/_lib/email/outbox";
+import type { Env } from "../functions/_lib/types";
 import { processPendingPromotionRecipients } from "../functions/_lib/services/event-agenda/promotion-batch-dispatch";
 import { processPromotionRenderJob } from "../functions/_lib/services/event-agenda/promotion-render-jobs";
 import { stagePendingSpeakerKitEmails } from "../functions/_lib/services/event-email-campaign";
@@ -86,8 +88,25 @@ async function outbox() {
   return rows.results;
 }
 
+function sendingEnv(): Env {
+  const allow = { limit: vi.fn().mockResolvedValue({ success: true }) };
+  return {
+    ...env,
+    SENDGRID_API_KEY: "sendgrid-test-key",
+    SENDGRID_API_BASE: "https://sendgrid.test/mail/send",
+    SENDGRID_FROM_EMAIL: "noreply@example.test",
+    SENDGRID_FROM_NAME: "Example",
+    EMAIL_RATE_LIMITER: allow,
+    IP_RATE_LIMITER: allow,
+  } as Env;
+}
+
 describe("speaker kit emails", () => {
   beforeEach(() => resetDb());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
 
   it("sends each speaker their finished kit once and only repeats it on request", async () => {
     const f = await kitFixture(true);
@@ -122,6 +141,43 @@ describe("speaker kit emails", () => {
     await renderPendingKits();
     expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 2, queued: 2, failed: 0 });
     expect(await outbox()).toHaveLength(4);
+  });
+
+  it("waits for a kit rendered again after queueing and then sends its current files", async () => {
+    const f = await kitFixture();
+    await send(f);
+    await renderPendingKits();
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toMatchObject({ queued: 1 });
+    const mail = await env.DB.prepare("SELECT id FROM email_outbox WHERE idempotency_key LIKE 'speaker-kit%'").first<{
+      id: string;
+    }>();
+
+    // A re-render replaces the queued files: the old ones are gone and the new ones are not ready yet.
+    const earlier = await env.DB.prepare("SELECT cache_key FROM event_promotion_renders").all<{ cache_key: string }>();
+    await env.ASSETS_BUCKET!.delete(earlier.results.map((row) => row.cache_key));
+    await env.DB.prepare(
+      "UPDATE event_promotion_renders SET status='queued',cache_key=cache_key||'-next',next_attempt_at='2000-01-01T00:00:00.000Z'",
+    ).run();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "kit" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(processOutboxById(env.DB, sendingEnv(), mail!.id)).rejects.toThrow("not ready");
+    expect(await env.DB.prepare("SELECT status FROM email_outbox WHERE id=?").bind(mail!.id).first()).toEqual({
+      status: "retrying",
+    });
+
+    await renderPendingKits();
+    await env.DB.prepare("UPDATE email_outbox SET send_after='2000-01-01T00:00:00.000Z' WHERE id=?")
+      .bind(mail!.id)
+      .run();
+    expect(await processOutboxById(env.DB, sendingEnv(), mail!.id)).toBe(true);
+    const [, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
+    const sent = JSON.parse(String(init.body)) as { attachments: Array<{ filename: string }> };
+    expect(sent.attachments.map((file) => file.filename)).toEqual([
+      expect.stringMatching(/-tall-post\.jpg$/),
+      expect.stringMatching(/-carousel\.pdf$/),
+    ]);
   });
 
   it("refuses a second send reviewed before the first one reserved the kits", async () => {
@@ -216,16 +272,14 @@ describe("speaker kit emails", () => {
 
     await env.ASSETS_BUCKET!.put("kit.zip", archive, { httpMetadata: { contentType: "application/zip" } });
     const files = await loadStoredFileAttachments(env.ASSETS_BUCKET!, [
-      { kind: "r2-stored-file", r2Key: "kit.zip", filenameBase: "talk-tall-post" },
+      { r2Key: "kit.zip", filenameBase: "talk-tall-post" },
     ]);
     expect(files.map(({ filename, contentType }) => [filename, contentType])).toEqual([
       ["talk-tall-post-01.jpg", "image/jpeg"],
       ["talk-tall-post-02.jpg", "image/jpeg"],
     ]);
     await expect(
-      loadStoredFileAttachments(env.ASSETS_BUCKET!, [
-        { kind: "r2-stored-file", r2Key: "missing", filenameBase: "talk-carousel" },
-      ]),
+      loadStoredFileAttachments(env.ASSETS_BUCKET!, [{ r2Key: "missing", filenameBase: "talk-carousel" }]),
     ).rejects.toThrow();
   });
 });

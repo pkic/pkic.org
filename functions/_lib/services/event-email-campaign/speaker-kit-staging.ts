@@ -65,7 +65,7 @@ const PENDING_KIT_EMAILS_SQL = `WITH pending AS (
   SELECT recipient.batch_id,recipient.occurrence_id,recipient.user_id,recipient.status,recipient.fingerprint,
     batch.event_id,batch.published_revision,COALESCE(state.published_revision,0) AS live_revision,
     batch.formats_json,batch.origin,batch.requested_by,batch.email_test,campaign.input_json,batch.created_at,
-    (SELECT json_group_array(json_object('format',render.format,'cacheKey',render.cache_key,'status',render.status))
+    (SELECT json_group_array(json_object('format',render.format,'status',render.status))
       FROM event_promotion_renders render
       WHERE render.event_id=batch.event_id AND render.occurrence_id=recipient.occurrence_id AND render.user_id=recipient.user_id
         AND render.fingerprint=recipient.fingerprint AND render.format IN(SELECT value FROM json_each(batch.formats_json))) AS renders_json,
@@ -89,15 +89,18 @@ function finishedKitFiles(
   sessionTitle: string,
 ): QueuedEmailAttachment[] | null {
   if (row.status === "failed" || row.live_revision !== row.published_revision || !row.fingerprint) return null;
-  const renders = JSON.parse(row.renders_json ?? "[]") as Array<{ format: string; cacheKey: string; status: string }>;
+  const renders = JSON.parse(row.renders_json ?? "[]") as Array<{ format: string; status: string }>;
   const session = slugifyAttachmentPart(sessionTitle).slice(0, 60) || "session";
   const files: QueuedEmailAttachment[] = [];
   for (const format of formats) {
     const render = renders.find((item) => item.format === format && item.status === "rendered");
     if (!render) return null;
     files.push({
-      kind: "r2-stored-file",
-      r2Key: render.cacheKey,
+      kind: "promotion-kit-file",
+      eventId: row.event_id,
+      occurrenceId: row.occurrence_id,
+      userId: row.user_id,
+      format,
       filenameBase: `${session}-${KIT_FILE_NAMES[format]}`,
     });
   }
