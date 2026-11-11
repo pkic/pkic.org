@@ -1,4 +1,6 @@
 ---
+# Level content comes from the PQCMM model in pkic/pqcmm; edit it there.
+# title, description, and summary below only feed menus and listings.
 date: 2026-05-07T00:00:00Z
 linkTitle: "3 — Advanced"
 title: "Level 3 (Advanced) - PQC Maturity Model (PQCMM)"
@@ -8,34 +10,4 @@ summary: Level 3 adds full cryptographic visibility and agility. Vendors can acc
 weight: 40
 ---
 
-## What Level 3 Means
-
-{{< model-section title="What Level 3 Means" >}}
-
-## Criteria
-
-{{< model part="criteria" >}}
-
-### Cryptographic Inventory Taxonomy
-
-{{< model-section title="Cryptographic Inventory Taxonomy" >}}
-
-## Assessment Questions
-
-{{< model-section title="Assessment approach" >}}
-
-{{< model part="methodology" >}}
-
-{{< model part="questions" >}}
-
-## Evidence Checklist
-
-{{< model part="evidence" >}}
-
-## Suggested Procurement Actions
-
-- Request the SBOM and verify cryptographic library versions against known vulnerabilities.
-- Assess whether crypto-agility mechanisms cover the use cases most relevant to your integration.
-- Use the non-quantum-safe feature register as input into your own cryptographic risk register.
-- Consider requiring Level 3 for any system involved in long-term data archival, identity issuance, or critical infrastructure.
-
+{{< model part="level" >}}

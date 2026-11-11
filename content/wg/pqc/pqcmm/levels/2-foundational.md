@@ -1,4 +1,6 @@
 ---
+# Level content comes from the PQCMM model in pkic/pqcmm; edit it there.
+# title, description, and summary below only feed menus and listings.
 date: 2026-05-07T00:00:00Z
 linkTitle: "2 — Foundational"
 title: "Level 2 (Foundational) - PQC Maturity Model (PQCMM)"
@@ -8,31 +10,4 @@ summary: Level 2 means PQC is production-ready and standards-compliant. This is 
 weight: 30
 ---
 
-## What Level 2 Means
-
-{{< model-section title="What Level 2 Means" >}}
-
-## Criteria
-
-{{< model part="criteria" >}}
-
-{{< model-section title="Criteria notes" >}}
-
-## Assessment Questions
-
-{{< model-section title="Assessment approach" >}}
-
-{{< model part="methodology" >}}
-
-{{< model part="questions" >}}
-
-## Evidence Checklist
-
-{{< model part="evidence" >}}
-
-## Suggested Procurement Actions
-
-- Require Level 2 as a minimum for any new production procurement on systems with a service life beyond 5–7 years.
-- Verify standard conformance claims against publicly available test results.
-- Evaluate the gap to Level 3 for systems where ongoing cryptographic visibility and agility are required.
-
+{{< model part="level" >}}

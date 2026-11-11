@@ -101,3 +101,45 @@ describe("model level content placed in authored pages", () => {
     expect(() => readableModelSchema.parse(value)).not.toThrow();
   });
 });
+
+describe("whole level layout", () => {
+  const sections = [
+    { title: "What Level 0 Means", placement: "before-criteria", body: "Meaning." },
+    { title: "Scope", placement: "after-criteria", body: "Scope note." },
+    { title: "Procurement", placement: "after-evidence-checklist", body: "- Ask for a roadmap." },
+  ];
+
+  it("lays out every part, with sections placed and headed by the model", () => {
+    const levelContent = content({ sections });
+    const page = levelContent.render(call({ part: "level" }));
+    const order = [
+      "## What Level 0 Means",
+      "## Criteria",
+      "### Scope",
+      "## Supplier Intake Questions",
+      "## Procurement",
+    ];
+    expect(order.map((heading) => page.indexOf(heading))).toEqual(
+      [...order.map((heading) => page.indexOf(heading))].sort((a, b) => a - b),
+    );
+    expect(page).not.toContain("## Evidence Checklist");
+    expect(levelContent.unplaced()).toEqual([]);
+  });
+
+  it("follows renamed and added sections without any page change", () => {
+    const renamed = [{ ...sections[0]!, title: "Meaning of Level 0" }, ...sections, { title: "Extra", body: "New." }];
+    const levelContent = content({ sections: renamed });
+    const page = levelContent.render(call({ part: "level" }));
+    expect(page).toContain("## Meaning of Level 0");
+    expect(page).toContain("### Extra");
+    expect(levelContent.unplaced()).toEqual([]);
+  });
+
+  it("titles assessment questions by their kind", () => {
+    const groups = [
+      { id: "0.2", name: "Checks", kind: "assessment", questions: [{ id: "0.2.1", question: "Q?", guidance: "G." }] },
+    ];
+    const page = content({ assessment: { methodology: "", groups } }).render(call({ part: "level" }));
+    expect(page).toContain("## Assessment Questions");
+  });
+});

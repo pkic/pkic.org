@@ -47,6 +47,8 @@ export async function loadModelPage(entry: ModelEntry, version: ModelVersion, so
   const tree = modelVersionTree(sourceTree, model, entry.root, root, route);
   return {
     ...base,
+    // The pinned model, not the page's front matter, describes each version of a level.
+    ...(level ? { title: level.title, description: level.description } : {}),
     route,
     robots: root === entry.root ? base.robots : "noindex, follow",
     html: scopeModelHtml(base.html, entry.root, root),

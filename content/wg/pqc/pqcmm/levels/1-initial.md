@@ -1,4 +1,6 @@
 ---
+# Level content comes from the PQCMM model in pkic/pqcmm; edit it there.
+# title, description, and summary below only feed menus and listings.
 date: 2026-05-07T00:00:00Z
 linkTitle: "1 — Initial"
 title: "Level 1 (Initial) - PQC Maturity Model (PQCMM)"
@@ -8,31 +10,4 @@ summary: Level 1 means PQC is available for testing and evaluation. The vendor h
 weight: 20
 ---
 
-## What Level 1 Means
-
-{{< model-section title="What Level 1 Means" >}}
-
-## Criteria
-
-{{< model part="criteria" >}}
-
-{{< model-section title="Criteria notes" >}}
-
-## Assessment Questions
-
-{{< model-section title="Assessment approach" >}}
-
-{{< model part="methodology" >}}
-
-{{< model part="questions" >}}
-
-## Evidence Checklist
-
-{{< model part="evidence" >}}
-
-## Suggested Procurement Actions
-
-- Obtain the release notes and configuration guide; perform a technical proof-of-concept.
-- Assess the gap to Level 2 and negotiate a roadmap commitment.
-- Include Level 2 attainment as a contract milestone or renewal condition where the product is on a critical path.
-
+{{< model part="level" >}}
