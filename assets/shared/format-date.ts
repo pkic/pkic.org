@@ -487,3 +487,11 @@ export function formatDuration(milliseconds: number): string {
   const rest = minutes % 60;
   return `${formatNumber(Math.floor(minutes / 60))} h${rest ? ` ${formatNumber(rest)} min` : ""}`;
 }
+
+/** "12 s ago", "4 min ago", "2 h ago": how long ago something was, for a live view. */
+export function formatAge(milliseconds: number): string {
+  const seconds = Math.max(0, Math.round(milliseconds / 1000));
+  if (seconds < 60) return `${formatNumber(seconds)} s ago`;
+  if (seconds < 3_600) return `${formatNumber(Math.floor(seconds / 60))} min ago`;
+  return `${formatNumber(Math.floor(seconds / 3_600))} h ago`;
+}

@@ -1,0 +1,35 @@
+/*
+ * A screen's last hour: label, trend and latest value on one line per
+ * reading, the trends lined up across rows.
+ */
+@layer components {
+  .pk-screen-quality {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--pk-1) var(--pk-2);
+    margin: 0;
+    font-size: var(--pk-text-xs);
+  }
+  .pk-screen-quality__row {
+    display: contents;
+  }
+  .pk-screen-quality__label {
+    color: var(--pk-ink-muted);
+  }
+  .pk-screen-quality__trend,
+  .pk-screen-quality__value {
+    margin: 0;
+  }
+  .pk-screen-quality__trend .pk-muted {
+    margin: 0;
+  }
+  .pk-screen-quality__value {
+    min-inline-size: 5rem;
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+  }
+  .pk-screen-quality[data-compact] .pk-screen-quality__value {
+    min-inline-size: 3.5rem;
+  }
+}

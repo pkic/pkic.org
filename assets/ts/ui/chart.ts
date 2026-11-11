@@ -466,3 +466,73 @@ export function svgStackedBarChart(
     `<div class="pk-chart__legend">${legend}</div>`,
   );
 }
+
+/**
+ * A word-sized trend: one series drawn without axes, its numbers in the same
+ * hidden table every chart carries. A gap in the data is a gap in the line;
+ * the `bars` variant draws counts as columns instead. The scale starts at zero and runs
+ * to `max` or the highest value.
+ */
+export function svgSparkline(
+  values: readonly (number | null)[],
+  opts: ChartCaption & {
+    labels: readonly string[];
+    valueHeader: string;
+    format: (value: number) => string;
+    variant?: "line" | "bars";
+    color?: string;
+    max?: number;
+  },
+): string {
+  const n = values.length;
+  const known = values.filter((value): value is number => value !== null);
+  if (!n || !known.length) return noData();
+  const W = 120;
+  const H = 24;
+  const pad = 2;
+  const top = Math.max(opts.max ?? 0, ...known, Number.EPSILON);
+  const color = opts.color ?? "var(--pk-info)";
+  const slot = W / n;
+  const x = (i: number) => (n === 1 ? W / 2 : pad + (i / (n - 1)) * (W - pad * 2));
+  const y = (value: number) => H - pad - (Math.min(value, top) / top) * (H - pad * 2);
+
+  let marks = `<line x1="0" y1="${H - 0.5}" x2="${W}" y2="${H - 0.5}" stroke="${GRID}" stroke-width="1"/>`;
+  if (opts.variant === "bars") {
+    values.forEach((value, i) => {
+      if (!value) return;
+      const height = Math.max(1.5, H - pad - y(value));
+      marks += `<rect x="${(i * slot + 0.25).toFixed(2)}" y="${(H - pad - height).toFixed(2)}" width="${Math.max(0.5, slot - 0.5).toFixed(2)}" height="${height.toFixed(2)}" fill="${esc(color)}" rx="0.5"/>`;
+    });
+  } else {
+    let run: string[] = [];
+    const flush = () => {
+      if (run.length > 1)
+        marks += `<polyline points="${run.join(" ")}" fill="none" stroke="${esc(color)}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
+      else if (run.length === 1) {
+        const [cx, cy] = run[0]!.split(",");
+        marks += `<circle cx="${cx}" cy="${cy}" r="1.25" fill="${esc(color)}"/>`;
+      }
+      run = [];
+    };
+    values.forEach((value, i) => {
+      if (value === null) flush();
+      else run.push(`${x(i).toFixed(2)},${y(value).toFixed(2)}`);
+    });
+    flush();
+  }
+
+  const table = dataTable(
+    opts.caption,
+    "Time",
+    [opts.valueHeader],
+    opts.labels.map((label, i) => [
+      label,
+      [values[i] === null || values[i] === undefined ? "" : opts.format(values[i]!)],
+    ]),
+  );
+  return figure(
+    opts.caption,
+    `<svg class="pk-chart__sparkline" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true" focusable="false">${marks}</svg>`,
+    table,
+  );
+}

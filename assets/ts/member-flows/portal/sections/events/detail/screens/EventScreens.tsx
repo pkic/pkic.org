@@ -1,7 +1,9 @@
 /**
  * The event's screens: where each stands, what it shows and whether it is
- * online. Staff who manage screens pair, edit and revoke them here; room
- * operators see the same list without those actions.
+ * online. With the monitor connected, a grid of cards shows each screen's
+ * latest screenshot and last hour beside the list. Staff who manage screens
+ * pair, edit, revoke, identify and reload them here; room operators see the
+ * same screens without those actions.
  */
 import { useRef, useState } from "preact/hooks";
 import { screenConnection, screenConnectionDisplay } from "../../../../../../../shared/event-screen-connection";
@@ -21,8 +23,11 @@ import type {
   ScreenLiveStatus,
   ScreenMonitorStaffMessage,
 } from "../../../../../../../shared/schemas/event-screen-monitor";
+import { DiscoveryViewToggle, useDiscoveryView } from "../../../DiscoveryView";
+import type { ScreenMonitorView } from "./screen-monitor-view";
 import { ScreenEditDialog } from "./ScreenEditDialog";
 import { ScreenHealthCell } from "./ScreenHealthCell";
+import { ScreenMonitorCard } from "./ScreenMonitorCard";
 import { ScreenPairDialog } from "./ScreenPairDialog";
 import { eventScreensPath, revokeScreenSession } from "./screen-requests";
 import "../../../../../../ui/Content.css";
@@ -51,7 +56,7 @@ export function EventScreens({
   canManage,
   now: fixedNow,
   load,
-  live,
+  monitor,
   onCommand,
 }: {
   slug: string;
@@ -61,8 +66,8 @@ export function EventScreens({
   now?: number;
   /** Reads the list and the room choices; the gallery hands in its own. */
   load?: CollectionLoader;
-  /** Each screen's live report by screen ID; without it the list shows only what the last reads recorded. */
-  live?: ReadonlyMap<string, ScreenLiveStatus>;
+  /** The event's screen monitor; without it the list shows only what the last reads recorded. */
+  monitor?: ScreenMonitorView;
   /** Sends a manager's Identify or Reload to a connected screen. */
   onCommand?: (type: ScreenMonitorStaffMessage["type"], screen: ScreenRecord) => void;
 }) {
@@ -72,6 +77,8 @@ export function EventScreens({
   const [pairing, setPairing] = useState(false);
   const [editing, setEditing] = useState<ScreenRecord | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const { view, setView } = useDiscoveryView();
+  const live = monitor?.live;
   const reload = async () => {
     await actions.current?.reload();
   };
@@ -94,6 +101,44 @@ export function EventScreens({
     await reload();
   }
 
+  const menu = (screen: ScreenRecord) => (
+    <RowActions
+      subject={screen.name}
+      actions={[
+        ...(onCommand
+          ? [
+              {
+                id: "identify",
+                label: "Identify",
+                disabled: !live?.get(screen.id)?.online,
+                onSelect: () => onCommand("screen.identify", screen),
+              },
+              {
+                id: "reload",
+                label: "Reload",
+                disabled: !live?.get(screen.id)?.online,
+                onSelect: () => onCommand("screen.reload", screen),
+              },
+            ]
+          : []),
+        {
+          id: "edit",
+          label: "Edit",
+          separatorBefore: Boolean(onCommand),
+          onSelect: () => setEditing(screen),
+        },
+        {
+          id: "revoke",
+          label: "Revoke",
+          danger: true,
+          separatorBefore: true,
+          disabled: screen.session.state === "none",
+          onSelect: () => void revoke(screen),
+        },
+      ]}
+    />
+  );
+
   return (
     <div class="pk pk-stack">
       {error && <ErrorAlert error={error} />}
@@ -109,6 +154,27 @@ export function EventScreens({
         paginate
         initialSort="name"
         searchPlaceholder="Search screens…"
+        framed={!(monitor && view === "grid")}
+        toolbar={monitor ? () => <DiscoveryViewToggle view={view} onChange={setView} /> : undefined}
+        renderItems={
+          monitor && view === "grid"
+            ? (screens) => (
+                <div class="pk-discovery-grid">
+                  {screens.map((screen) => (
+                    <ScreenMonitorCard
+                      key={screen.id}
+                      screen={screen}
+                      status={monitor.live.get(screen.id)}
+                      samples={monitor.quality.get(screen.id) ?? []}
+                      screenshot={monitor.screenshots.get(screen.id)}
+                      now={now}
+                      actions={canManage ? menu(screen) : undefined}
+                    />
+                  ))}
+                </div>
+              )
+            : undefined
+        }
         createAction={
           canManage ? { label: "Pair screen", showLabel: true, onSelect: () => setPairing(true) } : undefined
         }
@@ -149,43 +215,7 @@ export function EventScreens({
             ? [
                 {
                   header: "",
-                  cell: (screen: ScreenRecord) => (
-                    <RowActions
-                      subject={screen.name}
-                      actions={[
-                        ...(onCommand
-                          ? [
-                              {
-                                id: "identify",
-                                label: "Identify",
-                                disabled: !live?.get(screen.id)?.online,
-                                onSelect: () => onCommand("screen.identify", screen),
-                              },
-                              {
-                                id: "reload",
-                                label: "Reload",
-                                disabled: !live?.get(screen.id)?.online,
-                                onSelect: () => onCommand("screen.reload", screen),
-                              },
-                            ]
-                          : []),
-                        {
-                          id: "edit",
-                          label: "Edit",
-                          separatorBefore: Boolean(onCommand),
-                          onSelect: () => setEditing(screen),
-                        },
-                        {
-                          id: "revoke",
-                          label: "Revoke",
-                          danger: true,
-                          separatorBefore: true,
-                          disabled: screen.session.state === "none",
-                          onSelect: () => void revoke(screen),
-                        },
-                      ]}
-                    />
-                  ),
+                  cell: (screen: ScreenRecord) => menu(screen),
                 },
               ]
             : []),

@@ -191,8 +191,10 @@
   .pk-collection-status__fact {
     display: inline-block;
   }
+  /* A leading space would collapse at the start of the inline block, so the gap is a margin. */
   .pk-collection-status__fact + .pk-collection-status__fact::before {
-    content: " · ";
+    content: "·";
+    margin-inline: 0.35em;
     color: var(--pk-ink-muted);
     font-weight: 400;
   }

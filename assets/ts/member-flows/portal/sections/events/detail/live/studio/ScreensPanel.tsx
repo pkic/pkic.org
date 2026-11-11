@@ -1,44 +1,28 @@
 /**
- * The room's screens at a glance for its operators: whether each is online,
- * what it actually draws and how its device is doing. Screen managers also
- * get Identify and Reload; everyone else watches.
+ * The room's screens at a glance for its operators: each one's latest
+ * screenshot and its age, whether it is online and anything wrong with it,
+ * and its last hour of latency and loss (stalls for a livestream). Screen
+ * managers also get Identify and Reload; everyone else watches.
  */
-import { screenConnection, screenConnectionDisplay } from "../../../../../../../../shared/event-screen-connection";
-import { screenHealthDisplay } from "../../../../../../../../shared/event-screen-health";
 import { LIVE_SCREEN_OUTPUT_DETAILS } from "../../../../../../../../shared/live-room-outputs";
-import type {
-  ScreenLiveStatus,
-  ScreenMonitorStaffMessage,
-} from "../../../../../../../../shared/schemas/event-screen-monitor";
+import type { ScreenMonitorStaffMessage } from "../../../../../../../../shared/schemas/event-screen-monitor";
 import type { ScreenRecord } from "../../../../../../../../shared/schemas/event-screens";
-import { Badge } from "../../../../../../../ui/Badge";
+import { CollectionStatusLine } from "../../../../../../../ui/CollectionCard";
 import { RowActions } from "../../../../../../../ui/RowActions";
-import { screenHealthDetail } from "../../screens/ScreenHealthCell";
+import type { ScreenMonitorView } from "../../screens/screen-monitor-view";
+import { ScreenShot, screenStatusItems } from "../../screens/ScreenMonitorCard";
+import { ScreenQualityTrend } from "../../screens/ScreenQualityTrend";
 import "./ScreensPanel.css";
-
-function ScreenShows({ screen, live }: { screen: ScreenRecord; live: ScreenLiveStatus | undefined }) {
-  if (live?.online && live.health) {
-    const { label, tone } = screenHealthDisplay(live.health);
-    return tone ? <Badge tone={tone}>{label}</Badge> : <>{label}</>;
-  }
-  return <>{screen.assignment ? LIVE_SCREEN_OUTPUT_DETAILS[screen.assignment.output].label : "Not assigned"}</>;
-}
-
-function ScreenConnection({ screen, live, now }: { screen: ScreenRecord; live?: ScreenLiveStatus; now: number }) {
-  if (live?.online) return <>Online</>;
-  const { label, tone } = screenConnectionDisplay(screenConnection(screen.session, now));
-  return tone ? <Badge tone={tone}>{label}</Badge> : <>{label}</>;
-}
 
 export function ScreensPanel({
   screens,
-  live,
+  monitor,
   now,
   onCommand,
 }: {
   /** The room's screens, from the event's screen list filtered to this room. */
   screens: readonly ScreenRecord[];
-  live: ReadonlyMap<string, ScreenLiveStatus>;
+  monitor: ScreenMonitorView;
   now: number;
   /** Identify and Reload, for screen managers only. */
   onCommand?: (type: ScreenMonitorStaffMessage["type"], screen: ScreenRecord) => void;
@@ -47,18 +31,31 @@ export function ScreensPanel({
   return (
     <ul class="pk-studio-screens" aria-label="Screens">
       {screens.map((screen) => {
-        const status = live.get(screen.id);
-        const detail = status?.online ? screenHealthDetail(status) : "";
+        const status = monitor.live.get(screen.id);
+        const online = Boolean(status?.online);
         return (
           <li key={screen.id} class="pk-studio-screens__row">
+            <span class="pk-studio-screens__shot">
+              <ScreenShot screen={screen} screenshot={monitor.screenshots.get(screen.id)} online={online} now={now} />
+            </span>
             <span class="pk-studio-screens__name">{screen.name}</span>
             <span class="pk-studio-screens__status">
-              <ScreenConnection screen={screen} live={status} now={now} />
+              {screen.assignment && (
+                <span class="pk-studio-screens__output">
+                  {LIVE_SCREEN_OUTPUT_DETAILS[screen.assignment.output].label}
+                </span>
+              )}
+              <CollectionStatusLine items={screenStatusItems(screen, status, now)} />
             </span>
-            <span class="pk-studio-screens__shows">
-              <ScreenShows screen={screen} live={status} />
+            <span class="pk-studio-screens__trend">
+              <ScreenQualityTrend
+                screenName={screen.name}
+                samples={monitor.quality.get(screen.id) ?? []}
+                livestream={screen.assignment?.output === "livestream"}
+                now={now}
+                compact
+              />
             </span>
-            <span class="pk-studio-screens__detail">{detail || <span class="pk-mono">{screen.id}</span>}</span>
             {onCommand && (
               <span class="pk-studio-screens__actions">
                 <RowActions
@@ -67,13 +64,13 @@ export function ScreensPanel({
                     {
                       id: "identify",
                       label: "Identify",
-                      disabled: !status?.online,
+                      disabled: !online,
                       onSelect: () => onCommand("screen.identify", screen),
                     },
                     {
                       id: "reload",
                       label: "Reload",
-                      disabled: !status?.online,
+                      disabled: !online,
                       onSelect: () => onCommand("screen.reload", screen),
                     },
                   ]}
