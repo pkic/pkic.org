@@ -41,11 +41,46 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .pk-screen-standing {
+  /* The condition: a dot in its tone and one line of words, never taller than one line. */
+  .pk-screen-condition {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: var(--pk-1) var(--pk-2);
+    gap: var(--pk-2);
+    min-inline-size: 0;
+    block-size: 1.5em;
+    margin: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+  .pk-screen-condition__dot {
+    flex: none;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: var(--pk-ok);
+  }
+  .pk-screen-condition[data-tone="warning"] .pk-screen-condition__dot {
+    background: var(--pk-warn);
+  }
+  .pk-screen-condition[data-tone="critical"] .pk-screen-condition__dot {
+    background: var(--pk-danger);
+  }
+  .pk-screen-condition[data-tone="neutral"] .pk-screen-condition__dot {
+    background: var(--pk-ink-faint);
+  }
+  .pk-screen-condition__text {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* A screen with a warning or a critical issue carries its tone along the card's top edge. */
+  .pk-screen-card--warning {
+    border-block-start: 3px solid var(--pk-warn);
+  }
+  .pk-screen-card--critical {
+    border-block-start: 3px solid var(--pk-danger);
   }
 
   .pk-screen-card__body {
@@ -67,8 +102,7 @@
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-sm);
   }
-  .pk-screen-card__status {
+  .pk-screen-card__body > .pk-screen-condition {
     margin-block-end: var(--pk-2);
-    font-size: var(--pk-text-sm);
   }
 }

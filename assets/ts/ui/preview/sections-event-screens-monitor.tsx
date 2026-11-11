@@ -92,7 +92,7 @@ export const eventScreenMonitorSections: PreviewSection[] = [
   {
     id: "screens-tab-monitor",
     title: "Screens tab, multi-view",
-    note: "One card per screen, those with critical issues first, then warnings: latest screenshot with its age, name, room and output, online state and issues, then the last hour of latency and loss, with throughput and stalls for livestream screens. The summary chip filters to the screens that need attention; the menu beside it turns on browser notifications.",
+    note: "One card per screen, those with critical issues first, then warnings, their tone along the top edge: latest screenshot with its age, name, room and output, one condition line, then the last hour of latency and loss, with throughput and stalls for livestream screens. The summary chip filters to the screens that need attention; the menu beside it turns on browser notifications.",
     render: () => <MonitoredTab canManage />,
   },
   {
@@ -104,7 +104,7 @@ export const eventScreenMonitorSections: PreviewSection[] = [
   {
     id: "studio-screens-panel",
     title: "Studio Screens panel",
-    note: "The room's screens as compact rows, worst first: screenshot, name, output, status and issues, then latency with loss, or stalls for a livestream. Managers get Identify and Reload in each row's menu.",
+    note: "The room's screens as compact rows, worst first with their tone along the start: screenshot, name, output, one condition line, then latency with loss, or stalls for a livestream. Managers get Identify and Reload in each row's menu.",
     render: () => <StudioScreens canManage />,
   },
   {

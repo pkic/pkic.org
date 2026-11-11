@@ -25,7 +25,7 @@ import { toast } from "../../../../ui";
 import { DiscoveryViewToggle, useDiscoveryView } from "../../../DiscoveryView";
 import { ScreenEditDialog } from "./ScreenEditDialog";
 import { ScreenHealthCell } from "./ScreenHealthCell";
-import { ScreenMonitorCard, ScreenStatusLine } from "./ScreenMonitorCard";
+import { ScreenConditionLine, ScreenMonitorCard, screenCondition } from "./ScreenMonitorCard";
 import { useScreenMonitorController, type ScreenMonitorFixture } from "./useScreenMonitorController";
 import { ScreenPairDialog } from "./ScreenPairDialog";
 import { eventScreensPath, revokeScreenSession } from "./screen-requests";
@@ -235,11 +235,8 @@ export function EventScreens({
           {
             header: "Status",
             cell: (screen) => (
-              <ScreenStatusLine
-                screen={screen}
-                status={live?.get(screen.id)}
-                issues={controller.issuesOf(screen.id)}
-                now={now}
+              <ScreenConditionLine
+                condition={screenCondition(screen, live?.get(screen.id), controller.issuesOf(screen.id), now)}
               />
             ),
           },

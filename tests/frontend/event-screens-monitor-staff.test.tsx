@@ -233,7 +233,7 @@ describe("the multi-view", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-  it("puts critical screens first, shows two issue badges at most and filters to those needing attention", async () => {
+  it("puts critical screens first, says each condition in one line and filters to those needing attention", async () => {
     host = document.body.appendChild(document.createElement("div"));
     await act(() =>
       render(
@@ -245,10 +245,21 @@ describe("the multi-view", () => {
     const titles = [...host.querySelectorAll(".pk-screen-card__title")].map((title) => title.textContent);
     expect(titles).toEqual(["Cloakroom", "Balcony", "Atrium"]);
     const cards = [...host.querySelectorAll("article")];
-    const badges = (card: Element) => [...card.querySelectorAll(".pk-badge")].map((badge) => badge.textContent);
-    expect(badges(cards[0]!)).toEqual(["Offline"]);
-    expect(badges(cards[1]!)).toEqual(["Weak Wi-Fi", "No recent picture", "+1: Running on the agenda"]);
-    expect(badges(cards[2]!)).toEqual([]);
+    const condition = (card: Element) => card.querySelector(".pk-screen-condition")!;
+    expect(cards.map((card) => condition(card).getAttribute("title"))).toEqual([
+      "Last heard 10 min ago · Offline",
+      "Online · Weak Wi-Fi, no recent picture, running on the agenda",
+      "Online · Following the studio",
+    ]);
+    expect(cards.map((card) => condition(card).getAttribute("data-tone"))).toEqual(["critical", "warning", "ok"]);
+    // The tone along the top edge is for screens that need attention only, and is said to screen readers too.
+    expect(cards.map((card) => card.className)).toEqual([
+      "pk-collection-card pk-screen-card--critical",
+      "pk-collection-card pk-screen-card--warning",
+      "pk-collection-card",
+    ]);
+    expect(condition(cards[0]!).textContent).toBe("Critical: Last heard 10 min ago · Offline");
+    expect(host.querySelector(".pk-badge")).toBeNull();
 
     const summary = [...host.querySelectorAll<HTMLButtonElement>(".pk-chip__toggle")].find((chip) =>
       chip.textContent?.includes("critical"),

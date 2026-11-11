@@ -1,8 +1,9 @@
 /**
  * The room's screens at a glance for its operators: each one's latest
- * screenshot and its age, whether it is online and its issues, worst first,
- * and its last hour of latency and loss (stalls for a livestream). Screen
- * managers also get Identify and Reload; everyone else watches.
+ * screenshot and its age, one line on its connection and issues, worst
+ * screens first with their tone along the row's start, and the last hour of
+ * latency and loss (stalls for a livestream). Screen managers also get
+ * Identify and Reload; everyone else watches.
  */
 import { LIVE_SCREEN_OUTPUT_DETAILS } from "../../../../../../../../shared/live-room-outputs";
 import type { ScreenMonitorStaffMessage } from "../../../../../../../../shared/schemas/event-screen-monitor";
@@ -10,7 +11,7 @@ import type { ScreenRecord } from "../../../../../../../../shared/schemas/event-
 import { sortByScreenIssues, type ScreenIssue } from "../../../../../../../../shared/event-screen-issues";
 import { RowActions } from "../../../../../../../ui/RowActions";
 import type { ScreenMonitorView } from "../../screens/screen-monitor-view";
-import { ScreenShot, ScreenStatusLine } from "../../screens/ScreenMonitorCard";
+import { ScreenConditionLine, ScreenShot, screenCondition } from "../../screens/ScreenMonitorCard";
 import { ScreenQualityTrend } from "../../screens/ScreenQualityTrend";
 import "./ScreensPanel.css";
 
@@ -35,19 +36,18 @@ export function ScreensPanel({
       {sortByScreenIssues(screens, (screen) => issuesOf(screen.id)).map((screen) => {
         const status = monitor.live.get(screen.id);
         const online = Boolean(status?.online);
+        const condition = screenCondition(screen, status, issuesOf(screen.id), now);
         return (
-          <li key={screen.id} class="pk-studio-screens__row">
+          <li key={screen.id} class="pk-studio-screens__row" data-tone={condition.tone}>
             <span class="pk-studio-screens__shot">
               <ScreenShot screen={screen} screenshot={monitor.screenshots.get(screen.id)} online={online} now={now} />
             </span>
             <span class="pk-studio-screens__name">{screen.name}</span>
+            <span class="pk-studio-screens__output">
+              {screen.assignment ? LIVE_SCREEN_OUTPUT_DETAILS[screen.assignment.output].label : "Not assigned"}
+            </span>
             <span class="pk-studio-screens__status">
-              {screen.assignment && (
-                <span class="pk-studio-screens__output">
-                  {LIVE_SCREEN_OUTPUT_DETAILS[screen.assignment.output].label}
-                </span>
-              )}
-              <ScreenStatusLine screen={screen} status={status} issues={issuesOf(screen.id)} now={now} />
+              <ScreenConditionLine condition={condition} />
             </span>
             <span class="pk-studio-screens__trend">
               <ScreenQualityTrend
