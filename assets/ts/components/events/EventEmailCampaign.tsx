@@ -1,9 +1,9 @@
-import {
-  eventEmailCampaignAudienceSchema,
-  isInvitationCampaignAudience,
-  type EventEmailCampaignAudience,
-} from "../../../shared/schemas/event-email-campaigns";
+import type { EventEmailCampaignAudience } from "../../../shared/schemas/event-email-campaigns";
+import { formatNumber } from "../../../shared/format-number";
 import { useState, useEffect, useRef } from "preact/hooks";
+import type { z } from "zod";
+import type { promotionFormatSchema } from "../../../shared/schemas/event-promotion-kit";
+import { RECOMMENDED_KIT_FORMATS, SpeakerKitAttachments } from "./SpeakerKitAttachments";
 import { useContractForm } from "../../hooks/useContractForm";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import { Tabs } from "../Tabs";
@@ -18,17 +18,13 @@ import { IconBraces } from "../icons";
 import { Menu } from "../../ui/Menu";
 import type { MarkdownEditorHandle } from "../markdown-editor/MarkdownEditor";
 import {
-  eventEmailCampaignDayWaitlistFilterSchema,
   eventEmailCampaignPreviewInputSchema,
   eventEmailCampaignPreviewResponseSchema,
   eventEmailCampaignResponseSchema,
+  speakerKitTestResponseSchema,
   eventEmailCampaignSendModeSchema,
-  eventEmailCampaignSpeakerStatusFilterSchema,
-  type EventEmailCampaignDayWaitlistFilter,
   type EventEmailCampaignPreviewResponse,
   type EventEmailCampaignSendMode,
-  type EventEmailCampaignInvitationStatusFilter,
-  type EventEmailCampaignSpeakerStatusFilter,
 } from "../../../shared/schemas/event-email-campaigns";
 import { EMAIL_MESSAGE_TYPE_OPTIONS } from "../../shared/email-type-options";
 import { type TemplateHelperItem } from "../../shared/email-template-helpers";
@@ -37,25 +33,15 @@ import { highlightTemplateSyntax } from "../../shared/email-template-syntax";
 import type { EmailMessageType } from "../../../shared/schemas/email-templates";
 import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../shared/email-preview-tabs";
 import {
-  AUDIENCE_LABELS,
-  DAY_WAITLIST_FILTER_LABELS,
   PERSONAL_ONLY_HELPERS,
   SEND_MODE_LABELS,
-  SPEAKER_STATUS_FILTER_LABELS,
   availableHelperLabelsForAudience,
   availablePartialsForAudience,
   type CampaignPayload,
-  useDays,
 } from "./event-email-campaign-support";
-import {
-  EVENT_REGISTRATION_STATUS_FILTERS,
-  eventRegistrationStatusLabel,
-  eventRegistrationStatusFilterSchema,
-  type EventRegistrationStatusFilter,
-} from "../../../shared/schemas/event-registrations";
 import { ServerSearchSelect } from "../ServerSearchSelect";
 import { requestJson } from "../../shared/api-client";
-import { EventInvitationStatusFilter } from "./EventInvitationStatusFilter";
+import { EventEmailCampaignAudienceFields, useCampaignAudience } from "./EventEmailCampaignAudienceFields";
 import { emailTemplateCatalog, getEmailTemplateEditorVersion } from "../../shared/email-template-catalog";
 
 import "../../ui/Content.css";
@@ -69,6 +55,7 @@ export function EventEmailCampaign({
   initialAudience = "attendees",
   initialSubject = "",
   initialBody = "",
+  initialAttachKits = false,
   notify = () => {},
   cancelHref,
   onSent,
@@ -78,31 +65,29 @@ export function EventEmailCampaign({
   initialAudience?: EventEmailCampaignAudience;
   initialSubject?: string;
   initialBody?: string;
+  initialAttachKits?: boolean;
   notify?: (message: string, type: "success" | "error") => void;
   /** The way back, when the composer is a page of its own. */
   cancelHref?: string;
   /** Told once the campaign is queued, so a page can return to where it came from. */
   onSent?: () => void;
 }) {
-  const days = useDays(daysPath);
-
   const [templateKey, setTemplateKey] = useState("");
   const [mode, setMode] = useState<EventEmailCampaignSendMode>("personal");
   const [messageType, setMessageType] = useState<EmailMessageType>("promotional");
   const [batchSize, setBatchSize] = useState(500);
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
-  const [audience, setAudience] = useState<EventEmailCampaignAudience>(initialAudience);
+  const selection = useCampaignAudience(daysPath, initialAudience, initialAttachKits ? "scheduled" : "confirmed");
+  const { audience, speakerStatus, filter } = selection;
+  const filterKey = JSON.stringify(filter);
 
-  // attendee filters
-  const [attendeeStatus, setAttendeeStatus] = useState<EventRegistrationStatusFilter>("registered");
-  const [attendanceType, setAttendanceType] = useState("all");
-  const [dayFilter, setDayFilter] = useState("");
-  const [dayWaitlistStatus, setDayWaitlistStatus] = useState<EventEmailCampaignDayWaitlistFilter>("all");
-
-  // speaker filters
-  const [speakerStatus, setSpeakerStatus] = useState<EventEmailCampaignSpeakerStatusFilter>("confirmed");
-  const [invitationStatus, setInvitationStatus] = useState<EventEmailCampaignInvitationStatusFilter>("all");
+  // promotion kit attachments
+  const [kitFormats, setKitFormats] = useState<z.infer<typeof promotionFormatSchema>[]>([...RECOMMENDED_KIT_FORMATS]);
+  const [kitResend, setKitResend] = useState(false);
+  const [attachKits, setAttachKits] = useState(initialAttachKits);
+  const kitsAvailable = audience === "speakers" && speakerStatus === "scheduled";
+  const sendsKits = kitsAvailable && attachKits;
 
   // preview state
   const [preview, setPreview] = useState<EventEmailCampaignPreviewResponse | null>(null);
@@ -111,12 +96,13 @@ export function EventEmailCampaign({
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
   const [status, setStatus] = useState("Preview required before sending.");
   const [sending, setSending] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   const bodyEditor = useRef<MarkdownEditorHandle>(null);
   const subjectPreRef = useRef<HTMLPreElement>(null);
   const [bodyRevision, setBodyRevision] = useState(0);
   const templateRequestIdRef = useRef(0);
-  const availableHelperLabels = availableHelperLabelsForAudience(audience);
+  const availableHelperLabels = availableHelperLabelsForAudience(audience, { kits: sendsKits });
   const availablePartials = availablePartialsForAudience(audience);
 
   useEffect(() => {
@@ -128,21 +114,7 @@ export function EventEmailCampaign({
   useEffect(() => {
     setPreview(null);
     setPreviewConfirmed(false);
-  }, [
-    subject,
-    body,
-    templateKey,
-    audience,
-    mode,
-    messageType,
-    batchSize,
-    attendeeStatus,
-    attendanceType,
-    dayFilter,
-    dayWaitlistStatus,
-    speakerStatus,
-    invitationStatus,
-  ]);
+  }, [subject, body, templateKey, filterKey, mode, messageType, batchSize, sendsKits, kitFormats, kitResend]);
 
   function insertSnippet(snippet: string) {
     bodyEditor.current?.insertText(snippet);
@@ -187,24 +159,13 @@ export function EventEmailCampaign({
       subjectOverride: subject,
       bodyContent: body,
       messageType,
-      sendMode: mode,
+      sendMode: sendsKits ? "personal" : mode,
       batchSize,
-      filter: {
-        audience,
-      },
+      filter,
     };
+    if (sendsKits) base.kit = { formats: kitFormats, resend: kitResend };
     if (templateKey) base.templateKey = templateKey;
     if (withToken) base.previewToken = withToken;
-    if (audience === "attendees") {
-      base.filter.attendeeStatus = attendeeStatus as CampaignPayload["filter"]["attendeeStatus"];
-      base.filter.attendanceType = attendanceType as CampaignPayload["filter"]["attendanceType"];
-      if (dayFilter) base.filter.dayDate = dayFilter;
-      base.filter.dayWaitlistStatus = dayWaitlistStatus;
-    } else if (audience === "speakers") {
-      base.filter.speakerStatus = speakerStatus;
-    } else if (isInvitationCampaignAudience(audience)) {
-      base.filter.invitationStatus = invitationStatus;
-    }
     return base;
   }
 
@@ -248,9 +209,16 @@ export function EventEmailCampaign({
         body: JSON.stringify(buildPayload(preview.previewToken)),
       });
       const count = res.queuedRecipients;
-      notify(`Campaign accepted for ${count} recipient${count !== 1 ? "s" : ""}`, "success");
+      notify(
+        sendsKits
+          ? `Preparing ${formatNumber(count)} speaker kit email${count !== 1 ? "s" : ""}`
+          : `Campaign accepted for ${count} recipient${count !== 1 ? "s" : ""}`,
+        "success",
+      );
       setStatus(
-        `${res.stagedRecipients} of ${count} recipients added to the outbox. Open the Email outbox to add any remaining campaign messages.`,
+        sendsKits
+          ? "Each email goes out once its kit is ready."
+          : `${res.stagedRecipients} of ${count} recipients added to the outbox. Open the Email outbox to add any remaining campaign messages.`,
       );
       setPreview(null);
       setPreviewConfirmed(false);
@@ -269,7 +237,24 @@ export function EventEmailCampaign({
     }
   }
 
-  const personal = mode === "personal";
+  async function handleTest() {
+    if (!preview) return;
+    setTesting(true);
+    try {
+      const res = await requestJson(`${campaignsPath}/tests`, speakerKitTestResponseSchema, {
+        method: "POST",
+        body: JSON.stringify(buildPayload(preview.previewToken)),
+      });
+      notify(`Test on its way to you, using the kit for “${res.sessionTitle}”`, "success");
+    } catch (e) {
+      notify((e as Error).message, "error");
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  // Each kit is personal, so an attached kit rules out a shared BCC send.
+  const personal = sendsKits || mode === "personal";
 
   function isHelperAvailable(item: TemplateHelperItem): boolean {
     return availableHelperLabels.has(item.label);
@@ -288,129 +273,11 @@ export function EventEmailCampaign({
 
   return (
     <div class="pk pk-stack" {...form.handlers}>
-      <div class="pk-grid" aria-label="Audience and filters">
-        <Field label="Audience" {...form.of("filter.audience")}>
-          {(control) => (
-            <Select
-              {...control}
-              name="filter.audience"
-              value={audience}
-              onChange={(event) =>
-                setAudience(eventEmailCampaignAudienceSchema.parse((event.target as HTMLSelectElement).value))
-              }
-            >
-              {eventEmailCampaignAudienceSchema.options.map((option) => (
-                <option key={option} value={option}>
-                  {AUDIENCE_LABELS[option]}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
-        {isInvitationCampaignAudience(audience) ? (
-          <EventInvitationStatusFilter
-            value={invitationStatus}
-            onChange={setInvitationStatus}
-            field={form.of("filter.invitationStatus")}
-          />
-        ) : audience === "attendees" ? (
-          <>
-            <Field label="Registration status">
-              {(control) => (
-                <Select
-                  {...control}
-                  value={attendeeStatus}
-                  onChange={(e) =>
-                    setAttendeeStatus(eventRegistrationStatusFilterSchema.parse((e.target as HTMLSelectElement).value))
-                  }
-                >
-                  {EVENT_REGISTRATION_STATUS_FILTERS.map((status) => (
-                    <option key={status} value={status}>
-                      {status === "all" ? "All" : eventRegistrationStatusLabel(status)}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-            <Field label="Attendance type">
-              {(control) => (
-                <Select
-                  {...control}
-                  value={attendanceType}
-                  onChange={(e) => setAttendanceType((e.target as HTMLSelectElement).value)}
-                >
-                  <option value="all">All types</option>
-                  <option value="in_person">In-person</option>
-                  <option value="virtual">Virtual</option>
-                  <option value="on_demand">On-demand</option>
-                </Select>
-              )}
-            </Field>
-            <Field label="Specific day">
-              {(control) => (
-                <Select
-                  {...control}
-                  value={dayFilter}
-                  onChange={(e) => setDayFilter((e.target as HTMLSelectElement).value)}
-                >
-                  <option value="">All days</option>
-                  {days.map((d) => {
-                    const dateKey = d.day_date ?? d.date ?? "";
-                    return (
-                      <option key={dateKey} value={dateKey}>
-                        {d.label ?? dateKey}
-                      </option>
-                    );
-                  })}
-                </Select>
-              )}
-            </Field>
-            <Field label="Day waitlist">
-              {(control) => (
-                <Select
-                  {...control}
-                  value={dayWaitlistStatus}
-                  onChange={(e) =>
-                    setDayWaitlistStatus(
-                      eventEmailCampaignDayWaitlistFilterSchema.parse((e.target as HTMLSelectElement).value),
-                    )
-                  }
-                >
-                  {eventEmailCampaignDayWaitlistFilterSchema.options.map((waitlistStatus) => (
-                    <option key={waitlistStatus} value={waitlistStatus}>
-                      {DAY_WAITLIST_FILTER_LABELS[waitlistStatus]}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-          </>
-        ) : (
-          <Field label="Speaker status">
-            {(control) => (
-              <Select
-                {...control}
-                value={speakerStatus}
-                onChange={(e) =>
-                  setSpeakerStatus(
-                    eventEmailCampaignSpeakerStatusFilterSchema.parse((e.target as HTMLSelectElement).value),
-                  )
-                }
-              >
-                {/* Reading the contract's order puts "All active" at the head
-                    of the list where the hand-written version led with
-                    "Confirmed"; the composer still opens on confirmed
-                    speakers, because that is what the state starts as. */}
-                {eventEmailCampaignSpeakerStatusFilterSchema.options.map((status) => (
-                  <option key={status} value={status}>
-                    {SPEAKER_STATUS_FILTER_LABELS[status]}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-        )}
-      </div>
+      <EventEmailCampaignAudienceFields
+        selection={selection}
+        audienceField={form.of("filter.audience")}
+        invitationField={form.of("filter.invitationStatus")}
+      />
 
       {/* Template + mode */}
       <div class="pk-grid">
@@ -431,7 +298,8 @@ export function EventEmailCampaign({
           {(control) => (
             <Select
               {...control}
-              value={mode}
+              value={personal ? "personal" : mode}
+              disabled={sendsKits}
               onChange={(e) => setMode(eventEmailCampaignSendModeSchema.parse((e.target as HTMLSelectElement).value))}
             >
               {eventEmailCampaignSendModeSchema.options.map((sendMode) => (
@@ -514,6 +382,19 @@ export function EventEmailCampaign({
       </Field>
       {!personal && <p class="pk-small">Recipient-specific insertions are unavailable in Broadcast BCC mode.</p>}
 
+      {audience === "speakers" && (
+        <SpeakerKitAttachments
+          available={kitsAvailable}
+          attached={attachKits}
+          formats={kitFormats}
+          resend={kitResend}
+          formatsField={form.of("kit.formats")}
+          onAttachedChange={setAttachKits}
+          onFormatsChange={setKitFormats}
+          onResendChange={setKitResend}
+        />
+      )}
+
       {/* Preview panel */}
       {preview && (
         <Panel>
@@ -523,7 +404,11 @@ export function EventEmailCampaign({
               <span class="pk-small">Subject</span>
               <span class="pk-strong">{preview.subject}</span>
             </div>
-            <span class="pk-small">{preview.recipientCount} recipients</span>
+            <span class="pk-small">
+              {sendsKits
+                ? `${formatNumber(preview.recipientCount)} emails, one per speaker for each session`
+                : `${preview.recipientCount} recipients`}
+            </span>
             <Tabs items={EMAIL_PREVIEW_TABS} active={previewTab} onChange={(key) => setPreviewTab(key)} className="" />
             {previewTab === "html" && (
               <EmailHtmlPreview title="Rendered campaign email preview" html={preview.html} height={600} />
@@ -544,10 +429,15 @@ export function EventEmailCampaign({
         )}
         <div class="pk-cluster">
           <Button onClick={() => void handlePreview()}>Preview Email</Button>
+          {sendsKits && preview && (
+            <Button onClick={() => void handleTest()} disabled={testing} loading={testing}>
+              Send test to me
+            </Button>
+          )}
           <Button
             variant="primary"
             onClick={() => void handleSend()}
-            disabled={sending || !previewConfirmed}
+            disabled={sending || !previewConfirmed || preview?.recipientCount === 0}
             loading={sending}
           >
             Send Email

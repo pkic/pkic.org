@@ -151,6 +151,10 @@ export async function cleanExpiredCampaignSnapshots(db: DatabaseLike): Promise<v
       SELECT c.id FROM event_email_campaigns c
       WHERE c.expires_at < ? AND c.status IN ('draft', 'complete')
       AND NOT EXISTS (SELECT 1 FROM event_email_campaign_recipients r WHERE r.campaign_id = c.id)
+      -- A speaker kit email reads its message from the campaign until it reaches the outbox.
+      AND NOT EXISTS (SELECT 1 FROM event_promotion_batches b
+        JOIN event_promotion_batch_recipients kit ON kit.batch_id = b.id AND kit.email_status = 'pending'
+        WHERE b.email_campaign_id = c.id)
       ORDER BY c.expires_at, c.id LIMIT 100)`,
       )
       .bind(now),

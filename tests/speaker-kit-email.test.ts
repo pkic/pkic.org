@@ -1,0 +1,303 @@
+import { env } from "cloudflare:workers";
+import { downloadZip } from "client-zip";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  eventEmailCampaignPreviewResponseSchema,
+  eventEmailCampaignResponseSchema,
+} from "../assets/shared/schemas/event-email-campaigns";
+import { loadStoredFileAttachments, parseQueuedEmailAttachments } from "../functions/_lib/email/attachments";
+import { processOutboxById } from "../functions/_lib/email/outbox";
+import type { Env } from "../functions/_lib/types";
+import { processPendingPromotionRecipients } from "../functions/_lib/services/event-agenda/promotion-batch-dispatch";
+import { processPromotionRenderJob } from "../functions/_lib/services/event-agenda/promotion-render-jobs";
+import { stagePendingSpeakerKitEmails } from "../functions/_lib/services/event-email-campaign";
+import { cleanExpiredCampaignSnapshots } from "../functions/_lib/services/event-email-campaign/dispatch";
+import { readStoredZipEntries } from "../functions/_lib/utils/stored-zip";
+import { callApi } from "./helpers/app";
+import { eventBase, promotionFixture } from "./helpers/promotion-fixture";
+import { emailPlainText } from "../functions/_lib/email/plain-text";
+import { resetDb } from "./helpers/reset-db";
+import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
+
+type Fixture = Awaited<ReturnType<typeof promotionFixture>>;
+
+const campaigns = `${eventBase}/email/campaigns`;
+const message = {
+  subjectOverride: "Your promotion kit for {{sessionTitle}}",
+  bodyContent: "Hi {{firstName}}, [open your kit]({{promotionKitUrl}}).",
+  sendMode: "personal",
+  filter: { audience: "speakers", speakerStatus: "scheduled" },
+  kit: { formats: ["portrait", "carousel"], resend: false },
+};
+
+function post(f: Fixture, path: string, body: unknown) {
+  return callApi(env, path, { method: "POST", headers: f.headers, body: JSON.stringify(body) });
+}
+
+async function preview(f: Fixture, body: unknown = message) {
+  const response = await post(f, `${campaigns}/previews`, body);
+  expect(response.status, await response.clone().text()).toBe(200);
+  return eventEmailCampaignPreviewResponseSchema.parse(await response.json());
+}
+
+async function send(f: Fixture, body: Record<string, unknown> = message) {
+  const { previewToken } = await preview(f, body);
+  const response = await post(f, campaigns, { ...body, previewToken });
+  expect(response.status, await response.clone().text()).toBe(202);
+  return eventEmailCampaignResponseSchema.parse(await response.json());
+}
+
+async function kitFixture(withSecondSpeaker = false) {
+  const f = await promotionFixture(withSecondSpeaker);
+  for (const templateKey of [
+    "email_layout",
+    "partial_sponsors_block",
+    "partial_about_pkic",
+    "partial_donation_request",
+  ]) {
+    const version = await createTemplateVersion(env.DB, {
+      templateKey,
+      content: templateKey === "email_layout" ? "{{{body_html}}}" : "Details",
+      subjectTemplate: null,
+      createdByUserId: f.admin.id,
+    });
+    await activateTemplateVersion(env.DB, { templateKey, version: version.version });
+  }
+  return f;
+}
+
+async function renderPendingKits() {
+  while ((await processPendingPromotionRecipients(env.DB, 1)).prepared > 0);
+  const jobs = await env.DB.prepare("SELECT id,format FROM event_promotion_renders WHERE status='queued'").all<{
+    id: string;
+    format: string;
+  }>();
+  for (const job of jobs.results)
+    await processPromotionRenderJob(env.DB, env, job.id, async () => ({
+      body: new Uint8Array([1, 2, 3]),
+      contentType: job.format === "carousel" ? "application/pdf" : "image/jpeg",
+      count: 1,
+      thumbnail: { bytes: new Uint8Array([9]), contentType: "image/webp" },
+    }));
+}
+
+async function outbox() {
+  const rows = await env.DB.prepare(
+    "SELECT recipient_email,payload_json,idempotency_key FROM email_outbox WHERE idempotency_key LIKE 'speaker-kit%' ORDER BY recipient_email,created_at",
+  ).all<{ recipient_email: string; payload_json: string; idempotency_key: string }>();
+  return rows.results;
+}
+
+function sendingEnv(): Env {
+  const allow = { limit: vi.fn().mockResolvedValue({ success: true }) };
+  return {
+    ...env,
+    SENDGRID_API_KEY: "sendgrid-test-key",
+    SENDGRID_API_BASE: "https://sendgrid.test/mail/send",
+    SENDGRID_FROM_EMAIL: "noreply@example.test",
+    SENDGRID_FROM_NAME: "Example",
+    EMAIL_RATE_LIMITER: allow,
+    IP_RATE_LIMITER: allow,
+  } as Env;
+}
+
+describe("speaker kit emails", () => {
+  beforeEach(() => resetDb());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("sends each speaker their finished kit once and only repeats it on request", async () => {
+    const f = await kitFixture(true);
+    const reviewed = await preview(f);
+    expect(reviewed.recipientCount).toBe(2);
+    expect(reviewed.subject).toContain("Planning a quantum-safe migration");
+
+    expect((await send(f)).queuedRecipients).toBe(2);
+    while ((await processPendingPromotionRecipients(env.DB, 1)).prepared > 0);
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 0, queued: 0, failed: 0 });
+    expect(await outbox()).toHaveLength(0);
+
+    await renderPendingKits();
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 2, queued: 2, failed: 0 });
+    const sent = await outbox();
+    expect(sent.map((row) => row.recipient_email)).toEqual(["admin@pkic.org", "bulk-speaker@example.test"]);
+    const payload = JSON.parse(sent[1]!.payload_json) as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      firstName: emailPlainText("Second"),
+      sessionTitle: emailPlainText("Planning a quantum-safe migration"),
+      promotionKitUrl: expect.stringContaining("/portal/#/events/pqc-2026/promotion"),
+    });
+    expect(parseQueuedEmailAttachments(payload).map((file) => file.filenameBase)).toEqual([
+      "planning-a-quantum-safe-migration-tall-post",
+      "planning-a-quantum-safe-migration-carousel",
+    ]);
+
+    expect(await preview(f)).toMatchObject({ recipientCount: 0, text: expect.stringContaining("already received") });
+
+    const resend = { ...message, kit: { ...message.kit, resend: true } };
+    expect((await send(f, resend)).queuedRecipients).toBe(2);
+    await renderPendingKits();
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 2, queued: 2, failed: 0 });
+    expect(await outbox()).toHaveLength(4);
+  });
+
+  it("waits for a kit rendered again after queueing and then sends its current files", async () => {
+    const f = await kitFixture();
+    await send(f);
+    await renderPendingKits();
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toMatchObject({ queued: 1 });
+    const mail = await env.DB.prepare("SELECT id FROM email_outbox WHERE idempotency_key LIKE 'speaker-kit%'").first<{
+      id: string;
+    }>();
+
+    // A re-render replaces the queued files: the old ones are gone and the new ones are not ready yet.
+    const earlier = await env.DB.prepare("SELECT cache_key FROM event_promotion_renders").all<{ cache_key: string }>();
+    await env.ASSETS_BUCKET!.delete(earlier.results.map((row) => row.cache_key));
+    await env.DB.prepare(
+      "UPDATE event_promotion_renders SET status='queued',cache_key=cache_key||'-next',next_attempt_at='2000-01-01T00:00:00.000Z'",
+    ).run();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "kit" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(processOutboxById(env.DB, sendingEnv(), mail!.id)).rejects.toThrow("not ready");
+    expect(await env.DB.prepare("SELECT status FROM email_outbox WHERE id=?").bind(mail!.id).first()).toEqual({
+      status: "retrying",
+    });
+
+    await renderPendingKits();
+    await env.DB.prepare("UPDATE email_outbox SET send_after='2000-01-01T00:00:00.000Z' WHERE id=?")
+      .bind(mail!.id)
+      .run();
+    expect(await processOutboxById(env.DB, sendingEnv(), mail!.id)).toBe(true);
+    const [, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
+    const sent = JSON.parse(String(init.body)) as { attachments: Array<{ filename: string }> };
+    expect(sent.attachments.map((file) => file.filename)).toEqual([
+      expect.stringMatching(/-tall-post\.jpg$/),
+      expect.stringMatching(/-carousel\.pdf$/),
+    ]);
+  });
+
+  it("waits for a newer render instead of sending the older kit files", async () => {
+    const f = await kitFixture();
+    await send(f);
+    await renderPendingKits();
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toMatchObject({ queued: 1 });
+    const mail = await env.DB.prepare("SELECT id FROM email_outbox WHERE idempotency_key LIKE 'speaker-kit%'").first<{
+      id: string;
+    }>();
+    // The kit changed: a newer render is queued while the older one is still rendered.
+    await env.DB.prepare(
+      `INSERT INTO event_promotion_renders(id,event_id,occurrence_id,user_id,revision,fingerprint,format,origin,cache_key,status,next_attempt_at,created_at,updated_at,requested_at)
+       SELECT id||'-next',event_id,occurrence_id,user_id,revision,'changed',format,origin,cache_key||'-next','queued',next_attempt_at,created_at,updated_at,'2999-01-01T00:00:00.000Z'
+       FROM event_promotion_renders`,
+    ).run();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 202 })));
+    await expect(processOutboxById(env.DB, sendingEnv(), mail!.id)).rejects.toThrow("not ready");
+  });
+
+  it("refuses a second send reviewed before the first one reserved the kits", async () => {
+    const f = await kitFixture();
+    const [first, second] = [await preview(f), await preview(f)];
+    expect((await post(f, campaigns, { ...message, previewToken: first.previewToken })).status).toBe(202);
+    expect((await post(f, campaigns, { ...message, previewToken: second.previewToken })).status).toBe(400);
+    await renderPendingKits();
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 1, queued: 1, failed: 0 });
+  });
+
+  it("settles a batch whose template was retired so it cannot block later batches", async () => {
+    const f = await kitFixture();
+    await send(f);
+    await send(f, { ...message, kit: { ...message.kit, resend: true } });
+    await renderPendingKits();
+    await env.DB.prepare(
+      "UPDATE email_template_versions SET status='archived' WHERE template_key='email_layout'",
+    ).run();
+
+    const passes = [await stagePendingSpeakerKitEmails(env.DB), await stagePendingSpeakerKitEmails(env.DB)];
+    expect(passes.map(({ processed }) => processed)).toEqual([1, 1]);
+    expect(passes.reduce((sum, pass) => sum + pass.failed, 0)).toBe(2);
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 0, queued: 0, failed: 0 });
+    expect(await outbox()).toHaveLength(0);
+  });
+
+  it("delivers a test to the organizer without counting as the speaker's copy", async () => {
+    const f = await kitFixture(true);
+    const { previewToken } = await preview(f);
+    const response = await post(f, `${campaigns}/tests`, { ...message, previewToken });
+    expect(response.status, await response.clone().text()).toBe(202);
+    // The message stays with its campaign until the kit email reaches the outbox.
+    await env.DB.prepare("UPDATE event_email_campaigns SET expires_at='2000-01-01T00:00:00.000Z'").run();
+    await cleanExpiredCampaignSnapshots(env.DB);
+    await renderPendingKits();
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 1, queued: 1, failed: 0 });
+    expect((await outbox()).map((row) => row.recipient_email)).toEqual(["admin@pkic.org"]);
+    expect((await preview(f)).recipientCount).toBe(2);
+  });
+
+  it("settles as failed without emailing when the agenda changes before the kit is ready", async () => {
+    const f = await kitFixture();
+    await send(f);
+    await renderPendingKits();
+    await env.DB.prepare("UPDATE event_agenda_state SET published_revision=published_revision+1 WHERE event_id=?")
+      .bind(f.eventId)
+      .run();
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 1, queued: 0, failed: 1 });
+    expect(await outbox()).toHaveLength(0);
+    const kit = await env.DB.prepare("SELECT email_status FROM event_promotion_batch_recipients").first();
+    expect(kit).toEqual({ email_status: "failed" });
+  });
+
+  it("narrows speakers to the sessions on one day of the event", async () => {
+    const f = await kitFixture();
+    const onDay = await preview(f, { ...message, filter: { ...message.filter, dayDate: "2026-12-01" } });
+    expect(onDay.recipientCount).toBe(1);
+    const otherDay = await preview(f, { ...message, filter: { ...message.filter, dayDate: "2026-12-02" } });
+    expect(otherDay.recipientCount).toBe(0);
+  });
+
+  it.each([
+    ["an audience with no agenda session", { filter: { audience: "speakers", speakerStatus: "confirmed" } }],
+    ["a shared BCC send", { sendMode: "bcc_batch" }],
+  ])("refuses a kit on %s", async (_case, change) => {
+    const f = await kitFixture();
+    expect((await post(f, `${campaigns}/previews`, { ...message, ...change })).status).toBe(400);
+  });
+
+  it("keeps kit tests to event communicators", async () => {
+    const f = await kitFixture();
+    const test = await callApi(env, `${campaigns}/tests`, {
+      method: "POST",
+      headers: f.attendeeHeaders,
+      body: JSON.stringify({ ...message, previewToken: "x".repeat(32) }),
+    });
+    expect(test.status).toBe(403);
+  });
+
+  it("attaches each image of a multi-page archive as its own file", async () => {
+    const archive = new Uint8Array(
+      await downloadZip([
+        { name: "session-portrait-01.jpg", input: new Uint8Array([1, 2]) },
+        { name: "session-portrait-02.jpg", input: new Uint8Array([3, 4, 5]) },
+      ]).arrayBuffer(),
+    );
+    expect(readStoredZipEntries(archive).map((entry) => [entry.name, [...entry.bytes]])).toEqual([
+      ["session-portrait-01.jpg", [1, 2]],
+      ["session-portrait-02.jpg", [3, 4, 5]],
+    ]);
+
+    await env.ASSETS_BUCKET!.put("kit.zip", archive, { httpMetadata: { contentType: "application/zip" } });
+    const files = await loadStoredFileAttachments(env.ASSETS_BUCKET!, [
+      { r2Key: "kit.zip", filenameBase: "talk-tall-post" },
+    ]);
+    expect(files.map(({ filename, contentType }) => [filename, contentType])).toEqual([
+      ["talk-tall-post-01.jpg", "image/jpeg"],
+      ["talk-tall-post-02.jpg", "image/jpeg"],
+    ]);
+    await expect(
+      loadStoredFileAttachments(env.ASSETS_BUCKET!, [{ r2Key: "missing", filenameBase: "talk-carousel" }]),
+    ).rejects.toThrow();
+  });
+});

@@ -70,6 +70,8 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
   ],
   // Speaker / proposal
   proposalTitle: "Post-Quantum PKI in Practice",
+  sessionTitle: "Post-Quantum PKI in Practice",
+  promotionKitUrl: "https://example.org/portal/#/events/sample/promotion",
   proposalAbstract: "An exploration of PQC migration strategies for enterprise PKI.",
   speakerStatus: "accepted",
   speakerName: "Alex Example",
@@ -118,6 +120,8 @@ export const TEMPLATE_HELPERS: TemplateHelperItem[] = [
   { category: "Variables", label: "acceptedTermsText", snippet: "{{acceptedTermsText}}" },
   // Speaker / proposal
   { category: "Variables", label: "proposalTitle", snippet: "{{proposalTitle}}" },
+  { category: "Variables", label: "sessionTitle", snippet: "{{sessionTitle}}" },
+  { category: "Variables", label: "promotionKitUrl", snippet: "{{promotionKitUrl}}" },
   { category: "Variables", label: "proposalAbstract", snippet: "{{proposalAbstract}}" },
   { category: "Variables", label: "speakerStatus", snippet: "{{speakerStatus}}" },
   { category: "Variables", label: "finalStatus", snippet: "{{finalStatus}}" },

@@ -43,6 +43,7 @@ export const SPEAKER_STATUS_FILTER_LABELS: Record<EventEmailCampaignSpeakerStatu
   confirmed: "Confirmed",
   invited: "Invited",
   pending: "Pending",
+  scheduled: "Scheduled on the agenda",
 };
 
 export const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
@@ -123,7 +124,11 @@ export function useDays(daysPath: string) {
   return days;
 }
 
-export function availableHelperLabelsForAudience(audience: EventEmailCampaignAudience): Set<string> {
+export function availableHelperLabelsForAudience(
+  audience: EventEmailCampaignAudience,
+  options: { kits?: boolean } = {},
+): Set<string> {
+  if (options.kits) return new Set([...availableHelperLabelsForAudience(audience), "sessionTitle", "promotionKitUrl"]);
   if (audience === "attendee_invitations" || audience === "speaker_invitations") {
     return new Set([
       "eventName",

@@ -9,6 +9,7 @@ import { eventReadIdSql, type EventReadSelection } from "../events/selection";
 import { batchFirst } from "../../db/pagination";
 import { prepareAuditLogWhen } from "../audit";
 import { preparePromotionRequestActor } from "./promotion-request-context";
+import { publishedSpeakerSessionsSql } from "./published-speaker-sessions";
 import { permissionAuthorizationEvidenceForResource, requirePermission } from "../../auth/permissions";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
@@ -91,6 +92,7 @@ export async function createPromotionBatch(
     ],
   };
   const read = preparePromotionBatchRead(db, { slug: eventSlug }, input.requestId);
+  const sessions = publishedSpeakerSessionsSql(event, { revision: input.publishedRevision });
   const results = await db.batch([
     ...actor.statements,
     db
@@ -114,12 +116,10 @@ export async function createPromotionBatch(
       ),
     db
       .prepare(`INSERT INTO event_promotion_batch_recipients(batch_id,occurrence_id,user_id,next_attempt_at,updated_at)
-        SELECT ?,occurrence.id,speaker.user_id,?,? FROM event_agenda_occurrences occurrence JOIN event_agenda_occurrence_speakers speaker ON speaker.occurrence_id=occurrence.id JOIN users person ON person.id=speaker.user_id
-        WHERE changes()=1 AND occurrence.event_id=${event.sql} AND person.active=1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL AND EXISTS(
-          SELECT 1 FROM event_agenda_publications publication,json_each(publication.snapshot_json,'$.occurrences') entry
-          WHERE publication.event_id=occurrence.event_id AND publication.revision=? AND json_extract(entry.value,'$.id')=occurrence.id AND json_extract(entry.value,'$.visibility')='public' AND json_extract(entry.value,'$.kind')<>'break' AND EXISTS(SELECT 1 FROM json_each(entry.value,'$.speakers') credit WHERE json_extract(credit.value,'$.userId')=speaker.user_id))
+        SELECT ?,session.occurrence_id,session.user_id,?,? FROM (${sessions.sql}) session
+        WHERE changes()=1
         ON CONFLICT(batch_id,occurrence_id,user_id) DO NOTHING`)
-      .bind(input.requestId, at, at, ...event.bindings, input.publishedRevision),
+      .bind(input.requestId, at, at, ...sessions.bindings),
     prepareAuditLogWhen(db, {
       actorType: "user",
       actorId: actor.subjectId,

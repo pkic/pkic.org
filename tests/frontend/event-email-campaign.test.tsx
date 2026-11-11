@@ -100,6 +100,17 @@ const PREVIEW_BODY = {
   text: "Hello",
 };
 
+const DAY_ONE = {
+  id: "day-one",
+  date: "2026-12-01",
+  label: "Day one",
+  startsAt: null,
+  endsAt: null,
+  sortOrder: 0,
+  attendanceOptions: [],
+  attendanceCounts: {},
+};
+
 interface CapturedRequest {
   method: string;
   path: string;
@@ -112,7 +123,12 @@ interface CapturedRequest {
  * chooses. `previews` and `campaigns` return a Response so a test can hand
  * back a 4xx/5xx as easily as a success.
  */
-function stubCampaignFetch(routes: { previews: () => Response; campaigns?: () => Response }): CapturedRequest[] {
+function stubCampaignFetch(routes: {
+  previews: () => Response;
+  campaigns?: () => Response;
+  tests?: () => Response;
+  days?: unknown[];
+}): CapturedRequest[] {
   const requests: CapturedRequest[] = [];
   vi.stubGlobal(
     "fetch",
@@ -125,10 +141,13 @@ function stubCampaignFetch(routes: { previews: () => Response; campaigns?: () =>
         return json({ templates: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
       }
       if (method === "GET" && url.pathname.endsWith("/days")) {
-        return json({ days: [], eventUpdatedAt: "2026-08-29T08:00:00.000Z" });
+        return json({ days: routes.days ?? [], eventUpdatedAt: "2026-08-29T08:00:00.000Z" });
       }
       if (method === "POST" && url.pathname === `${CAMPAIGN_PATH}/previews`) {
         return routes.previews();
+      }
+      if (method === "POST" && url.pathname === `${CAMPAIGN_PATH}/tests` && routes.tests) {
+        return routes.tests();
       }
       if (method === "POST" && url.pathname === CAMPAIGN_PATH && routes.campaigns) {
         return routes.campaigns();
@@ -189,6 +208,69 @@ describe("event email campaign UI", () => {
     expect(preview.subjectOverride).toBe("My authored message");
     expect(preview.filter).toMatchObject({ audience: "attendees", attendeeStatus: "registered" });
     expect(requests.some(({ method, path }) => method === "POST" && path === CAMPAIGN_PATH)).toBe(false);
+  });
+
+  it("sends kits to the speakers of one day, personally, and offers a test once previewed", async () => {
+    const requests = stubCampaignFetch({
+      previews: () => json(PREVIEW_BODY),
+      tests: () => json({ success: true, sessionTitle: "Planning a migration" }, 202),
+      days: [DAY_ONE],
+    });
+    const container = mount(
+      <EventEmailCampaign
+        campaignsPath={CAMPAIGN_PATH}
+        daysPath={`${EVENT_PATH}/days`}
+        initialAudience="speakers"
+        initialAttachKits
+      />,
+    );
+    await settle();
+    expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Send test to me")).toBe(
+      false,
+    );
+    const day = controlFor<HTMLSelectElement>(container, "Specific day");
+    await act(() => {
+      day.value = DAY_ONE.date;
+      day.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await composeAndPreview(container);
+
+    const preview = eventEmailCampaignPreviewInputSchema.parse(
+      requests.find(({ path }) => path === `${CAMPAIGN_PATH}/previews`)?.body,
+    );
+    expect(preview.sendMode).toBe("personal");
+    expect(preview.kit).toEqual({ formats: ["portrait", "carousel"], resend: false });
+    expect(preview.filter).toMatchObject({ audience: "speakers", speakerStatus: "scheduled", dayDate: DAY_ONE.date });
+
+    await clickButton(container, "Send test to me");
+    await settle();
+    const test = eventEmailCampaignCreateInputSchema.parse(
+      requests.find(({ path }) => path === `${CAMPAIGN_PATH}/tests`)?.body,
+    );
+    expect(test.previewToken).toBe("campaign-preview-token");
+    expect(requests.some(({ method, path }) => method === "POST" && path === CAMPAIGN_PATH)).toBe(false);
+  });
+
+  it("says why a kit send with no formats cannot be previewed", async () => {
+    const requests = stubCampaignFetch({ previews: () => json(PREVIEW_BODY) });
+    const container = mount(
+      <EventEmailCampaign
+        campaignsPath={CAMPAIGN_PATH}
+        daysPath={`${EVENT_PATH}/days`}
+        initialAudience="speakers"
+        initialAttachKits
+      />,
+    );
+    await settle();
+    for (const name of ["Tall post", "Carousel"]) {
+      const box = [...container.querySelectorAll("label")]
+        .find((label) => label.textContent?.startsWith(name))
+        ?.querySelector("input");
+      await act(async () => box?.click());
+    }
+    await composeAndPreview(container);
+    expect(container.textContent).toContain("Choose at least one format.");
+    expect(requests.some(({ path }) => path === `${CAMPAIGN_PATH}/previews`)).toBe(false);
   });
 
   it("previews and creates a campaign through one canonical nested resource", async () => {

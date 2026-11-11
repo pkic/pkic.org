@@ -1,6 +1,7 @@
 import {
   GroupEventEmailCampaignCreate,
   GroupEventEmailCampaignPreviewCreate,
+  GroupSpeakerKitTestCreate,
 } from "./[groupId]/events/[eventId]/email-campaigns";
 
 type GroupEventEmailCampaignRouter = {
@@ -10,5 +11,6 @@ type GroupEventEmailCampaignRouter = {
 export function registerGroupEventEmailCampaignRoutes(openapi: unknown): void {
   const router = openapi as GroupEventEmailCampaignRouter;
   router.post("/:groupId/events/:eventId/email/campaigns/previews", GroupEventEmailCampaignPreviewCreate);
+  router.post("/:groupId/events/:eventId/email/campaigns/tests", GroupSpeakerKitTestCreate);
   router.post("/:groupId/events/:eventId/email/campaigns", GroupEventEmailCampaignCreate);
 }

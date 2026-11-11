@@ -159,7 +159,7 @@ export async function buildEmailOutboxRows(db: DatabaseLike, rows: OutboxListRow
         sentAt: row.sent_at,
         bccRecipientCount: bccRecipients.length,
         hasCalendarInvite: Boolean(payload.__calendarInvite),
-        hasBadgeAttachment: parseQueuedEmailAttachments(payload).length > 0,
+        hasBadgeAttachment: parseQueuedEmailAttachments(payload).some((item) => item.kind === "r2-badge-image"),
         usesDirectBody: readDirectEmailBody(payload) !== null,
         hasCustomText:
           typeof payload.__eventCampaignCustomText === "string" && payload.__eventCampaignCustomText.trim().length > 0,
