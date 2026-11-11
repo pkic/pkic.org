@@ -123,6 +123,7 @@ describe("whole level layout", () => {
       [...order.map((heading) => page.indexOf(heading))].sort((a, b) => a - b),
     );
     expect(page).not.toContain("## Evidence Checklist");
+    expect(page).not.toContain("### Supplier Intake Questions");
     expect(levelContent.unplaced()).toEqual([]);
   });
 

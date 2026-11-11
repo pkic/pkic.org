@@ -106,6 +106,9 @@ export function createModelLevelContent(model: ReadableModel, level: ModelLevel)
     const call = (part: ModelPart): ContentCall => ({ props: { part }, positional: [] });
     const groups = level.assessment.groups;
     const intakeOnly = groups.length > 0 && groups.every((group) => group.kind === "intake");
+    const heading = intakeOnly ? "Supplier Intake Questions" : "Assessment Questions";
+    // A lone group named like the section would repeat its heading.
+    const groupHeadings = !(groups.length === 1 && groups[0]!.name === heading);
     const hasEvidence = level.evidenceChecklist.items.length > 0 || Boolean(level.evidenceChecklist.introduction);
     return [
       ...sectionsAt("before-criteria", 2),
@@ -114,10 +117,15 @@ export function createModelLevelContent(model: ReadableModel, level: ModelLevel)
       ...sectionsAt("after-criteria", 3),
       ...(groups.length || level.assessment.methodology
         ? [
-            intakeOnly ? "## Supplier Intake Questions" : "## Assessment Questions",
+            `## ${heading}`,
             ...sectionsAt("before-assessment", 3),
             render(call("methodology")),
-            render(call("questions")),
+            groups
+              .map((group) => {
+                place(`question group ${group.id ?? group.name}`);
+                return questionGroupMarkdown(group, groupHeadings);
+              })
+              .join("\n\n"),
             ...sectionsAt("after-assessment", 3),
           ]
         : []),
