@@ -11,3 +11,4 @@ export default {
 
 /** Every Durable Object binding in wrangler.jsonc needs its class exported from the test entry point. */
 export { LiveSessionRoom } from "../../functions/_lib/services/live-session/room";
+export { EventScreenMonitor } from "../../functions/_lib/services/event-screens/screen-monitor";

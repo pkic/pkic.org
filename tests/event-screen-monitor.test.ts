@@ -1,0 +1,301 @@
+import { env } from "cloudflare:workers";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { SCREEN_POLICY } from "../assets/shared/event-screen-policy";
+import {
+  SCREEN_MONITOR_PROTOCOL,
+  screenMonitorCommandSchema,
+  screenMonitorServerMessageSchema,
+  type ScreenHealth,
+  type ScreenMonitorCommand,
+  type ScreenMonitorServerMessage,
+} from "../assets/shared/schemas/event-screen-monitor";
+import { signScreenSessionToken } from "../functions/_lib/auth/screen-session";
+import { screenMonitorName } from "../functions/_lib/services/event-screens/screen-monitor-access";
+import type { Env } from "../functions/_lib/types";
+import { callApi } from "./helpers/app";
+import { createAdminSession } from "./helpers/auth";
+import { resetDb } from "./helpers/reset-db";
+
+const SECRET = env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret";
+const ORIGIN = "https://app.test";
+const EVENT = { id: crypto.randomUUID(), slug: "monitor-a" };
+const OTHER_EVENT = { id: crypto.randomUUID(), slug: "monitor-b" };
+type Staff = "manager" | "moderator" | "reader";
+const users: Record<Staff, string> = {
+  manager: crypto.randomUUID(),
+  moderator: crypto.randomUUID(),
+  reader: crypto.randomUUID(),
+};
+const tokens = {} as Record<Staff, string>;
+const testEnv = env as Env;
+
+const HEALTH: ScreenHealth = {
+  pageVersion: "screen-page-test.js",
+  display: "output",
+  output: "stage-display",
+  mode: "live",
+  player: null,
+  clockOffsetMs: 40,
+  metrics: { uptime: 3600, temps: { cpu: 51 } },
+};
+
+async function seed() {
+  await resetDb();
+  const now = new Date().toISOString();
+  for (const event of [EVENT, OTHER_EVENT])
+    await env.DB.prepare(
+      "INSERT INTO events (id,slug,name,timezone,registration_mode,settings_json,created_at,updated_at) VALUES (?,?,'Monitor test','Europe/Amsterdam','invite_or_open','{}',?,?)",
+    )
+      .bind(event.id, event.slug, now, now)
+      .run();
+  const grants: Record<Staff, string> = {
+    manager: "agenda:screens_manage",
+    moderator: "agenda:live_moderate",
+    reader: "agenda:read",
+  };
+  for (const person of Object.keys(users) as Staff[]) {
+    await env.DB.prepare("INSERT INTO users (id,email,normalized_email,active) VALUES (?,?,?,1)")
+      .bind(users[person], `${person}@example.test`, `${person}@example.test`)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO permission_grants (id,user_id,permission,context_type,context_id,created_at) VALUES (?,?,?,'event',?,?)",
+    )
+      .bind(crypto.randomUUID(), users[person], grants[person], EVENT.id, now)
+      .run();
+    tokens[person] = await createAdminSession(env.DB, users[person], crypto.randomUUID());
+  }
+  for (const event of [EVENT, OTHER_EVENT])
+    onTestFinished(() =>
+      runInDurableObject(testEnv.EVENT_SCREEN_MONITORS!.getByName(screenMonitorName(event.id)), async (_, state) => {
+        for (const socket of state.getWebSockets()) socket.close(1000, "Fixture complete");
+        await state.storage.deleteAll();
+      }),
+    );
+}
+
+/** A screen paired for `event`, signed in with an active session. */
+async function pairedScreen(screenId: string, event = EVENT) {
+  const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 86_400_000).toISOString();
+  const sessionId = crypto.randomUUID();
+  await env.DB.prepare("INSERT INTO screens (id,name,event_id,created_by,created_at) VALUES (?,?,?,?,?)")
+    .bind(screenId, `Screen ${screenId}`, event.id, users.manager, now)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO screen_sessions (id,screen_id,token_hash,approved_by,created_at,activated_at,expires_at) VALUES (?,?,'x',?,?,?,?)",
+  )
+    .bind(sessionId, screenId, users.manager, now, now, expiresAt)
+    .run();
+  const token = await signScreenSessionToken(SECRET, { screenId, sessionId, expiresAt });
+  return { screenId, sessionId, cookie: `pkic_screen_session=${token}` };
+}
+
+function upgrade(path: string, headers: Record<string, string>) {
+  return callApi(
+    testEnv,
+    path,
+    {
+      headers: { upgrade: "websocket", origin: ORIGIN, "sec-websocket-protocol": SCREEN_MONITOR_PROTOCOL, ...headers },
+    },
+    { maxRoundTrips: 1 },
+  );
+}
+
+async function accepted<T>(response: Response, parse: (data: unknown) => T) {
+  expect(response.status).toBe(101);
+  const socket = response.webSocket!;
+  const received: T[] = [];
+  const closed = new Promise<{ code: number; reason: string }>((resolve) =>
+    socket.addEventListener("close", (event) => resolve({ code: event.code, reason: event.reason })),
+  );
+  socket.addEventListener("message", (event) => {
+    received.push(parse(JSON.parse(String(event.data))));
+  });
+  socket.accept();
+  return { socket, received, closed };
+}
+
+const monitorDb = (instance: unknown) => (instance as { env: Env }).env.DB;
+/** Counts the monitor's D1 calls while `work` runs over its sockets. */
+async function monitorD1Calls(eventId: string, work: () => Promise<void>) {
+  const stub = testEnv.EVENT_SCREEN_MONITORS!.getByName(screenMonitorName(eventId));
+  await runInDurableObject(stub, (instance) => {
+    vi.spyOn(monitorDb(instance), "batch");
+    vi.spyOn(monitorDb(instance), "prepare");
+  });
+  await work();
+  return runInDurableObject(stub, (instance) => {
+    const db = monitorDb(instance);
+    const count = vi.mocked(db.batch).mock.calls.length + vi.mocked(db.prepare).mock.calls.length;
+    vi.mocked(db.batch).mockRestore();
+    vi.mocked(db.prepare).mockRestore();
+    return count;
+  });
+}
+
+const connectScreen = async (cookie: string, screenId: string) =>
+  accepted(await upgrade(`/api/v1/screens/${screenId}/live`, { cookie }), (data) =>
+    screenMonitorCommandSchema.parse(data),
+  );
+const connectStaff = async (person: Staff, slug = EVENT.slug) =>
+  accepted(
+    await upgrade(`/api/v1/events/${slug}/screens/live`, { authorization: `Bearer ${tokens[person]}` }),
+    (data) => screenMonitorServerMessageSchema.parse(data),
+  );
+
+function next<T extends { type: string }, K extends T["type"]>(received: T[], type: K, after = 0) {
+  return vi.waitFor(
+    () => {
+      const found = received.slice(after).find((message): message is Extract<T, { type: K }> => message.type === type);
+      if (!found) throw new Error(`No ${type} yet`);
+      return found;
+    },
+    { timeout: 3000 },
+  );
+}
+
+describe("event screen monitor", () => {
+  beforeEach(seed);
+
+  it("relays a screen's health to staff, each admission in one D1 call", async () => {
+    const paired = await pairedScreen("MON234");
+    const watcher = await connectStaff("moderator");
+    const first = await next(watcher.received, "screens.snapshot");
+    expect(first).toMatchObject({ control: false, screens: [] });
+
+    const screen = await connectScreen(paired.cookie, paired.screenId);
+    const online = await next(watcher.received, "screens.changed");
+    expect(online.screen).toMatchObject({ screenId: "MON234", online: true, health: null });
+
+    const before = watcher.received.length;
+    screen.socket.send(JSON.stringify({ type: "screen.health", health: HEALTH }));
+    const reported = await next(watcher.received, "screens.changed", before);
+    expect(reported.screen.health).toEqual(HEALTH);
+    expect(reported.screen.reportedAt).toMatch(/Z$/);
+
+    const later = await connectStaff("manager");
+    const snapshot = await next(later.received, "screens.snapshot");
+    expect(snapshot.control).toBe(true);
+    expect(snapshot.screens).toEqual([expect.objectContaining({ screenId: "MON234", online: true, health: HEALTH })]);
+
+    const after = watcher.received.length;
+    screen.socket.close(1000, "Done");
+    const offline = await next(watcher.received, "screens.changed", after);
+    expect(offline.screen).toMatchObject({ online: false, health: HEALTH });
+    expect(offline.screen.disconnectedAt).toMatch(/Z$/);
+  });
+
+  it("drops a report the contract refuses, secrets included, without closing the screen", async () => {
+    const paired = await pairedScreen("MON235");
+    const watcher = await connectStaff("manager");
+    const screen = await connectScreen(paired.cookie, paired.screenId);
+    await next(watcher.received, "screens.changed");
+    const before = watcher.received.length;
+    screen.socket.send(
+      JSON.stringify({
+        type: "screen.health",
+        health: { ...HEALTH, metrics: { network: { management: { secret_sha256: "a".repeat(64) } } } },
+      }),
+    );
+    screen.socket.send(JSON.stringify({ type: "screen.health", health: { ...HEALTH, mode: "auto" } }));
+    const reported = await next(watcher.received, "screens.changed", before);
+    expect(reported.screen.health?.mode).toBe("auto");
+    expect(watcher.received.slice(before)).toHaveLength(1);
+  });
+
+  it("lets screen managers identify and reload a connected screen, and room operators only watch", async () => {
+    const paired = await pairedScreen("MON236");
+    const screen = await connectScreen(paired.cookie, paired.screenId);
+    const manager = await connectStaff("manager");
+    const moderator = await connectStaff("moderator");
+    await next(manager.received, "screens.snapshot");
+    await next(moderator.received, "screens.snapshot");
+
+    const refusedId = crypto.randomUUID();
+    moderator.socket.send(JSON.stringify({ type: "screen.reload", screenId: "MON236", operationId: refusedId }));
+    expect(await next(moderator.received, "screens.refused")).toMatchObject({
+      code: "SCREEN_MONITOR_READ_ONLY",
+      operationId: refusedId,
+    });
+
+    const operationId = crypto.randomUUID();
+    const calls = await monitorD1Calls(EVENT.id, async () => {
+      screen.socket.send(JSON.stringify({ type: "screen.health", health: HEALTH }));
+      await next(manager.received, "screens.changed");
+      manager.socket.send(JSON.stringify({ type: "screen.identify", screenId: "MON236", operationId }));
+      expect(await next(manager.received, "screens.sent")).toMatchObject({ operationId, command: "screen.identify" });
+    });
+    expect(calls).toBe(0);
+    const identify = (await next(screen.received, "screen.identify")) as Extract<
+      ScreenMonitorCommand,
+      { type: "screen.identify" }
+    >;
+    expect(Date.parse(identify.until) - Date.now()).toBeLessThanOrEqual(SCREEN_POLICY.identifySeconds * 1000);
+    expect(screen.received.some((command) => command.type === "screen.reload")).toBe(false);
+
+    manager.socket.send(
+      JSON.stringify({ type: "screen.reload", screenId: "ZZZ234", operationId: crypto.randomUUID() }),
+    );
+    expect(await next(manager.received, "screens.refused")).toMatchObject({ code: "SCREEN_NOT_CONNECTED" });
+  });
+
+  it("refuses staff without screen status access, a screen without its sign-in, and keeps events apart", async () => {
+    expect(await (await connectStaff("reader")).closed).toEqual({ code: 4403, reason: "SCREEN_STATUS_FORBIDDEN" });
+    const paired = await pairedScreen("MON237");
+    const wrong = await connectScreen("pkic_screen_session=invalid", paired.screenId);
+    expect((await wrong.closed).code).toBe(4401);
+    const borrowed = await connectScreen(paired.cookie, "MONABC");
+    expect((await borrowed.closed).code).toBe(4401);
+
+    const elsewhere = await pairedScreen("MONOTH", OTHER_EVENT);
+    const watcher = await connectStaff("manager");
+    await next(watcher.received, "screens.snapshot");
+    const other = await connectScreen(elsewhere.cookie, elsewhere.screenId);
+    other.socket.send(JSON.stringify({ type: "screen.health", health: HEALTH }));
+    const own = await connectScreen(paired.cookie, paired.screenId);
+    own.socket.send(JSON.stringify({ type: "screen.health", health: HEALTH }));
+    await vi.waitFor(() => expect(watcher.received.filter((m) => m.type === "screens.changed")).toHaveLength(2));
+    const changed = watcher.received.filter(
+      (message): message is Extract<ScreenMonitorServerMessage, { type: "screens.changed" }> =>
+        message.type === "screens.changed",
+    );
+    expect(changed.every((message) => message.screen.screenId === "MON237")).toBe(true);
+    const otherMonitor = testEnv.EVENT_SCREEN_MONITORS!.getByName(screenMonitorName(OTHER_EVENT.id));
+    await vi.waitFor(async () =>
+      expect(await runInDurableObject(otherMonitor, (_, state) => state.storage.get("status:MONOTH"))).toMatchObject({
+        online: true,
+        health: HEALTH,
+      }),
+    );
+  });
+
+  it("closes and forgets a revoked screen at its next access recheck, in one batch for every socket", async () => {
+    const paired = await pairedScreen("MONREV");
+    const screen = await connectScreen(paired.cookie, paired.screenId);
+    const watcher = await connectStaff("manager");
+    await next(watcher.received, "screens.snapshot");
+    await env.DB.prepare("UPDATE screen_sessions SET revoked_at=? WHERE id=?")
+      .bind(new Date().toISOString(), paired.sessionId)
+      .run();
+    const stub = testEnv.EVENT_SCREEN_MONITORS!.getByName(screenMonitorName(EVENT.id));
+    // One batch, prepared as one staff-session read plus one screen read: one D1 call.
+    await runInDurableObject(stub, (instance) => void vi.spyOn(monitorDb(instance), "batch"));
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    const calls = await runInDurableObject(stub, (instance) => {
+      const spy = vi.mocked(monitorDb(instance).batch);
+      const count = spy.mock.calls.length;
+      spy.mockRestore();
+      return count;
+    });
+    expect(calls).toBe(1);
+    expect(await screen.closed).toEqual({ code: 4403, reason: "SCREEN_MONITOR_ACCESS_ENDED" });
+    const snapshot = await vi.waitFor(() => {
+      const found = watcher.received.filter((message) => message.type === "screens.snapshot").at(-1);
+      if (!found || found.type !== "screens.snapshot" || found.screens.length) throw new Error("Not forgotten yet");
+      return found;
+    });
+    expect(snapshot.screens).toEqual([]);
+    expect(watcher.socket.readyState).toBe(WebSocket.OPEN);
+  });
+});

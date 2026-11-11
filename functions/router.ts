@@ -24,9 +24,11 @@ import {
 } from "./_lib/cache/public-read";
 
 import { isLiveRoomSocketPath, liveRoomSocketRequest } from "./_lib/routes/live-session-socket";
+import { isScreenMonitorSocketPath, screenMonitorSocketRequest } from "./_lib/routes/screen-monitor-socket";
 
 /** Durable Object classes this Worker implements; wrangler.jsonc declares them under `exports`. */
 export { LiveSessionRoom } from "./_lib/services/live-session/room";
+export { EventScreenMonitor } from "./_lib/services/event-screens/screen-monitor";
 
 function handleHttpRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   // Each request owns the scope that tells its audit records which identity the signed-in person acts as.
@@ -93,6 +95,10 @@ export default {
     if (isLiveRoomSocketPath(request))
       return withRequestD1Session(request, env, (sessionEnv) =>
         liveRoomSocketRequest(request, withDependencyHandling(sessionEnv)),
+      );
+    if (isScreenMonitorSocketPath(request))
+      return withRequestD1Session(request, env, (sessionEnv) =>
+        screenMonitorSocketRequest(request, withDependencyHandling(sessionEnv)),
       );
     try {
       if (isPublicReadCacheRequest(request)) {
