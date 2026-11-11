@@ -180,6 +180,24 @@ describe("speaker kit emails", () => {
     ]);
   });
 
+  it("waits for a newer render instead of sending the older kit files", async () => {
+    const f = await kitFixture();
+    await send(f);
+    await renderPendingKits();
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toMatchObject({ queued: 1 });
+    const mail = await env.DB.prepare("SELECT id FROM email_outbox WHERE idempotency_key LIKE 'speaker-kit%'").first<{
+      id: string;
+    }>();
+    // The kit changed: a newer render is queued while the older one is still rendered.
+    await env.DB.prepare(
+      `INSERT INTO event_promotion_renders(id,event_id,occurrence_id,user_id,revision,fingerprint,format,origin,cache_key,status,next_attempt_at,created_at,updated_at,requested_at)
+       SELECT id||'-next',event_id,occurrence_id,user_id,revision,'changed',format,origin,cache_key||'-next','queued',next_attempt_at,created_at,updated_at,'2999-01-01T00:00:00.000Z'
+       FROM event_promotion_renders`,
+    ).run();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 202 })));
+    await expect(processOutboxById(env.DB, sendingEnv(), mail!.id)).rejects.toThrow("not ready");
+  });
+
   it("refuses a second send reviewed before the first one reserved the kits", async () => {
     const f = await kitFixture();
     const [first, second] = [await preview(f), await preview(f)];

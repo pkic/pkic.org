@@ -164,19 +164,22 @@ export async function loadStoredFileAttachments(
   return loaded;
 }
 
-/** Resolves each kit format to its current rendered file, in one bounded read. */
+/**
+ * Resolves each kit format to the file of its latest requested render. A newer
+ * render still in progress means the kit changed, so the email waits for it.
+ */
 export async function loadPromotionKitAttachments(
   db: DatabaseLike,
   bucket: Pick<R2Bucket, "get">,
   attachments: readonly QueuedPromotionKitAttachment[],
 ): Promise<LoadedEmailAttachment[]> {
-  const current = await all<{ position: number; cache_key: string }>(
+  const current = await all<{ position: number; cache_key: string | null }>(
     db,
-    `SELECT kit.key AS position,(SELECT render.cache_key FROM event_promotion_renders render
+    `SELECT kit.key AS position,(SELECT CASE WHEN render.status='rendered' THEN render.cache_key END
+        FROM event_promotion_renders render
         WHERE render.event_id=json_extract(kit.value,'$.eventId') AND render.user_id=json_extract(kit.value,'$.userId')
           AND render.occurrence_id=json_extract(kit.value,'$.occurrenceId') AND render.format=json_extract(kit.value,'$.format')
-          AND render.status='rendered'
-        ORDER BY render.requested_at DESC LIMIT 1) AS cache_key
+        ORDER BY render.requested_at DESC,render.created_at DESC LIMIT 1) AS cache_key
      FROM json_each(?) kit`,
     [JSON.stringify(attachments)],
   );
