@@ -3,6 +3,7 @@ import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { SCREEN_POLICY } from "../assets/shared/event-screen-policy";
 import {
+  SCREEN_MONITOR_LIMITS,
   SCREEN_MONITOR_PROTOCOL,
   screenMonitorCommandSchema,
   screenMonitorServerMessageSchema,
@@ -297,5 +298,100 @@ describe("event screen monitor", () => {
     });
     expect(snapshot.screens).toEqual([]);
     expect(watcher.socket.readyState).toBe(WebSocket.OPEN);
+  });
+
+  it("paces screenshots by whether staff watch, keeps the latest and drops anything but a small JPEG", async () => {
+    const paired = await pairedScreen("MONSHT");
+    const screen = await connectScreen(paired.cookie, paired.screenId);
+    expect(await next(screen.received, "screen.capture")).toEqual({
+      type: "screen.capture",
+      everySeconds: SCREEN_POLICY.screenshotSeconds,
+    });
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9]);
+    screen.socket.send(jpeg);
+
+    const paces = screen.received.length;
+    const watcher = await connectStaff("moderator");
+    expect(await next(screen.received, "screen.capture", paces)).toMatchObject({
+      everySeconds: SCREEN_POLICY.screenshotWatchedSeconds,
+    });
+    // The stored screenshot follows the snapshot, to read-only staff too.
+    await next(watcher.received, "screens.snapshot");
+    const stored = await next(watcher.received, "screens.screenshot");
+    expect(stored).toMatchObject({ screenId: "MONSHT" });
+    expect(Uint8Array.from(atob(stored.jpeg), (char) => char.charCodeAt(0))).toEqual(jpeg);
+
+    const calls = await monitorD1Calls(EVENT.id, async () => {
+      const before = watcher.received.length;
+      screen.socket.send(Uint8Array.from([0x89, 0x50, 0x4e, 0x47]));
+      screen.socket.send(new Uint8Array(SCREEN_MONITOR_LIMITS.screenshotBytes + 1).fill(0xff));
+      // Sooner than the device takes a new one.
+      screen.socket.send(jpeg);
+      screen.socket.send(JSON.stringify({ type: "screen.health", health: HEALTH }));
+      await next(watcher.received, "screens.changed", before);
+      expect(watcher.received.slice(before).some((message) => message.type === "screens.screenshot")).toBe(false);
+      expect(screen.socket.readyState).toBe(WebSocket.OPEN);
+    });
+    expect(calls).toBe(0);
+
+    const left = screen.received.length;
+    watcher.socket.close(1000, "Done");
+    expect(await next(screen.received, "screen.capture", left)).toMatchObject({
+      everySeconds: SCREEN_POLICY.screenshotSeconds,
+    });
+  });
+
+  it("keeps one quality sample a minute and hands staff the last hour with the snapshot", async () => {
+    const paired = await pairedScreen("MONQLT");
+    const screen = await connectScreen(paired.cookie, paired.screenId);
+    const watcher = await connectStaff("manager");
+    await next(watcher.received, "screens.snapshot");
+    const network = (internet: number, signal: number) => ({
+      internet: { avg_ms: internet, loss_pct: 0, samples: 60 },
+      gateway: { avg_ms: 2.5, loss_pct: 0, samples: 60 },
+      wifi: { ssid: "Venue", signal },
+      rx_bps: 4_500_000,
+    });
+    const playback = {
+      state: "playing" as const,
+      stalls: { lastMinute: { count: 2, seconds: 3.5 }, lastHour: { count: 4, seconds: 9 } },
+      errorCode: null,
+      loadedFraction: 0.4,
+      reportedQuality: "hd720",
+      liveLagSeconds: 12.5,
+    };
+    const livestream: ScreenHealth = {
+      ...HEALTH,
+      display: "livestream",
+      output: "livestream",
+      player: { status: "playing", muted: false, changedAt: new Date().toISOString(), playback },
+    };
+    const before = watcher.received.length;
+    screen.socket.send(
+      JSON.stringify({ type: "screen.health", health: { ...livestream, metrics: { network: network(18, 70) } } }),
+    );
+    await next(watcher.received, "screens.changed", before);
+    const second = watcher.received.length;
+    screen.socket.send(
+      JSON.stringify({ type: "screen.health", health: { ...livestream, metrics: { network: network(9, 55) } } }),
+    );
+    const changed = await next(watcher.received, "screens.changed", second);
+    expect(changed.screen.health?.player?.playback).toEqual(playback);
+    // The worst of the minute, unless both reports straddled a minute boundary.
+    const expected = {
+      routerLatencyMs: 2.5,
+      internetLossPercent: 0,
+      rxBitsPerSecond: 4_500_000,
+      livestreamStalls: 2,
+    };
+    expect(changed.sample).toMatchObject(expected);
+    expect(changed.sample?.minute).toMatch(/:00\.000Z$/);
+
+    const later = await connectStaff("moderator");
+    const snapshot = await next(later.received, "screens.snapshot");
+    expect(snapshot.quality).toEqual([
+      { screenId: "MONQLT", samples: expect.arrayContaining([expect.objectContaining(expected)]) },
+    ]);
+    expect(snapshot.quality[0]!.samples.length).toBeLessThanOrEqual(2);
   });
 });

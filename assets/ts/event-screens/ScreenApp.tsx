@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
-import type { ScreenMonitorCommand } from "../../shared/schemas/event-screen-monitor";
+import type { ScreenManagerCommand } from "../../shared/schemas/event-screen-monitor";
 import type { ScreenId } from "../../shared/schemas/event-screens";
 import { formatLiveTimer } from "../../shared/live-timer-policy";
 import { LiveOverlayPresentation } from "../live-session/LiveOverlayPresentation";
@@ -104,8 +104,8 @@ export function ScreenApp({
   onHandoff: () => void;
   /** A screen manager's Reload. */
   onReload?: () => void;
-  /** The monitor connection's socket and metrics, replaced in tests. */
-  monitor?: Pick<Parameters<typeof useScreenMonitor>[0], "createSocket" | "readMetrics">;
+  /** The monitor connection's socket and device readers, replaced in tests. */
+  monitor?: Pick<Parameters<typeof useScreenMonitor>[0], "createSocket" | "readMetrics" | "readScreenshot">;
 }) {
   const runtime = useScreenRuntime({ screenId, storage, clock, api });
   const { view, agenda, overlayToken, refresh } = runtime;
@@ -190,7 +190,7 @@ export function ScreenApp({
   useEffect(() => subscribeLivestreamPlayerReport(setPlayer), []);
   const [identifyUntil, setIdentifyUntil] = useState<number | null>(null);
   const onCommand = useCallback(
-    (command: ScreenMonitorCommand) => {
+    (command: ScreenManagerCommand) => {
       if (command.type === "screen.reload") onReload();
       else setIdentifyUntil(Date.parse(command.until));
     },

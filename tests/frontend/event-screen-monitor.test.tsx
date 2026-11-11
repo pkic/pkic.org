@@ -16,6 +16,8 @@ import { ScreenApp } from "../../assets/ts/event-screens/ScreenApp";
 import { createScreenClock } from "../../assets/ts/event-screens/screen-clock";
 import { screenPageVersion } from "../../assets/ts/event-screens/screen-health";
 import { useScreenMonitor } from "../../assets/ts/event-screens/useScreenMonitor";
+import { LivestreamStallLog, livestreamPlayback } from "../../assets/ts/event-screens/livestream-playback";
+import type { YouTubePlayer } from "../../assets/ts/event-screens/youtube-iframe-api";
 import { fakeLiveSockets, type FakeLiveSocket } from "./helpers/live-room-socket";
 
 const SCREEN = "K7M2QA";
@@ -31,9 +33,13 @@ const HEALTH: Omit<ScreenHealth, "metrics"> = {
 
 /** What the screen sent its monitor, parsed by the monitor's own contract. */
 const reports = (socket: FakeLiveSocket) =>
-  socket.sent
-    .filter((data) => data !== "ping")
+  (socket.sent as unknown[])
+    .filter((data): data is string => typeof data === "string" && data !== "ping")
     .map((data) => screenMonitorScreenMessageSchema.parse(JSON.parse(data)).health);
+/** The screenshots the screen sent, as binary messages. */
+const screenshots = (socket: FakeLiveSocket) =>
+  (socket.sent as unknown[]).filter((data): data is ArrayBuffer => data instanceof ArrayBuffer);
+const JPEG = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 0xff, 0xd9]).buffer;
 
 let host: HTMLElement | undefined;
 beforeEach(() => vi.useFakeTimers());
@@ -59,6 +65,8 @@ describe("the screen's monitor connection", () => {
       health: HEALTH,
       onCommand: () => undefined,
       readMetrics: async () => METRICS,
+      readScreenshot: async () => JPEG,
+      readPlayback: () => null,
       createSocket: props.factory,
       ...props,
     });
@@ -114,6 +122,67 @@ describe("the screen's monitor connection", () => {
     expect(sockets.sockets).toHaveLength(7);
   });
 
+  it("sends the device's screenshot at once and then at the pace the monitor sets", async () => {
+    const sockets = fakeLiveSockets();
+    const onCommand = vi.fn();
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<Probe factory={sockets.factory} onCommand={onCommand} />, host!));
+    sockets.latest().open();
+    await advance(0);
+    expect(screenshots(sockets.latest())).toEqual([JPEG]);
+    await advance(SCREEN_POLICY.screenshotWatchedSeconds * 1000);
+    expect(screenshots(sockets.latest())).toHaveLength(1);
+
+    // Staff started watching: the next one comes at the faster pace, counted from the last.
+    sockets.latest().dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({ type: "screen.capture", everySeconds: SCREEN_POLICY.screenshotWatchedSeconds }),
+      }),
+    );
+    await advance(0);
+    expect(screenshots(sockets.latest())).toHaveLength(2);
+    await advance(SCREEN_POLICY.screenshotWatchedSeconds * 1000);
+    expect(screenshots(sockets.latest())).toHaveLength(3);
+    expect(onCommand).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing when the device has no screenshot", async () => {
+    const sockets = fakeLiveSockets();
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<Probe factory={sockets.factory} readScreenshot={async () => null} />, host!));
+    sockets.latest().open();
+    await advance(SCREEN_POLICY.screenshotSeconds * 1000);
+    expect(screenshots(sockets.latest())).toEqual([]);
+    expect(reports(sockets.latest()).length).toBeGreaterThan(0);
+  });
+
+  it("adds the player's own readings to a livestream report when it sends", async () => {
+    const sockets = fakeLiveSockets();
+    const playback = {
+      state: "buffering" as const,
+      stalls: { lastMinute: { count: 1, seconds: 4 }, lastHour: { count: 1, seconds: 4 } },
+      errorCode: null,
+      loadedFraction: 0.2,
+      reportedQuality: "auto",
+      liveLagSeconds: null,
+    };
+    const player = { status: "buffering" as const, muted: false, changedAt: new Date().toISOString(), playback: null };
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() =>
+      render(
+        <Probe
+          factory={sockets.factory}
+          health={{ ...HEALTH, display: "livestream", output: "livestream", player }}
+          readPlayback={() => playback}
+        />,
+        host!,
+      ),
+    );
+    sockets.latest().open();
+    await advance(0);
+    expect(reports(sockets.latest())[0]?.player).toEqual({ ...player, playback });
+  });
+
   it("stays closed while the screen is not paired", async () => {
     const sockets = fakeLiveSockets();
     host = document.body.appendChild(document.createElement("div"));
@@ -148,7 +217,7 @@ describe("the screen's commands", () => {
           api={api}
           onHandoff={vi.fn()}
           onReload={onReload}
-          monitor={{ createSocket: sockets.factory, readMetrics: async () => null }}
+          monitor={{ createSocket: sockets.factory, readMetrics: async () => null, readScreenshot: async () => null }}
         />,
         host!,
       ),
@@ -185,5 +254,56 @@ describe("the screen's commands", () => {
     const { sockets, onReload } = await mountApp();
     await deliver(sockets.latest(), { type: "screen.reload" });
     expect(onReload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the livestream player's readings", () => {
+  it("counts a stall from leaving playing until playing again, not the first start", () => {
+    const log = new LivestreamStallLog();
+    const t0 = Date.parse("2026-11-11T10:00:00.000Z");
+    log.status("loading", t0);
+    log.status("playing", t0 + 5_000);
+    log.status("buffering", t0 + 60_000);
+    log.status("error", t0 + 62_000);
+    log.status("loading", t0 + 67_000);
+    log.status("playing", t0 + 70_000);
+    log.status("buffering", t0 + 100_000);
+    expect(log.summary(t0 + 104_000, 60_000)).toEqual({ count: 2, seconds: 14 });
+    expect(log.summary(t0 + 104_000, 3_600_000)).toEqual({ count: 2, seconds: 14 });
+    expect(log.summary(t0 + 180_000, 60_000)).toEqual({ count: 0, seconds: 60 });
+  });
+
+  it("reads what YouTube's player says, and the lag only while it says the video is live", () => {
+    const player = {
+      getPlayerState: () => 1,
+      getVideoLoadedFraction: () => 0.4567,
+      getPlaybackQuality: () => "hd1080",
+      getDuration: () => 3_600,
+      getCurrentTime: () => 3_588,
+      getVideoData: () => ({ isLive: true }),
+    } as unknown as YouTubePlayer;
+    const stalls = new LivestreamStallLog();
+    expect(livestreamPlayback({ player, stalls, errorCode: 150, now: Date.now() })).toEqual({
+      state: "playing",
+      stalls: { lastMinute: { count: 0, seconds: 0 }, lastHour: { count: 0, seconds: 0 } },
+      errorCode: 150,
+      loadedFraction: 0.457,
+      reportedQuality: "hd1080",
+      liveLagSeconds: 12,
+    });
+    const recorded = { ...player, getVideoData: () => ({}) } as unknown as YouTubePlayer;
+    expect(
+      livestreamPlayback({ player: recorded, stalls, errorCode: null, now: Date.now() }).liveLagSeconds,
+    ).toBeNull();
+    const broken = {
+      getPlayerState: () => {
+        throw new Error("Not ready");
+      },
+    } as unknown as YouTubePlayer;
+    expect(livestreamPlayback({ player: broken, stalls, errorCode: null, now: Date.now() })).toMatchObject({
+      state: null,
+      loadedFraction: null,
+      reportedQuality: null,
+    });
   });
 });

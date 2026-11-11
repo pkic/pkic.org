@@ -42,7 +42,7 @@ const LIVE: ReadonlyMap<string, ScreenLiveStatus> = new Map(
       health({
         display: "livestream",
         output: "livestream",
-        player: { status: "playing", muted: true, changedAt: at(40) },
+        player: { status: "playing", muted: true, changedAt: at(40), playback: null },
       }),
     ),
     online("Q4ZT7B", health({ output: "stage-display", mode: "auto", clockOffsetMs: 2400 })),

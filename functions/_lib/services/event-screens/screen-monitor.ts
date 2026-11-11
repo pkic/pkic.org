@@ -1,14 +1,17 @@
 import { DurableObject } from "cloudflare:workers";
+import { bytesToBase64 } from "../../../../assets/shared/base64";
 import { SCREEN_POLICY } from "../../../../assets/shared/event-screen-policy";
 import {
   SCREEN_MONITOR_LIMITS,
   SCREEN_MONITOR_PROTOCOL,
+  isScreenScreenshot,
   screenMonitorCommandSchema,
   screenMonitorScreenMessageSchema,
   screenMonitorServerMessageSchema,
   screenMonitorStaffMessageSchema,
   type ScreenLiveStatus,
   type ScreenMonitorServerMessage,
+  type ScreenQualitySample,
 } from "../../../../assets/shared/schemas/event-screen-monitor";
 import { liveRoomRefusalCloseCode } from "../../../../assets/shared/schemas/live-session-room";
 import type { Env } from "../../types";
@@ -24,7 +27,7 @@ import {
   screenSocketTag,
   type ScreenMonitorAdmission,
 } from "./screen-monitor-access";
-import { ScreenMonitorStore } from "./screen-monitor-store";
+import { ScreenMonitorStore, type StoredScreenshot } from "./screen-monitor-store";
 
 const REFRESH_MS = SCREEN_POLICY.monitorAccessRefreshSeconds * 1000;
 const EXPIRED = "SCREEN_MONITOR_ACCESS_EXPIRED";
@@ -45,8 +48,11 @@ function send(socket: WebSocket, message: unknown): void {
 /**
  * One event's screen monitor. Screens report their health over hibernating
  * sockets, staff watch those reports and screen managers send Identify and
- * Reload. Reports and commands never touch D1: the alarm rechecks every
- * socket's access in one batch, and a socket past its lease is closed.
+ * Reload. Each screen also sends a screenshot, as a binary message, more
+ * often while any staff socket is open; the monitor tells screens which pace
+ * applies. Reports, screenshots and commands never touch D1: the alarm
+ * rechecks every socket's access in one batch, and a socket past its lease
+ * is closed.
  */
 export class EventScreenMonitor extends DurableObject<Env> {
   private readonly store: ScreenMonitorStore;
@@ -82,6 +88,7 @@ export class EventScreenMonitor extends DurableObject<Env> {
         closeLiveRoomSocket(old, 1000, "Replaced by a newer connection");
       this.ctx.acceptWebSocket(server, [SCREEN_MONITOR_SCREEN_TAG, screenSocketTag(admission.screenId)]);
       server.serializeAttachment(admission);
+      send(server, this.capturePace());
       await this.changed(await this.store.connected(admission.screenId, nowIso()));
     } else {
       if (this.open(SCREEN_MONITOR_STAFF_TAG).length >= SCREEN_MONITOR_LIMITS.staffConnections) {
@@ -92,6 +99,8 @@ export class EventScreenMonitor extends DurableObject<Env> {
       this.ctx.acceptWebSocket(server, [SCREEN_MONITOR_STAFF_TAG]);
       server.serializeAttachment(admission);
       send(server, await this.snapshot(admission.control));
+      for (const shot of await this.store.screenshots()) send(server, this.screenshotMessage(shot.screenId, shot));
+      this.syncCapturePace();
     }
     await this.scheduleRefresh();
     return response;
@@ -103,6 +112,10 @@ export class EventScreenMonitor extends DurableObject<Env> {
     if (!admission) return;
     if (!screenMonitorAccessCurrent(admission, Date.now())) {
       closeLiveRoomSocket(socket, liveRoomRefusalCloseCode(401), EXPIRED);
+      return;
+    }
+    if (admission.role === "screen" && typeof raw !== "string") {
+      await this.screenshot(admission.screenId, new Uint8Array(raw));
       return;
     }
     const text = typeof raw === "string" ? raw : "";
@@ -119,8 +132,10 @@ export class EventScreenMonitor extends DurableObject<Env> {
     if (admission.role === "screen") {
       const message = screenMonitorScreenMessageSchema.safeParse(body);
       // A screen has no one to read a refusal; a report the contract refuses is dropped.
-      if (message.success)
-        await this.changed(await this.store.reported(admission.screenId, message.data.health, nowIso()));
+      if (message.success) {
+        const { status, sample } = await this.store.reported(admission.screenId, message.data.health, nowIso());
+        await this.changed(status, sample);
+      }
       return;
     }
     const message = screenMonitorStaffMessageSchema.safeParse(body);
@@ -156,11 +171,13 @@ export class EventScreenMonitor extends DurableObject<Env> {
   async webSocketClose(socket: WebSocket, code: number, reason: string): Promise<void> {
     await this.left(socket);
     closeLiveRoomSocket(socket, code, reason);
+    if (this.admission(socket)?.role === "staff") this.syncCapturePace(socket);
   }
 
   async webSocketError(socket: WebSocket): Promise<void> {
     await this.left(socket);
     closeLiveRoomSocket(socket, 1011, "Monitor error");
+    if (this.admission(socket)?.role === "staff") this.syncCapturePace(socket);
   }
 
   /**
@@ -208,6 +225,7 @@ export class EventScreenMonitor extends DurableObject<Env> {
         if (!admission || !screenMonitorAccessCurrent(admission, Date.now()))
           closeLiveRoomSocket(socket, liveRoomRefusalCloseCode(401), EXPIRED);
       }
+      this.syncCapturePace();
     }
     await this.scheduleRefresh();
   }
@@ -238,22 +256,53 @@ export class EventScreenMonitor extends DurableObject<Env> {
   }
 
   private async snapshot(control: boolean): Promise<ScreenMonitorServerMessage> {
-    const screens = (await this.store.all()).map((status) => this.live(status));
-    return screenMonitorServerMessageSchema.parse({ type: "screens.snapshot", control, screens });
+    const [stored, quality] = await Promise.all([this.store.all(), this.store.quality()]);
+    const screens = stored.map((status) => this.live(status));
+    const known = new Set(screens.map((status) => status.screenId));
+    return screenMonitorServerMessageSchema.parse({
+      type: "screens.snapshot",
+      control,
+      screens,
+      quality: quality.filter((history) => known.has(history.screenId)),
+    });
   }
 
-  private async broadcastSnapshot(): Promise<void> {
-    for (const socket of this.open(SCREEN_MONITOR_STAFF_TAG)) {
-      const admission = this.admission(socket);
-      if (admission?.role === "staff") send(socket, await this.snapshot(admission.control));
-    }
+  /**
+   * How often screens send a screenshot: faster while any staff socket is
+   * open (`leaving` is one closing now). Screens hear it when they connect
+   * and whenever staff come or go; a screen already at that pace ignores it.
+   */
+  private capturePace(leaving?: WebSocket) {
+    const watched = this.open(SCREEN_MONITOR_STAFF_TAG).some((socket) => socket !== leaving);
+    return screenMonitorCommandSchema.parse({
+      type: "screen.capture",
+      everySeconds: watched ? SCREEN_POLICY.screenshotWatchedSeconds : SCREEN_POLICY.screenshotSeconds,
+    });
   }
 
-  /** Staff hear each change at once; a socket past its lease hears nothing more. */
-  private async changed(status: ScreenLiveStatus): Promise<void> {
-    const message = JSON.stringify(
-      screenMonitorServerMessageSchema.parse({ type: "screens.changed", screen: this.live(status) }),
-    );
+  private syncCapturePace(leaving?: WebSocket): void {
+    const message = this.capturePace(leaving);
+    for (const socket of this.open(SCREEN_MONITOR_SCREEN_TAG)) send(socket, message);
+  }
+
+  private screenshotMessage(screenId: string, shot: StoredScreenshot): ScreenMonitorServerMessage {
+    return screenMonitorServerMessageSchema.parse({
+      type: "screens.screenshot",
+      screenId,
+      capturedAt: shot.capturedAt,
+      jpeg: bytesToBase64(shot.jpeg),
+    });
+  }
+
+  /** Only the latest JPEG within the limit is kept; anything else, or one sent too soon, is dropped. */
+  private async screenshot(screenId: string, bytes: Uint8Array): Promise<void> {
+    if (!isScreenScreenshot(bytes)) return;
+    const stored = await this.store.screenshot(screenId, bytes, nowIso());
+    if (stored) this.toStaff(JSON.stringify(this.screenshotMessage(screenId, stored)));
+  }
+
+  /** Staff hear it at once; a socket past its lease hears nothing more. */
+  private toStaff(message: string): void {
     const now = Date.now();
     for (const socket of this.open(SCREEN_MONITOR_STAFF_TAG)) {
       const admission = this.admission(socket);
@@ -264,6 +313,25 @@ export class EventScreenMonitor extends DurableObject<Env> {
         /* Already closed. */
       }
     }
+  }
+
+  private async broadcastSnapshot(): Promise<void> {
+    for (const socket of this.open(SCREEN_MONITOR_STAFF_TAG)) {
+      const admission = this.admission(socket);
+      if (admission?.role === "staff") send(socket, await this.snapshot(admission.control));
+    }
+  }
+
+  private async changed(status: ScreenLiveStatus, sample?: ScreenQualitySample): Promise<void> {
+    this.toStaff(
+      JSON.stringify(
+        screenMonitorServerMessageSchema.parse({
+          type: "screens.changed",
+          screen: this.live(status),
+          ...(sample ? { sample } : {}),
+        }),
+      ),
+    );
   }
 
   /** The next access recheck while sockets are open, else the next screen to forget. */

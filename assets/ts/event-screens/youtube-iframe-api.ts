@@ -24,6 +24,14 @@ export interface YouTubePlayer {
   unMute(): void;
   setVolume(volume: number): void;
   destroy(): void;
+  /** Readings the screen reports; each may be missing or throw before the player is ready. */
+  getPlayerState?(): number;
+  getVideoLoadedFraction?(): number;
+  getPlaybackQuality?(): string;
+  getDuration?(): number;
+  getCurrentTime?(): number;
+  /** Not part of the documented API: `isLive` is read only when present. */
+  getVideoData?(): { isLive?: unknown } | undefined;
 }
 
 export interface YouTubePlayerEvents {

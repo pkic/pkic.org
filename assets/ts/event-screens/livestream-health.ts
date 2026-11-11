@@ -7,6 +7,7 @@
  * sound starts muted instead; the next player tries with sound again. Only a fault or another video recreates the
  * player; nothing the server says or fails to say does.
  */
+import { LIVESTREAM_PLAYER_STATES, SCREEN_PLAYER_STATUSES } from "../../shared/schemas/event-screen-monitor";
 
 export const LIVESTREAM_HEALTH_POLICY = {
   /** Buffering, paused or not started for this long counts as a fault. */
@@ -17,7 +18,7 @@ export const LIVESTREAM_HEALTH_POLICY = {
 } as const;
 
 /** What the player is doing, as the screen reports it. */
-export type LivestreamPlayerStatus = "loading" | "playing" | "buffering" | "error";
+export type LivestreamPlayerStatus = (typeof SCREEN_PLAYER_STATUSES)[number];
 
 export interface LivestreamHealth {
   videoId: string;
@@ -39,7 +40,7 @@ export interface LivestreamHealth {
 }
 
 /** The player's own states, as the screen hears them. */
-export type LivestreamPlayerState = "unstarted" | "cued" | "buffering" | "paused" | "playing" | "ended";
+export type LivestreamPlayerState = (typeof LIVESTREAM_PLAYER_STATES)[number];
 
 export type LivestreamHealthEvent =
   | { type: "video"; videoId: string; at: number }

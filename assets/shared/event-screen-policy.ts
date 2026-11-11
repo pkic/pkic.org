@@ -33,6 +33,11 @@ export const SCREEN_POLICY = {
   monitorAccessLeaseSeconds: 90,
   /** Identify shows the screen's name and ID over its picture this long. */
   identifySeconds: 10,
+  /** A connected screen sends a screenshot this often, and this often while staff watch its event's screens… */
+  screenshotSeconds: 60,
+  screenshotWatchedSeconds: 10,
+  /** …but never more often than its device takes a new one. */
+  screenshotMinGapSeconds: 5,
   /** The monitor forgets a screen this many days after it last disconnected. */
   monitorKeepDays: 7,
 } as const;

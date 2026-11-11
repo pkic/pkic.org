@@ -33,7 +33,13 @@ export function screenHealth(input: {
     mode: runMode(display),
     player:
       display.kind === "livestream" && input.player
-        ? { status: input.player.status, muted: input.player.muted, changedAt: input.player.changedAt }
+        ? {
+            status: input.player.status,
+            muted: input.player.muted,
+            changedAt: input.player.changedAt,
+            // The monitor connection reads the player's own readings when it sends.
+            playback: null,
+          }
         : null,
     clockOffsetMs: Math.max(-86_400_000, Math.min(86_400_000, Math.round(input.clockOffsetMs))),
   };

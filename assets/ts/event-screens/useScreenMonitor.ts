@@ -7,12 +7,14 @@ import {
   screenMonitorScreenMessageSchema,
   type ScreenDeviceMetrics,
   type ScreenHealth,
-  type ScreenMonitorCommand,
+  type ScreenManagerCommand,
 } from "../../shared/schemas/event-screen-monitor";
 import type { ScreenId } from "../../shared/schemas/event-screens";
 import { LIVE_PERSISTENT_RETRY_MAX_MS, persistentRetryDelay } from "../live-session/live-socket-retry";
 import type { LiveSocketFactory } from "../live-session/useLiveRoom";
+import { readLivestreamPlayback, type LivestreamPlaybackReader } from "./livestream-player-report";
 import { readScreenDeviceMetrics, type ScreenMetricsReader } from "./screen-device-metrics";
+import { readScreenDeviceScreenshot, type ScreenScreenshotReader } from "./screen-device-screenshot";
 
 const browserSocket: LiveSocketFactory = (url, protocols) => new WebSocket(url, protocols);
 const KEEP_ALIVE_MS = 25_000;
@@ -29,9 +31,10 @@ export function screenMonitorSocketUrl(location: Pick<Location, "protocol" | "ho
 /**
  * The screen's report to its event's monitor: its health when it connects,
  * whenever what it shows changes, and every few seconds besides, with the
- * device's metrics when they can be read. It never gives up reconnecting,
- * and it carries out a screen manager's Identify and Reload. It runs beside
- * the picture: nothing here can stop what the screen shows.
+ * device's metrics and the player's readings when they can be read. It
+ * sends the device's screenshot at the pace the monitor asks, never gives up
+ * reconnecting, and carries out a screen manager's Identify and Reload. It
+ * runs beside the picture: nothing here can stop what the screen shows.
  */
 export function useScreenMonitor({
   screenId,
@@ -41,6 +44,8 @@ export function useScreenMonitor({
   onCommand,
   createSocket = browserSocket,
   readMetrics = readScreenDeviceMetrics,
+  readScreenshot = readScreenDeviceScreenshot,
+  readPlayback = readLivestreamPlayback,
 }: {
   screenId: ScreenId;
   /** Paired; an unpaired screen has no sign-in to report with. */
@@ -48,17 +53,19 @@ export function useScreenMonitor({
   /** Changes when the screen may belong to another event, so it reconnects to that event's monitor. */
   connection: string;
   health: Omit<ScreenHealth, "metrics">;
-  onCommand: (command: ScreenMonitorCommand) => void;
+  onCommand: (command: ScreenManagerCommand) => void;
   createSocket?: LiveSocketFactory;
   readMetrics?: ScreenMetricsReader;
+  readScreenshot?: ScreenScreenshotReader;
+  readPlayback?: LivestreamPlaybackReader;
 }) {
   const latest = useRef(health);
   latest.current = health;
   const command = useRef(onCommand);
   command.current = onCommand;
   // Read at each attempt, so a caller's new function never reconnects the screen.
-  const factories = useRef({ createSocket, readMetrics });
-  factories.current = { createSocket, readMetrics };
+  const factories = useRef({ createSocket, readMetrics, readScreenshot, readPlayback });
+  factories.current = { createSocket, readMetrics, readScreenshot, readPlayback };
   const report = useRef<(() => void) | null>(null);
   const signature = JSON.stringify(health);
 
@@ -75,6 +82,11 @@ export function useScreenMonitor({
     let metrics: ScreenDeviceMetrics | null = null;
     let metricsTriedAt = Number.NEGATIVE_INFINITY;
     let metricsFailed = false;
+    // The monitor sets the pace; until it says, the unwatched one. Kept across reconnects.
+    let captureEveryMs = SCREEN_POLICY.screenshotSeconds * 1000;
+    let capturedAt = Number.NEGATIVE_INFINITY;
+    let capture: ReturnType<typeof setTimeout> | undefined;
+    let capturing = false;
 
     async function refreshMetrics() {
       const now = Date.now();
@@ -87,9 +99,14 @@ export function useScreenMonitor({
     function sendNow() {
       pending = undefined;
       if (!socket || socket.readyState !== WebSocket.OPEN) return;
+      const { player } = latest.current;
       const message = screenMonitorScreenMessageSchema.parse({
         type: "screen.health",
-        health: { ...latest.current, metrics },
+        health: {
+          ...latest.current,
+          player: player ? { ...player, playback: factories.current.readPlayback() } : null,
+          metrics,
+        },
       });
       const text = JSON.stringify(message);
       // A report over the monitor's limit would close the socket; send it without the metrics instead.
@@ -107,6 +124,26 @@ export function useScreenMonitor({
     }
     report.current = sendSoon;
 
+    /** The next screenshot falls due one pace after the last; a faster pace may bring it forward. */
+    function scheduleCapture() {
+      clearTimeout(capture);
+      if (stopped || !socket || socket.readyState !== WebSocket.OPEN) return;
+      capture = setTimeout(() => void captureNow(), Math.max(0, capturedAt + captureEveryMs - Date.now()));
+    }
+
+    async function captureNow() {
+      if (capturing) return;
+      capturing = true;
+      capturedAt = Date.now();
+      try {
+        const bytes = await factories.current.readScreenshot();
+        if (bytes && socket?.readyState === WebSocket.OPEN) socket.send(bytes);
+      } finally {
+        capturing = false;
+        scheduleCapture();
+      }
+    }
+
     function open() {
       const current = factories.current.createSocket(screenMonitorSocketUrl(window.location, screenId), [
         SCREEN_MONITOR_PROTOCOL,
@@ -120,6 +157,7 @@ export function useScreenMonitor({
           void refreshMetrics().then(sendNow);
         }, SCREEN_POLICY.healthSeconds * 1000);
         void refreshMetrics().then(sendNow);
+        scheduleCapture();
       });
       current.addEventListener("message", (event) => {
         if (stopped || socket !== current || event.data === "pong") return;
@@ -129,11 +167,18 @@ export function useScreenMonitor({
         } catch {
           return;
         }
-        if (parsed.success) command.current(parsed.data);
+        if (!parsed.success) return;
+        if (parsed.data.type !== "screen.capture") {
+          command.current(parsed.data);
+          return;
+        }
+        captureEveryMs = parsed.data.everySeconds * 1000;
+        if (!capturing) scheduleCapture();
       });
       current.addEventListener("close", () => {
         clearInterval(keepAlive);
         clearInterval(every);
+        clearTimeout(capture);
         if (socket === current) socket = null;
         if (stopped) return;
         // A refused admission opens and closes at once; one that held a while starts its backoff over.
@@ -151,6 +196,7 @@ export function useScreenMonitor({
       clearTimeout(pending);
       clearInterval(keepAlive);
       clearInterval(every);
+      clearTimeout(capture);
       socket?.close(1000, "Screen left");
       socket = null;
     };
