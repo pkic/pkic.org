@@ -171,8 +171,9 @@ export function RegistrationTotals({
       const counts = stats.attendanceStatusByType[option.value];
       if (!counts || counts.total + counts.cancelled === 0) return [];
       const card = registrationCard({
-        label: option.label.toLowerCase(),
-        title: `People who chose ${option.label.toLowerCase()} for at least one day, cancelled registrations aside`,
+        // The option's name as the settings write it: "Livestream Lounge" stays a name.
+        label: option.label,
+        title: `People who chose ${option.label} for at least one day, cancelled registrations aside`,
         total: counts.total,
         pending: counts.pending,
         waitlisted: counts.waitlisted,

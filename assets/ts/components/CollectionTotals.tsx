@@ -22,7 +22,11 @@ import { StatCard, type StatCardTone } from "../ui/StatCard";
 import "./CollectionTotals.css";
 
 export interface CollectionTotal {
-  /** What the figure counts, in lower case: "registered", "no reviews". The card writes it in sentence case. */
+  /**
+   * What the figure counts, in lower case: "registered", "no reviews". The card
+   * writes it in sentence case. A configured name ("Livestream Lounge") is
+   * passed as written and keeps its capitals.
+   */
   label: string;
   value: number | string;
   /** A qualifier under the figure — "+2 waitlisted". */

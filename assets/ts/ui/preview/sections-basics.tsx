@@ -10,6 +10,7 @@ import { PersonCell } from "../PersonCell";
 import { PkicMark } from "../PkicMark";
 import { Spinner } from "../Spinner";
 import { StatCard } from "../StatCard";
+import { IconPeople } from "../MediaIcons";
 import { IconMapPin, IconVirtual } from "../../components/icons";
 
 export const basicSections: PreviewSection[] = [
@@ -221,7 +222,7 @@ export const basicSections: PreviewSection[] = [
             icon={<IconMapPin width="18" height="18" />}
             onPress={() => undefined}
             pressed
-            pressLabel="Show in-person only"
+            pressLabel="Show In-person only"
             tooltip={
               <div class="pk-stack pk-stack--tight">
                 <strong>People who chose in-person for at least one day, cancelled registrations aside</strong>
@@ -236,12 +237,26 @@ export const basicSections: PreviewSection[] = [
             note="1 pending · 143 cancelled"
             icon={<IconVirtual width="18" height="18" />}
             onPress={() => undefined}
-            pressLabel="Show virtual only"
+            pressLabel="Show Virtual only"
             tooltip={
               <div class="pk-stack pk-stack--tight">
                 <strong>People who chose virtual for at least one day, cancelled registrations aside</strong>
                 <span>1 has not confirmed their email address yet</span>
                 <span>143 cancelled their registration and are not counted</span>
+              </div>
+            }
+          />
+          <StatCard
+            label="Livestream Lounge"
+            value="86"
+            note="2 cancelled"
+            icon={<IconPeople width="18" height="18" />}
+            onPress={() => undefined}
+            pressLabel="Show Livestream Lounge only"
+            tooltip={
+              <div class="pk-stack pk-stack--tight">
+                <strong>People who chose Livestream Lounge for at least one day, cancelled registrations aside</strong>
+                <span>2 cancelled their registration and are not counted</span>
               </div>
             }
           />

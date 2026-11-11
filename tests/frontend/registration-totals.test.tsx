@@ -14,6 +14,7 @@ import {
   type RegistrationTotalsFilters,
 } from "../../assets/ts/components/event-registrations/RegistrationTotals";
 import type { EventAttendanceRegistrationsStats } from "../../assets/shared/schemas/event-registrations";
+import { AttendanceIcon } from "../../assets/ts/components/AttendanceIcon";
 import type { EventAttendanceOption } from "../../assets/shared/schemas/event-configuration";
 
 const mounted: HTMLElement[] = [];
@@ -66,7 +67,7 @@ describe("RegistrationTotals filters", () => {
   it("filters an attendance card by its type and every status but cancelled, clearing other filters", () => {
     const list = filters({ country: "NL", waitlisted: "true" });
     const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} filters={list} />);
-    const inPerson = toggle(container, "Show in-person only");
+    const inPerson = toggle(container, "Show In-person only");
     expect(inPerson.getAttribute("aria-pressed")).toBe("false");
     void act(() => inPerson.click());
     expect(list.apply).toHaveBeenCalledWith({
@@ -85,7 +86,7 @@ describe("RegistrationTotals filters", () => {
         filters={filters({ attendance_type: "in_person", status: "pending_email_confirmation,registered" })}
       />,
     );
-    expect(toggle(pressed, "Show in-person only").getAttribute("aria-pressed")).toBe("true");
+    expect(toggle(pressed, "Show In-person only").getAttribute("aria-pressed")).toBe("true");
     expect(pressed.querySelector(".pk-stat-card--pressed")?.textContent).toContain("In-person");
     expect(toggle(pressed, "Show all registrations").getAttribute("aria-pressed")).toBe("false");
 
@@ -97,13 +98,13 @@ describe("RegistrationTotals filters", () => {
         filters={filters({ attendance_type: "in_person" })}
       />,
     );
-    expect(toggle(typeOnly, "Show in-person only").getAttribute("aria-pressed")).toBe("false");
+    expect(toggle(typeOnly, "Show In-person only").getAttribute("aria-pressed")).toBe("false");
   });
 
   it("clears the card's filters when it is pressed again", () => {
     const list = filters({ attendance_type: "virtual", status: "registered,pending_email_confirmation" });
     const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} filters={list} />);
-    void act(() => toggle(container, "Show virtual only").click());
+    void act(() => toggle(container, "Show Virtual only").click());
     expect(list.apply).toHaveBeenCalledWith({ attendance_type: "", status: "" });
   });
 
@@ -135,7 +136,7 @@ describe("RegistrationTotals attendance cards", () => {
   it("draws one card per configured option, in its order, wording and icon", () => {
     const configured: EventAttendanceOption[] = [
       { value: "virtual", label: "Watch online" },
-      { value: "livestream_lounge", label: "Livestream lounge", icon: "people" },
+      { value: "livestream_lounge", label: "Livestream Lounge", icon: "people" },
     ];
     const container = mount(
       <RegistrationTotals
@@ -150,8 +151,15 @@ describe("RegistrationTotals attendance cards", () => {
       />,
     );
     const labels = [...container.querySelectorAll(".pk-stat-card__label")].map((label) => label.textContent);
-    expect(labels).toEqual(["Registered", "Watch online", "Livestream lounge", "Bounced"]);
-    expect(container.querySelectorAll(".pk-stat-card__icon svg")).toHaveLength(2);
+    expect(labels).toEqual(["Registered", "Watch online", "Livestream Lounge", "Bounced"]);
+    // A custom option has no default icon: the card shows the one its settings chose.
+    const lounge = [...container.querySelectorAll(".pk-stat-card")].find(
+      (card) => card.querySelector(".pk-stat-card__label")?.textContent === "Livestream Lounge",
+    );
+    const configuredIcon = mount(<AttendanceIcon type="livestream_lounge" icon="people" />).innerHTML;
+    expect(configuredIcon).not.toBe("");
+    expect(lounge?.querySelector(".pk-stat-card__icon")?.innerHTML).toBe(configuredIcon);
+    expect(mount(<AttendanceIcon type="livestream_lounge" />).innerHTML).toBe("");
   });
 });
 
