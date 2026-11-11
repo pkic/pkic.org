@@ -37,6 +37,7 @@ export const STUDIO_PANEL_TYPES = [
   "polls",
   "chat",
   "sources",
+  "screens",
 ] as const;
 export type StudioPanelType = (typeof STUDIO_PANEL_TYPES)[number];
 export const STUDIO_PANEL_LABELS: Record<StudioPanelType, string> = {
@@ -50,6 +51,7 @@ export const STUDIO_PANEL_LABELS: Record<StudioPanelType, string> = {
   polls: "Polls",
   chat: "Chat",
   sources: "Output links",
+  screens: "Screens",
 };
 
 /** What a monitor can show: the two switcher buses, the stream viewers see, and every auxiliary output. */
@@ -183,6 +185,7 @@ const DEFAULT_SIZE: Record<StudioPanelType, { w: number; h: number }> = {
   polls: { w: 4, h: 7 },
   chat: { w: 4, h: 7 },
   sources: { w: 6, h: 7 },
+  screens: { w: 5, h: 12 },
 };
 
 /** The size a panel returns to: its place in the default layout, else its type's own size. */

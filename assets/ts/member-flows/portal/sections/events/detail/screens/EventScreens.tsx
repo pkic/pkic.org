@@ -6,7 +6,8 @@
  * same screens without those actions.
  */
 import { useRef, useState } from "preact/hooks";
-import { screenConnection, screenConnectionDisplay } from "../../../../../../../shared/event-screen-connection";
+import { screenIssueCounts, sortByScreenIssues } from "../../../../../../../shared/event-screen-issues";
+import { formatNumber } from "../../../../../../../shared/format-number";
 import { formatDateTime } from "../../../../../../../shared/format-date";
 import { LIVE_SCREEN_OUTPUT_DETAILS } from "../../../../../../../shared/live-room-outputs";
 import { eventScreensListSchema, type ScreenRecord } from "../../../../../../../shared/schemas/event-screens";
@@ -15,19 +16,17 @@ import type { CollectionLoader } from "../../../../../../hooks/useServerCollecti
 import { ApiDataTable, type ApiTableActions } from "../../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
-import { Badge } from "../../../../../../ui/Badge";
+import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
+import { Chip } from "../../../../../../ui/Chip";
 import { EmptyState } from "../../../../../../ui/EmptyState";
+import { Menu } from "../../../../../../ui/Menu";
 import { RowActions } from "../../../../../../ui/RowActions";
 import { toast } from "../../../../ui";
-import type {
-  ScreenLiveStatus,
-  ScreenMonitorStaffMessage,
-} from "../../../../../../../shared/schemas/event-screen-monitor";
 import { DiscoveryViewToggle, useDiscoveryView } from "../../../DiscoveryView";
-import type { ScreenMonitorView } from "./screen-monitor-view";
 import { ScreenEditDialog } from "./ScreenEditDialog";
 import { ScreenHealthCell } from "./ScreenHealthCell";
-import { ScreenMonitorCard } from "./ScreenMonitorCard";
+import { ScreenMonitorCard, ScreenStatusLine } from "./ScreenMonitorCard";
+import { useScreenMonitorController, type ScreenMonitorFixture } from "./useScreenMonitorController";
 import { ScreenPairDialog } from "./ScreenPairDialog";
 import { eventScreensPath, revokeScreenSession } from "./screen-requests";
 import "../../../../../../ui/Content.css";
@@ -44,11 +43,13 @@ function ScreenShows({ assignment }: { assignment: ScreenRecord["assignment"] })
   );
 }
 
-function ScreenStatus({ screen, now, live }: { screen: ScreenRecord; now: number; live?: ScreenLiveStatus }) {
-  // A connected socket is the freshest word there is; otherwise the last read decides.
-  if (live?.online) return <>Online</>;
-  const { label, tone } = screenConnectionDisplay(screenConnection(screen.session, now));
-  return tone ? <Badge tone={tone}>{label}</Badge> : <>{label}</>;
+/** "1 critical · 2 warnings": how many screens are at each tier. */
+function attentionSummary(counts: { critical: number; warning: number }): string {
+  const parts = [
+    counts.critical ? `${formatNumber(counts.critical)} critical` : "",
+    counts.warning ? `${formatNumber(counts.warning)} ${counts.warning === 1 ? "warning" : "warnings"}` : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "No screens need attention";
 }
 
 export function EventScreens({
@@ -56,8 +57,7 @@ export function EventScreens({
   canManage,
   now: fixedNow,
   load,
-  monitor,
-  onCommand,
+  monitor: fixture,
 }: {
   slug: string;
   /** Pair, edit and revoke; without it the list is read-only. */
@@ -66,13 +66,19 @@ export function EventScreens({
   now?: number;
   /** Reads the list and the room choices; the gallery hands in its own. */
   load?: CollectionLoader;
-  /** The event's screen monitor; without it the list shows only what the last reads recorded. */
-  monitor?: ScreenMonitorView;
-  /** Sends a manager's Identify or Reload to a connected screen. */
-  onCommand?: (type: ScreenMonitorStaffMessage["type"], screen: ScreenRecord) => void;
+  /** The gallery's fixed monitor view; otherwise the tab connects to the event's screen monitor. */
+  monitor?: ScreenMonitorFixture;
 }) {
   const clock = useBoundaryClock(nextMinute);
-  const now = fixedNow ?? clock;
+  const controller = useScreenMonitorController({ slug, fixture });
+  const monitor = controller.view;
+  const onCommand = controller.command;
+  const now = fixedNow ?? (monitor ? controller.now : clock);
+  const counts = screenIssueCounts(controller.issues.values());
+  const needAttention = [...controller.issues].filter(([, issues]) => issues.length).map(([screenId]) => screenId);
+  const [attention, setAttention] = useHashQueryParam("attention", "", ["", "1"]);
+  // The filter needs at least one screen; with none left the full list shows.
+  const attentionIds = attention && needAttention.length ? needAttention.sort().join(",") : "";
   const actions = useRef<ApiTableActions | null>(null);
   const [pairing, setPairing] = useState(false);
   const [editing, setEditing] = useState<ScreenRecord | null>(null);
@@ -150,21 +156,50 @@ export function EventScreens({
         responseSchema={eventScreensListSchema}
         resolve={(response) => response.screens}
         resolvePage={(response) => response.page}
+        params={attentionIds ? { screenIds: attentionIds } : undefined}
+        onData={(response) => controller.remember(response.screens)}
         load={load}
         paginate
         initialSort="name"
         searchPlaceholder="Search screens…"
         framed={!(monitor && view === "grid")}
-        toolbar={monitor ? () => <DiscoveryViewToggle view={view} onChange={setView} /> : undefined}
+        toolbar={
+          monitor
+            ? () => (
+                <>
+                  {(needAttention.length > 0 || attention) && (
+                    <Chip pressed={Boolean(attentionIds)} onToggle={() => setAttention(attention ? "" : "1")}>
+                      {attentionSummary(counts)}
+                    </Chip>
+                  )}
+                  <DiscoveryViewToggle view={view} onChange={setView} />
+                  <Menu
+                    label="Screen notifications"
+                    items={[
+                      {
+                        id: "notify",
+                        label: "Notify me in this browser",
+                        checked: controller.notifications.enabled,
+                        multiple: true,
+                        disabled: !controller.notifications.supported,
+                        onSelect: () => void controller.notifications.toggle(),
+                      },
+                    ]}
+                  />
+                </>
+              )
+            : undefined
+        }
         renderItems={
           monitor && view === "grid"
             ? (screens) => (
                 <div class="pk-discovery-grid">
-                  {screens.map((screen) => (
+                  {sortByScreenIssues(screens, (screen) => controller.issuesOf(screen.id)).map((screen) => (
                     <ScreenMonitorCard
                       key={screen.id}
                       screen={screen}
                       status={monitor.live.get(screen.id)}
+                      issues={controller.issuesOf(screen.id)}
                       samples={monitor.quality.get(screen.id) ?? []}
                       screenshot={monitor.screenshots.get(screen.id)}
                       now={now}
@@ -188,22 +223,25 @@ export function EventScreens({
           { header: "Screen ID", cell: (screen) => <span class="pk-mono">{screen.id}</span>, width: "fit" },
           {
             header: "Shows",
-            cell: (screen) =>
-              live?.get(screen.id)?.online ? (
-                <div class="pk-stack pk-stack--tight">
-                  <span>
-                    <ScreenShows assignment={screen.assignment} />
-                  </span>
-                  <ScreenHealthCell status={live.get(screen.id)} />
-                </div>
-              ) : (
-                <ScreenShows assignment={screen.assignment} />
-              ),
+            cell: (screen) => (
+              <div class="pk-stack pk-stack--tight">
+                <span>
+                  <ScreenShows assignment={screen.assignment} />
+                </span>
+                <ScreenHealthCell status={live?.get(screen.id)} />
+              </div>
+            ),
           },
           {
             header: "Status",
-            cell: (screen) => <ScreenStatus screen={screen} now={now} live={live?.get(screen.id)} />,
-            width: "fit",
+            cell: (screen) => (
+              <ScreenStatusLine
+                screen={screen}
+                status={live?.get(screen.id)}
+                issues={controller.issuesOf(screen.id)}
+                now={now}
+              />
+            ),
           },
           {
             header: "Last seen",

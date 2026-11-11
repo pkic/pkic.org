@@ -41,6 +41,13 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .pk-screen-standing {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-1) var(--pk-2);
+  }
+
   .pk-screen-card__body {
     display: flex;
     flex: 1;

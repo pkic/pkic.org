@@ -22,6 +22,7 @@ import { createLivePresence, livePresenceFocusAt, LivePresenceContext } from "./
 import { LivePanelPresence } from "./presence/LivePresenceTag";
 import { GraphicsPanel, nextInRoom } from "./studio/GraphicsPanel";
 import { monitorPanelView } from "./studio/MonitorPanel";
+import { ScreensPanel } from "./studio/ScreensPanel";
 import { SourcesPanel } from "./studio/SourcesPanel";
 import { SpeakerMessagePanel } from "./studio/SpeakerMessagePanel";
 import { StudioGrid, type StudioPanelView } from "./studio/StudioGrid";
@@ -40,6 +41,7 @@ import { useStudioFullscreen } from "./studio/useStudioFullscreen";
 import { ProgramUndoToast, TransitionControl, useTakeShortcut } from "./studio/StudioSwitcher";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { useStudioLayout } from "./studio/useStudioLayout";
+import { useStudioScreens } from "./studio/useStudioScreens";
 import "./LiveSessionDesk.css";
 
 /** Commands that change what the room puts on air, which first make this session the room's program. */
@@ -109,6 +111,12 @@ export function LiveSessionDesk({
   const live = room.status === "live";
   const now = useBoundaryClock(useCallback((at: number) => at + 30000, []));
   const layout = useStudioLayout();
+  // The room's screens connect only while a Screens panel is open.
+  const roomScreens = useStudioScreens({
+    slug,
+    roomId,
+    enabled: layout.panels.some((panel) => panel.type === "screens"),
+  });
   const fullscreen = useStudioFullscreen();
   const [broadcasting, setBroadcasting] = useState(false);
   const [lowerThirdSettings, setLowerThirdSettings] = useState(false);
@@ -292,6 +300,31 @@ export function LiveSessionDesk({
         return { title, body: <LiveChatPanel studio state={state} disabled={!live} send={sendProgram} /> };
       case "sources":
         return { title, body: <SourcesPanel slug={slug} roomId={roomId} layouts={state.overlayLayouts} /> };
+      case "screens":
+        return {
+          title,
+          menu: [
+            {
+              id: "notify",
+              label: "Notify me in this browser",
+              checked: roomScreens.controller.notifications.enabled,
+              multiple: true,
+              disabled: !roomScreens.controller.notifications.supported,
+              onSelect: () => void roomScreens.controller.notifications.toggle(),
+            },
+          ],
+          body: roomScreens.controller.view ? (
+            <ScreensPanel
+              screens={roomScreens.screens}
+              monitor={roomScreens.controller.view}
+              issuesOf={roomScreens.controller.issuesOf}
+              now={roomScreens.controller.now}
+              onCommand={roomScreens.controller.command}
+            />
+          ) : (
+            <p class="pk-studio-screens__empty">Screen status is available to staff who manage or operate screens.</p>
+          ),
+        };
     }
   };
   // Room status lives in the session bar's one status line; nothing is inserted above the panels.

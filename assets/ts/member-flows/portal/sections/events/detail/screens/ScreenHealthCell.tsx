@@ -1,14 +1,8 @@
 /**
- * What a screen actually draws, from its live report, and the device
- * metrics worth a glance.
+ * The device metrics worth a glance, from a screen's live report.
  */
-import {
-  SCREEN_CLOCK_DRIFT_WARNING_MS,
-  screenHealthDisplay,
-  screenKeyMetrics,
-} from "../../../../../../../shared/event-screen-health";
+import { SCREEN_CLOCK_DRIFT_WARNING_MS, screenKeyMetrics } from "../../../../../../../shared/event-screen-health";
 import type { ScreenLiveStatus } from "../../../../../../../shared/schemas/event-screen-monitor";
-import { Badge } from "../../../../../../ui/Badge";
 
 /** The metrics line: uptime, temperature and, when it drifts, the clock. */
 export function screenHealthDetail(status: ScreenLiveStatus): string {
@@ -19,22 +13,9 @@ export function screenHealthDetail(status: ScreenLiveStatus): string {
   return parts.join(" · ");
 }
 
-/**
- * Beneath a screen's assignment: a fault or fallback in tone (a screen doing
- * what it was assigned adds nothing), then the device metrics.
- */
+/** Beneath a screen's assignment: the device metrics worth a glance, while it is online. */
 export function ScreenHealthCell({ status }: { status: ScreenLiveStatus | undefined }) {
   if (!status?.health || !status.online) return null;
-  const { label, tone } = screenHealthDisplay(status.health);
   const detail = screenHealthDetail(status);
-  return (
-    <>
-      {tone && (
-        <span>
-          <Badge tone={tone}>{label}</Badge>
-        </span>
-      )}
-      {detail && <span class="pk-muted pk-small">{detail}</span>}
-    </>
-  );
+  return detail ? <span class="pk-muted pk-small">{detail}</span> : null;
 }

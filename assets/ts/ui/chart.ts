@@ -470,7 +470,7 @@ export function svgStackedBarChart(
 /**
  * A word-sized trend: one series drawn without axes, its numbers in the same
  * hidden table every chart carries. A gap in the data is a gap in the line;
- * the `bars` variant draws counts as columns instead. The scale starts at zero and runs
+ * the `bars` variant draws counts as columns instead, and nothing for a zero. The scale starts at zero and runs
  * to `max` or the highest value.
  */
 export function svgSparkline(

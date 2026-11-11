@@ -80,10 +80,15 @@ export function ScreenQualityTrend({
   const shown = compact
     ? [READINGS.latency, livestream ? READINGS.stalls : READINGS.loss]
     : [READINGS.latency, READINGS.loss, ...(livestream ? [READINGS.throughput, READINGS.stalls] : [])];
+  // A reading with nothing in the hour draws no row; a screen with no readings, no list.
+  const rows = shown.flatMap((reading) => {
+    const values = hour.map(({ sample }) => sample?.[reading.key] ?? null);
+    return values.some((value) => value !== null) ? [{ reading, values }] : [];
+  });
+  if (!rows.length) return null;
   return (
     <dl class="pk-screen-quality" data-compact={compact || undefined}>
-      {shown.map((reading) => {
-        const values = hour.map(({ sample }) => sample?.[reading.key] ?? null);
+      {rows.map(({ reading, values }) => {
         const latest = [...values].reverse().find((value) => value !== null) ?? null;
         return (
           <div key={reading.key} class="pk-screen-quality__row">

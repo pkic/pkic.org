@@ -7,6 +7,7 @@
 import type { PreviewSection } from "./PreviewShell";
 import type { ScreenRecord } from "../../../shared/schemas/event-screens";
 import { EventScreens } from "../../member-flows/portal/sections/events/detail/screens/EventScreens";
+import { screenMonitorIssues } from "../../member-flows/portal/sections/events/detail/screens/screen-monitor-view";
 import { ScreensPanel } from "../../member-flows/portal/sections/events/detail/live/studio/ScreensPanel";
 import { StudioPanelFrame } from "../../member-flows/portal/sections/events/detail/live/studio/StudioPanelFrame";
 import "../../member-flows/portal/sections/events/detail/live/studio/StudioGrid.css";
@@ -23,6 +24,7 @@ const BLUE_PROJECTOR = screen(
 const TAB_SCREENS: ScreenRecord[] = [SCREENS[0]!, SCREENS[1]!, BLUE_PROJECTOR, ...SCREENS.slice(2)];
 const ROOM_SCREENS = TAB_SCREENS.filter((each) => each.assignment?.roomId === blue.roomId);
 const noCommand = () => undefined;
+const ISSUES = screenMonitorIssues(MONITOR, SCREEN_FIXTURE_NOW);
 
 function MonitoredTab({ canManage }: { canManage: boolean }) {
   return (
@@ -33,8 +35,7 @@ function MonitoredTab({ canManage }: { canManage: boolean }) {
         canManage={canManage}
         now={SCREEN_FIXTURE_NOW}
         load={fixturesWith(TAB_SCREENS)}
-        monitor={MONITOR}
-        onCommand={canManage ? noCommand : undefined}
+        monitor={{ view: MONITOR, now: SCREEN_FIXTURE_NOW, control: canManage }}
       />
     </div>
   );
@@ -65,6 +66,9 @@ function StudioScreens({ canManage }: { canManage: boolean }) {
           panel={panel}
           panels={[panel]}
           title="Screens"
+          menu={[
+            { id: "notify", label: "Notify me in this browser", checked: false, multiple: true, onSelect: noCommand },
+          ]}
           change={noCommand}
           defaultSize={{ w: 5, h: 12 }}
           cell={noCommand}
@@ -74,6 +78,7 @@ function StudioScreens({ canManage }: { canManage: boolean }) {
           <ScreensPanel
             screens={ROOM_SCREENS}
             monitor={MONITOR}
+            issuesOf={(screenId) => ISSUES.get(screenId) ?? []}
             now={SCREEN_FIXTURE_NOW}
             onCommand={canManage ? noCommand : undefined}
           />
@@ -87,7 +92,7 @@ export const eventScreenMonitorSections: PreviewSection[] = [
   {
     id: "screens-tab-monitor",
     title: "Screens tab, multi-view",
-    note: "One card per screen: latest screenshot with its age, name, room and output, online state and any fault, then the last hour of latency and loss, with throughput and stalls for livestream screens. Identify and Reload sit in the card menu.",
+    note: "One card per screen, those with critical issues first, then warnings: latest screenshot with its age, name, room and output, online state and issues, then the last hour of latency and loss, with throughput and stalls for livestream screens. The summary chip filters to the screens that need attention; the menu beside it turns on browser notifications.",
     render: () => <MonitoredTab canManage />,
   },
   {
@@ -99,7 +104,7 @@ export const eventScreenMonitorSections: PreviewSection[] = [
   {
     id: "studio-screens-panel",
     title: "Studio Screens panel",
-    note: "The room's screens as compact rows: screenshot, name, output and status, then latency with loss, or stalls for a livestream. Managers get Identify and Reload in each row's menu.",
+    note: "The room's screens as compact rows, worst first: screenshot, name, output, status and issues, then latency with loss, or stalls for a livestream. Managers get Identify and Reload in each row's menu.",
     render: () => <StudioScreens canManage />,
   },
   {

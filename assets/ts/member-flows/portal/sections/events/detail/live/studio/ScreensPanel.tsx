@@ -1,28 +1,30 @@
 /**
  * The room's screens at a glance for its operators: each one's latest
- * screenshot and its age, whether it is online and anything wrong with it,
+ * screenshot and its age, whether it is online and its issues, worst first,
  * and its last hour of latency and loss (stalls for a livestream). Screen
  * managers also get Identify and Reload; everyone else watches.
  */
 import { LIVE_SCREEN_OUTPUT_DETAILS } from "../../../../../../../../shared/live-room-outputs";
 import type { ScreenMonitorStaffMessage } from "../../../../../../../../shared/schemas/event-screen-monitor";
 import type { ScreenRecord } from "../../../../../../../../shared/schemas/event-screens";
-import { CollectionStatusLine } from "../../../../../../../ui/CollectionCard";
+import { sortByScreenIssues, type ScreenIssue } from "../../../../../../../../shared/event-screen-issues";
 import { RowActions } from "../../../../../../../ui/RowActions";
 import type { ScreenMonitorView } from "../../screens/screen-monitor-view";
-import { ScreenShot, screenStatusItems } from "../../screens/ScreenMonitorCard";
+import { ScreenShot, ScreenStatusLine } from "../../screens/ScreenMonitorCard";
 import { ScreenQualityTrend } from "../../screens/ScreenQualityTrend";
 import "./ScreensPanel.css";
 
 export function ScreensPanel({
   screens,
   monitor,
+  issuesOf,
   now,
   onCommand,
 }: {
   /** The room's screens, from the event's screen list filtered to this room. */
   screens: readonly ScreenRecord[];
   monitor: ScreenMonitorView;
+  issuesOf: (screenId: string) => readonly ScreenIssue[];
   now: number;
   /** Identify and Reload, for screen managers only. */
   onCommand?: (type: ScreenMonitorStaffMessage["type"], screen: ScreenRecord) => void;
@@ -30,7 +32,7 @@ export function ScreensPanel({
   if (!screens.length) return <p class="pk-studio-screens__empty">No screens show this room.</p>;
   return (
     <ul class="pk-studio-screens" aria-label="Screens">
-      {screens.map((screen) => {
+      {sortByScreenIssues(screens, (screen) => issuesOf(screen.id)).map((screen) => {
         const status = monitor.live.get(screen.id);
         const online = Boolean(status?.online);
         return (
@@ -45,7 +47,7 @@ export function ScreensPanel({
                   {LIVE_SCREEN_OUTPUT_DETAILS[screen.assignment.output].label}
                 </span>
               )}
-              <CollectionStatusLine items={screenStatusItems(screen, status, now)} />
+              <ScreenStatusLine screen={screen} status={status} issues={issuesOf(screen.id)} now={now} />
             </span>
             <span class="pk-studio-screens__trend">
               <ScreenQualityTrend
