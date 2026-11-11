@@ -100,6 +100,30 @@
     background: var(--tone);
   }
 
+  /* The mark for what the card counts, in the corner, in the card's tone. */
+  .pk-stat-card--icon {
+    position: relative;
+  }
+
+  .pk-stat-card--icon .pk-stat-card__label {
+    padding-inline-end: var(--pk-5);
+  }
+
+  .pk-stat-card__icon {
+    position: absolute;
+    inset-block-start: var(--pk-3);
+    inset-inline-end: var(--pk-3);
+    display: inline-flex;
+    color: var(--tone);
+    opacity: 0.8;
+  }
+
+  /* A label that explains itself on hover: the dotted underline of an abbreviation. */
+  .pk-stat-card__hint {
+    text-decoration: underline dotted;
+    text-underline-offset: 0.2em;
+  }
+
   .pk-stat-card__value {
     font-size: var(--pk-text-2xl);
     font-weight: 700;

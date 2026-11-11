@@ -324,6 +324,7 @@ describe("canonical shared schema composition", () => {
           byAttendanceType: {},
           attendanceStatusByType: {},
           byStatus: {},
+          waitlistedCount: 0,
           bouncedCount: 0,
           consentCount: 0,
         },

@@ -125,16 +125,23 @@ export function AttendeeHeaderFiltersPreview() {
           if (filters.badge_role && row.role !== filters.badge_role) return false;
           if (filters.job_title && !row.jobTitle.toLowerCase().includes(filters.job_title.toLowerCase())) return false;
           const dates = filters.day_dates ? filters.day_dates.split(",") : null;
+          const types = filters.attendance_type ? filters.attendance_type.split(",") : null;
           const matches = row.days.filter((day) => {
             const waiting = day.waitlistStatus === "waiting" || day.waitlistStatus === "offered";
             return (
               day.attendanceType !== "not_attending" &&
               (!dates || dates.includes(day.dayDate)) &&
-              (!filters.attendance_type || day.attendanceType === filters.attendance_type) &&
+              (!types || types.includes(day.attendanceType)) &&
               (!filters.waitlisted || waiting === (filters.waitlisted === "true"))
             );
           });
-          return dates && filters.day_match === "all" ? matches.length === dates.length : matches.length > 0;
+          const everyType =
+            !types ||
+            filters.attendance_match !== "all" ||
+            types.every((type) => matches.some((day) => day.attendanceType === type));
+          return (
+            everyType && (dates && filters.day_match === "all" ? matches.length === dates.length : matches.length > 0)
+          );
         })}
         rowKey={(row) => row.name}
         filters={filters}

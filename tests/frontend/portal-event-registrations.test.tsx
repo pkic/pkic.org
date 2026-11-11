@@ -74,8 +74,9 @@ function listPage(rows: Array<Record<string, unknown>>): Record<string, unknown>
     event: { id: "20000000-0000-4000-8000-000000000001", slug: "pqc-2026", name: "PQC Conference 2026" },
     stats: {
       byAttendanceType: { in_person: 1 },
-      attendanceStatusByType: { in_person: { accepted: 1, waitlisted: 0 } },
+      attendanceStatusByType: { in_person: { total: 1, accepted: 1, waitlisted: 0 } },
       byStatus: { registered: 1, pending_email_confirmation: 2 },
+      waitlistedCount: 0,
       bouncedCount: 3,
       consentCount: 1,
     },
@@ -315,7 +316,7 @@ describe("event registrations list", () => {
         card.querySelector(".pk-stat-card__value")?.textContent?.trim(),
       ]),
     );
-    expect(figures).toMatchObject({ Registered: "1", "Pending confirmation": "2", "In-person": "1", Bounced: "3" });
+    expect(figures).toMatchObject({ Registered: "3", "In-person": "1", Bounced: "3" });
     expect(strip?.querySelector("[class*='text-']")).toBeNull();
   });
 

@@ -191,12 +191,21 @@ describe("group event registrations roster", () => {
       "In-person",
       "Virtual",
       "Livestream lounge",
+      "Any selected type",
+      "All selected types",
     ]);
     await chooseColumnFilter(container, "Attendance", "In-person", "Attendance type");
     await settle();
-    const last = requests.filter(({ method }) => method === "GET").at(-1);
-    const query = eventAttendanceRegistrationsQuerySchema.parse(Object.fromEntries(new URLSearchParams(last?.search)));
-    expect(query.attendance_type).toBe("in_person");
+    const query = () =>
+      eventAttendanceRegistrationsQuerySchema.parse(
+        Object.fromEntries(new URLSearchParams(requests.filter(({ method }) => method === "GET").at(-1)?.search)),
+      );
+    expect(query().attendance_type).toBe("in_person");
+    // In person one day, in the lounge another: both types, every one required.
+    await chooseColumnFilter(container, "Attendance", "Livestream lounge", "Attendance type");
+    await chooseColumnFilter(container, "Attendance", "All selected types", "Attendance type");
+    await settle();
+    expect(query()).toMatchObject({ attendance_type: "in_person,livestream_lounge", attendance_match: "all" });
   });
 
   it("offers the waitlist as the Attendance column's filter and sends it to the query", async () => {
@@ -224,8 +233,8 @@ describe("group event registrations roster", () => {
 
     const totals = container.querySelector('[role="group"][aria-label="Registration totals"]');
     expect(statFigures(totals)).toMatchObject({
-      Registered: { value: "1" },
-      "In-person": { value: "1", note: "+1 waitlisted" },
+      Registered: { value: "1", note: "1 waitlisted" },
+      "In-person": { value: "1", note: "1 not waitlisted · 1 waitlisted" },
     });
   });
 

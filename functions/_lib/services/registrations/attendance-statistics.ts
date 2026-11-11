@@ -1,5 +1,4 @@
 import { physicalAttendanceTransitionSql } from "./attendance-history-physical";
-import { eventRegistrationAttendanceTypesSql } from "./event-registration-stats";
 import { dayWaitlistStatusSql } from "./day-waitlist-policy";
 import type { AttendanceStatusCount } from "../../../../assets/shared/schemas/event-registrations";
 import { batchFirst, batchRows } from "../../db/pagination";
@@ -7,6 +6,7 @@ import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types
 
 interface AttendanceStatusRow {
   attendance_type: string | null;
+  total: number;
   accepted: number;
   waitlisted: number;
   expired: number;
@@ -66,31 +66,37 @@ export interface AttendanceChangeStatistics {
 }
 
 /**
- * Count registered attendees once per selected type. A type is waitlisted when
- * one of its selected days has an active waitlist; other types stay accepted.
+ * Count each person once per attendance type they chose for at least one day,
+ * whatever their status, cancelled registrations aside. A person counts as
+ * accepted when at least one day of that type is not waiting for a seat, and
+ * as waitlisted when at least one is, so someone with a seat on Monday and a
+ * place in Tuesday's queue is in both. These are the same tests the list's
+ * "Waitlist" filter applies, so a card and its filtered list agree.
  */
 export function prepareAttendanceStatusByTypeStatement(db: DatabaseLike, eventId: string): StatementLike {
+  const dayEntry = (statusClause: string) =>
+    `EXISTS (SELECT 1 FROM event_day_waitlist_entries w
+       WHERE w.registration_id = selected.registration_id AND w.event_day_id = selected.event_day_id
+         AND ${dayWaitlistStatusSql("w")} ${statusClause})`;
   return db
     .prepare(
-      `WITH registration_types AS (${eventRegistrationAttendanceTypesSql}),
-     typed_registration_waitlist AS (
+      `WITH selected_days AS (
        SELECT selected.registration_id, selected.attendance_type,
-         MAX(CASE WHEN ${dayWaitlistStatusSql("waiting")} IN ('waiting', 'offered') THEN 2
-                  WHEN ${dayWaitlistStatusSql("waiting")} = 'expired' THEN 1 ELSE 0 END) AS state
-       FROM event_day_waitlist_entries waiting
-       JOIN registration_day_attendance selected
-         ON selected.registration_id = waiting.registration_id AND selected.event_day_id = waiting.event_day_id
-       WHERE waiting.event_id = ? GROUP BY selected.registration_id, selected.attendance_type
+              ${dayEntry("IN ('waiting', 'offered')")} AS waiting,
+              ${dayEntry("= 'expired'")} AS expired
+       FROM registrations r
+       JOIN registration_day_attendance selected ON selected.registration_id = r.id
+       WHERE r.event_id = ? AND r.status <> 'cancelled'
+     ),
+     typed AS (
+       SELECT attendance_type, MIN(waiting) AS all_waiting, MAX(waiting) AS any_waiting, MAX(expired) AS any_expired
+       FROM selected_days GROUP BY registration_id, attendance_type
      )
-     SELECT r.attendance_type,
-            SUM(CASE WHEN COALESCE(w.state, 0) = 0 THEN 1 ELSE 0 END) AS accepted,
-            SUM(CASE WHEN w.state = 2 THEN 1 ELSE 0 END) AS waitlisted,
-            SUM(CASE WHEN w.state = 1 THEN 1 ELSE 0 END) AS expired
-     FROM registration_types r
-     LEFT JOIN typed_registration_waitlist w ON w.registration_id = r.id AND w.attendance_type = r.attendance_type
-     WHERE r.status = 'registered' GROUP BY r.attendance_type`,
+     SELECT attendance_type, COUNT(*) AS total,
+            SUM(1 - all_waiting) AS accepted, SUM(any_waiting) AS waitlisted, SUM(any_expired) AS expired
+     FROM typed GROUP BY attendance_type`,
     )
-    .bind(eventId, eventId);
+    .bind(eventId);
 }
 
 export function decodeAttendanceStatusByType(result: D1StatementResult): Record<string, AttendanceStatusCount> {
@@ -98,6 +104,7 @@ export function decodeAttendanceStatusByType(result: D1StatementResult): Record<
     batchRows<AttendanceStatusRow>(result).map((row) => [
       row.attendance_type ?? "not_attending",
       {
+        total: Number(row.total ?? 0),
         accepted: Number(row.accepted ?? 0),
         waitlisted: Number(row.waitlisted ?? 0),
         expired: Number(row.expired ?? 0),

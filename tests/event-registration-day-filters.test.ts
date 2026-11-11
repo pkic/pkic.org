@@ -87,6 +87,26 @@ it("keeps table, selected CSV and badge populations inside the same day filters 
     eventAttendanceRegistrationsListResponseSchema.parse(await everyDay.json()).registrations.map((row) => row.id),
   ).toEqual([f.both]);
 });
+it("matches any or every selected attendance type, within the selected days", async () => {
+  const f = await fixture();
+  const ids = async (query: string) => {
+    const response = await f.get(`${query}&status=registered`);
+    expect(response.status, await response.clone().text()).toBe(200);
+    return eventAttendanceRegistrationsListResponseSchema
+      .parse(await response.json())
+      .registrations.map((row) => row.id)
+      .sort();
+  };
+  expect(await ids("?attendance_type=virtual,in_person")).toEqual([f.matching, f.both, f.unrelated].sort());
+  expect(await ids("?attendance_type=in_person,virtual&attendance_match=all")).toEqual([f.matching]);
+  expect(await ids("?day_dates=2030-04-13&attendance_type=in_person,virtual&attendance_match=all")).toEqual([]);
+  const printed = await f.get("/badges/population?attendance_type=in_person,virtual&attendance_match=all");
+  expect(printed.status, await printed.clone().text()).toBe(200);
+  expect(
+    eventBadgePrintPopulationResponseSchema.parse(await printed.json()).registrations.map((row) => row.id),
+  ).toEqual([f.matching]);
+  expect((await f.get("?attendance_type=in_person,in_person")).status).toBe(400);
+});
 it("keeps negative type waitlist filters consistent across roster, CSV and print population", async () => {
   const f = await fixture();
   await env.DB.prepare(

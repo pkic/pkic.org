@@ -163,7 +163,7 @@ describe("portal event statistics", () => {
 
   it("shows expired offers separately from accepted attendance", async () => {
     const data = analytics();
-    data.registrations.attendanceStatusByType.virtual = { accepted: 0, waitlisted: 0, expired: 1 };
+    data.registrations.attendanceStatusByType.virtual = { total: 1, accepted: 1, waitlisted: 0, expired: 1 };
     stubAnalyticsFetch(() => jsonResponse(data));
     mount(<EventStats slug={SLUG} />);
     await settle();
