@@ -10,6 +10,7 @@ import { PersonCell } from "../PersonCell";
 import { PkicMark } from "../PkicMark";
 import { Spinner } from "../Spinner";
 import { StatCard } from "../StatCard";
+import { IconMapPin, IconVirtual } from "../../components/icons";
 
 export const basicSections: PreviewSection[] = [
   {
@@ -187,6 +188,36 @@ export const basicSections: PreviewSection[] = [
           <StatCard label="Certifications" value="8,204" trend="down" note="2% from last quarter" />
           <StatCard label="Audits" value="42" note="36 compliant" />
           <StatCard label="Pending Review" value="3" />
+        </div>
+
+        <div class="pk-preview__grid" data-gallery-open="focus">
+          <StatCard
+            label="Registered"
+            value="3,529"
+            note="1 pending · 356 waitlisted · 184 cancelled"
+            tooltip={
+              <div class="pk-stack pk-stack--tight">
+                <strong>Everyone who registered, whatever their status</strong>
+                <span>1 has not confirmed their email address yet</span>
+                <span>356 are on the waitlist for at least one day</span>
+                <span>184 cancelled their registration</span>
+              </div>
+            }
+          />
+          <StatCard
+            label="In-person"
+            value="1,268"
+            note="912 not waitlisted · 356 waitlisted"
+            tone="warn"
+            icon={<IconMapPin width="18" height="18" />}
+            tooltip={<strong>People who chose in-person for at least one day, cancelled registrations aside</strong>}
+          />
+          <StatCard
+            label="Virtual"
+            value="1,388"
+            icon={<IconVirtual width="18" height="18" />}
+            tooltip={<strong>People who chose virtual for at least one day, cancelled registrations aside</strong>}
+          />
         </div>
       </>
     ),

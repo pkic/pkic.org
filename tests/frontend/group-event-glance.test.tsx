@@ -48,7 +48,12 @@ function stubEndpoints({ published }: { published: number }) {
           registrations: [],
           page: page(2880),
           event: eventSummary,
-          stats: { byStatus: { registered: 2880, cancelled: 4 }, byAttendanceType: {}, attendanceStatusByType: {} },
+          stats: {
+            byStatus: { registered: 2880, cancelled: 4 },
+            byAttendanceType: {},
+            attendanceStatusByType: {},
+            waitlistedCount: 0,
+          },
         });
       }
       if (url.pathname.endsWith("/proposals")) {

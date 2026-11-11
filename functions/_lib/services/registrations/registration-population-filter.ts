@@ -21,6 +21,7 @@ export function registrationPopulationFilter(
     | "status"
     | "waitlisted"
     | "attendance_type"
+    | "attendance_match"
     | "day_dates"
     | "day_match"
     | "badge_role"
@@ -50,6 +51,9 @@ export function registrationPopulationFilter(
     bindings.push(params.created_since);
   }
   const dates = params.day_dates?.split(",") ?? [];
+  const types = params.attendance_type?.split(",") ?? [];
+  const scopedToDay = Boolean(dates.length || types.length);
+  // What a matching day must be, whatever its attendance type.
   const dayConditions = ["selected_day.registration_id = r.id", "ed.event_id = r.event_id"];
   const dayBindings: unknown[] = [];
   if (dates.length) {
@@ -57,11 +61,6 @@ export function registrationPopulationFilter(
     dayConditions.push(selectedDates.sql, "selected_day.attendance_type <> 'not_attending'");
     dayBindings.push(...selectedDates.bindings);
   }
-  if (params.attendance_type) {
-    dayConditions.push("selected_day.attendance_type = ?");
-    dayBindings.push(params.attendance_type);
-  }
-  const scopedToDay = Boolean(dates.length || params.attendance_type);
   const waitlistEntries = scopedToDay
     ? "FROM event_day_waitlist_entries w WHERE w.registration_id = r.id AND w.event_day_id = ed.id"
     : registrationWaitlistEntriesSql("r");
@@ -72,23 +71,35 @@ export function registrationPopulationFilter(
     (scopedToDay ? dayConditions : conditions).push(waitlistExists("= ?"));
     (scopedToDay ? dayBindings : bindings).push(waitlistStatus);
   }
-  if ((dates.length || params.attendance_type) && params.waitlisted)
+  if (scopedToDay && params.waitlisted)
     dayConditions.push(params.waitlisted === "true" ? dayWaitlist : `NOT ${dayWaitlist}`);
-  if (dates.length || params.attendance_type) {
-    const matchedDays = `FROM registration_day_attendance selected_day
-      JOIN event_days ed ON ed.id = selected_day.event_day_id WHERE ${dayConditions.join(" AND ")}`;
+  const matchedDays = (typeSql?: string) => `FROM registration_day_attendance selected_day
+      JOIN event_days ed ON ed.id = selected_day.event_day_id
+      WHERE ${[...dayConditions, ...(typeSql ? [typeSql] : [])].join(" AND ")}`;
+  if (scopedToDay) {
+    const selectedTypes = types.length ? buildD1JsonMembershipFilter("selected_day.attendance_type", types) : null;
     conditions.push(
       dates.length && params.day_match === "all"
-        ? `(SELECT COUNT(DISTINCT ed.id) ${matchedDays}) = ?`
-        : `EXISTS (SELECT 1 ${matchedDays})`,
+        ? `(SELECT COUNT(DISTINCT ed.id) ${matchedDays(selectedTypes?.sql)}) = ?`
+        : `EXISTS (SELECT 1 ${matchedDays(selectedTypes?.sql)})`,
     );
-    bindings.push(...dayBindings, ...(dates.length && params.day_match === "all" ? [dates.length] : []));
+    bindings.push(
+      ...dayBindings,
+      ...(selectedTypes?.bindings ?? []),
+      ...(dates.length && params.day_match === "all" ? [dates.length] : []),
+    );
+    // "All selected types": each type on at least one of the matching days.
+    if (types.length > 1 && params.attendance_match === "all")
+      for (const type of types) {
+        conditions.push(`EXISTS (SELECT 1 ${matchedDays("selected_day.attendance_type = ?")})`);
+        bindings.push(...dayBindings, type);
+      }
   }
   if (params.badge_role) {
     conditions.push(`${registrationBadgeDisplayRoleSql("r")} = ?`);
     bindings.push(params.badge_role);
   }
-  if (!dates.length && !params.attendance_type) {
+  if (!scopedToDay) {
     if (params.waitlisted === "true") conditions.push(activeDayWaitlistExistsSql("r"));
     else if (params.waitlisted === "false") conditions.push(`NOT ${activeDayWaitlistExistsSql("r")}`);
   }

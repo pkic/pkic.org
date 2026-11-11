@@ -1,4 +1,5 @@
-import type { JSX } from "preact";
+import type { ComponentChildren, JSX } from "preact";
+import { Tooltip } from "./Tooltip";
 
 import "./StatCard.css";
 
@@ -42,6 +43,18 @@ export interface StatCardProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 
    * is, and a card that is merely a count is not (#110).
    */
   tone?: StatCardTone;
+  /**
+   * What exactly the figure counts, when the label alone cannot say it. The
+   * label becomes the trigger of the shared Tooltip, so it opens on hover,
+   * focus and tap. Not combined with `href`: the label is then the link.
+   */
+  tooltip?: ComponentChildren;
+  /**
+   * A decorative mark for what the figure counts, in the card's top-right
+   * corner: the same icon the rows below use, so the figure and its rows are
+   * recognizably the same thing. The label still says it in words.
+   */
+  icon?: ComponentChildren;
 }
 
 export function StatCard({
@@ -52,6 +65,8 @@ export function StatCard({
   href,
   density = "default",
   tone,
+  tooltip,
+  icon,
   class: className,
   ...rest
 }: StatCardProps) {
@@ -60,6 +75,7 @@ export function StatCard({
     tone ? `pk-stat-card--${tone}` : null,
     href ? "pk-stat-card--link" : null,
     density === "compact" ? "pk-stat-card--compact" : null,
+    icon ? "pk-stat-card--icon" : null,
     className,
   ]
     .filter(Boolean)
@@ -75,11 +91,20 @@ export function StatCard({
 
   return (
     <div class={classes} {...rest}>
+      {icon && (
+        <span class="pk-stat-card__icon" aria-hidden="true">
+          {icon}
+        </span>
+      )}
       <div class="pk-stat-card__label">
         {href ? (
           <a class="pk-stat-card__link" href={href}>
             {label}
           </a>
+        ) : tooltip ? (
+          <Tooltip label={label} content={tooltip}>
+            <span class="pk-stat-card__hint">{label}</span>
+          </Tooltip>
         ) : (
           label
         )}

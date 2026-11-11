@@ -3,12 +3,14 @@
  *
  * A column's filter lives behind the `…` trigger in its head, named
  * "<Header> column options"; the choices are `menuitemradio` items with the
- * one in force checked. These helpers resolve the trigger through that name
+ * one in force checked, or `menuitemcheckbox` items where several combine. These helpers resolve the trigger through that name
  * — which fails exactly when the labeling is broken — open the menu, and
  * pick an option by its visible label, so a test asserts the query the
  * server receives rather than the shape of a select that no longer exists.
  */
 import { act } from "preact/test-utils";
+
+const CHOICES = '[role="menuitemradio"], [role="menuitemcheckbox"]';
 
 function labelOf(item: Element): string {
   return item.textContent!.replace(/^✓?\s*/, "").trim();
@@ -38,9 +40,7 @@ export function openColumnFilterMenu(container: ParentNode, column: string, grou
 /** The labels of the filter choices a column's menu offers, in order. */
 export function columnFilterOptions(container: ParentNode, column: string, group?: string): string[] {
   const popup = openColumnFilterMenu(container, column, group);
-  return [...popup.querySelectorAll('[role="menuitemradio"]')]
-    .filter((item) => !labelOf(item).startsWith("Sort "))
-    .map(labelOf);
+  return [...popup.querySelectorAll(CHOICES)].filter((item) => !labelOf(item).startsWith("Sort ")).map(labelOf);
 }
 
 /** Narrows a column to one of its filter choices, by the choice's label. */
@@ -51,7 +51,7 @@ export async function chooseColumnFilter(
   group?: string,
 ): Promise<void> {
   const popup = openColumnFilterMenu(container, column, group);
-  const item = [...popup.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(
+  const item = [...popup.querySelectorAll<HTMLButtonElement>(CHOICES)].find(
     (candidate) => labelOf(candidate) === option,
   );
   if (!item) throw new Error(`the ${column} column offers no "${option}" choice`);

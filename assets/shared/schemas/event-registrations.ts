@@ -102,7 +102,13 @@ export const eventRegistrationSummarySchema = registrationRecordContextSchema.ex
   lastAttendanceChange: eventRegistrationAttendanceChangeSchema.nullable(),
 });
 export type EventRegistrationSummary = z.infer<typeof eventRegistrationSummarySchema>;
+/**
+ * People who chose an attendance type for at least one day, cancelled
+ * registrations aside. `accepted` and `waitlisted` each count a person with at
+ * least one such day off or on the waitlist, so one person can be in both.
+ */
 export const attendanceStatusCountSchema = z.object({
+  total: z.number(),
   accepted: z.number(),
   waitlisted: z.number(),
   expired: z.number().default(0),
@@ -112,6 +118,8 @@ export const eventRegistrationsStatsSchema = z.object({
   byAttendanceType: z.record(z.string(), z.number()),
   attendanceStatusByType: z.record(z.string(), attendanceStatusCountSchema),
   byStatus: z.record(z.string(), z.number()),
+  /** Registrations, cancelled ones aside, waiting for or offered a seat on at least one day. */
+  waitlistedCount: z.number(),
   bouncedCount: z.number(),
   consentCount: z.number(),
 });
@@ -138,6 +146,18 @@ export const registrationDayDatesQuerySchema = z
     );
   }, "Choose up to 31 distinct event dates.");
 
+/** A bounded, bookmarkable set of attendance types: "in_person,livestream_lounge". */
+export const registrationAttendanceTypesQuerySchema = z
+  .string()
+  .max(650)
+  .refine((value) => {
+    const types = value.split(",");
+    return (
+      z.array(eventAttendanceTypeValueSchema).min(1).max(10).safeParse(types).success &&
+      new Set(types).size === types.length
+    );
+  }, "Choose up to 10 distinct attendance types.");
+
 export const eventAttendanceRegistrationsQuerySchema = eventRegistrationsQuerySchema
   .pick({
     q: true,
@@ -151,8 +171,10 @@ export const eventAttendanceRegistrationsQuerySchema = eventRegistrationsQuerySc
   .extend({
     job_title: z.string().trim().min(1).max(200).optional(),
     country: countryCodeSchema.optional(),
-    /** Match an attendance option selected on at least one day. */
-    attendance_type: eventAttendanceTypeValueSchema.optional(),
+    /** Match attendance options selected on at least one day. */
+    attendance_type: registrationAttendanceTypesQuerySchema.optional(),
+    /** `all`: every selected option on at least one day; otherwise any of them. */
+    attendance_match: z.enum(["any", "all"]).optional(),
     day_dates: registrationDayDatesQuerySchema.optional(),
     day_match: z.enum(["any", "all"]).optional(),
     /** The role band the registration's badge prints. */
@@ -190,6 +212,7 @@ export const eventAttendanceRegistrationsStatsSchema = eventRegistrationsStatsSc
   byAttendanceType: true,
   attendanceStatusByType: true,
   byStatus: true,
+  waitlistedCount: true,
 });
 export type EventAttendanceRegistrationsStats = z.infer<typeof eventAttendanceRegistrationsStatsSchema>;
 

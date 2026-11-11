@@ -84,7 +84,7 @@ export async function listEventAttendanceRegistrations(
     getEventRegistrationStats(db, eventId),
     getAttendanceStatusByType(db, eventId),
   ]);
-  const { byAttendanceType, byStatus } = statRows;
+  const { byAttendanceType, byStatus, waitlistedCount } = statRows;
   return {
     registrations: rows.map((row) =>
       eventAttendanceRegistrationSummarySchema.parse({
@@ -101,6 +101,11 @@ export async function listEventAttendanceRegistrations(
       }),
     ),
     total,
-    stats: eventAttendanceRegistrationsStatsSchema.parse({ byAttendanceType, byStatus, attendanceStatusByType }),
+    stats: eventAttendanceRegistrationsStatsSchema.parse({
+      byAttendanceType,
+      byStatus,
+      waitlistedCount,
+      attendanceStatusByType,
+    }),
   };
 }

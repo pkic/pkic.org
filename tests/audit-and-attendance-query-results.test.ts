@@ -72,7 +72,7 @@ describe("indexed audit and attendance query results", () => {
     expect(filtered.auditLog.map((entry) => entry.id)).toEqual(["scoped-deleted-child"]);
   });
 
-  it("counts each registered attendee once across active days and excludes inactive queue entries", async () => {
+  it("counts each live attendee once per type, seated and waitlisted on at least one day", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const timestamp = "2026-10-21T00:00:00.000Z";
     for (const [id, date] of [
@@ -87,6 +87,7 @@ describe("indexed audit and attendance query results", () => {
     }
     const registrations = [
       ["multi-day", "registered", "in_person", ["waiting", "offered"]],
+      ["seated-and-waiting", "registered", "in_person", ["accepted", "waiting"]],
       ["inactive-queue", "registered", "in_person", ["accepted", "removed"]],
       ["expired-queue", "registered", "virtual", ["expired"]],
       ["cancelled", "cancelled", "in_person", ["waiting"]],
@@ -121,8 +122,8 @@ describe("indexed audit and attendance query results", () => {
       );
     }
     expect(await getAttendanceStatusByType(env.DB, eventId)).toEqual({
-      in_person: { accepted: 1, waitlisted: 1, expired: 0 },
-      virtual: { accepted: 0, waitlisted: 0, expired: 1 },
+      in_person: { total: 4, accepted: 2, waitlisted: 3, expired: 0 },
+      virtual: { total: 1, accepted: 1, waitlisted: 0, expired: 1 },
     });
     expect(await getAttendanceStatusByType(env.DB, "other-event")).toEqual({});
   });

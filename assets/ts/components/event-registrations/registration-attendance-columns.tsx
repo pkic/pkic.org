@@ -23,6 +23,8 @@ export function registrationAttendanceColumns<Row extends { days: RegistrationDa
   const colors = ["blue", "teal", "purple"] as const;
   const typeColors = new Map([...options.keys()].map((type, i) => [type, colors[i % colors.length]]));
   const selectedDates = filters.day_dates ? new Set(filters.day_dates.split(",")) : null;
+  const selectedTypes = filters.attendance_type ? new Set(filters.attendance_type.split(",")) : null;
+  const typeLabel = (type: string) => options.get(type)?.label ?? attendanceTypeLabel(type);
   // Summarize only this row's day details; list membership is always filtered by D1.
   const matchingDays = (row: Row) =>
     row.days
@@ -31,7 +33,7 @@ export function registrationAttendanceColumns<Row extends { days: RegistrationDa
         return (
           day.attendanceType !== "not_attending" &&
           (!selectedDates || selectedDates.has(day.dayDate)) &&
-          (!filters.attendance_type || day.attendanceType === filters.attendance_type) &&
+          (!selectedTypes || selectedTypes.has(day.attendanceType)) &&
           (!filters.waitlisted || waiting === (filters.waitlisted === "true"))
         );
       })
@@ -104,6 +106,18 @@ export function registrationAttendanceColumns<Row extends { days: RegistrationDa
         {
           label: "Attendance type",
           param: "attendance_type",
+          multiple: true,
+          formatSummary: (values, mode) =>
+            values.length > 1
+              ? `${mode === "all" ? "All" : "Any"}: ${values.map(typeLabel).join(", ")}`
+              : values.map(typeLabel).join(", "),
+          match: {
+            param: "attendance_match",
+            options: [
+              { value: "", label: "Any selected type" },
+              { value: "all", label: "All selected types" },
+            ],
+          },
           options: [
             { value: "", label: "All types" },
             ...[...options].map(([value, option]) => ({ value, label: option.label })),

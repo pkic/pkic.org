@@ -21,6 +21,7 @@ export const eventBadgePrintPopulationQuerySchema = eventAttendanceRegistrations
     status: true,
     waitlisted: true,
     attendance_type: true,
+    attendance_match: true,
     day_dates: true,
     day_match: true,
     badge_role: true,

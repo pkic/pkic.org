@@ -15,6 +15,7 @@
  * on its own: the tone repeats it for readers who see it, and says nothing
  * new to those who do not.
  */
+import type { ComponentChildren } from "preact";
 import { formatNumber } from "../../shared/format-number";
 import { StatCard, type StatCardTone } from "../ui/StatCard";
 
@@ -28,6 +29,10 @@ export interface CollectionTotal {
   note?: string;
   /** The state the figure reports, when it reports one. */
   tone?: StatCardTone;
+  /** What exactly the figure counts, opened from its label. */
+  tooltip?: ComponentChildren;
+  /** A decorative mark for what the figure counts. */
+  icon?: ComponentChildren;
 }
 
 /**
@@ -55,7 +60,15 @@ export function CollectionTotals({ label, items }: { label: string; items: reado
       {items.map((item) => {
         const { value, tone } = figure(item);
         return (
-          <StatCard key={item.label} label={sentenceCase(item.label)} value={value} note={item.note} tone={tone} />
+          <StatCard
+            key={item.label}
+            label={sentenceCase(item.label)}
+            value={value}
+            note={item.note}
+            tone={tone}
+            tooltip={item.tooltip}
+            icon={item.icon}
+          />
         );
       })}
     </div>
