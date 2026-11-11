@@ -22,7 +22,11 @@ import { StatCard, type StatCardTone } from "../ui/StatCard";
 import "./CollectionTotals.css";
 
 export interface CollectionTotal {
-  /** What the figure counts, in lower case: "registered", "no reviews". The card writes it in sentence case. */
+  /**
+   * What the figure counts, in lower case: "registered", "no reviews". The card
+   * writes it in sentence case. A configured name ("Livestream Lounge") is
+   * passed as written and keeps its capitals.
+   */
   label: string;
   value: number | string;
   /** A qualifier under the figure — "+2 waitlisted". */
@@ -33,6 +37,12 @@ export interface CollectionTotal {
   tooltip?: ComponentChildren;
   /** A decorative mark for what the figure counts. */
   icon?: ComponentChildren;
+  /** Narrows the list to the rows the figure counts; see StatCard's `onPress`. */
+  onPress?: () => void;
+  /** Whether the list is narrowed to this figure's rows now; unset for a card that is an action, not a toggle. */
+  pressed?: boolean;
+  /** Names the toggle for assistive technology. */
+  pressLabel?: string;
 }
 
 /**
@@ -68,6 +78,9 @@ export function CollectionTotals({ label, items }: { label: string; items: reado
             tone={tone}
             tooltip={item.tooltip}
             icon={item.icon}
+            onPress={item.onPress}
+            pressed={item.pressed}
+            pressLabel={item.pressLabel}
           />
         );
       })}

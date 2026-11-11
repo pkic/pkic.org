@@ -296,9 +296,26 @@ describe("event registrations list", () => {
   });
 
   it("states each stat in words, so the strip is not read by tint", async () => {
+    // The attendance cards are the options the event's settings offer.
+    const days = {
+      days: [
+        {
+          id: "day-1",
+          date: "2026-05-12",
+          label: null,
+          startsAt: null,
+          endsAt: null,
+          sortOrder: 0,
+          attendanceOptions: [{ value: "in_person", label: "In-person", icon: "location" }],
+          attendanceCounts: {},
+        },
+      ],
+    };
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json(listPage([registration()]))),
+      vi.fn(async (input: RequestInfo | URL) =>
+        json(String(input).includes("/days") ? days : listPage([registration()])),
+      ),
     );
 
     const page = mount(<Registrations slug="pqc-2026" />);

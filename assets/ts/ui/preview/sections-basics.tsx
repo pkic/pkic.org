@@ -10,6 +10,7 @@ import { PersonCell } from "../PersonCell";
 import { PkicMark } from "../PkicMark";
 import { Spinner } from "../Spinner";
 import { StatCard } from "../StatCard";
+import { IconPeople } from "../MediaIcons";
 import { IconMapPin, IconVirtual } from "../../components/icons";
 
 export const basicSections: PreviewSection[] = [
@@ -190,11 +191,20 @@ export const basicSections: PreviewSection[] = [
           <StatCard label="Pending Review" value="3" />
         </div>
 
-        <div class="pk-preview__grid" data-gallery-open="focus">
+        {/* Figures that filter the list below: each card is a toggle, the pressed one is listed. */}
+        <div
+          class="pk-stat-row pk-stat-row--fit"
+          role="group"
+          aria-label="Registration totals"
+          data-gallery-open="focus"
+        >
           <StatCard
             label="Registered"
             value="3,529"
             note="1 pending · 356 waitlisted · 184 cancelled"
+            tone="warn"
+            onPress={() => undefined}
+            pressLabel="Show all registrations"
             tooltip={
               <div class="pk-stack pk-stack--tight">
                 <strong>Everyone who registered, whatever their status</strong>
@@ -207,16 +217,48 @@ export const basicSections: PreviewSection[] = [
           <StatCard
             label="In-person"
             value="1,268"
-            note="912 not waitlisted · 356 waitlisted"
+            note="356 waitlisted · 41 cancelled"
             tone="warn"
             icon={<IconMapPin width="18" height="18" />}
-            tooltip={<strong>People who chose in-person for at least one day, cancelled registrations aside</strong>}
+            onPress={() => undefined}
+            pressed
+            pressLabel="Show In-person only"
+            tooltip={
+              <div class="pk-stack pk-stack--tight">
+                <strong>People who chose in-person for at least one day, cancelled registrations aside</strong>
+                <span>356 are on the waitlist for at least one day</span>
+                <span>41 cancelled their registration and are not counted</span>
+              </div>
+            }
           />
           <StatCard
             label="Virtual"
             value="1,388"
+            note="1 pending · 143 cancelled"
             icon={<IconVirtual width="18" height="18" />}
-            tooltip={<strong>People who chose virtual for at least one day, cancelled registrations aside</strong>}
+            onPress={() => undefined}
+            pressLabel="Show Virtual only"
+            tooltip={
+              <div class="pk-stack pk-stack--tight">
+                <strong>People who chose virtual for at least one day, cancelled registrations aside</strong>
+                <span>1 has not confirmed their email address yet</span>
+                <span>143 cancelled their registration and are not counted</span>
+              </div>
+            }
+          />
+          <StatCard
+            label="Livestream Lounge"
+            value="86"
+            note="2 cancelled"
+            icon={<IconPeople width="18" height="18" />}
+            onPress={() => undefined}
+            pressLabel="Show Livestream Lounge only"
+            tooltip={
+              <div class="pk-stack pk-stack--tight">
+                <strong>People who chose Livestream Lounge for at least one day, cancelled registrations aside</strong>
+                <span>2 cancelled their registration and are not counted</span>
+              </div>
+            }
           />
         </div>
       </>

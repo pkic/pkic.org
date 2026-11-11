@@ -234,7 +234,7 @@ describe("group event registrations roster", () => {
     const totals = container.querySelector('[role="group"][aria-label="Registration totals"]');
     expect(statFigures(totals)).toMatchObject({
       Registered: { value: "1", note: "1 waitlisted" },
-      "In-person": { value: "1", note: "1 not waitlisted · 1 waitlisted" },
+      "In-person": { value: "1", note: "1 waitlisted" },
     });
   });
 

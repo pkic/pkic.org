@@ -25,13 +25,14 @@ import {
   EVENT_REGISTRATION_STATUSES,
   eventAttendanceRegistrationsListResponseSchema,
   eventRegistrationStatusLabel,
+  eventRegistrationStatusSchema,
   type EventAttendanceRegistrationsStats,
   type EventAttendanceRegistrationSummary,
 } from "../../../../../shared/schemas/event-registrations";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { registrationAttendanceColumns } from "../../../../components/event-registrations/registration-attendance-columns";
-import { RegistrationTotals } from "../../../../components/event-registrations/RegistrationTotals";
+import { listFilters, RegistrationTotals } from "../../../../components/event-registrations/RegistrationTotals";
 import { RegistrationRosterActions } from "../../../../components/event-registrations/RegistrationRosterActions";
 import { BulkBar } from "../../../../ui/BulkBar";
 import { useCollectionSelection } from "../../../../hooks/useCollectionSelection";
@@ -44,6 +45,7 @@ import { getJson } from "../../../../shared/api-client";
 import { useData } from "../../../../hooks/useData";
 import { BADGE_DISPLAY_ROLE_LABELS, badgeDisplayRoleSchema } from "../../../../../shared/schemas/participant-roles";
 import { usePortalHashLocation } from "../../hash-location";
+import { eventAttendanceOptions } from "../../../../shared/attendance";
 import { fmtDate, toast } from "../../ui";
 import { ContactOrganization } from "../../../../components/ContactOrganization";
 
@@ -96,7 +98,18 @@ export function GroupEventRegistrations({
 
   return (
     <div class="pk-stack pk-stack--snug">
-      {stats && <RegistrationTotals stats={stats} />}
+      {stats && (
+        <RegistrationTotals
+          stats={stats}
+          attendanceOptions={eventAttendanceOptions(days.data?.days ?? [])}
+          onRetryAttendanceOptions={days.error ? () => void days.reload() : undefined}
+          filters={{
+            current: listFilters(query),
+            apply: (changes) => tableRef.current?.setFilters?.(changes),
+            byAttendanceType: true,
+          }}
+        />
+      )}
       <ApiDataTable
         caption="Registrations"
         tableOptionsFilters
@@ -222,6 +235,14 @@ export function GroupEventRegistrations({
             sort: { asc: "status", desc: "-status" },
             filter: {
               param: "status",
+              multiple: true,
+              formatSummary: (values) =>
+                values
+                  .map((value) => {
+                    const status = eventRegistrationStatusSchema.safeParse(value);
+                    return status.success ? eventRegistrationStatusLabel(status.data) : value;
+                  })
+                  .join(", "),
               options: [
                 { value: "", label: "All statuses" },
                 ...EVENT_REGISTRATION_STATUSES.map((status) => ({

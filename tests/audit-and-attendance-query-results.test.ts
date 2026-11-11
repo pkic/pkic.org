@@ -122,8 +122,8 @@ describe("indexed audit and attendance query results", () => {
       );
     }
     expect(await getAttendanceStatusByType(env.DB, eventId)).toEqual({
-      in_person: { total: 4, accepted: 2, waitlisted: 3, expired: 0 },
-      virtual: { total: 1, accepted: 1, waitlisted: 0, expired: 1 },
+      in_person: { total: 4, accepted: 2, waitlisted: 3, expired: 0, pending: 1, cancelled: 1 },
+      virtual: { total: 1, accepted: 1, waitlisted: 0, expired: 1, pending: 0, cancelled: 0 },
     });
     expect(await getAttendanceStatusByType(env.DB, "other-event")).toEqual({});
   });
