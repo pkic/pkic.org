@@ -18,13 +18,13 @@ interface SpeakerKitBatchIdentity {
   at: string;
 }
 
-/** A kit emailed once is not emailed again for that session unless the organizer asks to resend. */
+/** A kit queued or waiting to be emailed is not emailed again for that session unless the organizer asks to resend. */
 function notEmailedSql(input: EventEmailCampaignPreviewInput) {
   return input.kit?.resend
     ? "1=1"
     : `NOT EXISTS(SELECT 1 FROM event_promotion_batch_recipients emailed
         JOIN event_promotion_batches earlier ON earlier.id=emailed.batch_id AND earlier.email_test=0
-        WHERE emailed.occurrence_id=session.occurrence_id AND emailed.user_id=session.user_id AND emailed.email_status='queued')`;
+        WHERE emailed.occurrence_id=session.occurrence_id AND emailed.user_id=session.user_id AND emailed.email_status IN('pending','queued'))`;
 }
 
 function prepareSpeakerKitBatch(

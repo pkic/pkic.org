@@ -167,9 +167,13 @@ export async function createEventEmailCampaign(
   options: EventEmailCampaignOperationOptions,
 ): Promise<EventEmailCampaignResponse> {
   const snapshot = await verifyCampaignPreview(db, event, input, options);
+  // Counted before acceptance: the accepted send reserves these kits.
+  const emails = input.kit ? await countSpeakerKitEmails(db, event, input) : 0;
+  if (input.kit && emails === 0) {
+    throw new AppError(400, "CAMPAIGN_NO_RECIPIENTS", "Every matching speaker already received this kit.");
+  }
   await acceptCampaignSnapshot(db, event, input, snapshot, options);
   if (input.kit) {
-    const emails = await countSpeakerKitEmails(db, event, input);
     return eventEmailCampaignResponseSchema.parse({
       success: true,
       queuedRecipients: emails,

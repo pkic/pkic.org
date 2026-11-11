@@ -124,6 +124,15 @@ describe("speaker kit emails", () => {
     expect(await outbox()).toHaveLength(4);
   });
 
+  it("refuses a second send reviewed before the first one reserved the kits", async () => {
+    const f = await kitFixture();
+    const [first, second] = [await preview(f), await preview(f)];
+    expect((await post(f, campaigns, { ...message, previewToken: first.previewToken })).status).toBe(202);
+    expect((await post(f, campaigns, { ...message, previewToken: second.previewToken })).status).toBe(400);
+    await renderPendingKits();
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 1, queued: 1, failed: 0 });
+  });
+
   it("settles a batch whose template was retired so it cannot block later batches", async () => {
     const f = await kitFixture();
     await send(f);

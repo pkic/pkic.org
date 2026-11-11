@@ -437,7 +437,7 @@ export function EventEmailCampaign({
           <Button
             variant="primary"
             onClick={() => void handleSend()}
-            disabled={sending || !previewConfirmed}
+            disabled={sending || !previewConfirmed || preview?.recipientCount === 0}
             loading={sending}
           >
             Send Email

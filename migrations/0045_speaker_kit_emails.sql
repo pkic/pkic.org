@@ -4,5 +4,5 @@ ALTER TABLE event_promotion_batches ADD COLUMN email_test INTEGER NOT NULL DEFAU
 -- pending until the kit is rendered, then queued (handed to the outbox) or failed.
 ALTER TABLE event_promotion_batch_recipients ADD COLUMN email_status TEXT;
 CREATE INDEX event_promotion_batch_email_pending ON event_promotion_batch_recipients(batch_id,occurrence_id,user_id) WHERE email_status='pending';
-CREATE INDEX event_promotion_batch_email_queued ON event_promotion_batch_recipients(occurrence_id,user_id) WHERE email_status='queued';
+CREATE INDEX event_promotion_batch_email_sent ON event_promotion_batch_recipients(occurrence_id,user_id) WHERE email_status IN('pending','queued');
 CREATE INDEX event_promotion_batches_email_campaign ON event_promotion_batches(email_campaign_id) WHERE email_campaign_id IS NOT NULL;
