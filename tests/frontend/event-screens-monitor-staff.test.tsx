@@ -332,10 +332,69 @@ describe("the staff clock", () => {
     // Reopened: the kept heartbeat is three minutes old, but no snapshot of this connection has arrived.
     await act(() => render(<Probe enabled />, host!));
     expect(latest!.issues.size).toBe(0);
-    // The first snapshot of this connection is looked at afresh, as when the page opened.
+    // The first snapshot of this connection, on the monitor's clock now, is looked at afresh, as when the page opened.
     await act(() => sockets.latest().open());
-    await snapshot(NOW);
+    await snapshot(Date.now());
     expect(latest!.issuesOf("K7M2QA").map((issue) => issue.severity)).toEqual(["critical"]);
+    expect(shown).toEqual([]);
+  });
+
+  it("measures the clock afresh on each connection, so a clock jump while closed raises nothing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const shown: string[] = [];
+    vi.stubGlobal(
+      "Notification",
+      Object.assign(
+        class {
+          constructor(title: string) {
+            shown.push(title);
+          }
+        },
+        { permission: "granted", requestPermission: async () => "granted" },
+      ),
+    );
+    localStorage.setItem("pkic.screens.notify", "1");
+    const sockets = fakeLiveSockets();
+    let latest: ReturnType<typeof useScreenMonitorController> | undefined;
+    function Probe({ enabled }: { enabled: boolean }) {
+      latest = useScreenMonitorController({ slug: SLUG, enabled, createSocket: sockets.factory });
+      return null;
+    }
+    const snapshot = (serverNow: number) =>
+      act(() => {
+        sockets.latest().dispatchEvent(
+          new MessageEvent("message", {
+            data: JSON.stringify(
+              message({
+                type: "screens.snapshot",
+                serverNow,
+                control: false,
+                screens: [status("K7M2QA", { reportedAt: new Date(serverNow - 4_000).toISOString() })],
+                quality: [],
+              }),
+            ),
+          }),
+        );
+      });
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<Probe enabled />, host!));
+    await act(() => sockets.latest().open());
+    // This browser and the monitor agree: offset 0.
+    await snapshot(NOW);
+    await act(() => render(<Probe enabled={false} />, host!));
+    // Asleep while closed: this browser's clock jumps five minutes; the monitor's moves a second.
+    vi.setSystemTime(NOW + 5 * 60_000);
+    await act(() => render(<Probe enabled />, host!));
+    await act(() => sockets.latest().open());
+    await snapshot(NOW + 1_000);
+    // Let the view's five-second clock catch up with this browser's.
+    for (let step = 0; step < 2; step += 1)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+    expect(latest!.now).toBeLessThan(NOW + 60_000);
+    expect(latest!.issues.get("K7M2QA")).toEqual([]);
     expect(shown).toEqual([]);
   });
 

@@ -116,6 +116,8 @@ export function useScreenMonitorStaff({
       current.addEventListener("close", (event) => {
         clearInterval(keepAlive);
         if (socket.current === current) socket.current = null;
+        // The next connection measures the clock afresh: this one's samples may predate a clock jump.
+        clockSamples.current = [];
         if (stopped) return;
         // A full monitor is temporary and retried; any other refusal is final.
         if (event.code !== FULL_CLOSE_CODE && liveRoomRefusalFromClose(event.code, event.reason)) {
@@ -136,6 +138,7 @@ export function useScreenMonitorStaff({
       clearInterval(keepAlive);
       socket.current?.close(1000, "Left the screens");
       socket.current = null;
+      clockSamples.current = [];
       // Only a snapshot on the next connection makes the view live again.
       setStatus("connecting");
     };
