@@ -1,4 +1,4 @@
-import { consortiumLogoCandidatesSql } from "./sponsorship/logo-eligibility";
+import { SPONSOR_CLOCK_SQL, consortiumLogoCandidatesSql } from "./sponsorship/logo-eligibility";
 import { versionedImagePath } from "./image-cache";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import type {
@@ -23,7 +23,7 @@ function publicSponsorReadModelCte(
   withSql = "",
 ): string {
   return `
-  WITH ${withSql ? `${withSql},` : ""} sponsor_clock AS (SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now') AS at), selected_event AS (
+  WITH ${withSql ? `${withSql},` : ""} selected_event AS (
     __SELECTED_EVENT__
   ), consortium_candidates AS (
     ${consortiumLogoCandidatesSql(source)}
@@ -46,7 +46,7 @@ function publicSponsorReadModelCte(
     FROM organizations o
     WHERE o.sponsor_tier IS NOT NULL
       AND NOT EXISTS(SELECT 1 FROM ${source} sp WHERE sp.sponsor_type='consortium' AND sp.organization_id=o.id)
-      AND NOT EXISTS(SELECT 1 FROM selected_event,sponsor_clock WHERE ends_at<=sponsor_clock.at)
+      AND NOT EXISTS(SELECT 1 FROM selected_event WHERE ends_at<=${SPONSOR_CLOCK_SQL})
   ), ranked_event_rows AS (
     SELECT CASE
              WHEN sp.organization_id IS NOT NULL THEN 'org:' || sp.organization_id
