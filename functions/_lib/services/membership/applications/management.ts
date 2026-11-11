@@ -426,9 +426,10 @@ export async function updateMembershipApplication(
     return getMembershipApplicationDetail(db, applicationId);
   }
 
-  // A kind change also clears organization identity and its domain claim, even
-  // when the patch names only the category. Those reviews cannot carry over.
+  // Kind changes and domain resolution can alter organization identity or its
+  // claim even in a category-only patch. Those reviews cannot carry over.
   const otherDetailsChanged =
+    organizationDomainChanged ||
     currentCategory.isIndividual !== nextCategory.isIndividual ||
     changedFields.some((field) => field !== "membershipCategory");
   dependentStatements.push(

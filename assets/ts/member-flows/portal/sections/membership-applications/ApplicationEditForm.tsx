@@ -132,7 +132,7 @@ export function ApplicationEditForm({
             {...contract.of("membershipCategory")}
             label="Category"
             required
-            help="Review progress carries over only when the category is the sole change, both categories use the same workflow and applicant type, and no fee is recorded. Otherwise the review restarts; objections remain and paid fees need staff handling."
+            help="Changing only the category can keep review progress. If a new review is needed, it restarts automatically. Objections remain; paid fees need staff handling."
           >
             {(control) => (
               <Select

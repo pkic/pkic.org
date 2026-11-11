@@ -26,11 +26,11 @@ beforeEach(async () => {
 });
 afterEach(() => vi.useRealTimers());
 
-async function reviewedApplication(position: number) {
+async function reviewedApplication(position: number, domain = `${crypto.randomUUID()}.test`) {
   const id = await seedMemberApplication({
-    applicantEmail: `${crypto.randomUUID()}@example.test`,
+    applicantEmail: `applicant@${domain}`,
     organizationName: "Synthetic Review Organization",
-    organizationDomain: null,
+    organizationDomain: domain,
     membershipCategory: "F",
     stage: "processing",
   });
@@ -141,16 +141,9 @@ it.each([
     if (category === "H6") {
       // Include the organization identity and claim that a category-only patch clears implicitly.
       const organizationId = await insertOrganization(env.DB, "Synthetic Review Organization");
-      await env.DB.batch([
-        env.DB.prepare("UPDATE member_applications SET organization_id = ?, organization_domain = ? WHERE id = ?").bind(
-          organizationId,
-          "example.test",
-          id,
-        ),
-        env.DB.prepare(
-          "INSERT INTO organization_domain_claims (id, domain, application_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        ).bind(crypto.randomUUID(), "example.test", id, now, now),
-      ]);
+      await env.DB.prepare("UPDATE member_applications SET organization_id = ? WHERE id = ?")
+        .bind(organizationId, id)
+        .run();
     }
     const response = await callApi(env, `/api/v1/members/applications/${id}`, {
       method: "PATCH",
@@ -191,3 +184,33 @@ it.each([
     }
   },
 );
+
+it("restarts completed reviews when a category-only edit resolves a different organization domain", async () => {
+  const id = await reviewedApplication(2, "sub.example.test");
+  const before = await getMembershipExecution(env.DB, id);
+  expect(before.application).toMatchObject({ organization_id: null, organization_domain: "sub.example.test" });
+  // Removing the explicit subdomain claim makes the resolver fall back to the registrable parent.
+  await env.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id = ?").bind(id).run();
+  const response = await callApi(env, `/api/v1/members/applications/${id}`, {
+    method: "PATCH",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ membershipCategory: "A" }),
+  });
+  expect(response.status, await response.clone().text()).toBe(200);
+  const restarted = await getMembershipExecution(env.DB, id);
+  expect(restarted.version.id).toBe(before.version.id);
+  expect(restarted.generation).toBe(before.generation + 1);
+  expect(restarted.application).toMatchObject({ membership_category: "A", organization_domain: "example.test" });
+  expect(restarted.steps.every((step) => step.state === "waiting" && step.completed_at === null)).toBe(true);
+  expect(await queryAll(env.DB, "SELECT domain FROM organization_domain_claims WHERE application_id = ?", id)).toEqual([
+    { domain: "example.test" },
+  ]);
+  expect(
+    await queryAll(
+      env.DB,
+      "SELECT position FROM membership_application_steps WHERE application_id = ? AND generation = 1 AND completed_at IS NOT NULL ORDER BY position",
+      id,
+    ),
+  ).toEqual([{ position: 0 }, { position: 1 }]);
+  expect((await notice(before.steps[2].notice_outbox_id!)).payload.reviewApplications).not.toHaveProperty(id);
+});
