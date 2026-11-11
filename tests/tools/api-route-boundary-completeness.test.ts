@@ -31,6 +31,7 @@ const APPROVED_API_ROOTS = new Set([
   "retention",
   "roles",
   "scheduler",
+  "screens",
   "sponsors",
   "users",
   "votes",

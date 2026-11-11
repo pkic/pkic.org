@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import { formatClockInZone } from "../../shared/format-date";
 import { liveQuestionAsker, liveQuestionFit } from "../../shared/live-stage-display";
 import type { LiveRoomState } from "./live-room-state";
@@ -41,9 +42,19 @@ function StageQuestion({ question, label, next }: { question: LiveStageQuestion;
  * Program: high contrast, type sized to read from the stage. The question
  * being answered now leads, with the next one lined up in Preview smaller
  * under it; the timer stays in view beside them. With no question the timer
- * fills the screen. Everything comes from the room's own state.
+ * fills the screen. Everything comes from the room's own state; the page that
+ * hosts it may add a status at the end of the bottom line, which never
+ * covers what comes next.
  */
-export function LiveStageDisplay({ state, roomId }: { state: LiveRoomState; roomId?: string }) {
+export function LiveStageDisplay({
+  state,
+  roomId,
+  aside,
+}: {
+  state: LiveRoomState;
+  roomId?: string;
+  aside?: ComponentChildren;
+}) {
   const { session, stage, stageDisplayNext: next } = state;
   const geometry = useNumericCssProperties({
     "--timer-columns": Math.max(1, Math.ceil(Math.sqrt(stage.timerGraphics.length))),
@@ -82,6 +93,7 @@ export function LiveStageDisplay({ state, roomId }: { state: LiveRoomState; room
             {upcoming.title}
           </p>
         ) : null}
+        {aside ? <div class="pk-live-stage-display__aside">{aside}</div> : null}
       </div>
     </div>
   );

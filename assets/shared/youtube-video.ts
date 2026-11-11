@@ -37,9 +37,13 @@ export function youtubeVideoId(input: string): string | null {
   return id && YOUTUBE_VIDEO_ID_PATTERN.test(id) ? id : null;
 }
 
-/** The privacy-enhanced player address for one video; the portal's CSP admits only this frame origin for it. */
-export function youtubePrivacyEmbedUrl(videoId: string): string {
-  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?rel=0&modestbranding=1`;
+/**
+ * The privacy-enhanced player address for one video; the portal's CSP admits only this frame origin for it.
+ * Extra player parameters join the defaults, such as a venue screen's autoplay without controls.
+ */
+export function youtubePrivacyEmbedUrl(videoId: string, parameters: Record<string, string> = {}): string {
+  const query = new URLSearchParams({ rel: "0", modestbranding: "1", ...parameters });
+  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?${query}`;
 }
 
 /** The video's own page on YouTube, for a viewer whose player will not start. */

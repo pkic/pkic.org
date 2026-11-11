@@ -8,7 +8,16 @@ export const USER_SESSION_TOKEN_HEADER = "x-user-token";
 export const MEETING_GUEST_SESSION_COOKIE_NAME = "pkic_meeting_guest_session";
 export const MEETING_GUEST_CHALLENGE_COOKIE_NAME = "pkic_meeting_guest_challenge";
 
-const AUTHENTICATED_SESSION_COOKIE_NAMES = new Set([USER_SESSION_COOKIE_NAME, MEETING_GUEST_SESSION_COOKIE_NAME]);
+/** A paired screen's long-lived, read-only sign-in, sent only to the screens API. */
+export const SCREEN_SESSION_COOKIE_NAME = "pkic_screen_session";
+export const SCREEN_SESSION_COOKIE_PATH = "/api/v1/screens";
+export const SCREEN_PAIRING_COOKIE_NAME = "pkic_screen_pairing";
+
+const AUTHENTICATED_SESSION_COOKIE_NAMES = new Set([
+  USER_SESSION_COOKIE_NAME,
+  MEETING_GUEST_SESSION_COOKIE_NAME,
+  SCREEN_SESSION_COOKIE_NAME,
+]);
 
 /** True when the request carries one of the application's authenticated session cookies. */
 export function hasAuthenticatedSessionCookie(request: Request): boolean {

@@ -1,0 +1,23 @@
+---
+/*
+ * The page every venue screen opens. The screen ID rides the fragment, which
+ * never reaches a server, so the page stays static. The watchdog is its own
+ * bundle so it still runs when the page's code cannot load.
+ */
+---
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1920, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <!-- YouTube's player refuses to play without its embedder's origin; the screen ID rides the fragment, never sent. -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>Event screen</title>
+  </head>
+  <body>
+    <div id="live-screen"></div>
+    <script>import "../../../assets/ts/event-screens/screen-watchdog";</script>
+    <script>import "../../../assets/ts/event-screens/screen-page";</script>
+  </body>
+</html>

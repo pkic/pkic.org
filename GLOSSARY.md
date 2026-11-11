@@ -49,3 +49,9 @@ Vendor-neutral: never name a specific production tool.
 - **Lower third**: the name and title graphic for the current speaker, taken from their identity.
 - **Ticker**: the scrolling message line.
 - **Switcher**: the production software, or the studio control that mirrors it.
+- **Livestream**: the room's live stream, as online viewers see it. A screen can show it full screen. Never "overflow".
+- **Screen**: a physical display at the venue. It is paired once and stays signed in; staff give it a **screen name** saying where it stands, such as "Foyer, by registration".
+- **Screen ID**: the 6-character identifier a screen shows on its own status page. It is stable and not a secret.
+- **Pairing code**: the short code an unpaired screen shows; staff enter it to approve that screen. It expires after a few minutes.
+- **Assignment**: what a screen shows: one room of one event and one output (Program, Projector, Stage preview, Stage display, or Livestream).
+- **Handoff**: a screen that cannot do its job hands control back to its local status page, which returns to the screen page once the server answers.

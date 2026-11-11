@@ -21,6 +21,8 @@ import { patternSections } from "./sections-patterns";
 import { agendaPickerSections } from "./sections-agenda-picker";
 import { eventParticipationSections } from "./sections-event-participation";
 import { speakerProfileReviewSections } from "./sections-speaker-profile-review";
+import { eventScreenSections } from "./sections-event-screens";
+import { eventScreenStaffSections } from "./sections-event-screens-staff";
 
 function main(): void {
   const mount = document.getElementById("pk-preview");
@@ -39,6 +41,8 @@ function main(): void {
     badgeLabelDeskSection,
     scannerPresentationSection,
     scannerDestinationsSection,
+    ...eventScreenSections,
+    ...eventScreenStaffSections,
   ];
   // `?only=<id>` renders one section alone, for a tight screenshot of one control.
   const only = new URLSearchParams(window.location.search).get("only");

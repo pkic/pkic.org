@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { LIVE_AUX_OUTPUTS, LIVE_AUX_OUTPUT_DETAILS } from "../../../../../../../../shared/live-room-outputs";
+import {
+  LIVE_AUX_OUTPUTS,
+  LIVE_AUX_OUTPUT_DETAILS,
+  LIVE_LIVESTREAM_OUTPUT_DETAILS,
+  LIVE_PROGRAM_OUTPUT_DETAILS,
+} from "../../../../../../../../shared/live-room-outputs";
 import {
   LIVE_OVERLAY_DEFAULT_LAYOUT,
   liveOverlayLayoutSlugSchema,
@@ -52,8 +57,8 @@ export const STUDIO_OUTPUTS = ["preview", "program", "livestream", ...LIVE_AUX_O
 export type StudioOutput = (typeof STUDIO_OUTPUTS)[number];
 export const STUDIO_OUTPUT_DETAILS: Record<StudioOutput, { label: string; short: string; purpose: string }> = {
   preview: { label: "Preview", short: "PVW", purpose: "The next composition" },
-  program: { label: "Program", short: "PGM", purpose: "What is on air" },
-  livestream: { label: "Livestream", short: "LIVE", purpose: "What online viewers see" },
+  program: LIVE_PROGRAM_OUTPUT_DETAILS,
+  livestream: LIVE_LIVESTREAM_OUTPUT_DETAILS,
   ...LIVE_AUX_OUTPUT_DETAILS,
 };
 

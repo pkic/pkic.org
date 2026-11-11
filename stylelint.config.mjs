@@ -34,6 +34,7 @@ export default {
         "assets/ts/live-session/LiveLowerThird.css",
         "assets/ts/live-session/LiveStageDisplay.css",
         "assets/ts/live-session/LiveGraphicTheme.css",
+        "assets/ts/event-screens/Screen*.css",
         "assets/ts/site/AgendaPrint.css",
         "assets/ts/components/event-badges/BadgePrintPreview.css",
       ],

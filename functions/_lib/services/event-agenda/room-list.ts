@@ -23,6 +23,8 @@ export async function listAgendaRooms(
   db: DatabaseLike,
   eventId: string,
   query: z.infer<typeof agendaRoomsQuerySchema>,
+  /** A room's virtual-room link is private like a session's own; only agenda readers receive it. */
+  { virtualRoomLinks }: { virtualRoomLinks: boolean },
 ) {
   const search = query.q ? buildD1TextSearchFilter(query.q, ["room.name"]) : null;
   const order = resolveMappedOrderBy(
@@ -53,7 +55,7 @@ export async function listAgendaRooms(
       setupMinutes: room.setup_minutes,
       equipment: JSON.parse(room.equipment_json),
       availablePeriods: JSON.parse(room.available_periods_json),
-      ...(room.virtual_room_url !== null ? { virtualRoomUrl: room.virtual_room_url } : {}),
+      ...(virtualRoomLinks && room.virtual_room_url !== null ? { virtualRoomUrl: room.virtual_room_url } : {}),
     })),
     page: buildPageInfo(query.limit, query.offset, total, rows.length),
   });

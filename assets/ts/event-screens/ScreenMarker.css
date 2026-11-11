@@ -1,0 +1,32 @@
+/*
+ * On the 1920 × 1080 frame. At the end of a bottom line it flows with the
+ * line; over a picture it takes the title-safe corner the overlay layouts
+ * keep clear. The shared badge is set at a size read from across a room, on
+ * the frame's fixed dark ground and ink, like the stage display, whatever
+ * the theme around it.
+ */
+@layer components {
+  .pk-screen-marker {
+    display: inline-flex;
+    vertical-align: middle;
+  }
+  .pk-screen-marker--corner {
+    position: absolute;
+    inset-block-end: 48px;
+    inset-inline-end: 48px;
+  }
+  .pk-screen-marker--dot {
+    inline-size: 20px;
+    block-size: 20px;
+    border-radius: var(--pk-radius-pill);
+    background: var(--pk-warn);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--pk-chrome-deep) 70%, transparent);
+  }
+  .pk-screen-marker .pk-badge {
+    padding: 8px 20px;
+    border-color: var(--tone);
+    background: color-mix(in srgb, var(--tone) 30%, var(--pk-chrome-raised));
+    color: var(--pk-on-solid);
+    font-size: var(--pk-text-3xl);
+  }
+}

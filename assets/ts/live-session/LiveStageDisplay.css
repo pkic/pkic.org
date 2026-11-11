@@ -138,6 +138,25 @@
     overflow-wrap: anywhere;
   }
   /* The next question: smaller, below a rule, so it never competes with the one being answered. */
+  /* The bottom line: what comes next, and at its end a status the host page adds, centered on the line. */
+  .pk-live-stage-display__after {
+    display: flex;
+    align-items: center;
+    gap: 48px;
+    min-inline-size: 0;
+  }
+  .pk-live-stage-display__after > :not(.pk-live-stage-display__aside) {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+  /* One line high whatever it holds, so a status appearing never moves the rule above it. */
+  .pk-live-stage-display__aside {
+    display: flex;
+    flex: none;
+    align-items: center;
+    block-size: 1lh;
+    margin-inline-start: auto;
+  }
   .pk-live-stage-display__after:not(:empty) {
     padding-block-start: 32px;
     border-block-start: 2px solid color-mix(in srgb, var(--pk-on-solid) 28%, var(--pk-chrome-deep));

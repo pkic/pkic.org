@@ -1,0 +1,65 @@
+/*
+ * A livestream screen: the player edge to edge on the 1920 × 1080 frame,
+ * and, only while the player fails, a card over it on the stage display's
+ * ground with the event's stripe. Sizes are fixed on the frame, which scales
+ * whole to the screen.
+ */
+@layer components {
+  .pk-screen-livestream {
+    position: relative;
+    box-sizing: border-box;
+    display: grid;
+    inline-size: 1920px;
+    block-size: 1080px;
+    background: var(--pk-chrome-deep);
+    color: var(--pk-on-solid);
+    font-family: var(--pk-font);
+    font-size: calc(var(--pk-text-3xl) * 1.25);
+    line-height: 1.2;
+  }
+  .pk-screen-livestream__player,
+  .pk-screen-livestream__reconnecting {
+    grid-area: 1 / 1;
+  }
+  .pk-screen-livestream__player,
+  .pk-screen-livestream__host {
+    display: grid;
+    place-items: stretch;
+  }
+  /* Nobody touches a venue screen: the player takes no clicks, so it never opens YouTube. */
+  .pk-screen-livestream__player iframe {
+    display: block;
+    inline-size: 1920px;
+    block-size: 1080px;
+    border: 0;
+    pointer-events: none;
+  }
+  .pk-screen-livestream__reconnecting {
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    background: var(--pk-chrome-deep);
+    border-block-start: 12px solid transparent;
+    border-image: var(--pk-pqc-stripe) 1;
+  }
+  .pk-screen-livestream__card {
+    display: grid;
+    gap: 24px;
+    box-sizing: border-box;
+    inline-size: 1280px;
+    padding: 64px 80px;
+    border-radius: var(--pk-radius-card);
+    background: var(--pk-chrome-raised);
+  }
+  .pk-screen-livestream__room {
+    margin: 0;
+    font-size: calc(var(--pk-text-3xl) * 3);
+    font-weight: 700;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+  }
+  .pk-screen-livestream__status {
+    margin: 0;
+    color: color-mix(in srgb, var(--pk-on-solid) 72%, var(--pk-chrome-deep));
+  }
+}
