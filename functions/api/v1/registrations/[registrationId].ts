@@ -12,8 +12,7 @@ import { markResponseSensitive, requestDb, type AdminContext } from "../../../_l
 import { processOutboxByIdBackground } from "../../../_lib/email/outbox";
 import { json } from "../../../_lib/http";
 import { openApiRoute } from "../../../_lib/openapi/route";
-import { enforceEmailTriggerRateLimits } from "../../../_lib/rate-limit";
-import { getClientIp, requireInternalSecret } from "../../../_lib/request";
+import { requireInternalSecret } from "../../../_lib/request";
 import { getRegistrationByManageToken } from "../../../_lib/services/registrations/queries";
 import { buildRegistrationManageView } from "../../../_lib/services/registrations/manage-view";
 import { updateManagedRegistration } from "../../../_lib/services/registrations/manage-update";
@@ -44,15 +43,6 @@ export const RegistrationParticipantPatch = openApiRoute(
   registrationParticipantUpdateRouteSchema,
   async (c: AdminContext, data) => {
     const { db, authority, registration } = await ownedRegistration(c, data.params.registrationId);
-    if (data.body.action === "update" && data.body.email) {
-      await enforceEmailTriggerRateLimits({
-        emailBinding: c.env.EMAIL_RATE_LIMITER,
-        ipBinding: c.env.IP_RATE_LIMITER,
-        namespace: "registration-email-change",
-        email: data.body.email,
-        clientIp: getClientIp(c.req.raw),
-      });
-    }
     const config = getConfig(c.env, c.req.raw);
     const result = await updateManagedRegistration(db, {
       registration,
@@ -72,7 +62,6 @@ export const RegistrationParticipantPatch = openApiRoute(
     return json(
       registrationManageUpdateResponseSchema.parse({
         success: true,
-        emailChanged: result.emailChanged,
         sponsorSharing: await readRegistrationSponsorSharing(db, result.registration),
       }),
     );

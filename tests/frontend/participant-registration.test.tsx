@@ -10,16 +10,25 @@ import {
 } from "../../assets/shared/schemas/registration";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { ParticipantRegistration } from "../../assets/ts/components/events/ParticipantRegistration";
-import { RegistrationIdentityChange } from "../../assets/ts/components/events/RegistrationIdentityChange";
 import { registrationIdentityChangeSchema } from "../../assets/shared/schemas/registration-identity";
-import { REGISTRATION_ID, ENDPOINT, EVENT, readResponse, FORMS } from "./helpers/participant-registration-fixtures";
+import {
+  REGISTRATION_ID,
+  ENDPOINT,
+  EVENT,
+  readResponse,
+  FORMS,
+  PERSONAL,
+  WORK,
+  identityApi,
+  type SessionIdentity,
+} from "./helpers/participant-registration-fixtures";
 import { confirmationButton, openConfirmation } from "./helpers/confirm-dialog";
 
 const mounted: HTMLElement[] = [];
 
 function installApi(
   read: RegistrationManageReadResponse = readResponse(),
-  options: { forms?: typeof FORMS; refusePatch?: unknown } = {},
+  options: { forms?: typeof FORMS; refusePatch?: unknown; identities?: SessionIdentity[] } = {},
 ) {
   const requests: Array<{ method: string; path: string; body?: unknown }> = [];
   vi.stubGlobal(
@@ -35,6 +44,8 @@ function installApi(
       const json = (value: unknown) =>
         new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
       if (method === "GET" && url.pathname === ENDPOINT) return json(read);
+      const identityReply = options.identities && identityApi(method, url.pathname, options.identities);
+      if (identityReply) return json(identityReply);
       if (method === "GET" && url.pathname.endsWith("/forms/placements/event_registration")) {
         return json({ ...(options.forms ?? FORMS), eventDays: read.eventDays });
       }
@@ -45,7 +56,7 @@ function installApi(
         });
       }
       if (method === "PATCH" && url.pathname === ENDPOINT) {
-        return json({ success: true, emailChanged: false, sponsorSharing: read.sponsorSharing });
+        return json({ success: true, sponsorSharing: read.sponsorSharing });
       }
       throw new Error(`Unexpected request: ${method} ${url.pathname}`);
     }),
@@ -106,57 +117,54 @@ afterEach(() => {
 });
 
 describe("ParticipantRegistration", () => {
-  it("retries a failed refresh without saving the representation twice", async () => {
-    const identity = {
-      id: "00000000-0000-4000-8000-000000000042",
-      organizationId: null,
-      organizationName: null,
-      jobTitle: null,
-    };
-    const fetch = vi.fn(
-      async (_url: string, init?: RequestInit) =>
-        new Response(
-          JSON.stringify(
-            init?.method === "PUT"
-              ? { success: true, identity, badgeVersion: "2026-01-01T00:00:00.000Z" }
-              : {
-                  success: true,
-                  sessionId: "00000000-0000-4000-8000-000000000045",
-                  expiresAt: "2099-12-31T23:59:59.000Z",
-                  idleExpiresAt: "2099-12-31T23:59:59.000Z",
-                  identity: { id: "00000000-0000-4000-8000-000000000041", email: "ada@example.test" },
-                  eventParticipation: true,
-                  actingIdentityId: identity.id,
-                  actingIdentities: [identity],
-                },
-          ),
-          { headers: { "content-type": "application/json" } },
-        ),
-    );
-    vi.stubGlobal("fetch", fetch);
-    const changed = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
-    const container = document.createElement("div");
-    document.body.append(container);
-    mounted.push(container);
-    await act(() =>
-      render(
-        <RegistrationIdentityChange data={readResponse({ identityId: identity.id })} onChanged={changed} />,
-        container,
-      ),
-    );
-    await click(container.querySelector('button[aria-label="Change representation"]'));
-    await click(button(document, "Save changes"));
-    await vi.waitFor(() => expect(container.textContent).toContain("could not be refreshed"));
-    const writes = fetch.mock.calls.filter(([, init]) => init?.method === "PUT");
-    expect(writes).toHaveLength(1);
-    expect(registrationIdentityChangeSchema.parse(JSON.parse(String(writes[0]![1]?.body)))).toMatchObject({
-      identityId: identity.id,
+  it("chooses the representation inside Edit details and moves the registration before saving the rest", async () => {
+    const requests = installApi(readResponse({ identityId: PERSONAL.id }), { identities: [PERSONAL, WORK] });
+    const container = await mount();
+
+    // The read view states the representation; changing it is part of editing, not a separate command.
+    expect(container.querySelector('button[aria-label="Change representation"]')).toBeNull();
+    await click(button(container, "Edit details"));
+    // The address follows the representation, so it is read here, never typed.
+    expect(container.querySelector('input[name="email"]')).toBeNull();
+    expect(facts(container)["Email address"]).toBe("ada@example.test");
+    expect(container.textContent).toContain("Registration emails go to the address of your representation.");
+
+    await vi.waitFor(() => expect(container.querySelector('[role="combobox"]')).not.toBeNull());
+    await click(container.querySelector<HTMLElement>('[role="combobox"]'));
+    await vi.waitFor(() => expect(document.querySelector(`[role="option"][data-key="${WORK.id}"]`)).not.toBeNull());
+    await click(document.querySelector<HTMLElement>(`[role="option"][data-key="${WORK.id}"]`));
+    await act(async () => {
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
-    await click(button(container, "Retry refresh"));
-    expect(changed).toHaveBeenCalledTimes(2);
-    expect(fetch.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
-    expect(button(container, "Retry refresh")).toBeNull();
+    await settle();
+    await settle();
+
+    const writes = requests.filter(({ method }) => method === "PUT" || method === "PATCH");
+    expect(writes.map(({ method }) => method)).toEqual(["PUT", "PATCH"]);
+    expect(registrationIdentityChangeSchema.parse(writes[0]!.body)).toEqual({
+      identityId: WORK.id,
+      expectedIdentityId: PERSONAL.id,
+    });
+    expect(registrationManageSchema.parse(writes[1]!.body)).not.toHaveProperty("email");
+    await vi.waitFor(() => expect(container.textContent).toContain("Registration updated."));
   });
+
+  it("keeps the representation when it is unchanged", async () => {
+    const requests = installApi(readResponse({ identityId: PERSONAL.id }), { identities: [PERSONAL, WORK] });
+    const container = await mount();
+
+    await click(button(container, "Edit details"));
+    await vi.waitFor(() => expect(container.querySelector('[role="combobox"]')).not.toBeNull());
+    await act(async () => {
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+    await settle();
+
+    expect(requests.some(({ method }) => method === "PUT")).toBe(false);
+    expect(requests.some(({ method }) => method === "PATCH")).toBe(true);
+  });
+
   it("opens read-only, with the registration's details as a description list", async () => {
     installApi(readResponse({ shareUrl: "https://example.test/r/SHARE1" }));
     const container = await mount();

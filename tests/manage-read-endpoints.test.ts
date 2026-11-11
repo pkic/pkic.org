@@ -337,7 +337,6 @@ describe("manage read endpoints", () => {
     const updatePayload = registrationManageUpdateResponseSchema.parse(await updateResponse.clone().json());
     expect(updatePayload).toEqual({
       success: true,
-      emailChanged: false,
       sponsorSharing: { allowed: false, withdrawnAt: null },
     });
     expect(updatePayload).not.toHaveProperty("registration");

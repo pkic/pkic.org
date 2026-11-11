@@ -63,10 +63,7 @@ export function ParticipantRegistration({
 }
 
 /** What the attendee reads after a change, in words rather than a status code. */
-function outcomeOf(change: RegistrationChange, emailChanged: boolean): string {
-  if (emailChanged) {
-    return "Check your new email address to confirm the change. Your registration remains pending until then.";
-  }
+function outcomeOf(change: RegistrationChange): string {
   if (change.action === "cancel") return "Registration cancelled.";
   return "Registration updated.";
 }
@@ -97,21 +94,22 @@ function RegistrationRecord({
   const restorable = cancelled && data.registration.cancellation_reason_code !== "unauthorized_registration";
 
   /** Sends one change and returns to the read view on success; rejects with the refusal. */
-  async function save(change: RegistrationChange, outcome?: string): Promise<void> {
+  async function save(
+    change: RegistrationChange,
+    outcome?: string,
+    changeIdentity: (() => Promise<void>) | null = null,
+  ): Promise<void> {
     // Giving up every day uses the same explicit cancellation confirmation from either editor.
     if (change.action === "update" && change.dayAttendance?.length === 0) return cancelRegistration();
     // The day picker confirms before calling; the full editor uses the same decision here.
     if (editing && change.dayAttendance && !(await confirmRegistrationDayChanges(data, change.dayAttendance))) return;
     setError("");
     setMessage("");
-    const result = await patchJson(
-      endpoint,
-      registrationManageSchema.parse(change),
-      registrationManageUpdateResponseSchema,
-    );
+    await changeIdentity?.();
+    await patchJson(endpoint, registrationManageSchema.parse(change), registrationManageUpdateResponseSchema);
     await closeEditor();
     setEditorMounted(false);
-    setMessage(result.emailChanged ? outcomeOf(change, true) : (outcome ?? outcomeOf(change, false)));
+    setMessage(outcome ?? outcomeOf(change));
     await reload();
   }
 
@@ -186,7 +184,7 @@ function RegistrationRecord({
               <ParticipantRegistrationForm
                 data={data}
                 forms={forms}
-                save={save}
+                save={(change, changeIdentity) => save(change, undefined, changeIdentity)}
                 onDiscard={() => {
                   setEditorMounted(false);
                   void closeEditor();
@@ -213,14 +211,7 @@ function RegistrationRecord({
               />
               <section class="pk-stack pk-stack--snug" aria-label="Your details">
                 <SectionHeading level={3}>Your details</SectionHeading>
-                <ParticipantRegistrationDetails
-                  data={data}
-                  form={forms.form}
-                  daysSummarized
-                  onIdentityChanged={async () => {
-                    await reload();
-                  }}
-                />
+                <ParticipantRegistrationDetails data={data} form={forms.form} daysSummarized />
                 {!cancelled && (
                   <div class="pk-cluster">
                     <Button

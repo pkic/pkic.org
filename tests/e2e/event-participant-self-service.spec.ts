@@ -472,8 +472,19 @@ test("a signed-in user registers from event home without another email challenge
   });
   await page.goto(`/portal/#/events/${event.slug}/ticket`);
   await page.getByRole("link", { name: "Registration details", exact: true }).click();
-  await page.getByRole("button", { name: "Change representation", exact: true }).click();
-  const changeIdentity = page.getByRole("dialog", { name: "Change representation", exact: true });
+  // The representation is chosen inside Edit details, not through a separate pencil.
+  const record = page.getByRole("region", { name: "Registration", exact: true });
+  await expect(record.getByRole("button", { name: "Change representation", exact: true })).toHaveCount(0);
+  const editDetails = async () => {
+    await record.getByRole("button", { name: "Edit details", exact: true }).click();
+    await expect(record.getByRole("textbox", { name: /^Email/ })).toHaveCount(0);
+  };
+  const saveDetails = async () => {
+    await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(page.getByText("Registration updated.", { exact: true })).toBeVisible();
+  };
+  await editDetails();
+  const changeIdentity = record.locator("[data-registration-flow='update']");
   await changeIdentity.getByRole("combobox", { name: "Representation", exact: true }).click();
   await page.getByRole("option").filter({ hasText: representations[1].name }).click();
   for (const [width, height, device] of [
@@ -481,7 +492,7 @@ test("a signed-in user registers from event home without another email challenge
     [375, 812, "phone"],
   ] as const) {
     await page.setViewportSize({ width, height });
-    await page.screenshot({ path: info.outputPath(`portal-update-identity-${device}.png`) });
+    await page.screenshot({ path: info.outputPath(`portal-update-identity-${device}.png`), fullPage: true });
   }
   await changeIdentity.getByRole("button", { name: "Add identity", exact: true }).click();
   await expect(
@@ -493,12 +504,18 @@ test("a signed-in user registers from event home without another email challenge
     .getByRole("dialog", { name: "Add identity", exact: true })
     .getByRole("button", { name: "Cancel", exact: true })
     .click();
-  await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
-  await expect(changeIdentity).not.toBeVisible();
+  await saveDetails();
   await expect(page.getByRole("definition").filter({ hasText: representations[1].name })).toBeVisible();
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`portal-updated-identity-${device}.png`), fullPage: true });
+  }
   await page.reload();
   await expect(page.getByRole("definition").filter({ hasText: representations[1].name })).toBeVisible();
-  await page.getByRole("button", { name: "Change representation", exact: true }).click();
+  await editDetails();
   await changeIdentity.getByRole("button", { name: "Add identity", exact: true }).click();
   const addRepresentation = page.getByRole("dialog", { name: "Add identity", exact: true });
   // A seconds-old unverified account must consolidate through proof into this signed-in account.
@@ -569,10 +586,11 @@ test("a signed-in user registers from event home without another email challenge
   await expect(changeIdentity.getByRole("combobox", { name: "Representation", exact: true })).toContainText(
     "Lighthouse Research",
   );
-  await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
-  await expect(changeIdentity).not.toBeVisible();
+  await saveDetails();
   await page.reload();
   await expect(page.getByRole("definition").filter({ hasText: "Lighthouse Research" })).toBeVisible();
+  // The registration's address follows its representation's verified address.
+  await expect(record.getByText("ada@lighthouse-work.test", { exact: true })).toBeVisible();
 });
 
 // Event-only identities deliberately have no staff or membership capacity.
@@ -604,7 +622,8 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await expect(registration.getByText(email, { exact: true })).toBeVisible();
   await expect(registration.locator("input:not([readonly]):not([type=hidden]), textarea, select")).toHaveCount(0);
   await registration.getByRole("button", { name: "Edit details", exact: true }).click();
-  await expect(page.getByLabel("Email address", { exact: true })).toHaveValue(email);
+  await expect(page.getByLabel("Email address", { exact: true })).toHaveCount(0);
+  await expect(registration.getByText(email, { exact: true })).toBeVisible();
   await expect(page.getByLabel("Country", { exact: true })).toHaveValue("US");
   await expect(registration.getByRole("button", { name: "Registration actions" })).toHaveCount(0);
   await page.getByLabel("Last name", { exact: true }).fill("Updated-Attendee");
@@ -648,32 +667,6 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath("registration-mobile.png"), fullPage: true });
-  // Changing domains returns through the same verified organization chooser.
-  // A fresh domain each run, so no earlier run has already given it an organization.
-  const nextEmail = `changed@domain-change-${crypto.randomUUID()}.test`;
-  const nextOrganization = `Domain Change Fixture ${crypto.randomUUID().slice(0, 8)}`;
-  const beforeEmailChange = await capturedEmailCount();
-  await registration.getByRole("button", { name: "Edit details", exact: true }).click();
-  await page.getByLabel("Email address", { exact: true }).fill(nextEmail);
-  await page.getByRole("button", { name: "Save changes", exact: true }).click();
-  await expect(registration.getByText(/Check your new email address/)).toBeVisible();
-  const changeMessage = await waitForCapturedEmail(nextEmail, "confirm", { since: beforeEmailChange });
-  await page.goto(extractEmailUrl(changeMessage, "/register/confirm/"));
-  const organizationName = page.getByRole("textbox", { name: /^Organization name/ });
-  await expect(organizationName).toBeVisible();
-  await organizationName.fill(nextOrganization);
-  await page.getByRole("textbox", { name: /^Job title/ }).fill("Engineer");
-  for (const [width, height, device] of [
-    [1280, 900, "desktop"],
-    [375, 812, "phone"],
-  ] as const) {
-    await page.setViewportSize({ width, height });
-    await page.screenshot({ path: testInfo.outputPath(`email-domain-confirmation-${device}.png`), fullPage: true });
-  }
-  await page.getByRole("button", { name: "Confirm my registration", exact: true }).click();
-  await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible();
-  await page.getByRole("link", { name: /Manage registration/ }).click();
-  await expect(page.getByText(nextOrganization, { exact: false })).toBeVisible();
 });
 
 for (const scenario of ["normal response", "late review", "late withdrawal"]) {

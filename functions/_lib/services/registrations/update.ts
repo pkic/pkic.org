@@ -134,23 +134,6 @@ export async function updateRegistrationByManageTokenWithNotification(
   );
 }
 
-export async function updateRegistrationByManageTokenWithEmailChange(
-  db: DatabaseLike,
-  payload: {
-    manageToken: ParticipantAuthority;
-    signingSecret: string;
-    emailChange: UpdateEmailChange;
-  } & RegistrationUpdatePayload,
-): Promise<{ registration: RegistrationRecord; outboxId: string | null; outboxIds: string[] }> {
-  return executeRegistrationUpdate(
-    db,
-    payload,
-    () => getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret),
-    undefined,
-    (built) => commitUpdateWithEmailChange(db, built, payload),
-  );
-}
-
 export async function updateRegistrationById(
   db: DatabaseLike,
   payload: { eventId: string; registrationId: string } & RegistrationUpdatePayload,

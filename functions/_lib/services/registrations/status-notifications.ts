@@ -26,7 +26,7 @@ import { prepareRegistrationDayWaitlist, type RegistrationDayWaitlistRow } from 
 import { prepareRegistrationByIdForEvent } from "./queries";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { UserProfilePatch } from "../users";
-import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
+import { registrationRecipientEmailSql } from "./recipient-email";
 import type { RegistrationRecord } from "./types";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
 import { myAgendaPageUrl } from "../frontend-links";
@@ -90,7 +90,7 @@ async function loadRegistrationEmailContext(
   const [registrationResult, userResult, attendanceResult, waitlistResult, termsResult] = await db.batch([
     prepareRegistrationByIdForEvent(db, event.id, registrationId),
     db
-      .prepare(`WITH email_identity AS (SELECT ? AS id) SELECT u.id, ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
+      .prepare(`WITH email_identity AS (SELECT ? AS id) SELECT u.id, ${registrationRecipientEmailSql(selectedIdentity)} AS email,
             u.first_name, u.last_name, ${selectedOrAffiliationOrganizationNameSql(selectedIdentity, "u.id")} AS organization_name, ${selectedOrAffiliationJobTitleSql(selectedIdentity, "u.id")} AS job_title
        FROM registrations r JOIN users u ON u.id = r.user_id
        WHERE r.id = ? AND r.event_id = ?`)

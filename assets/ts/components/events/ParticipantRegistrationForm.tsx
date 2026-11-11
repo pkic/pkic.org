@@ -12,7 +12,7 @@ export function ParticipantRegistrationForm({
 }: {
   data: RegistrationManageReadResponse;
   forms: EventFormsResponse;
-  save: (change: RegistrationChange) => Promise<void>;
+  save: (change: RegistrationChange, changeIdentity: (() => Promise<void>) | null) => Promise<void>;
   onDiscard: () => void;
 }) {
   return <RegistrationFlow mode="update" data={data} forms={forms} save={save} onDiscard={onDiscard} />;

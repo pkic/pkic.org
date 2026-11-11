@@ -127,43 +127,4 @@ describe("public resend rate limits", () => {
     expect((await makeRequest()).status).toBe(409);
     expect((await makeRequest()).status).toBe(429);
   });
-
-  it("rate-limits repeated bootstrap email corrections to an unverified target", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
-    await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
-    const limitedEnv = {
-      ...env,
-      EMAIL_RATE_LIMITER: createTestRateLimiter(3),
-      IP_RATE_LIMITER: createTestRateLimiter(20),
-    };
-    const create = await callApi(limitedEnv, "/api/v1/events/pqc-2026/registrations", {
-      method: "POST",
-      headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.43" },
-      body: JSON.stringify({
-        firstName: "Typo",
-        lastName: "Correction",
-        email: `wrong-${crypto.randomUUID()}@example.test`,
-        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
-        sourceType: "direct",
-        consents: [
-          { termKey: "privacy-policy", version: "v1" },
-          { termKey: "code-of-conduct", version: "v1" },
-        ],
-      }),
-    });
-    expect(create.status).toBe(200);
-    const { manageToken } = (await create.json()) as { manageToken: string };
-    const targetEmail = `correction-target-${crypto.randomUUID()}@example.test`;
-    const makeRequest = () =>
-      callApi(limitedEnv, `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.43" },
-        body: JSON.stringify({ action: "update", email: targetEmail }),
-      });
-
-    expect((await makeRequest()).status).toBe(200);
-    expect((await makeRequest()).status).toBe(200);
-    expect((await makeRequest()).status).toBe(200);
-    expect((await makeRequest()).status).toBe(429);
-  });
 });

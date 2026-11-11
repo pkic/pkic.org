@@ -39,7 +39,6 @@ function withdrawalReceipt(): Response {
   return json(
     registrationManageUpdateResponseSchema.parse({
       success: true,
-      emailChanged: false,
       sponsorSharing: { allowed: false, withdrawnAt },
     }),
   );
@@ -170,7 +169,7 @@ describe("attendee sponsor contact sharing", () => {
   });
 
   it("refuses a success payload without canonical sharing state", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ success: true, emailChanged: false })));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ success: true })));
     const host = await mount({ allowed: true, withdrawnAt: null });
     await act(async () => {
       host.querySelector<HTMLButtonElement>("button")!.click();

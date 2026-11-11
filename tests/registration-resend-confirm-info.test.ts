@@ -21,10 +21,9 @@ import { issueDatabaseCapability, materializeQueuedCapabilityLinks } from "../fu
 import { getRegistrationByManageToken } from "../functions/_lib/services/registrations";
 import { callApi } from "./helpers/app";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
-import {
-  registrationConfirmInfoResponseSchema,
-  registrationManageUpdateResponseSchema,
-} from "../assets/shared/schemas/registration";
+import { registrationConfirmInfoResponseSchema } from "../assets/shared/schemas/registration";
+import { eventRegistrationManagementUpdateResponseSchema } from "../assets/shared/schemas/route-contracts-event-registration-management";
+import { createAdminSession } from "./helpers/auth";
 
 const signingSecret = "test-signing-secret";
 
@@ -33,6 +32,17 @@ function resendManageLink(environment: typeof env, email: string, clientIp = "20
     method: "POST",
     headers: { "content-type": "application/json", "cf-connecting-ip": clientIp },
     body: JSON.stringify({ email }),
+  });
+}
+
+/** Organizers correct a registrant's address; an attendee's address follows their identity. */
+async function organizerChangesEmail(registrationId: string, email: string): Promise<Response> {
+  const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
+  const token = await createAdminSession(env.DB, admin.id, `organizer-${crypto.randomUUID()}`);
+  return callApi(env, `/api/v1/events/pqc-2026/registrations/${encodeURIComponent(registrationId)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ action: "update", email }),
   });
 }
 
@@ -336,7 +346,7 @@ describe("resend-confirmation endpoint", () => {
     const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
 
-    const { confirmationToken, registrationId, manageToken } = await registerAttendee();
+    const { confirmationToken, registrationId } = await registerAttendee();
     const [{ user_id: userId }] = await queryAll<{ user_id: string }>(
       env.DB,
       "SELECT user_id FROM registrations WHERE id=?",
@@ -378,16 +388,11 @@ describe("resend-confirmation endpoint", () => {
     );
     await gate.reached;
 
-    const emailChange = await callApi(env, `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "update", email: "resend-corrected@example.test" }),
-    });
-    expect(emailChange.status).toBe(200);
-    expect(registrationManageUpdateResponseSchema.parse(await emailChange.json())).toEqual({
+    const emailChange = await organizerChangesEmail(registrationId, "resend-corrected@example.test");
+    expect(emailChange.status, await emailChange.clone().text()).toBe(200);
+    expect(eventRegistrationManagementUpdateResponseSchema.parse(await emailChange.json())).toMatchObject({
       success: true,
       emailChanged: true,
-      sponsorSharing: { allowed: false, withdrawnAt: null },
     });
 
     gate.release();
@@ -480,14 +485,10 @@ describe("resend-confirmation endpoint", () => {
     await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
-    const { registrationId, manageToken } = await registerAttendee();
+    const { registrationId } = await registerAttendee();
 
-    const emailChange = await callApi(env, `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "update", email: "delayed-new@example.test" }),
-    });
-    expect(emailChange.status).toBe(200);
+    const emailChange = await organizerChangesEmail(registrationId, "delayed-new@example.test");
+    expect(emailChange.status, await emailChange.clone().text()).toBe(200);
     const newAddressRows = await queryAll<{ payload_json: string }>(
       env.DB,
       `SELECT payload_json FROM email_outbox
@@ -698,14 +699,10 @@ describe("resend-manage-link endpoint", () => {
     await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
-    const { manageToken, email } = await registerAttendee();
+    const { registrationId, email } = await registerAttendee();
 
-    const change = await callApi(env, `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "update", email: "unverified-pending@example.test" }),
-    });
-    expect(change.status).toBe(200);
+    const change = await organizerChangesEmail(registrationId, "unverified-pending@example.test");
+    expect(change.status, await change.clone().text()).toBe(200);
 
     const before = await queryAll<{ total: number }>(
       env.DB,

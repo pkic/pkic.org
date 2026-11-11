@@ -240,7 +240,7 @@ describe("registration manage read view", () => {
         );
       }
       return init?.method === "PATCH"
-        ? jsonResponse({ success: true, emailChanged: false, sponsorSharing: { allowed: false, withdrawnAt: null } })
+        ? jsonResponse({ success: true, sponsorSharing: { allowed: false, withdrawnAt: null } })
         : manageResponse();
     });
   }
@@ -325,7 +325,7 @@ describe("registration manage read view", () => {
   it("leads a cancelled registration with that, withholds the badge and invitations, and restores on request", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
       init?.method === "PATCH"
-        ? jsonResponse({ success: true, emailChanged: false, sponsorSharing: { allowed: false, withdrawnAt: null } })
+        ? jsonResponse({ success: true, sponsorSharing: { allowed: false, withdrawnAt: null } })
         : manageResponse({
             registration: { status: "cancelled", cancellation_reason_code: "attendee_cancelled" },
             shareUrl: "https://pkic.org/events/pqc-2026/register/?ref=casey",

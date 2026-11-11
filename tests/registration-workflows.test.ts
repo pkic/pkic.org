@@ -4,10 +4,7 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { callApi } from "./helpers/app";
-import {
-  registrationConfirmInfoResponseSchema,
-  registrationManageUpdateResponseSchema,
-} from "../assets/shared/schemas/registration";
+import { registrationConfirmInfoResponseSchema } from "../assets/shared/schemas/registration";
 import { registrationEmailProofVerifyResponseSchema } from "../assets/shared/schemas/registration-email-proof";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { getEventBySlug } from "../functions/_lib/services/events";
@@ -22,14 +19,11 @@ import { promoteEventWaitlistWithNotifications } from "../functions/_lib/service
 import { listCampaignRecipients } from "../functions/_lib/services/event-email-campaign";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
-import { createMemberSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
 import {
   addRepresentative,
-  assignRepresentativeRole,
   insertIndividualMember,
   insertOrganization,
-  insertUser,
-  REPRESENTATIVE_ROLE_IDS,
   seedOrganizationAggregate,
 } from "./helpers/membership";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
@@ -499,8 +493,8 @@ describe("registration workflows", () => {
       action: "update",
       email: "attacker-controlled@example.test",
     });
-    expect(unsafeChange.status).toBe(403);
-    await expect(unsafeChange.json()).resolves.toMatchObject({ error: { code: "ACCOUNT_AUTH_REQUIRED" } });
+    // A registration link never changes the account's address.
+    expect(unsafeChange.status).toBe(400);
 
     const confirmationToken = new URL(delivered.confirmationUrl).searchParams.get("token");
     const confirmResponse = await postConfirmation({ token: confirmationToken, id: created.registrationId });
@@ -516,7 +510,7 @@ describe("registration workflows", () => {
     ).resolves.toEqual([{ normalized_email: "admin@pkic.org" }]);
   });
 
-  it("lets the authenticated account owner initiate a new-address confirmation without old-mailbox approval", async () => {
+  it("refuses an attendee's own address change; organizers make that correction", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { userId } = await insertIndividualMember(env.DB, "H5", "member-change@example.test");
     const created = await createRegistrationService(env.DB, {
@@ -539,86 +533,14 @@ describe("registration workflows", () => {
       { cookie: `pkic_session=${encodeURIComponent(memberSession)}` },
     );
 
-    expect(response.status).toBe(200);
-    expect(registrationManageUpdateResponseSchema.parse(await response.json())).toEqual({
-      success: true,
-      emailChanged: true,
-      sponsorSharing: { allowed: false, withdrawnAt: null },
-    });
+    expect(response.status).toBe(400);
     await expect(
       queryAll<{ email: string; pending_email: string | null }>(
         env.DB,
         "SELECT email, pending_email FROM users WHERE id = ?",
         [userId],
       ),
-    ).resolves.toEqual([{ email: "member-change@example.test", pending_email: "member-new@example.test" }]);
-    await expect(
-      queryAll<{ template_key: string; recipient_email: string }>(
-        env.DB,
-        `SELECT template_key, recipient_email FROM email_outbox
-          WHERE template_key IN ('registration_email_change', 'registration_email_change_notice')
-          ORDER BY template_key`,
-      ),
-    ).resolves.toEqual([
-      { template_key: "registration_email_change", recipient_email: "member-new@example.test" },
-      { template_key: "registration_email_change_notice", recipient_email: "member-change@example.test" },
-    ]);
-  });
-
-  it("lets an organization contact initiate a coworker's new-address confirmation but rejects an ordinary coworker", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
-    const organizationId = await insertOrganization(env.DB, "Email recovery organization");
-    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
-    const contactUserId = await insertUser(env.DB, "org-contact@example.test");
-    const ordinaryCoworkerId = await insertUser(env.DB, "ordinary-coworker@example.test");
-    const targetUserId = await insertUser(env.DB, "org-target@example.test");
-    await addRepresentative(env.DB, memberId, contactUserId);
-    await addRepresentative(env.DB, memberId, ordinaryCoworkerId);
-    await addRepresentative(env.DB, memberId, targetUserId);
-    await assignRepresentativeRole(env.DB, memberId, contactUserId, REPRESENTATIVE_ROLE_IDS.primaryContact);
-
-    const created = await createRegistrationService(env.DB, {
-      event: { id: eventId },
-      userId: targetUserId,
-      sourceType: "direct",
-      confirmationTtlHours: 48,
-      signingSecret: "test-signing-secret",
-    });
-    const confirmed = await confirmRegistrationByToken(env.DB, {
-      token: created.confirmationToken as string,
-      waitlistClaimWindowHours: 24,
-      signingSecret: "test-signing-secret",
-    });
-    const ordinarySession = await createMemberSession(env.DB, ordinaryCoworkerId, "ordinary-coworker-session");
-    const rejected = await patchManage(
-      confirmed.manageToken,
-      { action: "update", email: "org-target-new@example.test" },
-      { cookie: `pkic_session=${encodeURIComponent(ordinarySession)}` },
-    );
-    expect(rejected.status).toBe(403);
-    await expect(rejected.json()).resolves.toMatchObject({ error: { code: "FORBIDDEN" } });
-
-    const contactSession = await createMemberSession(env.DB, contactUserId, "org-contact-session");
-    const accepted = await patchManage(
-      confirmed.manageToken,
-      { action: "update", email: "org-target-new@example.test" },
-      { cookie: `pkic_session=${encodeURIComponent(contactSession)}` },
-    );
-    expect(accepted.status).toBe(200);
-    await expect(
-      queryAll<{ email: string; pending_email: string | null }>(
-        env.DB,
-        "SELECT email, pending_email FROM users WHERE id = ?",
-        [targetUserId],
-      ),
-    ).resolves.toEqual([{ email: "org-target@example.test", pending_email: "org-target-new@example.test" }]);
-    await expect(
-      queryAll<{ actor_id: string }>(
-        env.DB,
-        "SELECT actor_id FROM audit_log WHERE entity_id = ? AND action = 'email_changed'",
-        [created.registration.id],
-      ),
-    ).resolves.toEqual([{ actor_id: contactUserId }]);
+    ).resolves.toEqual([{ email: "member-change@example.test", pending_email: null }]);
   });
 
   it("rolls back confirmation when the confirmed-email intent cannot be committed", async () => {
@@ -1645,8 +1567,8 @@ describe("registration workflows", () => {
     ).resolves.toEqual([{ total: 1 }]);
   });
 
-  it("rolls back the complete managed email-change aggregate when confirmation queuing fails", async () => {
-    await seedEventAndAdmin(env.DB);
+  it("rolls back the complete organizer email-change aggregate when confirmation queuing fails", async () => {
+    const { admin } = await seedEventAndAdmin(env.DB);
     const { userId } = await insertIndividualMember(env.DB, "H6", "email-before@example.test");
     const event = await getEventBySlug(env.DB, "pqc-2026");
     const created = await createRegistrationService(env.DB, {
@@ -1656,12 +1578,12 @@ describe("registration workflows", () => {
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
     });
-    const confirmed = await confirmRegistrationByToken(env.DB, {
+    await confirmRegistrationByToken(env.DB, {
       token: created.confirmationToken as string,
       waitlistClaimWindowHours: 24,
       signingSecret: "test-signing-secret",
     });
-    const memberSession = await createMemberSession(env.DB, userId, "member-email-atomic-session");
+    const organizerToken = await createAdminSession(env.DB, admin.id, "organizer-email-atomic-session");
     await env.DB.prepare(
       `CREATE TRIGGER reject_registration_email_change_email
        BEFORE INSERT ON email_outbox
@@ -1672,16 +1594,16 @@ describe("registration workflows", () => {
     ).run();
 
     try {
-      const response = await patchManage(
-        confirmed.manageToken,
-        {
+      const response = await callApi(env, `/api/v1/events/pqc-2026/registrations/${created.registration.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", authorization: `Bearer ${organizerToken}` },
+        body: JSON.stringify({
           action: "update",
           dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "on_demand" }],
           firstName: "After",
           email: "email-after@example.test",
-        },
-        { cookie: `pkic_session=${encodeURIComponent(memberSession)}` },
-      );
+        }),
+      });
       expect(response.status).toBe(500);
       const [registration] = await queryAll<{
         attendance_type: string;
@@ -1699,7 +1621,7 @@ describe("registration workflows", () => {
       );
       const audits = await queryAll(
         env.DB,
-        "SELECT id FROM audit_log WHERE entity_id = ? AND action IN ('self_service_update', 'email_changed')",
+        "SELECT id FROM audit_log WHERE entity_id = ? AND action IN ('event_registration_updated', 'event_registration_email_changed')",
         [created.registration.id],
       );
       expect(registration).toEqual({

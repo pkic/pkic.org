@@ -369,8 +369,9 @@ async function main(): Promise<void> {
           editorMounted = false;
           void editorNavigation.close(marker);
         }}
-        save={async (change) => {
-          const result = await patchJson(
+        save={async (change, changeIdentity) => {
+          await changeIdentity?.();
+          await patchJson(
             `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
             change,
             registrationManageUpdateResponseSchema,
@@ -378,10 +379,8 @@ async function main(): Promise<void> {
           await editorNavigation.close(marker);
           if (manageFormEl)
             showPostAction(root, manageFormEl, {
-              title: result.emailChanged ? "Email address updated" : "Changes saved",
-              message: result.emailChanged
-                ? "We’ve sent a confirmation email to your new address. Please click the link in that email to reactivate your registration."
-                : "Your registration details have been updated. A confirmation email is on its way.",
+              title: "Changes saved",
+              message: "Your registration details have been updated. A confirmation email is on its way.",
             });
         }}
       />,

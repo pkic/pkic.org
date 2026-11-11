@@ -385,7 +385,6 @@ export const registrationManageSchema = z
     claimDayWaitlistOffers: z.array(dayDateSchema).max(31).optional(),
     customAnswers: submittedFormAnswersSchema.optional(),
     sourceRef: trimmedString(2, 200).optional(),
-    email: normalizedEmailSchema.optional(),
     firstName: firstNameSchema.optional(),
     lastName: lastNameSchema.optional(),
   })
@@ -440,7 +439,6 @@ export const registrationManageReadResponseSchema = successResponseSchema.extend
 });
 
 export const registrationManageUpdateResponseSchema = successResponseSchema.extend({
-  emailChanged: z.boolean(),
   sponsorSharing: registrationSponsorSharingSchema,
 });
 

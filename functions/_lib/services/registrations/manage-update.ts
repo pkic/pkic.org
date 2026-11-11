@@ -7,17 +7,11 @@ import {
   toEventFormResolutionEvent,
   validateCustomAnswersForSubmission,
 } from "../forms";
-import { getNormalizedEmailForUser } from "../users";
 import type { z } from "zod";
 import type { RegistrationRecord } from "./types";
 import type { ParticipantAuthority } from "../participant-authority";
 import { withdrawRegistrationSponsorSharing } from "./sponsor-sharing";
-import {
-  updateRegistrationByIdWithEmailChange,
-  updateRegistrationByIdWithNotification,
-  updateRegistrationByManageTokenWithEmailChange,
-  updateRegistrationByManageTokenWithNotification,
-} from "./update";
+import { updateRegistrationByIdWithNotification, updateRegistrationByManageTokenWithNotification } from "./update";
 
 type RegistrationManageBody = z.infer<typeof registrationManageSchema>;
 
@@ -38,12 +32,11 @@ export interface ManageRegistrationUpdateResult {
   registration: RegistrationRecord;
   outboxId: string | null;
   outboxIds: string[];
-  emailChanged: boolean;
 }
 
 /**
  * Executes the registration self-service command, including form validation,
- * profile/email changes, audit context, and the durable notification intent.
+ * profile changes, audit context, and the durable notification intent.
  */
 export async function updateManagedRegistration(
   db: DatabaseLike,
@@ -58,7 +51,7 @@ export async function updateManagedRegistration(
         "Withdraw sharing using your own registration link or session.",
       );
     const registration = await withdrawRegistrationSponsorSharing(db, input.manageToken, input.signingSecret, current);
-    return { registration, outboxId: null, outboxIds: [], emailChanged: false };
+    return { registration, outboxId: null, outboxIds: [] };
   }
   const event = await getEventById(db, current.event_id);
   const validatedForm =
@@ -92,9 +85,6 @@ export async function updateManagedRegistration(
         }
       : undefined;
 
-  const currentEmail =
-    body.action === "update" && body.email ? await getNormalizedEmailForUser(db, current.user_id) : null;
-  const emailChanged = Boolean(currentEmail && body.email && body.email.trim().toLowerCase() !== currentEmail);
   const updatePayload = {
     action: body.action,
     dayAttendance: body.dayAttendance,
@@ -121,49 +111,6 @@ export async function updateManagedRegistration(
         : `Registration updated for ${event.name}`,
   };
 
-  if (emailChanged && body.email) {
-    const emailChange = {
-      newEmail: body.email,
-      confirmationTtlHours: input.confirmationLinkTtlHours,
-      signingSecret: input.signingSecret,
-      authority: input.isAdminManageJwt
-        ? ({ kind: "event_manager", actorUserId: input.actorUserId } as const)
-        : input.authenticatedActor
-          ? ({ kind: "authenticated_actor", actorUserId: input.authenticatedActor.id } as const)
-          : ({ kind: "registration_capability" } as const),
-      allowCancelled: true,
-      auditActor: {
-        type: input.isAdminManageJwt ? ("admin" as const) : ("user" as const),
-        id: input.isAdminManageJwt ? input.actorUserId : (input.authenticatedActor?.id ?? input.actorUserId),
-        action: "email_changed",
-        eventId: event.id,
-      },
-      confirmationEmail: {
-        event,
-        appBaseUrl: input.appBaseUrl,
-        confirmationTtlHours: input.confirmationLinkTtlHours,
-      },
-    };
-    const result = input.isAdminManageJwt
-      ? await updateRegistrationByIdWithEmailChange(
-          db,
-          { ...updatePayload, eventId: current.event_id, registrationId: current.id, emailChange },
-          "admin",
-        )
-      : await updateRegistrationByManageTokenWithEmailChange(db, {
-          ...updatePayload,
-          manageToken: input.manageToken,
-          signingSecret: input.signingSecret,
-          emailChange,
-        });
-    return {
-      registration: result.registration,
-      outboxId: result.outboxId,
-      outboxIds: result.outboxIds,
-      emailChanged,
-    };
-  }
-
   const result = input.isAdminManageJwt
     ? await updateRegistrationByIdWithNotification(
         db,
@@ -180,6 +127,5 @@ export async function updateManagedRegistration(
     registration: result.registration,
     outboxId: result.outboxId,
     outboxIds: result.outboxIds,
-    emailChanged,
   };
 }

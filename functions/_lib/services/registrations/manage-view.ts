@@ -1,4 +1,5 @@
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
+import { REGISTRATION_CURRENT_RECIPIENT_EMAIL_SQL } from "./recipient-email";
 import { batchFirst, batchRows } from "../../db/pagination";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
@@ -59,7 +60,7 @@ export async function buildRegistrationManageView(
     prepareEventById(db, registration.event_id),
     db
       .prepare(
-        `SELECT u.id, u.email, u.first_name, u.last_name, ${verifiedAddressesJsonSql("u.id")} AS verified_addresses,
+        `SELECT u.id, ${REGISTRATION_CURRENT_RECIPIENT_EMAIL_SQL} AS email, u.first_name, u.last_name, ${verifiedAddressesJsonSql("u.id")} AS verified_addresses,
              ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title, u.headshot_r2_key
              FROM registrations r JOIN users u ON u.id = r.user_id
               WHERE r.id = ?`,
