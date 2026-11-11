@@ -83,7 +83,11 @@ export function useScreenIssueNotifications({
     .map(([screenId, list]) => `${screenId}:${screenIssueSeverity(list) ?? ""}:${list[0]?.label ?? ""}`)
     .join("|");
   useEffect(() => {
-    if (!ready) return;
+    // Without a current snapshot nothing counts; the next one is looked at afresh, as when the page opened.
+    if (!ready) {
+      announced.current = null;
+      return;
+    }
     const issues = current.current;
     const critical = [...issues].filter(([, list]) => screenIssueSeverity(list) === "critical");
     // What is already wrong when the page opens is not news; its recovery is.

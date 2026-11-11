@@ -281,6 +281,64 @@ describe("the staff clock", () => {
     expect(latest!.issues.size).toBe(0);
   });
 
+  it("notifies only from a snapshot of the current connection after the panel reopens", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const shown: string[] = [];
+    vi.stubGlobal(
+      "Notification",
+      Object.assign(
+        class {
+          constructor(title: string) {
+            shown.push(title);
+          }
+        },
+        { permission: "granted", requestPermission: async () => "granted" },
+      ),
+    );
+    localStorage.setItem("pkic.screens.notify", "1");
+    const sockets = fakeLiveSockets();
+    let latest: ReturnType<typeof useScreenMonitorController> | undefined;
+    function Probe({ enabled }: { enabled: boolean }) {
+      latest = useScreenMonitorController({ slug: SLUG, enabled, createSocket: sockets.factory });
+      return null;
+    }
+    const snapshot = (serverNow: number) =>
+      act(() => {
+        sockets.latest().dispatchEvent(
+          new MessageEvent("message", {
+            data: JSON.stringify(
+              message({
+                type: "screens.snapshot",
+                serverNow,
+                control: false,
+                screens: [status("K7M2QA", { reportedAt: at(5) })],
+                quality: [],
+              }),
+            ),
+          }),
+        );
+      });
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<Probe enabled />, host!));
+    await act(() => sockets.latest().open());
+    await snapshot(NOW);
+    expect(latest!.notifications.enabled).toBe(true);
+    await act(() => render(<Probe enabled={false} />, host!));
+    for (let step = 0; step < 36; step += 1)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+    // Reopened: the kept heartbeat is three minutes old, but no snapshot of this connection has arrived.
+    await act(() => render(<Probe enabled />, host!));
+    expect(latest!.issues.size).toBe(0);
+    // The first snapshot of this connection is looked at afresh, as when the page opened.
+    await act(() => sockets.latest().open());
+    await snapshot(NOW);
+    expect(latest!.issuesOf("K7M2QA").map((issue) => issue.severity)).toEqual(["critical"]);
+    expect(shown).toEqual([]);
+  });
+
   it("chooses the offset with the least delay among recent messages", () => {
     expect(staffClockOffset([])).toBe(0);
     expect(staffClockOffset([-90_400, -90_050, -90_900])).toBe(-90_050);

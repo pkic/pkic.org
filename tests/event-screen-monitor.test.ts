@@ -482,4 +482,40 @@ describe("event screen monitor", () => {
     expect(await runInDurableObject(stub, (_, state) => state.storage.get("status:OLD235"))).toBeUndefined();
     expect(expired.received.slice(before)).toEqual([]);
   });
+
+  it("withholds a pruning snapshot when the lease runs out while the snapshot is read", async () => {
+    const watcher = await connectStaff("manager");
+    await next(watcher.received, "screens.snapshot");
+    const stub = testEnv.EVENT_SCREEN_MONITORS!.getByName(screenMonitorName(EVENT.id));
+    const gone = new Date(Date.now() - (SCREEN_POLICY.monitorKeepDays * 24 + 1) * 3_600_000).toISOString();
+    await runInDurableObject(stub, async (instance, state) => {
+      await state.storage.put("status:OLD236", {
+        screenId: "OLD236",
+        online: false,
+        connectedAt: gone,
+        disconnectedAt: gone,
+        reportedAt: gone,
+        stateSince: gone,
+        health: null,
+      });
+      // Only a snapshot reads the quality history: the clock passes the lease while it does.
+      const store = (instance as unknown as { store: { quality: () => Promise<unknown> } }).store;
+      const quality = store.quality.bind(store);
+      const real = Date.now;
+      vi.spyOn(store, "quality").mockImplementation(async () => {
+        const histories = await quality();
+        const later = real() + (SCREEN_POLICY.monitorAccessLeaseSeconds + 1) * 1000;
+        vi.spyOn(Date, "now").mockReturnValue(later);
+        return histories;
+      });
+    });
+    const before = watcher.received.length;
+    // A screen connecting prunes the forgotten one; the upgrade answers once the broadcast is done.
+    const paired = await pairedScreen("MONLSE");
+    await connectScreen(paired.cookie, paired.screenId);
+    await runInDurableObject(stub, () => vi.restoreAllMocks());
+    expect(await runInDurableObject(stub, (_, state) => state.storage.get("status:OLD236"))).toBeUndefined();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(watcher.received.slice(before).some((message) => message.type === "screens.snapshot")).toBe(false);
+  });
 });

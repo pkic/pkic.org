@@ -317,13 +317,18 @@ export class EventScreenMonitor extends DurableObject<Env> {
     }
   }
 
-  /** A fresh snapshot for every staff socket still within its lease, as `toStaff` sends changes. */
+  /**
+   * A fresh snapshot for every staff socket still within its lease, as
+   * `toStaff` sends changes. Reading the snapshot takes time, so the lease
+   * is checked again, on the clock of that moment, just before it is sent.
+   */
   private async broadcastSnapshot(): Promise<void> {
-    const now = Date.now();
     for (const socket of this.open(SCREEN_MONITOR_STAFF_TAG)) {
       const admission = this.admission(socket);
-      if (admission?.role === "staff" && screenMonitorAccessCurrent(admission, now))
-        send(socket, await this.snapshot(admission.control));
+      if (admission?.role !== "staff" || !screenMonitorAccessCurrent(admission, Date.now())) continue;
+      const message = await this.snapshot(admission.control);
+      const current = this.admission(socket);
+      if (current?.role === "staff" && screenMonitorAccessCurrent(current, Date.now())) send(socket, message);
     }
   }
 

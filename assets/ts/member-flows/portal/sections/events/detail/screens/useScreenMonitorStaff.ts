@@ -136,6 +136,8 @@ export function useScreenMonitorStaff({
       clearInterval(keepAlive);
       socket.current?.close(1000, "Left the screens");
       socket.current = null;
+      // Only a snapshot on the next connection makes the view live again.
+      setStatus("connecting");
     };
   }, [slug, enabled]);
 
