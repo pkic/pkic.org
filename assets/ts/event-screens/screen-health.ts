@@ -1,0 +1,40 @@
+import type { ScreenHealth } from "../../shared/schemas/event-screen-monitor";
+import type { ScreenOwnView } from "../../shared/schemas/event-screens";
+import type { LivestreamPlayerReport } from "./livestream-player-report";
+import type { ScreenDisplay } from "./screen-display";
+
+/** The page's own build: its bundle's file name, which changes with every release. */
+export function screenPageVersion(moduleUrl: string = import.meta.url): string {
+  const path = new URL(moduleUrl, "https://screen.invalid/").pathname;
+  return (path.split("/").pop() || path).slice(0, 120) || "unknown";
+}
+
+/** How the screen runs: following the studio, holding what it last had, or on its own agenda. */
+function runMode(display: ScreenDisplay): ScreenHealth["mode"] {
+  if (display.kind === "pairing") return "live";
+  const marker = display.marker;
+  if (marker?.kind === "auto") return "auto";
+  return marker ? "offline" : "live";
+}
+
+/** What the screen reports about itself, but the device's metrics, which the monitor connection adds. */
+export function screenHealth(input: {
+  display: ScreenDisplay;
+  assignment: ScreenOwnView["screen"]["assignment"] | null;
+  player: LivestreamPlayerReport | null;
+  clockOffsetMs: number;
+  pageVersion: string;
+}): Omit<ScreenHealth, "metrics"> {
+  const { display } = input;
+  return {
+    pageVersion: input.pageVersion,
+    display: display.kind,
+    output: display.kind === "pairing" || display.kind === "waiting" ? null : (input.assignment?.output ?? null),
+    mode: runMode(display),
+    player:
+      display.kind === "livestream" && input.player
+        ? { status: input.player.status, muted: input.player.muted, changedAt: input.player.changedAt }
+        : null,
+    clockOffsetMs: Math.max(-86_400_000, Math.min(86_400_000, Math.round(input.clockOffsetMs))),
+  };
+}

@@ -1,0 +1,43 @@
+/*
+ * Identify, over whatever the screen shows: its name and ID large in the
+ * middle of the 1920 × 1080 frame, read from across a hall. The picture
+ * underneath keeps running.
+ */
+@layer components {
+  .pk-screen-identify {
+    position: fixed;
+    z-index: 10;
+    inset: 0;
+    pointer-events: none;
+  }
+  .pk-screen-identify__card {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    display: grid;
+    gap: 24px;
+    box-sizing: border-box;
+    max-inline-size: 1600px;
+    padding: 64px 96px;
+    border: 8px solid var(--pk-accent);
+    border-radius: var(--pk-radius-lg);
+    background: var(--pk-chrome-deep);
+    color: var(--pk-on-solid);
+    font-family: var(--pk-font);
+    text-align: center;
+    transform: translate(-50%, -50%);
+  }
+  .pk-screen-identify__name {
+    margin: 0;
+    font-size: calc(var(--pk-text-3xl) * 2.5);
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .pk-screen-identify__id {
+    margin: 0;
+    font-family: var(--pk-font-mono);
+    font-size: calc(var(--pk-text-3xl) * 3.5);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+}

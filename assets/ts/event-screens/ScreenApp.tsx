@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import type { ScreenMonitorCommand } from "../../shared/schemas/event-screen-monitor";
 import type { ScreenId } from "../../shared/schemas/event-screens";
 import { formatLiveTimer } from "../../shared/live-timer-policy";
 import { LiveOverlayPresentation } from "../live-session/LiveOverlayPresentation";
@@ -10,7 +11,11 @@ import type { ScreenClock } from "./screen-clock";
 import { screenDisplay, type ScreenDisplay, type ScreenLink } from "./screen-display";
 import { screenHandoffDue, SCREEN_READY_ATTRIBUTE } from "./screen-handoff";
 import { ScreenLiveFeed, type ScreenLiveReport } from "./ScreenLiveFeed";
+import { ScreenIdentify } from "./ScreenIdentify";
 import { ScreenLivestreamPlayer } from "./ScreenLivestreamPlayer";
+import { livestreamPlayerReport, subscribeLivestreamPlayerReport } from "./livestream-player-report";
+import { screenHealth, screenPageVersion } from "./screen-health";
+import { useScreenMonitor } from "./useScreenMonitor";
 import { ScreenMarker } from "./ScreenMarker";
 import { ScreenPairing, ScreenWaiting } from "./ScreenStatus";
 import { useScreenRuntime } from "./useScreenRuntime";
@@ -89,12 +94,18 @@ export function ScreenApp({
   clock,
   api,
   onHandoff,
+  onReload = () => window.location.reload(),
+  monitor,
 }: {
   screenId: ScreenId;
   storage: Storage;
   clock: ScreenClock;
   api?: ScreenApi;
   onHandoff: () => void;
+  /** A screen manager's Reload. */
+  onReload?: () => void;
+  /** The monitor connection's socket and metrics, replaced in tests. */
+  monitor?: Pick<Parameters<typeof useScreenMonitor>[0], "createSocket" | "readMetrics">;
 }) {
   const runtime = useScreenRuntime({ screenId, storage, clock, api });
   const { view, agenda, overlayToken, refresh } = runtime;
@@ -174,6 +185,29 @@ export function ScreenApp({
   useEffect(() => {
     document.documentElement.setAttribute(SCREEN_READY_ATTRIBUTE, "");
   }, []);
+
+  const [player, setPlayer] = useState(livestreamPlayerReport);
+  useEffect(() => subscribeLivestreamPlayerReport(setPlayer), []);
+  const [identifyUntil, setIdentifyUntil] = useState<number | null>(null);
+  const onCommand = useCallback(
+    (command: ScreenMonitorCommand) => {
+      if (command.type === "screen.reload") onReload();
+      else setIdentifyUntil(Date.parse(command.until));
+    },
+    [onReload],
+  );
+  const pageVersion = useMemo(() => screenPageVersion(), []);
+  useScreenMonitor({
+    screenId,
+    // Only a screen signed in has a sign-in to report with; one holding its device's copy may not be.
+    enabled: !runtime.pairingRequired && view !== null,
+    connection: assignment?.eventSlug ?? "",
+    health: screenHealth({ display, assignment, player, clockOffsetMs: clock.offset(), pageVersion }),
+    onCommand,
+    ...monitor,
+  });
+  // The monitor sets the end on the server's clock, which `now` follows.
+  const identifying = identifyUntil !== null && now < identifyUntil;
   const hasGoodState = view !== null || live.state !== null;
   useEffect(() => {
     if (screenHandoffDue({ hasGoodState, unreachableSince: runtime.unreachableSince, now })) onHandoff();
@@ -193,6 +227,7 @@ export function ScreenApp({
         />
       ) : null}
       <ScreenView screenId={screenId} display={display} now={now} />
+      {identifying ? <ScreenIdentify screenId={screenId} name={view?.screen.name ?? null} /> : null}
     </>
   );
 }

@@ -31,6 +31,8 @@ export function createScreenClock(device: () => number = () => Date.now()) {
   let offset = 0;
   return {
     now: () => device() + offset,
+    /** The server's clock minus the device's, as the screen last chose it. */
+    offset: () => offset,
     record(sample: ScreenClockSample | null) {
       if (!sample) return;
       samples = [...samples, sample].slice(-SCREEN_CLOCK_SAMPLES);
