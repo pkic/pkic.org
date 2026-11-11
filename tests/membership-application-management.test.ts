@@ -641,26 +641,6 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
     expect(JSON.parse(notice.payload_json).reviewApplications).toEqual({});
   });
 
-  it("refuses other corrections alongside a category change once review evidence exists", async () => {
-    const { id } = await createApplication({ stage: "processing" });
-    await pinCategoryWorkflow(env.DB, id, "F");
-    await env.DB.prepare(
-      "UPDATE membership_application_steps SET state = 'complete', completed_at = ? WHERE application_id = ? AND position = 0",
-    )
-      .bind(new Date().toISOString(), id)
-      .run();
-
-    const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ membershipCategory: "A", applicantName: "Renamed Applicant" }),
-    });
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: { code: "MEMBERSHIP_REVIEW_RESTART_REQUIRED" } });
-    expect(
-      await queryAll(env.DB, "SELECT membership_category, applicant_name FROM member_applications WHERE id = ?", id),
-    ).toEqual([{ membership_category: "F", applicant_name: "Applicant Name" }]);
-  });
-
   it("restarts completed review evidence when the new category pins a different workflow", async () => {
     const { id } = await createApplication({ stage: "processing" });
     await pinReviewedStaffWorkflow(env.DB, id);

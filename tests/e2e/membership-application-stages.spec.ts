@@ -232,3 +232,48 @@ test("staff email the applicant and record an internal note through the Communic
   await card.evaluate((element) => element.scrollIntoView({ block: "start" }));
   await page.screenshot({ path: test.info().outputPath("pkic-application-populated.png") });
 });
+
+/** @covers join.1.5 */
+test("staff correct the category and applicant details together after review starts", async ({ page }) => {
+  const suffix = uniqueSuffix();
+  const application = await submitMembershipApplication(page, {
+    email: `correction-${suffix}@correction-${suffix}.test`,
+    name: "Synthetic Correction Applicant",
+    category: "F",
+    organizationName: `Synthetic Correction Organization ${suffix}`,
+  });
+  await signInToPortal(page, e2eAdminEmail("membership-category-correction"));
+  await page.goto(`/portal/#/membership/applications/${application.applicationId}/review`);
+  await page.getByLabel("Review decision and reason").fill("Verified the synthetic organization and applicant.");
+  await page.getByRole("button", { name: "Complete review", exact: true }).click();
+  await expect(stageBadge(page, application.name)).not.toHaveText("Staff review");
+  await page.goto(`/portal/#/membership/applications/${application.applicationId}`);
+  await page.getByRole("button", { name: "Application actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit application…", exact: true }).click();
+  await page.getByLabel("Category").selectOption("A");
+  const correctedName = "Corrected Synthetic Applicant";
+  await page.getByLabel("Applicant name").fill(correctedName);
+  for (const [label, width, height] of [
+    ["desktop", 1280, 900],
+    ["phone", 375, 812],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.getByLabel("Category").scrollIntoViewIfNeeded();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: test.info().outputPath(`application-correction-${label}.png`) });
+  }
+  const saved = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `/api/v1/members/applications/${application.applicationId}` &&
+      response.request().method() === "PATCH",
+  );
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  expect((await saved).status()).toBe(200);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: correctedName, exact: true })).toBeVisible();
+  await expect(stageBadge(page, correctedName)).toHaveText("Staff review");
+  await page.getByRole("button", { name: "Application actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit application…", exact: true }).click();
+  await expect(page.getByLabel("Category")).toHaveValue("A");
+  await expect(page.getByLabel("Applicant name")).toHaveValue(correctedName);
+});

@@ -132,8 +132,8 @@ export function ApplicationOverviewCard({
             editForm && (
               <>
                 <p class="pk-small">
-                  To correct other details after review has started, first restart the review through “Restart or change
-                  workflow.”
+                  Changing the category and other details together restarts the review. To correct details without
+                  changing the category after review has started, first use “Restart or change workflow.”
                 </p>
                 <ApplicationEditForm
                   form={editForm}

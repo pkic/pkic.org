@@ -3,7 +3,8 @@ import type { MembershipWorkflowVersion } from "../../../../../assets/shared/sch
 import { prepareAuthorizationGuard } from "../../../db/authorization-guard";
 import type { DatabaseLike, StatementLike } from "../../../types";
 import { prepareCategoryWorkflowGuard } from "./pinning";
-import { prepareRemoveMembershipReviewSnapshots } from "./review-digest-content";
+import { MEMBERSHIP_WORKFLOW_HAS_FEE_SQL } from "./fee-evidence";
+import { prepareRemoveMembershipReviewSnapshots, prepareReopenUndeliveredReviewSteps } from "./review-digest-content";
 
 /**
  * Correct the category of an application whose new category pins the same
@@ -25,21 +26,12 @@ export function prepareMembershipWorkflowCategoryCorrection(
       sql: `SELECT 1 FROM membership_application_workflows workflow
         WHERE workflow.application_id = ? AND workflow.generation = ? AND workflow.revision = ?
           AND workflow.version_id = ? AND workflow.superseded_at IS NULL
-          AND NOT EXISTS (SELECT 1 FROM membership_fee_intents fee
-            WHERE fee.application_id = workflow.application_id AND fee.generation = workflow.generation)`,
+          AND NOT ${MEMBERSHIP_WORKFLOW_HAS_FEE_SQL}`,
       bindings: [applicationId, current.generation, current.revision, version.id],
     }),
     prepareCategoryWorkflowGuard(db, category, version),
     ...prepareRemoveMembershipReviewSnapshots(db, applicationId, now),
-    // Runs after the snapshot removal, which may cancel a digest left empty.
-    db
-      .prepare(
-        `UPDATE membership_application_steps SET state = 'waiting', notice_outbox_id = NULL, opened_at = NULL, deadline_at = NULL
-        WHERE application_id = ? AND generation = ? AND completed_at IS NULL
-          AND notice_outbox_id IN (SELECT id FROM email_outbox
-            WHERE sent_at IS NULL AND status IN ('queued', 'retrying', 'failed', 'cancelled'))`,
-      )
-      .bind(applicationId, current.generation),
+    prepareReopenUndeliveredReviewSteps(db, applicationId),
     db
       .prepare(
         `UPDATE membership_application_workflows

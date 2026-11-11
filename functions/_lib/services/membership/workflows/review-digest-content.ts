@@ -1,6 +1,8 @@
 import { prepareAuthorizationGuard } from "../../../db/authorization-guard";
 import type { DatabaseLike, StatementLike } from "../../../types";
 
+const UNCLAIMED_REVIEW_NOTICE_STATUSES_SQL = "'queued', 'retrying', 'failed'";
+
 /** Both enqueueing and removal rebuild the same rendered summaries from snapshots. */
 export const MEMBERSHIP_REVIEW_DIGEST_CONTENT_SQL = `json_set(updated.payload_json,
   '$.applicationSummary', COALESCE((SELECT group_concat(json_extract(entry.value, '$.summary'), '') FROM json_each(updated.payload_json, '$.reviewApplications') entry), ''),
@@ -27,7 +29,7 @@ export function prepareRemoveMembershipReviewSnapshots(
       .prepare(
         `WITH updated AS MATERIALIZED (
         SELECT id, json_remove(payload_json, ?) AS payload_json FROM email_outbox
-        WHERE id IN (${notices}) AND sent_at IS NULL AND status IN ('queued', 'retrying', 'failed')
+        WHERE id IN (${notices}) AND sent_at IS NULL AND status IN (${UNCLAIMED_REVIEW_NOTICE_STATUSES_SQL})
           AND json_type(payload_json, ?) IS NOT NULL
       )
       UPDATE email_outbox SET
@@ -39,4 +41,20 @@ export function prepareRemoveMembershipReviewSnapshots(
       )
       .bind(path, applicationId, path, now),
   ];
+}
+
+/** Reopen only unopened reviews after snapshot removal, which can cancel an empty digest. */
+export function prepareReopenUndeliveredReviewSteps(db: DatabaseLike, applicationId: string): StatementLike {
+  return db
+    .prepare(
+      `UPDATE membership_application_steps SET state = 'waiting', notice_outbox_id = NULL, opened_at = NULL, deadline_at = NULL
+      WHERE application_id = ? AND state = 'active' AND completed_at IS NULL AND opened_at IS NULL
+        AND generation = (SELECT generation FROM membership_application_workflows
+          WHERE application_id = ? AND superseded_at IS NULL)
+        AND EXISTS (SELECT 1 FROM email_outbox notice
+          WHERE notice.id = membership_application_steps.notice_outbox_id
+            AND notice.sent_at IS NULL AND notice.status IN (${UNCLAIMED_REVIEW_NOTICE_STATUSES_SQL}, 'cancelled')
+            AND json_type(notice.payload_json, '$.reviewApplications') = 'object')`,
+    )
+    .bind(applicationId, applicationId);
 }

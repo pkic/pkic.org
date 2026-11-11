@@ -6,6 +6,7 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { seedMemberApplication } from "./helpers/member-applications";
+import { insertOrganization } from "./helpers/membership";
 import { pinCategoryWorkflow } from "./helpers/membership-workflows";
 import { seedMembershipReviewDigestTemplates } from "./helpers/membership-review-email-templates";
 import { resetFailedOutbox } from "../functions/_lib/email/outbox";
@@ -118,5 +119,75 @@ it.each([
     expect(Object.keys(replacement.payload.reviewApplications)).toEqual([id]);
     const category = await requireMembershipCategory(env.DB, "A");
     expect(replacement.payload.reviewApplications[id].details).toContain(category.label);
+  },
+);
+
+it.each([
+  { position: 1, category: "A", rename: true, completed: false },
+  { position: 1, category: "A", rename: true, completed: true },
+  { position: 2, category: "H6", rename: false, completed: true },
+])(
+  "restarts review for category $category with other changes (completed evidence: $completed)",
+  async ({ position, category, rename, completed }) => {
+    const id = await reviewedApplication(position);
+    if (!completed)
+      await env.DB.prepare(
+        "UPDATE membership_application_steps SET state = 'waiting', completed_at = NULL WHERE application_id = ? AND position < ?",
+      )
+        .bind(id, position)
+        .run();
+    const before = await getMembershipExecution(env.DB, id);
+    expect((await requireMembershipCategory(env.DB, category)).workflowVersionId).toBe(before.version.id);
+    if (category === "H6") {
+      // Include the organization identity and claim that a category-only patch clears implicitly.
+      const organizationId = await insertOrganization(env.DB, "Synthetic Review Organization");
+      await env.DB.batch([
+        env.DB.prepare("UPDATE member_applications SET organization_id = ?, organization_domain = ? WHERE id = ?").bind(
+          organizationId,
+          "example.test",
+          id,
+        ),
+        env.DB.prepare(
+          "INSERT INTO organization_domain_claims (id, domain, application_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        ).bind(crypto.randomUUID(), "example.test", id, now, now),
+      ]);
+    }
+    const response = await callApi(env, `/api/v1/members/applications/${id}`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ membershipCategory: category, ...(rename ? { applicantName: "Renamed Applicant" } : {}) }),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    const restarted = await getMembershipExecution(env.DB, id);
+    expect(restarted.generation).toBe(before.generation + 1);
+    expect(restarted.application.membership_category).toBe(category);
+    expect(
+      restarted.steps.every(
+        (step) => step.state === "waiting" && step.completed_at === null && step.notice_outbox_id === null,
+      ),
+    ).toBe(true);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT position FROM membership_application_steps WHERE application_id = ? AND generation = 1 AND completed_at IS NOT NULL ORDER BY position",
+        id,
+      ),
+    ).toHaveLength(completed ? position : 0);
+    if (rename) expect(restarted.application.applicant_name).toBe("Renamed Applicant");
+    else {
+      expect(restarted.application).toMatchObject({
+        organization_id: null,
+        organization_name: null,
+        organization_domain: null,
+      });
+      expect(
+        await queryAll(env.DB, "SELECT domain FROM organization_domain_claims WHERE application_id = ?", id),
+      ).toEqual([]);
+    }
+    const noticeId = before.steps[position].notice_outbox_id;
+    if (noticeId) {
+      expect((await notice(noticeId)).payload.reviewApplications).not.toHaveProperty(id);
+      expect((await notice(noticeId)).status).toBe("cancelled");
+    }
   },
 );

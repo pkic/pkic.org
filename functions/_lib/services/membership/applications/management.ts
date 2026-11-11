@@ -426,7 +426,11 @@ export async function updateMembershipApplication(
     return getMembershipApplicationDetail(db, applicationId);
   }
 
-  const otherDetailsChanged = changedFields.some((field) => field !== "membershipCategory");
+  // A kind change also clears organization identity and its domain claim, even
+  // when the patch names only the category. Those reviews cannot carry over.
+  const otherDetailsChanged =
+    currentCategory.isIndividual !== nextCategory.isIndividual ||
+    changedFields.some((field) => field !== "membershipCategory");
   dependentStatements.push(
     ...(await prepareApplicationEditEvidenceGuard(db, application, nextCategory, otherDetailsChanged, now)),
   );
