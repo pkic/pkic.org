@@ -2,7 +2,7 @@ import type { EventDay } from "../../../shared/schemas/event-configuration";
 import type { RegistrationDayState } from "../../../shared/schemas/event-registrations";
 import { formatNumber } from "../../../shared/format-number";
 import { formatDayAndMonth } from "../../../shared/format-date";
-import { attendanceTypeLabel } from "../../shared/attendance";
+import { attendanceTypeLabel, eventAttendanceOptions } from "../../shared/attendance";
 import type { Column } from "../Table";
 import { IconBadge } from "../../ui/Badge";
 
@@ -14,12 +14,7 @@ export function registrationAttendanceColumns<Row extends { days: RegistrationDa
   days: readonly Pick<EventDay, "date" | "label" | "attendanceOptions">[],
   filters: Readonly<Record<string, string>> = {},
 ): Column<Row>[] {
-  const options = new Map<string, EventDay["attendanceOptions"][number]>();
-  for (const day of days)
-    for (const option of day.attendanceOptions) {
-      const previous = options.get(option.value);
-      options.set(option.value, previous ? { ...option, ...previous, icon: previous.icon ?? option.icon } : option);
-    }
+  const options = new Map(eventAttendanceOptions(days).map((option) => [option.value, option]));
   const colors = ["blue", "teal", "purple"] as const;
   const typeColors = new Map([...options.keys()].map((type, i) => [type, colors[i % colors.length]]));
   const selectedDates = filters.day_dates ? new Set(filters.day_dates.split(",")) : null;

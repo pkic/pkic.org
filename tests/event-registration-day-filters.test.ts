@@ -129,6 +129,10 @@ it("matches any selected status, so an attendance type can leave cancelled regis
       .registrations.map((row) => row.id)
       .sort(),
   ).toEqual([f.matching, f.both, f.unrelated, f.cancelled].sort());
+  // The in-person card: the same people, its cancellations counted apart.
+  const stats = eventAttendanceRegistrationsListResponseSchema.parse(await (await f.get("")).json()).stats;
+  expect(stats.attendanceStatusByType.in_person).toMatchObject({ total: 3, pending: 0, cancelled: 1 });
+  expect(stats.attendanceStatusByType.virtual).toMatchObject({ total: 1, cancelled: 0 });
   expect((await f.get("?status=registered,registered")).status).toBe(400);
   expect((await f.get("?status=registered,unknown")).status).toBe(400);
 });

@@ -14,6 +14,7 @@ import {
   type RegistrationTotalsFilters,
 } from "../../assets/ts/components/event-registrations/RegistrationTotals";
 import type { EventAttendanceRegistrationsStats } from "../../assets/shared/schemas/event-registrations";
+import type { EventAttendanceOption } from "../../assets/shared/schemas/event-configuration";
 
 const mounted: HTMLElement[] = [];
 
@@ -35,13 +36,18 @@ afterEach(() => {
 const stats: EventAttendanceRegistrationsStats & { bouncedCount?: number } = {
   byAttendanceType: {},
   attendanceStatusByType: {
-    in_person: { total: 12, accepted: 10, waitlisted: 2, expired: 0 },
-    virtual: { total: 5, accepted: 5, waitlisted: 0, expired: 0 },
+    in_person: { total: 12, accepted: 10, waitlisted: 2, expired: 0, pending: 1, cancelled: 2 },
+    virtual: { total: 5, accepted: 5, waitlisted: 0, expired: 0, pending: 0, cancelled: 0 },
   },
   byStatus: { registered: 15, pending_email_confirmation: 1, cancelled: 3 },
   waitlistedCount: 2,
   bouncedCount: 1,
 };
+
+const options: EventAttendanceOption[] = [
+  { value: "in_person", label: "In-person", icon: "location" },
+  { value: "virtual", label: "Virtual" },
+];
 
 function filters(current: Record<string, string>, byAttendanceType = true) {
   const apply = vi.fn<RegistrationTotalsFilters["apply"]>();
@@ -59,7 +65,7 @@ function toggle(container: HTMLElement, name: string): HTMLButtonElement {
 describe("RegistrationTotals filters", () => {
   it("filters an attendance card by its type and every status but cancelled, clearing other filters", () => {
     const list = filters({ country: "NL", waitlisted: "true" });
-    const container = mount(<RegistrationTotals stats={stats} filters={list} />);
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} filters={list} />);
     const inPerson = toggle(container, "Show in-person only");
     expect(inPerson.getAttribute("aria-pressed")).toBe("false");
     void act(() => inPerson.click());
@@ -75,6 +81,7 @@ describe("RegistrationTotals filters", () => {
     const pressed = mount(
       <RegistrationTotals
         stats={stats}
+        attendanceOptions={options}
         filters={filters({ attendance_type: "in_person", status: "pending_email_confirmation,registered" })}
       />,
     );
@@ -83,20 +90,26 @@ describe("RegistrationTotals filters", () => {
     expect(toggle(pressed, "Show all registrations").getAttribute("aria-pressed")).toBe("false");
 
     // The attendance filter alone keeps cancellations: not the card's population.
-    const typeOnly = mount(<RegistrationTotals stats={stats} filters={filters({ attendance_type: "in_person" })} />);
+    const typeOnly = mount(
+      <RegistrationTotals
+        stats={stats}
+        attendanceOptions={options}
+        filters={filters({ attendance_type: "in_person" })}
+      />,
+    );
     expect(toggle(typeOnly, "Show in-person only").getAttribute("aria-pressed")).toBe("false");
   });
 
   it("clears the card's filters when it is pressed again", () => {
     const list = filters({ attendance_type: "virtual", status: "registered,pending_email_confirmation" });
-    const container = mount(<RegistrationTotals stats={stats} filters={list} />);
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} filters={list} />);
     void act(() => toggle(container, "Show virtual only").click());
     expect(list.apply).toHaveBeenCalledWith({ attendance_type: "", status: "" });
   });
 
   it("lists everyone from the registered card and bounced registrations from the bounced card", () => {
     const list = filters({ status: "cancelled" }, false);
-    const container = mount(<RegistrationTotals stats={stats} filters={list} />);
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} filters={list} />);
     expect(toggle(container, "Show all registrations").getAttribute("aria-pressed")).toBe("false");
     void act(() => toggle(container, "Show all registrations").click());
     expect(list.apply).toHaveBeenLastCalledWith({ status: "" });
@@ -105,14 +118,77 @@ describe("RegistrationTotals filters", () => {
   });
 
   it("leaves attendance cards as figures where the list cannot filter by attendance type", () => {
-    const container = mount(<RegistrationTotals stats={stats} filters={filters({}, false)} />);
+    const container = mount(
+      <RegistrationTotals stats={stats} attendanceOptions={options} filters={filters({}, false)} />,
+    );
     expect(toggle(container, "Show all registrations").getAttribute("aria-pressed")).toBe("true");
     expect(container.querySelectorAll("button[aria-pressed]")).toHaveLength(2);
   });
 
   it("renders figures without toggles when the list offers no filters", () => {
-    const container = mount(<RegistrationTotals stats={stats} />);
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} />);
     expect(container.querySelectorAll("button[aria-pressed]")).toHaveLength(0);
+  });
+});
+
+describe("RegistrationTotals attendance cards", () => {
+  it("draws one card per configured option, in its order, wording and icon", () => {
+    const configured: EventAttendanceOption[] = [
+      { value: "virtual", label: "Watch online" },
+      { value: "livestream_lounge", label: "Livestream lounge", icon: "people" },
+    ];
+    const container = mount(
+      <RegistrationTotals
+        stats={{
+          ...stats,
+          attendanceStatusByType: {
+            ...stats.attendanceStatusByType,
+            livestream_lounge: { total: 3, accepted: 3, waitlisted: 0, expired: 0, pending: 0, cancelled: 0 },
+          },
+        }}
+        attendanceOptions={configured}
+      />,
+    );
+    const labels = [...container.querySelectorAll(".pk-stat-card__label")].map((label) => label.textContent);
+    expect(labels).toEqual(["Registered", "Watch online", "Livestream lounge", "Bounced"]);
+    expect(container.querySelectorAll(".pk-stat-card__icon svg")).toHaveLength(2);
+  });
+});
+
+describe("RegistrationTotals breakdown", () => {
+  it("states pending, waitlisted and cancelled the same way on every card", () => {
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} />);
+    const notes = Object.fromEntries(
+      [...container.querySelectorAll(".pk-stat-card")].map((card) => [
+        card.querySelector(".pk-stat-card__label")?.textContent,
+        card.querySelector(".pk-stat-card__note")?.textContent ?? null,
+      ]),
+    );
+    expect(notes).toEqual({
+      Registered: "1 pending · 2 waitlisted · 3 cancelled",
+      "In-person": "1 pending · 2 waitlisted · 2 cancelled",
+      Virtual: null,
+      Bounced: null,
+    });
+  });
+
+  it("keeps an attendance card whose registrations were all cancelled, at zero", () => {
+    const container = mount(
+      <RegistrationTotals
+        stats={{
+          ...stats,
+          attendanceStatusByType: {
+            virtual: { total: 0, accepted: 0, waitlisted: 0, expired: 0, pending: 0, cancelled: 4 },
+          },
+        }}
+        attendanceOptions={options}
+      />,
+    );
+    const virtual = [...container.querySelectorAll(".pk-stat-card")].find(
+      (card) => card.querySelector(".pk-stat-card__label")?.textContent === "Virtual",
+    );
+    expect(virtual?.querySelector(".pk-stat-card__value")?.textContent).toBe("0");
+    expect(virtual?.querySelector(".pk-stat-card__note")?.textContent).toBe("4 cancelled");
   });
 });
 

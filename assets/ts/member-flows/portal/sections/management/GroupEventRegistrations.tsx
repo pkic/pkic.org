@@ -45,6 +45,7 @@ import { getJson } from "../../../../shared/api-client";
 import { useData } from "../../../../hooks/useData";
 import { BADGE_DISPLAY_ROLE_LABELS, badgeDisplayRoleSchema } from "../../../../../shared/schemas/participant-roles";
 import { usePortalHashLocation } from "../../hash-location";
+import { eventAttendanceOptions } from "../../../../shared/attendance";
 import { fmtDate, toast } from "../../ui";
 import { ContactOrganization } from "../../../../components/ContactOrganization";
 
@@ -100,6 +101,7 @@ export function GroupEventRegistrations({
       {stats && (
         <RegistrationTotals
           stats={stats}
+          attendanceOptions={eventAttendanceOptions(days.data?.days ?? [])}
           filters={{
             current: listFilters(query),
             apply: (changes) => tableRef.current?.setFilters?.(changes),

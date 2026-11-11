@@ -7,7 +7,10 @@ import { FilterSelect } from "../../../../../components/FilterSelect";
 import { Tabs } from "../../../../../components/Tabs";
 import { SponsorConsentCell } from "../../../../../components/event-registrations/SponsorConsentCell";
 import { registrationPersonColumn } from "../../../../../components/event-registrations/registration-person-column";
-import { attendanceTypeLabel } from "../../../../../shared/attendance";
+import { attendanceTypeLabel, eventAttendanceOptions } from "../../../../../shared/attendance";
+import { getJson } from "../../../../../shared/api-client";
+import { useData } from "../../../../../hooks/useData";
+import { eventDaysResponseSchema } from "../../../../../../shared/schemas/event-configuration";
 import { fmt, fmtDate, toast } from "../../../ui";
 import type { Registration, RegistrationAttendanceChange } from "../types";
 import { EventEmailCampaign } from "../../../../../components/events/EventEmailCampaign";
@@ -77,6 +80,11 @@ export function RegistrationsList({
   const [query, setQuery] = useState<Readonly<Record<string, string>> | null>(null);
   const [stats, setStats] = useState<RegistrationStats | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
+  // The attendance cards are the options the event's settings offer.
+  const days = useData(
+    () => getJson(`/api/v1/events/${encodeURIComponent(slug)}/days`, eventDaysResponseSchema),
+    [slug],
+  );
 
   const columns: Array<Column<Registration>> = [
     registrationPersonColumn<Registration>(),
@@ -218,6 +226,7 @@ export function RegistrationsList({
       {!embedded && stats && (
         <RegistrationTotals
           stats={stats}
+          attendanceOptions={eventAttendanceOptions(days.data?.days ?? [])}
           // The attendance-change view is not a filter a card can reproduce.
           filters={
             query && !attendanceChangeFilter

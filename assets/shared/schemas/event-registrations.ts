@@ -104,7 +104,7 @@ export const eventRegistrationSummarySchema = registrationRecordContextSchema.ex
 export type EventRegistrationSummary = z.infer<typeof eventRegistrationSummarySchema>;
 /**
  * People who chose an attendance type for at least one day, cancelled
- * registrations aside. `accepted` and `waitlisted` each count a person with at
+ * registrations aside and counted apart. `accepted` and `waitlisted` each count a person with at
  * least one such day off or on the waitlist, so one person can be in both.
  */
 export const attendanceStatusCountSchema = z.object({
@@ -112,6 +112,10 @@ export const attendanceStatusCountSchema = z.object({
   accepted: z.number(),
   waitlisted: z.number(),
   expired: z.number().default(0),
+  /** Of `total`, the registrations not yet confirmed. */
+  pending: z.number().default(0),
+  /** Cancelled registrations that chose the type; not in `total`. */
+  cancelled: z.number().default(0),
 });
 export type AttendanceStatusCount = z.infer<typeof attendanceStatusCountSchema>;
 export const eventRegistrationsStatsSchema = z.object({

@@ -10,6 +10,8 @@ interface AttendanceStatusRow {
   accepted: number;
   waitlisted: number;
   expired: number;
+  pending: number;
+  cancelled: number;
 }
 
 interface AttendanceChangeSummaryRow {
@@ -67,7 +69,9 @@ export interface AttendanceChangeStatistics {
 
 /**
  * Count each person once per attendance type they chose for at least one day,
- * whatever their status, cancelled registrations aside. A person counts as
+ * whatever their status, cancelled registrations aside; `pending` counts those
+ * not yet confirmed among them, and `cancelled` the cancelled registrations
+ * that chose the type, which `total` leaves out. A person counts as
  * accepted when at least one day of that type is not waiting for a seat, and
  * as waitlisted when at least one is, so someone with a seat on Monday and a
  * place in Tuesday's queue is in both. These are the same tests the list's
@@ -81,19 +85,23 @@ export function prepareAttendanceStatusByTypeStatement(db: DatabaseLike, eventId
   return db
     .prepare(
       `WITH selected_days AS (
-       SELECT selected.registration_id, selected.attendance_type,
+       SELECT selected.registration_id, selected.attendance_type, r.status,
               ${dayEntry("IN ('waiting', 'offered')")} AS waiting,
               ${dayEntry("= 'expired'")} AS expired
        FROM registrations r
        JOIN registration_day_attendance selected ON selected.registration_id = r.id
-       WHERE r.event_id = ? AND r.status <> 'cancelled'
+       WHERE r.event_id = ?
      ),
      typed AS (
-       SELECT attendance_type, MIN(waiting) AS all_waiting, MAX(waiting) AS any_waiting, MAX(expired) AS any_expired
+       SELECT attendance_type, status = 'cancelled' AS cancelled, status = 'pending_email_confirmation' AS pending,
+              MIN(waiting) AS all_waiting, MAX(waiting) AS any_waiting, MAX(expired) AS any_expired
        FROM selected_days GROUP BY registration_id, attendance_type
      )
-     SELECT attendance_type, COUNT(*) AS total,
-            SUM(1 - all_waiting) AS accepted, SUM(any_waiting) AS waitlisted, SUM(any_expired) AS expired
+     SELECT attendance_type, SUM(1 - cancelled) AS total,
+            SUM(CASE WHEN cancelled THEN 0 ELSE 1 - all_waiting END) AS accepted,
+            SUM(CASE WHEN cancelled THEN 0 ELSE any_waiting END) AS waitlisted,
+            SUM(CASE WHEN cancelled THEN 0 ELSE any_expired END) AS expired,
+            SUM(pending) AS pending, SUM(cancelled) AS cancelled
      FROM typed GROUP BY attendance_type`,
     )
     .bind(eventId);
@@ -108,6 +116,8 @@ export function decodeAttendanceStatusByType(result: D1StatementResult): Record<
         accepted: Number(row.accepted ?? 0),
         waitlisted: Number(row.waitlisted ?? 0),
         expired: Number(row.expired ?? 0),
+        pending: Number(row.pending ?? 0),
+        cancelled: Number(row.cancelled ?? 0),
       },
     ]),
   );
