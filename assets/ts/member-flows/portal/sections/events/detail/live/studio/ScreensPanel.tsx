@@ -5,6 +5,7 @@
  * latency and loss (stalls for a livestream). Screen managers also get
  * Identify and Reload; everyone else watches.
  */
+import { formatAge } from "../../../../../../../../shared/format-date";
 import { LIVE_SCREEN_OUTPUT_DETAILS } from "../../../../../../../../shared/live-room-outputs";
 import type { ScreenMonitorStaffMessage } from "../../../../../../../../shared/schemas/event-screen-monitor";
 import type { ScreenRecord } from "../../../../../../../../shared/schemas/event-screens";
@@ -12,7 +13,7 @@ import { sortByScreenIssues, type ScreenIssue } from "../../../../../../../../sh
 import { Button } from "../../../../../../../ui/Button";
 import { RowActions } from "../../../../../../../ui/RowActions";
 import type { ScreenMonitorView } from "../../screens/screen-monitor-view";
-import { ScreenConditionLine, ScreenMonitorLost, ScreenShot, screenCondition } from "../../screens/ScreenMonitorCard";
+import { ScreenConditionLine, ScreenShot, screenCondition } from "../../screens/ScreenMonitorCard";
 import { ScreenQualityTrend } from "../../screens/ScreenQualityTrend";
 import type { useStudioScreens } from "./useStudioScreens";
 import "./ScreensPanel.css";
@@ -37,60 +38,57 @@ export function ScreensPanel({
 }) {
   if (!screens.length) return <p class="pk-studio-screens__empty">No screens show this room.</p>;
   return (
-    <>
-      <ScreenMonitorLost lostSince={lostSince} now={now} />
-      <ul class="pk-studio-screens" aria-label="Screens">
-        {sortByScreenIssues(screens, (screen) => issuesOf(screen.id)).map((screen) => {
-          const status = monitor.live.get(screen.id);
-          const online = Boolean(status?.online);
-          const condition = screenCondition(screen, status, issuesOf(screen.id), now, lostSince);
-          return (
-            <li key={screen.id} class="pk-studio-screens__row" data-tone={condition.tone}>
-              <span class="pk-studio-screens__shot">
-                <ScreenShot screen={screen} screenshot={monitor.screenshots.get(screen.id)} online={online} now={now} />
-              </span>
-              <span class="pk-studio-screens__name">{screen.name}</span>
-              <span class="pk-studio-screens__output">
-                {screen.assignment ? LIVE_SCREEN_OUTPUT_DETAILS[screen.assignment.output].label : "Not assigned"}
-              </span>
-              <span class="pk-studio-screens__status">
-                <ScreenConditionLine condition={condition} />
-              </span>
-              <span class="pk-studio-screens__trend">
-                <ScreenQualityTrend
-                  screenName={screen.name}
-                  samples={monitor.quality.get(screen.id) ?? []}
-                  livestream={screen.assignment?.output === "livestream"}
-                  now={now}
-                  compact
+    <ul class="pk-studio-screens" aria-label="Screens">
+      {sortByScreenIssues(screens, (screen) => issuesOf(screen.id)).map((screen) => {
+        const status = monitor.live.get(screen.id);
+        const online = Boolean(status?.online);
+        const condition = screenCondition(screen, status, issuesOf(screen.id), now, lostSince);
+        return (
+          <li key={screen.id} class="pk-studio-screens__row" data-tone={condition.tone}>
+            <span class="pk-studio-screens__shot">
+              <ScreenShot screen={screen} screenshot={monitor.screenshots.get(screen.id)} online={online} now={now} />
+            </span>
+            <span class="pk-studio-screens__name">{screen.name}</span>
+            <span class="pk-studio-screens__output">
+              {screen.assignment ? LIVE_SCREEN_OUTPUT_DETAILS[screen.assignment.output].label : "Not assigned"}
+            </span>
+            <span class="pk-studio-screens__status">
+              <ScreenConditionLine condition={condition} />
+            </span>
+            <span class="pk-studio-screens__trend">
+              <ScreenQualityTrend
+                screenName={screen.name}
+                samples={monitor.quality.get(screen.id) ?? []}
+                livestream={screen.assignment?.output === "livestream"}
+                now={now}
+                compact
+              />
+            </span>
+            {onCommand && (
+              <span class="pk-studio-screens__actions">
+                <RowActions
+                  subject={screen.name}
+                  actions={[
+                    {
+                      id: "identify",
+                      label: "Identify",
+                      disabled: !online,
+                      onSelect: () => onCommand("screen.identify", screen),
+                    },
+                    {
+                      id: "reload",
+                      label: "Reload",
+                      disabled: !online,
+                      onSelect: () => onCommand("screen.reload", screen),
+                    },
+                  ]}
                 />
               </span>
-              {onCommand && (
-                <span class="pk-studio-screens__actions">
-                  <RowActions
-                    subject={screen.name}
-                    actions={[
-                      {
-                        id: "identify",
-                        label: "Identify",
-                        disabled: !online,
-                        onSelect: () => onCommand("screen.identify", screen),
-                      },
-                      {
-                        id: "reload",
-                        label: "Reload",
-                        disabled: !online,
-                        onSelect: () => onCommand("screen.reload", screen),
-                      },
-                    ]}
-                  />
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -118,5 +116,16 @@ export function StudioScreensBody({ roomScreens }: { roomScreens: ReturnType<typ
       lostSince={controller.lostSince}
       onCommand={controller.command}
     />
+  );
+}
+
+/** In the panel's header, a fixed spot: the connection to the monitor is lost, and since when. */
+export function StudioScreensConnection({ roomScreens }: { roomScreens: ReturnType<typeof useStudioScreens> }) {
+  const { lostSince, now } = roomScreens.controller;
+  if (lostSince === null) return null;
+  return (
+    <span class="pk-studio-panel__meta" role="status">
+      Reconnecting · last update {formatAge(now - lostSince)}
+    </span>
   );
 }

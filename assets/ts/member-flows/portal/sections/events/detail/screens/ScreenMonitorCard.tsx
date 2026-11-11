@@ -44,11 +44,15 @@ export function screenCondition(
   now: number,
   /** The monitor's last word, while the connection to it is lost: nothing it said counts as now. */
   lostSince: number | null = null,
+  /** The monitor watches the event's screens; one it does not know about has no issue it tracks. */
+  monitored = true,
 ): { tone: ScreenConditionTone; text: string } {
   if (lostSince !== null && status)
     return { tone: "neutral", text: `Status unknown · last update ${formatAge(now - lostSince)}` };
   if (!status) {
     const { label, tone } = screenConnectionDisplay(screenConnection(screen.session, now));
+    // While the monitor watches, only its issues carry a tone, so cards, the count and the filter agree.
+    if (monitored) return { tone: "neutral", text: label };
     return { tone: tone === "risk" ? "critical" : tone === "warn" ? "warning" : "neutral", text: label };
   }
   const heardAt = status.reportedAt ?? status.disconnectedAt;

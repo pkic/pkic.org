@@ -448,4 +448,38 @@ describe("event screen monitor", () => {
     ).toEqual([undefined, undefined]);
     expect(screen.socket.readyState).toBe(WebSocket.OPEN);
   });
+
+  it("sends a pruning snapshot only to staff whose lease is current", async () => {
+    const expired = await connectStaff("manager");
+    await next(expired.received, "screens.snapshot");
+    const stub = testEnv.EVENT_SCREEN_MONITORS!.getByName(screenMonitorName(EVENT.id));
+    const gone = new Date(Date.now() - (SCREEN_POLICY.monitorKeepDays * 24 + 1) * 3_600_000).toISOString();
+    await runInDurableObject(stub, async (_, state) => {
+      // The lease ran out between alarms; the socket is still open.
+      for (const socket of state.getWebSockets("staff"))
+        socket.serializeAttachment({ ...(socket.deserializeAttachment() as object), checkedAt: 0 });
+      await state.storage.put("status:OLD235", {
+        screenId: "OLD235",
+        online: false,
+        connectedAt: gone,
+        disconnectedAt: gone,
+        reportedAt: gone,
+        stateSince: gone,
+        health: null,
+      });
+    });
+    const before = expired.received.length;
+    // A new connection prunes the forgotten screen and tells current staff.
+    const current = await connectStaff("moderator");
+    // Its own snapshot is sent before the prune; the prune's follows, without the forgotten screen.
+    await next(current.received, "screens.snapshot");
+    const pruned = await vi.waitFor(() => {
+      const snapshots = current.received.filter((message) => message.type === "screens.snapshot");
+      if (snapshots.length < 2) throw new Error("No pruning snapshot yet");
+      return snapshots.at(-1)!;
+    });
+    expect(pruned.type === "screens.snapshot" && pruned.screens).toEqual([]);
+    expect(await runInDurableObject(stub, (_, state) => state.storage.get("status:OLD235"))).toBeUndefined();
+    expect(expired.received.slice(before)).toEqual([]);
+  });
 });

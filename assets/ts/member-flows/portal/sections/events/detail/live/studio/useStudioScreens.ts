@@ -23,9 +23,10 @@ export async function loadRoomScreens(slug: string, roomId: string, signal: Abor
     const query = new URLSearchParams({ roomId, sort: "name", limit: String(PAGE_SIZE), offset: String(offset) });
     const page = await getJson(`${eventScreensPath(slug)}?${query}`, eventScreensListSchema, { signal });
     screens.push(...page.screens);
-    if (!page.page.hasMore) break;
+    if (!page.page.hasMore) return screens;
   }
-  return screens;
+  // More than the list can page through: say the read failed rather than show part of the room.
+  throw new Error("The room has more screens than the panel can list.");
 }
 
 export function useStudioScreens({ slug, roomId, enabled }: { slug: string; roomId: string; enabled: boolean }) {

@@ -246,6 +246,7 @@ export function EventScreens({
                   controller.issuesOf(screen.id),
                   now,
                   controller.lostSince,
+                  Boolean(monitor),
                 )}
               />
             ),

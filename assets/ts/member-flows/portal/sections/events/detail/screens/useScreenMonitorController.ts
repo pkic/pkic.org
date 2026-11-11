@@ -55,15 +55,18 @@ export function useScreenMonitorController({
    * on screen for its pictures and trends, but nothing in it counts as now.
    */
   const lostSince = !fixture && staff.status !== "live" && staff.status !== "refused" ? staff.lastUpdateAt : null;
+  // Switched off (a closed studio panel), the view kept from before says nothing about now.
+  const active = Boolean(fixture) || enabled;
   const issues = useMemo(() => {
-    const all = view && lostSince === null ? screenMonitorIssues(view, now) : new Map<string, ScreenIssue[]>();
+    const all =
+      active && view && lostSince === null ? screenMonitorIssues(view, now) : new Map<string, ScreenIssue[]>();
     return only ? new Map([...all].filter(([screenId]) => only.has(screenId))) : all;
-  }, [view, now, only, lostSince]);
+  }, [active, view, now, only, lostSince]);
   /** Names of the screens this view has listed, for notifications about screens on another page. */
   const names = useRef(new Map<string, string>());
   const notifications = useScreenIssueNotifications({
     issues,
-    ready: ready && (Boolean(fixture) || staff.status === "live"),
+    ready: ready && (Boolean(fixture) || (enabled && staff.status === "live")),
     nameOf: (screenId) => names.current.get(screenId) ?? screenId,
   });
   const remember = useCallback((screens: readonly ScreenRecord[]) => {

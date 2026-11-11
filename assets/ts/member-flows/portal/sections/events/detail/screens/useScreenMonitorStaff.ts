@@ -12,7 +12,10 @@ import {
   screenMonitorStaffMessageSchema,
   type ScreenMonitorStaffMessage,
 } from "../../../../../../../shared/schemas/event-screen-monitor";
-import { liveRoomRefusalFromClose } from "../../../../../../../shared/schemas/live-session-room";
+import {
+  liveRoomRefusalCloseCode,
+  liveRoomRefusalFromClose,
+} from "../../../../../../../shared/schemas/live-session-room";
 import type { ScreenRecord } from "../../../../../../../shared/schemas/event-screens";
 import { persistentRetryDelay } from "../../../../../../live-session/live-socket-retry";
 import type { LiveSocketFactory } from "../../../../../../live-session/useLiveRoom";
@@ -27,6 +30,8 @@ import {
 
 const browserSocket: LiveSocketFactory = (url, protocols) => new WebSocket(url, protocols);
 const KEEP_ALIVE_MS = 25_000;
+/** The monitor holds its most staff connections; another may fit shortly. */
+const FULL_CLOSE_CODE = liveRoomRefusalCloseCode(429);
 /** A new offset within this much of the current one changes nothing on screen. */
 const CLOCK_SETTLE_MS = 250;
 const COMMAND_LABELS: Record<ScreenMonitorStaffMessage["type"], string> = {
@@ -112,7 +117,8 @@ export function useScreenMonitorStaff({
         clearInterval(keepAlive);
         if (socket.current === current) socket.current = null;
         if (stopped) return;
-        if (liveRoomRefusalFromClose(event.code, event.reason)) {
+        // A full monitor is temporary and retried; any other refusal is final.
+        if (event.code !== FULL_CLOSE_CODE && liveRoomRefusalFromClose(event.code, event.reason)) {
           setStatus("refused");
           return;
         }

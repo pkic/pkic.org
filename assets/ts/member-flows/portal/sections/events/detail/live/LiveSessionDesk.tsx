@@ -22,7 +22,7 @@ import { createLivePresence, livePresenceFocusAt, LivePresenceContext } from "./
 import { LivePanelPresence } from "./presence/LivePresenceTag";
 import { GraphicsPanel, nextInRoom } from "./studio/GraphicsPanel";
 import { monitorPanelView } from "./studio/MonitorPanel";
-import { StudioScreensBody } from "./studio/ScreensPanel";
+import { StudioScreensBody, StudioScreensConnection } from "./studio/ScreensPanel";
 import { SourcesPanel } from "./studio/SourcesPanel";
 import { SpeakerMessagePanel } from "./studio/SpeakerMessagePanel";
 import { StudioGrid, type StudioPanelView } from "./studio/StudioGrid";
@@ -313,6 +313,7 @@ export function LiveSessionDesk({
               onSelect: () => void roomScreens.controller.notifications.toggle(),
             },
           ],
+          actions: <StudioScreensConnection roomScreens={roomScreens} />,
           body: <StudioScreensBody roomScreens={roomScreens} />,
         };
     }

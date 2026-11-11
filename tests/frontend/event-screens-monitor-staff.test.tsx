@@ -30,6 +30,8 @@ import {
 import { useScreenIssueNotifications } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/useScreenIssueNotifications";
 import { useScreenMonitorController } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/useScreenMonitorController";
 import { useScreenMonitorStaff } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/useScreenMonitorStaff";
+import { LIVE_PERSISTENT_RETRY_MAX_MS } from "../../assets/ts/live-session/live-socket-retry";
+import { loadRoomScreens } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/useStudioScreens";
 import { fakeLiveSockets } from "./helpers/live-room-socket";
 
 const SLUG = "pqc-conference-2026";
@@ -138,9 +140,21 @@ describe("the staff view of the monitor", () => {
     const sent = screenMonitorStaffMessageSchema.parse(JSON.parse(sockets.latest().sent.at(-1)!));
     expect(sent).toMatchObject({ type: "screen.identify", screenId: "K7M2QA" });
 
+    // A full monitor is temporary: the page tries again.
+    vi.useFakeTimers();
+    await act(() => sockets.latest().refuse(4429, "SCREEN_MONITOR_FULL"));
+    expect(latest!.status).toBe("offline");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LIVE_PERSISTENT_RETRY_MAX_MS);
+    });
+    expect(sockets.sockets).toHaveLength(2);
+
     await act(() => sockets.latest().refuse(4403, "SCREEN_STATUS_FORBIDDEN"));
     expect(latest!.status).toBe("refused");
-    expect(sockets.sockets).toHaveLength(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LIVE_PERSISTENT_RETRY_MAX_MS);
+    });
+    expect(sockets.sockets).toHaveLength(2);
   });
 });
 
@@ -231,6 +245,42 @@ describe("the staff clock", () => {
     );
   });
 
+  it("derives nothing from the kept view once switched off, as when the studio panel closes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const sockets = fakeLiveSockets();
+    let latest: ReturnType<typeof useScreenMonitorController> | undefined;
+    function Probe({ enabled }: { enabled: boolean }) {
+      latest = useScreenMonitorController({ slug: SLUG, enabled, createSocket: sockets.factory });
+      return null;
+    }
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<Probe enabled />, host!));
+    await act(() => sockets.latest().open());
+    await act(() => {
+      sockets.latest().dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify(
+            message({
+              type: "screens.snapshot",
+              serverNow: NOW,
+              control: false,
+              screens: [status("K7M2QA")],
+              quality: [],
+            }),
+          ),
+        }),
+      );
+    });
+    await act(() => render(<Probe enabled={false} />, host!));
+    // Three minutes on, the kept heartbeat would read as critical.
+    for (let step = 0; step < 36; step += 1)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+    expect(latest!.issues.size).toBe(0);
+  });
+
   it("chooses the offset with the least delay among recent messages", () => {
     expect(staffClockOffset([])).toBe(0);
     expect(staffClockOffset([-90_400, -90_050, -90_900])).toBe(-90_050);
@@ -247,7 +297,12 @@ describe("the multi-view", () => {
     session: { state: "active", activatedAt: at(7200), lastSeenAt: at(60), expiresAt: "2027-12-01T08:00:00.000Z" },
     createdAt: at(86_400),
   });
-  const screens = [record("AAA234", "Atrium"), record("BBB234", "Balcony"), record("CCC234", "Cloakroom")];
+  // The monitor forgot the depot's screen long ago: it reads offline from its last visit, but carries no tone.
+  const depot = {
+    ...record("DDD234", "Depot"),
+    session: { ...record("DDD234", "Depot").session, lastSeenAt: at(8 * 86_400) },
+  };
+  const screens = [record("AAA234", "Atrium"), record("BBB234", "Balcony"), record("CCC234", "Cloakroom"), depot];
   const view: ScreenMonitorView = {
     live: new Map([
       ["AAA234", status("AAA234")],
@@ -298,19 +353,26 @@ describe("the multi-view", () => {
     );
     await settle();
     const titles = [...host.querySelectorAll(".pk-screen-card__title")].map((title) => title.textContent);
-    expect(titles).toEqual(["Cloakroom", "Balcony", "Atrium"]);
+    expect(titles).toEqual(["Cloakroom", "Balcony", "Atrium", "Depot"]);
     const cards = [...host.querySelectorAll("article")];
     const condition = (card: Element) => card.querySelector(".pk-screen-condition")!;
     expect(cards.map((card) => condition(card).getAttribute("title"))).toEqual([
       "Last heard 10 min ago · Offline",
       "Online · Weak Wi-Fi, no recent picture, running on the agenda",
       "Online · Following the studio",
+      "Offline · 192 h",
     ]);
-    expect(cards.map((card) => condition(card).getAttribute("data-tone"))).toEqual(["critical", "warning", "ok"]);
+    expect(cards.map((card) => condition(card).getAttribute("data-tone"))).toEqual([
+      "critical",
+      "warning",
+      "ok",
+      "neutral",
+    ]);
     // The tone along the top edge is for screens that need attention only, and is said to screen readers too.
     expect(cards.map((card) => card.className)).toEqual([
       "pk-collection-card pk-screen-card--critical",
       "pk-collection-card pk-screen-card--warning",
+      "pk-collection-card",
       "pk-collection-card",
     ]);
     expect(condition(cards[0]!).textContent).toBe("Critical: Last heard 10 min ago · Offline");
@@ -327,6 +389,25 @@ describe("the multi-view", () => {
       "Cloakroom",
       "Balcony",
     ]);
+  });
+});
+
+describe("the studio's room screens", () => {
+  it("refuses to call a list complete when the room has more screens than the list can page through", async () => {
+    const page = (offset: number) => ({
+      screens: [],
+      page: { limit: 100, offset, total: 20_000, hasMore: true },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const offset = Number(new URL(String(input), location.origin).searchParams.get("offset"));
+        return new Response(JSON.stringify(page(offset)), { headers: { "content-type": "application/json" } });
+      }),
+    );
+    await expect(
+      loadRoomScreens(SLUG, "30000000-0000-4000-8000-000000000001", new AbortController().signal),
+    ).rejects.toThrow("more screens");
   });
 });
 
