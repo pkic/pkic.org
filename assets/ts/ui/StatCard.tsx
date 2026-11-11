@@ -61,7 +61,9 @@ export interface StatCardProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 
    * so the card is pressable everywhere while the label's tooltip stays
    * reachable above it. `pressLabel` names the toggle for assistive
    * technology ("Filter the list: In person"); `pressed` is whether the
-   * list is narrowed that way now. Not combined with `href`.
+   * list is narrowed that way now. Without `pressed` the card is a plain
+   * action, not a toggle: a failed figure's "Try again". Not combined with
+   * `href`.
    */
   onPress?: () => void;
   pressed?: boolean;
@@ -79,7 +81,7 @@ export function StatCard({
   tooltip,
   icon,
   onPress,
-  pressed = false,
+  pressed,
   pressLabel,
   class: className,
   ...rest

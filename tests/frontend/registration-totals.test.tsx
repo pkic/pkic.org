@@ -164,22 +164,23 @@ describe("RegistrationTotals attendance cards", () => {
 });
 
 describe("RegistrationTotals without attendance options", () => {
-  it("says the options failed to load and loads them again on request", () => {
+  it("offers to load the options again from a card in the totals", () => {
     const retry = vi.fn();
     const container = mount(
       <RegistrationTotals stats={stats} attendanceOptions={[]} onRetryAttendanceOptions={retry} />,
     );
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      "The event's attendance options could not be loaded.",
-    );
-    const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === "Try again");
-    void act(() => button?.click());
+    const group = container.querySelector('[role="group"]');
+    const actions = [...(group?.querySelectorAll("button.pk-stat-card__press") ?? [])];
+    expect(actions).toHaveLength(1);
+    // An action, not a filter toggle.
+    expect(actions[0].hasAttribute("aria-pressed")).toBe(false);
+    void act(() => (actions[0] as HTMLButtonElement).click());
     expect(retry).toHaveBeenCalledOnce();
   });
 
-  it("shows no warning while the options are loaded", () => {
+  it("offers no retry while the options are loaded", () => {
     const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} />);
-    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(container.querySelector("button.pk-stat-card__press:not([aria-pressed])")).toBeNull();
   });
 });
 

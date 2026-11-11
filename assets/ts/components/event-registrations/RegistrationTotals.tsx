@@ -15,8 +15,6 @@
 import type { ComponentChildren } from "preact";
 import { AttendanceIcon } from "../AttendanceIcon";
 import type { StatCardTone } from "../../ui/StatCard";
-import { Alert } from "../../ui/Alert";
-import { Button } from "../../ui/Button";
 import { CollectionTotals, type CollectionTotal } from "../CollectionTotals";
 import { formatNumber } from "../../../shared/format-number";
 import type { EventAttendanceOption } from "../../../shared/schemas/event-configuration";
@@ -190,6 +188,18 @@ export function RegistrationTotals({
       ];
     }),
   ];
+  // A failed load is a card in the row, not a panel beside it: the figure it
+  // cannot give, why, and pressing it loads the options again.
+  if (onRetryAttendanceOptions)
+    items.push({
+      label: "attendance",
+      value: "—",
+      tone: "warn",
+      note: "Could not load. Try again.",
+      tooltip: "The event's attendance options could not be loaded, so their totals are not shown.",
+      onPress: onRetryAttendanceOptions,
+      pressLabel: "Load the attendance totals again",
+    });
   const bounced = stats.bouncedCount ?? 0;
   if (bounced > 0)
     items.push(
@@ -203,15 +213,5 @@ export function RegistrationTotals({
         { bounced: "true" },
       ),
     );
-  return (
-    <>
-      <CollectionTotals label="Registration totals" items={items} />
-      {onRetryAttendanceOptions && (
-        <Alert tone="warn" title="Attendance totals are not shown">
-          <p>The event's attendance options could not be loaded.</p>
-          <Button onClick={onRetryAttendanceOptions}>Try again</Button>
-        </Alert>
-      )}
-    </>
-  );
+  return <CollectionTotals label="Registration totals" items={items} />;
 }

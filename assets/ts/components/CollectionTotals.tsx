@@ -39,7 +39,7 @@ export interface CollectionTotal {
   icon?: ComponentChildren;
   /** Narrows the list to the rows the figure counts; see StatCard's `onPress`. */
   onPress?: () => void;
-  /** Whether the list is narrowed to this figure's rows now. */
+  /** Whether the list is narrowed to this figure's rows now; unset for a card that is an action, not a toggle. */
   pressed?: boolean;
   /** Names the toggle for assistive technology. */
   pressLabel?: string;
