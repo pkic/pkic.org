@@ -302,11 +302,19 @@ export const screenMonitorStaffMessageSchema = z
   .strict();
 export type ScreenMonitorStaffMessage = z.infer<typeof screenMonitorStaffMessageSchema>;
 
+/**
+ * The monitor's clock when it sent a message, in epoch milliseconds. Staff
+ * read every age and staleness against it, never against their own clock,
+ * which may be off by minutes.
+ */
+const serverNowSchema = z.number().int().positive();
+
 /** Monitor to staff. */
 export const screenMonitorServerMessageSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("screens.snapshot"),
+      serverNow: serverNowSchema,
       /** The viewer may send Identify and Reload. */
       control: z.boolean(),
       screens: z.array(screenLiveStatusSchema).max(SCREEN_MONITOR_LIMITS.screensPerEvent),
@@ -317,6 +325,7 @@ export const screenMonitorServerMessageSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("screens.changed"),
+      serverNow: serverNowSchema,
       screen: screenLiveStatusSchema,
       /** With a health report: the screen's sample for the current minute, replacing any of the same minute. */
       sample: screenQualitySampleSchema.optional(),
@@ -325,6 +334,7 @@ export const screenMonitorServerMessageSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("screens.screenshot"),
+      serverNow: serverNowSchema,
       screenId: screenIdSchema,
       /** When the monitor received it. */
       capturedAt: utcInstantSchema,

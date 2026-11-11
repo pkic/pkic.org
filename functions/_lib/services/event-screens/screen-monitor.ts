@@ -261,6 +261,7 @@ export class EventScreenMonitor extends DurableObject<Env> {
     const known = new Set(screens.map((status) => status.screenId));
     return screenMonitorServerMessageSchema.parse({
       type: "screens.snapshot",
+      serverNow: Date.now(),
       control,
       screens,
       quality: quality.filter((history) => known.has(history.screenId)),
@@ -288,6 +289,7 @@ export class EventScreenMonitor extends DurableObject<Env> {
   private screenshotMessage(screenId: string, shot: StoredScreenshot): ScreenMonitorServerMessage {
     return screenMonitorServerMessageSchema.parse({
       type: "screens.screenshot",
+      serverNow: Date.now(),
       screenId,
       capturedAt: shot.capturedAt,
       jpeg: bytesToBase64(shot.jpeg),
@@ -327,6 +329,7 @@ export class EventScreenMonitor extends DurableObject<Env> {
       JSON.stringify(
         screenMonitorServerMessageSchema.parse({
           type: "screens.changed",
+          serverNow: Date.now(),
           screen: this.live(status),
           ...(sample ? { sample } : {}),
         }),

@@ -7,7 +7,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ScreenIssue } from "../../assets/shared/event-screen-issues";
+import { screenIssues, type ScreenIssue } from "../../assets/shared/event-screen-issues";
 import {
   SCREEN_MONITOR_PROTOCOL,
   screenMonitorServerMessageSchema,
@@ -20,9 +20,11 @@ import { EventScreens } from "../../assets/ts/member-flows/portal/sections/event
 import {
   applyScreenMonitorMessage,
   EMPTY_SCREEN_MONITOR_VIEW,
+  staffClockOffset,
   type ScreenMonitorView,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/screen-monitor-view";
 import { useScreenIssueNotifications } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/useScreenIssueNotifications";
+import { useScreenMonitorController } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/useScreenMonitorController";
 import { useScreenMonitorStaff } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/useScreenMonitorStaff";
 import { fakeLiveSockets } from "./helpers/live-room-socket";
 
@@ -75,23 +77,31 @@ describe("the staff view of the monitor", () => {
     };
     view = applyScreenMonitorMessage(
       view,
-      message({ type: "screens.snapshot", control: true, screens: [status("K7M2QA")], quality: [] }),
+      message({ type: "screens.snapshot", serverNow: NOW, control: true, screens: [status("K7M2QA")], quality: [] }),
     );
     view = applyScreenMonitorMessage(
       view,
-      message({ type: "screens.screenshot", screenId: "K7M2QA", capturedAt: at(2), jpeg: "/9j/4AAQ" }),
+      message({ type: "screens.screenshot", serverNow: NOW, screenId: "K7M2QA", capturedAt: at(2), jpeg: "/9j/4AAQ" }),
     );
-    view = applyScreenMonitorMessage(view, message({ type: "screens.changed", screen: status("K7M2QA"), sample }));
     view = applyScreenMonitorMessage(
       view,
-      message({ type: "screens.changed", screen: status("K7M2QA"), sample: { ...sample, internetLatencyMs: 40 } }),
+      message({ type: "screens.changed", serverNow: NOW, screen: status("K7M2QA"), sample }),
+    );
+    view = applyScreenMonitorMessage(
+      view,
+      message({
+        type: "screens.changed",
+        serverNow: NOW,
+        screen: status("K7M2QA"),
+        sample: { ...sample, internetLatencyMs: 40 },
+      }),
     );
     expect(view.quality.get("K7M2QA")).toEqual([{ ...sample, internetLatencyMs: 40 }]);
     expect(view.screenshots.get("K7M2QA")).toEqual({ capturedAt: at(2), src: "data:image/jpeg;base64,/9j/4AAQ" });
     // A screen the monitor forgot loses its screenshot with the next snapshot.
     view = applyScreenMonitorMessage(
       view,
-      message({ type: "screens.snapshot", control: true, screens: [], quality: [] }),
+      message({ type: "screens.snapshot", serverNow: NOW, control: true, screens: [], quality: [] }),
     );
     expect(view.screenshots.size).toBe(0);
     expect(view.live.size).toBe(0);
@@ -113,7 +123,9 @@ describe("the staff view of the monitor", () => {
         sockets.latest().dispatchEvent(new MessageEvent("message", { data: JSON.stringify(value) }));
       });
     await act(() => sockets.latest().open());
-    await deliver(message({ type: "screens.snapshot", control: true, screens: [status("K7M2QA")], quality: [] }));
+    await deliver(
+      message({ type: "screens.snapshot", serverNow: NOW, control: true, screens: [status("K7M2QA")], quality: [] }),
+    );
     expect(latest!.control).toBe(true);
     expect(latest!.status).toBe("live");
     expect(latest!.view.live.get("K7M2QA")?.online).toBe(true);
@@ -125,6 +137,48 @@ describe("the staff view of the monitor", () => {
     await act(() => sockets.latest().refuse(4403, "SCREEN_STATUS_FORBIDDEN"));
     expect(latest!.status).toBe("refused");
     expect(sockets.sockets).toHaveLength(1);
+  });
+});
+
+describe("the staff clock", () => {
+  it("reads ages on the monitor's clock, so a browser 90 s ahead shows no false Not responding", async () => {
+    const server = NOW;
+    vi.useFakeTimers();
+    vi.setSystemTime(server + 90_000);
+    const sockets = fakeLiveSockets();
+    let latest: ReturnType<typeof useScreenMonitorController> | undefined;
+    function Probe() {
+      latest = useScreenMonitorController({ slug: SLUG, createSocket: sockets.factory });
+      return null;
+    }
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<Probe />, host!));
+    await act(() => sockets.latest().open());
+    const screenshot = { type: "screens.screenshot", screenId: "K7M2QA", capturedAt: at(5), jpeg: "/9j/4AAQ" };
+    await act(() => {
+      for (const value of [
+        { type: "screens.snapshot", serverNow: server, control: false, screens: [status("K7M2QA")], quality: [] },
+        { ...screenshot, serverNow: server },
+      ])
+        sockets.latest().dispatchEvent(new MessageEvent("message", { data: JSON.stringify(message(value)) }));
+    });
+    // On this browser's own clock the last heartbeat looks 95 s old.
+    const view = latest!.view!;
+    expect(
+      screenIssues({
+        status: view.live.get("K7M2QA"),
+        samples: [],
+        screenshotAt: at(5),
+        now: Date.now(),
+      }).map((issue) => issue.label),
+    ).toContain("Not responding");
+    expect(latest!.now).toBeLessThanOrEqual(server + 1_000);
+    expect(latest!.issuesOf("K7M2QA")).toEqual([]);
+  });
+
+  it("chooses the offset with the least delay among recent messages", () => {
+    expect(staffClockOffset([])).toBe(0);
+    expect(staffClockOffset([-90_400, -90_050, -90_900])).toBe(-90_050);
   });
 });
 

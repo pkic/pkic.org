@@ -13,6 +13,7 @@ import { useBoundaryClock } from "../../../../../../hooks/useBoundaryClock";
 import { screenMonitorIssues, type ScreenMonitorView } from "./screen-monitor-view";
 import { useScreenIssueNotifications } from "./useScreenIssueNotifications";
 import { useScreenMonitorStaff } from "./useScreenMonitorStaff";
+import type { LiveSocketFactory } from "../../../../../../live-session/useLiveRoom";
 
 /** Issues read against a clock that moves every five seconds, so a late heartbeat shows within the window. */
 const nextTick = (now: number) => now - (now % 5_000) + 5_000;
@@ -30,6 +31,7 @@ export function useScreenMonitorController({
   enabled = true,
   only,
   ready = true,
+  createSocket,
 }: {
   slug: string;
   fixture?: ScreenMonitorFixture;
@@ -39,10 +41,13 @@ export function useScreenMonitorController({
   only?: ReadonlySet<string>;
   /** The caller's own data is in, so issues present now are already known rather than new. */
   ready?: boolean;
+  /** The monitor connection's socket, replaced in tests. */
+  createSocket?: LiveSocketFactory;
 }) {
-  const staff = useScreenMonitorStaff({ slug, enabled: enabled && !fixture });
+  const staff = useScreenMonitorStaff({ slug, enabled: enabled && !fixture, createSocket });
   const clock = useBoundaryClock(nextTick);
-  const now = fixture?.now ?? clock;
+  // Every age, staleness and "since" is read on the monitor's clock, whatever this browser's says.
+  const now = fixture?.now ?? clock + staff.clockOffsetMs;
   // A refused connection shows only what the screen list recorded.
   const view = fixture?.view ?? (staff.status === "refused" ? undefined : staff.view);
   const issues = useMemo(() => {

@@ -178,6 +178,7 @@ describe("event screen monitor", () => {
     const later = await connectStaff("manager");
     const snapshot = await next(later.received, "screens.snapshot");
     expect(snapshot.control).toBe(true);
+    expect(Math.abs(snapshot.serverNow - Date.now())).toBeLessThan(5_000);
     expect(snapshot.screens).toEqual([expect.objectContaining({ screenId: "MON234", online: true, health: HEALTH })]);
 
     const after = watcher.received.length;

@@ -83,3 +83,18 @@ export function screenMonitorIssues(view: ScreenMonitorView, now: number): Map<s
     ]),
   );
 }
+
+/** How many recent messages the staff clock chooses its offset from. */
+export const STAFF_CLOCK_SAMPLES = 8;
+
+/**
+ * The monitor's clock minus this browser's, from recent messages. Each
+ * message's `serverNow` minus its arrival time is the true offset less that
+ * message's travel time, so the largest recent value has the least delay in
+ * it: the same least-uncertainty choice as the screen page's own clock, for
+ * messages that only travel one way.
+ */
+export function staffClockOffset(samples: readonly number[]): number {
+  const recent = samples.slice(-STAFF_CLOCK_SAMPLES);
+  return recent.length ? Math.max(...recent) : 0;
+}

@@ -17,10 +17,18 @@ import type { ScreenRecord } from "../../../../../../../shared/schemas/event-scr
 import { persistentRetryDelay } from "../../../../../../live-session/live-socket-retry";
 import type { LiveSocketFactory } from "../../../../../../live-session/useLiveRoom";
 import { toast } from "../../../../ui";
-import { applyScreenMonitorMessage, EMPTY_SCREEN_MONITOR_VIEW, type ScreenMonitorView } from "./screen-monitor-view";
+import {
+  applyScreenMonitorMessage,
+  EMPTY_SCREEN_MONITOR_VIEW,
+  STAFF_CLOCK_SAMPLES,
+  staffClockOffset,
+  type ScreenMonitorView,
+} from "./screen-monitor-view";
 
 const browserSocket: LiveSocketFactory = (url, protocols) => new WebSocket(url, protocols);
 const KEEP_ALIVE_MS = 25_000;
+/** A new offset within this much of the current one changes nothing on screen. */
+const CLOCK_SETTLE_MS = 250;
 const COMMAND_LABELS: Record<ScreenMonitorStaffMessage["type"], string> = {
   "screen.identify": "Identify",
   "screen.reload": "Reload",
@@ -45,6 +53,9 @@ export function useScreenMonitorStaff({
   const [view, setView] = useState<ScreenMonitorView>(EMPTY_SCREEN_MONITOR_VIEW);
   const [control, setControl] = useState(false);
   const [status, setStatus] = useState<ScreenMonitorStaffStatus>("connecting");
+  /** The monitor's clock minus this browser's, so ages never depend on how far off this browser's clock is. */
+  const [clockOffsetMs, setClockOffsetMs] = useState(0);
+  const clockSamples = useRef<number[]>([]);
   const socket = useRef<WebSocket | null>(null);
   const factory = useRef(createSocket);
   factory.current = createSocket;
@@ -74,6 +85,11 @@ export function useScreenMonitorStaff({
         }
         if (!parsed.success) return;
         const message = parsed.data;
+        if ("serverNow" in message) {
+          clockSamples.current = [...clockSamples.current, message.serverNow - Date.now()].slice(-STAFF_CLOCK_SAMPLES);
+          const offset = staffClockOffset(clockSamples.current);
+          setClockOffsetMs((current) => (Math.abs(offset - current) < CLOCK_SETTLE_MS ? current : offset));
+        }
         if (message.type === "screens.snapshot") {
           attempt = 0;
           setControl(message.control);
@@ -126,5 +142,5 @@ export function useScreenMonitorStaff({
     current.send(JSON.stringify(screenMonitorStaffMessageSchema.parse({ type, screenId: screen.id, operationId })));
   }, []);
 
-  return { view, control, status, command };
+  return { view, control, status, clockOffsetMs, command };
 }
