@@ -47,7 +47,7 @@ export async function linuxDiagramBrowserOptions(cacheDirectory = publicationCac
         // Another publisher may finish the same version while this one extracts.
         // Reuse only a complete runtime, and keep other filesystem failures visible.
         if (error.code !== "ENOTEMPTY" && error.code !== "EEXIST") throw error;
-        if ((await readFile(join(cache, "ready"), "utf8")) !== version) throw error;
+        if ((await readFile(join(cache, "ready"), "utf8").catch(() => "")) !== version) throw error;
       }
     } finally {
       await rm(temporary, { recursive: true, force: true });

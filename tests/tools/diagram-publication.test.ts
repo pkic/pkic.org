@@ -96,6 +96,26 @@ it("shares a complete rootless Linux renderer across concurrent publishers and l
   }
 });
 
+it("preserves the rename error and cleans up when an incomplete browser cache has no ready marker", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pkic-diagram-incomplete-"));
+  const require = createRequire(import.meta.url);
+  const chromiumRequire = createRequire(require.resolve("@sparticuz/chromium"));
+  const { version } = chromiumRequire("../package.json");
+  const cache = join(root, `linux-x64-${version}`);
+  try {
+    await mkdir(cache);
+    await writeFile(join(cache, "incomplete"), "Synthetic interrupted extraction");
+    await expect(linuxDiagramBrowserOptions(root)).rejects.toMatchObject({
+      code: expect.stringMatching(/^(ENOTEMPTY|EEXIST)$/),
+      syscall: "rename",
+    });
+    expect(await readdir(root)).toEqual([`linux-x64-${version}`]);
+    expect(await readdir(cache)).toEqual(["incomplete"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 afterEach(() => vi.unstubAllEnvs());
 
 it.each([undefined, "1"])(
