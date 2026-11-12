@@ -199,7 +199,6 @@ export function TimerRow({
         <span class="pk-segmented pk-studio-time__transport" role="group" aria-label={`${timer.name} controls`}>
           <Button
             icon
-            class="pk-studio-time__start"
             variant={reading.running ? "secondary" : "primary"}
             aria-label={`${startLabel} ${timer.name}`}
             title={startLabel}
