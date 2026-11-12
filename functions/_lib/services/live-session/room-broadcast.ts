@@ -87,7 +87,7 @@ export class LiveRoomBroadcast {
       outputs: seesRoomOutputs(viewer) ? this.store.outputs() : EMPTY_LIVE_OUTPUTS,
       speakerMessage: seesRoomOutputs(viewer) ? this.store.speakerMessage() : null,
       preview: operator ? this.store.preview() : EMPTY_LIVE_AUX_COMPOSITION,
-      timers: this.store.timers(session),
+      timers: this.store.timers(),
       reactionTotals: this.store.reactionTotals(),
       queue: operator ? this.store.queue() : EMPTY_QUEUE,
       operators: operator ? this.operators(undefined, eligible) : [],

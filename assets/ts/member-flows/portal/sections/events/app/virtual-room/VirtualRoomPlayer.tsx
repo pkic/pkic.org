@@ -1,4 +1,4 @@
-import { formatLiveTimer } from "../../../../../../../shared/live-timer-policy";
+import { formatLiveTimer } from "../../../../../../../shared/live-timer-format";
 import { useLiveTimerNow } from "../../../../../../live-session/useLiveCountdown";
 /**
  * The location's live player and what is on it: YouTube's privacy-enhanced player for the day's stream, then

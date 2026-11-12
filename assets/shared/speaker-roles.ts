@@ -7,9 +7,13 @@
  * decides what to call it. Controls that offer a subset filter this list
  * rather than writing their own.
  */
-import { PROPOSAL_SPEAKER_ROLES, type ProposalSpeakerRole } from "../../shared/schemas/participant-roles";
+import {
+  isProposalSpeakerRoleAssignable,
+  PROPOSAL_SPEAKER_ROLES,
+  type ProposalSpeakerRole,
+} from "./schemas/participant-roles";
 
-const SPEAKER_ROLE_LABELS: Record<ProposalSpeakerRole, string> = {
+export const SPEAKER_ROLE_LABELS: Record<ProposalSpeakerRole, string> = {
   proposer: "Proposer",
   speaker: "Speaker",
   co_speaker: "Co-speaker",
@@ -19,3 +23,7 @@ const SPEAKER_ROLE_LABELS: Record<ProposalSpeakerRole, string> = {
 
 export const SPEAKER_ROLE_OPTIONS: ReadonlyArray<{ value: ProposalSpeakerRole; label: string }> =
   PROPOSAL_SPEAKER_ROLES.map((role) => ({ value: role, label: SPEAKER_ROLE_LABELS[role] }));
+
+export function assignableSpeakerRoleOptions(ownership: { isCurrentProposer: boolean }) {
+  return SPEAKER_ROLE_OPTIONS.filter((option) => isProposalSpeakerRoleAssignable(option.value, ownership));
+}

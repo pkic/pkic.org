@@ -6,13 +6,10 @@ import {
   type LiveRoomSnapshot,
 } from "../../shared/schemas/live-session-room";
 import { DEFAULT_LIVE_SCHEDULE_CONFIG, type LiveScheduleProjection } from "../../shared/schemas/live-session-schedule";
-import { defaultLiveTimerGraphic, type LiveTimer } from "../../shared/schemas/live-session-timer";
-import { LIVE_SESSION_TIMER_ID } from "../../shared/live-timer-policy";
+import { defaultLiveTimerGraphic } from "../../shared/schemas/live-session-timer";
+import { LIVE_SESSION_TIMER_ID, sessionLiveTimer } from "../../shared/live-timer-policy";
 import { applyLiveRoomMessage, type LiveRoomState } from "../live-session/live-room-state";
 import type { ScreenCachedAgenda } from "./screen-cache";
-
-/** The countdown to the next session's start, which auto mode shows before it begins. */
-const STARTS_IN_TIMER_ID = "starts-in";
 
 /** Where the room is on its agenda at `now`: the session under way, else the next one, and the one after. */
 export function screenAgendaMoment(sessions: readonly ScreenAgendaSession[], now: number) {
@@ -51,23 +48,12 @@ function upNext(
   };
 }
 
-const countdown = (id: string, name: string, kind: LiveTimer["kind"], until: string): LiveTimer => ({
-  id,
-  name,
-  kind,
-  targetAt: kind === "until" ? until : null,
-  durationSeconds: null,
-  running: true,
-  anchorAt: until,
-  heldMs: 0,
-  change: null,
-});
-
 /**
  * The stage display a screen runs on its own once the studio's session has
- * ended and the studio cannot be reached: the session under way counts to
- * its scheduled end; before the next one, the countdown to its start. Null
- * when the agenda holds nothing more for the room.
+ * ended and the studio cannot be reached: the session under way, else the
+ * next one, with its session timer following the agenda, so it reads the
+ * time until the next session starts and then counts it down. Null when the
+ * agenda holds nothing more for the room.
  */
 export function screenAutoState(
   agenda: ScreenCachedAgenda,
@@ -77,13 +63,8 @@ export function screenAutoState(
   const { current, next, after } = screenAgendaMoment(agenda.sessions, now);
   const shown = current ?? next;
   if (!shown) return null;
-  const timer = current
-    ? countdown(LIVE_SESSION_TIMER_ID, "Session", "session", current.endAt)
-    : countdown(STARTS_IN_TIMER_ID, "Starts in", "until", shown.startAt);
-  const graphic = current
-    ? defaultLiveTimerGraphic(timer.id)
-    : // A start coming up is no warning.
-      { ...defaultLiveTimerGraphic(timer.id), warningSeconds: 0 };
+  const timer = sessionLiveTimer();
+  const graphic = defaultLiveTimerGraphic(LIVE_SESSION_TIMER_ID);
   const stageDisplay = {
     ...EMPTY_LIVE_AUX_COMPOSITION,
     schedule: upNext(after, agenda, room, now),

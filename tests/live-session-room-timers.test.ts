@@ -13,12 +13,50 @@ const f = createLiveRoomFixture();
 describe("live room timers", () => {
   beforeEach(() => f.setup());
 
-  it("starts every room with a session timer that follows the agenda's end", async () => {
+  it("starts every room with a session timer that follows the agenda", async () => {
     const operator = await f.connect({ person: "operator" });
-    const { timers, session } = await operator.next("room.snapshot");
+    const { timers } = await operator.next("room.snapshot");
     expect(timers).toEqual([
-      expect.objectContaining({ id: LIVE_SESSION_TIMER_ID, kind: "session", running: true, anchorAt: session.endAt }),
+      expect.objectContaining({ id: LIVE_SESSION_TIMER_ID, kind: "session", followsAgenda: true, anchorAt: null }),
     ]);
+  });
+
+  it("sets what a timer does at zero and where it sounds, refusing a reset a timer cannot do", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const second = await f.connect({ person: "secondOperator" });
+    operator.send({
+      type: "timer.add",
+      timer: { name: "Pitch", kind: "duration", targetAt: null, durationSeconds: 180 },
+    });
+    const pitch = (await second.next("timers.changed", (message) => message.timers.length === 2)).timers[1]!;
+    const settings = {
+      atZero: { action: "reset" as const, resetAfterSeconds: 5, restart: true },
+      sound: { places: ["stage-display" as const], warningSeconds: 30, zero: true },
+    };
+    operator.send({ type: "timer.configure", timerId: pitch.id, settings });
+    expect(
+      (await second.next("timers.changed", (message) => message.timers[1]!.atZero.action === "reset")).timers[1],
+    ).toMatchObject(settings);
+    operator.send({ type: "timer.configure", timerId: LIVE_SESSION_TIMER_ID, settings });
+    expect((await operator.next("room.refused")).code).toBe("LIVE_TIMER_SETTINGS_UNSUPPORTED");
+    operator.send({ type: "timer.control", timerId: LIVE_SESSION_TIMER_ID, action: "reset" });
+    expect(
+      (await second.next("timers.changed", (message) => !message.timers[0]!.followsAgenda)).timers[0],
+    ).toMatchObject({ running: false, heldMs: 60 * 60_000 });
+    operator.send({ type: "timer.control", timerId: LIVE_SESSION_TIMER_ID, action: "follow" });
+    await second.next("timers.changed", (message) => message.timers[0]!.followsAgenda);
+
+    // A clock shows the time of day: it is added like a timer and has nothing to start.
+    operator.send({
+      type: "timer.add",
+      timer: { name: "Clock", kind: "clock", targetAt: null, durationSeconds: null },
+    });
+    const clock = (await second.next("timers.changed", (message) => message.timers.length === 3)).timers[2]!;
+    expect(clock).toMatchObject({ kind: "clock", running: false, anchorAt: null });
+    operator.send({ type: "timer.control", timerId: clock.id, action: "start" });
+    expect(
+      (await operator.next("room.refused", (message) => message.code !== "LIVE_TIMER_SETTINGS_UNSUPPORTED")).code,
+    ).toBe("LIVE_TIMER_CLOCK");
   });
 
   it("keeps several named timers that every operator starts, pauses, nudges and resets", async () => {
@@ -81,7 +119,7 @@ describe("live room timers", () => {
       timer: { name: "Pitch", kind: "duration", targetAt: null, durationSeconds: 60 },
     });
     const pitch = (await operator.next("timers.changed", (message) => message.timers.length === 2)).timers[1]!;
-    const graphic = { ...defaultLiveTimerGraphic(pitch.id), label: "Pitch time", format: "hh:mm:ss" as const };
+    const graphic = { ...defaultLiveTimerGraphic(pitch.id), label: "Pitch time", format: "ss" as const };
     operator.send({ type: "stage.timer", timer: graphic, visible: true });
     operator.send({ type: "stage.timer", timer: defaultLiveTimerGraphic(LIVE_SESSION_TIMER_ID), visible: true });
     operator.send({
@@ -147,7 +185,7 @@ describe("live room timers", () => {
       const store = new LiveRoomStore(new LiveRoomSql(state.storage.sql));
       expect(store.stage()).toMatchObject({
         lowerThirdMotion: "cut",
-        timerGraphics: [{ timerId: "session", format: "hh:mm:ss" }],
+        timerGraphics: [{ timerId: "session", format: "clock" }],
       });
       expect(store.preview().timerGraphics).toHaveLength(1);
       expect(store.aux("projector").timerGraphics).toEqual([]);
@@ -201,6 +239,55 @@ describe("live room timers", () => {
       expect(store.overlayMode()).toBe("switcher");
       expect(store.aux("stage-display").panelists).toEqual({ layout: "list" });
       expect(state.storage.sql.exec("SELECT 1 FROM room_controls WHERE name='aux:stage-timer'").toArray()).toEqual([]);
+    });
+  });
+  it("moves stored minute and hour formats to the clock and a stored session timer onto the agenda, once", async () => {
+    await f.connect({ person: "operator" });
+    await runInDurableObject(f.room(), (_room, state) => {
+      const upsert = (name: string, value: unknown) =>
+        state.storage.sql.exec(
+          "INSERT INTO room_controls(name,value_json) VALUES(?,?) ON CONFLICT(name) DO UPDATE SET value_json=excluded.value_json",
+          name,
+          JSON.stringify(value),
+        );
+      const legacy = (format: string) => ({ ...defaultLiveTimerGraphic("session"), format });
+      upsert("stage", {
+        ...EMPTY_LIVE_STAGE,
+        timerGraphics: [legacy("mm:ss"), { ...legacy("hh:mm:ss"), timerId: "b" }],
+      });
+      upsert("aux:stage-display", { ...EMPTY_LIVE_STAGE, question: null, timerGraphics: [legacy("ss")] });
+      const stored = {
+        name: "Session",
+        targetAt: null,
+        durationSeconds: null,
+        heldMs: 0,
+        change: null,
+      };
+      upsert("timers", [
+        { ...stored, id: "session", kind: "session", running: true, anchorAt: "2026-12-01T10:00:00.000Z" },
+        {
+          ...stored,
+          id: "pitch",
+          name: "Pitch",
+          kind: "duration",
+          durationSeconds: 60,
+          running: false,
+          anchorAt: null,
+          heldMs: 60_000,
+        },
+      ]);
+      const store = new LiveRoomStore(new LiveRoomSql(state.storage.sql));
+      expect(store.stage().timerGraphics.map((graphic) => graphic.format)).toEqual(["clock", "clock"]);
+      expect(store.aux("stage-display").timerGraphics.map((graphic) => graphic.format)).toEqual(["ss"]);
+      expect(store.timers()).toMatchObject([
+        { id: "session", followsAgenda: true, running: false, anchorAt: null, atZero: { action: "overtime" } },
+        { id: "pitch", followsAgenda: false, heldMs: 60_000, sound: { places: [] } },
+      ]);
+      const saved = state.storage.sql.exec("SELECT value_json FROM room_controls WHERE name='timers'").toArray()[0]!;
+      new LiveRoomStore(new LiveRoomSql(state.storage.sql)).timers();
+      expect(
+        state.storage.sql.exec("SELECT value_json FROM room_controls WHERE name='timers'").toArray()[0]!.value_json,
+      ).toBe(saved.value_json);
     });
   });
 });

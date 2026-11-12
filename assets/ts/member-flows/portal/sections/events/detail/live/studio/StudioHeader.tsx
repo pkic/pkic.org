@@ -5,7 +5,7 @@ import type { ClockZone } from "../../../../../../../../shared/event-clock";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import { liveSessionTiming, liveSessionTimingText } from "../../../../../../../../shared/live-session-agenda";
 import type { LiveTimer } from "../../../../../../../../shared/schemas/live-session-room";
-import { useLiveTimerValue } from "../../../../../../../live-session/useLiveCountdown";
+import { useLiveTimerReading } from "../../../../../../../live-session/useLiveCountdown";
 import { LiveStudioOperators } from "../presence/LiveStudioOperators";
 import { liveTimeTone } from "./TimePanel";
 import "./StudioHeader.css";
@@ -52,8 +52,8 @@ export function SessionTiming({
   clock: ClockZone;
 }) {
   const now = useNow();
-  const value = useLiveTimerValue(timer);
-  const timing = liveSessionTiming(session, now, active, timer?.running ? value : null);
+  const reading = useLiveTimerReading(timer, session);
+  const timing = liveSessionTiming(session, now, active, reading.running ? reading.valueMs : null);
   // Active before its start is ordinary in rehearsal: said on hover, not colored.
   const early = active && timing.state === "upcoming";
   const tone =

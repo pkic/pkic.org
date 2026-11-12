@@ -241,6 +241,21 @@ export function formatTimeOfDay(value: string | null | undefined): string {
 
 const EVENT_CLOCK_OPTIONS = { hour: "numeric", minute: "2-digit", hour12: false } as const;
 
+/**
+ * A time of day on an event's clock as 24-hour "HH:mm" ("09:05", "00:00"),
+ * whatever the viewer's own zone or hour cycle: the clock a stage display shows.
+ */
+export function format24HourClockInZone(instant: number, zone: ClockZone): string {
+  const parts = new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: clockTimeZone(zone),
+  }).formatToParts(new Date(instant));
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)?.value ?? "00";
+  return `${part("hour").padStart(2, "0")}:${part("minute").padStart(2, "0")}`;
+}
+
 /** A clock with its zone named by the surrounding agenda label. */
 export function formatClockInZone(value: string, zone: ClockZone): string {
   const date = toDate(value);

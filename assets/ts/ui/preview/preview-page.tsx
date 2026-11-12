@@ -25,6 +25,7 @@ import { eventScreenSections } from "./sections-event-screens";
 import { eventScreenStaffSections } from "./sections-event-screens-staff";
 import { eventScreenMonitorSections } from "./sections-event-screens-monitor";
 import { studioOnScreenSections } from "./sections-studio-on-screen";
+import { studioTimerSections } from "./sections-studio-timers";
 import { eventScreenBrowserSections } from "./sections-event-screens-browser";
 
 function main(): void {
@@ -48,6 +49,7 @@ function main(): void {
     ...eventScreenStaffSections,
     ...eventScreenMonitorSections,
     ...studioOnScreenSections,
+    ...studioTimerSections,
     ...eventScreenBrowserSections,
   ];
   // `?only=<id>` renders one section alone, for a tight screenshot of one control.

@@ -23,11 +23,11 @@ describe("a session's timing against now", () => {
 
   it("shows the time left while it runs, by the session timer when it runs", () => {
     expect(text(session(-10, 18.7), true)).toBe("18:42 left");
-    expect(text(session(-10, 30), true, 5 * MINUTE)).toBe("05:00 left");
+    expect(text(session(-10, 30), true, 5 * MINUTE)).toBe("5:00 left");
   });
 
   it("runs over while it is active, and has ended otherwise", () => {
-    expect(text(session(-60, -2.25), true)).toBe("+02:15 over");
+    expect(text(session(-60, -2.25), true)).toBe("+2:15 over");
     expect(text(session(-60, -10), false)).toBe("Ended 10 min ago");
     expect(liveSessionTiming(session(-60, -2), now, true).state).toBe("over");
   });

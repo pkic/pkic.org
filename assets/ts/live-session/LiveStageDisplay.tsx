@@ -1,15 +1,16 @@
 import type { ComponentChildren } from "preact";
 import { formatClockInZone } from "../../shared/format-date";
 import { liveQuestionAsker, liveQuestionFit } from "../../shared/live-stage-display";
+import { liveTimerCounts } from "../../shared/live-timer-policy";
 import type { LiveRoomState } from "./live-room-state";
 import type { LiveStageQuestion, LiveTimerGraphic } from "../../shared/schemas/live-session-room";
-import { useLiveTimerReading } from "./useLiveCountdown";
+import { useLiveTimerGraphicReading } from "./useLiveCountdown";
 import { useNumericCssProperties } from "../hooks/useNumericCssProperties";
 import "./LiveStageDisplay.css";
 
 /** The timer the stage display shows, in its graphic's format and label; it steps aside for a question. */
 function StageCountdown({ graphic, state }: { graphic: LiveTimerGraphic; state: LiveRoomState }) {
-  const reading = useLiveTimerReading(graphic, state.timers, state.session);
+  const reading = useLiveTimerGraphicReading(graphic, state.timers, state.session);
   const geometry = useNumericCssProperties({
     "--timer-text-scale": Math.min(1, 10 / Math.max(reading?.text.length ?? 0, 1)),
   });
@@ -21,6 +22,22 @@ function StageCountdown({ graphic, state }: { graphic: LiveTimerGraphic; state: 
         {reading.text}
       </p>
     </div>
+  );
+}
+
+/**
+ * A clock on the stage display: the event's time of day in one line under the
+ * countdowns, smaller than they are, so it never competes with them and
+ * stays clear of the operators' message along the top.
+ */
+function StageClock({ graphic, state }: { graphic: LiveTimerGraphic; state: LiveRoomState }) {
+  const reading = useLiveTimerGraphicReading(graphic, state.timers, state.session);
+  if (!reading) return null;
+  return (
+    <p class="pk-live-stage-display__clock">
+      {reading.label ? <span class="pk-live-stage-display__label">{reading.label}</span> : null}
+      <time class="pk-live-stage-display__clock-time">{reading.text}</time>
+    </p>
   );
 }
 
@@ -56,8 +73,13 @@ export function LiveStageDisplay({
   aside?: ComponentChildren;
 }) {
   const { session, stage, stageDisplayNext: next } = state;
+  // A clock reads the time of day under the countdowns, which keep the grid to themselves.
+  const isClock = (graphic: LiveTimerGraphic) =>
+    state.timers.some((timer) => timer.id === graphic.timerId && !liveTimerCounts(timer));
+  const clocks = stage.timerGraphics.filter(isClock);
+  const countdowns = stage.timerGraphics.filter((graphic) => !isClock(graphic));
   const geometry = useNumericCssProperties({
-    "--timer-columns": Math.max(1, Math.ceil(Math.sqrt(stage.timerGraphics.length))),
+    "--timer-columns": Math.max(1, Math.ceil(Math.sqrt(countdowns.length))),
   });
   const zone = session.timeZone;
   const rooms = stage.schedule?.available ? stage.schedule.rooms : [];
@@ -67,14 +89,21 @@ export function LiveStageDisplay({
   return (
     <div class="pk-live-stage-display" data-question={current ? "" : undefined}>
       <div class="pk-live-stage-display__session">
-        <span>{session.title}</span>
-        <span>Ends {formatClockInZone(session.endAt, zone)}</span>
+        <span class="pk-live-stage-display__title">{session.title}</span>
+        <span class="pk-live-stage-display__end">Ends {formatClockInZone(session.endAt, zone)}</span>
       </div>
       <div class="pk-live-stage-display__main">
         {current ? <StageQuestion question={current} label="Question" /> : null}
-        <div class="pk-live-stage-display__timers" data-numeric-css-properties={geometry}>
-          {stage.timerGraphics.map((graphic) => (
-            <StageCountdown key={graphic.timerId} graphic={graphic} state={state} />
+        <div class="pk-live-stage-display__timing">
+          {countdowns.length ? (
+            <div class="pk-live-stage-display__timers" data-numeric-css-properties={geometry}>
+              {countdowns.map((graphic) => (
+                <StageCountdown key={graphic.timerId} graphic={graphic} state={state} />
+              ))}
+            </div>
+          ) : null}
+          {clocks.map((graphic) => (
+            <StageClock key={graphic.timerId} graphic={graphic} state={state} />
           ))}
         </div>
       </div>

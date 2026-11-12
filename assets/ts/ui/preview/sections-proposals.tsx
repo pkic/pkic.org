@@ -5,6 +5,7 @@ import { ProposalIdentityPreview } from "./VerifiedOrganizationPreview";
 
 /** Speaker submission states rendered with the production components and synthetic data. */
 export const proposalSections: PreviewSection[] = [
+  { id: "proposer-speaker", title: "Proposer speaker role", render: () => <ConfirmedSpeakerPreview proposer /> },
   { id: "speaker-confirmed", title: "Confirmed proposal participant", render: () => <ConfirmedSpeakerPreview /> },
   { id: "speaker-participation", title: "Speaker willingness", render: () => <SpeakerParticipationPreview /> },
   { id: "speaker-late-response", title: "Late speaker response", render: () => <SpeakerParticipationPreview late /> },

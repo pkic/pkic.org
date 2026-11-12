@@ -1,6 +1,6 @@
 import { formatDuration, formatEventDayInZone, formatRelativeDays } from "./format-date";
 import type { ClockZone } from "./event-clock";
-import { formatLiveTimer } from "./live-timer-policy";
+import { formatLiveDuration } from "./live-timer-format";
 
 /**
  * Where a session stands against the clock and the agenda, for the control
@@ -41,9 +41,9 @@ export function liveSessionTiming(
 
 /** "12 min", "2 h 15 min": never less than a minute, so a span never reads as nothing. */
 const span = (ms: number) => formatDuration(Math.max(ms, 60_000));
-const clock = (ms: number) => formatLiveTimer(ms, ms >= 3_600_000 ? "hh:mm:ss" : "mm:ss");
+const clock = formatLiveDuration;
 
-/** "Starts in 12 min", "Starts in 2 h 15 min", "Starts in 49 days", "18:42 left", "+02:15 over", "Ended 10 min ago". */
+/** "Starts in 12 min", "Starts in 2 h 15 min", "Starts in 49 days", "18:42 left", "+2:15 over", "Ended 10 min ago". */
 export function liveSessionTimingText(timing: LiveSessionTiming, session: Window, zone: ClockZone): string {
   switch (timing.state) {
     case "upcoming":

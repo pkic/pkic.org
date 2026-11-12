@@ -1,3 +1,4 @@
+import { liveTimerReading } from "../../assets/shared/live-timer-policy";
 import { describe, expect, it } from "vitest";
 import { screenOwnViewSchema, type ScreenOwnView } from "../../assets/shared/schemas/event-screens";
 import { persistentRetryDelay } from "../../assets/ts/live-session/live-socket-retry";
@@ -142,10 +143,19 @@ describe("what a screen shows", () => {
 
   it("counts down to the next start, then the session to its scheduled end", () => {
     const room = { id: ROOM, name: "Blue room" };
+    // One session timer following the agenda reads the time to the next start, then the session down to its end.
     const before = screenAutoState(screenAgendaFixture, room, SCREEN_FIXTURE_NOW)!;
-    expect(before.timers[0]).toMatchObject({ kind: "until", running: true, anchorAt: "2026-12-01T09:30:00.000Z" });
-    const during = screenAutoState(screenAgendaFixture, room, Date.parse("2026-12-01T09:40:00.000Z"))!;
-    expect(during.timers[0]).toMatchObject({ kind: "session", anchorAt: "2026-12-01T10:15:00.000Z" });
+    expect(before.timers[0]).toMatchObject({ kind: "session", followsAgenda: true });
+    expect(before.session.startAt).toBe("2026-12-01T09:30:00.000Z");
+    expect(liveTimerReading(before.timers[0]!, before.session, SCREEN_FIXTURE_NOW).startsInMs).toBe(139_000);
+    const at = Date.parse("2026-12-01T09:40:00.000Z");
+    const during = screenAutoState(screenAgendaFixture, room, at)!;
+    expect(during.session.endAt).toBe("2026-12-01T10:15:00.000Z");
+    expect(liveTimerReading(during.timers[0]!, during.session, at)).toMatchObject({
+      valueMs: 35 * 60_000,
+      running: true,
+      startsInMs: null,
+    });
     expect(during.outputs["stage-display"].schedule?.rooms[0]?.title).toBe(screenAgendaFixture.sessions[2]!.title);
     expect(screenAutoState(screenAgendaFixture, room, Date.parse("2026-12-01T23:00:00.000Z"))).toBeNull();
   });

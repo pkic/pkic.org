@@ -122,6 +122,24 @@ export class LiveRoomSql {
           timer,
         );
       }
+      // Timer graphics read in the one clock format; the minutes and hours formats it replaced move to it once.
+      this.sql.exec(
+        `UPDATE room_controls SET value_json = replace(replace(value_json, '"format":"mm:ss"', '"format":"clock"'), '"format":"hh:mm:ss"', '"format":"clock"')
+         WHERE (name IN ('stage', 'preview', 'programUndo') OR name LIKE 'aux:%')
+           AND (instr(value_json, '"format":"mm:ss"') > 0 OR instr(value_json, '"format":"hh:mm:ss"') > 0)`,
+      );
+      // A session timer stored before timers followed the agenda follows it now, as a new room's does.
+      this.sql.exec(
+        `UPDATE room_controls SET value_json = (
+           SELECT json_group_array(json(timer)) FROM (
+             SELECT CASE WHEN json_extract(value, '$.kind') = 'session' AND json_type(value, '$.followsAgenda') IS NULL
+               THEN json_set(value, '$.followsAgenda', json('true'), '$.running', json('false'), '$.anchorAt', NULL, '$.heldMs', 0)
+               ELSE value END AS timer
+             FROM json_each(room_controls.value_json) ORDER BY key))
+         WHERE name = 'timers' AND EXISTS (
+           SELECT 1 FROM json_each(room_controls.value_json)
+           WHERE json_extract(value, '$.kind') = 'session' AND json_type(value, '$.followsAgenda') IS NULL)`,
+      );
       this.ready = true;
     }
     return this.sql;

@@ -4,6 +4,14 @@ export const PROPOSAL_SPEAKER_ROLES = ["proposer", "speaker", "co_speaker", "mod
 export const proposalSpeakerRoleSchema = z.enum(PROPOSAL_SPEAKER_ROLES);
 export type ProposalSpeakerRole = z.infer<typeof proposalSpeakerRoleSchema>;
 
+/** Ownership is independent of presentation role; assigning proposer requires ownership. */
+export function isProposalSpeakerRoleAssignable(
+  role: string,
+  { isCurrentProposer }: { isCurrentProposer: boolean },
+): boolean {
+  return isCurrentProposer || role !== "proposer";
+}
+
 /** Default day choices for a newly accepted speaker, in preference order. */
 export const SPEAKER_ATTENDANCE_PREFERENCE = ["in_person", "virtual", "on_demand"] as const;
 

@@ -1,3 +1,4 @@
+import { sessionLiveTimer } from "../../../assets/shared/live-timer-policy";
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../../assets/shared/schemas/live-session-ticker";
 import {
   EMPTY_LIVE_AUX_COMPOSITION,
@@ -143,19 +144,7 @@ export function liveSnapshot(overrides: Partial<Omit<LiveRoomSnapshot, "type">> 
     outputs: EMPTY_LIVE_OUTPUTS,
     speakerMessage: null,
     preview: EMPTY_LIVE_AUX_COMPOSITION,
-    timers: [
-      {
-        id: "session",
-        name: "Session",
-        kind: "session",
-        targetAt: null,
-        durationSeconds: null,
-        running: false,
-        anchorAt: null,
-        heldMs: 50 * 60_000,
-        change: null,
-      },
-    ],
+    timers: [{ ...sessionLiveTimer(), followsAgenda: false, heldMs: 50 * 60_000 }],
     reactionTotals: {},
     queue: { question: [], "lower-third": [], poll: [], change: null },
     operators: [],
