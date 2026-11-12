@@ -90,7 +90,7 @@ function attempt<T>(request: () => Promise<T>): Promise<T> {
   try {
     return request();
   } catch (error) {
-    return Promise.reject(error);
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
   }
 }
 
