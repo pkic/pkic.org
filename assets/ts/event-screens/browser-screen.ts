@@ -85,6 +85,15 @@ export const browserPlatform = (): BrowserScreenPlatform => ({
   }),
 });
 
+/** A request a browser may not offer at all, or refuse before it even starts, as a promise either way. */
+function attempt<T>(request: () => Promise<T>): Promise<T> {
+  try {
+    return request();
+  } catch (error) {
+    return Promise.reject(error);
+  }
+}
+
 export type BrowserScreen = ReturnType<typeof createBrowserScreen>;
 
 export function createBrowserScreen(platform: BrowserScreenPlatform = browserPlatform()) {
@@ -177,11 +186,13 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
      */
     async enroll(): Promise<BrowserScreenProblem[]> {
       const requests = {
-        capture: platform.getDisplayMedia ? platform.getDisplayMedia(BROWSER_SCREEN_CAPTURE_OPTIONS) : null,
+        capture: platform.getDisplayMedia
+          ? attempt(() => platform.getDisplayMedia!(BROWSER_SCREEN_CAPTURE_OPTIONS))
+          : null,
         fullscreen: document.fullscreenElement
           ? Promise.resolve()
-          : document.documentElement.requestFullscreen().then(() => undefined),
-        sound: platform.unlockSound(),
+          : attempt(() => document.documentElement.requestFullscreen()).then(() => undefined),
+        sound: attempt(platform.unlockSound),
         wakeLock: keepAwake(),
       };
       requestLivestreamSound();

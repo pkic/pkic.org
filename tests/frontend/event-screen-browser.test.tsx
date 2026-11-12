@@ -125,6 +125,14 @@ describe("setting up a browser as a screen", () => {
     expect(screen.get()).toMatchObject(state);
   });
 
+  it("goes on when the browser has no full screen at all", async () => {
+    const { platform, doc } = fakePlatform();
+    (doc.documentElement as { requestFullscreen?: unknown }).requestFullscreen = undefined;
+    const screen = createBrowserScreen(platform);
+    expect(await screen.enroll()).toEqual(["fullscreen"]);
+    expect(screen.get().capture).toBe("live");
+  });
+
   it("accepts a capture of this tab only, and reports when the person stops sharing", async () => {
     const window = fakePlatform({ capture: "window" });
     const refused = createBrowserScreen(window.platform);
