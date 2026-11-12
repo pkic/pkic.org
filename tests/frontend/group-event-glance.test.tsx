@@ -90,7 +90,8 @@ function figures(container: HTMLElement) {
     value: card.querySelector(".pk-stat-card__value")?.textContent,
     note: card.querySelector(".pk-stat-card__note")?.textContent ?? undefined,
     toned: /pk-stat-card--(warn|ok|accent)/.test(card.className),
-    href: card.querySelector("a")?.getAttribute("href"),
+    href: card.querySelector("a.pk-stat-card__link")?.getAttribute("href"),
+    explained: Boolean(card.querySelector(".pk-tooltip__trigger")),
   }));
 }
 
@@ -116,9 +117,24 @@ describe("group event overview at a glance", () => {
         note: "4 cancelled",
         toned: false,
         href: "#/events/registrations",
+        explained: true,
       },
-      { label: "Proposals to review", value: "0", note: undefined, toned: false, href: "#/events/proposals" },
-      { label: "Agenda", value: "Changes to publish", note: "3 of 12 sessions", toned: true, href: "#/events/agenda" },
+      {
+        label: "Proposals to review",
+        value: "0",
+        note: undefined,
+        toned: false,
+        href: "#/events/proposals",
+        explained: false,
+      },
+      {
+        label: "Agenda",
+        value: "Changes to publish",
+        note: "3 of 12 sessions",
+        toned: true,
+        href: "#/events/agenda",
+        explained: false,
+      },
     ]);
   });
 

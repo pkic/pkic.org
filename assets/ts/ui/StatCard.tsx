@@ -179,7 +179,7 @@ export function StatCard({
         </span>
       )}
       <div class="pk-stat-card__label">
-        {href ? (
+        {href && !tooltip ? (
           <a class="pk-stat-card__link" href={href}>
             {label}
           </a>
@@ -217,6 +217,13 @@ export function StatCard({
             </Fragment>
           ))}
         </div>
+      )}
+      {/* A linked card with an explanation: the label keeps its tooltip,
+          and the link covers the card behind it. */}
+      {href && tooltip && (
+        <a class="pk-stat-card__link" href={href}>
+          <span class="pk-sr-only">{label}</span>
+        </a>
       )}
       {onPress && (
         <button type="button" class="pk-stat-card__press" aria-pressed={pressed} onClick={onPress}>

@@ -234,6 +234,11 @@
     inset: 0;
   }
 
+  .pk-stat-card--link .pk-tooltip {
+    position: relative;
+    z-index: 1;
+  }
+
   .pk-stat-card__link:focus-visible {
     outline: none;
   }
