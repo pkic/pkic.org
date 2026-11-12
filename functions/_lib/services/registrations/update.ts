@@ -102,7 +102,7 @@ async function commitUpdateWithNotification(
   }
   const idempotencyKey =
     payload.notification.idempotencyKey ??
-    `registration-status:${built.registration.id}:${built.notificationRevision}:` +
+    `registration-update:${built.registration.id}:${built.notificationRevision}:` +
       `${payload.notification.templateKey}:${payload.notification.noticeKind ?? "status_update"}`;
   const outboxId = payload.notification.outboxId ?? (await outboxIdForOperation(idempotencyKey));
   const email = await prepareRegistrationStatusEmail(db, {

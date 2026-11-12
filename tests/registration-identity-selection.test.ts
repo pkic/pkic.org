@@ -38,6 +38,7 @@ import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import type { DatabaseLike, Env } from "../functions/_lib/types";
 import { signAdminManageJwt } from "../functions/_lib/utils/jwt";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
+import { outboxIdForOperation, prepareQueueEmailStatement } from "../functions/_lib/email/outbox-queue";
 import { registrationIdentityChangeSchema } from "../assets/shared/schemas/registration-identity";
 
 let registrationEnvironment: Env;
@@ -168,6 +169,18 @@ describe("registration representation changes", () => {
     const f = await setupChange();
     const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     await seedWorkflowEmailTemplates(env.DB, adminId);
+    // Earlier profile edits could queue this revision without advancing the registration.
+    const before = await getRegistrationById(env.DB, f.registrationId);
+    const legacyKey = `registration-status:${f.registrationId}:${before.transition_revision + 1}:registration_updated:status_update`;
+    await prepareQueueEmailStatement(env.DB, {
+      outboxId: await outboxIdForOperation(legacyKey),
+      idempotencyKey: legacyKey,
+      templateKey: "registration_updated",
+      recipientEmail: f.email,
+      recipientUserId: f.userId,
+      messageType: "transactional",
+      data: {},
+    }).statement.run();
     const nameUpdate = await callApi(registrationEnvironment, f.path, {
       method: "PATCH",
       headers: { authorization: `Bearer ${f.token}`, "content-type": "application/json" },
@@ -186,8 +199,8 @@ describe("registration representation changes", () => {
       env.DB,
       "SELECT idempotency_key FROM email_outbox WHERE template_key='registration_updated'",
     );
-    expect(notifications).toHaveLength(4);
-    expect(new Set(notifications.map((row) => row.idempotency_key)).size).toBe(4);
+    expect(notifications).toHaveLength(5);
+    expect(new Set(notifications.map((row) => row.idempotency_key)).size).toBe(5);
   });
 
   it("hides representation changes for delegated manage JWTs and refuses them before session verification", async () => {
