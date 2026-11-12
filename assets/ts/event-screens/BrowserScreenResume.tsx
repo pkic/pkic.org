@@ -2,8 +2,8 @@
  * A browser screen's one control, on every state it shows (pairing code,
  * waiting, any output), fixed in a corner of the window so nothing on the
  * screen moves when it comes or goes: what is missing, and one button that
- * does what the next click can. After a reload that is Resume (full screen
- * and sharing this tab again); otherwise Full screen, Share this tab, Turn
+ * does what the next click can. After a reload that is Resume (sharing this
+ * tab again; full screen follows on the next click); otherwise Full screen, Share this tab, Turn
  * on sound once the livestream's player is blocked, or Keep awake when the
  * browser refused the wake lock without a click. The screen runs without
  * the click.
@@ -44,13 +44,14 @@ export function BrowserScreenResume({
       <Button
         variant="primary"
         onClick={() => {
-          // Everything starts within the click: full screen, then the capture and the wake lock, then sound.
+          // Everything starts within the click: the capture or full screen, the wake lock, then sound.
           if (next.asks.fullscreen || next.asks.capture || next.asks.wakeLock)
             void browser.request({ fullscreen: next.asks.fullscreen, capture: next.asks.capture });
           if (next.asks.sound) onSound();
         }}
       >
-        {BROWSER_SCREEN_ACTION_LABELS[next.action]}
+        {/* After a refused share the click shares again, whatever else is missing. */}
+        {BROWSER_SCREEN_ACTION_LABELS[refusal && next.action === "resume" ? "share" : next.action]}
       </Button>
     </aside>
   );

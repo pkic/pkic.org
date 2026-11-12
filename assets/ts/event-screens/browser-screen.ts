@@ -1,13 +1,15 @@
 /**
  * A browser set up as a screen (a laptop at a stage instead of a device):
  * what its clicks grant it and what it keeps. It holds a screen wake lock
- * from the start, with no click; the setup click asks for full screen, then
- * a capture of this tab for staff's screenshots. Each may be refused on its
+ * from the start, with no click; the setup click shares this tab for
+ * staff's screenshots, and the next click anywhere goes full screen (the
+ * share picker would drop a full screen asked for in the same click). Each may be refused on its
  * own; the screen runs without it, and its corner offers what the next
  * click can bring back. A reload takes page full screen and the capture
  * away until someone clicks again; the browser's own full screen (F11, or
  * Control-Command-F on a Mac) counts as full screen and survives a reload.
- * While full screen is missing, a click anywhere on the screen asks for it. Sound is the livestream player's to confirm,
+ * While full screen is missing and no share picker is open, a click
+ * anywhere on the screen asks for it. Sound is the livestream player's to confirm,
  * not a click's.
  */
 import type { ScreenBrowserState } from "../../shared/schemas/event-screen-monitor";
@@ -164,10 +166,11 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
   const readFullscreen = () => set({ fullscreen: isFullscreen() });
   document.addEventListener("fullscreenchange", readFullscreen);
   platform.windowFullscreen?.onChange(readFullscreen);
-  // A click anywhere asks for full screen while it is missing: the capture's picker in the setup click
-  // often drops it, and a big screen is easier to click than its corner.
+  /** A share picker is open: a click that started it must not also ask for full screen, which the picker drops. */
+  let picking = false;
+  // A click anywhere asks for full screen while it is missing; a big screen is easier to click than its corner.
   document.addEventListener("click", () => {
-    if (!state.fullscreen) void enterFullscreen().then(readFullscreen, () => undefined);
+    if (!state.fullscreen && !picking) void enterFullscreen().then(readFullscreen, () => undefined);
   });
 
   /**
@@ -267,31 +270,27 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
   }
 
   /**
-   * What one click asks for, in the order browsers allow: full screen
-   * first (it prompts for nothing, so the click grants it), then the
-   * capture in the same handler, and the wake lock. A browser may refuse
-   * the capture for want of the click, and its picker may drop full
-   * screen; neither is a failure. Once the capture settles, full screen is
-   * read from the document and whatever is still missing is left for the
-   * next click. Resolves with what is missing.
+   * What one click asks for: this tab's capture where it is asked and the
+   * browser can share, otherwise full screen, and the wake lock either way.
+   * Never both: the share picker drops a full screen asked for in the same
+   * click, so full screen waits for the next click. Resolves with what is
+   * missing once the requests settle.
    */
   async function request(asked: { fullscreen?: boolean; capture?: boolean }): Promise<BrowserScreenProblem[]> {
-    const fullscreenRequest = asked.fullscreen ? enterFullscreen() : Promise.resolve();
-    const captureRequest =
-      asked.capture && platform.getDisplayMedia
-        ? attempt(() => platform.getDisplayMedia!(BROWSER_SCREEN_CAPTURE_OPTIONS))
-        : null;
+    const sharing = Boolean(asked.capture && platform.getDisplayMedia);
+    const fullscreenRequest = asked.fullscreen && !sharing ? enterFullscreen() : Promise.resolve();
+    picking = sharing;
+    const captureRequest = sharing ? attempt(() => platform.getDisplayMedia!(BROWSER_SCREEN_CAPTURE_OPTIONS)) : null;
     const [captured] = await Promise.allSettled([
       asked.capture ? capture(captureRequest) : Promise.resolve(null),
       fullscreenRequest,
       keepAwake(),
     ]);
+    if (sharing) picking = false;
     const missing: BrowserScreenProblem[] = [];
     const capturedProblem = captured.status === "fulfilled" ? captured.value : "capture";
     if (capturedProblem) missing.push(capturedProblem);
     else if (state.capture !== "live") missing.push("capture");
-    // The picker may have dropped full screen; ask once more while the click may still allow it.
-    if (asked.fullscreen && !isFullscreen()) await enterFullscreen().catch(() => undefined);
     const fullscreen = isFullscreen();
     if (!fullscreen) missing.push("fullscreen");
     if (!state.wakeLock && platform.wakeLock) missing.push("wake-lock");
@@ -308,7 +307,7 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
       return () => void listeners.delete(listener);
     },
     request,
-    /** The setup click, and Resume's: full screen and this tab's capture. */
+    /** The setup click, and Resume's: this tab's capture, then full screen on the next click. */
     enroll: () => request({ fullscreen: true, capture: true }),
     /** One frame of this tab while it is captured, as the monitor takes a screenshot; null otherwise. */
     async readScreenshot(): Promise<ArrayBuffer | null> {
