@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
 /**
- * The event registrations list.
+ * The attendance-change list: the registrations behind the attendance
+ * dashboard's detail views.
  *
- * This surface carried more signal in color than any other in the portal: a
- * green tick with a `title` for sponsor consent, four tinted numbers in the
- * stats strip, and a `<span>` wearing button classes in the last column. Two
- * of its four filters had no accessible name at all. What is asserted here is
- * what a visual review cannot see — that each of those now says what it means
- * in words, that every filter is named, that the row's activation is a real
- * control, and that a failed list is announced rather than left blank.
+ * What is asserted here is what a visual review cannot see: that each state
+ * says what it means in words, that the filters live in their columns, that
+ * the row's activation is a real control, and that a failed list is
+ * announced rather than left blank.
  */
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
@@ -18,10 +16,8 @@ import {
   eventRegistrationsListResponseSchema,
   type EventRegistrationSummary,
 } from "../../assets/shared/schemas/event-registrations";
-import { Registrations } from "../../assets/ts/member-flows/portal/sections/events/detail/Registrations";
+import { RegistrationsList } from "../../assets/ts/member-flows/portal/sections/events/detail/Registrations";
 import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
-import { menuPath } from "./helpers/menu-path";
-import { tabNames } from "./helpers/tabs";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
 vi.mock("wouter", () => ({
@@ -116,43 +112,17 @@ afterEach(() => {
 });
 
 describe("event registrations list", () => {
-  it("does not offer a full-roster CSV under a filtered legacy registration list", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json(listPage([registration()]))),
-    );
-    const page = mount(<Registrations slug="pqc-2026" />);
-    await settle();
-    await settle();
-    const csv = await menuPath(page, "Registration actions", ["Download", "CSV", "Attendees"]);
-    expect(csv.getAttribute("href")).toContain("/exports");
-    await act(() => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
-    await chooseColumnFilter(page, "Status", "Registered");
-    await settle();
-    await settle();
-    const unavailable = await menuPath(page, "Registration actions", ["Download", "CSV", "Attendees"]);
-    expect(unavailable).toBeInstanceOf(HTMLButtonElement);
-    expect((unavailable as HTMLButtonElement).disabled).toBe(true);
-    expect(unavailable.hasAttribute("href")).toBe(false);
-  });
-  it("keeps status, email delivery and consent in their columns, and names the one view control left in the toolbar", async () => {
+  it("narrows by status and email delivery from their columns, with no other filter control", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => json(listPage([registration()]))),
     );
 
-    const page = mount(<Registrations slug="pqc-2026" />);
+    const page = mount(<RegistrationsList slug="pqc-2026" attendanceChange="left_in_person" />);
     await settle();
     await settle();
 
-    // Three of the four filters narrow by a value a column shows, so they
-    // live in those columns' menus. The attendance-change view is the one
-    // control left above the table — it reshapes the columns and is reached
-    // from the attendance dashboard's links — and it says what it is; it
-    // used to announce only "combo box".
-    expect(filterNames(page)).toEqual(["Attendance changes"]);
+    expect(filterNames(page)).toEqual([]);
     expect(columnFilterOptions(page, "Status")).toEqual([
       "All statuses",
       "Registered",
@@ -160,14 +130,9 @@ describe("event registrations list", () => {
       "Cancelled",
     ]);
     expect(columnFilterOptions(page, "Email")).toEqual(["All email statuses", "Bounced", "Not bounced"]);
-    expect(columnFilterOptions(page, "Consent")).toEqual([
-      "All consent",
-      "Sponsor consent given",
-      "No sponsor consent",
-    ]);
   });
 
-  it("sends the status, consent and attendance-change choices to the registrations query", async () => {
+  it("sends the attendance change and the column filters to the registrations query", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -177,32 +142,17 @@ describe("event registrations list", () => {
       }),
     );
 
-    const page = mount(<Registrations slug="pqc-2026" />);
+    const page = mount(<RegistrationsList slug="pqc-2026" attendanceChange="left_in_person" />);
     await settle();
     await settle();
-
-    await chooseColumnFilter(page, "Consent", "Sponsor consent given");
-    await settle();
-    expect(requests.at(-1)?.searchParams.get("consent")).toBe("true");
-    expect(columnFilterSummary(page, "Consent")).toBe("Sponsor consent given");
+    expect(requests.at(-1)?.searchParams.get("attendance_change")).toBe("left_in_person");
 
     await chooseColumnFilter(page, "Status", "Cancelled");
     await settle();
-    // Both column filters travel together, from the first page.
     expect(requests.at(-1)?.searchParams.get("status")).toBe("cancelled");
-    expect(requests.at(-1)?.searchParams.get("consent")).toBe("true");
-    expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
-
-    const changes = page.querySelector<HTMLSelectElement>('select[aria-label="Attendance changes"]')!;
-    changes.value = "left_in_person";
-    await act(async () => {
-      changes.dispatchEvent(new Event("change", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    await settle();
     expect(requests.at(-1)?.searchParams.get("attendance_change")).toBe("left_in_person");
-    // The view keeps the column filters that still have a column.
-    expect(requests.at(-1)?.searchParams.get("status")).toBe("cancelled");
+    expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
+    expect(columnFilterSummary(page, "Status")).toBe("Cancelled");
   });
 
   it("states email delivery in words in its own column, not as a second badge in the status cell", async () => {
@@ -211,7 +161,7 @@ describe("event registrations list", () => {
       vi.fn(async () => json(listPage([registration({ has_bounced: true })]))),
     );
 
-    const page = mount(<Registrations slug="pqc-2026" />);
+    const page = mount(<RegistrationsList slug="pqc-2026" attendanceChange="left_in_person" />);
     await settle();
     await settle();
 
@@ -221,53 +171,18 @@ describe("event registrations list", () => {
     expect(cells).toContain("Bounced");
   });
 
-  it("names the table and states sponsor consent in words, not only as a green tick", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json(listPage([registration()]))),
-    );
-
-    const page = mount(<Registrations slug="pqc-2026" />);
-    await settle();
-    await settle();
-
-    // Four unnamed tables on one page are announced as four tables.
-    expect(page.querySelector("caption")?.textContent).toBe("Event registrations");
-    // The tick is decoration; the sentence beside it is the answer. The
-    // consent cell is found by its sentence, since the row's other quiet
-    // states — a delivered email — say theirs the same way.
-    const hidden = [...page.querySelectorAll("tbody .pk-sr-only")].map((span) => span.textContent);
-    expect(hidden).toContain("Consented to share with sponsors");
-    expect(page.textContent).toContain("✓");
-  });
-
-  it("says why consent is absent rather than showing an unexplained dash", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json(listPage([registration({ sponsor_consent: false })]))),
-    );
-
-    const page = mount(<Registrations slug="pqc-2026" />);
-    await settle();
-    await settle();
-
-    const hidden = [...page.querySelectorAll(".pk-sr-only")].map((span) => span.textContent);
-    expect(hidden).toContain("No sponsor consent");
-    // The dash is hidden from assistive technology, so it is not read as text.
-    const dashes = [...page.querySelectorAll("[aria-hidden='true']")].map((element) => element.textContent);
-    expect(dashes).toContain("—");
-  });
-
   it("makes the row's activation a real control with a name that says whose row it is", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => json(listPage([registration()]))),
     );
 
-    const page = mount(<Registrations slug="pqc-2026" />);
+    const page = mount(<RegistrationsList slug="pqc-2026" attendanceChange="left_in_person" />);
     await settle();
     await settle();
 
+    // Several unnamed tables on one page are announced as several tables.
+    expect(page.querySelector("caption")?.textContent).toBe("Event registrations");
     // Never an onClick on the `<tr>`: a row is not focusable and takes no
     // Enter key, which is how fourteen portal lists became mouse-only.
     const rowLink = page.querySelector<HTMLAnchorElement>("tbody a.pk-table__row-link");
@@ -282,7 +197,7 @@ describe("event registrations list", () => {
       vi.fn(async () => json(listPage([registration()]))),
     );
 
-    const page = mount(<Registrations slug="pqc-2026" />);
+    const page = mount(<RegistrationsList slug="pqc-2026" attendanceChange="left_in_person" />);
     await settle();
     await settle();
 
@@ -295,73 +210,18 @@ describe("event registrations list", () => {
     expect(view?.tagName.toLowerCase()).toBe("span");
   });
 
-  it("states each stat in words, so the strip is not read by tint", async () => {
-    // The attendance cards are the options the event's settings offer.
-    const days = {
-      days: [
-        {
-          id: "day-1",
-          date: "2026-05-12",
-          label: null,
-          startsAt: null,
-          endsAt: null,
-          sortOrder: 0,
-          attendanceOptions: [{ value: "in_person", label: "In-person", icon: "location" }],
-          attendanceCounts: {},
-        },
-      ],
-    };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) =>
-        json(String(input).includes("/days") ? days : listPage([registration()])),
-      ),
-    );
-
-    const page = mount(<Registrations slug="pqc-2026" />);
-    await settle();
-    await settle();
-
-    const strip = page.querySelector("[role='group']");
-    expect(strip?.getAttribute("aria-label")).toBe("Registration totals");
-    // Each figure is a card whose label says what it counts (#110); the tone
-    // a card wears repeats the label for readers who see color and is not
-    // what says which figure is which.
-    const figures = Object.fromEntries(
-      [...(strip?.querySelectorAll(".pk-stat-card") ?? [])].map((card) => [
-        card.querySelector(".pk-stat-card__label")?.textContent?.trim(),
-        card.querySelector(".pk-stat-card__value")?.textContent?.trim(),
-      ]),
-    );
-    expect(figures).toMatchObject({ Registered: "3", "In-person": "1", Bounced: "3" });
-    expect(strip?.querySelector("[class*='text-']")).toBeNull();
-  });
-
   it("announces a failed list as a sentence rather than leaving the table blank", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => json({ error: "unavailable" }, 503)),
     );
 
-    const page = mount(<Registrations slug="pqc-2026" />);
+    const page = mount(<RegistrationsList slug="pqc-2026" attendanceChange="left_in_person" />);
     await settle();
     await settle();
 
     const alert = page.querySelector("[role='alert']");
     expect(alert).not.toBeNull();
     expect(alert?.textContent).toContain("Online services are temporarily unavailable.");
-  });
-
-  it("names the tab set, so it is not one of several anonymous 'Sections' strips", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json(listPage([registration()]))),
-    );
-
-    const page = mount(<Registrations slug="pqc-2026" />);
-    await settle();
-
-    expect(page.querySelector("[role='tablist']")?.getAttribute("aria-label")).toBe("Registration sections");
-    expect(tabNames(page)).toEqual(["Overview", "Responses", "Email"]);
   });
 });

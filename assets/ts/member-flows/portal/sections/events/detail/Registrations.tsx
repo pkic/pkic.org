@@ -1,47 +1,22 @@
-import { useState, useRef } from "preact/hooks";
 import { usePortalHashLocation } from "../../../hash-location";
 import { Badge } from "../../../../../components/Badge";
 import type { Column } from "../../../../../components/Table";
-import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
-import { FilterSelect } from "../../../../../components/FilterSelect";
-import { Tabs } from "../../../../../components/Tabs";
-import { SponsorConsentCell } from "../../../../../components/event-registrations/SponsorConsentCell";
+import { ApiDataTable } from "../../../../../components/ApiDataTable";
 import { registrationPersonColumn } from "../../../../../components/event-registrations/registration-person-column";
-import { attendanceTypeLabel, eventAttendanceOptions } from "../../../../../shared/attendance";
-import { getJson } from "../../../../../shared/api-client";
-import { useData } from "../../../../../hooks/useData";
-import { eventDaysResponseSchema } from "../../../../../../shared/schemas/event-configuration";
-import { fmt, fmtDate, toast } from "../../../ui";
+import { attendanceTypeLabel } from "../../../../../shared/attendance";
+import { fmt } from "../../../ui";
 import type { Registration, RegistrationAttendanceChange } from "../types";
-import { EventEmailCampaign } from "../../../../../components/events/EventEmailCampaign";
 import { RegistrationDayStates } from "../../../../../components/event-registrations/RegistrationDayStates";
-import { listFilters, RegistrationTotals } from "../../../../../components/event-registrations/RegistrationTotals";
-import { RegistrationRosterActions } from "../../../../../components/event-registrations/RegistrationRosterActions";
-import { EventFormResponses } from "./Forms";
 import {
-  EVENT_REGISTRATION_ATTENDANCE_CHANGE_LABELS,
   EVENT_REGISTRATION_STATUSES,
-  eventRegistrationAttendanceChangeFilterSchema,
   eventRegistrationStatusLabel,
   eventRegistrationsListResponseSchema,
-  type EventRegistrationsListResponse,
 } from "../../../../../../shared/schemas/event-registrations";
-import {
-  eventRegistrationExportsPath,
-  eventRegistrationPromotionsPath,
-  eventRegistrationsPath,
-  eventRegistrationViewPath,
-} from "./registration-paths";
+import { eventRegistrationsPath, eventRegistrationViewPath } from "./registration-paths";
 // `pk-mono` is defined in Content.css, which ships in a lazy chunk, so the
 // module that writes the class name has to import the stylesheet itself.
 import "../../../../../ui/Content.css";
 import { ContactOrganization } from "../../../../../components/ContactOrganization";
-
-const ATTENDANCE_CHANGE_PRESETS: Record<string, string> = {
-  "attendance-changed": "any",
-  "left-in-person": "left_in_person",
-  "joined-in-person": "joined_in_person",
-};
 
 function attendanceJourneyLabel(history: RegistrationAttendanceChange[]): string {
   const transitions = history.flatMap((change) => change.transitions);
@@ -60,32 +35,21 @@ function attendanceJourneyLabel(history: RegistrationAttendanceChange[]): string
   return path.map(attendanceTypeLabel).join(" → ");
 }
 
-type RegistrationStats = EventRegistrationsListResponse["stats"];
+// ─── Attendance-change list ───────────────────────────────────────────────────
 
-// ─── Registration list ────────────────────────────────────────────────────────
-
+/**
+ * The registrations whose attendance changed after they registered, in the
+ * attendance dashboard's detail views: who, their standing, and how their
+ * attendance moved.
+ */
 export function RegistrationsList({
   slug,
-  initialAttendanceChange = "",
-  embedded = false,
+  attendanceChange,
 }: {
   slug: string;
-  initialAttendanceChange?: string;
-  embedded?: boolean;
+  /** The change to list: any change, leaving in-person, or joining it. */
+  attendanceChange: string;
 }) {
-  // Not a column filter: the attendance-change view is seeded by the route
-  // (`…/registrations/left-in-person`), reshapes the columns and the empty
-  // sentence. Export availability also follows the table's complete query.
-  const [attendanceChangeFilter, setAttendanceChangeFilter] = useState(initialAttendanceChange);
-  const [query, setQuery] = useState<Readonly<Record<string, string>> | null>(null);
-  const [stats, setStats] = useState<RegistrationStats | null>(null);
-  const tableRef = useRef<ApiTableActions | null>(null);
-  // The attendance cards are the options the event's settings offer.
-  const days = useData(
-    () => getJson(`/api/v1/events/${encodeURIComponent(slug)}/days`, eventDaysResponseSchema),
-    [slug],
-  );
-
   const columns: Array<Column<Registration>> = [
     registrationPersonColumn<Registration>(),
     // Who they represent and what they do, as the account states it (#119).
@@ -161,50 +125,21 @@ export function RegistrationsList({
         ],
       },
     },
-    ...(attendanceChangeFilter
-      ? [
-          {
-            header: "Attendance journey · latest ↓",
-            cell: (r: Registration) => {
-              const history = r.attendanceChangeHistory ?? [];
-              const latest = r.lastAttendanceChange;
-              return latest ? (
-                <div class="pk-stack pk-stack--tight pk-small">
-                  <div class="pk-strong">{attendanceJourneyLabel(history)}</div>
-                  <div class="pk-muted pk-mono">Last changed {fmt(latest.changedAt)}</div>
-                </div>
-              ) : (
-                "—"
-              );
-            },
-          },
-        ]
-      : []),
-    ...(!attendanceChangeFilter
-      ? [
-          {
-            header: "Consent",
-            cell: (r: Registration) => <SponsorConsentCell consent={r.sponsor_consent} />,
-            className: "pk-center",
-            width: "fit" as const,
-            filter: {
-              param: "consent",
-              options: [
-                { value: "", label: "All consent" },
-                { value: "true", label: "Sponsor consent given" },
-                { value: "false", label: "No sponsor consent" },
-              ],
-            },
-          },
-          { header: "Source", cell: (r: Registration) => r.source_type ?? "—", className: "pk-small pk-muted" },
-          {
-            header: "Registered",
-            cell: (r: Registration) => fmtDate(r.created_at),
-            className: "pk-mono pk-small",
-            sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" as const },
-          },
-        ]
-      : []),
+    {
+      header: "Attendance journey · latest ↓",
+      cell: (r) => {
+        const history = r.attendanceChangeHistory ?? [];
+        const latest = r.lastAttendanceChange;
+        return latest ? (
+          <div class="pk-stack pk-stack--tight pk-small">
+            <div class="pk-strong">{attendanceJourneyLabel(history)}</div>
+            <div class="pk-muted pk-mono">Last changed {fmt(latest.changedAt)}</div>
+          </div>
+        ) : (
+          "—"
+        );
+      },
+    },
     /*
      * The row itself is the link — `rowAction` renders a real control and
      * stretches it over the row — so this column is the affordance a reader
@@ -222,125 +157,23 @@ export function RegistrationsList({
   ];
 
   return (
-    <div class="pk pk-stack">
-      {!embedded && stats && (
-        <RegistrationTotals
-          stats={stats}
-          attendanceOptions={eventAttendanceOptions(days.data?.days ?? [])}
-          onRetryAttendanceOptions={days.error ? () => void days.reload() : undefined}
-          // The attendance-change view is not a filter a card can reproduce.
-          filters={
-            query && !attendanceChangeFilter
-              ? {
-                  current: listFilters(query),
-                  apply: (changes) => tableRef.current?.setFilters?.(changes),
-                  byAttendanceType: false,
-                }
-              : undefined
-          }
-        />
-      )}
-      <ApiDataTable
-        urlState="event-registrations"
-        caption="Event registrations"
-        endpoint={eventRegistrationsPath(slug)}
-        responseSchema={eventRegistrationsListResponseSchema}
-        resolve={(data) => data.registrations}
-        resolvePage={(data) => data.page}
-        onData={(data) => setStats(data.stats)}
-        paginate
-        onQueryChange={setQuery}
-        searchPlaceholder="Search name / email…"
-        params={attendanceChangeFilter ? { attendance_change: attendanceChangeFilter } : {}}
-        actionsRef={tableRef}
-        toolbar={
-          embedded
-            ? undefined
-            : ({ resetPage }) => (
-                <>
-                  {/* Status, email delivery and sponsor consent narrow from their
-                own columns' menus. This one stays: it is a view of the list
-                rather than a value a column shows, arrived at from the
-                attendance dashboard's links as much as from here. */}
-                  <FilterSelect
-                    ariaLabel="Attendance changes"
-                    value={attendanceChangeFilter}
-                    options={[
-                      { value: "", label: "All attendance activity" },
-                      ...eventRegistrationAttendanceChangeFilterSchema.options.map((change) => ({
-                        value: change,
-                        label: EVENT_REGISTRATION_ATTENDANCE_CHANGE_LABELS[change],
-                      })),
-                    ]}
-                    onChange={(value) => {
-                      setAttendanceChangeFilter(value);
-                      resetPage();
-                    }}
-                  />
-                  <RegistrationRosterActions
-                    promotionsEndpoint={eventRegistrationPromotionsPath(slug)}
-                    exportsEndpoint={
-                      query &&
-                      !attendanceChangeFilter &&
-                      !Object.entries(query).some(([key, value]) => value && !["limit", "offset", "sort"].includes(key))
-                        ? eventRegistrationExportsPath(slug)
-                        : null
-                    }
-                    onPromoted={() => tableRef.current?.reload()}
-                    notify={toast}
-                  />
-                </>
-              )
-        }
-        columns={columns}
-        empty={attendanceChangeFilter ? "No attendees match this attendance change" : "No registrations yet"}
-        rowKey={(r) => r.id}
-        rowAction={(r) => ({
-          label: `View registration for ${r.display_name ?? r.user_email ?? "this attendee"}`,
-          href: usePortalHashLocation.hrefs(eventRegistrationViewPath(slug, r.id)),
-        })}
-      />
-    </div>
-  );
-}
-
-// ─── Registrations compositor ─────────────────────────────────────────────────
-
-export function Registrations({ slug, subTab }: { slug: string; subTab?: string }) {
-  const [, navigate] = usePortalHashLocation();
-  const tab = subTab === "responses" || subTab === "email" ? subTab : "overview";
-
-  return (
-    <div class="pk pk-stack">
-      {/* The tab set is named, so it is not one of several anonymous
-          "Sections" strips when a reader lists the page's landmarks. */}
-      <Tabs
-        label="Registration sections"
-        items={[
-          { key: "overview", label: "Overview" },
-          { key: "responses", label: "Responses" },
-          { key: "email", label: "Email" },
-        ]}
-        active={tab}
-        onChange={(key) => navigate(`/events/${slug}/registrations/${key === "overview" ? "" : key}`)}
-      />
-
-      {tab === "overview" && (
-        <RegistrationsList
-          key={`${slug}:${subTab ?? "overview"}`}
-          slug={slug}
-          initialAttendanceChange={ATTENDANCE_CHANGE_PRESETS[subTab ?? ""] ?? ""}
-        />
-      )}
-      {tab === "responses" && <EventFormResponses slug={slug} purpose="event_registration" />}
-      {tab === "email" && (
-        <EventEmailCampaign
-          campaignsPath={`/api/v1/events/${encodeURIComponent(slug)}/email/campaigns`}
-          daysPath={`/api/v1/events/${encodeURIComponent(slug)}/days`}
-          initialAudience="attendees"
-          notify={toast}
-        />
-      )}
-    </div>
+    <ApiDataTable
+      urlState="event-registrations"
+      caption="Event registrations"
+      endpoint={eventRegistrationsPath(slug)}
+      responseSchema={eventRegistrationsListResponseSchema}
+      resolve={(data) => data.registrations}
+      resolvePage={(data) => data.page}
+      paginate
+      searchPlaceholder="Search name / email…"
+      params={{ attendance_change: attendanceChange }}
+      columns={columns}
+      empty="No attendees match this attendance change"
+      rowKey={(r) => r.id}
+      rowAction={(r) => ({
+        label: `View registration for ${r.display_name ?? r.user_email ?? "this attendee"}`,
+        href: usePortalHashLocation.hrefs(eventRegistrationViewPath(slug, r.id)),
+      })}
+    />
   );
 }

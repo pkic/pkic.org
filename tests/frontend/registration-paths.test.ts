@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  eventRegistrationExportsPath,
   eventRegistrationPath,
-  eventRegistrationPromotionsPath,
   eventRegistrationResourcePath,
   eventRegistrationsPath,
   eventRegistrationsViewPath,
@@ -15,8 +13,6 @@ describe("event registration resource paths", () => {
     expect(eventRegistrationPath("event", "registration/1")).toBe(
       "/api/v1/events/event/registrations/registration%2F1",
     );
-    expect(eventRegistrationExportsPath("event")).toBe("/api/v1/events/event/registrations/exports");
-    expect(eventRegistrationPromotionsPath("event")).toBe("/api/v1/events/event/registrations/promotions");
     expect(eventRegistrationResourcePath("event", "registration", "audit")).toBe(
       "/api/v1/events/event/registrations/registration/audit",
     );
