@@ -15,6 +15,7 @@ import {
 import { recordingAcquisitionCleanupStorage } from "../event-recordings/acquisition-cleanup-storage";
 import { runSitePublicationPipeline } from "../site-publication-runtime";
 import { processPendingPromotionRecipients } from "../event-agenda/promotion-batch-dispatch";
+import { listPromotionRenderingBacklog, retryPromotionBacklogItem } from "../event-agenda/promotion-backlog";
 import { purgeExpiredPromotionFiles } from "../event-agenda/promotion-retention";
 import { runAgendaParticipationDueWork } from "../event-participation/reconciliation";
 import { runAgendaSessionReminders } from "../event-participation/reminders";
@@ -250,6 +251,13 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
         idle: !recipients.prepared && !recipients.failed && !renders.processed && !renders.failed && !emails.processed,
         summary: { recipients, renders, emails },
       };
+    },
+    backlog: listPromotionRenderingBacklog,
+    retryBacklogItem: async (env, itemId) => {
+      const outcome = await retryPromotionBacklogItem(env.DB, env, itemId);
+      // A rendered file may be the last one an email waited for.
+      if (outcome.finished) await stagePendingSpeakerKitEmails(env.DB);
+      return outcome;
     },
   },
   {

@@ -276,6 +276,58 @@ describe("speaker kit emails", () => {
     expect(test.status).toBe(403);
   });
 
+  it("emails one person the files an organizer picked, in one message once all are ready", async () => {
+    const f = await kitFixture();
+    const at = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO registrations(id,event_id,user_id,status,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','direct','speaker-secret',?,?)",
+    )
+      .bind(crypto.randomUUID(), f.eventId, f.admin.id, at, at)
+      .run();
+    const picked = {
+      subjectOverride: "Your promotion materials",
+      bodyContent: "Hi {{firstName}}, [open your materials]({{promotionKitUrl}}).",
+      sendMode: "personal",
+      filter: { audience: "attendees", attendeeStatus: "all", userIds: [f.admin.id] },
+      materials: {
+        files: [
+          { kit: "session", occurrenceId: f.sessionId, format: "portrait" },
+          { kit: "attendee", format: "carousel" },
+          { kit: "badge", format: "square" },
+        ],
+      },
+    };
+    const twoPeople = { ...picked, filter: { ...picked.filter, userIds: [f.admin.id, f.userId] } };
+    expect((await post(f, `${campaigns}/previews`, twoPeople)).status).toBe(400);
+    const otherSession = { ...picked, filter: { ...picked.filter, userIds: [f.userId] } };
+    expect((await post(f, `${campaigns}/previews`, otherSession)).status).toBe(422);
+
+    expect((await send(f, picked)).queuedRecipients).toBe(1);
+    const rows = await env.DB.prepare(
+      "SELECT occurrence_id,formats_json FROM event_promotion_batch_recipients ORDER BY occurrence_id IS NULL",
+    ).all<{ occurrence_id: string | null; formats_json: string }>();
+    expect(rows.results).toEqual([
+      { occurrence_id: f.sessionId, formats_json: '["portrait"]' },
+      { occurrence_id: null, formats_json: '["carousel"]' },
+    ]);
+
+    while ((await processPendingPromotionRecipients(env.DB, 1)).prepared > 0);
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 0, queued: 0, failed: 0 });
+    await renderPendingKits();
+    expect(await stagePendingSpeakerKitEmails(env.DB)).toEqual({ processed: 2, queued: 1, failed: 0 });
+
+    const sent = await env.DB.prepare(
+      "SELECT recipient_email,payload_json FROM email_outbox WHERE idempotency_key LIKE 'promotion-materials:%'",
+    ).all<{ recipient_email: string; payload_json: string }>();
+    expect(sent.results.map((row) => row.recipient_email)).toEqual(["admin@pkic.org"]);
+    const files = parseQueuedEmailAttachments(JSON.parse(sent.results[0]!.payload_json) as Record<string, unknown>);
+    expect(files).toEqual([
+      expect.objectContaining({ kind: "promotion-kit-file", occurrenceId: f.sessionId, format: "portrait" }),
+      expect.objectContaining({ kind: "promotion-kit-file", occurrenceId: null, format: "carousel" }),
+      expect.objectContaining({ kind: "r2-badge-image", r2Key: expect.stringMatching(/\/square$/), required: true }),
+    ]);
+  });
+
   it("attaches each image of a multi-page archive as its own file", async () => {
     const archive = new Uint8Array(
       await downloadZip([

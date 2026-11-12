@@ -1,36 +1,40 @@
 import { DownloadAction } from "../../../../../../ui/DownloadAction";
-import { PromotionTile } from "./PromotionTile";
+import { downloadUrl } from "../../../../../../shared/download-file";
+import { PromotionTile, type PromotionTileSelection } from "./PromotionTile";
 
 function withQuery(url: string, query: string) {
   return `${url}${url.includes("?") ? "&" : "?"}${query}`;
 }
 
-/** The same badge preview and formats for participant and organizer galleries. */
-export function PromotionBadgeTile({ badgeUrl }: { badgeUrl: string }) {
+const badges = [
+  { format: "badge-landscape", name: "Wide badge", ratio: "1.91:1", query: "" },
+  { format: "badge-square", name: "Square badge", ratio: "1:1", query: "format=square&" },
+] as const;
+
+/** The badge in both shapes, one card and one download each, for participant and organizer galleries. */
+export function PromotionBadgeTiles({
+  badgeUrl,
+  select,
+}: {
+  badgeUrl: string;
+  select?: (format: (typeof badges)[number]["format"], download: () => Promise<void>) => PromotionTileSelection;
+}) {
   return (
-    <PromotionTile
-      name="Badge"
-      detail="Wide, square · JPEG"
-      previewSrc={withQuery(badgeUrl, "thumbnail=1")}
-      previewAlt="Preview of your badge"
-      action={
-        <DownloadAction
-          label="Download badge (JPEG)"
-          menuLabel="Download badge formats"
-          options={[
-            {
-              id: "landscape",
-              label: "Wide badge (JPEG)",
-              href: withQuery(badgeUrl, "download=1"),
-            },
-            {
-              id: "square",
-              label: "Square badge (JPEG)",
-              href: withQuery(badgeUrl, "format=square&download=1"),
-            },
-          ]}
-        />
-      }
-    />
+    <>
+      {badges.map((badge) => {
+        const href = withQuery(badgeUrl, `${badge.query}download=1`);
+        return (
+          <PromotionTile
+            key={badge.format}
+            name={badge.name}
+            ratio={badge.ratio}
+            previewSrc={withQuery(badgeUrl, `${badge.query}thumbnail=1`)}
+            previewAlt={`Preview of your ${badge.name.toLowerCase()}`}
+            selection={select?.(badge.format, async () => downloadUrl(href))}
+            action={<DownloadAction label={`Download ${badge.name.toLowerCase()} (JPEG)`} href={href} />}
+          />
+        );
+      })}
+    </>
   );
 }

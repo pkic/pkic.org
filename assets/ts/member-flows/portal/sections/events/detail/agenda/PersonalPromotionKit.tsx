@@ -1,4 +1,4 @@
-import { PromotionBadgeTile } from "./PromotionBadgeTile";
+import { PromotionBadgeTiles } from "./PromotionBadgeTile";
 import { extractOgBadgeUrl } from "../../../../../../shared/widgets/share-panel";
 import { usePromotionArtwork, loadPromotionArtwork } from "./usePromotionArtwork";
 import { usePromotionDownloads } from "./usePromotionDownloads";
@@ -19,19 +19,20 @@ import { Button } from "../../../../../../ui/Button";
 import { DownloadAction } from "../../../../../../ui/DownloadAction";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { PromotionCompositionEditor } from "./PromotionCompositionEditor";
-import { PromotionTile } from "./PromotionTile";
+import { PromotionTile, type PromotionTileSelection } from "./PromotionTile";
 import { copyText } from "../../../../../../shared/clipboard";
 import { toast } from "../../../../ui";
 import "./PromotionGallery.css";
 type Kit = z.infer<typeof promotionKitSchema>;
 type Format = z.infer<typeof promotionFormatSchema>;
+type BadgeFormat = "badge-landscape" | "badge-square";
 
 const tiles = [
-  { format: "portrait", name: "Tall post", detail: "4:5 · JPEG", type: "JPEG" },
-  { format: "square", name: "Square post", detail: "1:1 · JPEG", type: "JPEG" },
-  { format: "landscape", name: "Wide post", detail: "1.91:1 · JPEG", type: "JPEG" },
-  { format: "carousel", name: "Carousel", detail: "PDF slides", type: "PDF", stacked: true },
-] satisfies readonly { format: Format; name: string; detail: string; type: string; stacked?: boolean }[];
+  { format: "portrait", name: "Tall post", ratio: "4:5", type: "JPEG" },
+  { format: "square", name: "Square post", ratio: "1:1", type: "JPEG" },
+  { format: "landscape", name: "Wide post", ratio: "1.91:1", type: "JPEG" },
+  { format: "carousel", name: "Carousel", ratio: "4:5", type: "PDF", stacked: true },
+] satisfies readonly { format: Format; name: string; ratio: string; type: string; stacked?: boolean }[];
 
 export function PersonalPromotionKit({
   base,
@@ -39,8 +40,11 @@ export function PersonalPromotionKit({
   leading,
   readOnly = false,
   menu,
+  select,
 }: {
   base: string;
+  /** Lets an organizer pick files: the selection state of each format, given how to download it. */
+  select?: (format: Format | BadgeFormat, download?: () => Promise<void>) => PromotionTileSelection;
   title: string;
   menu?: ComponentChildren;
   /** Tiles from outside this kit shown first, such as the attendee badge. */
@@ -81,7 +85,7 @@ export function PersonalPromotionKit({
               </Alert>
             )}
             <ul class="pk-promotion-gallery">
-              {leading ?? (attendeeBadgeUrl && <PromotionBadgeTile badgeUrl={attendeeBadgeUrl} />)}
+              {leading ?? (attendeeBadgeUrl && <PromotionBadgeTiles badgeUrl={attendeeBadgeUrl} select={select} />)}
               {tiles.map((tile) => {
                 const loaded = previews[tile.format];
                 const preview = !kit.stale && loaded?.artwork.fingerprint === kit.fingerprint ? loaded : undefined;
@@ -91,8 +95,14 @@ export function PersonalPromotionKit({
                     key={`${tile.format}:${kit.fingerprint}`}
                     previewId={`${base}:${tile.format}`}
                     name={tile.name}
-                    detail={tile.detail}
+                    ratio={tile.ratio}
                     stacked={"stacked" in tile}
+                    selection={
+                      select && {
+                        ...select(tile.format, ready ? () => downloads.download(tile.format, preview) : undefined),
+                        disabled: !ready,
+                      }
+                    }
                     previewSrc={preview?.urls[0]}
                     loadSlides={
                       tile.format === "carousel"

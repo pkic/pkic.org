@@ -93,7 +93,11 @@ export async function processPromotionRenderJob(
     settlePromotionRender(db, job, lease.token, status, detail);
   try {
     if (job.format === BADGE_RENDER_FORMAT) {
-      const renderer = renderBadge ?? (await import("../og-badge-prerender")).renderAndCacheBadge;
+      // A queued badge renders both shapes: an email can attach the square badge too.
+      const renderer =
+        renderBadge ??
+        (async (code: string, env: Env, origin: string) =>
+          (await import("../og-badge-prerender")).renderAndCacheBadge(code, env, origin, ["landscape", "square"]));
       await renderer(badgeRenderReferralCode(job.id), env, resolveAppBaseUrl(env));
       await settle("rendered");
     } else if (await renderQueuedKit(db, env, bucket, job, lease.token, render)) {

@@ -5,8 +5,16 @@ import { useDialogQueryState } from "../../../../../../hooks/useDialogQueryState
 import { useEffect, useRef, useState } from "preact/hooks";
 import { ImageCarousel, ImageCarouselControls } from "../../../../../../ui/ImageCarousel";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
+import { Checkbox } from "../../../../../../ui/Checkbox";
+import { IconImage, IconSlides } from "../../../../../../ui/MediaIcons";
 import type { ComponentChildren } from "preact";
 import "./PromotionGallery.css";
+
+export interface PromotionTileSelection {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+}
 
 /**
  * One ready-to-post picture in a promotion gallery: a small preview, what it is
@@ -15,7 +23,7 @@ import "./PromotionGallery.css";
  */
 export function PromotionTile({
   name,
-  detail,
+  ratio,
   previewSrc,
   previewId,
   previewAlt,
@@ -25,9 +33,11 @@ export function PromotionTile({
   action,
   previewActions,
   loadSlides,
+  selection,
 }: {
   name: string;
-  detail: string;
+  /** The picture's shape, such as "4:5"; the file type is drawn as an icon beside it. */
+  ratio: string;
   previewSrc?: string;
   previewId?: string;
   previewAlt: string;
@@ -39,6 +49,8 @@ export function PromotionTile({
   action?: ComponentChildren;
   loadSlides?: (signal: AbortSignal) => Promise<string[]>;
   previewActions?: (dismiss: () => Promise<void>) => ComponentChildren;
+  /** Makes the tile one of several files an organizer picks to send. */
+  selection?: PromotionTileSelection;
 }) {
   const [open, show, close] = useDialogQueryState(`promotionPreview:${previewId ?? name}`);
   const [slides, setSlides] = useState<string[] | null>(null);
@@ -72,8 +84,17 @@ export function PromotionTile({
     element?.scrollBy({ left: element.clientWidth * direction });
   };
   return (
-    <li class="pk-promotion-tile">
+    <li class={`pk-promotion-tile${selection?.checked ? " pk-promotion-tile--selected" : ""}`}>
       <CollectionCardSurface>
+        {selection && (
+          <Checkbox
+            class="pk-promotion-tile__select"
+            label={<span class="pk-sr-only">{`Select ${name.toLowerCase()}`}</span>}
+            checked={selection.checked}
+            disabled={selection.disabled}
+            onChange={(event) => selection.onChange((event.target as HTMLInputElement).checked)}
+          />
+        )}
         {previewSrc ? (
           <Button
             variant="ghost"
@@ -134,7 +155,11 @@ export function PromotionTile({
           fact={
             <span class="pk-promotion-tile__text">
               <span class="pk-promotion-tile__name">{name}</span>
-              <span class="pk-promotion-tile__detail">{detail}</span>
+              <span class="pk-promotion-tile__detail">
+                {stacked ? <IconSlides /> : <IconImage />}
+                <span class="pk-sr-only">{stacked ? "PDF slides, " : "JPEG image, "}</span>
+                {ratio}
+              </span>
               <span role="status">{status}</span>
             </span>
           }

@@ -126,9 +126,10 @@ export function useDays(daysPath: string) {
 
 export function availableHelperLabelsForAudience(
   audience: EventEmailCampaignAudience,
-  options: { kits?: boolean } = {},
+  options: { kits?: boolean; materials?: boolean } = {},
 ): Set<string> {
   if (options.kits) return new Set([...availableHelperLabelsForAudience(audience), "sessionTitle", "promotionKitUrl"]);
+  if (options.materials) return new Set([...availableHelperLabelsForAudience(audience), "promotionKitUrl"]);
   if (audience === "attendee_invitations" || audience === "speaker_invitations") {
     return new Set([
       "eventName",

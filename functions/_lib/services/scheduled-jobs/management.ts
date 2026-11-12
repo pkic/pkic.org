@@ -16,7 +16,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, Env, UserBackedAuthAdmin } from "../../types";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { runScheduledJobWithD1Budget } from "../scheduled-job-runner";
-import { prepareJobClaim, recordJobOutcome } from "./dispatcher";
+import { prepareJobClaim, reapAbandonedRuns, recordJobOutcome } from "./dispatcher";
 import { SCHEDULED_JOB_DEFINITIONS } from "./registry";
 import { SCHEDULED_JOB_COLUMNS, type ScheduledJobDefinition, type ScheduledJobRow } from "./types";
 
@@ -52,14 +52,15 @@ const JOB_DEFINITIONS = new Map(SCHEDULED_JOB_DEFINITIONS.map((definition) => [d
 function toScheduledJobResource(job: ScheduledJob, actor: UserBackedAuthAdmin): ScheduledJobResource {
   const definition = JOB_DEFINITIONS.get(job.jobKey as ScheduledJobDefinition["key"]);
   const manageState = hasPermission(actor, "scheduler:read") && hasPermission(actor, "scheduler:manage");
+  const domainGranted =
+    definition !== undefined &&
+    (definition.requiredPermissions ?? []).every((permission) => hasPermission(actor, permission));
   return {
     ...job,
     capabilities: {
       manageState,
-      run:
-        manageState &&
-        definition !== undefined &&
-        (definition.requiredPermissions ?? []).every((permission) => hasPermission(actor, permission)),
+      run: manageState && domainGranted,
+      readBacklog: hasPermission(actor, "scheduler:read") && domainGranted && definition?.backlog !== undefined,
     },
   };
 }
@@ -187,6 +188,8 @@ export async function updateScheduledJobState(
  * Runs one job immediately. It takes the same lease as a scheduled pass, so a
  * manual trigger cannot run concurrently with the dispatcher, and uses the
  * same D1 query budget so it cannot exceed the bounds the schedule respects.
+ * A run whose lease expired is released first, as the dispatcher does, so a job
+ * whose Worker died can still be run by hand where no cron trigger runs.
  */
 export async function runScheduledJobNow(
   db: DatabaseLike,
@@ -199,6 +202,7 @@ export async function runScheduledJobNow(
   if (row.paused_at !== null) {
     throw new AppError(409, "SCHEDULED_JOB_PAUSED", `Job '${definition.key}' is paused and cannot be run`);
   }
+  await reapAbandonedRuns(db);
   const claim = prepareJobClaim(db, definition.key, definition.leaseSeconds);
   try {
     await db.batch([

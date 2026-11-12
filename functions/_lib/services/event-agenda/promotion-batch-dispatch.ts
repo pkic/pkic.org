@@ -6,11 +6,13 @@ import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
 import { promotionBatchCreateSchema } from "../../../../assets/shared/schemas/event-promotion-batches";
 import { assignedPromotionKit } from "./promotion-access";
+import { getAttendeePromotionKit } from "./promotion-source";
 import { requestPromotionRenders } from "./promotion-render-jobs";
 
 interface Recipient {
   batch_id: string;
-  occurrence_id: string;
+  /** NULL for the attendee kit, which belongs to no session. */
+  occurrence_id: string | null;
   user_id: string;
   event_id: string;
   published_revision: number;
@@ -25,7 +27,7 @@ export async function processPendingPromotionRecipients(db: DatabaseLike, limit 
   const at = nowIso();
   const recipients = await all<Recipient>(
     db,
-    `SELECT recipient.batch_id,recipient.occurrence_id,recipient.user_id,recipient.attempts,batch.event_id,batch.published_revision,batch.formats_json,batch.origin
+    `SELECT recipient.batch_id,recipient.occurrence_id,recipient.user_id,recipient.attempts,batch.event_id,batch.published_revision,COALESCE(recipient.formats_json,batch.formats_json) AS formats_json,batch.origin
     FROM event_promotion_batch_recipients recipient JOIN event_promotion_batches batch ON batch.id=recipient.batch_id
     WHERE (recipient.status='queued' AND recipient.next_attempt_at<=?) OR (recipient.status='preparing' AND recipient.lease_expires_at<=?)
     ORDER BY recipient.next_attempt_at,recipient.batch_id,recipient.occurrence_id,recipient.user_id LIMIT ?`,
@@ -37,7 +39,7 @@ export async function processPendingPromotionRecipients(db: DatabaseLike, limit 
     const lease = createDurableJobLease();
     const claimed = await run(
       db,
-      "UPDATE event_promotion_batch_recipients SET status='preparing',processing_token=?,lease_expires_at=?,updated_at=? WHERE batch_id=? AND occurrence_id=? AND user_id=? AND ((status='queued' AND next_attempt_at<=?) OR (status='preparing' AND lease_expires_at<=?))",
+      "UPDATE event_promotion_batch_recipients SET status='preparing',processing_token=?,lease_expires_at=?,updated_at=? WHERE batch_id=? AND occurrence_id IS ? AND user_id=? AND ((status='queued' AND next_attempt_at<=?) OR (status='preparing' AND lease_expires_at<=?))",
       [
         lease.token,
         lease.expiresAt,
@@ -56,21 +58,23 @@ export async function processPendingPromotionRecipients(db: DatabaseLike, limit 
         "SELECT published_revision FROM event_agenda_state WHERE event_id=?",
         [recipient.event_id],
       );
-      if (current?.published_revision !== recipient.published_revision)
+      if ((current?.published_revision ?? 0) !== recipient.published_revision)
         throw new AppError(409, "PROMOTION_BATCH_OBSOLETE", "The published agenda changed. Start a new batch.");
-      const source = await assignedPromotionKit(
-        db,
-        recipient.event_id,
-        recipient.occurrence_id,
-        recipient.user_id,
-        false,
-        recipient.origin,
-      );
+      const source = recipient.occurrence_id
+        ? await assignedPromotionKit(
+            db,
+            recipient.event_id,
+            recipient.occurrence_id,
+            recipient.user_id,
+            false,
+            recipient.origin,
+          )
+        : await getAttendeePromotionKit(db, recipient.event_id, recipient.user_id, recipient.origin);
       const formats = promotionBatchCreateSchema.shape.formats.parse(JSON.parse(recipient.formats_json));
       await requestPromotionRenders(db, recipient.event_id, source, formats, recipient.origin);
       await run(
         db,
-        "UPDATE event_promotion_batch_recipients SET status='prepared',fingerprint=?,processing_token=NULL,lease_expires_at=NULL,last_error=NULL,updated_at=? WHERE batch_id=? AND occurrence_id=? AND user_id=? AND processing_token=?",
+        "UPDATE event_promotion_batch_recipients SET status='prepared',fingerprint=?,processing_token=NULL,lease_expires_at=NULL,last_error=NULL,updated_at=? WHERE batch_id=? AND occurrence_id IS ? AND user_id=? AND processing_token=?",
         [source.kit.fingerprint, nowIso(), recipient.batch_id, recipient.occurrence_id, recipient.user_id, lease.token],
       );
       prepared++;
@@ -80,7 +84,7 @@ export async function processPendingPromotionRecipients(db: DatabaseLike, limit 
       const permanent = error instanceof AppError && [403, 404, 409, 422].includes(error.status);
       await run(
         db,
-        "UPDATE event_promotion_batch_recipients SET status=?,attempts=?,next_attempt_at=?,processing_token=NULL,lease_expires_at=NULL,last_error=?,updated_at=? WHERE batch_id=? AND occurrence_id=? AND user_id=? AND processing_token=?",
+        "UPDATE event_promotion_batch_recipients SET status=?,attempts=?,next_attempt_at=?,processing_token=NULL,lease_expires_at=NULL,last_error=?,updated_at=? WHERE batch_id=? AND occurrence_id IS ? AND user_id=? AND processing_token=?",
         [
           permanent || retry.status === "failed" ? "failed" : "queued",
           attempts,

@@ -46,6 +46,12 @@ function assertCampaignRecipientLimit(rows: unknown[], maxRecipients: number): v
   );
 }
 
+/** Bindings for the picked-people condition: the same JSON list twice, or no narrowing. */
+function pickedUsers(filter: CampaignAudienceFilter): [string | null, string | null] {
+  const picked = filter.userIds ? JSON.stringify(filter.userIds) : null;
+  return [picked, picked];
+}
+
 export function attendeeCampaignSelection(
   event: CampaignEvent,
   filter: CampaignAudienceFilter,
@@ -80,6 +86,7 @@ export function attendeeCampaignSelection(
            ${population.fromSql}
              AND u.email IS NOT NULL
              AND (? IS NULL OR lower(trim(u.email)) IN (SELECT value FROM json_each(?)))
+             AND (? IS NULL OR u.id IN (SELECT value FROM json_each(?)))
          )
          SELECT registration_id, manage_link_secret, user_id, email, first_name, last_name, organization_name,
                 job_title, status, custom_answers_json, form_placement_id
@@ -91,6 +98,7 @@ export function attendeeCampaignSelection(
       ...population.bindings,
       recipientEmails ? JSON.stringify(recipientEmails) : null,
       recipientEmails ? JSON.stringify(recipientEmails) : null,
+      ...pickedUsers(filter),
       fetchLimit,
     ],
   };
@@ -170,6 +178,7 @@ export function speakerCampaignSelection(
          JOIN users u ON u.id = session.user_id
          WHERE u.email IS NOT NULL
            AND (? IS NULL OR lower(trim(u.email)) IN (SELECT value FROM json_each(?)))
+           AND (? IS NULL OR u.id IN (SELECT value FROM json_each(?)))
        )
        SELECT proposal_id, form_placement_id, email, first_name, last_name, organization_name, job_title,
               speaker_status, proposal_title, proposal_abstract, proposal_type,
@@ -178,7 +187,7 @@ export function speakerCampaignSelection(
        WHERE recipient_rank = 1
        ORDER BY lower(email) ASC
        LIMIT ?`,
-      bindings: [...sessions.bindings, recipientEmailsJson, recipientEmailsJson, limit],
+      bindings: [...sessions.bindings, recipientEmailsJson, recipientEmailsJson, ...pickedUsers(filter), limit],
     };
   }
 
@@ -217,6 +226,7 @@ export function speakerCampaignSelection(
          ${onDay}
          AND u.email IS NOT NULL
          AND (? IS NULL OR lower(trim(u.email)) IN (SELECT value FROM json_each(?)))
+         AND (? IS NULL OR u.id IN (SELECT value FROM json_each(?)))
      )
      SELECT proposal_id, form_placement_id, email, first_name, last_name, organization_name, job_title,
             speaker_status, proposal_title, proposal_abstract, proposal_type,
@@ -232,6 +242,7 @@ export function speakerCampaignSelection(
       ...(filter.dayDate ? sessions.bindings : []),
       recipientEmailsJson,
       recipientEmailsJson,
+      ...pickedUsers(filter),
       limit,
     ],
   };

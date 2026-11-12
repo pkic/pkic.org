@@ -140,6 +140,27 @@ export function IconDownload(props: SvgProps) {
   );
 }
 
+/** A picture: a frame with a sun and a hill, for an image file. */
+export function IconImage(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <rect x="1.8" y="2.5" width="12.4" height="11" rx="1.2" />
+      <circle cx="5.5" cy="6" r="1.2" />
+      <path d="m1.8 12 3.7-3.5 2.5 2.3 2.2-2 4 3.4" />
+    </StrokeIcon>
+  );
+}
+
+/** Stacked pages, for a multi-page document such as a slide carousel. */
+export function IconSlides(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <rect x="2" y="4" width="9" height="10.5" rx="1" />
+      <path d="M5 1.5h7a2 2 0 0 1 2 2v8" />
+    </StrokeIcon>
+  );
+}
+
 // ── Commands ────────────────────────────────────────────────────────────────
 
 /** A funnel for the control that shows or hides agenda filters. */
