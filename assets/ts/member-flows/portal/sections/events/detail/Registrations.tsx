@@ -71,7 +71,6 @@ export function RegistrationsList({
       header: "Status",
       cell: (r) => <Badge status={r.status} />,
       width: "fit",
-      sort: { asc: "status", desc: "-status" },
       filter: {
         param: "status",
         options: [
