@@ -1,4 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
+import { Button } from "../../../../../../ui/Button";
 import { formatDateTime } from "../../../../../../../shared/format-date";
 import { liveOverlayAccessResponseSchema } from "../../../../../../../shared/schemas/live-overlay-access";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
@@ -23,6 +24,8 @@ export function LiveOverlayLinks({
 }) {
   const [access, setAccess] = useState<{ token: string; expiresAt: string } | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  // Bumped by Try again, so a failed load can repeat without leaving the page.
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let current = true;
     setAccess(null);
@@ -39,8 +42,18 @@ export function LiveOverlayLinks({
     return () => {
       current = false;
     };
-  }, [slug, roomId]);
-  if (error) return <ErrorAlert error={error} />;
+  }, [slug, roomId, attempt]);
+  if (error)
+    return (
+      <div class="pk-stack pk-stack--snug">
+        <ErrorAlert error={error} />
+        <div>
+          <Button variant="secondary" onClick={() => setAttempt((count) => count + 1)}>
+            Try again
+          </Button>
+        </div>
+      </div>
+    );
   if (!access) return <Spinner label="Getting the links…" />;
   return (
     <div class="pk-stack">

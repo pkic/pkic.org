@@ -194,6 +194,20 @@ describe("saved studio layouts", () => {
     expect(loaded.livestream).toHaveLength(saved.livestream.length);
   });
 
+  it("drops a first-shape Output links panel and keeps the workspace's other panels", () => {
+    const storage = memory({
+      [STUDIO_LAYOUT_V1_STORAGE_KEY]: {
+        livestream: [
+          { id: "a", type: "chat", span: 8, height: null },
+          { id: "b", type: "sources", span: 4, height: null },
+        ],
+      },
+    });
+    expect(loadStudioLayouts(storage).livestream.map(({ id, type }) => ({ id, type }))).toEqual([
+      { id: "a", type: "chat" },
+    ]);
+  });
+
   it("settles a saved arrangement whose panels overlap", () => {
     const overlapping: StudioPanel[] = [
       { id: "a", type: "chat", x: 0, y: 0, w: 6, h: 4 },

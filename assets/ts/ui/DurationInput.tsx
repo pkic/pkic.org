@@ -5,7 +5,8 @@
  * Place it in a `Field` with `group`, so the field's name is the legend over
  * the three boxes and each box says which part it is. The value is whole
  * seconds; it is null while every box is empty or a part is out of range,
- * which the form's contract then names.
+ * which the form's contract then names. A form on `useContractForm` passes
+ * `durationFieldOf` as its `fieldOf`, so typing in any box marks that field.
  */
 import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -33,6 +34,9 @@ function joined(parts: Parts, maxHours: number): number | null {
   if (hours > maxHours || minutes > 59 || seconds > 59) return null;
   return hours * 3600 + minutes * 60 + seconds;
 }
+
+/** For `useContractForm`'s `fieldOf`: every box answers the duration field it is named for. */
+export const durationFieldOf = (name: string, control: HTMLElement): string => control.dataset.durationOf ?? name;
 
 const PARTS = [
   { key: "hours", label: "Hours", max: null },
@@ -83,6 +87,7 @@ export function DurationInput({
           ) : null}
           <TextInput
             {...(index === 0 ? { id: control.id, name } : { name: `${name}.${part.key}` })}
+            data-duration-of={name}
             aria-label={part.label}
             aria-describedby={control["aria-describedby"]}
             aria-invalid={control["aria-invalid"]}

@@ -282,6 +282,66 @@ describe("studio timers", () => {
     expect(document.querySelector("dialog[open]")).toBeNull();
   });
 
+  it("keeps a chime saved at another time than the warning when only the name changes", () => {
+    const snapshot = liveSnapshot({ viewer: OPERATOR });
+    const pitch = {
+      ...snapshot.timers[0]!,
+      id: "pitch",
+      name: "Pitch",
+      kind: "duration" as const,
+      followsAgenda: false,
+      durationSeconds: 180,
+      heldMs: 180_000,
+      sound: { warningSeconds: 30, zero: false },
+    };
+    const { host, live } = mountDesk({ ...snapshot, timers: [snapshot.timers[0]!, pitch] }, "stage");
+    void act(() => labeled(host, "Pitch timer").click());
+    void act(() => button(document.body, "Timer settings").click());
+    const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
+    expect(dialog.querySelector<HTMLInputElement>('input[name="graphic.warningSeconds"]')!.value).not.toBe("30");
+    type(dialog.querySelector<HTMLInputElement>('input[name="edit.name"]')!, "Startup pitch");
+    void act(() => button(dialog, "Save").click());
+    expect(commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent))).toEqual([
+      { type: "timer.edit", timerId: "pitch", edit: { name: "Startup pitch" } },
+    ]);
+  });
+
+  it("marks the field an operator got wrong: a length part out of range, a chime at zero seconds left", () => {
+    const snapshot = liveSnapshot({ viewer: OPERATOR });
+    const pitch = {
+      ...snapshot.timers[0]!,
+      id: "pitch",
+      name: "Pitch",
+      kind: "duration" as const,
+      followsAgenda: false,
+      durationSeconds: 180,
+      heldMs: 180_000,
+      sound: { warningSeconds: 60, zero: false },
+    };
+    const { host, live } = mountDesk({ ...snapshot, timers: [snapshot.timers[0]!, pitch] }, "stage");
+    void act(() => labeled(host, "Pitch timer").click());
+    void act(() => button(document.body, "Timer settings").click());
+    const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
+    const minutes = dialog.querySelector<HTMLInputElement>('input[name="edit.durationSeconds.minutes"]')!;
+    type(minutes, "75");
+    // Typing in the minutes box marks the Length field, before any Save.
+    expect(minutes.getAttribute("aria-invalid")).toBe("true");
+    type(minutes, "04");
+    const warning = dialog.querySelector<HTMLInputElement>('input[name="graphic.warningSeconds"]')!;
+    type(warning, "0");
+    expect(warning.getAttribute("aria-invalid")).toBe("true");
+    void act(() => button(dialog, "Save").click());
+    expect(commands(live)).toEqual([]);
+    // The reason shows on Warn at, and only there.
+    const alerts = [...dialog.querySelectorAll('[role="alert"]')];
+    expect(alerts.map((alert) => alert.id)).toEqual([
+      warning
+        .getAttribute("aria-describedby")
+        ?.split(" ")
+        .find((id) => id.endsWith("-message")),
+    ]);
+  });
+
   it("keeps the graphic dialog open when the save cannot reach the room", () => {
     const shown = defaultLiveTimerGraphic("session");
     const snapshot = liveSnapshot({ viewer: OPERATOR });

@@ -93,6 +93,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   private readonly presence: LiveRoomPresence;
   private readonly addedCredits: LiveRoomAddedCredits;
   private readonly engagement: LiveRoomEngagement;
+  private readonly onScreenLists: LiveRoomOnScreenLists;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -140,6 +141,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       () => this.graphics.tickerContext,
       (work) => this.access.run(work),
     );
+    this.onScreenLists = new LiveRoomOnScreenLists(ctx, this.store, this.chat, this.broadcast);
     this.graphics = new LiveRoomGraphics(
       this.sessionEnv,
       this.store,
@@ -148,7 +150,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.outputs,
       new LiveRoomPreview(this.store, this.pollStore, this.controls),
       new LiveRoomGraphicBasis(this.sql),
-      new LiveRoomOnScreenLists(ctx, this.store, this.chat, this.broadcast),
+      this.onScreenLists,
     );
     this.graphics.chatTicker = () => liveChatTickerLines(this.chat);
     this.chatActions = new LiveRoomChatActions(
@@ -386,6 +388,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       }
     }
     this.engagement.clear();
+    this.onScreenLists.stop();
     await this.ctx.storage.deleteAll();
     this.sql.erased();
     this.databaseSession.reset();
@@ -393,7 +396,8 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
 
   private async left(socket: WebSocket): Promise<void> {
     const viewer = socket.deserializeAttachment() as LiveRoomParticipant | null;
-    if (viewer?.role !== "operator") return;
+    // A socket the purge closed can report closing after the erase; telling the others must not recreate the room.
+    if (viewer?.role !== "operator" || !this.sql.holdsData()) return;
     this.presence.left(viewer);
     await this.broadcast.operatorsChanged(socket);
   }

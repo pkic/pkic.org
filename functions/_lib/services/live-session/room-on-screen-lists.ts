@@ -63,6 +63,14 @@ export class LiveRoomOnScreenLists {
     return { config, messages: await liveChatOnAirMessages(this.chat, config.count, sentBy) };
   }
 
+  /** The room's storage is being erased: no refill may run afterwards and recreate it. */
+  stop(): void {
+    if (this.timer) clearTimeout(this.timer);
+    if (this.wake) clearTimeout(this.wake.timer);
+    this.timer = null;
+    this.wake = null;
+  }
+
   /** Questions or chat changed: the lists fill again once the changes of the next moment are in. */
   due(): void {
     this.timer ??= setTimeout(() => {

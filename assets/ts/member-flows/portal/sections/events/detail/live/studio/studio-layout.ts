@@ -117,13 +117,11 @@ export const studioPanelSchema = z
 export type StudioPanel = z.infer<typeof studioPanelSchema>;
 /** Panel types the studio no longer has: the output links are on the event's live layouts settings. A saved one is dropped. */
 const RETIRED_PANEL_TYPES: ReadonlySet<unknown> = new Set(["sources"]);
-const studioWorkspaceSchema = z.preprocess(
-  (panels) =>
-    Array.isArray(panels)
-      ? panels.filter((panel: unknown) => !RETIRED_PANEL_TYPES.has((panel as { type?: unknown } | null)?.type))
-      : panels,
-  z.array(studioPanelSchema).max(24),
-);
+const withoutRetiredPanels = (panels: unknown) =>
+  Array.isArray(panels)
+    ? panels.filter((panel: unknown) => !RETIRED_PANEL_TYPES.has((panel as { type?: unknown } | null)?.type))
+    : panels;
+const studioWorkspaceSchema = z.preprocess(withoutRetiredPanels, z.array(studioPanelSchema).max(24));
 export const studioLayoutsSchema = z
   .object(
     Object.fromEntries(STUDIO_WORKSPACES.map((workspace) => [workspace, studioWorkspaceSchema])) as Record<
@@ -336,7 +334,7 @@ export function migrateStudioLayoutsV1(saved: unknown): StudioLayouts {
   const record = typeof saved === "object" && saved !== null ? (saved as Record<string, unknown>) : {};
   return Object.fromEntries(
     STUDIO_WORKSPACES.map((workspace) => {
-      const parsed = z.array(studioPanelV1Schema).max(24).safeParse(record[workspace]);
+      const parsed = z.array(studioPanelV1Schema).max(24).safeParse(withoutRetiredPanels(record[workspace]));
       if (!parsed.success) return [workspace, defaults[workspace]];
       const placed = flowGrid(
         parsed.data,

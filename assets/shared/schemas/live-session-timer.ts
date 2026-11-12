@@ -22,6 +22,8 @@ export type LiveTimerKind = (typeof LIVE_TIMER_KINDS)[number];
 export const LIVE_TIMER_MAX = 12;
 /** Ten fixed 365-day years either way, including long-form custom durations. */
 export const LIVE_TIMER_MAX_MS = 10 * 365 * 24 * 60 * 60 * 1000;
+/** The longest length a timer takes, in whole hours, for an hours box. */
+export const LIVE_TIMER_MAX_HOURS = LIVE_TIMER_MAX_MS / 3_600_000;
 
 export const liveTimerIdSchema = z.string().regex(/^[a-z0-9-]{1,40}$/u);
 export const liveTimerNameSchema = z

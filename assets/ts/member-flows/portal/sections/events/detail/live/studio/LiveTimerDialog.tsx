@@ -12,6 +12,7 @@ import type {
 import {
   LIVE_TIMER_ZERO_ACTIONS,
   liveTimerAtZeroSchema,
+  LIVE_TIMER_MAX_HOURS,
   liveTimerEditSchema,
   liveTimerGraphicSchema,
   liveTimerResetsAtZero,
@@ -25,7 +26,7 @@ import { LiveClockContext } from "../../../../../../../live-session/useLiveCount
 import { Alert } from "../../../../../../../ui/Alert";
 import { Checkbox } from "../../../../../../../ui/Checkbox";
 import { Dialog } from "../../../../../../../ui/Dialog";
-import { DurationInput } from "../../../../../../../ui/DurationInput";
+import { DurationInput, durationFieldOf } from "../../../../../../../ui/DurationInput";
 import { Field } from "../../../../../../../ui/Field";
 import { FormSection } from "../../../../../../../ui/FormSection";
 import { Select, TextInput } from "../../../../../../../ui/TextControl";
@@ -46,6 +47,8 @@ const timerDialogSchema = z.object({
   graphic: liveTimerGraphicSchema,
 });
 
+/** The chime sounds at the warning, so its refusal shows on the Warn at field. */
+const keyOf = (path: string) => (path === "settings.sound.warningSeconds" ? "graphic.warningSeconds" : path);
 const seconds = (value: string) => (value.trim() ? Number(value) : null);
 const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
 /** The current value with only the fields this operator changed since opening laid over it. */
@@ -114,12 +117,21 @@ export function LiveTimerDialog({
         resetAfterSeconds: action === "reset" ? seconds(resetAfter) : timer.atZero.resetAfterSeconds,
         restart,
       },
-      // The chime sounds when the time turns amber.
-      sound: { warningSeconds: chime ? warnAt : null, zero },
+      // The chime sounds when the time turns amber; one saved at another time stays there until the
+      // operator changes the warning or the chime.
+      sound: {
+        warningSeconds:
+          chime === (opened.timer.sound.warningSeconds !== null) && warnAt === opened.graphic.warningSeconds
+            ? opened.timer.sound.warningSeconds
+            : chime
+              ? warnAt
+              : null,
+        zero,
+      },
     },
     graphic: { ...look, warningSeconds: warnAt, overrunSeconds: seconds(overrun) },
   };
-  const form = useContractForm(timerDialogSchema, body);
+  const form = useContractForm(timerDialogSchema, body, { fieldOf: durationFieldOf, keyOf });
   const actions = LIVE_TIMER_ZERO_ACTIONS.filter((option) => option !== "reset" || liveTimerResetsAtZero(timer.kind));
 
   const save = () => {
@@ -175,7 +187,13 @@ export function LiveTimerDialog({
                 {...form.of("edit.durationSeconds")}
               >
                 {(control) => (
-                  <DurationInput control={control} name="edit.durationSeconds" value={length} onChange={setLength} />
+                  <DurationInput
+                    control={control}
+                    name="edit.durationSeconds"
+                    value={length}
+                    maxHours={LIVE_TIMER_MAX_HOURS}
+                    onChange={setLength}
+                  />
                 )}
               </Field>
             ) : null}
@@ -256,7 +274,7 @@ export function LiveTimerDialog({
                       {...control}
                       name="graphic.warningSeconds"
                       type="number"
-                      min="0"
+                      min={chime ? "1" : "0"}
                       max="3600"
                       inputMode="numeric"
                       value={warning}
