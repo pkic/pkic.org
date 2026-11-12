@@ -138,14 +138,14 @@ async function markOutboxSent(
     db,
     `UPDATE email_outbox
      SET status = 'sent', template_version = ?, provider_message_id = ?, sent_at = ?,
-         payload_json = CASE WHEN ? = '[]' THEN payload_json ELSE json_set(payload_json, '$.${SENT_ATTACHMENT_NAMES_KEY}', json(?)) END,
+         payload_json = json_set(payload_json, '$.${SENT_ATTACHMENT_NAMES_KEY}', json(?)),
          last_error = NULL, processing_token = NULL, lease_expires_at = NULL, updated_at = ?
      WHERE id = ? AND status = 'sending' AND processing_token = ?`,
     [
       templateVersion,
       messageId,
       nowIso(),
-      JSON.stringify(attachmentNames),
+      // Recorded even when empty: an optional badge that was not ready was not sent.
       JSON.stringify(attachmentNames),
       nowIso(),
       row.id,

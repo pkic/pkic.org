@@ -73,7 +73,7 @@ export interface CapturedRequest {
  * back a 4xx/5xx as easily as a success.
  */
 export function stubCampaignFetch(routes: {
-  previews: () => Response;
+  previews: () => Response | Promise<Response>;
   campaigns?: () => Response;
   tests?: () => Response;
   days?: unknown[];

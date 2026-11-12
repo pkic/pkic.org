@@ -90,4 +90,28 @@ describe("event message with picked promotion files", () => {
     expect(container.textContent).not.toContain("attendee@example.test");
     expect(container.textContent).toContain("Shown in the preview");
   });
+
+  it("drops a preview that answers after the picked files changed", async () => {
+    let answer: (response: Response) => void = () => {};
+    stubCampaignFetch({ previews: () => new Promise<Response>((resolve) => (answer = resolve)) });
+    const files = [promotionMaterialFile("attendee:carousel"), promotionMaterialFile("attendee:square")].flatMap(
+      (file) => file ?? [],
+    );
+    const composer = (picked: typeof files) => (
+      <EventEmailCampaign
+        campaignsPath={CAMPAIGN_PATH}
+        daysPath={`${EVENT_PATH}/days`}
+        materials={{ userId: "person-1", files: picked, onReview: () => {} }}
+      />
+    );
+    const container = mount(composer(files));
+    await settle();
+    await composeAndPreview(container);
+    // The organizer attaches other files while the first preview is still on its way.
+    await act(() => render(composer(files.slice(1)), container));
+    answer(json(PREVIEW_BODY));
+    await settle();
+    expect(container.textContent).not.toContain("attendee@example.test");
+    expect(container.textContent).not.toContain("Preview ready");
+  });
 });

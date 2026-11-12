@@ -110,6 +110,8 @@ export function EventEmailCampaign({
 
   const bodyEditor = useRef<MarkdownEditorHandle>(null);
   const subjectPreRef = useRef<HTMLPreElement>(null);
+  /** Counts preview requests; a response from an older message or file selection is dropped. */
+  const previewRequest = useRef(0);
   const [bodyRevision, setBodyRevision] = useState(0);
   const templateRequestIdRef = useRef(0);
   const availableHelperLabels = availableHelperLabelsForAudience(filter.audience, {
@@ -125,6 +127,7 @@ export function EventEmailCampaign({
   }, [subject]);
 
   useEffect(() => {
+    previewRequest.current += 1;
     setPreview(null);
     setPreviewConfirmed(false);
   }, [
@@ -206,14 +209,17 @@ export function EventEmailCampaign({
     setStatus("Generating preview…");
     setPreview(null);
     setPreviewConfirmed(false);
+    const request = ++previewRequest.current;
     try {
       const res = await requestJson(`${campaignsPath}/previews`, eventEmailCampaignPreviewResponseSchema, {
         method: "POST",
         body: JSON.stringify(checked.data),
       });
+      if (request !== previewRequest.current) return;
       setPreview(res);
       setStatus(`Preview ready — ${res.recipientCount} recipients.`);
     } catch (e) {
+      if (request !== previewRequest.current) return;
       // A refusal that names a field (an unknown variable in the message) shows on that field.
       const msg = form.refuse(e);
       setStatus(msg);

@@ -30,7 +30,8 @@ export function buildPromotionBacklogPageQuery(query: PendingWorkListQuery, now:
     SELECT 'kit' AS kind,
            CASE WHEN r.status = 'preparing' AND r.lease_expires_at <= ? THEN 'interrupted' ELSE r.status END AS state,
            e.name AS event_name, r.occurrence_id, COALESCE(r.formats_json, b.formats_json) AS formats,
-           u.first_name, u.last_name, u.email, r.next_attempt_at AS due_at, r.last_error
+           u.first_name, u.last_name, u.email, r.next_attempt_at AS due_at, r.last_error,
+           r.batch_id || ':' || COALESCE(r.occurrence_id, '') || ':' || r.user_id AS item_id
       FROM event_promotion_batch_recipients r
       JOIN event_promotion_batches b ON b.id = r.batch_id
       JOIN events e ON e.id = b.event_id
@@ -40,7 +41,7 @@ export function buildPromotionBacklogPageQuery(query: PendingWorkListQuery, now:
     SELECT 'file',
            CASE WHEN p.status = 'rendering' AND p.lease_expires_at <= ? THEN 'interrupted' ELSE p.status END,
            e.name, p.occurrence_id, json_array(p.format),
-           u.first_name, u.last_name, u.email, p.next_attempt_at, p.last_error
+           u.first_name, u.last_name, u.email, p.next_attempt_at, p.last_error, p.id
       FROM event_promotion_renders p
       JOIN events e ON e.id = p.event_id
       JOIN users u ON u.id = p.user_id
@@ -48,7 +49,8 @@ export function buildPromotionBacklogPageQuery(query: PendingWorkListQuery, now:
     UNION ALL
     SELECT 'email', 'waiting',
            e.name, r.occurrence_id, COALESCE(r.formats_json, b.formats_json),
-           u.first_name, u.last_name, u.email, r.updated_at, NULL
+           u.first_name, u.last_name, u.email, r.updated_at, NULL,
+           r.batch_id || ':' || COALESCE(r.occurrence_id, '') || ':' || r.user_id
       FROM event_promotion_batch_recipients r
       JOIN event_promotion_batches b ON b.id = r.batch_id
       JOIN events e ON e.id = b.event_id
@@ -68,18 +70,20 @@ export function buildPromotionBacklogPageQuery(query: PendingWorkListQuery, now:
   }
   return {
     sql: `SELECT work.kind, work.state, work.event_name, work.occurrence_id, work.formats,
-                 work.first_name, work.last_name, work.email, work.due_at, work.last_error
+                 work.first_name, work.last_name, work.email, work.due_at, work.last_error, work.item_id
             FROM (${source}) work${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""}`,
     bindings,
     orderBy: resolveMappedOrderBy(
       query.sort,
       {
         dueAt: "work.due_at",
-        title: "COALESCE(work.first_name, work.email) COLLATE NOCASE",
+        // The title the table shows: the full name, or the address when there is none.
+        title: `COALESCE(NULLIF(TRIM(COALESCE(work.first_name, '') || ' ' || COALESCE(work.last_name, '')), ''), work.email) COLLATE NOCASE`,
         typeLabel: "work.kind",
       },
       "work.due_at ASC",
-      "work.email ASC",
+      // One recipient row is both a kit and an email, so the kind keeps the identifier unique.
+      "work.kind ASC, work.item_id ASC",
     ),
     limit: query.limit,
     offset: query.offset,

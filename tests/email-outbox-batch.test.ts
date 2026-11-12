@@ -421,6 +421,26 @@ describe("email outbox batch processing", () => {
     expect(JSON.parse(sent.names)).toEqual(["attendee-badge.png"]);
   });
 
+  it("records that nothing was attached when an optional badge was not ready", async () => {
+    vi.stubGlobal("fetch", makeSendgridMock());
+    const id = await queueEmail(env.DB, {
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: "optional-badge@example.test",
+      messageType: "transactional",
+      data: { firstName: "Example" },
+      attachments: [buildBadgeAttachment({ badgeCode: crypto.randomUUID(), badgeType: "donation" })],
+    });
+    await processOutboxById(env.DB, env, id);
+    const [sent] = await queryAll<{ status: string; names: string }>(
+      env.DB,
+      "SELECT status, json_extract(payload_json, '$.__sentAttachmentNames') AS names FROM email_outbox WHERE id = ?",
+      [id],
+    );
+    expect(sent.status).toBe("sent");
+    expect(JSON.parse(sent.names)).toEqual([]);
+  });
+
   it("recovers a completed older-renderer badge through its existing job before delivering the waiting email", async () => {
     const fetchMock = makeSendgridMock();
     vi.stubGlobal("fetch", fetchMock);
