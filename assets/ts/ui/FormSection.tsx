@@ -31,7 +31,8 @@ export function FormSection({
   layout = "fields",
   children,
 }: {
-  title: string;
+  /** Left out only for a form's first section, when the dialog or page title above already names it. */
+  title?: string;
   /** One line on what the group is for, where the fields cannot say it alone. */
   description?: ComponentChildren;
   /** Stack metadata and actions instead of arranging editable fields in columns. */
@@ -40,7 +41,7 @@ export function FormSection({
 }) {
   return (
     <fieldset class="pk-form-section">
-      <legend class="pk-form-section__title">{title}</legend>
+      {title ? <legend class="pk-form-section__title">{title}</legend> : null}
       {description && <p class="pk-form-section__description">{description}</p>}
       <div class={`pk-form-section__fields${layout === "stack" ? " pk-form-section__fields--stack" : ""}`}>
         {children}

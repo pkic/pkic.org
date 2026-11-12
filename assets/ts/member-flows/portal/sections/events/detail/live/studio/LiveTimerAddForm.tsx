@@ -2,7 +2,6 @@ import { useState } from "preact/hooks";
 import type { ClockZone } from "../../../../../../../../shared/event-clock";
 import { clockTimeZone } from "../../../../../../../../shared/event-clock";
 import { formatClockName } from "../../../../../../../../shared/format-date";
-import { parseLiveTimerLength } from "../../../../../../../../shared/live-timer-format";
 import { LIVE_TIMER_KIND_LABELS } from "../../../../../../../../shared/live-timer-policy";
 import type { LiveRoomClientMessage, LiveRoomSession } from "../../../../../../../../shared/schemas/live-session-room";
 import {
@@ -13,6 +12,7 @@ import {
 import { dateTimeLocalToIso, instantToCalendarDate } from "../../../../../../../../shared/timezone";
 import { useContractForm } from "../../../../../../../hooks/useContractForm";
 import { Button } from "../../../../../../../ui/Button";
+import { DurationInput } from "../../../../../../../ui/DurationInput";
 import { Field } from "../../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../../ui/TextControl";
 
@@ -49,14 +49,14 @@ export function LiveTimerAddForm({
   const [name, setName] = useState("");
   const [kind, setKind] = useState<LiveTimerKind>("duration");
   const [time, setTime] = useState("");
-  const [length, setLength] = useState("5:00");
+  const [length, setLength] = useState<number | null>(300);
   const [error, setError] = useState<string | null>(null);
   const zone = clockTimeZone(clock);
   const draft = {
     name,
     kind,
     targetAt: kind === "until" ? liveTimerTargetInstant(time, session, zone) : null,
-    durationSeconds: kind === "duration" ? parseLiveTimerLength(length) : null,
+    durationSeconds: kind === "duration" ? length : null,
   };
   const form = useContractForm(liveTimerDraftSchema, draft);
   const add = () => {
@@ -124,16 +124,14 @@ export function LiveTimerAddForm({
         </Field>
       ) : null}
       {kind === "duration" ? (
-        <Field label="Length" help="As m:ss or h:mm:ss." {...form.of("durationSeconds")}>
+        <Field label="Length" group {...form.of("durationSeconds")}>
           {(control) => (
-            <TextInput
-              {...control}
+            <DurationInput
+              control={control}
               name="durationSeconds"
-              inputMode="numeric"
-              placeholder="5:00"
               value={length}
               disabled={disabled}
-              onInput={(event) => setLength(event.currentTarget.value)}
+              onChange={setLength}
             />
           )}
         </Field>

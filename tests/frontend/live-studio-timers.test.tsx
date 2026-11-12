@@ -30,7 +30,9 @@ describe("studio timers", () => {
     // The create action sits in the panel header and opens the form.
     void act(() => labeled(time, "Add timer").click());
     type(time.querySelector<HTMLInputElement>("input[name=name]")!, "Questions");
-    type(time.querySelector<HTMLInputElement>("input[name=durationSeconds]")!, "10:30");
+    // The length is set as hours, minutes and seconds.
+    type(time.querySelector<HTMLInputElement>('input[name="durationSeconds.minutes"]')!, "10");
+    type(time.querySelector<HTMLInputElement>('input[name="durationSeconds.seconds"]')!, "30");
     void act(() => button(time, "Add timer").click());
     expect(commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent))).toEqual([
       { type: "timer.control", timerId: "session", action: "start" },
@@ -103,7 +105,7 @@ describe("studio timers", () => {
     void act(() => button(document.body, "Timer settings").click());
     const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
     type(dialog.querySelector<HTMLInputElement>('input[name="edit.name"]')!, "Startup pitch");
-    type(dialog.querySelector<HTMLInputElement>('input[name="edit.durationSeconds"]')!, "4:00");
+    type(dialog.querySelector<HTMLInputElement>('input[name="edit.durationSeconds.minutes"]')!, "4");
     void act(() => button(dialog, "Save").click());
     expect(commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent))).toEqual([
       { type: "timer.edit", timerId: "pitch", edit: { name: "Startup pitch", durationSeconds: 240 } },

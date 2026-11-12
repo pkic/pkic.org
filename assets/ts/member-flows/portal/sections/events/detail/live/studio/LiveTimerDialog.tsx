@@ -3,7 +3,6 @@ import { z } from "zod";
 import type { ClockZone } from "../../../../../../../../shared/event-clock";
 import { clockTimeZone } from "../../../../../../../../shared/event-clock";
 import { format24HourClockInZone, formatClockName } from "../../../../../../../../shared/format-date";
-import { formatLiveTimerLength, parseLiveTimerLength } from "../../../../../../../../shared/live-timer-format";
 import { liveTimerHasSettings } from "../../../../../../../../shared/live-timer-policy";
 import type {
   LiveRoomClientMessage,
@@ -26,6 +25,7 @@ import { LiveClockContext } from "../../../../../../../live-session/useLiveCount
 import { Alert } from "../../../../../../../ui/Alert";
 import { Checkbox } from "../../../../../../../ui/Checkbox";
 import { Dialog } from "../../../../../../../ui/Dialog";
+import { DurationInput } from "../../../../../../../ui/DurationInput";
 import { Field } from "../../../../../../../ui/Field";
 import { FormSection } from "../../../../../../../ui/FormSection";
 import { Select, TextInput } from "../../../../../../../ui/TextControl";
@@ -79,7 +79,7 @@ export function LiveTimerDialog({
   const settable = liveTimerHasSettings(timer);
   const shownTime = timer.targetAt ? format24HourClockInZone(Date.parse(timer.targetAt), clock) : "";
   const [name, setName] = useState(timer.name);
-  const [length, setLength] = useState(timer.durationSeconds ? formatLiveTimerLength(timer.durationSeconds) : "");
+  const [length, setLength] = useState<number | null>(timer.durationSeconds);
   const [time, setTime] = useState(shownTime);
   const [warning, setWarning] = useState(String(graphic.warningSeconds));
   const [overrun, setOverrun] = useState(String(graphic.overrunSeconds));
@@ -92,7 +92,7 @@ export function LiveTimerDialog({
   const [error, setError] = useState<string | null>(null);
   const warnAt = seconds(warning);
   const edit: Record<string, unknown> = { name };
-  if (timer.kind === "duration") edit.durationSeconds = parseLiveTimerLength(length);
+  if (timer.kind === "duration") edit.durationSeconds = length;
   // An unchanged time keeps the stored instant, seconds and all.
   if (timer.kind === "until" && time !== shownTime) edit.targetAt = liveTimerTargetInstant(time, session, zone);
   const body = {
@@ -140,7 +140,7 @@ export function LiveTimerDialog({
     <Dialog open size="wide" title="Timer settings" confirmLabel="Save" onCancel={onClose} onConfirm={save}>
       <form noValidate {...form.handlers} class="pk-timer-settings" onSubmit={(event) => event.preventDefault()}>
         <div class="pk-stack">
-          <FormSection title="Timer">
+          <FormSection>
             <Field label="Name" {...form.of("edit.name")}>
               {(control) => (
                 <TextInput
@@ -154,18 +154,12 @@ export function LiveTimerDialog({
             {timer.kind === "duration" ? (
               <Field
                 label="Length"
-                help="As m:ss or h:mm:ss. Once it has begun, the time left moves by the difference."
+                help="Once it has begun, the time left moves by the difference."
+                group
                 {...form.of("edit.durationSeconds")}
               >
                 {(control) => (
-                  <TextInput
-                    {...control}
-                    name="edit.durationSeconds"
-                    inputMode="numeric"
-                    placeholder="5:00"
-                    value={length}
-                    onInput={(event) => setLength(event.currentTarget.value)}
-                  />
+                  <DurationInput control={control} name="edit.durationSeconds" value={length} onChange={setLength} />
                 )}
               </Field>
             ) : null}

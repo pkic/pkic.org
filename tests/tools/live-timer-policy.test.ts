@@ -14,12 +14,7 @@ import {
   updateLiveTimerGraphics,
 } from "../../assets/shared/live-timer-policy";
 import { format24HourClockInZone } from "../../assets/shared/format-date";
-import {
-  formatLiveDuration,
-  formatLiveTimer,
-  formatLiveTimerLength,
-  parseLiveTimerLength,
-} from "../../assets/shared/live-timer-format";
+import { formatLiveDuration, formatLiveTimer } from "../../assets/shared/live-timer-format";
 import {
   DEFAULT_LIVE_TIMER_SOUND,
   defaultLiveTimerGraphic,
@@ -374,16 +369,6 @@ describe("timer sounds", () => {
     const chimeOnly = { ...timer, sound: { warningSeconds: 30, zero: false } };
     expect(liveTimerCue(chimeOnly, session, now + 59_000, now + 61_000)).toBeNull();
     expect(liveTimerCue(chimeOnly, session, now + 29_000, now + 31_000)).toBe("warning");
-  });
-});
-
-describe("a countdown's length as typed", () => {
-  it("reads h:mm:ss, m:ss and whole minutes, and writes it back the short way", () => {
-    expect(["1:30:00", "4:30", "0:45", "90:00", "5", " 2:05 "].map(parseLiveTimerLength)).toEqual([
-      5400, 270, 45, 5400, 300, 125,
-    ]);
-    expect(["", "1:60", "1:75:00", "abc", "1:2"].map(parseLiveTimerLength)).toEqual([null, null, null, null, null]);
-    expect([45, 270, 5400, 3661].map(formatLiveTimerLength)).toEqual(["0:45", "4:30", "1:30:00", "1:01:01"]);
   });
 });
 

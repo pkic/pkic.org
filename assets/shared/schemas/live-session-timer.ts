@@ -30,7 +30,7 @@ export const liveTimerNameSchema = z
   .min(1, "Name the timer.")
   .max(40, "Keep the name under 40 characters.");
 const durationSecondsSchema = z
-  .number({ error: "Enter the length as m:ss or h:mm:ss." })
+  .number({ error: "Enter the length in hours, minutes and seconds." })
   .int()
   .min(1, "Enter a length of at least a second.")
   .max(LIVE_TIMER_MAX_MS / 1000, "Keep the length under ten years.");
