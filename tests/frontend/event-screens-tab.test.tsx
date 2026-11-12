@@ -217,6 +217,36 @@ describe("Pairing a screen", () => {
     expect(openDialog()).toBe(dialog);
     expect(controlFor(dialog, "Pairing code").getAttribute("aria-invalid")).toBe("true");
   });
+
+  it("offers to replace a signed-in screen with the same ID, and sends it only once confirmed", async () => {
+    const posts: unknown[] = [];
+    api(
+      () => [],
+      (request) => {
+        if (request.method !== "POST") return undefined;
+        posts.push(request.body);
+        return posts.length === 1
+          ? refusal(409, "SCREEN_ID_IN_USE", {
+              fieldErrors: { screenId: ["“Foyer” has this screen ID and is signed in. Check the ID, or replace it."] },
+            })
+          : json(record(), 201);
+      },
+    );
+    const root = await mount(true);
+    const dialog = await fillAndPair(root);
+    expect(controlFor(dialog, "Screen ID").getAttribute("aria-invalid")).toBe("true");
+    const replace = [...dialog.querySelectorAll("label")]
+      .find((label) => label.textContent?.startsWith("Replace the signed-in screen"))!
+      .querySelector<HTMLInputElement>("input[type=checkbox]")!;
+    expect(replace.checked).toBe(false);
+    expect(eventScreenPairingCreateSchema.parse(posts[0]).replace).toBeUndefined();
+
+    await act(() => replace.click());
+    await act(() => button(dialog, "Pair screen")!.click());
+    await settle();
+    expect(eventScreenPairingCreateSchema.parse(posts[1]).replace).toBe(true);
+    expect(openDialog()).toBeNull();
+  });
 });
 
 describe("Editing a screen", () => {

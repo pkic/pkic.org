@@ -118,12 +118,13 @@ function approve(person: Staff, body: Record<string, unknown>, eventSlug = EVENT
 }
 
 /** Pair the screen end to end and return its sign-in cookie. */
-async function pair(assignment?: unknown, screenId = SCREEN) {
+async function pair(assignment?: unknown, screenId = SCREEN, extra: Record<string, unknown> = {}) {
   const challenge = await startPairing(screenId);
   const approved = await approve("manager", {
     screenId,
     pairingCode: challenge.code,
     ...(assignment !== undefined ? { assignment } : {}),
+    ...extra,
   });
   expect(approved.status, await approved.clone().text()).toBe(201);
   const activated = await poll(challenge.cookie, screenId);
@@ -201,7 +202,10 @@ describe("event screen pairing", () => {
   it("keeps waiting for a wrong code and leaves the current sign-in untouched", async () => {
     const first = await pair();
     const challenge = await startPairing();
-    const approved = await approve("manager", { pairingCode: challenge.code === "AAAAAAAA" ? "BBBBBBBB" : "AAAAAAAA" });
+    const approved = await approve("manager", {
+      pairingCode: challenge.code === "AAAAAAAA" ? "BBBBBBBB" : "AAAAAAAA",
+      replace: true,
+    });
     expect(approved.status).toBe(201);
     expect((await poll(challenge.cookie)).status).toBe(202);
     expect((await readAsScreen(first.cookie)).status).toBe(200);
@@ -253,9 +257,17 @@ describe("event screen pairing", () => {
     expect(otherScreen.status).toBe(401);
   });
 
-  it("revokes older sign-ins when a screen pairs again", async () => {
+  it("refuses to pair over a signed-in screen until staff confirm, then revokes its older sign-ins", async () => {
     const first = await pair();
-    const second = await pair();
+    // Another screen, a mistyped ID or a browser's colliding one, would sign the first out.
+    const refused = await approve("manager", { pairingCode: (await startPairing()).code });
+    expect(refused.status).toBe(409);
+    const body = (await refused.json()) as { error: { code: string; details: unknown } };
+    expect(body.error.code).toBe("SCREEN_ID_IN_USE");
+    expect(apiValidationErrorDetailsSchema.parse(body.error.details).fieldErrors?.screenId?.[0]).toContain("Foyer");
+    expect((await readAsScreen(first.cookie)).status).toBe(200);
+
+    const second = await pair(undefined, SCREEN, { replace: true });
     expect((await readAsScreen(second.cookie)).status).toBe(200);
     const old = await readAsScreen(first.cookie);
     expect(old.status).toBe(401);
@@ -523,7 +535,7 @@ describe("screen staff permissions", () => {
     )
       .bind(crypto.randomUUID(), users.otherManager, EVENT.id, new Date().toISOString())
       .run();
-    const moved = await approve("otherManager", { pairingCode: challenge.code }, OTHER_EVENT.slug);
+    const moved = await approve("otherManager", { pairingCode: challenge.code, replace: true }, OTHER_EVENT.slug);
     expect(moved.status, await moved.clone().text()).toBe(201);
     expect((await poll(challenge.cookie)).status).toBe(201);
     expect((await readAsScreen(cookie)).status).toBe(401);
