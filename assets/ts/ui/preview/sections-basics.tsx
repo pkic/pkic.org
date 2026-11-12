@@ -10,7 +10,7 @@ import { PersonCell } from "../PersonCell";
 import { PkicMark } from "../PkicMark";
 import { Spinner } from "../Spinner";
 import { StatCard } from "../StatCard";
-import { RegistrationTotalsPreview } from "./RegistrationTotalsPreview";
+import { OverviewRegistrationsPreview, RegistrationTotalsPreview } from "./RegistrationTotalsPreview";
 
 export const basicSections: PreviewSection[] = [
   {
@@ -189,6 +189,9 @@ export const basicSections: PreviewSection[] = [
           <StatCard label="Audits" value="42" note="36 compliant" />
           <StatCard label="Pending Review" value="3" />
         </div>
+
+        {/* The event Overview's figures: the registration card's parts link to the list narrowed to them. */}
+        <OverviewRegistrationsPreview />
 
         {/* Figures that filter the list below: each card and each figure under it is a toggle. */}
         <div data-gallery-open="focus">

@@ -1,5 +1,7 @@
 import { useState } from "preact/hooks";
-import { RegistrationTotals } from "../../components/event-registrations/RegistrationTotals";
+import { registeredTotal, RegistrationTotals } from "../../components/event-registrations/RegistrationTotals";
+import { CollectionTotalCard } from "../../components/CollectionTotals";
+import { StatCard } from "../StatCard";
 import type { EventAttendanceRegistrationsStats } from "../../../shared/schemas/event-registrations";
 import type { EventAttendanceOption } from "../../../shared/schemas/event-configuration";
 
@@ -41,5 +43,16 @@ export function RegistrationTotalsPreview() {
         byAttendanceType: true,
       }}
     />
+  );
+}
+
+/** The event Overview's figures: the list's first card, each part a link to the list narrowed to it. */
+export function OverviewRegistrationsPreview() {
+  return (
+    <div class="pk-stat-row" role="group" aria-label="Event at a glance">
+      <CollectionTotalCard item={registeredTotal(STATS, { href: () => "#registrations" })} />
+      <StatCard label="Proposals to review" value="12" tone="warn" href="#proposals" />
+      <StatCard label="Agenda" value="Changes to publish" note="3 of 48 sessions" tone="warn" href="#agenda" />
+    </div>
   );
 }

@@ -110,15 +110,34 @@ describe("group event overview at a glance", () => {
     expect(container.querySelector('[role="group"]')?.getAttribute("aria-label")).toBe("Event at a glance");
     expect(figures(container)).toEqual([
       {
-        label: "Registrations",
-        value: (2880).toLocaleString(),
-        note: undefined,
+        label: "Registered",
+        value: (2884).toLocaleString(),
+        note: "4 cancelled",
         toned: false,
         href: "#/events/registrations",
       },
       { label: "Proposals to review", value: "0", note: undefined, toned: false, href: "#/events/proposals" },
       { label: "Agenda", value: "Changes to publish", note: "3 of 12 sessions", toned: true, href: "#/events/agenda" },
     ]);
+  });
+
+  it("shows the registrations list's own first card, each part opening the list narrowed to it", async () => {
+    stubEndpoints({ published: 12 });
+    const container = mount(
+      <GroupEventGlance
+        event={EVENT}
+        groupId="group-1"
+        visibleTabs={new Set(["registrations"])}
+        tabHref={(tab) => `#/events/${tab}`}
+      />,
+    );
+    await settle();
+    await settle();
+    const part = container.querySelector<HTMLAnchorElement>("a.pk-stat-card__part");
+    expect(part?.getAttribute("href")).toBe("#/events/registrations?registrations.f.status=cancelled");
+    expect(part?.getAttribute("aria-label")).toBe("Show only the 4 cancelled registrations");
+    // A link, not a toggle: nothing on the Overview is pressed.
+    expect(container.querySelector("[aria-pressed]")).toBeNull();
   });
 
   it("draws only the figures whose tab the reader can open", async () => {
