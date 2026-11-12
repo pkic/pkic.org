@@ -17,6 +17,8 @@ export const LIVE_AUX_OUTPUT_DETAILS: Record<LiveAuxOutput, { label: string; sho
 
 /** The broadcast the room puts on air, as the studio and the room's screens name it. */
 export const LIVE_PROGRAM_OUTPUT_DETAILS = { label: "Program", short: "PGM", purpose: "What is on air" } as const;
+/** The operators' shared Preview: the next composition, which a Transition puts on Program. */
+export const LIVE_PREVIEW_OUTPUT_DETAILS = { label: "Preview", short: "PVW", purpose: "The next composition" } as const;
 /** The room's live stream, as online viewers see it. It is a stream, not an overlay composition. */
 export const LIVE_LIVESTREAM_OUTPUT_DETAILS = {
   label: "Livestream",

@@ -94,8 +94,8 @@ describe("live control room Transition", () => {
 
   it("puts the timer on the shared Preview and toggles it on Program directly", () => {
     const { host, live } = mountDesk(undefined, "stage");
-    void act(() => labeled(host, "Show timer in preview").click());
-    void act(() => labeled(host, "Show timer on air").click());
+    void act(() => labeled(host, "Show Session timer in preview").click());
+    void act(() => labeled(host, "Show Session timer on air").click());
     const graphic = defaultLiveTimerGraphic("session");
     expect(commands(live)).toEqual([
       { type: "preview.set", composition: { timerGraphics: [graphic] } },
@@ -271,7 +271,7 @@ describe("live control room panels", () => {
     const time = panel(host, "Time");
     void act(() => labeled(time, "Reset Session").click());
     void act(() => labeled(time, "Session timer").click());
-    void act(() => button(document.body, "Timer settings").click());
+    void act(() => button(document.body, "Sounds and at zero").click());
     const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
     const action = dialog.querySelector<HTMLSelectElement>("select[name='atZero.action']")!;
     // A session has no length of its own to reset to, so the reset choice is not offered.
@@ -301,7 +301,7 @@ describe("live control room panels", () => {
   it("sends the timer graphic with its own settings", () => {
     const { host, live } = mountDesk(undefined, "stage");
     void act(() => labeled(host, "Session timer").click());
-    void act(() => button(document.body, "Graphic settings").click());
+    void act(() => button(document.body, "Edit graphic").click());
     const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
     type(dialog.querySelector<HTMLInputElement>("input[name=label]")!, "Time left");
     for (const [name, value] of [
@@ -318,7 +318,7 @@ describe("live control room panels", () => {
     }
     type(dialog.querySelector<HTMLInputElement>("input[name=warningSeconds]")!, "60");
     void act(() => button(dialog, "Save").click());
-    void act(() => labeled(host, "Show timer on air").click());
+    void act(() => labeled(host, "Show Session timer on air").click());
     expect(commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent))).toEqual([
       {
         type: "stage.timer",
@@ -334,6 +334,44 @@ describe("live control room panels", () => {
         },
       },
     ]);
+  });
+
+  it("saves a timer graphic onto the outputs that show it, and switches outputs from the row's menu", () => {
+    const shown = defaultLiveTimerGraphic("session");
+    const snapshot = liveSnapshot({ viewer: OPERATOR });
+    const { host, live } = mountDesk(
+      {
+        ...snapshot,
+        stage: { ...snapshot.stage, timerGraphics: [shown] },
+        outputs: {
+          ...snapshot.outputs,
+          "stage-display": { ...snapshot.outputs["stage-display"], timerGraphics: [shown] },
+        },
+      },
+      "stage",
+    );
+    void act(() => labeled(host, "Session timer").click());
+    void act(() => button(document.body, "Edit graphic").click());
+    const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
+    type(dialog.querySelector<HTMLInputElement>("input[name=label]")!, "Time left");
+    void act(() => button(dialog, "Save").click());
+    const saved = { ...shown, label: "Time left" };
+    const [onProgram, onStage] = commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent));
+    expect(onProgram).toEqual({ type: "stage.timer", timer: saved, visible: true });
+    expect(onStage).toMatchObject({
+      type: "aux.set",
+      output: "stage-display",
+      composition: { timerGraphics: [saved] },
+    });
+    // The menu switches each output with one tap and stays open for the next.
+    void act(() => labeled(host, "Session timer").click());
+    void act(() => button(document.body, "Projector").click());
+    expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toMatchObject({
+      type: "aux.set",
+      output: "projector",
+      composition: { timerGraphics: [saved] },
+    });
+    expect(button(document.body, "Stage display")).toBeTruthy();
   });
 
   it("refuses a countdown to a time without its time, as the contract does", () => {

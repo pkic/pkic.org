@@ -7,7 +7,7 @@ import { liveSessionTiming, liveSessionTimingText } from "../../../../../../../.
 import type { LiveTimer } from "../../../../../../../../shared/schemas/live-session-room";
 import { useLiveTimerReading } from "../../../../../../../live-session/useLiveCountdown";
 import { LiveStudioOperators } from "../presence/LiveStudioOperators";
-import { liveTimeTone } from "./TimePanel";
+import { liveTimeTone } from "./time-panel-text";
 import "./StudioHeader.css";
 
 /** The room's wall clock on the event's clock, ticking each second. */

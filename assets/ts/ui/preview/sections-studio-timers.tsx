@@ -79,7 +79,7 @@ export const studioTimerSections: PreviewSection[] = [
   {
     id: "studio-time-panel",
     title: "Studio: Time panel",
-    note: "One compact row per timer, Reset beside Start; the session timer follows the agenda and says when it starts.",
+    note: "One row per timer: value and progress, PVW and PGM first, then Start, Reset and a minute either way; the menu holds every action.",
     render: () => <TimeSpecimen />,
   },
   {

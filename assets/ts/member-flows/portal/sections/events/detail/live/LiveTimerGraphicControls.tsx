@@ -1,5 +1,4 @@
 import { useState } from "preact/hooks";
-import { liveTimerCounts } from "../../../../../../../shared/live-timer-policy";
 import {
   LIVE_TIMER_DIRECTIONS,
   LIVE_TIMER_FORMATS,
@@ -16,8 +15,7 @@ import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../ui/TextControl";
-import { LiveLayerTargets } from "./LiveLayerTargets";
-import type { LiveTargets } from "./live-output-targets";
+import { liveTimerGraphicReplacements, type LiveTargets } from "./live-output-targets";
 
 const FORMAT_LABELS: Record<LiveTimerGraphic["format"], string> = {
   clock: "Clock (12:34, 1:02:34, 3 d 04:12)",
@@ -80,7 +78,7 @@ function ChoiceField<Key extends "format" | "direction" | "presentation" | "plac
 }
 
 /** The timer graphic's settings, drafted from the graphic as the dialog opens. */
-function LiveTimerGraphicDialog({
+export function LiveTimerGraphicDialog({
   graphic,
   timerName,
   counts,
@@ -252,39 +250,20 @@ function LiveTimerGraphicDialog({
 }
 
 /**
- * Where one timer's graphic goes, and its settings when the timer row's menu
- * opens them. Each output keeps the graphic it was sent, so Program can show
- * the session while the stage display shows another timer.
+ * One timer's graphic as this desk sends it: what the outputs show, else the
+ * defaults. Each output keeps the graphic it was sent, so Program can show
+ * the session while the stage display shows another timer. Saving new
+ * settings replaces the graphic on every destination that shows it now.
  */
-export function LiveTimerGraphicControls({
-  targets,
-  timerId,
-  settingsOpen,
-  onSettingsClose,
-}: {
-  targets: LiveTargets;
-  timerId: string;
-  settingsOpen: boolean;
-  onSettingsClose: () => void;
-}) {
+export function useLiveTimerGraphic(targets: LiveTargets, timerId: string) {
   const { state } = targets;
   const shown =
     state.preview.timerGraphics.find((graphic) => graphic.timerId === timerId) ??
     (targets.programActive ? state.stage.timerGraphics.find((graphic) => graphic.timerId === timerId) : undefined);
   const [graphic, setGraphic] = useState<LiveTimerGraphic>(shown ?? defaultLiveTimerGraphic(timerId));
-  const timer = state.timers.find((entry) => entry.id === timerId);
-  return (
-    <>
-      <LiveLayerTargets targets={targets} subject="timer" layer={{ kind: "timer", graphic }} disabled={!timer} />
-      {settingsOpen && timer ? (
-        <LiveTimerGraphicDialog
-          graphic={graphic}
-          timerName={timer.name}
-          counts={liveTimerCounts(timer)}
-          onSave={setGraphic}
-          onClose={onSettingsClose}
-        />
-      ) : null}
-    </>
-  );
+  const save = (next: LiveTimerGraphic) => {
+    for (const message of liveTimerGraphicReplacements(targets, graphic, next)) targets.sendProgram(message);
+    setGraphic(next);
+  };
+  return { graphic, save };
 }

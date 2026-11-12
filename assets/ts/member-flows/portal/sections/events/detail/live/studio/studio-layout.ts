@@ -3,6 +3,7 @@ import {
   LIVE_AUX_OUTPUTS,
   LIVE_AUX_OUTPUT_DETAILS,
   LIVE_LIVESTREAM_OUTPUT_DETAILS,
+  LIVE_PREVIEW_OUTPUT_DETAILS,
   LIVE_PROGRAM_OUTPUT_DETAILS,
 } from "../../../../../../../../shared/live-room-outputs";
 import {
@@ -58,7 +59,7 @@ export const STUDIO_PANEL_LABELS: Record<StudioPanelType, string> = {
 export const STUDIO_OUTPUTS = ["preview", "program", "livestream", ...LIVE_AUX_OUTPUTS] as const;
 export type StudioOutput = (typeof STUDIO_OUTPUTS)[number];
 export const STUDIO_OUTPUT_DETAILS: Record<StudioOutput, { label: string; short: string; purpose: string }> = {
-  preview: { label: "Preview", short: "PVW", purpose: "The next composition" },
+  preview: LIVE_PREVIEW_OUTPUT_DETAILS,
   program: LIVE_PROGRAM_OUTPUT_DETAILS,
   livestream: LIVE_LIVESTREAM_OUTPUT_DETAILS,
   ...LIVE_AUX_OUTPUT_DETAILS,
