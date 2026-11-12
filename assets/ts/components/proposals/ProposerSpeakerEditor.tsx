@@ -4,7 +4,7 @@ import { speakerRoleSchema } from "../../../shared/schemas/registration";
 import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { proposalAccessPath, type ProposalResourceAccess } from "../../../shared/proposal-access-paths";
 import { patchJson } from "../../shared/api-client";
-import { SPEAKER_ROLE_OPTIONS } from "../../shared/speaker-roles";
+import { assignableSpeakerRoleOptions } from "../../shared/speaker-roles";
 import { useContractForm } from "../../hooks/useContractForm";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Button } from "../../ui/Button";
@@ -109,13 +109,11 @@ export function ProposerSpeakerEditor({
                   value={role}
                   onChange={(event) => setRole(speakerRoleSchema.parse(event.currentTarget.value))}
                 >
-                  {SPEAKER_ROLE_OPTIONS.filter((option) => isCurrentProposer || option.value !== "proposer").map(
-                    (option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ),
-                  )}
+                  {assignableSpeakerRoleOptions({ isCurrentProposer }).map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </Select>
               )}
             </Field>

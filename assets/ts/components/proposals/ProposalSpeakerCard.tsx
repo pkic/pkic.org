@@ -387,8 +387,6 @@ export function ProposalSpeakerCard({
   }
   if (canFinalize) {
     actions.push({ id: "role", label: "Change role…", onSelect: () => setChangingRole(true) });
-  }
-  if (canFinalize) {
     actions.push({
       id: "remind-profile",
       label: "Send profile reminder",
@@ -461,6 +459,12 @@ export function ProposalSpeakerCard({
           <dl class="pk-speaker-portrait-standing" aria-label={`Where ${name} stands`}>
             <dt class="pk-sr-only">Role</dt>
             <dd>{ROLE_LABELS.get(speaker.role) ?? statusLabel(speaker.role)}</dd>
+            {isCurrentProposer && speaker.role !== "proposer" && (
+              <>
+                <dt class="pk-sr-only">Proposal owner</dt>
+                <dd>Proposer</dd>
+              </>
+            )}
             <dt class="pk-sr-only">Status</dt>
             <dd>
               {[participationText(speaker), registration === undefined ? null : speakerRegistrationText(registration)]
@@ -520,7 +524,7 @@ export function ProposalSpeakerCard({
         <ProposalSpeakerRoleDialog
           name={name}
           role={speaker.role}
-          isProposer={isCurrentProposer}
+          isCurrentProposer={isCurrentProposer}
           path={speakerPath()}
           notify={notify}
           onSaved={(role) => onSaved(speaker.userId, { role })}
