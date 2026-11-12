@@ -3,6 +3,7 @@ import { useRef, useState } from "preact/hooks";
 import { Spinner } from "../../../../../../components/Spinner";
 import { Button } from "../../../../../../ui/Button";
 import { Dialog } from "../../../../../../ui/Dialog";
+import { MAX_PROMOTION_MATERIAL_FILES } from "../../../../../../../shared/schemas/event-email-campaigns";
 import { MyPromotionKits, type PromotionFilePicker } from "./MyPromotionKits";
 
 /**
@@ -30,30 +31,41 @@ export function PromotionMaterialsDialog({
 }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set(initialSelected));
   const [downloading, setDownloading] = useState(false);
+  const [notice, setNotice] = useState("");
   const downloads = useRef(new Map<string, () => Promise<void>>());
 
   const pick: PromotionFilePicker = (key, download) => {
     downloads.current.set(key, download);
     return {
       checked: selected.has(key),
-      onChange: (checked) =>
+      onChange: (checked) => {
+        setNotice("");
         setSelected((current) => {
           const next = new Set(current);
           if (checked) next.add(key);
           else next.delete(key);
           return next;
-        }),
+        });
+      },
     };
   };
 
   async function downloadSelected() {
+    // A tile registers its download once its kit has loaded; never skip a picked file silently.
+    if ([...selected].some((key) => !downloads.current.has(key))) {
+      setNotice("Some files are still loading. Try again in a moment.");
+      return;
+    }
+    setNotice("");
     setDownloading(true);
     try {
-      for (const key of selected) await downloads.current.get(key)?.();
+      for (const key of selected) await downloads.current.get(key)!();
     } finally {
       setDownloading(false);
     }
   }
+
+  const tooMany = selected.size > MAX_PROMOTION_MATERIAL_FILES;
 
   return (
     <Dialog
@@ -69,12 +81,17 @@ export function PromotionMaterialsDialog({
       footerActions={
         <>
           <span class="pk-dialog__foot-status" role="status">
-            {selected.size ? `${selected.size} selected` : "Select the files to download or email"}
+            {notice ||
+              (tooMany
+                ? `${selected.size} selected. Email up to ${MAX_PROMOTION_MATERIAL_FILES} files at a time.`
+                : selected.size
+                  ? `${selected.size} selected`
+                  : "Select the files to download or email")}
           </span>
           <Button disabled={!selected.size} loading={downloading} onClick={() => void downloadSelected()}>
             Download selected
           </Button>
-          <Button variant="primary" disabled={!selected.size} onClick={() => onEmail([...selected])}>
+          <Button variant="primary" disabled={!selected.size || tooMany} onClick={() => onEmail([...selected])}>
             {emailLabel}
           </Button>
         </>

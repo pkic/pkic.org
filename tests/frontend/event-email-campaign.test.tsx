@@ -296,6 +296,30 @@ describe("event email campaign UI", () => {
     expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Send test to me")).toBe(
       false,
     );
+    expect(
+      eventEmailCampaignPreviewInputSchema.safeParse({
+        ...preview,
+        filter: { ...preview.filter, audience: "speakers" },
+      }).success,
+    ).toBe(false);
+
+    const rerender = (picked: typeof files) =>
+      act(() =>
+        render(
+          <EventEmailCampaign
+            campaignsPath={CAMPAIGN_PATH}
+            daysPath={`${EVENT_PATH}/days`}
+            materials={{ userId: "person-1", files: picked, onReview }}
+          />,
+          container,
+        ),
+      );
+    // A re-render with the same files keeps the reviewed preview; other files need a new one.
+    await rerender([...files]);
+    expect(container.textContent).toContain("attendee@example.test");
+    await rerender(files.slice(1));
+    expect(container.textContent).not.toContain("attendee@example.test");
+    expect(container.textContent).toContain("Shown in the preview");
   });
 
   it("says why a kit send with no formats cannot be previewed", async () => {

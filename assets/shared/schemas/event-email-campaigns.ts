@@ -85,12 +85,15 @@ export const promotionMaterialFileSchema = z.discriminatedUnion("kit", [
 ]);
 export type PromotionMaterialFile = z.infer<typeof promotionMaterialFileSchema>;
 
+/** One email carries at most this many picked files. */
+export const MAX_PROMOTION_MATERIAL_FILES = 24;
+
 /** The files an organizer picked from one person's promotion materials, sent in one email. */
 export const eventEmailCampaignMaterialsSchema = z.strictObject({
   files: z
     .array(promotionMaterialFileSchema)
     .min(1, "Choose at least one file.")
-    .max(24)
+    .max(MAX_PROMOTION_MATERIAL_FILES)
     .refine(
       (files) => new Set(files.map((file) => JSON.stringify(file))).size === files.length,
       "Choose each file once.",
@@ -116,7 +119,7 @@ function refineCampaignKit(input: z.infer<typeof eventEmailCampaignContentSchema
   if (input.materials) {
     if (input.kit)
       context.addIssue({ code: "custom", path: ["materials"], message: "Attach either kits or picked files." });
-    if (input.filter.userIds?.length !== 1 || isInvitationCampaignAudience(input.filter.audience))
+    if (input.filter.userIds?.length !== 1 || input.filter.audience !== "attendees")
       context.addIssue({
         code: "custom",
         path: ["materials"],

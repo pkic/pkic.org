@@ -49,6 +49,21 @@ export function GroupEventCommunications({
   const [, navigate] = usePortalHashLocation();
   const eventPath = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}`;
 
+  if (composing && preset === "promotion-materials" && !materials) {
+    // Never widen a one-person handoff into an audience message.
+    return (
+      <Panel aria-label="New event message">
+        <PanelHeader title="New event message" breadcrumb />
+        <PanelBody>
+          <EmptyState
+            title="These files could not be attached"
+            body="The link is missing the person or the files. Open their promotion materials from Registrations and select the files again."
+          />
+        </PanelBody>
+      </Panel>
+    );
+  }
+
   if (composing) {
     return (
       <div class="pk-stack">

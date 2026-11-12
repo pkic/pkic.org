@@ -89,6 +89,7 @@ export function EventEmailCampaign({
     ? { audience: "attendees", attendeeStatus: "all", userIds: [materials.userId] }
     : selection.filter;
   const filterKey = JSON.stringify(filter);
+  const materialsKey = JSON.stringify(materials?.files ?? null);
 
   // promotion kit attachments
   const [kitFormats, setKitFormats] = useState<z.infer<typeof promotionFormatSchema>[]>([...RECOMMENDED_KIT_FORMATS]);
@@ -126,7 +127,19 @@ export function EventEmailCampaign({
   useEffect(() => {
     setPreview(null);
     setPreviewConfirmed(false);
-  }, [subject, body, templateKey, filterKey, mode, messageType, batchSize, sendsKits, kitFormats, kitResend]);
+  }, [
+    subject,
+    body,
+    templateKey,
+    filterKey,
+    mode,
+    messageType,
+    batchSize,
+    sendsKits,
+    kitFormats,
+    kitResend,
+    materialsKey,
+  ]);
 
   function insertSnippet(snippet: string) {
     bodyEditor.current?.insertText(snippet);
