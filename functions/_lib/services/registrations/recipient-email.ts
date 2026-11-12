@@ -39,3 +39,9 @@ export const REGISTRATION_CURRENT_RECIPIENT_EMAIL_SQL = `CASE
   WHEN r.status = 'pending_email_confirmation' THEN ${REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL}
   ELSE ${REGISTRATION_RECIPIENT_EMAIL_SQL}
 END`;
+
+/** Pending mailboxes may receive proof only; manage capabilities stay on the account address. */
+export const REGISTRATION_RECOVERY_RECIPIENT_EMAIL_SQL = `CASE
+  WHEN r.status = 'pending_email_confirmation' THEN u.email
+  ELSE ${REGISTRATION_RECIPIENT_EMAIL_SQL}
+END`;

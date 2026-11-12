@@ -143,7 +143,7 @@ function identityRecord(identity: SessionIdentity) {
   };
 }
 
-/** The registrant's session, identities, and representation change, or null for any other request. */
+/** The registrant's session and identities, or null for any other request. */
 export function identityApi(method: string, path: string, identities: SessionIdentity[]): unknown {
   if (method === "GET" && path === "/api/v1/auth/session") return ownerSession(identities);
   if (method === "GET" && path === "/api/v1/users/current/identities")
@@ -151,7 +151,5 @@ export function identityApi(method: string, path: string, identities: SessionIde
       identities: identities.map(identityRecord),
       page: { limit: 25, offset: 0, total: identities.length, hasMore: false },
     };
-  if (method === "PUT" && path === `${ENDPOINT}/identity`)
-    return { success: true, identity: identities[1], badgeVersion: "2026-01-01T00:00:00.000Z" };
   return null;
 }

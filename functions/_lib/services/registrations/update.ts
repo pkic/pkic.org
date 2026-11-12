@@ -1,7 +1,8 @@
+import { userSessionRequestAuthorizationEvidence } from "../../auth/user-session-evidence";
 import { AppError } from "../../errors";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { isAuditChangeGuardFailure } from "../audit";
-import { prepareRegistrationIdentityChange } from "./change-identity";
+import { prepareRegistrationIdentityChange, registrationIdentityChangeEvidence } from "./change-identity";
 import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types";
 import type { ChangeRegistrationEmailParams } from "./change-email";
 import { prepareRegistrationEmailChange } from "./change-email";
@@ -32,9 +33,11 @@ async function executeRegistrationUpdate<T>(
   changedBy: string | undefined,
   commit: (built: RegistrationUpdatePlan) => Promise<T>,
 ): Promise<T> {
+  let attemptedRegistrationId: string | undefined;
   try {
     return await withDayCapacityRetry(async () => {
       const registration = await load();
+      attemptedRegistrationId = registration.id;
       const built = await buildRegistrationUpdate(db, registration, payload, changedBy);
       if (payload.identityChange) {
         built.statements.push(...prepareRegistrationIdentityChange(db, registration.id, payload.identityChange));
@@ -45,15 +48,35 @@ async function executeRegistrationUpdate<T>(
         if (!built.notificationChanged) built.notificationRevision += 1;
         built.notificationChanged = true;
       }
+      if (built.notificationChanged) {
+        // Scalar triggers do not cover identity, profile, or every attendance edit.
+        // Advance the persisted revision for each accepted notification operation.
+        built.statements.push(
+          db
+            .prepare("UPDATE registrations SET transition_revision=transition_revision+1 WHERE id=?")
+            .bind(registration.id),
+        );
+      }
       return commit(built);
     });
   } catch (error) {
-    if (payload.identityChange && isAuthorizationGuardFailure(error))
+    if (attemptedRegistrationId && payload.identityChange && isAuthorizationGuardFailure(error)) {
+      // Diagnose only the refused operation, using the same evidence as its guards.
+      const session = userSessionRequestAuthorizationEvidence(payload.identityChange.claims);
+      const identity = registrationIdentityChangeEvidence(attemptedRegistrationId, payload.identityChange);
+      const current = await db
+        .prepare(`SELECT EXISTS (${session.sql}) AS session_active, EXISTS (${identity.sql}) AS identity_available`)
+        .bind(...session.bindings, ...identity.bindings)
+        .first<{ session_active: number; identity_available: number }>();
+      if (!current?.session_active)
+        throw new AppError(401, "AUTH_REQUIRED", "Sign in again to change your representation.");
+      if (current.identity_available) throw error;
       throw new AppError(
         403,
         "REGISTRATION_IDENTITY_UNAVAILABLE",
         "Choose an active identity on your own registration.",
       );
+    }
     if (payload.identityChange && isAuditChangeGuardFailure(error)) throw registrationChangedError();
     if (isFormSubmissionContextConflict(error)) throw formSubmissionContextChangedError();
     if (isEmailReservationConflict(error)) throw emailTakenError();

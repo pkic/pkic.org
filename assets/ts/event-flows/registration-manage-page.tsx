@@ -364,10 +364,12 @@ async function main(): Promise<void> {
         mode="update"
         data={manageData}
         forms={formsData}
-        onDiscard={() => {
+        onDiscard={(profileEdited) => {
           render(null, editorEl);
           editorMounted = false;
-          void editorNavigation.close(marker);
+          void editorNavigation.close(marker).then(() => {
+            if (profileEdited) location.reload();
+          });
         }}
         save={async (change) => {
           await patchJson(

@@ -22,15 +22,9 @@ export function prepareRegistrationIdentityChange(
 ) {
   const userId = claims.sub;
   const now = nowIso();
-  const owned = ownedIdentityAtEvidence({ userId, identityId: change.identityId });
   return [
     prepareAuthorizationGuard(db, userSessionRequestAuthorizationEvidence(claims)),
-    prepareAuthorizationGuard(db, {
-      sql: `SELECT 1 FROM registrations r JOIN users u ON u.id=r.user_id
-        WHERE r.id=? AND r.user_id=? AND r.status!='cancelled' AND u.active=1
-          AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL AND EXISTS (${owned.sql})`,
-      bindings: [registrationId, userId, ...owned.bindings],
-    }),
+    prepareAuthorizationGuard(db, registrationIdentityChangeEvidence(registrationId, { change, claims })),
     db
       .prepare(`UPDATE registrations SET registration_identity_id=?, updated_at=?
       WHERE id=? AND user_id=? AND registration_identity_id IS ?`)
@@ -47,4 +41,19 @@ export function prepareRegistrationIdentityChange(
     ),
     prepareBadgeRenderJobsForUser(db, userId, now, registrationId),
   ];
+}
+
+/** Shared ownership and lifecycle evidence for the write guard and refusal diagnosis. */
+export function registrationIdentityChangeEvidence(
+  registrationId: string,
+  { change, claims }: RegistrationIdentityChange,
+) {
+  const userId = claims.sub;
+  const owned = ownedIdentityAtEvidence({ userId, identityId: change.identityId });
+  return {
+    sql: `SELECT 1 FROM registrations r JOIN users u ON u.id=r.user_id
+        WHERE r.id=? AND r.user_id=? AND r.status!='cancelled' AND u.active=1
+          AND u.pii_redacted_at IS NULL AND u.merged_into_user_id IS NULL AND EXISTS (${owned.sql})`,
+    bindings: [registrationId, userId, ...owned.bindings],
+  };
 }

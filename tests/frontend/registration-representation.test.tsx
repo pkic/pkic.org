@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { act } from "preact/test-utils";
 import { describe, expect, it, vi } from "vitest";
+import {
+  identityProfileUpdateSchema,
+  ownIdentityProfileSchema,
+} from "../../assets/shared/schemas/own-identity-profile";
+import { typeInto, controlFor } from "./helpers/labeled-control";
 import { registrationManageSchema } from "../../assets/shared/schemas/registration";
 import { readResponse, PERSONAL, WORK } from "./helpers/participant-registration-fixtures";
 import { installApi, mount, click, button, facts, settle } from "./helpers/participant-registration-harness";
@@ -84,6 +89,52 @@ describe("registration representation editing", () => {
     await click(button(container, "Edit details"));
     expect(container.querySelector('[role="combobox"]')).toBeNull();
     expect(container.querySelector('input[name="email"]')).toBeNull();
+    await vi.waitFor(() => expect(container.querySelector('a[href="/portal/"]')).not.toBeNull());
+    expect(container.textContent).not.toContain("Saving a different representation");
+  });
+
+  it("refreshes saved identity profile edits when the registration form is discarded", async () => {
+    const work = { ...WORK };
+    const read = readResponse({ identityId: work.id });
+    const requests = installApi(read, { identities: [work] });
+    const api = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const path = String(input);
+        if (!path.endsWith(`/identities/${work.id}/profile`)) return api(input, init);
+        if (init.method === "PATCH") {
+          const body = identityProfileUpdateSchema.parse(JSON.parse(String(init.body)));
+          work.jobTitle = body.jobTitle ?? work.jobTitle;
+          read.user.job_title = work.jobTitle;
+        }
+        return Response.json(
+          ownIdentityProfileSchema.parse({
+            identityId: work.id,
+            organizationId: work.organizationId,
+            organizationName: work.organizationName,
+            jobTitle: work.jobTitle,
+            biography: null,
+            links: [],
+          }),
+        );
+      }),
+    );
+    const container = await mount();
+    await click(button(container, "Edit details"));
+    await vi.waitFor(() => expect(container.querySelector('button[aria-label="Edit representation"]')).not.toBeNull());
+    await click(container.querySelector('button[aria-label="Edit representation"]'));
+    await settle();
+    await typeInto(controlFor<HTMLInputElement>(document.body, "Job title for this organization"), "Coordinator");
+    await click(button(document.querySelector("dialog[open]")!, "Save changes"));
+    await vi.waitFor(() => expect(document.querySelector("dialog[open]")).toBeNull());
+    const readsBefore = requests.filter((r) => r.method === "GET" && r.path.endsWith(read.registration.id)).length;
+    await click(button(container, "Discard changes"));
+    await vi.waitFor(() => expect(container.textContent).toContain("Coordinator"));
+    expect(requests.filter((r) => r.method === "GET" && r.path.endsWith(read.registration.id)).length).toBeGreaterThan(
+      readsBefore,
+    );
+    expect(requests.some((r) => r.method === "PATCH")).toBe(false);
   });
 
   it("keeps the representation when it is unchanged", async () => {

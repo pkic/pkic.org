@@ -61,7 +61,7 @@ type Update = {
   data: RegistrationManageReadResponse;
   /** Saves the details and any representation change in one request. */
   save: (change: RegistrationChange) => Promise<void>;
-  onDiscard: () => void;
+  onDiscard: (profileEdited?: boolean) => void;
 };
 type Props = (Create | Update) & { forms: EventFormsResponse };
 const PERSONAL_FIELDS = [
@@ -87,6 +87,7 @@ export function RegistrationFlow(props: Props) {
     firstName: initial?.user.first_name ?? "",
     lastName: initial?.user.last_name ?? "",
   });
+  const profileEdited = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [attendance, setAttendance] = useState(initial?.dayAttendance ?? []);
@@ -379,6 +380,9 @@ export function RegistrationFlow(props: Props) {
                   </Field>
                 ))}
                 <RegistrationRepresentationField
+                  onUpdated={() => {
+                    profileEdited.current = true;
+                  }}
                   data={props.data}
                   onSelect={(identity) => setIdentityId(identity?.id ?? null)}
                 />
@@ -450,7 +454,7 @@ export function RegistrationFlow(props: Props) {
                   <Button type="submit" variant="primary" loading={busy}>
                     Save changes
                   </Button>
-                  <Button variant="secondary" onClick={props.onDiscard}>
+                  <Button variant="secondary" onClick={() => props.onDiscard(profileEdited.current)}>
                     Discard changes
                   </Button>
                 </>

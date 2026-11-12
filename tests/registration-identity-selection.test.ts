@@ -36,6 +36,8 @@ import { buildCreateIndividualMemberStatements } from "../functions/_lib/service
 import { findEligibleMemberById } from "../functions/_lib/auth/identity-capacities";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import type { DatabaseLike, Env } from "../functions/_lib/types";
+import { signAdminManageJwt } from "../functions/_lib/utils/jwt";
+import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { registrationIdentityChangeSchema } from "../assets/shared/schemas/registration-identity";
 
 let registrationEnvironment: Env;
@@ -160,6 +162,73 @@ describe("registration representation changes", () => {
     expect(
       await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_updated'"),
     ).toEqual([{ recipient_email: "selected@example.test" }]);
+  });
+
+  it("queues a distinct notification after name-only edits and repeated representation switches", async () => {
+    const f = await setupChange();
+    const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
+    await seedWorkflowEmailTemplates(env.DB, adminId);
+    const nameUpdate = await callApi(registrationEnvironment, f.path, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${f.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ action: "update", firstName: "New name" }),
+    });
+    expect(nameUpdate.status).toBe(200);
+    for (const [identityId, expectedIdentityId] of [
+      [f.personalId, f.identityId],
+      [f.identityId, f.personalId],
+      [f.personalId, f.identityId],
+    ]) {
+      const response = await change(f, identityId, f.token, expectedIdentityId);
+      expect(response.status, await response.clone().text()).toBe(200);
+    }
+    const notifications = await queryAll<{ idempotency_key: string }>(
+      env.DB,
+      "SELECT idempotency_key FROM email_outbox WHERE template_key='registration_updated'",
+    );
+    expect(notifications).toHaveLength(4);
+    expect(new Set(notifications.map((row) => row.idempotency_key)).size).toBe(4);
+  });
+
+  it("hides representation changes for delegated manage JWTs and refuses them before session verification", async () => {
+    const f = await setupChange();
+    const fingerprint = await sha256Hex("");
+    const token = await signAdminManageJwt(env.INTERNAL_SIGNING_SECRET!, {
+      sub: f.registrationId,
+      actor: "api-key",
+      event: "pqc-2026",
+      iphash: fingerprint,
+      uahash: fingerprint,
+      ttlSeconds: 3600,
+    });
+    const path = `/api/v1/registrations/access/${encodeURIComponent(token)}`;
+    const read = await callApi(registrationEnvironment, path, { headers: { authorization: `Bearer ${f.token}` } });
+    expect(registrationManageReadResponseSchema.parse(await read.json()).canChangeIdentity).toBe(false);
+    const response = await change(f, f.personalId, null, f.identityId, path);
+    expect(response.status, await response.clone().text()).toBe(403);
+    expect((await getRegistrationById(env.DB, f.registrationId)).registration_identity_id).toBe(f.identityId);
+  });
+
+  it("requests sign-in when the session is revoked at the write boundary and rolls back details", async () => {
+    const f = await setupChange();
+    const before = await getRegistrationById(env.DB, f.registrationId);
+    const path = await managePath(f.registrationId);
+    registrationEnvironment = {
+      ...registrationEnvironment,
+      DB: mutateBeforeMatchingQuery(
+        env.DB,
+        (sql) => sql.includes("UPDATE registrations SET registration_identity_id"),
+        () => env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?").bind(nowIso(), f.userId).run(),
+      ),
+    };
+    const response = await change(f, f.personalId, f.token, f.identityId, path, { firstName: "Must roll back" });
+    expect(response.status, await response.clone().text()).toBe(401);
+    expect(await response.json()).toMatchObject({ error: { code: "AUTH_REQUIRED" } });
+    expect(await getRegistrationById(env.DB, f.registrationId)).toEqual(before);
+    expect((await readAttribution(f.registrationId)).user.first_name).not.toBe("Must roll back");
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='registration_updated'"),
+    ).toHaveLength(0);
   });
 
   it("leaves the representation unchanged when registration details are invalid", async () => {

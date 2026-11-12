@@ -179,8 +179,9 @@ function RegistrationRecord({
               <ParticipantRegistrationForm
                 data={data}
                 forms={forms}
-                save={(change) => save(change)}
-                onDiscard={() => {
+                save={save}
+                onDiscard={(profileEdited) => {
+                  if (profileEdited) void reload();
                   setEditorMounted(false);
                   void closeEditor();
                 }}

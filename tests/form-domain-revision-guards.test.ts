@@ -225,7 +225,6 @@ describe("form revision guards on registration and proposal commands", () => {
         },
         appBaseUrl: "https://app.test",
         signingSecret: SIGNING_SECRET,
-        confirmationLinkTtlHours: 24,
         waitlistClaimWindowHours: 24,
       }),
     ).rejects.toMatchObject({ status: 409, code: "FORM_CHANGED" });
@@ -263,7 +262,6 @@ describe("form revision guards on registration and proposal commands", () => {
       },
       appBaseUrl: "https://app.test",
       signingSecret: SIGNING_SECRET,
-      confirmationLinkTtlHours: 24,
       waitlistClaimWindowHours: 24,
     });
     await saveProposalAccessChanges(env.DB, {

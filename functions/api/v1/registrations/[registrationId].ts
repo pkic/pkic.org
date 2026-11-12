@@ -55,7 +55,6 @@ export const RegistrationParticipantPatch = openApiRoute(
       identitySessionClaims: data.body.identityChange ? await verifyUserSessionRequest(c.req.raw, c.env) : undefined,
       appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
       signingSecret: requireInternalSecret(c.env),
-      confirmationLinkTtlHours: config.confirmationLinkTtlHours,
       waitlistClaimWindowHours: config.waitlistClaimWindowHours,
     });
     for (const id of result.outboxIds) {

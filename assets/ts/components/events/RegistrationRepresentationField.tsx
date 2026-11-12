@@ -11,30 +11,31 @@ import { userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth
 import type { SessionActingIdentity } from "../../../shared/session-acting-identity";
 import { getJson } from "../../shared/api-client";
 import { RegistrationIdentityField } from "../RegistrationIdentitySelect";
+import { ButtonLink } from "../../ui/Button";
 import { Spinner } from "../Spinner";
 import { RegistrationAffiliation } from "./RegistrationAffiliation";
 
 type Session = ReturnType<typeof userAuthSessionResponseSchema.parse>;
 
-/** The signed-in session when it belongs to the registrant, else null. */
-async function readOwnerSession(data: RegistrationManageReadResponse): Promise<Session | null> {
+/** Load picker choices only when the server allows representation changes. */
+async function readRepresentationSession(data: RegistrationManageReadResponse): Promise<Session | null> {
   if (!data.canChangeIdentity) return null;
-  const current = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema).catch(() => null);
-  if (!current) return null;
-  return current;
+  return getJson("/api/v1/auth/session", userAuthSessionResponseSchema).catch(() => null);
 }
 
 export function RegistrationRepresentationField({
   data,
   onSelect,
+  onUpdated,
 }: {
   data: RegistrationManageReadResponse;
   onSelect: (identity: SessionActingIdentity | null) => void;
+  onUpdated: () => void;
 }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   useEffect(() => {
     let active = true;
-    void readOwnerSession(data).then((owner) => {
+    void readRepresentationSession(data).then((owner) => {
       if (active) setSession(owner);
     });
     return () => {
@@ -44,20 +45,34 @@ export function RegistrationRepresentationField({
   if (session === undefined) return <Spinner label="Loading your representations…" />;
   if (!session)
     return (
-      <RegistrationAffiliation
-        organizationName={data.user.organization_name}
-        jobTitle={data.user.job_title}
-        pendingOrganizationName={data.pendingOrganizationName}
-      />
+      <div class="pk-stack pk-stack--snug">
+        <RegistrationAffiliation
+          organizationName={data.user.organization_name}
+          jobTitle={data.user.job_title}
+          pendingOrganizationName={data.pendingOrganizationName}
+        />
+        <p class="pk-muted pk-small">
+          To choose or add a representation, sign in as the registrant and open your own registration link.
+        </p>
+        <ButtonLink href="/portal/" external>
+          Sign in
+        </ButtonLink>
+      </div>
     );
   return (
-    <RegistrationIdentityField
-      presentation="picker"
-      personalAdvisory={false}
-      preferred={session.actingIdentities.find((identity) => identity.id === data.identityId) ?? null}
-      available={session.actingIdentities}
-      userId={session.identity.id}
-      onSelect={onSelect}
-    />
+    <div class="pk-stack pk-stack--snug">
+      <RegistrationIdentityField
+        presentation="picker"
+        personalAdvisory={false}
+        preferred={session.actingIdentities.find((identity) => identity.id === data.identityId) ?? null}
+        available={session.actingIdentities}
+        userId={session.identity.id}
+        onSelect={onSelect}
+        onUpdated={onUpdated}
+      />
+      <p class="pk-muted pk-small">
+        Saving a different representation updates the address used for registration emails.
+      </p>
+    </div>
   );
 }

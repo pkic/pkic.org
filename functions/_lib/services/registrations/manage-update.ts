@@ -26,7 +26,6 @@ export interface ManageRegistrationUpdateInput {
   identitySessionClaims?: UserSessionTokenClaims;
   appBaseUrl: string;
   signingSecret: string;
-  confirmationLinkTtlHours: number;
   waitlistClaimWindowHours: number;
 }
 

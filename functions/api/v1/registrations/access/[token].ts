@@ -1,4 +1,3 @@
-import { resolveOptionalIdentityFromRequest } from "../../../../_lib/auth/user-session";
 import { verifyUserSessionRequest } from "../../../../_lib/auth/user-session-request";
 import type { ValidatedData } from "chanfana";
 import { handleError, json } from "../../../../_lib/http";
@@ -56,10 +55,10 @@ async function handleRegistrationManagePatch(
       authenticatedActor,
       actorUserId,
       body,
-      identitySessionClaims: body.identityChange ? await verifyUserSessionRequest(c.req.raw, c.env) : undefined,
+      identitySessionClaims:
+        body.identityChange && !isJwt ? await verifyUserSessionRequest(c.req.raw, c.env) : undefined,
       appBaseUrl,
       signingSecret,
-      confirmationLinkTtlHours: config.confirmationLinkTtlHours,
       waitlistClaimWindowHours: config.waitlistClaimWindowHours,
     });
     for (const outboxId of result.outboxIds) {
@@ -86,10 +85,15 @@ async function handleRegistrationManageGet(
     const resolved = await resolveManageToken(c.req.raw, c.env, token);
     if (resolved instanceof Response) return resolved;
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-    const viewer = await resolveOptionalIdentityFromRequest(c.env.DB, c.req.raw, c.env);
+    const viewer = !resolved.isJwt
+      ? await verifyUserSessionRequest(c.req.raw, c.env).catch((error: unknown) => {
+          if (error instanceof AppError && error.status === 401) return null;
+          throw error;
+        })
+      : null;
     return json(
       registrationManageReadResponseSchema.parse(
-        await buildRegistrationManageView(c.env.DB, resolved.registration, appBaseUrl, viewer?.userId),
+        await buildRegistrationManageView(c.env.DB, resolved.registration, appBaseUrl, viewer?.sub),
       ),
     );
   } catch (error) {

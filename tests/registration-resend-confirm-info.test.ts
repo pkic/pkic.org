@@ -675,15 +675,34 @@ describe("resend-manage-link endpoint", () => {
   }
 
   it("matches and delivers recovery to the verified representation address", async () => {
-    const f = await setupRepresentationRecipient();
-    expect((await resendManageLink(env, f.email)).status).toBe(200);
-    expect(
-      await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'"),
-    ).toHaveLength(0);
+    await setupRepresentationRecipient();
     expect((await resendManageLink(env, "WORK@example.test")).status).toBe(200);
     expect(
       await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'"),
     ).toEqual([{ recipient_email: "work@example.test" }]);
+  });
+
+  it("recovers through the account address when the registration uses another verified mailbox", async () => {
+    const f = await setupRepresentationRecipient();
+    expect((await resendManageLink(env, f.email)).status).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'"),
+    ).toEqual([{ recipient_email: f.email }]);
+  });
+
+  it("uses the account address while registration awaits confirmation", async () => {
+    const f = await setupRepresentationRecipient();
+    await env.DB.prepare("UPDATE registrations SET status='pending_email_confirmation' WHERE id=?")
+      .bind(f.registrationId)
+      .run();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    expect(
+      await queueRegistrationManageLinkRecovery(env.DB, event, "work@example.test", "https://app.test"),
+    ).toBeNull();
+    expect(await queueRegistrationManageLinkRecovery(env.DB, event, f.email, "https://app.test")).not.toBeNull();
+    expect(
+      await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'"),
+    ).toEqual([{ recipient_email: f.email }]);
   });
 
   it("suppresses recovery when the representation address changes before enqueueing", async () => {
