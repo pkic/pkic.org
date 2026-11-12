@@ -116,7 +116,7 @@ export const attendanceStatusCountSchema = z.object({
   pending: z.number().default(0),
   /** Cancelled registrations that chose the type; not in `total`. */
   cancelled: z.number().default(0),
-  /** Of `total`, the confirmed registrations with a seat on at least one such day: the people expected there. */
+  /** Of `total`, the registered ones (email confirmed, not cancelled) not waitlisted on at least one such day: the people expected there. */
   confirmed: z.number(),
 });
 export type AttendanceStatusCount = z.infer<typeof attendanceStatusCountSchema>;

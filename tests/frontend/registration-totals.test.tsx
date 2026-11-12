@@ -125,7 +125,10 @@ describe("RegistrationTotals figures", () => {
       row.querySelector("dd")?.textContent,
     ]);
     expect(rows).toHaveLength(4);
-    expect(rows[0]).toEqual(["Confirmed, with a seat on at least one day", "9"]);
+    expect(rows[0]).toEqual([
+      "ConfirmedEmail confirmed, not cancelled, and not waitlisted on at least one of their In-person days",
+      "9",
+    ]);
     expect(rows.slice(1).map(([, count]) => count)).toEqual(["1", "2", "2"]);
   });
 

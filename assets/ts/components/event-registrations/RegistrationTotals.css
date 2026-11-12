@@ -63,6 +63,24 @@
     font-weight: 600;
   }
 
+  /* The lead row is two lines: its dot and figure stay on the first. */
+  .pk-totals-tip__row--lead::before {
+    align-self: start;
+    margin-block-start: calc(0.5lh - 0.1875rem);
+  }
+
+  .pk-totals-tip__row--lead dd {
+    align-self: start;
+  }
+
+  /* What confirmed means, spelled out under the word: no room to guess. */
+  .pk-totals-tip__definition {
+    display: block;
+    font-size: var(--pk-text-xs);
+    font-weight: 400;
+    color: var(--pk-ink-muted);
+  }
+
   .pk-totals-tip__row dd {
     margin: 0;
     font-weight: 600;

@@ -114,7 +114,7 @@ interface CardSource {
    * The people expected to attend: confirmed, and not waiting for a seat.
    * The card states it beside its figure, the most important part of it.
    */
-  confirmed?: { count: number; description: string };
+  confirmed?: { count: number; definition: string };
   pending?: number;
   waitlisted?: number;
   cancelled?: number;
@@ -201,7 +201,10 @@ function registrationCard(source: CardSource, target: CardTarget | undefined): C
           <dl class="pk-totals-tip__rows">
             {source.confirmed && (
               <div class="pk-totals-tip__row pk-totals-tip__row--ok pk-totals-tip__row--lead">
-                <dt>{source.confirmed.description}</dt>
+                <dt>
+                  Confirmed
+                  <span class="pk-totals-tip__definition">{source.confirmed.definition}</span>
+                </dt>
                 <dd>{formatNumber(source.confirmed.count)}</dd>
               </div>
             )}
@@ -233,7 +236,7 @@ export function registeredTotal(
       total: Object.values(stats.byStatus).reduce((sum, count) => sum + count, 0),
       filter: {},
       pressLabel: "Show all registrations",
-      confirmed: { count: stats.confirmedCount, description: "Confirmed, not waiting for any seat" },
+      confirmed: { count: stats.confirmedCount, definition: "Email confirmed, not cancelled, not on any waitlist" },
       pending: stats.byStatus.pending_email_confirmation ?? 0,
       waitlisted: stats.waitlistedCount,
       cancelled: stats.byStatus.cancelled ?? 0,
@@ -272,7 +275,10 @@ export function RegistrationTotals({
             total: counts.total,
             filter: filters?.byAttendanceType ? { ...scope, status: LIVE_STATUSES } : null,
             scope,
-            confirmed: { count: counts.confirmed, description: "Confirmed, with a seat on at least one day" },
+            confirmed: {
+              count: counts.confirmed,
+              definition: `Email confirmed, not cancelled, and not waitlisted on at least one of their ${option.label} days`,
+            },
             pending: counts.pending,
             waitlisted: counts.waitlisted,
             cancelled: counts.cancelled,
