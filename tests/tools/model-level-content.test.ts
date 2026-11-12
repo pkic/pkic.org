@@ -72,6 +72,14 @@ describe("model level content placed in authored pages", () => {
     expect(withoutSection.render(call({ part: "section", title: "Taxonomy" }, "\nFallback\n"))).toBe("Fallback");
   });
 
+  it("fails when a version lacks a section the page places, unless the placement is optional", () => {
+    const withoutSection = content({ sections: [] });
+    expect(() => withoutSection.render(call({ part: "section", title: "Taxonomy" }))).toThrow(
+      /has no section "Taxonomy"/,
+    );
+    expect(withoutSection.render(call({ part: "section", title: "Taxonomy", optional: "true" }))).toBe("");
+  });
+
   it.each([
     ["<script>alert(1)</script>", /raw HTML/],
     ['<img src="x" onerror="alert(1)">', /raw HTML/],
@@ -91,5 +99,60 @@ describe("model level content placed in authored pages", () => {
     value.levels[0]!.criteria.items[0]!.text =
       "See [Level 1](/wg/pqc/pqcmm/levels/1-initial/), [question 1](#1.2.1), [NIST](https://csrc.nist.gov/?a=1&b=2) and [us](mailto:pqc@pkic.org).";
     expect(() => readableModelSchema.parse(value)).not.toThrow();
+  });
+});
+
+describe("whole level layout", () => {
+  const sections = [
+    { title: "What Level 0 Means", placement: "before-criteria", body: "Meaning." },
+    { title: "Scope", placement: "after-criteria", body: "Scope note." },
+    { title: "Procurement", placement: "after-evidence-checklist", body: "- Ask for a roadmap." },
+  ];
+
+  it("lays out every part, with sections placed and headed by the model", () => {
+    const levelContent = content({ sections });
+    const page = levelContent.render(call({ part: "level" }));
+    const order = [
+      "## What Level 0 Means",
+      "## Criteria",
+      "### Scope",
+      "## Supplier Intake Questions",
+      "## Procurement",
+    ];
+    expect(order.map((heading) => page.indexOf(heading))).toEqual(
+      [...order.map((heading) => page.indexOf(heading))].sort((a, b) => a - b),
+    );
+    expect(page).not.toContain("## Evidence Checklist");
+    expect(page).not.toContain("### Supplier Intake Questions");
+    expect(levelContent.unplaced()).toEqual([]);
+  });
+
+  it("follows renamed and added sections without any page change", () => {
+    const renamed = [{ ...sections[0]!, title: "Meaning of Level 0" }, ...sections, { title: "Extra", body: "New." }];
+    const levelContent = content({ sections: renamed });
+    const page = levelContent.render(call({ part: "level" }));
+    expect(page).toContain("## Meaning of Level 0");
+    expect(page).toContain("### Extra");
+    expect(levelContent.unplaced()).toEqual([]);
+  });
+
+  it("places sections that share a title when their identifiers differ", () => {
+    const twins = [
+      { id: "0.s.1", title: "Notes", placement: "before-criteria", body: "First." },
+      { id: "0.s.2", title: "Notes", placement: "after-evidence-checklist", body: "Second." },
+    ];
+    const levelContent = content({ sections: twins });
+    const page = levelContent.render(call({ part: "level" }));
+    expect(page).toContain("First.");
+    expect(page).toContain("Second.");
+    expect(levelContent.unplaced()).toEqual([]);
+  });
+
+  it("titles assessment questions by their kind", () => {
+    const groups = [
+      { id: "0.2", name: "Checks", kind: "assessment", questions: [{ id: "0.2.1", question: "Q?", guidance: "G." }] },
+    ];
+    const page = content({ assessment: { methodology: "", groups } }).render(call({ part: "level" }));
+    expect(page).toContain("## Assessment Questions");
   });
 });

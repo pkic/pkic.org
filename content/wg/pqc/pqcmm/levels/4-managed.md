@@ -1,4 +1,6 @@
 ---
+# Level content comes from the PQCMM model in pkic/pqcmm; edit it there.
+# title, description, and summary below only feed menus and listings.
 date: 2026-05-07T00:00:00Z
 linkTitle: "4 — Managed"
 title: "Level 4 (Managed) - PQC Maturity Model (PQCMM)"
@@ -8,33 +10,4 @@ summary: Level 4 adds a CBOM, zero-legacy capability, and explicit hybrid/compos
 weight: 50
 ---
 
-## What Level 4 Means
-
-A product at **Level 4** builds on the visibility and agility of Level 3, adding the precision of a **Cryptographic Bill of Materials (CBOM)**, a demonstrated ability to **disable all non-quantum-safe algorithms entirely** while remaining functional, and clarity about **hybrid and composite algorithm support**.
-
-> Level 4 is the benchmark for **high-assurance deployments**. It provides both the documentation precision needed for compliance and the operational capability to enforce a fully quantum-safe configuration.
-{.callout-info}
-
-## Criteria
-
-{{< model part="criteria" >}}
-
-## Assessment Questions
-
-At Level 4, assessors must request and validate the CBOM directly — not just accept that one exists. The assessment must document how the CBOM was generated, how it was validated, and whether the assessor independently cross-checked it. Claims made solely on the basis of vendor documentation without any independent check must be flagged. **A complete Level 4 assessment must also work through all [Level 1](/wg/pqc/pqcmm/levels/1-initial/#assessment-questions), [Level 2](/wg/pqc/pqcmm/levels/2-foundational/#assessment-questions), and [Level 3](/wg/pqc/pqcmm/levels/3-advanced/#assessment-questions) questions.**
-
-{{< model part="methodology" >}}
-
-{{< model part="questions" >}}
-
-## Evidence Checklist
-
-{{< model part="evidence" >}}
-
-## Suggested Procurement Actions
-
-- Request the CBOM and validate it against your organisation's cryptographic policy.
-- Confirm zero-legacy capability covers the specific features and protocols in your deployment scenario.
-- Clarify hybrid/composite support before designing a hybrid migration architecture.
-- Consider requiring Level 4 for certificate authorities, HSMs, identity providers, and other cryptographic root services.
-
+{{< model part="level" >}}

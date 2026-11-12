@@ -1,4 +1,5 @@
 import { splitMarkdownContainers } from "../../../assets/shared/markdown-aside";
+import { contentCallouts } from "./site-content-callouts";
 import { ContentLayout } from "../../../assets/ts/site/ContentLayout";
 import { SiteImage, prepareSiteImage } from "../../../assets/ts/site/SiteImage";
 import { DonationForm } from "../../../assets/ts/site/DonationForm";
@@ -541,15 +542,7 @@ export async function renderContentMarkdown(markdown: string, context: ContentCo
     if (call.block) html = html.replace(new RegExp(`<p>\\s*${call.token}\\s*</p>`, "g"), () => call.html);
     html = html.replaceAll(call.token, () => call.html);
   }
-  return html
-    .replace(
-      /<blockquote>\s*<p>([\s\S]*?)\s*\{\.callout-(info|warning)\}<\/p>\s*<\/blockquote>/g,
-      '<blockquote class="pk-content-callout pk-content-callout--$2 callout-$2"><p>$1</p></blockquote>',
-    )
-    .replace(
-      /<p>((?:(?!<\/p>)[\s\S])*?)\s*\{\.callout-(info|warning)\}<\/p>/g,
-      '<div class="pk-content-callout pk-content-callout--$2 callout-$2"><p>$1</p></div>',
-    );
+  return contentCallouts(html);
 }
 
 export function stripContentComponentSyntax(markdown: string): string {
