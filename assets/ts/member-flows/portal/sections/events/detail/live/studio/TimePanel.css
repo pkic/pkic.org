@@ -32,12 +32,23 @@
     padding: var(--pk-2) var(--pk-3);
     border-block-end: 1px solid var(--pk-line-soft);
   }
-  .pk-studio-time__detail,
-  .pk-studio-time__reset,
-  .pk-studio-time__minus,
-  .pk-studio-time__plus,
-  .pk-studio-time__outputs .pk-output-target > .pk-menu {
-    display: none;
+  /*
+   * Narrow panels hide what they cannot fit, below a width rather than
+   * revealing it above one: revealing with display: revert would undo the
+   * buttons' own flex centering.
+   */
+  @container studio-time (width < 30rem) {
+    .pk-studio-time__detail,
+    .pk-studio-time__reset {
+      display: none;
+    }
+  }
+  @container studio-time (width < 46rem) {
+    .pk-studio-time__minus,
+    .pk-studio-time__plus,
+    .pk-studio-time__outputs .pk-output-target > .pk-menu {
+      display: none;
+    }
   }
   @container studio-time (width >= 30rem) {
     .pk-studio-time__list {
@@ -48,17 +59,6 @@
         "name reading outputs transport menu"
         "detail reading outputs transport menu";
       column-gap: var(--pk-3);
-    }
-    .pk-studio-time__detail,
-    .pk-studio-time__reset {
-      display: revert;
-    }
-  }
-  @container studio-time (width >= 46rem) {
-    .pk-studio-time__minus,
-    .pk-studio-time__plus,
-    .pk-studio-time__outputs .pk-output-target > .pk-menu {
-      display: revert;
     }
   }
   .pk-studio-time__name {
