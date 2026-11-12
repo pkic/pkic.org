@@ -87,6 +87,9 @@ describe("live control room Transition", () => {
           checkInText: DEFAULT_LIVE_CHECK_IN_TEXT,
           lowerThirdMotion: "animated",
           timerGraphics: [],
+          topQuestions: null,
+          chatFeed: null,
+          reactions: false,
         },
       },
     ]);

@@ -52,6 +52,9 @@ const ON_STAGE = {
   poll: null,
   pollChange: null,
   timerGraphics: [],
+  topQuestions: null,
+  chatFeed: null,
+  reactions: false,
 };
 const SESSION_TIMER = liveSnapshot().timers[0]!;
 const FULL_FRAME = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
@@ -320,8 +323,9 @@ describe("broadcast overlays", () => {
     expect(host.querySelector(".pk-live-overlay__poll-question")).toBeNull();
   });
 
-  it("floats each reaction burst", () => {
+  it("floats each reaction burst while reactions are on", () => {
     const reactions = mountOverlay("program");
+    void act(() => reactions.live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, reactions: true } }));
     void act(() =>
       reactions.live
         .latest()

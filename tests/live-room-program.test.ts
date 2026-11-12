@@ -6,10 +6,8 @@ import {
   liveProgramMessageSchema,
   liveProgramSelectionSchema,
 } from "../assets/shared/schemas/live-room-program";
-import {
-  LIVE_OVERLAY_PROTOCOL_PREFIX,
-  liveOverlayAccessResponseSchema,
-} from "../assets/shared/schemas/live-session-room";
+import { LIVE_OVERLAY_PROTOCOL_PREFIX } from "../assets/shared/schemas/live-session-room";
+import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-overlay-access";
 import { signLiveOverlayToken } from "../functions/_lib/auth/live-session-overlay-token";
 import { verifyUserSessionToken } from "../functions/_lib/auth/user-session-token";
 import { liveProgramName } from "../functions/_lib/services/live-session/room-program";

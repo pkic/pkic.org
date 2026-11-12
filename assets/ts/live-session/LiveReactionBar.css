@@ -1,0 +1,15 @@
+@layer components {
+  /* The reactions row under the stream, its status line beside it; the line keeps its place, so nothing moves. */
+  .pk-live-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-1) var(--pk-3);
+  }
+  .pk-live-reactions__status {
+    min-block-size: 1lh;
+    margin: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+}

@@ -47,6 +47,7 @@ export type LivestreamHealthEvent =
   | { type: "state"; state: LivestreamPlayerState; at: number }
   | { type: "fault"; at: number }
   | { type: "muted"; at: number }
+  | { type: "unmuted"; at: number }
   /** A click allowed sound, and the player unmuted. */
   | { type: "sound"; at: number }
   | { type: "tick"; at: number };
@@ -103,6 +104,8 @@ export function nextLivestreamHealth(health: LivestreamHealth, event: Livestream
       return fault(health, event.at);
     case "muted":
       return health.muted || health.retryAt !== null ? health : { ...health, muted: true, changedAt: event.at };
+    // Someone turned the sound on themselves, or a click allowed it: the player plays with sound.
+    case "unmuted":
     case "sound":
       return health.muted ? { ...health, muted: false, changedAt: event.at } : health;
     case "tick":

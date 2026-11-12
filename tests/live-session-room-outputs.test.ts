@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { decodeAttendancePointResource } from "../assets/shared/attendance-points";
-import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-session-room";
+import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-overlay-access";
 import { defaultLiveTimerGraphic } from "../assets/shared/schemas/live-session-timer";
 import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../assets/shared/schemas/live-stage-display-settings";
 import { parseCapabilityToken } from "../functions/_lib/auth/capability-token";

@@ -1,4 +1,4 @@
-import { liveOverlayAccessRouteSchema } from "../../../../../../assets/shared/schemas/live-session-room";
+import { liveOverlayAccessRouteSchema } from "../../../../../../assets/shared/schemas/live-overlay-access";
 import { markResponseSensitive, type AdminContext } from "../../../../../_lib/db/context";
 import { json } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";

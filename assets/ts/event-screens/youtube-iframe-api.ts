@@ -31,6 +31,8 @@ export interface YouTubePlayer {
   getPlaybackQuality?(): string;
   getDuration?(): number;
   getCurrentTime?(): number;
+  /** Moves the playhead; a live monitor uses it to return to the live edge. */
+  seekTo?(seconds: number, allowSeekAhead: boolean): void;
   /** Not part of the documented API: `isLive` is read only when present. */
   getVideoData?(): { isLive?: unknown } | undefined;
 }

@@ -19,6 +19,7 @@ import { LiveOverlayFrame } from "./LiveOverlayFrame";
 import { LiveOverlayLayer } from "./LiveOverlayLayer";
 import { LivePanelistsOverlay } from "./LivePanelistsOverlay";
 import { LiveCheckInOverlay } from "./LiveCheckInOverlay";
+import { LiveChatFeedOverlay, LiveTopQuestionsOverlay } from "./LiveAudienceListsOverlay";
 import type {
   LiveOverlayElement,
   LiveOverlayElementPlacement,
@@ -191,6 +192,16 @@ const PROGRAM_LAYERS: readonly Layer[] = [
   },
   { element: "poll", draw: (state) => <PollOverlay stage={state.stage} polls={state.polls} /> },
   {
+    element: "topQuestions",
+    draw: (state) =>
+      state.stage.topQuestions?.questions.length ? <LiveTopQuestionsOverlay list={state.stage.topQuestions} /> : null,
+  },
+  {
+    element: "chat",
+    draw: (state) =>
+      state.stage.chatFeed?.messages.length ? <LiveChatFeedOverlay list={state.stage.chatFeed} /> : null,
+  },
+  {
     element: "timer",
     draw: () => null,
   },
@@ -198,7 +209,8 @@ const PROGRAM_LAYERS: readonly Layer[] = [
     element: "ticker",
     draw: (state) => (state.stage.ticker?.segments.length ? <LiveTickerOverlay ticker={state.stage.ticker} /> : null),
   },
-  { element: "reactions", draw: (state) => <ReactionsOverlay burst={state.burst} /> },
+  // Reactions float only while an operator has them on for this output.
+  { element: "reactions", draw: (state) => (state.stage.reactions ? <ReactionsOverlay burst={state.burst} /> : null) },
 ];
 
 /**

@@ -76,7 +76,7 @@ function read<T>(call: (() => T) | undefined): T | null {
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 
 /** Behind the live edge, only while YouTube says the video is live: elsewhere the same sum is the time left. */
-function liveLag(player: YouTubePlayer): number | null {
+export function liveLag(player: YouTubePlayer): number | null {
   if (read(() => player.getVideoData?.())?.isLive !== true) return null;
   const duration = read(() => player.getDuration?.());
   const current = read(() => player.getCurrentTime?.());

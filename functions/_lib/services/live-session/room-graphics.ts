@@ -30,6 +30,7 @@ import { resolveLiveTicker } from "./room-ticker";
 import { resolveLiveCheckIn } from "../event-attendance-points/live-check-in";
 import type { AttendancePointSelection } from "../../../../assets/shared/attendance-points";
 import type { LiveGraphicTheme } from "../../../../assets/shared/live-graphic-theme";
+import type { LiveRoomOnScreenLists } from "./room-on-screen-lists";
 
 /** A check-in code the room cannot show: its day, room or session is gone, or codes are unavailable. */
 const CHECK_IN_UNAVAILABLE = {
@@ -45,7 +46,7 @@ export class LiveRoomGraphics {
   layouts: LiveOverlayLayoutGeometry[] = [];
   tickerContext: LiveTickerContext = DEFAULT_LIVE_TICKER_CONTEXT;
   /** The attendee chat lines a chat ticker may show now. */
-  chatTicker: () => string[] = () => [];
+  chatTicker: () => Promise<string[]> = async () => [];
   constructor(
     /** The database, and the secret that signs check-in codes; without it no output can show one. */
     private readonly env: { DB: DatabaseLike; INTERNAL_SIGNING_SECRET?: string },
@@ -55,6 +56,8 @@ export class LiveRoomGraphics {
     private readonly outputs: LiveRoomOutputs,
     private readonly preview: LiveRoomPreview,
     private readonly basis: LiveRoomGraphicBasis,
+    /** The audience lists an output shows, which the room fills from its own questions and chat. */
+    readonly lists: LiveRoomOnScreenLists,
   ) {
     const saved = basis.read();
     this.layouts = saved.layouts;
@@ -96,7 +99,7 @@ export class LiveRoomGraphics {
         Date.now(),
         this.tickerContext,
         this.basis.read().agenda,
-        this.chatTicker(),
+        await this.chatTicker(),
       ),
       at,
     );
@@ -137,7 +140,7 @@ export class LiveRoomGraphics {
   async takePreview(actor: Actor, session: LiveRoomSession, at: string): Promise<LiveControlOutcome> {
     return this.preview.take(actor, session, await this.resolve(session, this.preview.sources(), at), at);
   }
-  /** The ticker and schedule a composition names, resolved from the approved agenda. */
+  /** What a composition names, resolved: ticker and schedule from the approved agenda, its lists from the room. */
   private async resolve(
     session: LiveRoomSession,
     input: LiveCompositionInput,
@@ -145,6 +148,8 @@ export class LiveRoomGraphics {
   ): Promise<ResolvedComposition> {
     const room = this.store.session()!;
     const approved = this.basis.read().agenda;
+    // Messages still waiting when the chat goes on show once their wait is over.
+    if (input.chatFeed?.delaySeconds) this.lists.due();
     return {
       questionId: input.questionId,
       creditKey: input.creditKey,
@@ -153,6 +158,9 @@ export class LiveRoomGraphics {
       lowerThirdMotion: input.lowerThirdMotion,
       panelists: input.panelists,
       timerGraphics: input.timerGraphics,
+      topQuestions: input.topQuestions && this.lists.topQuestions(input.topQuestions),
+      chatFeed: input.chatFeed && (await this.lists.chatFeed(input.chatFeed)),
+      reactions: input.reactions,
       ticker: await resolveLiveTicker(
         this.db,
         room.eventId,
@@ -161,7 +169,7 @@ export class LiveRoomGraphics {
         Date.now(),
         this.tickerContext,
         approved,
-        this.chatTicker(),
+        await this.chatTicker(),
       ),
       schedule: input.schedule
         ? resolveUpcomingRooms(approved, session.occurrenceId, Date.parse(at), input.schedule)
@@ -205,6 +213,8 @@ export class LiveRoomGraphics {
       await this.broadcast.all({ type: "overlay.layouts.changed", layouts });
     }
     await this.refreshCompositions(true);
+    // The audience lists also refill on this cadence, so a message whose wait ended while nothing changed shows.
+    await this.lists.refresh();
   }
 
   /** Recompute room-local chat and time-dependent graphics without querying D1. */
@@ -222,7 +232,7 @@ export class LiveRoomGraphics {
     if (!dynamic.some((composition) => composition.ticker || composition.schedule || composition.checkIn)) return;
     const approved = this.basis.read().agenda;
     const now = Date.now();
-    const chat = this.chatTicker();
+    const chat = await this.chatTicker();
     const refreshed = async <Composition extends LiveStage>(composition: Composition): Promise<Composition | null> => {
       const ticker = await resolveLiveTicker(
         this.db,

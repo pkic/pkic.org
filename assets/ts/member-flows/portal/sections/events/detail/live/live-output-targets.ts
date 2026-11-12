@@ -11,6 +11,10 @@ import {
   type LiveTimerGraphic,
 } from "../../../../../../../shared/schemas/live-session-room";
 import type { LiveScheduleConfig } from "../../../../../../../shared/schemas/live-session-schedule";
+import type {
+  LiveChatFeedConfig,
+  LiveTopQuestionsConfig,
+} from "../../../../../../../shared/schemas/live-session-on-screen";
 import type { LiveRoomState } from "../../../../../../live-session/live-room-state";
 import { liveCompositionInput, previewLiveStage, takeLiveStage } from "./live-stage-preview";
 
@@ -26,7 +30,10 @@ export type LiveLayer =
   | { kind: "schedule"; config: LiveScheduleConfig }
   | { kind: "panelists"; panelists: LivePanelists }
   | { kind: "timer"; graphic: LiveTimerGraphic }
-  | { kind: "checkIn"; checkIn: LiveCheckInOnAir };
+  | { kind: "checkIn"; checkIn: LiveCheckInOnAir }
+  | { kind: "topQuestions"; config: LiveTopQuestionsConfig }
+  | { kind: "chatFeed"; config: LiveChatFeedConfig }
+  | { kind: "reactions" };
 
 /** Everything the output controls read and send, assembled once by the control room. */
 export interface LiveTargets {
@@ -67,6 +74,12 @@ export function liveLayerShown(stage: LiveStage, layer: LiveLayer): boolean {
         stage.checkIn?.theme === layer.checkIn.theme &&
         sameConfig(stage.checkIn?.text, layer.checkIn.text)
       );
+    case "topQuestions":
+      return stage.topQuestions !== null && sameConfig(stage.topQuestions.config, layer.config);
+    case "chatFeed":
+      return stage.chatFeed !== null && sameConfig(stage.chatFeed.config, layer.config);
+    case "reactions":
+      return stage.reactions;
   }
 }
 
@@ -104,6 +117,13 @@ export function liveLayerToggle(
         checkInTheme: layer.checkIn.theme,
         checkInText: layer.checkIn.text,
       };
+    // The room fills a list from its own questions and chat, so the whole composition goes at once.
+    case "topQuestions":
+      return { ...takeLiveStage(stage), topQuestions: shown ? null : layer.config };
+    case "chatFeed":
+      return { ...takeLiveStage(stage), chatFeed: shown ? null : layer.config };
+    case "reactions":
+      return { ...takeLiveStage(stage), reactions: !shown };
   }
 }
 
@@ -145,6 +165,12 @@ export function livePreviewToggle(state: LiveRoomState, layer: LiveLayer): LiveR
           checkInTheme: layer.checkIn.theme,
           checkInText: layer.checkIn.text,
         };
+      case "topQuestions":
+        return { topQuestions: shown ? null : layer.config };
+      case "chatFeed":
+        return { chatFeed: shown ? null : layer.config };
+      case "reactions":
+        return { reactions: !shown };
     }
   })();
   return { type: "preview.set", composition };

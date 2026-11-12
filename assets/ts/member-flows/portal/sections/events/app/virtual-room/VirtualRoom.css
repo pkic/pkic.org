@@ -100,20 +100,3 @@
   }
 }
 
-@layer components {
-  .pk-virtual-room__player--monitor {
-    position: static;
-    display: grid;
-    place-items: center;
-    aspect-ratio: 16 / 9;
-    background: var(--pk-pqc-ink);
-    color: var(--pk-on-solid);
-    border: 1px solid var(--pk-line);
-    border-radius: var(--pk-radius-card);
-    font-size: var(--pk-text-xs);
-  }
-  .pk-virtual-room__player--monitor .pk-embed {
-    inline-size: 100%;
-    block-size: 100%;
-  }
-}
