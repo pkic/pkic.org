@@ -2,12 +2,13 @@
 /**
  * The event workspace's Screens tab: who sees it and its commands, and what
  * pairing, editing, replacing a device, revoking and removing send and do
- * with the server's answer. List
+ * with the server's answer, and which cards read as inactive. List
  * mechanics (search, sort, paging) are the shared table's own tests.
  */
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ScreenLiveStatus } from "../../assets/shared/schemas/event-screen-monitor";
 import {
   eventScreenPairingCreateSchema,
   screenDeviceReplacementSchema,
@@ -16,6 +17,7 @@ import {
 } from "../../assets/shared/schemas/event-screens";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { EventScreens } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/EventScreens";
+import { screenInactive } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/ScreenMonitorCard";
 import { visibleEventWorkspaceTabs } from "../../assets/ts/member-flows/portal/sections/management/group-event-workspace-tabs";
 import { authStatus, portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
@@ -400,5 +402,28 @@ describe("Removing a screen", () => {
     ]);
     await settle();
     expect(rowMenuTrigger(root, "Foyer, by registration")).toBeNull();
+  });
+});
+
+describe("Inactive screen cards", () => {
+  const NOW = Date.parse("2026-12-01T09:27:00.000Z");
+  const status = (online: boolean): ScreenLiveStatus => ({
+    screenId: "K7M2QA",
+    online,
+    connectedAt: "2026-12-01T08:00:00.000Z",
+    disconnectedAt: online ? null : "2026-12-01T09:10:00.000Z",
+    reportedAt: "2026-12-01T09:10:00.000Z",
+    stateSince: "2026-12-01T08:00:00.000Z",
+    health: null,
+  });
+
+  it("marks a screen that shows nothing now, and never one whose state is unknown", () => {
+    const pending = record({ session: { ...record().session, state: "pending", activatedAt: null } });
+    const offline = record({ session: { ...record().session, lastSeenAt: "2026-12-01T09:10:00.000Z" } });
+    expect(screenInactive(record(), status(true), NOW, null)).toBe(false);
+    expect(screenInactive(record(), status(false), NOW, null)).toBe(true);
+    expect(screenInactive(offline, undefined, NOW, null)).toBe(true);
+    expect(screenInactive(pending, undefined, NOW, null)).toBe(false);
+    expect(screenInactive(record(), status(false), NOW, NOW - 60_000)).toBe(false);
   });
 });

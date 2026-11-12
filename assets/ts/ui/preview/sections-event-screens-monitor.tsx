@@ -28,11 +28,21 @@ const BLUE_LAPTOP = screen(
   { state: "active", seenMinutesAgo: 1 },
 );
 const TAB_SCREENS: ScreenRecord[] = [SCREENS[0]!, SCREENS[1]!, BLUE_PROJECTOR, BLUE_LAPTOP, ...SCREENS.slice(2)];
+/** A screen whose device was reinstalled under a new screen ID: the old record, unseen since. */
+const LEFT_BEHIND = screen(
+  "H6WQ3R",
+  "Main hall, left of stage",
+  { ...blue, output: "projector" },
+  {
+    state: "active",
+    seenMinutesAgo: 17,
+  },
+);
 const ROOM_SCREENS = TAB_SCREENS.filter((each) => each.assignment?.roomId === blue.roomId);
 const noCommand = () => undefined;
 const ISSUES = screenMonitorIssues(MONITOR, SCREEN_FIXTURE_NOW);
 
-function MonitoredTab({ canManage }: { canManage: boolean }) {
+function MonitoredTab({ canManage, screens = TAB_SCREENS }: { canManage: boolean; screens?: ScreenRecord[] }) {
   return (
     <div class="pk-stack">
       <WorkspaceTabs />
@@ -40,7 +50,7 @@ function MonitoredTab({ canManage }: { canManage: boolean }) {
         slug="pqc-conference-2026"
         canManage={canManage}
         now={SCREEN_FIXTURE_NOW}
-        load={fixturesWith(TAB_SCREENS)}
+        load={fixturesWith(screens)}
         monitor={{ view: MONITOR, now: SCREEN_FIXTURE_NOW, control: canManage }}
       />
     </div>
@@ -106,6 +116,12 @@ export const eventScreenMonitorSections: PreviewSection[] = [
     title: "Screens tab, multi-view, read-only",
     note: "A room operator sees the same cards without a menu.",
     render: () => <MonitoredTab canManage={false} />,
+  },
+  {
+    id: "screens-tab-offline",
+    title: "Screens tab, offline screens",
+    note: "A screen that shows nothing now reads as inactive: a sunk card, a grey picture area and secondary text. The status line keeps full ink and the menu works as usual. Online screens look as before.",
+    render: () => <MonitoredTab canManage screens={[BLUE_PROJECTOR, SCREENS[2]!, LEFT_BEHIND]} />,
   },
   {
     id: "studio-screens-panel",

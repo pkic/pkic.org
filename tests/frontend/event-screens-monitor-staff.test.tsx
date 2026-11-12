@@ -256,12 +256,13 @@ describe("the multi-view", () => {
       "ok",
       "neutral",
     ]);
-    // The tone along the top edge is for screens that need attention only, and is said to screen readers too.
+    // The tone along the top edge is for screens that need attention only, and is said to screen readers too;
+    // a screen that shows nothing now, by the monitor's word or its last visit, reads as inactive.
     expect(cards.map((card) => card.className)).toEqual([
-      "pk-collection-card pk-screen-card--critical",
+      "pk-collection-card pk-screen-card--critical pk-screen-card--inactive",
       "pk-collection-card pk-screen-card--warning",
       "pk-collection-card",
-      "pk-collection-card",
+      "pk-collection-card pk-screen-card--inactive",
     ]);
     expect(condition(cards[0]!).textContent).toBe("Critical: Last heard 10 min ago · Offline");
     expect(host.querySelector(".pk-badge")).toBeNull();
