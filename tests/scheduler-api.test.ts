@@ -207,6 +207,27 @@ describe("scheduler API", () => {
     expect(row.last_status).toBe("succeeded");
   });
 
+  it("takes over a run whose lease expired instead of reporting it as running", async () => {
+    const token = await staffWith(["schedulerOperator", "retentionOperator"]);
+    await env.DB.prepare(
+      `UPDATE scheduled_jobs
+          SET running_since = '2026-01-01T00:00:00.000Z', lease_expires_at = '2026-01-01T00:05:00.000Z', run_token = 'dead-run'
+        WHERE job_key = 'retention'`,
+    ).run();
+
+    const response = await call(token, "/api/v1/scheduler/jobs/retention/runs", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+
+    expect(response.status).toBe(200);
+    const [row] = await queryAll<{ running_since: string | null; last_status: string; consecutive_abandoned: number }>(
+      env.DB,
+      "SELECT running_since, last_status, consecutive_abandoned FROM scheduled_jobs WHERE job_key = 'retention'",
+    );
+    expect(row).toMatchObject({ running_since: null, last_status: "succeeded", consecutive_abandoned: 0 });
+  });
+
   it("returns 404 for an unknown job rather than leaking the registry shape", async () => {
     const token = await staffWith(["schedulerOperator"]);
     const response = await call(token, "/api/v1/scheduler/jobs/not-a-job/runs", {
