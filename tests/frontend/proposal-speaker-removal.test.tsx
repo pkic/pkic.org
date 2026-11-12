@@ -420,7 +420,7 @@ describe("proposal speaker removal UI", () => {
     );
   });
 
-  it("holds the proposer's own card to the proposer role", async () => {
+  it("lets the proposer take any role in the contract, the proposer's included", async () => {
     const root = mount(
       <SpeakerCard
         speaker={proposalSpeaker({ role: "proposer" })}
@@ -433,8 +433,12 @@ describe("proposal speaker removal UI", () => {
       />,
     );
 
-    const labels = (await openCardMenu(root, "Casey Speaker")).map((item) => item.textContent?.trim());
-    expect(labels).not.toContain("Change role…");
+    await runCardAction(root, "Casey Speaker", "Change role…");
+
+    const dialog = root.querySelector<HTMLDialogElement>("dialog")!;
+    const select = controlFor<HTMLSelectElement>(dialog, "Role");
+    expect(optionValues(select)).toEqual([...PROPOSAL_SPEAKER_ROLES]);
+    expect(select.value).toBe("proposer");
   });
 
   it("changes the role through the proposal's own contract", async () => {

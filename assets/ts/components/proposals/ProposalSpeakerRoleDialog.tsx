@@ -3,8 +3,9 @@
  * panelist — the one thing about them the proposal itself holds. Asked in a
  * dialog from the card's menu rather than a select standing open on the card.
  *
- * The proposer's role is never offered: the proposal moves to another speaker
- * by promoting them, not by relabelling this one.
+ * The proposer may take any role, like every other speaker. The proposer role
+ * itself is offered only to the proposer: the proposal moves to another
+ * speaker by promoting them, not by relabelling this one.
  */
 import { useState } from "preact/hooks";
 import { proposalSpeakerPatchSchema } from "../../../shared/schemas/proposal-management";
@@ -21,6 +22,7 @@ import { Select } from "../../ui/TextControl";
 export function ProposalSpeakerRoleDialog({
   name,
   role,
+  isProposer,
   path,
   onSaved,
   onClose,
@@ -28,6 +30,8 @@ export function ProposalSpeakerRoleDialog({
 }: {
   name: string;
   role: SpeakerRole;
+  /** Whether this speaker is the proposal's proposer, the only one who may hold the proposer role. */
+  isProposer: boolean;
   /** The speaker on this proposal's roster. */
   path: string;
   onSaved: (role: SpeakerRole) => void;
@@ -81,7 +85,7 @@ export function ProposalSpeakerRoleDialog({
             value={draft}
             onChange={(event) => setDraft(speakerRoleSchema.parse(event.currentTarget.value))}
           >
-            {SPEAKER_ROLE_OPTIONS.filter((option) => option.value !== "proposer").map((option) => (
+            {SPEAKER_ROLE_OPTIONS.filter((option) => isProposer || option.value !== "proposer").map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>

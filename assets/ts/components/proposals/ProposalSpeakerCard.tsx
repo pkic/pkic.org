@@ -385,7 +385,7 @@ export function ProposalSpeakerCard({
       },
     });
   }
-  if (canFinalize && !isCurrentProposer) {
+  if (canFinalize) {
     actions.push({ id: "role", label: "Change role…", onSelect: () => setChangingRole(true) });
   }
   if (canFinalize) {
@@ -520,6 +520,7 @@ export function ProposalSpeakerCard({
         <ProposalSpeakerRoleDialog
           name={name}
           role={speaker.role}
+          isProposer={isCurrentProposer}
           path={speakerPath()}
           notify={notify}
           onSaved={(role) => onSaved(speaker.userId, { role })}
