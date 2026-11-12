@@ -1,0 +1,119 @@
+/*
+ * Audience lists on air: top questions and the latest chat. Each card has
+ * one fixed width on the 1080p frame and grows only in height, so a layout
+ * box scales every list by the same amount, however many lines it holds.
+ * The card wears the question card's paper, stripe and shadow.
+ */
+@layer components {
+  .pk-live-overlay__list {
+    box-sizing: border-box;
+    display: grid;
+    gap: 16px;
+    inline-size: 840px;
+    max-block-size: 728px;
+    padding: 24px 32px;
+    overflow: hidden;
+    border-block-start: 10px solid transparent;
+    border-image: var(--pk-pqc-stripe) 1;
+    border-radius: var(--pk-radius-card);
+    background: var(--pk-pqc-paper);
+    box-shadow: var(--pk-shadow-3);
+    animation: pk-live-overlay-rise var(--pk-dur-slow) var(--pk-ease) both;
+  }
+  .pk-live-overlay__list[data-list="chat"] {
+    inline-size: 768px;
+  }
+  .pk-live-overlay__list-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .pk-live-overlay__list-header .pk-live-overlay__emblem {
+    inline-size: calc(48px * 360 / 314);
+  }
+  .pk-live-overlay__list-title {
+    margin: 0;
+    font-size: var(--pk-text-3xl);
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .pk-live-overlay__list-items {
+    display: grid;
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .pk-live-overlay__list-item {
+    display: flex;
+    align-items: start;
+    gap: 24px;
+    padding-block-start: 16px;
+    border-block-start: 1px solid color-mix(in srgb, var(--pk-pqc-ink) 12%, transparent);
+  }
+  .pk-live-overlay__list-item:first-child {
+    padding-block-start: 0;
+    border-block-start: 0;
+  }
+  /* The votes, a fixed column so every question's text starts at the same edge. */
+  .pk-live-overlay__votes {
+    display: grid;
+    flex: none;
+    justify-items: center;
+    inline-size: 96px;
+    margin: 0;
+    color: var(--pk-pqc-forest);
+    line-height: 1.1;
+  }
+  .pk-live-overlay__votes-count {
+    font-size: calc(var(--pk-text-3xl) * 1.125);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  .pk-live-overlay__votes-label {
+    color: var(--pk-pqc-ink-muted);
+    font-size: calc(var(--pk-text-md) * 1.6);
+    font-weight: 500;
+  }
+  .pk-live-overlay__list-body {
+    display: grid;
+    gap: 4px;
+    min-inline-size: 0;
+  }
+  /* Paragraphs, not blockquote and figcaption: the site's own rules for those sit outside the layers and would win. */
+  .pk-live-overlay__list-text {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    font-size: calc(var(--pk-text-xl) * 1.4);
+    font-weight: 600;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+  .pk-live-overlay__list-byline {
+    margin: 0;
+    overflow: hidden;
+    color: var(--pk-pqc-ink-muted);
+    font-size: calc(var(--pk-text-md) * 1.6);
+    font-weight: 500;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pk-live-overlay__list[data-list="chat"] .pk-live-overlay__list-byline {
+    color: var(--pk-pqc-forest);
+    font-weight: 700;
+  }
+  .pk-live-overlay__list[data-list="chat"] .pk-live-overlay__list-text {
+    font-size: calc(var(--pk-text-lg) * 1.5);
+    font-weight: 500;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-live-overlay__list {
+      animation: none;
+    }
+  }
+}

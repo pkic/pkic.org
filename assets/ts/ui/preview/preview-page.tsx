@@ -24,6 +24,7 @@ import { speakerProfileReviewSections } from "./sections-speaker-profile-review"
 import { eventScreenSections } from "./sections-event-screens";
 import { eventScreenStaffSections } from "./sections-event-screens-staff";
 import { eventScreenMonitorSections } from "./sections-event-screens-monitor";
+import { studioOnScreenSections } from "./sections-studio-on-screen";
 
 function main(): void {
   const mount = document.getElementById("pk-preview");
@@ -45,6 +46,7 @@ function main(): void {
     ...eventScreenSections,
     ...eventScreenStaffSections,
     ...eventScreenMonitorSections,
+    ...studioOnScreenSections,
   ];
   // `?only=<id>` renders one section alone, for a tight screenshot of one control.
   const only = new URLSearchParams(window.location.search).get("only");

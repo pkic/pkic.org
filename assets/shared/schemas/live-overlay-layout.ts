@@ -18,6 +18,8 @@ export const LIVE_OVERLAY_ELEMENTS = [
   "schedule",
   "panelists",
   "checkIn",
+  "topQuestions",
+  "chat",
   "reactions",
   "stageDisplay",
   "stageMessage",
@@ -32,6 +34,8 @@ export const LIVE_OVERLAY_ELEMENT_LABELS: Record<LiveOverlayElement, string> = {
   schedule: "Up next",
   panelists: "Panel",
   checkIn: "Check-in code",
+  topQuestions: "Top questions",
+  chat: "Chat",
   reactions: "Reactions",
   stageDisplay: "Stage display",
   stageMessage: "Message to speaker",
@@ -48,6 +52,8 @@ export const LIVE_OVERLAY_ELEMENT_COMPOSITIONS: Record<LiveOverlayElement, reado
   schedule: ["program"],
   panelists: ["program"],
   checkIn: ["program", "stage-display"],
+  topQuestions: ["program"],
+  chat: ["program"],
   reactions: ["program"],
   stageDisplay: ["stage-display"],
   stageMessage: ["stage-display"],
@@ -84,6 +90,45 @@ function insideFrame<Schema extends z.ZodType<{ x: number; y: number; w: number;
 export const liveOverlayElementBoxSchema = insideFrame(z.object(boxShape).strict());
 export type LiveOverlayElementBox = z.infer<typeof liveOverlayElementBoxSchema>;
 
+const fractionOf = (pixels: number, side: number) => Math.round((pixels / side) * 10_000) / 10_000;
+/** A box from pixel edges of the 1920 × 1080 frame. */
+export function liveOverlayPixelBox(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  anchor: Pick<LiveOverlayElementBox, "horizontal" | "vertical">,
+): LiveOverlayElementBox {
+  const { width, height } = LIVE_OVERLAY_FRAME;
+  return {
+    x: fractionOf(x, width),
+    y: fractionOf(y, height),
+    w: fractionOf(w, width),
+    h: fractionOf(h, height),
+    ...anchor,
+  };
+}
+
+/**
+ * Elements added after events began saving layouts, at their Full frame box.
+ * A layout or set of shared positions saved before one existed reads it
+ * there, shown and shared, so nothing an organizer saved stops reading.
+ */
+export const LIVE_OVERLAY_ADDED_ELEMENT_BOXES = {
+  topQuestions: liveOverlayPixelBox(48, 176, 840, 728, { horizontal: "left", vertical: "top" }),
+  chat: liveOverlayPixelBox(1104, 176, 768, 728, { horizontal: "right", vertical: "bottom" }),
+} satisfies Partial<Record<LiveOverlayElement, LiveOverlayElementBox>>;
+
+/** Saved elements with any element added since filled in; anything but an object is left for the schema to refuse. */
+function withAddedElements(value: unknown, placement: boolean): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const added = Object.entries(LIVE_OVERLAY_ADDED_ELEMENT_BOXES).map(([element, box]) => [
+    element,
+    placement ? { visible: true, shared: true, ...box } : box,
+  ]);
+  return { ...Object.fromEntries(added), ...value };
+}
+
 /**
  * Where one element sits on one layout: whether it shows, and its box. An
  * element `shared` with the event's other layouts takes the event's shared
@@ -95,25 +140,30 @@ export const liveOverlayElementPlacementSchema = insideFrame(
 );
 export type LiveOverlayElementPlacement = z.infer<typeof liveOverlayElementPlacementSchema>;
 
-export const liveOverlayLayoutElementsSchema = z
-  .object(
-    Object.fromEntries(LIVE_OVERLAY_ELEMENTS.map((element) => [element, liveOverlayElementPlacementSchema])) as Record<
-      LiveOverlayElement,
-      typeof liveOverlayElementPlacementSchema
-    >,
-  )
-  .strict();
+export const liveOverlayLayoutElementsSchema = z.preprocess(
+  (value) => withAddedElements(value, true),
+  z
+    .object(
+      Object.fromEntries(
+        LIVE_OVERLAY_ELEMENTS.map((element) => [element, liveOverlayElementPlacementSchema]),
+      ) as Record<LiveOverlayElement, typeof liveOverlayElementPlacementSchema>,
+    )
+    .strict(),
+);
 export type LiveOverlayLayoutElements = z.infer<typeof liveOverlayLayoutElementsSchema>;
 
 /** The event's shared position for every element, which each layout takes unless it places the element itself. */
-export const liveOverlaySharedPositionsSchema = z
-  .object(
-    Object.fromEntries(LIVE_OVERLAY_ELEMENTS.map((element) => [element, liveOverlayElementBoxSchema])) as Record<
-      LiveOverlayElement,
-      typeof liveOverlayElementBoxSchema
-    >,
-  )
-  .strict();
+export const liveOverlaySharedPositionsSchema = z.preprocess(
+  (value) => withAddedElements(value, false),
+  z
+    .object(
+      Object.fromEntries(LIVE_OVERLAY_ELEMENTS.map((element) => [element, liveOverlayElementBoxSchema])) as Record<
+        LiveOverlayElement,
+        typeof liveOverlayElementBoxSchema
+      >,
+    )
+    .strict(),
+);
 export type LiveOverlaySharedPositions = z.infer<typeof liveOverlaySharedPositionsSchema>;
 
 /** The built-in layouts every event starts with; their data lives in `live-overlay-layout-presets.ts`. */

@@ -24,6 +24,9 @@ export type ResolvedComposition = {
   schedule: LiveStage["schedule"];
   checkIn: LiveStage["checkIn"] | LiveRefusal;
   timerGraphics: LiveStage["timerGraphics"];
+  topQuestions: LiveStage["topQuestions"];
+  chatFeed: LiveStage["chatFeed"];
+  reactions: boolean;
 };
 
 export const LIVE_CREDIT_NOT_FOUND: LiveRefusal = {
@@ -104,5 +107,8 @@ export function composeLiveStage(
     poll: input.pollId ? { id: input.pollId, presentation: input.pollPresentation } : null,
     pollChange: change,
     timerGraphics: input.timerGraphics,
+    topQuestions: input.topQuestions,
+    chatFeed: input.chatFeed,
+    reactions: input.reactions,
   };
 }

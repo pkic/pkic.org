@@ -1,8 +1,9 @@
 import {
+  LIVE_OVERLAY_ADDED_ELEMENT_BOXES,
   LIVE_OVERLAY_DEFAULT_LAYOUT,
   LIVE_OVERLAY_ELEMENTS,
-  LIVE_OVERLAY_FRAME,
   LIVE_OVERLAY_PRESETS,
+  liveOverlayPixelBox,
   type LiveOverlayElement,
   type LiveOverlayElementBox,
   type LiveOverlayElementPlacement,
@@ -22,19 +23,10 @@ import {
  */
 
 type Anchor = Pick<LiveOverlayElementPlacement, "horizontal" | "vertical">;
-const round = (value: number) => Math.round(value * 10_000) / 10_000;
 
 /** A box from pixel edges, at its anchor, shown unless said otherwise. */
 function box(x: number, y: number, w: number, h: number, anchor: Anchor, visible = true): LiveOverlayElementPlacement {
-  return {
-    visible,
-    x: round(x / LIVE_OVERLAY_FRAME.width),
-    y: round(y / LIVE_OVERLAY_FRAME.height),
-    w: round(w / LIVE_OVERLAY_FRAME.width),
-    h: round(h / LIVE_OVERLAY_FRAME.height),
-    ...anchor,
-    shared: true,
-  };
+  return { visible, ...liveOverlayPixelBox(x, y, w, h, anchor), shared: true };
 }
 
 const LEFT_TOP: Anchor = { horizontal: "left", vertical: "top" };
@@ -55,6 +47,8 @@ const FULL_FRAME: LiveOverlayLayoutElements = {
   schedule: box(192, 108, 1536, 864, CENTER),
   panelists: box(96, 108, 1728, 864, CENTER),
   checkIn: box(1392, 216, 480, 648, RIGHT_MIDDLE),
+  topQuestions: { visible: true, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.topQuestions, shared: true },
+  chat: { visible: true, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.chat, shared: true },
   reactions: box(1492, 48, 380, 984, RIGHT_MIDDLE),
   stageDisplay: box(0, 0, 1920, 1080, CENTER),
   stageMessage: box(96, 24, 1728, 152, { horizontal: "center", vertical: "top" }),
@@ -107,6 +101,8 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
       schedule: box(48, 280, 560, 520, LEFT_MIDDLE),
       panelists: box(48, 280, 560, 520, LEFT_MIDDLE),
       checkIn: box(48, 280, 560, 520, LEFT_MIDDLE),
+      topQuestions: box(48, 280, 560, 520, LEFT_MIDDLE),
+      chat: box(48, 280, 560, 520, LEFT_MIDDLE),
       reactions: box(48, 48, 560, 760, LEFT_BOTTOM, false),
     },
   },

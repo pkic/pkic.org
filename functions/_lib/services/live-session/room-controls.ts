@@ -9,6 +9,7 @@ import {
 import type {
   LiveOverlayMode,
   LiveQueue,
+  LiveRoomClientMessage,
   LiveRoomServerMessage,
   LiveRoomSession,
   LiveStage,
@@ -28,6 +29,26 @@ import {
 
 export type { LiveRefusal } from "./room-composition";
 type Operator = { userId: string; name: string };
+/** The commands only the control desk sends; the room's other messages are participation open to every viewer. */
+export type LiveDeskCommand = Exclude<
+  LiveRoomClientMessage,
+  {
+    type:
+      | "question.ask"
+      | "question.edit"
+      | "question.withdraw"
+      | "question.answers.watch"
+      | "question.answer"
+      | "question.answer.accept"
+      | "question.vote"
+      | "reaction.send"
+      | "poll.vote"
+      | "question.moderate"
+      | `chat.${string}`
+      | "author.lookup"
+      | "presence.update";
+  }
+>;
 /** What a control changed: the messages every viewer receives, and the polls whose visibility moved. */
 export type LiveControlOutcome = { messages: LiveRoomServerMessage[]; polls?: string[] } | LiveRefusal;
 

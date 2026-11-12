@@ -30,6 +30,7 @@ import { resolveLiveTicker } from "./room-ticker";
 import { resolveLiveCheckIn } from "../event-attendance-points/live-check-in";
 import type { AttendancePointSelection } from "../../../../assets/shared/attendance-points";
 import type { LiveGraphicTheme } from "../../../../assets/shared/live-graphic-theme";
+import type { LiveRoomOnScreenLists } from "./room-on-screen-lists";
 
 /** A check-in code the room cannot show: its day, room or session is gone, or codes are unavailable. */
 const CHECK_IN_UNAVAILABLE = {
@@ -55,6 +56,8 @@ export class LiveRoomGraphics {
     private readonly outputs: LiveRoomOutputs,
     private readonly preview: LiveRoomPreview,
     private readonly basis: LiveRoomGraphicBasis,
+    /** The audience lists an output shows, which the room fills from its own questions and chat. */
+    readonly lists: LiveRoomOnScreenLists,
   ) {
     const saved = basis.read();
     this.layouts = saved.layouts;
@@ -137,7 +140,7 @@ export class LiveRoomGraphics {
   async takePreview(actor: Actor, session: LiveRoomSession, at: string): Promise<LiveControlOutcome> {
     return this.preview.take(actor, session, await this.resolve(session, this.preview.sources(), at), at);
   }
-  /** The ticker and schedule a composition names, resolved from the approved agenda. */
+  /** What a composition names, resolved: ticker and schedule from the approved agenda, its lists from the room. */
   private async resolve(
     session: LiveRoomSession,
     input: LiveCompositionInput,
@@ -153,6 +156,9 @@ export class LiveRoomGraphics {
       lowerThirdMotion: input.lowerThirdMotion,
       panelists: input.panelists,
       timerGraphics: input.timerGraphics,
+      topQuestions: input.topQuestions && this.lists.topQuestions(input.topQuestions),
+      chatFeed: input.chatFeed && this.lists.chatFeed(input.chatFeed),
+      reactions: input.reactions,
       ticker: await resolveLiveTicker(
         this.db,
         room.eventId,

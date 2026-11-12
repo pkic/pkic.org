@@ -62,7 +62,16 @@ export function previewLiveStage(
           : stage.checkIn && { ...stage.checkIn, theme: message.checkInTheme, text: message.checkInText };
   if (message.type === "stage.ticker" || message.type === "stage.set")
     next.ticker = message.ticker ? { ...message.ticker, segments: [] } : null;
-  if (message.type === "stage.set") next.timerGraphics = message.timerGraphics;
+  if (message.type === "stage.set") {
+    next.timerGraphics = message.timerGraphics;
+    // The room fills the lists; until it answers, a list keeps what it showed.
+    next.topQuestions = message.topQuestions && {
+      config: message.topQuestions,
+      questions: stage.topQuestions?.questions ?? [],
+    };
+    next.chatFeed = message.chatFeed && { config: message.chatFeed, messages: stage.chatFeed?.messages ?? [] };
+    next.reactions = message.reactions;
+  }
   if (message.type === "stage.timer")
     next.timerGraphics = updateLiveTimerGraphics(stage.timerGraphics, message.timer, message.visible);
   return next;
@@ -88,6 +97,9 @@ export function livePreviewDifferences(preview: LiveStage, program: LiveStage): 
     "schedule",
     "checkIn",
     "timerGraphics",
+    "topQuestions",
+    "chatFeed",
+    "reactions",
   ];
   const changed = layers.filter((layer) => JSON.stringify(left[layer]) !== JSON.stringify(right[layer])).length;
   const poll =

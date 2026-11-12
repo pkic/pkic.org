@@ -1,4 +1,4 @@
-/* A venue screen's 16:9 frame in the gallery column, and the stand-in for its livestream player. */
+/* A venue screen's 16:9 frame in the gallery column, and the stand-ins for its livestream player and a camera. */
 @layer components {
   .pk-preview__screen {
     inline-size: 100%;
@@ -11,5 +11,9 @@
     border: 2px dashed color-mix(in srgb, var(--pk-on-solid) 28%, var(--pk-chrome-deep));
     color: color-mix(in srgb, var(--pk-on-solid) 72%, var(--pk-chrome-deep));
     font-size: calc(var(--pk-text-3xl) * 1.5);
+  }
+  /* What a camera might see behind a transparent overlay: enough tone that the graphics read as they would on air. */
+  .pk-preview__camera {
+    background: linear-gradient(135deg, var(--pk-chrome-raised), var(--pk-chrome-deep) 60%);
   }
 }

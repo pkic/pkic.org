@@ -5,6 +5,7 @@ import { LiveRoomAnswerStore } from "./room-answer-store";
 import { advanceLiveStage } from "./room-stage-next";
 import { LiveRoomGraphics } from "./room-graphics";
 import { LiveRoomGraphicBasis } from "./room-graphic-basis";
+import { LiveRoomOnScreenLists } from "./room-on-screen-lists";
 import { LIVE_TICKER_REFRESH_MS, liveChatTickerLines } from "./room-ticker";
 import { LiveRoomProgram, LIVE_PROGRAM_SOCKET_TAG, closeLiveRoomProgramSources } from "./room-program";
 import type {
@@ -38,7 +39,7 @@ import { liveRoomRefusalCloseCode } from "../../../../assets/shared/schemas/live
 import { nowIso } from "../../utils/time";
 import { LIVE_ROOM_ADMISSION_HEADER, liveRoomAdmissionSchema, type LiveRoomParticipant } from "./room-admission";
 import { LiveRoomBroadcast } from "./room-broadcast";
-import { LiveRoomControls, type LiveControlOutcome, type LiveRefusal } from "./room-controls";
+import { LiveRoomControls, type LiveControlOutcome, type LiveDeskCommand, type LiveRefusal } from "./room-controls";
 import { LiveRoomTimers } from "./room-timers";
 import { LivePollStore } from "./room-poll-store";
 import { LiveRoomPolls } from "./room-polls";
@@ -148,6 +149,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.outputs,
       new LiveRoomPreview(this.store, this.pollStore, this.controls),
       new LiveRoomGraphicBasis(this.sql),
+      new LiveRoomOnScreenLists(ctx, this.store, this.chat, this.broadcast),
     );
     this.graphics.chatTicker = () => liveChatTickerLines(this.chat);
     this.chatActions = new LiveRoomChatActions(
@@ -159,12 +161,14 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.authors,
       {
         tickerChanged: () => this.graphics.refreshLocal(),
+        listed: () => this.graphics.lists.due(),
         audited: () => this.scheduleCopy(),
       },
     );
     this.questions = new LiveRoomQuestions(this.store, this.broadcast, this.controls, this.authors, {
       allowed: (userId) => this.store.takeQuestionWriteAllowance(userId, nowIso()),
       changed: () => this.scheduleCopy(),
+      listed: () => this.graphics.lists.due(),
     });
     this.answerStore = new LiveRoomAnswerStore(this.sql);
     this.answers = new LiveRoomAnswers(
@@ -356,6 +360,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     }
     for (const questionId of recounted) await this.broadcast.question(questionId);
     for (const pollId of polls) await this.broadcast.poll(pollId);
+    if (removed.length || recounted.length || chat.length) this.graphics.lists.due();
     if (removed.length || recounted.length || polls.length) await this.scheduleAlarm(this.copyDue(), true);
   }
 
@@ -502,29 +507,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   }
 
   /** The control desk's actions, each one a single synchronous change of the room's storage. */
-  private async operate(
-    actor: Actor,
-    session: LiveRoomSession,
-    message: Exclude<
-      LiveRoomClientMessage,
-      {
-        type:
-          | "question.ask"
-          | "question.edit"
-          | "question.withdraw"
-          | "question.answers.watch"
-          | "question.answer"
-          | "question.answer.accept"
-          | "question.vote"
-          | "reaction.send"
-          | "poll.vote"
-          | "question.moderate"
-          | `chat.${string}`
-          | "author.lookup"
-          | "presence.update";
-      }
-    >,
-  ): Promise<LiveControlOutcome> {
+  private async operate(actor: Actor, session: LiveRoomSession, message: LiveDeskCommand): Promise<LiveControlOutcome> {
     const at = nowIso();
     switch (message.type) {
       case "question.rewrite":

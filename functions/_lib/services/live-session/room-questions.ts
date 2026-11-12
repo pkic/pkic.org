@@ -56,6 +56,8 @@ export class LiveRoomQuestions {
       allowed: (userId: string) => boolean;
       /** The durable copy is due. */
       changed: () => Promise<void>;
+      /** A question changed what an audience list on air may hold. */
+      listed: () => void;
     },
   ) {}
 
@@ -106,6 +108,7 @@ export class LiveRoomQuestions {
     });
     this.authors.recordQuestion(id, stamp);
     await this.broadcast.question(id);
+    this.hooks.listed();
     await this.hooks.changed();
     return { questionId: id };
   }
@@ -154,6 +157,7 @@ export class LiveRoomQuestions {
       changed_at: at,
     });
     await this.broadcast.question(question.id);
+    this.hooks.listed();
     const withdrawalActor = question.anonymous === 1 ? { ...actor, name: "Anonymous" } : actor;
     if (input.type === "question.withdraw")
       for (const message of this.controls.withdraw(withdrawalActor, "question", question.id, at))
@@ -168,6 +172,7 @@ export class LiveRoomQuestions {
     if (this.store.hasVoted(questionId, userId) === voted) return;
     this.store.setVote(questionId, userId, voted);
     await this.broadcast.question(questionId);
+    this.hooks.listed();
     await this.hooks.changed();
   }
 
@@ -177,6 +182,7 @@ export class LiveRoomQuestions {
     this.store.rewrite(questionId, text, actor, at);
     this.store.recordStaffAction(actor.userId, "live_session.question.rewritten", { questionId }, at);
     await this.broadcast.question(questionId);
+    this.hooks.listed();
     return { messages: this.controls.refreshQuestionOnStage(questionId) };
   }
 
@@ -203,6 +209,7 @@ export class LiveRoomQuestions {
       at,
     );
     await this.broadcast.question(questionId);
+    this.hooks.listed();
     const cleared: LiveRoomServerMessage[] = this.controls.clearHiddenQuestion(actor, questionId, status, at);
     for (const message of cleared) await this.broadcast.all(message);
     await this.hooks.changed();

@@ -1,3 +1,7 @@
+import {
+  DEFAULT_LIVE_CHAT_FEED_CONFIG,
+  DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,
+} from "../../../../../../../../shared/schemas/live-session-on-screen";
 import { DEFAULT_LIVE_CHECK_IN_TEXT } from "../../../../../../../../shared/schemas/live-session-graphic-settings";
 import { LIVE_MODERATOR_ROLE_LABEL } from "../../../../../../../../shared/live-room-credits";
 import { formFieldStatFromTallies } from "../../../../../../../../shared/form-field-statistics";
@@ -135,6 +139,21 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
       timerGraphics: [
         { ...defaultLiveTimerGraphic(LIVE_SESSION_TIMER_ID), presentation: "digital", label: "Time left" },
       ],
+      topQuestions: {
+        config: DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,
+        questions: [
+          { id: QUESTION, text: "How do we find every certificate we depend on?", authorName: null, votes: 12 },
+          { id: NEXT, text: "Which algorithms should we pilot first?", authorName: "Riley Sample", votes: 7 },
+        ],
+      },
+      chatFeed: {
+        config: DEFAULT_LIVE_CHAT_FEED_CONFIG,
+        messages: [
+          { id: SESSION, authorName: "Alex Example", text: "Great overview of the inventory step." },
+          { id: POLL, authorName: "Jordan Placeholder", text: "Will the slides be shared after the session?" },
+        ],
+      },
+      reactions: true,
     },
     outputs: EMPTY_LIVE_OUTPUTS,
     speakerMessage: { text: "Please wrap up", tone: "warning", flash: false, change: null },
