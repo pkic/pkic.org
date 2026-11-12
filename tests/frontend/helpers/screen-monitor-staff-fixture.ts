@@ -17,6 +17,8 @@ export const status = (screenId: string, overrides: Partial<ScreenLiveStatus> = 
   stateSince: at(600),
   health: {
     pageVersion: "p",
+    kind: "device",
+    browser: null,
     display: "output",
     output: "projector",
     mode: "live",

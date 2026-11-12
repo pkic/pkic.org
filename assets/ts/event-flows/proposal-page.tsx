@@ -31,6 +31,7 @@ import { SpeakerFormCard } from "../components/SpeakerFormCard";
 import { ConfirmDialogHost } from "../components/ConfirmDialog";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { ButtonLink } from "../ui/Button";
+import { Alert } from "../ui/Alert";
 import { Radio } from "../ui/Checkbox";
 import type { ProfileLinksHandle } from "../components/ProfileLinksInput";
 import { handleFormInviteSubmitError } from "../shared/widgets/invite-recovery";
@@ -452,13 +453,28 @@ async function main(): Promise<void> {
         .forEach((control) => {
           control.disabled = true;
         });
-      setStatus(
-        statusEl,
-        windowState === "scheduled"
-          ? "The call for proposals has not opened yet."
-          : "The call for proposals is closed.",
-        true,
+      form.hidden = true;
+      const progress = boot.root.querySelector<HTMLElement>(".event-flow-stepper");
+      if (progress) progress.hidden = true;
+      const notice = document.createElement("div");
+      render(
+        <Alert
+          title={
+            windowState === "scheduled"
+              ? "The call for proposals has not opened yet"
+              : "The call for proposals is closed"
+          }
+        >
+          <p>
+            {windowState === "scheduled"
+              ? "Please check back when the call opens to submit a new proposal."
+              : "Thank you for your interest. We are no longer accepting new proposals for this event."}
+          </p>
+          <p>Already submitted a proposal? Use the management link in your confirmation email to view or edit it.</p>
+        </Alert>,
+        notice,
       );
+      boot.root.append(notice);
       return;
     }
     eventName = forms.event.name;

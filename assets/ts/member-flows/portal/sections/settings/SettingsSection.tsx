@@ -57,6 +57,9 @@ const ScheduledWork = lazy(() =>
 const ScheduledJobs = lazy(() =>
   import("../system-operations/ScheduledJobs").then((module) => ({ default: module.ScheduledJobs })),
 );
+const ScheduledJobBacklog = lazy(() =>
+  import("../system-operations/ScheduledJobBacklog").then((module) => ({ default: module.ScheduledJobBacklog })),
+);
 const AccessControl = lazy(() => import("../access-control").then((module) => ({ default: module.AccessControl })));
 
 export function SettingsSection({
@@ -142,7 +145,11 @@ export function SettingsSection({
           canApproveMembership={portalHasGlobalPermission(session, "membership:approve")}
         />
       ) : requested === "/settings/scheduled-jobs" ? (
-        <ScheduledJobs />
+        resourceId ? (
+          <ScheduledJobBacklog jobKey={resourceId} />
+        ) : (
+          <ScheduledJobs />
+        )
       ) : requested === "/settings/access-control" ? (
         <AccessControl
           canGrant={portalHasGlobalPermission(session, "access:grant")}

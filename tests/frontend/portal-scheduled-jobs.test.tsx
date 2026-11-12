@@ -9,7 +9,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScheduledJobs } from "../../assets/ts/member-flows/portal/sections/system-operations/ScheduledJobs";
-import { runRowAction } from "./helpers/row-actions";
+import { rowActionIsDisabled, runRowAction } from "./helpers/row-actions";
 import {
   schedulerJobRunCreateSchema,
   schedulerJobScheduleUpdateSchema,
@@ -63,7 +63,7 @@ function scheduledJob(overrides: Partial<ScheduledJobResource> = {}): ScheduledJ
     pausedAt: null,
     pausedReason: null,
     leaseExpired: false,
-    capabilities: { manageState: false, run: false },
+    capabilities: { manageState: false, run: false, readBacklog: false },
     ...overrides,
   };
 }
@@ -131,6 +131,29 @@ describe("portal scheduled-job management", () => {
     expect(requests).toEqual(["GET /api/v1/scheduler/jobs"]);
   });
 
+  it("links a job to its backlog and lets a run past its lease be started again", async () => {
+    const job = scheduledJob({
+      jobKey: "promotion_rendering",
+      runningSince: "2026-09-01T00:00:00.000Z",
+      leaseExpiresAt: "2026-09-01T00:10:00.000Z",
+      leaseExpired: true,
+      capabilities: { manageState: false, run: true, readBacklog: true },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(jobsPage([job]))),
+    );
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<ScheduledJobs />, container!));
+    await settle();
+
+    const link = [...container.querySelectorAll("a")].find((anchor) => anchor.textContent === "Promotion Rendering");
+    expect(link?.getAttribute("href")).toBe("#/settings/scheduled-jobs/promotion_rendering");
+    expect(container.textContent).toContain("Lease expired");
+    expect(await rowActionIsDisabled(container, "Promotion Rendering", "Run now")).toBe(false);
+  });
+
   it("announces a load failure instead of showing an empty registry", async () => {
     vi.stubGlobal(
       "fetch",
@@ -164,7 +187,7 @@ describe("portal scheduled-job management", () => {
 
   it("uses the canonical state resource and runs collection for server-authorized controls", async () => {
     const requests: Array<{ method: string; path: string; body: unknown }> = [];
-    let current = scheduledJob({ capabilities: { manageState: true, run: true } });
+    let current = scheduledJob({ capabilities: { manageState: true, run: true, readBacklog: false } });
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -179,7 +202,7 @@ describe("portal scheduled-job management", () => {
         if (url.pathname === "/api/v1/scheduler/jobs/retention" && method === "PATCH") {
           const state = (body as { state: "active" | "paused" }).state;
           current = scheduledJob({
-            capabilities: { manageState: true, run: true },
+            capabilities: { manageState: true, run: true, readBacklog: false },
             pausedAt: state === "paused" ? "2026-08-30T00:00:00.000Z" : null,
             pausedReason: state === "paused" ? (body as { reason: string }).reason : null,
           });
@@ -187,7 +210,7 @@ describe("portal scheduled-job management", () => {
         }
         if (url.pathname === "/api/v1/scheduler/jobs/retention/runs" && method === "POST") {
           current = scheduledJob({
-            capabilities: { manageState: true, run: true },
+            capabilities: { manageState: true, run: true, readBacklog: false },
             lastRunAt: "2026-08-30T00:00:01.000Z",
             lastSuccessAt: "2026-08-30T00:00:01.000Z",
             lastStatus: "succeeded",
@@ -274,7 +297,7 @@ describe("portal scheduled-job pause refusals", () => {
         );
         const method = init?.method ?? (input instanceof Request ? input.method : "GET");
         if (url.pathname === "/api/v1/scheduler/jobs" && method === "GET") {
-          return json(jobsPage([scheduledJob({ capabilities: { manageState: true, run: true } })]));
+          return json(jobsPage([scheduledJob({ capabilities: { manageState: true, run: true, readBacklog: false } })]));
         }
         if (url.pathname === "/api/v1/scheduler/jobs/retention" && method === "PATCH") {
           patched += 1;
@@ -326,7 +349,10 @@ describe("portal scheduled-job pause refusals", () => {
 describe("portal scheduled-job schedule editing", () => {
   it("refuses an interval the contract rejects, then saves minutes as seconds against the shown interval", async () => {
     const patches: unknown[] = [];
-    let current = scheduledJob({ intervalSeconds: 3_600, capabilities: { manageState: true, run: true } });
+    let current = scheduledJob({
+      intervalSeconds: 3_600,
+      capabilities: { manageState: true, run: true, readBacklog: false },
+    });
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

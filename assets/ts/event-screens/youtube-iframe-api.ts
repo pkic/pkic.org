@@ -26,6 +26,7 @@ export interface YouTubePlayer {
   destroy(): void;
   /** Readings the screen reports; each may be missing or throw before the player is ready. */
   getPlayerState?(): number;
+  isMuted?(): boolean;
   getVideoLoadedFraction?(): number;
   getPlaybackQuality?(): string;
   getDuration?(): number;
@@ -38,6 +39,8 @@ export interface YouTubePlayerEvents {
   onReady?: (event: { target: YouTubePlayer }) => void;
   onStateChange?: (event: { data: number; target: YouTubePlayer }) => void;
   onError?: (event: { data: number; target: YouTubePlayer }) => void;
+  /** The browser refused to start playback, as it does with sound before any click. */
+  onAutoplayBlocked?: (event: { target: YouTubePlayer }) => void;
 }
 
 /** Attaches to an iframe that already loads an `/embed/` address with `enablejsapi=1`. */

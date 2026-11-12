@@ -1,0 +1,24 @@
+/*
+ * A browser screen's Resume button, fixed in a corner of the window so
+ * nothing on the screen moves when it comes or goes.
+ */
+@layer components {
+  .pk-screen-resume {
+    position: fixed;
+    z-index: 10;
+    inset-block-end: var(--pk-3);
+    inset-inline-end: var(--pk-3);
+    display: flex;
+    align-items: center;
+    gap: var(--pk-3);
+    padding: var(--pk-2) var(--pk-2) var(--pk-2) var(--pk-3);
+    border-radius: var(--pk-radius-pill);
+    background: color-mix(in srgb, var(--pk-chrome-deep) 88%, transparent);
+    color: var(--pk-on-solid);
+    font-family: var(--pk-font);
+    font-size: var(--pk-text-sm);
+  }
+  .pk-screen-resume__missing {
+    color: color-mix(in srgb, var(--pk-on-solid) 80%, transparent);
+  }
+}

@@ -53,6 +53,7 @@ function stubEndpoints({ published }: { published: number }) {
             byAttendanceType: {},
             attendanceStatusByType: {},
             waitlistedCount: 0,
+            confirmedCount: 0,
           },
         });
       }
@@ -89,7 +90,8 @@ function figures(container: HTMLElement) {
     value: card.querySelector(".pk-stat-card__value")?.textContent,
     note: card.querySelector(".pk-stat-card__note")?.textContent ?? undefined,
     toned: /pk-stat-card--(warn|ok|accent)/.test(card.className),
-    href: card.querySelector("a")?.getAttribute("href"),
+    href: card.querySelector("a.pk-stat-card__link")?.getAttribute("href"),
+    explained: Boolean(card.querySelector(".pk-tooltip__trigger")),
   }));
 }
 
@@ -110,15 +112,49 @@ describe("group event overview at a glance", () => {
     expect(container.querySelector('[role="group"]')?.getAttribute("aria-label")).toBe("Event at a glance");
     expect(figures(container)).toEqual([
       {
-        label: "Registrations",
-        value: (2880).toLocaleString(),
-        note: undefined,
+        label: "Registered",
+        value: (2884).toLocaleString(),
+        note: "4 cancelled",
         toned: false,
         href: "#/events/registrations",
+        explained: true,
       },
-      { label: "Proposals to review", value: "0", note: undefined, toned: false, href: "#/events/proposals" },
-      { label: "Agenda", value: "Changes to publish", note: "3 of 12 sessions", toned: true, href: "#/events/agenda" },
+      {
+        label: "Proposals to review",
+        value: "0",
+        note: undefined,
+        toned: false,
+        href: "#/events/proposals",
+        explained: false,
+      },
+      {
+        label: "Agenda",
+        value: "Changes to publish",
+        note: "3 of 12 sessions",
+        toned: true,
+        href: "#/events/agenda",
+        explained: false,
+      },
     ]);
+  });
+
+  it("shows the registrations list's own first card, each part opening the list narrowed to it", async () => {
+    stubEndpoints({ published: 12 });
+    const container = mount(
+      <GroupEventGlance
+        event={EVENT}
+        groupId="group-1"
+        visibleTabs={new Set(["registrations"])}
+        tabHref={(tab) => `#/events/${tab}`}
+      />,
+    );
+    await settle();
+    await settle();
+    const part = container.querySelector<HTMLAnchorElement>(".pk-stat-card__note a.pk-stat-card__part");
+    expect(part?.getAttribute("href")).toBe("#/events/registrations?registrations.f.status=cancelled");
+    expect(part?.getAttribute("aria-label")).toBe("Show only the 4 cancelled registrations");
+    // A link, not a toggle: nothing on the Overview is pressed.
+    expect(container.querySelector("[aria-pressed]")).toBeNull();
   });
 
   it("draws only the figures whose tab the reader can open", async () => {

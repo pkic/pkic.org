@@ -108,7 +108,7 @@ export function AttendanceChangeDashboard({ slug, changes }: { slug: string; cha
             )}
           </>
         ) : (
-          <RegistrationsList key={`${slug}:${view}`} slug={slug} initialAttendanceChange={filter} embedded />
+          <RegistrationsList key={`${slug}:${view}`} slug={slug} attendanceChange={filter} />
         )}
       </PanelBody>
     </Panel>

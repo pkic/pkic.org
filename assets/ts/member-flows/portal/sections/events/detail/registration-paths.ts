@@ -18,14 +18,6 @@ export function eventRegistrationResourcePath(
   return `${eventRegistrationPath(eventSlug, registrationId)}/${resource}`;
 }
 
-export function eventRegistrationExportsPath(eventSlug: string): string {
-  return `${eventRegistrationsPath(eventSlug)}/exports`;
-}
-
-export function eventRegistrationPromotionsPath(eventSlug: string): string {
-  return `${eventRegistrationsPath(eventSlug)}/promotions`;
-}
-
 export function eventRegistrationViewPath(eventSlug: string, registrationId: string): string {
   return `${eventRegistrationsViewPath(eventSlug)}/detail/${segment(registrationId)}`;
 }

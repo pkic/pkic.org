@@ -7,15 +7,15 @@
  * way the invitation goes to the same canonical contract — the picker only
  * spares the operator retyping what the portal holds.
  */
+import type { z } from "zod";
 import { useState } from "preact/hooks";
 import { coSpeakerInviteSchema, coSpeakerInviteResponseSchema } from "../../../shared/schemas/proposal-management";
-import { PROPOSAL_SPEAKER_ROLES, type ProposalSpeakerRole } from "../../../shared/schemas/participant-roles";
 import type { EventInviteWindow } from "../../../shared/schemas/event-invite-validity";
 import { dateTimeLocalToIso, instantToDateTimeLocal } from "../../../shared/timezone";
 import { useContractForm } from "../../hooks/useContractForm";
 import { postJson } from "../../shared/api-client";
 import type { ToastType } from "../../shared/ui";
-import { statusLabel } from "../Badge";
+import { assignableSpeakerRoleOptions } from "../../../shared/speaker-roles";
 import { UserPicker, type PickedUser } from "../UserPicker";
 import { Alert } from "../../ui/Alert";
 import { Button, ButtonLink } from "../../ui/Button";
@@ -24,9 +24,7 @@ import { FormSection } from "../../ui/FormSection";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Select, TextInput } from "../../ui/TextControl";
 
-const INVITABLE_ROLES = PROPOSAL_SPEAKER_ROLES.filter(
-  (role): role is Exclude<ProposalSpeakerRole, "proposer"> => role !== "proposer",
-);
+const INVITABLE_ROLES = assignableSpeakerRoleOptions({ isCurrentProposer: false });
 
 export function ProposalCoSpeakerInviteForm({
   endpoint,
@@ -48,7 +46,7 @@ export function ProposalCoSpeakerInviteForm({
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [role, setRole] = useState<Exclude<ProposalSpeakerRole, "proposer">>("speaker");
+  const [role, setRole] = useState<z.infer<typeof coSpeakerInviteSchema>["role"]>("speaker");
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -165,14 +163,12 @@ export function ProposalCoSpeakerInviteForm({
                       name="role"
                       value={role}
                       onChange={(changeEvent) =>
-                        setRole(
-                          (changeEvent.target as HTMLSelectElement).value as Exclude<ProposalSpeakerRole, "proposer">,
-                        )
+                        setRole(coSpeakerInviteSchema.shape.role.parse(changeEvent.currentTarget.value))
                       }
                     >
                       {INVITABLE_ROLES.map((option) => (
-                        <option key={option} value={option}>
-                          {statusLabel(option)}
+                        <option key={option.value} value={option.value}>
+                          {option.label}
                         </option>
                       ))}
                     </Select>

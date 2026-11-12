@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
 import { seedEventAndAdmin, deliveredEmailPayload } from "./helpers/context";
-import { insertIndividualMember, insertUser } from "./helpers/membership";
+import { insertIndividualMember, insertOrganization, insertUser } from "./helpers/membership";
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { resetDb } from "./helpers/reset-db";
 import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import {
@@ -155,7 +156,6 @@ describe("session-owned event participation", () => {
     expect((await request(path, f.tokens[0], { action: "update" })).status).toBe(200);
     view = registrationManageReadResponseSchema.parse(await (await request(path, f.tokens[0])).json());
     expect(view.registration.status).toBe("registered");
-    expect((await request(path, f.tokens[0], { action: "update", email: "invalid" })).status).toBe(400);
     await env.DB.prepare(
       "UPDATE registrations SET status = 'cancelled', cancellation_reason_code = 'unauthorized_registration' WHERE id = ?",
     )
@@ -239,19 +239,38 @@ describe("session-owned event participation", () => {
     ).not.toBe("Must roll back");
   });
 
-  it("keeps email changes pending without reassigning registration ownership", async () => {
+  it("refuses an attendee email change and shows the address of the registration's identity", async () => {
     const f = await fixture();
     const path = `/api/v1/registrations/${f.registrationId}`;
-    const response = await request(path, f.tokens[0], { action: "update", email: "new-participant@example.test" });
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(await response.json()).toMatchObject({ emailChanged: true });
-    const view = registrationManageReadResponseSchema.parse(await (await request(path, f.tokens[0])).json());
-    expect(view.user.email).toBe("participant-owner@example.test");
-    expect(view.registration.status).toBe("pending_email_confirmation");
-    expect(
-      await env.DB.prepare("SELECT user_id FROM registrations WHERE id = ?").bind(f.registrationId).first("user_id"),
-    ).toBe(f.owner);
-    expect((await request(path, f.tokens[2])).status).toBe(404);
+    const refused = await request(path, f.tokens[0], { action: "update", email: "new-participant@example.test" });
+    expect(refused.status).toBe(400);
+
+    const organizationId = await insertOrganization(env.DB, "Work Address Fixture");
+    const identity = await buildCreateIdentityStatement(env.DB, {
+      userId: f.owner,
+      organizationId,
+      source: "verified_email",
+      verifiedEmailDomain: "work.example.test",
+      startImmediately: true,
+    });
+    const emailId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await env.DB.batch([
+      identity.statement,
+      env.DB.prepare(
+        `INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,verification_method,created_at)
+         VALUES(?,?,'participant@work.example.test','participant@work.example.test',?,'magic_link',?)`,
+      ).bind(emailId, f.owner, now, now),
+      env.DB.prepare("UPDATE identities SET email_id=? WHERE id=?").bind(emailId, identity.identityId),
+    ]);
+    const before = registrationManageReadResponseSchema.parse(await (await request(path, f.tokens[0])).json());
+    expect(before.user.email).toBe("participant-owner@example.test");
+
+    await env.DB.prepare("UPDATE registrations SET registration_identity_id=? WHERE id=?")
+      .bind(identity.identityId, f.registrationId)
+      .run();
+    const after = registrationManageReadResponseSchema.parse(await (await request(path, f.tokens[0])).json());
+    expect(after.user.email).toBe("participant@work.example.test");
   });
 
   it("denies another identity's speaker files and consent mutations", async () => {

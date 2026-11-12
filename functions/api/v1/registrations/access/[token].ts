@@ -1,3 +1,4 @@
+import { verifyUserSessionRequest } from "../../../../_lib/auth/user-session-request";
 import type { ValidatedData } from "chanfana";
 import { handleError, json } from "../../../../_lib/http";
 import { updateManagedRegistration } from "../../../../_lib/services/registrations";
@@ -12,13 +13,12 @@ import {
   registrationManageReadRouteSchema,
   registrationManageUpdateRouteSchema,
 } from "../../../../../assets/shared/schemas/route-contracts-registrations";
-import { getClientIp, requireInternalSecret } from "../../../../_lib/request";
+import { requireInternalSecret } from "../../../../_lib/request";
 import { buildRegistrationManageView } from "../../../../_lib/services/registrations/manage-view";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { hasAuthenticatedSessionCookie, hasAuthenticationCredential } from "../../../../_lib/auth/session-cookies";
 import { requireAnyActorFromRequest } from "../../../../_lib/auth/actor";
 import { AppError } from "../../../../_lib/errors";
-import { enforceEmailTriggerRateLimits } from "../../../../_lib/rate-limit";
 import { readRegistrationSponsorSharing } from "../../../../_lib/services/event-participation/sponsor-consent";
 
 async function handleRegistrationManagePatch(
@@ -46,15 +46,6 @@ async function handleRegistrationManagePatch(
         if (!(error instanceof AppError) || error.status !== 401) throw error;
       }
     }
-    if (!isJwt && body.action === "update" && body.email) {
-      await enforceEmailTriggerRateLimits({
-        emailBinding: c.env.EMAIL_RATE_LIMITER,
-        ipBinding: c.env.IP_RATE_LIMITER,
-        namespace: "registration-email-change",
-        email: body.email,
-        clientIp: getClientIp(c.req.raw),
-      });
-    }
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
     const signingSecret = requireInternalSecret(c.env);
     const result = await updateManagedRegistration(c.env.DB, {
@@ -64,9 +55,10 @@ async function handleRegistrationManagePatch(
       authenticatedActor,
       actorUserId,
       body,
+      identitySessionClaims:
+        body.identityChange && !isJwt ? await verifyUserSessionRequest(c.req.raw, c.env) : undefined,
       appBaseUrl,
       signingSecret,
-      confirmationLinkTtlHours: config.confirmationLinkTtlHours,
       waitlistClaimWindowHours: config.waitlistClaimWindowHours,
     });
     for (const outboxId of result.outboxIds) {
@@ -76,7 +68,6 @@ async function handleRegistrationManagePatch(
     return json(
       registrationManageUpdateResponseSchema.parse({
         success: true,
-        emailChanged: result.emailChanged,
         sponsorSharing: await readRegistrationSponsorSharing(c.env.DB, result.registration),
       }),
     );
@@ -94,9 +85,15 @@ async function handleRegistrationManageGet(
     const resolved = await resolveManageToken(c.req.raw, c.env, token);
     if (resolved instanceof Response) return resolved;
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
+    const viewer = !resolved.isJwt
+      ? await verifyUserSessionRequest(c.req.raw, c.env).catch((error: unknown) => {
+          if (error instanceof AppError && error.status === 401) return null;
+          throw error;
+        })
+      : null;
     return json(
       registrationManageReadResponseSchema.parse(
-        await buildRegistrationManageView(c.env.DB, resolved.registration, appBaseUrl),
+        await buildRegistrationManageView(c.env.DB, resolved.registration, appBaseUrl, viewer?.sub),
       ),
     );
   } catch (error) {

@@ -56,8 +56,11 @@ export function screenCondition(
     return { tone: tone === "risk" ? "critical" : tone === "warn" ? "warning" : "neutral", text: label };
   }
   const heardAt = status.reportedAt ?? status.disconnectedAt;
+  // A browser screen says so where a device says it is online.
   const connection = status.online
-    ? "Online"
+    ? status.health?.kind === "browser"
+      ? "Browser"
+      : "Online"
     : heardAt
       ? `Last heard ${formatAge(now - Date.parse(heardAt))}`
       : "Offline";
@@ -73,6 +76,26 @@ export function screenCondition(
       ? `${connection} · ${details.map((label, index) => (index ? label.charAt(0).toLowerCase() + label.slice(1) : label)).join(", ")}`
       : connection,
   };
+}
+
+/** The screen's device shows it now, by the monitor's word or, without one, its last visit. */
+export function screenOnline(screen: ScreenRecord, status: ScreenLiveStatus | undefined, now: number): boolean {
+  return status ? status.online : screenConnection(screen.session, now).kind === "online";
+}
+
+/**
+ * A screen that shows nothing now: offline, signed out, or its approval
+ * never collected. One waiting for its new sign-in is not, nor one whose
+ * state is unknown while the connection to the monitor is lost.
+ */
+export function screenInactive(
+  screen: ScreenRecord,
+  status: ScreenLiveStatus | undefined,
+  now: number,
+  lostSince: number | null,
+): boolean {
+  if (lostSince !== null || screenOnline(screen, status, now)) return false;
+  return status !== undefined || screenConnection(screen.session, now).kind !== "waiting";
 }
 
 const TONE_WORDS: Record<ScreenConditionTone, string> = {
@@ -141,12 +164,11 @@ export function ScreenMonitorCard({
 }) {
   const Heading = useSectionHeading(3);
   const condition = screenCondition(screen, status, issues, now, lostSince);
+  const tone =
+    condition.tone === "warning" || condition.tone === "critical" ? `pk-screen-card--${condition.tone}` : undefined;
+  const inactive = screenInactive(screen, status, now, lostSince) ? "pk-screen-card--inactive" : undefined;
   return (
-    <CollectionCardSurface
-      class={
-        condition.tone === "warning" || condition.tone === "critical" ? `pk-screen-card--${condition.tone}` : undefined
-      }
-    >
+    <CollectionCardSurface class={[tone, inactive].filter(Boolean).join(" ") || undefined}>
       <ScreenShot screen={screen} screenshot={screenshot} online={Boolean(status?.online)} now={now} />
       <div class="pk-screen-card__body">
         <Heading class="pk-screen-card__title">{screen.name}</Heading>

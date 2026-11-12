@@ -109,3 +109,10 @@ export function livestreamPlayback(input: {
     liveLagSeconds: player ? liveLag(player) : null,
   };
 }
+
+/** The player says it is unmuted and playing; anything it cannot say counts as no. */
+export function livestreamSoundConfirmed(player: YouTubePlayer): boolean {
+  return (
+    read(() => player.isMuted?.()) === false && read(() => player.getPlayerState?.()) === YOUTUBE_PLAYER_STATES.playing
+  );
+}

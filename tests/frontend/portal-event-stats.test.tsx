@@ -170,6 +170,7 @@ describe("portal event statistics", () => {
       expired: 1,
       pending: 0,
       cancelled: 0,
+      confirmed: 1,
     };
     stubAnalyticsFetch(() => jsonResponse(data));
     mount(<EventStats slug={SLUG} />);

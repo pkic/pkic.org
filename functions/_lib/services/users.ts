@@ -80,13 +80,6 @@ export async function findUserByEmail(db: DatabaseLike, email: string): Promise<
   return findExistingUserByAnyEmail(db, normalizeEmail(email));
 }
 
-export async function getNormalizedEmailForUser(db: DatabaseLike, userId: string): Promise<string | null> {
-  return (
-    (await first<{ normalized_email: string }>(db, "SELECT normalized_email FROM users WHERE id = ?", [userId]))
-      ?.normalized_email ?? null
-  );
-}
-
 export interface FindOrCreateUserPayload {
   email: string;
   firstName?: string;

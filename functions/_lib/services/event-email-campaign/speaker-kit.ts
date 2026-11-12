@@ -75,7 +75,7 @@ export function prepareSpeakerKitAcceptance(
         `INSERT INTO event_promotion_batch_recipients(batch_id,occurrence_id,user_id,next_attempt_at,updated_at,email_status)
          SELECT ?,session.occurrence_id,session.user_id,?,?,'pending' FROM (${sessions.sql}) session
          WHERE changes()=1 AND session.email IS NOT NULL AND ${notEmailedSql(input)}
-         ON CONFLICT(batch_id,occurrence_id,user_id) DO NOTHING`,
+         ON CONFLICT DO NOTHING`,
       )
       .bind(batchId, identity.at, identity.at, ...sessions.bindings),
     prepareAuditLogWhen(db, {
@@ -135,7 +135,7 @@ export async function queueSpeakerKitTest(
          SELECT ?,session.occurrence_id,session.user_id,?,?,'pending' FROM (${sessions.sql}) session
          WHERE changes()=1 AND session.email IS NOT NULL
          ORDER BY lower(trim(session.email)),session.occurrence_id LIMIT 1
-         ON CONFLICT(batch_id,occurrence_id,user_id) DO NOTHING`,
+         ON CONFLICT DO NOTHING`,
       )
       .bind(batchId, at, at, ...sessions.bindings),
     prepareJobWake(db, "promotion_rendering", {

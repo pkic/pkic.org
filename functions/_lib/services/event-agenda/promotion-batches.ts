@@ -118,7 +118,7 @@ export async function createPromotionBatch(
       .prepare(`INSERT INTO event_promotion_batch_recipients(batch_id,occurrence_id,user_id,next_attempt_at,updated_at)
         SELECT ?,session.occurrence_id,session.user_id,?,? FROM (${sessions.sql}) session
         WHERE changes()=1
-        ON CONFLICT(batch_id,occurrence_id,user_id) DO NOTHING`)
+        ON CONFLICT DO NOTHING`)
       .bind(input.requestId, at, at, ...sessions.bindings),
     prepareAuditLogWhen(db, {
       actorType: "user",

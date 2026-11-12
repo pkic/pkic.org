@@ -20,6 +20,8 @@ const minute = (minutesAgo: number) => new Date(Math.floor(NOW / 60_000) * 60_00
 
 const HEALTH: ScreenHealth = {
   pageVersion: "p",
+  kind: "device",
+  browser: null,
   display: "output",
   output: "projector",
   mode: "live",
@@ -182,5 +184,36 @@ describe("a screen's issues", () => {
     );
     expect(sorted.map((item) => item.id)).toEqual(["d", "b", "a", "c"]);
     expect(screenIssueCounts([mixed, warning, warning, []])).toEqual({ critical: 1, warning: 2 });
+  });
+
+  it("warns a browser screen that needs a click or stopped sharing, never critical, and ignores its missing network", () => {
+    const browser = (state: Partial<NonNullable<ScreenHealth["browser"]>>) =>
+      online({
+        kind: "browser",
+        metrics: null,
+        browser: { fullscreen: true, wakeLock: true, sound: "on", capture: "live", ...state },
+      });
+    expect(issues(browser({}))).toEqual([]);
+    // A player still starting, or none at all, is not missing sound.
+    expect(issues(browser({ sound: "starting" }))).toEqual([]);
+    expect(issues(browser({ sound: "none" }))).toEqual([]);
+    expect(issues(browser({ sound: "blocked" })).map((issue) => issue.code)).toEqual(["browser-resume"]);
+    // The classification, not the wording of its label.
+    const classified = (found: ReturnType<typeof issues>) => found.map(({ label: _label, ...issue }) => issue);
+    expect(classified(issues(browser({ fullscreen: false, sound: "blocked", capture: "off" })))).toEqual([
+      { code: "browser-resume", severity: "warning", since: ago(20) },
+    ]);
+    // Refused or without a wake lock, the laptop may sleep.
+    expect(classified(issues(browser({ wakeLock: false })))).toEqual([
+      { code: "browser-awake", severity: "warning", since: ago(20) },
+    ]);
+    // Sharing stopped: its last screenshot ages without counting against it.
+    const stopped = screenIssues({
+      status: browser({ capture: "stopped" }),
+      samples: [],
+      screenshotAt: ago(RULES.pictureMinutes.critical + 5),
+      now: NOW,
+    });
+    expect(classified(stopped)).toEqual([{ code: "browser-sharing", severity: "warning", since: ago(20) }]);
   });
 });

@@ -7,7 +7,13 @@ import { resetDb } from "./helpers/reset-db";
 import { seedPersona } from "./personas/seed";
 import { onlyPersona } from "./personas/catalog";
 import { queryAll } from "./helpers/context";
-import { schedulerJobsListResponseSchema } from "../assets/shared/schemas/scheduler";
+import {
+  schedulerJobBacklogResponseSchema,
+  schedulerJobBacklogRetryResponseSchema,
+  schedulerJobsListResponseSchema,
+} from "../assets/shared/schemas/scheduler";
+import { seedEventAndAdmin } from "./helpers/context";
+import { findOrCreateUser } from "../functions/_lib/services/users";
 import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
@@ -108,7 +114,7 @@ describe("scheduler API", () => {
     expect(retention).toBeDefined();
     expect(retention!.lastSuccessAt).toBeNull();
     expect(retention!.leaseExpired).toBe(false);
-    expect(retention!.capabilities).toEqual({ manageState: false, run: false });
+    expect(retention!.capabilities).toEqual({ manageState: false, run: false, readBacklog: false });
     expect(payload.jobs.map((job) => job.jobKey)).toContain("votes_due_work");
     expect(payload.jobs.map((job) => job.jobKey)).toContain("standing_chair_terms");
     expect(payload.jobs.map((job) => job.jobKey)).toContain("standing_event_speakers");
@@ -147,6 +153,7 @@ describe("scheduler API", () => {
     expect(managerPayload.jobs.find((job) => job.jobKey === "retention")?.capabilities).toEqual({
       manageState: true,
       run: false,
+      readBacklog: false,
     });
 
     const runner = await staffWith(["schedulerOperator", "retentionOperator"]);
@@ -156,7 +163,14 @@ describe("scheduler API", () => {
     expect(runnerPayload.jobs.find((job) => job.jobKey === "retention")?.capabilities).toEqual({
       manageState: true,
       run: true,
+      readBacklog: false,
     });
+    // Only a job that lists its work offers it, and only to a caller holding the job's domain grant.
+    const agenda = await staffWith(["schedulerOperator", "agendaEditor"]);
+    const agendaPayload = schedulerJobsListResponseSchema.parse(
+      await (await call(agenda, "/api/v1/scheduler/jobs?q=promotion")).json(),
+    );
+    expect(agendaPayload.jobs.find((job) => job.jobKey === "promotion_rendering")?.capabilities.readBacklog).toBe(true);
   });
 
   it("refuses a run to a caller holding scheduler:manage but not the job's own grants", async () => {
@@ -205,6 +219,112 @@ describe("scheduler API", () => {
     );
     expect(row.running_since).toBeNull();
     expect(row.last_status).toBe("succeeded");
+  });
+
+  it("takes over a run whose lease expired instead of reporting it as running", async () => {
+    const token = await staffWith(["schedulerOperator", "retentionOperator"]);
+    await env.DB.prepare(
+      `UPDATE scheduled_jobs
+          SET running_since = '2026-01-01T00:00:00.000Z', lease_expires_at = '2026-01-01T00:05:00.000Z', run_token = 'dead-run'
+        WHERE job_key = 'retention'`,
+    ).run();
+
+    const response = await call(token, "/api/v1/scheduler/jobs/retention/runs", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+
+    expect(response.status).toBe(200);
+    const [row] = await queryAll<{ running_since: string | null; last_status: string; consecutive_abandoned: number }>(
+      env.DB,
+      "SELECT running_since, last_status, consecutive_abandoned FROM scheduled_jobs WHERE job_key = 'retention'",
+    );
+    expect(row).toMatchObject({ running_since: null, last_status: "succeeded", consecutive_abandoned: 0 });
+  });
+
+  it("lists the promotion job's unfinished work only for a caller holding its domain grant", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const user = await findOrCreateUser(env.DB, {
+      email: "backlog@example.test",
+      firstName: "Ada",
+      lastName: "Example",
+    });
+    const at = "2026-01-01T00:00:00.000Z";
+    await env.DB.batch([
+      // A render whose Worker died, and an email that waits for that file.
+      env.DB.prepare(
+        `INSERT INTO event_promotion_renders(id,event_id,occurrence_id,user_id,revision,format,origin,cache_key,status,next_attempt_at,lease_expires_at,created_at,updated_at)
+         VALUES ('render-1',?,NULL,?,1,'carousel','https://app.test','key-1','rendering',?,?,?,?)`,
+      ).bind(eventId, user.id, at, at, at, at),
+      env.DB.prepare(
+        `INSERT INTO event_promotion_batches(id,event_id,requested_by,published_revision,formats_json,origin,created_at)
+         VALUES ('batch-1',?,?,1,'["carousel"]','https://app.test',?)`,
+      ).bind(eventId, user.id, at),
+      env.DB.prepare(
+        `INSERT INTO event_promotion_batch_recipients(batch_id,occurrence_id,user_id,status,next_attempt_at,updated_at,email_status)
+         VALUES ('batch-1',NULL,?,'prepared',?,?,'pending')`,
+      ).bind(user.id, at, at),
+    ]);
+    const path = "/api/v1/scheduler/jobs/promotion_rendering/backlog?sort=typeLabel";
+
+    expect((await call(await staffWith(["schedulerOperator"]), path)).status).toBe(403);
+    const response = await call(await staffWith(["schedulerOperator", "agendaEditor"]), path);
+    expect(response.status).toBe(200);
+    const body = schedulerJobBacklogResponseSchema.parse(await response.json());
+    expect(body.page.total).toBe(2);
+    expect(body.items.map((item) => [item.typeLabel, item.title, item.context, item.statusLabel])).toEqual([
+      ["Email", "Ada Example", "Attendee kit · Carousel", "Waiting for files"],
+      ["File", "Ada Example", "Attendee kit · Carousel", "Interrupted"],
+    ]);
+    // Only the file can run on its own; the email follows from it.
+    expect(body.items.map((item) => item.retryable)).toEqual([false, true]);
+    // A job without a backlog has no such page.
+    expect(
+      (
+        await call(
+          await staffWith(["schedulerOperator", "retentionOperator"]),
+          "/api/v1/scheduler/jobs/retention/backlog",
+        )
+      ).status,
+    ).toBe(404);
+  });
+
+  it("retries one waiting file now instead of at its next attempt", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const user = await findOrCreateUser(env.DB, { email: "retry@example.test", firstName: "Ada", lastName: "Retry" });
+    const at = "2026-01-01T00:00:00.000Z";
+    const later = "2099-01-01T00:00:00.000Z";
+    await env.DB.prepare(
+      `INSERT INTO event_promotion_renders(id,event_id,occurrence_id,user_id,revision,format,origin,cache_key,status,attempts,next_attempt_at,last_error,created_at,updated_at)
+       VALUES ('render-retry',?,NULL,?,1,'carousel','https://app.test','key-retry','retrying',1,?,'Render timed out',?,?)`,
+    )
+      .bind(eventId, user.id, later, at, at)
+      .run();
+    const path = (itemId: string) =>
+      `/api/v1/scheduler/jobs/promotion_rendering/backlog/${encodeURIComponent(itemId)}/retries`;
+    const post = (token: string, itemId: string) => call(token, path(itemId), { method: "POST", body: "{}" });
+
+    expect((await post(await staffWith(["schedulerOperator"]), "file:render-retry")).status).toBe(403);
+    const token = await staffWith(["schedulerOperator", "agendaEditor"]);
+    // A kit or an email is not retried on its own.
+    expect((await post(token, "email:batch-1::user")).status).toBe(404);
+    expect((await post(token, "file:not-a-render")).status).toBe(404);
+
+    const response = await post(token, "file:render-retry");
+    expect(response.status).toBe(200);
+    // The synthetic event publishes no kit, so the attempt settles the file as no longer needed.
+    expect(schedulerJobBacklogRetryResponseSchema.parse(await response.json())).toEqual({
+      success: true,
+      finished: true,
+      error: null,
+    });
+    const [row] = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM event_promotion_renders WHERE id = 'render-retry'",
+    );
+    expect(row!.status).toBe("obsolete");
+    // Finished work cannot be retried again.
+    expect((await post(token, "file:render-retry")).status).toBe(404);
   });
 
   it("returns 404 for an unknown job rather than leaking the registry shape", async () => {

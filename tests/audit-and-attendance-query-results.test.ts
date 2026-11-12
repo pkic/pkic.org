@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { listProposalAuditLog } from "../functions/_lib/services/audit-log-read";
 import { getAttendanceStatusByType } from "../functions/_lib/services/registrations/attendance-statistics";
+import { getEventRegistrationStats } from "../functions/_lib/services/registrations/event-registration-stats";
 import { seedEventAndAdmin } from "./helpers/context";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
@@ -122,9 +123,11 @@ describe("indexed audit and attendance query results", () => {
       );
     }
     expect(await getAttendanceStatusByType(env.DB, eventId)).toEqual({
-      in_person: { total: 4, accepted: 2, waitlisted: 3, expired: 0, pending: 1, cancelled: 1 },
-      virtual: { total: 1, accepted: 1, waitlisted: 0, expired: 1, pending: 0, cancelled: 0 },
+      in_person: { total: 4, accepted: 2, waitlisted: 3, expired: 0, pending: 1, cancelled: 1, confirmed: 2 },
+      virtual: { total: 1, accepted: 1, waitlisted: 0, expired: 1, pending: 0, cancelled: 0, confirmed: 1 },
     });
     expect(await getAttendanceStatusByType(env.DB, "other-event")).toEqual({});
+    // Confirmed and waiting for no seat on any day: the inactive and expired queues.
+    expect((await getEventRegistrationStats(env.DB, eventId)).confirmedCount).toBe(2);
   });
 });

@@ -23,6 +23,7 @@ import {
   registrationPageUrl,
 } from "../frontend-links";
 import { countSpeakerKitEmails, queueSpeakerKitTest } from "./speaker-kit";
+import { assertPromotionMaterialsBelongToPerson, hasPromotionMaterials } from "./promotion-materials";
 import { assertCampaignBroadcastSafety } from "./broadcast-safety";
 import {
   createCampaignSnapshot,
@@ -50,6 +51,7 @@ export async function previewEventEmailCampaign(
   input: EventEmailCampaignPreviewInput,
   options: EventEmailCampaignOperationOptions,
 ): Promise<EventEmailCampaignPreviewResponse> {
+  if (hasPromotionMaterials(input)) await assertPromotionMaterialsBelongToPerson(db, event, input);
   const campaign = await createCampaignSnapshot(db, event, input, options);
   const { template, recipients, token } = campaign;
   const recipientCount =
@@ -95,7 +97,9 @@ export async function previewEventEmailCampaign(
           sessionTitle: sample?.templateData.proposalTitle ?? "",
           promotionKitUrl: promotionKitPageUrl(options.appBaseUrl, event),
         }
-      : {}),
+      : input.materials
+        ? { promotionKitUrl: promotionKitPageUrl(options.appBaseUrl, event) }
+        : {}),
   };
   const known = new Set([
     ...Object.keys(canonicalData),
@@ -172,12 +176,13 @@ export async function createEventEmailCampaign(
   if (input.kit && emails === 0) {
     throw new AppError(400, "CAMPAIGN_NO_RECIPIENTS", "Every matching speaker already received this kit.");
   }
+  if (hasPromotionMaterials(input)) await assertPromotionMaterialsBelongToPerson(db, event, input);
   await acceptCampaignSnapshot(db, event, input, snapshot, options);
-  if (input.kit) {
+  if (input.kit || input.materials) {
     return eventEmailCampaignResponseSchema.parse({
       success: true,
-      queuedRecipients: emails,
-      queuedBatches: emails,
+      queuedRecipients: input.kit ? emails : snapshot.recipient_count,
+      queuedBatches: input.kit ? emails : snapshot.recipient_count,
       stagedRecipients: 0,
       mode: input.sendMode,
     });

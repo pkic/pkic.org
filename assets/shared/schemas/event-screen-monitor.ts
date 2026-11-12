@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { eventSlugParamsSchema, utcInstantSchema } from "./api-common";
 import { screenIdSchema, screenOutputSchema } from "./event-screens";
+import { detectImageFormat } from "../image-signature";
 
 /**
  * The event's screen monitor: each paired screen keeps a socket open to its
@@ -138,6 +139,35 @@ export function screenDeviceMetricsFrom(raw: unknown): ScreenDeviceMetrics | nul
 export const SCREEN_DISPLAY_KINDS = ["pairing", "waiting", "livestream", "idle", "output"] as const;
 /** Following the studio, holding its last state while the studio is out of reach, or running on its agenda. */
 export const SCREEN_RUN_MODES = ["live", "offline", "auto"] as const;
+/**
+ * What runs the screen page: the venue's screen device, which marks its own
+ * address, or any other browser set up as a screen (a laptop at a stage).
+ */
+export const SCREEN_KINDS = ["device", "browser"] as const;
+export type ScreenKind = (typeof SCREEN_KINDS)[number];
+/** A browser screen's tab capture: running, ended by the person sharing it, or not started since the page loaded. */
+export const SCREEN_BROWSER_CAPTURE_STATES = ["live", "stopped", "off"] as const;
+
+/**
+ * A browser screen's livestream sound, as its player confirms it: playing
+ * unmuted, blocked by the browser (muted, or not playing at all), still
+ * starting, or no player to have sound.
+ */
+export const SCREEN_BROWSER_SOUND_STATES = ["on", "blocked", "starting", "none"] as const;
+
+/**
+ * What a browser screen was granted by the clicks that set it up, which a
+ * reload takes away. A device screen has none of this.
+ */
+export const screenBrowserStateSchema = z
+  .object({
+    fullscreen: z.boolean(),
+    wakeLock: z.boolean(),
+    sound: z.enum(SCREEN_BROWSER_SOUND_STATES),
+    capture: z.enum(SCREEN_BROWSER_CAPTURE_STATES),
+  })
+  .strict();
+export type ScreenBrowserState = z.infer<typeof screenBrowserStateSchema>;
 export const SCREEN_PLAYER_STATUSES = ["loading", "playing", "buffering", "error"] as const;
 /** The YouTube player's own states, as its IFrame API names them. */
 export const LIVESTREAM_PLAYER_STATES = ["unstarted", "ended", "playing", "paused", "buffering", "cued"] as const;
@@ -181,6 +211,10 @@ export const screenHealthSchema = z
   .object({
     /** The page's build, so staff see a screen still running an old release. */
     pageVersion: z.string().min(1).max(120),
+    /** A page from before screens said what runs them is a device's. */
+    kind: z.enum(SCREEN_KINDS).default("device"),
+    /** A browser screen's grants; null on a device. */
+    browser: screenBrowserStateSchema.nullable().default(null),
     display: z.enum(SCREEN_DISPLAY_KINDS),
     /** The output it is assigned and shows; null while it shows none. */
     output: screenOutputSchema.nullable(),
@@ -255,18 +289,20 @@ export type ScreenQualityHistory = z.infer<typeof screenQualityHistorySchema>;
 
 // ── Screenshots ──
 
+/** The image formats a screenshot may come in, as the screen's device or browser encodes it. */
+export const SCREEN_SCREENSHOT_FORMATS = ["webp", "jpeg"] as const;
+export type ScreenScreenshotFormat = (typeof SCREEN_SCREENSHOT_FORMATS)[number];
+
 /**
- * A screen sends its screenshot as one binary message: the JPEG itself, as
- * its device took it, no larger than the limit. Anything else is dropped.
+ * A screen sends its screenshot as one binary message: the image itself, as
+ * it was encoded, no larger than the limit. Its format is read from its
+ * leading bytes, never from anything declared; anything but WebP or JPEG is
+ * dropped.
  */
-export function isScreenScreenshot(bytes: Uint8Array): boolean {
-  return (
-    bytes.byteLength > 3 &&
-    bytes.byteLength <= SCREEN_MONITOR_LIMITS.screenshotBytes &&
-    bytes[0] === 0xff &&
-    bytes[1] === 0xd8 &&
-    bytes[2] === 0xff
-  );
+export function screenScreenshotFormat(bytes: Uint8Array): ScreenScreenshotFormat | null {
+  if (bytes.byteLength > SCREEN_MONITOR_LIMITS.screenshotBytes) return null;
+  const detected = detectImageFormat(bytes);
+  return detected?.contentType === "image/webp" ? "webp" : detected?.contentType === "image/jpeg" ? "jpeg" : null;
 }
 
 // ── Messages ──
@@ -345,8 +381,9 @@ export const screenMonitorServerMessageSchema = z.discriminatedUnion("type", [
       screenId: screenIdSchema,
       /** When the monitor received it. */
       capturedAt: utcInstantSchema,
-      /** The JPEG, base64-encoded. */
-      jpeg: z
+      format: z.enum(SCREEN_SCREENSHOT_FORMATS),
+      /** The image as the screen sent it, base64-encoded. */
+      image: z
         .base64()
         .min(4)
         .max(Math.ceil(SCREEN_MONITOR_LIMITS.screenshotBytes / 3) * 4),

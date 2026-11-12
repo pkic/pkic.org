@@ -1,4 +1,3 @@
-import { Dialog } from "../../../../ui/Dialog";
 import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
 import { eventClock } from "../../../../../shared/event-clock";
 import { groupEventWhenAndWhere } from "./group-event-place";
@@ -21,8 +20,10 @@ import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { lazy, Suspense } from "preact/compat";
 import { Spinner } from "../../../../components/Spinner";
-const MyPromotionKits = lazy(() =>
-  import("../events/detail/agenda/MyPromotionKits").then((module) => ({ default: module.MyPromotionKits })),
+const PromotionMaterialsDialog = lazy(() =>
+  import("../events/detail/agenda/PromotionMaterialsDialog").then((module) => ({
+    default: module.PromotionMaterialsDialog,
+  })),
 );
 const RegistrationBadgePrinting = lazy(() =>
   import("../../../../components/event-badges/RegistrationBadgePrinting").then((module) => ({
@@ -82,6 +83,7 @@ const EventScreens = lazy(() =>
 const EventStats = lazy(() => import("../events/detail/EventStats").then((module) => ({ default: module.EventStats })));
 
 import { groupEventProposalPath, CALL_SEGMENT, NEW_CAMPAIGN_SEGMENT } from "./group-event-paths";
+import { splitHash, writeUrlQuery } from "../../../../ui/url-query";
 
 // `pk-datalist-aligned` and `pk-mono` ship in Content.css, a lazy chunk
 // rather than the entry stylesheet.
@@ -462,21 +464,28 @@ export function GroupEventWorkspace({
           </section>
         )}
         {canManage && promotionUserId && (
-          <Dialog
-            open
-            viewer
-            size="wide"
-            title="Promotion materials"
-            meta={promotionContext?.userId === promotionUserId ? promotionContext.name : undefined}
-            closeLabel="Close promotion materials"
-            confirmLabel="Close"
-            onConfirm={() => setPromotionUserId("")}
-            onCancel={() => setPromotionUserId("")}
-          >
-            <Suspense fallback={<Spinner />}>
-              <MyPromotionKits key={promotionUserId} slug={event.slug} userId={promotionUserId} />
-            </Suspense>
-          </Dialog>
+          <Suspense fallback={<Spinner />}>
+            <PromotionMaterialsDialog
+              key={promotionUserId}
+              slug={event.slug}
+              userId={promotionUserId}
+              name={promotionContext?.userId === promotionUserId ? promotionContext.name : undefined}
+              onClose={() => setPromotionUserId("")}
+              onEmail={(keys) =>
+                writeUrlQuery({
+                  source: "hash",
+                  ownerPath: splitHash().path,
+                  destinationPath: `${tabPath("communications")}/${NEW_CAMPAIGN_SEGMENT}`,
+                  params: new URLSearchParams({
+                    campaignPreset: "promotion-materials",
+                    materialsUserId: promotionUserId,
+                    materialsFiles: keys.join(","),
+                  }),
+                  mode: "push",
+                })
+              }
+            />
+          </Suspense>
         )}
         {tab === "registrations" &&
           detailId === undefined &&

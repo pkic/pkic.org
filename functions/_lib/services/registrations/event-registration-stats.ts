@@ -10,14 +10,15 @@ export const registrationAttendanceTypesSql = `
 export const eventRegistrationAttendanceTypesSql = `${registrationAttendanceTypesSql} WHERE r.event_id = ?`;
 
 interface EventRegistrationStatsRow {
-  kind: "status" | "type" | "waitlist";
+  kind: "status" | "type" | "waitlist" | "confirmed";
   value: string;
   count: number;
 }
 
 /**
  * Count each registration once per selected attendance type and once per
- * status, and count the live registrations waiting for a seat on any day.
+ * status, the live registrations waiting for a seat on any day, and the
+ * confirmed ones waiting for none: the people expected to attend.
  */
 export async function getEventRegistrationStats(
   db: DatabaseLike,
@@ -26,6 +27,7 @@ export async function getEventRegistrationStats(
   byAttendanceType: Record<string, number>;
   byStatus: Record<string, number>;
   waitlistedCount: number;
+  confirmedCount: number;
 }> {
   const rows = await all<EventRegistrationStatsRow>(
     db,
@@ -38,15 +40,20 @@ export async function getEventRegistrationStats(
       WHERE status = 'registered' GROUP BY attendance_type
     UNION ALL
     SELECT 'waitlist' AS kind, 'waitlisted' AS value, COUNT(*) AS count FROM registrations r
-      WHERE r.event_id = ? AND r.status <> 'cancelled' AND ${activeDayWaitlistExistsSql("r")}`,
-    [eventId, eventId, eventId],
+      WHERE r.event_id = ? AND r.status <> 'cancelled' AND ${activeDayWaitlistExistsSql("r")}
+    UNION ALL
+    SELECT 'confirmed' AS kind, 'confirmed' AS value, COUNT(*) AS count FROM registrations r
+      WHERE r.event_id = ? AND r.status = 'registered' AND NOT ${activeDayWaitlistExistsSql("r")}`,
+    [eventId, eventId, eventId, eventId],
   );
   const byAttendanceType: Record<string, number> = {};
   const byStatus: Record<string, number> = {};
   let waitlistedCount = 0;
+  let confirmedCount = 0;
   for (const row of rows) {
     if (row.kind === "waitlist") waitlistedCount = Number(row.count);
+    else if (row.kind === "confirmed") confirmedCount = Number(row.count);
     else (row.kind === "type" ? byAttendanceType : byStatus)[row.value] = Number(row.count);
   }
-  return { byAttendanceType, byStatus, waitlistedCount };
+  return { byAttendanceType, byStatus, waitlistedCount, confirmedCount };
 }

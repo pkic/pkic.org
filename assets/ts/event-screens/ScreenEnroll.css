@@ -1,0 +1,23 @@
+/*
+ * A browser's setup page on the status frame: its one button keeps its share
+ * of the 1920 × 1080 frame, which scales whole to the window.
+ */
+@layer components {
+  .pk-screen-enroll {
+    display: grid;
+    align-content: center;
+    gap: 40px;
+    max-inline-size: 1400px;
+    --pk-control-text: 44px;
+    --pk-control-y: 20px;
+    --pk-control-x: 64px;
+  }
+  .pk-screen-enroll > p {
+    margin: 0;
+  }
+  .pk-screen-enroll__title {
+    margin: 0;
+    font-size: inherit;
+    font-weight: 700;
+  }
+}

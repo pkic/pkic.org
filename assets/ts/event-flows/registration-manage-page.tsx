@@ -341,6 +341,7 @@ async function main(): Promise<void> {
   // ── Read view, and the edit command that swaps it for the form ────────────
   const editorNavigation = createUrlDialogState("editRegistration", "search", location.pathname);
   let editorMounted = false;
+  let profileRefreshSequence = 0;
   const showEditor = (editing: boolean) => {
     if (editing && isCancelled) {
       void editorNavigation.close(editorNavigation.marker());
@@ -364,13 +365,24 @@ async function main(): Promise<void> {
         mode="update"
         data={manageData}
         forms={formsData}
+        onProfileUpdated={async () => {
+          const sequence = ++profileRefreshSequence;
+          const refreshed = await getJson(
+            `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
+            registrationManageReadResponseSchema,
+          );
+          if (sequence !== profileRefreshSequence) return;
+          manageData = refreshed;
+          renderSummary();
+          if (sharePanelEl) refreshSharePanelBadge(sharePanelEl);
+        }}
         onDiscard={() => {
           render(null, editorEl);
           editorMounted = false;
           void editorNavigation.close(marker);
         }}
         save={async (change) => {
-          const result = await patchJson(
+          await patchJson(
             `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
             change,
             registrationManageUpdateResponseSchema,
@@ -378,10 +390,8 @@ async function main(): Promise<void> {
           await editorNavigation.close(marker);
           if (manageFormEl)
             showPostAction(root, manageFormEl, {
-              title: result.emailChanged ? "Email address updated" : "Changes saved",
-              message: result.emailChanged
-                ? "We’ve sent a confirmation email to your new address. Please click the link in that email to reactivate your registration."
-                : "Your registration details have been updated. A confirmation email is on its way.",
+              title: "Changes saved",
+              message: "Your registration details have been updated. A confirmation email is on its way.",
             });
         }}
       />,
@@ -396,24 +406,27 @@ async function main(): Promise<void> {
     showEditor(Boolean(editorNavigation.marker()));
   });
   showEditor(Boolean(editorNavigation.marker()));
-  if (summaryEl) {
-    render(
-      <RegistrationManageSummary
-        data={manageData}
-        form={formsData?.form ?? null}
-        editable={!isCancelled}
-        // The photo tile mounts the page's confirmation host when it is shown;
-        // a page without it still needs one for the commands below.
-        dialogHost={isCancelled || !headshotSection?.querySelector("[data-headshot-tile]")}
-        onEdit={() => {
-          clearStatus(statusEl);
-          editorNavigation.show();
-        }}
-        onCancel={() => void cancelRegistration()}
-        onReport={() => void reportUnauthorized()}
-      />,
-      summaryEl,
-    );
+  renderSummary();
+  function renderSummary() {
+    if (summaryEl) {
+      render(
+        <RegistrationManageSummary
+          data={manageData}
+          form={formsData?.form ?? null}
+          editable={!isCancelled}
+          // The photo tile mounts the page's confirmation host when it is shown;
+          // a page without it still needs one for the commands below.
+          dialogHost={isCancelled || !headshotSection?.querySelector("[data-headshot-tile]")}
+          onEdit={() => {
+            clearStatus(statusEl);
+            editorNavigation.show();
+          }}
+          onCancel={() => void cancelRegistration()}
+          onReport={() => void reportUnauthorized()}
+        />,
+        summaryEl,
+      );
+    }
   }
 
   // ── Whole-record commands, each confirmed in the shared dialog ────────────

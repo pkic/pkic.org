@@ -7,7 +7,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ScreenIssue } from "../../assets/shared/event-screen-issues";
+import { screenIssues, type ScreenIssue } from "../../assets/shared/event-screen-issues";
 import {
   SCREEN_MONITOR_PROTOCOL,
   screenMonitorStaffMessageSchema,
@@ -15,6 +15,7 @@ import {
 } from "../../assets/shared/schemas/event-screen-monitor";
 import type { ScreenRecord } from "../../assets/shared/schemas/event-screens";
 import { EventScreens } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/EventScreens";
+import { screenCondition } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/ScreenMonitorCard";
 import {
   applyScreenMonitorMessage,
   EMPTY_SCREEN_MONITOR_VIEW,
@@ -56,7 +57,14 @@ describe("the staff view of the monitor", () => {
     );
     view = applyScreenMonitorMessage(
       view,
-      message({ type: "screens.screenshot", serverNow: NOW, screenId: "K7M2QA", capturedAt: at(2), jpeg: "/9j/4AAQ" }),
+      message({
+        type: "screens.screenshot",
+        serverNow: NOW,
+        screenId: "K7M2QA",
+        capturedAt: at(2),
+        format: "jpeg",
+        image: "/9j/4AAQ",
+      }),
     );
     view = applyScreenMonitorMessage(
       view,
@@ -124,6 +132,44 @@ describe("the staff view of the monitor", () => {
       await vi.advanceTimersByTimeAsync(LIVE_PERSISTENT_RETRY_MAX_MS);
     });
     expect(sockets.sockets).toHaveLength(2);
+  });
+});
+
+describe("a browser screen in the status line", () => {
+  it("says Browser, and that it needs a click or stopped sharing, as a warning", () => {
+    const record = { id: "LAP234", name: "Laptop", session: { state: "active" } } as ScreenRecord;
+    const browser = (capture: "off" | "stopped") =>
+      status("LAP234", {
+        health: {
+          ...status("LAP234").health!,
+          kind: "browser",
+          browser: { fullscreen: false, wakeLock: true, sound: "none", capture },
+        },
+      });
+    // Said as a browser, with the issue's own label first, as a warning; not the sentence's exact wording.
+    for (const capture of ["off", "stopped"] as const) {
+      const live = browser(capture);
+      const found = screenIssues({ status: live, samples: [], screenshotAt: null, now: NOW });
+      expect(found.map((issue) => issue.code)).toEqual([capture === "off" ? "browser-resume" : "browser-sharing"]);
+      const condition = screenCondition(record, live, found, NOW);
+      expect(condition.tone).toBe("warning");
+      expect(condition.text.startsWith(`Browser · ${found[0]!.label}`)).toBe(true);
+    }
+  });
+
+  it("shows a WebP screenshot as WebP", () => {
+    const view = applyScreenMonitorMessage(
+      EMPTY_SCREEN_MONITOR_VIEW,
+      message({
+        type: "screens.screenshot",
+        serverNow: NOW,
+        screenId: "LAP234",
+        capturedAt: at(1),
+        format: "webp",
+        image: "UklGRg==",
+      }),
+    );
+    expect(view.screenshots.get("LAP234")?.src).toBe("data:image/webp;base64,UklGRg==");
   });
 });
 
@@ -208,12 +254,13 @@ describe("the multi-view", () => {
       "ok",
       "neutral",
     ]);
-    // The tone along the top edge is for screens that need attention only, and is said to screen readers too.
+    // The tone along the top edge is for screens that need attention only, and is said to screen readers too;
+    // a screen that shows nothing now, by the monitor's word or its last visit, reads as inactive.
     expect(cards.map((card) => card.className)).toEqual([
-      "pk-collection-card pk-screen-card--critical",
+      "pk-collection-card pk-screen-card--critical pk-screen-card--inactive",
       "pk-collection-card pk-screen-card--warning",
       "pk-collection-card",
-      "pk-collection-card",
+      "pk-collection-card pk-screen-card--inactive",
     ]);
     expect(condition(cards[0]!).textContent).toBe("Critical: Last heard 10 min ago · Offline");
     expect(host.querySelector(".pk-badge")).toBeNull();

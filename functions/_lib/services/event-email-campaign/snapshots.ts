@@ -15,6 +15,7 @@ import { attendeeCampaignSelection, listCampaignRecipients, speakerCampaignSelec
 import { computeCampaignDigest } from "./digest";
 import { signCampaignPreviewToken } from "./preview-token";
 import { prepareSpeakerKitAcceptance } from "./speaker-kit";
+import { hasPromotionMaterials, preparePromotionMaterialsAcceptance } from "./promotion-materials";
 import type { CampaignEvent } from "./types";
 
 export interface CampaignSnapshot {
@@ -131,14 +132,14 @@ export async function acceptCampaignSnapshot(
   await db.batch([
     db
       .prepare(
-        // A send with kits has nothing left to page through: its render batch owns the emails.
+        // A send with files has nothing left to page through: its render batch owns the emails.
         `UPDATE event_email_campaigns SET status = ?, updated_at = ?
       WHERE id = ? AND status = 'draft' AND expires_at >= ?
       AND NOT EXISTS (${currentEmails} EXCEPT SELECT email FROM event_email_campaign_recipients WHERE campaign_id = ?)
       AND NOT EXISTS (SELECT email FROM event_email_campaign_recipients WHERE campaign_id = ? EXCEPT ${currentEmails})`,
       )
       .bind(
-        input.kit ? "complete" : "queued",
+        input.kit || input.materials ? "complete" : "queued",
         now,
         snapshot.id,
         now,
@@ -147,16 +148,18 @@ export async function acceptCampaignSnapshot(
         snapshot.id,
         ...selection.bindings,
       ),
-    ...(input.kit
-      ? prepareSpeakerKitAcceptance(db, event, input, { ...actor, campaignId: snapshot.id, at: now })
-      : [
-          db
-            .prepare(
-              `UPDATE scheduled_jobs SET wake_requested = 1 WHERE job_key = 'event_email_campaigns'
+    ...(hasPromotionMaterials(input)
+      ? preparePromotionMaterialsAcceptance(db, event, input, { ...actor, campaignId: snapshot.id, at: now })
+      : input.kit
+        ? prepareSpeakerKitAcceptance(db, event, input, { ...actor, campaignId: snapshot.id, at: now })
+        : [
+            db
+              .prepare(
+                `UPDATE scheduled_jobs SET wake_requested = 1 WHERE job_key = 'event_email_campaigns'
       AND EXISTS (SELECT 1 FROM event_email_campaigns WHERE id = ? AND status = 'queued')`,
-            )
-            .bind(snapshot.id),
-        ]),
+              )
+              .bind(snapshot.id),
+          ]),
   ]);
   const accepted = await first<{ status: string }>(db, "SELECT status FROM event_email_campaigns WHERE id = ?", [
     snapshot.id,

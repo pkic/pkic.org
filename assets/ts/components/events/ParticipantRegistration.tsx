@@ -49,24 +49,31 @@ export function ParticipantRegistration({
     return { registration, forms };
   }, [registrationId, eventId, slug]);
   if (loaded.loading) return <Spinner label="Loading registration…" />;
-  if (!loaded.data) return <Alert tone="danger">{loaded.error}</Alert>;
   return (
-    <RegistrationRecord
-      key={registrationId}
-      endpoint={endpoint}
-      data={loaded.data.registration}
-      forms={loaded.data.forms}
-      reload={loaded.reload}
-      focusDay={focusDay}
-    />
+    <>
+      {loaded.error && <Alert tone="danger">{loaded.error}</Alert>}
+      {loaded.error && (
+        <Button variant="secondary" onClick={() => void loaded.reload()}>
+          Retry registration
+        </Button>
+      )}
+      {loaded.data && (
+        <RegistrationRecord
+          key={registrationId}
+          endpoint={endpoint}
+          data={loaded.data.registration}
+          forms={loaded.data.forms}
+          reload={loaded.reload}
+          refreshProfile={loaded.refresh}
+          focusDay={focusDay}
+        />
+      )}
+    </>
   );
 }
 
 /** What the attendee reads after a change, in words rather than a status code. */
-function outcomeOf(change: RegistrationChange, emailChanged: boolean): string {
-  if (emailChanged) {
-    return "Check your new email address to confirm the change. Your registration remains pending until then.";
-  }
+function outcomeOf(change: RegistrationChange): string {
   if (change.action === "cancel") return "Registration cancelled.";
   return "Registration updated.";
 }
@@ -76,12 +83,14 @@ function RegistrationRecord({
   data,
   forms,
   reload,
+  refreshProfile,
   focusDay,
 }: {
   endpoint: string;
   data: RegistrationManageReadResponse;
   forms: EventFormsResponse;
   reload: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   focusDay: string | null;
 }) {
   const [editing, showEditor, closeEditor] = useDialogQueryState("editRegistration");
@@ -104,14 +113,10 @@ function RegistrationRecord({
     if (editing && change.dayAttendance && !(await confirmRegistrationDayChanges(data, change.dayAttendance))) return;
     setError("");
     setMessage("");
-    const result = await patchJson(
-      endpoint,
-      registrationManageSchema.parse(change),
-      registrationManageUpdateResponseSchema,
-    );
+    await patchJson(endpoint, registrationManageSchema.parse(change), registrationManageUpdateResponseSchema);
     await closeEditor();
     setEditorMounted(false);
-    setMessage(result.emailChanged ? outcomeOf(change, true) : (outcome ?? outcomeOf(change, false)));
+    setMessage(outcome ?? outcomeOf(change));
     await reload();
   }
 
@@ -187,6 +192,7 @@ function RegistrationRecord({
                 data={data}
                 forms={forms}
                 save={save}
+                onProfileUpdated={refreshProfile}
                 onDiscard={() => {
                   setEditorMounted(false);
                   void closeEditor();
@@ -213,14 +219,7 @@ function RegistrationRecord({
               />
               <section class="pk-stack pk-stack--snug" aria-label="Your details">
                 <SectionHeading level={3}>Your details</SectionHeading>
-                <ParticipantRegistrationDetails
-                  data={data}
-                  form={forms.form}
-                  daysSummarized
-                  onIdentityChanged={async () => {
-                    await reload();
-                  }}
-                />
+                <ParticipantRegistrationDetails data={data} form={forms.form} daysSummarized />
                 {!cancelled && (
                   <div class="pk-cluster">
                     <Button

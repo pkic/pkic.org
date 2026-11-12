@@ -21,7 +21,10 @@ import { unclaimedAccountSql } from "./proposal-speaker-account-authority";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { ProposalAccessSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
 import type { SpeakerRole } from "../../../assets/shared/schemas/registration";
-import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/participant-roles";
+import {
+  isProposalSpeakerRoleAssignable,
+  type ProposalSpeakerRole,
+} from "../../../assets/shared/schemas/participant-roles";
 import { effectiveStoredInviteExpiry, type InviteEventWindow } from "../invite-validity";
 import type { PreparedProposalActingIdentity, ProposalActingIdentityRow } from "./proposal-speaker-identity";
 
@@ -427,7 +430,7 @@ export function assertProposalSpeakerRoleTransition(input: {
   const isCurrentProposer = input.currentProposerUserId === input.speakerUserId;
   // Ownership and presentation role are separate concepts. The current
   // owner may change their presentation role without changing ownership.
-  if (!isCurrentProposer && input.nextRole === "proposer") {
+  if (!isProposalSpeakerRoleAssignable(input.nextRole, { isCurrentProposer })) {
     throw new AppError(
       409,
       "PROPOSER_TRANSFER_REQUIRED",

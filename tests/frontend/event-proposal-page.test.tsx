@@ -96,7 +96,8 @@ async function boot(): Promise<void> {
   await vi.waitFor(() => {
     expect(
       !document.querySelector("[data-consents]")?.textContent?.includes("Loading") ||
-        document.querySelector<HTMLElement>("[data-flow-status]")?.dataset.state === "error",
+        document.querySelector<HTMLElement>("[data-flow-status]")?.dataset.state === "error" ||
+        document.querySelector<HTMLFormElement>("[data-event-proposal] form")?.hidden,
     ).toBe(true);
   });
 }
@@ -145,7 +146,7 @@ describe("proposal submission gate", () => {
   });
 
   it.each(["scheduled", "closed"])(
-    "disables the public proposal form when its canonical event window is %s",
+    "replaces the public proposal form with a helpful notice when its canonical event window is %s",
     async (state) => {
       const form = mountShell();
       const id = "10000000-0000-4000-8000-000000000001";
@@ -178,9 +179,12 @@ describe("proposal submission gate", () => {
       });
       await boot();
       expect([...form.querySelectorAll<HTMLInputElement>("input")].every((control) => control.disabled)).toBe(true);
-      expect(document.querySelector("[data-flow-status]")?.textContent).toContain(
-        state === "scheduled" ? "has not opened yet" : "is closed",
-      );
+      expect(form.hidden).toBe(true);
+      expect(document.querySelector<HTMLElement>(".event-flow-stepper")?.hidden).toBe(true);
+      const notice = document.querySelector(".pk-alert--info[role='status']");
+      expect(notice?.textContent).toContain(state === "scheduled" ? "has not opened yet" : "is closed");
+      expect(notice?.textContent).toContain("management link in your confirmation email");
+      expect(notice?.textContent).not.toContain("Loading");
       await submit(form);
       expect(requests.some(({ method }) => method === "POST")).toBe(false);
     },
