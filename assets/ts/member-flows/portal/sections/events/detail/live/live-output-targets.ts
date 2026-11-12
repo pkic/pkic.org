@@ -1,5 +1,5 @@
 import { updateLiveTimerGraphics } from "../../../../../../../shared/live-timer-policy";
-import type { LiveAuxOutput } from "../../../../../../../shared/live-room-outputs";
+import { LIVE_AUX_OUTPUTS, type LiveAuxOutput } from "../../../../../../../shared/live-room-outputs";
 import type { LivePollPresentation } from "../../../../../../../shared/schemas/live-session-poll";
 import {
   type LivePanelists,
@@ -44,7 +44,15 @@ export interface LiveTargets {
   disabled: boolean;
   /** Sends a command to the room, which first makes this session the room's program when it changes what is on air. */
   sendProgram: Send;
+  /** Sends several commands in order as one change; without it each goes out on its own. */
+  sendPrograms?: (messages: readonly LiveRoomClientMessage[]) => boolean;
 }
+
+/** Sends commands in order as one change, so a broadcast in progress cannot refuse the later ones. */
+export const sendLivePrograms = (targets: LiveTargets, messages: readonly LiveRoomClientMessage[]): boolean =>
+  targets.sendPrograms
+    ? targets.sendPrograms(messages)
+    : messages.map((message) => targets.sendProgram(message)).every(Boolean);
 
 const sameConfig = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
 
@@ -67,7 +75,8 @@ export function liveLayerShown(stage: LiveStage, layer: LiveLayer): boolean {
     case "panelists":
       return stage.panelists?.layout === layer.panelists.layout;
     case "timer":
-      return stage.timerGraphics.some((graphic) => sameConfig(graphic, layer.graphic));
+      // An output shows each timer once; it shows this one whatever its settings there.
+      return stage.timerGraphics.some((graphic) => graphic.timerId === layer.graphic.timerId);
     case "checkIn":
       return (
         sameConfig(stage.checkIn?.selection ?? null, layer.checkIn.selection) &&
@@ -200,4 +209,38 @@ export function sendLayerToggle(
     // Program shows another session while this one is not on air, so the first press always puts the graphic on.
     return targets.sendProgram(liveLayerToggle(state.stage, layer, targets.programActive ? undefined : false));
   return targets.sendProgram(liveAuxToggle(state, destination, layer));
+}
+
+/**
+ * Saving a timer graphic's settings: the commands that replace it, by its
+ * timer, on every destination that shows it now, so what is on air changes
+ * with the save. A destination that does not show it is left alone.
+ */
+export function liveTimerGraphicReplacements(
+  targets: LiveTargets,
+  previous: LiveTimerGraphic,
+  next: LiveTimerGraphic,
+): LiveRoomClientMessage[] {
+  const { state } = targets;
+  const where = liveLayerTargets(targets, { kind: "timer", graphic: previous });
+  const replace = { type: "stage.timer", timer: next, visible: true } as const;
+  return [
+    ...(where.preview
+      ? [
+          {
+            type: "preview.set",
+            composition: { timerGraphics: updateLiveTimerGraphics(state.preview.timerGraphics, next, true) },
+          } as const,
+        ]
+      : []),
+    ...(where.program ? [replace] : []),
+    ...LIVE_AUX_OUTPUTS.filter((output) => where.aux(output)).map(
+      (output) =>
+        ({
+          type: "aux.set",
+          output,
+          composition: liveCompositionInput(previewLiveStage(state, state.outputs[output], replace)),
+        }) as const,
+    ),
+  ];
 }

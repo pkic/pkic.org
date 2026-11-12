@@ -55,7 +55,6 @@ import { refreshLiveCreditCopies } from "./room-credit-refresh";
 
 type Handled = LiveRefusal | void;
 type Actor = { userId: string; name: string };
-
 const REFUSALS = {
   closed: { code: "LIVE_ROOM_CLOSED", message: "Questions and reactions open shortly before the session starts." },
   readOnly: { code: "LIVE_ROOM_READ_ONLY", message: "This connection can only watch the room." },
@@ -94,6 +93,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   private readonly presence: LiveRoomPresence;
   private readonly addedCredits: LiveRoomAddedCredits;
   private readonly engagement: LiveRoomEngagement;
+  private readonly onScreenLists: LiveRoomOnScreenLists;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -141,6 +141,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       () => this.graphics.tickerContext,
       (work) => this.access.run(work),
     );
+    this.onScreenLists = new LiveRoomOnScreenLists(ctx, this.store, this.chat, this.broadcast);
     this.graphics = new LiveRoomGraphics(
       this.sessionEnv,
       this.store,
@@ -149,7 +150,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.outputs,
       new LiveRoomPreview(this.store, this.pollStore, this.controls),
       new LiveRoomGraphicBasis(this.sql),
-      new LiveRoomOnScreenLists(ctx, this.store, this.chat, this.broadcast),
+      this.onScreenLists,
     );
     this.graphics.chatTicker = () => liveChatTickerLines(this.chat);
     this.chatActions = new LiveRoomChatActions(
@@ -387,6 +388,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       }
     }
     this.engagement.clear();
+    this.onScreenLists.stop();
     await this.ctx.storage.deleteAll();
     this.sql.erased();
     this.databaseSession.reset();
@@ -394,7 +396,8 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
 
   private async left(socket: WebSocket): Promise<void> {
     const viewer = socket.deserializeAttachment() as LiveRoomParticipant | null;
-    if (viewer?.role !== "operator") return;
+    // A socket the purge closed can report closing after the erase; telling the others must not recreate the room.
+    if (viewer?.role !== "operator" || !this.sql.holdsData()) return;
     this.presence.left(viewer);
     await this.broadcast.operatorsChanged(socket);
   }
@@ -537,7 +540,8 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       case "preview.take":
         return this.graphics.takePreview(actor, session, at);
       case "speaker.message":
-        return this.outputs.setSpeakerMessage(actor, message.text, message.tone, message.flash, at);
+      case "stage.display.settings":
+        return this.outputs.setStageDisplay(actor, message, at);
       case "program.clear":
         return this.controls.clearProgram(actor, at);
       case "program.restore":
@@ -570,6 +574,8 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
         return this.timers.control(actor, session, message.timerId, message.action, Date.now(), at);
       case "timer.configure":
         return this.timers.configure(actor, session, message.timerId, message.settings, Date.now(), at);
+      case "timer.edit":
+        return this.timers.edit(actor, session, message.timerId, message.edit, Date.now(), at);
     }
   }
 

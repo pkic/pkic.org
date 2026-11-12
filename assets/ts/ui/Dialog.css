@@ -39,6 +39,12 @@
     background: var(--pk-overlay);
   }
 
+  /* Only the body scrolls: a long body never squeezes the title or the actions. */
+  .pk-dialog__head,
+  .pk-dialog__foot {
+    flex-shrink: 0;
+  }
+
   .pk-dialog__head {
     display: flex;
     align-items: flex-start;
@@ -68,6 +74,7 @@
   }
 
   .pk-dialog__body {
+    min-block-size: 0;
     padding: var(--pk-2) var(--pk-4) var(--pk-4);
     display: flex;
     flex-direction: column;

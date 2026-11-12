@@ -77,26 +77,15 @@ it("draws every timer state in the same countdown face", async () => {
   expect(faces).toContain(`font-family: ${family};`);
 });
 
-it("puts the screen's status at the end of the stage display's bottom line, beside a long title", async () => {
+it("puts the screen's status at the end of the stage display's footer, beside a long title cut at a word", async () => {
   const long = {
     ...screenStageRunningFixture,
-    outputs: {
-      ...screenStageRunningFixture.outputs,
-      "stage-display": {
-        ...screenStageRunningFixture.outputs["stage-display"],
-        schedule: {
-          ...screenStageRunningFixture.outputs["stage-display"].schedule!,
-          rooms: screenStageRunningFixture.outputs["stage-display"].schedule!.rooms.map((entry) => ({
-            ...entry,
-            title: "A very long session title ".repeat(8).trim(),
-          })),
-        },
-      },
-    },
+    session: { ...screenStageRunningFixture.session, title: "A very long session title ".repeat(8).trim() },
   };
   const page = await drawn(long, SCREEN_FIXTURE_NOW, { kind: "offline-badge", minutes: 6 });
-  const line = page.querySelector(".pk-live-stage-display__after")!;
-  expect(line.querySelector(".pk-live-stage-display__line")?.textContent).toContain("A very long session title");
-  expect(line.querySelector(".pk-live-stage-display__aside")?.textContent).toBe("Offline · 6 min");
+  const footer = page.querySelector(".pk-live-stage-display__footer")!;
+  const title = footer.querySelector(".pk-live-stage-display__title")!.textContent!;
+  expect(title).toMatch(/^LiveA very long session title( [a-z]+)+…$/iu);
+  expect(footer.querySelector(".pk-live-stage-display__aside")?.textContent).toBe("Offline · 6 min");
   expect(page.querySelector(".pk-screen-marker--corner")).toBeNull();
 });

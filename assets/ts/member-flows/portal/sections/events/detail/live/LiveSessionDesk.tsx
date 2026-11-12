@@ -23,13 +23,12 @@ import { LivePanelPresence } from "./presence/LivePresenceTag";
 import { GraphicsPanel, nextInRoom } from "./studio/GraphicsPanel";
 import { monitorPanelView } from "./studio/MonitorPanel";
 import { StudioScreensBody, StudioScreensConnection } from "./studio/ScreensPanel";
-import { SourcesPanel } from "./studio/SourcesPanel";
 import { SpeakerMessagePanel } from "./studio/SpeakerMessagePanel";
+import { stageDisplaySettingsMenu } from "./studio/stage-display-settings-menu";
 import { StudioGrid, type StudioPanelView } from "./studio/StudioGrid";
 import { StudioHeader, type StudioNoticeContent } from "./studio/StudioHeader";
 import { StudioToolbar } from "./studio/StudioToolbar";
 import { LiveAddTimerAction, TimePanel } from "./studio/TimePanel";
-import { LiveTimerSounds } from "../../../../../../live-session/useLiveTimerSounds";
 import {
   STUDIO_PANEL_LABELS,
   setStudioPanelLabeled,
@@ -130,16 +129,24 @@ export function LiveSessionDesk({
 
   /** Sends a command; the other operators briefly see who changed the control it came from. */
   const sendProgram = (message: LiveRoomClientMessage): boolean => {
-    const sent = sendToRoom(message);
+    const sent = sendToRoom([message]);
     if (sent && message.type !== "chat.send") presence.changed();
     return sent;
   };
-  const sendToRoom = (message: LiveRoomClientMessage): boolean => {
-    if (!changesBroadcast(message) || !broadcast) return room.send(message);
+  /** Sends commands in order; those that change what is on air go out as one broadcast, so none is refused. */
+  const sendPrograms = (messages: readonly LiveRoomClientMessage[]): boolean => {
+    const sent = sendToRoom(messages);
+    if (sent && messages.length) presence.changed();
+    return sent;
+  };
+  const sendToRoom = (messages: readonly LiveRoomClientMessage[]): boolean => {
+    const sendEach = () => messages.map((message) => room.send(message)).every(Boolean);
+    const first = messages.find(changesBroadcast);
+    if (!first || !broadcast) return sendEach();
     if (runningBroadcast.current || !live) return false;
     runningBroadcast.current = true;
     setBroadcasting(true);
-    void broadcast(message, () => room.send(message)).finally(() => {
+    void broadcast(first, sendEach).finally(() => {
       runningBroadcast.current = false;
       setBroadcasting(false);
     });
@@ -157,7 +164,7 @@ export function LiveSessionDesk({
     );
   const programActive = activeOccurrenceId === occurrenceId;
   const disabled = !live || broadcasting;
-  const targets: LiveTargets = { state, programActive, disabled, sendProgram };
+  const targets: LiveTargets = { state, programActive, disabled, sendProgram, sendPrograms };
   const take = () => sendProgram({ type: "preview.take" });
   const agenda = approvedAgenda ?? null;
   const preview = previewProjection(state);
@@ -289,6 +296,7 @@ export function LiveSessionDesk({
       case "message":
         return {
           title,
+          menu: stageDisplaySettingsMenu(state.stageDisplaySettings, sendProgram, disabled),
           body: <SpeakerMessagePanel message={state.speakerMessage} send={sendProgram} disabled={disabled} />,
         };
       case "polls":
@@ -299,8 +307,6 @@ export function LiveSessionDesk({
         };
       case "chat":
         return { title, body: <LiveChatPanel studio state={state} disabled={!live} send={sendProgram} /> };
-      case "sources":
-        return { title, body: <SourcesPanel slug={slug} roomId={roomId} layouts={state.overlayLayouts} /> };
       case "screens":
         return {
           title,
@@ -387,7 +393,6 @@ export function LiveSessionDesk({
         {phone ? null : (
           <StudioGrid workspace={layout.workspace} panels={layout.panels} change={layout.change} render={render} />
         )}
-        <LiveTimerSounds timers={state.timers} session={state.session} place="studio" />
         <ProgramUndoToast
           undo={state.programUndo}
           onUndo={(snapshotId) => sendProgram({ type: "program.restore", snapshotId })}

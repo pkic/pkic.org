@@ -27,6 +27,11 @@ import {
 import { LIVE_AUX_OUTPUTS, type LiveAuxOutput } from "../../../../assets/shared/live-room-outputs";
 import { liveTimersSchema } from "../../../../assets/shared/schemas/live-session-timer";
 import { sessionLiveTimer } from "../../../../assets/shared/live-timer-policy";
+import {
+  liveStageDisplaySettingsSchema,
+  liveStageDisplaySettingsSnapshotSchema,
+  type LiveStageDisplaySettings,
+} from "../../../../assets/shared/schemas/live-stage-display-settings";
 import { copyableLivePolls, type LivePollCopy } from "./room-poll-store";
 import type { LiveRoomSql } from "./room-sql";
 
@@ -386,6 +391,16 @@ export class LiveRoomStore {
 
   saveSpeakerMessage(message: LiveSpeakerMessage | null): void {
     this.saveControl("speakerMessage", message === null ? null : liveSpeakerMessageSchema.parse(message));
+  }
+
+  /** The stage display's settings; a stored value that no longer parses reads as the defaults. */
+  stageDisplaySettings(): LiveStageDisplaySettings {
+    const saved = liveStageDisplaySettingsSnapshotSchema.safeParse(this.control("stageDisplaySettings") ?? undefined);
+    return saved.success ? saved.data : liveStageDisplaySettingsSnapshotSchema.parse(undefined);
+  }
+
+  saveStageDisplaySettings(settings: LiveStageDisplaySettings): void {
+    this.saveControl("stageDisplaySettings", liveStageDisplaySettingsSchema.parse(settings));
   }
 
   queue(): LiveQueue {

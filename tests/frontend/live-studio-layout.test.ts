@@ -3,6 +3,7 @@ import {
   compactGrid,
   gridOverlaps,
   placeGridItem,
+  swapGridItems,
   type GridItem,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/studio-grid";
 import {
@@ -61,6 +62,24 @@ describe("studio grid geometry", () => {
     const swapped = placeGridItem(grid, "a", { x: 0, y: 5, w: 6, h: 4 }, STUDIO_GRID_BOUNDS);
     expect(at(swapped, "b").y).toBe(0);
     expect(at(swapped, "a").y).toBe(5);
+  });
+
+  it("swaps an item dropped on another; each keeps its size, and a larger one sets the other beside it", () => {
+    const grid = [item("preview", 0, 0, 5, 12), item("transition", 5, 0, 2, 12), item("program", 7, 0, 5, 12)];
+    const swapped = swapGridItems(grid, "program", "preview", 12);
+    expect(at(swapped, "program")).toEqual({ x: 0, y: 0, w: 5, h: 12 });
+    expect(at(swapped, "preview")).toEqual({ x: 7, y: 0, w: 5, h: 12 });
+    const stacked = [item("small", 0, 0, 4, 4), item("wide", 4, 0, 8, 6)];
+    const crossed = swapGridItems(stacked, "wide", "small", 12);
+    expect(at(crossed, "wide")).toEqual({ x: 0, y: 0, w: 8, h: 6 });
+    expect(at(crossed, "small")).toEqual({ x: 8, y: 0, w: 4, h: 4 });
+    expect(noOverlaps(crossed)).toBe(true);
+    // Dropped downward onto a taller full-width item, the two still trade places.
+    const stackedRows = [item("a", 0, 0, 12, 4), item("b", 0, 4, 12, 8)];
+    const down = swapGridItems(stackedRows, "a", "b", 12);
+    expect([at(down, "b").y, at(down, "a").y]).toEqual([0, 8]);
+    const up = swapGridItems(stackedRows, "b", "a", 12);
+    expect([at(up, "b").y, at(up, "a").y]).toEqual([0, 8]);
   });
 
   it("pushes a chain of items down and keeps the grid free of overlaps", () => {
@@ -161,6 +180,32 @@ describe("saved studio layouts", () => {
         },
       }),
     ).toEqual(defaultStudioLayouts());
+  });
+
+  it("drops a saved Output links panel, now on the settings page, and keeps the rest of the arrangement", () => {
+    const saved = defaultStudioLayouts();
+    const withLinks = {
+      ...saved,
+      livestream: [...saved.livestream, { id: "livestream-sources-9", type: "sources", x: 0, y: 30, w: 6, h: 7 }],
+    };
+    const storage = memory({ [STUDIO_LAYOUT_STORAGE_KEY]: withLinks });
+    const loaded = loadStudioLayouts(storage);
+    expect(loaded.livestream.map((panel) => panel.type)).not.toContain("sources");
+    expect(loaded.livestream).toHaveLength(saved.livestream.length);
+  });
+
+  it("drops a first-shape Output links panel and keeps the workspace's other panels", () => {
+    const storage = memory({
+      [STUDIO_LAYOUT_V1_STORAGE_KEY]: {
+        livestream: [
+          { id: "a", type: "chat", span: 8, height: null },
+          { id: "b", type: "sources", span: 4, height: null },
+        ],
+      },
+    });
+    expect(loadStudioLayouts(storage).livestream.map(({ id, type }) => ({ id, type }))).toEqual([
+      { id: "a", type: "chat" },
+    ]);
   });
 
   it("settles a saved arrangement whose panels overlap", () => {

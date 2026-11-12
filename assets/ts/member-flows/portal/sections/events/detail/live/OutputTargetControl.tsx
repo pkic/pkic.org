@@ -1,6 +1,8 @@
 import {
   LIVE_AUX_OUTPUTS,
   LIVE_AUX_OUTPUT_DETAILS,
+  LIVE_PREVIEW_OUTPUT_DETAILS,
+  LIVE_PROGRAM_OUTPUT_DETAILS,
   type LiveAuxOutput,
 } from "../../../../../../../shared/live-room-outputs";
 import type { LivePresenceTarget } from "../../../../../../../shared/live-room-presence";
@@ -53,6 +55,7 @@ export function OutputTargetControl({
   aux,
   disabled,
   integrated = false,
+  short = false,
   presenceItem,
   presence = [],
   onToggle,
@@ -65,6 +68,8 @@ export function OutputTargetControl({
   disabled: boolean;
   /** Spans the foot of a card instead of sitting inline. */
   integrated?: boolean;
+  /** Names Preview and Program by their switcher abbreviations, PVW and PGM, for a dense row. */
+  short?: boolean;
   /** The graphic's presence id, so other operators see this operator on it. */
   presenceItem?: string;
   presence?: readonly OutputTargetPresence[];
@@ -86,24 +91,24 @@ export function OutputTargetControl({
         data-destination="preview"
         data-presence-color={presenceOn(presence, "preview")}
         aria-label={`Show ${subject} in preview`}
-        title="Show in preview, ready to put on air"
+        title={short ? LIVE_PREVIEW_OUTPUT_DETAILS.label : "Show in preview, ready to put on air"}
         aria-pressed={preview}
         disabled={disabled}
         onClick={() => onToggle("preview")}
       >
-        Preview
+        {short ? LIVE_PREVIEW_OUTPUT_DETAILS.short : LIVE_PREVIEW_OUTPUT_DETAILS.label}
       </Button>
       <Button
         class="pk-output-target__button"
         data-destination="program"
         data-presence-color={presenceOn(presence, "program")}
         aria-label={`Show ${subject} on air`}
-        title="Show on air now, on the program output"
+        title={short ? LIVE_PROGRAM_OUTPUT_DETAILS.label : "Show on air now, on the program output"}
         aria-pressed={program}
         disabled={disabled}
         onClick={() => onToggle("program")}
       >
-        Program
+        {short ? LIVE_PROGRAM_OUTPUT_DETAILS.short : LIVE_PROGRAM_OUTPUT_DETAILS.label}
       </Button>
       <Menu
         variant="plain"

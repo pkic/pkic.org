@@ -97,8 +97,8 @@ describe("live control room Transition", () => {
 
   it("puts the timer on the shared Preview and toggles it on Program directly", () => {
     const { host, live } = mountDesk(undefined, "stage");
-    void act(() => labeled(host, "Show timer in preview").click());
-    void act(() => labeled(host, "Show timer on air").click());
+    void act(() => labeled(host, "Show Session timer in preview").click());
+    void act(() => labeled(host, "Show Session timer on air").click());
     const graphic = defaultLiveTimerGraphic("session");
     expect(commands(live)).toEqual([
       { type: "preview.set", composition: { timerGraphics: [graphic] } },
@@ -233,125 +233,6 @@ describe("live control room panels", () => {
     expect(commands(live)).toEqual([
       { type: "question.rewrite", questionId: LIVE_QUESTION, text: "Should we deploy hybrid certificates?" },
     ]);
-  });
-
-  it("runs several named timers from the Time panel", () => {
-    const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR }), "stage");
-    const time = panel(host, "Time");
-    expect(time.querySelector("output")?.textContent).toBe("50:00");
-    void act(() => labeled(time, "Start Session").click());
-    void act(() => labeled(time, "Add a minute to Session").click());
-    void act(() => labeled(time, "Take a minute from Session").click());
-    // The create action sits in the panel header and opens the form.
-    void act(() => labeled(time, "Add timer").click());
-    type(time.querySelector<HTMLInputElement>("input[name=name]")!, "Questions");
-    type(time.querySelector<HTMLInputElement>("input[name=durationSeconds]")!, "10");
-    void act(() => button(time, "Add timer").click());
-    expect(commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent))).toEqual([
-      { type: "timer.control", timerId: "session", action: "start" },
-      { type: "timer.adjust", timerId: "session", deltaSeconds: 60 },
-      { type: "timer.adjust", timerId: "session", deltaSeconds: -60 },
-      { type: "timer.add", timer: { name: "Questions", kind: "duration", targetAt: null, durationSeconds: 600 } },
-    ]);
-    expect(time.querySelector("input[name=durationSeconds]")).toBeNull();
-    const [session] = liveSnapshot().timers;
-    const questions = {
-      ...session!,
-      id: "qa",
-      name: "Questions",
-      kind: "duration" as const,
-      durationSeconds: 600,
-      heldMs: 600_000,
-    };
-    void act(() => live.latest().deliver({ type: "timers.changed", timers: [session!, questions] }));
-    expect([...time.querySelectorAll("output")].map((value) => value.textContent)).toEqual(["50:00", "10:00"]);
-    void act(() => labeled(time, "Start Questions").click());
-    expect(commands(live).at(-1)).toEqual({ type: "timer.control", timerId: "qa", action: "start" });
-  });
-
-  it("resets a timer from its row, sets what it does at zero, and hands a session timer back to the agenda", () => {
-    const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR }), "stage");
-    const time = panel(host, "Time");
-    void act(() => labeled(time, "Reset Session").click());
-    void act(() => labeled(time, "Session timer").click());
-    void act(() => button(document.body, "Timer settings").click());
-    const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
-    const action = dialog.querySelector<HTMLSelectElement>("select[name='atZero.action']")!;
-    // A session has no length of its own to reset to, so the reset choice is not offered.
-    expect([...action.options].map((option) => option.value)).toEqual(["overtime", "stop"]);
-    void act(() => {
-      action.value = "stop";
-      action.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    void act(() => dialog.querySelector<HTMLInputElement>("input[value='stage-display']")!.click());
-    void act(() => button(dialog, "Save").click());
-    void act(() => labeled(time, "Session timer").click());
-    void act(() => button(document.body, "Follow the agenda").click());
-    expect(commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent))).toEqual([
-      { type: "timer.control", timerId: "session", action: "reset" },
-      {
-        type: "timer.configure",
-        timerId: "session",
-        settings: {
-          atZero: { action: "stop", resetAfterSeconds: 10, restart: false },
-          sound: { places: ["stage-display"], warningSeconds: 60, zero: true },
-        },
-      },
-      { type: "timer.control", timerId: "session", action: "follow" },
-    ]);
-  });
-
-  it("sends the timer graphic with its own settings", () => {
-    const { host, live } = mountDesk(undefined, "stage");
-    void act(() => labeled(host, "Session timer").click());
-    void act(() => button(document.body, "Graphic settings").click());
-    const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
-    type(dialog.querySelector<HTMLInputElement>("input[name=label]")!, "Time left");
-    for (const [name, value] of [
-      ["format", "ss"],
-      ["direction", "elapsed"],
-      ["placement", "bottom-right"],
-      ["size", "small"],
-    ] as const) {
-      const select = dialog.querySelector<HTMLSelectElement>(`select[name=${name}]`)!;
-      void act(() => {
-        select.value = value;
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      });
-    }
-    type(dialog.querySelector<HTMLInputElement>("input[name=warningSeconds]")!, "60");
-    void act(() => button(dialog, "Save").click());
-    void act(() => labeled(host, "Show timer on air").click());
-    expect(commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent))).toEqual([
-      {
-        type: "stage.timer",
-        visible: true,
-        timer: {
-          ...defaultLiveTimerGraphic("session"),
-          label: "Time left",
-          format: "ss",
-          direction: "elapsed",
-          placement: "bottom-right",
-          size: "small",
-          warningSeconds: 60,
-        },
-      },
-    ]);
-  });
-
-  it("refuses a countdown to a time without its time, as the contract does", () => {
-    const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR }), "stage");
-    const time = panel(host, "Time");
-    void act(() => labeled(time, "Add timer").click());
-    type(time.querySelector<HTMLInputElement>("input[name=name]")!, "Doors");
-    const kind = time.querySelector<HTMLSelectElement>("select[name=kind]")!;
-    void act(() => {
-      kind.value = "until";
-      kind.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    void act(() => button(time, "Add timer").click());
-    expect(time.textContent).toContain("Enter the time it counts down to.");
-    expect(commands(live)).toEqual([]);
   });
 
   it("pictures a question's asker only when they asked by name and have a photo", () => {

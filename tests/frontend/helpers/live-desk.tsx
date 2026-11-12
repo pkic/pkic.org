@@ -2,14 +2,17 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { vi } from "vitest";
+import type { ComponentProps } from "preact";
 import { LiveSessionDesk } from "../../../assets/ts/member-flows/portal/sections/events/detail/live/LiveSessionDesk";
 import { fakeLiveSockets, LIVE_OCCURRENCE, liveSnapshot } from "./live-room-socket";
 
 const hosts: HTMLElement[] = [];
 export const OPERATOR = { role: "operator" as const, name: "Olga Operator" };
 
+type Broadcast = ComponentProps<typeof LiveSessionDesk>["broadcast"];
+
 /** Mounts the desk on a fake room socket that has not opened yet. */
-export function mountClosedDesk() {
+export function mountClosedDesk(broadcast?: Broadcast) {
   const live = fakeLiveSockets();
   const host = document.createElement("div");
   document.body.append(host);
@@ -21,6 +24,7 @@ export function mountClosedDesk() {
         occurrenceId={LIVE_OCCURRENCE}
         activeOccurrenceId={LIVE_OCCURRENCE}
         createSocket={live.factory}
+        broadcast={broadcast}
       />,
       host,
     );
@@ -29,9 +33,9 @@ export function mountClosedDesk() {
 }
 
 /** Mounts the desk in a workspace and delivers the room's snapshot. */
-export function mountDesk(snapshot = liveSnapshot({ viewer: OPERATOR }), workspace = "show") {
+export function mountDesk(snapshot = liveSnapshot({ viewer: OPERATOR }), workspace = "show", broadcast?: Broadcast) {
   history.replaceState(null, "", workspace === "show" ? "/#/live" : `/#/live?studio=${workspace}`);
-  const desk = mountClosedDesk();
+  const desk = mountClosedDesk(broadcast);
   void act(() => {
     desk.live.latest().open();
     desk.live.latest().deliver(snapshot);

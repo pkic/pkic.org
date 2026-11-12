@@ -347,6 +347,12 @@ describe("live session control room", () => {
     const issued = await issueOverlay();
     expect(issued.status).toBe(201);
     const access = liveOverlayAccessResponseSchema.parse(await issued.json());
+    // Asking again gives the same links, so an operator finds them again.
+    const again = await callApi(env, f.programPath("/overlays"), {
+      method: "POST",
+      headers: { authorization: `Bearer ${f.tokens.operator}`, origin: "https://app.test" },
+    });
+    expect(liveOverlayAccessResponseSchema.parse(await again.json())).toEqual(access);
     const operator = await f.connect({ person: "operator" });
     operator.send({ type: "question.ask", text: "Visible only to moderators", anonymous: false });
     await operator.next("question.changed");

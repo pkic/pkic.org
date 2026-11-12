@@ -22,6 +22,8 @@ export type LiveTimerKind = (typeof LIVE_TIMER_KINDS)[number];
 export const LIVE_TIMER_MAX = 12;
 /** Ten fixed 365-day years either way, including long-form custom durations. */
 export const LIVE_TIMER_MAX_MS = 10 * 365 * 24 * 60 * 60 * 1000;
+/** The longest length a timer takes, in whole hours, for an hours box. */
+export const LIVE_TIMER_MAX_HOURS = LIVE_TIMER_MAX_MS / 3_600_000;
 
 export const liveTimerIdSchema = z.string().regex(/^[a-z0-9-]{1,40}$/u);
 export const liveTimerNameSchema = z
@@ -30,9 +32,9 @@ export const liveTimerNameSchema = z
   .min(1, "Name the timer.")
   .max(40, "Keep the name under 40 characters.");
 const durationSecondsSchema = z
-  .number({ error: "Enter the length in minutes." })
+  .number({ error: "Enter the length in hours, minutes and seconds." })
   .int()
-  .min(1, "Enter a length of at least a minute.")
+  .min(1, "Enter a length of at least a second.")
   .max(LIVE_TIMER_MAX_MS / 1000, "Keep the length under ten years.");
 
 /**
@@ -54,16 +56,14 @@ export const liveTimerAtZeroSchema = z
   })
   .strict();
 
-/** Where a timer's sounds play: the operators' studio, the speaker's stage display, or both. */
-export const LIVE_TIMER_SOUND_PLACES = ["studio", "stage-display"] as const;
-export type LiveTimerSoundPlace = (typeof LIVE_TIMER_SOUND_PLACES)[number];
-/** A chime with `warningSeconds` left (none when null) and, when `zero` is on, a buzzer at zero; nowhere until a place is chosen. */
-export const liveTimerSoundSchema = z
+/**
+ * A timer's sounds: a chime with `warningSeconds` left (none when null) and,
+ * when `zero` is on, a buzzer at zero. They play on the feeds that show the
+ * timer (Program and the livestream, the stage display, a projector, a
+ * screen), only while they show it.
+ */
+const soundFieldsSchema = z
   .object({
-    places: z
-      .array(z.enum(LIVE_TIMER_SOUND_PLACES))
-      .max(LIVE_TIMER_SOUND_PLACES.length)
-      .refine((places) => new Set(places).size === places.length, "Choose each place once."),
     warningSeconds: z
       .number({ error: "Enter the seconds left for the warning." })
       .int()
@@ -73,16 +73,22 @@ export const liveTimerSoundSchema = z
     zero: z.boolean(),
   })
   .strict();
+/** A timer saved with a list of places to sound in: one that had none stays silent. */
+export const liveTimerSoundSchema = z.preprocess((sound) => {
+  if (!sound || typeof sound !== "object" || !("places" in sound)) return sound;
+  const { places, ...rest } = sound as { places: unknown } & Record<string, unknown>;
+  return Array.isArray(places) && places.length ? rest : { ...rest, warningSeconds: null, zero: false };
+}, soundFieldsSchema);
 
 export const DEFAULT_LIVE_TIMER_AT_ZERO: z.infer<typeof liveTimerAtZeroSchema> = {
   action: "overtime",
   resetAfterSeconds: 10,
   restart: false,
 };
+/** Silent until an operator turns the chime or the buzzer on. */
 export const DEFAULT_LIVE_TIMER_SOUND: z.infer<typeof liveTimerSoundSchema> = {
-  places: [],
-  warningSeconds: 60,
-  zero: true,
+  warningSeconds: null,
+  zero: false,
 };
 
 /** A timer's settings an operator changes after adding it. */
@@ -149,7 +155,7 @@ export type LiveTimerDraft = z.infer<typeof liveTimerDraftSchema>;
 // ── The timer graphic ───────────────────────────────────────────────────────
 
 /**
- * `clock` grows with the time it shows (12:34, 1:02:34, 3 d 04:12, 2 y 145 d)
+ * `clock` grows with the time it shows (12:34, 1:02:34, 3d 04:12, 2y 145d)
  * and reads the same in the studio and on every screen; `ss` is total seconds.
  */
 export const LIVE_TIMER_FORMATS = ["clock", "ss", "custom"] as const;
@@ -228,6 +234,17 @@ export function defaultLiveTimerGraphic(timerId: string): LiveTimerGraphic {
 
 // ── Commands ────────────────────────────────────────────────────────────────
 
+/** A timer's name and what it counts, changed after adding it: a length for a countdown, a time for a countdown to a time. */
+export const liveTimerEditSchema = z
+  .object({
+    name: liveTimerNameSchema.optional(),
+    durationSeconds: durationSecondsSchema.optional(),
+    targetAt: utcInstantSchema.optional(),
+  })
+  .strict()
+  .refine((edit) => Object.keys(edit).length > 0, "Change the name, the length or the time.");
+export type LiveTimerEdit = z.infer<typeof liveTimerEditSchema>;
+
 export const liveTimerAddSchema = z.object({ type: z.literal("timer.add"), timer: liveTimerDraftSchema }).strict();
 /** `reset`: back to its full length, stopped (an `until` counts to its time again); `follow`: a session timer follows the agenda again. */
 export const liveTimerActionSchema = z.enum(["start", "pause", "reset", "follow"]);
@@ -239,6 +256,7 @@ export const liveTimerCommandSchemas = [
   z
     .object({ type: z.literal("timer.configure"), timerId: liveTimerIdSchema, settings: liveTimerSettingsSchema })
     .strict(),
+  z.object({ type: z.literal("timer.edit"), timerId: liveTimerIdSchema, edit: liveTimerEditSchema }).strict(),
   z
     .object({
       type: z.literal("timer.adjust"),

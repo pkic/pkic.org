@@ -1,11 +1,13 @@
 import { LIVE_ROOM_POLICY, liveRoomPurgeAt } from "./live-session-policy";
-/** Issue near the event: a program's duration extends the existing day allowance, never its future start date. */
-export function liveProgramOverlayAccessHours(firstStartAt: string | null, lastEndAt: string | null): number {
-  if (!firstStartAt || !lastEndAt) return LIVE_ROOM_POLICY.overlayAccessHours;
-  const first = Date.parse(firstStartAt),
-    last = Date.parse(lastEndAt);
-  if (!Number.isFinite(first) || !Number.isFinite(last) || last < first) return LIVE_ROOM_POLICY.overlayAccessHours;
-  return Math.max(LIVE_ROOM_POLICY.overlayAccessHours, (last - first) / 3600000 + LIVE_ROOM_POLICY.overlayAccessHours);
+/**
+ * When a room's output links stop working: a day after its program's last
+ * session ends, so asking again gives the same links until the program
+ * changes. A room without a program gets a day from now.
+ */
+export function liveProgramOverlayExpiresAt(lastEndAt: string | null, now: number): string {
+  const end = lastEndAt ? Date.parse(lastEndAt) : Number.NaN;
+  const from = Number.isFinite(end) ? end : now;
+  return new Date(from + LIVE_ROOM_POLICY.overlayAccessHours * 3_600_000).toISOString();
 }
 
 /** Publication lifecycle checks run only on the room's own alarm, never browser polling or cached authority. */

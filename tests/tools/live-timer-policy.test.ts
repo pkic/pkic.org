@@ -4,6 +4,7 @@ import {
   configureLiveTimer,
   controlLiveTimer,
   createLiveTimer,
+  editLiveTimer,
   liveTimerCue,
   liveTimerReading,
   liveTimerShownMs,
@@ -103,6 +104,18 @@ describe("a session timer that follows the agenda", () => {
   });
 });
 
+describe("a countdown just started", () => {
+  it("never reads more than it had when it was started, on a screen whose clock runs behind", () => {
+    const started = {
+      ...pitch({ action: "overtime", resetAfterSeconds: 10, restart: false }),
+      change: { operatorName: "Op", at: at(0) },
+    };
+    // The screen's clock is 400 ms behind the room's: without the cap it would read 1:00.4, so 1:01.
+    expect(read(started, session, now - 400).valueMs).toBe(60_000);
+    expect(read(started, session, now + 1_000).valueMs).toBe(59_000);
+  });
+});
+
 describe("a countdown at zero", () => {
   it("keeps counting as overtime by default", () => {
     const timer = pitch({ action: "overtime", resetAfterSeconds: 10, restart: false });
@@ -182,6 +195,60 @@ describe("a countdown at zero", () => {
   });
 });
 
+describe("editing a timer", () => {
+  const overtime = { action: "overtime" as const, resetAfterSeconds: 10, restart: false };
+  const value = (timer: LiveTimer, when: number) => read(timer, session, when).valueMs;
+
+  it("renames any timer, and gives a countdown at its full length or at zero the new length", () => {
+    const ready = createLiveTimer(
+      "pitch",
+      { name: "Pitch", kind: "duration", targetAt: null, durationSeconds: 180 },
+      session,
+      now,
+    );
+    const longer = editLiveTimer(ready, session, { name: "Startup pitch", durationSeconds: 240 }, now)!;
+    expect(longer).toMatchObject({ name: "Startup pitch", durationSeconds: 240, running: false, heldMs: 240_000 });
+    const stoppedAtZero = { ...ready, heldMs: 0 };
+    expect(editLiveTimer(stoppedAtZero, session, { durationSeconds: 120 }, now)).toMatchObject({ heldMs: 120_000 });
+    expect(editLiveTimer(sessionLiveTimer(), session, { name: "Keynote" }, now)).toMatchObject({ name: "Keynote" });
+  });
+
+  it("moves the time left of a countdown that has begun by the difference, running or paused", () => {
+    // One minute long, 20 s in: 40 s left; at three minutes long, 2:40 left.
+    const running = pitch(overtime);
+    const edited = editLiveTimer(running, session, { durationSeconds: 180 }, now + 20_000)!;
+    expect(edited.running).toBe(true);
+    expect(value(edited, now + 20_000)).toBe(160_000);
+    const paused = controlLiveTimer(running, session, "pause", now + 20_000);
+    expect(editLiveTimer(paused, session, { durationSeconds: 30 }, now + 30_000)).toMatchObject({
+      running: false,
+      heldMs: 10_000,
+    });
+  });
+
+  it("counts a countdown to a time to the new time, held if paused, and refuses a time that has passed", () => {
+    const doors = createLiveTimer(
+      "doors",
+      { name: "Doors", kind: "until", targetAt: at(900_000), durationSeconds: null },
+      session,
+      now,
+    );
+    expect(editLiveTimer(doors, session, { targetAt: at(1_200_000) }, now)).toMatchObject({
+      running: true,
+      anchorAt: at(1_200_000),
+      targetAt: at(1_200_000),
+      durationSeconds: 1200,
+    });
+    const paused = controlLiveTimer(doors, session, "pause", now);
+    expect(editLiveTimer(paused, session, { targetAt: at(600_000) }, now)).toMatchObject({
+      running: false,
+      heldMs: 600_000,
+    });
+    expect(editLiveTimer(doors, session, { targetAt: at(-60_000) }, now)).toBeNull();
+    expect(editLiveTimer(doors, session, { durationSeconds: 60 }, now)).toBeNull();
+  });
+});
+
 describe("other kinds", () => {
   it("counts down to a time on the event clock, and resets to count to it again", () => {
     const doors = createLiveTimer(
@@ -233,10 +300,10 @@ describe("a clock", () => {
     expect(adjustLiveTimer(clock, session, 60, now)).toBe(clock);
     expect(liveTimerTone(clock, 0, defaultLiveTimerGraphic("clock"))).toBeUndefined();
     expect(
-      configureLiveTimer(clock, session, { atZero: clock.atZero, sound: { ...clock.sound, places: ["studio"] } }, now),
+      configureLiveTimer(clock, session, { atZero: clock.atZero, sound: { warningSeconds: 30, zero: true } }, now),
     ).toBeNull();
     expect(
-      liveTimerCue({ ...clock, sound: { ...clock.sound, places: ["studio"] } }, session, now - 86_400_000, now),
+      liveTimerCue({ ...clock, sound: { warningSeconds: 30, zero: true } }, session, now - 86_400_000, now),
     ).toBeNull();
   });
 
@@ -257,7 +324,7 @@ describe("a clock", () => {
 describe("timer sounds", () => {
   const sounding = (timer: LiveTimer): LiveTimer => ({
     ...timer,
-    sound: { places: ["stage-display"], warningSeconds: 30, zero: true },
+    sound: { warningSeconds: 30, zero: true },
   });
 
   it("chimes at the warning and buzzes at zero, each once as time runs past it", () => {
@@ -299,7 +366,7 @@ describe("timer sounds", () => {
 
   it("plays no buzzer when only the chime is wanted", () => {
     const timer = { ...pitch({ action: "overtime", resetAfterSeconds: 10, restart: false }) };
-    const chimeOnly = { ...timer, sound: { places: ["studio" as const], warningSeconds: 30, zero: false } };
+    const chimeOnly = { ...timer, sound: { warningSeconds: 30, zero: false } };
     expect(liveTimerCue(chimeOnly, session, now + 59_000, now + 61_000)).toBeNull();
     expect(liveTimerCue(chimeOnly, session, now + 29_000, now + 31_000)).toBe("warning");
   });
@@ -314,26 +381,26 @@ describe("the shared clock format", () => {
     [3_600_000, "1:00:00"],
     [3_723_000, "1:02:03"],
     [86_399_000, "23:59:59"],
-    [86_400_000, "1 d 00:00"],
-    [(3 * 86400 + 4 * 3600 + 12 * 60) * 1000, "3 d 04:12"],
-    [(19 * 86400 + 22 * 3600 + 30 * 60) * 1000, "19 d 22:30"],
-    [(364 * 86400 + 23 * 3600) * 1000, "364 d 23:00"],
-    [365 * 86_400_000, "1 y 0 d"],
-    [(4 * 365 + 210) * 86_400_000, "4 y 210 d"],
+    [86_400_000, "1d 00:00"],
+    [(3 * 86400 + 4 * 3600 + 12 * 60) * 1000, "3d 04:12"],
+    [(19 * 86400 + 22 * 3600 + 30 * 60) * 1000, "19d 22:30"],
+    [(364 * 86400 + 23 * 3600) * 1000, "364d 23:00"],
+    [365 * 86_400_000, "1y 0d"],
+    [(4 * 365 + 210) * 86_400_000, "4y 210d"],
   ])("reads %i ms as %s", (milliseconds, text) => {
     expect(formatLiveDuration(milliseconds)).toBe(text);
   });
 
   it("rounds a countdown up to the second, so it reads 0:01 until it is over", () => {
     expect(formatLiveDuration(400)).toBe("0:01");
-    expect(formatLiveDuration((86_400 + 30) * 1000)).toBe("1 d 00:01");
+    expect(formatLiveDuration((86_400 + 30) * 1000)).toBe("1d 00:01");
   });
 
   it("marks time over with a plus at every range", () => {
     expect(formatLiveDuration(-15_000)).toBe("+0:15");
     expect(formatLiveDuration(-62_481_000)).toBe("+17:21:21");
-    expect(formatLiveDuration(-2 * 86_400_000)).toBe("+2 d 00:00");
-    expect(formatLiveDuration(-2 * 365 * 86_400_000)).toBe("+2 y 0 d");
+    expect(formatLiveDuration(-2 * 86_400_000)).toBe("+2d 00:00");
+    expect(formatLiveDuration(-2 * 365 * 86_400_000)).toBe("+2y 0d");
   });
 
   it("reads a graphic's clock, total seconds and long custom duration tokens", () => {

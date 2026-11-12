@@ -73,22 +73,34 @@ function StudioTimerSpecimen() {
       <ul class="pk-studio-time__list" aria-label="Timers">
         <li class="pk-studio-time__row">
           <span class="pk-studio-time__name">Session</span>
-          <output class="pk-studio-time__value">12:40</output>
           <span class="pk-studio-time__detail">Session ends 15:45</span>
-          <Meter class="pk-studio-time__meter" label="Session time used" value={30} max={45} tone="accent" />
-          <span class="pk-studio-time__controls">
+          <span class="pk-studio-time__reading">
+            <output class="pk-studio-time__value">12:40</output>
+            <Meter class="pk-studio-time__meter" label="Session time used" value={30} max={45} tone="accent" />
+          </span>
+          <span class="pk-segmented pk-studio-time__transport" role="group" aria-label="Session controls">
             <Button icon variant="secondary" aria-label="Pause Session" title="Pause">
               <StrokeIcon>
                 <path d="M5.5 3v10M10.5 3v10" />
               </StrokeIcon>
             </Button>
-            <Button aria-label="Reset Session">Reset</Button>
-            <Button aria-label="Take a minute from Session">−1m</Button>
-            <Button aria-label="Add a minute to Session">+1m</Button>
+            <Button icon class="pk-studio-time__reset" aria-label="Reset Session" title="Reset">
+              <StrokeIcon>
+                <path d="M3.5 8a4.5 4.5 0 1 0 1.3-3.2M3.5 2.5v2.8h2.8" />
+              </StrokeIcon>
+            </Button>
+            <Button class="pk-studio-time__minus" aria-label="Take a minute from Session">
+              −1m
+            </Button>
+            <Button class="pk-studio-time__plus" aria-label="Add a minute to Session">
+              +1m
+            </Button>
+          </span>
+          <span class="pk-studio-time__menu">
             <Menu
               label="Session timer"
               align="end"
-              items={[{ id: "settings", label: "Timer settings", onSelect: () => {} }]}
+              items={[{ id: "settings", label: "Sounds and at zero", onSelect: () => {} }]}
             />
           </span>
         </li>

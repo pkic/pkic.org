@@ -1,3 +1,4 @@
+import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../../../../../../../shared/schemas/live-stage-display-settings";
 import {
   DEFAULT_LIVE_CHAT_FEED_CONFIG,
   DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,
@@ -164,6 +165,8 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
     operators: [],
     addedCredits: [],
     stageDisplayNext: null,
+    stageDisplayNextVotes: null,
+    stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
     burst: null,
     refusal: null,
   };

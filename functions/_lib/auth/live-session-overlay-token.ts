@@ -2,6 +2,8 @@ import { AppError } from "../errors";
 import { signJwt, verifyJwt } from "../utils/jwt";
 
 const OVERLAY_TOKEN_TYPE = "live-session-overlay";
+/** The issuer of a room's output links; who asked for them is in the audit log. */
+export const LIVE_OVERLAY_ROOM_ISSUER = "room";
 
 /** A read-only overlay's access to one physical room's broadcast program, issued by a staff operator. */
 export interface LiveOverlayClaims {
@@ -10,7 +12,7 @@ export interface LiveOverlayClaims {
   evt: string;
   /** The physical room the continuous source follows. */
   room: string;
-  /** The operator who issued the access, for attribution; for a screen, who assigned it. */
+  /** For a screen, who assigned it; a room's output links carry LIVE_OVERLAY_ROOM_ISSUER, so they come out the same for every operator. */
   iss: string;
   /** The paired screen the access was minted for, when a screen holds it. */
   scr?: string;

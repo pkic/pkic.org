@@ -383,7 +383,7 @@ describe("broadcast overlays", () => {
       "Pitch",
     );
     expect(host.querySelector(".pk-live-stage-display__message")?.textContent).toBe("Please wrap up");
-    expect(host.querySelector(".pk-live-stage-display__question")?.textContent).toContain(
+    expect(host.querySelector(".pk-live-stage-display__question-text")?.textContent).toBe(
       "What about hybrid certificates?",
     );
     expect(host.querySelector(".pk-live-overlay__lower-third-bars")).toBeNull();
@@ -398,28 +398,24 @@ describe("broadcast overlays", () => {
       authorPhotoUrl: null,
       authorAffiliation: { organization: { name: "Example Bank" } },
     };
-    const questions = () =>
-      [...host.querySelectorAll<HTMLElement>(".pk-live-stage-display__question")].map((figure) => ({
-        label: figure.querySelector(".pk-live-stage-display__label")?.textContent,
-        text: figure.querySelector(".pk-live-stage-display__question-text")?.textContent,
-        asker: figure.querySelector(".pk-live-stage-display__asker")?.textContent,
-        next: figure.hasAttribute("data-next"),
-      }));
-    void act(() => live.latest().deliver({ type: "stage.display.next.changed", question: next }));
-    expect(questions()).toEqual([
-      { label: "Question", text: "What about hybrid certificates?", asker: "Audience question", next: false },
-      { label: "Next question", text: next.text, asker: "Riley Chen, Example Bank", next: true },
-    ]);
+    const shown = () => ({
+      tag: host.querySelector(".pk-live-stage-display__questions .pk-live-stage-display__tag")?.textContent ?? null,
+      text: host.querySelector(".pk-live-stage-display__question-text")?.textContent ?? null,
+      next: host.querySelector(".pk-live-stage-display__next-text")?.textContent ?? null,
+    });
+    void act(() => live.latest().deliver({ type: "stage.display.next.changed", question: next, votes: 31 }));
+    expect(shown()).toEqual({ tag: "On air", text: "What about hybrid certificates?", next: next.text });
+    // The room sends its votes with it, since a stage display source has no question list.
+    expect(host.querySelector(".pk-live-stage-display__votes")?.textContent).toBe("31");
     // Taken to Program, the next question becomes the current one and is not repeated below it.
     void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, question: next } }));
-    expect(questions().map((question) => question.label)).toEqual(["Question"]);
-    // A long question steps down in size, never below the smallest readable step.
+    expect(shown()).toEqual({ tag: "On air", text: next.text, next: null });
+    // Off Program, the question lined up next leads on its own.
+    void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, question: null } }));
     void act(() =>
-      live
-        .latest()
-        .deliver({ type: "stage.changed", stage: { ...ON_STAGE, question: { ...next, text: "x ".repeat(150) } } }),
+      live.latest().deliver({ type: "stage.display.next.changed", question: { ...next, id: LIVE_QUESTION } }),
     );
-    expect(host.querySelector<HTMLElement>(".pk-live-stage-display__question-text")?.dataset.fit).toBe("longest");
+    expect(shown()).toEqual({ tag: "Next", text: null, next: "Which clients still fail a hybrid handshake?" });
   });
 
   it("never shows Preview's question on an audience output", () => {
@@ -438,29 +434,29 @@ describe("broadcast overlays", () => {
     expect(new URL(live.latest().url).searchParams.get("output")).toBe("stage-display");
   });
 
-  it("sets the message to the speaker in its tone, smaller only as it grows longer", () => {
+  it("sets the message to the speaker in the banner, smaller only as it grows longer", () => {
     const { host, live } = mountOverlay("stage-display");
     const shown = () => host.querySelector<HTMLElement>(".pk-live-stage-display__message")!;
-    const say = (text: string, tone: "neutral" | "urgent") =>
+    const say = (text: string, flash = false) =>
       void act(() =>
         live
           .latest()
-          .deliver({ type: "speaker.message.changed", speakerMessage: { text, tone, flash: false, change: null } }),
+          .deliver({ type: "speaker.message.changed", speakerMessage: { text, tone: "urgent", flash, change: null } }),
       );
-    say("Please wrap up", "urgent");
-    expect([shown().dataset.speakerTone, shown().dataset.fit]).toEqual(["urgent", "regular"]);
-    say("Two more questions from the room, then the panel closes", "neutral");
-    expect([shown().dataset.speakerTone, shown().dataset.fit]).toEqual(["neutral", "long"]);
-    say("x".repeat(LIVE_SPEAKER_MESSAGE_MAX_LENGTH), "neutral");
+    say("Please wrap up");
+    expect([shown().dataset.source, shown().dataset.fit]).toEqual(["operator", "regular"]);
+    // The banner covers the top row: its clock and reactions keep their place, unseen.
+    expect(host.querySelector(".pk-live-stage-display__top")?.hasAttribute("data-covered")).toBe(true);
+    say("Two more questions from the room, then the panel closes");
+    expect(shown().dataset.fit).toBe("long");
+    say("x".repeat(LIVE_SPEAKER_MESSAGE_MAX_LENGTH));
     expect(shown().dataset.fit).toBe("longer");
     expect(shown().hasAttribute("data-flash")).toBe(false);
-    void act(() =>
-      live.latest().deliver({
-        type: "speaker.message.changed",
-        speakerMessage: { text: "Please wrap up", tone: "urgent", flash: true, change: null },
-      }),
-    );
+    say("Please wrap up", true);
     expect(shown().hasAttribute("data-flash")).toBe(true);
+    void act(() => live.latest().deliver({ type: "speaker.message.changed", speakerMessage: null }));
+    expect(host.querySelector(".pk-live-stage-display__message")).toBeNull();
+    expect(host.querySelector(".pk-live-stage-display__top")?.hasAttribute("data-covered")).toBe(false);
   });
 
   it("keeps the whole address in the fragment, output and layout first", () => {

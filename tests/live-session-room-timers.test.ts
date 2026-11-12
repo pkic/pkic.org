@@ -31,7 +31,7 @@ describe("live room timers", () => {
     const pitch = (await second.next("timers.changed", (message) => message.timers.length === 2)).timers[1]!;
     const settings = {
       atZero: { action: "reset" as const, resetAfterSeconds: 5, restart: true },
-      sound: { places: ["stage-display" as const], warningSeconds: 30, zero: true },
+      sound: { warningSeconds: 30, zero: true },
     };
     operator.send({ type: "timer.configure", timerId: pitch.id, settings });
     expect(
@@ -57,6 +57,22 @@ describe("live room timers", () => {
     expect(
       (await operator.next("room.refused", (message) => message.code !== "LIVE_TIMER_SETTINGS_UNSUPPORTED")).code,
     ).toBe("LIVE_TIMER_CLOCK");
+  });
+
+  it("renames a timer and changes its length for every operator, refusing a length a timer does not have", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const second = await f.connect({ person: "secondOperator" });
+    operator.send({
+      type: "timer.add",
+      timer: { name: "Pitch", kind: "duration", targetAt: null, durationSeconds: 180 },
+    });
+    const pitch = (await second.next("timers.changed", (message) => message.timers.length === 2)).timers[1]!;
+    operator.send({ type: "timer.edit", timerId: pitch.id, edit: { name: "Startup pitch", durationSeconds: 240 } });
+    expect(
+      (await second.next("timers.changed", (message) => message.timers[1]!.name === "Startup pitch")).timers[1],
+    ).toMatchObject({ durationSeconds: 240, running: false, heldMs: 240_000 });
+    operator.send({ type: "timer.edit", timerId: LIVE_SESSION_TIMER_ID, edit: { durationSeconds: 60 } });
+    expect((await operator.next("room.refused")).code).toBe("LIVE_TIMER_EDIT_UNSUPPORTED");
   });
 
   it("keeps several named timers that every operator starts, pauses, nudges and resets", async () => {
@@ -281,7 +297,7 @@ describe("live room timers", () => {
       expect(store.aux("stage-display").timerGraphics.map((graphic) => graphic.format)).toEqual(["ss"]);
       expect(store.timers()).toMatchObject([
         { id: "session", followsAgenda: true, running: false, anchorAt: null, atZero: { action: "overtime" } },
-        { id: "pitch", followsAgenda: false, heldMs: 60_000, sound: { places: [] } },
+        { id: "pitch", followsAgenda: false, heldMs: 60_000, sound: { warningSeconds: null, zero: false } },
       ]);
       const saved = state.storage.sql.exec("SELECT value_json FROM room_controls WHERE name='timers'").toArray()[0]!;
       new LiveRoomStore(new LiveRoomSql(state.storage.sql)).timers();

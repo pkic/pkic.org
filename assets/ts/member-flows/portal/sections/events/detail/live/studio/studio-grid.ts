@@ -119,39 +119,35 @@ export function resizeGridRect(
 }
 
 /**
- * Drops an item into a row of the grid, before the item it was dropped on.
- * The row makes room: its items, the dropped one among them, share the
- * columns evenly and take the row's height, the way the neighbours are sized;
- * whatever no longer fits moves below. Then the grid compacts.
+ * Swaps an item with the one it was dropped on: each takes the other's place
+ * and keeps its own size. When the sizes differ so they would overlap, the
+ * one dropped on moves beside it, or, when the row is full, the upper of the
+ * two keeps its place and the other goes below it; the others move out of
+ * the way, then the grid compacts.
  */
-export function insertIntoGridRow<T extends GridItem>(
+export function swapGridItems<T extends GridItem>(
   items: readonly T[],
   id: string,
-  beforeId: string,
-  bounds: GridBounds,
+  withId: string,
+  columns: number,
 ): T[] {
   const moving = items.find((item) => item.id === id);
-  const before = items.find((item) => item.id === beforeId);
-  if (!moving || !before || moving.id === before.id) return compactGrid(items);
-  const row = items.filter((item) => item.id !== id && item.y === before.y).sort((a, b) => a.x - b.x);
-  const order = [...row];
-  order.splice(row.indexOf(before), 0, moving);
-  const fitting = order.slice(0, Math.max(1, Math.floor(bounds.columns / bounds.minW)));
-  const height = Math.max(...row.map((item) => item.h));
-  const share = Math.floor(bounds.columns / fitting.length);
-  let extra = bounds.columns - share * fitting.length;
-  let x = 0;
-  const laid = new Map<string, T>();
-  for (const item of fitting) {
-    const w = share + (extra > 0 ? 1 : 0);
-    extra -= 1;
-    laid.set(item.id, { ...item, x, y: before.y, w, h: height });
-    x += w;
+  const other = items.find((item) => item.id === withId);
+  if (!moving || !other || moving === other) return compactGrid(items);
+  let dropped = { ...moving, x: Math.min(other.x, columns - moving.w), y: other.y };
+  let swapped = { ...other, x: Math.min(moving.x, columns - other.w), y: moving.y };
+  if (gridOverlaps(dropped, swapped)) {
+    // Beside the dropped one in its row when it fits there; else the one that ends up on top keeps its place
+    // and the other goes below it, so a drop downward still swaps.
+    const beside = { ...swapped, x: dropped.x + dropped.w, y: dropped.y };
+    if (beside.x + beside.w <= columns) swapped = beside;
+    else if (moving.y < other.y) dropped = { ...dropped, y: swapped.y + swapped.h };
+    else swapped = { ...swapped, y: dropped.y + dropped.h };
   }
-  const others = items
-    .filter((item) => !laid.has(item.id))
-    .map((item) => (item.y >= before.y ? { ...item, y: item.y + height } : item));
-  return compactGrid([...laid.values(), ...others]);
+  const placed: T[] = [dropped, swapped];
+  for (const item of items.filter((entry) => entry !== moving && entry !== other).sort(byGridPosition))
+    placed.push(pushDown(item, placed));
+  return compactGrid(placed);
 }
 
 /** Lays items without positions (or from an older shape) left to right, wrapping at the last column. */

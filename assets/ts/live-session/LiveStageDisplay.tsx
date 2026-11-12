@@ -1,129 +1,135 @@
 import type { ComponentChildren } from "preact";
-import { formatClockInZone } from "../../shared/format-date";
-import { liveQuestionAsker, liveQuestionFit } from "../../shared/live-stage-display";
-import { liveTimerCounts } from "../../shared/live-timer-policy";
+import { formatNumber } from "../../shared/format-number";
+import type { LiveStageBanner, LiveStageMain, LiveStageTimer } from "../../shared/live-stage-display-plan";
 import type { LiveRoomState } from "./live-room-state";
-import type { LiveStageQuestion, LiveTimerGraphic } from "../../shared/schemas/live-session-room";
-import { useLiveTimerGraphicReading } from "./useLiveCountdown";
 import { useNumericCssProperties } from "../hooks/useNumericCssProperties";
+import { LiveStageContent } from "./LiveStageContent";
+import { useLiveStageDisplayPlan, useLiveStageReactions } from "./useLiveStageDisplay";
 import "./LiveStageDisplay.css";
 
-/** The timer the stage display shows, in its graphic's format and label; it steps aside for a question. */
-function StageCountdown({ graphic, state }: { graphic: LiveTimerGraphic; state: LiveRoomState }) {
-  const reading = useLiveTimerGraphicReading(graphic, state.timers, state.session);
-  const geometry = useNumericCssProperties({
-    "--timer-text-scale": Math.min(1, 10 / Math.max(reading?.text.length ?? 0, 1)),
-  });
-  if (!reading) return null;
+/** One timer: its label over its value, sized by its role and fitted to its column by its length. */
+function StageTimer({ timer }: { timer: LiveStageTimer }) {
+  const geometry = useNumericCssProperties({ "--timer-chars": Math.max(4, [...timer.text].length) });
   return (
-    <div class="pk-live-stage-display__timer" data-numeric-css-properties={geometry}>
-      {reading.label ? <p class="pk-live-stage-display__label">{reading.label}</p> : null}
-      <p class="pk-live-stage-display__countdown" data-tone={reading.tone}>
-        {reading.text}
+    <div class="pk-live-stage-display__timer" data-size={timer.size} data-numeric-css-properties={geometry}>
+      {timer.label ? <p class="pk-live-stage-display__label">{timer.label}</p> : null}
+      <p class="pk-live-stage-display__countdown" data-tone={timer.tone}>
+        {timer.text}
       </p>
     </div>
   );
 }
 
-/**
- * A clock on the stage display: the event's time of day in one line under the
- * countdowns, smaller than they are, so it never competes with them and
- * stays clear of the operators' message along the top.
- */
-function StageClock({ graphic, state }: { graphic: LiveTimerGraphic; state: LiveRoomState }) {
-  const reading = useLiveTimerGraphicReading(graphic, state.timers, state.session);
-  if (!reading) return null;
+/** The main area: at most two items, side by side with a rule between them. */
+function StageMain({ main }: { main: LiveStageMain }) {
+  switch (main.kind) {
+    case "empty":
+      return null;
+    case "overtime":
+    case "break":
+      return <StageTimer timer={main.timer} />;
+    case "timers":
+      return (
+        <>
+          {main.timers.map((timer) => (
+            <StageTimer key={timer.timerId} timer={timer} />
+          ))}
+        </>
+      );
+    case "content":
+      return (
+        <>
+          {main.timer ? <StageTimer timer={main.timer} /> : null}
+          <LiveStageContent content={main.content} />
+        </>
+      );
+  }
+}
+
+/** The reactions arriving now, in the top row's right end; empty while none arrive. */
+function StageReactions({ state, enabled }: { state: LiveRoomState; enabled: boolean }) {
+  const reactions = useLiveStageReactions(state.burst, enabled);
   return (
-    <p class="pk-live-stage-display__clock">
-      {reading.label ? <span class="pk-live-stage-display__label">{reading.label}</span> : null}
-      <time class="pk-live-stage-display__clock-time">{reading.text}</time>
+    <p class="pk-live-stage-display__reactions" aria-hidden="true">
+      {reactions.map((reaction) => (
+        <span key={reaction.id} class="pk-live-stage-display__reaction" title={reaction.label}>
+          {reaction.emoji} ×{formatNumber(reaction.count)}
+        </span>
+      ))}
     </p>
   );
 }
 
-/** One question as the speaker reads it from the stage: its words large, who asked small under them. */
-function StageQuestion({ question, label, next }: { question: LiveStageQuestion; label: string; next?: boolean }) {
-  return (
-    <figure class="pk-live-stage-display__question" data-next={next ? "" : undefined}>
-      <p class="pk-live-stage-display__label">{label}</p>
-      <p class="pk-live-stage-display__question-text" data-fit={liveQuestionFit(question.text)}>
-        {question.text}
-      </p>
-      <p class="pk-live-stage-display__asker">{liveQuestionAsker(question)}</p>
-    </figure>
-  );
-}
-
 /**
- * The speaker-facing stage display, its own design rather than a copy of
- * Program: high contrast, type sized to read from the stage. The question
- * being answered now leads, with the next one lined up in Preview smaller
- * under it; the timer stays in view beside them. With no question the timer
- * fills the screen. Everything comes from the room's own state; the page that
- * hosts it may add a status at the end of the bottom line, which never
- * covers what comes next.
+ * The speaker-facing stage display: a confidence monitor read from two to
+ * five meters, in fixed rows so nothing moves. The brand stripe; a top row
+ * with the event's clock and the reactions as they arrive, which the banner
+ * covers when there is one (`bannerShown`); the main area; and a footer
+ * naming the session live now, or the next one near the end and in breaks.
+ * The page that hosts it may add a status at the end of the footer.
  */
 export function LiveStageDisplay({
   state,
   roomId,
   aside,
+  bannerShown = true,
 }: {
+  /** The room as it is, not projected onto one output: the display weighs its own composition against Program. */
   state: LiveRoomState;
   roomId?: string;
   aside?: ComponentChildren;
+  /** Whether the layout draws the banner over the top row. */
+  bannerShown?: boolean;
 }) {
-  const { session, stage, stageDisplayNext: next } = state;
-  // A clock reads the time of day under the countdowns, which keep the grid to themselves.
-  const isClock = (graphic: LiveTimerGraphic) =>
-    state.timers.some((timer) => timer.id === graphic.timerId && !liveTimerCounts(timer));
-  const clocks = stage.timerGraphics.filter(isClock);
-  const countdowns = stage.timerGraphics.filter((graphic) => !isClock(graphic));
-  const geometry = useNumericCssProperties({
-    "--timer-columns": Math.max(1, Math.ceil(Math.sqrt(countdowns.length))),
-  });
-  const zone = session.timeZone;
-  const rooms = stage.schedule?.available ? stage.schedule.rooms : [];
-  const upcoming = rooms.find((room) => room.roomId === roomId) ?? rooms[0];
-  const poll = stage.poll ? state.polls.find((entry) => entry.id === stage.poll?.id) : undefined;
-  const current = stage.question;
+  const plan = useLiveStageDisplayPlan(state, roomId);
+  const covered = bannerShown && plan.banner !== null;
+  const items = plan.main.kind === "timers" ? plan.main.timers.length : plan.main.kind === "content" ? 2 : 1;
   return (
-    <div class="pk-live-stage-display" data-question={current ? "" : undefined}>
-      <div class="pk-live-stage-display__session">
-        <span class="pk-live-stage-display__title">{session.title}</span>
-        <span class="pk-live-stage-display__end">Ends {formatClockInZone(session.endAt, zone)}</span>
+    <div class="pk-live-stage-display" data-main={plan.main.kind} data-items={items}>
+      <div class="pk-live-stage-display__stripe" />
+      <div class="pk-live-stage-display__top" data-covered={covered ? "" : undefined}>
+        <time class="pk-live-stage-display__clock">{plan.clock}</time>
+        <StageReactions state={state} enabled={plan.reactions && !covered} />
       </div>
       <div class="pk-live-stage-display__main">
-        {current ? <StageQuestion question={current} label="Question" /> : null}
-        <div class="pk-live-stage-display__timing">
-          {countdowns.length ? (
-            <div class="pk-live-stage-display__timers" data-numeric-css-properties={geometry}>
-              {countdowns.map((graphic) => (
-                <StageCountdown key={graphic.timerId} graphic={graphic} state={state} />
-              ))}
-            </div>
-          ) : null}
-          {clocks.map((graphic) => (
-            <StageClock key={graphic.timerId} graphic={graphic} state={state} />
-          ))}
-        </div>
+        <StageMain main={plan.main} />
       </div>
-      <div class="pk-live-stage-display__after">
-        {next ? (
-          <StageQuestion question={next} label="Next question" next />
-        ) : poll ? (
-          <p class="pk-live-stage-display__line">
-            <span class="pk-live-stage-display__label">Poll</span> {poll.field.label}
-          </p>
-        ) : upcoming ? (
-          <p class="pk-live-stage-display__line">
-            <span class="pk-live-stage-display__label">
-              Up next {formatClockInZone(upcoming.startAt, stage.schedule?.timeZone ?? zone)}
-            </span>{" "}
-            {upcoming.title}
-          </p>
-        ) : null}
-        {aside ? <div class="pk-live-stage-display__aside">{aside}</div> : null}
-      </div>
+      <footer class="pk-live-stage-display__footer">
+        <p class="pk-live-stage-display__title">
+          <span class="pk-live-stage-display__marker" data-marker={plan.footer.marker}>
+            {plan.footer.marker === "live" ? "Live" : "Next"}
+          </span>
+          {plan.footer.title}
+        </p>
+        <p class="pk-live-stage-display__speakers">
+          <span class="pk-live-stage-display__speaker-names">{plan.footer.speakers}</span>
+          {aside ? <span class="pk-live-stage-display__aside">{aside}</span> : null}
+        </p>
+      </footer>
     </div>
+  );
+}
+
+/**
+ * The banner over the stage display's top row: the operators' message to the
+ * speaker, or the display's own near-end cue. A layer of its own, so a
+ * layout can place it; it sets large while short and never below the
+ * smallest size read from the stage, wrapping to two lines past that.
+ */
+export function LiveStageDisplayBanner({ state, roomId }: { state: LiveRoomState; roomId?: string }) {
+  const { banner } = useLiveStageDisplayPlan(state, roomId);
+  return <div class="pk-live-overlay__stage-message">{banner ? <StageBanner banner={banner} /> : null}</div>;
+}
+
+function StageBanner({ banner }: { banner: LiveStageBanner }) {
+  return (
+    <p
+      class="pk-live-stage-display__message"
+      data-source={banner.source}
+      data-fit={banner.fit}
+      data-flash={banner.flash ? "" : undefined}
+    >
+      <span class="pk-live-stage-display__message-text">{banner.text}</span>
+    </p>
   );
 }

@@ -142,6 +142,15 @@ export function Dialog({
       // component stays testable rather than testing a mock of itself.
       if (typeof dialog.showModal === "function") dialog.showModal();
       else dialog.setAttribute("open", "");
+      // A body long enough to scroll is itself focusable, and the browser gives it the first focus,
+      // drawing its ring across the title. Start at its first control instead, as a short body does.
+      const body = dialog.querySelector<HTMLElement>(".pk-dialog__body");
+      if (body && document.activeElement === body)
+        body
+          .querySelector<HTMLElement>(
+            "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])",
+          )
+          ?.focus({ preventScroll: true });
     } else if (!open && dialog.open) {
       // Close first: while the modal is open the rest of the page is inert,
       // and the browser refuses to move focus to the opener inside it.

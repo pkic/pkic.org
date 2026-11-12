@@ -121,28 +121,38 @@ afterEach(() => {
 describe("studio grid", () => {
   const [preview, , multiview] = defaultStudioLayouts().show;
 
-  it("drops a panel into another's row, which makes room and shares its columns, and saves on release", () => {
+  it("swaps a panel dropped on another, each keeping its size, and saves on release", () => {
     mount();
     const header = cell(multiview!.id).querySelector(".pk-studio-panel__header")!;
     pointer(header, "pointerdown", 600, 10);
     pointer(header, "pointermove", 600 - 5 * COLUMN, 12);
     const grid = host!.querySelector<HTMLElement>(".pk-studio-grid")!;
     expect(grid.dataset.gesture).toBe("move");
-    // Dropped on Preview, it goes before it in that row; the placeholder shows the share it takes.
+    // Dropped on Preview, the two trade places; the placeholder shows where it lands.
     expect(rect(host!.querySelector<HTMLElement>(".pk-studio-grid__placeholder")!)).toEqual({
       x: 0,
       y: 0,
-      w: 4,
+      w: 5,
       h: 12,
     });
-    expect(rect(cell(preview!.id))).toEqual({ x: 4, y: 0, w: 4, h: 12 });
+    expect(rect(cell(preview!.id))).toEqual({ x: 7, y: 0, w: 5, h: 12 });
     expect(stored.has(STUDIO_LAYOUT_STORAGE_KEY)).toBe(false);
-    pointer(header, "pointerup", 600 - 5 * COLUMN, 12);
+    // The window follows the pointer, so a release away from the header still drops it.
+    pointer(document.body, "pointerup", 600 - 5 * COLUMN, 12);
     expect(grid.hasAttribute("data-gesture")).toBe(false);
     expect(cell(multiview!.id).style.transform).toBe("");
     const show = savedShow();
-    expect(show.find((panel) => panel.id === multiview!.id)).toMatchObject({ x: 0, y: 0, w: 4 });
-    expect(show.find((panel) => panel.id === preview!.id)).toMatchObject({ x: 4, y: 0, w: 4 });
+    expect(show.find((panel) => panel.id === multiview!.id)).toMatchObject({ x: 0, y: 0, w: 5, h: 12 });
+    expect(show.find((panel) => panel.id === preview!.id)).toMatchObject({ x: 7, y: 0, w: 5, h: 12 });
+  });
+
+  it("keeps what the operator saw when the browser takes the pointer away", () => {
+    mount();
+    const grip = cell(preview!.id).querySelector(".pk-studio-cell__resize")!;
+    pointer(grip, "pointerdown", 500, 380);
+    pointer(grip, "pointermove", 500 - COLUMN, 380 - 2 * ROW);
+    pointer(document.body, "pointercancel", 500 - COLUMN, 380 - 2 * ROW);
+    expect(savedShow().find((panel) => panel.id === preview!.id)).toMatchObject({ w: 4, h: 10 });
   });
 
   it("resizes from the corner grip on whole columns and rows", () => {

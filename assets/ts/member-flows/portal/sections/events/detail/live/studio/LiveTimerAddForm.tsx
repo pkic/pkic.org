@@ -6,18 +6,23 @@ import { LIVE_TIMER_KIND_LABELS } from "../../../../../../../../shared/live-time
 import type { LiveRoomClientMessage, LiveRoomSession } from "../../../../../../../../shared/schemas/live-session-room";
 import {
   LIVE_TIMER_KINDS,
-  LIVE_TIMER_MAX_MS,
+  LIVE_TIMER_MAX_HOURS,
   liveTimerDraftSchema,
   type LiveTimerKind,
 } from "../../../../../../../../shared/schemas/live-session-timer";
 import { dateTimeLocalToIso, instantToCalendarDate } from "../../../../../../../../shared/timezone";
 import { useContractForm } from "../../../../../../../hooks/useContractForm";
 import { Button } from "../../../../../../../ui/Button";
+import { DurationInput, durationFieldOf } from "../../../../../../../ui/DurationInput";
 import { Field } from "../../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../../ui/TextControl";
 
 /** A time of day on the event's clock, on the session's own day, as the UTC instant the room keeps. */
-function targetInstant(time: string, session: Pick<LiveRoomSession, "startAt">, zone: string): string | null {
+export function liveTimerTargetInstant(
+  time: string,
+  session: Pick<LiveRoomSession, "startAt">,
+  zone: string,
+): string | null {
   if (!/^\d{2}:\d{2}$/u.test(time)) return null;
   try {
     return dateTimeLocalToIso(`${instantToCalendarDate(session.startAt, zone)}T${time}`, zone);
@@ -45,16 +50,16 @@ export function LiveTimerAddForm({
   const [name, setName] = useState("");
   const [kind, setKind] = useState<LiveTimerKind>("duration");
   const [time, setTime] = useState("");
-  const [minutes, setMinutes] = useState("5");
+  const [length, setLength] = useState<number | null>(300);
   const [error, setError] = useState<string | null>(null);
   const zone = clockTimeZone(clock);
   const draft = {
     name,
     kind,
-    targetAt: kind === "until" ? targetInstant(time, session, zone) : null,
-    durationSeconds: kind === "duration" && minutes.trim() ? Math.round(Number(minutes) * 60) : null,
+    targetAt: kind === "until" ? liveTimerTargetInstant(time, session, zone) : null,
+    durationSeconds: kind === "duration" ? length : null,
   };
-  const form = useContractForm(liveTimerDraftSchema, draft);
+  const form = useContractForm(liveTimerDraftSchema, draft, { fieldOf: durationFieldOf });
   const add = () => {
     const checked = form.submit();
     if (!checked.data) return setError(checked.formMessage);
@@ -120,18 +125,15 @@ export function LiveTimerAddForm({
         </Field>
       ) : null}
       {kind === "duration" ? (
-        <Field label="Minutes" {...form.of("durationSeconds")}>
+        <Field label="Length" group {...form.of("durationSeconds")}>
           {(control) => (
-            <TextInput
-              {...control}
+            <DurationInput
+              control={control}
               name="durationSeconds"
-              type="number"
-              min="1"
-              max={String(LIVE_TIMER_MAX_MS / 60000)}
-              inputMode="numeric"
-              value={minutes}
+              value={length}
+              maxHours={LIVE_TIMER_MAX_HOURS}
               disabled={disabled}
-              onInput={(event) => setMinutes(event.currentTarget.value)}
+              onChange={setLength}
             />
           )}
         </Field>

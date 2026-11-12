@@ -12,9 +12,8 @@ import { FormFieldStatChart } from "../components/forms/FormResponseStats";
 import { useLiveTimerGraphicReading } from "./useLiveCountdown";
 import { LiveTimerSounds } from "./useLiveTimerSounds";
 import "./LiveOverlay.css";
-import "./LiveSpeakerMessageTones.css";
-import { liveSpeakerMessageFit } from "../../shared/live-room-outputs";
 import { liveQuestionFit } from "../../shared/live-stage-display";
+import { liveStageDisplayGraphics } from "../../shared/live-stage-display-plan";
 import { Avatar } from "../ui/Avatar";
 import { LiveOverlayFrame } from "./LiveOverlayFrame";
 import { LiveOverlayLayer } from "./LiveOverlayLayer";
@@ -31,7 +30,7 @@ import { resolveLiveOverlayLayout } from "../../shared/live-overlay-layout-prese
 import { LiveCountdownEmblem } from "./LiveCountdownEmblem";
 import { OverlayEmblem } from "./LiveEmblem";
 import { LiveLowerThird } from "./LiveLowerThird";
-import { LiveStageDisplay } from "./LiveStageDisplay";
+import { LiveStageDisplay, LiveStageDisplayBanner } from "./LiveStageDisplay";
 import { isLiveAuxOutput, liveOutputProjection, liveOutputView } from "./live-output-projection";
 import "../../design/tokens.event.generated.css";
 
@@ -151,24 +150,6 @@ function ReactionsOverlay({ burst }: { burst: LiveRoomState["burst"] }) {
   );
 }
 
-/** The message the operators send the speaker, as its own layer on the stage display. */
-function StageMessageOverlay({ message }: { message: LiveRoomState["speakerMessage"] }) {
-  return (
-    <div class="pk-live-overlay__stage-message">
-      {message ? (
-        <p
-          class="pk-live-stage-display__message"
-          data-speaker-tone={message.tone}
-          data-fit={liveSpeakerMessageFit(message.text)}
-          data-flash={message.flash ? "" : undefined}
-        >
-          {message.text}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 /** How an output is being watched: a browser source on air plays motion even where a monitor would not. */
 type DrawContext = { placement: LiveOverlayElementPlacement; animate: boolean };
 type Layer = {
@@ -232,14 +213,27 @@ const PROGRAM_LAYERS: readonly Layer[] = [
   { element: "reactions", draw: (state) => (state.stage.reactions ? <ReactionsOverlay burst={state.burst} /> : null) },
 ];
 
-/** The stage display's layers: the speaker-facing screen, the code to check in, and the operators' message on top. */
-const STAGE_DISPLAY_LAYERS = (roomId: string | undefined, aside: ComponentChildren): readonly Layer[] => [
-  { element: "stageDisplay", draw: (state) => <LiveStageDisplay state={state} roomId={roomId} aside={aside} /> },
+/**
+ * The stage display's layers: the speaker-facing screen, the code to check
+ * in, and the banner over its top row. The screen and the banner read the
+ * room as it is (`room`), weighing the display's own composition against
+ * Program; the check-in code is the display's own.
+ */
+const STAGE_DISPLAY_LAYERS = (
+  room: LiveRoomState,
+  roomId: string | undefined,
+  aside: ComponentChildren,
+  bannerShown: boolean,
+): readonly Layer[] => [
+  {
+    element: "stageDisplay",
+    draw: () => <LiveStageDisplay state={room} roomId={roomId} aside={aside} bannerShown={bannerShown} />,
+  },
   {
     element: "checkIn",
     draw: (state) => (state.stage.checkIn ? <LiveCheckInOverlay checkIn={state.stage.checkIn} /> : null),
   },
-  { element: "stageMessage", draw: (state) => <StageMessageOverlay message={state.speakerMessage} /> },
+  { element: "stageMessage", draw: () => <LiveStageDisplayBanner state={room} roomId={roomId} /> },
 ];
 
 /**
@@ -277,7 +271,7 @@ export function LiveOverlayPresentation({
   broadcast?: boolean;
   /** Drawn at the end of the stage display's bottom line by the page that hosts it, such as a screen's status. */
   stageAside?: ComponentChildren;
-  /** A real stage display, not a monitor of one: it plays the cues of the timers it shows that sound on the stage display. */
+  /** A real output, not a monitor of one: it plays the cues of the timers it shows that sound on the outputs. */
   playsSounds?: boolean;
   /** Drawn over every layer by the page that hosts the output, such as a screen's connection status. */
   children?: ComponentChildren;
@@ -286,14 +280,24 @@ export function LiveOverlayPresentation({
   const state = projection && isLiveAuxOutput(requested) ? liveOutputProjection(projection, requested) : projection;
   const view = liveOutputView(requested);
   const elements = draft ?? resolveLiveOverlayLayout(state?.overlayLayouts ?? [], layout);
-  const layers = view === "stage-display" ? STAGE_DISPLAY_LAYERS(roomId, stageAside) : PROGRAM_LAYERS;
+  const layers =
+    view === "stage-display" && projection
+      ? STAGE_DISPLAY_LAYERS(projection, roomId, stageAside, elements.stageMessage.visible)
+      : PROGRAM_LAYERS;
+  // An output sounds the timers it shows: the stage display its own and those on Program, any other its own.
+  const shown =
+    view === "stage-display" && projection
+      ? liveStageDisplayGraphics(projection.outputs["stage-display"], projection.stage, projection.timers)
+      : (state?.stage.timerGraphics ?? []);
+  // The stage display draws its timers itself, so its own layer decides whether they show.
+  const timersShow = view === "stage-display" ? elements.stageDisplay.visible : elements.timer.visible;
   const sounding =
-    playsSounds && state && view === "stage-display" && elements.timer.visible
-      ? state.timers.filter((timer) => state.stage.timerGraphics.some((graphic) => graphic.timerId === timer.id))
+    playsSounds && state && timersShow
+      ? state.timers.filter((timer) => shown.some((graphic) => graphic.timerId === timer.id))
       : null;
   return (
     <LiveOverlayFrame view={requested} status={status}>
-      {sounding && state ? <LiveTimerSounds timers={sounding} session={state.session} place="stage-display" /> : null}
+      {sounding?.length && state ? <LiveTimerSounds timers={sounding} session={state.session} /> : null}
       {state
         ? layers.map(({ element, draw }) => {
             const placement = elements[element];

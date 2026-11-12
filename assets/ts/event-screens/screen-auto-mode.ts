@@ -1,3 +1,4 @@
+import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../shared/schemas/live-stage-display-settings";
 import type { ScreenAgendaSession } from "../../shared/schemas/event-screens";
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../shared/schemas/live-session-ticker";
 import {
@@ -97,6 +98,8 @@ export function screenAutoState(
     operators: [],
     addedCredits: [],
     stageDisplayNext: null,
+    stageDisplayNextVotes: null,
+    stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
   };
   return applyLiveRoomMessage(null, snapshot);
 }

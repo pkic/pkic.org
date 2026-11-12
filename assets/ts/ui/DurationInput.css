@@ -1,0 +1,17 @@
+@layer components {
+  /* Three short boxes read as one length: h : mm : ss. */
+  .pk-duration-input {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-1);
+  }
+  .pk-input.pk-duration-input__part {
+    inline-size: 3.75rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .pk-duration-input__separator {
+    color: var(--pk-ink-muted);
+    font-weight: 600;
+  }
+}

@@ -1,8 +1,9 @@
 /*
- * The Time panel: one compact row per timer. A wide panel reads name and
- * detail, value, then the controls over the outputs that show the timer,
- * with a thin progress bar under the row. A narrow panel stacks the
- * controls and the outputs under the value.
+ * The Time panel: one row per timer, fixed so nothing moves while operating.
+ * The row follows the panel's width: a phone keeps the name over the value,
+ * PVW and PGM, Start or Pause, and the menu; a medium panel adds the detail
+ * and Reset in a single line; a wide one adds the screens and a minute
+ * either way. Start, Reset and the minutes are one joined control. What a width hides stays in the row's menu.
  */
 @layer components {
   .pk-studio-time {
@@ -13,7 +14,7 @@
   /* The rows share the list's columns, so values and controls line up from row to row. */
   .pk-studio-time__list {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) repeat(3, auto);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -23,30 +24,41 @@
     grid-column: 1 / -1;
     grid-template-columns: subgrid;
     grid-template-areas:
-      "name value"
-      "detail value"
-      "meter meter"
-      "controls controls"
-      "outputs outputs";
+      "name outputs transport menu"
+      "reading outputs transport menu";
     align-items: center;
-    column-gap: var(--pk-3);
+    column-gap: var(--pk-2);
     row-gap: var(--pk-1);
     padding: var(--pk-2) var(--pk-3);
     border-block-end: 1px solid var(--pk-line-soft);
   }
-  @container studio-time (width >= 40rem) {
+  /*
+   * Narrow panels hide what they cannot fit, below a width rather than
+   * revealing it above one: revealing with display: revert would undo the
+   * buttons' own flex centering.
+   */
+  @container studio-time (width < 30rem) {
+    .pk-studio-time__detail,
+    .pk-studio-time__reset {
+      display: none;
+    }
+  }
+  @container studio-time (width < 46rem) {
+    .pk-studio-time__minus,
+    .pk-studio-time__plus,
+    .pk-studio-time__outputs .pk-output-target > .pk-menu {
+      display: none;
+    }
+  }
+  @container studio-time (width >= 30rem) {
     .pk-studio-time__list {
-      grid-template-columns: minmax(0, 1fr) auto auto;
+      grid-template-columns: minmax(0, 1fr) repeat(4, auto);
     }
     .pk-studio-time__row {
       grid-template-areas:
-        "name value controls"
-        "detail value outputs"
-        "meter meter meter";
-    }
-    .pk-studio-time__controls,
-    .pk-studio-time__outputs {
-      justify-content: end;
+        "name reading outputs transport menu"
+        "detail reading outputs transport menu";
+      column-gap: var(--pk-3);
     }
   }
   .pk-studio-time__name {
@@ -66,15 +78,33 @@
     white-space: nowrap;
     text-overflow: ellipsis;
   }
+  /* The value over its thin progress line, which keeps its height on a timer that has none. */
+  .pk-studio-time__reading {
+    display: grid;
+    grid-area: reading;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+  }
   .pk-studio-time__value {
-    grid-area: value;
     font-family: var(--pk-font-mono);
     font-size: var(--pk-text-xl);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     line-height: 1;
-    text-align: end;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* On a phone a start days away steps down a size, so "Starts in" and its days fit beside the outputs. */
+  .pk-studio-time__value[data-before] {
+    font-size: var(--pk-text-lg);
+  }
+  @container studio-time (width >= 30rem) {
+    .pk-studio-time__value,
+    .pk-studio-time__value[data-before] {
+      font-size: var(--pk-text-2xl);
+      text-align: end;
+    }
   }
   .pk-studio-time__prefix {
     color: var(--pk-ink-muted);
@@ -90,24 +120,24 @@
     color: var(--pk-danger-ink);
   }
   .pk-studio-time__meter {
-    grid-area: meter;
-    min-inline-size: 0;
+    display: block;
+    block-size: 0.1875rem;
   }
   .pk-studio-time__meter .pk-meter__track {
-    block-size: 0.25rem;
+    block-size: 0.1875rem;
   }
-  .pk-studio-time__controls,
   .pk-studio-time__outputs {
     display: flex;
-    flex-wrap: wrap;
+    grid-area: outputs;
     align-items: center;
     gap: var(--pk-1);
   }
-  .pk-studio-time__controls {
-    grid-area: controls;
+  .pk-studio-time__transport {
+    grid-area: transport;
   }
-  .pk-studio-time__outputs {
-    grid-area: outputs;
+  .pk-studio-time__menu {
+    display: flex;
+    grid-area: menu;
   }
   .pk-studio-time__empty {
     margin: 0;

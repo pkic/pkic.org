@@ -23,13 +23,8 @@ import { useScrollEdges } from "./useScrollEdges";
 const EDGES: readonly GridEdge[] = ["n", "e", "s", "w", "ne", "nw", "sw"];
 import type { StudioChange } from "./useStudioLayout";
 
-type PointerHandlers = {
-  onPointerDown: (event: PointerEvent) => void;
-  onPointerMove: (event: PointerEvent) => void;
-  onPointerUp: (event: PointerEvent) => void;
-  onPointerCancel: (event: PointerEvent) => void;
-  onLostPointerCapture: (event: PointerEvent) => void;
-};
+/** A press starts the gesture; the grid follows the pointer from there. */
+type PointerHandlers = { onPointerDown: (event: PointerEvent) => void };
 
 const MOVES: ReadonlyArray<{ direction: StudioDirection; label: string }> = [
   { direction: "up", label: "Move up" },

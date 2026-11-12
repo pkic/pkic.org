@@ -17,6 +17,7 @@ import { Panel, PanelBody, PanelHeader } from "../Panel";
 import { PersonCell } from "../PersonCell";
 import { RowActions } from "../RowActions";
 import { PageHeader } from "../PageHeader";
+import { DurationInput } from "../DurationInput";
 import { Select, Textarea, TextInput } from "../TextControl";
 import { Tabs } from "../Tabs";
 import { Toast } from "../Toast";
@@ -99,6 +100,12 @@ export const dataSections: PreviewSection[] = [
 
           <Field label="Biography" required state="invalid" message="Biography must be at least 10 characters.">
             {(props) => <Textarea {...props} placeholder="Tell us about your expertise…" />}
+          </Field>
+
+          <Field label="Length" help="Hours, minutes and seconds, the way a timer is set." group>
+            {(control) => (
+              <DurationInput control={control} name="length" value={5 * 60 + 30} onChange={() => undefined} />
+            )}
           </Field>
 
           <Field label="Supporting document" help="PDF, up to 5 MB.">

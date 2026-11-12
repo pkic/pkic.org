@@ -13,12 +13,15 @@ export function LiveLayerTargets({
   layer,
   subject,
   integrated = false,
+  short = false,
   disabled = false,
 }: {
   targets: LiveTargets;
   layer: LiveLayer;
   subject: string;
   integrated?: boolean;
+  /** PVW and PGM in place of the full names, for a dense row. */
+  short?: boolean;
   /** Held for a reason of this graphic's own, such as a ticker that does not validate yet. */
   disabled?: boolean;
 }) {
@@ -31,6 +34,7 @@ export function LiveLayerTargets({
       <OutputTargetControl
         subject={subject}
         integrated={integrated}
+        short={short}
         presenceItem={item}
         presence={marks.map((mark) => ({ target: mark.focus?.target ?? null, color: mark.color }))}
         preview={where.preview}

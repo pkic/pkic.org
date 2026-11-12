@@ -3,6 +3,7 @@ import {
   LIVE_AUX_OUTPUTS,
   LIVE_AUX_OUTPUT_DETAILS,
   LIVE_LIVESTREAM_OUTPUT_DETAILS,
+  LIVE_PREVIEW_OUTPUT_DETAILS,
   LIVE_PROGRAM_OUTPUT_DETAILS,
 } from "../../../../../../../../shared/live-room-outputs";
 import {
@@ -36,7 +37,6 @@ export const STUDIO_PANEL_TYPES = [
   "message",
   "polls",
   "chat",
-  "sources",
   "screens",
 ] as const;
 export type StudioPanelType = (typeof STUDIO_PANEL_TYPES)[number];
@@ -50,7 +50,6 @@ export const STUDIO_PANEL_LABELS: Record<StudioPanelType, string> = {
   message: "Message to speaker",
   polls: "Polls",
   chat: "Chat",
-  sources: "Output links",
   screens: "Screens",
 };
 
@@ -58,7 +57,7 @@ export const STUDIO_PANEL_LABELS: Record<StudioPanelType, string> = {
 export const STUDIO_OUTPUTS = ["preview", "program", "livestream", ...LIVE_AUX_OUTPUTS] as const;
 export type StudioOutput = (typeof STUDIO_OUTPUTS)[number];
 export const STUDIO_OUTPUT_DETAILS: Record<StudioOutput, { label: string; short: string; purpose: string }> = {
-  preview: { label: "Preview", short: "PVW", purpose: "The next composition" },
+  preview: LIVE_PREVIEW_OUTPUT_DETAILS,
   program: LIVE_PROGRAM_OUTPUT_DETAILS,
   livestream: LIVE_LIVESTREAM_OUTPUT_DETAILS,
   ...LIVE_AUX_OUTPUT_DETAILS,
@@ -116,7 +115,13 @@ export const studioPanelSchema = z
     return panel.w >= bounds.minW && panel.h >= bounds.minH;
   }, "A panel is at least its type's smallest size.");
 export type StudioPanel = z.infer<typeof studioPanelSchema>;
-const studioWorkspaceSchema = z.array(studioPanelSchema).max(24);
+/** Panel types the studio no longer has: the output links are on the event's live layouts settings. A saved one is dropped. */
+const RETIRED_PANEL_TYPES: ReadonlySet<unknown> = new Set(["sources"]);
+const withoutRetiredPanels = (panels: unknown) =>
+  Array.isArray(panels)
+    ? panels.filter((panel: unknown) => !RETIRED_PANEL_TYPES.has((panel as { type?: unknown } | null)?.type))
+    : panels;
+const studioWorkspaceSchema = z.preprocess(withoutRetiredPanels, z.array(studioPanelSchema).max(24));
 export const studioLayoutsSchema = z
   .object(
     Object.fromEntries(STUDIO_WORKSPACES.map((workspace) => [workspace, studioWorkspaceSchema])) as Record<
@@ -160,8 +165,7 @@ export function defaultStudioLayouts(): StudioLayouts {
       ["monitor", { x: 0, y: 12, w: 4, h: 7 }, ["program"]],
       ["speakers", { x: 4, y: 12, w: 4, h: 7 }],
       ["graphics", { x: 8, y: 12, w: 4, h: 7 }],
-      ["chat", { x: 0, y: 19, w: 6, h: 7 }],
-      ["sources", { x: 6, y: 19, w: 6, h: 7 }],
+      ["chat", { x: 0, y: 19, w: 12, h: 7 }],
     ]),
     stage: seeded("stage", [
       ["monitor", { x: 0, y: 0, w: 6, h: 10 }, ["stage-display"]],
@@ -184,7 +188,6 @@ const DEFAULT_SIZE: Record<StudioPanelType, { w: number; h: number }> = {
   message: { w: 4, h: 7 },
   polls: { w: 4, h: 7 },
   chat: { w: 4, h: 7 },
-  sources: { w: 6, h: 7 },
   screens: { w: 5, h: 12 },
 };
 
@@ -331,7 +334,7 @@ export function migrateStudioLayoutsV1(saved: unknown): StudioLayouts {
   const record = typeof saved === "object" && saved !== null ? (saved as Record<string, unknown>) : {};
   return Object.fromEntries(
     STUDIO_WORKSPACES.map((workspace) => {
-      const parsed = z.array(studioPanelV1Schema).max(24).safeParse(record[workspace]);
+      const parsed = z.array(studioPanelV1Schema).max(24).safeParse(withoutRetiredPanels(record[workspace]));
       if (!parsed.success) return [workspace, defaults[workspace]];
       const placed = flowGrid(
         parsed.data,
