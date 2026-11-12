@@ -341,6 +341,7 @@ async function main(): Promise<void> {
   // ── Read view, and the edit command that swaps it for the form ────────────
   const editorNavigation = createUrlDialogState("editRegistration", "search", location.pathname);
   let editorMounted = false;
+  let profileRefreshSequence = 0;
   const showEditor = (editing: boolean) => {
     if (editing && isCancelled) {
       void editorNavigation.close(editorNavigation.marker());
@@ -365,10 +366,13 @@ async function main(): Promise<void> {
         data={manageData}
         forms={formsData}
         onProfileUpdated={async () => {
-          manageData = await getJson(
+          const sequence = ++profileRefreshSequence;
+          const refreshed = await getJson(
             `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
             registrationManageReadResponseSchema,
           );
+          if (sequence !== profileRefreshSequence) return;
+          manageData = refreshed;
           renderSummary();
           if (sharePanelEl) refreshSharePanelBadge(sharePanelEl);
         }}

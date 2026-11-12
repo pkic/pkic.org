@@ -726,10 +726,11 @@ describe("resend-manage-link endpoint", () => {
         IP_RATE_LIMITER: createTestRateLimiter(100),
       };
       const at = new Date().toISOString();
+      // The identities constraint requires blocked identities to be ended too.
       await env.DB.prepare("UPDATE identities SET started_at=?, ended_at=?, blocked_at=? WHERE id=?")
         .bind(
           state === "not started" ? null : at,
-          state === "not started" ? null : at,
+          state === "ended" || state === "blocked" ? at : null,
           state === "blocked" ? at : null,
           f.identityId,
         )
