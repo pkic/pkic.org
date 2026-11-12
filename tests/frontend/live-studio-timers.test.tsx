@@ -186,6 +186,31 @@ describe("studio timers", () => {
     ]);
   });
 
+  it("keeps the look of a timer only the stage display shows when its settings are saved", () => {
+    const shown = { ...defaultLiveTimerGraphic("session"), size: "small" as const, placement: "top-left" as const };
+    const snapshot = liveSnapshot({ viewer: OPERATOR });
+    const { host, live } = mountDesk(
+      {
+        ...snapshot,
+        outputs: {
+          ...snapshot.outputs,
+          "stage-display": { ...snapshot.outputs["stage-display"], timerGraphics: [shown] },
+        },
+      },
+      "stage",
+    );
+    void act(() => labeled(host, "Session timer").click());
+    void act(() => button(document.body, "Timer settings").click());
+    const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
+    type(dialog.querySelector<HTMLInputElement>('input[name="graphic.label"]')!, "Time left");
+    void act(() => button(dialog, "Save").click());
+    expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toMatchObject({
+      type: "aux.set",
+      output: "stage-display",
+      composition: { timerGraphics: [{ ...shown, label: "Time left" }] },
+    });
+  });
+
   it("saves a timer graphic onto the outputs that show it, and switches outputs from the row's menu", () => {
     const shown = defaultLiveTimerGraphic("session");
     const snapshot = liveSnapshot({ viewer: OPERATOR });

@@ -13,6 +13,7 @@ import type { FieldPresentation } from "../../../../../../hooks/useContractForm"
 import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Field } from "../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../ui/TextControl";
+import { LIVE_AUX_OUTPUTS } from "../../../../../../../shared/live-room-outputs";
 import { liveTimerGraphicReplacements, sendLivePrograms, type LiveTargets } from "./live-output-targets";
 
 const FORMAT_LABELS: Record<LiveTimerGraphic["format"], string> = {
@@ -204,9 +205,14 @@ export function LiveTimerLookFields({
  */
 export function useLiveTimerGraphic(targets: LiveTargets, timerId: string) {
   const { state } = targets;
+  const on = (graphics: readonly LiveTimerGraphic[]) => graphics.find((graphic) => graphic.timerId === timerId);
+  // Preview first, then Program, then a screen such as the stage display, so a timer shown only there keeps its look.
   const shown =
-    state.preview.timerGraphics.find((graphic) => graphic.timerId === timerId) ??
-    (targets.programActive ? state.stage.timerGraphics.find((graphic) => graphic.timerId === timerId) : undefined);
+    on(state.preview.timerGraphics) ??
+    (targets.programActive
+      ? (on(state.stage.timerGraphics) ??
+        LIVE_AUX_OUTPUTS.map((output) => on(state.outputs[output].timerGraphics)).find(Boolean))
+      : undefined);
   const [graphic, setGraphic] = useState<LiveTimerGraphic>(shown ?? defaultLiveTimerGraphic(timerId));
   // When another operator changes what an output shows, this desk follows it.
   const shownKey = shown ? JSON.stringify(shown) : null;
