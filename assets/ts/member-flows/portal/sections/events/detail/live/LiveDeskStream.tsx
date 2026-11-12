@@ -4,7 +4,7 @@ import { getJson } from "../../../../../../shared/api-client";
 import { useData } from "../../../../../../hooks/useData";
 import { Spinner } from "../../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
-import { VirtualRoomPlayer } from "../../app/virtual-room/VirtualRoomPlayer";
+import { StudioLivestreamMonitor } from "./studio/StudioLivestreamMonitor";
 
 /** Only the authenticated attendee/staff stream projection supplies the player destination. */
 export function LiveDeskStream({ slug, roomId, startAt }: { slug: string; roomId: string; startAt: string }) {
@@ -19,5 +19,7 @@ export function LiveDeskStream({ slug, roomId, startAt }: { slug: string; roomId
     room && streams.data ? locationStreamOn(room, instantToCalendarDate(startAt, streams.data.timeZone)) : null;
   // No stream is an ordinary state of a monitor: the monitor's own empty picture, not the player's card.
   if (!stream) return <p class="pk-studio-monitor__idle">No livestream for this room</p>;
-  return <VirtualRoomPlayer stream={stream} locationName={room?.name ?? "Selected room"} presentation="monitor" />;
+  return (
+    <StudioLivestreamMonitor key={stream.videoId} videoId={stream.videoId} roomName={room?.name ?? "Selected room"} />
+  );
 }

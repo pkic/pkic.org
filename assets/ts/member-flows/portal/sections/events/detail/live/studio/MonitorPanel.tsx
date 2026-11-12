@@ -22,6 +22,7 @@ import {
 } from "./studio-layout";
 import type { StudioPanelView } from "./StudioGrid";
 import type { StudioChange } from "./useStudioLayout";
+import { setStudioLivestreamSound, studioLivestreamAudible } from "./studio-livestream-sound";
 import "../live-tally.css";
 import "./MonitorPanel.css";
 
@@ -57,6 +58,7 @@ function showsGraphics(output: StudioOutput, state: LiveRoomState): boolean {
   return Object.entries(composition).some(
     ([key, value]) =>
       value !== null &&
+      value !== false &&
       !(Array.isArray(value) && value.length === 0) &&
       !key.endsWith("Change") &&
       key !== "lowerThirdMotion",
@@ -141,6 +143,31 @@ export function ExpandIcon() {
   );
 }
 
+/** The speaker, crossed out while muted. */
+function SoundIcon({ audible }: { audible: boolean }) {
+  return (
+    <StrokeIcon>
+      <path d="M2 6h2.5L8 3v10l-3.5-3H2z" />
+      {audible ? (
+        <path d="M10.5 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6.4 6.4 0 0 1 0 9" />
+      ) : (
+        <path d="m10.5 6 4 4M14.5 6l-4 4" />
+      )}
+    </StrokeIcon>
+  );
+}
+
+/** Sound on the LIVE monitor: muted until the operator turns it on, and kept that way in their browser. */
+function LivestreamSoundToggle() {
+  const audible = studioLivestreamAudible();
+  const label = audible ? "Mute Livestream" : "Unmute Livestream";
+  return (
+    <Button icon variant="ghost" aria-label={label} title={label} onClick={() => setStudioLivestreamSound(!audible)}>
+      <SoundIcon audible={audible} />
+    </Button>
+  );
+}
+
 /** The monitor enlarged to the whole window, by panel and output; one at a time across the studio. */
 const enlarged = signal<string | null>(null);
 const enlargedKey = (panelId: string, output: StudioOutput) => `${panelId}:${output}`;
@@ -186,7 +213,9 @@ function MonitorActions({ output, context }: { output: StudioOutput; context: Mo
   const details = STUDIO_OUTPUT_DETAILS[output];
   return (
     <span class="pk-studio-monitor__controls">
-      {output === "livestream" ? null : (
+      {output === "livestream" ? (
+        <LivestreamSoundToggle />
+      ) : (
         <Button
           icon
           variant="ghost"
