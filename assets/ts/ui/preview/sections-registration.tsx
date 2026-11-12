@@ -42,7 +42,7 @@ export const registrationSections: PreviewSection[] = [
         <RegistrationRepresentationField
           data={readOnlyRegistration}
           onSelect={() => undefined}
-          onUpdated={() => undefined}
+          onUpdated={async () => undefined}
         />
         <RegistrationEmailAddress email={readOnlyRegistration.user.email} />
       </div>

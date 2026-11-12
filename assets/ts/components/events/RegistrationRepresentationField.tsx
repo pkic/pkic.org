@@ -5,23 +5,18 @@
  * registration's email address follows that choice. Without their session (a
  * manage link opened elsewhere) the representation is shown read-only.
  */
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import type { RegistrationManageReadResponse } from "../../../shared/schemas/registration";
 import { userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
 import type { SessionActingIdentity } from "../../../shared/session-acting-identity";
 import { getJson } from "../../shared/api-client";
 import { RegistrationIdentityField } from "../RegistrationIdentitySelect";
-import { ButtonLink } from "../../ui/Button";
+import { useData } from "../../hooks/useData";
+import { friendlyErrorMessage } from "../ErrorAlert";
+import { Alert } from "../../ui/Alert";
+import { Button, ButtonLink } from "../../ui/Button";
 import { Spinner } from "../Spinner";
 import { RegistrationAffiliation } from "./RegistrationAffiliation";
-
-type Session = ReturnType<typeof userAuthSessionResponseSchema.parse>;
-
-/** Load picker choices only when the server allows representation changes. */
-async function readRepresentationSession(data: RegistrationManageReadResponse): Promise<Session | null> {
-  if (!data.canChangeIdentity) return null;
-  return getJson("/api/v1/auth/session", userAuthSessionResponseSchema).catch(() => null);
-}
 
 export function RegistrationRepresentationField({
   data,
@@ -30,20 +25,35 @@ export function RegistrationRepresentationField({
 }: {
   data: RegistrationManageReadResponse;
   onSelect: (identity: SessionActingIdentity | null) => void;
-  onUpdated: () => void;
+  onUpdated: () => Promise<void>;
 }) {
-  const [session, setSession] = useState<Session | null | undefined>(undefined);
-  useEffect(() => {
-    let active = true;
-    void readRepresentationSession(data).then((owner) => {
-      if (active) setSession(owner);
-    });
-    return () => {
-      active = false;
-    };
-  }, [data]);
-  if (session === undefined) return <Spinner label="Loading your representations…" />;
-  if (!session)
+  const session = useData(
+    () =>
+      data.canChangeIdentity ? getJson("/api/v1/auth/session", userAuthSessionResponseSchema) : Promise.resolve(null),
+    [data.canChangeIdentity, data.registration.id],
+  );
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  async function refreshProfile() {
+    setRefreshError(null);
+    try {
+      await onUpdated();
+    } catch (error) {
+      setRefreshError(
+        friendlyErrorMessage(error instanceof Error ? error.message : "Could not refresh your registration."),
+      );
+    }
+  }
+  if (session.loading) return <Spinner label="Loading your representations…" />;
+  if (session.error)
+    return (
+      <div class="pk-stack pk-stack--snug">
+        <Alert tone="danger">Could not load your representations. Try again.</Alert>
+        <Button variant="secondary" onClick={() => void session.reload()}>
+          Retry
+        </Button>
+      </div>
+    );
+  if (!session.data)
     return (
       <div class="pk-stack pk-stack--snug">
         <RegistrationAffiliation
@@ -64,12 +74,18 @@ export function RegistrationRepresentationField({
       <RegistrationIdentityField
         presentation="picker"
         personalAdvisory={false}
-        preferred={session.actingIdentities.find((identity) => identity.id === data.identityId) ?? null}
-        available={session.actingIdentities}
-        userId={session.identity.id}
+        preferred={session.data.actingIdentities.find((identity) => identity.id === data.identityId) ?? null}
+        available={session.data.actingIdentities}
+        userId={session.data.identity.id}
         onSelect={onSelect}
-        onUpdated={onUpdated}
+        onUpdated={() => void refreshProfile()}
       />
+      {refreshError && <Alert tone="danger">{refreshError}</Alert>}
+      {refreshError && (
+        <Button variant="secondary" onClick={() => void refreshProfile()}>
+          Retry refresh
+        </Button>
+      )}
       <p class="pk-muted pk-small">
         Saving a different representation updates the address used for registration emails.
       </p>

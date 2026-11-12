@@ -49,16 +49,25 @@ export function ParticipantRegistration({
     return { registration, forms };
   }, [registrationId, eventId, slug]);
   if (loaded.loading) return <Spinner label="Loading registration…" />;
-  if (!loaded.data) return <Alert tone="danger">{loaded.error}</Alert>;
   return (
-    <RegistrationRecord
-      key={registrationId}
-      endpoint={endpoint}
-      data={loaded.data.registration}
-      forms={loaded.data.forms}
-      reload={loaded.reload}
-      focusDay={focusDay}
-    />
+    <>
+      {loaded.error && <Alert tone="danger">{loaded.error}</Alert>}
+      {loaded.error && (
+        <Button variant="secondary" onClick={() => void loaded.reload()}>
+          Retry registration
+        </Button>
+      )}
+      {loaded.data && (
+        <RegistrationRecord
+          key={registrationId}
+          endpoint={endpoint}
+          data={loaded.data.registration}
+          forms={loaded.data.forms}
+          reload={loaded.reload}
+          focusDay={focusDay}
+        />
+      )}
+    </>
   );
 }
 
@@ -180,8 +189,8 @@ function RegistrationRecord({
                 data={data}
                 forms={forms}
                 save={save}
-                onDiscard={(profileEdited) => {
-                  if (profileEdited) void reload();
+                onProfileUpdated={reload}
+                onDiscard={() => {
                   setEditorMounted(false);
                   void closeEditor();
                 }}

@@ -364,12 +364,28 @@ async function main(): Promise<void> {
         mode="update"
         data={manageData}
         forms={formsData}
-        onDiscard={(profileEdited) => {
+        onProfileUpdated={async () => {
+          try {
+            manageData = await getJson(
+              `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
+              registrationManageReadResponseSchema,
+            );
+            renderSummary();
+            if (sharePanelEl) refreshSharePanelBadge(sharePanelEl);
+            clearStatus(statusEl);
+          } catch (error) {
+            setStatus(
+              statusEl,
+              "Your representation was saved, but the registration could not be refreshed. Reload this page to try again.",
+              true,
+            );
+            throw error;
+          }
+        }}
+        onDiscard={() => {
           render(null, editorEl);
           editorMounted = false;
-          void editorNavigation.close(marker).then(() => {
-            if (profileEdited) location.reload();
-          });
+          void editorNavigation.close(marker);
         }}
         save={async (change) => {
           await patchJson(
@@ -396,24 +412,27 @@ async function main(): Promise<void> {
     showEditor(Boolean(editorNavigation.marker()));
   });
   showEditor(Boolean(editorNavigation.marker()));
-  if (summaryEl) {
-    render(
-      <RegistrationManageSummary
-        data={manageData}
-        form={formsData?.form ?? null}
-        editable={!isCancelled}
-        // The photo tile mounts the page's confirmation host when it is shown;
-        // a page without it still needs one for the commands below.
-        dialogHost={isCancelled || !headshotSection?.querySelector("[data-headshot-tile]")}
-        onEdit={() => {
-          clearStatus(statusEl);
-          editorNavigation.show();
-        }}
-        onCancel={() => void cancelRegistration()}
-        onReport={() => void reportUnauthorized()}
-      />,
-      summaryEl,
-    );
+  renderSummary();
+  function renderSummary() {
+    if (summaryEl) {
+      render(
+        <RegistrationManageSummary
+          data={manageData}
+          form={formsData?.form ?? null}
+          editable={!isCancelled}
+          // The photo tile mounts the page's confirmation host when it is shown;
+          // a page without it still needs one for the commands below.
+          dialogHost={isCancelled || !headshotSection?.querySelector("[data-headshot-tile]")}
+          onEdit={() => {
+            clearStatus(statusEl);
+            editorNavigation.show();
+          }}
+          onCancel={() => void cancelRegistration()}
+          onReport={() => void reportUnauthorized()}
+        />,
+        summaryEl,
+      );
+    }
   }
 
   // ── Whole-record commands, each confirmed in the shared dialog ────────────

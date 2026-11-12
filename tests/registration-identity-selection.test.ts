@@ -201,6 +201,17 @@ describe("registration representation changes", () => {
     );
     expect(notifications).toHaveLength(5);
     expect(new Set(notifications.map((row) => row.idempotency_key)).size).toBe(5);
+    // The existing transition guard owns one revision per accepted edit.
+    const afterEdits = (await getRegistrationById(env.DB, f.registrationId)).transition_revision;
+    expect(afterEdits).toBe(before.transition_revision + 4);
+    const cancelled = await callApi(registrationEnvironment, f.path, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${f.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ action: "cancel" }),
+    });
+    expect(cancelled.status, await cancelled.clone().text()).toBe(200);
+    // Cancellation also advances the existing status-transition trigger.
+    expect((await getRegistrationById(env.DB, f.registrationId)).transition_revision).toBe(afterEdits + 2);
   });
 
   it("hides representation changes for delegated manage JWTs and refuses them before session verification", async () => {
@@ -340,6 +351,29 @@ describe("registration representation changes", () => {
         f.registrationId,
       ]),
     ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='registration_updated'"),
+    ).toHaveLength(0);
+  });
+
+  it("returns a recoverable conflict when the identity is available again during refusal diagnosis", async () => {
+    const f = await setupChange();
+    const before = await getRegistrationById(env.DB, f.registrationId);
+    const ended = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("UPDATE registrations SET registration_identity_id"),
+      () => env.DB.prepare("UPDATE identities SET ended_at=? WHERE id=?").bind(nowIso(), f.personalId).run(),
+    );
+    const restored = mutateBeforeMatchingQuery(
+      ended,
+      (sql) => sql.includes("AS session_active"),
+      () => env.DB.prepare("UPDATE identities SET ended_at=NULL WHERE id=?").bind(f.personalId).run(),
+    );
+    registrationEnvironment = { ...registrationEnvironment, DB: restored };
+    const response = await change(f);
+    expect(response.status, await response.clone().text()).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "REGISTRATION_CHANGED" } });
+    expect(await getRegistrationById(env.DB, f.registrationId)).toEqual(before);
     expect(
       await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='registration_updated'"),
     ).toHaveLength(0);

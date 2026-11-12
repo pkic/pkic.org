@@ -168,6 +168,37 @@ describe("confirm-info endpoint", () => {
     expect(body.expired).toBe(false);
   });
 
+  it("advances only the canonical guard revision for a pending registration's name-only edit", async () => {
+    await seedEventAndAdmin(env.DB);
+    const { confirmationToken, manageToken, registrationId } = await registerAttendee();
+    const response = await callApi(
+      env,
+      `/api/v1/events/pqc-2026/registrations/confirm-info?token=${encodeURIComponent(confirmationToken)}`,
+    );
+    const info = registrationConfirmInfoResponseSchema.parse(await response.json());
+    expect(info.organizationProof).toBeTruthy();
+    const revisions = () =>
+      queryAll<{ transition_revision: number }>(env.DB, "SELECT transition_revision FROM registrations WHERE id=?", [
+        registrationId,
+      ]);
+    const [before] = await revisions();
+    const updated = await callApi(env, `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "update", firstName: "Updated" }),
+    });
+    expect(updated.status, await updated.clone().text()).toBe(200);
+    const [after] = await revisions();
+    expect(after.transition_revision).toBe(before.transition_revision + 1);
+    const proof = await callApi(env, "/api/v1/events/pqc-2026/registrations/proof/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: info.organizationProof }),
+    });
+    expect(proof.status).toBe(409);
+    expect(await proof.json()).toMatchObject({ error: { code: "REGISTRATION_CHANGED" } });
+  });
+
   it("refuses a confirmation mailbox proof after its pending registration changes", async () => {
     await seedEventAndAdmin(env.DB);
     const { confirmationToken, registrationId } = await registerAttendee();
@@ -681,6 +712,23 @@ describe("resend-manage-link endpoint", () => {
       await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'"),
     ).toEqual([{ recipient_email: "work@example.test" }]);
   });
+
+  it.each(["work@bücher.example", "WORK@xn--bcher-kva.example"])(
+    "matches the stored normalized representation mailbox for %s",
+    async (email) => {
+      const f = await setupRepresentationRecipient();
+      await env.DB.prepare("UPDATE user_emails SET email=?,normalized_email=? WHERE id=?")
+        .bind("work@bücher.example", "work@xn--bcher-kva.example", f.emailId)
+        .run();
+      expect((await resendManageLink(env, email)).status).toBe(200);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'",
+        ),
+      ).toEqual([{ recipient_email: "work@bücher.example" }]);
+    },
+  );
 
   it("recovers through the account address when the registration uses another verified mailbox", async () => {
     const f = await setupRepresentationRecipient();

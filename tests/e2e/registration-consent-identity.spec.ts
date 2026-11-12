@@ -207,7 +207,26 @@ test("verified approved-domain registration affiliates once and an organization 
       await expect(changeIdentity.getByRole("textbox", { name: /^Email/ })).toHaveCount(0);
       await expect(changeIdentity.getByRole("definition").filter({ hasText: email })).toBeVisible();
     };
+    await attendee.route(
+      "**/api/v1/auth/session",
+      (route) =>
+        route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ error: { code: "TEMPORARY_UNAVAILABLE", message: "Temporary outage" } }),
+        }),
+      { times: 1 },
+    );
     await editRepresentation();
+    await expect(changeIdentity.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+    for (const [width, height, device] of [
+      [1280, 900, "desktop"],
+      [375, 812, "phone"],
+    ] as const) {
+      await attendee.setViewportSize({ width, height });
+      await attendee.screenshot({ path: testInfo.outputPath(`representation-retry-${device}.png`), fullPage: true });
+    }
+    await changeIdentity.getByRole("button", { name: "Retry", exact: true }).click();
     await changeIdentity.getByRole("combobox", { name: /^Representation/ }).click();
     await attendee.getByRole("option").filter({ hasText: "Personal" }).click();
     for (const [width, height, device] of [
@@ -241,6 +260,16 @@ test("verified approved-domain registration affiliates once and an organization 
     await attendee.getByRole("button", { name: "Edit details", exact: true }).click();
     await expect(attendee.getByRole("textbox", { name: /^Organization/ })).toHaveCount(0);
     await expect(changeIdentity.getByRole("combobox", { name: /^Representation/ })).toContainText(organizationName);
+    await changeIdentity.getByRole("button", { name: "Edit representation", exact: true }).click();
+    const profile = attendee.getByRole("dialog", { name: "Edit representation", exact: true });
+    await profile.getByRole("textbox", { name: /^Job title for this organization/ }).fill("Event liaison");
+    await profile.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(profile).not.toBeVisible();
+    await attendee.goBack();
+    await expect(attendee.getByRole("button", { name: "Edit details", exact: true })).toBeVisible();
+    await expect(attendee.getByRole("definition").filter({ hasText: "Event liaison" })).toBeVisible();
+    await attendee.screenshot({ path: testInfo.outputPath("profile-summary-after-back-phone.png"), fullPage: true });
+    await attendee.goForward();
     await expect(attendee.getByLabel("Country", { exact: true })).toHaveValue("US");
     await attendee.getByLabel("Country", { exact: true }).selectOption("CA");
     await attendee.goBack();

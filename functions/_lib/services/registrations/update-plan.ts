@@ -89,7 +89,6 @@ export interface BuiltRegistrationUpdate {
   registration: RegistrationRecord;
   statements: StatementLike[];
   notificationChanged: boolean;
-  notificationRevision: number;
   dayAttendance?: Array<{
     dayDate: string;
     attendanceType: string;
@@ -157,7 +156,6 @@ export async function buildRegistrationUpdate(
       registration: cancelled,
       statements,
       notificationChanged: true,
-      notificationRevision: registration.transition_revision + 1,
       dayWaitlist: [],
     };
   }
@@ -210,7 +208,6 @@ export async function buildRegistrationUpdate(
       registration: updated,
       statements,
       notificationChanged: true,
-      notificationRevision: registration.transition_revision + 1,
       dayWaitlist: [],
     };
   }
@@ -390,7 +387,6 @@ export async function buildRegistrationUpdate(
     registration: updated,
     statements,
     notificationChanged,
-    notificationRevision: registration.transition_revision + (notificationChanged ? 1 : 0),
     dayAttendance: plannedDayAttendance,
     dayWaitlist: plannedDayWaitlist,
   };

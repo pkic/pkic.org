@@ -93,48 +93,105 @@ describe("registration representation editing", () => {
     expect(container.textContent).not.toContain("Saving a different representation");
   });
 
-  it("refreshes saved identity profile edits when the registration form is discarded", async () => {
-    const work = { ...WORK };
-    const read = readResponse({ identityId: work.id });
-    const requests = installApi(read, { identities: [work] });
+  it.each(["Discard", "Back", "refresh failure"] as const)(
+    "refreshes saved identity profile edits independently of closing with %s",
+    async (exit) => {
+      const work = { ...WORK };
+      const read = readResponse({ identityId: work.id });
+      const requests = installApi(read, { identities: [work] });
+      const api = globalThis.fetch;
+      let profileSaved = false;
+      let refuseRefresh = exit === "refresh failure";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+          const path = String(input);
+          if (profileSaved && refuseRefresh && path.endsWith(read.registration.id)) {
+            return Response.json(
+              { error: { code: "TEMPORARY_UNAVAILABLE", message: "Registration refresh is unavailable." } },
+              { status: 503 },
+            );
+          }
+          if (!path.endsWith(`/identities/${work.id}/profile`)) return api(input, init);
+          if (init.method === "PATCH") {
+            const body = identityProfileUpdateSchema.parse(JSON.parse(String(init.body)));
+            work.jobTitle = body.jobTitle ?? work.jobTitle;
+            read.user.job_title = work.jobTitle;
+            profileSaved = true;
+          }
+          return Response.json(
+            ownIdentityProfileSchema.parse({
+              identityId: work.id,
+              organizationId: work.organizationId,
+              organizationName: work.organizationName,
+              jobTitle: work.jobTitle,
+              biography: null,
+              links: [],
+            }),
+          );
+        }),
+      );
+      const container = await mount();
+      await click(button(container, "Edit details"));
+      await typeInto(container.querySelector<HTMLInputElement>('input[name="firstName"]')!, "Draft name");
+      await vi.waitFor(() =>
+        expect(container.querySelector('button[aria-label="Edit representation"]')).not.toBeNull(),
+      );
+      const readsBefore = requests.filter((r) => r.method === "GET" && r.path.endsWith(read.registration.id)).length;
+      await click(container.querySelector('button[aria-label="Edit representation"]'));
+      await settle();
+      await typeInto(controlFor<HTMLInputElement>(document.body, "Job title for this organization"), "Coordinator");
+      await click(button(document.querySelector("dialog[open]")!, "Save changes"));
+      await vi.waitFor(() => expect(document.querySelector("dialog[open]")).toBeNull());
+      expect(container.querySelector<HTMLInputElement>('input[name="firstName"]')!.value).toBe("Draft name");
+      if (exit === "refresh failure") {
+        await vi.waitFor(() => expect(button(container, "Retry registration")).not.toBeNull());
+        await act(() => history.back());
+        await vi.waitFor(() => expect(button(container, "Edit details")).not.toBeNull());
+        expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+          "Registration refresh is unavailable.",
+        );
+        refuseRefresh = false;
+        await click(button(container, "Retry registration"));
+      } else {
+        await vi.waitFor(() =>
+          expect(
+            requests.filter((r) => r.method === "GET" && r.path.endsWith(read.registration.id)).length,
+          ).toBeGreaterThan(readsBefore),
+        );
+        if (exit === "Back") await act(() => history.back());
+        else await click(button(container, "Discard changes"));
+      }
+      await vi.waitFor(() => expect(button(container, "Edit details")).not.toBeNull());
+      await vi.waitFor(() => expect(facts(container).Representation).toContain("Coordinator"));
+      expect(button(container, "Retry registration")).toBeNull();
+      expect(requests.some((r) => r.method === "PATCH")).toBe(false);
+    },
+  );
+
+  it("offers retry after a transient owner-session load failure without asking the owner to sign in", async () => {
+    installApi(readResponse({ identityId: WORK.id }), { identities: [WORK] });
     const api = globalThis.fetch;
+    let fail = true;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-        const path = String(input);
-        if (!path.endsWith(`/identities/${work.id}/profile`)) return api(input, init);
-        if (init.method === "PATCH") {
-          const body = identityProfileUpdateSchema.parse(JSON.parse(String(init.body)));
-          work.jobTitle = body.jobTitle ?? work.jobTitle;
-          read.user.job_title = work.jobTitle;
-        }
-        return Response.json(
-          ownIdentityProfileSchema.parse({
-            identityId: work.id,
-            organizationId: work.organizationId,
-            organizationName: work.organizationName,
-            jobTitle: work.jobTitle,
-            biography: null,
-            links: [],
-          }),
-        );
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).endsWith("/auth/session") && fail)
+          return Response.json(
+            { error: { code: "TEMPORARY_UNAVAILABLE", message: "Temporary outage" } },
+            { status: 503 },
+          );
+        return api(input, init);
       }),
     );
     const container = await mount();
     await click(button(container, "Edit details"));
-    await vi.waitFor(() => expect(container.querySelector('button[aria-label="Edit representation"]')).not.toBeNull());
-    await click(container.querySelector('button[aria-label="Edit representation"]'));
-    await settle();
-    await typeInto(controlFor<HTMLInputElement>(document.body, "Job title for this organization"), "Coordinator");
-    await click(button(document.querySelector("dialog[open]")!, "Save changes"));
-    await vi.waitFor(() => expect(document.querySelector("dialog[open]")).toBeNull());
-    const readsBefore = requests.filter((r) => r.method === "GET" && r.path.endsWith(read.registration.id)).length;
-    await click(button(container, "Discard changes"));
-    await vi.waitFor(() => expect(container.textContent).toContain("Coordinator"));
-    expect(requests.filter((r) => r.method === "GET" && r.path.endsWith(read.registration.id)).length).toBeGreaterThan(
-      readsBefore,
-    );
-    expect(requests.some((r) => r.method === "PATCH")).toBe(false);
+    await vi.waitFor(() => expect(button(container, "Retry")).not.toBeNull());
+    expect(container.querySelector('a[href="/portal/"]')).toBeNull();
+    fail = false;
+    await click(button(container, "Retry"));
+    await vi.waitFor(() => expect(container.querySelector('[role="combobox"]')).not.toBeNull());
+    expect(button(container, "Retry")).toBeNull();
   });
 
   it("keeps the representation when it is unchanged", async () => {

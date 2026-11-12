@@ -70,7 +70,7 @@ describe("ParticipantRegistration", () => {
   });
 
   it("shows organization and job title read-only from the identity, with where to manage them", async () => {
-    installApi();
+    installApi(readResponse({ canChangeIdentity: false }));
     const container = await mount();
 
     await click(button(container, "Edit details"));

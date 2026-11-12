@@ -10,8 +10,8 @@
  */
 
 /** The verified address an identity uses, or NULL when it uses the account's address. */
-function identityVerifiedEmailSql(identityIdSql: string): string {
-  return `(SELECT recipient_address.email FROM identities recipient_identity
+function identityVerifiedEmailSql(identityIdSql: string, column: "email" | "normalized_email"): string {
+  return `(SELECT recipient_address.${column} FROM identities recipient_identity
     JOIN user_emails recipient_address ON recipient_address.id = recipient_identity.email_id
      AND recipient_address.user_id = recipient_identity.user_id AND recipient_address.verified_at IS NOT NULL
     WHERE recipient_identity.id = ${identityIdSql} AND recipient_identity.user_id = u.id)`;
@@ -19,7 +19,11 @@ function identityVerifiedEmailSql(identityIdSql: string): string {
 
 /** Where a registration made as `identityIdSql` sends its ordinary messages. */
 export function registrationRecipientEmailSql(identityIdSql = "r.registration_identity_id"): string {
-  return `COALESCE(${identityVerifiedEmailSql(identityIdSql)}, u.email)`;
+  return registrationRecipientAddressSql(identityIdSql, "email");
+}
+
+function registrationRecipientAddressSql(identityIdSql: string, column: "email" | "normalized_email"): string {
+  return `COALESCE(${identityVerifiedEmailSql(identityIdSql, column)}, u.${column})`;
 }
 
 export const REGISTRATION_RECIPIENT_EMAIL_SQL = registrationRecipientEmailSql();
@@ -41,7 +45,10 @@ export const REGISTRATION_CURRENT_RECIPIENT_EMAIL_SQL = `CASE
 END`;
 
 /** Pending mailboxes may receive proof only; manage capabilities stay on the account address. */
-export const REGISTRATION_RECOVERY_RECIPIENT_EMAIL_SQL = `CASE
-  WHEN r.status = 'pending_email_confirmation' THEN u.email
-  ELSE ${REGISTRATION_RECIPIENT_EMAIL_SQL}
-END`;
+function registrationRecoveryRecipientSql(column: "email" | "normalized_email"): string {
+  return `CASE WHEN r.status = 'pending_email_confirmation' THEN u.${column}
+    ELSE ${registrationRecipientAddressSql("r.registration_identity_id", column)} END`;
+}
+
+export const REGISTRATION_RECOVERY_RECIPIENT_EMAIL_SQL = registrationRecoveryRecipientSql("email");
+export const REGISTRATION_RECOVERY_NORMALIZED_EMAIL_SQL = registrationRecoveryRecipientSql("normalized_email");

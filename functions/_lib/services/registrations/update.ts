@@ -15,6 +15,7 @@ import { buildRegistrationUpdate, type RegistrationUpdatePayload } from "./updat
 import { isRegistrationTransitionConflict, registrationChangedError } from "./transition-guard";
 import { emailTakenError, isEmailReservationConflict } from "../user-emails";
 import { formSubmissionContextChangedError, isFormSubmissionContextConflict } from "../forms";
+import { uuid } from "../../utils/ids";
 import { outboxIdForOperation } from "../../email/outbox-queue";
 
 type RegistrationUpdatePlan = Awaited<ReturnType<typeof buildRegistrationUpdate>>;
@@ -31,8 +32,10 @@ async function executeRegistrationUpdate<T>(
   payload: RegistrationUpdatePayload,
   load: () => Promise<RegistrationRecord>,
   changedBy: string | undefined,
-  commit: (built: RegistrationUpdatePlan) => Promise<T>,
+  commit: (built: RegistrationUpdatePlan, operationId: string) => Promise<T>,
 ): Promise<T> {
+  // One operation key survives capacity retries without changing capability-bound state.
+  const operationId = uuid();
   let attemptedRegistrationId: string | undefined;
   try {
     return await withDayCapacityRetry(async () => {
@@ -45,19 +48,9 @@ async function executeRegistrationUpdate<T>(
           ...built.registration,
           registration_identity_id: payload.identityChange.change.identityId,
         };
-        if (!built.notificationChanged) built.notificationRevision += 1;
         built.notificationChanged = true;
       }
-      if (built.notificationChanged) {
-        // Scalar triggers do not cover identity, profile, or every attendance edit.
-        // Advance the persisted revision for each accepted notification operation.
-        built.statements.push(
-          db
-            .prepare("UPDATE registrations SET transition_revision=transition_revision+1 WHERE id=?")
-            .bind(registration.id),
-        );
-      }
-      return commit(built);
+      return commit(built, operationId);
     });
   } catch (error) {
     if (attemptedRegistrationId && payload.identityChange && isAuthorizationGuardFailure(error)) {
@@ -70,7 +63,7 @@ async function executeRegistrationUpdate<T>(
         .first<{ session_active: number; identity_available: number }>();
       if (!current?.session_active)
         throw new AppError(401, "AUTH_REQUIRED", "Sign in again to change your representation.");
-      if (current.identity_available) throw error;
+      if (current.identity_available) throw registrationChangedError();
       throw new AppError(
         403,
         "REGISTRATION_IDENTITY_UNAVAILABLE",
@@ -94,6 +87,7 @@ async function commitUpdateWithNotification(
   db: DatabaseLike,
   built: RegistrationUpdatePlan,
   payload: RegistrationUpdatePayload & { notification: UpdateNotification },
+  operationId: string,
   commitBatch: (statements: StatementLike[]) => Promise<D1StatementResult[]> = (statements) => db.batch(statements),
 ): Promise<{ registration: RegistrationRecord; outboxId: string | null; outboxIds: string[] }> {
   if (!built.notificationChanged) {
@@ -102,7 +96,7 @@ async function commitUpdateWithNotification(
   }
   const idempotencyKey =
     payload.notification.idempotencyKey ??
-    `registration-update:${built.registration.id}:${built.notificationRevision}:` +
+    `registration-update:${built.registration.id}:${operationId}:` +
       `${payload.notification.templateKey}:${payload.notification.noticeKind ?? "status_update"}`;
   const outboxId = payload.notification.outboxId ?? (await outboxIdForOperation(idempotencyKey));
   const email = await prepareRegistrationStatusEmail(db, {
@@ -174,7 +168,7 @@ export async function updateRegistrationByManageTokenWithNotification(
     payload,
     () => getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret),
     undefined,
-    (built) => commitUpdateWithNotification(db, built, payload),
+    (built, operationId) => commitUpdateWithNotification(db, built, payload, operationId),
   );
 }
 
@@ -210,7 +204,7 @@ export async function updateRegistrationByIdWithNotification(
         ? Promise.resolve(registrationSnapshot)
         : getRegistrationByIdForEvent(db, payload.eventId, payload.registrationId),
     changedBy,
-    (built) => commitUpdateWithNotification(db, built, payload, commitBatch),
+    (built, operationId) => commitUpdateWithNotification(db, built, payload, operationId, commitBatch),
   );
 }
 
