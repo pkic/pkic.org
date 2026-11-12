@@ -34,6 +34,7 @@ type SessionTime = Pick<LiveRoomSession, "startAt" | "endAt" | "timeZone">;
 
 const PLAY = <path d="M5 3l8 5-8 5z" />;
 const PAUSE = <path d="M5.5 3v10M10.5 3v10" />;
+const RESET = <path d="M3.5 8a4.5 4.5 0 1 0 1.3-3.2M3.5 2.5v2.8h2.8" />;
 
 /** The outputs a graphic can go to, as one-tap switches in the row's menu. */
 function outputItems(
@@ -60,8 +61,8 @@ function outputItems(
 
 /**
  * One timer in one row: its name and what it counts to, its value over a
- * thin progress line, where it shows (PVW and PGM), Start or Pause, Reset,
- * a minute either way, and the menu. The row adapts to the panel's width
+ * thin progress line, where it shows (PVW and PGM), one joined control for
+ * Start or Pause, Reset and a minute either way, and the menu. The row adapts to the panel's width
  * (see TimePanel.css); whatever it hides stays one tap away in the menu,
  * which holds every action. Only setup opens a dialog.
  */
@@ -194,7 +195,8 @@ export function TimerRow({
         <LiveLayerTargets targets={targets} subject={`${timer.name} timer`} layer={layer} short />
       </span>
       {counts ? (
-        <>
+        // One joined control, like PVW | PGM: Start or Pause, Reset, and a minute either way.
+        <span class="pk-segmented pk-studio-time__transport" role="group" aria-label={`${timer.name} controls`}>
           <Button
             icon
             class="pk-studio-time__start"
@@ -207,16 +209,19 @@ export function TimerRow({
             <StrokeIcon>{reading.running ? PAUSE : PLAY}</StrokeIcon>
           </Button>
           <Button
+            icon
             class="pk-studio-time__reset"
             aria-label={`Reset ${timer.name}`}
+            title="Reset"
             disabled={disabled}
             onClick={() => control("reset")}
           >
-            Reset
+            <StrokeIcon>{RESET}</StrokeIcon>
           </Button>
           <Button
             class="pk-studio-time__minus"
             aria-label={`Take a minute from ${timer.name}`}
+            title="Take a minute"
             disabled={disabled}
             onClick={() => adjust(-60)}
           >
@@ -225,12 +230,13 @@ export function TimerRow({
           <Button
             class="pk-studio-time__plus"
             aria-label={`Add a minute to ${timer.name}`}
+            title="Add a minute"
             disabled={disabled}
             onClick={() => adjust(60)}
           >
             +1m
           </Button>
-        </>
+        </span>
       ) : null}
       <span class="pk-studio-time__menu">
         <Menu label={`${timer.name} timer`} heading={timer.name} align="end" items={items} />

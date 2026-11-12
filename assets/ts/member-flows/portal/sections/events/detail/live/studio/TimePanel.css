@@ -3,7 +3,7 @@
  * The row follows the panel's width: a phone keeps the name over the value,
  * PVW and PGM, Start or Pause, and the menu; a medium panel adds the detail
  * and Reset in a single line; a wide one adds the screens and a minute
- * either way. What a width hides stays in the row's menu.
+ * either way. Start, Reset and the minutes are one joined control. What a width hides stays in the row's menu.
  */
 @layer components {
   .pk-studio-time {
@@ -24,8 +24,8 @@
     grid-column: 1 / -1;
     grid-template-columns: subgrid;
     grid-template-areas:
-      "name outputs start menu"
-      "reading outputs start menu";
+      "name outputs transport menu"
+      "reading outputs transport menu";
     align-items: center;
     column-gap: var(--pk-2);
     row-gap: var(--pk-1);
@@ -41,12 +41,12 @@
   }
   @container studio-time (width >= 30rem) {
     .pk-studio-time__list {
-      grid-template-columns: minmax(0, 1fr) repeat(5, auto);
+      grid-template-columns: minmax(0, 1fr) repeat(4, auto);
     }
     .pk-studio-time__row {
       grid-template-areas:
-        "name reading outputs start reset menu"
-        "detail reading outputs start reset menu";
+        "name reading outputs transport menu"
+        "detail reading outputs transport menu";
       column-gap: var(--pk-3);
     }
     .pk-studio-time__detail,
@@ -55,14 +55,6 @@
     }
   }
   @container studio-time (width >= 46rem) {
-    .pk-studio-time__list {
-      grid-template-columns: minmax(0, 1fr) repeat(7, auto);
-    }
-    .pk-studio-time__row {
-      grid-template-areas:
-        "name reading outputs start reset minus plus menu"
-        "detail reading outputs start reset minus plus menu";
-    }
     .pk-studio-time__minus,
     .pk-studio-time__plus,
     .pk-studio-time__outputs .pk-output-target > .pk-menu {
@@ -140,17 +132,8 @@
     align-items: center;
     gap: var(--pk-1);
   }
-  .pk-studio-time__start {
-    grid-area: start;
-  }
-  .pk-studio-time__reset {
-    grid-area: reset;
-  }
-  .pk-studio-time__minus {
-    grid-area: minus;
-  }
-  .pk-studio-time__plus {
-    grid-area: plus;
+  .pk-studio-time__transport {
+    grid-area: transport;
   }
   .pk-studio-time__menu {
     display: flex;
