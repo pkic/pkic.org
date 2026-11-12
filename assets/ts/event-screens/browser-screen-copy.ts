@@ -7,6 +7,8 @@ export const BROWSER_SCREEN_PROBLEM_LABELS: Record<BrowserScreenProblem, string>
   "wake-lock": "May sleep",
   capture: "Tab not shared",
   "capture-surface": "Share this tab, not a window or screen",
+  "capture-other-tab": "Wrong tab shared",
+  "capture-unverified": "Tab can't be verified",
 };
 
 export type BrowserScreenAction = "resume" | "fullscreen" | "share" | "sound" | "awake";

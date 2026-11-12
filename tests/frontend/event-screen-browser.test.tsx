@@ -7,7 +7,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SCREEN_MONITOR_LIMITS } from "../../assets/shared/schemas/event-screen-monitor";
+import { SCREEN_MONITOR_LIMITS, screenScreenshotFormat } from "../../assets/shared/schemas/event-screen-monitor";
 import { screenIdSchema, screenReadResponseSchema } from "../../assets/shared/schemas/event-screens";
 import {
   BROWSER_SCREEN_CAPTURE_OPTIONS,
@@ -17,7 +17,7 @@ import {
 } from "../../assets/ts/event-screens/browser-screen";
 import { browserScreenNextClick } from "../../assets/ts/event-screens/browser-screen-copy";
 import { browserScreenAddress, parseScreenPageAddress } from "../../assets/ts/event-screens/screen-address";
-import { screenStorage } from "../../assets/ts/event-screens/screen-storage";
+import { memoryStorage, screenStorage } from "../../assets/ts/event-screens/screen-storage";
 import { BROWSER_SCREEN_FRAME, encodeBrowserScreenFrame } from "../../assets/ts/event-screens/browser-screen-frame";
 import {
   BROWSER_SCREEN_ID_KEY,
@@ -141,6 +141,56 @@ describe("setting up a browser as a screen", () => {
     expect(await screen.readScreenshot()).toBeNull();
   });
 
+  it("marks this tab before the capture and sends only a capture that shows it", async () => {
+    const { platform, click, getDisplayMedia, configured } = fakePlatform();
+    const screen = createBrowserScreen(platform);
+    expect(configured()).toMatchObject({ exposeOrigin: true, permittedOrigins: [platform.origin] });
+    // A fresh handle for each page load.
+    const other = fakePlatform();
+    createBrowserScreen(other.platform);
+    expect(other.configured()!.handle).not.toBe(configured()!.handle);
+    expect(platform.setCaptureHandleConfig).toHaveBeenCalledTimes(1);
+    expect(await click(() => screen.enroll())).toEqual([]);
+    expect(getDisplayMedia).toHaveBeenCalled();
+    expect(screen.get().capture).toBe("live");
+  });
+
+  it.each([
+    ["another tab", { capture: "other-tab" as const }, "capture-other-tab", "Wrong tab shared"],
+    ["a browser that cannot tell", { captureHandles: false }, "capture-unverified", "Tab can't be verified"],
+  ])("refuses %s, sends nothing and offers Share this tab again", async (_case, grants, problem, says) => {
+    const { platform, click, track } = fakePlatform(grants);
+    const screen = createBrowserScreen(platform);
+    expect(await click(() => screen.enroll())).toEqual([problem]);
+    expect(track.stop).toHaveBeenCalled();
+    expect(screen.get().capture).toBe("off");
+    expect(await screen.readScreenshot()).toBeNull();
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<BrowserScreenResume browser={screen} sound="none" />, host!));
+    expect(host.querySelector(".pk-screen-resume__missing")?.textContent).toBe(says);
+    expect(host.querySelector(".pk-screen-resume button")?.textContent).toBe("Share this tab");
+  });
+
+  it("ends a capture whose tab stops saying it is this screen", async () => {
+    const { platform, click, track, changeHandle } = fakePlatform();
+    const screen = createBrowserScreen(platform);
+    await click(() => screen.enroll());
+    changeHandle();
+    expect(screen.get().capture).toBe("stopped");
+    expect(screen.problems()).toContain("capture-other-tab");
+    expect(track.stop).toHaveBeenCalled();
+    expect(await screen.readScreenshot()).toBeNull();
+  });
+
+  it("is refused again by a retry after the click ended, and offers it once more", async () => {
+    const { platform, click, getDisplayMedia } = fakePlatform({ spends: "fullscreen" });
+    const screen = createBrowserScreen(platform);
+    expect(await click(() => screen.enroll())).toEqual(["capture"]);
+    expect(await screen.request({ capture: true })).toEqual(["capture"]);
+    await expect(getDisplayMedia.mock.results.at(-1)!.value).rejects.toThrow("No user activation");
+    expect(browserScreenNextClick({ ...screen.get(), sound: "none" })?.action).toBe("share");
+  });
+
   it("takes a frame of its tab as a screenshot while it is shared", async () => {
     const { platform, click } = fakePlatform();
     const screen = createBrowserScreen(platform);
@@ -148,6 +198,7 @@ describe("setting up a browser as a screen", () => {
     await click(() => screen.enroll());
     const frame = await screen.readScreenshot();
     expect(frame?.byteLength).toBe(30_000);
+    expect(screenScreenshotFormat(new Uint8Array(frame!))).toBe("webp");
   });
 
   it("enrolls from the setup page's one button and goes on, ready again if going on fails", async () => {
@@ -180,6 +231,22 @@ describe("setting up a browser as a screen", () => {
     const id = browserScreenId(blocked);
     expect(screenIdSchema.safeParse(id).success).toBe(true);
     expect(browserScreenId(blocked)).toBe(id);
+  });
+
+  it("keeps its saved ID where the storage is full", () => {
+    const persisted = memoryStorage();
+    persisted.setItem(BROWSER_SCREEN_ID_KEY, "K7M2QA");
+    const full = Object.assign(Object.create(persisted) as Storage, {
+      setItem: () => {
+        throw new DOMException("Full", "QuotaExceededError");
+      },
+    });
+    const storage = screenStorage({ localStorage: full });
+    expect(browserScreenId(storage)).toBe("K7M2QA");
+    // This visit's writes still read back.
+    storage.setItem("pkic.screen.cache", "kept");
+    expect(storage.getItem("pkic.screen.cache")).toBe("kept");
+    expect(persisted.getItem("pkic.screen.cache")).toBeNull();
   });
 });
 
@@ -326,7 +393,9 @@ describe("a browser screen's own ID", () => {
 describe("a browser screen's screenshot encoding", () => {
   it("encodes WebP, falls back to JPEG where the browser cannot, and retries once when too large", async () => {
     const webp = fakeCanvas([["image/webp", 20_000]]);
-    expect((await encodeBrowserScreenFrame(webp))?.byteLength).toBe(20_000);
+    const webpFrame = await encodeBrowserScreenFrame(webp);
+    expect(webpFrame?.byteLength).toBe(20_000);
+    expect(screenScreenshotFormat(new Uint8Array(webpFrame!))).toBe("webp");
     expect(webp.asked).toEqual([["image/webp", BROWSER_SCREEN_FRAME.quality]]);
 
     // A browser without a WebP encoder answers with PNG.
@@ -334,7 +403,9 @@ describe("a browser screen's screenshot encoding", () => {
       ["image/png", 90_000],
       ["image/jpeg", 25_000],
     ]);
-    expect((await encodeBrowserScreenFrame(jpeg))?.byteLength).toBe(25_000);
+    const jpegFrame = await encodeBrowserScreenFrame(jpeg);
+    expect(jpegFrame?.byteLength).toBe(25_000);
+    expect(screenScreenshotFormat(new Uint8Array(jpegFrame!))).toBe("jpeg");
     expect(jpeg.asked.map(([type]) => type)).toEqual(["image/webp", "image/jpeg"]);
 
     const large = SCREEN_MONITOR_LIMITS.screenshotBytes + 1;

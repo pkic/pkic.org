@@ -253,6 +253,24 @@ describe("the livestream screen", () => {
     expect(livestreamPlayerReport()).toMatchObject({ muted: true });
   });
 
+  it("falls back to muted once when resuming after a pause is blocked, then leaves sound to the click", async () => {
+    const api = fakeApi();
+    api.read.mockResolvedValue(timed(ownView("first-video")));
+    await mountApp(api);
+    await act(() => latest().events.onReady?.({ target: latest() as never }));
+    await emit("playing");
+    expect(livestreamPlayerReport()).toMatchObject({ status: "playing", muted: false });
+    await emit("paused");
+    await act(() => latest().events.onAutoplayBlocked?.({ target: latest() as never }));
+    expect(latest().mute).toHaveBeenCalledTimes(1);
+    expect(livestreamPlayerReport()).toMatchObject({ muted: true });
+    // Blocked again before it plays: no loop of fallbacks.
+    await act(() => latest().events.onAutoplayBlocked?.({ target: latest() as never }));
+    expect(latest().mute).toHaveBeenCalledTimes(1);
+    await emit("playing");
+    expect(livestreamPlayerReport()).toMatchObject({ status: "playing", muted: true });
+  });
+
   it("turns sound on from a click only once the player confirms it is unmuted and playing", async () => {
     const api = fakeApi();
     api.read.mockResolvedValue(timed(ownView("first-video")));

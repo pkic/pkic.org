@@ -22,9 +22,29 @@ export interface BrowserScreenPlatform {
   };
   wakeLock?: ScreenWakeLockApi;
   getDisplayMedia?: (options: object) => Promise<MediaStream>;
+  /** This page's origin, which a capture of this tab reports with its handle. */
+  origin: string;
+  /**
+   * Marks this tab with a handle a capture of it reports, telling it from
+   * another tab the person picked; absent where the browser has no capture
+   * handles.
+   */
+  setCaptureHandleConfig?: (config: CaptureHandleConfig) => void;
+  /** A fresh, unguessable handle for this page load. */
+  randomHandle: () => string;
   /** A video and a canvas to take frames with. */
   frames: () => { video: FrameVideo; canvas: FrameCanvas & FrameDrawing };
 }
+
+interface CaptureHandleConfig {
+  handle: string;
+  exposeOrigin: boolean;
+  permittedOrigins: string[];
+}
+/** A captured tab's track, with the handle and origin of the tab it shows where the browser reports them. */
+type CapturedTrack = MediaStreamTrack & {
+  getCaptureHandle?: () => { handle?: string; origin?: string } | null;
+};
 
 export interface FrameVideo {
   srcObject: MediaProvider | null;
@@ -56,7 +76,20 @@ export const BROWSER_SCREEN_CAPTURE_OPTIONS = {
 /** A wake lock the system let go is asked for again after this long, so a browser that keeps letting go is not asked in a loop. */
 export const BROWSER_SCREEN_WAKE_LOCK_RETRY_MS = 1_000;
 
-export type BrowserScreenProblem = "fullscreen" | "wake-lock" | "capture" | "capture-surface";
+export type BrowserScreenProblem =
+  | "fullscreen"
+  | "wake-lock"
+  | "capture"
+  | "capture-surface"
+  | "capture-other-tab"
+  | "capture-unverified";
+
+/** Why a capture was refused after the person picked it, for the corner to say instead of what is missing. */
+export const BROWSER_SCREEN_CAPTURE_REFUSALS = [
+  "capture-surface",
+  "capture-other-tab",
+  "capture-unverified",
+] as const satisfies readonly BrowserScreenProblem[];
 
 export const browserPlatform = (): BrowserScreenPlatform => ({
   document,
@@ -64,6 +97,11 @@ export const browserPlatform = (): BrowserScreenPlatform => ({
   getDisplayMedia: navigator.mediaDevices?.getDisplayMedia?.bind(navigator.mediaDevices) as
     | BrowserScreenPlatform["getDisplayMedia"]
     | undefined,
+  origin: location.origin,
+  setCaptureHandleConfig: (
+    navigator.mediaDevices as { setCaptureHandleConfig?: (config: CaptureHandleConfig) => void } | undefined
+  )?.setCaptureHandleConfig?.bind(navigator.mediaDevices),
+  randomHandle: () => crypto.randomUUID(),
   frames: () => ({
     video: document.createElement("video"),
     canvas: document.createElement("canvas") as HTMLCanvasElement as FrameCanvas & FrameDrawing,
@@ -137,6 +175,28 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
     return document.fullscreenElement ? Promise.resolve() : attempt(() => document.documentElement.requestFullscreen());
   }
 
+  /**
+   * This tab's handle, set once per page load before any capture, or null
+   * where the browser cannot set one; a capture is then never sent.
+   */
+  const handle = ((): string | null => {
+    if (!platform.setCaptureHandleConfig) return null;
+    const fresh = platform.randomHandle();
+    try {
+      platform.setCaptureHandleConfig({ handle: fresh, exposeOrigin: true, permittedOrigins: [platform.origin] });
+      return fresh;
+    } catch {
+      return null;
+    }
+  })();
+
+  /** Why this capture does not show this screen's tab, or null when it does. */
+  function thisTabRefusal(track: CapturedTrack): BrowserScreenProblem | null {
+    if (!handle || !track.getCaptureHandle) return "capture-unverified";
+    const captured = track.getCaptureHandle();
+    return captured?.handle === handle && captured.origin === platform.origin ? null : "capture-other-tab";
+  }
+
   async function capture(request: Promise<MediaStream> | null): Promise<BrowserScreenProblem | null> {
     if (!request) return "capture";
     let next: MediaStream;
@@ -145,16 +205,29 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
     } catch {
       return "capture";
     }
-    const track = next.getVideoTracks()[0];
+    const track = next.getVideoTracks()[0] as CapturedTrack | undefined;
     // Only this tab: a window or a whole screen would show staff more than the screen.
     if (!track || track.getSettings().displaySurface !== "browser") {
       for (const each of next.getTracks()) each.stop();
       return "capture-surface";
     }
+    // Only this screen's tab: another tab (an inbox, say) would reach staff too.
+    const refused = thisTabRefusal(track);
+    if (refused) {
+      for (const each of next.getTracks()) each.stop();
+      return refused;
+    }
     endCapture("off");
     stream = next;
     track.addEventListener("ended", () => {
       if (stream === next) endCapture("stopped");
+    });
+    // The captured tab could change what it says it is; a capture that no longer shows this screen ends.
+    track.addEventListener("capturehandlechange", () => {
+      const changed = stream === next ? thisTabRefusal(track) : null;
+      if (!changed) return;
+      endCapture("stopped");
+      set({}, [...problems.filter((problem) => problem !== changed), changed]);
     });
     frames ??= platform.frames();
     frames.video.muted = true;

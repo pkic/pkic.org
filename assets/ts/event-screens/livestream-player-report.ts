@@ -37,6 +37,7 @@ export function publishLivestreamPlayerReport(report: LivestreamPlayerReport | n
       latest &&
       report.status === latest.status &&
       report.videoId === latest.videoId &&
+      report.muted === latest.muted &&
       report.changedAt === latest.changedAt)
   )
     return;

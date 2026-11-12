@@ -60,6 +60,23 @@ describe("the screen wake lock", () => {
     expect(awake).not.toHaveBeenCalledWith(true);
   });
 
+  it("lets a lock go that arrives after a release, and asks afresh after it", async () => {
+    const late = fakeLock();
+    const fresh = fakeLock();
+    const request = vi.fn().mockResolvedValueOnce(late).mockResolvedValueOnce(fresh);
+    const awake = vi.fn();
+    const held = screenWakeLock(awake, { wakeLock: () => ({ request }) });
+    const asked = held.acquire();
+    held.release();
+    const again = held.acquire();
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(await asked).toBe(false);
+    expect(late.release).toHaveBeenCalled();
+    expect(await again).toBe(true);
+    expect(fresh.release).not.toHaveBeenCalled();
+    expect(awake).toHaveBeenLastCalledWith(true);
+  });
+
   it("goes on without one where the browser has none or refuses", async () => {
     const awake = vi.fn();
     expect(await screenWakeLock(awake, { wakeLock: () => undefined }).acquire()).toBe(false);

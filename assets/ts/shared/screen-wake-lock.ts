@@ -32,20 +32,24 @@ export function screenWakeLock(
   let disposed = false;
   let lock: ScreenWakeLockSentinel | undefined;
   let asking: Promise<boolean> | null = null;
+  /** Counts releases: a request made before the latest one is let go as it arrives. */
+  let releases = 0;
 
   /** Asks for the lock, once at a time; resolves with whether it is held. A browser without one, or that refuses, leaves the screen as it was. */
   function acquire(): Promise<boolean> {
     if (lock && !lock.released) return Promise.resolve(true);
-    asking ??= ask().finally(() => {
-      asking = null;
+    if (asking) return asking;
+    const current = ask(releases).finally(() => {
+      if (asking === current) asking = null;
     });
-    return asking;
+    asking = current;
+    return current;
   }
 
-  async function ask(): Promise<boolean> {
+  async function ask(asked: number): Promise<boolean> {
     try {
       const next = await wakeLock()?.request("screen");
-      if (disposed) {
+      if (disposed || asked !== releases) {
         await next?.release();
         return false;
       }
@@ -64,10 +68,14 @@ export function screenWakeLock(
     }
   }
 
-  /** Lets the lock go, keeping the holder: a later acquire asks again. */
+  /** Lets the lock go, and one still being asked for as it arrives; a later acquire asks afresh. */
   function release() {
+    releases += 1;
+    asking = null;
     onAwake(false);
-    void lock?.release().catch(() => {});
+    const held = lock;
+    lock = undefined;
+    void held?.release().catch(() => {});
   }
 
   return {

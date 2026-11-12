@@ -10,7 +10,7 @@
  */
 import type { ScreenBrowserState } from "../../shared/schemas/event-screen-monitor";
 import { Button } from "../ui/Button";
-import type { BrowserScreen } from "./browser-screen";
+import { BROWSER_SCREEN_CAPTURE_REFUSALS, type BrowserScreen } from "./browser-screen";
 import {
   BROWSER_SCREEN_ACTION_LABELS,
   BROWSER_SCREEN_PROBLEM_LABELS,
@@ -36,7 +36,8 @@ export function BrowserScreenResume({
     ? browserScreenNextClick({ ...state, sound }, { offerWakeLock: problems.includes("wake-lock") })
     : null;
   if (!next) return null;
-  const hint = problems.includes("capture-surface") ? BROWSER_SCREEN_PROBLEM_LABELS["capture-surface"] : null;
+  const refusal = BROWSER_SCREEN_CAPTURE_REFUSALS.find((problem) => problems.includes(problem));
+  const hint = refusal ? BROWSER_SCREEN_PROBLEM_LABELS[refusal] : null;
   return (
     <aside class="pk-screen-resume" aria-label="This screen">
       <span class="pk-screen-resume__missing">{hint ?? next.missing.join(" · ")}</span>

@@ -129,8 +129,12 @@ export function ScreenLivestreamPlayer({
     let stopped = false;
     let player: YouTubePlayer | null = null;
     let played = false;
+    /** Whether it plays now, and whether it already fell back to muted since it last did: one fallback per stop. */
+    let playing = false;
+    let fellBack = false;
     let withSound: ReturnType<typeof setTimeout> | undefined;
     const startMuted = (target: YouTubePlayer) => {
+      fellBack = true;
       target.mute();
       target.playVideo();
       report({ type: "muted" });
@@ -151,9 +155,10 @@ export function ScreenLivestreamPlayer({
                 if (!stopped && !played) startMuted(target);
               }, AUTOPLAY_WITH_SOUND_MS);
             },
-            // The browser said so at once: no need to wait for the fallback.
+            // The browser said so at once, at the start or on resuming after a pause: no need to wait.
+            // Muted once; still blocked after that, the screen's sound control is the way back.
             onAutoplayBlocked: ({ target }) => {
-              if (stopped || played) return;
+              if (stopped || playing || fellBack) return;
               clearTimeout(withSound);
               startMuted(target);
             },
@@ -161,7 +166,11 @@ export function ScreenLivestreamPlayer({
               if (stopped) return;
               const state = livestreamPlayerState(data);
               if (!state) return;
-              if (state === "playing") played = true;
+              playing = state === "playing";
+              if (playing) {
+                played = true;
+                fellBack = false;
+              }
               // Nobody pauses a venue screen; carry on.
               if (state === "paused") target.playVideo();
               report({ type: "state", state });
