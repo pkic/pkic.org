@@ -7,17 +7,19 @@ import { LIVE_CHAT_POLICY, liveChatPlainText } from "../../../../assets/shared/l
 import { readLiveTickerContext } from "./room-ticker-context";
 import { readPublishedLiveAgenda } from "./approved-agenda";
 import type { LiveRoomChat } from "./room-chat";
+import { filterLiveChatForAir } from "./room-chat-on-air-filter";
 export const LIVE_TICKER_REFRESH_MS = 30000;
 
 /**
  * The latest attendee messages a broadcast may show, oldest first, as plain
  * words cut to the broadcast's length. Hidden and reported messages, and
- * anything by a muted or banned person, never reach an output: the chat
- * ticker and the chat graphic both read them here.
+ * anything by a muted or banned person, never reach an output, nor does a
+ * message still within its wait (`sentBy`) or one the on-air filter holds
+ * back: the chat ticker and the chat graphic both read them here.
  */
-export function liveChatOnAirMessages(chat: LiveRoomChat, limit: number) {
-  return chat
-    .tickerRows(limit)
+export async function liveChatOnAirMessages(chat: LiveRoomChat, limit: number, sentBy: string | null = null) {
+  const messages = chat
+    .tickerRows(limit, sentBy)
     .reverse()
     .flatMap((row) => {
       const text = liveChatPlainText(row.body);
@@ -28,11 +30,12 @@ export function liveChatOnAirMessages(chat: LiveRoomChat, limit: number) {
           : text;
       return [{ id: row.id, authorName: row.author_name, text: words }];
     });
+  return filterLiveChatForAir(messages);
 }
 
 /** The chat ticker's lines: the latest messages a broadcast may show, each after its author's name. */
-export function liveChatTickerLines(chat: LiveRoomChat): string[] {
-  return liveChatOnAirMessages(chat, LIVE_CHAT_POLICY.tickerMessages).map(
+export async function liveChatTickerLines(chat: LiveRoomChat): Promise<string[]> {
+  return (await liveChatOnAirMessages(chat, LIVE_CHAT_POLICY.tickerMessages)).map(
     (message) => `${message.authorName}: ${message.text}`,
   );
 }

@@ -22,6 +22,8 @@ import { liveChatOnAirMessages } from "./room-ticker";
  */
 export class LiveRoomOnScreenLists {
   private timer: ReturnType<typeof setTimeout> | null = null;
+  /** The refill due when the next waiting chat message may show. */
+  private wake: { at: number; timer: ReturnType<typeof setTimeout> } | null = null;
 
   constructor(
     private readonly ctx: DurableObjectState,
@@ -51,9 +53,14 @@ export class LiveRoomOnScreenLists {
     };
   }
 
-  /** The latest attendee messages a broadcast may show, newest last. */
-  chatFeed(config: LiveChatFeedConfig): LiveChatFeedOnAir {
-    return { config, messages: liveChatOnAirMessages(this.chat, config.count) };
+  /**
+   * The latest attendee messages a broadcast may show, newest last, each only
+   * once its wait is over. The room's moderation is read now, so a message
+   * hidden, held, reported or deleted during its wait never shows.
+   */
+  async chatFeed(config: LiveChatFeedConfig, now = Date.now()): Promise<LiveChatFeedOnAir> {
+    const sentBy = config.delaySeconds ? new Date(now - config.delaySeconds * 1000).toISOString() : null;
+    return { config, messages: await liveChatOnAirMessages(this.chat, config.count, sentBy) };
   }
 
   /** Questions or chat changed: the lists fill again once the changes of the next moment are in. */
@@ -65,31 +72,63 @@ export class LiveRoomOnScreenLists {
   }
 
   /** Fills every composition's lists again and tells viewers about those that changed. */
-  async refresh(): Promise<void> {
+  async refresh(now = Date.now()): Promise<void> {
     if (!this.store.session()) return;
-    const program = this.refilled(this.store.stage());
+    const program = await this.refilled(this.store.stage(), now);
     if (program) {
       this.store.saveStage(program);
       await this.broadcast.all({ type: "stage.changed", stage: this.store.stage() });
     }
     for (const output of LIVE_AUX_OUTPUTS) {
-      const composition = this.refilled(this.store.aux(output));
+      const composition = await this.refilled(this.store.aux(output), now);
       if (!composition) continue;
       this.store.saveAux(output, composition);
       await this.broadcast.all({ type: "aux.changed", output, composition: this.store.aux(output) });
     }
-    const preview = this.refilled(this.store.preview());
+    const preview = await this.refilled(this.store.preview(), now);
     if (preview) {
       this.store.savePreview(preview);
       await this.broadcast.all({ type: "preview.changed", composition: this.store.preview() });
     }
+    this.wakeForWaitingChat(now);
+  }
+
+  /**
+   * Refills once the oldest message still waiting may show. The room's alarm
+   * refills the lists on its own cadence too, so a room that sleeps in
+   * between catches up there.
+   */
+  private wakeForWaitingChat(now: number): void {
+    const outputs = this.store.outputs();
+    const delays = [
+      this.store.stage(),
+      this.store.preview(),
+      ...LIVE_AUX_OUTPUTS.map((output) => outputs[output]),
+    ].flatMap((composition) =>
+      composition.chatFeed?.config.delaySeconds ? [composition.chatFeed.config.delaySeconds] : [],
+    );
+    const waits = delays.flatMap((delay) => {
+      const sent = this.chat.firstSentAfter(new Date(now - delay * 1000).toISOString());
+      return sent ? [Date.parse(sent) + delay * 1000] : [];
+    });
+    if (!waits.length) return;
+    const at = Math.min(...waits) + 1;
+    if (this.wake && this.wake.at <= at && this.wake.at > now) return;
+    if (this.wake) clearTimeout(this.wake.timer);
+    this.wake = {
+      at,
+      timer: setTimeout(() => {
+        this.wake = null;
+        this.ctx.waitUntil(this.refresh());
+      }, at - now),
+    };
   }
 
   /** The composition with its lists filled again, or null when they hold what they held. */
-  private refilled(composition: LiveStage): LiveStage | null {
+  private async refilled(composition: LiveStage, now: number): Promise<LiveStage | null> {
     if (!composition.topQuestions && !composition.chatFeed) return null;
     const topQuestions = composition.topQuestions && this.topQuestions(composition.topQuestions.config);
-    const chatFeed = composition.chatFeed && this.chatFeed(composition.chatFeed.config);
+    const chatFeed = composition.chatFeed && (await this.chatFeed(composition.chatFeed.config, now));
     const same =
       JSON.stringify(topQuestions) === JSON.stringify(composition.topQuestions) &&
       JSON.stringify(chatFeed) === JSON.stringify(composition.chatFeed);

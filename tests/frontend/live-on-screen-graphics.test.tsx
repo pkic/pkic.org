@@ -136,7 +136,7 @@ describe("audience graphics on an output", () => {
           config: { count: 3 },
           questions: [{ id: "q-1", text: "Which algorithms first?", authorName: null, votes: 4 }],
         },
-        chatFeed: { config: { count: 4 }, messages: [] },
+        chatFeed: { config: { count: 4, delaySeconds: 10 }, messages: [] },
       },
     });
     const questions = host!.querySelector('[data-overlay-element="topQuestions"]');

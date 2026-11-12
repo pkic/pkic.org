@@ -11,6 +11,12 @@ export const LIVE_ON_SCREEN_LIST_POLICY = {
   questions: { min: 1, max: 5, default: 3 },
   /** Latest chat messages, newest last. */
   chat: { min: 1, max: 6, default: 4 },
+  /**
+   * How long, in seconds, a new chat message waits before an output may show
+   * it, so moderators can hide it first. The livestream itself often runs up
+   * to half a minute behind, so a short wait is rarely seen by viewers.
+   */
+  chatDelaySeconds: { choices: [0, 10, 30, 60], default: 10 },
 } as const;
 
 /** The parts of a question the selection reads; the room's rows and the operators' list both carry them. */

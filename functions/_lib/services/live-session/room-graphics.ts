@@ -46,7 +46,7 @@ export class LiveRoomGraphics {
   layouts: LiveOverlayLayoutGeometry[] = [];
   tickerContext: LiveTickerContext = DEFAULT_LIVE_TICKER_CONTEXT;
   /** The attendee chat lines a chat ticker may show now. */
-  chatTicker: () => string[] = () => [];
+  chatTicker: () => Promise<string[]> = async () => [];
   constructor(
     /** The database, and the secret that signs check-in codes; without it no output can show one. */
     private readonly env: { DB: DatabaseLike; INTERNAL_SIGNING_SECRET?: string },
@@ -99,7 +99,7 @@ export class LiveRoomGraphics {
         Date.now(),
         this.tickerContext,
         this.basis.read().agenda,
-        this.chatTicker(),
+        await this.chatTicker(),
       ),
       at,
     );
@@ -148,6 +148,8 @@ export class LiveRoomGraphics {
   ): Promise<ResolvedComposition> {
     const room = this.store.session()!;
     const approved = this.basis.read().agenda;
+    // Messages still waiting when the chat goes on show once their wait is over.
+    if (input.chatFeed?.delaySeconds) this.lists.due();
     return {
       questionId: input.questionId,
       creditKey: input.creditKey,
@@ -157,7 +159,7 @@ export class LiveRoomGraphics {
       panelists: input.panelists,
       timerGraphics: input.timerGraphics,
       topQuestions: input.topQuestions && this.lists.topQuestions(input.topQuestions),
-      chatFeed: input.chatFeed && this.lists.chatFeed(input.chatFeed),
+      chatFeed: input.chatFeed && (await this.lists.chatFeed(input.chatFeed)),
       reactions: input.reactions,
       ticker: await resolveLiveTicker(
         this.db,
@@ -167,7 +169,7 @@ export class LiveRoomGraphics {
         Date.now(),
         this.tickerContext,
         approved,
-        this.chatTicker(),
+        await this.chatTicker(),
       ),
       schedule: input.schedule
         ? resolveUpcomingRooms(approved, session.occurrenceId, Date.parse(at), input.schedule)
@@ -211,6 +213,8 @@ export class LiveRoomGraphics {
       await this.broadcast.all({ type: "overlay.layouts.changed", layouts });
     }
     await this.refreshCompositions(true);
+    // The audience lists also refill on this cadence, so a message whose wait ended while nothing changed shows.
+    await this.lists.refresh();
   }
 
   /** Recompute room-local chat and time-dependent graphics without querying D1. */
@@ -228,7 +232,7 @@ export class LiveRoomGraphics {
     if (!dynamic.some((composition) => composition.ticker || composition.schedule || composition.checkIn)) return;
     const approved = this.basis.read().agenda;
     const now = Date.now();
-    const chat = this.chatTicker();
+    const chat = await this.chatTicker();
     const refreshed = async <Composition extends LiveStage>(composition: Composition): Promise<Composition | null> => {
       const ticker = await resolveLiveTicker(
         this.db,

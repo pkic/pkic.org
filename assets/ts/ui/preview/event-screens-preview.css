@@ -16,4 +16,8 @@
   .pk-preview__camera {
     background: linear-gradient(135deg, var(--pk-chrome-raised), var(--pk-chrome-deep) 60%);
   }
+  /* An attendee's view of the stream, as wide as the virtual room's player on a laptop. */
+  .pk-preview__watch {
+    max-inline-size: 48rem;
+  }
 }

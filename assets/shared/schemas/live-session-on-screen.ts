@@ -19,9 +19,24 @@ export const DEFAULT_LIVE_TOP_QUESTIONS_CONFIG: LiveTopQuestionsConfig = {
   count: LIVE_ON_SCREEN_LIST_POLICY.questions.default,
 };
 
-export const liveChatFeedConfigSchema = z.object({ count: count(LIVE_ON_SCREEN_LIST_POLICY.chat) }).strict();
+const { choices: delays, default: defaultDelay } = LIVE_ON_SCREEN_LIST_POLICY.chatDelaySeconds;
+export const liveChatFeedDelaySchema = z
+  .number()
+  .int()
+  .refine((seconds) => (delays as readonly number[]).includes(seconds), "Choose one of the offered delays.");
+
+export const liveChatFeedConfigSchema = z
+  .object({
+    count: count(LIVE_ON_SCREEN_LIST_POLICY.chat),
+    /** Seconds a new message waits before it may show; a list saved before the delay existed takes the default. */
+    delaySeconds: liveChatFeedDelaySchema.default(defaultDelay),
+  })
+  .strict();
 export type LiveChatFeedConfig = z.infer<typeof liveChatFeedConfigSchema>;
-export const DEFAULT_LIVE_CHAT_FEED_CONFIG: LiveChatFeedConfig = { count: LIVE_ON_SCREEN_LIST_POLICY.chat.default };
+export const DEFAULT_LIVE_CHAT_FEED_CONFIG: LiveChatFeedConfig = {
+  count: LIVE_ON_SCREEN_LIST_POLICY.chat.default,
+  delaySeconds: defaultDelay,
+};
 
 /** One open question as an output lists it; an anonymous author stays anonymous. */
 export const liveTopQuestionSchema = z

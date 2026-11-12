@@ -94,15 +94,29 @@ export class LiveRoomChat {
       .reverse();
   }
 
-  /** The latest attendee messages nobody reported or hid, by people free to chat, newest first. */
-  tickerRows(limit: number): LiveChatRow[] {
+  /**
+   * The latest attendee messages nobody reported or hid, by people free to
+   * chat, newest first; only those sent by `sentBy` when a wait applies.
+   */
+  tickerRows(limit: number, sentBy: string | null = null): LiveChatRow[] {
     return this.sql.rows<LiveChatRow>(
       `${select("attendee")} WHERE ${HIDDEN}
          AND id NOT IN (SELECT message_id FROM room_chat_reports)
          AND author_user_id NOT IN (SELECT user_id FROM room_chat_restrictions)
+         ${sentBy ? "AND sent_at <= ?" : ""}
        ORDER BY sent_at DESC, rowid DESC LIMIT ?`,
+      ...(sentBy ? [sentBy] : []),
       limit,
     );
+  }
+
+  /** When the oldest attendee message sent after `since` was sent, or null when there is none. */
+  firstSentAfter(since: string): string | null {
+    const [row] = this.sql.rows<{ sent_at: string }>(
+      "SELECT sent_at FROM room_chat WHERE sent_at > ? ORDER BY sent_at, rowid LIMIT 1",
+      since,
+    );
+    return row?.sent_at ?? null;
   }
 
   /** One persistent per-person allowance covers both channels, so switching channels cannot reset it. */

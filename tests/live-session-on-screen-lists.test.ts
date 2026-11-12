@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { runInDurableObject } from "cloudflare:test";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { liveRoomClientMessageSchema, type LiveRoomServerMessage } from "../assets/shared/schemas/live-session-room";
+import type { LiveRoomOnScreenLists } from "../functions/_lib/services/live-session/room-on-screen-lists";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
 
 const f = createLiveRoomFixture();
@@ -7,7 +9,11 @@ type Client = Awaited<ReturnType<typeof f.connect>>;
 type AuxChanged = Extract<LiveRoomServerMessage, { type: "aux.changed" }>;
 
 /** The projector's composition with one audience list, or reactions, on it, as the studio sends it. */
-const projectorWith = (list: { topQuestions?: { count: number }; chatFeed?: { count: number }; reactions?: boolean }) =>
+const projectorWith = (list: {
+  topQuestions?: { count: number };
+  chatFeed?: { count: number; delaySeconds?: number };
+  reactions?: boolean;
+}) =>
   liveRoomClientMessageSchema.parse({
     type: "aux.set",
     output: "projector",
@@ -26,6 +32,11 @@ const projectorWith = (list: { topQuestions?: { count: number }; chatFeed?: { co
 async function projector(source: Client, where: (composition: AuxChanged["composition"]) => boolean) {
   return (await source.next("aux.changed", (message) => message.output === "projector" && where(message.composition)))
     .composition;
+}
+
+/** The room's audience lists, reached the way the sibling room tests reach its parts. */
+function lists(instance: unknown): LiveRoomOnScreenLists {
+  return Reflect.get(Reflect.get(instance as object, "graphics") as object, "lists");
 }
 
 async function ask(author: Client, operator: Client, text: string, anonymous = false) {
@@ -114,7 +125,7 @@ describe("audience lists on an output", () => {
     operator.send({ type: "chat.moderate", messageId: toHide.id, decision: "hide" });
     await operator.next("chat.message", (m) => m.message.id === toHide.id && m.message.moderation?.hidden !== null);
 
-    operator.send(projectorWith({ chatFeed: { count: 6 } }));
+    operator.send(projectorWith({ chatFeed: { count: 6, delaySeconds: 0 } }));
     const listed = await projector(source, (composition) => composition.chatFeed !== null);
     // Oldest first; the operators' channel, hidden and reported messages never reach an output.
     expect(listed.chatFeed?.messages).toEqual([
@@ -135,6 +146,58 @@ describe("audience lists on an output", () => {
       if (message.type === "aux.changed")
         expect(JSON.stringify(message.composition.chatFeed)).not.toContain("Crew only");
   });
+
+  it(
+    "holds each new message for the chat's wait, and never shows one moderated during it",
+    { timeout: 30_000 },
+    async () => {
+      const attendee = await f.connect({ person: "attendee" });
+      const second = await f.connect({ person: "secondAttendee" });
+      const operator = await f.connect({ person: "operator" });
+      const source = await f.connectSource("projector");
+      const delayed = { count: 6, delaySeconds: 10 };
+      operator.send(projectorWith({ chatFeed: delayed }));
+      await projector(source, (composition) => composition.chatFeed?.config.delaySeconds === 10);
+
+      const kept = await say(attendee, operator, "Worth the wait");
+      const hidden = await say(attendee, operator, "Something rude");
+      const deleted = await say(attendee, operator, "Typo in my message");
+      const reported = await say(second, operator, "Buy cheap certificates");
+      const fresh = await runInDurableObject(f.room(), (instance) => lists(instance).chatFeed(delayed));
+      expect(fresh.messages).toEqual([]);
+      // A message that waited its time shows; one sent later still waits.
+      const later = await runInDurableObject(f.room(), (instance) =>
+        lists(instance).chatFeed(delayed, Date.now() + 11_000),
+      );
+      expect(later.messages.map((message) => message.id)).toEqual([kept.id, hidden.id, deleted.id, reported.id]);
+
+      operator.send({ type: "chat.moderate", messageId: hidden.id, decision: "hide" });
+      attendee.send({ type: "chat.delete", messageId: deleted.id });
+      attendee.send({ type: "chat.report", messageId: reported.id, reason: "spam" });
+      await operator.next("chat.message", (m) => m.message.id === reported.id && m.message.moderation?.reports === 1);
+      await operator.next("chat.removed", (m) => m.messageId === deleted.id);
+
+      // Once the wait is over the room refills by itself; only the message nobody moderated reaches the output.
+      const shown = await vi.waitFor(
+        () => {
+          const found = [...source.received]
+            .reverse()
+            .find(
+              (message): message is AuxChanged =>
+                message.type === "aux.changed" && (message.composition.chatFeed?.messages.length ?? 0) > 0,
+            );
+          if (!found) throw new Error("No message on air yet");
+          return found.composition;
+        },
+        { timeout: 15_000, interval: 250 },
+      );
+      expect(shown.chatFeed?.messages.map((message) => message.id)).toEqual([kept.id]);
+      for (const message of source.received)
+        if (message.type === "aux.changed")
+          for (const id of [hidden.id, deleted.id, reported.id])
+            expect(message.composition.chatFeed?.messages.map((entry) => entry.id) ?? []).not.toContain(id);
+    },
+  );
 
   it("turns floating reactions on for one output only", async () => {
     const attendee = await f.connect({ person: "attendee" });
