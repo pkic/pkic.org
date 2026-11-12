@@ -32,7 +32,19 @@ export function BrowserScreenEnroll({
             disabled={busy}
             onClick={() => {
               setBusy(true);
-              void browser.enroll().finally(onEnrolled);
+              void browser
+                .enroll()
+                .catch(() => [])
+                .then(() => {
+                  // Whatever was refused, the screen goes on; if going on fails, the button is ready again.
+                  try {
+                    onEnrolled();
+                  } catch {
+                    /* Nothing more to do here; another click tries again. */
+                  } finally {
+                    setBusy(false);
+                  }
+                });
             }}
           >
             Enroll

@@ -13,7 +13,7 @@ import { screenHandoffDue, SCREEN_READY_ATTRIBUTE } from "./screen-handoff";
 import { ScreenLiveFeed, type ScreenLiveReport } from "./ScreenLiveFeed";
 import { ScreenIdentify } from "./ScreenIdentify";
 import { ScreenLivestreamPlayer } from "./ScreenLivestreamPlayer";
-import type { BrowserScreen } from "./browser-screen";
+import { browserScreenSound, type BrowserScreen } from "./browser-screen";
 import { BrowserScreenResume } from "./BrowserScreenResume";
 import { useBrowserScreenState } from "./useBrowserScreenState";
 import { livestreamPlayerReport, subscribeLivestreamPlayerReport } from "./livestream-player-report";
@@ -206,7 +206,8 @@ export function ScreenApp({
     [onReload],
   );
   const pageVersion = useMemo(() => screenPageVersion(), []);
-  const browserState = useBrowserScreenState(browser).state;
+  const grants = useBrowserScreenState(browser).state;
+  const sound = browserScreenSound(display.kind === "livestream" ? player : null);
   // A browser screen has no device to read: no metrics, and screenshots from its own tab capture.
   const readers = useMemo(
     () => (browser ? { readMetrics: async () => null, readScreenshot: browser.readScreenshot } : {}),
@@ -223,7 +224,7 @@ export function ScreenApp({
       player,
       clockOffsetMs: clock.offset(),
       pageVersion,
-      browser: browserState,
+      browser: grants ? { ...grants, sound } : null,
     }),
     onCommand,
     ...readers,
@@ -251,7 +252,7 @@ export function ScreenApp({
       ) : null}
       <ScreenView screenId={screenId} display={display} now={now} />
       {identifying ? <ScreenIdentify screenId={screenId} name={view?.screen.name ?? null} /> : null}
-      {browser ? <BrowserScreenResume browser={browser} /> : null}
+      {browser ? <BrowserScreenResume browser={browser} sound={sound} /> : null}
     </>
   );
 }

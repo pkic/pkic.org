@@ -69,7 +69,7 @@ export function screenKeyMetrics(status: Pick<ScreenLiveStatus, "health">): stri
 /** A clock this far off the server's shows its countdowns visibly wrong. */
 export const SCREEN_CLOCK_DRIFT_WARNING_MS = 2_000;
 
-/** What a click on a browser screen would bring back: anything its setup click granted that is gone now. */
+/** What a click on a browser screen would bring back: full screen, blocked sound or the tab capture. */
 export function screenBrowserNeedsResume(state: ScreenBrowserState): boolean {
-  return !state.fullscreen || !state.sound || state.capture !== "live";
+  return !state.fullscreen || state.sound === "blocked" || state.capture !== "live";
 }

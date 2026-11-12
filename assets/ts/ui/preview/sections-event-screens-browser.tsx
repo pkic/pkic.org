@@ -1,13 +1,15 @@
 /**
  * A browser set up as a screen: the setup page with its one button, and the
- * Resume button a reload leaves in a corner of the window, over what the
- * screen shows. Open one alone (`?only=<id>`) for a full-window screenshot.
+ * one control in a corner of the window, over what the screen shows: Resume
+ * after a reload, or the second click a browser needs for full screen and
+ * sound. Open one alone (`?only=<id>`) for a full-window screenshot.
  */
 import type { PreviewSection } from "./PreviewShell";
-import type { ScreenBrowserState } from "../../../shared/schemas/event-screen-monitor";
+import type { BrowserScreenGrants } from "../../event-screens/browser-screen";
 import { BrowserScreenEnroll } from "../../event-screens/BrowserScreenEnroll";
 import { BrowserScreenResume } from "../../event-screens/BrowserScreenResume";
 import { ScreenView } from "../../event-screens/ScreenApp";
+import { ScreenLivestream } from "../../event-screens/ScreenLivestream";
 import { LiveClockContext } from "../../live-session/useLiveCountdown";
 import { SCREEN_FIXTURE, SCREEN_FIXTURE_NOW, screenStageRunningFixture } from "./event-screens-fixtures";
 import "./event-screens-preview.css";
@@ -15,9 +17,17 @@ import "./event-screens-preview.css";
 const fixedClock = () => SCREEN_FIXTURE_NOW;
 const enroll = async () => [];
 
-/** After a reload: still awake, but no full screen, sound or tab capture until a click. */
-const reloaded: ScreenBrowserState = { fullscreen: false, wakeLock: true, sound: false, capture: "off" };
-const reloadedScreen = { get: () => reloaded, problems: () => [], subscribe: () => () => undefined, enroll };
+const screenWith = (grants: BrowserScreenGrants) => ({
+  get: () => grants,
+  problems: () => [],
+  subscribe: () => () => undefined,
+  enroll,
+  requestFullscreen: async () => true,
+});
+/** After a reload: still awake, but no full screen or tab capture until a click. */
+const reloaded = screenWith({ fullscreen: false, wakeLock: true, capture: "off" });
+/** The setup click went to the capture, and the livestream's player was refused sound. */
+const secondClick = screenWith({ fullscreen: false, wakeLock: true, capture: "live" });
 
 export const eventScreenBrowserSections: PreviewSection[] = [
   {
@@ -50,8 +60,21 @@ export const eventScreenBrowserSections: PreviewSection[] = [
             }}
           />
         </div>
-        <BrowserScreenResume browser={reloadedScreen} />
+        <BrowserScreenResume browser={reloaded} sound="none" />
       </LiveClockContext.Provider>
+    ),
+  },
+  {
+    id: "screen-browser-second-click",
+    title: "Browser screen: full screen and sound",
+    note: "A browser that spent the setup click on the tab capture, on a livestream its player could not start with sound: one more click in the same corner.",
+    render: () => (
+      <div class="pk-preview__screen">
+        <ScreenLivestream>
+          <div class="pk-preview__screen-player">Livestream player</div>
+        </ScreenLivestream>
+        <BrowserScreenResume browser={secondClick} sound="blocked" onSound={() => undefined} />
+      </div>
     ),
   },
 ];

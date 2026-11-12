@@ -149,15 +149,21 @@ export type ScreenKind = (typeof SCREEN_KINDS)[number];
 export const SCREEN_BROWSER_CAPTURE_STATES = ["live", "stopped", "off"] as const;
 
 /**
- * What a browser screen was granted by the click that set it up, which a
+ * A browser screen's livestream sound, as its player confirms it: playing
+ * unmuted, blocked by the browser (muted, or not playing at all), still
+ * starting, or no player to have sound.
+ */
+export const SCREEN_BROWSER_SOUND_STATES = ["on", "blocked", "starting", "none"] as const;
+
+/**
+ * What a browser screen was granted by the clicks that set it up, which a
  * reload takes away. A device screen has none of this.
  */
 export const screenBrowserStateSchema = z
   .object({
     fullscreen: z.boolean(),
     wakeLock: z.boolean(),
-    /** The livestream may play with sound. */
-    sound: z.boolean(),
+    sound: z.enum(SCREEN_BROWSER_SOUND_STATES),
     capture: z.enum(SCREEN_BROWSER_CAPTURE_STATES),
   })
   .strict();

@@ -11,7 +11,11 @@ import {
   type LivestreamHealth,
   type LivestreamHealthEvent,
 } from "../../assets/ts/event-screens/livestream-health";
-import { livestreamPlayerReport, readLivestreamPlayback } from "../../assets/ts/event-screens/livestream-player-report";
+import {
+  livestreamPlayerReport,
+  readLivestreamPlayback,
+  requestLivestreamSound,
+} from "../../assets/ts/event-screens/livestream-player-report";
 import type { ScreenApi } from "../../assets/ts/event-screens/screen-api";
 import { ScreenApp } from "../../assets/ts/event-screens/ScreenApp";
 import { createScreenClock } from "../../assets/ts/event-screens/screen-clock";
@@ -101,6 +105,9 @@ describe("the livestream screen", () => {
     destroy: ReturnType<typeof vi.fn>;
     playVideo: ReturnType<typeof vi.fn>;
     mute: ReturnType<typeof vi.fn>;
+    unMute: ReturnType<typeof vi.fn>;
+    isMuted: ReturnType<typeof vi.fn>;
+    getPlayerState: ReturnType<typeof vi.fn>;
   }
   let players: FakePlayer[] = [];
   let host: HTMLElement | undefined;
@@ -151,6 +158,8 @@ describe("the livestream screen", () => {
           mute = vi.fn();
           unMute = vi.fn();
           setVolume = vi.fn();
+          isMuted = vi.fn(() => true);
+          getPlayerState = vi.fn(() => YOUTUBE_PLAYER_STATES.playing);
           constructor(frame: HTMLIFrameElement, options: { events: YouTubePlayerEvents }) {
             players.push(Object.assign(this, { frame, events: options.events }) as unknown as FakePlayer);
           }
@@ -232,6 +241,37 @@ describe("the livestream screen", () => {
       errorCode: 150,
       stalls: { lastMinute: { count: 1, seconds: (LIVESTREAM_HEALTH_POLICY.retryFirstMs + 1_000) / 1000 }, started: 1 },
     });
+  });
+
+  it("starts muted at once when the player says the browser blocked it", async () => {
+    const api = fakeApi();
+    api.read.mockResolvedValue(timed(ownView("first-video")));
+    await mountApp(api);
+    await act(() => latest().events.onReady?.({ target: latest() as never }));
+    await act(() => latest().events.onAutoplayBlocked?.({ target: latest() as never }));
+    expect(latest().mute).toHaveBeenCalled();
+    expect(livestreamPlayerReport()).toMatchObject({ muted: true });
+  });
+
+  it("turns sound on from a click only once the player confirms it is unmuted and playing", async () => {
+    const api = fakeApi();
+    api.read.mockResolvedValue(timed(ownView("first-video")));
+    await mountApp(api);
+    await act(() => latest().events.onReady?.({ target: latest() as never }));
+    await act(() => latest().events.onAutoplayBlocked?.({ target: latest() as never }));
+    await emit("playing");
+
+    // Still blocked: the player stays muted after the click.
+    await act(() => requestLivestreamSound());
+    expect(latest().unMute).toHaveBeenCalled();
+    await advance(2_000);
+    expect(livestreamPlayerReport()).toMatchObject({ muted: true });
+
+    latest().isMuted.mockReturnValue(false);
+    await act(() => requestLivestreamSound());
+    expect(livestreamPlayerReport()).toMatchObject({ muted: true });
+    await advance(2_000);
+    expect(livestreamPlayerReport()).toMatchObject({ status: "playing", muted: false });
   });
 
   it("starts muted when the browser refuses to start with sound, instead of reconnecting", async () => {

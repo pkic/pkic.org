@@ -1,14 +1,18 @@
 /**
  * A browser set up as a screen (a laptop at a stage instead of a device):
- * what one click grants it and what it keeps. The click asks, all at once,
- * for full screen, a screen wake lock, sound for the livestream and a
- * capture of this tab for staff's screenshots. Each may be refused on its
- * own; the screen runs without it and says what is missing. A reload takes
- * full screen, sound and the capture away until the next click.
+ * what its clicks grant it and what it keeps. The setup click asks for a
+ * capture of this tab for staff's screenshots, then full screen, and takes a
+ * screen wake lock. A browser that spends the click on the capture refuses
+ * full screen; a second click in the screen's corner finishes it. Each may be
+ * refused on its own; the screen runs without it and says what is missing. A
+ * reload takes full screen and the capture away until the next click. Sound
+ * is the livestream player's to confirm, not this click's.
  */
 import type { ScreenBrowserState } from "../../shared/schemas/event-screen-monitor";
 import { browserScreenFrameSize, encodeBrowserScreenFrame, type FrameCanvas } from "./browser-screen-frame";
-import { requestLivestreamSound } from "./livestream-player-report";
+
+/** What the clicks grant; the screen adds the livestream's sound, which its player confirms. */
+export type BrowserScreenGrants = Omit<ScreenBrowserState, "sound">;
 
 /** What the screen asks of the browser, replaced in tests. */
 export interface BrowserScreenPlatform {
@@ -17,10 +21,6 @@ export interface BrowserScreenPlatform {
   };
   wakeLock?: { request(type: "screen"): Promise<WakeLockLike> };
   getDisplayMedia?: (options: object) => Promise<MediaStream>;
-  /** A sound context started by the click; resolves true once it runs. */
-  unlockSound: () => Promise<boolean>;
-  /** Whether the page has had a click since it loaded. */
-  hasBeenActive: () => boolean;
   /** A video and a canvas to take frames with. */
   frames: () => { video: FrameVideo; canvas: FrameCanvas & FrameDrawing };
 }
@@ -56,19 +56,7 @@ export const BROWSER_SCREEN_CAPTURE_OPTIONS = {
   monitorTypeSurfaces: "exclude",
 } as const;
 
-export type BrowserScreenProblem = "fullscreen" | "wake-lock" | "sound" | "capture" | "capture-surface";
-
-const unlockWithAudioContext = async () => {
-  const Context = window.AudioContext ?? (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!Context) return false;
-  const context = new Context();
-  try {
-    await context.resume();
-    return context.state === "running";
-  } finally {
-    void context.close();
-  }
-};
+export type BrowserScreenProblem = "fullscreen" | "wake-lock" | "capture" | "capture-surface";
 
 export const browserPlatform = (): BrowserScreenPlatform => ({
   document,
@@ -76,9 +64,6 @@ export const browserPlatform = (): BrowserScreenPlatform => ({
   getDisplayMedia: navigator.mediaDevices?.getDisplayMedia?.bind(navigator.mediaDevices) as
     | BrowserScreenPlatform["getDisplayMedia"]
     | undefined,
-  unlockSound: unlockWithAudioContext,
-  hasBeenActive: () =>
-    (navigator as { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive ?? false,
   frames: () => ({
     video: document.createElement("video"),
     canvas: document.createElement("canvas") as HTMLCanvasElement as FrameCanvas & FrameDrawing,
@@ -98,10 +83,9 @@ export type BrowserScreen = ReturnType<typeof createBrowserScreen>;
 
 export function createBrowserScreen(platform: BrowserScreenPlatform = browserPlatform()) {
   const { document } = platform;
-  let state: ScreenBrowserState = {
+  let state: BrowserScreenGrants = {
     fullscreen: Boolean(document.fullscreenElement),
     wakeLock: false,
-    sound: platform.hasBeenActive(),
     capture: "off",
   };
   let problems: BrowserScreenProblem[] = [];
@@ -109,8 +93,8 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
   let frames: ReturnType<BrowserScreenPlatform["frames"]> | null = null;
   const listeners = new Set<() => void>();
 
-  function set(next: Partial<ScreenBrowserState>, nextProblems = problems) {
-    const changed = Object.entries(next).some(([key, value]) => state[key as keyof ScreenBrowserState] !== value);
+  function set(next: Partial<BrowserScreenGrants>, nextProblems = problems) {
+    const changed = Object.entries(next).some(([key, value]) => state[key as keyof BrowserScreenGrants] !== value);
     if (!changed && nextProblems === problems) return;
     state = { ...state, ...next };
     problems = nextProblems;
@@ -137,11 +121,16 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
   });
   void keepAwake();
 
-  function endCapture(next: ScreenBrowserState["capture"]) {
+  function endCapture(next: BrowserScreenGrants["capture"]) {
     for (const track of stream?.getTracks() ?? []) track.stop();
     stream = null;
     if (frames) frames.video.srcObject = null;
     set({ capture: next });
+  }
+
+  /** Already full screen counts as granted; a browser without full screen refuses it like any other. */
+  function enterFullscreen(): Promise<void> {
+    return document.fullscreenElement ? Promise.resolve() : attempt(() => document.documentElement.requestFullscreen());
   }
 
   async function capture(request: Promise<MediaStream> | null): Promise<BrowserScreenProblem | null> {
@@ -180,42 +169,33 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
       return () => void listeners.delete(listener);
     },
     /**
-     * Everything one click grants, asked for at once while the click still
-     * counts as the person's: the browser forgets the click after the first
-     * request that waits. Resolves with what is still missing.
+     * The setup click, and Resume's: the capture first, while the click still
+     * counts as the person's, then full screen in the same handler, and the
+     * wake lock. Full screen is read from the document once the capture
+     * settles. Resolves with what is still missing; a refused full screen is
+     * offered again in the screen's corner.
      */
     async enroll(): Promise<BrowserScreenProblem[]> {
-      const requests = {
-        capture: platform.getDisplayMedia
-          ? attempt(() => platform.getDisplayMedia!(BROWSER_SCREEN_CAPTURE_OPTIONS))
-          : null,
-        fullscreen: document.fullscreenElement
-          ? Promise.resolve()
-          : attempt(() => document.documentElement.requestFullscreen()).then(() => undefined),
-        sound: attempt(platform.unlockSound),
-        wakeLock: keepAwake(),
-      };
-      requestLivestreamSound();
-      const [captured, fullscreen, sound, awake] = await Promise.allSettled([
-        capture(requests.capture),
-        requests.fullscreen,
-        requests.sound,
-        requests.wakeLock,
-      ]);
+      const captureRequest = platform.getDisplayMedia
+        ? attempt(() => platform.getDisplayMedia!(BROWSER_SCREEN_CAPTURE_OPTIONS))
+        : null;
+      const fullscreenRequest = enterFullscreen();
+      const [captured] = await Promise.allSettled([capture(captureRequest), fullscreenRequest, keepAwake()]);
       const missing: BrowserScreenProblem[] = [];
       const capturedProblem = captured.status === "fulfilled" ? captured.value : "capture";
       if (capturedProblem) missing.push(capturedProblem);
-      if (fullscreen.status === "rejected") missing.push("fullscreen");
-      if (sound.status === "rejected" || !sound.value) missing.push("sound");
-      if (awake.status === "rejected" || !awake.value) missing.push("wake-lock");
-      set(
-        {
-          fullscreen: Boolean(document.fullscreenElement) || fullscreen.status === "fulfilled",
-          sound: sound.status === "fulfilled" && sound.value,
-        },
-        missing,
-      );
+      const fullscreen = Boolean(document.fullscreenElement);
+      if (!fullscreen) missing.push("fullscreen");
+      if (!state.wakeLock) missing.push("wake-lock");
+      set({ fullscreen }, missing);
       return missing;
+    },
+    /** A second click's full screen, for a browser that spent the first on the capture. */
+    async requestFullscreen(): Promise<boolean> {
+      await enterFullscreen().catch(() => undefined);
+      const fullscreen = Boolean(document.fullscreenElement);
+      set({ fullscreen }, fullscreen ? problems.filter((problem) => problem !== "fullscreen") : problems);
+      return fullscreen;
     },
     /** One frame of this tab while it is captured, as the monitor takes a screenshot; null otherwise. */
     async readScreenshot(): Promise<ArrayBuffer | null> {
@@ -229,4 +209,11 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
       return encodeBrowserScreenFrame(frames.canvas);
     },
   };
+}
+
+/** The livestream's sound as its player confirms it: unmuted and playing, blocked (muted), starting, or no player. */
+export function browserScreenSound(player: { status: string; muted: boolean } | null): ScreenBrowserState["sound"] {
+  if (!player) return "none";
+  if (player.muted) return "blocked";
+  return player.status === "playing" ? "on" : "starting";
 }

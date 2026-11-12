@@ -144,7 +144,7 @@ describe("a browser screen in the status line", () => {
         health: {
           ...status("LAP234").health!,
           kind: "browser",
-          browser: { fullscreen: false, wakeLock: true, sound: false, capture },
+          browser: { fullscreen: false, wakeLock: true, sound: "none", capture },
         },
       });
     const condition = (live: ScreenLiveStatus) =>

@@ -191,10 +191,14 @@ describe("a screen's issues", () => {
       online({
         kind: "browser",
         metrics: null,
-        browser: { fullscreen: true, wakeLock: true, sound: true, capture: "live", ...state },
+        browser: { fullscreen: true, wakeLock: true, sound: "on", capture: "live", ...state },
       });
     expect(issues(browser({}))).toEqual([]);
-    expect(issues(browser({ fullscreen: false, sound: false, capture: "off" }))).toEqual([
+    // A player still starting, or none at all, is not missing sound.
+    expect(issues(browser({ sound: "starting" }))).toEqual([]);
+    expect(issues(browser({ sound: "none" }))).toEqual([]);
+    expect(issues(browser({ sound: "blocked" })).map((issue) => issue.code)).toEqual(["browser-resume"]);
+    expect(issues(browser({ fullscreen: false, sound: "blocked", capture: "off" }))).toEqual([
       { code: "browser-resume", label: "Needs a click to resume", severity: "warning", since: ago(20) },
     ]);
     // Sharing stopped: its last screenshot ages without counting against it.

@@ -102,7 +102,7 @@ export const MONITOR: ScreenMonitorView = {
         MONITOR_SCREENS.laptop,
         health({
           kind: "browser",
-          browser: { fullscreen: false, wakeLock: true, sound: false, capture: "off" },
+          browser: { fullscreen: false, wakeLock: true, sound: "none", capture: "off" },
           output: "stage-display",
           metrics: null,
         }),

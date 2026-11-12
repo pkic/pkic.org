@@ -12,9 +12,13 @@ import { SCREEN_MONITOR_LIMITS } from "../../assets/shared/schemas/event-screen-
 import { screenIdSchema, screenReadResponseSchema } from "../../assets/shared/schemas/event-screens";
 import {
   BROWSER_SCREEN_CAPTURE_OPTIONS,
+  browserScreenSound,
   createBrowserScreen,
   type BrowserScreenPlatform,
 } from "../../assets/ts/event-screens/browser-screen";
+import { browserScreenNextClick } from "../../assets/ts/event-screens/browser-screen-copy";
+import { browserScreenAddress, parseScreenPageAddress } from "../../assets/ts/event-screens/screen-address";
+import { screenStorage } from "../../assets/ts/event-screens/screen-storage";
 import { BROWSER_SCREEN_FRAME, encodeBrowserScreenFrame } from "../../assets/ts/event-screens/browser-screen-frame";
 import {
   BROWSER_SCREEN_ID_KEY,
@@ -29,31 +33,43 @@ import { createScreenClock } from "../../assets/ts/event-screens/screen-clock";
 import { readScreenDeviceScreenshot } from "../../assets/ts/event-screens/screen-device-screenshot";
 import { fakeLiveSockets } from "./helpers/live-room-socket";
 
-/** A browser that grants or refuses each request as told. */
+/**
+ * A browser that grants or refuses each request as told. A click's
+ * activation lasts until a request that needs it consumes it; `spends`
+ * says whether the capture does, as browsers following the spec do.
+ */
 function fakePlatform(
-  grants: { fullscreen?: boolean; sound?: boolean; wakeLock?: boolean; capture?: "tab" | "window" | "declined" } = {},
+  grants: { fullscreen?: boolean; wakeLock?: boolean; capture?: "tab" | "window" | "declined"; spends?: boolean } = {},
 ) {
-  const { fullscreen = true, sound = true, wakeLock = true, capture = "tab" } = grants;
+  const { fullscreen = true, wakeLock = true, capture = "tab", spends = false } = grants;
   const listeners = new Map<string, () => void>();
   const track = Object.assign(new EventTarget(), {
     stop: vi.fn(),
     getSettings: () => ({ displaySurface: capture === "tab" ? "browser" : "window" }),
   });
   const stream = { getVideoTracks: () => [track], getTracks: () => [track] } as unknown as MediaStream;
+  let active = false;
   const doc = {
     fullscreenElement: null as Element | null,
     visibilityState: "visible" as DocumentVisibilityState,
     addEventListener: (type: string, listener: () => void) => listeners.set(type, listener),
     documentElement: {
-      requestFullscreen: vi.fn(async () => {
-        if (!fullscreen) throw new Error("Refused");
+      requestFullscreen: vi.fn((): Promise<void> => {
+        if (!fullscreen || !active) return Promise.reject(new TypeError("Not allowed"));
+        active = false;
         doc.fullscreenElement = {} as Element;
+        return Promise.resolve();
       }),
     },
   };
-  const getDisplayMedia = vi.fn(async () => {
-    if (capture === "declined") throw new DOMException("Denied", "NotAllowedError");
-    return stream;
+  let pending: (() => void) | null = null;
+  const getDisplayMedia = vi.fn((): Promise<MediaStream> => {
+    if (spends) active = false;
+    if (capture === "declined") return Promise.reject(new DOMException("Denied", "NotAllowedError"));
+    return new Promise((resolve) => {
+      pending = () => resolve(stream);
+      queueMicrotask(() => pending?.());
+    });
   });
   const platform: BrowserScreenPlatform = {
     document: doc as unknown as BrowserScreenPlatform["document"],
@@ -64,8 +80,6 @@ function fakePlatform(
       }),
     },
     getDisplayMedia,
-    unlockSound: vi.fn(async () => sound),
-    hasBeenActive: () => false,
     frames: () => ({
       video: { srcObject: null, muted: false, videoWidth: 1920, videoHeight: 1080, play: async () => undefined },
       canvas: Object.assign(fakeCanvas([["image/webp", 30_000]]), {
@@ -75,7 +89,16 @@ function fakePlatform(
       }),
     }),
   };
-  return { platform, track, getDisplayMedia, doc };
+  /** A person's click: activation for the requests it starts. */
+  const click = <T,>(run: () => T): T => {
+    active = true;
+    return run();
+  };
+  const exitFullscreen = () => {
+    doc.fullscreenElement = null;
+    listeners.get("fullscreenchange")?.();
+  };
+  return { platform, track, getDisplayMedia, doc, click, exitFullscreen };
 }
 
 /** A canvas whose encoder answers each request in turn with a blob of this type and size. */
@@ -104,45 +127,83 @@ afterEach(async () => {
 });
 
 describe("setting up a browser as a screen", () => {
-  it("asks for everything in one click and keeps what was granted", async () => {
-    const { platform, getDisplayMedia } = fakePlatform();
+  it("captures this tab and goes full screen in one click where the browser allows it", async () => {
+    const { platform, getDisplayMedia, doc, click } = fakePlatform();
     const screen = createBrowserScreen(platform);
-    expect(await screen.enroll()).toEqual([]);
+    expect(await click(() => screen.enroll())).toEqual([]);
     expect(getDisplayMedia).toHaveBeenCalledWith(BROWSER_SCREEN_CAPTURE_OPTIONS);
-    expect(screen.get()).toEqual({ fullscreen: true, wakeLock: true, sound: true, capture: "live" });
+    // The capture is asked for first, while the click still counts.
+    expect(getDisplayMedia.mock.invocationCallOrder[0]).toBeLessThan(
+      doc.documentElement.requestFullscreen.mock.invocationCallOrder[0]!,
+    );
+    expect(screen.get()).toEqual({ fullscreen: true, wakeLock: true, capture: "live" });
+  });
+
+  it("finishes full screen with a second click in the corner where the capture spent the first", async () => {
+    const { platform, click } = fakePlatform({ spends: true });
+    const screen = createBrowserScreen(platform);
+    expect(await click(() => screen.enroll())).toEqual(["fullscreen"]);
+    expect(screen.get()).toMatchObject({ fullscreen: false, capture: "live" });
+
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<BrowserScreenResume browser={screen} sound="none" />, host!));
+    const action = host.querySelector<HTMLButtonElement>(".pk-screen-resume button")!;
+    expect(action.textContent).toBe("Full screen");
+    await act(async () => {
+      await click(() => {
+        action.click();
+        return Promise.resolve();
+      });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.get().fullscreen).toBe(true);
+    expect(screen.problems()).toEqual([]);
+    expect(host.querySelector(".pk-screen-resume")).toBeNull();
+  });
+
+  it("reads full screen from the document once the capture settles", async () => {
+    const { platform, click, doc, exitFullscreen } = fakePlatform();
+    doc.fullscreenElement = {} as Element;
+    const screen = createBrowserScreen(platform);
+    const enrolled = click(() => screen.enroll());
+    // The person leaves full screen while the capture picker is open.
+    exitFullscreen();
+    expect(await enrolled).toEqual(["fullscreen"]);
+    expect(screen.get().fullscreen).toBe(false);
   });
 
   it.each([
     [{ fullscreen: false }, ["fullscreen"], { fullscreen: false, capture: "live" }],
-    [{ sound: false }, ["sound"], { sound: false }],
     [{ wakeLock: false }, ["wake-lock"], { wakeLock: false }],
-    [{ capture: "declined" as const }, ["capture"], { capture: "off" }],
+    [{ capture: "declined" as const }, ["capture"], { capture: "off", fullscreen: true }],
   ])("goes on without what is refused (%o) and says so", async (grants, problems, state) => {
-    const { platform } = fakePlatform(grants);
+    const { platform, click } = fakePlatform(grants);
     const screen = createBrowserScreen(platform);
-    expect(await screen.enroll()).toEqual(problems);
+    expect(await click(() => screen.enroll())).toEqual(problems);
     expect(screen.problems()).toEqual(problems);
     expect(screen.get()).toMatchObject(state);
   });
 
   it("goes on when the browser has no full screen at all", async () => {
-    const { platform, doc } = fakePlatform();
+    const { platform, doc, click } = fakePlatform();
     (doc.documentElement as { requestFullscreen?: unknown }).requestFullscreen = undefined;
     const screen = createBrowserScreen(platform);
-    expect(await screen.enroll()).toEqual(["fullscreen"]);
+    expect(await click(() => screen.enroll())).toEqual(["fullscreen"]);
     expect(screen.get().capture).toBe("live");
   });
 
   it("accepts a capture of this tab only, and reports when the person stops sharing", async () => {
     const window = fakePlatform({ capture: "window" });
     const refused = createBrowserScreen(window.platform);
-    expect(await refused.enroll()).toEqual(["capture-surface"]);
+    expect(await window.click(() => refused.enroll())).toEqual(["capture-surface"]);
     expect(window.track.stop).toHaveBeenCalled();
     expect(refused.get().capture).toBe("off");
 
     const tab = fakePlatform();
     const screen = createBrowserScreen(tab.platform);
-    await screen.enroll();
+    await tab.click(() => screen.enroll());
     expect(screen.get().capture).toBe("live");
     tab.track.dispatchEvent(new Event("ended"));
     expect(screen.get().capture).toBe("stopped");
@@ -150,25 +211,83 @@ describe("setting up a browser as a screen", () => {
   });
 
   it("takes a frame of its tab as a screenshot while it is shared", async () => {
-    const { platform } = fakePlatform();
+    const { platform, click } = fakePlatform();
     const screen = createBrowserScreen(platform);
     expect(await screen.readScreenshot()).toBeNull();
-    await screen.enroll();
+    await click(() => screen.enroll());
     const frame = await screen.readScreenshot();
     expect(frame?.byteLength).toBe(30_000);
   });
 
-  it("enrolls from the setup page's one button, then goes on", async () => {
+  it("enrolls from the setup page's one button and goes on, ready again if going on fails", async () => {
     const enroll = vi.fn(async () => []);
-    const onEnrolled = vi.fn();
+    const onEnrolled = vi.fn(() => {
+      throw new Error("Address refused");
+    });
     host = document.body.appendChild(document.createElement("div"));
     await act(() => render(<BrowserScreenEnroll browser={{ enroll }} onEnrolled={onEnrolled} />, host!));
-    expect(host.textContent).toContain("Set up this browser as a screen");
+    const button = host.querySelector("button")!;
     await act(async () => {
-      host!.querySelector("button")!.click();
+      button.click();
+      await enroll.mock.results[0]!.value;
     });
     expect(enroll).toHaveBeenCalledTimes(1);
     expect(onEnrolled).toHaveBeenCalledTimes(1);
+    expect(button.disabled).toBe(false);
+  });
+
+  it("writes the browser's marker with its ID, and keeps working where storage is refused", () => {
+    expect(parseScreenPageAddress({ hash: `#${browserScreenAddress("K7M2QA")}` })).toEqual({
+      screenId: "K7M2QA",
+      host: "browser",
+    });
+    const blocked = screenStorage({
+      get localStorage(): Storage {
+        throw new DOMException("Blocked", "SecurityError");
+      },
+    });
+    const id = browserScreenId(blocked);
+    expect(screenIdSchema.safeParse(id).success).toBe(true);
+    expect(browserScreenId(blocked)).toBe(id);
+  });
+});
+
+describe("the corner's next click", () => {
+  const live = { fullscreen: true, wakeLock: true, capture: "live" as const };
+  it.each([
+    [{ ...live, sound: "on" as const }, null],
+    [{ ...live, sound: "starting" as const }, null],
+    [{ ...live, fullscreen: false, sound: "none" as const }, "fullscreen"],
+    [{ ...live, sound: "blocked" as const }, "sound"],
+    [{ ...live, fullscreen: false, sound: "blocked" as const }, "fullscreen-sound"],
+    [{ ...live, capture: "off" as const, sound: "none" as const }, "resume"],
+    [{ ...live, capture: "stopped" as const, sound: "blocked" as const }, "resume"],
+  ])("for %o is %s", (state, action) => {
+    expect(browserScreenNextClick(state)?.action ?? null).toBe(action);
+  });
+
+  it("turns on sound within the click, with full screen when that is missing too", async () => {
+    const { platform, click } = fakePlatform({ spends: true });
+    const screen = createBrowserScreen(platform);
+    await click(() => screen.enroll());
+    const onSound = vi.fn();
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<BrowserScreenResume browser={screen} sound="blocked" onSound={onSound} />, host!));
+    const action = host.querySelector<HTMLButtonElement>(".pk-screen-resume button")!;
+    expect(action.textContent).toBe("Full screen and sound");
+    await act(async () => {
+      click(() => action.click());
+      await Promise.resolve();
+    });
+    expect(onSound).toHaveBeenCalledTimes(1);
+    expect(screen.get().fullscreen).toBe(true);
+  });
+
+  it("reports sound only as the player confirms it", () => {
+    expect(browserScreenSound(null)).toBe("none");
+    expect(browserScreenSound({ status: "loading", muted: false })).toBe("starting");
+    expect(browserScreenSound({ status: "playing", muted: false })).toBe("on");
+    expect(browserScreenSound({ status: "playing", muted: true })).toBe("blocked");
   });
 });
 
@@ -217,16 +336,16 @@ describe("a browser screen's screenshot encoding", () => {
 });
 
 describe("after a reload", () => {
-  it("offers one Resume button while anything is missing, which asks again", async () => {
-    const { platform } = fakePlatform();
+  it("offers Resume while the capture is missing, which asks for it again", async () => {
+    const { platform, click } = fakePlatform();
     const screen = createBrowserScreen(platform);
     const enroll = vi.spyOn(screen, "enroll");
     host = document.body.appendChild(document.createElement("div"));
-    await act(() => render(<BrowserScreenResume browser={screen} />, host!));
-    const resume = host.querySelector<HTMLElement>(".pk-screen-resume");
-    expect(resume?.querySelector("button")).not.toBeNull();
+    await act(() => render(<BrowserScreenResume browser={screen} sound="none" />, host!));
+    const action = host.querySelector<HTMLButtonElement>(".pk-screen-resume button")!;
+    expect(action.textContent).toBe("Resume");
     await act(async () => {
-      resume!.querySelector("button")!.click();
+      click(() => action.click());
       await enroll.mock.results[0]!.value;
     });
     expect(enroll).toHaveBeenCalledTimes(1);
@@ -295,7 +414,10 @@ describe("the device's local service", () => {
     const reports = (sockets.latest().sent as unknown[])
       .filter((data): data is string => typeof data === "string" && data.startsWith("{"))
       .map((data) => JSON.parse(data) as { health: { kind: string; browser: unknown } });
-    expect(reports[0]?.health).toMatchObject({ kind: "browser", browser: { capture: "off", fullscreen: false } });
+    expect(reports[0]?.health).toMatchObject({
+      kind: "browser",
+      browser: { capture: "off", fullscreen: false, sound: "none" },
+    });
   });
 
   it("is read on a device, for its metrics and screenshot", async () => {
