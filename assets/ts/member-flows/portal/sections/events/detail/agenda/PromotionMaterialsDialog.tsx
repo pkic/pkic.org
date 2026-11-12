@@ -2,6 +2,7 @@ import { Suspense } from "preact/compat";
 import { useRef, useState } from "preact/hooks";
 import { Spinner } from "../../../../../../components/Spinner";
 import { Button } from "../../../../../../ui/Button";
+import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { MAX_PROMOTION_MATERIAL_FILES } from "../../../../../../../shared/schemas/event-email-campaigns";
 import { MyPromotionKits, type PromotionFilePicker } from "./MyPromotionKits";
@@ -33,10 +34,14 @@ export function PromotionMaterialsDialog({
   const [downloading, setDownloading] = useState(false);
   const [notice, setNotice] = useState("");
   const downloads = useRef(new Map<string, () => Promise<void>>());
+  // A ready file can be picked; "Select all" follows the cards as they become ready.
+  const [, setReadyCount] = useState(0);
 
   const pick: PromotionFilePicker = (key, download) => {
+    const wasReady = downloads.current.has(key);
     if (download) downloads.current.set(key, download);
     else downloads.current.delete(key);
+    if (wasReady !== Boolean(download)) queueMicrotask(() => setReadyCount(downloads.current.size));
     return {
       checked: selected.has(key),
       onChange: (checked) => {
@@ -67,6 +72,13 @@ export function PromotionMaterialsDialog({
   }
 
   const tooMany = selected.size > MAX_PROMOTION_MATERIAL_FILES;
+  const ready = [...downloads.current.keys()];
+  const allSelected = ready.length > 0 && ready.every((key) => selected.has(key));
+
+  function selectAll(checked: boolean) {
+    setNotice("");
+    setSelected(checked ? new Set([...selected, ...ready]) : new Set());
+  }
 
   return (
     <Dialog
@@ -81,6 +93,13 @@ export function PromotionMaterialsDialog({
       onCancel={onClose}
       footerActions={
         <>
+          <Checkbox
+            label="Select all"
+            checked={allSelected}
+            indeterminate={selected.size > 0 && !allSelected}
+            disabled={!ready.length}
+            onChange={(event) => selectAll(event.currentTarget.checked)}
+          />
           <span class="pk-dialog__foot-status" role="status">
             {notice ||
               (tooMany
