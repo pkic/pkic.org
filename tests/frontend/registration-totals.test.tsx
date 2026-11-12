@@ -67,7 +67,7 @@ function card(container: HTMLElement, label: string): HTMLElement {
   const found = [...container.querySelectorAll<HTMLElement>(".pk-stat-card")].find(
     (candidate) => candidate.querySelector(".pk-stat-card__label")?.textContent === label,
   );
-  if (!found) throw new Error(`No card labelled "${label}"`);
+  if (!found) throw new Error(`No card labeled "${label}"`);
   return found;
 }
 
