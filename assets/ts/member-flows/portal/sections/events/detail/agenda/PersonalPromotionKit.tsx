@@ -44,7 +44,7 @@ export function PersonalPromotionKit({
 }: {
   base: string;
   /** Lets an organizer pick files: the selection state of each format, given how to download it. */
-  select?: (format: Format | BadgeFormat, download: () => Promise<void>) => PromotionTileSelection;
+  select?: (format: Format | BadgeFormat, download?: () => Promise<void>) => PromotionTileSelection;
   title: string;
   menu?: ComponentChildren;
   /** Tiles from outside this kit shown first, such as the attendee badge. */
@@ -99,7 +99,7 @@ export function PersonalPromotionKit({
                     stacked={"stacked" in tile}
                     selection={
                       select && {
-                        ...select(tile.format, () => downloads.download(tile.format, preview)),
+                        ...select(tile.format, ready ? () => downloads.download(tile.format, preview) : undefined),
                         disabled: !ready,
                       }
                     }

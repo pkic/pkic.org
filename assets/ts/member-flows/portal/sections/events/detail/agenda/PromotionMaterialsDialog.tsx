@@ -35,7 +35,8 @@ export function PromotionMaterialsDialog({
   const downloads = useRef(new Map<string, () => Promise<void>>());
 
   const pick: PromotionFilePicker = (key, download) => {
-    downloads.current.set(key, download);
+    if (download) downloads.current.set(key, download);
+    else downloads.current.delete(key);
     return {
       checked: selected.has(key),
       onChange: (checked) => {
@@ -51,9 +52,9 @@ export function PromotionMaterialsDialog({
   };
 
   async function downloadSelected() {
-    // A tile registers its download once its kit has loaded; never skip a picked file silently.
+    // A tile registers its download only while its file is ready; never skip a picked file silently.
     if ([...selected].some((key) => !downloads.current.has(key))) {
-      setNotice("Some files are still loading. Try again in a moment.");
+      setNotice("Some files are not ready yet. Try again in a moment.");
       return;
     }
     setNotice("");

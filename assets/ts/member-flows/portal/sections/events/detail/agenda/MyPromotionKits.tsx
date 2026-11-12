@@ -13,7 +13,8 @@ import type { PromotionTileSelection } from "./PromotionTile";
 import { promotionFileKey } from "./promotion-file-keys";
 
 /** Picks one file and remembers how to download it, for the dialog's commands on the selection. */
-export type PromotionFilePicker = (key: string, download: () => Promise<void>) => PromotionTileSelection;
+/** The file's download, or undefined while the file is not ready to download. */
+export type PromotionFilePicker = (key: string, download?: () => Promise<void>) => PromotionTileSelection;
 
 /** Everything a participant shares for one event: their materials, then their invite link. */
 export function MyPromotionKits({
@@ -51,7 +52,7 @@ export function MyPromotionKits({
   const badgeUrl = share && extractOgBadgeUrl(share.shareUrl, share.badgeVersion);
   const select =
     pick &&
-    ((kit: { occurrenceId: string } | "attendee") => (format: string, download: () => Promise<void>) =>
+    ((kit: { occurrenceId: string } | "attendee") => (format: string, download?: () => Promise<void>) =>
       pick(promotionFileKey(kit, format), download));
   const inviteAction = canInvite && !userId ? <InviteColleagueButton eventSlug={slug} /> : undefined;
   return (
