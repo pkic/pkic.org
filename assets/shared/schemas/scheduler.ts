@@ -2,7 +2,7 @@ import { z } from "zod";
 import { successResponseSchema, trimmedString, utcInstantSchema } from "./api-common";
 import { authErrors, ok, requiresPermissions } from "./route-contract";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { pendingWorkListQuerySchema, pendingWorkListResponseSchema } from "./pending-work";
+import { pendingWorkListQuerySchema, pendingWorkRowSchema } from "./pending-work";
 
 /**
  * The scheduler is the mechanism; a scheduled job is the resource it manages.
@@ -187,7 +187,14 @@ export const schedulerJobScheduleUpdateRouteSchema = {
 
 /** A job's unfinished work, listed by the job's own domain in the shared pending-work shape. */
 export const schedulerJobBacklogQuerySchema = pendingWorkListQuerySchema;
-export const schedulerJobBacklogResponseSchema = pendingWorkListResponseSchema;
+export const schedulerJobBacklogItemSchema = pendingWorkRowSchema.extend({
+  /** The domain's own identifier for the item, opaque to the scheduler. */
+  id: z.string(),
+  /** The caller may run this item now instead of waiting for the next run. */
+  retryable: z.boolean(),
+});
+export type SchedulerJobBacklogItem = z.infer<typeof schedulerJobBacklogItemSchema>;
+export const schedulerJobBacklogResponseSchema = paginatedResponseSchema("items", schedulerJobBacklogItemSchema);
 export const schedulerJobBacklogRouteSchema = {
   tags: ["Scheduler"],
   ...requiresPermissions("scheduler:read"),
@@ -200,6 +207,36 @@ export const schedulerJobBacklogRouteSchema = {
     ...authErrors({
       forbidden: "Requires scheduler:read and the job's own domain permissions.",
       notFound: "Unknown job, or a job that lists no backlog.",
+    }),
+  },
+};
+
+export const schedulerJobBacklogItemParamsSchema = schedulerJobParamsSchema.extend({
+  itemId: z.string().trim().min(1).max(200),
+});
+export const schedulerJobBacklogRetryCreateSchema = z.object({}).default({});
+export const schedulerJobBacklogRetryResponseSchema = successResponseSchema.extend({
+  /** False when the attempt failed again; the item stays in the backlog with its new error. */
+  finished: z.boolean(),
+  error: z.string().nullable(),
+});
+export type SchedulerJobBacklogRetryResponse = z.infer<typeof schedulerJobBacklogRetryResponseSchema>;
+export const schedulerJobBacklogRetryRouteSchema = {
+  tags: ["Scheduler"],
+  ...requiresPermissions("scheduler:read", "scheduler:manage"),
+  summary: "Retry one backlog item now",
+  description:
+    "Runs one unfinished item now instead of waiting for its next attempt, through the same claim the job uses, so it never runs twice. Requires the grants the job's own domain requires.",
+  request: {
+    params: schedulerJobBacklogItemParamsSchema,
+    body: { required: false, content: { "application/json": { schema: schedulerJobBacklogRetryCreateSchema } } },
+  },
+  responses: {
+    ...ok("The attempt's outcome.", schedulerJobBacklogRetryResponseSchema),
+    ...authErrors({
+      forbidden: "Requires scheduler:manage and the job's own domain permissions.",
+      notFound: "Unknown job, or an item that is finished or cannot be retried.",
+      conflict: "The item is being worked on right now.",
     }),
   },
 };

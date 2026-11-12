@@ -156,8 +156,6 @@ async function markOutboxSent(
       processingToken,
     ],
   );
-
-  // Calendar delivery is tracked through email_outbox rows to keep storage/model simple.
 }
 
 async function markOutboxFailed(

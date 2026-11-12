@@ -3,7 +3,7 @@ import {
   schedulerJobBacklogResponseSchema,
   schedulerJobBacklogRouteSchema,
 } from "../../../../../../assets/shared/schemas/scheduler";
-import { requirePermission } from "../../../../../_lib/auth/permissions";
+import { hasPermission, requirePermission } from "../../../../../_lib/auth/permissions";
 import { requireStaffPermission } from "../../../../../_lib/auth/staff-permissions";
 import { markResponseSensitive, type AdminContext } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
@@ -21,9 +21,11 @@ export const SchedulerJobBacklogList = openApiRoute(schedulerJobBacklogRouteSche
   // The backlog names people and events, so reading it takes the job's own domain grants.
   for (const permission of definition.requiredPermissions ?? []) requirePermission(staff, permission);
   const result = await definition.backlog(db, data.query);
+  // Retrying is a manual run of one item, so it takes what a manual run of the job takes.
+  const canRetry = hasPermission(staff, "scheduler:manage") && definition.retryBacklogItem !== undefined;
   return json(
     schedulerJobBacklogResponseSchema.parse({
-      items: result.items,
+      items: result.items.map((item) => ({ ...item, retryable: canRetry && item.retryable })),
       page: buildPageInfo(data.query.limit, data.query.offset, result.total, result.items.length),
     }),
   );

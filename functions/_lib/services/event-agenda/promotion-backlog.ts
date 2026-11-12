@@ -1,9 +1,13 @@
-import type { PendingWorkListQuery, PendingWorkRow } from "../../../../assets/shared/schemas/pending-work";
+import type { PendingWorkListQuery } from "../../../../assets/shared/schemas/pending-work";
+import type { SchedulerJobBacklogItem } from "../../../../assets/shared/schemas/scheduler";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
-import type { DatabaseLike } from "../../types";
+import { first, run } from "../../db/queries";
+import { AppError } from "../../errors";
+import type { DatabaseLike, Env } from "../../types";
 import { nowIso } from "../../utils/time";
+import { processPromotionRenderJob } from "./promotion-render-jobs";
 
 type BacklogKind = "kit" | "file" | "email";
 
@@ -18,6 +22,7 @@ interface PromotionBacklogRow {
   email: string;
   due_at: string | null;
   last_error: string | null;
+  item_id: string;
 }
 
 /**
@@ -114,7 +119,10 @@ function formatList(json: string): string {
   }
 }
 
-function toPendingWork(row: PromotionBacklogRow): PendingWorkRow {
+/** Only a file render can run on its own; kits and emails follow from it. */
+const RETRYABLE_FILE_STATES = new Set(["queued", "retrying", "interrupted"]);
+
+function toPendingWork(row: PromotionBacklogRow): SchedulerJobBacklogItem {
   const name = [row.first_name, row.last_name].filter(Boolean).join(" ");
   const state =
     row.state === "interrupted"
@@ -123,6 +131,8 @@ function toPendingWork(row: PromotionBacklogRow): PendingWorkRow {
   const kit = row.occurrence_id ? "Session kit" : "Attendee kit";
   const formats = formatList(row.formats);
   return {
+    id: `${row.kind}:${row.item_id}`,
+    retryable: row.kind === "file" && RETRYABLE_FILE_STATES.has(row.state),
     typeLabel: KIND_LABELS[row.kind],
     title: name || row.email,
     subtitle: row.event_name,
@@ -137,4 +147,37 @@ function toPendingWork(row: PromotionBacklogRow): PendingWorkRow {
 export async function listPromotionRenderingBacklog(db: DatabaseLike, query: PendingWorkListQuery) {
   const page = await queryPage<PromotionBacklogRow>(db, buildPromotionBacklogPageQuery(query, nowIso()));
   return { items: page.rows.map(toPendingWork), total: page.total };
+}
+
+/**
+ * Renders one waiting file now. It goes through the job's own claim, so a run
+ * that picks the same file at the same moment does not render it twice.
+ */
+export async function retryPromotionBacklogItem(db: DatabaseLike, env: Env, itemId: string) {
+  const id = itemId.startsWith("file:") ? itemId.slice("file:".length) : null;
+  const notRetryable = () => new AppError(404, "BACKLOG_ITEM_NOT_FOUND", "This work is finished or cannot be retried.");
+  if (!id) throw notRetryable();
+  const now = nowIso();
+  // A waiting retry becomes due now; an interrupted render is claimable once its lease expired.
+  await run(
+    db,
+    "UPDATE event_promotion_renders SET next_attempt_at=?, updated_at=? WHERE id=? AND status IN ('queued','retrying')",
+    [now, now, id],
+  );
+  const before = await first<{ status: string; lease_expires_at: string | null }>(
+    db,
+    "SELECT status, lease_expires_at FROM event_promotion_renders WHERE id=?",
+    [id],
+  );
+  if (!before || !["queued", "retrying", "rendering"].includes(before.status)) throw notRetryable();
+  if (before.status === "rendering" && before.lease_expires_at !== null && before.lease_expires_at > now) {
+    throw new AppError(409, "BACKLOG_ITEM_IN_PROGRESS", "This file is rendering right now.");
+  }
+  const finished = await processPromotionRenderJob(db, env, id);
+  const after = await first<{ last_error: string | null }>(
+    db,
+    "SELECT last_error FROM event_promotion_renders WHERE id=?",
+    [id],
+  );
+  return { finished, error: finished ? null : (after?.last_error ?? null) };
 }

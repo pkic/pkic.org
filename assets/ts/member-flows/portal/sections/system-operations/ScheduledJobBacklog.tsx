@@ -1,13 +1,18 @@
-import type { PendingWorkRow } from "../../../../../shared/schemas/pending-work";
-import { schedulerJobBacklogResponseSchema } from "../../../../../shared/schemas/scheduler";
-import { ApiDataTable } from "../../../../components/ApiDataTable";
+import { useRef, useState } from "preact/hooks";
+import {
+  schedulerJobBacklogResponseSchema,
+  schedulerJobBacklogRetryResponseSchema,
+  type SchedulerJobBacklogItem,
+} from "../../../../../shared/schemas/scheduler";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import type { Column } from "../../../../components/Table";
 import type { CollectionLoader } from "../../../../hooks/useServerCollection";
-import { getJson } from "../../../../shared/api-client";
+import { getJson, postJson } from "../../../../shared/api-client";
 import { Badge } from "../../../../ui/Badge";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { Panel } from "../../../../ui/Panel";
-import { fmt } from "../../ui";
+import { RowActions } from "../../../../ui/RowActions";
+import { fmt, toast } from "../../ui";
 import { scheduledJobTitle } from "./scheduled-job-title";
 import "../../../../ui/Content.css";
 
@@ -22,7 +27,28 @@ const NOTABLE_STATES: Record<string, "warn"> = { interrupted: "warn", retrying: 
  */
 export function ScheduledJobBacklog({ jobKey }: { jobKey: string }) {
   const title = scheduledJobTitle(jobKey);
-  const columns: Column<PendingWorkRow>[] = [
+  const tableActions = useRef<ApiTableActions | null>(null);
+  const [busyItem, setBusyItem] = useState<string | null>(null);
+
+  async function retryNow(item: SchedulerJobBacklogItem): Promise<void> {
+    setBusyItem(item.id);
+    try {
+      const outcome = await postJson(
+        `/api/v1/scheduler/jobs/${encodeURIComponent(jobKey)}/backlog/${encodeURIComponent(item.id)}/retries`,
+        {},
+        schedulerJobBacklogRetryResponseSchema,
+      );
+      await tableActions.current?.reload();
+      if (outcome.finished) toast(`${item.typeLabel} for ${item.title} is done.`, "success");
+      else toast(outcome.error ? `It failed again: ${outcome.error}` : "It failed again.", "error");
+    } catch (retryError) {
+      toast((retryError as Error).message, "error");
+    } finally {
+      setBusyItem(null);
+    }
+  }
+
+  const columns: Column<SchedulerJobBacklogItem>[] = [
     {
       header: "Work",
       width: "primary",
@@ -57,6 +83,22 @@ export function ScheduledJobBacklog({ jobKey }: { jobKey: string }) {
       width: "fit",
       sort: { asc: "dueAt", desc: "-dueAt", defaultDirection: "asc" },
     },
+    {
+      header: "",
+      width: "fit",
+      className: "pk-end",
+      cell: (row) => (
+        <RowActions
+          // One person can have several rows, so the name also says which work it is.
+          subject={`${row.title}, ${row.context}`}
+          actions={
+            row.retryable
+              ? [{ id: "retry", label: "Retry now", onSelect: () => void retryNow(row), disabled: busyItem !== null }]
+              : []
+          }
+        />
+      ),
+    },
   ];
 
   return (
@@ -83,6 +125,7 @@ export function ScheduledJobBacklog({ jobKey }: { jobKey: string }) {
           initialSort="dueAt"
           searchPlaceholder="Search person or event…"
           load={loadPortalCollection}
+          actionsRef={tableActions}
           columns={columns}
           empty="Nothing is waiting."
         />

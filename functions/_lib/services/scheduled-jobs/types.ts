@@ -1,9 +1,13 @@
 import type { Permission } from "../../../../assets/shared/schemas/permissions";
 import type { D1QueryBudget } from "../../db/query-budget";
-import type { PendingWorkListQuery, PendingWorkRow } from "../../../../assets/shared/schemas/pending-work";
+import type { PendingWorkListQuery } from "../../../../assets/shared/schemas/pending-work";
 import type { DatabaseLike, Env } from "../../types";
 
-import type { ScheduledJobKey, ScheduledJobStatus } from "../../../../assets/shared/schemas/scheduler";
+import type {
+  ScheduledJobKey,
+  ScheduledJobStatus,
+  SchedulerJobBacklogItem,
+} from "../../../../assets/shared/schemas/scheduler";
 export type { ScheduledJobKey, ScheduledJobStatus } from "../../../../assets/shared/schemas/scheduler";
 
 export interface ScheduledJobRunContext {
@@ -49,7 +53,12 @@ export interface ScheduledJobDefinition {
    * The work this job has not finished, read from its own domain. Reading it
    * needs the same grants as `requiredPermissions`.
    */
-  backlog?(db: DatabaseLike, query: PendingWorkListQuery): Promise<{ items: PendingWorkRow[]; total: number }>;
+  backlog?(db: DatabaseLike, query: PendingWorkListQuery): Promise<{ items: SchedulerJobBacklogItem[]; total: number }>;
+  /**
+   * Runs one retryable backlog item now, through the job's own claim. Throws
+   * 404 when the item is finished or not retryable, 409 while it is claimed.
+   */
+  retryBacklogItem?(env: Env, itemId: string): Promise<{ finished: boolean; error: string | null }>;
 }
 
 export interface ScheduledJobRow {

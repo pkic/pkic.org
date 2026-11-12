@@ -6,6 +6,7 @@ import { SchedulerJobsList } from "./jobs/index";
 import { SchedulerJobStateUpdate } from "./jobs/[jobKey]/index";
 import { SchedulerJobRunCreate } from "./jobs/[jobKey]/runs/index";
 import { SchedulerJobBacklogList } from "./jobs/[jobKey]/backlog";
+import { SchedulerJobBacklogRetryCreate } from "./jobs/[jobKey]/backlog/[itemId]/retries";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -15,5 +16,6 @@ openapi.patch("/jobs/:jobKey", SchedulerJobStateUpdate);
 openapi.patch("/jobs/:jobKey/schedule", SchedulerJobScheduleUpdate);
 openapi.post("/jobs/:jobKey/runs", SchedulerJobRunCreate);
 openapi.get("/jobs/:jobKey/backlog", SchedulerJobBacklogList);
+openapi.post("/jobs/:jobKey/backlog/:itemId/retries", SchedulerJobBacklogRetryCreate);
 
 export default openapi;

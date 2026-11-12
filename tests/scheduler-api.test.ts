@@ -7,7 +7,11 @@ import { resetDb } from "./helpers/reset-db";
 import { seedPersona } from "./personas/seed";
 import { onlyPersona } from "./personas/catalog";
 import { queryAll } from "./helpers/context";
-import { schedulerJobBacklogResponseSchema, schedulerJobsListResponseSchema } from "../assets/shared/schemas/scheduler";
+import {
+  schedulerJobBacklogResponseSchema,
+  schedulerJobBacklogRetryResponseSchema,
+  schedulerJobsListResponseSchema,
+} from "../assets/shared/schemas/scheduler";
 import { seedEventAndAdmin } from "./helpers/context";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
@@ -272,6 +276,8 @@ describe("scheduler API", () => {
       ["Email", "Ada Example", "Attendee kit · Carousel", "Waiting for files"],
       ["File", "Ada Example", "Attendee kit · Carousel", "Interrupted"],
     ]);
+    // Only the file can run on its own; the email follows from it.
+    expect(body.items.map((item) => item.retryable)).toEqual([false, true]);
     // A job without a backlog has no such page.
     expect(
       (
@@ -281,6 +287,44 @@ describe("scheduler API", () => {
         )
       ).status,
     ).toBe(404);
+  });
+
+  it("retries one waiting file now instead of at its next attempt", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const user = await findOrCreateUser(env.DB, { email: "retry@example.test", firstName: "Ada", lastName: "Retry" });
+    const at = "2026-01-01T00:00:00.000Z";
+    const later = "2099-01-01T00:00:00.000Z";
+    await env.DB.prepare(
+      `INSERT INTO event_promotion_renders(id,event_id,occurrence_id,user_id,revision,format,origin,cache_key,status,attempts,next_attempt_at,last_error,created_at,updated_at)
+       VALUES ('render-retry',?,NULL,?,1,'carousel','https://app.test','key-retry','retrying',1,?,'Render timed out',?,?)`,
+    )
+      .bind(eventId, user.id, later, at, at)
+      .run();
+    const path = (itemId: string) =>
+      `/api/v1/scheduler/jobs/promotion_rendering/backlog/${encodeURIComponent(itemId)}/retries`;
+    const post = (token: string, itemId: string) => call(token, path(itemId), { method: "POST", body: "{}" });
+
+    expect((await post(await staffWith(["schedulerOperator"]), "file:render-retry")).status).toBe(403);
+    const token = await staffWith(["schedulerOperator", "agendaEditor"]);
+    // A kit or an email is not retried on its own.
+    expect((await post(token, "email:batch-1::user")).status).toBe(404);
+    expect((await post(token, "file:not-a-render")).status).toBe(404);
+
+    const response = await post(token, "file:render-retry");
+    expect(response.status).toBe(200);
+    // The synthetic event publishes no kit, so the attempt settles the file as no longer needed.
+    expect(schedulerJobBacklogRetryResponseSchema.parse(await response.json())).toEqual({
+      success: true,
+      finished: true,
+      error: null,
+    });
+    const [row] = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM event_promotion_renders WHERE id = 'render-retry'",
+    );
+    expect(row!.status).toBe("obsolete");
+    // Finished work cannot be retried again.
+    expect((await post(token, "file:render-retry")).status).toBe(404);
   });
 
   it("returns 404 for an unknown job rather than leaking the registry shape", async () => {
