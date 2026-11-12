@@ -45,6 +45,9 @@ export const countsUp = (timer: Pick<LiveTimer, "kind">) => timer.kind === "stop
 export const liveTimerCounts = (timer: Pick<LiveTimer, "kind">) => timer.kind !== "clock";
 
 /** A countdown's full length, for its progress and its reset; null for a stopwatch or a span the room does not know. */
+/** A countdown this far over is forgotten on the stage display: nobody stopped it, and nobody is reading it. */
+export const LIVE_TIMER_STALE_OVERTIME_MS = 60 * 60 * 1000;
+
 export function liveTimerTotalMs(timer: Pick<LiveTimer, "kind" | "durationSeconds">, session: SessionTime) {
   if (timer.kind === "session") return Math.max(0, Date.parse(session.endAt) - Date.parse(session.startAt));
   return timer.kind === "stopwatch" || timer.kind === "clock" || timer.durationSeconds === null
@@ -135,7 +138,12 @@ export function createLiveTimer(id: string, draft: LiveTimerDraft, session: Sess
 function storedValue(timer: LiveTimer, now: number): number {
   if (!timer.running || !timer.anchorAt) return timer.heldMs;
   const anchor = Date.parse(timer.anchorAt);
-  return clampMs(countsUp(timer) ? now - anchor : anchor - now);
+  if (countsUp(timer)) return clampMs(now - anchor);
+  // A countdown never reads more than it had when an operator last started or changed it: a screen whose
+  // clock runs a little behind the room's would otherwise show a second extra right after Start.
+  const changedAt = timer.change ? Date.parse(timer.change.at) : Number.NaN;
+  const left = anchor - now;
+  return clampMs(Number.isFinite(changedAt) ? Math.min(left, anchor - changedAt) : left);
 }
 
 /**

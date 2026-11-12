@@ -7,7 +7,14 @@ import {
   type LiveStageSpeaker,
 } from "./live-stage-display";
 import { formatLiveTimer } from "./live-timer-format";
-import { countsUp, liveTimerCounts, liveTimerReading, liveTimerShownMs, liveTimerTone } from "./live-timer-policy";
+import {
+  countsUp,
+  LIVE_TIMER_STALE_OVERTIME_MS,
+  liveTimerCounts,
+  liveTimerReading,
+  liveTimerShownMs,
+  liveTimerTone,
+} from "./live-timer-policy";
 import type { LivePoll } from "./schemas/live-session-poll";
 import type {
   LiveRoomSession,
@@ -220,16 +227,19 @@ export function liveStageDisplayPlan(input: LiveStageDisplayInput): LiveStageDis
   const { session, settings, now } = input;
   const left = sessionLeftMs(input);
   const nearEnd = settings.nearEndSeconds > 0 && left !== null && left > 0 && left <= settings.nearEndSeconds * 1000;
-  const items = liveStageDisplayGraphics(input.own, input.program, input.timers).map((graphic) => {
-    const item = liveTimerGraphicText(
-      graphic,
-      input.timers.find((timer) => timer.id === graphic.timerId)!,
-      session,
-      now,
-    );
-    // Near the end the session timer turns amber with the cue, whatever its own warning time.
-    return nearEnd && item.kind === "session" && !item.tone ? { ...item, tone: "warn" as const } : item;
-  });
+  const items = liveStageDisplayGraphics(input.own, input.program, input.timers)
+    .map((graphic) => {
+      const item = liveTimerGraphicText(
+        graphic,
+        input.timers.find((timer) => timer.id === graphic.timerId)!,
+        session,
+        now,
+      );
+      // Near the end the session timer turns amber with the cue, whatever its own warning time.
+      return nearEnd && item.kind === "session" && !item.tone ? { ...item, tone: "warn" as const } : item;
+    })
+    // A countdown left running an hour past zero drops off the stage; the Studio still shows it.
+    .filter((item) => item.remainingMs === null || item.remainingMs > -LIVE_TIMER_STALE_OVERTIME_MS);
   const shown = main(input, items);
   const message = input.speakerMessage;
   const banner: LiveStageBanner | null = message

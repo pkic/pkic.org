@@ -132,6 +132,13 @@ describe("stage display plan", () => {
     expect(plan.footer).toMatchObject({ marker: "next", title: "Crypto agility in HSMs", speakers: "Casey Demo" });
   });
 
+  it("drops a countdown left running an hour past zero", () => {
+    const stale = { ...pitch, atZero: { ...pitch.atZero, action: "overtime" as const }, anchorAt: at(-61 * MINUTE) };
+    const plan = liveStageDisplayPlan(input(-10 * MINUTE, 50 * MINUTE, { own: both, timers: [session, stale] }));
+    expect(plan.main.kind).not.toBe("overtime");
+    expect(JSON.stringify(plan.main)).not.toContain("Pitch");
+  });
+
   it("counts down to the next session in a break", () => {
     const plan = liveStageDisplayPlan(input(11 * MINUTE + 57_000, 40 * MINUTE));
     expect(plan.main).toMatchObject({ kind: "break", timer: { label: "Next session starts in", text: "11:57" } });

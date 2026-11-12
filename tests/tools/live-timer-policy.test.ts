@@ -103,6 +103,18 @@ describe("a session timer that follows the agenda", () => {
   });
 });
 
+describe("a countdown just started", () => {
+  it("never reads more than it had when it was started, on a screen whose clock runs behind", () => {
+    const started = {
+      ...pitch({ action: "overtime", resetAfterSeconds: 10, restart: false }),
+      change: { operatorName: "Op", at: at(0) },
+    };
+    // The screen's clock is 400 ms behind the room's: without the cap it would read 1:00.4, so 1:01.
+    expect(read(started, session, now - 400).valueMs).toBe(60_000);
+    expect(read(started, session, now + 1_000).valueMs).toBe(59_000);
+  });
+});
+
 describe("a countdown at zero", () => {
   it("keeps counting as overtime by default", () => {
     const timer = pitch({ action: "overtime", resetAfterSeconds: 10, restart: false });
