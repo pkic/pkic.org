@@ -90,10 +90,9 @@ describe("registration representation editing", () => {
     expect(container.querySelector('[role="combobox"]')).toBeNull();
     expect(container.querySelector('input[name="email"]')).toBeNull();
     await vi.waitFor(() => expect(container.querySelector('a[href="/portal/"]')).not.toBeNull());
-    expect(container.textContent).not.toContain("Saving a different representation");
   });
 
-  it.each(["Discard", "Back", "refresh failure"] as const)(
+  it.each(["Discard", "Back", 503, 403, 500] as const)(
     "refreshes saved identity profile edits independently of closing with %s",
     async (exit) => {
       const work = { ...WORK };
@@ -101,7 +100,7 @@ describe("registration representation editing", () => {
       const requests = installApi(read, { identities: [work] });
       const api = globalThis.fetch;
       let profileSaved = false;
-      let refuseRefresh = exit === "refresh failure";
+      let refuseRefresh = typeof exit === "number";
       vi.stubGlobal(
         "fetch",
         vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -109,7 +108,7 @@ describe("registration representation editing", () => {
           if (profileSaved && refuseRefresh && path.endsWith(read.registration.id)) {
             return Response.json(
               { error: { code: "TEMPORARY_UNAVAILABLE", message: "Registration refresh is unavailable." } },
-              { status: 503 },
+              { status: typeof exit === "number" ? exit : 503 },
             );
           }
           if (!path.endsWith(`/identities/${work.id}/profile`)) return api(input, init);
@@ -144,15 +143,17 @@ describe("registration representation editing", () => {
       await click(button(document.querySelector("dialog[open]")!, "Save changes"));
       await vi.waitFor(() => expect(document.querySelector("dialog[open]")).toBeNull());
       expect(container.querySelector<HTMLInputElement>('input[name="firstName"]')!.value).toBe("Draft name");
-      if (exit === "refresh failure") {
-        await vi.waitFor(() => expect(button(container, "Retry registration")).not.toBeNull());
+      if (typeof exit === "number") {
+        await vi.waitFor(() => expect(button(container, "Retry refresh")).not.toBeNull());
         await act(() => history.back());
         await vi.waitFor(() => expect(button(container, "Edit details")).not.toBeNull());
-        expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-          "Registration refresh is unavailable.",
-        );
+        await act(() => history.forward());
+        await vi.waitFor(() => expect(button(container, "Retry refresh")).not.toBeNull());
+        expect(container.querySelector<HTMLInputElement>('input[name="firstName"]')!.value).toBe("Draft name");
+        expect(container.querySelector('[role="alert"]')?.textContent).toContain("Your profile changes were saved");
         refuseRefresh = false;
-        await click(button(container, "Retry registration"));
+        await click(button(container, "Retry refresh"));
+        await act(() => history.back());
       } else {
         await vi.waitFor(() =>
           expect(
@@ -192,6 +193,24 @@ describe("registration representation editing", () => {
     await click(button(container, "Retry"));
     await vi.waitFor(() => expect(container.querySelector('[role="combobox"]')).not.toBeNull());
     expect(button(container, "Retry")).toBeNull();
+  });
+
+  it("offers sign-in when the owner session has expired or been revoked", async () => {
+    installApi(readResponse({ identityId: WORK.id }), { identities: [WORK] });
+    const api = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).endsWith("/auth/session"))
+          return Response.json({ error: { code: "AUTH_REQUIRED", message: "Sign in again." } }, { status: 401 });
+        return api(input, init);
+      }),
+    );
+    const container = await mount();
+    await click(button(container, "Edit details"));
+    await vi.waitFor(() => expect(container.querySelector('a[href="/portal/"]')).not.toBeNull());
+    expect(button(container, "Retry")).toBeNull();
+    expect(container.querySelector('[role="combobox"]')).toBeNull();
   });
 
   it("keeps the representation when it is unchanged", async () => {

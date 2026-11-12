@@ -15,7 +15,6 @@ import { buildRegistrationUpdate, type RegistrationUpdatePayload } from "./updat
 import { isRegistrationTransitionConflict, registrationChangedError } from "./transition-guard";
 import { emailTakenError, isEmailReservationConflict } from "../user-emails";
 import { formSubmissionContextChangedError, isFormSubmissionContextConflict } from "../forms";
-import { uuid } from "../../utils/ids";
 import { outboxIdForOperation } from "../../email/outbox-queue";
 
 type RegistrationUpdatePlan = Awaited<ReturnType<typeof buildRegistrationUpdate>>;
@@ -32,10 +31,8 @@ async function executeRegistrationUpdate<T>(
   payload: RegistrationUpdatePayload,
   load: () => Promise<RegistrationRecord>,
   changedBy: string | undefined,
-  commit: (built: RegistrationUpdatePlan, operationId: string) => Promise<T>,
+  commit: (built: RegistrationUpdatePlan) => Promise<T>,
 ): Promise<T> {
-  // One operation key survives capacity retries without changing capability-bound state.
-  const operationId = uuid();
   let attemptedRegistrationId: string | undefined;
   try {
     return await withDayCapacityRetry(async () => {
@@ -48,9 +45,10 @@ async function executeRegistrationUpdate<T>(
           ...built.registration,
           registration_identity_id: payload.identityChange.change.identityId,
         };
-        built.notificationChanged = true;
+        built.notificationChanged ||=
+          registration.registration_identity_id !== payload.identityChange.change.identityId;
       }
-      return commit(built, operationId);
+      return commit(built);
     });
   } catch (error) {
     if (attemptedRegistrationId && payload.identityChange && isAuthorizationGuardFailure(error)) {
@@ -87,16 +85,17 @@ async function commitUpdateWithNotification(
   db: DatabaseLike,
   built: RegistrationUpdatePlan,
   payload: RegistrationUpdatePayload & { notification: UpdateNotification },
-  operationId: string,
   commitBatch: (statements: StatementLike[]) => Promise<D1StatementResult[]> = (statements) => db.batch(statements),
 ): Promise<{ registration: RegistrationRecord; outboxId: string | null; outboxIds: string[] }> {
   if (!built.notificationChanged) {
     await commitBatch(built.statements);
     return { registration: built.registration, outboxId: null, outboxIds: [] };
   }
+  // The atomic transition guard advances this persisted revision for every
+  // accepted edit; retries share a key and later edits get distinct keys.
   const idempotencyKey =
     payload.notification.idempotencyKey ??
-    `registration-update:${built.registration.id}:${operationId}:` +
+    `registration-update:${built.registration.id}:from-revision:${built.registration.transition_revision}:` +
       `${payload.notification.templateKey}:${payload.notification.noticeKind ?? "status_update"}`;
   const outboxId = payload.notification.outboxId ?? (await outboxIdForOperation(idempotencyKey));
   const email = await prepareRegistrationStatusEmail(db, {
@@ -168,7 +167,7 @@ export async function updateRegistrationByManageTokenWithNotification(
     payload,
     () => getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret),
     undefined,
-    (built, operationId) => commitUpdateWithNotification(db, built, payload, operationId),
+    (built) => commitUpdateWithNotification(db, built, payload),
   );
 }
 
@@ -204,7 +203,7 @@ export async function updateRegistrationByIdWithNotification(
         ? Promise.resolve(registrationSnapshot)
         : getRegistrationByIdForEvent(db, payload.eventId, payload.registrationId),
     changedBy,
-    (built, operationId) => commitUpdateWithNotification(db, built, payload, operationId, commitBatch),
+    (built) => commitUpdateWithNotification(db, built, payload, commitBatch),
   );
 }
 

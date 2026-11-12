@@ -64,6 +64,7 @@ export function ParticipantRegistration({
           data={loaded.data.registration}
           forms={loaded.data.forms}
           reload={loaded.reload}
+          refreshProfile={loaded.refresh}
           focusDay={focusDay}
         />
       )}
@@ -82,12 +83,14 @@ function RegistrationRecord({
   data,
   forms,
   reload,
+  refreshProfile,
   focusDay,
 }: {
   endpoint: string;
   data: RegistrationManageReadResponse;
   forms: EventFormsResponse;
   reload: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   focusDay: string | null;
 }) {
   const [editing, showEditor, closeEditor] = useDialogQueryState("editRegistration");
@@ -189,7 +192,7 @@ function RegistrationRecord({
                 data={data}
                 forms={forms}
                 save={save}
-                onProfileUpdated={reload}
+                onProfileUpdated={refreshProfile}
                 onDiscard={() => {
                   setEditorMounted(false);
                   void closeEditor();

@@ -261,8 +261,29 @@ test("verified approved-domain registration affiliates once and an organization 
     await changeIdentity.getByRole("button", { name: "Edit representation", exact: true }).click();
     const profile = attendee.getByRole("dialog", { name: "Edit representation", exact: true });
     await profile.getByRole("textbox", { name: /^Job title for this organization/ }).fill("Event liaison");
+    await attendee.route("**/api/v1/registrations/access/*", (route) =>
+      route.request().method() === "GET"
+        ? route.fulfill({
+            status: 500,
+            contentType: "application/json",
+            body: JSON.stringify({ error: { code: "REFRESH_FAILED", message: "Try again." } }),
+          })
+        : route.continue(),
+    );
     await profile.getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(profile).not.toBeVisible();
+    await expect(changeIdentity.getByRole("button", { name: "Retry refresh", exact: true })).toBeVisible();
+    await expect(attendee.getByRole("alert").filter({ hasText: "Your profile changes were saved" })).toHaveCount(1);
+    for (const [width, height, device] of [
+      [1280, 900, "desktop"],
+      [375, 812, "phone"],
+    ] as const) {
+      await attendee.setViewportSize({ width, height });
+      await attendee.screenshot({ path: testInfo.outputPath(`profile-refresh-retry-${device}.png`), fullPage: true });
+    }
+    await attendee.unroute("**/api/v1/registrations/access/*");
+    await changeIdentity.getByRole("button", { name: "Retry refresh", exact: true }).click();
+    await expect(changeIdentity.getByRole("button", { name: "Retry refresh", exact: true })).toHaveCount(0);
     await attendee.goBack();
     await expect(attendee.getByRole("button", { name: "Edit details", exact: true })).toBeVisible();
     await expect(attendee.getByRole("definition").filter({ hasText: "Event liaison" })).toBeVisible();

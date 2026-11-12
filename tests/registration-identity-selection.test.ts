@@ -214,6 +214,38 @@ describe("registration representation changes", () => {
     expect((await getRegistrationById(env.DB, f.registrationId)).transition_revision).toBe(afterEdits + 2);
   });
 
+  it("queues one notification for a double submit and a retry after a lost response", async () => {
+    const f = await setupChange();
+    const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
+    await seedWorkflowEmailTemplates(env.DB, adminId);
+    const before = await getRegistrationById(env.DB, f.registrationId);
+    const submit = (environment = registrationEnvironment) =>
+      callApi(environment, f.path, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${f.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ action: "update", firstName: "New name" }),
+      });
+    let competing: Response | undefined;
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("INSERT INTO registration_transition_guards"),
+      async () => {
+        competing = await submit();
+      },
+    );
+    const pending = await submit({ ...registrationEnvironment, DB: db });
+    expect(competing?.status).toBe(200);
+    expect(pending.status).toBe(409);
+    expect((await submit()).status).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT idempotency_key FROM email_outbox WHERE template_key='registration_updated'"),
+    ).toEqual([
+      {
+        idempotency_key: `registration-update:${f.registrationId}:from-revision:${before.transition_revision}:registration_updated:status_update`,
+      },
+    ]);
+  });
+
   it("hides representation changes for delegated manage JWTs and refuses them before session verification", async () => {
     const f = await setupChange();
     const fingerprint = await sha256Hex("");

@@ -9,7 +9,7 @@ import { useState } from "preact/hooks";
 import type { RegistrationManageReadResponse } from "../../../shared/schemas/registration";
 import { userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
 import type { SessionActingIdentity } from "../../../shared/session-acting-identity";
-import { getJson } from "../../shared/api-client";
+import { ApiClientError, getJson } from "../../shared/api-client";
 import { RegistrationIdentityField } from "../RegistrationIdentitySelect";
 import { useData } from "../../hooks/useData";
 import { friendlyErrorMessage } from "../ErrorAlert";
@@ -27,11 +27,15 @@ export function RegistrationRepresentationField({
   onSelect: (identity: SessionActingIdentity | null) => void;
   onUpdated: () => Promise<void>;
 }) {
-  const session = useData(
-    () =>
-      data.canChangeIdentity ? getJson("/api/v1/auth/session", userAuthSessionResponseSchema) : Promise.resolve(null),
-    [data.canChangeIdentity, data.registration.id],
-  );
+  const session = useData(async () => {
+    if (!data.canChangeIdentity) return null;
+    try {
+      return await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
+    } catch (error) {
+      if (error instanceof ApiClientError && error.status === 401) return null;
+      throw error;
+    }
+  }, [data.canChangeIdentity, data.registration.id]);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   async function refreshProfile() {
     setRefreshError(null);
@@ -80,14 +84,19 @@ export function RegistrationRepresentationField({
         onSelect={onSelect}
         onUpdated={() => void refreshProfile()}
       />
-      {refreshError && <Alert tone="danger">{refreshError}</Alert>}
+      {refreshError && (
+        <Alert tone="danger">
+          Your profile changes were saved, but the registration could not be refreshed. {refreshError}
+        </Alert>
+      )}
       {refreshError && (
         <Button variant="secondary" onClick={() => void refreshProfile()}>
           Retry refresh
         </Button>
       )}
       <p class="pk-muted pk-small">
-        Saving a different representation updates the address used for registration emails.
+        Registration emails use your active representation’s verified address, or your account address if none is
+        available. Confirmation emails use your account address.
       </p>
     </div>
   );

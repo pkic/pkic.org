@@ -365,22 +365,12 @@ async function main(): Promise<void> {
         data={manageData}
         forms={formsData}
         onProfileUpdated={async () => {
-          try {
-            manageData = await getJson(
-              `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
-              registrationManageReadResponseSchema,
-            );
-            renderSummary();
-            if (sharePanelEl) refreshSharePanelBadge(sharePanelEl);
-            clearStatus(statusEl);
-          } catch (error) {
-            setStatus(
-              statusEl,
-              "Your representation was saved, but the registration could not be refreshed. Reload this page to try again.",
-              true,
-            );
-            throw error;
-          }
+          manageData = await getJson(
+            `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
+            registrationManageReadResponseSchema,
+          );
+          renderSummary();
+          if (sharePanelEl) refreshSharePanelBadge(sharePanelEl);
         }}
         onDiscard={() => {
           render(null, editorEl);

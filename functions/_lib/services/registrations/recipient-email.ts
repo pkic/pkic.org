@@ -14,7 +14,8 @@ function identityVerifiedEmailSql(identityIdSql: string, column: "email" | "norm
   return `(SELECT recipient_address.${column} FROM identities recipient_identity
     JOIN user_emails recipient_address ON recipient_address.id = recipient_identity.email_id
      AND recipient_address.user_id = recipient_identity.user_id AND recipient_address.verified_at IS NOT NULL
-    WHERE recipient_identity.id = ${identityIdSql} AND recipient_identity.user_id = u.id)`;
+    WHERE recipient_identity.id = ${identityIdSql} AND recipient_identity.user_id = u.id
+      AND recipient_identity.ended_at IS NULL AND recipient_identity.blocked_at IS NULL)`;
 }
 
 /** Where a registration made as `identityIdSql` sends its ordinary messages. */
