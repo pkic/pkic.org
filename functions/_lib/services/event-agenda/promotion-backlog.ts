@@ -67,7 +67,9 @@ export function buildPromotionBacklogPageQuery(query: PendingWorkListQuery, now:
     bindings.push(...search.bindings);
   }
   return {
-    sql: `SELECT work.* FROM (${source}) work${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""}`,
+    sql: `SELECT work.kind, work.state, work.event_name, work.occurrence_id, work.formats,
+                 work.first_name, work.last_name, work.email, work.due_at, work.last_error
+            FROM (${source}) work${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""}`,
     bindings,
     orderBy: resolveMappedOrderBy(
       query.sort,
