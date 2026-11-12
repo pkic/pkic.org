@@ -93,21 +93,23 @@ export function PromotionMaterialsDialog({
       onCancel={onClose}
       footerActions={
         <>
-          <Checkbox
-            label="Select all"
-            checked={allSelected}
-            indeterminate={selected.size > 0 && !allSelected}
-            disabled={!ready.length}
-            onChange={(event) => selectAll(event.currentTarget.checked)}
-          />
-          <span class="pk-dialog__foot-status" role="status">
-            {notice ||
-              (tooMany
-                ? `${selected.size} selected. Email up to ${MAX_PROMOTION_MATERIAL_FILES} files at a time.`
-                : selected.size
-                  ? `${selected.size} selected`
-                  : "Select the files to download or email")}
-          </span>
+          <div class="pk-dialog__foot-start">
+            <Checkbox
+              label="Select all"
+              checked={allSelected}
+              indeterminate={selected.size > 0 && !allSelected}
+              disabled={!ready.length}
+              onChange={(event) => selectAll(event.currentTarget.checked)}
+            />
+            <span class="pk-dialog__foot-status" role="status">
+              {notice ||
+                (tooMany
+                  ? `${selected.size} selected. Email up to ${MAX_PROMOTION_MATERIAL_FILES} files at a time.`
+                  : selected.size
+                    ? `${selected.size} selected`
+                    : "Select the files to download or email")}
+            </span>
+          </div>
           <Button disabled={!selected.size} loading={downloading} onClick={() => void downloadSelected()}>
             Download selected
           </Button>

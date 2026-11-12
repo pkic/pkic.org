@@ -124,6 +124,21 @@
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-sm);
   }
+  /* A choice over the dialog's items, such as Select all, leads the status at its size. */
+  .pk-dialog__foot-start {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-1) var(--pk-3);
+    margin-inline-end: auto;
+  }
+  .pk-dialog__foot-start .pk-dialog__foot-status {
+    margin-inline-end: 0;
+  }
+  .pk-dialog__foot-start .pk-check {
+    align-items: center;
+    font-size: var(--pk-text-sm);
+  }
 
   /* On a phone a centered card wastes the reachable area; the dialog becomes a
      sheet anchored to the bottom, where the thumb already is. */
