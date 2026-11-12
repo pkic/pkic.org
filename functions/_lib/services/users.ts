@@ -1,5 +1,5 @@
 import { prepareAddressDeliveryTransfer } from "./email-address-delivery";
-import { firstNameSchema, lastNameSchema } from "../../../assets/shared/schemas/api-common";
+import { firstNameSchema, lastNameSchema, preferredNameSchema } from "../../../assets/shared/schemas/api-common";
 import {
   readEmailOwnership,
   provedMailboxUserId,
@@ -126,10 +126,12 @@ export async function userProfilePatchWouldChange(
     [userId],
   );
   if (!user) return false;
+  const preferredName =
+    payload.preferredName == null ? payload.preferredName : preferredNameSchema.parse(payload.preferredName);
   return (
     (payload.firstName !== undefined && payload.firstName !== user.first_name) ||
     (payload.lastName !== undefined && payload.lastName !== user.last_name) ||
-    (payload.preferredName !== undefined && payload.preferredName !== user.preferred_name) ||
+    (preferredName !== undefined && preferredName !== user.preferred_name) ||
     (payload.headshotR2Key !== undefined && payload.headshotR2Key !== user.headshot_r2_key)
   );
 }
@@ -163,7 +165,11 @@ export function prepareUserProfileStatements(
   };
   add("first_name", payload.firstName == null ? payload.firstName : firstNameSchema.parse(payload.firstName));
   add("last_name", payload.lastName == null ? payload.lastName : lastNameSchema.parse(payload.lastName));
-  add("preferred_name", payload.preferredName, false);
+  add(
+    "preferred_name",
+    payload.preferredName == null ? payload.preferredName : preferredNameSchema.parse(payload.preferredName),
+    false,
+  );
   if (payload.headshotR2Key !== undefined) {
     add("headshot_r2_key", payload.headshotR2Key);
     add("headshot_updated_at", payload.headshotR2Key ? now : null, false);
@@ -310,7 +316,7 @@ async function resolveUserWrite(
       normalized_email: normalized,
       first_name: payload.firstName === undefined ? null : firstNameSchema.parse(payload.firstName),
       last_name: payload.lastName === undefined ? null : lastNameSchema.parse(payload.lastName),
-      preferred_name: payload.preferredName ?? null,
+      preferred_name: payload.preferredName == null ? null : preferredNameSchema.parse(payload.preferredName),
       data_json: payload.dataJson ?? null,
     };
 
@@ -359,7 +365,12 @@ async function resolveUserWrite(
   const updatedFirstName =
     payload.firstName === undefined ? existing.first_name : firstNameSchema.parse(payload.firstName);
   const updatedLastName = payload.lastName === undefined ? existing.last_name : lastNameSchema.parse(payload.lastName);
-  const updatedPreferredName = payload.preferredName ?? existing.preferred_name;
+  const updatedPreferredName =
+    payload.preferredName === undefined
+      ? existing.preferred_name
+      : payload.preferredName === null
+        ? null
+        : preferredNameSchema.parse(payload.preferredName);
   const updatedDataJson = payload.dataJson ?? existing.data_json;
 
   const user: UserRecord = {

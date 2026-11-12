@@ -4,7 +4,7 @@
  * target-user path parameter.
  */
 import { z } from "zod";
-import { firstNameSchema, lastNameSchema, successResponseSchema } from "./api-common";
+import { firstNameSchema, lastNameSchema, preferredNameSchema, successResponseSchema } from "./api-common";
 import { httpOrSameOriginUrlSchema } from "./urls";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
@@ -107,7 +107,7 @@ export const myActiveIdentitySwitchRouteSchema = {
 export const myProfileUpdateSchema = identityProfileUpdateSchema.extend({
   firstName: firstNameSchema.optional(),
   lastName: lastNameSchema.optional(),
-  preferredName: z.string().trim().max(120).optional(),
+  preferredName: preferredNameSchema.nullable().optional(),
   emailId: databaseIdSchema.nullable().optional(),
   showOnOrgProfile: z.boolean().optional(),
 });

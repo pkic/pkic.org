@@ -172,6 +172,9 @@ describe("affiliation reviews by group", () => {
     expect(await queryAll(env.DB, "SELECT organization_id,source FROM identities WHERE user_id = ?", [person])).toEqual(
       [{ organization_id: organizationId, source: "staff" }],
     );
+    expect(await queryAll(env.DB, "SELECT job_title FROM identities WHERE user_id=?", [person])).toEqual([
+      { job_title: "Architect" },
+    ]);
     expect(
       await queryAll(env.DB, "SELECT resolved_by_user_id FROM affiliation_reviews WHERE user_id = ?", [person]),
     ).toEqual([{ resolved_by_user_id: adminId }]);
@@ -267,12 +270,43 @@ describe("affiliation reviews by group", () => {
     expect(await queryAll(env.DB, "SELECT organization_id FROM identities WHERE user_id = ?", [person])).toEqual([
       { organization_id: organizationId },
     ]);
+    expect(await queryAll(env.DB, "SELECT job_title FROM identities WHERE user_id=?", [person])).toEqual([
+      { job_title: "Architect" },
+    ]);
     expect(
       await queryAll(env.DB, "SELECT resolved_by_user_id FROM affiliation_reviews WHERE id IN (?, ?) ORDER BY id", ids),
     ).toEqual([{ resolved_by_user_id: adminId }, { resolved_by_user_id: adminId }]);
     expect(
       await queryAll(env.DB, "SELECT id FROM affiliation_reviews WHERE user_id = ? AND resolved_at IS NULL", [person]),
     ).toHaveLength(1);
+  });
+
+  it.each([
+    { current: null, conflicting: false, expected: "Architect" },
+    { current: "Principal Engineer", conflicting: false, expected: "Principal Engineer" },
+    { current: null, conflicting: true, expected: "Researcher" },
+  ])("fills a missing title from the latest review: %j", async ({ current, conflicting, expected }) => {
+    const organizationId = await approvedOrganization();
+    const person = await verifiedPerson("review-title@ibm.example");
+    const member = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM members WHERE organization_id=?", [organizationId])
+    )[0];
+    const identityId = await addRepresentative(env.DB, member.id, person);
+    await env.DB.prepare("UPDATE identities SET job_title=? WHERE id=?").bind(current, identityId).run();
+    const earlier = await insertReview(person, "IBM", "Architect");
+    await env.DB.prepare("UPDATE affiliation_reviews SET created_at='2026-10-01T00:00:00.000Z' WHERE id=?")
+      .bind(earlier)
+      .run();
+    if (conflicting) {
+      const latest = await insertReview(person, "IBM", "Researcher");
+      await env.DB.prepare("UPDATE affiliation_reviews SET created_at='2026-10-02T00:00:00.000Z' WHERE id=?")
+        .bind(latest)
+        .run();
+    }
+    await approve({ userId: person });
+    expect(await queryAll(env.DB, "SELECT job_title FROM identities WHERE id=?", [identityId])).toEqual([
+      { job_title: expected },
+    ]);
   });
 
   it("does not approve a different named employer through the person's matching work domain", async () => {

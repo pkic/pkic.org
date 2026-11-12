@@ -127,6 +127,12 @@ function personName(max: number, field: string) {
     .regex(namePattern, `Check your ${field} and remove unsupported characters.`);
 }
 export const firstNameSchema = personName(80, "first name");
+/** The first name a person goes by; blank means none. */
+export const preferredNameSchema = z
+  .string()
+  .trim()
+  .max(80)
+  .transform((value) => value || null);
 export const lastNameSchema = personName(120, "last name");
 export const personNamePatchSchema = z
   .object({ firstName: firstNameSchema.optional(), lastName: lastNameSchema.optional() })
