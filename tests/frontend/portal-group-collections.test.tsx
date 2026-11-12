@@ -336,9 +336,10 @@ describe("portal selected-group collections", () => {
             event: { id: event.id, slug: event.slug, name: event.name },
             stats: {
               byAttendanceType: { virtual: 1 },
-              attendanceStatusByType: { virtual: { total: 1, accepted: 1, waitlisted: 0 } },
+              attendanceStatusByType: { virtual: { total: 1, accepted: 1, waitlisted: 0, confirmed: 1 } },
               byStatus: { registered: 1 },
               waitlistedCount: 0,
+              confirmedCount: 0,
               bouncedCount: 0,
               consentCount: 1,
             },

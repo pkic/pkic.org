@@ -1,0 +1,96 @@
+/*
+ * A registration card's tooltip: who the figure counts, then its parts as
+ * rows — the status's dot, what the part is, and its figure aligned on the
+ * right — so the line under the figure reads in full here, one part a row.
+ */
+@layer components {
+  .pk-totals-tip {
+    display: grid;
+    gap: var(--pk-2);
+    min-width: min(16rem, calc(100vw - 2rem));
+  }
+
+  .pk-totals-tip__title {
+    margin: 0;
+    font-weight: 600;
+  }
+
+  .pk-totals-tip__rows {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    column-gap: var(--pk-2);
+    row-gap: var(--pk-1);
+    margin: 0;
+    padding-block-start: var(--pk-2);
+    border-block-start: 1px solid var(--pk-line-soft);
+  }
+
+  .pk-totals-tip__row {
+    --tone: var(--pk-ink-muted);
+    display: contents;
+  }
+
+  .pk-totals-tip__row--ok {
+    --tone: var(--pk-ok);
+  }
+  .pk-totals-tip__row--warn {
+    --tone: var(--pk-warn);
+  }
+  .pk-totals-tip__row--danger {
+    --tone: var(--pk-danger);
+  }
+  .pk-totals-tip__row--info {
+    --tone: var(--pk-info);
+  }
+
+  /* The Badge's dot, in the part's status tone. */
+  .pk-totals-tip__row::before {
+    content: "";
+    align-self: center;
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 50%;
+    background: var(--tone);
+  }
+
+  .pk-totals-tip__row dt {
+    color: var(--pk-ink-muted);
+  }
+
+  /* Confirmed leads: the people expected to attend, in full ink. */
+  .pk-totals-tip__row--lead dt {
+    color: var(--pk-ink);
+    font-weight: 600;
+  }
+
+  /* The lead row is two lines: its dot and figure stay on the first. */
+  .pk-totals-tip__row--lead::before {
+    align-self: start;
+    margin-block-start: calc(0.5lh - 0.1875rem);
+  }
+
+  .pk-totals-tip__row--lead dd {
+    align-self: start;
+  }
+
+  /* What confirmed means, spelled out under the word: no room to guess. */
+  .pk-totals-tip__definition {
+    display: block;
+    font-size: var(--pk-text-xs);
+    font-weight: 400;
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-totals-tip__row dd {
+    margin: 0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+  }
+
+  .pk-totals-tip__hint {
+    margin: 0;
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+  }
+}

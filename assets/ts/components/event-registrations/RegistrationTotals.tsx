@@ -1,6 +1,7 @@
 /**
  * The registration list's figures. Every card counts people the same way:
- * the figure is everyone in it, the line under it breaks that down, and the
+ * the figure is everyone in it, beside it is how many of them are confirmed
+ * and expected to attend, the line under it breaks the rest down, and the
  * label opens a tooltip that says exactly what was counted. There is one
  * attendance card for each option the event's attendance settings offer, in
  * its wording and with its icon. It counts each person who chose that option
@@ -14,9 +15,13 @@
  */
 import type { ComponentChildren } from "preact";
 import { AttendanceIcon } from "../AttendanceIcon";
+import { IconCheckmark } from "../../ui/MediaIcons";
 import type { StatCardTone } from "../../ui/StatCard";
 import { CollectionTotals, type CollectionTotal } from "../CollectionTotals";
+
+import "./RegistrationTotals.css";
 import { formatNumber } from "../../../shared/format-number";
+import { statusTone } from "../../../shared/status-display";
 import type { EventAttendanceOption } from "../../../shared/schemas/event-configuration";
 import {
   EVENT_REGISTRATION_STATUSES,
@@ -34,6 +39,17 @@ export interface RegistrationTotalsFilters {
 }
 
 type CardFilter = Readonly<Record<string, string>>;
+
+/**
+ * Where the figures lead when the list is on another page, such as the
+ * event's Overview: the address of the list narrowed by a card's filters.
+ */
+export interface RegistrationTotalsLinks {
+  href: (filter: CardFilter) => string;
+}
+
+/** What pressing a figure does: narrow the list beside it, or open it narrowed. */
+type CardTarget = RegistrationTotalsFilters | RegistrationTotalsLinks;
 
 /** What a list query holds besides its column filters. */
 const NOT_FILTERS = new Set(["q", "sort", "limit", "offset"]);
@@ -58,29 +74,30 @@ function isApplied(filter: CardFilter, current: Readonly<Record<string, string>>
 }
 
 /**
- * A card's toggle: pressing it lists exactly the people it counts, clearing
- * every other filter; pressing it again, or the registered card, lists everyone.
+ * A toggle for a card or one of its figures: pressing it lists exactly the
+ * people it counts, clearing every other filter; pressing it again, or the
+ * registered card, lists everyone.
  */
-function pressable(
-  item: CollectionTotal,
-  filter: CardFilter,
-  filters: RegistrationTotalsFilters,
-  pressLabel: string,
-): CollectionTotal {
+function toggle(filter: CardFilter, filters: RegistrationTotalsFilters): { pressed: boolean; onPress: () => void } {
   const pressed = isApplied(filter, filters.current);
   const cleared = Object.fromEntries(Object.keys(filters.current).map((param) => [param, ""]));
-  return {
-    ...item,
-    pressed,
-    pressLabel,
-    onPress: () => filters.apply(pressed ? cleared : { ...cleared, ...filter }),
-  };
+  return { pressed, onPress: () => filters.apply(pressed ? cleared : { ...cleared, ...filter }) };
 }
 
-/** "1 pending · 356 waitlisted": the non-zero parts, in order. */
-function breakdown(parts: ReadonlyArray<readonly [number, string]>): string | undefined {
-  const shown = parts.filter(([count]) => count > 0).map(([count, word]) => `${formatNumber(count)} ${word}`);
-  return shown.length ? shown.join(" · ") : undefined;
+function action(filter: CardFilter, target: CardTarget): { href: string } | ReturnType<typeof toggle> {
+  return "href" in target ? { href: target.href(filter) } : toggle(filter, target);
+}
+
+/** A part of a card's figure, and the filters that list just it. */
+interface PartSource {
+  count: number;
+  /** In the line under the figure: "356 waitlisted". */
+  word: string;
+  /** In the tooltip's row: "On a waitlist for at least one day". */
+  description: string;
+  tone: StatCardTone;
+  /** The filters that list exactly these people, on top of the card's scope. */
+  filter: CardFilter;
 }
 
 /** What one card counts. Every card is drawn from this shape, by one builder. */
@@ -89,6 +106,15 @@ interface CardSource {
   /** The tooltip's first line: exactly who the figure counts. */
   title: string;
   total: number;
+  /** The filters that list the people the figure counts; null when the list cannot narrow to them. */
+  filter: CardFilter | null;
+  /** What the card's parts are narrowed to as well: its attendance type. */
+  scope?: CardFilter;
+  /**
+   * The people expected to attend: confirmed, and not waiting for a seat.
+   * The card states it beside its figure, the most important part of it.
+   */
+  confirmed?: { count: number; definition: string };
   pending?: number;
   waitlisted?: number;
   cancelled?: number;
@@ -96,47 +122,128 @@ interface CardSource {
   cancelledInTotal?: boolean;
   icon?: ComponentChildren;
   tone?: StatCardTone;
+  pressLabel?: string;
 }
 
 /**
- * One card: the figure, the pending, waitlisted and cancelled parts under it,
- * and the same parts in words in its tooltip. A live waitlist is the state
+ * One card: the figure, its pending, waitlisted and cancelled parts under it,
+ * and the same parts as rows in its tooltip. Each part filters the list to
+ * its people, as the card does to all of them. A live waitlist is the state
  * that asks for action, so it tones the card.
  */
-function registrationCard(source: CardSource): CollectionTotal {
+function registrationCard(source: CardSource, target: CardTarget | undefined): CollectionTotal {
   const { pending = 0, waitlisted = 0, cancelled = 0 } = source;
+  const scope = source.scope ?? {};
+  const parts: PartSource[] = [
+    {
+      count: pending,
+      word: "pending",
+      description: "Email address not confirmed yet",
+      tone: statusTone("pending_email_confirmation"),
+      filter: { ...scope, status: "pending_email_confirmation" },
+    },
+    {
+      count: waitlisted,
+      word: "waitlisted",
+      description: "On a waitlist for at least one day",
+      tone: statusTone("waitlisted"),
+      filter: { ...scope, status: LIVE_STATUSES, waitlisted: "true" },
+    },
+    {
+      count: cancelled,
+      word: "cancelled",
+      description: source.cancelledInTotal ? "Cancelled" : "Cancelled, not counted",
+      tone: statusTone("cancelled"),
+      filter: { ...scope, status: "cancelled" },
+    },
+  ].filter((part) => part.count > 0);
+  const pressable = target && source.filter ? target : undefined;
+  // "In-person registrations", or just "registrations" for the card that counts them all.
+  const whose = source.label === "registered" ? "registrations" : `${source.label} registrations`;
+  // Confirmed and not waitlisted: on the whole event for the registered card,
+  // on at least one day of the type for an attendance card.
+  const confirmedFilter = { ...scope, status: "registered", waitlisted: "false" };
   return {
     label: source.label,
     value: source.total,
     icon: source.icon,
-    note: breakdown([
-      [pending, "pending"],
-      [waitlisted, "waitlisted"],
-      [cancelled, "cancelled"],
-    ]),
+    ...(source.confirmed
+      ? {
+          highlight: {
+            text: `${formatNumber(source.confirmed.count)} confirmed`,
+            icon: <IconCheckmark />,
+            ...(pressable
+              ? {
+                  ...action(confirmedFilter, pressable),
+                  pressLabel: `Show only the ${formatNumber(source.confirmed.count)} confirmed ${whose}`,
+                }
+              : {}),
+          },
+        }
+      : {}),
+    ...(pressable && source.filter
+      ? { ...action(source.filter, pressable), pressLabel: source.pressLabel ?? `Show ${source.label} only` }
+      : {}),
+    breakdown: parts.map((part) => ({
+      text: `${formatNumber(part.count)} ${part.word}`,
+      ...(pressable
+        ? {
+            ...action(part.filter, pressable),
+            pressLabel: `Show only the ${formatNumber(part.count)} ${part.word} ${whose}`,
+          }
+        : {}),
+    })),
     tone: source.tone ?? (waitlisted > 0 ? "warn" : undefined),
     tooltip: (
-      <div class="pk-stack pk-stack--tight">
-        <strong>{source.title}</strong>
-        {pending > 0 && (
-          <span>
-            {formatNumber(pending)} {pending === 1 ? "has" : "have"} not confirmed their email address yet
-          </span>
+      <div class="pk-totals-tip">
+        <p class="pk-totals-tip__title">{source.title}</p>
+        {(source.confirmed || parts.length > 0) && (
+          <dl class="pk-totals-tip__rows">
+            {source.confirmed && (
+              <div class="pk-totals-tip__row pk-totals-tip__row--ok pk-totals-tip__row--lead">
+                <dt>
+                  Confirmed
+                  <span class="pk-totals-tip__definition">{source.confirmed.definition}</span>
+                </dt>
+                <dd>{formatNumber(source.confirmed.count)}</dd>
+              </div>
+            )}
+            {parts.map((part) => (
+              <div key={part.word} class={`pk-totals-tip__row pk-totals-tip__row--${part.tone}`}>
+                <dt>{part.description}</dt>
+                <dd>{formatNumber(part.count)}</dd>
+              </div>
+            ))}
+          </dl>
         )}
-        {waitlisted > 0 && (
-          <span>
-            {formatNumber(waitlisted)} {waitlisted === 1 ? "is" : "are"} on the waitlist for at least one day
-          </span>
-        )}
-        {cancelled > 0 && (
-          <span>
-            {formatNumber(cancelled)} cancelled their registration
-            {source.cancelledInTotal ? "" : ` and ${cancelled === 1 ? "is" : "are"} not counted`}
-          </span>
+        {pressable && !("href" in pressable) && (
+          <p class="pk-totals-tip__hint">Select the card or any figure on it to list those registrations.</p>
         )}
       </div>
     ),
   };
+}
+
+/** The card for everyone who registered: the list's first, and the event Overview's registration figure. */
+export function registeredTotal(
+  stats: Pick<EventAttendanceRegistrationsStats, "byStatus" | "waitlistedCount" | "confirmedCount">,
+  target?: CardTarget,
+): CollectionTotal {
+  return registrationCard(
+    {
+      label: "registered",
+      title: "Everyone who registered, whatever their status",
+      total: Object.values(stats.byStatus).reduce((sum, count) => sum + count, 0),
+      filter: {},
+      pressLabel: "Show all registrations",
+      confirmed: { count: stats.confirmedCount, definition: "Email confirmed, not cancelled, not on any waitlist" },
+      pending: stats.byStatus.pending_email_confirmation ?? 0,
+      waitlisted: stats.waitlistedCount,
+      cancelled: stats.byStatus.cancelled ?? 0,
+      cancelledInTotal: true,
+    },
+    target,
+  );
 }
 
 export function RegistrationTotals({
@@ -153,38 +260,32 @@ export function RegistrationTotals({
   /** The attendance options failed to load: say so, and offer to load them again. */
   onRetryAttendanceOptions?: () => void;
 }) {
-  const withFilter = (item: CollectionTotal, filter: CardFilter | null, pressLabel = `Show ${item.label} only`) =>
-    filters && filter ? pressable(item, filter, filters, pressLabel) : item;
-  const total = Object.values(stats.byStatus).reduce((sum, count) => sum + count, 0);
   const items: CollectionTotal[] = [
-    withFilter(
-      registrationCard({
-        label: "registered",
-        title: "Everyone who registered, whatever their status",
-        total,
-        pending: stats.byStatus.pending_email_confirmation ?? 0,
-        waitlisted: stats.waitlistedCount,
-        cancelled: stats.byStatus.cancelled ?? 0,
-        cancelledInTotal: true,
-      }),
-      {},
-      "Show all registrations",
-    ),
+    registeredTotal(stats, filters),
     ...attendanceOptions.flatMap((option) => {
       const counts = stats.attendanceStatusByType[option.value];
       if (!counts || counts.total + counts.cancelled === 0) return [];
-      const card = registrationCard({
-        // The option's name as the settings write it: "Livestream Lounge" stays a name.
-        label: option.label,
-        title: `People who chose ${option.label} for at least one day, cancelled registrations aside`,
-        total: counts.total,
-        pending: counts.pending,
-        waitlisted: counts.waitlisted,
-        cancelled: counts.cancelled,
-        icon: <AttendanceIcon type={option.value} icon={option.icon} />,
-      });
+      const scope = { attendance_type: option.value };
       return [
-        withFilter(card, filters?.byAttendanceType ? { status: LIVE_STATUSES, attendance_type: option.value } : null),
+        registrationCard(
+          {
+            // The option's name as the settings write it: "Livestream Lounge" stays a name.
+            label: option.label,
+            title: `People who chose ${option.label} for at least one day, cancelled registrations aside`,
+            total: counts.total,
+            filter: filters?.byAttendanceType ? { ...scope, status: LIVE_STATUSES } : null,
+            scope,
+            confirmed: {
+              count: counts.confirmed,
+              definition: `Email confirmed, not cancelled, and not waitlisted on at least one of their ${option.label} days`,
+            },
+            pending: counts.pending,
+            waitlisted: counts.waitlisted,
+            cancelled: counts.cancelled,
+            icon: <AttendanceIcon type={option.value} icon={option.icon} />,
+          },
+          filters,
+        ),
       ];
     }),
   ];
@@ -203,14 +304,15 @@ export function RegistrationTotals({
   const bounced = stats.bouncedCount ?? 0;
   if (bounced > 0)
     items.push(
-      withFilter(
-        registrationCard({
+      registrationCard(
+        {
           label: "bounced",
           title: "Registrations whose confirmation email bounced",
           total: bounced,
+          filter: { bounced: "true" },
           tone: "danger",
-        }),
-        { bounced: "true" },
+        },
+        filters,
       ),
     );
   return <CollectionTotals label="Registration totals" items={items} />;

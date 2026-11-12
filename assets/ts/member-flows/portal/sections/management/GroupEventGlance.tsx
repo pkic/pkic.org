@@ -15,6 +15,8 @@ import { formatNumber } from "../../../../../shared/format-number";
 import { getJson } from "../../../../shared/api-client";
 import { useData } from "../../../../hooks/useData";
 import { StatCard, type StatCardTone } from "../../../../ui/StatCard";
+import { CollectionTotalCard } from "../../../../components/CollectionTotals";
+import { registeredTotal } from "../../../../components/event-registrations/RegistrationTotals";
 
 export interface GroupEventGlanceProps {
   event: GroupEvent;
@@ -35,8 +37,22 @@ function RegistrationsFigure({ event, groupId, href }: { event: GroupEvent; grou
     [groupId, event.id],
   );
   if (!registrations.data) return null;
-  const registered = registrations.data.stats.byStatus.registered ?? 0;
-  return <StatCard label="Registrations" value={formatNumber(registered)} href={href} />;
+  // The registrations list's own first card: the same figure, and each part
+  // under it opens the list narrowed to those people.
+  return (
+    <CollectionTotalCard
+      item={registeredTotal(registrations.data.stats, { href: (filter) => filteredHref(href, filter) })}
+    />
+  );
+}
+
+/** The registrations tab's address with its list narrowed: `registrations.f.<param>`, as the list reads it. */
+function filteredHref(href: string, filter: Readonly<Record<string, string>>): string {
+  const params = new URLSearchParams(
+    Object.entries(filter).map(([param, value]) => [`registrations.f.${param}`, value]),
+  );
+  const query = params.toString();
+  return query ? `${href}?${query}` : href;
 }
 
 function ProposalsFigure({ event, href }: { event: GroupEvent; href: string }) {

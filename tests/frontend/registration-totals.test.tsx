@@ -37,11 +37,12 @@ afterEach(() => {
 const stats: EventAttendanceRegistrationsStats & { bouncedCount?: number } = {
   byAttendanceType: {},
   attendanceStatusByType: {
-    in_person: { total: 12, accepted: 10, waitlisted: 2, expired: 0, pending: 1, cancelled: 2 },
-    virtual: { total: 5, accepted: 5, waitlisted: 0, expired: 0, pending: 0, cancelled: 0 },
+    in_person: { total: 12, accepted: 10, waitlisted: 2, expired: 0, pending: 1, cancelled: 2, confirmed: 9 },
+    virtual: { total: 5, accepted: 5, waitlisted: 0, expired: 0, pending: 0, cancelled: 0, confirmed: 5 },
   },
   byStatus: { registered: 15, pending_email_confirmation: 1, cancelled: 3 },
   waitlistedCount: 2,
+  confirmedCount: 13,
   bouncedCount: 1,
 };
 
@@ -62,6 +63,92 @@ function toggle(container: HTMLElement, name: string): HTMLButtonElement {
   if (!button) throw new Error(`No toggle named "${name}"`);
   return button;
 }
+
+function card(container: HTMLElement, label: string): HTMLElement {
+  const found = [...container.querySelectorAll<HTMLElement>(".pk-stat-card")].find(
+    (candidate) => candidate.querySelector(".pk-stat-card__label")?.textContent === label,
+  );
+  if (!found) throw new Error(`No card labeled "${label}"`);
+  return found;
+}
+
+/** A figure under a card's value, found by what it shows: "2 waitlisted". */
+function part(container: HTMLElement, label: string, text: string): HTMLButtonElement {
+  const button = [...card(container, label).querySelectorAll<HTMLButtonElement>(".pk-stat-card__part")].find(
+    (candidate) => candidate.textContent === text,
+  );
+  if (!button) throw new Error(`No figure "${text}" on "${label}"`);
+  return button;
+}
+
+describe("RegistrationTotals figures", () => {
+  it("filters the list to an attendance card's waitlisted people on that type", () => {
+    const list = filters({ country: "NL" });
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} filters={list} />);
+    const waitlisted = part(container, "In-person", "2 waitlisted");
+    expect(waitlisted.getAttribute("aria-pressed")).toBe("false");
+    expect(waitlisted.getAttribute("aria-label")).toBe("Show only the 2 waitlisted In-person registrations");
+    void act(() => waitlisted.click());
+    expect(list.apply).toHaveBeenCalledWith({
+      country: "",
+      attendance_type: "in_person",
+      status: "registered,pending_email_confirmation",
+      waitlisted: "true",
+    });
+  });
+
+  it("filters the registered card's figures by status alone", () => {
+    const list = filters({});
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} filters={list} />);
+    void act(() => part(container, "Registered", "1 pending").click());
+    expect(list.apply).toHaveBeenLastCalledWith({ status: "pending_email_confirmation" });
+    void act(() => part(container, "Registered", "3 cancelled").click());
+    expect(list.apply).toHaveBeenLastCalledWith({ status: "cancelled" });
+  });
+
+  it("shows the applied figure as pressed, not its card, and clears the list on a second press", () => {
+    const list = filters({ attendance_type: "in_person", status: "cancelled" });
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} filters={list} />);
+    const cancelled = part(container, "In-person", "2 cancelled");
+    expect(cancelled.getAttribute("aria-pressed")).toBe("true");
+    expect(toggle(container, "Show In-person only").getAttribute("aria-pressed")).toBe("false");
+    void act(() => cancelled.click());
+    expect(list.apply).toHaveBeenCalledWith({ attendance_type: "", status: "" });
+  });
+
+  it("states each figure as a row in the card's tooltip", () => {
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} />);
+    const trigger = card(container, "In-person").querySelector<HTMLButtonElement>(".pk-tooltip__trigger");
+    void act(() => trigger?.click());
+    const rows = [...document.querySelectorAll(".pk-totals-tip__row")].map((row) => [
+      row.querySelector("dt")?.textContent,
+      row.querySelector("dd")?.textContent,
+    ]);
+    expect(rows).toHaveLength(4);
+    expect(rows[0]).toEqual([
+      "ConfirmedEmail confirmed, not cancelled, and not waitlisted on at least one of their In-person days",
+      "9",
+    ]);
+    expect(rows.slice(1).map(([, count]) => count)).toEqual(["1", "2", "2"]);
+  });
+
+  it("states the confirmed people beside each figure and filters the list to them", () => {
+    const list = filters({});
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} filters={list} />);
+    const registered = card(container, "Registered").querySelector<HTMLButtonElement>(".pk-stat-card__highlight");
+    expect(registered?.textContent).toBe("13 confirmed");
+    void act(() => registered?.click());
+    expect(list.apply).toHaveBeenLastCalledWith({ status: "registered", waitlisted: "false" });
+    const inPerson = card(container, "In-person").querySelector<HTMLButtonElement>(".pk-stat-card__highlight");
+    expect(inPerson?.getAttribute("aria-label")).toBe("Show only the 9 confirmed In-person registrations");
+    void act(() => inPerson?.click());
+    expect(list.apply).toHaveBeenLastCalledWith({
+      attendance_type: "in_person",
+      status: "registered",
+      waitlisted: "false",
+    });
+  });
+});
 
 describe("RegistrationTotals filters", () => {
   it("filters an attendance card by its type and every status but cancelled, clearing other filters", () => {
@@ -123,7 +210,10 @@ describe("RegistrationTotals filters", () => {
       <RegistrationTotals stats={stats} attendanceOptions={options} filters={filters({}, false)} />,
     );
     expect(toggle(container, "Show all registrations").getAttribute("aria-pressed")).toBe("true");
-    expect(container.querySelectorAll("button[aria-pressed]")).toHaveLength(2);
+    // Registered and bounced filter, with the registered card's figures; the attendance cards do not.
+    expect(container.querySelectorAll(".pk-stat-card__press")).toHaveLength(2);
+    const inPerson = card(container, "In-person");
+    expect(inPerson.querySelectorAll("button")).toHaveLength(1);
   });
 
   it("renders figures without toggles when the list offers no filters", () => {
@@ -144,7 +234,15 @@ describe("RegistrationTotals attendance cards", () => {
           ...stats,
           attendanceStatusByType: {
             ...stats.attendanceStatusByType,
-            livestream_lounge: { total: 3, accepted: 3, waitlisted: 0, expired: 0, pending: 0, cancelled: 0 },
+            livestream_lounge: {
+              total: 3,
+              accepted: 3,
+              waitlisted: 0,
+              expired: 0,
+              pending: 0,
+              cancelled: 0,
+              confirmed: 3,
+            },
           },
         }}
         attendanceOptions={configured}
@@ -207,7 +305,7 @@ describe("RegistrationTotals breakdown", () => {
         stats={{
           ...stats,
           attendanceStatusByType: {
-            virtual: { total: 0, accepted: 0, waitlisted: 0, expired: 0, pending: 0, cancelled: 4 },
+            virtual: { total: 0, accepted: 0, waitlisted: 0, expired: 0, pending: 0, cancelled: 4, confirmed: 0 },
           },
         }}
         attendanceOptions={options}
