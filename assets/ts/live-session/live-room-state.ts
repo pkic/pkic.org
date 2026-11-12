@@ -91,7 +91,7 @@ export function applyLiveRoomMessage(
     case "operators.changed":
       return { ...state, operators: message.operators };
     case "stage.display.next.changed":
-      return { ...state, stageDisplayNext: message.question };
+      return { ...state, stageDisplayNext: message.question, stageDisplayNextVotes: message.votes ?? null };
     case "stage.display.settings.changed":
       return { ...state, stageDisplaySettings: message.settings };
     case "program.cleared":

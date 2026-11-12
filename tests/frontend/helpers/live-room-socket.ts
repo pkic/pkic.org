@@ -151,6 +151,7 @@ export function liveSnapshot(overrides: Partial<Omit<LiveRoomSnapshot, "type">> 
     operators: [],
     addedCredits: [],
     stageDisplayNext: null,
+    stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
     ...overrides,
   };

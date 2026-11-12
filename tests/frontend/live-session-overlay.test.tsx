@@ -403,8 +403,10 @@ describe("broadcast overlays", () => {
       text: host.querySelector(".pk-live-stage-display__question-text")?.textContent ?? null,
       next: host.querySelector(".pk-live-stage-display__next-text")?.textContent ?? null,
     });
-    void act(() => live.latest().deliver({ type: "stage.display.next.changed", question: next }));
+    void act(() => live.latest().deliver({ type: "stage.display.next.changed", question: next, votes: 31 }));
     expect(shown()).toEqual({ tag: "On air", text: "What about hybrid certificates?", next: next.text });
+    // The room sends its votes with it, since a stage display source has no question list.
+    expect(host.querySelector(".pk-live-stage-display__votes")?.textContent).toBe("31");
     // Taken to Program, the next question becomes the current one and is not repeated below it.
     void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, question: next } }));
     expect(shown()).toEqual({ tag: "On air", text: next.text, next: null });

@@ -306,9 +306,15 @@ describe("live room auxiliary outputs", () => {
         ),
       ).toBe(false);
 
+    // The speaker sees the next question's votes as they come in.
+    expect(cue.votes).toBe(0);
+    author.send({ type: "question.vote", questionId: next, voted: true });
+    expect((await stageDisplay.next("stage.display.next.changed", (m) => m.votes === 1)).question?.id).toBe(next);
+
     // Joining later, only the stage display and the operators learn what Preview lines up next.
     const late = await f.connect({ overlay: access, output: "stage-display" });
-    expect((await late.next("room.snapshot")).stageDisplayNext?.id).toBe(next);
+    const joined = await late.next("room.snapshot");
+    expect([joined.stageDisplayNext?.id, joined.stageDisplayNextVotes]).toEqual([next, 1]);
     expect((await (await f.connect({ overlay: access })).next("room.snapshot")).stageDisplayNext).toBeNull();
     expect((await (await f.connect({ person: "speaker" })).next("room.snapshot")).stageDisplayNext).toBeNull();
     expect((await (await f.connect({ person: "operator" })).next("room.snapshot")).stageDisplayNext?.id).toBe(next);

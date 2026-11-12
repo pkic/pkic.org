@@ -165,6 +165,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
     operators: [],
     addedCredits: [],
     stageDisplayNext: null,
+    stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
     burst: null,
     refusal: null,

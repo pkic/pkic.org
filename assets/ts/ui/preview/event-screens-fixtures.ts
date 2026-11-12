@@ -101,6 +101,7 @@ function stageDisplayState(
     operators: [],
     addedCredits: [],
     stageDisplayNext: null,
+    stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
   };
   return applyLiveRoomMessage(null, snapshot)!;

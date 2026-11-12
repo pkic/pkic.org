@@ -17,8 +17,10 @@ export function useLiveStageDisplayPlan(state: LiveRoomState, roomId?: string): 
     own: state.outputs["stage-display"],
     program: state.stage,
     next,
-    // Operators' monitors know the votes; a stage display source receives no question list.
-    nextVotes: next ? (state.questions.find((question) => question.id === next.id)?.votes ?? null) : null,
+    // Operators' monitors read the votes from the question list; a stage display source receives them with the question.
+    nextVotes: next
+      ? (state.questions.find((question) => question.id === next.id)?.votes ?? state.stageDisplayNextVotes)
+      : null,
     polls: state.polls,
     timers: state.timers,
     speakerMessage: state.speakerMessage,

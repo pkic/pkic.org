@@ -97,6 +97,7 @@ export class LiveRoomBroadcast {
       operators: operator ? this.operators(undefined, eligible) : [],
       addedCredits: operator ? this.store.addedCredits() : [],
       stageDisplayNext: seesStageDisplayNext(viewer) ? this.store.preview().question : null,
+      stageDisplayNextVotes: seesStageDisplayNext(viewer) ? this.nextVotes() : null,
       stageDisplaySettings: this.store.stageDisplaySettings(),
     });
   }
@@ -116,6 +117,26 @@ export class LiveRoomBroadcast {
       );
       return question ? { type: "question.changed", question } : { type: "question.removed", questionId };
     }, null);
+    // The stage display shows the next question's votes as they come in.
+    if (this.store.preview().question?.id === questionId) await this.stageDisplayNext();
+  }
+
+  /** The votes of the question lined up in Preview, or null when none is. */
+  private nextVotes(): number | null {
+    const next = this.store.preview().question;
+    return next ? (this.store.question(next.id)?.votes ?? null) : null;
+  }
+
+  /** Tells the stage display sources the question lined up next, with its votes. */
+  private async stageDisplayNext(): Promise<void> {
+    const next = {
+      type: "stage.display.next.changed",
+      question: this.store.preview().question,
+      votes: this.nextVotes(),
+    } as const;
+    for (const socket of this.ctx.getWebSockets("overlay"))
+      if (seesStageDisplayNext(socket.deserializeAttachment() as LiveRoomParticipant))
+        await this.send(() => next, null, socket);
   }
 
   private questionsFor(viewer: LiveRoomParticipant, voted: ReadonlySet<string>) {
@@ -221,11 +242,7 @@ export class LiveRoomBroadcast {
             : "all",
     );
     // Preview's question also reaches the stage display, as the speaker's next one; operators read it from Preview.
-    if (message.type !== "preview.changed") return;
-    const next = { type: "stage.display.next.changed", question: message.composition.question } as const;
-    for (const socket of this.ctx.getWebSockets("overlay"))
-      if (seesStageDisplayNext(socket.deserializeAttachment() as LiveRoomParticipant))
-        await this.send(() => next, null, socket);
+    if (message.type === "preview.changed") await this.stageDisplayNext();
   }
 
   private sendChatRemovals(removed: readonly LiveChatRemoval[], sockets: WebSocket[]): void {
