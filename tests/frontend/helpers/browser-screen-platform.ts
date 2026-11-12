@@ -16,7 +16,7 @@ export function fakePlatform(
   grants: {
     fullscreen?: boolean;
     wakeLock?: boolean | "needs-click";
-    capture?: "screen" | "tab" | "window" | "declined";
+    capture?: "screen" | "tab" | "window" | "unreported" | "declined";
     spends?: "fullscreen" | "capture";
     pickerExitsFullscreen?: boolean;
     /** The browser window is full screen (F11) from the start. */

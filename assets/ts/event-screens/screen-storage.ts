@@ -47,18 +47,30 @@ function overlaidStorage(persisted: Storage): Storage {
     for (let index = 0; index < written.length; index += 1) all.add(written.key(index)!);
     return [...all];
   };
+  /** Removes a key from the browser's storage where it allows it; the visit-local mask covers a refusal. */
+  const forget = (key: string) => {
+    try {
+      persisted.removeItem(key);
+    } catch {
+      /* Storage refused the removal: the mask keeps it gone for this visit. */
+    }
+  };
   return {
     get length() {
       return keys().length;
     },
     clear: () => {
-      for (const key of keys()) removed.add(key);
+      for (const key of keys()) {
+        forget(key);
+        removed.add(key);
+      }
       written.clear();
     },
     getItem: (key) => written.getItem(key) ?? (removed.has(key) ? null : read(key)),
     key: (index) => keys()[index] ?? null,
     removeItem: (key) => {
       written.removeItem(key);
+      forget(key);
       removed.add(key);
     },
     setItem: (key, value) => {

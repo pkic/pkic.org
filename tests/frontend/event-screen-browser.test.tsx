@@ -125,20 +125,23 @@ describe("setting up a browser as a screen", () => {
     expect(screen.get().capture).toBe("live");
   });
 
-  it.each(["window", "tab"] as const)("refuses a shared %s, and offers Share screen again", async (surface) => {
-    const shared = fakePlatform({ capture: surface });
-    const refused = createBrowserScreen(shared.platform);
-    expect(await shared.click(() => refused.enroll())).toEqual(["capture-surface", "fullscreen"]);
-    expect(shared.track.stop).toHaveBeenCalled();
-    expect(refused.get().capture).toBe("off");
-    expect(await refused.readScreenshot()).toBeNull();
-    host = document.body.appendChild(document.createElement("div"));
-    await act(() => render(<BrowserScreenResume browser={refused} sound="none" />, host!));
-    expect(host.querySelector(".pk-screen-resume__missing")?.textContent).toBe(
-      "Share the whole screen, not a window or tab",
-    );
-    expect(host.querySelector(".pk-screen-resume button")?.textContent).toBe("Share screen");
-  });
+  it.each(["window", "tab", "unreported"] as const)(
+    "refuses a shared %s surface, and offers Share screen again",
+    async (surface) => {
+      const shared = fakePlatform({ capture: surface });
+      const refused = createBrowserScreen(shared.platform);
+      expect(await shared.click(() => refused.enroll())).toEqual(["capture-surface", "fullscreen"]);
+      expect(shared.track.stop).toHaveBeenCalled();
+      expect(refused.get().capture).toBe("off");
+      expect(await refused.readScreenshot()).toBeNull();
+      host = document.body.appendChild(document.createElement("div"));
+      await act(() => render(<BrowserScreenResume browser={refused} sound="none" />, host!));
+      expect(host.querySelector(".pk-screen-resume__missing")?.textContent).toBe(
+        "Share the whole screen, not a window or tab",
+      );
+      expect(host.querySelector(".pk-screen-resume button")?.textContent).toBe("Share screen");
+    },
+  );
 
   it("accepts a capture of the whole screen, and reports when the person stops sharing", async () => {
     const tab = fakePlatform();
