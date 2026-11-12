@@ -31,5 +31,5 @@ export function screenHandoffDue(input: { hasGoodState: boolean; unreachableSinc
 
 /** Only a device has a status page to go back to; a browser screen stays and keeps trying. */
 export function handOffScreen(location: Pick<Location, "replace" | "hash"> = window.location): void {
-  if (parseScreenPageAddress(location).agent) location.replace(SCREEN_HANDOFF.url);
+  if (parseScreenPageAddress(location).host === "device") location.replace(SCREEN_HANDOFF.url);
 }

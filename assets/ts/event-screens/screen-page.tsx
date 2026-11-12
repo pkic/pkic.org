@@ -1,8 +1,8 @@
 /**
  * The screen page's entry. A venue screen device opens it with its screen ID
- * and its own marker, and runs as a device. Any other browser is a browser
- * screen: without an ID it offers to set itself up, then runs with the ID it
- * keeps. Each runs on a clock corrected to the server's. A render it cannot
+ * and runs as a device. A browser without an ID offers to set itself up as a
+ * screen, then runs as a browser screen with the ID it keeps; the address
+ * says which (see `parseScreenPageAddress`). Each runs on a clock corrected to the server's. A render it cannot
  * recover from hands a device back to its local status page.
  */
 import { Component, render, type ComponentChildren } from "preact";
@@ -15,9 +15,10 @@ import { LiveClockContext } from "../live-session/useLiveCountdown";
 import { createBrowserScreen, type BrowserScreen } from "./browser-screen";
 import { browserScreenId } from "./browser-screen-id";
 import { BrowserScreenEnroll } from "./BrowserScreenEnroll";
-import { parseScreenPageAddress } from "./screen-address";
+import { browserScreenAddress, parseScreenPageAddress } from "./screen-address";
 import { createScreenClock } from "./screen-clock";
 import { handOffScreen } from "./screen-handoff";
+import { screenStorage } from "./screen-storage";
 import { ScreenApp } from "./ScreenApp";
 import "./screen-page.css";
 
@@ -31,16 +32,18 @@ class ScreenRecovery extends Component<{ children: ComponentChildren }> {
 }
 
 const clock = createScreenClock();
+/** This browser's storage, or this visit's where the browser refuses it. */
+const storage = screenStorage();
 /** One per page, so what the setup click granted carries into the screen it becomes. */
 let browser: BrowserScreen | null = null;
 
 function mount(): void {
   const host = document.getElementById("live-screen");
   if (!host) return;
-  const { screenId, agent } = parseScreenPageAddress(window.location);
-  if (!agent) browser ??= createBrowserScreen();
+  const { screenId, host: runsOn } = parseScreenPageAddress(window.location);
+  if (runsOn === "browser") browser ??= createBrowserScreen();
   // A device without an ID has nothing to pair; its status page opens this page with one.
-  if (agent && !screenId) {
+  if (runsOn === "device" && !screenId) {
     render(null, host);
     return;
   }
@@ -50,7 +53,7 @@ function mount(): void {
         <BrowserScreenEnroll
           browser={browser!}
           onEnrolled={() => {
-            window.location.hash = new URLSearchParams({ id: browserScreenId(window.localStorage) }).toString();
+            window.location.hash = browserScreenAddress(browserScreenId(storage));
           }}
         />
       </main>,
@@ -65,10 +68,10 @@ function mount(): void {
           <ScreenApp
             key={screenId}
             screenId={screenId}
-            storage={window.localStorage}
+            storage={storage}
             clock={clock}
             onHandoff={handOffScreen}
-            browser={agent ? null : browser}
+            browser={runsOn === "browser" ? browser : null}
           />
         </LiveClockContext.Provider>
       </ScreenRecovery>
