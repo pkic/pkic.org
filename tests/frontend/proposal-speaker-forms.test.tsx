@@ -485,7 +485,7 @@ describe("ProposalSpeakersPanel", () => {
       const mira = card(root, "Mira Lind");
 
       expect(mira.querySelector(".pk-badge")).toBeNull();
-      const standing = [...mira.querySelectorAll(".pk-speaker-portrait-standing > dd")].map((dd) => dd.textContent);
+      const standing = [...mira.querySelectorAll(".pk-proposal-speaker-standing > dd")].map((dd) => dd.textContent);
       expect(standing[0]).toBe("Speaker");
       expect(standing[1]).toMatch(/^Participation confirmed .+ · Registered$/);
       // Nothing to chase: no checklist at all.
@@ -497,7 +497,7 @@ describe("ProposalSpeakersPanel", () => {
       const pavel = card(root, "Pavel Petrov");
 
       expect(pavel.querySelector(".pk-badge")).toBeNull();
-      const standing = [...pavel.querySelectorAll(".pk-speaker-portrait-standing > dd")].map((dd) => dd.textContent);
+      const standing = [...pavel.querySelectorAll(".pk-proposal-speaker-standing > dd")].map((dd) => dd.textContent);
       expect(standing).toEqual(["Co-speaker", "Not registered"]);
       const checklist = pavel.querySelector('ul.pk-attention-list[aria-label="Still needed for Pavel Petrov"]');
       const items = [...(checklist?.querySelectorAll("li") ?? [])].map((item) => item.textContent);

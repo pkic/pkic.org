@@ -112,9 +112,12 @@ export function ProposalManageSpeakerCard({
         <div class="pk-cluster">
           {/* An invited speaker without a name is titled by the address already; it is not repeated. */}
           {speakerName !== speaker.email && <span>{speaker.email}</span>}
-          <dl class="pk-speaker-portrait-standing" aria-label={`Role of ${speakerName}`}>
-            <ProposalSpeakerRoleStanding role={speaker.role} isCurrentProposer={isCurrentProposer} />
-          </dl>
+          <ProposalSpeakerRoleStanding
+            name={speakerName}
+            role={speaker.role}
+            isCurrentProposer={isCurrentProposer}
+            badges
+          />
           <Badge tone={statusTone(speaker.status)}>{formatStatusLabel(speaker.status)}</Badge>
         </div>
         {speaker.declineReason && <p class="pk-small">Reason for declining: {speaker.declineReason}</p>}

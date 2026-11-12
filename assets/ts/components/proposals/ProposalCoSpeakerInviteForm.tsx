@@ -7,9 +7,9 @@
  * way the invitation goes to the same canonical contract — the picker only
  * spares the operator retyping what the portal holds.
  */
+import type { z } from "zod";
 import { useState } from "preact/hooks";
 import { coSpeakerInviteSchema, coSpeakerInviteResponseSchema } from "../../../shared/schemas/proposal-management";
-import { type ProposalSpeakerRole } from "../../../shared/schemas/participant-roles";
 import type { EventInviteWindow } from "../../../shared/schemas/event-invite-validity";
 import { dateTimeLocalToIso, instantToDateTimeLocal } from "../../../shared/timezone";
 import { useContractForm } from "../../hooks/useContractForm";
@@ -46,7 +46,7 @@ export function ProposalCoSpeakerInviteForm({
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [role, setRole] = useState<Exclude<ProposalSpeakerRole, "proposer">>("speaker");
+  const [role, setRole] = useState<z.infer<typeof coSpeakerInviteSchema>["role"]>("speaker");
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -163,9 +163,7 @@ export function ProposalCoSpeakerInviteForm({
                       name="role"
                       value={role}
                       onChange={(changeEvent) =>
-                        setRole(
-                          (changeEvent.target as HTMLSelectElement).value as Exclude<ProposalSpeakerRole, "proposer">,
-                        )
+                        setRole(coSpeakerInviteSchema.shape.role.parse(changeEvent.currentTarget.value))
                       }
                     >
                       {INVITABLE_ROLES.map((option) => (

@@ -56,22 +56,6 @@
     font-size: var(--pk-text-sm);
     text-align: center;
   }
-  /* An organizer's roster says where the speaker stands in plain lines under
-     the name — role, then answer and registration — with no pills. */
-  .pk-speaker-portrait-standing {
-    display: flex;
-    flex-direction: column;
-    gap: var(--pk-1);
-    margin: 0;
-    font-size: var(--pk-text-sm);
-    line-height: 1.4;
-  }
-  .pk-speaker-portrait-standing > dd {
-    margin: 0;
-  }
-  .pk-speaker-portrait-standing > dd:first-of-type {
-    color: var(--pk-ink-muted);
-  }
   .pk-speaker-portrait-actions {
     position: absolute;
     inset-block-start: var(--pk-2);

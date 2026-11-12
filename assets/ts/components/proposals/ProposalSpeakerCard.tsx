@@ -454,8 +454,7 @@ export function ProposalSpeakerCard({
               </span>
             )}
           </div>
-          <dl class="pk-speaker-portrait-standing" aria-label={`Where ${name} stands`}>
-            <ProposalSpeakerRoleStanding role={speaker.role} isCurrentProposer={isCurrentProposer} />
+          <ProposalSpeakerRoleStanding name={name} role={speaker.role} isCurrentProposer={isCurrentProposer}>
             <dt class="pk-sr-only">Status</dt>
             <dd>
               {[participationText(speaker), registration === undefined ? null : speakerRegistrationText(registration)]
@@ -468,7 +467,7 @@ export function ProposalSpeakerCard({
                 <dd>“{speaker.declineReason}”</dd>
               </>
             )}
-          </dl>
+          </ProposalSpeakerRoleStanding>
           {independentCapacity && <IndependentCapacityBadge status={independentCapacity.status} />}
           <AttentionList label={`Still needed for ${name}`} items={speakerAttention(speaker)} />
         </div>

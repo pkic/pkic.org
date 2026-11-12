@@ -78,8 +78,8 @@ describe("proposer-managed speaker roster", () => {
         onStatus={() => {}}
       />,
     );
-    const standing = root.querySelector('dl[aria-label="Role of Casey Speaker"]')!;
-    expect([...standing.querySelectorAll("dd")].map((item) => item.textContent)).toEqual(labels);
+    const standing = root.querySelector('dl[aria-label="Where Casey Speaker stands"]')!;
+    expect([...standing.querySelectorAll("dd .pk-badge")].map((item) => item.textContent)).toEqual(labels);
   });
 
   it("keeps the roster read-only until one speaker is selected and preserves owner role rules", async () => {

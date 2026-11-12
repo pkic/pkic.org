@@ -334,7 +334,7 @@ describe("proposal speaker removal UI", () => {
     expect(root.querySelector("dialog")).toBeNull();
     // The answer is said once, in words with its date, not as a pill.
     expect(root.textContent?.match(/Participation confirmed/g)).toHaveLength(1);
-    expect(root.querySelector(".pk-speaker-portrait-standing")?.textContent).toMatch(/Participation confirmed \w/);
+    expect(root.querySelector(".pk-proposal-speaker-standing")?.textContent).toMatch(/Participation confirmed \w/);
     expect(root.querySelector(".pk-badge")).toBeNull();
     // The role is read once.
     expect(root.textContent?.match(/Proposer/g)).toHaveLength(1);
