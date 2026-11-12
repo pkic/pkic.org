@@ -6,9 +6,11 @@ import {
 } from "../../../../assets/shared/live-room-outputs";
 import type {
   LiveAuxComposition,
+  LiveRoomClientMessage,
   LiveRoomServerMessage,
   LiveRoomSession,
 } from "../../../../assets/shared/schemas/live-session-room";
+import type { LiveStageDisplaySettings } from "../../../../assets/shared/schemas/live-stage-display-settings";
 import type { LiveControlOutcome } from "./room-controls";
 import { composeLiveStage, type ResolvedComposition } from "./room-composition";
 import type { LivePollStore } from "./room-poll-store";
@@ -47,7 +49,7 @@ export class LiveRoomOutputs {
     };
   }
 
-  setSpeakerMessage(
+  private setSpeakerMessage(
     operator: Operator,
     text: string | null,
     tone: LiveSpeakerMessageTone,
@@ -58,6 +60,28 @@ export class LiveRoomOutputs {
     this.store.saveSpeakerMessage(speakerMessage);
     this.store.recordStaffAction(operator.userId, "live_session.speaker_message", { text, tone, flash }, at);
     return { messages: [{ type: "speaker.message.changed", speakerMessage }] };
+  }
+
+  /** The stage display's own controls: the message to the speaker, and how it behaves for this session. */
+  setStageDisplay(
+    operator: Operator,
+    message: Extract<LiveRoomClientMessage, { type: "speaker.message" | "stage.display.settings" }>,
+    at: string,
+  ): LiveControlOutcome {
+    return message.type === "speaker.message"
+      ? this.setSpeakerMessage(operator, message.text, message.tone, message.flash, at)
+      : this.setStageDisplaySettings(operator, message.settings, at);
+  }
+
+  /** How the stage display behaves for this session: its reactions and its near-end cue. */
+  private setStageDisplaySettings(
+    operator: Operator,
+    settings: LiveStageDisplaySettings,
+    at: string,
+  ): LiveControlOutcome {
+    this.store.saveStageDisplaySettings(settings);
+    this.store.recordStaffAction(operator.userId, "live_session.stage_display_settings", settings, at);
+    return { messages: [{ type: "stage.display.settings.changed", settings }] };
   }
 
   /** A rewritten question already on an auxiliary output or Preview shows its new text there too. */

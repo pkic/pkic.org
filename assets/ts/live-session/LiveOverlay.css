@@ -423,11 +423,13 @@
     fill: var(--pk-danger);
   }
 
-  /* The operators' message to the speaker: a bar across the top of the stage display, over its session line. */
+  /* The stage display's banner: over its top row, between the brand stripe and the main area, the same height. */
   .pk-live-overlay__stage-message {
     position: absolute;
-    inset-inline: 96px;
+    display: grid;
+    inset-inline: 64px;
     inset-block-start: 24px;
+    block-size: 152px;
     font-family: var(--pk-font);
   }
 

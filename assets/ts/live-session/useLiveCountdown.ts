@@ -1,14 +1,7 @@
 import { createContext } from "preact";
 import { useContext, useEffect, useState } from "preact/hooks";
-import { format24HourClockInZone } from "../../shared/format-date";
-import { formatLiveTimer } from "../../shared/live-timer-format";
-import {
-  liveTimerCounts,
-  liveTimerReading,
-  liveTimerShownMs,
-  liveTimerTone,
-  type LiveTimerReading,
-} from "../../shared/live-timer-policy";
+import { liveTimerGraphicText } from "../../shared/live-stage-display-plan";
+import { liveTimerReading, type LiveTimerReading } from "../../shared/live-timer-policy";
 import type { LiveRoomSession, LiveTimer, LiveTimerGraphic } from "../../shared/schemas/live-session-room";
 
 type SessionTime = Pick<LiveRoomSession, "startAt" | "endAt">;
@@ -52,19 +45,5 @@ export function useLiveTimerGraphicReading(
 ) {
   const timer = timers.find((entry) => entry.id === graphic.timerId);
   const now = useTimerNow(timer, session);
-  if (!timer) return null;
-  const reading = liveTimerReading(timer, session, now);
-  const before = reading.startsInMs !== null;
-  const name = graphic.showLabel ? (graphic.label ?? timer.name) : null;
-  return {
-    timer,
-    running: reading.running,
-    // A clock reads the event's time of day on the same clock as the countdowns beside it.
-    text: !liveTimerCounts(timer)
-      ? format24HourClockInZone(now, session.timeZone)
-      : formatLiveTimer(liveTimerShownMs(timer, graphic, session, now), graphic.format, graphic.customFormat),
-    // A start coming up is no warning.
-    tone: before ? undefined : liveTimerTone(timer, reading.valueMs, graphic),
-    label: before ? (name ? `${name} starts in` : "Starts in") : name,
-  };
+  return timer ? liveTimerGraphicText(graphic, timer, session, now) : null;
 }

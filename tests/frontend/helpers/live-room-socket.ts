@@ -1,3 +1,4 @@
+import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../../assets/shared/schemas/live-stage-display-settings";
 import { sessionLiveTimer } from "../../../assets/shared/live-timer-policy";
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../../assets/shared/schemas/live-session-ticker";
 import {
@@ -147,6 +148,7 @@ export function liveSnapshot(overrides: Partial<Omit<LiveRoomSnapshot, "type">> 
     operators: [],
     addedCredits: [],
     stageDisplayNext: null,
+    stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
     ...overrides,
   };
 }

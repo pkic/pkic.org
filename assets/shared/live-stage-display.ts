@@ -41,11 +41,74 @@ export function liveQuestionFit(text: string): LiveQuestionFit {
 }
 
 /**
- * Who asked, as one short line: the name and, when known, the capacity they
- * asked in (frozen with the question): their organization, else their title.
+ * How many characters of the stage display's smallest type (64 px on its
+ * 1792 px line) fit on one line. Like the question's fit, a character count
+ * stands in for measuring, so every screen cuts a line in the same place.
  */
-export function liveQuestionAsker(question: Pick<LiveStageQuestion, "authorName" | "authorAffiliation">): string {
-  if (!question.authorName) return "Audience question";
-  const capacity = question.authorAffiliation?.organization?.name ?? question.authorAffiliation?.title;
-  return capacity ? `${question.authorName}, ${capacity}` : question.authorName;
+export const LIVE_STAGE_LINE_CHARS = 56;
+/** The footer's title: two lines, less the room its Live or Next marker takes. */
+const TITLE_CHARS = LIVE_STAGE_LINE_CHARS * 2 - 10;
+
+/** Cuts text to a budget at the last whole word, with an ellipsis; text that fits is returned as it is. */
+export function cutAtWord(text: string, budget: number): string {
+  const trimmed = text.trim().replace(/\s+/gu, " ");
+  if ([...trimmed].length <= budget) return trimmed;
+  const head = [...trimmed].slice(0, budget).join("");
+  const space = head.lastIndexOf(" ");
+  return `${(space > budget / 2 ? head.slice(0, space) : head).replace(/[\s,;:·–-]+$/u, "")}…`;
+}
+
+/** The session title as the footer shows it: at most two lines, cut at a word. */
+export function liveStageTitle(title: string): string {
+  return cutAtWord(title, TITLE_CHARS);
+}
+
+/** Lowercase name particles that belong to a surname: "van Brouwershaven", "de Blaauw". */
+const SURNAME_PARTICLES = new Set([
+  "da",
+  "de",
+  "del",
+  "den",
+  "der",
+  "di",
+  "du",
+  "la",
+  "le",
+  "ten",
+  "ter",
+  "van",
+  "von",
+]);
+
+/** A person's surname with its particles, from the name as shown: "Art de Blaauw" reads "de Blaauw". */
+export function liveSurname(name: string): string {
+  const words = name.trim().split(/\s+/u);
+  let start = words.length - 1;
+  while (start > 1 && SURNAME_PARTICLES.has(words[start - 1]!.toLowerCase())) start -= 1;
+  return words.slice(start).join(" ");
+}
+
+export interface LiveStageSpeaker {
+  name: string;
+  /** The organization they speak for; null when unknown. */
+  affiliation: string | null;
+}
+
+/**
+ * The speakers in one line, as much as fits: names and affiliations, then
+ * names, then surnames, then only how many there are. Never scrolls.
+ */
+export function liveStageSpeakers(speakers: readonly LiveStageSpeaker[], budget = LIVE_STAGE_LINE_CHARS): string {
+  if (!speakers.length) return "";
+  const fits = (line: string) => [...line].length <= budget;
+  const join = (parts: string[]) => parts.join(" · ");
+  const attempts = [
+    join(speakers.map((speaker) => (speaker.affiliation ? `${speaker.name}, ${speaker.affiliation}` : speaker.name))),
+    join(speakers.map((speaker) => speaker.name)),
+    join(speakers.map((speaker) => liveSurname(speaker.name))),
+  ];
+  return (
+    attempts.find(fits) ??
+    (speakers.length > 1 ? `Panel · ${speakers.length} speakers` : cutAtWord(attempts[2]!, budget))
+  );
 }

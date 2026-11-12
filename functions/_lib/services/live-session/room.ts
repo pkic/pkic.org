@@ -54,7 +54,6 @@ import { refreshLiveCreditCopies } from "./room-credit-refresh";
 
 type Handled = LiveRefusal | void;
 type Actor = { userId: string; name: string };
-
 const REFUSALS = {
   closed: { code: "LIVE_ROOM_CLOSED", message: "Questions and reactions open shortly before the session starts." },
   readOnly: { code: "LIVE_ROOM_READ_ONLY", message: "This connection can only watch the room." },
@@ -554,7 +553,8 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       case "preview.take":
         return this.graphics.takePreview(actor, session, at);
       case "speaker.message":
-        return this.outputs.setSpeakerMessage(actor, message.text, message.tone, message.flash, at);
+      case "stage.display.settings":
+        return this.outputs.setStageDisplay(actor, message, at);
       case "program.clear":
         return this.controls.clearProgram(actor, at);
       case "program.restore":

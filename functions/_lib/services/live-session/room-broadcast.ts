@@ -29,7 +29,11 @@ function seesRoomOutputs(viewer: LiveRoomParticipant): boolean {
 }
 
 function roomOutputMessage(message: LiveRoomServerMessage): boolean {
-  return message.type === "aux.changed" || message.type === "speaker.message.changed";
+  return (
+    message.type === "aux.changed" ||
+    message.type === "speaker.message.changed" ||
+    message.type === "stage.display.settings.changed"
+  );
 }
 
 /**
@@ -93,6 +97,7 @@ export class LiveRoomBroadcast {
       operators: operator ? this.operators(undefined, eligible) : [],
       addedCredits: operator ? this.store.addedCredits() : [],
       stageDisplayNext: seesStageDisplayNext(viewer) ? this.store.preview().question : null,
+      stageDisplaySettings: this.store.stageDisplaySettings(),
     });
   }
 

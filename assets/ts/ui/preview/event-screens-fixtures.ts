@@ -2,6 +2,7 @@
  * Synthetic data for the event screen specimens: one room on a fixed
  * morning, so every screenshot reads the same.
  */
+import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../../shared/schemas/live-stage-display-settings";
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../../shared/schemas/live-session-ticker";
 import {
   EMPTY_LIVE_AUX_COMPOSITION,
@@ -100,6 +101,7 @@ function stageDisplayState(
     operators: [],
     addedCredits: [],
     stageDisplayNext: null,
+    stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
   };
   return applyLiveRoomMessage(null, snapshot)!;
 }

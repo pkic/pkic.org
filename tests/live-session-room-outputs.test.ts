@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { decodeAttendancePointResource } from "../assets/shared/attendance-points";
 import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-session-room";
 import { defaultLiveTimerGraphic } from "../assets/shared/schemas/live-session-timer";
+import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../assets/shared/schemas/live-stage-display-settings";
 import { parseCapabilityToken } from "../functions/_lib/auth/capability-token";
 import { callApi } from "./helpers/app";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
@@ -78,6 +79,21 @@ describe("live room auxiliary outputs", () => {
 
     operator.send({ type: "speaker.message", text: null, tone: "neutral", flash: false });
     expect((await speaker.next("speaker.message.changed", (m) => m.speakerMessage === null)).speakerMessage).toBeNull();
+  });
+
+  it("keeps the stage display's settings for the session, for its outputs only and set by operators only", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const attendee = await f.connect({ person: "attendee" });
+    const overlay = await f.connect({ overlay: await overlayToken() });
+    expect((await overlay.next("room.snapshot")).stageDisplaySettings).toEqual(DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS);
+    const settings = { reactions: false, nearEndSeconds: 120, endsWithQuestions: false };
+    operator.send({ type: "stage.display.settings", settings });
+    expect((await overlay.next("stage.display.settings.changed")).settings).toEqual(settings);
+    attendee.send({ type: "stage.display.settings", settings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS });
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect(attendee.received.some((m) => m.type === "stage.display.settings.changed")).toBe(false);
+    const rejoined = await f.connect({ person: "operator" });
+    expect((await rejoined.next("room.snapshot")).stageDisplaySettings).toEqual(settings);
   });
 
   it("refuses an invalid composition whole and leaves the output unchanged", async () => {

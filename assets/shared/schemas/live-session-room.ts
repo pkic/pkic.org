@@ -69,6 +69,7 @@ import {
   liveTimersSchema,
 } from "./live-session-timer";
 import { attendancePointSelectionSchema } from "../attendance-points";
+import * as stageDisplaySettings from "./live-stage-display-settings";
 import { LIVE_GRAPHIC_THEME_DEFAULTS, liveGraphicThemeSchema } from "../live-graphic-theme";
 import { DEFAULT_LIVE_LOWER_THIRD_MOTION } from "../live-lower-third";
 import {
@@ -183,7 +184,6 @@ export const liveStageQuestionSchema = z
     authorName: livePersonNameSchema.nullable(),
     /** Shown beside the question only when the author asked by name and has a profile photo. */
     authorPhotoUrl: publicSessionPortraitUrlSchema.nullable().default(null),
-    /** The organization the author spoke for as they asked; null when anonymous or unaffiliated. */
     /** The capacity the author asked in, frozen with the question; null when anonymous or unaffiliated. */
     authorAffiliation: liveAuthorAffiliationSchema.nullable().default(null),
   })
@@ -380,6 +380,7 @@ export const liveRoomSnapshotSchema = z
      * for everyone else, so Preview never reaches an audience output.
      */
     stageDisplayNext: liveStageQuestionSchema.nullable().default(null),
+    stageDisplaySettings: stageDisplaySettings.liveStageDisplaySettingsSnapshotSchema,
   })
   .strict();
 export type LiveRoomSnapshot = z.infer<typeof liveRoomSnapshotSchema>;
@@ -420,6 +421,7 @@ export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("overlay.mode.changed"), mode: liveOverlayModeSchema }).strict(),
   /** Stage display sources only: the question in Preview changed. Operators read it from Preview itself. */
   z.object({ type: z.literal("stage.display.next.changed"), question: liveStageQuestionSchema.nullable() }).strict(),
+  stageDisplaySettings.liveStageDisplaySettingsChangedSchema,
   /** Operators only: Program was cleared, and this snapshot restores it. */
   z
     .object({
@@ -570,6 +572,7 @@ export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
     .strict(),
   ...liveTimerCommandSchemas,
   z.object({ type: z.literal("overlay.mode"), mode: liveOverlayModeSchema }).strict(),
+  stageDisplaySettings.liveStageDisplaySettingsCommandSchema,
   ...liveChatClientMessageSchemas,
   ...liveAuthorClientMessageSchemas,
 ]);

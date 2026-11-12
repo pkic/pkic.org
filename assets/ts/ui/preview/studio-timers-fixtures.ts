@@ -3,6 +3,7 @@
  * on a fixed clock, nineteen days before its session, so every screenshot
  * reads the same.
  */
+import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../../shared/schemas/live-stage-display-settings";
 import { sessionLiveTimer } from "../../../shared/live-timer-policy";
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../../shared/schemas/live-session-ticker";
 import {
@@ -81,7 +82,7 @@ export const breakTimer: LiveTimer = {
 export function timersRoomState(
   timers: LiveTimer[],
   stageDisplay: LiveTimerGraphic[] = [],
-  overrides: Partial<Pick<LiveRoomSnapshot, "session" | "speakerMessage">> = {},
+  overrides: Partial<Omit<LiveRoomSnapshot, "type">> = {},
 ): LiveRoomState {
   const snapshot: LiveRoomSnapshot = {
     type: "room.snapshot",
@@ -106,6 +107,7 @@ export function timersRoomState(
     operators: [],
     addedCredits: [],
     stageDisplayNext: null,
+    stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
     ...overrides,
   };
   return applyLiveRoomMessage(null, snapshot)!;

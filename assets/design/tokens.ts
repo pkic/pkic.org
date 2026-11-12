@@ -1,5 +1,6 @@
 import { conferenceField } from "./conference-field.ts";
 import { scannerTokens } from "./scanner-tokens.ts";
+import { stageTokens } from "./stage-tokens.ts";
 /**
  * The canonical design tokens.
  *
@@ -468,6 +469,7 @@ export const constants = {
   "pqc-stripe": `linear-gradient(90deg, ${palette.green} 0%, ${palette.blue} 50%, ${palette.orange} 100%)`,
   "pqc-dots": `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='1.7' fill='rgba(255,255,255,0.22)'/%3E%3C/svg%3E")`,
   "pqc-dots-fine": `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Ccircle cx='7' cy='7' r='1.1' fill='rgba(255,255,255,0.22)'/%3E%3C/svg%3E")`,
+  ...stageTokens,
   // The dark theme's --pk-danger is a light red meant for ink. Filling a
   // button with it and writing in white gave 2.6:1. A destructive fill gets
   // the same darkening an accent fill does.
@@ -578,5 +580,6 @@ export const featureTokenGroups = {
     "pqc-stripe",
     "pqc-dots",
     "pqc-dots-fine",
+    ...Object.keys(stageTokens),
   ],
 } as const;

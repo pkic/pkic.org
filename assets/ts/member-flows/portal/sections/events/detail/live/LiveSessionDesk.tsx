@@ -25,6 +25,7 @@ import { monitorPanelView } from "./studio/MonitorPanel";
 import { StudioScreensBody, StudioScreensConnection } from "./studio/ScreensPanel";
 import { SourcesPanel } from "./studio/SourcesPanel";
 import { SpeakerMessagePanel } from "./studio/SpeakerMessagePanel";
+import { stageDisplaySettingsMenu } from "./studio/stage-display-settings-menu";
 import { StudioGrid, type StudioPanelView } from "./studio/StudioGrid";
 import { StudioHeader, type StudioNoticeContent } from "./studio/StudioHeader";
 import { StudioToolbar } from "./studio/StudioToolbar";
@@ -289,6 +290,7 @@ export function LiveSessionDesk({
       case "message":
         return {
           title,
+          menu: stageDisplaySettingsMenu(state.stageDisplaySettings, sendProgram, disabled),
           body: <SpeakerMessagePanel message={state.speakerMessage} send={sendProgram} disabled={disabled} />,
         };
       case "polls":

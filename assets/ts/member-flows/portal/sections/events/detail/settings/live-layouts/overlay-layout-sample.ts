@@ -1,3 +1,4 @@
+import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../../../../../../../shared/schemas/live-stage-display-settings";
 import { DEFAULT_LIVE_CHECK_IN_TEXT } from "../../../../../../../../shared/schemas/live-session-graphic-settings";
 import { LIVE_MODERATOR_ROLE_LABEL } from "../../../../../../../../shared/live-room-credits";
 import { formFieldStatFromTallies } from "../../../../../../../../shared/form-field-statistics";
@@ -145,6 +146,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
     operators: [],
     addedCredits: [],
     stageDisplayNext: null,
+    stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
     burst: null,
     refusal: null,
   };

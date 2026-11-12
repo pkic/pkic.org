@@ -57,7 +57,7 @@ const FULL_FRAME: LiveOverlayLayoutElements = {
   checkIn: box(1392, 216, 480, 648, RIGHT_MIDDLE),
   reactions: box(1492, 48, 380, 984, RIGHT_MIDDLE),
   stageDisplay: box(0, 0, 1920, 1080, CENTER),
-  stageMessage: box(96, 24, 1728, 152, { horizontal: "center", vertical: "top" }),
+  stageMessage: box(64, 24, 1792, 152, { horizontal: "center", vertical: "top" }),
 };
 
 /** Shows only the listed elements; every other one stays where it is, hidden. */
