@@ -271,6 +271,22 @@
     text-decoration: underline dotted;
     text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
     text-underline-offset: 0.2em;
+    white-space: nowrap;
+  }
+
+  /*
+   * On a touch screen each figure is a full 24px row, so a tap that lands a
+   * little off still selects the figure rather than the card behind it. The
+   * figures wrap whole, one or more to a row, as they do at rest.
+   */
+  @media (pointer: coarse) {
+    .pk-stat-card__part {
+      display: inline-block;
+      min-height: 1.5rem;
+      padding-inline: 0.125rem;
+      margin-inline: -0.125rem;
+      line-height: 1.5rem;
+    }
   }
 
   .pk-stat-card__part:hover {
