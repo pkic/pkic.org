@@ -39,14 +39,16 @@ async function executeRegistrationUpdate<T>(
       const registration = await load();
       attemptedRegistrationId = registration.id;
       const built = await buildRegistrationUpdate(db, registration, payload, changedBy);
-      if (payload.identityChange) {
+      if (
+        payload.identityChange &&
+        registration.registration_identity_id !== payload.identityChange.change.identityId
+      ) {
         built.statements.push(...prepareRegistrationIdentityChange(db, registration.id, payload.identityChange));
         built.registration = {
           ...built.registration,
           registration_identity_id: payload.identityChange.change.identityId,
         };
-        built.notificationChanged ||=
-          registration.registration_identity_id !== payload.identityChange.change.identityId;
+        built.notificationChanged = true;
       }
       return commit(built);
     });

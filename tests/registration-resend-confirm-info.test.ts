@@ -716,39 +716,53 @@ describe("resend-manage-link endpoint", () => {
     ).toEqual([{ recipient_email: "work@example.test" }]);
   });
 
-  it.each(["ended", "blocked"])("uses the account mailbox after the representation is %s", async (state) => {
-    const f = await setupRepresentationRecipient();
-    const recoveryEnvironment = {
-      ...env,
-      EMAIL_RATE_LIMITER: createTestRateLimiter(100),
-      IP_RATE_LIMITER: createTestRateLimiter(100),
-    };
-    const at = new Date().toISOString();
-    await env.DB.prepare("UPDATE identities SET ended_at=?, blocked_at=? WHERE id=?")
-      .bind(at, state === "blocked" ? at : null, f.identityId)
-      .run();
-    const path = `/api/v1/registrations/access/${encodeURIComponent(f.manageToken)}`;
-    const view = await callApi(env, path);
-    expect(view.status).toBe(200);
-    expect(registrationManageReadResponseSchema.parse(await view.json()).user.email).toBe(f.email);
-    const updated = await callApi(env, path, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "update", firstName: "Updated" }),
-    });
-    expect(updated.status, await updated.clone().text()).toBe(200);
-    expect(
-      await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_updated'"),
-    ).toEqual([{ recipient_email: f.email }]);
-    expect((await resendManageLink(recoveryEnvironment, "work@example.test")).status).toBe(200);
-    expect(
-      await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'"),
-    ).toHaveLength(0);
-    expect((await resendManageLink(recoveryEnvironment, f.email)).status).toBe(200);
-    expect(
-      await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'"),
-    ).toEqual([{ recipient_email: f.email }]);
-  });
+  it.each(["not started", "ended", "blocked"])(
+    "uses the account mailbox after the representation is %s",
+    async (state) => {
+      const f = await setupRepresentationRecipient();
+      const recoveryEnvironment = {
+        ...env,
+        EMAIL_RATE_LIMITER: createTestRateLimiter(100),
+        IP_RATE_LIMITER: createTestRateLimiter(100),
+      };
+      const at = new Date().toISOString();
+      await env.DB.prepare("UPDATE identities SET started_at=?, ended_at=?, blocked_at=? WHERE id=?")
+        .bind(
+          state === "not started" ? null : at,
+          state === "not started" ? null : at,
+          state === "blocked" ? at : null,
+          f.identityId,
+        )
+        .run();
+      const path = `/api/v1/registrations/access/${encodeURIComponent(f.manageToken)}`;
+      const view = await callApi(env, path);
+      expect(view.status).toBe(200);
+      expect(registrationManageReadResponseSchema.parse(await view.json()).user.email).toBe(f.email);
+      const updated = await callApi(env, path, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "update", firstName: "Updated" }),
+      });
+      expect(updated.status, await updated.clone().text()).toBe(200);
+      expect(
+        await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_updated'"),
+      ).toEqual([{ recipient_email: f.email }]);
+      expect((await resendManageLink(recoveryEnvironment, "work@example.test")).status).toBe(200);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'",
+        ),
+      ).toHaveLength(0);
+      expect((await resendManageLink(recoveryEnvironment, f.email)).status).toBe(200);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'",
+        ),
+      ).toEqual([{ recipient_email: f.email }]);
+    },
+  );
 
   it.each(["work@bücher.example", "WORK@xn--bcher-kva.example"])(
     "matches the stored normalized representation mailbox for %s",

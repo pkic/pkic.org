@@ -1,3 +1,5 @@
+import { ownedIdentityLifecycleSql } from "../identities/selection";
+
 /**
  * Canonical registration-recipient projections for SQL queries that alias
  * registrations as `r` and users as `u`.
@@ -15,7 +17,7 @@ function identityVerifiedEmailSql(identityIdSql: string, column: "email" | "norm
     JOIN user_emails recipient_address ON recipient_address.id = recipient_identity.email_id
      AND recipient_address.user_id = recipient_identity.user_id AND recipient_address.verified_at IS NOT NULL
     WHERE recipient_identity.id = ${identityIdSql} AND recipient_identity.user_id = u.id
-      AND recipient_identity.ended_at IS NULL AND recipient_identity.blocked_at IS NULL)`;
+      AND ${ownedIdentityLifecycleSql("recipient_identity", null)})`;
 }
 
 /** Where a registration made as `identityIdSql` sends its ordinary messages. */

@@ -102,6 +102,31 @@ describe("registration representation changes", () => {
       ),
     ).toHaveLength(1);
   });
+  it.each(["participant", "manage link"])(
+    "does not record identity effects for an unchanged selection through %s",
+    async (access) => {
+      const f = await setupChange();
+      const path = access === "participant" ? f.path : await managePath(f.registrationId);
+      const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
+      await seedWorkflowEmailTemplates(env.DB, adminId);
+      const badgeJobs = () => queryAll(env.DB, "SELECT id, revision FROM event_promotion_renders ORDER BY id");
+      const before = await badgeJobs();
+      const response = await change(f, f.identityId, f.token, f.identityId, path);
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect((await getRegistrationById(env.DB, f.registrationId)).registration_identity_id).toBe(f.identityId);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT id FROM audit_log WHERE entity_id=? AND action='registration_identity_changed'",
+          [f.registrationId],
+        ),
+      ).toEqual([]);
+      expect(await badgeJobs()).toEqual(before);
+      expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='registration_updated'")).toEqual(
+        [],
+      );
+    },
+  );
   it("rejects another user's identity and a stale selection without recording effects", async () => {
     const f = await setupChange();
     const otherId = await insertUser(env.DB, "other-representation@example.test");
