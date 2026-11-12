@@ -152,3 +152,19 @@ export function prepareScreenMonitorRefresh(
     },
   };
 }
+
+/**
+ * Which of these screens, kept by the monitor without an open socket, still
+ * belong to the event. One removed, replaced by a new device or moved to
+ * another event is forgotten, so it stops counting as an offline screen.
+ */
+export function prepareScreenMonitorMembership(db: DatabaseLike, eventId: string, screenIds: readonly string[]) {
+  return {
+    statement: db
+      .prepare(
+        "SELECT screen.id FROM json_each(?) requested JOIN screens screen ON screen.id=requested.value WHERE screen.event_id=?",
+      )
+      .bind(JSON.stringify(screenIds), eventId),
+    decode: (result: D1StatementResult) => new Set(batchRows<{ id: string }>(result).map((row) => row.id)),
+  };
+}

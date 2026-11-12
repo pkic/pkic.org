@@ -74,8 +74,8 @@ export const eventScreenBrowserSections: PreviewSection[] = [
               marker: null,
             }}
           />
+          <BrowserScreenResume browser={reloaded} sound="none" />
         </div>
-        <BrowserScreenResume browser={reloaded} sound="none" />
       </LiveClockContext.Provider>
     ),
   },

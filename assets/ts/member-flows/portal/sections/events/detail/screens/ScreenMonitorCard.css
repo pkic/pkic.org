@@ -83,6 +83,37 @@
     border-block-start: 3px solid var(--pk-danger);
   }
 
+  /*
+   * A screen that shows nothing now reads as inactive at a glance: a sunk
+   * surface, a grey picture area and secondary text. Its status line keeps
+   * full ink and its menu stays as it is.
+   */
+  .pk-collection-card.pk-screen-card--inactive {
+    background: var(--pk-surface-sunk);
+    box-shadow: none;
+  }
+  .pk-screen-card--inactive .pk-screen-shot {
+    background: color-mix(in oklab, var(--pk-ink-faint) 18%, var(--pk-surface-sunk));
+  }
+  .pk-screen-card--inactive .pk-screen-shot img {
+    opacity: 0.35;
+    filter: grayscale(1);
+  }
+  .pk-screen-card--inactive .pk-screen-card__title {
+    color: var(--pk-ink-muted);
+  }
+  .pk-screen-card--inactive .pk-screen-card__meta,
+  .pk-screen-card--inactive .pk-collection-card__fact {
+    color: var(--pk-ink-faint);
+  }
+  .pk-screen-card--inactive .pk-screen-condition {
+    color: var(--pk-ink);
+  }
+  .pk-screen-card--inactive .pk-screen-quality {
+    opacity: 0.55;
+    filter: grayscale(1);
+  }
+
   .pk-screen-card__body {
     display: flex;
     flex: 1;

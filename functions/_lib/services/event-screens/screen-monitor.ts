@@ -21,6 +21,7 @@ import {
   SCREEN_MONITOR_ADMISSION_HEADER,
   SCREEN_MONITOR_SCREEN_TAG,
   SCREEN_MONITOR_STAFF_TAG,
+  prepareScreenMonitorMembership,
   prepareScreenMonitorRefresh,
   screenMonitorAccessCurrent,
   screenMonitorAdmissionSchema,
@@ -182,8 +183,9 @@ export class EventScreenMonitor extends DurableObject<Env> {
 
   /**
    * The single owner of access rechecks and forgetting. While sockets are
-   * open it rechecks them all in one D1 batch; if that fails, sockets stay
-   * until their lease runs out and the next alarm tries again.
+   * open it rechecks them all in one D1 batch, with whether each screen it
+   * keeps without a socket still belongs to the event; if that fails,
+   * sockets stay until their lease runs out and the next alarm tries again.
    */
   async alarm(): Promise<void> {
     const now = Date.now();
@@ -203,7 +205,13 @@ export class EventScreenMonitor extends DurableObject<Env> {
             known.map((each) => each.admission),
             now,
           );
-          const refreshed = await read.decode(await this.env.DB.batch(read.statements));
+          const idle = (await this.store.all())
+            .map((status) => status.screenId)
+            .filter((screenId) => this.open(screenSocketTag(screenId)).length === 0);
+          const membership = prepareScreenMonitorMembership(this.env.DB, eventId, idle);
+          const results = await this.env.DB.batch([...read.statements, membership.statement]);
+          const refreshed = await read.decode(results.slice(0, -1));
+          await this.forgetLeft(idle, membership.decode(results.at(-1)!));
           for (const [index, { socket, admission }] of known.entries()) {
             const next = refreshed[index];
             if (next) {
@@ -228,6 +236,13 @@ export class EventScreenMonitor extends DurableObject<Env> {
       this.syncCapturePace();
     }
     await this.scheduleRefresh();
+  }
+
+  /** Screens kept without a socket that no longer belong to the event: removed, replaced or moved. */
+  private async forgetLeft(idle: readonly string[], members: ReadonlySet<string>): Promise<void> {
+    const left = idle.filter((screenId) => !members.has(screenId));
+    for (const screenId of left) await this.store.forget(screenId);
+    if (left.length) await this.broadcastSnapshot();
   }
 
   private open(tag?: string): WebSocket[] {

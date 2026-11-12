@@ -6,6 +6,7 @@ import {
   eventScreensParamsSchema,
   eventScreensQuerySchema,
   screenPairingResponseSchema,
+  screenDeviceReplacementSchema,
   screenParamsSchema,
   screenReadQuerySchema,
   screenReadResponseSchema,
@@ -110,6 +111,44 @@ export const screenUpdateRouteSchema = {
       notFound: "Screen not found",
       conflict: "The screen changed since it was read, or it belongs to no event",
       unprocessable: "The room is not in the screen's event",
+    }),
+  },
+};
+
+export const screenDeviceReplaceRouteSchema = {
+  tags,
+  ...requiresPermissions(SCREEN_MANAGE_PERMISSION),
+  summary: "Move a screen to a new device",
+  description:
+    "Approves the pairing code a new device shows and moves the screen's name, event and assignment to the new " +
+    "device's screen ID in one change. The old screen ID is removed with its sign-ins, so the old device shows a " +
+    "pairing code. The new device signs in with its challenge, as after pairing.",
+  request: {
+    params: screenParamsSchema,
+    body: { required: true, content: { "application/json": { schema: screenDeviceReplacementSchema } } },
+  },
+  responses: {
+    ...ok("The screen under its new screen ID, waiting for its sign-in", screenRecordSchema),
+    ...authErrors({
+      badRequest: "Invalid replacement",
+      notFound: "Screen not found",
+      conflict: "The screen changed, belongs to no event, or the new screen ID belongs to another screen",
+      unprocessable: "The new screen ID is the screen's own",
+    }),
+  },
+};
+
+export const screenDeleteRouteSchema = {
+  tags,
+  ...requiresPermissions(SCREEN_MANAGE_PERMISSION),
+  summary: "Remove a screen that is not signed in",
+  description: "Deletes the screen's record and its pairing approvals. A signed-in screen is revoked first.",
+  request: { params: screenParamsSchema },
+  responses: {
+    ...noContent("The screen is removed."),
+    ...authErrors({
+      notFound: "Screen not found",
+      conflict: "The screen is signed in, changed since it was read, or your permission changed",
     }),
   },
 };

@@ -1,8 +1,9 @@
 /**
  * The event workspace's Screens tab: the list and its room choices read
- * from synthetic fixtures on a fixed clock, and the pairing dialog opened
- * from its toolbar.
+ * from synthetic fixtures on a fixed clock, the pairing dialog opened from
+ * its toolbar, and the replace device dialog opened from a screen's menu.
  */
+import type { ComponentChildren } from "preact";
 import type { PreviewSection } from "./PreviewShell";
 import { Tabs } from "../../components/Tabs";
 import type { CollectionLoader } from "../../hooks/useServerCollection";
@@ -10,6 +11,7 @@ import { eventScreensListSchema, type ScreenRecord } from "../../../shared/schem
 import { agendaRoomsListSchema } from "../../../shared/schemas/event-agenda-room-list";
 import { EventScreens } from "../../member-flows/portal/sections/events/detail/screens/EventScreens";
 import { ScreenPairDialog } from "../../member-flows/portal/sections/events/detail/screens/ScreenPairDialog";
+import { ScreenReplaceDialog } from "../../member-flows/portal/sections/events/detail/screens/ScreenReplaceDialog";
 import { useState } from "preact/hooks";
 import { Button } from "../Button";
 import { SCREEN_FIXTURE, SCREEN_FIXTURE_NOW } from "./event-screens-fixtures";
@@ -119,20 +121,15 @@ function ScreensTab({ screens, canManage = true }: { screens: ScreenRecord[]; ca
   );
 }
 
-function PairDialogSpecimen() {
+/** A dialog behind the button that opens it, which the gallery clicks for its screenshot. */
+function DialogSpecimen({ label, dialog }: { label: string; dialog: (close: () => void) => ComponentChildren }) {
   const [open, setOpen] = useState(false);
   return (
     <div data-gallery-open>
       <Button variant="primary" onClick={() => setOpen(true)}>
-        Pair screen
+        {label}
       </Button>
-      <ScreenPairDialog
-        open={open}
-        slug="pqc-conference-2026"
-        load={fixturesWith([])}
-        onPaired={() => undefined}
-        onClose={() => setOpen(false)}
-      />
+      {open && dialog(() => setOpen(false))}
     </div>
   );
 }
@@ -160,6 +157,38 @@ export const eventScreenStaffSections: PreviewSection[] = [
     id: "screens-pair-dialog",
     title: "Pair screen",
     note: "Staff copy the pairing code and screen ID off the screen; the assignment can wait.",
-    render: () => <PairDialogSpecimen />,
+    render: () => (
+      <DialogSpecimen
+        label="Pair screen"
+        dialog={(close) => (
+          <ScreenPairDialog
+            open
+            slug="pqc-conference-2026"
+            load={fixturesWith([])}
+            onPaired={() => undefined}
+            onClose={close}
+          />
+        )}
+      />
+    ),
+  },
+  {
+    id: "screens-replace-dialog",
+    title: "Replace device",
+    note: "From a screen's menu: staff enter what the new device shows, and the screen keeps its name and assignment there. While the current device is online, the dialog says it stops showing the screen.",
+    render: () => (
+      <DialogSpecimen
+        label="Replace device…"
+        dialog={(close) => (
+          <ScreenReplaceDialog
+            screen={SCREENS[0]!}
+            online
+            onReplaced={() => undefined}
+            onChanged={() => undefined}
+            onClose={close}
+          />
+        )}
+      />
+    ),
   },
 ];
