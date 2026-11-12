@@ -1,3 +1,4 @@
+import type { UserSessionTokenClaims } from "../../auth/user-session-token";
 import { AppError } from "../../errors";
 import { registrationManageSchema } from "../../../../assets/shared/schemas/registration";
 import type { DatabaseLike } from "../../types";
@@ -7,17 +8,11 @@ import {
   toEventFormResolutionEvent,
   validateCustomAnswersForSubmission,
 } from "../forms";
-import { getNormalizedEmailForUser } from "../users";
 import type { z } from "zod";
 import type { RegistrationRecord } from "./types";
 import type { ParticipantAuthority } from "../participant-authority";
 import { withdrawRegistrationSponsorSharing } from "./sponsor-sharing";
-import {
-  updateRegistrationByIdWithEmailChange,
-  updateRegistrationByIdWithNotification,
-  updateRegistrationByManageTokenWithEmailChange,
-  updateRegistrationByManageTokenWithNotification,
-} from "./update";
+import { updateRegistrationByIdWithNotification, updateRegistrationByManageTokenWithNotification } from "./update";
 
 type RegistrationManageBody = z.infer<typeof registrationManageSchema>;
 
@@ -28,9 +23,9 @@ export interface ManageRegistrationUpdateInput {
   authenticatedActor: { kind: "user"; id: string } | null;
   actorUserId: string;
   body: RegistrationManageBody;
+  identitySessionClaims?: UserSessionTokenClaims;
   appBaseUrl: string;
   signingSecret: string;
-  confirmationLinkTtlHours: number;
   waitlistClaimWindowHours: number;
 }
 
@@ -38,12 +33,11 @@ export interface ManageRegistrationUpdateResult {
   registration: RegistrationRecord;
   outboxId: string | null;
   outboxIds: string[];
-  emailChanged: boolean;
 }
 
 /**
  * Executes the registration self-service command, including form validation,
- * profile/email changes, audit context, and the durable notification intent.
+ * profile changes, audit context, and the durable notification intent.
  */
 export async function updateManagedRegistration(
   db: DatabaseLike,
@@ -58,8 +52,10 @@ export async function updateManagedRegistration(
         "Withdraw sharing using your own registration link or session.",
       );
     const registration = await withdrawRegistrationSponsorSharing(db, input.manageToken, input.signingSecret, current);
-    return { registration, outboxId: null, outboxIds: [], emailChanged: false };
+    return { registration, outboxId: null, outboxIds: [] };
   }
+  if (body.identityChange && (!input.identitySessionClaims || input.isAdminManageJwt))
+    throw new AppError(403, "REGISTRATION_IDENTITY_UNAVAILABLE", "Sign in to change your own representation.");
   const event = await getEventById(db, current.event_id);
   const validatedForm =
     body.customAnswers !== undefined
@@ -92,11 +88,12 @@ export async function updateManagedRegistration(
         }
       : undefined;
 
-  const currentEmail =
-    body.action === "update" && body.email ? await getNormalizedEmailForUser(db, current.user_id) : null;
-  const emailChanged = Boolean(currentEmail && body.email && body.email.trim().toLowerCase() !== currentEmail);
   const updatePayload = {
     action: body.action,
+    identityChange:
+      body.identityChange && input.identitySessionClaims
+        ? { change: body.identityChange, claims: input.identitySessionClaims }
+        : undefined,
     dayAttendance: body.dayAttendance,
     claimDayWaitlistOffers: body.claimDayWaitlistOffers,
     customAnswersJson: body.customAnswers !== undefined ? JSON.stringify(customAnswers) : undefined,
@@ -121,49 +118,6 @@ export async function updateManagedRegistration(
         : `Registration updated for ${event.name}`,
   };
 
-  if (emailChanged && body.email) {
-    const emailChange = {
-      newEmail: body.email,
-      confirmationTtlHours: input.confirmationLinkTtlHours,
-      signingSecret: input.signingSecret,
-      authority: input.isAdminManageJwt
-        ? ({ kind: "event_manager", actorUserId: input.actorUserId } as const)
-        : input.authenticatedActor
-          ? ({ kind: "authenticated_actor", actorUserId: input.authenticatedActor.id } as const)
-          : ({ kind: "registration_capability" } as const),
-      allowCancelled: true,
-      auditActor: {
-        type: input.isAdminManageJwt ? ("admin" as const) : ("user" as const),
-        id: input.isAdminManageJwt ? input.actorUserId : (input.authenticatedActor?.id ?? input.actorUserId),
-        action: "email_changed",
-        eventId: event.id,
-      },
-      confirmationEmail: {
-        event,
-        appBaseUrl: input.appBaseUrl,
-        confirmationTtlHours: input.confirmationLinkTtlHours,
-      },
-    };
-    const result = input.isAdminManageJwt
-      ? await updateRegistrationByIdWithEmailChange(
-          db,
-          { ...updatePayload, eventId: current.event_id, registrationId: current.id, emailChange },
-          "admin",
-        )
-      : await updateRegistrationByManageTokenWithEmailChange(db, {
-          ...updatePayload,
-          manageToken: input.manageToken,
-          signingSecret: input.signingSecret,
-          emailChange,
-        });
-    return {
-      registration: result.registration,
-      outboxId: result.outboxId,
-      outboxIds: result.outboxIds,
-      emailChanged,
-    };
-  }
-
   const result = input.isAdminManageJwt
     ? await updateRegistrationByIdWithNotification(
         db,
@@ -180,6 +134,5 @@ export async function updateManagedRegistration(
     registration: result.registration,
     outboxId: result.outboxId,
     outboxIds: result.outboxIds,
-    emailChanged,
   };
 }

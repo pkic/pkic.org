@@ -21,7 +21,13 @@ const BLUE_PROJECTOR = screen(
   { ...blue, output: "projector" },
   { state: "active", seenMinutesAgo: 1 },
 );
-const TAB_SCREENS: ScreenRecord[] = [SCREENS[0]!, SCREENS[1]!, BLUE_PROJECTOR, ...SCREENS.slice(2)];
+const BLUE_LAPTOP = screen(
+  MONITOR_SCREENS.laptop,
+  "Blue room, laptop at the lectern",
+  { ...blue, output: "stage-display" },
+  { state: "active", seenMinutesAgo: 1 },
+);
+const TAB_SCREENS: ScreenRecord[] = [SCREENS[0]!, SCREENS[1]!, BLUE_PROJECTOR, BLUE_LAPTOP, ...SCREENS.slice(2)];
 const ROOM_SCREENS = TAB_SCREENS.filter((each) => each.assignment?.roomId === blue.roomId);
 const noCommand = () => undefined;
 const ISSUES = screenMonitorIssues(MONITOR, SCREEN_FIXTURE_NOW);

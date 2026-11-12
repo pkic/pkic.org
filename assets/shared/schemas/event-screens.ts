@@ -89,9 +89,16 @@ export const eventScreenPairingCreateSchema = z
     pairingCode: screenPairingCodeSchema,
     name: screenNameSchema,
     assignment: screenAssignmentInputSchema.nullable().optional(),
+    /**
+     * Pair even though a screen with this ID is signed in now, which signs it
+     * out. Without it, such a pairing is refused: the ID was mistyped, or two
+     * screens share it.
+     */
+    replace: z.literal(true).optional(),
   })
   .strict();
 export type EventScreenPairingCreate = z.infer<typeof eventScreenPairingCreateSchema>;
+export const SCREEN_ID_IN_USE_CODE = "SCREEN_ID_IN_USE";
 
 // ── Staff records ──
 

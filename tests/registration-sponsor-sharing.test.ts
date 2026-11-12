@@ -130,7 +130,6 @@ describe("attendee sponsor sharing withdrawal", () => {
     const response = await withdraw(f.path);
     expect(response.status, await response.clone().text()).toBe(200);
     const receipt = registrationManageUpdateResponseSchema.parse(await response.json());
-    expect(receipt.emailChanged).toBe(false);
     expect(receipt.sponsorSharing.allowed).toBe(false);
     expect(receipt.sponsorSharing.withdrawnAt).not.toBeNull();
     const after = await acceptanceRows(f.registrationId);

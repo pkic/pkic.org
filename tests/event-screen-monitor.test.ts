@@ -33,6 +33,8 @@ const testEnv = env as Env;
 
 const HEALTH: ScreenHealth = {
   pageVersion: "screen-page-test.js",
+  kind: "device",
+  browser: null,
   display: "output",
   output: "stage-display",
   mode: "live",
@@ -301,15 +303,16 @@ describe("event screen monitor", () => {
     expect(watcher.socket.readyState).toBe(WebSocket.OPEN);
   });
 
-  it("paces screenshots by whether staff watch, keeps the latest and drops anything but a small JPEG", async () => {
+  it("paces screenshots by whether staff watch, keeps the latest and drops anything but a small WebP or JPEG", async () => {
     const paired = await pairedScreen("MONSHT");
     const screen = await connectScreen(paired.cookie, paired.screenId);
     expect(await next(screen.received, "screen.capture")).toEqual({
       type: "screen.capture",
       everySeconds: SCREEN_POLICY.screenshotSeconds,
     });
+    const webp = Uint8Array.from([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 1, 2]);
     const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9]);
-    screen.socket.send(jpeg);
+    screen.socket.send(webp);
 
     const paces = screen.received.length;
     const watcher = await connectStaff("moderator");
@@ -319,13 +322,18 @@ describe("event screen monitor", () => {
     // The stored screenshot follows the snapshot, to read-only staff too.
     await next(watcher.received, "screens.snapshot");
     const stored = await next(watcher.received, "screens.screenshot");
-    expect(stored).toMatchObject({ screenId: "MONSHT" });
-    expect(Uint8Array.from(atob(stored.jpeg), (char) => char.charCodeAt(0))).toEqual(jpeg);
+    // Kept and relayed as sent: no conversion on the server.
+    expect(stored).toMatchObject({ screenId: "MONSHT", format: "webp" });
+    expect(Uint8Array.from(atob(stored.image), (char) => char.charCodeAt(0))).toEqual(webp);
 
     const calls = await monitorD1Calls(EVENT.id, async () => {
       const before = watcher.received.length;
-      screen.socket.send(Uint8Array.from([0x89, 0x50, 0x4e, 0x47]));
-      screen.socket.send(new Uint8Array(SCREEN_MONITOR_LIMITS.screenshotBytes + 1).fill(0xff));
+      screen.socket.send(Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]));
+      // RIFF without WEBP is not a WebP.
+      screen.socket.send(Uint8Array.from([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x41, 0x56, 0x45, 1]));
+      const large = new Uint8Array(SCREEN_MONITOR_LIMITS.screenshotBytes + 1);
+      large.set(webp);
+      screen.socket.send(large);
       // Sooner than the device takes a new one.
       screen.socket.send(jpeg);
       screen.socket.send(JSON.stringify({ type: "screen.health", health: HEALTH }));
@@ -334,6 +342,17 @@ describe("event screen monitor", () => {
       expect(screen.socket.readyState).toBe(WebSocket.OPEN);
     });
     expect(calls).toBe(0);
+
+    // Another screen's JPEG is relayed as JPEG.
+    const other = await pairedScreen("MONJPG");
+    const jpegScreen = await connectScreen(other.cookie, other.screenId);
+    const sent = watcher.received.length;
+    jpegScreen.socket.send(jpeg);
+    expect(await next(watcher.received, "screens.screenshot", sent)).toMatchObject({
+      screenId: "MONJPG",
+      format: "jpeg",
+      image: btoa(String.fromCharCode(...jpeg)),
+    });
 
     const left = screen.received.length;
     watcher.socket.close(1000, "Done");

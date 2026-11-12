@@ -200,8 +200,31 @@ test("verified approved-domain registration affiliates once and an organization 
     await expect(attendee.getByRole("heading", { name: /You're registered/i })).toBeVisible();
     const selectedEmail = await waitForCapturedEmail(email, "registration is confirmed", { since: sinceSelected });
     await attendee.goto(extractEmailUrl(selectedEmail, "/register/manage/"));
-    await attendee.getByRole("button", { name: "Change representation", exact: true }).click();
-    const changeIdentity = attendee.getByRole("dialog", { name: "Change representation", exact: true });
+    // The representation is chosen inside Edit details; the address follows it and is never typed.
+    const changeIdentity = attendee.locator("[data-registration-flow='update']");
+    const editRepresentation = async () => {
+      await attendee.getByRole("button", { name: "Edit details", exact: true }).click();
+      await expect(changeIdentity.getByRole("textbox", { name: /^Email/ })).toHaveCount(0);
+      await expect(changeIdentity.getByRole("definition").filter({ hasText: email })).toBeVisible();
+    };
+    await attendee.route("**/api/v1/auth/session", (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { code: "TEMPORARY_UNAVAILABLE", message: "Temporary outage" } }),
+      }),
+    );
+    await editRepresentation();
+    await expect(changeIdentity.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+    for (const [width, height, device] of [
+      [1280, 900, "desktop"],
+      [375, 812, "phone"],
+    ] as const) {
+      await attendee.setViewportSize({ width, height });
+      await attendee.screenshot({ path: testInfo.outputPath(`representation-retry-${device}.png`), fullPage: true });
+    }
+    await attendee.unroute("**/api/v1/auth/session");
+    await changeIdentity.getByRole("button", { name: "Retry", exact: true }).click();
     await changeIdentity.getByRole("combobox", { name: /^Representation/ }).click();
     await attendee.getByRole("option").filter({ hasText: "Personal" }).click();
     for (const [width, height, device] of [
@@ -209,23 +232,23 @@ test("verified approved-domain registration affiliates once and an organization 
       [375, 812, "phone"],
     ] as const) {
       await attendee.setViewportSize({ width, height });
-      await attendee.screenshot({ path: testInfo.outputPath(`public-update-identity-${device}.png`) });
+      await attendee.screenshot({ path: testInfo.outputPath(`public-update-identity-${device}.png`), fullPage: true });
     }
     await changeIdentity.getByRole("button", { name: "Add identity", exact: true }).click();
     const addIdentity = attendee.getByRole("dialog", { name: "Add identity", exact: true });
     await expect(addIdentity.getByRole("textbox", { name: EMAIL_FIRST_COPY.representation.work.label })).toBeVisible();
     await attendee.screenshot({ path: testInfo.outputPath("public-update-add-identity-phone.png") });
     await addIdentity.getByRole("button", { name: "Cancel", exact: true }).click();
-    // The page reloads itself after saving. Wait for that document instead of
-    // racing it with a second reload, which aborts navigation in CI.
     const saveRepresentation = async () => {
-      const reloaded = attendee.waitForEvent("domcontentloaded");
+      const identitySaved = attendee.waitForResponse(
+        (response) => response.url().includes("/registrations/access/") && response.request().method() === "PATCH",
+      );
       await changeIdentity.getByRole("button", { name: "Save changes", exact: true }).click();
-      await reloaded;
-      await expect(changeIdentity).not.toBeVisible();
+      expect((await identitySaved).status()).toBe(200);
+      await attendee.reload();
     };
     await saveRepresentation();
-    await attendee.getByRole("button", { name: "Change representation", exact: true }).click();
+    await editRepresentation();
     await expect(changeIdentity.getByRole("combobox", { name: /^Representation/ })).toContainText("Personal");
     await changeIdentity.getByRole("combobox", { name: /^Representation/ }).click();
     await attendee.getByRole("option").filter({ hasText: organizationName }).click();
@@ -234,7 +257,38 @@ test("verified approved-domain registration affiliates once and an organization 
     await expect(attendee.getByRole("definition").filter({ hasText: organizationName })).toBeVisible();
     await attendee.getByRole("button", { name: "Edit details", exact: true }).click();
     await expect(attendee.getByRole("textbox", { name: /^Organization/ })).toHaveCount(0);
-    await expect(attendee.getByRole("link", { name: "Manage identities", exact: true })).toBeVisible();
+    await expect(changeIdentity.getByRole("combobox", { name: /^Representation/ })).toContainText(organizationName);
+    await changeIdentity.getByRole("button", { name: "Edit representation", exact: true }).click();
+    const profile = attendee.getByRole("dialog", { name: "Edit representation", exact: true });
+    await profile.getByRole("textbox", { name: /^Job title for this organization/ }).fill("Event liaison");
+    await attendee.route("**/api/v1/registrations/access/*", (route) =>
+      route.request().method() === "GET"
+        ? route.fulfill({
+            status: 500,
+            contentType: "application/json",
+            body: JSON.stringify({ error: { code: "REFRESH_FAILED", message: "Try again." } }),
+          })
+        : route.continue(),
+    );
+    await profile.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(profile).not.toBeVisible();
+    await expect(changeIdentity.getByRole("button", { name: "Retry refresh", exact: true })).toBeVisible();
+    await expect(attendee.getByRole("alert").filter({ hasText: "Your profile changes were saved" })).toHaveCount(1);
+    for (const [width, height, device] of [
+      [1280, 900, "desktop"],
+      [375, 812, "phone"],
+    ] as const) {
+      await attendee.setViewportSize({ width, height });
+      await attendee.screenshot({ path: testInfo.outputPath(`profile-refresh-retry-${device}.png`), fullPage: true });
+    }
+    await attendee.unroute("**/api/v1/registrations/access/*");
+    await changeIdentity.getByRole("button", { name: "Retry refresh", exact: true }).click();
+    await expect(changeIdentity.getByRole("button", { name: "Retry refresh", exact: true })).toHaveCount(0);
+    await attendee.goBack();
+    await expect(attendee.getByRole("button", { name: "Edit details", exact: true })).toBeVisible();
+    await expect(attendee.getByRole("definition").filter({ hasText: "Event liaison" })).toBeVisible();
+    await attendee.screenshot({ path: testInfo.outputPath("profile-summary-after-back-phone.png"), fullPage: true });
+    await attendee.goForward();
     await expect(attendee.getByLabel("Country", { exact: true })).toHaveValue("US");
     await attendee.getByLabel("Country", { exact: true }).selectOption("CA");
     await attendee.goBack();

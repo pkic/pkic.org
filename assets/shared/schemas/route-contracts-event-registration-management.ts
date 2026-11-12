@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
+import { eventSlugParamsSchema, normalizedEmailSchema, successResponseSchema } from "./api-common";
 import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
 import { eventRegistrationAdmitSchema, eventRegistrationDetailResponseSchema } from "./event-registration-detail";
 import {
@@ -33,6 +33,8 @@ export const personalEventCalendarRouteSchema = {
 
 export const eventRegistrationManagementUpdateSchema = registrationManageSchema.safeExtend({
   action: registrationManageSchema.shape.action.exclude(["withdraw_sponsor_sharing"]),
+  /** Organizers correct a registrant's address; attendees' addresses follow their identity. */
+  email: normalizedEmailSchema.optional(),
 });
 export const eventRegistrationNotificationCreateSchema = z.object({ type: z.literal("confirmation") });
 

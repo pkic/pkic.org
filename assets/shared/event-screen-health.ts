@@ -1,6 +1,11 @@
 import { formatDuration } from "./format-date";
 import { formatNumber } from "./format-number";
-import type { ScreenHealth, ScreenLiveStatus, ScreenMetricValue } from "./schemas/event-screen-monitor";
+import type {
+  ScreenBrowserState,
+  ScreenHealth,
+  ScreenLiveStatus,
+  ScreenMetricValue,
+} from "./schemas/event-screen-monitor";
 
 /**
  * How a screen's live health reads to staff: the state of what it draws, or
@@ -29,12 +34,14 @@ export function screenHealthDisplay(health: ScreenHealth): {
 
 /** What a screen draws, as one comparable value: a change starts its `stateSince` over. */
 export function screenHealthState(health: ScreenHealth): string {
+  const browser = health.browser;
   return [
     health.display,
     health.mode,
     health.output ?? "",
     health.player?.status ?? "",
     health.player?.muted ?? "",
+    browser ? `${browser.fullscreen}:${browser.wakeLock}:${browser.sound}:${browser.capture}` : "",
   ].join("|");
 }
 
@@ -61,3 +68,8 @@ export function screenKeyMetrics(status: Pick<ScreenLiveStatus, "health">): stri
 
 /** A clock this far off the server's shows its countdowns visibly wrong. */
 export const SCREEN_CLOCK_DRIFT_WARNING_MS = 2_000;
+
+/** What a click on a browser screen would bring back: full screen, blocked sound or the tab capture. */
+export function screenBrowserNeedsResume(state: ScreenBrowserState): boolean {
+  return !state.fullscreen || state.sound === "blocked" || state.capture !== "live";
+}

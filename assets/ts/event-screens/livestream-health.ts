@@ -48,6 +48,8 @@ export type LivestreamHealthEvent =
   | { type: "fault"; at: number }
   | { type: "muted"; at: number }
   | { type: "unmuted"; at: number }
+  /** A click allowed sound, and the player unmuted. */
+  | { type: "sound"; at: number }
   | { type: "tick"; at: number };
 
 /** An event as its source reports it, before the screen stamps the time. */
@@ -102,8 +104,9 @@ export function nextLivestreamHealth(health: LivestreamHealth, event: Livestream
       return fault(health, event.at);
     case "muted":
       return health.muted || health.retryAt !== null ? health : { ...health, muted: true, changedAt: event.at };
+    // Someone turned the sound on themselves, or a click allowed it: the player plays with sound.
     case "unmuted":
-      // Someone turned the sound on themselves: the player plays with sound, not because a refusal was lifted.
+    case "sound":
       return health.muted ? { ...health, muted: false, changedAt: event.at } : health;
     case "tick":
       if (health.retryAt !== null)

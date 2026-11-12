@@ -4,12 +4,8 @@ import { resolveHeroImageUrl } from "./event-presentation";
 import { svgRasterImage } from "../utils/svg-raster-image";
 import type { Env } from "../types";
 import { readBoundedStream } from "../utils/bounded-stream";
-import {
-  SUPPORTED_RASTER_IMAGE_CONTENT_TYPES,
-  validateRasterImage,
-  type EmbeddedRasterImage,
-  type ValidatedRasterImage,
-} from "../utils/image-format";
+import { SUPPORTED_RASTER_IMAGE_CONTENT_TYPES } from "../../../assets/shared/image-signature";
+import { validateRasterImage, type EmbeddedRasterImage, type ValidatedRasterImage } from "../utils/image-format";
 import { resolveHeroImageSource } from "../utils/hero-image-url";
 import { currentEventHeroImage } from "./events/hero-image";
 import { parseEventHeroImagePath } from "../../../assets/shared/event-hero-image-variants";

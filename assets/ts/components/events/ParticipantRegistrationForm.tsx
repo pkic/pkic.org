@@ -9,11 +9,22 @@ export function ParticipantRegistrationForm({
   forms,
   save,
   onDiscard,
+  onProfileUpdated,
 }: {
   data: RegistrationManageReadResponse;
   forms: EventFormsResponse;
   save: (change: RegistrationChange) => Promise<void>;
   onDiscard: () => void;
+  onProfileUpdated: () => Promise<void>;
 }) {
-  return <RegistrationFlow mode="update" data={data} forms={forms} save={save} onDiscard={onDiscard} />;
+  return (
+    <RegistrationFlow
+      mode="update"
+      data={data}
+      forms={forms}
+      save={save}
+      onDiscard={onDiscard}
+      onProfileUpdated={onProfileUpdated}
+    />
+  );
 }

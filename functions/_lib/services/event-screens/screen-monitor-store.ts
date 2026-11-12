@@ -8,7 +8,9 @@ import {
   type ScreenHealth,
   type ScreenLiveStatus,
   type ScreenQualityHistory,
+  screenScreenshotFormat,
   type ScreenQualitySample,
+  type ScreenScreenshotFormat,
 } from "../../../../assets/shared/schemas/event-screen-monitor";
 
 const STATUS = "status:";
@@ -20,7 +22,9 @@ const SHOT_GAP_MS = (SCREEN_POLICY.screenshotMinGapSeconds - 1) * 1000;
 
 export interface StoredScreenshot {
   capturedAt: string;
-  jpeg: Uint8Array;
+  format: ScreenScreenshotFormat;
+  /** The image as the screen sent it, never converted. */
+  bytes: Uint8Array;
 }
 
 function samples(value: unknown): ScreenQualitySample[] {
@@ -30,8 +34,11 @@ function samples(value: unknown): ScreenQualitySample[] {
 
 function screenshot(value: unknown): StoredScreenshot | null {
   if (value === null || typeof value !== "object") return null;
-  const { capturedAt, jpeg } = value as Partial<StoredScreenshot>;
-  return typeof capturedAt === "string" && jpeg instanceof Uint8Array ? { capturedAt, jpeg } : null;
+  const { capturedAt, bytes } = value as Partial<StoredScreenshot>;
+  if (typeof capturedAt !== "string" || !(bytes instanceof Uint8Array)) return null;
+  // The format is read again from the bytes, so nothing stored can claim another.
+  const format = screenScreenshotFormat(bytes);
+  return format ? { capturedAt, format, bytes } : null;
 }
 
 /**
@@ -129,10 +136,14 @@ export class ScreenMonitorStore {
    * Keeps the screen's latest screenshot in place of the one before. Null
    * when the screen sends faster than its device takes a new one.
    */
-  async screenshot(screenId: string, jpeg: Uint8Array, at: string): Promise<StoredScreenshot | null> {
+  async screenshot(
+    screenId: string,
+    image: { format: ScreenScreenshotFormat; bytes: Uint8Array },
+    at: string,
+  ): Promise<StoredScreenshot | null> {
     const previous = screenshot(await this.storage.get<unknown>(SHOT + screenId));
     if (previous && Date.parse(at) - Date.parse(previous.capturedAt) < SHOT_GAP_MS) return null;
-    const stored = { capturedAt: at, jpeg };
+    const stored = { capturedAt: at, ...image };
     await this.storage.put(SHOT + screenId, stored);
     return stored;
   }

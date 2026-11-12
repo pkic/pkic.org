@@ -12,7 +12,8 @@ export interface IdentityRepresentation {
 export interface OwnedIdentityAtInput {
   userId: string;
   identityId: string;
-  at: string;
+  /** Omit to evaluate eligibility against the database clock when the query executes. */
+  at?: string;
   expectedUpdatedAt?: string;
   organizationName?: string | null;
 }
@@ -27,21 +28,20 @@ export function ownedIdentityLifecycleSql(identityAlias: string, atSql: string |
     AND (${identityAlias}.blocked_at IS NULL OR ${identityAlias}.blocked_at > ${atSql})`;
 }
 
-/** Lifecycle is evaluated at the use case's actual instant, never an event-wide date. */
+/** Use database time for live guards, or an explicitly supplied instant for point-in-time checks. */
 export function ownedIdentityAtEvidence(input: OwnedIdentityAtInput): AuthorizationEvidence {
+  const atSql = input.at === undefined ? "strftime('%Y-%m-%dT%H:%M:%fZ','now')" : "?";
   return {
     sql: `SELECT 1 FROM identities identity
       LEFT JOIN organizations organization ON organization.id = identity.organization_id
       WHERE identity.id = ? AND identity.user_id = ?
-        AND ${ownedIdentityLifecycleSql("identity", "?")}
+        AND ${ownedIdentityLifecycleSql("identity", atSql)}
         ${input.expectedUpdatedAt === undefined ? "" : "AND identity.updated_at = ?"}
         ${input.organizationName === undefined ? "" : "AND organization.name IS ?"}`,
     bindings: [
       input.identityId,
       input.userId,
-      input.at,
-      input.at,
-      input.at,
+      ...(input.at === undefined ? [] : [input.at, input.at, input.at]),
       ...(input.expectedUpdatedAt === undefined ? [] : [input.expectedUpdatedAt]),
       ...(input.organizationName === undefined ? [] : [input.organizationName]),
     ],

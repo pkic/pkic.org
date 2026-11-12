@@ -7,14 +7,16 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ScreenIssue } from "../../assets/shared/event-screen-issues";
+import { screenIssues, type ScreenIssue } from "../../assets/shared/event-screen-issues";
 import {
   SCREEN_MONITOR_PROTOCOL,
   screenMonitorStaffMessageSchema,
+  type ScreenLiveStatus,
   type ScreenMonitorServerMessage,
 } from "../../assets/shared/schemas/event-screen-monitor";
 import type { ScreenRecord } from "../../assets/shared/schemas/event-screens";
 import { EventScreens } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/EventScreens";
+import { screenCondition } from "../../assets/ts/member-flows/portal/sections/events/detail/screens/ScreenMonitorCard";
 import {
   applyScreenMonitorMessage,
   EMPTY_SCREEN_MONITOR_VIEW,
@@ -56,7 +58,14 @@ describe("the staff view of the monitor", () => {
     );
     view = applyScreenMonitorMessage(
       view,
-      message({ type: "screens.screenshot", serverNow: NOW, screenId: "K7M2QA", capturedAt: at(2), jpeg: "/9j/4AAQ" }),
+      message({
+        type: "screens.screenshot",
+        serverNow: NOW,
+        screenId: "K7M2QA",
+        capturedAt: at(2),
+        format: "jpeg",
+        image: "/9j/4AAQ",
+      }),
     );
     view = applyScreenMonitorMessage(
       view,
@@ -124,6 +133,45 @@ describe("the staff view of the monitor", () => {
       await vi.advanceTimersByTimeAsync(LIVE_PERSISTENT_RETRY_MAX_MS);
     });
     expect(sockets.sockets).toHaveLength(2);
+  });
+});
+
+describe("a browser screen in the status line", () => {
+  it("says Browser, and that it needs a click or stopped sharing, as a warning", () => {
+    const record = { id: "LAP234", name: "Laptop", session: { state: "active" } } as ScreenRecord;
+    const browser = (capture: "off" | "stopped") =>
+      status("LAP234", {
+        health: {
+          ...status("LAP234").health!,
+          kind: "browser",
+          browser: { fullscreen: false, wakeLock: true, sound: "none", capture },
+        },
+      });
+    const condition = (live: ScreenLiveStatus) =>
+      screenCondition(record, live, screenIssues({ status: live, samples: [], screenshotAt: null, now: NOW }), NOW);
+    expect(condition(browser("off"))).toEqual({
+      tone: "warning",
+      text: "Browser · Needs a click to resume, following the studio",
+    });
+    expect(condition(browser("stopped"))).toEqual({
+      tone: "warning",
+      text: "Browser · No picture (sharing stopped), following the studio",
+    });
+  });
+
+  it("shows a WebP screenshot as WebP", () => {
+    const view = applyScreenMonitorMessage(
+      EMPTY_SCREEN_MONITOR_VIEW,
+      message({
+        type: "screens.screenshot",
+        serverNow: NOW,
+        screenId: "LAP234",
+        capturedAt: at(1),
+        format: "webp",
+        image: "UklGRg==",
+      }),
+    );
+    expect(view.screenshots.get("LAP234")?.src).toBe("data:image/webp;base64,UklGRg==");
   });
 });
 
