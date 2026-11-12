@@ -22,6 +22,8 @@ export function fakePlatform(
     captureHandles?: boolean;
     spends?: "fullscreen" | "capture";
     pickerExitsFullscreen?: boolean;
+    /** The browser window is full screen (F11) from the start. */
+    windowFullscreen?: boolean;
   } = {},
 ) {
   const {
@@ -31,7 +33,10 @@ export function fakePlatform(
     captureHandles = true,
     spends,
     pickerExitsFullscreen = false,
+    windowFullscreen = false,
   } = grants;
+  let windowFull = windowFullscreen;
+  let windowChanged: (() => void) | null = null;
   const origin = "https://pkic.example";
   const listeners = new Map<string, () => void>();
   /** What this tab set as its handle, which a capture of it reports. */
@@ -99,6 +104,7 @@ export function fakePlatform(
     document: doc as unknown as BrowserScreenPlatform["document"],
     wakeLock: { request: requestWakeLock },
     getDisplayMedia,
+    windowFullscreen: { matches: () => windowFull, onChange: (listener) => void (windowChanged = listener) },
     origin,
     setCaptureHandleConfig: captureHandles
       ? vi.fn((config: { handle: string; permittedOrigins: string[] }) => {
@@ -124,6 +130,13 @@ export function fakePlatform(
       active = false;
     }
   };
+  /** A click anywhere on the page, outside any control. */
+  const clickPage = () => click(() => listeners.get("click")?.());
+  /** The person presses F11, or leaves the browser's full screen. */
+  const setWindowFullscreen = (full: boolean) => {
+    windowFull = full;
+    windowChanged?.();
+  };
   const exitFullscreen = () => {
     doc.fullscreenElement = null;
     listeners.get("fullscreenchange")?.();
@@ -135,6 +148,8 @@ export function fakePlatform(
   };
   return {
     platform,
+    clickPage,
+    setWindowFullscreen,
     track,
     changeHandle,
     configured: () => configured,

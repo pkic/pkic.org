@@ -4,8 +4,10 @@
  * from the start, with no click; the setup click asks for full screen, then
  * a capture of this tab for staff's screenshots. Each may be refused on its
  * own; the screen runs without it, and its corner offers what the next
- * click can bring back. A reload takes full screen and the capture away
- * until someone clicks again. Sound is the livestream player's to confirm,
+ * click can bring back. A reload takes page full screen and the capture
+ * away until someone clicks again; the browser's own full screen (F11, or
+ * Control-Command-F on a Mac) counts as full screen and survives a reload.
+ * While full screen is missing, a click anywhere on the screen asks for it. Sound is the livestream player's to confirm,
  * not a click's.
  */
 import type { ScreenBrowserState } from "../../shared/schemas/event-screen-monitor";
@@ -22,6 +24,11 @@ export interface BrowserScreenPlatform {
   };
   wakeLock?: ScreenWakeLockApi;
   getDisplayMedia?: (options: object) => Promise<MediaStream>;
+  /**
+   * Whether the browser window itself is full screen (F11), which the page's
+   * own full screen API does not report; absent in tests that leave it out.
+   */
+  windowFullscreen?: { matches: () => boolean; onChange: (listener: () => void) => void };
   /** This page's origin, which a capture of this tab reports with its handle. */
   origin: string;
   /**
@@ -91,8 +98,21 @@ export const BROWSER_SCREEN_CAPTURE_REFUSALS = [
   "capture-unverified",
 ] as const satisfies readonly BrowserScreenProblem[];
 
+/** The window fills the screen: the browser's own full screen, as F11 gives it. */
+function windowFillsScreen(): boolean {
+  if (matchMedia("(display-mode: fullscreen)").matches) return true;
+  return innerWidth >= screen.width && innerHeight >= screen.height;
+}
+
 export const browserPlatform = (): BrowserScreenPlatform => ({
   document,
+  windowFullscreen: {
+    matches: windowFillsScreen,
+    onChange: (listener) => {
+      addEventListener("resize", listener);
+      matchMedia("(display-mode: fullscreen)").addEventListener("change", listener);
+    },
+  },
   wakeLock: (navigator as { wakeLock?: ScreenWakeLockApi }).wakeLock,
   getDisplayMedia: navigator.mediaDevices?.getDisplayMedia?.bind(navigator.mediaDevices) as
     | BrowserScreenPlatform["getDisplayMedia"]
@@ -121,8 +141,10 @@ export type BrowserScreen = ReturnType<typeof createBrowserScreen>;
 
 export function createBrowserScreen(platform: BrowserScreenPlatform = browserPlatform()) {
   const { document } = platform;
+  /** Full screen either way: the page's own, or the browser window's (F11). */
+  const isFullscreen = () => Boolean(document.fullscreenElement) || Boolean(platform.windowFullscreen?.matches());
   let state: BrowserScreenGrants = {
-    fullscreen: Boolean(document.fullscreenElement),
+    fullscreen: isFullscreen(),
     wakeLock: false,
     capture: "off",
   };
@@ -139,7 +161,14 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
     for (const listener of listeners) listener();
   }
 
-  document.addEventListener("fullscreenchange", () => set({ fullscreen: Boolean(document.fullscreenElement) }));
+  const readFullscreen = () => set({ fullscreen: isFullscreen() });
+  document.addEventListener("fullscreenchange", readFullscreen);
+  platform.windowFullscreen?.onChange(readFullscreen);
+  // A click anywhere asks for full screen while it is missing: the capture's picker in the setup click
+  // often drops it, and a big screen is easier to click than its corner.
+  document.addEventListener("click", () => {
+    if (!state.fullscreen) void enterFullscreen().then(readFullscreen, () => undefined);
+  });
 
   /**
    * Kept awake from the start, with no click: the wake lock needs only a
@@ -172,7 +201,7 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
 
   /** Already full screen counts as granted; a browser without full screen refuses it like any other. */
   function enterFullscreen(): Promise<void> {
-    return document.fullscreenElement ? Promise.resolve() : attempt(() => document.documentElement.requestFullscreen());
+    return isFullscreen() ? Promise.resolve() : attempt(() => document.documentElement.requestFullscreen());
   }
 
   /**
@@ -261,7 +290,9 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
     const capturedProblem = captured.status === "fulfilled" ? captured.value : "capture";
     if (capturedProblem) missing.push(capturedProblem);
     else if (state.capture !== "live") missing.push("capture");
-    const fullscreen = Boolean(document.fullscreenElement);
+    // The picker may have dropped full screen; ask once more while the click may still allow it.
+    if (asked.fullscreen && !isFullscreen()) await enterFullscreen().catch(() => undefined);
+    const fullscreen = isFullscreen();
     if (!fullscreen) missing.push("fullscreen");
     if (!state.wakeLock && platform.wakeLock) missing.push("wake-lock");
     set({ fullscreen }, missing);

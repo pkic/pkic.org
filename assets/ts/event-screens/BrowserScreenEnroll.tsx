@@ -26,6 +26,9 @@ export function BrowserScreenEnroll({
           Full screen, kept awake, with the livestream's sound. Share this tab when asked, so staff see what it shows.
           Then pair it in the event workspace like any screen.
         </p>
+        <p class="pk-screen-status__muted">
+          To stay full screen after a reload, use the browser's own full screen: F11, or Control-Command-F on a Mac.
+        </p>
         <p>
           <Button
             variant="primary"

@@ -94,6 +94,25 @@ describe("setting up a browser as a screen", () => {
     expect(host!.querySelector(".pk-screen-resume")).toBeNull();
   });
 
+  it("asks for full screen on a click anywhere while it is missing", async () => {
+    const { platform, click, clickPage } = fakePlatform({ pickerExitsFullscreen: true });
+    const screen = createBrowserScreen(platform);
+    await click(() => screen.enroll());
+    expect(screen.get().fullscreen).toBe(false);
+    clickPage();
+    await Promise.resolve();
+    expect(screen.get().fullscreen).toBe(true);
+  });
+
+  it("counts the browser's own full screen (F11), which a reload keeps", async () => {
+    const { platform, click, setWindowFullscreen } = fakePlatform({ fullscreen: false, windowFullscreen: true });
+    const screen = createBrowserScreen(platform);
+    expect(screen.get().fullscreen).toBe(true);
+    expect(await click(() => screen.enroll())).toEqual([]);
+    setWindowFullscreen(false);
+    expect(screen.get().fullscreen).toBe(false);
+  });
+
   it("reads full screen from the document once the capture settles", async () => {
     const { platform, click, doc, exitFullscreen } = fakePlatform();
     doc.fullscreenElement = {} as Element;
