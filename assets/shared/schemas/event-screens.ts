@@ -150,6 +150,13 @@ export type ScreenUpdate = z.infer<typeof screenUpdateSchema>;
 export const SCREEN_LIST_SORTS = ["name", "lastSeenAt"] as const;
 export const eventScreensQuerySchema = listQuerySchema(SCREEN_LIST_SORTS).extend({
   roomId: databaseIdSchema.optional(),
+  /** Only these screens, comma-separated: the ones the screen monitor says need attention. */
+  screenIds: z
+    .string()
+    .max(800)
+    .optional()
+    .transform((value) => value?.split(","))
+    .pipe(z.array(screenIdSchema).min(1).max(100).optional()),
 });
 export type EventScreensQuery = z.infer<typeof eventScreensQuerySchema>;
 export const eventScreensListSchema = paginatedResponseSchema("screens", screenRecordSchema);

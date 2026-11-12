@@ -39,6 +39,8 @@ export const NODE_UNIT_TEST_FILES = [
   "tests/event-live-stream-schema.test.ts",
   "tests/event-registration-status-policy.test.ts",
   "tests/event-screen-connection.test.ts",
+  "tests/event-screen-issues.test.ts",
+  "tests/event-screen-monitor-contract.test.ts",
   "tests/registration-population-filter.test.ts",
   "tests/form-answers.test.ts",
   "tests/form-answer-contract.test.ts",

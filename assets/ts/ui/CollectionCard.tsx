@@ -45,7 +45,7 @@ export interface CollectionCardCover {
  */
 export interface CollectionStatus {
   label: string;
-  tone?: "info" | "warn" | "danger" | "neutral";
+  tone?: "info" | "warn" | "risk" | "danger" | "neutral";
   /** Shown on hover and said after the label, for a fact that summarizes a list. */
   description?: string;
 }

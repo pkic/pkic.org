@@ -1,10 +1,13 @@
 /**
  * The event's screens: where each stands, what it shows and whether it is
- * online. Staff who manage screens pair, edit and revoke them here; room
- * operators see the same list without those actions.
+ * online. With the monitor connected, a grid of cards shows each screen's
+ * latest screenshot and last hour beside the list. Staff who manage screens
+ * pair, edit, revoke, identify and reload them here; room operators see the
+ * same screens without those actions.
  */
 import { useRef, useState } from "preact/hooks";
-import { screenConnection, screenConnectionDisplay } from "../../../../../../../shared/event-screen-connection";
+import { screenIssueCounts, sortByScreenIssues } from "../../../../../../../shared/event-screen-issues";
+import { formatNumber } from "../../../../../../../shared/format-number";
 import { formatDateTime } from "../../../../../../../shared/format-date";
 import { LIVE_SCREEN_OUTPUT_DETAILS } from "../../../../../../../shared/live-room-outputs";
 import { eventScreensListSchema, type ScreenRecord } from "../../../../../../../shared/schemas/event-screens";
@@ -13,11 +16,17 @@ import type { CollectionLoader } from "../../../../../../hooks/useServerCollecti
 import { ApiDataTable, type ApiTableActions } from "../../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
-import { Badge } from "../../../../../../ui/Badge";
+import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
+import { Chip } from "../../../../../../ui/Chip";
 import { EmptyState } from "../../../../../../ui/EmptyState";
+import { Menu } from "../../../../../../ui/Menu";
 import { RowActions } from "../../../../../../ui/RowActions";
 import { toast } from "../../../../ui";
+import { DiscoveryViewToggle, useDiscoveryView } from "../../../DiscoveryView";
 import { ScreenEditDialog } from "./ScreenEditDialog";
+import { ScreenHealthCell } from "./ScreenHealthCell";
+import { ScreenConditionLine, ScreenMonitorCard, ScreenMonitorLost, screenCondition } from "./ScreenMonitorCard";
+import { useScreenMonitorController, type ScreenMonitorFixture } from "./useScreenMonitorController";
 import { ScreenPairDialog } from "./ScreenPairDialog";
 import { eventScreensPath, revokeScreenSession } from "./screen-requests";
 import "../../../../../../ui/Content.css";
@@ -34,9 +43,13 @@ function ScreenShows({ assignment }: { assignment: ScreenRecord["assignment"] })
   );
 }
 
-function ScreenStatus({ screen, now }: { screen: ScreenRecord; now: number }) {
-  const { label, tone } = screenConnectionDisplay(screenConnection(screen.session, now));
-  return tone ? <Badge tone={tone}>{label}</Badge> : <>{label}</>;
+/** "1 critical · 2 warnings": how many screens are at each tier. */
+function attentionSummary(counts: { critical: number; warning: number }): string {
+  const parts = [
+    counts.critical ? `${formatNumber(counts.critical)} critical` : "",
+    counts.warning ? `${formatNumber(counts.warning)} ${counts.warning === 1 ? "warning" : "warnings"}` : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "No screens need attention";
 }
 
 export function EventScreens({
@@ -44,6 +57,7 @@ export function EventScreens({
   canManage,
   now: fixedNow,
   load,
+  monitor: fixture,
 }: {
   slug: string;
   /** Pair, edit and revoke; without it the list is read-only. */
@@ -52,13 +66,25 @@ export function EventScreens({
   now?: number;
   /** Reads the list and the room choices; the gallery hands in its own. */
   load?: CollectionLoader;
+  /** The gallery's fixed monitor view; otherwise the tab connects to the event's screen monitor. */
+  monitor?: ScreenMonitorFixture;
 }) {
   const clock = useBoundaryClock(nextMinute);
-  const now = fixedNow ?? clock;
+  const controller = useScreenMonitorController({ slug, fixture });
+  const monitor = controller.view;
+  const onCommand = controller.command;
+  const now = fixedNow ?? (monitor ? controller.now : clock);
+  const counts = screenIssueCounts(controller.issues.values());
+  const needAttention = [...controller.issues].filter(([, issues]) => issues.length).map(([screenId]) => screenId);
+  const [attention, setAttention] = useHashQueryParam("attention", "", ["", "1"]);
+  // The filter needs at least one screen; with none left the full list shows.
+  const attentionIds = attention && needAttention.length ? needAttention.sort().join(",") : "";
   const actions = useRef<ApiTableActions | null>(null);
   const [pairing, setPairing] = useState(false);
   const [editing, setEditing] = useState<ScreenRecord | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const { view, setView } = useDiscoveryView();
+  const live = monitor?.live;
   const reload = async () => {
     await actions.current?.reload();
   };
@@ -81,6 +107,44 @@ export function EventScreens({
     await reload();
   }
 
+  const menu = (screen: ScreenRecord) => (
+    <RowActions
+      subject={screen.name}
+      actions={[
+        ...(onCommand
+          ? [
+              {
+                id: "identify",
+                label: "Identify",
+                disabled: !live?.get(screen.id)?.online,
+                onSelect: () => onCommand("screen.identify", screen),
+              },
+              {
+                id: "reload",
+                label: "Reload",
+                disabled: !live?.get(screen.id)?.online,
+                onSelect: () => onCommand("screen.reload", screen),
+              },
+            ]
+          : []),
+        {
+          id: "edit",
+          label: "Edit",
+          separatorBefore: Boolean(onCommand),
+          onSelect: () => setEditing(screen),
+        },
+        {
+          id: "revoke",
+          label: "Revoke",
+          danger: true,
+          separatorBefore: true,
+          disabled: screen.session.state === "none",
+          onSelect: () => void revoke(screen),
+        },
+      ]}
+    />
+  );
+
   return (
     <div class="pk pk-stack">
       {error && <ErrorAlert error={error} />}
@@ -92,10 +156,64 @@ export function EventScreens({
         responseSchema={eventScreensListSchema}
         resolve={(response) => response.screens}
         resolvePage={(response) => response.page}
+        params={attentionIds ? { screenIds: attentionIds } : undefined}
+        inset={
+          controller.lostSince !== null ? <ScreenMonitorLost lostSince={controller.lostSince} now={now} /> : undefined
+        }
+        onData={(response) => controller.remember(response.screens)}
         load={load}
         paginate
         initialSort="name"
         searchPlaceholder="Search screens…"
+        framed={!(monitor && view === "grid")}
+        toolbar={
+          monitor
+            ? () => (
+                <>
+                  {(needAttention.length > 0 || attention) && (
+                    <Chip pressed={Boolean(attentionIds)} onToggle={() => setAttention(attention ? "" : "1")}>
+                      {attentionSummary(counts)}
+                    </Chip>
+                  )}
+                  <DiscoveryViewToggle view={view} onChange={setView} />
+                  <Menu
+                    label="Screen notifications"
+                    items={[
+                      {
+                        id: "notify",
+                        label: "Notify me in this browser",
+                        checked: controller.notifications.enabled,
+                        multiple: true,
+                        disabled: !controller.notifications.supported,
+                        onSelect: () => void controller.notifications.toggle(),
+                      },
+                    ]}
+                  />
+                </>
+              )
+            : undefined
+        }
+        renderItems={
+          monitor && view === "grid"
+            ? (screens) => (
+                <div class="pk-discovery-grid">
+                  {sortByScreenIssues(screens, (screen) => controller.issuesOf(screen.id)).map((screen) => (
+                    <ScreenMonitorCard
+                      key={screen.id}
+                      screen={screen}
+                      status={monitor.live.get(screen.id)}
+                      issues={controller.issuesOf(screen.id)}
+                      lostSince={controller.lostSince}
+                      samples={monitor.quality.get(screen.id) ?? []}
+                      screenshot={monitor.screenshots.get(screen.id)}
+                      now={now}
+                      actions={canManage ? menu(screen) : undefined}
+                    />
+                  ))}
+                </div>
+              )
+            : undefined
+        }
         createAction={
           canManage ? { label: "Pair screen", showLabel: true, onSelect: () => setPairing(true) } : undefined
         }
@@ -107,8 +225,32 @@ export function EventScreens({
             sort: { asc: "name", desc: "-name" },
           },
           { header: "Screen ID", cell: (screen) => <span class="pk-mono">{screen.id}</span>, width: "fit" },
-          { header: "Shows", cell: (screen) => <ScreenShows assignment={screen.assignment} /> },
-          { header: "Status", cell: (screen) => <ScreenStatus screen={screen} now={now} />, width: "fit" },
+          {
+            header: "Shows",
+            cell: (screen) => (
+              <div class="pk-stack pk-stack--tight">
+                <span>
+                  <ScreenShows assignment={screen.assignment} />
+                </span>
+                <ScreenHealthCell status={live?.get(screen.id)} />
+              </div>
+            ),
+          },
+          {
+            header: "Status",
+            cell: (screen) => (
+              <ScreenConditionLine
+                condition={screenCondition(
+                  screen,
+                  live?.get(screen.id),
+                  controller.issuesOf(screen.id),
+                  now,
+                  controller.lostSince,
+                  Boolean(monitor),
+                )}
+              />
+            ),
+          },
           {
             header: "Last seen",
             cell: (screen) => formatDateTime(screen.session.lastSeenAt),
@@ -119,22 +261,7 @@ export function EventScreens({
             ? [
                 {
                   header: "",
-                  cell: (screen: ScreenRecord) => (
-                    <RowActions
-                      subject={screen.name}
-                      actions={[
-                        { id: "edit", label: "Edit", onSelect: () => setEditing(screen) },
-                        {
-                          id: "revoke",
-                          label: "Revoke",
-                          danger: true,
-                          separatorBefore: true,
-                          disabled: screen.session.state === "none",
-                          onSelect: () => void revoke(screen),
-                        },
-                      ]}
-                    />
-                  ),
+                  cell: (screen: ScreenRecord) => menu(screen),
                 },
               ]
             : []),

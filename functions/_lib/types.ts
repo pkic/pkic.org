@@ -104,6 +104,8 @@ export interface Env {
   OAUTH_KV?: KVNamespace;
   /** One SQLite-backed Durable Object per session's live room (questions, reactions, control desk). */
   LIVE_SESSION_ROOMS?: DurableObjectNamespace<LiveSessionRoomRpc>;
+  /** One SQLite-backed Durable Object per event: its screens' live health, watched by staff. */
+  EVENT_SCREEN_MONITORS?: DurableObjectNamespace;
   /** Cloudflare Rate Limiting binding for low-volume per-email public email triggers. */
   EMAIL_RATE_LIMITER?: RateLimitBinding;
   /** Cloudflare Rate Limiting binding for higher-volume per-IP public email triggers. */

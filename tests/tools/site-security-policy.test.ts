@@ -83,6 +83,16 @@ it("lets only the venue screen page load YouTube's player API, and send its orig
   expect(page).not.toMatch(/name="referrer" content="no-referrer"/u);
 });
 
+it("lets only the venue screen page reach its device's local metrics service", () => {
+  expect(directive(siteContentSecurityPolicy("/live/screen/"), "connect-src")?.split(" ")).toEqual([
+    "connect-src",
+    "'self'",
+    "http://127.0.0.1:8080",
+  ]);
+  for (const path of ["/", "/live/overlay/", "/portal/", "/donate/"])
+    expect(directive(siteContentSecurityPolicy(path), "connect-src")).not.toContain("127.0.0.1");
+});
+
 it("allows email styling only in the isolated preview document", () => {
   const portal = siteContentSecurityPolicy("/portal/");
   expect(directive(portal, "style-src")).toBe("style-src 'self'");

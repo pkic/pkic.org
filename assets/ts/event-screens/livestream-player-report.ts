@@ -1,8 +1,11 @@
 /**
  * The livestream player's state as the screen last reported it, for anything
  * on the page that forwards the screen's health. The player publishes; a
- * reader takes the latest report or subscribes to changes.
+ * reader takes the latest report or subscribes to changes. The player's own
+ * readings change all the time, so they are not published: the player
+ * provides a reader, and the health report reads it when it is sent.
  */
+import type { ScreenPlayback } from "../../shared/schemas/event-screen-monitor";
 import type { LivestreamPlayerStatus } from "./livestream-health";
 
 export interface LivestreamPlayerReport {
@@ -40,3 +43,23 @@ export function publishLivestreamPlayerReport(report: LivestreamPlayerReport | n
   latest = report;
   for (const listener of listeners) listener(report);
 }
+
+export type LivestreamPlaybackReader = () => ScreenPlayback | null;
+let playback: LivestreamPlaybackReader | null = null;
+
+/** The running player's readings; returns the function that withdraws them. */
+export function provideLivestreamPlayback(reader: LivestreamPlaybackReader): () => void {
+  playback = reader;
+  return () => {
+    if (playback === reader) playback = null;
+  };
+}
+
+/** Null while no player runs, or when its readings fail. */
+export const readLivestreamPlayback: LivestreamPlaybackReader = () => {
+  try {
+    return playback?.() ?? null;
+  } catch {
+    return null;
+  }
+};

@@ -25,7 +25,8 @@ const ROOMS = agendaRoomsListSchema.parse({
 
 const minutesBefore = (minutes: number) => new Date(SCREEN_FIXTURE_NOW - minutes * 60_000).toISOString();
 
-function screen(
+/** A screen record of the fixture event, last seen this many minutes before the fixed clock. */
+export function screen(
   id: string,
   name: string,
   assignment: { roomId: string; roomName: string; output: NonNullable<ScreenRecord["assignment"]>["output"] } | null,
@@ -48,9 +49,9 @@ function screen(
   };
 }
 
-const blue = { roomId: SCREEN_FIXTURE.roomId, roomName: SCREEN_FIXTURE.roomName };
-const green = { roomId: GREEN_ROOM_ID, roomName: "Green room" };
-const SCREENS: ScreenRecord[] = [
+export const blue = { roomId: SCREEN_FIXTURE.roomId, roomName: SCREEN_FIXTURE.roomName };
+export const green = { roomId: GREEN_ROOM_ID, roomName: "Green room" };
+export const SCREENS: ScreenRecord[] = [
   screen(
     SCREEN_FIXTURE.screenId,
     SCREEN_FIXTURE.name,
@@ -71,21 +72,23 @@ const SCREENS: ScreenRecord[] = [
   screen("T2HN6V", "Spare, storage room", null, { state: "none" }),
 ];
 
-/** Answers the tab's two reads, the screens and the room choices, from the fixtures above. */
-const fixturesWith =
+/** Answers the tab's two reads, the screens (only those asked for by ID, when it asks) and the room choices. */
+export const fixturesWith =
   (screens: ScreenRecord[]): CollectionLoader =>
-  async (url, _signal, schema) =>
-    schema.parse(
-      url.includes("/agenda/rooms")
-        ? ROOMS
-        : eventScreensListSchema.parse({
-            screens,
-            page: { limit: 25, offset: 0, total: screens.length, hasMore: false },
-          }),
+  async (url, _signal, schema) => {
+    if (url.includes("/agenda/rooms")) return schema.parse(ROOMS);
+    const ids = new URL(url, "https://gallery.invalid").searchParams.get("screenIds")?.split(",");
+    const listed = ids ? screens.filter((screen) => ids.includes(screen.id)) : screens;
+    return schema.parse(
+      eventScreensListSchema.parse({
+        screens: listed,
+        page: { limit: 25, offset: 0, total: listed.length, hasMore: false },
+      }),
     );
+  };
 
 /** The workspace strip around the tab, so the specimen shows where Screens sits. */
-function WorkspaceTabs() {
+export function WorkspaceTabs() {
   return (
     <Tabs
       items={[

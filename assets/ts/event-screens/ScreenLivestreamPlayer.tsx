@@ -1,23 +1,15 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useReducer, useRef } from "preact/hooks";
 import { youtubePrivacyEmbedUrl } from "../../shared/youtube-video";
-import {
-  nextLivestreamHealth,
-  startLivestreamHealth,
-  type LivestreamHealthSignal,
-  type LivestreamPlayerState,
-} from "./livestream-health";
-import { publishLivestreamPlayerReport } from "./livestream-player-report";
+import { nextLivestreamHealth, startLivestreamHealth, type LivestreamHealthSignal } from "./livestream-health";
+import { LivestreamStallLog, livestreamPlayback, livestreamPlayerState } from "./livestream-playback";
+import { provideLivestreamPlayback, publishLivestreamPlayerReport } from "./livestream-player-report";
 import { ScreenLivestream } from "./ScreenLivestream";
-import { loadYouTubeIframeApi, YOUTUBE_PLAYER_STATES, type YouTubePlayer } from "./youtube-iframe-api";
+import { loadYouTubeIframeApi, type YouTubePlayer } from "./youtube-iframe-api";
 
 const HEALTH_TICK_MS = 1_000;
 /** A player not playing this long after it asked to start with sound was refused it; it starts muted. */
 const AUTOPLAY_WITH_SOUND_MS = 5_000;
-
-const PLAYER_STATES = new Map<number, LivestreamPlayerState>(
-  Object.entries(YOUTUBE_PLAYER_STATES).map(([name, value]) => [value, name as LivestreamPlayerState]),
-);
 
 /**
  * The player stays on the venue's kiosk: YouTube's privacy-enhanced embed,
@@ -67,8 +59,29 @@ export function ScreenLivestreamPlayer({
   // The title follows a renamed room without recreating the player.
   const title = useRef(roomName);
   title.current = `${roomName} livestream`;
+  // What the health report reads of the player: the ready player, its stalls and its last error.
+  const ready = useRef<YouTubePlayer | null>(null);
+  const stalls = useRef(new LivestreamStallLog());
+  const lastError = useRef<number | null>(null);
 
-  useEffect(() => report({ type: "video", videoId }), [videoId]);
+  useEffect(() => {
+    lastError.current = null;
+    report({ type: "video", videoId });
+  }, [videoId]);
+
+  useEffect(
+    () =>
+      provideLivestreamPlayback(() =>
+        livestreamPlayback({
+          player: ready.current,
+          stalls: stalls.current,
+          errorCode: lastError.current,
+          now: Date.now(),
+        }),
+      ),
+    [],
+  );
+  useEffect(() => stalls.current.status(health.status, health.changedAt), [health.status, health.changedAt]);
 
   useEffect(() => {
     const tick = setInterval(() => report({ type: "tick" }), HEALTH_TICK_MS);
@@ -88,6 +101,8 @@ export function ScreenLivestreamPlayer({
         player = new api.Player(frame, {
           events: {
             onReady: ({ target }) => {
+              if (stopped) return;
+              ready.current = target;
               target.unMute();
               target.setVolume(100);
               target.playVideo();
@@ -101,15 +116,17 @@ export function ScreenLivestreamPlayer({
             },
             onStateChange: ({ data, target }) => {
               if (stopped) return;
-              const state = PLAYER_STATES.get(data);
+              const state = livestreamPlayerState(data);
               if (!state) return;
               if (state === "playing") played = true;
               // Nobody pauses a venue screen; carry on.
               if (state === "paused") target.playVideo();
               report({ type: "state", state });
             },
-            onError: () => {
-              if (!stopped) report({ type: "fault" });
+            onError: ({ data }) => {
+              if (stopped) return;
+              lastError.current = Number.isInteger(data) ? data : null;
+              report({ type: "fault" });
             },
           },
         });
@@ -120,6 +137,7 @@ export function ScreenLivestreamPlayer({
     );
     return () => {
       stopped = true;
+      ready.current = null;
       clearTimeout(withSound);
       try {
         player?.destroy();

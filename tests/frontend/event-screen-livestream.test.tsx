@@ -11,7 +11,7 @@ import {
   type LivestreamHealth,
   type LivestreamHealthEvent,
 } from "../../assets/ts/event-screens/livestream-health";
-import { livestreamPlayerReport } from "../../assets/ts/event-screens/livestream-player-report";
+import { livestreamPlayerReport, readLivestreamPlayback } from "../../assets/ts/event-screens/livestream-player-report";
 import type { ScreenApi } from "../../assets/ts/event-screens/screen-api";
 import { ScreenApp } from "../../assets/ts/event-screens/ScreenApp";
 import { createScreenClock } from "../../assets/ts/event-screens/screen-clock";
@@ -227,6 +227,11 @@ describe("the livestream screen", () => {
     expect(reconnecting()).toBe(true);
     await emit("playing");
     expect(reconnecting()).toBe(false);
+    // The health report reads the error and the stall through the new player, until another video.
+    expect(readLivestreamPlayback()).toMatchObject({
+      errorCode: 150,
+      stalls: { lastMinute: { count: 1, seconds: (LIVESTREAM_HEALTH_POLICY.retryFirstMs + 1_000) / 1000 }, started: 1 },
+    });
   });
 
   it("starts muted when the browser refuses to start with sound, instead of reconnecting", async () => {

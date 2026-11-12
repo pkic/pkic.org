@@ -1,0 +1,77 @@
+/*
+ * The studio's Screens panel: one compact row per screen of the room. The
+ * screenshot leads; beside it the name, then output and status, then the
+ * hour's trends; the row menu sits at the end.
+ */
+@layer components {
+  .pk-studio-screens {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .pk-studio-screens__row {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr) auto;
+    grid-template-areas:
+      "shot name actions"
+      "shot output actions"
+      "shot status status"
+      "shot trend trend";
+    align-items: center;
+    column-gap: var(--pk-3);
+    row-gap: var(--pk-1);
+    padding: var(--pk-2) var(--pk-3);
+    border-block-end: 1px solid var(--pk-line-soft);
+    /* Reserved on every row, so a row that turns its tone on does not move. */
+    border-inline-start: 3px solid transparent;
+  }
+  .pk-studio-screens__row[data-tone="warning"] {
+    border-inline-start-color: var(--pk-warn);
+  }
+  .pk-studio-screens__row[data-tone="critical"] {
+    border-inline-start-color: var(--pk-danger);
+  }
+  .pk-studio-screens__shot {
+    grid-area: shot;
+    align-self: start;
+    overflow: hidden;
+    border-radius: var(--pk-radius);
+  }
+  /* The thumbnail is small; its age sits tight in the corner. */
+  .pk-studio-screens__shot .pk-screen-shot__age {
+    inset-inline-start: var(--pk-1);
+    inset-block-end: var(--pk-1);
+    padding: 0 var(--pk-1);
+  }
+  .pk-studio-screens__name {
+    grid-area: name;
+    min-inline-size: 0;
+    overflow: hidden;
+    font-weight: 700;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-studio-screens__status {
+    grid-area: status;
+    min-inline-size: 0;
+  }
+  .pk-studio-screens__output {
+    grid-area: output;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+  .pk-studio-screens__trend {
+    grid-area: trend;
+    min-inline-size: 0;
+  }
+  .pk-studio-screens__actions {
+    grid-area: actions;
+    align-self: start;
+  }
+  .pk-studio-screens__empty {
+    margin: 0;
+    padding: var(--pk-3);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+}

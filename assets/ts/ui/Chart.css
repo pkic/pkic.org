@@ -304,3 +304,16 @@
     font-size: var(--pk-text-md);
   }
 }
+
+@layer components {
+  .pk-sparkline {
+    min-inline-size: 0;
+  }
+
+  /* A trend the size of a word: it takes its row's width at a fixed height. */
+  .pk-chart__sparkline {
+    display: block;
+    inline-size: 100%;
+    block-size: 1.5rem;
+  }
+}

@@ -33,6 +33,8 @@ export function siteContentSecurityPolicy(pathname = "/"): string {
   if (portal) frames.push("'self'");
   // A livestream screen drives YouTube's player through its IFrame API, which loads from this host only.
   if (screen) script.push("https://www.youtube.com");
+  // A venue screen reads its own device's metrics from the device's local service, and nothing else local.
+  if (screen) connect.push("http://127.0.0.1:8080");
   if (payment) {
     // Embedded Checkout, Stripe.js, redirects, and Link; restricted to donation pages.
     script.push("https://js.stripe.com", "https://*.js.stripe.com", "https://checkout.stripe.com");

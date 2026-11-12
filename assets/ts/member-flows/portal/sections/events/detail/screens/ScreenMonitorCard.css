@@ -1,0 +1,108 @@
+/*
+ * A screen's card in the multi-view, and the screenshot it shares with the
+ * studio's panel: the picture at the screen's own 16:9 with its age on it,
+ * then name, placement, status and the hour's trends.
+ */
+@layer components {
+  .pk-screen-shot {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    background: var(--pk-surface-sunk);
+  }
+  .pk-screen-shot img {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+  .pk-screen-shot[data-offline] img {
+    opacity: 0.45;
+    filter: grayscale(1);
+  }
+  .pk-screen-shot__none {
+    padding: var(--pk-2);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    text-align: center;
+  }
+  .pk-screen-shot__age {
+    position: absolute;
+    inset-inline-start: var(--pk-2);
+    inset-block-end: var(--pk-2);
+    padding: 0 var(--pk-2);
+    border-radius: var(--pk-radius-pill);
+    background: color-mix(in oklab, var(--pk-surface) 88%, transparent);
+    color: var(--pk-ink);
+    font-size: var(--pk-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The condition: a dot in its tone and one line of words, never taller than one line. */
+  .pk-screen-condition {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+    block-size: 1.5em;
+    margin: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+  .pk-screen-condition__dot {
+    flex: none;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: var(--pk-ok);
+  }
+  .pk-screen-condition[data-tone="warning"] .pk-screen-condition__dot {
+    background: var(--pk-warn);
+  }
+  .pk-screen-condition[data-tone="critical"] .pk-screen-condition__dot {
+    background: var(--pk-danger);
+  }
+  .pk-screen-condition[data-tone="neutral"] .pk-screen-condition__dot {
+    background: var(--pk-ink-faint);
+  }
+  .pk-screen-condition__text {
+    min-inline-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* A screen with a warning or a critical issue carries its tone along the card's top edge. */
+  .pk-screen-card--warning {
+    border-block-start: 3px solid var(--pk-warn);
+  }
+  .pk-screen-card--critical {
+    border-block-start: 3px solid var(--pk-danger);
+  }
+
+  .pk-screen-card__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--pk-1);
+    padding: var(--pk-3) var(--pk-4);
+    min-inline-size: 0;
+  }
+  .pk-screen-card__title {
+    margin: 0;
+    font-size: var(--pk-text-md);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+  .pk-screen-card__meta {
+    margin: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+  .pk-screen-card__body > .pk-screen-condition {
+    margin-block-end: var(--pk-2);
+  }
+}
