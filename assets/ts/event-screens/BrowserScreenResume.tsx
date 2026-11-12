@@ -1,11 +1,12 @@
 /**
- * A browser screen's one control, fixed in a corner of the window so nothing
- * on the screen moves when it comes or goes: what is missing, and one button
- * that does what the next click can. After a reload that is Resume (the tab
- * capture and full screen again); after a setup click the browser spent on
- * the capture, Full screen; once the livestream's player is blocked from
- * playing with sound, Turn on sound; or full screen and sound together. The
- * screen runs without the click.
+ * A browser screen's one control, on every state it shows (pairing code,
+ * waiting, any output), fixed in a corner of the window so nothing on the
+ * screen moves when it comes or goes: what is missing, and one button that
+ * does what the next click can. After a reload that is Resume (full screen
+ * and sharing this tab again); otherwise Full screen, Share this tab, Turn
+ * on sound once the livestream's player is blocked, or Keep awake when the
+ * browser refused the wake lock without a click. The screen runs without
+ * the click.
  */
 import type { ScreenBrowserState } from "../../shared/schemas/event-screen-monitor";
 import { Button } from "../ui/Button";
@@ -24,14 +25,16 @@ export function BrowserScreenResume({
   sound,
   onSound = requestLivestreamSound,
 }: {
-  browser: Pick<BrowserScreen, "get" | "problems" | "subscribe" | "enroll" | "requestFullscreen">;
+  browser: Pick<BrowserScreen, "get" | "problems" | "subscribe" | "request">;
   /** The livestream's sound, as its player confirms it. */
   sound: ScreenBrowserState["sound"];
   /** Asks the player to unmute and play, within the click. */
   onSound?: () => void;
 }) {
   const { state, problems } = useBrowserScreenState(browser);
-  const next = state ? browserScreenNextClick({ ...state, sound }) : null;
+  const next = state
+    ? browserScreenNextClick({ ...state, sound }, { offerWakeLock: problems.includes("wake-lock") })
+    : null;
   if (!next) return null;
   const hint = problems.includes("capture-surface") ? BROWSER_SCREEN_PROBLEM_LABELS["capture-surface"] : null;
   return (
@@ -40,10 +43,10 @@ export function BrowserScreenResume({
       <Button
         variant="primary"
         onClick={() => {
-          // Everything starts within the click: the capture first, then full screen, then sound.
-          if (next.action === "resume") void browser.enroll();
-          else if (next.action !== "sound") void browser.requestFullscreen();
-          if (sound === "blocked") onSound();
+          // Everything starts within the click: full screen, then the capture and the wake lock, then sound.
+          if (next.asks.fullscreen || next.asks.capture || next.asks.wakeLock)
+            void browser.request({ fullscreen: next.asks.fullscreen, capture: next.asks.capture });
+          if (next.asks.sound) onSound();
         }}
       >
         {BROWSER_SCREEN_ACTION_LABELS[next.action]}

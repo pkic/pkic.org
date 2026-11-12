@@ -22,14 +22,31 @@ import { screenStorage } from "./screen-storage";
 import { ScreenApp } from "./ScreenApp";
 import "./screen-page.css";
 
-class ScreenRecovery extends Component<{ children: ComponentChildren }> {
+/**
+ * A render the screen cannot recover from hands a device back to its status
+ * page. A browser screen has none, and a reload would cost it full screen
+ * and sharing, so it draws itself afresh instead.
+ */
+class ScreenRecovery extends Component<{ children: ComponentChildren; onError: () => void }, { failed: boolean }> {
+  state = { failed: false };
   componentDidCatch() {
-    handOffScreen();
+    // Drawn again only by a fresh mount, so a render that keeps failing cannot loop.
+    this.setState({ failed: true });
+    this.props.onError();
   }
   render() {
-    return this.props.children;
+    return this.state.failed ? null : this.props.children;
   }
 }
+
+/** How long a browser screen waits before drawing itself afresh after a render failed. */
+const BROWSER_RECOVERY_MS = 5_000;
+/** Bumped to draw a browser screen afresh: everything is read again, nothing reloads. */
+let generation = 0;
+const redraw = () => {
+  generation += 1;
+  mount();
+};
 
 const clock = createScreenClock();
 /** This browser's storage, or this visit's where the browser refuses it. */
@@ -63,7 +80,10 @@ function mount(): void {
   }
   render(
     <main data-live-screen>
-      <ScreenRecovery>
+      <ScreenRecovery
+        key={generation}
+        onError={runsOn === "device" ? handOffScreen : () => setTimeout(redraw, BROWSER_RECOVERY_MS)}
+      >
         <LiveClockContext.Provider value={clock.now}>
           <ScreenApp
             key={screenId}
@@ -72,6 +92,8 @@ function mount(): void {
             clock={clock}
             onHandoff={handOffScreen}
             browser={runsOn === "browser" ? browser : null}
+            // A staff Reload refreshes a browser screen in place: a page reload would end its sharing.
+            onReload={runsOn === "browser" ? redraw : undefined}
           />
         </LiveClockContext.Provider>
       </ScreenRecovery>

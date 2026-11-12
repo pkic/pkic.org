@@ -43,6 +43,7 @@ export const SCREEN_ISSUE_CODES = [
   "cached-agenda",
   "browser-resume",
   "browser-sharing",
+  "browser-awake",
 ] as const;
 export type ScreenIssueCode = (typeof SCREEN_ISSUE_CODES)[number];
 export type ScreenIssueSeverity = "critical" | "warning";
@@ -172,6 +173,8 @@ export function screenIssues({
   if (browser?.capture === "stopped") add("browser-sharing", "No picture (sharing stopped)", "warning", stateSince);
   else if (browser && screenBrowserNeedsResume(browser))
     add("browser-resume", "Needs a click to resume", "warning", stateSince);
+  // The laptop may sleep or dim: the browser refused the wake lock, or has none.
+  if (browser && !browser.wakeLock) add("browser-awake", "May sleep", "warning", stateSince);
 
   if (health?.mode === "auto" || health?.mode === "offline")
     add(

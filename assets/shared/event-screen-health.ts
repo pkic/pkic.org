@@ -41,7 +41,7 @@ export function screenHealthState(health: ScreenHealth): string {
     health.output ?? "",
     health.player?.status ?? "",
     health.player?.muted ?? "",
-    browser ? `${browser.fullscreen}:${browser.sound}:${browser.capture}` : "",
+    browser ? `${browser.fullscreen}:${browser.wakeLock}:${browser.sound}:${browser.capture}` : "",
   ].join("|");
 }
 

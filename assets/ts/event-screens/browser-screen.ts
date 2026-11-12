@@ -1,14 +1,15 @@
 /**
  * A browser set up as a screen (a laptop at a stage instead of a device):
- * what its clicks grant it and what it keeps. The setup click asks for a
- * capture of this tab for staff's screenshots, then full screen, and takes a
- * screen wake lock. A browser that spends the click on the capture refuses
- * full screen; a second click in the screen's corner finishes it. Each may be
- * refused on its own; the screen runs without it and says what is missing. A
- * reload takes full screen and the capture away until the next click. Sound
- * is the livestream player's to confirm, not this click's.
+ * what its clicks grant it and what it keeps. It holds a screen wake lock
+ * from the start, with no click; the setup click asks for full screen, then
+ * a capture of this tab for staff's screenshots. Each may be refused on its
+ * own; the screen runs without it, and its corner offers what the next
+ * click can bring back. A reload takes full screen and the capture away
+ * until someone clicks again. Sound is the livestream player's to confirm,
+ * not a click's.
  */
 import type { ScreenBrowserState } from "../../shared/schemas/event-screen-monitor";
+import { screenWakeLock, type ScreenWakeLockApi } from "../shared/screen-wake-lock";
 import { browserScreenFrameSize, encodeBrowserScreenFrame, type FrameCanvas } from "./browser-screen-frame";
 
 /** What the clicks grant; the screen adds the livestream's sound, which its player confirms. */
@@ -19,16 +20,12 @@ export interface BrowserScreenPlatform {
   document: Pick<Document, "fullscreenElement" | "visibilityState" | "addEventListener"> & {
     documentElement: Pick<HTMLElement, "requestFullscreen">;
   };
-  wakeLock?: { request(type: "screen"): Promise<WakeLockLike> };
+  wakeLock?: ScreenWakeLockApi;
   getDisplayMedia?: (options: object) => Promise<MediaStream>;
   /** A video and a canvas to take frames with. */
   frames: () => { video: FrameVideo; canvas: FrameCanvas & FrameDrawing };
 }
 
-interface WakeLockLike {
-  released: boolean;
-  addEventListener(type: "release", listener: () => void): void;
-}
 export interface FrameVideo {
   srcObject: MediaProvider | null;
   muted: boolean;
@@ -56,11 +53,14 @@ export const BROWSER_SCREEN_CAPTURE_OPTIONS = {
   monitorTypeSurfaces: "exclude",
 } as const;
 
+/** A wake lock the system let go is asked for again after this long, so a browser that keeps letting go is not asked in a loop. */
+export const BROWSER_SCREEN_WAKE_LOCK_RETRY_MS = 1_000;
+
 export type BrowserScreenProblem = "fullscreen" | "wake-lock" | "capture" | "capture-surface";
 
 export const browserPlatform = (): BrowserScreenPlatform => ({
   document,
-  wakeLock: (navigator as { wakeLock?: BrowserScreenPlatform["wakeLock"] }).wakeLock,
+  wakeLock: (navigator as { wakeLock?: ScreenWakeLockApi }).wakeLock,
   getDisplayMedia: navigator.mediaDevices?.getDisplayMedia?.bind(navigator.mediaDevices) as
     | BrowserScreenPlatform["getDisplayMedia"]
     | undefined,
@@ -103,22 +103,26 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
 
   document.addEventListener("fullscreenchange", () => set({ fullscreen: Boolean(document.fullscreenElement) }));
 
-  /** The wake lock needs no click, only a visible page; the browser drops it whenever the page is hidden. */
-  async function keepAwake(): Promise<boolean> {
-    if (!platform.wakeLock || document.visibilityState !== "visible") return false;
-    try {
-      const lock = await platform.wakeLock.request("screen");
-      lock.addEventListener("release", () => set({ wakeLock: false }));
-      set({ wakeLock: !lock.released });
-      return !lock.released;
-    } catch {
-      set({ wakeLock: false });
-      return false;
-    }
-  }
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && !state.wakeLock) void keepAwake();
+  /**
+   * Kept awake from the start, with no click: the wake lock needs only a
+   * visible page. The browser lets it go whenever the page is hidden, and
+   * may at any time; it is asked for again once the page is visible, and a
+   * click asks once more if the browser wanted one.
+   */
+  const awake = screenWakeLock((wakeLock) => set({ wakeLock }), {
+    wakeLock: () => platform.wakeLock,
+    onReleased: () => setTimeout(() => void keepAwake(), BROWSER_SCREEN_WAKE_LOCK_RETRY_MS),
   });
+  async function keepAwake(): Promise<boolean> {
+    if (document.visibilityState !== "visible") return false;
+    const held = await awake.acquire();
+    // Refused while visible: a click may be what the browser wants, so the next one offers it.
+    const refused = !held && Boolean(platform.wakeLock);
+    if (refused !== problems.includes("wake-lock"))
+      set({}, refused ? [...problems, "wake-lock"] : problems.filter((problem) => problem !== "wake-lock"));
+    return held;
+  }
+  document.addEventListener("visibilitychange", () => void keepAwake());
   void keepAwake();
 
   function endCapture(next: BrowserScreenGrants["capture"]) {
@@ -160,6 +164,37 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
     return null;
   }
 
+  /**
+   * What one click asks for, in the order browsers allow: full screen
+   * first (it prompts for nothing, so the click grants it), then the
+   * capture in the same handler, and the wake lock. A browser may refuse
+   * the capture for want of the click, and its picker may drop full
+   * screen; neither is a failure. Once the capture settles, full screen is
+   * read from the document and whatever is still missing is left for the
+   * next click. Resolves with what is missing.
+   */
+  async function request(asked: { fullscreen?: boolean; capture?: boolean }): Promise<BrowserScreenProblem[]> {
+    const fullscreenRequest = asked.fullscreen ? enterFullscreen() : Promise.resolve();
+    const captureRequest =
+      asked.capture && platform.getDisplayMedia
+        ? attempt(() => platform.getDisplayMedia!(BROWSER_SCREEN_CAPTURE_OPTIONS))
+        : null;
+    const [captured] = await Promise.allSettled([
+      asked.capture ? capture(captureRequest) : Promise.resolve(null),
+      fullscreenRequest,
+      keepAwake(),
+    ]);
+    const missing: BrowserScreenProblem[] = [];
+    const capturedProblem = captured.status === "fulfilled" ? captured.value : "capture";
+    if (capturedProblem) missing.push(capturedProblem);
+    else if (state.capture !== "live") missing.push("capture");
+    const fullscreen = Boolean(document.fullscreenElement);
+    if (!fullscreen) missing.push("fullscreen");
+    if (!state.wakeLock && platform.wakeLock) missing.push("wake-lock");
+    set({ fullscreen }, missing);
+    return missing;
+  }
+
   return {
     get: () => state,
     /** What the last click could not get, for the screen to say. */
@@ -168,35 +203,9 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
       listeners.add(listener);
       return () => void listeners.delete(listener);
     },
-    /**
-     * The setup click, and Resume's: the capture first, while the click still
-     * counts as the person's, then full screen in the same handler, and the
-     * wake lock. Full screen is read from the document once the capture
-     * settles. Resolves with what is still missing; a refused full screen is
-     * offered again in the screen's corner.
-     */
-    async enroll(): Promise<BrowserScreenProblem[]> {
-      const captureRequest = platform.getDisplayMedia
-        ? attempt(() => platform.getDisplayMedia!(BROWSER_SCREEN_CAPTURE_OPTIONS))
-        : null;
-      const fullscreenRequest = enterFullscreen();
-      const [captured] = await Promise.allSettled([capture(captureRequest), fullscreenRequest, keepAwake()]);
-      const missing: BrowserScreenProblem[] = [];
-      const capturedProblem = captured.status === "fulfilled" ? captured.value : "capture";
-      if (capturedProblem) missing.push(capturedProblem);
-      const fullscreen = Boolean(document.fullscreenElement);
-      if (!fullscreen) missing.push("fullscreen");
-      if (!state.wakeLock) missing.push("wake-lock");
-      set({ fullscreen }, missing);
-      return missing;
-    },
-    /** A second click's full screen, for a browser that spent the first on the capture. */
-    async requestFullscreen(): Promise<boolean> {
-      await enterFullscreen().catch(() => undefined);
-      const fullscreen = Boolean(document.fullscreenElement);
-      set({ fullscreen }, fullscreen ? problems.filter((problem) => problem !== "fullscreen") : problems);
-      return fullscreen;
-    },
+    request,
+    /** The setup click, and Resume's: full screen and this tab's capture. */
+    enroll: () => request({ fullscreen: true, capture: true }),
     /** One frame of this tab while it is captured, as the monitor takes a screenshot; null otherwise. */
     async readScreenshot(): Promise<ArrayBuffer | null> {
       if (state.capture !== "live" || !frames) return null;

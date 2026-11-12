@@ -201,6 +201,10 @@ describe("a screen's issues", () => {
     expect(issues(browser({ fullscreen: false, sound: "blocked", capture: "off" }))).toEqual([
       { code: "browser-resume", label: "Needs a click to resume", severity: "warning", since: ago(20) },
     ]);
+    // Refused or without a wake lock, the laptop may sleep.
+    expect(issues(browser({ wakeLock: false }))).toEqual([
+      { code: "browser-awake", label: "May sleep", severity: "warning", since: ago(20) },
+    ]);
     // Sharing stopped: its last screenshot ages without counting against it.
     const stopped = screenIssues({
       status: browser({ capture: "stopped" }),
