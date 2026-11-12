@@ -9,7 +9,7 @@ import {
 import { screenPairingCodeHash } from "../../auth/screen-pairing-challenge";
 import { batchFirst } from "../../db/pagination";
 import { AppError } from "../../errors";
-import type { DatabaseLike, Env } from "../../types";
+import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { randomToken, sha256Hex } from "../../utils/crypto";
 import { addHours, addMinutes, nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
@@ -105,20 +105,7 @@ export async function approveScreenPairing(
                 "UPDATE screen_sessions SET revoked_at=? WHERE screen_id=? AND activated_at IS NULL AND revoked_at IS NULL",
               )
               .bind(now, input.screenId),
-            write
-              .prepare(
-                `INSERT INTO screen_sessions(id,screen_id,token_hash,pairing_code_hash,approved_by,created_at,expires_at)
-                 VALUES(?,?,?,?,?,?,?)`,
-              )
-              .bind(
-                crypto.randomUUID(),
-                input.screenId,
-                await sha256Hex(randomToken(32)),
-                await screenPairingCodeHash(input.screenId, input.pairingCode),
-                actor.id,
-                now,
-                addMinutes(now, SCREEN_POLICY.pairingMinutes),
-              ),
+            await prepareScreenPairingApproval(write, input.screenId, input.pairingCode, actor.id, now),
             prepareScreenRecordRead(write, input.screenId),
           ]);
           return toScreenRecord(decodeScreenRecordRow(results.at(-1)!) as ScreenRecordRow);
@@ -131,8 +118,38 @@ export async function approveScreenPairing(
   });
 }
 
+/**
+ * The pending sign-in a staff approval holds: the code's hash, valid for the
+ * code's lifetime, until the screen collects it with its challenge.
+ */
+export async function prepareScreenPairingApproval(
+  db: DatabaseLike,
+  screenId: string,
+  pairingCode: string,
+  actorId: string,
+  now: string,
+): Promise<StatementLike> {
+  return db
+    .prepare(
+      `INSERT INTO screen_sessions(id,screen_id,token_hash,pairing_code_hash,approved_by,created_at,expires_at)
+       VALUES(?,?,?,?,?,?,?)`,
+    )
+    .bind(
+      crypto.randomUUID(),
+      screenId,
+      await sha256Hex(randomToken(32)),
+      await screenPairingCodeHash(screenId, pairingCode),
+      actorId,
+      now,
+      addMinutes(now, SCREEN_POLICY.pairingMinutes),
+    );
+}
+
 /** A screen signed in now: an activated sign-in that has not run out. */
-function screenSignedIn(row: ScreenRecordRow, now: string): boolean {
+export function screenSignedIn(
+  row: Pick<ScreenRecordRow, "session_activated_at" | "session_expires_at">,
+  now: string,
+): boolean {
   return row.session_activated_at !== null && row.session_expires_at !== null && row.session_expires_at > now;
 }
 

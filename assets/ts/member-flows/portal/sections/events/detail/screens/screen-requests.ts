@@ -3,10 +3,12 @@ import { noContentResponseSchema } from "../../../../../../../shared/schemas/api
 import {
   SCREEN_REVISION_CONFLICT_CODE,
   eventScreenPairingCreateSchema,
+  screenDeviceReplacementSchema,
   screenRecordSchema,
   screenStaffViewSchema,
   screenUpdateSchema,
   type EventScreenPairingCreate,
+  type ScreenDeviceReplacement,
   type ScreenRecord,
   type ScreenUpdate,
 } from "../../../../../../../shared/schemas/event-screens";
@@ -15,6 +17,7 @@ import {
   getJson,
   patchValidated,
   postValidated,
+  putValidated,
   requestJson,
 } from "../../../../../../shared/api-client";
 
@@ -36,6 +39,15 @@ export async function readScreenRecord(screenId: string): Promise<ScreenRecord> 
 
 export async function revokeScreenSession(screenId: string): Promise<void> {
   await requestJson(`${screenPath(screenId)}/session`, noContentResponseSchema, { method: "DELETE" });
+}
+
+/** Moves the screen to a new device; the record comes back under the new device's screen ID. */
+export function replaceScreenDevice(screenId: string, body: ScreenDeviceReplacement): Promise<ScreenRecord> {
+  return putValidated(`${screenPath(screenId)}/device`, screenDeviceReplacementSchema, body, screenRecordSchema);
+}
+
+export async function removeScreen(screenId: string): Promise<void> {
+  await requestJson(screenPath(screenId), noContentResponseSchema, { method: "DELETE" });
 }
 
 export function isScreenRevisionConflict(error: unknown): boolean {

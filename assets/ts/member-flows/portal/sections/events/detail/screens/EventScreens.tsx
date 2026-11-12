@@ -2,7 +2,8 @@
  * The event's screens: where each stands, what it shows and whether it is
  * online. With the monitor connected, a grid of cards shows each screen's
  * latest screenshot and last hour beside the list. Staff who manage screens
- * pair, edit, revoke, identify and reload them here; room operators see the
+ * pair, edit, identify and reload them here, move one to a new device,
+ * revoke one and remove one that is not signed in; room operators see the
  * same screens without those actions.
  */
 import { useRef, useState } from "preact/hooks";
@@ -25,10 +26,17 @@ import { toast } from "../../../../ui";
 import { DiscoveryViewToggle, useDiscoveryView } from "../../../DiscoveryView";
 import { ScreenEditDialog } from "./ScreenEditDialog";
 import { ScreenHealthCell } from "./ScreenHealthCell";
-import { ScreenConditionLine, ScreenMonitorCard, ScreenMonitorLost, screenCondition } from "./ScreenMonitorCard";
+import {
+  ScreenConditionLine,
+  ScreenMonitorCard,
+  ScreenMonitorLost,
+  screenCondition,
+  screenOnline,
+} from "./ScreenMonitorCard";
 import { useScreenMonitorController, type ScreenMonitorFixture } from "./useScreenMonitorController";
 import { ScreenPairDialog } from "./ScreenPairDialog";
-import { eventScreensPath, revokeScreenSession } from "./screen-requests";
+import { ScreenReplaceDialog } from "./ScreenReplaceDialog";
+import { eventScreensPath, removeScreen, revokeScreenSession } from "./screen-requests";
 import "../../../../../../ui/Content.css";
 
 /** Statuses read against a clock that moves each minute, so "Offline · 12 min" keeps counting. */
@@ -82,6 +90,7 @@ export function EventScreens({
   const actions = useRef<ApiTableActions | null>(null);
   const [pairing, setPairing] = useState(false);
   const [editing, setEditing] = useState<ScreenRecord | null>(null);
+  const [replacing, setReplacing] = useState<ScreenRecord | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const { view, setView } = useDiscoveryView();
   const live = monitor?.live;
@@ -103,6 +112,24 @@ export function EventScreens({
       toast(`“${screen.name}” revoked`, "success");
     } catch (cause) {
       setError(cause instanceof Error ? cause : new Error("The screen could not be revoked."));
+    }
+    await reload();
+  }
+
+  async function remove(screen: ScreenRecord) {
+    const confirmed = await confirmAction({
+      title: `Remove “${screen.name}”?`,
+      body: "Its name and assignment are deleted. Pair the device again to bring it back.",
+      confirmLabel: "Remove screen",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    setError(null);
+    try {
+      await removeScreen(screen.id);
+      toast(`“${screen.name}” removed`, "success");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause : new Error("The screen could not be removed."));
     }
     await reload();
   }
@@ -134,12 +161,25 @@ export function EventScreens({
           onSelect: () => setEditing(screen),
         },
         {
+          id: "replace",
+          label: "Replace device…",
+          disabled: !screen.eventId,
+          onSelect: () => setReplacing(screen),
+        },
+        {
           id: "revoke",
           label: "Revoke",
           danger: true,
           separatorBefore: true,
           disabled: screen.session.state === "none",
           onSelect: () => void revoke(screen),
+        },
+        {
+          id: "remove",
+          label: "Remove",
+          danger: true,
+          disabled: screen.session.state === "active",
+          onSelect: () => void remove(screen),
         },
       ]}
     />
@@ -287,6 +327,18 @@ export function EventScreens({
             await reload();
           }}
           onClose={() => setPairing(false)}
+        />
+      )}
+      {replacing && (
+        <ScreenReplaceDialog
+          screen={replacing}
+          online={screenOnline(replacing, live?.get(replacing.id), now)}
+          onReplaced={async (screen) => {
+            toast(`“${screen.name}” moved to the new device. Waiting for it to sign in.`, "success");
+            await reload();
+          }}
+          onChanged={reload}
+          onClose={() => setReplacing(null)}
         />
       )}
       {editing && (

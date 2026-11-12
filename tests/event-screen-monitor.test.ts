@@ -303,6 +303,41 @@ describe("event screen monitor", () => {
     expect(watcher.socket.readyState).toBe(WebSocket.OPEN);
   });
 
+  it("forgets a screen kept without a socket once it leaves the event, in the same batch", async () => {
+    const paired = await pairedScreen("MONSTA");
+    const watcher = await connectStaff("manager");
+    await next(watcher.received, "screens.snapshot");
+    const stub = testEnv.EVENT_SCREEN_MONITORS!.getByName(screenMonitorName(EVENT.id));
+    const recent = new Date(Date.now() - 60_000).toISOString();
+    // Two screens went offline a minute ago; one of them was then replaced by a new device.
+    await pairedScreen("MONGON");
+    await runInDurableObject(stub, async (instance, state) => {
+      for (const screenId of [paired.screenId, "MONGON"])
+        await state.storage.put(`status:${screenId}`, {
+          screenId,
+          online: false,
+          connectedAt: recent,
+          disconnectedAt: recent,
+          reportedAt: recent,
+          stateSince: recent,
+          health: null,
+        });
+      vi.spyOn(monitorDb(instance), "batch");
+    });
+    await env.DB.prepare("DELETE FROM screens WHERE id='MONGON'").run();
+    const before = watcher.received.length;
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    const snapshot = await next(watcher.received, "screens.snapshot", before);
+    expect(snapshot.screens.map((status) => status.screenId)).toEqual([paired.screenId]);
+    const calls = await runInDurableObject(stub, (monitor) => {
+      const spy = vi.mocked(monitorDb(monitor).batch);
+      const count = spy.mock.calls.length;
+      spy.mockRestore();
+      return count;
+    });
+    expect(calls).toBe(1);
+  });
+
   it("paces screenshots by whether staff watch, keeps the latest and drops anything but a small WebP or JPEG", async () => {
     const paired = await pairedScreen("MONSHT");
     const screen = await connectScreen(paired.cookie, paired.screenId);

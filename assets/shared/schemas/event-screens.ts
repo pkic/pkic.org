@@ -154,6 +154,25 @@ export const screenUpdateSchema = z
   });
 export type ScreenUpdate = z.infer<typeof screenUpdateSchema>;
 
+/**
+ * Moves a screen to a new device, as when its device was reinstalled and
+ * shows a new screen ID: staff enter what the new device shows, and the
+ * screen keeps its name and assignment under the new ID. The old device is
+ * signed out.
+ */
+export const screenDeviceReplacementSchema = z
+  .object({
+    expectedRevision: z.number().int().nonnegative(),
+    newScreenId: screenIdSchema,
+    pairingCode: screenPairingCodeSchema,
+  })
+  .strict();
+export type ScreenDeviceReplacement = z.infer<typeof screenDeviceReplacementSchema>;
+/** The 409 a replacement receives when the new device's screen ID already belongs to a screen. */
+export const SCREEN_ID_TAKEN_CODE = "SCREEN_ID_TAKEN";
+/** The 409 a removal receives while the screen is signed in. */
+export const SCREEN_SIGNED_IN_CODE = "SCREEN_SIGNED_IN";
+
 export const SCREEN_LIST_SORTS = ["name", "lastSeenAt"] as const;
 export const eventScreensQuerySchema = listQuerySchema(SCREEN_LIST_SORTS).extend({
   roomId: databaseIdSchema.optional(),

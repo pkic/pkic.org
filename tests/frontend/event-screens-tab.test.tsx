@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
  * The event workspace's Screens tab: who sees it and its commands, and what
- * pairing, editing and revoking send and do with the server's answer. List
+ * pairing, editing, replacing a device, revoking and removing send and do
+ * with the server's answer. List
  * mechanics (search, sort, paging) are the shared table's own tests.
  */
 import { render } from "preact";
@@ -9,6 +10,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   eventScreenPairingCreateSchema,
+  screenDeviceReplacementSchema,
   screenUpdateSchema,
   type ScreenRecord,
 } from "../../assets/shared/schemas/event-screens";
@@ -123,12 +125,16 @@ const button = (root: ParentNode, label: string) =>
 const listReads = (requests: Captured[]) =>
   requests.filter((request) => request.method === "GET" && request.pathname.endsWith("/screens")).length;
 
-async function rowCommand(root: HTMLElement, subject: string, label: string): Promise<void> {
+async function rowMenuItem(root: HTMLElement, subject: string, label: string): Promise<HTMLButtonElement> {
   await act(() => rowMenuTrigger(root, subject)!.click());
-  const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+  return [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
     (entry) => entry.textContent?.trim() === label,
-  );
-  await act(() => item!.click());
+  )!;
+}
+
+async function rowCommand(root: HTMLElement, subject: string, label: string): Promise<void> {
+  const item = await rowMenuItem(root, subject, label);
+  await act(() => item.click());
   await settle();
 }
 
@@ -308,5 +314,91 @@ describe("Revoking a screen", () => {
     await settle();
     expect(deletes().map((request) => request.pathname)).toEqual(["/api/v1/screens/K7M2QA/session"]);
     expect(listReads(requests)).toBe(2);
+  });
+});
+
+describe("Replacing a screen's device", () => {
+  async function fillAndReplace(root: HTMLElement) {
+    await rowCommand(root, "Foyer, by registration", "Replace device…");
+    const dialog = openDialog()!;
+    await typeInto(controlFor(dialog, "Pairing code"), "hjkp-4qrt");
+    await typeInto(controlFor(dialog, "Screen ID"), "n3wd7v");
+    await act(() => button(dialog, "Replace device")!.click());
+    await settle();
+    return dialog;
+  }
+
+  it("sends the new device's code and ID from the screen's revision, and reloads the list", async () => {
+    let screens = [record()];
+    const requests = api(
+      () => screens,
+      (request) => {
+        if (request.method !== "PUT") return undefined;
+        screens = [record({ id: "N3WD7V", revision: 4, session: { ...record().session, state: "pending" } })];
+        return json(screens[0]);
+      },
+    );
+    const root = await mount(true);
+    await fillAndReplace(root);
+
+    const sent = requests.find((request) => request.method === "PUT");
+    expect(sent?.pathname).toBe("/api/v1/screens/K7M2QA/device");
+    expect(screenDeviceReplacementSchema.parse(sent!.body)).toEqual({
+      expectedRevision: 3,
+      newScreenId: "N3WD7V",
+      pairingCode: "HJKP4QRT",
+    });
+    expect(openDialog()).toBeNull();
+    expect(listReads(requests)).toBe(2);
+    await settle();
+    expect(root.textContent).toContain("N3WD7V");
+  });
+
+  it("keeps the dialog open on the screen ID another screen has", async () => {
+    api(
+      () => [record()],
+      (request) =>
+        request.method === "PUT"
+          ? refusal(409, "SCREEN_ID_TAKEN", { fieldErrors: { newScreenId: ["“Spare” has this screen ID."] } })
+          : undefined,
+    );
+    const root = await mount(true);
+    const dialog = await fillAndReplace(root);
+    expect(openDialog()).toBe(dialog);
+    expect(controlFor(dialog, "Screen ID").getAttribute("aria-invalid")).toBe("true");
+  });
+});
+
+describe("Removing a screen", () => {
+  it("offers removal once the screen is not signed in, and deletes it only once confirmed", async () => {
+    let screens = [record()];
+    const requests = api(
+      () => screens,
+      (request) => {
+        if (request.method !== "DELETE") return undefined;
+        screens = [];
+        return new Response(null, { status: 204 });
+      },
+    );
+    const signedIn = await mount(true);
+    expect((await rowMenuItem(signedIn, "Foyer, by registration", "Remove")).disabled).toBe(true);
+    await act(() => render(null, signedIn));
+    signedIn.remove();
+
+    screens = [record({ session: { state: "none", activatedAt: null, lastSeenAt: null, expiresAt: null } })];
+    const root = await mount(true);
+    await rowCommand(root, "Foyer, by registration", "Remove");
+    await act(() => confirmationButton("Cancel")!.click());
+    await settle();
+    expect(requests.filter((request) => request.method === "DELETE")).toHaveLength(0);
+
+    await rowCommand(root, "Foyer, by registration", "Remove");
+    await act(() => confirmationButton("Remove screen")!.click());
+    await settle();
+    expect(requests.filter((request) => request.method === "DELETE").map((request) => request.pathname)).toEqual([
+      "/api/v1/screens/K7M2QA",
+    ]);
+    await settle();
+    expect(rowMenuTrigger(root, "Foyer, by registration")).toBeNull();
   });
 });

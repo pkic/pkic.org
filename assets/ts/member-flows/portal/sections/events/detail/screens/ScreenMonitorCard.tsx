@@ -78,6 +78,11 @@ export function screenCondition(
   };
 }
 
+/** The screen's device shows it now, by the monitor's word or, without one, its last visit. */
+export function screenOnline(screen: ScreenRecord, status: ScreenLiveStatus | undefined, now: number): boolean {
+  return status ? status.online : screenConnection(screen.session, now).kind === "online";
+}
+
 const TONE_WORDS: Record<ScreenConditionTone, string> = {
   ok: "",
   neutral: "",

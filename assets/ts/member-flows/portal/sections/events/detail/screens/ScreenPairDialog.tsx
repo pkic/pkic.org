@@ -5,7 +5,6 @@
 import { useState } from "preact/hooks";
 import {
   SCREEN_ID_IN_USE_CODE,
-  SCREEN_PAIRING_CODE_LENGTH,
   eventScreenPairingCreateSchema,
   type ScreenRecord,
 } from "../../../../../../../shared/schemas/event-screens";
@@ -24,6 +23,7 @@ import {
   screenAssignmentBody,
   type ScreenAssignmentDraft,
 } from "./ScreenAssignmentFields";
+import { ScreenCodeFields } from "./ScreenCodeFields";
 import { pairScreen } from "./screen-requests";
 
 interface PairDraft {
@@ -116,46 +116,23 @@ export function ScreenPairDialog({
         }}
       >
         <FormSection title="The screen">
-          <Field
-            label="Pairing code"
-            required
-            help={`The large code, ${String(SCREEN_PAIRING_CODE_LENGTH)} characters.`}
-            {...form.of("pairingCode")}
+          <ScreenCodeFields
+            pairingCode={draft.pairingCode}
+            screenId={draft.screenId}
+            idName="screenId"
+            fields={form.of}
+            onPairingCode={(pairingCode) => setDraft({ ...draft, pairingCode })}
+            onScreenId={(screenId) => setDraft({ ...draft, screenId, replace: false })}
           >
-            {(control) => (
-              <TextInput
-                {...control}
-                name="pairingCode"
-                value={draft.pairingCode}
-                autocomplete="off"
-                autocapitalize="characters"
-                spellcheck={false}
-                maxLength={SCREEN_PAIRING_CODE_LENGTH + 2}
-                onInput={(event) => setDraft({ ...draft, pairingCode: event.currentTarget.value })}
+            {inUse !== null && inUse === draft.screenId && (
+              <Checkbox
+                label="Replace the signed-in screen"
+                hint="It signs out and this screen takes its place."
+                checked={draft.replace}
+                onChange={(event) => setDraft({ ...draft, replace: event.currentTarget.checked })}
               />
             )}
-          </Field>
-          <Field label="Screen ID" required help="Shown next to the code." {...form.of("screenId")}>
-            {(control) => (
-              <TextInput
-                {...control}
-                name="screenId"
-                value={draft.screenId}
-                autocomplete="off"
-                autocapitalize="characters"
-                spellcheck={false}
-                onInput={(event) => setDraft({ ...draft, screenId: event.currentTarget.value, replace: false })}
-              />
-            )}
-          </Field>
-          {inUse !== null && inUse === draft.screenId && (
-            <Checkbox
-              label="Replace the signed-in screen"
-              hint="It signs out and this screen takes its place."
-              checked={draft.replace}
-              onChange={(event) => setDraft({ ...draft, replace: event.currentTarget.checked })}
-            />
-          )}
+          </ScreenCodeFields>
           <Field label="Name" required help="Where it stands, such as “Foyer, by registration”." {...form.of("name")}>
             {(control) => (
               <TextInput
