@@ -4,7 +4,7 @@ import type { DatabaseLike } from "../../types";
 import { EMAIL_OUTBOX_SELECT, type OutboxListRow } from "./query";
 import { buildEmailOutboxRows } from "./preview";
 import { readDirectEmailBody } from "../../email/direct-body";
-import { parseQueuedEmailAttachments } from "../../email/attachments";
+import { parseQueuedEmailAttachments, readSentAttachmentNames } from "../../email/attachments";
 import { parseJsonSafe } from "../../utils/json";
 
 export async function getEmailOutboxDetail(db: DatabaseLike, id: string) {
@@ -12,12 +12,16 @@ export async function getEmailOutboxDetail(db: DatabaseLike, id: string) {
   if (!row) throw new AppError(404, "EMAIL_NOT_FOUND", "Email message not found");
   const payload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
   const customText = payload.__eventCampaignCustomText;
+  const sentNames = readSentAttachmentNames(payload);
   return {
     message: {
       ...(await buildEmailOutboxRows(db, [row]))[0],
       bodyContent: readDirectEmailBody(payload),
       customText: typeof customText === "string" && customText.trim() ? customText : null,
-      attachments: parseQueuedEmailAttachments(payload).map((file) => ({ name: file.filenameBase })),
+      attachments: (sentNames ?? parseQueuedEmailAttachments(payload).map((file) => file.filenameBase)).map((name) => ({
+        name,
+      })),
+      attachmentNamesFinal: sentNames !== null,
     },
   };
 }

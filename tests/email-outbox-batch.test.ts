@@ -412,6 +412,13 @@ describe("email outbox batch processing", () => {
     expect(JSON.parse(String(init.body)).attachments).toEqual([
       expect.objectContaining({ filename: "attendee-badge.png", type: "image/png", disposition: "attachment" }),
     ]);
+    // The outbox keeps the names it sent, which only the stored file can give.
+    const [sent] = await queryAll<{ names: string }>(
+      env.DB,
+      "SELECT json_extract(payload_json, '$.__sentAttachmentNames') AS names FROM email_outbox WHERE id = ?",
+      [id],
+    );
+    expect(JSON.parse(sent.names)).toEqual(["attendee-badge.png"]);
   });
 
   it("recovers a completed older-renderer badge through its existing job before delivering the waiting email", async () => {

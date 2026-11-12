@@ -45,6 +45,15 @@ export interface StoredFileAttachment {
 
 export type QueuedEmailAttachment = QueuedBadgeAttachment | QueuedPromotionKitAttachment;
 
+/** The payload key that records the file names a message was sent with. */
+export const SENT_ATTACHMENT_NAMES_KEY = "__sentAttachmentNames";
+
+/** The names a sent message carried, or null before it is sent. */
+export function readSentAttachmentNames(payload: Record<string, unknown>): string[] | null {
+  const names = payload[SENT_ATTACHMENT_NAMES_KEY];
+  return Array.isArray(names) && names.every((name) => typeof name === "string") ? names : null;
+}
+
 /** A retryable refusal: the outbox tries again while the kit finishes rendering. */
 export const PROMOTION_KIT_NOT_READY = "Required promotion file is not ready";
 

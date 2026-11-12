@@ -65,11 +65,16 @@ export function EmailOutboxDetail({ id }: { id: string }) {
                 {
                   term: "Attachments",
                   value: message.attachments.length ? (
-                    <ul class="pk-plain-list">
-                      {message.attachments.map((file, index) => (
-                        <li key={index}>{file.name}</li>
-                      ))}
-                    </ul>
+                    <>
+                      <ul class="pk-plain-list">
+                        {message.attachments.map((file, index) => (
+                          <li key={index}>{file.name}</li>
+                        ))}
+                      </ul>
+                      {!message.attachmentNamesFinal && (
+                        <p class="pk-muted">File names and types are set when the message is sent.</p>
+                      )}
+                    </>
                   ) : (
                     "None"
                   ),

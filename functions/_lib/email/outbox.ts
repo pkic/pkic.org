@@ -30,6 +30,7 @@ import {
   loadPromotionKitAttachments,
   parseQueuedEmailAttachments,
   queuedBadgeRendererIsCurrent,
+  SENT_ATTACHMENT_NAMES_KEY,
 } from "./attachments";
 import { materializeQueuedCapabilityLinks } from "../auth/capability-links";
 import type { DatabaseLike, Env } from "../types";
@@ -130,14 +131,26 @@ async function markOutboxSent(
   processingToken: string,
   messageId: string | null,
   templateVersion: number,
+  attachmentNames: readonly string[],
 ): Promise<void> {
+  // The file names as sent; a stored kit only gets its extension, or its pages, when it is loaded.
   await run(
     db,
     `UPDATE email_outbox
      SET status = 'sent', template_version = ?, provider_message_id = ?, sent_at = ?,
+         payload_json = CASE WHEN ? = '[]' THEN payload_json ELSE json_set(payload_json, '$.${SENT_ATTACHMENT_NAMES_KEY}', json(?)) END,
          last_error = NULL, processing_token = NULL, lease_expires_at = NULL, updated_at = ?
      WHERE id = ? AND status = 'sending' AND processing_token = ?`,
-    [templateVersion, messageId, nowIso(), nowIso(), row.id, processingToken],
+    [
+      templateVersion,
+      messageId,
+      nowIso(),
+      JSON.stringify(attachmentNames),
+      JSON.stringify(attachmentNames),
+      nowIso(),
+      row.id,
+      processingToken,
+    ],
   );
 
   // Calendar delivery is tracked through email_outbox rows to keep storage/model simple.
@@ -358,7 +371,14 @@ async function attemptOutboxDelivery(
       from,
     });
 
-    await markOutboxSent(db, row, processingToken, acceptedMessageId, resolvedTemplateVersion);
+    await markOutboxSent(
+      db,
+      row,
+      processingToken,
+      acceptedMessageId,
+      resolvedTemplateVersion,
+      (attachments ?? []).map((file) => file.filename),
+    );
     return { status: "accepted" };
   } catch (error) {
     const deliveryUnknown =

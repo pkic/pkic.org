@@ -44,6 +44,7 @@ function message(overrides: Record<string, unknown> = {}) {
       bodyContent: "Dear {{firstName}},\n\nThis is the edited message.",
       customText: null,
       attachments: [],
+      attachmentNamesFinal: false,
       ...overrides,
     },
   });
@@ -127,15 +128,17 @@ describe("portal email outbox message", () => {
         status: "queued",
         bodyContent: null,
         customText: "A note from the organizer.",
-        attachments: [{ name: "attendee-badge-alex-example" }, { name: "attendee-carousel" }],
+        attachments: [{ name: "attendee-badge-alex-example.png" }, { name: "attendee-carousel-01.jpg" }],
+        attachmentNamesFinal: true,
       }),
     );
 
     expect(container!.querySelector('[role="alert"]')).toBeNull();
     expect([...container!.querySelectorAll("dd li")].map((item) => item.textContent)).toEqual([
-      "attendee-badge-alex-example",
-      "attendee-carousel",
+      "attendee-badge-alex-example.png",
+      "attendee-carousel-01.jpg",
     ]);
+    expect(container!.textContent).not.toContain("set when the message is sent");
     expect(container!.textContent).toMatch(/Template\s*organization-invitation v3/);
     expect(container!.querySelector('section[aria-label="Queued message"]')).toBeNull();
     expect(container!.querySelector('section[aria-label="Custom message text"]')?.textContent).toContain(
