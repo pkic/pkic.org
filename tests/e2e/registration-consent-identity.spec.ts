@@ -207,15 +207,12 @@ test("verified approved-domain registration affiliates once and an organization 
       await expect(changeIdentity.getByRole("textbox", { name: /^Email/ })).toHaveCount(0);
       await expect(changeIdentity.getByRole("definition").filter({ hasText: email })).toBeVisible();
     };
-    await attendee.route(
-      "**/api/v1/auth/session",
-      (route) =>
-        route.fulfill({
-          status: 503,
-          contentType: "application/json",
-          body: JSON.stringify({ error: { code: "TEMPORARY_UNAVAILABLE", message: "Temporary outage" } }),
-        }),
-      { times: 1 },
+    await attendee.route("**/api/v1/auth/session", (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { code: "TEMPORARY_UNAVAILABLE", message: "Temporary outage" } }),
+      }),
     );
     await editRepresentation();
     await expect(changeIdentity.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
@@ -226,6 +223,7 @@ test("verified approved-domain registration affiliates once and an organization 
       await attendee.setViewportSize({ width, height });
       await attendee.screenshot({ path: testInfo.outputPath(`representation-retry-${device}.png`), fullPage: true });
     }
+    await attendee.unroute("**/api/v1/auth/session");
     await changeIdentity.getByRole("button", { name: "Retry", exact: true }).click();
     await changeIdentity.getByRole("combobox", { name: /^Representation/ }).click();
     await attendee.getByRole("option").filter({ hasText: "Personal" }).click();
