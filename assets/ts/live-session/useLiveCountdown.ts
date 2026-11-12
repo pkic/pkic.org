@@ -1,45 +1,70 @@
 import { createContext } from "preact";
 import { useContext, useEffect, useState } from "preact/hooks";
-import { formatLiveTimer, liveTimerShownMs, liveTimerTone, liveTimerValue } from "../../shared/live-timer-policy";
+import { format24HourClockInZone } from "../../shared/format-date";
+import { formatLiveTimer } from "../../shared/live-timer-format";
+import {
+  liveTimerCounts,
+  liveTimerReading,
+  liveTimerShownMs,
+  liveTimerTone,
+  type LiveTimerReading,
+} from "../../shared/live-timer-policy";
 import type { LiveRoomSession, LiveTimer, LiveTimerGraphic } from "../../shared/schemas/live-session-room";
+
+type SessionTime = Pick<LiveRoomSession, "startAt" | "endAt">;
 
 /** Where countdowns read the time: the device clock, or a page's clock corrected to the server's. */
 export type LiveClock = () => number;
 export const LiveClockContext = createContext<LiveClock>(() => Date.now());
 
-/** The current instant, ticking every second while a timer runs and holding still while it is paused. */
-export function useLiveTimerNow(running: boolean): number {
+/** The current instant, ticking every second while a timer's reading moves and holding still while it does not. */
+export function useLiveTimerNow(ticking: boolean): number {
   const clock = useContext(LiveClockContext);
   const [now, setNow] = useState(() => clock());
   useEffect(() => {
     setNow(clock());
-    if (!running) return;
+    if (!ticking) return;
     const tick = setInterval(() => setNow(clock()), 1000);
     return () => clearInterval(tick);
-  }, [running, clock]);
+  }, [ticking, clock]);
   return now;
 }
 
-/** A timer's value now: a countdown's time left (negative once over) or a stopwatch's time counted. */
-export function useLiveTimerValue(timer: LiveTimer | undefined): number {
-  const now = useLiveTimerNow(timer?.running ?? false);
-  return timer ? liveTimerValue(timer, now) : 0;
+const IDLE: LiveTimerReading = { valueMs: 0, running: false, startsInMs: null, ticking: false };
+
+/** The instant a timer is read at, ticking while its reading moves. */
+function useTimerNow(timer: LiveTimer | undefined, session: SessionTime): number {
+  const clock = useContext(LiveClockContext);
+  return useLiveTimerNow(timer ? liveTimerReading(timer, session, clock()).ticking : false);
+}
+
+/** What a timer reads now, ticking while it moves; a still reading without a timer. */
+export function useLiveTimerReading(timer: LiveTimer | undefined, session: SessionTime): LiveTimerReading {
+  const now = useTimerNow(timer, session);
+  return timer ? liveTimerReading(timer, session, now) : IDLE;
 }
 
 /** What a timer graphic reads now: its text, its warning or overrun tone and its label; null without its timer. */
-export function useLiveTimerReading(
+export function useLiveTimerGraphicReading(
   graphic: LiveTimerGraphic,
   timers: readonly LiveTimer[],
-  session: Pick<LiveRoomSession, "startAt" | "endAt">,
+  session: SessionTime & Pick<LiveRoomSession, "timeZone">,
 ) {
   const timer = timers.find((entry) => entry.id === graphic.timerId);
-  const now = useLiveTimerNow(timer?.running ?? false);
+  const now = useTimerNow(timer, session);
   if (!timer) return null;
-  const value = liveTimerValue(timer, now);
+  const reading = liveTimerReading(timer, session, now);
+  const before = reading.startsInMs !== null;
+  const name = graphic.showLabel ? (graphic.label ?? timer.name) : null;
   return {
     timer,
-    text: formatLiveTimer(liveTimerShownMs(timer, graphic, session, now), graphic.format, graphic.customFormat),
-    tone: liveTimerTone(timer, value, graphic),
-    label: graphic.showLabel ? (graphic.label ?? timer.name) : null,
+    running: reading.running,
+    // A clock reads the event's time of day on the same clock as the countdowns beside it.
+    text: !liveTimerCounts(timer)
+      ? format24HourClockInZone(now, session.timeZone)
+      : formatLiveTimer(liveTimerShownMs(timer, graphic, session, now), graphic.format, graphic.customFormat),
+    // A start coming up is no warning.
+    tone: before ? undefined : liveTimerTone(timer, reading.valueMs, graphic),
+    label: before ? (name ? `${name} starts in` : "Starts in") : name,
   };
 }

@@ -398,9 +398,9 @@ export class LiveRoomStore {
   }
 
   /** The room's timers; a room nobody timed yet has the one that follows the session. */
-  timers(session: LiveRoomSession): LiveTimer[] {
+  timers(): LiveTimer[] {
     const saved = this.control("timers");
-    return saved ? liveTimersSchema.parse(saved) : [sessionLiveTimer(session)];
+    return saved ? liveTimersSchema.parse(saved) : [sessionLiveTimer()];
   }
 
   saveTimers(timers: readonly LiveTimer[]): void {

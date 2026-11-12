@@ -89,7 +89,7 @@ export function composeLiveStage(
     return { code: "LIVE_POLL_PRESENTATION", message: "Show written answers as a word cloud." };
   if (poll && !written && input.pollPresentation.chart === "wordcloud")
     return { code: "LIVE_POLL_PRESENTATION", message: "Use a bar, donut or pie for choice and rating answers." };
-  if (input.timerGraphics.some((graphic) => !store.timers(session).some((timer) => timer.id === graphic.timerId)))
+  if (input.timerGraphics.some((graphic) => !store.timers().some((timer) => timer.id === graphic.timerId)))
     return { code: "LIVE_TIMER_NOT_FOUND", message: "That timer is no longer in this room. Choose another one." };
   return {
     ticker: input.ticker,

@@ -29,6 +29,7 @@ import { StudioGrid, type StudioPanelView } from "./studio/StudioGrid";
 import { StudioHeader, type StudioNoticeContent } from "./studio/StudioHeader";
 import { StudioToolbar } from "./studio/StudioToolbar";
 import { LiveAddTimerAction, TimePanel } from "./studio/TimePanel";
+import { LiveTimerSounds } from "../../../../../../live-session/useLiveTimerSounds";
 import {
   STUDIO_PANEL_LABELS,
   setStudioPanelLabeled,
@@ -386,6 +387,7 @@ export function LiveSessionDesk({
         {phone ? null : (
           <StudioGrid workspace={layout.workspace} panels={layout.panels} change={layout.change} render={render} />
         )}
+        <LiveTimerSounds timers={state.timers} session={state.session} place="studio" />
         <ProgramUndoToast
           undo={state.programUndo}
           onUndo={(snapshotId) => sendProgram({ type: "program.restore", snapshotId })}

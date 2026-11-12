@@ -10,12 +10,14 @@ import { liveChangeSchema } from "./live-session-change";
  */
 
 /**
- * - `session`: counts down to the session's scheduled end on the agenda;
+ * - `session`: counts down the session's length, by itself with the agenda
+ *   (see `followsAgenda`) or as an operator starts it;
  * - `until`: counts down to a time on the event's clock;
  * - `duration`: counts down a fixed length;
- * - `stopwatch`: counts up from zero.
+ * - `stopwatch`: counts up from zero;
+ * - `clock`: shows the time of day on the event's clock, and counts nothing.
  */
-export const LIVE_TIMER_KINDS = ["session", "until", "duration", "stopwatch"] as const;
+export const LIVE_TIMER_KINDS = ["session", "until", "duration", "stopwatch", "clock"] as const;
 export type LiveTimerKind = (typeof LIVE_TIMER_KINDS)[number];
 export const LIVE_TIMER_MAX = 12;
 /** Ten fixed 365-day years either way, including long-form custom durations. */
@@ -33,6 +35,65 @@ const durationSecondsSchema = z
   .min(1, "Enter a length of at least a minute.")
   .max(LIVE_TIMER_MAX_MS / 1000, "Keep the length under ten years.");
 
+/**
+ * What a countdown does at zero: keep counting as overtime, stop at zero, or
+ * (a `duration` only) reset to its full length once it has been over for
+ * `resetAfterSeconds`, waiting there or starting again at once.
+ */
+export const LIVE_TIMER_ZERO_ACTIONS = ["overtime", "stop", "reset"] as const;
+export type LiveTimerZeroAction = (typeof LIVE_TIMER_ZERO_ACTIONS)[number];
+export const liveTimerAtZeroSchema = z
+  .object({
+    action: z.enum(LIVE_TIMER_ZERO_ACTIONS),
+    resetAfterSeconds: z
+      .number({ error: "Enter the seconds over before it resets." })
+      .int()
+      .min(0, "Enter zero or more seconds.")
+      .max(600, "Keep it under ten minutes."),
+    restart: z.boolean(),
+  })
+  .strict();
+
+/** Where a timer's sounds play: the operators' studio, the speaker's stage display, or both. */
+export const LIVE_TIMER_SOUND_PLACES = ["studio", "stage-display"] as const;
+export type LiveTimerSoundPlace = (typeof LIVE_TIMER_SOUND_PLACES)[number];
+/** A chime with `warningSeconds` left (none when null) and, when `zero` is on, a buzzer at zero; nowhere until a place is chosen. */
+export const liveTimerSoundSchema = z
+  .object({
+    places: z
+      .array(z.enum(LIVE_TIMER_SOUND_PLACES))
+      .max(LIVE_TIMER_SOUND_PLACES.length)
+      .refine((places) => new Set(places).size === places.length, "Choose each place once."),
+    warningSeconds: z
+      .number({ error: "Enter the seconds left for the warning." })
+      .int()
+      .min(1, "Enter at least a second.")
+      .max(3600, "Keep the warning under an hour.")
+      .nullable(),
+    zero: z.boolean(),
+  })
+  .strict();
+
+export const DEFAULT_LIVE_TIMER_AT_ZERO: z.infer<typeof liveTimerAtZeroSchema> = {
+  action: "overtime",
+  resetAfterSeconds: 10,
+  restart: false,
+};
+export const DEFAULT_LIVE_TIMER_SOUND: z.infer<typeof liveTimerSoundSchema> = {
+  places: [],
+  warningSeconds: 60,
+  zero: true,
+};
+
+/** A timer's settings an operator changes after adding it. */
+export const liveTimerSettingsSchema = z
+  .object({ atZero: liveTimerAtZeroSchema, sound: liveTimerSoundSchema })
+  .strict();
+export type LiveTimerSettings = z.infer<typeof liveTimerSettingsSchema>;
+
+/** The kinds that can reset themselves at zero: only a fixed length has a length to go back to. */
+export const liveTimerResetsAtZero = (kind: LiveTimerKind) => kind === "duration";
+
 export const liveTimerSchema = z
   .object({
     id: liveTimerIdSchema,
@@ -47,10 +108,24 @@ export const liveTimerSchema = z
     anchorAt: utcInstantSchema.nullable(),
     /** While paused: a countdown's time left (negative once over), or a stopwatch's time counted. */
     heldMs: z.number().int().min(-LIVE_TIMER_MAX_MS).max(LIVE_TIMER_MAX_MS),
+    /**
+     * A session timer that follows the agenda: before the session starts it
+     * shows the time until it does, then counts the session down to its end.
+     * It reads the session's times, so it keeps no anchor of its own.
+     */
+    followsAgenda: z.boolean().default(false),
+    atZero: liveTimerAtZeroSchema.default(DEFAULT_LIVE_TIMER_AT_ZERO),
+    sound: liveTimerSoundSchema.default(DEFAULT_LIVE_TIMER_SOUND),
     change: liveChangeSchema.nullable(),
   })
   .strict()
-  .refine((timer) => timer.running === (timer.anchorAt !== null), "A running timer has an anchor; a paused one none.");
+  .refine((timer) => timer.running === (timer.anchorAt !== null), "A running timer has an anchor; a paused one none.")
+  .refine((timer) => !timer.followsAgenda || (timer.kind === "session" && !timer.running), {
+    message: "Only a session timer follows the agenda, and it keeps no anchor while it does.",
+  })
+  .refine((timer) => timer.atZero.action !== "reset" || liveTimerResetsAtZero(timer.kind), {
+    message: "Only a timer with a fixed length resets itself at zero.",
+  });
 export type LiveTimer = z.infer<typeof liveTimerSchema>;
 export const liveTimersSchema = z.array(liveTimerSchema).max(LIVE_TIMER_MAX);
 
@@ -73,7 +148,11 @@ export type LiveTimerDraft = z.infer<typeof liveTimerDraftSchema>;
 
 // ── The timer graphic ───────────────────────────────────────────────────────
 
-export const LIVE_TIMER_FORMATS = ["hh:mm:ss", "mm:ss", "ss", "custom"] as const;
+/**
+ * `clock` grows with the time it shows (12:34, 1:02:34, 3 d 04:12, 2 y 145 d)
+ * and reads the same in the studio and on every screen; `ss` is total seconds.
+ */
+export const LIVE_TIMER_FORMATS = ["clock", "ss", "custom"] as const;
 /** Time left on a countdown, or time gone since it started. A stopwatch always counts up. */
 export const LIVE_TIMER_DIRECTIONS = ["remaining", "elapsed"] as const;
 /** Where the graphic sits: the source's layout, a corner, or the middle of the picture. */
@@ -135,7 +214,7 @@ export function defaultLiveTimerGraphic(timerId: string): LiveTimerGraphic {
     timerId,
     label: null,
     showLabel: true,
-    format: "mm:ss",
+    format: "clock",
     customFormat: "{{hours}}h {{minutes}}m {{seconds}}s",
     showLogo: true,
     direction: "remaining",
@@ -150,11 +229,16 @@ export function defaultLiveTimerGraphic(timerId: string): LiveTimerGraphic {
 // ── Commands ────────────────────────────────────────────────────────────────
 
 export const liveTimerAddSchema = z.object({ type: z.literal("timer.add"), timer: liveTimerDraftSchema }).strict();
-export const liveTimerActionSchema = z.enum(["start", "pause", "reset"]);
+/** `reset`: back to its full length, stopped (an `until` counts to its time again); `follow`: a session timer follows the agenda again. */
+export const liveTimerActionSchema = z.enum(["start", "pause", "reset", "follow"]);
+export type LiveTimerAction = z.infer<typeof liveTimerActionSchema>;
 export const liveTimerCommandSchemas = [
   liveTimerAddSchema,
   z.object({ type: z.literal("timer.remove"), timerId: liveTimerIdSchema }).strict(),
   z.object({ type: z.literal("timer.control"), timerId: liveTimerIdSchema, action: liveTimerActionSchema }).strict(),
+  z
+    .object({ type: z.literal("timer.configure"), timerId: liveTimerIdSchema, settings: liveTimerSettingsSchema })
+    .strict(),
   z
     .object({
       type: z.literal("timer.adjust"),

@@ -25,20 +25,22 @@
   }
   .pk-live-stage-display__session {
     display: flex;
-    justify-content: space-between;
+    align-items: baseline;
     gap: 48px;
     color: var(--stage-muted);
   }
-  .pk-live-stage-display__session > span:first-child {
+  .pk-live-stage-display__title {
+    flex: 1;
     min-inline-size: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
   }
-  .pk-live-stage-display__session > span:last-child {
+  .pk-live-stage-display__end {
     flex: none;
     font-variant-numeric: tabular-nums;
   }
+
   /* The question and the timer share the middle: the question leads, the timer keeps a column beside it. */
   .pk-live-stage-display__main {
     display: grid;
@@ -55,6 +57,33 @@
     color: var(--stage-muted);
     font-size: calc(var(--pk-text-3xl) * 1.125);
     font-weight: 500;
+  }
+  /* The countdowns, then any clock in one line under them. */
+  .pk-live-stage-display__timing {
+    display: grid;
+    gap: 56px;
+    justify-items: center;
+    min-inline-size: 0;
+  }
+  .pk-live-stage-display__timing > .pk-live-stage-display__timers {
+    justify-self: stretch;
+  }
+  /* The time of day: secondary to the countdowns, still read at a glance from the stage. */
+  .pk-live-stage-display__clock {
+    display: flex;
+    align-items: baseline;
+    gap: 24px;
+    margin: 0;
+  }
+  .pk-live-stage-display__clock-time {
+    font-family: var(--pk-font-mono);
+    font-size: calc(var(--pk-text-3xl) * 3);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .pk-live-stage-display[data-question] .pk-live-stage-display__clock-time {
+    font-size: calc(var(--pk-text-3xl) * 2);
   }
   .pk-live-stage-display__timers {
     display: grid;

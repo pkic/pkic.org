@@ -1,7 +1,8 @@
 /*
- * The Time panel: one compact row per timer. On a wide panel a row reads
- * name, value, progress and controls in one line; a narrow panel puts the
- * progress and controls on a second line.
+ * The Time panel: one compact row per timer. A wide panel reads name and
+ * detail, value, then the controls over the outputs that show the timer,
+ * with a thin progress bar under the row. A narrow panel stacks the
+ * controls and the outputs under the value.
  */
 @layer components {
   .pk-studio-time {
@@ -9,31 +10,43 @@
     display: flex;
     flex-direction: column;
   }
+  /* The rows share the list's columns, so values and controls line up from row to row. */
   .pk-studio-time__list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     margin: 0;
     padding: 0;
     list-style: none;
   }
   .pk-studio-time__row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
     grid-template-areas:
       "name value"
-      "detail detail"
-      "meter controls";
+      "detail value"
+      "meter meter"
+      "controls controls"
+      "outputs outputs";
     align-items: center;
     column-gap: var(--pk-3);
     row-gap: var(--pk-1);
     padding: var(--pk-2) var(--pk-3);
     border-block-end: 1px solid var(--pk-line-soft);
   }
-  @container studio-time (width >= 34rem) {
+  @container studio-time (width >= 40rem) {
+    .pk-studio-time__list {
+      grid-template-columns: minmax(0, 1fr) auto auto;
+    }
     .pk-studio-time__row {
-      grid-template-columns: minmax(6rem, 1fr) auto minmax(5rem, 8rem) auto;
       grid-template-areas:
-        "name value meter controls"
-        "detail value meter controls";
-      row-gap: 0;
+        "name value controls"
+        "detail value outputs"
+        "meter meter meter";
+    }
+    .pk-studio-time__controls,
+    .pk-studio-time__outputs {
+      justify-content: end;
     }
   }
   .pk-studio-time__name {
@@ -61,6 +74,13 @@
     font-variant-numeric: tabular-nums;
     line-height: 1;
     text-align: end;
+    white-space: nowrap;
+  }
+  .pk-studio-time__prefix {
+    color: var(--pk-ink-muted);
+    font-family: var(--pk-font);
+    font-size: var(--pk-text-xs);
+    font-weight: 400;
   }
   .pk-studio-time__value[data-tone="warn"],
   .pk-studio-time__next[data-tone="warn"] {
@@ -73,11 +93,21 @@
     grid-area: meter;
     min-inline-size: 0;
   }
-  .pk-studio-time__controls {
-    grid-area: controls;
+  .pk-studio-time__meter .pk-meter__track {
+    block-size: 0.25rem;
+  }
+  .pk-studio-time__controls,
+  .pk-studio-time__outputs {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--pk-1);
+  }
+  .pk-studio-time__controls {
+    grid-area: controls;
+  }
+  .pk-studio-time__outputs {
+    grid-area: outputs;
   }
   .pk-studio-time__empty {
     margin: 0;
