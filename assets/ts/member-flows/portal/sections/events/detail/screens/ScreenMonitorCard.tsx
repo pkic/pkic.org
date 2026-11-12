@@ -56,8 +56,11 @@ export function screenCondition(
     return { tone: tone === "risk" ? "critical" : tone === "warn" ? "warning" : "neutral", text: label };
   }
   const heardAt = status.reportedAt ?? status.disconnectedAt;
+  // A browser screen says so where a device says it is online.
   const connection = status.online
-    ? "Online"
+    ? status.health?.kind === "browser"
+      ? "Browser"
+      : "Online"
     : heardAt
       ? `Last heard ${formatAge(now - Date.parse(heardAt))}`
       : "Offline";

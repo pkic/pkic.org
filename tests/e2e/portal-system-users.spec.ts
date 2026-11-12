@@ -243,11 +243,14 @@ test("staff read registration and account changes through the shared audit table
     const beforeCorrection = registrationManageReadResponseSchema.parse(
       await (await attendee.request.get(`/api/v1/registrations/${record!.id}`)).json(),
     );
-    const linked = await attendee.request.put(`/api/v1/registrations/${record!.id}/identity`, {
-      data: registrationIdentityChangeSchema.parse({
-        identityId: identity.identityId,
-        expectedIdentityId: beforeCorrection.identityId ?? null,
-      }),
+    const linked = await attendee.request.patch(`/api/v1/registrations/${record!.id}`, {
+      data: {
+        action: "update",
+        identityChange: registrationIdentityChangeSchema.parse({
+          identityId: identity.identityId,
+          expectedIdentityId: beforeCorrection.identityId ?? null,
+        }),
+      },
     });
     expect(linked.status()).toBe(200);
     await page.getByRole("button", { name: `Actions for ${organizationName}`, exact: true }).click();

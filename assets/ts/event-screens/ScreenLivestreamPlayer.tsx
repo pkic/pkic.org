@@ -2,14 +2,25 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useReducer, useRef } from "preact/hooks";
 import { youtubePrivacyEmbedUrl } from "../../shared/youtube-video";
 import { nextLivestreamHealth, startLivestreamHealth, type LivestreamHealthSignal } from "./livestream-health";
-import { LivestreamStallLog, livestreamPlayback, livestreamPlayerState } from "./livestream-playback";
-import { provideLivestreamPlayback, publishLivestreamPlayerReport } from "./livestream-player-report";
+import {
+  LivestreamStallLog,
+  livestreamPlayback,
+  livestreamPlayerState,
+  livestreamSoundConfirmed,
+} from "./livestream-playback";
+import {
+  onLivestreamSoundRequest,
+  provideLivestreamPlayback,
+  publishLivestreamPlayerReport,
+} from "./livestream-player-report";
 import { ScreenLivestream } from "./ScreenLivestream";
 import { loadYouTubeIframeApi, type YouTubePlayer } from "./youtube-iframe-api";
 
 const HEALTH_TICK_MS = 1_000;
 /** A player not playing this long after it asked to start with sound was refused it; it starts muted. */
 const AUTOPLAY_WITH_SOUND_MS = 5_000;
+/** After a click asks for sound, the player has this long to be unmuted and playing. */
+const SOUND_CONFIRM_MS = 1_500;
 
 /**
  * The player stays on the venue's kiosk: YouTube's privacy-enhanced embed,
@@ -82,6 +93,30 @@ export function ScreenLivestreamPlayer({
     [],
   );
   useEffect(() => stalls.current.status(health.status, health.changedAt), [health.status, health.changedAt]);
+  // A click on a browser screen's corner asks for sound: unmute and play at once, while the click
+  // counts, then report sound only once the player says it is unmuted and playing.
+  useEffect(() => {
+    let check: ReturnType<typeof setTimeout> | undefined;
+    const stop = onLivestreamSoundRequest(() => {
+      const player = ready.current;
+      if (!player) return;
+      try {
+        player.unMute();
+        player.setVolume(100);
+        player.playVideo();
+      } catch {
+        return;
+      }
+      clearTimeout(check);
+      check = setTimeout(() => {
+        if (ready.current === player && livestreamSoundConfirmed(player)) report({ type: "sound" });
+      }, SOUND_CONFIRM_MS);
+    });
+    return () => {
+      stop();
+      clearTimeout(check);
+    };
+  }, []);
 
   useEffect(() => {
     const tick = setInterval(() => report({ type: "tick" }), HEALTH_TICK_MS);
@@ -94,7 +129,16 @@ export function ScreenLivestreamPlayer({
     let stopped = false;
     let player: YouTubePlayer | null = null;
     let played = false;
+    /** Whether it plays now, and whether it already fell back to muted since it last did: one fallback per stop. */
+    let playing = false;
+    let fellBack = false;
     let withSound: ReturnType<typeof setTimeout> | undefined;
+    const startMuted = (target: YouTubePlayer) => {
+      fellBack = true;
+      target.mute();
+      target.playVideo();
+      report({ type: "muted" });
+    };
     loadYouTubeIframeApi().then(
       (api) => {
         if (stopped) return;
@@ -108,20 +152,30 @@ export function ScreenLivestreamPlayer({
               target.playVideo();
               // The browser may refuse to start with sound; muted is better than the reconnecting card.
               withSound = setTimeout(() => {
-                if (stopped || played) return;
-                target.mute();
-                target.playVideo();
-                report({ type: "muted" });
+                if (!stopped && !played) startMuted(target);
               }, AUTOPLAY_WITH_SOUND_MS);
+            },
+            // The browser said so at once, at the start or on resuming after a pause: no need to wait.
+            // Muted once; still blocked after that, the screen's sound control is the way back.
+            onAutoplayBlocked: ({ target }) => {
+              if (stopped || playing || fellBack) return;
+              clearTimeout(withSound);
+              startMuted(target);
             },
             onStateChange: ({ data, target }) => {
               if (stopped) return;
               const state = livestreamPlayerState(data);
               if (!state) return;
-              if (state === "playing") played = true;
+              playing = state === "playing";
+              if (playing) {
+                played = true;
+                fellBack = false;
+              }
               // Nobody pauses a venue screen; carry on.
               if (state === "paused") target.playVideo();
               report({ type: "state", state });
+              // Sound asked for while buffering is confirmed once playback starts, not only by the click's check.
+              if (playing && livestreamSoundConfirmed(target)) report({ type: "sound" });
             },
             onError: ({ data }) => {
               if (stopped) return;
