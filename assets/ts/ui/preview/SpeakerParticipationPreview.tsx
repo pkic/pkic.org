@@ -1,5 +1,3 @@
-import { useState } from "preact/hooks";
-import type { ProposalSpeakerRole } from "../../../shared/schemas/participant-roles";
 import { ProposalSpeakerCard } from "../../components/proposals/ProposalSpeakerCard";
 import { proposalSpeakerSchema } from "../../../shared/schemas/proposal-speakers";
 import { ParticipantSpeaker } from "../../components/events/ParticipantSpeaker";
@@ -71,12 +69,11 @@ export function SpeakerParticipationPreview({ late = false }: { late?: boolean }
 }
 
 export function ConfirmedSpeakerPreview({ proposer = false }: { proposer?: boolean }) {
-  const [role, setRole] = useState<ProposalSpeakerRole>(proposer ? "proposer" : "speaker");
   const data = speakerParticipationData(false);
   const speaker = proposalSpeakerSchema.parse({
     ...data.profile,
     userId: id,
-    role,
+    role: "speaker",
     status: "confirmed",
     confirmedAt: at,
     declinedAt: null,
@@ -94,12 +91,9 @@ export function ConfirmedSpeakerPreview({ proposer = false }: { proposer?: boole
         speaker={speaker}
         proposalId={id}
         isCurrentProposer={proposer}
-        canFinalize={proposer}
         replacementSpeakers={[]}
         endpoints={{ speakerPath: () => `/api/v1/proposals/${id}/speakers/${id}` }}
-        onSaved={(_userId, patch) => {
-          if (patch.role) setRole(patch.role);
-        }}
+        onSaved={() => {}}
         onRemoved={() => {}}
       />
     </div>

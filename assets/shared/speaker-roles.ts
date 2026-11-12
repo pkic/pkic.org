@@ -11,9 +11,9 @@ import {
   isProposalSpeakerRoleAssignable,
   PROPOSAL_SPEAKER_ROLES,
   type ProposalSpeakerRole,
-} from "../../shared/schemas/participant-roles";
+} from "./schemas/participant-roles";
 
-const SPEAKER_ROLE_LABELS: Record<ProposalSpeakerRole, string> = {
+export const SPEAKER_ROLE_LABELS: Record<ProposalSpeakerRole, string> = {
   proposer: "Proposer",
   speaker: "Speaker",
   co_speaker: "Co-speaker",

@@ -4,7 +4,7 @@ import { speakerRoleSchema } from "../../../shared/schemas/registration";
 import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { proposalAccessPath, type ProposalResourceAccess } from "../../../shared/proposal-access-paths";
 import { patchJson } from "../../shared/api-client";
-import { assignableSpeakerRoleOptions } from "../../shared/speaker-roles";
+import { assignableSpeakerRoleOptions } from "../../../shared/speaker-roles";
 import { useContractForm } from "../../hooks/useContractForm";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Button } from "../../ui/Button";

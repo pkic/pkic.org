@@ -30,6 +30,7 @@ vi.mock("../../assets/ts/shared/headshot/upload", async (original) => ({
   showHeadshotDisclaimer: () => Promise.resolve(true),
 }));
 import { openCardMenu, runCardAction } from "./helpers/row-actions";
+import { formatDate } from "../../assets/ts/shared/ui";
 import { SPEAKER_NOT_YET_ACCEPTED_LABEL } from "../../assets/shared/proposal-speaker-acceptance";
 
 let container: HTMLElement | null = null;
@@ -420,10 +421,14 @@ describe("proposal speaker removal UI", () => {
     );
   });
 
-  it.each([true, false])("shows proposer ownership independently of the speaker role: %s", (isCurrentProposer) => {
+  it.each([
+    { role: "speaker", isCurrentProposer: true, labels: ["Speaker", "Proposer"] },
+    { role: "speaker", isCurrentProposer: false, labels: ["Speaker"] },
+    { role: "proposer", isCurrentProposer: true, labels: ["Proposer"] },
+  ] as const)("shows $role with proposer ownership $isCurrentProposer", ({ role, isCurrentProposer, labels }) => {
     const root = mount(
       <SpeakerCard
-        speaker={proposalSpeaker({ role: "speaker" })}
+        speaker={proposalSpeaker({ role })}
         proposalId="proposal-1"
         isCurrentProposer={isCurrentProposer}
         replacementSpeakers={[]}
@@ -432,10 +437,10 @@ describe("proposal speaker removal UI", () => {
       />,
     );
     const standing = root.querySelector('dl[aria-label="Where Casey Speaker stands"]')!;
-    expect(standing.textContent).toContain("Speaker");
-    expect([...standing.querySelectorAll("dd")].some((item) => item.textContent === "Proposer")).toBe(
-      isCurrentProposer,
-    );
+    expect([...standing.querySelectorAll("dd")].map((item) => item.textContent)).toEqual([
+      ...labels,
+      `Participation confirmed ${formatDate("2026-08-01T00:00:00.000Z")}`,
+    ]);
   });
 
   it("lets the proposer take any role in the contract, the proposer's included", async () => {

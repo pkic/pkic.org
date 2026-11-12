@@ -12,7 +12,7 @@ import { proposalSpeakerPatchResponseSchema } from "../../../shared/schemas/prop
 import { speakerRoleSchema, type SpeakerRole } from "../../../shared/schemas/registration";
 import { useContractForm } from "../../hooks/useContractForm";
 import { requestJson } from "../../shared/api-client";
-import { assignableSpeakerRoleOptions } from "../../shared/speaker-roles";
+import { assignableSpeakerRoleOptions } from "../../../shared/speaker-roles";
 import type { ToastType } from "../../shared/ui";
 import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";

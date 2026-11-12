@@ -63,6 +63,25 @@ function mount(node: Parameters<typeof render>[0]): HTMLElement {
 }
 
 describe("proposer-managed speaker roster", () => {
+  it.each([
+    { role: "speaker", isCurrentProposer: true, labels: ["Speaker", "Proposer"] },
+    { role: "speaker", isCurrentProposer: false, labels: ["Speaker"] },
+    { role: "proposer", isCurrentProposer: true, labels: ["Proposer"] },
+  ] as const)("shows $role with proposer ownership $isCurrentProposer", ({ role, isCurrentProposer, labels }) => {
+    const root = mount(
+      <SpeakerList
+        speakers={[managedSpeaker({ role })]}
+        token="manage-token"
+        apiBase="/api/v1"
+        proposerUserId={isCurrentProposer ? "speaker-1" : "another-speaker"}
+        onReload={async () => {}}
+        onStatus={() => {}}
+      />,
+    );
+    const standing = root.querySelector('dl[aria-label="Role of Casey Speaker"]')!;
+    expect([...standing.querySelectorAll("dd")].map((item) => item.textContent)).toEqual(labels);
+  });
+
   it("keeps the roster read-only until one speaker is selected and preserves owner role rules", async () => {
     const root = mount(
       <SpeakerList

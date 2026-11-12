@@ -2,7 +2,7 @@ import type { ComponentChildren, Ref } from "preact";
 import { useRef } from "preact/hooks";
 import { confirmAction } from "./ConfirmDialog";
 import { ProfileLinksInput, type ProfileLinksHandle } from "./ProfileLinksInput";
-import { SPEAKER_ROLE_OPTIONS } from "../shared/speaker-roles";
+import { SPEAKER_ROLE_OPTIONS } from "../../shared/speaker-roles";
 import { Button } from "../ui/Button";
 import { Radio } from "../ui/Checkbox";
 import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
