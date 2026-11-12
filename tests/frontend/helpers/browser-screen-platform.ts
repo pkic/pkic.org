@@ -1,4 +1,4 @@
-/** A browser for browser-screen tests: its grants, its activation, its wake lock and its tab capture. */
+/** A browser for browser-screen tests: its grants, its activation, its wake lock and its screen capture. */
 import { Blob as NodeBlob } from "node:buffer";
 import { vi } from "vitest";
 import type { BrowserScreenPlatform } from "../../../assets/ts/event-screens/browser-screen";
@@ -8,9 +8,7 @@ import type { BrowserScreenPlatform } from "../../../assets/ts/event-screens/bro
  * the capture each need a click's activation; `spends` says which request
  * uses it up, and `pickerExitsFullscreen` that showing the picker leaves
  * full screen; activation ends when the click's handler returns. The
- * capture shows this tab, another tab, a window, or is declined; a browser
- * without capture handles (`captureHandles: false`) cannot say which tab it
- * shows. The wake lock is granted with no click, refused, or granted
+ * capture shows the whole screen, a tab, a window, or is declined. The wake lock is granted with no click, refused, or granted
  * only within one (`"needs-click"`); the browser lets it go when the page is
  * hidden, or whenever `systemRelease` says.
  */
@@ -18,8 +16,7 @@ export function fakePlatform(
   grants: {
     fullscreen?: boolean;
     wakeLock?: boolean | "needs-click";
-    capture?: "tab" | "other-tab" | "window" | "declined";
-    captureHandles?: boolean;
+    capture?: "screen" | "tab" | "window" | "declined";
     spends?: "fullscreen" | "capture";
     pickerExitsFullscreen?: boolean;
     /** The browser window is full screen (F11) from the start. */
@@ -29,27 +26,17 @@ export function fakePlatform(
   const {
     fullscreen = true,
     wakeLock = true,
-    capture = "tab",
-    captureHandles = true,
+    capture = "screen",
     spends,
     pickerExitsFullscreen = false,
     windowFullscreen = false,
   } = grants;
   let windowFull = windowFullscreen;
   let windowChanged: (() => void) | null = null;
-  const origin = "https://pkic.example";
   const listeners = new Map<string, () => void>();
-  /** What this tab set as its handle, which a capture of it reports. */
-  let configured: { handle: string; permittedOrigins: string[] } | null = null;
   const track = Object.assign(new EventTarget(), {
     stop: vi.fn(),
-    getSettings: () => ({ displaySurface: capture === "window" ? "window" : "browser" }),
-    ...(captureHandles && {
-      getCaptureHandle: () =>
-        capture === "other-tab"
-          ? { handle: "another-page", origin }
-          : configured && { handle: configured.handle, origin },
-    }),
+    getSettings: () => ({ displaySurface: { screen: "monitor", tab: "browser", window: "window" }[capture as string] }),
   });
   const stream = { getVideoTracks: () => [track], getTracks: () => [track] } as unknown as MediaStream;
   let active = false;
@@ -105,13 +92,6 @@ export function fakePlatform(
     wakeLock: { request: requestWakeLock },
     getDisplayMedia,
     windowFullscreen: { matches: () => windowFull, onChange: (listener) => void (windowChanged = listener) },
-    origin,
-    setCaptureHandleConfig: captureHandles
-      ? vi.fn((config: { handle: string; permittedOrigins: string[] }) => {
-          configured = config;
-        })
-      : undefined,
-    randomHandle: () => crypto.randomUUID(),
     frames: () => ({
       video: { srcObject: null, muted: false, videoWidth: 1920, videoHeight: 1080, play: async () => undefined },
       canvas: Object.assign(fakeCanvas([["image/webp", 30_000]]), {
@@ -141,18 +121,11 @@ export function fakePlatform(
     doc.fullscreenElement = null;
     listeners.get("fullscreenchange")?.();
   };
-  /** The tab's handle changes, as when the captured page navigates. */
-  const changeHandle = () => {
-    configured = configured && { ...configured, handle: "navigated" };
-    track.dispatchEvent(new Event("capturehandlechange"));
-  };
   return {
     platform,
     clickPage,
     setWindowFullscreen,
     track,
-    changeHandle,
-    configured: () => configured,
     getDisplayMedia,
     doc,
     click,

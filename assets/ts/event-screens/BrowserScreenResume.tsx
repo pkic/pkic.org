@@ -2,8 +2,8 @@
  * A browser screen's one control, on every state it shows (pairing code,
  * waiting, any output), fixed in a corner of the window so nothing on the
  * screen moves when it comes or goes: what is missing, and one button that
- * does what the next click can. After a reload that is Resume (sharing this
- * tab again; full screen follows on the next click); otherwise Full screen, Share this tab, Turn
+ * does what the next click can. After a reload that is Resume (sharing the
+ * screen again; full screen follows on the next click); otherwise Full screen, Share screen, Turn
  * on sound once the livestream's player is blocked, or Keep awake when the
  * browser refused the wake lock without a click. The screen runs without
  * the click.

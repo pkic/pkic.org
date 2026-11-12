@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * A browser set up as a screen: the one click that asks for everything, the
- * tab-only capture, its own screen ID, its screenshots, the Resume button,
+ * whole-screen capture, its own screen ID, its screenshots, the Resume button,
  * and that it never reaches for a device's local service.
  */
 import { render } from "preact";
@@ -45,7 +45,7 @@ afterEach(async () => {
 });
 
 describe("setting up a browser as a screen", () => {
-  it("shares this tab in the setup click, then goes full screen on the next click anywhere", async () => {
+  it("shares the screen in the setup click, then goes full screen on the next click anywhere", async () => {
     const { platform, getDisplayMedia, doc, click, clickPage } = fakePlatform();
     const screen = createBrowserScreen(platform);
     const enrolled = click(() => screen.enroll());
@@ -125,60 +125,28 @@ describe("setting up a browser as a screen", () => {
     expect(screen.get().capture).toBe("live");
   });
 
-  it("accepts a capture of this tab only, and reports when the person stops sharing", async () => {
-    const window = fakePlatform({ capture: "window" });
-    const refused = createBrowserScreen(window.platform);
-    expect(await window.click(() => refused.enroll())).toEqual(["capture-surface", "fullscreen"]);
-    expect(window.track.stop).toHaveBeenCalled();
+  it.each(["window", "tab"] as const)("refuses a shared %s, and offers Share screen again", async (surface) => {
+    const shared = fakePlatform({ capture: surface });
+    const refused = createBrowserScreen(shared.platform);
+    expect(await shared.click(() => refused.enroll())).toEqual(["capture-surface", "fullscreen"]);
+    expect(shared.track.stop).toHaveBeenCalled();
     expect(refused.get().capture).toBe("off");
+    expect(await refused.readScreenshot()).toBeNull();
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() => render(<BrowserScreenResume browser={refused} sound="none" />, host!));
+    expect(host.querySelector(".pk-screen-resume__missing")?.textContent).toBe(
+      "Share the whole screen, not a window or tab",
+    );
+    expect(host.querySelector(".pk-screen-resume button")?.textContent).toBe("Share screen");
+  });
 
+  it("accepts a capture of the whole screen, and reports when the person stops sharing", async () => {
     const tab = fakePlatform();
     const screen = createBrowserScreen(tab.platform);
     await tab.click(() => screen.enroll());
     expect(screen.get().capture).toBe("live");
     tab.track.dispatchEvent(new Event("ended"));
     expect(screen.get().capture).toBe("stopped");
-    expect(await screen.readScreenshot()).toBeNull();
-  });
-
-  it("marks this tab before the capture and sends only a capture that shows it", async () => {
-    const { platform, click, getDisplayMedia, configured } = fakePlatform();
-    const screen = createBrowserScreen(platform);
-    expect(configured()).toMatchObject({ exposeOrigin: true, permittedOrigins: [platform.origin] });
-    // A fresh handle for each page load.
-    const other = fakePlatform();
-    createBrowserScreen(other.platform);
-    expect(other.configured()!.handle).not.toBe(configured()!.handle);
-    expect(platform.setCaptureHandleConfig).toHaveBeenCalledTimes(1);
-    expect(await click(() => screen.enroll())).toEqual(["fullscreen"]);
-    expect(getDisplayMedia).toHaveBeenCalled();
-    expect(screen.get().capture).toBe("live");
-  });
-
-  it.each([
-    ["another tab", { capture: "other-tab" as const }, "capture-other-tab", "Wrong tab shared"],
-    ["a browser that cannot tell", { captureHandles: false }, "capture-unverified", "Tab can't be verified"],
-  ])("refuses %s, sends nothing and offers Share this tab again", async (_case, grants, problem, says) => {
-    const { platform, click, track } = fakePlatform(grants);
-    const screen = createBrowserScreen(platform);
-    expect(await click(() => screen.enroll())).toEqual([problem, "fullscreen"]);
-    expect(track.stop).toHaveBeenCalled();
-    expect(screen.get().capture).toBe("off");
-    expect(await screen.readScreenshot()).toBeNull();
-    host = document.body.appendChild(document.createElement("div"));
-    await act(() => render(<BrowserScreenResume browser={screen} sound="none" />, host!));
-    expect(host.querySelector(".pk-screen-resume__missing")?.textContent).toBe(says);
-    expect(host.querySelector(".pk-screen-resume button")?.textContent).toBe("Share this tab");
-  });
-
-  it("ends a capture whose tab stops saying it is this screen", async () => {
-    const { platform, click, track, changeHandle } = fakePlatform();
-    const screen = createBrowserScreen(platform);
-    await click(() => screen.enroll());
-    changeHandle();
-    expect(screen.get().capture).toBe("stopped");
-    expect(screen.problems()).toContain("capture-other-tab");
-    expect(track.stop).toHaveBeenCalled();
     expect(await screen.readScreenshot()).toBeNull();
   });
 

@@ -1,7 +1,7 @@
 /**
  * A browser set up as a screen (a laptop at a stage instead of a device):
  * what its clicks grant it and what it keeps. It holds a screen wake lock
- * from the start, with no click; the setup click shares this tab for
+ * from the start, with no click; the setup click shares the screen for
  * staff's screenshots, and the next click anywhere goes full screen (the
  * share picker would drop a full screen asked for in the same click). Each may be refused on its
  * own; the screen runs without it, and its corner offers what the next
@@ -31,29 +31,9 @@ export interface BrowserScreenPlatform {
    * own full screen API does not report; absent in tests that leave it out.
    */
   windowFullscreen?: { matches: () => boolean; onChange: (listener: () => void) => void };
-  /** This page's origin, which a capture of this tab reports with its handle. */
-  origin: string;
-  /**
-   * Marks this tab with a handle a capture of it reports, telling it from
-   * another tab the person picked; absent where the browser has no capture
-   * handles.
-   */
-  setCaptureHandleConfig?: (config: CaptureHandleConfig) => void;
-  /** A fresh, unguessable handle for this page load. */
-  randomHandle: () => string;
   /** A video and a canvas to take frames with. */
   frames: () => { video: FrameVideo; canvas: FrameCanvas & FrameDrawing };
 }
-
-interface CaptureHandleConfig {
-  handle: string;
-  exposeOrigin: boolean;
-  permittedOrigins: string[];
-}
-/** A captured tab's track, with the handle and origin of the tab it shows where the browser reports them. */
-type CapturedTrack = MediaStreamTrack & {
-  getCaptureHandle?: () => { handle?: string; origin?: string } | null;
-};
 
 export interface FrameVideo {
   srcObject: MediaProvider | null;
@@ -69,36 +49,27 @@ interface FrameDrawing {
 }
 
 /**
- * The capture asks for this tab and nothing else: the browser offers the
- * current tab first, and windows, other tabs and whole screens are refused
- * after the fact by the surface the capture reports.
+ * The capture asks for the whole screen: it shows staff exactly what the
+ * screen shows, full screen or not, and every browser offers it (Safari
+ * cannot share a tab). A tab is refused after the fact: Chrome cannot put a
+ * tab it is sharing in full screen. A window is refused too: it would show
+ * staff only that window.
  */
 export const BROWSER_SCREEN_CAPTURE_OPTIONS = {
-  video: true,
+  video: { displaySurface: "monitor" },
   audio: false,
-  preferCurrentTab: true,
-  selfBrowserSurface: "include",
+  selfBrowserSurface: "exclude",
   surfaceSwitching: "exclude",
-  monitorTypeSurfaces: "exclude",
+  monitorTypeSurfaces: "include",
 } as const;
 
 /** A wake lock the system let go is asked for again after this long, so a browser that keeps letting go is not asked in a loop. */
 export const BROWSER_SCREEN_WAKE_LOCK_RETRY_MS = 1_000;
 
-export type BrowserScreenProblem =
-  | "fullscreen"
-  | "wake-lock"
-  | "capture"
-  | "capture-surface"
-  | "capture-other-tab"
-  | "capture-unverified";
+export type BrowserScreenProblem = "fullscreen" | "wake-lock" | "capture" | "capture-surface";
 
 /** Why a capture was refused after the person picked it, for the corner to say instead of what is missing. */
-export const BROWSER_SCREEN_CAPTURE_REFUSALS = [
-  "capture-surface",
-  "capture-other-tab",
-  "capture-unverified",
-] as const satisfies readonly BrowserScreenProblem[];
+export const BROWSER_SCREEN_CAPTURE_REFUSALS = ["capture-surface"] as const satisfies readonly BrowserScreenProblem[];
 
 /** The window fills the screen: the browser's own full screen, as F11 gives it. */
 function windowFillsScreen(): boolean {
@@ -119,11 +90,6 @@ export const browserPlatform = (): BrowserScreenPlatform => ({
   getDisplayMedia: navigator.mediaDevices?.getDisplayMedia?.bind(navigator.mediaDevices) as
     | BrowserScreenPlatform["getDisplayMedia"]
     | undefined,
-  origin: location.origin,
-  setCaptureHandleConfig: (
-    navigator.mediaDevices as { setCaptureHandleConfig?: (config: CaptureHandleConfig) => void } | undefined
-  )?.setCaptureHandleConfig?.bind(navigator.mediaDevices),
-  randomHandle: () => crypto.randomUUID(),
   frames: () => ({
     video: document.createElement("video"),
     canvas: document.createElement("canvas") as HTMLCanvasElement as FrameCanvas & FrameDrawing,
@@ -207,28 +173,6 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
     return isFullscreen() ? Promise.resolve() : attempt(() => document.documentElement.requestFullscreen());
   }
 
-  /**
-   * This tab's handle, set once per page load before any capture, or null
-   * where the browser cannot set one; a capture is then never sent.
-   */
-  const handle = ((): string | null => {
-    if (!platform.setCaptureHandleConfig) return null;
-    const fresh = platform.randomHandle();
-    try {
-      platform.setCaptureHandleConfig({ handle: fresh, exposeOrigin: true, permittedOrigins: [platform.origin] });
-      return fresh;
-    } catch {
-      return null;
-    }
-  })();
-
-  /** Why this capture does not show this screen's tab, or null when it does. */
-  function thisTabRefusal(track: CapturedTrack): BrowserScreenProblem | null {
-    if (!handle || !track.getCaptureHandle) return "capture-unverified";
-    const captured = track.getCaptureHandle();
-    return captured?.handle === handle && captured.origin === platform.origin ? null : "capture-other-tab";
-  }
-
   async function capture(request: Promise<MediaStream> | null): Promise<BrowserScreenProblem | null> {
     if (!request) return "capture";
     let next: MediaStream;
@@ -237,29 +181,17 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
     } catch {
       return "capture";
     }
-    const track = next.getVideoTracks()[0] as CapturedTrack | undefined;
-    // Only this tab: a window or a whole screen would show staff more than the screen.
-    if (!track || track.getSettings().displaySurface !== "browser") {
+    const track = next.getVideoTracks()[0];
+    // The whole screen only; a browser that does not say what it shares is taken at its word.
+    const surface = track?.getSettings().displaySurface;
+    if (!track || (surface && surface !== "monitor")) {
       for (const each of next.getTracks()) each.stop();
       return "capture-surface";
-    }
-    // Only this screen's tab: another tab (an inbox, say) would reach staff too.
-    const refused = thisTabRefusal(track);
-    if (refused) {
-      for (const each of next.getTracks()) each.stop();
-      return refused;
     }
     endCapture("off");
     stream = next;
     track.addEventListener("ended", () => {
       if (stream === next) endCapture("stopped");
-    });
-    // The captured tab could change what it says it is; a capture that no longer shows this screen ends.
-    track.addEventListener("capturehandlechange", () => {
-      const changed = stream === next ? thisTabRefusal(track) : null;
-      if (!changed) return;
-      endCapture("stopped");
-      set({}, [...problems.filter((problem) => problem !== changed), changed]);
     });
     frames ??= platform.frames();
     frames.video.muted = true;
@@ -270,7 +202,7 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
   }
 
   /**
-   * What one click asks for: this tab's capture where it is asked and the
+   * What one click asks for: the screen's capture where it is asked and the
    * browser can share, otherwise full screen, and the wake lock either way.
    * Never both: the share picker drops a full screen asked for in the same
    * click, so full screen waits for the next click. Resolves with what is
@@ -307,9 +239,9 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
       return () => void listeners.delete(listener);
     },
     request,
-    /** The setup click, and Resume's: this tab's capture, then full screen on the next click. */
+    /** The setup click, and Resume's: the screen's capture, then full screen on the next click. */
     enroll: () => request({ fullscreen: true, capture: true }),
-    /** One frame of this tab while it is captured, as the monitor takes a screenshot; null otherwise. */
+    /** One frame of the screen while it is captured, as the monitor takes a screenshot; null otherwise. */
     async readScreenshot(): Promise<ArrayBuffer | null> {
       if (state.capture !== "live" || !frames) return null;
       const size = browserScreenFrameSize(frames.video);
