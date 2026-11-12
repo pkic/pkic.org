@@ -1,6 +1,7 @@
 import type { Permission } from "../../../../assets/shared/schemas/permissions";
 import type { D1QueryBudget } from "../../db/query-budget";
-import type { Env } from "../../types";
+import type { PendingWorkListQuery, PendingWorkRow } from "../../../../assets/shared/schemas/pending-work";
+import type { DatabaseLike, Env } from "../../types";
 
 import type { ScheduledJobKey, ScheduledJobStatus } from "../../../../assets/shared/schemas/scheduler";
 export type { ScheduledJobKey, ScheduledJobStatus } from "../../../../assets/shared/schemas/scheduler";
@@ -44,6 +45,11 @@ export interface ScheduledJobDefinition {
   /** CPU-heavy work must not share the cron invocation with other jobs. */
   dedicatedInvocation?: boolean;
   run(context: ScheduledJobRunContext): Promise<ScheduledJobOutcome | void>;
+  /**
+   * The work this job has not finished, read from its own domain. Reading it
+   * needs the same grants as `requiredPermissions`.
+   */
+  backlog?(db: DatabaseLike, query: PendingWorkListQuery): Promise<{ items: PendingWorkRow[]; total: number }>;
 }
 
 export interface ScheduledJobRow {

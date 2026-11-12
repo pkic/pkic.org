@@ -29,13 +29,7 @@ import { Textarea } from "../../../../ui/TextControl";
 import { patchJson, postJson } from "../../../../shared/api-client";
 import { fmt, toast } from "../../ui";
 import "../../../../ui/Content.css";
-
-function titleFromKey(jobKey: string): string {
-  return jobKey
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase())
-    .replace(/\bEc\b/g, "EC");
-}
+import { scheduledJobTitle } from "./scheduled-job-title";
 
 function formatInterval(seconds: number): string {
   if (seconds % 86_400 === 0) return `${seconds / 86_400} day${seconds === 86_400 ? "" : "s"}`;
@@ -47,7 +41,13 @@ function formatInterval(seconds: number): string {
 function JobIdentity({ job }: { job: ScheduledJobResource }) {
   return (
     <div class="pk-stack pk-stack--tight">
-      <div>{titleFromKey(job.jobKey)}</div>
+      <div>
+        {job.capabilities.readBacklog ? (
+          <a href={`#/settings/scheduled-jobs/${encodeURIComponent(job.jobKey)}`}>{scheduledJobTitle(job.jobKey)}</a>
+        ) : (
+          scheduledJobTitle(job.jobKey)
+        )}
+      </div>
       <div class="pk-mono pk-small">{job.jobKey}</div>
       {job.pausedAt !== null && job.pausedReason ? <div class="pk-small">{job.pausedReason}</div> : null}
     </div>
@@ -125,7 +125,8 @@ function JobActions({ job, controls }: { job: ScheduledJobResource; controls: Jo
       id: "run",
       label: "Run now",
       onSelect: () => controls.onRun(job),
-      disabled: isBusy || isPaused || isRunning,
+      // A run past its lease died; running again takes it over.
+      disabled: isBusy || isPaused || (isRunning && !job.leaseExpired),
     });
   }
   if (job.capabilities.manageState) {
@@ -141,7 +142,7 @@ function JobActions({ job, controls }: { job: ScheduledJobResource; controls: Jo
         : { id: "pause", label: "Pause", onSelect: () => controls.onStartPause(job), disabled: isBusy },
     );
   }
-  return <RowActions subject={titleFromKey(job.jobKey)} actions={actions} />;
+  return <RowActions subject={scheduledJobTitle(job.jobKey)} actions={actions} />;
 }
 
 /**
@@ -170,7 +171,7 @@ function PauseDialog({
   // what the reason shows as it is typed and what Confirm may send.
   const form = useContractForm(schedulerJobStateUpdateSchema, { state: "paused", reason });
   const [error, setError] = useState("");
-  const title = titleFromKey(job.jobKey);
+  const title = scheduledJobTitle(job.jobKey);
 
   async function confirm() {
     setError("");
@@ -275,7 +276,7 @@ export function ScheduledJobs() {
       );
       await tableActions.current?.reload();
       toast(
-        `${titleFromKey(job.jobKey)} finished with status ${statusLabel(result.status).toLowerCase()}.`,
+        `${scheduledJobTitle(job.jobKey)} finished with status ${statusLabel(result.status).toLowerCase()}.`,
         result.status === "succeeded" ? "success" : "error",
       );
     } catch (runError) {

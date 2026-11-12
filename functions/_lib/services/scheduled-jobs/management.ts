@@ -52,14 +52,15 @@ const JOB_DEFINITIONS = new Map(SCHEDULED_JOB_DEFINITIONS.map((definition) => [d
 function toScheduledJobResource(job: ScheduledJob, actor: UserBackedAuthAdmin): ScheduledJobResource {
   const definition = JOB_DEFINITIONS.get(job.jobKey as ScheduledJobDefinition["key"]);
   const manageState = hasPermission(actor, "scheduler:read") && hasPermission(actor, "scheduler:manage");
+  const domainGranted =
+    definition !== undefined &&
+    (definition.requiredPermissions ?? []).every((permission) => hasPermission(actor, permission));
   return {
     ...job,
     capabilities: {
       manageState,
-      run:
-        manageState &&
-        definition !== undefined &&
-        (definition.requiredPermissions ?? []).every((permission) => hasPermission(actor, permission)),
+      run: manageState && domainGranted,
+      readBacklog: hasPermission(actor, "scheduler:read") && domainGranted && definition?.backlog !== undefined,
     },
   };
 }

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { successResponseSchema, trimmedString, utcInstantSchema } from "./api-common";
 import { authErrors, ok, requiresPermissions } from "./route-contract";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { pendingWorkListQuerySchema, pendingWorkListResponseSchema } from "./pending-work";
 
 /**
  * The scheduler is the mechanism; a scheduled job is the resource it manages.
@@ -73,6 +74,8 @@ export type ScheduledJob = z.infer<typeof scheduledJobSchema>;
 export const scheduledJobCapabilitiesSchema = z.object({
   run: z.boolean(),
   manageState: z.boolean(),
+  /** The job lists the work it has not finished yet, and the caller may read it. */
+  readBacklog: z.boolean(),
 });
 export const scheduledJobResourceSchema = scheduledJobSchema.extend({
   capabilities: scheduledJobCapabilitiesSchema,
@@ -179,5 +182,24 @@ export const schedulerJobScheduleUpdateRouteSchema = {
   responses: {
     ...ok("Updated scheduled job.", schedulerJobStateResponseSchema),
     ...authErrors({ notFound: "Unknown job.", conflict: "The interval changed or the job is running." }),
+  },
+};
+
+/** A job's unfinished work, listed by the job's own domain in the shared pending-work shape. */
+export const schedulerJobBacklogQuerySchema = pendingWorkListQuerySchema;
+export const schedulerJobBacklogResponseSchema = pendingWorkListResponseSchema;
+export const schedulerJobBacklogRouteSchema = {
+  tags: ["Scheduler"],
+  ...requiresPermissions("scheduler:read"),
+  summary: "List a scheduled job's backlog",
+  description:
+    "Lists the work one job has not finished, such as files still rendering or emails waiting for them. The job's own domain supplies the list, so the scheduler stores nothing about it. Requires the grants the job's own domain requires.",
+  request: { params: schedulerJobParamsSchema, query: schedulerJobBacklogQuerySchema },
+  responses: {
+    ...ok("The job's unfinished work.", schedulerJobBacklogResponseSchema),
+    ...authErrors({
+      forbidden: "Requires scheduler:read and the job's own domain permissions.",
+      notFound: "Unknown job, or a job that lists no backlog.",
+    }),
   },
 };

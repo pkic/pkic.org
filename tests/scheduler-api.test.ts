@@ -7,7 +7,9 @@ import { resetDb } from "./helpers/reset-db";
 import { seedPersona } from "./personas/seed";
 import { onlyPersona } from "./personas/catalog";
 import { queryAll } from "./helpers/context";
-import { schedulerJobsListResponseSchema } from "../assets/shared/schemas/scheduler";
+import { schedulerJobBacklogResponseSchema, schedulerJobsListResponseSchema } from "../assets/shared/schemas/scheduler";
+import { seedEventAndAdmin } from "./helpers/context";
+import { findOrCreateUser } from "../functions/_lib/services/users";
 import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
@@ -108,7 +110,7 @@ describe("scheduler API", () => {
     expect(retention).toBeDefined();
     expect(retention!.lastSuccessAt).toBeNull();
     expect(retention!.leaseExpired).toBe(false);
-    expect(retention!.capabilities).toEqual({ manageState: false, run: false });
+    expect(retention!.capabilities).toEqual({ manageState: false, run: false, readBacklog: false });
     expect(payload.jobs.map((job) => job.jobKey)).toContain("votes_due_work");
     expect(payload.jobs.map((job) => job.jobKey)).toContain("standing_chair_terms");
     expect(payload.jobs.map((job) => job.jobKey)).toContain("standing_event_speakers");
@@ -147,6 +149,7 @@ describe("scheduler API", () => {
     expect(managerPayload.jobs.find((job) => job.jobKey === "retention")?.capabilities).toEqual({
       manageState: true,
       run: false,
+      readBacklog: false,
     });
 
     const runner = await staffWith(["schedulerOperator", "retentionOperator"]);
@@ -156,7 +159,14 @@ describe("scheduler API", () => {
     expect(runnerPayload.jobs.find((job) => job.jobKey === "retention")?.capabilities).toEqual({
       manageState: true,
       run: true,
+      readBacklog: false,
     });
+    // Only a job that lists its work offers it, and only to a caller holding the job's domain grant.
+    const agenda = await staffWith(["schedulerOperator", "agendaEditor"]);
+    const agendaPayload = schedulerJobsListResponseSchema.parse(
+      await (await call(agenda, "/api/v1/scheduler/jobs?q=promotion")).json(),
+    );
+    expect(agendaPayload.jobs.find((job) => job.jobKey === "promotion_rendering")?.capabilities.readBacklog).toBe(true);
   });
 
   it("refuses a run to a caller holding scheduler:manage but not the job's own grants", async () => {
@@ -226,6 +236,51 @@ describe("scheduler API", () => {
       "SELECT running_since, last_status, consecutive_abandoned FROM scheduled_jobs WHERE job_key = 'retention'",
     );
     expect(row).toMatchObject({ running_since: null, last_status: "succeeded", consecutive_abandoned: 0 });
+  });
+
+  it("lists the promotion job's unfinished work only for a caller holding its domain grant", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const user = await findOrCreateUser(env.DB, {
+      email: "backlog@example.test",
+      firstName: "Ada",
+      lastName: "Example",
+    });
+    const at = "2026-01-01T00:00:00.000Z";
+    await env.DB.batch([
+      // A render whose Worker died, and an email that waits for that file.
+      env.DB.prepare(
+        `INSERT INTO event_promotion_renders(id,event_id,occurrence_id,user_id,revision,format,origin,cache_key,status,next_attempt_at,lease_expires_at,created_at,updated_at)
+         VALUES ('render-1',?,NULL,?,1,'carousel','https://app.test','key-1','rendering',?,?,?,?)`,
+      ).bind(eventId, user.id, at, at, at, at),
+      env.DB.prepare(
+        `INSERT INTO event_promotion_batches(id,event_id,requested_by,published_revision,formats_json,origin,created_at)
+         VALUES ('batch-1',?,?,1,'["carousel"]','https://app.test',?)`,
+      ).bind(eventId, user.id, at),
+      env.DB.prepare(
+        `INSERT INTO event_promotion_batch_recipients(batch_id,occurrence_id,user_id,status,next_attempt_at,updated_at,email_status)
+         VALUES ('batch-1',NULL,?,'prepared',?,?,'pending')`,
+      ).bind(user.id, at, at),
+    ]);
+    const path = "/api/v1/scheduler/jobs/promotion_rendering/backlog?sort=typeLabel";
+
+    expect((await call(await staffWith(["schedulerOperator"]), path)).status).toBe(403);
+    const response = await call(await staffWith(["schedulerOperator", "agendaEditor"]), path);
+    expect(response.status).toBe(200);
+    const body = schedulerJobBacklogResponseSchema.parse(await response.json());
+    expect(body.page.total).toBe(2);
+    expect(body.items.map((item) => [item.typeLabel, item.title, item.context, item.statusLabel])).toEqual([
+      ["Email", "Ada Example", "Attendee kit · Carousel", "Waiting for files"],
+      ["File", "Ada Example", "Attendee kit · Carousel", "Interrupted"],
+    ]);
+    // A job without a backlog has no such page.
+    expect(
+      (
+        await call(
+          await staffWith(["schedulerOperator", "retentionOperator"]),
+          "/api/v1/scheduler/jobs/retention/backlog",
+        )
+      ).status,
+    ).toBe(404);
   });
 
   it("returns 404 for an unknown job rather than leaking the registry shape", async () => {

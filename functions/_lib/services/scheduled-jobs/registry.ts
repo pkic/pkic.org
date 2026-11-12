@@ -15,6 +15,7 @@ import {
 import { recordingAcquisitionCleanupStorage } from "../event-recordings/acquisition-cleanup-storage";
 import { runSitePublicationPipeline } from "../site-publication-runtime";
 import { processPendingPromotionRecipients } from "../event-agenda/promotion-batch-dispatch";
+import { listPromotionRenderingBacklog } from "../event-agenda/promotion-backlog";
 import { purgeExpiredPromotionFiles } from "../event-agenda/promotion-retention";
 import { runAgendaParticipationDueWork } from "../event-participation/reconciliation";
 import { runAgendaSessionReminders } from "../event-participation/reminders";
@@ -251,6 +252,7 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
         summary: { recipients, renders, emails },
       };
     },
+    backlog: listPromotionRenderingBacklog,
   },
   {
     key: "on_hold_due_work",
