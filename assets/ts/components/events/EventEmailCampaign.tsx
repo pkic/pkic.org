@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import type { z } from "zod";
 import type { promotionFormatSchema } from "../../../shared/schemas/event-promotion-kit";
 import { RECOMMENDED_KIT_FORMATS, SpeakerKitAttachments } from "./SpeakerKitAttachments";
+import { PromotionMaterialAttachments } from "./PromotionMaterialAttachments";
 import { useContractForm } from "../../hooks/useContractForm";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import { Tabs } from "../Tabs";
@@ -25,6 +26,7 @@ import {
   eventEmailCampaignSendModeSchema,
   type EventEmailCampaignPreviewResponse,
   type EventEmailCampaignSendMode,
+  type PromotionMaterialFile,
 } from "../../../shared/schemas/event-email-campaigns";
 import { EMAIL_MESSAGE_TYPE_OPTIONS } from "../../shared/email-type-options";
 import { type TemplateHelperItem } from "../../shared/email-template-helpers";
@@ -56,6 +58,7 @@ export function EventEmailCampaign({
   initialSubject = "",
   initialBody = "",
   initialAttachKits = false,
+  materials,
   notify = () => {},
   cancelHref,
   onSent,
@@ -66,6 +69,8 @@ export function EventEmailCampaign({
   initialSubject?: string;
   initialBody?: string;
   initialAttachKits?: boolean;
+  /** Files picked from one person's promotion materials: the message goes to that person only. */
+  materials?: { userId: string; files: PromotionMaterialFile[]; onReview?: () => void };
   notify?: (message: string, type: "success" | "error") => void;
   /** The way back, when the composer is a page of its own. */
   cancelHref?: string;
@@ -79,7 +84,10 @@ export function EventEmailCampaign({
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
   const selection = useCampaignAudience(daysPath, initialAudience, initialAttachKits ? "scheduled" : "confirmed");
-  const { audience, speakerStatus, filter } = selection;
+  const { audience, speakerStatus } = selection;
+  const filter: CampaignPayload["filter"] = materials
+    ? { audience: "attendees", attendeeStatus: "all", userIds: [materials.userId] }
+    : selection.filter;
   const filterKey = JSON.stringify(filter);
 
   // promotion kit attachments
@@ -87,7 +95,8 @@ export function EventEmailCampaign({
   const [kitResend, setKitResend] = useState(false);
   const [attachKits, setAttachKits] = useState(initialAttachKits);
   const kitsAvailable = audience === "speakers" && speakerStatus === "scheduled";
-  const sendsKits = kitsAvailable && attachKits;
+  const sendsKits = !materials && kitsAvailable && attachKits;
+  const sendsFiles = sendsKits || Boolean(materials);
 
   // preview state
   const [preview, setPreview] = useState<EventEmailCampaignPreviewResponse | null>(null);
@@ -102,8 +111,11 @@ export function EventEmailCampaign({
   const subjectPreRef = useRef<HTMLPreElement>(null);
   const [bodyRevision, setBodyRevision] = useState(0);
   const templateRequestIdRef = useRef(0);
-  const availableHelperLabels = availableHelperLabelsForAudience(audience, { kits: sendsKits });
-  const availablePartials = availablePartialsForAudience(audience);
+  const availableHelperLabels = availableHelperLabelsForAudience(filter.audience, {
+    kits: sendsKits,
+    materials: Boolean(materials),
+  });
+  const availablePartials = availablePartialsForAudience(filter.audience);
 
   useEffect(() => {
     if (subjectPreRef.current) {
@@ -159,11 +171,12 @@ export function EventEmailCampaign({
       subjectOverride: subject,
       bodyContent: body,
       messageType,
-      sendMode: sendsKits ? "personal" : mode,
+      sendMode: sendsFiles ? "personal" : mode,
       batchSize,
       filter,
     };
     if (sendsKits) base.kit = { formats: kitFormats, resend: kitResend };
+    if (materials) base.materials = { files: materials.files };
     if (templateKey) base.templateKey = templateKey;
     if (withToken) base.previewToken = withToken;
     return base;
@@ -212,12 +225,14 @@ export function EventEmailCampaign({
       notify(
         sendsKits
           ? `Preparing ${formatNumber(count)} speaker kit email${count !== 1 ? "s" : ""}`
-          : `Campaign accepted for ${count} recipient${count !== 1 ? "s" : ""}`,
+          : materials
+            ? "Preparing the email with the picked files"
+            : `Campaign accepted for ${count} recipient${count !== 1 ? "s" : ""}`,
         "success",
       );
       setStatus(
-        sendsKits
-          ? "Each email goes out once its kit is ready."
+        sendsFiles
+          ? "Each email goes out once its files are ready."
           : `${res.stagedRecipients} of ${count} recipients added to the outbox. Open the Email outbox to add any remaining campaign messages.`,
       );
       setPreview(null);
@@ -254,7 +269,7 @@ export function EventEmailCampaign({
   }
 
   // Each kit is personal, so an attached kit rules out a shared BCC send.
-  const personal = sendsKits || mode === "personal";
+  const personal = sendsFiles || mode === "personal";
 
   function isHelperAvailable(item: TemplateHelperItem): boolean {
     return availableHelperLabels.has(item.label);
@@ -273,11 +288,17 @@ export function EventEmailCampaign({
 
   return (
     <div class="pk pk-stack" {...form.handlers}>
-      <EventEmailCampaignAudienceFields
-        selection={selection}
-        audienceField={form.of("filter.audience")}
-        invitationField={form.of("filter.invitationStatus")}
-      />
+      {materials ? (
+        <Field label="Recipient" help="Only the person whose promotion materials you picked.">
+          {() => <p class="pk-small">{preview?.sampleRecipients[0] ?? "Shown in the preview"}</p>}
+        </Field>
+      ) : (
+        <EventEmailCampaignAudienceFields
+          selection={selection}
+          audienceField={form.of("filter.audience")}
+          invitationField={form.of("filter.invitationStatus")}
+        />
+      )}
 
       {/* Template + mode */}
       <div class="pk-grid">
@@ -299,7 +320,7 @@ export function EventEmailCampaign({
             <Select
               {...control}
               value={personal ? "personal" : mode}
-              disabled={sendsKits}
+              disabled={sendsFiles}
               onChange={(e) => setMode(eventEmailCampaignSendModeSchema.parse((e.target as HTMLSelectElement).value))}
             >
               {eventEmailCampaignSendModeSchema.options.map((sendMode) => (
@@ -382,7 +403,8 @@ export function EventEmailCampaign({
       </Field>
       {!personal && <p class="pk-small">Recipient-specific insertions are unavailable in Broadcast BCC mode.</p>}
 
-      {audience === "speakers" && (
+      {materials && <PromotionMaterialAttachments files={materials.files} onReview={materials.onReview} />}
+      {!materials && audience === "speakers" && (
         <SpeakerKitAttachments
           available={kitsAvailable}
           attached={attachKits}

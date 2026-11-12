@@ -17,6 +17,7 @@ import { availableHelperLabelsForAudience } from "../../assets/ts/components/eve
 import { PREVIEW_DEFAULTS, TEMPLATE_HELPERS } from "../../assets/ts/shared/email-template-helpers";
 import { EventEmailCampaign } from "../../assets/ts/components/events/EventEmailCampaign";
 import { controlFor, labelNames, optionValues, typeMarkdown } from "./helpers/labeled-control";
+import { promotionMaterialFile } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/promotion-file-keys";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
 
 vi.mock("wouter/use-hash-location", () => ({
@@ -249,6 +250,52 @@ describe("event email campaign UI", () => {
     );
     expect(test.previewToken).toBe("campaign-preview-token");
     expect(requests.some(({ method, path }) => method === "POST" && path === CAMPAIGN_PATH)).toBe(false);
+  });
+
+  it("sends the picked promotion files to their one person through the shared composer", async () => {
+    const requests = stubCampaignFetch({ previews: () => json(PREVIEW_BODY) });
+    const files = [
+      promotionMaterialFile("session:occurrence-1:portrait"),
+      promotionMaterialFile("attendee:carousel"),
+      promotionMaterialFile("attendee:badge-square"),
+    ].flatMap((file) => file ?? []);
+    expect(files).toEqual([
+      { kit: "session", occurrenceId: "occurrence-1", format: "portrait" },
+      { kit: "attendee", format: "carousel" },
+      { kit: "badge", format: "square" },
+    ]);
+    expect(promotionMaterialFile("attendee:poster")).toBeNull();
+    const onReview = vi.fn();
+    const container = mount(
+      <EventEmailCampaign
+        campaignsPath={CAMPAIGN_PATH}
+        daysPath={`${EVENT_PATH}/days`}
+        materials={{ userId: "person-1", files, onReview }}
+      />,
+    );
+    await settle();
+    expect(labelNames(container)).not.toContain("Audience");
+    [...container.querySelectorAll("button")].find((button) => button.textContent === "Review files")!.click();
+    expect(onReview).toHaveBeenCalledOnce();
+    expect([...container.querySelectorAll("li")].map((item) => item.textContent)).toEqual([
+      "Tall post, session kit",
+      "Carousel, attendee kit",
+      "Square badge",
+    ]);
+    await composeAndPreview(container);
+
+    const preview = eventEmailCampaignPreviewInputSchema.parse(
+      requests.find(({ path }) => path === `${CAMPAIGN_PATH}/previews`)?.body,
+    );
+    expect(preview).toMatchObject({
+      sendMode: "personal",
+      filter: { audience: "attendees", attendeeStatus: "all", userIds: ["person-1"] },
+      materials: { files },
+    });
+    expect(container.textContent).toContain("attendee@example.test");
+    expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Send test to me")).toBe(
+      false,
+    );
   });
 
   it("says why a kit send with no formats cannot be previewed", async () => {

@@ -8,9 +8,40 @@
     list-style: none;
   }
   .pk-promotion-tile {
+    position: relative;
     display: flex;
     flex-direction: column;
     min-width: 0;
+  }
+  /* The pick is a round mark on the preview's corner, the way photo apps select a picture. */
+  .pk-promotion-tile .pk-promotion-tile__select {
+    position: absolute;
+    z-index: 1;
+    inset-block-start: var(--pk-2);
+    inset-inline-start: var(--pk-2);
+  }
+  .pk-promotion-tile__select .pk-check__input {
+    width: 1.375rem;
+    height: 1.375rem;
+    margin: 0;
+    background: color-mix(in srgb, var(--pk-ink) 28%, transparent);
+    border: 2px solid var(--pk-on-solid);
+    border-radius: 50%;
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--pk-ink) 35%, transparent);
+  }
+  .pk-promotion-tile__select .pk-check__input:checked {
+    background: var(--pk-accent-strong);
+    border-color: var(--pk-on-solid);
+  }
+  .pk-promotion-tile__select .pk-check__input[type="checkbox"]:checked::after {
+    left: 0.4rem;
+    top: 0.2rem;
+  }
+  .pk-promotion-tile--selected .pk-collection-card {
+    box-shadow: 0 0 0 2px var(--pk-accent-strong);
+  }
+  .pk-promotion-tile--selected .pk-promotion-tile__frame {
+    background: color-mix(in srgb, var(--pk-accent-strong) 12%, var(--pk-surface-sunk));
   }
   .pk-promotion-preview {
     display: block;
@@ -60,8 +91,17 @@
     font-weight: 600;
   }
   .pk-promotion-tile__detail {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-1);
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-sm);
+  }
+  /* One file per card, so the download sits in the same corner on every card. */
+  .pk-promotion-tile .pk-collection-card__footer {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    padding-block: var(--pk-2);
   }
   @media (max-width: 30rem) {
     .pk-promotion-gallery {

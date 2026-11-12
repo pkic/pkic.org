@@ -117,6 +117,13 @@
     padding: var(--pk-3) var(--pk-4);
     border-top: 1px solid var(--pk-line-soft);
   }
+  /* A count or hint about the dialog's choices, at the start of the actions row. */
+  .pk-dialog__foot-status {
+    align-self: center;
+    margin-inline-end: auto;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
 
   /* On a phone a centered card wastes the reachable area; the dialog becomes a
      sheet anchored to the bottom, where the thumb already is. */

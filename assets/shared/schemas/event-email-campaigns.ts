@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { emailMessageTypeSchema, successResponseSchema, utcInstantSchema } from "./api-common";
 import { eventRegistrationStatusFilterSchema } from "./event-registrations";
-import { promotionFormatsSchema } from "./event-promotion-kit";
+import { personalPromotionImageFormatSchema } from "../personal-promotion-image";
+import { promotionFormatSchema, promotionFormatsSchema } from "./event-promotion-kit";
 import { attendanceTypeSchema } from "./registration";
 
 export const eventEmailCampaignAudienceSchema = z.enum([
@@ -57,6 +58,8 @@ export const eventEmailCampaignFilterSchema = z.object({
   dayWaitlistStatus: eventEmailCampaignDayWaitlistFilterSchema.optional(),
   speakerStatus: eventEmailCampaignSpeakerStatusFilterSchema.optional(),
   invitationStatus: eventEmailCampaignInvitationStatusFilterSchema.optional(),
+  /** The people picked by hand; the other filters still apply to them. */
+  userIds: z.array(z.string().trim().min(1).max(64)).min(1).max(500).optional(),
 });
 export type EventEmailCampaignFilter = z.infer<typeof eventEmailCampaignFilterSchema>;
 
@@ -66,6 +69,34 @@ export const eventEmailCampaignKitSchema = z.strictObject({
   resend: z.boolean().default(false),
 });
 export type EventEmailCampaignKit = z.infer<typeof eventEmailCampaignKitSchema>;
+
+/**
+ * One file of a person's promotion materials: a session kit format, an attendee
+ * kit format, or a badge. A session file names the session it belongs to.
+ */
+export const promotionMaterialFileSchema = z.discriminatedUnion("kit", [
+  z.strictObject({
+    kit: z.literal("session"),
+    occurrenceId: z.string().trim().min(1).max(64),
+    format: promotionFormatSchema,
+  }),
+  z.strictObject({ kit: z.literal("attendee"), format: promotionFormatSchema }),
+  z.strictObject({ kit: z.literal("badge"), format: personalPromotionImageFormatSchema }),
+]);
+export type PromotionMaterialFile = z.infer<typeof promotionMaterialFileSchema>;
+
+/** The files an organizer picked from one person's promotion materials, sent in one email. */
+export const eventEmailCampaignMaterialsSchema = z.strictObject({
+  files: z
+    .array(promotionMaterialFileSchema)
+    .min(1, "Choose at least one file.")
+    .max(24)
+    .refine(
+      (files) => new Set(files.map((file) => JSON.stringify(file))).size === files.length,
+      "Choose each file once.",
+    ),
+});
+export type EventEmailCampaignMaterials = z.infer<typeof eventEmailCampaignMaterialsSchema>;
 
 const eventEmailCampaignContentSchema = z.object({
   templateKey: z.string().trim().min(1).max(200).optional(),
@@ -77,23 +108,40 @@ const eventEmailCampaignContentSchema = z.object({
   batchSize: z.number().int().min(1).max(500).default(50),
   filter: eventEmailCampaignFilterSchema,
   kit: eventEmailCampaignKitSchema.optional(),
+  materials: eventEmailCampaignMaterialsSchema.optional(),
 });
 
-/** A kit exists only for a session on the published agenda, and each one is personal. */
+/** Attached files are personal: a kit exists only for a scheduled speaker, materials only for one picked person. */
 function refineCampaignKit(input: z.infer<typeof eventEmailCampaignContentSchema>, context: z.RefinementCtx) {
+  if (input.materials) {
+    if (input.kit)
+      context.addIssue({ code: "custom", path: ["materials"], message: "Attach either kits or picked files." });
+    if (input.filter.userIds?.length !== 1 || isInvitationCampaignAudience(input.filter.audience))
+      context.addIssue({
+        code: "custom",
+        path: ["materials"],
+        message: "Picked promotion files can be sent only to the one person they belong to.",
+      });
+  }
+  if (input.filter.userIds && isInvitationCampaignAudience(input.filter.audience))
+    context.addIssue({
+      code: "custom",
+      path: ["filter", "userIds"],
+      message: "Invitations cannot be picked by person.",
+    });
+  if ((input.kit || input.materials) && input.sendMode !== "personal") {
+    context.addIssue({
+      code: "custom",
+      path: ["sendMode"],
+      message: "Promotion kits must be sent as personal emails.",
+    });
+  }
   if (!input.kit) return;
   if (input.filter.audience !== "speakers" || input.filter.speakerStatus !== "scheduled") {
     context.addIssue({
       code: "custom",
       path: ["kit"],
       message: "Promotion kits can be attached only for speakers scheduled on the agenda.",
-    });
-  }
-  if (input.sendMode !== "personal") {
-    context.addIssue({
-      code: "custom",
-      path: ["sendMode"],
-      message: "Promotion kits must be sent as personal emails.",
     });
   }
 }

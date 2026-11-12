@@ -156,7 +156,7 @@ it("loads complete carousel slides only when enlarged and offers retry after a f
   document.body.append(root);
   await act(() =>
     render(
-      <PromotionTile name="Carousel" detail="PDF slides" previewAlt="Cover" previewSrc="cover" loadSlides={loader} />,
+      <PromotionTile name="Carousel" ratio="4:5" stacked previewAlt="Cover" previewSrc="cover" loadSlides={loader} />,
       root,
     ),
   );
@@ -375,8 +375,8 @@ it("opens Share on one gallery with the badge first and the invite link below", 
       root,
     ),
   );
-  await vi.waitFor(() => expect(root.querySelectorAll(".pk-promotion-tile")).toHaveLength(5));
-  expect(root.querySelector(".pk-promotion-tile__name")?.textContent).toBe("Badge");
+  await vi.waitFor(() => expect(root.querySelectorAll(".pk-promotion-tile")).toHaveLength(6));
+  expect(root.querySelector(".pk-promotion-tile__name")?.textContent).toBe("Wide badge");
   expect(root.querySelector("[data-og-badge-img]")).toBeNull();
   expect(root.textContent).not.toContain("Prepare downloads");
   expect(root.querySelector("table")).toBeNull();
@@ -385,7 +385,7 @@ it("opens Share on one gallery with the badge first and the invite link below", 
 it("keeps the PDF announcement region mounted before preparation starts", async () => {
   root = document.createElement("div");
   document.body.append(root);
-  const props = { name: "Carousel", detail: "PDF slides", previewAlt: "Carousel preview" };
+  const props = { name: "Carousel", ratio: "4:5", stacked: true, previewAlt: "Carousel preview" };
   await act(() => render(<PromotionTile {...props} />, root));
   const announcement = root.querySelector('[role="status"]');
   expect(announcement).not.toBeNull();
@@ -464,10 +464,10 @@ it("includes the selected attendee's badge using the same referral as their prom
       root,
     ),
   );
-  await vi.waitFor(() => expect(root.querySelector('img[alt="Preview of your badge"]')).not.toBeNull());
-  const preview = root.querySelector<HTMLImageElement>('img[alt="Preview of your badge"]')!;
+  await vi.waitFor(() => expect(root.querySelector('img[alt="Preview of your wide badge"]')).not.toBeNull());
+  const preview = root.querySelector<HTMLImageElement>('img[alt="Preview of your wide badge"]')!;
   expect(preview.src).toContain("/api/v1/registrations/referrals/Attendee123/badge");
-  expect(root.querySelector('a[aria-label="Download badge (JPEG)"]')).not.toBeNull();
-  await act(() => buttonNamed("Enlarge badge")!.click());
-  expect(root.querySelector('dialog[open] .pk-dialog__foot a[aria-label="Download badge (JPEG)"]')).not.toBeNull();
+  expect(root.querySelector('a[aria-label="Download wide badge (JPEG)"]')).not.toBeNull();
+  await act(() => buttonNamed("Enlarge wide badge")!.click());
+  expect(root.querySelector('dialog[open] .pk-dialog__foot a[aria-label="Download wide badge (JPEG)"]')).not.toBeNull();
 });

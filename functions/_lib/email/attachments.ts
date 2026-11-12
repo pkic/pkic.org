@@ -2,6 +2,7 @@ import {
   PERSONAL_PROMOTION_RENDERER,
   personalPromotionImageCacheKey,
   personalPromotionRendererIsCurrent,
+  type PersonalPromotionImageFormat,
 } from "../../../assets/shared/personal-promotion-image";
 import { bytesToBase64 } from "../../../assets/shared/base64";
 import { all } from "../db/queries";
@@ -23,13 +24,14 @@ export interface QueuedBadgeAttachment {
 }
 
 /**
- * One format of a speaker's promotion kit. It names the kit, not a file, so a kit
- * rendered again before sending still attaches its current file.
+ * One format of a promotion kit. It names the kit, not a file, so a kit rendered
+ * again before sending still attaches its current file.
  */
 export interface QueuedPromotionKitAttachment {
   kind: "promotion-kit-file";
   eventId: string;
-  occurrenceId: string;
+  /** NULL for the attendee kit, which belongs to no session. */
+  occurrenceId: string | null;
   userId: string;
   format: string;
   filenameBase: string;
@@ -65,18 +67,22 @@ function resolveAttachmentNamePart(
 export function buildBadgeAttachment(payload: {
   badgeCode: string;
   badgeType: "attendee" | "donation";
+  /** The attendee badge also comes square; donation badges are wide only. */
+  format?: PersonalPromotionImageFormat;
   firstName?: string;
   lastName?: string;
   name?: string;
 }): QueuedBadgeAttachment {
-  const filenamePrefix = payload.badgeType === "donation" ? "donation-badge" : "attendee-badge";
+  const square = payload.badgeType === "attendee" && payload.format === "square";
+  const filenamePrefix =
+    payload.badgeType === "donation" ? "donation-badge" : square ? "attendee-badge-square" : "attendee-badge";
   const namePart = resolveAttachmentNamePart(payload.firstName, payload.lastName, payload.name);
 
   return {
     kind: "r2-badge-image",
     r2Key:
       payload.badgeType === "attendee"
-        ? personalPromotionImageCacheKey(payload.badgeCode)
+        ? personalPromotionImageCacheKey(payload.badgeCode, square ? "square" : "landscape")
         : `og-badges/${payload.badgeCode}`,
     filenameBase: namePart ? `${filenamePrefix}-${namePart}` : filenamePrefix,
     ...(payload.badgeType === "attendee" ? { required: true, renderer: PERSONAL_PROMOTION_RENDERER } : {}),
@@ -107,8 +113,12 @@ export function parseQueuedEmailAttachments(payload: Record<string, unknown>): Q
     }
 
     if (candidate.kind === "promotion-kit-file") {
-      return ["eventId", "occurrenceId", "userId", "format", "filenameBase"].every(
-        (key) => typeof candidate[key] === "string" && (candidate[key] as string).length > 0,
+      return (
+        ["eventId", "userId", "format", "filenameBase"].every(
+          (key) => typeof candidate[key] === "string" && (candidate[key] as string).length > 0,
+        ) &&
+        (candidate.occurrenceId === null ||
+          (typeof candidate.occurrenceId === "string" && candidate.occurrenceId.length > 0))
       );
     }
 
@@ -178,7 +188,7 @@ export async function loadPromotionKitAttachments(
     `SELECT kit.key AS position,(SELECT CASE WHEN render.status='rendered' THEN render.cache_key END
         FROM event_promotion_renders render
         WHERE render.event_id=json_extract(kit.value,'$.eventId') AND render.user_id=json_extract(kit.value,'$.userId')
-          AND render.occurrence_id=json_extract(kit.value,'$.occurrenceId') AND render.format=json_extract(kit.value,'$.format')
+          AND render.occurrence_id IS json_extract(kit.value,'$.occurrenceId') AND render.format=json_extract(kit.value,'$.format')
         ORDER BY render.requested_at DESC,render.created_at DESC LIMIT 1) AS cache_key
      FROM json_each(?) kit`,
     [JSON.stringify(attachments)],

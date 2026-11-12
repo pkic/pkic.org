@@ -1,3 +1,6 @@
+import { lazy, Suspense } from "preact/compat";
+import { useState } from "preact/hooks";
+import { Spinner } from "../../../../components/Spinner";
 import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
 import { eventMyAgendaPath } from "../../../../../shared/event-participation-link";
 /** Event messages are composed on their own page under Communications. */
@@ -9,6 +12,13 @@ import { usePortalHashLocation } from "../../hash-location";
 import { toast } from "../../ui";
 
 import { NEW_CAMPAIGN_SEGMENT } from "./group-event-paths";
+import { promotionMaterialFile } from "../events/detail/agenda/promotion-file-keys";
+
+const PromotionMaterialsDialog = lazy(() =>
+  import("../events/detail/agenda/PromotionMaterialsDialog").then((module) => ({
+    default: module.PromotionMaterialsDialog,
+  })),
+);
 
 export function GroupEventCommunications({
   groupId,
@@ -26,6 +36,15 @@ export function GroupEventCommunications({
   const [preset] = useHashQueryParam("campaignPreset", "");
   const planning = preset === "session-planning";
   const kits = preset === "speaker-kits";
+  const [materialsUserId] = useHashQueryParam("materialsUserId", "");
+  const [materialsFiles, setMaterialsFiles] = useHashQueryParam("materialsFiles", "");
+  const [reviewing, setReviewing] = useState(false);
+  const pickedKeys = materialsFiles.split(",").filter((key) => promotionMaterialFile(key));
+  const pickedFiles = pickedKeys.flatMap((key) => promotionMaterialFile(key) ?? []);
+  const materials =
+    preset === "promotion-materials" && materialsUserId && pickedFiles.length
+      ? { userId: materialsUserId, files: pickedFiles, onReview: () => setReviewing(true) }
+      : undefined;
   const agendaUrl = new URL(eventMyAgendaPath(eventSlug), window.location.origin).href;
   const [, navigate] = usePortalHashLocation();
   const eventPath = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}`;
@@ -41,15 +60,24 @@ export function GroupEventCommunications({
               daysPath={`${eventPath}/days`}
               initialAudience={kits ? "speakers" : "attendees"}
               initialAttachKits={kits}
+              materials={materials}
               initialSubject={
-                planning ? "Plan your sessions" : kits ? "Your promotion kit for {{sessionTitle}}" : undefined
+                planning
+                  ? "Plan your sessions"
+                  : kits
+                    ? "Your promotion kit for {{sessionTitle}}"
+                    : materials
+                      ? "Your promotion materials for {{eventName}}"
+                      : undefined
               }
               initialBody={
-                kits
-                  ? `Hi {{firstName}},\n\nYour session {{sessionTitle}} is on the agenda for {{eventName}}. We attached promotion images you can share with your network. They carry your personal registration link.\n\nWant another format or different wording? [Open your promotion kit]({{promotionKitUrl}}).`
-                  : planning
-                    ? `Please plan the sessions you would like to attend.\n\nSave favorites to show your interest. A favorite does not register you or reserve a place. Register or request approval where the session indicates it; optional registration and invitation-only access remain separate.\n\n[Open My agenda](${agendaUrl})`
-                    : undefined
+                materials
+                  ? `Hi {{firstName}},\n\nWe attached promotion files for {{eventName}} you can share with your network. They carry your personal registration link.\n\nWant another format or different wording? [Open your promotion materials]({{promotionKitUrl}}).`
+                  : kits
+                    ? `Hi {{firstName}},\n\nYour session {{sessionTitle}} is on the agenda for {{eventName}}. We attached promotion images you can share with your network. They carry your personal registration link.\n\nWant another format or different wording? [Open your promotion kit]({{promotionKitUrl}}).`
+                    : planning
+                      ? `Please plan the sessions you would like to attend.\n\nSave favorites to show your interest. A favorite does not register you or reserve a place. Register or request approval where the session indicates it; optional registration and invitation-only access remain separate.\n\n[Open My agenda](${agendaUrl})`
+                      : undefined
               }
               notify={toast}
               cancelHref={usePortalHashLocation.hrefs(listPath)}
@@ -57,6 +85,21 @@ export function GroupEventCommunications({
             />
           </PanelBody>
         </Panel>
+        {materials && reviewing && (
+          <Suspense fallback={<Spinner />}>
+            <PromotionMaterialsDialog
+              slug={eventSlug}
+              userId={materials.userId}
+              initialSelected={pickedKeys}
+              emailLabel="Attach selected"
+              onClose={() => setReviewing(false)}
+              onEmail={(keys) => {
+                setMaterialsFiles(keys.join(","));
+                setReviewing(false);
+              }}
+            />
+          </Suspense>
+        )}
       </div>
     );
   }

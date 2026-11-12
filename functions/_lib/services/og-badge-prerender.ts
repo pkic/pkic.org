@@ -1,5 +1,8 @@
 import { personalPromotionSharePath } from "../../../assets/shared/personal-promotion-image";
-import { personalPromotionImageCacheKey } from "../../../assets/shared/personal-promotion-image";
+import {
+  personalPromotionImageCacheKey,
+  type PersonalPromotionImageFormat,
+} from "../../../assets/shared/personal-promotion-image";
 /**
  * OG badge pre-rendering service.
  *
@@ -184,17 +187,24 @@ async function pngToR2(
  * Render and atomically overwrite one cached badge. The previous R2 object is
  * left in place until the replacement bytes have been generated successfully.
  */
-export async function renderAndCacheBadge(code: string, env: BadgeCacheEnv, origin: string): Promise<void> {
+export async function renderAndCacheBadge(
+  code: string,
+  env: BadgeCacheEnv,
+  origin: string,
+  formats: readonly PersonalPromotionImageFormat[] = ["landscape"],
+): Promise<void> {
   const source = await readBadgeSource(env.DB, code);
   if (!source) throw new AppError(404, "BADGE_SOURCE_NOT_FOUND", "This badge has no registration or proposal.");
   // The retention sweep removed this event's badges; a profile change must not bring them back.
   if (!promotionIsRetained({ startsAt: source.starts_at, endsAt: source.ends_at })) return;
-  const metadata = personalBadgeCacheMetadata(code, source);
-  const png = await renderBadgeSourcePng(code, source, env, origin);
-  const key = personalPromotionImageCacheKey(code);
-  await pngToR2(png, key, metadata, env);
-  // The gallery previews the badge from a small thumbnail with the same freshness metadata.
-  await pngToR2(png, promotionThumbnailKey(key), metadata, env, THUMBNAIL_OUTPUT);
+  for (const format of formats) {
+    const metadata = personalBadgeCacheMetadata(code, source, format);
+    const png = await renderBadgeSourcePng(code, source, env, origin, format);
+    const key = personalPromotionImageCacheKey(code, format);
+    await pngToR2(png, key, metadata, env);
+    // The gallery previews the badge from a small thumbnail with the same freshness metadata.
+    await pngToR2(png, promotionThumbnailKey(key), metadata, env, THUMBNAIL_OUTPUT);
+  }
 }
 
 /**

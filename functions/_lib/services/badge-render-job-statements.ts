@@ -99,14 +99,14 @@ export function prepareWaitingEmailBadgeRenders(db: DatabaseLike, limit: number,
       `INSERT INTO event_promotion_renders (${BADGE_RENDER_COLUMNS})
     SELECT ${BADGE_RENDER_VALUES}
       FROM email_outbox mail JOIN json_each(mail.payload_json,'$.__attachments') attachment
-      JOIN referral_codes referral ON referral.code=substr(json_extract(attachment.value,'$.r2Key'),?)
+      JOIN referral_codes referral ON referral.code=substr(replace(json_extract(attachment.value,'$.r2Key'),'/square',''),?)
       LEFT JOIN registrations registration
         ON referral.owner_type='registration' AND registration.id=referral.owner_id
       LEFT JOIN event_promotion_renders job ON job.id='${BADGE_RENDER_ID_PREFIX}'||referral.code
      WHERE mail.status IN ('queued','retrying') AND mail.last_error IN (?,?)
        AND json_extract(attachment.value,'$.kind')='r2-badge-image'
        AND json_extract(attachment.value,'$.required')=1
-       AND json_extract(attachment.value,'$.r2Key')=?||referral.code
+       AND replace(json_extract(attachment.value,'$.r2Key'),'/square','')=?||referral.code
        AND ${BADGE_OWNER_SQL} IS NOT NULL
        AND (job.id IS NULL OR (job.status='rendered' AND job.updated_at<mail.updated_at))
      GROUP BY referral.code LIMIT ?
