@@ -9,10 +9,8 @@ import {
   liveTimerGraphicSchema,
   type LiveTimerGraphic,
 } from "../../../../../../../shared/schemas/live-session-timer";
-import { useContractForm, type FieldPresentation } from "../../../../../../hooks/useContractForm";
-import { Alert } from "../../../../../../ui/Alert";
+import type { FieldPresentation } from "../../../../../../hooks/useContractForm";
 import { Checkbox } from "../../../../../../ui/Checkbox";
-import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../ui/TextControl";
 import { liveTimerGraphicReplacements, sendLivePrograms, type LiveTargets } from "./live-output-targets";
@@ -60,7 +58,7 @@ function ChoiceField<Key extends "format" | "direction" | "presentation" | "plac
       {(control) => (
         <Select
           {...control}
-          name={field}
+          name={`graphic.${field}`}
           value={draft[field]}
           onChange={(event) =>
             update(liveTimerGraphicSchema.shape[field].parse(event.currentTarget.value) as LiveTimerGraphic[Key])
@@ -77,177 +75,122 @@ function ChoiceField<Key extends "format" | "direction" | "presentation" | "plac
   );
 }
 
-/** The timer graphic's settings, drafted from the graphic as the dialog opens. */
-export function LiveTimerGraphicDialog({
-  graphic,
+/**
+ * How the timer looks wherever it shows: its label, what it reads and in
+ * which format, the logo, the look, and its position and size. Controls are
+ * named `graphic.<field>` for the form around them.
+ */
+export function LiveTimerLookFields({
+  draft,
   timerName,
   counts,
-  onSave,
-  onClose,
+  of,
+  update,
 }: {
-  graphic: LiveTimerGraphic;
+  draft: LiveTimerGraphic;
   timerName: string;
   /** False for a clock, which reads the time of day in one fixed way. */
   counts: boolean;
-  /** Whether the graphic reached every output that shows it. */
-  onSave: (graphic: LiveTimerGraphic) => boolean;
-  onClose: () => void;
+  /** The form's presentation for one graphic field. */
+  of: (field: keyof LiveTimerGraphic) => FieldPresentation;
+  update: <Key extends keyof LiveTimerGraphic>(key: Key, value: LiveTimerGraphic[Key]) => void;
 }) {
-  const [draft, setDraft] = useState(graphic);
-  const [warning, setWarning] = useState(String(graphic.warningSeconds));
-  const [overrun, setOverrun] = useState(String(graphic.overrunSeconds));
-  const [error, setError] = useState<string | null>(null);
-  const body = {
-    ...draft,
-    warningSeconds: warning.trim() ? Number(warning) : null,
-    overrunSeconds: overrun.trim() ? Number(overrun) : null,
-  };
-  const form = useContractForm(liveTimerGraphicSchema, body);
-  const update = <Key extends keyof LiveTimerGraphic>(key: Key, value: LiveTimerGraphic[Key]) =>
-    setDraft((previous) => ({ ...previous, [key]: value }));
   return (
-    <Dialog
-      open
-      title={`${timerName} graphic`}
-      confirmLabel="Save"
-      onCancel={onClose}
-      onConfirm={() => {
-        const checked = form.submit();
-        if (!checked.data) return setError(checked.formMessage);
-        if (!onSave(checked.data))
-          return setError("The control room is reconnecting or busy. Try again when it is connected.");
-        onClose();
-      }}
-    >
-      <form noValidate {...form.handlers} class="pk-stack pk-stack--snug" onSubmit={(event) => event.preventDefault()}>
-        <Checkbox
-          name="showLabel"
-          checked={draft.showLabel}
-          onChange={(event) => update("showLabel", event.currentTarget.checked)}
-          label="Show a label"
-        />
-        {draft.showLabel ? (
-          <Field label="Label" help="Leave empty to use the timer's name." {...form.of("label")}>
-            {(control) => (
-              <TextInput
-                {...control}
-                name="label"
-                value={draft.label ?? ""}
-                placeholder={timerName}
-                onInput={(event) =>
-                  update("label", event.currentTarget.value.trim() ? event.currentTarget.value : null)
-                }
-              />
-            )}
-          </Field>
-        ) : null}
-        {counts ? (
-          <>
-            <ChoiceField
-              field="direction"
-              label="Shows"
-              options={LIVE_TIMER_DIRECTIONS}
-              labels={DIRECTION_LABELS}
-              draft={draft}
-              presentation={form.of("direction")}
-              update={(value) => update("direction", value)}
+    <>
+      <Checkbox
+        name="graphic.showLabel"
+        checked={draft.showLabel}
+        onChange={(event) => update("showLabel", event.currentTarget.checked)}
+        label="Show a label"
+      />
+      {draft.showLabel ? (
+        <Field label="Label" help="Leave empty to show the timer's name." {...of("label")}>
+          {(control) => (
+            <TextInput
+              {...control}
+              name="graphic.label"
+              value={draft.label ?? ""}
+              placeholder={timerName}
+              onInput={(event) => update("label", event.currentTarget.value.trim() ? event.currentTarget.value : null)}
             />
-            <ChoiceField
-              field="format"
-              label="Format"
-              options={LIVE_TIMER_FORMATS}
-              labels={FORMAT_LABELS}
-              draft={draft}
-              presentation={form.of("format")}
-              update={(value) => update("format", value)}
-            />
-            {draft.format === "custom" ? (
-              <Field
-                label="Custom duration"
-                help="Use {{years}}, {{months}}, {{days}}, {{hours}}, {{minutes}} and {{seconds}}. Years are 365 days; months are 30 days."
-                {...form.of("customFormat")}
-              >
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    value={draft.customFormat}
-                    onInput={(event) => update("customFormat", event.currentTarget.value)}
-                  />
-                )}
-              </Field>
-            ) : null}
-          </>
-        ) : null}
-        <Checkbox
-          label="Show logo"
-          checked={draft.showLogo}
-          onChange={(event) => update("showLogo", event.currentTarget.checked)}
-          {...form.of("showLogo")}
-        />
-        {counts ? (
-          <div class="pk-cluster">
-            <Field label="Warn at (seconds left)" {...form.of("warningSeconds")}>
+          )}
+        </Field>
+      ) : null}
+      {counts ? (
+        <>
+          <ChoiceField
+            field="direction"
+            label="Shows"
+            options={LIVE_TIMER_DIRECTIONS}
+            labels={DIRECTION_LABELS}
+            draft={draft}
+            presentation={of("direction")}
+            update={(value) => update("direction", value)}
+          />
+          <ChoiceField
+            field="format"
+            label="Format"
+            options={LIVE_TIMER_FORMATS}
+            labels={FORMAT_LABELS}
+            draft={draft}
+            presentation={of("format")}
+            update={(value) => update("format", value)}
+          />
+          {draft.format === "custom" ? (
+            <Field
+              label="Custom duration"
+              help="Use {{years}}, {{months}}, {{days}}, {{hours}}, {{minutes}} and {{seconds}}. Years are 365 days; months are 30 days."
+              {...of("customFormat")}
+            >
               {(control) => (
                 <TextInput
                   {...control}
-                  name="warningSeconds"
-                  type="number"
-                  min="0"
-                  max="3600"
-                  inputMode="numeric"
-                  value={warning}
-                  onInput={(event) => setWarning(event.currentTarget.value)}
+                  name="graphic.customFormat"
+                  value={draft.customFormat}
+                  onInput={(event) => update("customFormat", event.currentTarget.value)}
                 />
               )}
             </Field>
-            <Field label="Overrun after (seconds over)" {...form.of("overrunSeconds")}>
-              {(control) => (
-                <TextInput
-                  {...control}
-                  name="overrunSeconds"
-                  type="number"
-                  min="0"
-                  max="3600"
-                  inputMode="numeric"
-                  value={overrun}
-                  onInput={(event) => setOverrun(event.currentTarget.value)}
-                />
-              )}
-            </Field>
-          </div>
-        ) : null}
+          ) : null}
+        </>
+      ) : null}
+      <Checkbox
+        name="graphic.showLogo"
+        label="Show logo"
+        checked={draft.showLogo}
+        onChange={(event) => update("showLogo", event.currentTarget.checked)}
+        {...of("showLogo")}
+      />
+      <ChoiceField
+        field="presentation"
+        label="Look"
+        options={LIVE_TIMER_PRESENTATIONS}
+        labels={PRESENTATION_LABELS}
+        draft={draft}
+        presentation={of("presentation")}
+        update={(value) => update("presentation", value)}
+      />
+      <div class="pk-cluster">
         <ChoiceField
-          field="presentation"
-          label="Look"
-          options={LIVE_TIMER_PRESENTATIONS}
-          labels={PRESENTATION_LABELS}
+          field="placement"
+          label="Position"
+          options={LIVE_TIMER_PLACEMENTS}
+          labels={PLACEMENT_LABELS}
           draft={draft}
-          presentation={form.of("presentation")}
-          update={(value) => update("presentation", value)}
+          presentation={of("placement")}
+          update={(value) => update("placement", value)}
         />
-        <div class="pk-cluster">
-          <ChoiceField
-            field="placement"
-            label="Position"
-            options={LIVE_TIMER_PLACEMENTS}
-            labels={PLACEMENT_LABELS}
-            draft={draft}
-            presentation={form.of("placement")}
-            update={(value) => update("placement", value)}
-          />
-          <ChoiceField
-            field="size"
-            label="Size"
-            options={LIVE_TIMER_SIZES}
-            labels={SIZE_LABELS}
-            draft={draft}
-            presentation={form.of("size")}
-            update={(value) => update("size", value)}
-          />
-        </div>
-        {error ? <Alert tone="danger">{error}</Alert> : null}
-      </form>
-    </Dialog>
+        <ChoiceField
+          field="size"
+          label="Size"
+          options={LIVE_TIMER_SIZES}
+          labels={SIZE_LABELS}
+          draft={draft}
+          presentation={of("size")}
+          update={(value) => update("size", value)}
+        />
+      </div>
+    </>
   );
 }
 

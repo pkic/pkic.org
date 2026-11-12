@@ -10,11 +10,13 @@ import { LiveClockContext } from "../../live-session/useLiveCountdown";
 import type { LiveRoomState } from "../../live-session/live-room-state";
 import { LiveOverlayPresentation } from "../../live-session/LiveOverlayPresentation";
 import { TimePanel } from "../../member-flows/portal/sections/events/detail/live/studio/TimePanel";
-import { LiveTimerSettingsDialog } from "../../member-flows/portal/sections/events/detail/live/studio/LiveTimerSettingsDialog";
+import { LiveTimerDialog } from "../../member-flows/portal/sections/events/detail/live/studio/LiveTimerDialog";
+import { defaultLiveTimerGraphic } from "../../../shared/schemas/live-session-timer";
 import { Panel } from "../Panel";
 import { SectionHeading } from "../SectionHeading";
 import {
   TIMERS_FIXTURE_NOW,
+  TIMERS_FIXTURE_SESSION,
   agendaSessionTimer,
   breakTimer,
   clockTimer,
@@ -85,10 +87,18 @@ export const studioTimerSections: PreviewSection[] = [
   {
     id: "studio-timer-settings",
     title: "Studio: timer settings",
-    note: "What a timer does at zero and where its sounds play, from the row's menu.",
+    note: "One dialog from the row's menu: name and length, the warning with its chime and buzzer, where they play, what happens at zero, and the look.",
     render: () => (
       <div data-density="compact">
-        <LiveTimerSettingsDialog timer={pitchTimer} send={send} onClose={() => undefined} />
+        <LiveTimerDialog
+          timer={pitchTimer}
+          session={TIMERS_FIXTURE_SESSION}
+          clock="Europe/Amsterdam"
+          graphic={defaultLiveTimerGraphic(pitchTimer.id)}
+          send={send}
+          saveGraphic={() => true}
+          onClose={() => undefined}
+        />
       </div>
     ),
   },

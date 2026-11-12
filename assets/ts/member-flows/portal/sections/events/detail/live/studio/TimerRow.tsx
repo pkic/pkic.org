@@ -4,12 +4,7 @@ import type { ClockZone } from "../../../../../../../../shared/event-clock";
 import { format24HourClockInZone } from "../../../../../../../../shared/format-date";
 import { LIVE_AUX_OUTPUTS, LIVE_AUX_OUTPUT_DETAILS } from "../../../../../../../../shared/live-room-outputs";
 import { formatLiveDuration } from "../../../../../../../../shared/live-timer-format";
-import {
-  countsUp,
-  liveTimerCounts,
-  liveTimerHasSettings,
-  liveTimerTotalMs,
-} from "../../../../../../../../shared/live-timer-policy";
+import { countsUp, liveTimerCounts, liveTimerTotalMs } from "../../../../../../../../shared/live-timer-policy";
 import type {
   LiveRoomClientMessage,
   LiveRoomSession,
@@ -23,10 +18,10 @@ import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { Menu, type MenuItem } from "../../../../../../../ui/Menu";
 import { Meter } from "../../../../../../../ui/Meter";
 import { LiveLayerTargets } from "../LiveLayerTargets";
-import { LiveTimerGraphicDialog, useLiveTimerGraphic } from "../LiveTimerGraphicControls";
+import { useLiveTimerGraphic } from "../LiveTimerGraphicControls";
 import { liveLayerTargets, sendLayerToggle, type LiveTargets } from "../live-output-targets";
 import type { LiveDestination } from "../OutputTargetControl";
-import { LiveTimerSettingsDialog } from "./LiveTimerSettingsDialog";
+import { LiveTimerDialog } from "./LiveTimerDialog";
 import { liveTimeTone, timerDetail } from "./time-panel-text";
 
 type Send = (message: LiveRoomClientMessage) => boolean;
@@ -81,7 +76,7 @@ export function TimerRow({
   disabled: boolean;
   send: Send;
 }) {
-  const [dialog, setDialog] = useState<"settings" | "graphic" | null>(null);
+  const [dialog, setDialog] = useState(false);
   const reading = useLiveTimerReading(timer, session);
   const now = useContext(LiveClockContext)();
   const { graphic, save } = useLiveTimerGraphic(targets, timer.id);
@@ -129,23 +124,12 @@ export function TimerRow({
       (destination) => sendLayerToggle(targets, layer, destination),
       targets.disabled,
     ).map((item, index) => (index === 0 && !live.length ? { ...item, separatorBefore: false } : item)),
-    ...(liveTimerHasSettings(timer)
-      ? [
-          {
-            id: "settings",
-            label: "Sounds and at zero",
-            separatorBefore: true,
-            disabled,
-            onSelect: () => setDialog("settings"),
-          },
-        ]
-      : []),
     {
-      id: "graphic",
-      label: "Edit graphic",
-      separatorBefore: !liveTimerHasSettings(timer),
+      id: "settings",
+      label: "Timer settings",
+      separatorBefore: true,
       disabled,
-      onSelect: () => setDialog("graphic"),
+      onSelect: () => setDialog(true),
     },
     {
       id: "remove",
@@ -240,16 +224,15 @@ export function TimerRow({
       <span class="pk-studio-time__menu">
         <Menu label={`${timer.name} timer`} heading={timer.name} align="end" items={items} />
       </span>
-      {dialog === "settings" ? (
-        <LiveTimerSettingsDialog timer={timer} send={send} onClose={() => setDialog(null)} />
-      ) : null}
-      {dialog === "graphic" ? (
-        <LiveTimerGraphicDialog
+      {dialog ? (
+        <LiveTimerDialog
+          timer={timer}
+          session={session}
+          clock={clock}
           graphic={graphic}
-          timerName={timer.name}
-          counts={counts}
-          onSave={save}
-          onClose={() => setDialog(null)}
+          send={send}
+          saveGraphic={save}
+          onClose={() => setDialog(false)}
         />
       ) : null}
     </li>

@@ -8,6 +8,7 @@ import {
   type LiveTimer,
   type LiveTimerAction,
   type LiveTimerDraft,
+  type LiveTimerEdit,
   type LiveTimerGraphic,
   type LiveTimerSettings,
 } from "./schemas/live-session-timer";
@@ -243,6 +244,46 @@ export function configureLiveTimer(
   if (settings.atZero.action === "reset" && !liveTimerResetsAtZero(timer.kind)) return null;
   // Whatever the old settings did by now stays done; the new ones apply from here.
   return { ...settleLiveTimer(timer, session, now), atZero: settings.atZero, sound: settings.sound };
+}
+
+/**
+ * Renames a timer, or changes what it counts. A new length applies at once
+ * to a countdown at its full length or at zero; one that has begun keeps the
+ * time it has used, so its time left moves by the difference. A countdown to
+ * a time counts to the new time, held if it was paused. Null when the timer
+ * has no length or time of that kind, or the time has passed.
+ */
+export function editLiveTimer(
+  timer: LiveTimer,
+  session: SessionTime,
+  edit: LiveTimerEdit,
+  now: number,
+): LiveTimer | null {
+  const named = edit.name ? { ...timer, name: edit.name } : timer;
+  if (edit.durationSeconds !== undefined) {
+    if (timer.kind !== "duration") return null;
+    const settled = settleLiveTimer(named, session, now);
+    const reading = liveTimerReading(settled, session, now);
+    const before = (timer.durationSeconds ?? 0) * 1000;
+    const after = edit.durationSeconds * 1000;
+    const resized = { ...settled, durationSeconds: edit.durationSeconds };
+    if (!reading.running)
+      return stopped(
+        resized,
+        reading.valueMs === before || reading.valueMs === 0 ? after : reading.valueMs + after - before,
+      );
+    return runningTo(resized, now + reading.valueMs + after - before);
+  }
+  if (edit.targetAt !== undefined) {
+    if (timer.kind !== "until") return null;
+    const target = Date.parse(edit.targetAt);
+    if (target <= now) return null;
+    const span = Math.max(1, Math.min(LIVE_TIMER_MAX_MS / 1000, Math.ceil((target - now) / 1000)));
+    const moved = { ...named, targetAt: edit.targetAt, durationSeconds: span };
+    const reading = liveTimerReading(timer, session, now);
+    return !reading.running && reading.valueMs > 0 ? stopped(moved, target - now) : runningTo(moved, target);
+  }
+  return named;
 }
 
 /** A stopwatch and a clock never reach zero, so they have nothing to do there and no sound to play. */

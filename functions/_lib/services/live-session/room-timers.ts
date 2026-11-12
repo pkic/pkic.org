@@ -4,6 +4,7 @@ import {
   configureLiveTimer,
   controlLiveTimer,
   createLiveTimer,
+  editLiveTimer,
   liveTimerCounts,
 } from "../../../../assets/shared/live-timer-policy";
 import type { LiveRoomSession, LiveTimer } from "../../../../assets/shared/schemas/live-session-room";
@@ -11,6 +12,7 @@ import {
   LIVE_TIMER_MAX,
   type LiveTimerAction,
   type LiveTimerDraft,
+  type LiveTimerEdit,
   type LiveTimerSettings,
 } from "../../../../assets/shared/schemas/live-session-timer";
 import type { LiveControlOutcome } from "./room-controls";
@@ -108,6 +110,28 @@ export class LiveRoomTimers {
     const outcome = this.update(operator, session, timerId, at, () => configured);
     if (!("code" in outcome))
       this.store.recordStaffAction(operator.userId, "live_session.timer.configure", { timerId, ...settings }, at);
+    return outcome;
+  }
+
+  /** Renames a timer, or changes its length or the time it counts to. */
+  edit(
+    operator: Operator,
+    session: LiveRoomSession,
+    timerId: string,
+    edit: LiveTimerEdit,
+    now: number,
+    at: string,
+  ): LiveControlOutcome {
+    const timer = this.store.timers().find((entry) => entry.id === timerId);
+    if (!timer) return notFound;
+    const edited = editLiveTimer(timer, session, edit, now);
+    if (!edited)
+      return edit.targetAt !== undefined && timer.kind === "until"
+        ? { code: "LIVE_TIMER_TARGET_PAST", message: "Choose a time that is still ahead." }
+        : { code: "LIVE_TIMER_EDIT_UNSUPPORTED", message: "This timer has no length or time to change." };
+    const outcome = this.update(operator, session, timerId, at, () => edited);
+    if (!("code" in outcome))
+      this.store.recordStaffAction(operator.userId, "live_session.timer.edit", { timerId, ...edit }, at);
     return outcome;
   }
 

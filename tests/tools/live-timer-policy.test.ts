@@ -4,6 +4,7 @@ import {
   configureLiveTimer,
   controlLiveTimer,
   createLiveTimer,
+  editLiveTimer,
   liveTimerCue,
   liveTimerReading,
   liveTimerShownMs,
@@ -194,6 +195,60 @@ describe("a countdown at zero", () => {
   });
 });
 
+describe("editing a timer", () => {
+  const overtime = { action: "overtime" as const, resetAfterSeconds: 10, restart: false };
+  const value = (timer: LiveTimer, when: number) => read(timer, session, when).valueMs;
+
+  it("renames any timer, and gives a countdown at its full length or at zero the new length", () => {
+    const ready = createLiveTimer(
+      "pitch",
+      { name: "Pitch", kind: "duration", targetAt: null, durationSeconds: 180 },
+      session,
+      now,
+    );
+    const longer = editLiveTimer(ready, session, { name: "Startup pitch", durationSeconds: 240 }, now)!;
+    expect(longer).toMatchObject({ name: "Startup pitch", durationSeconds: 240, running: false, heldMs: 240_000 });
+    const stoppedAtZero = { ...ready, heldMs: 0 };
+    expect(editLiveTimer(stoppedAtZero, session, { durationSeconds: 120 }, now)).toMatchObject({ heldMs: 120_000 });
+    expect(editLiveTimer(sessionLiveTimer(), session, { name: "Keynote" }, now)).toMatchObject({ name: "Keynote" });
+  });
+
+  it("moves the time left of a countdown that has begun by the difference, running or paused", () => {
+    // One minute long, 20 s in: 40 s left; at three minutes long, 2:40 left.
+    const running = pitch(overtime);
+    const edited = editLiveTimer(running, session, { durationSeconds: 180 }, now + 20_000)!;
+    expect(edited.running).toBe(true);
+    expect(value(edited, now + 20_000)).toBe(160_000);
+    const paused = controlLiveTimer(running, session, "pause", now + 20_000);
+    expect(editLiveTimer(paused, session, { durationSeconds: 30 }, now + 30_000)).toMatchObject({
+      running: false,
+      heldMs: 10_000,
+    });
+  });
+
+  it("counts a countdown to a time to the new time, held if paused, and refuses a time that has passed", () => {
+    const doors = createLiveTimer(
+      "doors",
+      { name: "Doors", kind: "until", targetAt: at(900_000), durationSeconds: null },
+      session,
+      now,
+    );
+    expect(editLiveTimer(doors, session, { targetAt: at(1_200_000) }, now)).toMatchObject({
+      running: true,
+      anchorAt: at(1_200_000),
+      targetAt: at(1_200_000),
+      durationSeconds: 1200,
+    });
+    const paused = controlLiveTimer(doors, session, "pause", now);
+    expect(editLiveTimer(paused, session, { targetAt: at(600_000) }, now)).toMatchObject({
+      running: false,
+      heldMs: 600_000,
+    });
+    expect(editLiveTimer(doors, session, { targetAt: at(-60_000) }, now)).toBeNull();
+    expect(editLiveTimer(doors, session, { durationSeconds: 60 }, now)).toBeNull();
+  });
+});
+
 describe("other kinds", () => {
   it("counts down to a time on the event clock, and resets to count to it again", () => {
     const doors = createLiveTimer(
@@ -269,7 +324,7 @@ describe("a clock", () => {
 describe("timer sounds", () => {
   const sounding = (timer: LiveTimer): LiveTimer => ({
     ...timer,
-    sound: { places: ["stage-display"], warningSeconds: 30, zero: true },
+    sound: { places: ["outputs"], warningSeconds: 30, zero: true },
   });
 
   it("chimes at the warning and buzzes at zero, each once as time runs past it", () => {

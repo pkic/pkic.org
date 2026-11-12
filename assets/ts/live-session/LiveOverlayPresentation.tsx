@@ -271,7 +271,7 @@ export function LiveOverlayPresentation({
   broadcast?: boolean;
   /** Drawn at the end of the stage display's bottom line by the page that hosts it, such as a screen's status. */
   stageAside?: ComponentChildren;
-  /** A real stage display, not a monitor of one: it plays the cues of the timers it shows that sound on the stage display. */
+  /** A real output, not a monitor of one: it plays the cues of the timers it shows that sound on the outputs. */
   playsSounds?: boolean;
   /** Drawn over every layer by the page that hosts the output, such as a screen's connection status. */
   children?: ComponentChildren;
@@ -284,17 +284,18 @@ export function LiveOverlayPresentation({
     view === "stage-display" && projection
       ? STAGE_DISPLAY_LAYERS(projection, roomId, stageAside, elements.stageMessage.visible)
       : PROGRAM_LAYERS;
-  // The stage display sounds the timers it shows: its own and those on Program.
-  const shownOnStage = projection
-    ? liveStageDisplayGraphics(projection.outputs["stage-display"], projection.stage, projection.timers)
-    : [];
+  // An output sounds the timers it shows: the stage display its own and those on Program, any other its own.
+  const shown =
+    view === "stage-display" && projection
+      ? liveStageDisplayGraphics(projection.outputs["stage-display"], projection.stage, projection.timers)
+      : (state?.stage.timerGraphics ?? []);
   const sounding =
-    playsSounds && state && view === "stage-display" && elements.timer.visible
-      ? state.timers.filter((timer) => shownOnStage.some((graphic) => graphic.timerId === timer.id))
+    playsSounds && state && elements.timer.visible
+      ? state.timers.filter((timer) => shown.some((graphic) => graphic.timerId === timer.id))
       : null;
   return (
     <LiveOverlayFrame view={requested} status={status}>
-      {sounding && state ? <LiveTimerSounds timers={sounding} session={state.session} place="stage-display" /> : null}
+      {sounding?.length && state ? <LiveTimerSounds timers={sounding} session={state.session} place="outputs" /> : null}
       {state
         ? layers.map(({ element, draw }) => {
             const placement = elements[element];

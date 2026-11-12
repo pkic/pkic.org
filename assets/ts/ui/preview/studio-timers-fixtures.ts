@@ -21,7 +21,7 @@ const at = (ms: number) => new Date(TIMERS_FIXTURE_NOW + ms).toISOString();
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
 
-const SESSION = {
+export const TIMERS_FIXTURE_SESSION = {
   occurrenceId: "30000000-0000-4000-8000-000000000021",
   title: "Opening keynote",
   startAt: "2026-12-01T08:30:00.000Z",
@@ -46,11 +46,11 @@ const running = (id: string, name: string, kind: LiveTimer["kind"], leftMs: numb
 
 /** The session timer, following the agenda: nineteen days before its session it reads the time until it starts. */
 export const agendaSessionTimer: LiveTimer = base;
-/** A three-minute pitch that resets itself ten seconds over and buzzes on the stage display. */
+/** A three-minute pitch that resets itself ten seconds over and buzzes on the outputs that show it. */
 export const pitchTimer = running("pitch", "Pitch", "duration", 42_000, {
   durationSeconds: 180,
   atZero: { action: "reset", resetAfterSeconds: 10, restart: false },
-  sound: { places: ["stage-display"], warningSeconds: 30, zero: true },
+  sound: { places: ["outputs"], warningSeconds: 30, zero: true },
 });
 /** A pitch left counting as overtime, 1:21 over. */
 export const overrunPitchTimer = running("pitch-over", "Pitch", "duration", -81_000, { durationSeconds: 180 });
@@ -88,7 +88,7 @@ export function timersRoomState(
     type: "room.snapshot",
     overlayLayouts: [],
     tickerContext: DEFAULT_LIVE_TICKER_CONTEXT,
-    session: SESSION,
+    session: TIMERS_FIXTURE_SESSION,
     viewer: { role: "operator", name: "Studio operator" },
     overlayMode: "direct",
     chat: [],
@@ -129,7 +129,12 @@ export const stageClockState = timersRoomState(
     defaultLiveTimerGraphic(clockTimer.id),
   ],
   {
-    session: { ...SESSION, title: "Panel: migrating a private CA", startAt: at(-15 * MINUTE), endAt: at(15 * MINUTE) },
+    session: {
+      ...TIMERS_FIXTURE_SESSION,
+      title: "Panel: migrating a private CA",
+      startAt: at(-15 * MINUTE),
+      endAt: at(15 * MINUTE),
+    },
     speakerMessage: { text: "Two minutes for questions", tone: "warning", flash: false, change: null },
   },
 );

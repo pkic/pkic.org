@@ -3,8 +3,9 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { controlLiveTimer, createLiveTimer } from "../../assets/shared/live-timer-policy";
+import { EMPTY_LIVE_STAGE } from "../../assets/shared/schemas/live-session-room";
 import type { LiveTimer } from "../../assets/shared/schemas/live-session-timer";
-import { defaultLiveTimerGraphic } from "../../assets/shared/schemas/live-session-timer";
+import { defaultLiveTimerGraphic, liveTimerSoundSchema } from "../../assets/shared/schemas/live-session-timer";
 import { LiveOverlayPresentation } from "../../assets/ts/live-session/LiveOverlayPresentation";
 import { liveTimerCueWav } from "../../assets/ts/live-session/live-timer-sound";
 import { LiveClockContext } from "../../assets/ts/live-session/useLiveCountdown";
@@ -97,8 +98,25 @@ it("plays every round of a pitch that resets and starts again", async () => {
   expect(played).toHaveLength(4);
 });
 
+it("sounds on Program for the timers Program shows, and reads a stage display place saved before as the outputs", async () => {
+  const saved = liveTimerSoundSchema.parse({ places: ["stage-display", "studio"], warningSeconds: 30, zero: true });
+  expect(saved.places).toEqual(["outputs", "studio"]);
+  const state = timersRoomState([pitch(["outputs"])], [], {
+    stage: { ...EMPTY_LIVE_STAGE, timerGraphics: [defaultLiveTimerGraphic("pitch")] },
+  });
+  await mount(
+    <LiveOverlayPresentation
+      view="program"
+      playsSounds
+      projection={{ ...state, session: { ...state.session, ...session } }}
+    />,
+  );
+  await advance(65_000);
+  expect(played).toHaveLength(2);
+});
+
 it("stays silent in a place the timer does not sound in, and for a crossing it slept through", async () => {
-  await mount(<LiveTimerSounds timers={[pitch(["stage-display"])]} session={session} place="studio" />);
+  await mount(<LiveTimerSounds timers={[pitch(["outputs"])]} session={session} place="studio" />);
   await advance(65_000);
   expect(played).toEqual([]);
   await act(() => render(null, host!));
@@ -111,8 +129,8 @@ it("stays silent in a place the timer does not sound in, and for a crossing it s
   expect(played).toEqual([]);
 });
 
-it("sounds on a real stage display for the timers it shows, never on a monitor of it", async () => {
-  const state = timersRoomState([pitch(["stage-display"])], [defaultLiveTimerGraphic("pitch")]);
+it("sounds on a real output for the timers it shows, never on a monitor of it", async () => {
+  const state = timersRoomState([pitch(["outputs"])], [defaultLiveTimerGraphic("pitch")]);
   await mount(
     <LiveOverlayPresentation
       view="stage-display"
@@ -131,7 +149,7 @@ it("sounds on a real stage display for the timers it shows, never on a monitor o
   now = start;
   await advance(65_000);
   expect(played).toHaveLength(2);
-  const hidden = timersRoomState([pitch(["stage-display"])], []);
+  const hidden = timersRoomState([pitch(["outputs"])], []);
   await mount(<LiveOverlayPresentation view="stage-display" playsSounds projection={hidden} />);
   played = [];
   now = start;

@@ -570,6 +570,8 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
         return this.timers.control(actor, session, message.timerId, message.action, Date.now(), at);
       case "timer.configure":
         return this.timers.configure(actor, session, message.timerId, message.settings, Date.now(), at);
+      case "timer.edit":
+        return this.timers.edit(actor, session, message.timerId, message.edit, Date.now(), at);
     }
   }
 

@@ -17,7 +17,11 @@ import { Field } from "../../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../../ui/TextControl";
 
 /** A time of day on the event's clock, on the session's own day, as the UTC instant the room keeps. */
-function targetInstant(time: string, session: Pick<LiveRoomSession, "startAt">, zone: string): string | null {
+export function liveTimerTargetInstant(
+  time: string,
+  session: Pick<LiveRoomSession, "startAt">,
+  zone: string,
+): string | null {
   if (!/^\d{2}:\d{2}$/u.test(time)) return null;
   try {
     return dateTimeLocalToIso(`${instantToCalendarDate(session.startAt, zone)}T${time}`, zone);
@@ -51,7 +55,7 @@ export function LiveTimerAddForm({
   const draft = {
     name,
     kind,
-    targetAt: kind === "until" ? targetInstant(time, session, zone) : null,
+    targetAt: kind === "until" ? liveTimerTargetInstant(time, session, zone) : null,
     durationSeconds: kind === "duration" && minutes.trim() ? Math.round(Number(minutes) * 60) : null,
   };
   const form = useContractForm(liveTimerDraftSchema, draft);
