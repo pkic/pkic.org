@@ -237,6 +237,7 @@ describe("registration representation changes", () => {
     expect(competing?.status).toBe(200);
     expect(pending.status).toBe(409);
     expect((await submit()).status).toBe(200);
+    expect((await change(f, f.identityId, f.token, f.identityId)).status).toBe(200);
     expect(
       await queryAll(env.DB, "SELECT idempotency_key FROM email_outbox WHERE template_key='registration_updated'"),
     ).toEqual([
