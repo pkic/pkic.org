@@ -289,8 +289,10 @@ export function LiveOverlayPresentation({
     view === "stage-display" && projection
       ? liveStageDisplayGraphics(projection.outputs["stage-display"], projection.stage, projection.timers)
       : (state?.stage.timerGraphics ?? []);
+  // The stage display draws its timers itself, so its own layer decides whether they show.
+  const timersShow = view === "stage-display" ? elements.stageDisplay.visible : elements.timer.visible;
   const sounding =
-    playsSounds && state && elements.timer.visible
+    playsSounds && state && timersShow
       ? state.timers.filter((timer) => shown.some((graphic) => graphic.timerId === timer.id))
       : null;
   return (

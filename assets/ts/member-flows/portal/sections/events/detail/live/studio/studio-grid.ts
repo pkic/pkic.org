@@ -121,8 +121,9 @@ export function resizeGridRect(
 /**
  * Swaps an item with the one it was dropped on: each takes the other's place
  * and keeps its own size. When the sizes differ so they would overlap, the
- * one dropped on moves beside it, or below when the row is full; the others
- * move out of the way, then the grid compacts.
+ * one dropped on moves beside it, or, when the row is full, the upper of the
+ * two keeps its place and the other goes below it; the others move out of
+ * the way, then the grid compacts.
  */
 export function swapGridItems<T extends GridItem>(
   items: readonly T[],
@@ -133,12 +134,15 @@ export function swapGridItems<T extends GridItem>(
   const moving = items.find((item) => item.id === id);
   const other = items.find((item) => item.id === withId);
   if (!moving || !other || moving === other) return compactGrid(items);
-  const dropped = { ...moving, x: Math.min(other.x, columns - moving.w), y: other.y };
+  let dropped = { ...moving, x: Math.min(other.x, columns - moving.w), y: other.y };
   let swapped = { ...other, x: Math.min(moving.x, columns - other.w), y: moving.y };
   if (gridOverlaps(dropped, swapped)) {
-    // Beside the dropped one in its row when it fits there, else below it.
+    // Beside the dropped one in its row when it fits there; else the one that ends up on top keeps its place
+    // and the other goes below it, so a drop downward still swaps.
     const beside = { ...swapped, x: dropped.x + dropped.w, y: dropped.y };
-    swapped = beside.x + beside.w <= columns ? beside : { ...swapped, y: dropped.y + dropped.h };
+    if (beside.x + beside.w <= columns) swapped = beside;
+    else if (moving.y < other.y) dropped = { ...dropped, y: swapped.y + swapped.h };
+    else swapped = { ...swapped, y: dropped.y + dropped.h };
   }
   const placed: T[] = [dropped, swapped];
   for (const item of items.filter((entry) => entry !== moving && entry !== other).sort(byGridPosition))

@@ -113,6 +113,41 @@ describe("studio timers", () => {
     expect(document.querySelector("dialog[open]")).toBeNull();
   });
 
+  it("sends only what this operator changed, keeping another operator's change made meanwhile", () => {
+    const snapshot = liveSnapshot({ viewer: OPERATOR });
+    const pitch = {
+      ...snapshot.timers[0]!,
+      id: "pitch",
+      name: "Pitch",
+      kind: "duration" as const,
+      followsAgenda: false,
+      durationSeconds: 180,
+      heldMs: 180_000,
+    };
+    const { host, live } = mountDesk({ ...snapshot, timers: [snapshot.timers[0]!, pitch] }, "stage");
+    void act(() => labeled(host, "Pitch timer").click());
+    void act(() => button(document.body, "Timer settings").click());
+    const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
+    // Another operator makes it four minutes while this dialog is open.
+    void act(() =>
+      live.latest().deliver({
+        type: "timers.changed",
+        timers: [snapshot.timers[0]!, { ...pitch, durationSeconds: 240, heldMs: 240_000 }],
+      }),
+    );
+    void act(() => dialog.querySelector<HTMLInputElement>("input[name='settings.sound.zero']")!.click());
+    type(dialog.querySelector<HTMLInputElement>('input[name="edit.name"]')!, "Startup pitch");
+    void act(() => button(dialog, "Save").click());
+    expect(commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent))).toEqual([
+      { type: "timer.edit", timerId: "pitch", edit: { name: "Startup pitch" } },
+      {
+        type: "timer.configure",
+        timerId: "pitch",
+        settings: { atZero: pitch.atZero, sound: { ...pitch.sound, zero: true } },
+      },
+    ]);
+  });
+
   it("sends the timer graphic with its own settings", () => {
     const { host, live } = mountDesk(undefined, "stage");
     void act(() => labeled(host, "Session timer").click());

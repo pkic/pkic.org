@@ -74,6 +74,12 @@ describe("studio grid geometry", () => {
     expect(at(crossed, "wide")).toEqual({ x: 0, y: 0, w: 8, h: 6 });
     expect(at(crossed, "small")).toEqual({ x: 8, y: 0, w: 4, h: 4 });
     expect(noOverlaps(crossed)).toBe(true);
+    // Dropped downward onto a taller full-width item, the two still trade places.
+    const stackedRows = [item("a", 0, 0, 12, 4), item("b", 0, 4, 12, 8)];
+    const down = swapGridItems(stackedRows, "a", "b", 12);
+    expect([at(down, "b").y, at(down, "a").y]).toEqual([0, 8]);
+    const up = swapGridItems(stackedRows, "b", "a", 12);
+    expect([at(up, "b").y, at(up, "a").y]).toEqual([0, 8]);
   });
 
   it("pushes a chain of items down and keeps the grid free of overlaps", () => {

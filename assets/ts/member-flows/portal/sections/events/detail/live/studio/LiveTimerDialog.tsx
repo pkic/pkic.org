@@ -47,6 +47,12 @@ const timerDialogSchema = z.object({
 });
 
 const seconds = (value: string) => (value.trim() ? Number(value) : null);
+const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+/** The current value with only the fields this operator changed since opening laid over it. */
+function mineOver<Value extends object>(opened: Value, mine: Value, current: Value): Value {
+  const changed = Object.entries(mine).filter(([key, value]) => !same(value, opened[key as keyof Value]));
+  return { ...current, ...Object.fromEntries(changed) };
+}
 const RECONNECTING = "The control room is reconnecting or busy. Try again when it is connected.";
 
 /**
@@ -77,7 +83,10 @@ export function LiveTimerDialog({
   const zone = clockTimeZone(clock);
   const counts = timer.kind !== "clock";
   const settable = liveTimerHasSettings(timer);
-  const shownTime = timer.targetAt ? format24HourClockInZone(Date.parse(timer.targetAt), clock) : "";
+  // What the timer was when the dialog opened: only what this operator changed from it is sent, so a change
+  // another operator makes meanwhile is kept.
+  const [opened] = useState(() => ({ timer, graphic }));
+  const shownTime = opened.timer.targetAt ? format24HourClockInZone(Date.parse(opened.timer.targetAt), clock) : "";
   const [name, setName] = useState(timer.name);
   const [length, setLength] = useState<number | null>(timer.durationSeconds);
   const [time, setTime] = useState(shownTime);
@@ -93,8 +102,9 @@ export function LiveTimerDialog({
   const warnAt = seconds(warning);
   const edit: Record<string, unknown> = { name };
   if (timer.kind === "duration") edit.durationSeconds = length;
-  // An unchanged time keeps the stored instant, seconds and all.
-  if (timer.kind === "until" && time !== shownTime) edit.targetAt = liveTimerTargetInstant(time, session, zone);
+  // An unchanged time keeps the stored instant; a new one keeps the date the timer counts to.
+  if (timer.kind === "until" && time !== shownTime)
+    edit.targetAt = liveTimerTargetInstant(time, { startAt: opened.timer.targetAt ?? session.startAt }, zone);
   const body = {
     edit,
     settings: {
@@ -119,20 +129,26 @@ export function LiveTimerDialog({
     if (next.edit.targetAt && Date.parse(next.edit.targetAt) <= now())
       return setError("Choose a time that is still ahead.");
     const patch: LiveTimerEdit = {
-      ...(next.edit.name !== timer.name ? { name: next.edit.name } : {}),
-      ...(next.edit.durationSeconds !== undefined && next.edit.durationSeconds !== timer.durationSeconds
+      ...(next.edit.name !== opened.timer.name ? { name: next.edit.name } : {}),
+      ...(next.edit.durationSeconds !== undefined && next.edit.durationSeconds !== opened.timer.durationSeconds
         ? { durationSeconds: next.edit.durationSeconds }
         : {}),
       ...(next.edit.targetAt !== undefined ? { targetAt: next.edit.targetAt } : {}),
     };
     if (Object.keys(patch).length && !send({ type: "timer.edit", timerId: timer.id, edit: patch }))
       return setError(RECONNECTING);
-    const settingsChanged =
-      JSON.stringify(next.settings) !== JSON.stringify({ atZero: timer.atZero, sound: timer.sound });
-    if (settable && settingsChanged && !send({ type: "timer.configure", timerId: timer.id, settings: next.settings }))
+    const settings = {
+      atZero: mineOver(opened.timer.atZero, next.settings.atZero, timer.atZero),
+      sound: mineOver(opened.timer.sound, next.settings.sound, timer.sound),
+    };
+    if (
+      settable &&
+      !same(settings, { atZero: timer.atZero, sound: timer.sound }) &&
+      !send({ type: "timer.configure", timerId: timer.id, settings })
+    )
       return setError(RECONNECTING);
-    if (JSON.stringify(next.graphic) !== JSON.stringify(graphic) && !saveGraphic(next.graphic))
-      return setError(RECONNECTING);
+    const shown = mineOver(opened.graphic, next.graphic, graphic);
+    if (!same(shown, graphic) && !saveGraphic(shown)) return setError(RECONNECTING);
     onClose();
   };
 
