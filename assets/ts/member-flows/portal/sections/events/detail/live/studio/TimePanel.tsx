@@ -294,6 +294,9 @@ export function TimePanel({
   const sessionReading = useLiveTimerReading(sessionTimer, session);
   const overrun = sessionTimer ? Math.max(0, -sessionReading.valueMs) : 0;
   const slot = next ? Date.parse(next.endAt) - Date.parse(next.startAt) : 0;
+  // Overrun first uses up any break before the next session, then its slot.
+  const gap = next ? Math.max(0, Date.parse(next.startAt) - Date.parse(session.endAt)) : 0;
+  const late = Math.max(0, overrun - gap);
   return (
     <div class="pk-studio-time">
       {timers.length ? (
@@ -314,13 +317,13 @@ export function TimePanel({
         <p class="pk-studio-time__empty">No timers yet. Use Add timer to start one.</p>
       )}
       {next ? (
-        <p class="pk-studio-time__next" data-tone={overrun ? "warn" : undefined}>
+        <p class="pk-studio-time__next" data-tone={late ? "warn" : undefined}>
           <span>
             Next {formatClockInZone(next.startAt, clock)} <strong>{next.title}</strong>
           </span>
           <span>
-            {overrun
-              ? `${formatLiveDuration(Math.max(0, slot - overrun))} of its ${formatLiveDuration(slot)} left`
+            {late
+              ? `${formatLiveDuration(Math.max(0, slot - late))} of its ${formatLiveDuration(slot)} left`
               : "On schedule"}
           </span>
         </p>

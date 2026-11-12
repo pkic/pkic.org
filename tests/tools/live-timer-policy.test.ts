@@ -71,6 +71,11 @@ describe("a session timer that follows the agenda", () => {
     expect(read(started, future, now + MINUTE)).toMatchObject({ valueMs: 29 * MINUTE, startsInMs: null });
   });
 
+  it("leaves the agenda when an operator starts it during its session", () => {
+    const started = controlLiveTimer(sessionLiveTimer(), session, "start", now);
+    expect(started).toMatchObject({ followsAgenda: false, running: true, anchorAt: session.endAt });
+  });
+
   it("pauses, resets to its full length stopped, and follows the agenda again", () => {
     const paused = controlLiveTimer(sessionLiveTimer(), session, "pause", now + MINUTE);
     expect(paused).toMatchObject({ followsAgenda: false, running: false, heldMs: 49 * MINUTE });
@@ -116,6 +121,9 @@ describe("a countdown at zero", () => {
     });
     expect(settleLiveTimer(timer, session, now + 75_000)).toMatchObject({ running: false, heldMs: 0 });
     expect(controlLiveTimer(timer, session, "pause", now + 75_000)).toMatchObject({ running: false, heldMs: 0 });
+    // Start at zero begins a new countdown from the full length.
+    const again = controlLiveTimer(timer, session, "start", now + 75_000);
+    expect(read(again, session, now + 75_000)).toMatchObject({ valueMs: 60_000, running: true });
   });
 
   it("resets to its full length after the seconds over, and waits there", () => {
@@ -188,6 +196,8 @@ describe("other kinds", () => {
       running: true,
       anchorAt: at(900_000),
     });
+    // Once the time has passed, reset stops at zero instead of rearming to the past.
+    expect(controlLiveTimer(paused, session, "reset", now + 960_000)).toMatchObject({ running: false, heldMs: 0 });
   });
 
   it("counts up as a stopwatch, never below zero, and resets to zero", () => {
@@ -328,7 +338,7 @@ describe("the shared clock format", () => {
 
   it("reads a graphic's clock, total seconds and long custom duration tokens", () => {
     expect(formatLiveTimer(3_723_000, "clock")).toBe("1:02:03");
-    expect(formatLiveTimer(-3_723_000, "ss")).toBe("+3723");
+    expect(formatLiveTimer(-3_723_000, "ss")).toBe("+3,723");
     const span = (365 * 86400 + 2 * 30 * 86400 + 5 * 86400 + 3 * 3600 + 20 * 60 + 10) * 1000;
     expect(
       formatLiveTimer(

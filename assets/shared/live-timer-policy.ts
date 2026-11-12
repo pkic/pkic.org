@@ -69,10 +69,14 @@ const runningTo = (timer: LiveTimer, anchor: number): LiveTimer => ({
 
 /**
  * Reset: back to the full length, stopped. A countdown to a time counts to
- * that time again, and a stopwatch goes back to zero.
+ * that time again while the time is still ahead (once it has passed, the
+ * timer stops at zero), and a stopwatch goes back to zero.
  */
-function resetLiveTimer(timer: LiveTimer, session: SessionTime): LiveTimer {
-  if (timer.kind === "until" && timer.targetAt) return runningTo(timer, Date.parse(timer.targetAt));
+function resetLiveTimer(timer: LiveTimer, session: SessionTime, now: number): LiveTimer {
+  if (timer.kind === "until" && timer.targetAt) {
+    const target = Date.parse(timer.targetAt);
+    return target > now ? runningTo(timer, target) : stopped(timer, 0);
+  }
   return stopped(timer, liveTimerTotalMs(timer, session) ?? 0);
 }
 
@@ -124,7 +128,7 @@ export function createLiveTimer(id: string, draft: LiveTimerDraft, session: Sess
     sound: DEFAULT_LIVE_TIMER_SOUND,
     change: null,
   };
-  return draft.kind === "session" ? following(timer) : resetLiveTimer(timer, session);
+  return draft.kind === "session" ? following(timer) : resetLiveTimer(timer, session, now);
 }
 
 /** A stored timer's own value at `now`, before anything happens at zero. */
@@ -184,7 +188,8 @@ export function liveTimerReading(timer: LiveTimer, session: SessionTime, now: nu
 
 /**
  * The operators' controls. Start counts on from what the timer reads (a
- * session timer waiting for its session starts at its full length); pause
+ * session timer waiting for its session starts at its full length, and one
+ * stopped at zero starts again from its full length); pause
  * holds it; reset goes back to the full length, stopped; follow hands a
  * session timer back to the agenda. Each acts on the settled state, and any
  * of them but follow takes a session timer off the agenda.
@@ -196,11 +201,16 @@ export function controlLiveTimer(
   now: number,
 ): LiveTimer {
   if (!liveTimerCounts(timer)) return timer;
-  if (action === "reset") return resetLiveTimer(timer, session);
+  if (action === "reset") return resetLiveTimer(timer, session, now);
   if (action === "follow") return timer.kind === "session" ? following(timer) : timer;
   const reading = liveTimerReading(timer, session, now);
   if (action === "pause") return stopped(timer, reading.valueMs);
-  if (reading.running) return settleLiveTimer(timer, session, now);
+  if (reading.running && !timer.followsAgenda) return settleLiveTimer(timer, session, now);
+  if (!countsUp(timer) && timer.atZero.action === "stop" && reading.valueMs <= 0) {
+    // Stopped at zero: start again from the full length, as after a reset.
+    const full = resetLiveTimer(timer, session, now);
+    return full.running || full.heldMs <= 0 ? full : runningTo(full, now + full.heldMs);
+  }
   return runningTo(timer, countsUp(timer) ? now - reading.valueMs : now + reading.valueMs);
 }
 

@@ -47,7 +47,7 @@ export function formatLiveTimer(
   if (format === "clock") return formatLiveDuration(milliseconds);
   const sign = milliseconds < 0 ? "+" : "";
   const total = wholeSeconds(milliseconds);
-  if (format === "ss") return `${sign}${total}`;
+  if (format === "ss") return `${sign}${formatNumber(total)}`;
   let remainder = total;
   const units: Record<string, number> = {};
   for (const [name, secondsPerUnit] of [

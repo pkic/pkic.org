@@ -47,7 +47,12 @@ export function LiveTimerSettingsDialog({
   const [zero, setZero] = useState(timer.sound.zero);
   const [error, setError] = useState<string | null>(null);
   const body = {
-    atZero: { action, resetAfterSeconds: seconds(resetAfter), restart },
+    atZero: {
+      action,
+      // The delay only shows for reset; a cleared hidden field keeps the stored value.
+      resetAfterSeconds: action === "reset" ? seconds(resetAfter) : timer.atZero.resetAfterSeconds,
+      restart,
+    },
     sound: { places, warningSeconds: seconds(warning), zero },
   };
   const form = useContractForm(liveTimerSettingsSchema, body);

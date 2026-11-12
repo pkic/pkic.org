@@ -276,7 +276,7 @@ export function LiveOverlayPresentation({
   const elements = draft ?? resolveLiveOverlayLayout(state?.overlayLayouts ?? [], layout);
   const layers = view === "stage-display" ? STAGE_DISPLAY_LAYERS(roomId, stageAside) : PROGRAM_LAYERS;
   const sounding =
-    playsSounds && state && view === "stage-display"
+    playsSounds && state && view === "stage-display" && elements.timer.visible
       ? state.timers.filter((timer) => state.stage.timerGraphics.some((graphic) => graphic.timerId === timer.id))
       : null;
   return (
