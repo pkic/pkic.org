@@ -25,6 +25,10 @@
   .pk-studio-grid[data-gesture] {
     user-select: none;
   }
+  /* While a panel is pressed, a video or picture under the pointer never takes its moves or its release. */
+  .pk-studio-grid[data-pressing] :is(iframe, img, video) {
+    pointer-events: none;
+  }
   .pk-studio-grid[data-gesture="move"] {
     cursor: grabbing;
   }

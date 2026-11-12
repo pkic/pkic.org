@@ -3,6 +3,7 @@ import {
   compactGrid,
   gridOverlaps,
   placeGridItem,
+  swapGridItems,
   type GridItem,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/studio-grid";
 import {
@@ -61,6 +62,18 @@ describe("studio grid geometry", () => {
     const swapped = placeGridItem(grid, "a", { x: 0, y: 5, w: 6, h: 4 }, STUDIO_GRID_BOUNDS);
     expect(at(swapped, "b").y).toBe(0);
     expect(at(swapped, "a").y).toBe(5);
+  });
+
+  it("swaps an item dropped on another; each keeps its size, and a larger one sets the other beside it", () => {
+    const grid = [item("preview", 0, 0, 5, 12), item("transition", 5, 0, 2, 12), item("program", 7, 0, 5, 12)];
+    const swapped = swapGridItems(grid, "program", "preview", 12);
+    expect(at(swapped, "program")).toEqual({ x: 0, y: 0, w: 5, h: 12 });
+    expect(at(swapped, "preview")).toEqual({ x: 7, y: 0, w: 5, h: 12 });
+    const stacked = [item("small", 0, 0, 4, 4), item("wide", 4, 0, 8, 6)];
+    const crossed = swapGridItems(stacked, "wide", "small", 12);
+    expect(at(crossed, "wide")).toEqual({ x: 0, y: 0, w: 8, h: 6 });
+    expect(at(crossed, "small")).toEqual({ x: 8, y: 0, w: 4, h: 4 });
+    expect(noOverlaps(crossed)).toBe(true);
   });
 
   it("pushes a chain of items down and keeps the grid free of overlaps", () => {

@@ -1,6 +1,6 @@
 import { useCallback, useRef } from "preact/hooks";
 import { usePointerDragSession } from "../../../../../../../hooks/usePointerDragSession";
-import { gridOverlaps, insertIntoGridRow, resizeGridRect, type GridEdge, type GridRect } from "./studio-grid";
+import { gridOverlaps, resizeGridRect, swapGridItems, type GridEdge, type GridRect } from "./studio-grid";
 import { STUDIO_COLUMNS, placeStudioPanel, studioGridBounds, type StudioPanel } from "./studio-layout";
 import type { StudioChange } from "./useStudioLayout";
 
@@ -39,9 +39,9 @@ interface Gesture {
   base: readonly StudioPanel[];
   target: GridRect;
   preview: readonly StudioPanel[];
+  /** The arrangement last laid out, so a move that changes nothing does no work. */
+  key: string;
 }
-
-const sameRect = (a: GridRect, b: GridRect) => a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
 
 /**
  * Dragging and resizing panels with pointer events, so mouse, touch and pen
@@ -93,6 +93,7 @@ export function useStudioGesture(panels: readonly StudioPanel[], change: StudioC
       active.frame = null;
     }
     gesture.current = null;
+    stopFollowing();
     const node = cells.current.get(active.id);
     node?.style.removeProperty("transform");
     if (active.kind === "resize" && node) {
@@ -101,6 +102,7 @@ export function useStudioGesture(panels: readonly StudioPanel[], change: StudioC
     }
     node?.removeAttribute("data-gesture");
     grid.current?.removeAttribute("data-gesture");
+    grid.current?.removeAttribute("data-pressing");
     if (active.handle.hasPointerCapture?.(active.pointer)) active.handle.releasePointerCapture(active.pointer);
     if (!active.started) return;
     if (commit && active.preview !== active.base) {
@@ -122,7 +124,8 @@ export function useStudioGesture(panels: readonly StudioPanel[], change: StudioC
     let preview: readonly StudioPanel[];
     if (active.kind === "move") {
       node.style.setProperty("transform", `translate(${dx}px, ${dy}px)`);
-      // Over another panel, the dragged one joins that panel's row before it; elsewhere it lands on the cells it covers.
+      // Over another panel the two swap places; elsewhere the dragged one lands on the cells it covers.
+      // Every panel keeps its size: a drop never resizes the others.
       const at = {
         x: Math.floor((active.x - active.grid.left) / active.column),
         y: Math.floor((active.y - active.grid.top) / active.row),
@@ -131,7 +134,7 @@ export function useStudioGesture(panels: readonly StudioPanel[], change: StudioC
       };
       const over = active.base.find((entry) => entry.id !== active.id && gridOverlaps(entry, at));
       if (over) {
-        preview = insertIntoGridRow(active.base, active.id, over.id, studioGridBounds(panel.type));
+        preview = swapGridItems(active.base, active.id, over.id, STUDIO_COLUMNS);
         target = preview.find((entry) => entry.id === active.id) ?? panel;
       } else {
         target = {
@@ -157,7 +160,10 @@ export function useStudioGesture(panels: readonly StudioPanel[], change: StudioC
       const placed = preview.find((entry) => entry.id === active.id);
       if (placed) placeStudioCell(node, placed);
     }
-    if (sameRect(target, active.target) && active.preview !== active.base) return;
+    // The same rectangle can come with another arrangement (a swap, or landing beside), so compare both.
+    const key = preview.map((entry) => `${entry.id}:${entry.x},${entry.y},${entry.w},${entry.h}`).join(" ");
+    if (key === active.key) return;
+    active.key = key;
     active.target = target;
     active.preview = preview;
     arrange(active, active.preview);
@@ -194,12 +200,44 @@ export function useStudioGesture(panels: readonly StudioPanel[], change: StudioC
       base: latest.current,
       target: panel,
       preview: latest.current,
+      key: "",
     };
+    // The window follows the pointer, so a pointer that leaves the handle, crosses a video or loses its
+    // capture still ends the gesture where it was released. No text selection or native drag starts.
     handle.setPointerCapture?.(event.pointerId);
-    if (kind === "resize") event.preventDefault();
+    event.preventDefault();
+    area.setAttribute("data-pressing", "");
+    follow();
   };
 
-  const { release, cancel, requestFrame } = usePointerDragSession(gesture, finish);
+  const { release, requestFrame } = usePointerDragSession(gesture, finish);
+  /** A browser that takes the pointer away keeps what the operator saw, rather than springing back. */
+  const interrupted = (event: PointerEvent) => {
+    if (gesture.current?.pointer === event.pointerId) finish(true);
+  };
+  const live = useRef({ move: (_event: PointerEvent) => {}, release, interrupted });
+  const listeners = useRef<{
+    move: (event: PointerEvent) => void;
+    up: (event: PointerEvent) => void;
+    cancel: (event: PointerEvent) => void;
+  } | null>(null);
+  listeners.current ??= {
+    move: (event) => live.current.move(event),
+    up: (event) => live.current.release(event),
+    cancel: (event) => live.current.interrupted(event),
+  };
+  function follow() {
+    const { move: onMove, up, cancel } = listeners.current!;
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+  }
+  function stopFollowing() {
+    const { move: onMove, up, cancel } = listeners.current!;
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", cancel);
+  }
 
   const move = (event: PointerEvent) => {
     const active = gesture.current;
@@ -216,8 +254,9 @@ export function useStudioGesture(panels: readonly StudioPanel[], change: StudioC
     event.preventDefault();
     requestFrame(active, frame);
   };
+  live.current = { move, release, interrupted };
 
-  /** Pointer handlers for a panel's drag handle (its header) or one of its resize edges. */
+  /** The pointer handler for a panel's drag handle (its header) or one of its resize edges; the window does the rest. */
   const handlers = (kind: Gesture["kind"], panel: StudioPanel, edge: GridEdge = "se") => ({
     onPointerDown: (event: PointerEvent) => {
       // The header's own buttons and menus keep their clicks.
@@ -225,10 +264,6 @@ export function useStudioGesture(panels: readonly StudioPanel[], change: StudioC
         return;
       begin(kind, panel, event, edge);
     },
-    onPointerMove: move,
-    onPointerUp: release,
-    onPointerCancel: cancel,
-    onLostPointerCapture: cancel,
   });
 
   return { grid, placeholder, register, handlers };
