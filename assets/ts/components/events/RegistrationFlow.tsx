@@ -39,7 +39,8 @@ import { ConsentList } from "../ConsentCard";
 import { DayAttendancePicker } from "../DayAttendancePicker";
 import { RegistrationContactStep } from "../RegistrationContactStep";
 import type { ConfirmOrganizationController } from "../RegistrationConfirmOrganization";
-import { RegistrationAffiliation } from "./RegistrationAffiliation";
+import { RegistrationEmailAddress } from "./RegistrationEmailAddress";
+import { RegistrationRepresentationField } from "./RegistrationRepresentationField";
 import { useFormAnswers } from "../forms/useFormAnswers";
 
 export type RegistrationChange = z.output<typeof registrationManageSchema>;
@@ -58,12 +59,13 @@ type Create = {
 type Update = {
   mode: "update";
   data: RegistrationManageReadResponse;
+  /** Saves the details and any representation change in one request. */
   save: (change: RegistrationChange) => Promise<void>;
   onDiscard: () => void;
+  onProfileUpdated: () => Promise<void>;
 };
 type Props = (Create | Update) & { forms: EventFormsResponse };
 const PERSONAL_FIELDS = [
-  ["email", "Email address"],
   ["firstName", "First name"],
   ["lastName", "Last name"],
 ] as const;
@@ -83,13 +85,14 @@ export function RegistrationFlow(props: Props) {
   const invitation = useRef<ReturnType<typeof registrationInvitation> | null>(null);
   const [ready, setReady] = useState(updating);
   const [personalDraft, setPersonalDraft] = useState({
-    email: initial?.user.email ?? "",
     firstName: initial?.user.first_name ?? "",
     lastName: initial?.user.last_name ?? "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [attendance, setAttendance] = useState(initial?.dayAttendance ?? []);
+  const savedIdentityId = useRef(initial?.identityId ?? null);
+  const [identityId, setIdentityId] = useState(savedIdentityId.current);
   const fields = useMemo(
     () => forms.form?.fields.filter((field) => !isIdentityOwnedFormKey(field.key)) ?? [],
     [forms.form],
@@ -102,13 +105,9 @@ export function RegistrationFlow(props: Props) {
     const form = element.current;
     if (!form) return {};
     const dayAttendance = readDayAttendance(form);
-    const personal = {
-      email: readField(form, "email"),
+    const shared = {
       firstName: readField(form, "firstName"),
       lastName: readField(form, "lastName"),
-    };
-    const shared = {
-      ...personal,
       dayAttendance,
       customAnswers: forms.form ? readCustomFieldValues(form) : undefined,
     };
@@ -116,12 +115,16 @@ export function RegistrationFlow(props: Props) {
       return {
         ...shared,
         action: "update",
-        email: personal.email === props.data.user.email ? undefined : personal.email,
+        identityChange:
+          identityId && identityId !== savedIdentityId.current
+            ? { identityId, expectedIdentityId: savedIdentityId.current }
+            : undefined,
       };
     const named = organization.current.read?.();
     const liveEntry = registrationEntry(props.context.query);
     return {
       ...shared,
+      email: readField(form, "email"),
       identityId: readField(form, "identityId") || undefined,
       unaffiliatedAttestation: readField(form, "unaffiliatedAttestation") === "true",
       consents: readConsentValues(form),
@@ -299,8 +302,9 @@ export function RegistrationFlow(props: Props) {
                 checked = contract.submit();
                 if (!checked.data) return setError(checked.formMessage ?? "");
               }
-              if (props.mode === "update") await props.save(registrationManageSchema.parse(checked.data));
-              else {
+              if (props.mode === "update") {
+                await props.save(registrationManageSchema.parse(checked.data));
+              } else {
                 const body = registrationCreateSchema.parse(checked.data);
                 const result = props.submit
                   ? await props.submit(body)
@@ -365,7 +369,7 @@ export function RegistrationFlow(props: Props) {
                       <TextInput
                         {...control}
                         name={name}
-                        type={name === "email" ? "email" : "text"}
+                        type="text"
                         value={personalDraft[name]}
                         onInput={(event) => {
                           const value = event.currentTarget.value;
@@ -375,16 +379,12 @@ export function RegistrationFlow(props: Props) {
                     )}
                   </Field>
                 ))}
-                {element.current && readField(element.current, "email") !== props.data.user.email && (
-                  <Alert>
-                    A confirmation will be sent to the new address. Signing in does not confirm the address change.
-                  </Alert>
-                )}
-                <RegistrationAffiliation
-                  organizationName={props.data.user.organization_name}
-                  jobTitle={props.data.user.job_title}
-                  pendingOrganizationName={props.data.pendingOrganizationName}
+                <RegistrationRepresentationField
+                  onUpdated={props.onProfileUpdated}
+                  data={props.data}
+                  onSelect={(identity) => setIdentityId(identity?.id ?? null)}
                 />
+                <RegistrationEmailAddress email={props.data.user.email} />
               </>
             )}
           </section>

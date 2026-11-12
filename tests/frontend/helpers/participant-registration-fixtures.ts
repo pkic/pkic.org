@@ -22,6 +22,7 @@ export function readResponse(overrides: Partial<RegistrationManageReadResponse> 
       isEmailVerified: true,
     },
     identityId: null,
+    canChangeIdentity: true,
     event: { ...EVENT, startsAt: "2026-12-01T09:00:00.000Z" },
     user: {
       email: "ada@example.test",
@@ -80,3 +81,75 @@ export const FORMS = eventFormsResponseSchema.parse({
   allowedSessionTypes: [],
   eventDays: [],
 });
+
+/** A signed-in registrant who holds a personal and an organization identity. */
+export type SessionIdentity = {
+  id: string;
+  organizationId: string | null;
+  organizationName: string | null;
+  jobTitle: string | null;
+};
+const OWNER_ID = "00000000-0000-4000-8000-000000000041";
+export const PERSONAL: SessionIdentity = {
+  id: "00000000-0000-4000-8000-000000000042",
+  organizationId: null,
+  organizationName: null,
+  jobTitle: "Engineer",
+};
+export const WORK: SessionIdentity = {
+  id: "00000000-0000-4000-8000-000000000043",
+  organizationId: "00000000-0000-4000-8000-000000000044",
+  organizationName: "Analytical Engines",
+  jobTitle: "Engineer",
+};
+
+function ownerSession(identities: SessionIdentity[]) {
+  return {
+    success: true,
+    sessionId: "00000000-0000-4000-8000-000000000045",
+    expiresAt: "2099-12-31T23:59:59.000Z",
+    idleExpiresAt: "2099-12-31T23:59:59.000Z",
+    identity: { id: OWNER_ID, email: "ada@example.test" },
+    eventParticipation: true,
+    actingIdentityId: identities[0]!.id,
+    actingIdentities: identities,
+  };
+}
+
+function identityRecord(identity: SessionIdentity) {
+  const now = "2026-01-01T00:00:00.000Z";
+  return {
+    ...identity,
+    memberId: null,
+    membershipCategory: null,
+    userId: OWNER_ID,
+    userName: "Ada Lovelace",
+    emailId: null,
+    email: "ada@example.test",
+    biography: null,
+    links: [],
+    headshotUrl: null,
+    source: "verified_email",
+    state: "active",
+    showOnOrganizationProfile: true,
+    invitedAt: now,
+    startedAt: now,
+    endedAt: null,
+    blockedAt: null,
+    blockedByUserId: null,
+    predecessorIdentityId: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/** The registrant's session and identities, or null for any other request. */
+export function identityApi(method: string, path: string, identities: SessionIdentity[]): unknown {
+  if (method === "GET" && path === "/api/v1/auth/session") return ownerSession(identities);
+  if (method === "GET" && path === "/api/v1/users/current/identities")
+    return {
+      identities: identities.map(identityRecord),
+      page: { limit: 25, offset: 0, total: identities.length, hasMore: false },
+    };
+  return null;
+}

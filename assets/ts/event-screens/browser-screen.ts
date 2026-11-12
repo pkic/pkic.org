@@ -182,9 +182,9 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
       return "capture";
     }
     const track = next.getVideoTracks()[0];
-    // The whole screen only; a browser that does not say what it shares is taken at its word.
-    const surface = track?.getSettings().displaySurface;
-    if (!track || (surface && surface !== "monitor")) {
+    // The whole screen only. The requested surface is a hint, so the browser must say it shares a monitor:
+    // a browser that does not say (all current ones do, Safari included) could be showing staff a window.
+    if (!track || track.getSettings().displaySurface !== "monitor") {
       for (const each of next.getTracks()) each.stop();
       return "capture-surface";
     }

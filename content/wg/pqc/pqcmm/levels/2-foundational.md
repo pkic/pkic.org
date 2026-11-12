@@ -1,4 +1,6 @@
 ---
+# Level content comes from the PQCMM model in pkic/pqcmm; edit it there.
+# title, description, and summary below only feed menus and listings.
 date: 2026-05-07T00:00:00Z
 linkTitle: "2 — Foundational"
 title: "Level 2 (Foundational) - PQC Maturity Model (PQCMM)"
@@ -8,45 +10,4 @@ summary: Level 2 means PQC is production-ready and standards-compliant. This is 
 weight: 30
 ---
 
-## What Level 2 Means
-
-A product at **Level 2** has moved beyond evaluation and into production. Quantum-safe algorithms are supported in the product's core functionality, are stable, and conform to recognised standards. Organizations can deploy quantum-safe configurations with reasonable confidence.
-
-This level is the **minimum acceptable baseline** for new production deployments where long-term data confidentiality or integrity matters — particularly for systems with a service life extending beyond the anticipated availability of cryptographically relevant quantum computers.
-
-> Level 2 is the **production floor**. Any new procurement for a system with a long lifespan should require at minimum Level 2 from the vendor.
-{.callout-info}
-
-## Criteria
-
-{{< model part="criteria" >}}
-
-Level 2 does **not** require full cryptographic inventory, crypto agility, or the feature to be enabled by default.
-
-> **Why no cryptographic inventory at Level 2?**
->
-> Level 2 deliberately prioritises time-to-market and accessibility — a vendor can reach Level 2 by demonstrating a standards-conformant PQC implementation in a released build, without committing to the inventory and agility discipline required at [Level 3](/wg/pqc/pqcmm/levels/3-advanced/).
->
-> This trade-off has a cost: at Level 2, a buyer cannot independently verify the product's full cryptographic surface area, including third-party and dependency cryptography. The cryptographic inventory and SBOM at Level 3 are the **primary differentiators** between the two levels (alongside crypto agility), and they are a meaningful lift for the vendor.
->
-> Buyers in regulated industries, or where supply-chain visibility is itself a procurement requirement (e.g., banking, healthcare, critical infrastructure, identity and trust services), should set the **minimum acceptable** procurement floor at Level 3, not Level 2 — see the [Setting Minimum Requirements](/wg/pqc/pqcmm/adoption/procurement/#setting-minimum-requirements) table. Level 2 remains useful as an entry signal but is not, by itself, a sufficient basis for crypto-asset visibility.
-{.callout-info}
-
-## Assessment Questions
-
-At Level 2, generic claims are not sufficient — the assessor must verify specific algorithm names, parameter sets, standards references, and production documentation. At least one claim must be verified through an independent public source (e.g., NIST CMVP database) or a reproducible hands-on test. **A complete Level 2 assessment must also work through all [Level 1 questions](/wg/pqc/pqcmm/levels/1-initial/#assessment-questions).**
-
-{{< model part="methodology" >}}
-
-{{< model part="questions" >}}
-
-## Evidence Checklist
-
-{{< model part="evidence" >}}
-
-## Suggested Procurement Actions
-
-- Require Level 2 as a minimum for any new production procurement on systems with a service life beyond 5–7 years.
-- Verify standard conformance claims against publicly available test results.
-- Evaluate the gap to Level 3 for systems where ongoing cryptographic visibility and agility are required.
-
+{{< model part="level" >}}

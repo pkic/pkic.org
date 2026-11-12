@@ -174,6 +174,8 @@ export function ScreenLivestreamPlayer({
               // Nobody pauses a venue screen; carry on.
               if (state === "paused") target.playVideo();
               report({ type: "state", state });
+              // Sound asked for while buffering is confirmed once playback starts, not only by the click's check.
+              if (playing && livestreamSoundConfirmed(target)) report({ type: "sound" });
             },
             onError: ({ data }) => {
               if (stopped) return;

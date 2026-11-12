@@ -3,7 +3,10 @@ import { prepareQueueEmailStatementWhen } from "../../email/outbox";
 import type { DatabaseLike } from "../../types";
 import { buildEventEmailVariables, type EventRecord } from "../events";
 import { normalizeEmail } from "../../validation";
-import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
+import {
+  REGISTRATION_RECOVERY_RECIPIENT_EMAIL_SQL,
+  REGISTRATION_RECOVERY_NORMALIZED_EMAIL_SQL,
+} from "./recipient-email";
 import { registrationManageCapability } from "./capability-urls";
 import { myAgendaPageUrl } from "../frontend-links";
 
@@ -14,7 +17,6 @@ interface RegistrationManageLinkMatch {
   registration_updated_at: string;
   user_id: string;
   email: string;
-  normalized_email: string;
   first_name: string | null;
   last_name: string | null;
   user_updated_at: string;
@@ -34,22 +36,29 @@ export async function queueRegistrationManageLinkRecovery(
 ): Promise<string | null> {
   const alreadyRegistered = options.alreadyRegistered === true;
   const normalizedEmail = normalizeEmail(email);
+  // Recovery may go to the account's login mailbox or this registration's recipient.
+  const inputSql = "input(email) AS (VALUES (?))";
+  const matchSql = `(u.normalized_email = input.email OR ${REGISTRATION_RECOVERY_NORMALIZED_EMAIL_SQL} = input.email)`;
+  const recoveryEmailSql = `CASE WHEN u.normalized_email = input.email THEN u.email ELSE ${REGISTRATION_RECOVERY_RECIPIENT_EMAIL_SQL} END`;
   const registration = await first<RegistrationManageLinkMatch>(
     db,
-    `SELECT
+    `WITH ${inputSql}, candidate_users AS (
+       SELECT id FROM users WHERE normalized_email = (SELECT email FROM input)
+       UNION
+       SELECT user_id AS id FROM user_emails WHERE normalized_email = (SELECT email FROM input) AND verified_at IS NOT NULL
+     ) SELECT
        r.id AS registration_id,
        r.status AS registration_status,
        r.manage_link_secret,
        r.updated_at AS registration_updated_at,
        u.id AS user_id,
-       ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
-       u.normalized_email,
+       ${recoveryEmailSql} AS email,
        u.first_name,
        u.last_name,
        u.updated_at AS user_updated_at
-     FROM users u
-     JOIN registrations r ON r.user_id = u.id
-     WHERE u.normalized_email = ?
+     FROM candidate_users candidate JOIN users u ON u.id = candidate.id
+     JOIN registrations r ON r.user_id = u.id CROSS JOIN input
+     WHERE ${matchSql}
        AND r.event_id = ?
        AND (? = 0 OR r.status NOT IN ('cancelled', 'pending_email_confirmation'))
      ORDER BY r.created_at DESC
@@ -84,19 +93,21 @@ export async function queueRegistrationManageLinkRecovery(
       },
     },
     {
-      sql: `SELECT 1
+      sql: `WITH ${inputSql} SELECT 1
               FROM registrations r
-              JOIN users u ON u.id = r.user_id
+              JOIN users u ON u.id = r.user_id CROSS JOIN input
              WHERE r.id = ? AND r.event_id = ? AND r.updated_at = ?
                AND u.id = ? AND u.updated_at = ?
-               AND u.normalized_email = ?`,
+               AND ${matchSql}
+               AND ${recoveryEmailSql} = ?`,
       bindings: [
+        normalizedEmail,
         registration.registration_id,
         event.id,
         registration.registration_updated_at,
         registration.user_id,
         registration.user_updated_at,
-        normalizedEmail,
+        registration.email,
       ],
     },
   );

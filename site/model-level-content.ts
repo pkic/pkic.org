@@ -3,9 +3,10 @@ import type { ContentCall } from "../functions/_lib/services/site-shortcodes";
 import type { ReadableModel } from "./model-version-source";
 
 type ModelLevel = ReadableModel["levels"][number];
-type ModelPart = "criteria" | "methodology" | "questions" | "evidence" | "section";
+type ModelPart = "level" | "criteria" | "methodology" | "questions" | "evidence" | "section";
+type Placement = ModelLevel["sections"][number]["placement"];
 
-const PARTS = new Set<ModelPart>(["criteria", "methodology", "questions", "evidence", "section"]);
+const PARTS = new Set<ModelPart>(["level", "criteria", "methodology", "questions", "evidence", "section"]);
 
 /** A criterion's position within its level; questions and evidence keep their full identifier. */
 function position(id: string) {
@@ -79,9 +80,15 @@ function criteriaMarkdown(model: ReadableModel, level: ModelLevel) {
  * Normative level content placed by `{{< model part="…" >}}` in the page's authored Markdown.
  * Guidance stays authored; every criterion, question group, evidence item and model section must be
  * placed exactly once, so content can no longer disappear silently from a published level page.
- * Model sections are placed by title with `{{< model-section >}}`; its inner Markdown is the fallback
- * for model versions that do not carry that section yet.
+ * `{{< model part="level" >}}` lays out the whole level, placing sections by their `placement`, so the
+ * model is the only source of level content. Individual parts and `{{< model-section >}}` (by title)
+ * remain for pages that need a custom layout.
  */
+/** Sections are tracked by identifier, so two sections may share a title. */
+function sectionKey(section: ModelLevel["sections"][number]) {
+  return `section ${section.id ?? `"${section.title}"`}`;
+}
+
 export function createModelLevelContent(model: ReadableModel, level: ModelLevel) {
   const placed = new Set<string>();
   const place = (key: string) => {
@@ -89,15 +96,67 @@ export function createModelLevelContent(model: ReadableModel, level: ModelLevel)
     placed.add(key);
   };
 
+  /** Sections at a placement, headed by their own titles; a model can add or rename them freely. */
+  function sectionsAt(placement: Placement, depth: 2 | 3) {
+    return level.sections
+      .filter((section) => section.placement === placement)
+      .map((section) => {
+        place(sectionKey(section));
+        return `${"#".repeat(depth)} ${section.title}\n\n${section.body}`;
+      });
+  }
+
+  /** The whole level in the standard layout, so the page needs no content of its own. */
+  function levelMarkdown(): string {
+    const call = (part: ModelPart): ContentCall => ({ props: { part }, positional: [] });
+    const groups = level.assessment.groups;
+    const intakeOnly = groups.length > 0 && groups.every((group) => group.kind === "intake");
+    const heading = intakeOnly ? "Supplier Intake Questions" : "Assessment Questions";
+    // A lone group named like the section would repeat its heading.
+    const groupHeadings = !(groups.length === 1 && groups[0]!.name === heading);
+    const hasEvidence = level.evidenceChecklist.items.length > 0 || Boolean(level.evidenceChecklist.introduction);
+    return [
+      ...sectionsAt("before-criteria", 2),
+      "## Criteria",
+      render(call("criteria")),
+      ...sectionsAt("after-criteria", 3),
+      ...(groups.length || level.assessment.methodology
+        ? [
+            `## ${heading}`,
+            ...sectionsAt("before-assessment", 3),
+            render(call("methodology")),
+            groups
+              .map((group) => {
+                place(`question group ${group.id ?? group.name}`);
+                return questionGroupMarkdown(group, groupHeadings);
+              })
+              .join("\n\n"),
+            ...sectionsAt("after-assessment", 3),
+          ]
+        : []),
+      ...(hasEvidence ? ["## Evidence Checklist", render(call("evidence"))] : []),
+      ...sectionsAt("after-evidence-checklist", 2),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
   function render(call: ContentCall): string {
     const part = (call.props.part ?? call.positional[0]) as ModelPart;
     if (!PARTS.has(part)) throw new Error(`Unknown model part "${String(part)}" on ${level.sourcePage}`);
+    if (part === "level") return levelMarkdown();
     if (part === "section") {
       const title = call.props.title;
       if (!title) throw new Error(`A model section needs a title on ${level.sourcePage}`);
       const section = level.sections.find((entry) => entry.title === title);
-      if (!section) return call.inner?.trim() ?? "";
-      place(`section "${title}"`);
+      if (!section) {
+        const fallback = call.inner?.trim();
+        if (fallback || call.props.optional === "true") return fallback ?? "";
+        throw new Error(
+          `The model for ${level.sourcePage} has no section "${title}"; add it or mark the placement optional`,
+        );
+      }
+      place(sectionKey(section));
       return section.body;
     }
     if (part === "criteria") {
@@ -132,7 +191,7 @@ export function createModelLevelContent(model: ReadableModel, level: ModelLevel)
       ...(level.assessment.methodology ? ["methodology"] : []),
       ...level.assessment.groups.map((group) => `question group ${group.id ?? group.name}`),
       ...(level.evidenceChecklist.items.length || level.evidenceChecklist.introduction ? ["evidence"] : []),
-      ...level.sections.map((section) => `section "${section.title}"`),
+      ...level.sections.map(sectionKey),
     ];
     return expected.filter((key) => !placed.has(key));
   }

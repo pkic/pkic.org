@@ -48,9 +48,12 @@ const question = z.object({
   purpose: modelText.optional(),
 });
 const section = z.object({
+  id: z.string().optional(),
   title: modelText,
   body: modelText,
-  placement: z.enum(["after-criteria", "after-assessment", "after-evidence-checklist"]).default("after-criteria"),
+  placement: z
+    .enum(["before-criteria", "after-criteria", "before-assessment", "after-assessment", "after-evidence-checklist"])
+    .default("after-criteria"),
 });
 // This is the rendering projection; the canonical model contract remains in pkic/pqcmm.
 export const readableModelSchema = z.object({

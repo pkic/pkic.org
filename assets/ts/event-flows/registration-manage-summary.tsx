@@ -38,12 +38,7 @@ export function RegistrationManageSummary({
     <div class="pk-stack pk-stack--loose">
       <section class="pk-stack pk-stack--snug" aria-label="Your details">
         <h3>Your details</h3>
-        <ParticipantRegistrationDetails
-          data={data}
-          form={form}
-          daysSummarized={false}
-          onIdentityChanged={() => location.reload()}
-        />
+        <ParticipantRegistrationDetails data={data} form={form} daysSummarized={false} />
         {editable && (
           <div class="pk-cluster">
             <Button type="button" variant="secondary" onClick={onEdit}>
