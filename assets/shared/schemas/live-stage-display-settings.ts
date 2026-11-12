@@ -46,3 +46,20 @@ export const liveStageDisplaySettingsCommandSchema = z
 export const liveStageDisplaySettingsChangedSchema = z
   .object({ type: z.literal("stage.display.settings.changed"), settings: liveStageDisplaySettingsSchema })
   .strict();
+
+/** A count of votes the stage display shows beside a question; null when it is not known. */
+export const liveStageDisplayVotesSchema = z.number().int().min(0).nullable();
+
+/**
+ * Stage display sources only: the question lined up in Preview, or its
+ * votes, changed. Operators read it from Preview itself. The room passes its
+ * question schema, which this module cannot import without a cycle.
+ */
+export const liveStageDisplayNextChangedSchema = <Question extends z.ZodType>(question: Question) =>
+  z
+    .object({
+      type: z.literal("stage.display.next.changed"),
+      question: question.nullable(),
+      votes: liveStageDisplayVotesSchema.optional(),
+    })
+    .strict();

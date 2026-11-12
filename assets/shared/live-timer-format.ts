@@ -63,3 +63,25 @@ export function formatLiveTimer(
   }
   return sign + renderOverlayTextMarkdown(customFormat, units);
 }
+
+/**
+ * A countdown's length as an operator types it: `h:mm:ss`, `m:ss`, or a
+ * whole number of minutes. Null when it does not read as a length.
+ */
+export function parseLiveTimerLength(text: string): number | null {
+  const value = text.trim();
+  if (/^\d+$/u.test(value)) return Number(value) * 60;
+  const parts = /^(?:(\d+):)?(\d{1,2}):(\d{2})$/u.exec(value);
+  if (!parts) return null;
+  const [, hours = "0", minutes, seconds] = parts;
+  if (Number(seconds) > 59 || (parts[1] !== undefined && Number(minutes) > 59)) return null;
+  return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
+}
+
+/** A countdown's length as the operator types it back: `m:ss`, or `h:mm:ss` from an hour. */
+export function formatLiveTimerLength(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor(seconds / 60) % 60;
+  const rest = String(seconds % 60).padStart(2, "0");
+  return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}` : `${Math.floor(seconds / 60)}:${rest}`;
+}

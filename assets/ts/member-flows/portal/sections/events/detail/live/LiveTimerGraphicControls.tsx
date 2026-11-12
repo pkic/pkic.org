@@ -118,24 +118,26 @@ export function LiveTimerLookFields({
       ) : null}
       {counts ? (
         <>
-          <ChoiceField
-            field="direction"
-            label="Shows"
-            options={LIVE_TIMER_DIRECTIONS}
-            labels={DIRECTION_LABELS}
-            draft={draft}
-            presentation={of("direction")}
-            update={(value) => update("direction", value)}
-          />
-          <ChoiceField
-            field="format"
-            label="Format"
-            options={LIVE_TIMER_FORMATS}
-            labels={FORMAT_LABELS}
-            draft={draft}
-            presentation={of("format")}
-            update={(value) => update("format", value)}
-          />
+          <div class="pk-cluster">
+            <ChoiceField
+              field="direction"
+              label="Shows"
+              options={LIVE_TIMER_DIRECTIONS}
+              labels={DIRECTION_LABELS}
+              draft={draft}
+              presentation={of("direction")}
+              update={(value) => update("direction", value)}
+            />
+            <ChoiceField
+              field="format"
+              label="Format"
+              options={LIVE_TIMER_FORMATS}
+              labels={FORMAT_LABELS}
+              draft={draft}
+              presentation={of("format")}
+              update={(value) => update("format", value)}
+            />
+          </div>
           {draft.format === "custom" ? (
             <Field
               label="Custom duration"
@@ -161,16 +163,16 @@ export function LiveTimerLookFields({
         onChange={(event) => update("showLogo", event.currentTarget.checked)}
         {...of("showLogo")}
       />
-      <ChoiceField
-        field="presentation"
-        label="Look"
-        options={LIVE_TIMER_PRESENTATIONS}
-        labels={PRESENTATION_LABELS}
-        draft={draft}
-        presentation={of("presentation")}
-        update={(value) => update("presentation", value)}
-      />
       <div class="pk-cluster">
+        <ChoiceField
+          field="presentation"
+          label="Look"
+          options={LIVE_TIMER_PRESENTATIONS}
+          labels={PRESENTATION_LABELS}
+          draft={draft}
+          presentation={of("presentation")}
+          update={(value) => update("presentation", value)}
+        />
         <ChoiceField
           field="placement"
           label="Position"

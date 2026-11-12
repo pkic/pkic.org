@@ -115,7 +115,7 @@ export const studioPanelSchema = z
     return panel.w >= bounds.minW && panel.h >= bounds.minH;
   }, "A panel is at least its type's smallest size.");
 export type StudioPanel = z.infer<typeof studioPanelSchema>;
-/** Panel types the studio no longer has: the output links moved to the toolbar. A saved one is dropped. */
+/** Panel types the studio no longer has: the output links are on the event's live layouts settings. A saved one is dropped. */
 const RETIRED_PANEL_TYPES: ReadonlySet<unknown> = new Set(["sources"]);
 const studioWorkspaceSchema = z.preprocess(
   (panels) =>

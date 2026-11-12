@@ -30,13 +30,13 @@ describe("studio timers", () => {
     // The create action sits in the panel header and opens the form.
     void act(() => labeled(time, "Add timer").click());
     type(time.querySelector<HTMLInputElement>("input[name=name]")!, "Questions");
-    type(time.querySelector<HTMLInputElement>("input[name=durationSeconds]")!, "10");
+    type(time.querySelector<HTMLInputElement>("input[name=durationSeconds]")!, "10:30");
     void act(() => button(time, "Add timer").click());
     expect(commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent))).toEqual([
       { type: "timer.control", timerId: "session", action: "start" },
       { type: "timer.adjust", timerId: "session", deltaSeconds: 60 },
       { type: "timer.adjust", timerId: "session", deltaSeconds: -60 },
-      { type: "timer.add", timer: { name: "Questions", kind: "duration", targetAt: null, durationSeconds: 600 } },
+      { type: "timer.add", timer: { name: "Questions", kind: "duration", targetAt: null, durationSeconds: 630 } },
     ]);
     expect(time.querySelector("input[name=durationSeconds]")).toBeNull();
     const [session] = liveSnapshot().timers;
@@ -68,7 +68,7 @@ describe("studio timers", () => {
       action.value = "stop";
       action.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    void act(() => dialog.querySelector<HTMLInputElement>("input[value='outputs']")!.click());
+    void act(() => dialog.querySelector<HTMLInputElement>("input[name='settings.sound.chime']")!.click());
     void act(() => button(dialog, "Save").click());
     void act(() => labeled(time, "Session timer").click());
     void act(() => button(document.body, "Follow the agenda").click());
@@ -79,8 +79,8 @@ describe("studio timers", () => {
         timerId: "session",
         settings: {
           atZero: { action: "stop", resetAfterSeconds: 10, restart: false },
-          // One warning value: the chime sounds when the time turns amber.
-          sound: { places: ["outputs"], warningSeconds: 120, zero: true },
+          // One warning value: the chime sounds on the feeds when the time turns amber.
+          sound: { warningSeconds: 120, zero: false },
         },
       },
       { type: "timer.control", timerId: "session", action: "follow" },
@@ -103,7 +103,7 @@ describe("studio timers", () => {
     void act(() => button(document.body, "Timer settings").click());
     const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
     type(dialog.querySelector<HTMLInputElement>('input[name="edit.name"]')!, "Startup pitch");
-    type(dialog.querySelector<HTMLInputElement>('input[name="edit.durationSeconds"]')!, "4");
+    type(dialog.querySelector<HTMLInputElement>('input[name="edit.durationSeconds"]')!, "4:00");
     void act(() => button(dialog, "Save").click());
     expect(commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent))).toEqual([
       { type: "timer.edit", timerId: "pitch", edit: { name: "Startup pitch", durationSeconds: 240 } },
@@ -133,15 +133,6 @@ describe("studio timers", () => {
     void act(() => button(dialog, "Save").click());
     void act(() => labeled(host, "Show Session timer on air").click());
     expect(commands(live).map((sent) => liveRoomClientMessageSchema.parse(sent))).toEqual([
-      // One warning: the chime moves with the time it turns amber.
-      {
-        type: "timer.configure",
-        timerId: "session",
-        settings: {
-          atZero: { action: "overtime", resetAfterSeconds: 10, restart: false },
-          sound: { places: [], warningSeconds: 60, zero: true },
-        },
-      },
       {
         type: "stage.timer",
         visible: true,

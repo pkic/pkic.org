@@ -50,7 +50,7 @@ export const agendaSessionTimer: LiveTimer = base;
 export const pitchTimer = running("pitch", "Pitch", "duration", 42_000, {
   durationSeconds: 180,
   atZero: { action: "reset", resetAfterSeconds: 10, restart: false },
-  sound: { places: ["outputs"], warningSeconds: 30, zero: true },
+  sound: { warningSeconds: 30, zero: true },
 });
 /** A pitch left counting as overtime, 1:21 over. */
 export const overrunPitchTimer = running("pitch-over", "Pitch", "duration", -81_000, { durationSeconds: 180 });

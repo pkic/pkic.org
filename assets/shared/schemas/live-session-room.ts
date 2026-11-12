@@ -394,7 +394,7 @@ export const liveRoomSnapshotSchema = z
      */
     stageDisplayNext: liveStageQuestionSchema.nullable().default(null),
     /** The votes of the question lined up next, so a stage display source shows them without the question list. */
-    stageDisplayNextVotes: z.number().int().min(0).nullable().default(null),
+    stageDisplayNextVotes: stageDisplaySettings.liveStageDisplayVotesSchema.default(null),
     stageDisplaySettings: stageDisplaySettings.liveStageDisplaySettingsSnapshotSchema,
   })
   .strict();
@@ -434,14 +434,7 @@ export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("presence.left"), id: livePresenceSchema.shape.id }).strict(),
   liveTimersChangedSchema,
   z.object({ type: z.literal("overlay.mode.changed"), mode: liveOverlayModeSchema }).strict(),
-  /** Stage display sources only: the question in Preview, or its votes, changed. Operators read it from Preview itself. */
-  z
-    .object({
-      type: z.literal("stage.display.next.changed"),
-      question: liveStageQuestionSchema.nullable(),
-      votes: z.number().int().min(0).nullable().optional(),
-    })
-    .strict(),
+  stageDisplaySettings.liveStageDisplayNextChangedSchema(liveStageQuestionSchema),
   stageDisplaySettings.liveStageDisplaySettingsChangedSchema,
   /** Operators only: Program was cleared, and this snapshot restores it. */
   z

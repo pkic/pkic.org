@@ -2,11 +2,11 @@ import { useState } from "preact/hooks";
 import type { ClockZone } from "../../../../../../../../shared/event-clock";
 import { clockTimeZone } from "../../../../../../../../shared/event-clock";
 import { formatClockName } from "../../../../../../../../shared/format-date";
+import { parseLiveTimerLength } from "../../../../../../../../shared/live-timer-format";
 import { LIVE_TIMER_KIND_LABELS } from "../../../../../../../../shared/live-timer-policy";
 import type { LiveRoomClientMessage, LiveRoomSession } from "../../../../../../../../shared/schemas/live-session-room";
 import {
   LIVE_TIMER_KINDS,
-  LIVE_TIMER_MAX_MS,
   liveTimerDraftSchema,
   type LiveTimerKind,
 } from "../../../../../../../../shared/schemas/live-session-timer";
@@ -49,14 +49,14 @@ export function LiveTimerAddForm({
   const [name, setName] = useState("");
   const [kind, setKind] = useState<LiveTimerKind>("duration");
   const [time, setTime] = useState("");
-  const [minutes, setMinutes] = useState("5");
+  const [length, setLength] = useState("5:00");
   const [error, setError] = useState<string | null>(null);
   const zone = clockTimeZone(clock);
   const draft = {
     name,
     kind,
     targetAt: kind === "until" ? liveTimerTargetInstant(time, session, zone) : null,
-    durationSeconds: kind === "duration" && minutes.trim() ? Math.round(Number(minutes) * 60) : null,
+    durationSeconds: kind === "duration" ? parseLiveTimerLength(length) : null,
   };
   const form = useContractForm(liveTimerDraftSchema, draft);
   const add = () => {
@@ -124,18 +124,16 @@ export function LiveTimerAddForm({
         </Field>
       ) : null}
       {kind === "duration" ? (
-        <Field label="Minutes" {...form.of("durationSeconds")}>
+        <Field label="Length" help="As m:ss or h:mm:ss." {...form.of("durationSeconds")}>
           {(control) => (
             <TextInput
               {...control}
               name="durationSeconds"
-              type="number"
-              min="1"
-              max={String(LIVE_TIMER_MAX_MS / 60000)}
               inputMode="numeric"
-              value={minutes}
+              placeholder="5:00"
+              value={length}
               disabled={disabled}
-              onInput={(event) => setMinutes(event.currentTarget.value)}
+              onInput={(event) => setLength(event.currentTarget.value)}
             />
           )}
         </Field>

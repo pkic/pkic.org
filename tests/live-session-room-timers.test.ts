@@ -31,7 +31,7 @@ describe("live room timers", () => {
     const pitch = (await second.next("timers.changed", (message) => message.timers.length === 2)).timers[1]!;
     const settings = {
       atZero: { action: "reset" as const, resetAfterSeconds: 5, restart: true },
-      sound: { places: ["outputs" as const], warningSeconds: 30, zero: true },
+      sound: { warningSeconds: 30, zero: true },
     };
     operator.send({ type: "timer.configure", timerId: pitch.id, settings });
     expect(
@@ -297,7 +297,7 @@ describe("live room timers", () => {
       expect(store.aux("stage-display").timerGraphics.map((graphic) => graphic.format)).toEqual(["ss"]);
       expect(store.timers()).toMatchObject([
         { id: "session", followsAgenda: true, running: false, anchorAt: null, atZero: { action: "overtime" } },
-        { id: "pitch", followsAgenda: false, heldMs: 60_000, sound: { places: [] } },
+        { id: "pitch", followsAgenda: false, heldMs: 60_000, sound: { warningSeconds: null, zero: false } },
       ]);
       const saved = state.storage.sql.exec("SELECT value_json FROM room_controls WHERE name='timers'").toArray()[0]!;
       new LiveRoomStore(new LiveRoomSql(state.storage.sql)).timers();

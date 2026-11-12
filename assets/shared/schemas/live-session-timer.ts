@@ -30,9 +30,9 @@ export const liveTimerNameSchema = z
   .min(1, "Name the timer.")
   .max(40, "Keep the name under 40 characters.");
 const durationSecondsSchema = z
-  .number({ error: "Enter the length in minutes." })
+  .number({ error: "Enter the length as m:ss or h:mm:ss." })
   .int()
-  .min(1, "Enter a length of at least a minute.")
+  .min(1, "Enter a length of at least a second.")
   .max(LIVE_TIMER_MAX_MS / 1000, "Keep the length under ten years.");
 
 /**
@@ -55,27 +55,13 @@ export const liveTimerAtZeroSchema = z
   .strict();
 
 /**
- * Where a timer's sounds play: every output that shows the timer (Program
- * and the livestream, the stage display, a projector, a screen), only while
- * it shows it, and the operators' studio.
+ * A timer's sounds: a chime with `warningSeconds` left (none when null) and,
+ * when `zero` is on, a buzzer at zero. They play on the feeds that show the
+ * timer (Program and the livestream, the stage display, a projector, a
+ * screen), only while they show it.
  */
-export const LIVE_TIMER_SOUND_PLACES = ["outputs", "studio"] as const;
-export type LiveTimerSoundPlace = (typeof LIVE_TIMER_SOUND_PLACES)[number];
-/** Places saved before the outputs shared one switch: the stage display's became every output's. */
-const soundPlaces = z.preprocess(
-  (places) =>
-    Array.isArray(places)
-      ? [...new Set(places.map((place) => (place === "stage-display" ? "outputs" : place)))]
-      : places,
-  z
-    .array(z.enum(LIVE_TIMER_SOUND_PLACES))
-    .max(LIVE_TIMER_SOUND_PLACES.length)
-    .refine((places) => new Set(places).size === places.length, "Choose each place once."),
-);
-/** A chime with `warningSeconds` left (none when null) and, when `zero` is on, a buzzer at zero; nowhere until a place is chosen. */
-export const liveTimerSoundSchema = z
+const soundFieldsSchema = z
   .object({
-    places: soundPlaces,
     warningSeconds: z
       .number({ error: "Enter the seconds left for the warning." })
       .int()
@@ -85,17 +71,22 @@ export const liveTimerSoundSchema = z
     zero: z.boolean(),
   })
   .strict();
+/** A timer saved with a list of places to sound in: one that had none stays silent. */
+export const liveTimerSoundSchema = z.preprocess((sound) => {
+  if (!sound || typeof sound !== "object" || !("places" in sound)) return sound;
+  const { places, ...rest } = sound as { places: unknown } & Record<string, unknown>;
+  return Array.isArray(places) && places.length ? rest : { ...rest, warningSeconds: null, zero: false };
+}, soundFieldsSchema);
 
 export const DEFAULT_LIVE_TIMER_AT_ZERO: z.infer<typeof liveTimerAtZeroSchema> = {
   action: "overtime",
   resetAfterSeconds: 10,
   restart: false,
 };
-/** The chime sounds at the graphic's default warning, when the time turns amber. */
+/** Silent until an operator turns the chime or the buzzer on. */
 export const DEFAULT_LIVE_TIMER_SOUND: z.infer<typeof liveTimerSoundSchema> = {
-  places: [],
-  warningSeconds: 120,
-  zero: true,
+  warningSeconds: null,
+  zero: false,
 };
 
 /** A timer's settings an operator changes after adding it. */

@@ -32,7 +32,7 @@ export function timerDetail(timer: LiveTimer, session: SessionTime, clock: Clock
         ? `resets ${formatNumber(timer.atZero.resetAfterSeconds)} s over`
         : "resets at zero",
     );
-  if (timer.sound.places.length) parts.push("sound on");
+  if (timer.sound.warningSeconds !== null || timer.sound.zero) parts.push("sound on");
   return parts.join(" · ");
 }
 

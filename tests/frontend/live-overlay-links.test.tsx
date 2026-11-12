@@ -2,7 +2,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
-import { StudioOutputLinksDialog } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/StudioOutputLinksDialog";
+import { LiveOverlayLinks } from "../../assets/ts/member-flows/portal/sections/events/detail/live/LiveOverlayLinks";
 
 let host: HTMLElement | undefined;
 afterEach(() => {
@@ -24,11 +24,14 @@ it("loads the room's output links at once, one compact row per output, the link 
   host = document.createElement("div");
   document.body.append(host);
   await act(async () =>
-    render(<StudioOutputLinksDialog slug="pqc-2026" roomId="room-1" layouts={[]} onClose={() => {}} />, host!),
+    render(
+      <LiveOverlayLinks slug="pqc-2026" roomId="room-1" layout={{ slug: "full-frame", name: "Full frame" }} />,
+      host!,
+    ),
   );
   await vi.waitFor(() => expect(document.querySelector("[data-copy-link-row]")).not.toBeNull());
   expect(fetch).toHaveBeenCalledTimes(1);
-  const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
+  const dialog = host!;
   const rows = [...dialog.querySelectorAll<HTMLElement>("[data-copy-link-row]")];
   expect(rows.map((row) => row.querySelector("span")?.textContent)).toContain("Program");
   // No long link fields until a copy fails.

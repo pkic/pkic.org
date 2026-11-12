@@ -295,7 +295,7 @@ export function LiveOverlayPresentation({
       : null;
   return (
     <LiveOverlayFrame view={requested} status={status}>
-      {sounding?.length && state ? <LiveTimerSounds timers={sounding} session={state.session} place="outputs" /> : null}
+      {sounding?.length && state ? <LiveTimerSounds timers={sounding} session={state.session} /> : null}
       {state
         ? layers.map(({ element, draw }) => {
             const placement = elements[element];

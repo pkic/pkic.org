@@ -176,7 +176,7 @@ describe("saved studio layouts", () => {
     ).toEqual(defaultStudioLayouts());
   });
 
-  it("drops a saved Output links panel, now in the toolbar, and keeps the rest of the arrangement", () => {
+  it("drops a saved Output links panel, now on the settings page, and keeps the rest of the arrangement", () => {
     const saved = defaultStudioLayouts();
     const withLinks = {
       ...saved,

@@ -1,0 +1,13 @@
+@layer components {
+  /* The timer's own settings beside its look on a wide screen; one column below. */
+  .pk-timer-settings {
+    display: grid;
+    gap: var(--pk-4);
+    align-items: start;
+  }
+  @media (width >= 56rem) {
+    .pk-timer-settings {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+}
