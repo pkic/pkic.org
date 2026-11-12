@@ -5,6 +5,7 @@
  * same issues, labels and tiers. The thresholds live in one place.
  */
 import { formatNumber } from "./format-number";
+import { screenBrowserNeedsResume } from "./event-screen-health";
 import { screenNetworkReadings } from "./event-screen-quality";
 import type { ScreenLiveStatus, ScreenQualitySample } from "./schemas/event-screen-monitor";
 
@@ -40,6 +41,8 @@ export const SCREEN_ISSUE_CODES = [
   "weak-wifi",
   "no-recent-picture",
   "cached-agenda",
+  "browser-resume",
+  "browser-sharing",
 ] as const;
 export type ScreenIssueCode = (typeof SCREEN_ISSUE_CODES)[number];
 export type ScreenIssueSeverity = "critical" | "warning";
@@ -155,13 +158,20 @@ export function screenIssues({
   }
 
   // Only a screen that has sent a screenshot is judged on its age: a device without the screenshot service never sends one.
-  if (screenshotAt)
+  // A browser screen whose capture ended says so below instead.
+  const browser = health?.kind === "browser" ? health.browser : null;
+  if (screenshotAt && (!browser || browser.capture === "live"))
     add(
       "no-recent-picture",
       "No recent picture",
       tier((level) => age(screenshotAt, now) > rules.pictureMinutes[level] * MINUTE_MS),
       screenshotAt,
     );
+
+  // What a reload or the person sharing took from a browser screen: never critical on its own.
+  if (browser?.capture === "stopped") add("browser-sharing", "No picture (sharing stopped)", "warning", stateSince);
+  else if (browser && screenBrowserNeedsResume(browser))
+    add("browser-resume", "Needs a click to resume", "warning", stateSince);
 
   if (health?.mode === "auto" || health?.mode === "offline")
     add(

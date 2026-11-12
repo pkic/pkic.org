@@ -9,7 +9,7 @@ import "./ScreenStatus.css";
  * A screen's own page while it shows no output: the consortium's mark, not an
  * event's, since an unpaired or unassigned screen belongs to no event yet.
  */
-function ScreenStatusFrame({ view, children }: { view: string; children: ComponentChildren }) {
+export function ScreenStatusFrame({ view, children }: { view: string; children: ComponentChildren }) {
   return (
     <LiveOverlayFrame view={view}>
       <div class="pk-screen-status">

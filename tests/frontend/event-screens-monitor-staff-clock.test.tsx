@@ -42,7 +42,13 @@ describe("the staff clock", () => {
     host = document.body.appendChild(document.createElement("div"));
     await act(() => render(<Probe />, host!));
     await act(() => sockets.latest().open());
-    const screenshot = { type: "screens.screenshot", screenId: "K7M2QA", capturedAt: at(5), jpeg: "/9j/4AAQ" };
+    const screenshot = {
+      type: "screens.screenshot",
+      screenId: "K7M2QA",
+      capturedAt: at(5),
+      format: "jpeg",
+      image: "/9j/4AAQ",
+    };
     await act(() => {
       for (const value of [
         { type: "screens.snapshot", serverNow: server, control: false, screens: [status("K7M2QA")], quality: [] },

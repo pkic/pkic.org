@@ -63,3 +63,15 @@ export const readLivestreamPlayback: LivestreamPlaybackReader = () => {
     return null;
   }
 };
+
+const soundRequests = new Set<() => void>();
+
+/** A click that allows sound happened: a muted player tries with sound again. */
+export function requestLivestreamSound(): void {
+  for (const listener of soundRequests) listener();
+}
+
+export function onLivestreamSoundRequest(listener: () => void): () => void {
+  soundRequests.add(listener);
+  return () => void soundRequests.delete(listener);
+}

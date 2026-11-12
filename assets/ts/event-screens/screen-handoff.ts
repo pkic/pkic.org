@@ -1,3 +1,5 @@
+import { parseScreenPageAddress } from "./screen-address";
+
 /**
  * When a screen gives control back to the device's own status page, which
  * shows the screen ID and returns to the screen page once the server
@@ -27,6 +29,7 @@ export function screenHandoffDue(input: { hasGoodState: boolean; unreachableSinc
   );
 }
 
-export function handOffScreen(location: Pick<Location, "replace"> = window.location): void {
-  location.replace(SCREEN_HANDOFF.url);
+/** Only a device has a status page to go back to; a browser screen stays and keeps trying. */
+export function handOffScreen(location: Pick<Location, "replace" | "hash"> = window.location): void {
+  if (parseScreenPageAddress(location).agent) location.replace(SCREEN_HANDOFF.url);
 }

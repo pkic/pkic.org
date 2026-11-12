@@ -20,6 +20,8 @@ const minute = (minutesAgo: number) => new Date(Math.floor(NOW / 60_000) * 60_00
 
 const HEALTH: ScreenHealth = {
   pageVersion: "p",
+  kind: "device",
+  browser: null,
   display: "output",
   output: "projector",
   mode: "live",
@@ -182,5 +184,28 @@ describe("a screen's issues", () => {
     );
     expect(sorted.map((item) => item.id)).toEqual(["d", "b", "a", "c"]);
     expect(screenIssueCounts([mixed, warning, warning, []])).toEqual({ critical: 1, warning: 2 });
+  });
+
+  it("warns a browser screen that needs a click or stopped sharing, never critical, and ignores its missing network", () => {
+    const browser = (state: Partial<NonNullable<ScreenHealth["browser"]>>) =>
+      online({
+        kind: "browser",
+        metrics: null,
+        browser: { fullscreen: true, wakeLock: true, sound: true, capture: "live", ...state },
+      });
+    expect(issues(browser({}))).toEqual([]);
+    expect(issues(browser({ fullscreen: false, sound: false, capture: "off" }))).toEqual([
+      { code: "browser-resume", label: "Needs a click to resume", severity: "warning", since: ago(20) },
+    ]);
+    // Sharing stopped: its last screenshot ages without counting against it.
+    const stopped = screenIssues({
+      status: browser({ capture: "stopped" }),
+      samples: [],
+      screenshotAt: ago(RULES.pictureMinutes.critical + 5),
+      now: NOW,
+    });
+    expect(stopped).toEqual([
+      { code: "browser-sharing", label: "No picture (sharing stopped)", severity: "warning", since: ago(20) },
+    ]);
   });
 });

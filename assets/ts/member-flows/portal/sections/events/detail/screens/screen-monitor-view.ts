@@ -10,12 +10,13 @@ import type {
   ScreenLiveStatus,
   ScreenMonitorServerMessage,
   ScreenQualitySample,
+  ScreenScreenshotFormat,
 } from "../../../../../../../shared/schemas/event-screen-monitor";
 
 export interface ScreenMonitorScreenshot {
   /** When the monitor received it. */
   capturedAt: string;
-  /** The JPEG as an image address the page can show. */
+  /** The image as an address the page can show. */
   src: string;
 }
 
@@ -25,8 +26,9 @@ export interface ScreenMonitorView {
   screenshots: ReadonlyMap<string, ScreenMonitorScreenshot>;
 }
 
-export function screenshotSource(jpeg: string): string {
-  return `data:image/jpeg;base64,${jpeg}`;
+/** The screenshot as an image address, in the format the screen sent it. */
+export function screenshotSource(format: ScreenScreenshotFormat, image: string): string {
+  return `data:image/${format};base64,${image}`;
 }
 
 export const EMPTY_SCREEN_MONITOR_VIEW: ScreenMonitorView = {
@@ -61,7 +63,7 @@ export function applyScreenMonitorMessage(
         ...view,
         screenshots: new Map(view.screenshots).set(message.screenId, {
           capturedAt: message.capturedAt,
-          src: screenshotSource(message.jpeg),
+          src: screenshotSource(message.format, message.image),
         }),
       };
     default:

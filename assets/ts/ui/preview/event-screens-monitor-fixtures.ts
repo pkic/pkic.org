@@ -11,6 +11,8 @@ const at = (minutesAgo: number) => new Date(SCREEN_FIXTURE_NOW - minutesAgo * 60
 
 export const health = (overrides: Partial<ScreenHealth>): ScreenHealth => ({
   pageVersion: "screen-page-3f9a1c.js",
+  kind: "device",
+  browser: null,
   display: "output",
   output: "projector",
   mode: "live",
@@ -73,9 +75,11 @@ export const MONITOR_SCREENS = {
   stage: "Q4ZT7B",
   projector: "B5LN3D",
   greenRoom: "M3XW5C",
+  /** A laptop set up as a screen, reloaded since: it needs a click to resume. */
+  laptop: "LAPST4",
 } as const;
 
-/** The view as the monitor would build it, with one screen critical (offline) and two with warnings. */
+/** The view as the monitor would build it, with one screen critical (offline) and three with warnings. */
 export const MONITOR: ScreenMonitorView = {
   live: new Map(
     [
@@ -94,6 +98,15 @@ export const MONITOR: ScreenMonitorView = {
       ),
       status(MONITOR_SCREENS.projector, health({ output: "projector", metrics: { network: network(81) } })),
       status(MONITOR_SCREENS.greenRoom, health({ output: "projector" }), false),
+      status(
+        MONITOR_SCREENS.laptop,
+        health({
+          kind: "browser",
+          browser: { fullscreen: false, wakeLock: true, sound: false, capture: "off" },
+          output: "stage-display",
+          metrics: null,
+        }),
+      ),
     ].map((each) => [each.screenId, each]),
   ),
   quality: new Map([
@@ -109,5 +122,7 @@ export const MONITOR: ScreenMonitorView = {
     [MONITOR_SCREENS.stage, { capturedAt: at(3.2), src: picture("timer", "Migrating a private CA") }],
     [MONITOR_SCREENS.projector, { capturedAt: at(0.1), src: picture("slide", "Hybrid certificates") }],
     [MONITOR_SCREENS.greenRoom, { capturedAt: at(12), src: picture("slide", "Welcome back") }],
+    // Its last frame before the reload ended its tab capture.
+    [MONITOR_SCREENS.laptop, { capturedAt: at(1.5), src: picture("timer", "Migrating a private CA") }],
   ]),
 };

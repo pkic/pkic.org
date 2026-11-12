@@ -3,7 +3,11 @@ import { useEffect, useReducer, useRef } from "preact/hooks";
 import { youtubePrivacyEmbedUrl } from "../../shared/youtube-video";
 import { nextLivestreamHealth, startLivestreamHealth, type LivestreamHealthSignal } from "./livestream-health";
 import { LivestreamStallLog, livestreamPlayback, livestreamPlayerState } from "./livestream-playback";
-import { provideLivestreamPlayback, publishLivestreamPlayerReport } from "./livestream-player-report";
+import {
+  onLivestreamSoundRequest,
+  provideLivestreamPlayback,
+  publishLivestreamPlayerReport,
+} from "./livestream-player-report";
 import { ScreenLivestream } from "./ScreenLivestream";
 import { loadYouTubeIframeApi, type YouTubePlayer } from "./youtube-iframe-api";
 
@@ -82,6 +86,23 @@ export function ScreenLivestreamPlayer({
     [],
   );
   useEffect(() => stalls.current.status(health.status, health.changedAt), [health.status, health.changedAt]);
+  // A browser screen's click allows sound: a player that started muted unmutes.
+  useEffect(
+    () =>
+      onLivestreamSoundRequest(() => {
+        const player = ready.current;
+        if (!player) return;
+        try {
+          player.unMute();
+          player.setVolume(100);
+          player.playVideo();
+          report({ type: "sound" });
+        } catch {
+          /* A player going away keeps its sound as it was. */
+        }
+      }),
+    [],
+  );
 
   useEffect(() => {
     const tick = setInterval(() => report({ type: "tick" }), HEALTH_TICK_MS);
