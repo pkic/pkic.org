@@ -1,9 +1,10 @@
 import { SCREEN_MANAGE_PERMISSION } from "../../../../assets/shared/event-screen-permissions";
 import { SCREEN_POLICY } from "../../../../assets/shared/event-screen-policy";
-import type {
-  EventScreenPairingCreate,
-  ScreenRecord,
-  ScreenSessionPollResponse,
+import {
+  SCREEN_ID_IN_USE_CODE,
+  type EventScreenPairingCreate,
+  type ScreenRecord,
+  type ScreenSessionPollResponse,
 } from "../../../../assets/shared/schemas/event-screens";
 import { screenPairingCodeHash } from "../../auth/screen-pairing-challenge";
 import { batchFirst } from "../../db/pagination";
@@ -52,6 +53,7 @@ export async function approveScreenPairing(
         );
         const transferFrom = requireScreenTransfer(actor, SCREEN_MANAGE_PERMISSION, existing, event.id);
         const now = nowIso();
+        if (!input.replace && existing && screenSignedIn(existing, now)) throw screenIdInUse(existing.name);
         const write = screenWriteDatabase(
           db,
           actor,
@@ -126,6 +128,22 @@ export async function approveScreenPairing(
         }
       },
     };
+  });
+}
+
+/** A screen signed in now: an activated sign-in that has not run out. */
+function screenSignedIn(row: ScreenRecordRow, now: string): boolean {
+  return row.session_activated_at !== null && row.session_expires_at !== null && row.session_expires_at > now;
+}
+
+/**
+ * Pairing over a screen that is signed in would sign it out: likely a
+ * mistyped ID, or two screens sharing one. Staff confirm it to go ahead.
+ */
+function screenIdInUse(name: string): AppError {
+  return new AppError(409, SCREEN_ID_IN_USE_CODE, "This screen ID belongs to a screen that is signed in.", {
+    fieldErrors: { screenId: [`“${name}” has this screen ID and is signed in. Check the ID, or replace it.`] },
+    formErrors: [],
   });
 }
 

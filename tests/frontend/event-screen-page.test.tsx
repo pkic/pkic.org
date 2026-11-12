@@ -8,7 +8,7 @@ import { parseScreenPageAddress } from "../../assets/ts/event-screens/screen-add
 import type { ScreenApi } from "../../assets/ts/event-screens/screen-api";
 import { ScreenApp } from "../../assets/ts/event-screens/ScreenApp";
 import { createScreenClock } from "../../assets/ts/event-screens/screen-clock";
-import { SCREEN_HANDOFF } from "../../assets/ts/event-screens/screen-handoff";
+import { SCREEN_HANDOFF, handOffScreen } from "../../assets/ts/event-screens/screen-handoff";
 import { ScreenPairing } from "../../assets/ts/event-screens/ScreenStatus";
 
 let host: HTMLElement | undefined;
@@ -20,11 +20,30 @@ afterEach(async () => {
   }
 });
 
-it("reads the screen ID from the fragment only, as the screen prints it", () => {
-  expect(parseScreenPageAddress({ hash: "#id=K7M2QA" })).toEqual({ screenId: "K7M2QA" });
-  expect(parseScreenPageAddress({ hash: "#id=k7m2qa" })).toEqual({ screenId: "K7M2QA" });
-  expect(parseScreenPageAddress({ hash: "#id=K7M2Q1" })).toBeNull();
-  expect(parseScreenPageAddress({ hash: "" })).toBeNull();
+it("reads the screen ID and where the page runs from the fragment only", () => {
+  expect(parseScreenPageAddress({ hash: "#id=K7M2QA&agent=1" })).toEqual({ screenId: "K7M2QA", host: "device" });
+  expect(parseScreenPageAddress({ hash: "#id=k7m2qa&browser=1" })).toEqual({ screenId: "K7M2QA", host: "browser" });
+  expect(parseScreenPageAddress({ hash: "#id=K7M2Q1&agent=1" })).toEqual({ screenId: null, host: "device" });
+  // No ID and no marker: a browser about to be set up.
+  expect(parseScreenPageAddress({ hash: "" })).toEqual({ screenId: null, host: "browser" });
+});
+
+// Legacy rule: devices opened `#id=` before they marked themselves. It can go once every device sends `agent=1`.
+it("runs an unmarked address with an ID as a device, as before devices marked themselves", () => {
+  expect(parseScreenPageAddress({ hash: "#id=K7M2QA" })).toEqual({ screenId: "K7M2QA", host: "device" });
+  expect(parseScreenPageAddress({ hash: "#agent=yes&id=K7M2QA" })).toEqual({ screenId: "K7M2QA", host: "device" });
+  const replace = vi.fn();
+  handOffScreen({ hash: "#id=K7M2QA", replace });
+  expect(replace).toHaveBeenCalledWith(SCREEN_HANDOFF.url);
+});
+
+it("hands a device back to its local status page, never a browser screen", () => {
+  const replace = vi.fn();
+  handOffScreen({ hash: "#id=K7M2QA&browser=1", replace });
+  handOffScreen({ hash: "", replace });
+  expect(replace).not.toHaveBeenCalled();
+  handOffScreen({ hash: "#id=K7M2QA&agent=1", replace });
+  expect(replace).toHaveBeenCalledWith(SCREEN_HANDOFF.url);
 });
 
 it("shows the pairing code and the screen ID staff enter together", async () => {

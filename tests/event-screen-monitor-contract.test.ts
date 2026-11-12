@@ -8,7 +8,7 @@ import {
 } from "../assets/shared/event-screen-quality";
 import {
   SCREEN_MONITOR_LIMITS,
-  isScreenScreenshot,
+  screenScreenshotFormat,
   screenDeviceMetricsFrom,
   screenDeviceMetricsSchema,
   type ScreenHealth,
@@ -87,6 +87,8 @@ describe("device metrics a screen forwards", () => {
 describe("a screen's quality samples", () => {
   const HEALTH: ScreenHealth = {
     pageVersion: "screen-page-test.js",
+    kind: "device",
+    browser: null,
     display: "output",
     output: "projector",
     mode: "live",
@@ -160,6 +162,8 @@ describe("a screen's quality samples", () => {
 describe("stalls in the quality samples", () => {
   const livestream = (started: number): ScreenHealth => ({
     pageVersion: "p",
+    kind: "device",
+    browser: null,
     display: "livestream",
     output: "livestream",
     mode: "live",
@@ -210,12 +214,18 @@ describe("stalls in the quality samples", () => {
 });
 
 describe("screenshots a screen sends", () => {
-  it("accepts a JPEG within the limit and nothing else", () => {
-    expect(isScreenScreenshot(Uint8Array.from([0xff, 0xd8, 0xff, 0xdb, 0]))).toBe(true);
-    expect(isScreenScreenshot(Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0]))).toBe(false);
+  const WEBP = [0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 0];
+  it("accepts WebP and JPEG within the limit, read from their bytes, and nothing else", () => {
+    expect(screenScreenshotFormat(Uint8Array.from(WEBP))).toBe("webp");
+    expect(screenScreenshotFormat(Uint8Array.from([0xff, 0xd8, 0xff, 0xdb, 0]))).toBe("jpeg");
+    expect(screenScreenshotFormat(Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]))).toBeNull();
+    expect(
+      screenScreenshotFormat(Uint8Array.from([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x41, 0x56, 0x45])),
+    ).toBeNull();
+    expect(screenScreenshotFormat(new Uint8Array(0))).toBeNull();
     const large = new Uint8Array(SCREEN_MONITOR_LIMITS.screenshotBytes + 1);
-    large.set([0xff, 0xd8, 0xff]);
-    expect(isScreenScreenshot(large)).toBe(false);
+    large.set(WEBP);
+    expect(screenScreenshotFormat(large)).toBeNull();
   });
 });
 
@@ -223,6 +233,8 @@ describe("health badges", () => {
   it("name only the state, never the output again", () => {
     const base: ScreenHealth = {
       pageVersion: "p",
+      kind: "device",
+      browser: null,
       display: "livestream",
       output: "livestream",
       mode: "live",

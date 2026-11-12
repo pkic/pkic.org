@@ -24,6 +24,8 @@ const SCREEN = "K7M2QA";
 const METRICS: ScreenDeviceMetrics = { uptime: 120, temps: { cpu: 48 } };
 const HEALTH: Omit<ScreenHealth, "metrics"> = {
   pageVersion: "screen-page-test.js",
+  kind: "device",
+  browser: null,
   display: "waiting",
   output: null,
   mode: "live",

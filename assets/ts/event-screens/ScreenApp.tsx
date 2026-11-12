@@ -13,6 +13,9 @@ import { screenHandoffDue, SCREEN_READY_ATTRIBUTE } from "./screen-handoff";
 import { ScreenLiveFeed, type ScreenLiveReport } from "./ScreenLiveFeed";
 import { ScreenIdentify } from "./ScreenIdentify";
 import { ScreenLivestreamPlayer } from "./ScreenLivestreamPlayer";
+import { browserScreenSound, type BrowserScreen } from "./browser-screen";
+import { BrowserScreenResume } from "./BrowserScreenResume";
+import { useBrowserScreenState } from "./useBrowserScreenState";
 import { livestreamPlayerReport, subscribeLivestreamPlayerReport } from "./livestream-player-report";
 import { screenHealth, screenPageVersion } from "./screen-health";
 import { useScreenMonitor } from "./useScreenMonitor";
@@ -96,6 +99,7 @@ export function ScreenApp({
   onHandoff,
   onReload = () => window.location.reload(),
   monitor,
+  browser = null,
 }: {
   screenId: ScreenId;
   storage: Storage;
@@ -106,6 +110,11 @@ export function ScreenApp({
   onReload?: () => void;
   /** The monitor connection's socket and device readers, replaced in tests. */
   monitor?: Pick<Parameters<typeof useScreenMonitor>[0], "createSocket" | "readMetrics" | "readScreenshot">;
+  /**
+   * A browser screen's grants and tab capture. Without one the page runs on a
+   * device and reads the device's local service; with one it never does.
+   */
+  browser?: BrowserScreen | null;
 }) {
   const runtime = useScreenRuntime({ screenId, storage, clock, api });
   const { view, agenda, overlayToken, refresh } = runtime;
@@ -197,13 +206,28 @@ export function ScreenApp({
     [onReload],
   );
   const pageVersion = useMemo(() => screenPageVersion(), []);
+  const grants = useBrowserScreenState(browser).state;
+  const sound = browserScreenSound(display.kind === "livestream" ? player : null);
+  // A browser screen has no device to read: no metrics, and screenshots from its own tab capture.
+  const readers = useMemo(
+    () => (browser ? { readMetrics: async () => null, readScreenshot: browser.readScreenshot } : {}),
+    [browser],
+  );
   useScreenMonitor({
     screenId,
     // Only a screen signed in has a sign-in to report with; one holding its device's copy may not be.
     enabled: !runtime.pairingRequired && view !== null,
     connection: assignment?.eventSlug ?? "",
-    health: screenHealth({ display, assignment, player, clockOffsetMs: clock.offset(), pageVersion }),
+    health: screenHealth({
+      display,
+      assignment,
+      player,
+      clockOffsetMs: clock.offset(),
+      pageVersion,
+      browser: grants ? { ...grants, sound } : null,
+    }),
     onCommand,
+    ...readers,
     ...monitor,
   });
   // The monitor sets the end on the server's clock, which `now` follows.
@@ -228,6 +252,7 @@ export function ScreenApp({
       ) : null}
       <ScreenView screenId={screenId} display={display} now={now} />
       {identifying ? <ScreenIdentify screenId={screenId} name={view?.screen.name ?? null} /> : null}
+      {browser ? <BrowserScreenResume browser={browser} sound={sound} /> : null}
     </>
   );
 }

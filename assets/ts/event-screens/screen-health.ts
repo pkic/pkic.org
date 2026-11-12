@@ -1,4 +1,4 @@
-import type { ScreenHealth } from "../../shared/schemas/event-screen-monitor";
+import type { ScreenBrowserState, ScreenHealth } from "../../shared/schemas/event-screen-monitor";
 import type { ScreenOwnView } from "../../shared/schemas/event-screens";
 import type { LivestreamPlayerReport } from "./livestream-player-report";
 import type { ScreenDisplay } from "./screen-display";
@@ -24,10 +24,14 @@ export function screenHealth(input: {
   player: LivestreamPlayerReport | null;
   clockOffsetMs: number;
   pageVersion: string;
+  /** A browser screen's grants; a device has none. */
+  browser?: ScreenBrowserState | null;
 }): Omit<ScreenHealth, "metrics"> {
   const { display } = input;
   return {
     pageVersion: input.pageVersion,
+    kind: input.browser ? "browser" : "device",
+    browser: input.browser ?? null,
     display: display.kind,
     output: display.kind === "pairing" || display.kind === "waiting" ? null : (input.assignment?.output ?? null),
     mode: runMode(display),

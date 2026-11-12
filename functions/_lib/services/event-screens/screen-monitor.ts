@@ -4,7 +4,7 @@ import { SCREEN_POLICY } from "../../../../assets/shared/event-screen-policy";
 import {
   SCREEN_MONITOR_LIMITS,
   SCREEN_MONITOR_PROTOCOL,
-  isScreenScreenshot,
+  screenScreenshotFormat,
   screenMonitorCommandSchema,
   screenMonitorScreenMessageSchema,
   screenMonitorServerMessageSchema,
@@ -292,14 +292,16 @@ export class EventScreenMonitor extends DurableObject<Env> {
       serverNow: Date.now(),
       screenId,
       capturedAt: shot.capturedAt,
-      jpeg: bytesToBase64(shot.jpeg),
+      format: shot.format,
+      image: bytesToBase64(shot.bytes),
     });
   }
 
-  /** Only the latest JPEG within the limit is kept; anything else, or one sent too soon, is dropped. */
+  /** Only the latest WebP or JPEG within the limit is kept, as sent; anything else, or one sent too soon, is dropped. */
   private async screenshot(screenId: string, bytes: Uint8Array): Promise<void> {
-    if (!isScreenScreenshot(bytes)) return;
-    const stored = await this.store.screenshot(screenId, bytes, nowIso());
+    const format = screenScreenshotFormat(bytes);
+    if (!format) return;
+    const stored = await this.store.screenshot(screenId, { format, bytes }, nowIso());
     if (stored) this.toStaff(JSON.stringify(this.screenshotMessage(screenId, stored)));
   }
 

@@ -1,3 +1,5 @@
+import { screenWakeLock } from "../../../../../../shared/screen-wake-lock";
+
 /** Fullscreen is progressive enhancement; the fixed viewport works on iOS too. */
 export function enterScannerFullscreen(element: HTMLElement) {
   void element.requestFullscreen?.().catch(() => {});
@@ -8,30 +10,13 @@ export function scannerImmersiveLifecycle(
   onExit: () => void,
   onAwake: (awake: boolean) => void = () => {},
 ) {
-  let disposed = false;
-  let wakeLock: WakeLockSentinel | undefined;
+  const wakeLock = screenWakeLock(onAwake);
   onAwake(false);
   // Native document scrolling remains disabled while the scanner owns the viewport.
   document.body.classList.add("pk-scanner-immersive");
-  const acquire = async () => {
-    try {
-      const lock = await navigator.wakeLock?.request("screen");
-      if (disposed) await lock?.release();
-      else {
-        wakeLock = lock;
-        onAwake(Boolean(lock && !lock.released));
-        lock?.addEventListener("release", () => {
-          if (!disposed) onAwake(false);
-        });
-      }
-    } catch {
-      /* Screen wake lock is optional. */
-    }
-  };
   const visibility = () => {
     if (document.visibilityState !== "visible") {
-      onAwake(false);
-      void wakeLock?.release().catch(() => {});
+      wakeLock.release();
       onExit();
     }
   };
@@ -42,14 +27,12 @@ export function scannerImmersiveLifecycle(
   // remains active until an explicit exit or the document becomes hidden.
   document.addEventListener("visibilitychange", visibility);
   document.addEventListener("keydown", escape);
-  void acquire();
+  void wakeLock.acquire();
   return () => {
-    disposed = true;
-    onAwake(false);
+    wakeLock.dispose();
     document.body.classList.remove("pk-scanner-immersive");
     document.removeEventListener("visibilitychange", visibility);
     document.removeEventListener("keydown", escape);
-    void wakeLock?.release().catch(() => {});
     if (document.fullscreenElement === element) void document.exitFullscreen?.().catch(() => {});
   };
 }
