@@ -1,16 +1,16 @@
-import { useState } from "preact/hooks";
-import { liveOverlayAccessResponseSchema } from "../../../../../../../shared/schemas/live-overlay-access";
+import { useEffect, useState } from "preact/hooks";
 import { formatDateTime } from "../../../../../../../shared/format-date";
+import { liveOverlayAccessResponseSchema } from "../../../../../../../shared/schemas/live-overlay-access";
+import { ErrorAlert } from "../../../../../../components/ErrorAlert";
+import { liveOverlayAddress, LIVE_OVERLAY_VIEWS } from "../../../../../../live-session/live-overlay-address";
 import { postJson } from "../../../../../../shared/api-client";
 import { CopyLinkRow } from "../../../../../../shared/widgets/copy-link-row";
-import { liveOverlayAddress, LIVE_OVERLAY_VIEWS } from "../../../../../../live-session/live-overlay-address";
-import { ErrorAlert } from "../../../../../../components/ErrorAlert";
-import { Button } from "../../../../../../ui/Button";
+import { Spinner } from "../../../../../../components/Spinner";
 
 /**
- * Stable broadcast browser sources for one physical room throughout its
- * program: one per output, each drawing the given layout. Load the same
- * output again with another layout for each scene in the production software.
+ * A physical room's browser sources for one layout: one compact row per
+ * output with its copy control. The room gives the same links each time, so
+ * they load as soon as they show, until a day after its program ends.
  */
 export function LiveOverlayLinks({
   slug,
@@ -22,51 +22,45 @@ export function LiveOverlayLinks({
   layout: { slug: string; name: string };
 }) {
   const [access, setAccess] = useState<{ token: string; expiresAt: string } | null>(null);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  async function issue() {
-    setBusy(true);
+  useEffect(() => {
+    let current = true;
+    setAccess(null);
     setError(null);
-    try {
-      setAccess(
-        await postJson(
-          `/api/v1/events/${encodeURIComponent(slug)}/agenda/rooms/${encodeURIComponent(roomId)}/live/overlays`,
-          {},
-          liveOverlayAccessResponseSchema,
-        ),
-      );
-    } catch (failure) {
-      setError(failure instanceof Error ? failure : new Error("The overlay links could not be created."));
-    } finally {
-      setBusy(false);
-    }
-  }
+    postJson(
+      `/api/v1/events/${encodeURIComponent(slug)}/agenda/rooms/${encodeURIComponent(roomId)}/live/overlays`,
+      {},
+      liveOverlayAccessResponseSchema,
+    ).then(
+      (issued) => current && setAccess(issued),
+      (failure: unknown) =>
+        current && setError(failure instanceof Error ? failure : new Error("The output links could not be loaded.")),
+    );
+    return () => {
+      current = false;
+    };
+  }, [slug, roomId]);
+  if (error) return <ErrorAlert error={error} />;
+  if (!access) return <Spinner label="Getting the links…" />;
   return (
     <div class="pk-stack">
-      {error ? <ErrorAlert error={error} /> : null}
-      {access ? (
-        <>
-          {LIVE_OVERLAY_VIEWS.map((view) => (
-            <CopyLinkRow
-              key={view.id}
-              label={`${view.label}, ${layout.name}`}
-              url={liveOverlayAddress(window.location.origin, {
-                view: view.id,
-                layout: layout.slug,
-                slug,
-                roomId,
-                token: access.token,
-              })}
-            />
-          ))}
-          <p class="pk-small pk-muted">Sources expire {formatDateTime(access.expiresAt)}.</p>
-        </>
-      ) : null}
-      <div class="pk-cluster">
-        <Button loading={busy} onClick={() => void issue()}>
-          {access ? "Refresh sources" : "Create sources"}
-        </Button>
+      <div class="pk-stack pk-stack--snug">
+        {LIVE_OVERLAY_VIEWS.map((view) => (
+          <CopyLinkRow
+            key={view.id}
+            compact
+            label={view.label}
+            url={liveOverlayAddress(window.location.origin, {
+              view: view.id,
+              layout: layout.slug,
+              slug,
+              roomId,
+              token: access.token,
+            })}
+          />
+        ))}
       </div>
+      <p class="pk-small pk-muted">These links stay the same and work until {formatDateTime(access.expiresAt)}.</p>
     </div>
   );
 }

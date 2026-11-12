@@ -1,3 +1,5 @@
+import { useState } from "preact/hooks";
+import type { ComponentProps } from "preact";
 import { Button } from "../../../../../../../ui/Button";
 import { buttonClasses } from "../../../../../../../ui/button-classes";
 import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
@@ -12,9 +14,10 @@ import {
   type StudioPanel,
   type StudioWorkspace,
 } from "./studio-layout";
+import { StudioOutputLinksDialog } from "./StudioOutputLinksDialog";
 import type { StudioChange } from "./useStudioLayout";
 
-/** The layout row: switch workspace, add or reset panels, and take the whole screen. */
+/** The layout row: switch workspace, add or reset panels, the room's output links, and the whole screen. */
 export function StudioToolbar({
   workspace,
   selectWorkspace,
@@ -23,6 +26,7 @@ export function StudioToolbar({
   reset,
   expanded,
   toggleExpanded,
+  outputLinks,
 }: {
   workspace: StudioWorkspace;
   selectWorkspace: (workspace: StudioWorkspace) => void;
@@ -31,8 +35,11 @@ export function StudioToolbar({
   reset: () => void;
   expanded: boolean;
   toggleExpanded: () => void;
+  /** The room whose output links the toolbar offers. */
+  outputLinks: Omit<ComponentProps<typeof StudioOutputLinksDialog>, "onClose">;
 }) {
   const present = new Set(panels.map((panel) => panel.type));
+  const [linksOpen, setLinksOpen] = useState(false);
   return (
     <div class="pk-studio-toolbar">
       <span class="pk-studio-toolbar__label" aria-hidden="true">
@@ -62,6 +69,9 @@ export function StudioToolbar({
         <Button variant="ghost" onClick={reset}>
           Reset layout
         </Button>
+        <Button variant="ghost" onClick={() => setLinksOpen(true)}>
+          Output links
+        </Button>
         <Button
           icon
           aria-pressed={expanded}
@@ -74,6 +84,7 @@ export function StudioToolbar({
           </StrokeIcon>
         </Button>
       </div>
+      {linksOpen ? <StudioOutputLinksDialog {...outputLinks} onClose={() => setLinksOpen(false)} /> : null}
     </div>
   );
 }

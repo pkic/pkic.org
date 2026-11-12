@@ -1,14 +1,15 @@
-import { liveProgramOverlayAccessHours } from "../../../../assets/shared/live-room-program-policy";
+import { liveProgramOverlayExpiresAt } from "../../../../assets/shared/live-room-program-policy";
 import { liveOverlayAccessResponseSchema } from "../../../../assets/shared/schemas/live-overlay-access";
-import { signLiveOverlayToken } from "../../auth/live-session-overlay-token";
+import { LIVE_OVERLAY_ROOM_ISSUER, signLiveOverlayToken } from "../../auth/live-session-overlay-token";
 import type { DatabaseLike, Env } from "../../types";
-import { addHours, nowIso } from "../../utils/time";
+import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
 import { readPublishedProgramRoom } from "./program-room";
 
 /**
- * Issues a broadcast overlay's read-only access to one physical room's program. The
- * access expires on its own; issuing it is audited against the event.
+ * Issues a broadcast overlay's read-only access to one physical room's program:
+ * the same links each time until a day after the program ends. Each request
+ * is audited against the event.
  */
 export async function issueLiveOverlayAccess(
   db: DatabaseLike,
@@ -19,11 +20,12 @@ export async function issueLiveOverlayAccess(
 ) {
   const room = await readPublishedProgramRoom(db, eventId, roomId);
   const issuedAt = nowIso();
-  const expiresAt = addHours(issuedAt, liveProgramOverlayAccessHours(room.firstStartAt, room.lastEndAt));
+  // The same room and program give the same links, whoever asks and whenever: an operator finds them again.
+  const expiresAt = liveProgramOverlayExpiresAt(room.lastEndAt, Date.parse(issuedAt));
   const token = await signLiveOverlayToken(env.INTERNAL_SIGNING_SECRET, {
     eventId,
     roomId,
-    issuedBy: operatorUserId,
+    issuedBy: LIVE_OVERLAY_ROOM_ISSUER,
     expiresAt,
   });
   await db.batch([

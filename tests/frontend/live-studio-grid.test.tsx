@@ -23,6 +23,7 @@ function Harness() {
         change={layout.change}
         reset={layout.reset}
         expanded={false}
+        outputLinks={{ slug: "pqc-2026", roomId: "room", layouts: [] }}
         toggleExpanded={() => {}}
       />
       <StudioGrid

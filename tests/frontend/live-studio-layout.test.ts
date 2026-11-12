@@ -176,6 +176,18 @@ describe("saved studio layouts", () => {
     ).toEqual(defaultStudioLayouts());
   });
 
+  it("drops a saved Output links panel, now in the toolbar, and keeps the rest of the arrangement", () => {
+    const saved = defaultStudioLayouts();
+    const withLinks = {
+      ...saved,
+      livestream: [...saved.livestream, { id: "livestream-sources-9", type: "sources", x: 0, y: 30, w: 6, h: 7 }],
+    };
+    const storage = memory({ [STUDIO_LAYOUT_STORAGE_KEY]: withLinks });
+    const loaded = loadStudioLayouts(storage);
+    expect(loaded.livestream.map((panel) => panel.type)).not.toContain("sources");
+    expect(loaded.livestream).toHaveLength(saved.livestream.length);
+  });
+
   it("settles a saved arrangement whose panels overlap", () => {
     const overlapping: StudioPanel[] = [
       { id: "a", type: "chat", x: 0, y: 0, w: 6, h: 4 },

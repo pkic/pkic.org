@@ -23,7 +23,6 @@ import { LivePanelPresence } from "./presence/LivePresenceTag";
 import { GraphicsPanel, nextInRoom } from "./studio/GraphicsPanel";
 import { monitorPanelView } from "./studio/MonitorPanel";
 import { StudioScreensBody, StudioScreensConnection } from "./studio/ScreensPanel";
-import { SourcesPanel } from "./studio/SourcesPanel";
 import { SpeakerMessagePanel } from "./studio/SpeakerMessagePanel";
 import { stageDisplaySettingsMenu } from "./studio/stage-display-settings-menu";
 import { StudioGrid, type StudioPanelView } from "./studio/StudioGrid";
@@ -309,8 +308,6 @@ export function LiveSessionDesk({
         };
       case "chat":
         return { title, body: <LiveChatPanel studio state={state} disabled={!live} send={sendProgram} /> };
-      case "sources":
-        return { title, body: <SourcesPanel slug={slug} roomId={roomId} layouts={state.overlayLayouts} /> };
       case "screens":
         return {
           title,
@@ -392,6 +389,7 @@ export function LiveSessionDesk({
             reset={layout.reset}
             expanded={fullscreen.expanded}
             toggleExpanded={fullscreen.toggle}
+            outputLinks={{ slug, roomId, layouts: state.overlayLayouts }}
           />
         </div>
         {phone ? null : (

@@ -37,7 +37,6 @@ export const STUDIO_PANEL_TYPES = [
   "message",
   "polls",
   "chat",
-  "sources",
   "screens",
 ] as const;
 export type StudioPanelType = (typeof STUDIO_PANEL_TYPES)[number];
@@ -51,7 +50,6 @@ export const STUDIO_PANEL_LABELS: Record<StudioPanelType, string> = {
   message: "Message to speaker",
   polls: "Polls",
   chat: "Chat",
-  sources: "Output links",
   screens: "Screens",
 };
 
@@ -117,7 +115,15 @@ export const studioPanelSchema = z
     return panel.w >= bounds.minW && panel.h >= bounds.minH;
   }, "A panel is at least its type's smallest size.");
 export type StudioPanel = z.infer<typeof studioPanelSchema>;
-const studioWorkspaceSchema = z.array(studioPanelSchema).max(24);
+/** Panel types the studio no longer has: the output links moved to the toolbar. A saved one is dropped. */
+const RETIRED_PANEL_TYPES: ReadonlySet<unknown> = new Set(["sources"]);
+const studioWorkspaceSchema = z.preprocess(
+  (panels) =>
+    Array.isArray(panels)
+      ? panels.filter((panel: unknown) => !RETIRED_PANEL_TYPES.has((panel as { type?: unknown } | null)?.type))
+      : panels,
+  z.array(studioPanelSchema).max(24),
+);
 export const studioLayoutsSchema = z
   .object(
     Object.fromEntries(STUDIO_WORKSPACES.map((workspace) => [workspace, studioWorkspaceSchema])) as Record<
@@ -161,8 +167,7 @@ export function defaultStudioLayouts(): StudioLayouts {
       ["monitor", { x: 0, y: 12, w: 4, h: 7 }, ["program"]],
       ["speakers", { x: 4, y: 12, w: 4, h: 7 }],
       ["graphics", { x: 8, y: 12, w: 4, h: 7 }],
-      ["chat", { x: 0, y: 19, w: 6, h: 7 }],
-      ["sources", { x: 6, y: 19, w: 6, h: 7 }],
+      ["chat", { x: 0, y: 19, w: 12, h: 7 }],
     ]),
     stage: seeded("stage", [
       ["monitor", { x: 0, y: 0, w: 6, h: 10 }, ["stage-display"]],
@@ -185,7 +190,6 @@ const DEFAULT_SIZE: Record<StudioPanelType, { w: number; h: number }> = {
   message: { w: 4, h: 7 },
   polls: { w: 4, h: 7 },
   chat: { w: 4, h: 7 },
-  sources: { w: 6, h: 7 },
   screens: { w: 5, h: 12 },
 };
 

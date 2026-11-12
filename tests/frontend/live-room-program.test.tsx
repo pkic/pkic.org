@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { LiveProgramOverlay } from "../../assets/ts/live-session/LiveProgramOverlay";
 import { LIVE_PROGRAM_PROTOCOL, liveProgramMessageSchema } from "../../assets/shared/schemas/live-room-program";
 import { fakeLiveSockets, liveSnapshot, LIVE_OCCURRENCE } from "./helpers/live-room-socket";
-import { liveProgramOverlayAccessHours, liveProgramPointerPurgeAt } from "../../assets/shared/live-room-program-policy";
+import { liveProgramOverlayExpiresAt, liveProgramPointerPurgeAt } from "../../assets/shared/live-room-program-policy";
 let host: HTMLDivElement;
 afterEach(() => {
   if (host) {
@@ -103,10 +103,11 @@ describe("continuous physical-room source", () => {
     );
     expect(liveProgramPointerPurgeAt(null, "2030-12-01T09:00:00.000Z")).toBe(Date.parse("2030-12-08T09:00:00.000Z"));
   });
-  it("extends a source by program duration rather than waiting months until a future event", () => {
-    expect(liveProgramOverlayAccessHours("2030-12-01T09:00:00.000Z", "2030-12-03T17:00:00.000Z")).toBe(80);
-    expect(liveProgramOverlayAccessHours(null, null)).toBe(24);
-    expect(liveProgramOverlayAccessHours("invalid", "2030-12-03T17:00:00.000Z")).toBe(24);
-    expect(liveProgramOverlayAccessHours("2030-12-03T17:00:00.000Z", "2030-12-01T09:00:00.000Z")).toBe(24);
+  it("keeps a room's output links until a day after its program ends, the same whenever they are asked for", () => {
+    const now = Date.parse("2030-10-01T09:00:00.000Z");
+    expect(liveProgramOverlayExpiresAt("2030-12-03T17:00:00.000Z", now)).toBe("2030-12-04T17:00:00.000Z");
+    expect(liveProgramOverlayExpiresAt("2030-12-03T17:00:00.000Z", now + 86_400_000)).toBe("2030-12-04T17:00:00.000Z");
+    expect(liveProgramOverlayExpiresAt(null, now)).toBe("2030-10-02T09:00:00.000Z");
+    expect(liveProgramOverlayExpiresAt("invalid", now)).toBe("2030-10-02T09:00:00.000Z");
   });
 });
