@@ -201,7 +201,7 @@ export function TimerRow({
             icon
             variant={reading.running ? "secondary" : "primary"}
             aria-label={`${startLabel} ${timer.name}`}
-            title={startLabel}
+            title={reading.running ? "Pause" : before ? "Start now, from its full length" : "Start"}
             disabled={disabled}
             onClick={() => control(reading.running ? "pause" : "start")}
           >
@@ -211,7 +211,7 @@ export function TimerRow({
             icon
             class="pk-studio-time__reset"
             aria-label={`Reset ${timer.name}`}
-            title="Reset"
+            title={timer.kind === "until" ? "Count to its time again" : "Back to its full length, stopped"}
             disabled={disabled}
             onClick={() => control("reset")}
           >

@@ -10,7 +10,7 @@ import type {
   LiveRoomServerMessage,
   LiveRoomSession,
 } from "../../../../assets/shared/schemas/live-session-room";
-import type { LiveStageDisplaySettings } from "../../../../assets/shared/schemas/live-stage-display-settings";
+import type { LiveStageDisplaySettingsPatch } from "../../../../assets/shared/schemas/live-stage-display-settings";
 import type { LiveControlOutcome } from "./room-controls";
 import { composeLiveStage, type ResolvedComposition } from "./room-composition";
 import type { LivePollStore } from "./room-poll-store";
@@ -76,11 +76,12 @@ export class LiveRoomOutputs {
   /** How the stage display behaves for this session: its reactions and its near-end cue. */
   private setStageDisplaySettings(
     operator: Operator,
-    settings: LiveStageDisplaySettings,
+    patch: LiveStageDisplaySettingsPatch,
     at: string,
   ): LiveControlOutcome {
+    const settings = { ...this.store.stageDisplaySettings(), ...patch };
     this.store.saveStageDisplaySettings(settings);
-    this.store.recordStaffAction(operator.userId, "live_session.stage_display_settings", settings, at);
+    this.store.recordStaffAction(operator.userId, "live_session.stage_display_settings", patch, at);
     return { messages: [{ type: "stage.display.settings.changed", settings }] };
   }
 

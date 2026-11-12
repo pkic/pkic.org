@@ -44,7 +44,15 @@ export interface LiveTargets {
   disabled: boolean;
   /** Sends a command to the room, which first makes this session the room's program when it changes what is on air. */
   sendProgram: Send;
+  /** Sends several commands in order as one change; without it each goes out on its own. */
+  sendPrograms?: (messages: readonly LiveRoomClientMessage[]) => boolean;
 }
+
+/** Sends commands in order as one change, so a broadcast in progress cannot refuse the later ones. */
+export const sendLivePrograms = (targets: LiveTargets, messages: readonly LiveRoomClientMessage[]): boolean =>
+  targets.sendPrograms
+    ? targets.sendPrograms(messages)
+    : messages.map((message) => targets.sendProgram(message)).every(Boolean);
 
 const sameConfig = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
 
@@ -67,7 +75,8 @@ export function liveLayerShown(stage: LiveStage, layer: LiveLayer): boolean {
     case "panelists":
       return stage.panelists?.layout === layer.panelists.layout;
     case "timer":
-      return stage.timerGraphics.some((graphic) => sameConfig(graphic, layer.graphic));
+      // An output shows each timer once; it shows this one whatever its settings there.
+      return stage.timerGraphics.some((graphic) => graphic.timerId === layer.graphic.timerId);
     case "checkIn":
       return (
         sameConfig(stage.checkIn?.selection ?? null, layer.checkIn.selection) &&

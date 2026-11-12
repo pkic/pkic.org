@@ -50,7 +50,8 @@ export function useLiveStageReactions(burst: LiveRoomState["burst"], enabled: bo
   const sequence = burst?.sequence;
   useEffect(() => {
     const arrived = latest.current?.counts;
-    if (!arrived) return;
+    // A snapshot clears the burst; clear the row with it rather than keep stale counts.
+    if (!arrived) return setCounts((current) => (Object.keys(current).length ? {} : current));
     setCounts((current) => {
       const next = { ...current };
       for (const [id, count] of Object.entries(arrived) as Array<[LiveReactionId, number]>)

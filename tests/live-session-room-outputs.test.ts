@@ -96,6 +96,18 @@ describe("live room auxiliary outputs", () => {
     expect((await rejoined.next("room.snapshot")).stageDisplaySettings).toEqual(settings);
   });
 
+  it("merges each stage display change into the room's copy, so quick changes never undo each other", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const overlay = await f.connect({ overlay: await overlayToken() });
+    await overlay.next("room.snapshot");
+    operator.send({ type: "stage.display.settings", settings: { reactions: false } });
+    operator.send({ type: "stage.display.settings", settings: { endsWithQuestions: false } });
+    const merged = { ...DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS, reactions: false, endsWithQuestions: false };
+    expect(
+      (await overlay.next("stage.display.settings.changed", (m) => !m.settings.endsWithQuestions)).settings,
+    ).toEqual(merged);
+  });
+
   it("refuses an invalid composition whole and leaves the output unchanged", async () => {
     const operator = await f.connect({ person: "operator" });
     operator.send({

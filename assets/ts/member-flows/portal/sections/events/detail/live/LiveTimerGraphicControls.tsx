@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import {
   LIVE_TIMER_DIRECTIONS,
   LIVE_TIMER_FORMATS,
@@ -15,7 +15,7 @@ import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../ui/TextControl";
-import { liveTimerGraphicReplacements, type LiveTargets } from "./live-output-targets";
+import { liveTimerGraphicReplacements, sendLivePrograms, type LiveTargets } from "./live-output-targets";
 
 const FORMAT_LABELS: Record<LiveTimerGraphic["format"], string> = {
   clock: "Clock (12:34, 1:02:34, 3d 04:12)",
@@ -89,7 +89,8 @@ export function LiveTimerGraphicDialog({
   timerName: string;
   /** False for a clock, which reads the time of day in one fixed way. */
   counts: boolean;
-  onSave: (graphic: LiveTimerGraphic) => void;
+  /** Whether the graphic reached every output that shows it. */
+  onSave: (graphic: LiveTimerGraphic) => boolean;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState(graphic);
@@ -113,7 +114,8 @@ export function LiveTimerGraphicDialog({
       onConfirm={() => {
         const checked = form.submit();
         if (!checked.data) return setError(checked.formMessage);
-        onSave(checked.data);
+        if (!onSave(checked.data))
+          return setError("The control room is reconnecting or busy. Try again when it is connected.");
         onClose();
       }}
     >
@@ -261,9 +263,16 @@ export function useLiveTimerGraphic(targets: LiveTargets, timerId: string) {
     state.preview.timerGraphics.find((graphic) => graphic.timerId === timerId) ??
     (targets.programActive ? state.stage.timerGraphics.find((graphic) => graphic.timerId === timerId) : undefined);
   const [graphic, setGraphic] = useState<LiveTimerGraphic>(shown ?? defaultLiveTimerGraphic(timerId));
-  const save = (next: LiveTimerGraphic) => {
-    for (const message of liveTimerGraphicReplacements(targets, graphic, next)) targets.sendProgram(message);
+  // When another operator changes what an output shows, this desk follows it.
+  const shownKey = shown ? JSON.stringify(shown) : null;
+  useEffect(() => {
+    if (shownKey) setGraphic(JSON.parse(shownKey) as LiveTimerGraphic);
+  }, [shownKey]);
+  /** Whether every output that shows the timer took the new graphic; on failure nothing changes here. */
+  const save = (next: LiveTimerGraphic): boolean => {
+    if (!sendLivePrograms(targets, liveTimerGraphicReplacements(targets, graphic, next))) return false;
     setGraphic(next);
+    return true;
   };
   return { graphic, save };
 }

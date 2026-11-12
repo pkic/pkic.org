@@ -131,16 +131,24 @@ export function LiveSessionDesk({
 
   /** Sends a command; the other operators briefly see who changed the control it came from. */
   const sendProgram = (message: LiveRoomClientMessage): boolean => {
-    const sent = sendToRoom(message);
+    const sent = sendToRoom([message]);
     if (sent && message.type !== "chat.send") presence.changed();
     return sent;
   };
-  const sendToRoom = (message: LiveRoomClientMessage): boolean => {
-    if (!changesBroadcast(message) || !broadcast) return room.send(message);
+  /** Sends commands in order; those that change what is on air go out as one broadcast, so none is refused. */
+  const sendPrograms = (messages: readonly LiveRoomClientMessage[]): boolean => {
+    const sent = sendToRoom(messages);
+    if (sent && messages.length) presence.changed();
+    return sent;
+  };
+  const sendToRoom = (messages: readonly LiveRoomClientMessage[]): boolean => {
+    const sendEach = () => messages.map((message) => room.send(message)).every(Boolean);
+    const first = messages.find(changesBroadcast);
+    if (!first || !broadcast) return sendEach();
     if (runningBroadcast.current || !live) return false;
     runningBroadcast.current = true;
     setBroadcasting(true);
-    void broadcast(message, () => room.send(message)).finally(() => {
+    void broadcast(first, sendEach).finally(() => {
       runningBroadcast.current = false;
       setBroadcasting(false);
     });
@@ -158,7 +166,7 @@ export function LiveSessionDesk({
     );
   const programActive = activeOccurrenceId === occurrenceId;
   const disabled = !live || broadcasting;
-  const targets: LiveTargets = { state, programActive, disabled, sendProgram };
+  const targets: LiveTargets = { state, programActive, disabled, sendProgram, sendPrograms };
   const take = () => sendProgram({ type: "preview.take" });
   const agenda = approvedAgenda ?? null;
   const preview = previewProjection(state);

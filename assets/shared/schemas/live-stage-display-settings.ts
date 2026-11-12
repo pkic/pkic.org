@@ -33,8 +33,14 @@ export const liveStageDisplaySettingsSnapshotSchema = liveStageDisplaySettingsSc
   DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
 );
 
+/** Only the settings that change: the room merges them into its copy, so two quick changes never undo each other. */
+export const liveStageDisplaySettingsPatchSchema = liveStageDisplaySettingsSchema
+  .partial()
+  .refine((patch) => Object.keys(patch).length > 0, "Change at least one setting.");
+export type LiveStageDisplaySettingsPatch = z.infer<typeof liveStageDisplaySettingsPatchSchema>;
+
 export const liveStageDisplaySettingsCommandSchema = z
-  .object({ type: z.literal("stage.display.settings"), settings: liveStageDisplaySettingsSchema })
+  .object({ type: z.literal("stage.display.settings"), settings: liveStageDisplaySettingsPatchSchema })
   .strict();
 
 export const liveStageDisplaySettingsChangedSchema = z

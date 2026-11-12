@@ -374,7 +374,54 @@ describe("live control room panels", () => {
       output: "projector",
       composition: { timerGraphics: [saved] },
     });
-    expect(button(document.body, "Stage display")).toBeTruthy();
+    // The stage display shows the session timer, so its switch is on.
+    expect(button(document.body, "✓Stage display")).toBeTruthy();
+  });
+
+  it("saves a timer graphic onto Program and a screen as one broadcast, so neither is refused", async () => {
+    const shown = defaultLiveTimerGraphic("session");
+    const snapshot = liveSnapshot({ viewer: OPERATOR });
+    const broadcasts: string[] = [];
+    const broadcast = async (message: { type: string }, send: () => boolean) => {
+      broadcasts.push(message.type);
+      await Promise.resolve();
+      return send();
+    };
+    const { host, live } = mountDesk(
+      {
+        ...snapshot,
+        stage: { ...snapshot.stage, timerGraphics: [shown] },
+        outputs: {
+          ...snapshot.outputs,
+          "stage-display": { ...snapshot.outputs["stage-display"], timerGraphics: [{ ...shown, size: "small" }] },
+        },
+      },
+      "stage",
+      broadcast,
+    );
+    void act(() => labeled(host, "Session timer").click());
+    void act(() => button(document.body, "Edit graphic").click());
+    const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
+    type(dialog.querySelector<HTMLInputElement>("input[name=label]")!, "Time left");
+    await act(async () => button(dialog, "Save").click());
+    expect(broadcasts).toEqual(["stage.timer"]);
+    // The screen showed the timer with other settings; it still takes the save.
+    expect(commands(live).map((sent) => sent.type)).toEqual(["stage.timer", "aux.set"]);
+    expect(document.querySelector("dialog[open]")).toBeNull();
+  });
+
+  it("keeps the graphic dialog open when the save cannot reach the room", () => {
+    const shown = defaultLiveTimerGraphic("session");
+    const snapshot = liveSnapshot({ viewer: OPERATOR });
+    const { host, live } = mountDesk({ ...snapshot, stage: { ...snapshot.stage, timerGraphics: [shown] } }, "stage");
+    void act(() => labeled(host, "Session timer").click());
+    void act(() => button(document.body, "Edit graphic").click());
+    const dialog = document.querySelector<HTMLElement>("dialog[open]")!;
+    // The room drops while the dialog is open.
+    void act(() => live.latest().close());
+    void act(() => button(dialog, "Save").click());
+    expect(document.querySelector("dialog[open]")).toBe(dialog);
+    expect(dialog.textContent).toContain("Try again when it is connected.");
   });
 
   it("refuses a countdown to a time without its time, as the contract does", () => {

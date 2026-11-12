@@ -145,6 +145,21 @@ describe("stage display plan", () => {
     expect(plan.footer).toMatchObject({ marker: "next", title: "Opening keynote" });
   });
 
+  it("names the session as next before it starts, even with no countdown shown", () => {
+    const plan = liveStageDisplayPlan(
+      input(11 * MINUTE, 40 * MINUTE, { own: { ...EMPTY_LIVE_STAGE, schedule: nextSession } }),
+    );
+    expect(plan.main.kind).toBe("empty");
+    expect(plan.footer).toMatchObject({ marker: "next", title: "Opening keynote" });
+  });
+
+  it("never names another room's session as next", () => {
+    const plan = liveStageDisplayPlan(input(-25 * MINUTE, 4 * MINUTE, { roomId: "other" }));
+    expect(plan.footer).toMatchObject({ marker: "live", title: "Opening keynote" });
+    const roomless = liveStageDisplayPlan(input(-25 * MINUTE, 4 * MINUTE, { roomId: undefined }));
+    expect(roomless.footer).toMatchObject({ marker: "next", title: "Crypto agility in HSMs" });
+  });
+
   it("sets a question beside the small timer, tagged on air, with the next one and its votes", () => {
     const lined = { ...question, id: "q2", text: "And HSMs?" };
     const plan = liveStageDisplayPlan(

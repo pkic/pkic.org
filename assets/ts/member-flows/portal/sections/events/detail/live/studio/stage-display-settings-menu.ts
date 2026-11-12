@@ -16,8 +16,9 @@ export function stageDisplaySettingsMenu(
   send: (message: LiveRoomClientMessage) => boolean,
   disabled: boolean,
 ): MenuItem[] {
+  // Only the setting that changed: the room merges it, so a second quick change never undoes the first.
   const change = (patch: Partial<LiveStageDisplaySettings>) =>
-    send({ type: "stage.display.settings", settings: { ...settings, ...patch } });
+    send({ type: "stage.display.settings", settings: patch });
   return [
     {
       id: "stage-reactions",

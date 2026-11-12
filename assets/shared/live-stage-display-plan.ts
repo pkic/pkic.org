@@ -214,10 +214,18 @@ function sessionLeftMs(input: LiveStageDisplayInput): number | null {
   return reading.startsInMs === null ? reading.valueMs : null;
 }
 
+/** Whether the session is still ahead: by its session timer, else by the agenda. */
+function sessionAhead(input: LiveStageDisplayInput): boolean {
+  const timer = input.timers.find((entry) => entry.kind === "session");
+  if (!timer) return Date.parse(input.session.startAt) > input.now;
+  return liveTimerReading(timer, input.session, input.now).startsInMs !== null;
+}
+
 function upcoming(input: LiveStageDisplayInput): LiveScheduleRoom | undefined {
   const schedule = input.own.schedule ?? input.program.schedule;
   const rooms = schedule?.available ? schedule.rooms : [];
-  return rooms.find((room) => room.roomId === input.roomId) ?? rooms[0];
+  // Another room's next session is never this room's; only a screen without a room takes the first.
+  return input.roomId === undefined ? rooms[0] : rooms.find((room) => room.roomId === input.roomId);
 }
 
 const creditSpeakers = (credits: LiveStageDisplayInput["session"]["credits"]): LiveStageSpeaker[] =>
@@ -252,7 +260,8 @@ export function liveStageDisplayPlan(input: LiveStageDisplayInput): LiveStageDis
           fit: "regular",
         }
       : null;
-  const before = shown.kind === "break";
+  // Before the session the footer names it as next, even when no countdown to it is shown.
+  const before = shown.kind === "break" || sessionAhead(input);
   const after = upcoming(input);
   const footer: LiveStageFooter = before
     ? {
