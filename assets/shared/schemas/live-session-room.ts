@@ -42,7 +42,6 @@ import {
 } from "./live-session-credit";
 import { liveOverlayLayoutGeometriesSchema } from "./live-overlay-layout";
 import { z } from "zod";
-import { liveProgramParamsSchema } from "./live-room-program";
 import { publicSessionPortraitUrlSchema } from "./event-session-history";
 import {
   liveAuthorAffiliationSchema,
@@ -57,7 +56,6 @@ import {
 } from "./live-session-chat";
 import { databaseIdSchema } from "./identifiers";
 import { eventSlugParamsSchema, utcInstantSchema } from "./api-common";
-import { authErrors, created, requiresPermissions } from "./route-contract";
 import { LIVE_REACTION_IDS, LIVE_ROOM_POLICY, LIVE_STAGE_VIEWS } from "../live-session-policy";
 import { liveChangeSchema, livePersonNameSchema } from "./live-session-change";
 import { LIVE_AUX_OUTPUTS, LIVE_SPEAKER_MESSAGE_MAX_LENGTH, LIVE_SPEAKER_MESSAGE_TONES } from "../live-room-outputs";
@@ -574,20 +572,3 @@ export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
   ...liveAuthorClientMessageSchemas,
 ]);
 export type LiveRoomClientMessage = z.infer<typeof liveRoomClientMessageSchema>;
-
-// ── Overlay access ──────────────────────────────────────────────────────────
-
-export const liveOverlayAccessResponseSchema = z
-  .object({ token: z.string().min(1).max(2000), expiresAt: utcInstantSchema })
-  .strict();
-
-export const liveOverlayAccessRouteSchema = {
-  ...requiresPermissions("agenda:live_moderate"),
-  tags: ["Events"],
-  summary: "Issue read-only, expiring sources for a physical room's complete broadcast program",
-  request: { params: liveProgramParamsSchema },
-  responses: {
-    ...created("Overlay access for broadcast browser sources", liveOverlayAccessResponseSchema),
-    ...authErrors({ notFound: "The physical room is not on the approved agenda." }),
-  },
-};

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { LIVE_ROOM_POLICY } from "../assets/shared/live-session-policy";
 import { LIVE_CHAT_POLICY } from "../assets/shared/live-chat-policy";
-import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-session-room";
+import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-overlay-access";
 import { individualAppearanceFixture } from "./helpers/agenda-appearances";
 import { callApi } from "./helpers/app";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
