@@ -1,3 +1,4 @@
+import { verifyUserSessionRequest } from "../../../_lib/auth/user-session-request";
 import {
   registrationParticipantReadRouteSchema,
   registrationParticipantUpdateRouteSchema,
@@ -12,8 +13,7 @@ import { markResponseSensitive, requestDb, type AdminContext } from "../../../_l
 import { processOutboxByIdBackground } from "../../../_lib/email/outbox";
 import { json } from "../../../_lib/http";
 import { openApiRoute } from "../../../_lib/openapi/route";
-import { enforceEmailTriggerRateLimits } from "../../../_lib/rate-limit";
-import { getClientIp, requireInternalSecret } from "../../../_lib/request";
+import { requireInternalSecret } from "../../../_lib/request";
 import { getRegistrationByManageToken } from "../../../_lib/services/registrations/queries";
 import { buildRegistrationManageView } from "../../../_lib/services/registrations/manage-view";
 import { updateManagedRegistration } from "../../../_lib/services/registrations/manage-update";
@@ -30,10 +30,10 @@ async function ownedRegistration(c: AdminContext, registrationId: string) {
 export const RegistrationParticipantGet = openApiRoute(
   registrationParticipantReadRouteSchema,
   async (c: AdminContext, data) => {
-    const { db, registration } = await ownedRegistration(c, data.params.registrationId);
+    const { db, authority, registration } = await ownedRegistration(c, data.params.registrationId);
     return json(
       registrationManageReadResponseSchema.parse(
-        await buildRegistrationManageView(db, registration, resolveAppBaseUrl(c.env, c.req.raw)),
+        await buildRegistrationManageView(db, registration, resolveAppBaseUrl(c.env, c.req.raw), authority.userId),
       ),
     );
   },
@@ -44,15 +44,6 @@ export const RegistrationParticipantPatch = openApiRoute(
   registrationParticipantUpdateRouteSchema,
   async (c: AdminContext, data) => {
     const { db, authority, registration } = await ownedRegistration(c, data.params.registrationId);
-    if (data.body.action === "update" && data.body.email) {
-      await enforceEmailTriggerRateLimits({
-        emailBinding: c.env.EMAIL_RATE_LIMITER,
-        ipBinding: c.env.IP_RATE_LIMITER,
-        namespace: "registration-email-change",
-        email: data.body.email,
-        clientIp: getClientIp(c.req.raw),
-      });
-    }
     const config = getConfig(c.env, c.req.raw);
     const result = await updateManagedRegistration(db, {
       registration,
@@ -61,9 +52,9 @@ export const RegistrationParticipantPatch = openApiRoute(
       authenticatedActor: { kind: "user", id: authority.userId },
       actorUserId: authority.userId,
       body: data.body,
+      identitySessionClaims: data.body.identityChange ? await verifyUserSessionRequest(c.req.raw, c.env) : undefined,
       appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
       signingSecret: requireInternalSecret(c.env),
-      confirmationLinkTtlHours: config.confirmationLinkTtlHours,
       waitlistClaimWindowHours: config.waitlistClaimWindowHours,
     });
     for (const id of result.outboxIds) {
@@ -72,7 +63,6 @@ export const RegistrationParticipantPatch = openApiRoute(
     return json(
       registrationManageUpdateResponseSchema.parse({
         success: true,
-        emailChanged: result.emailChanged,
         sponsorSharing: await readRegistrationSponsorSharing(db, result.registration),
       }),
     );

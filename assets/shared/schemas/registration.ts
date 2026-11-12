@@ -2,6 +2,7 @@ import { identityAffiliationContextSchema, identityAffiliationPrepareBaseSchema 
 import { consentSelectionIssues } from "../consent-selection";
 import type { RequiredTerm } from "./event-read-models";
 import { z } from "zod";
+import { registrationIdentityChangeSchema } from "./registration-identity";
 import { formAnswersSchema, submittedFormAnswersSchema } from "./form-answers";
 import { databaseIdSchema } from "./identifiers";
 import {
@@ -385,11 +386,15 @@ export const registrationManageSchema = z
     claimDayWaitlistOffers: z.array(dayDateSchema).max(31).optional(),
     customAnswers: submittedFormAnswersSchema.optional(),
     sourceRef: trimmedString(2, 200).optional(),
-    email: normalizedEmailSchema.optional(),
     firstName: firstNameSchema.optional(),
     lastName: lastNameSchema.optional(),
+    identityChange: registrationIdentityChangeSchema.optional(),
   })
   .strict()
+  .refine((value) => !value.identityChange || value.action === "update", {
+    message: "Change representation only when updating registration details",
+    path: ["identityChange"],
+  })
   .refine(
     (value) =>
       value.action !== "withdraw_sponsor_sharing" ||
@@ -425,6 +430,8 @@ export const registrationManageReadResponseSchema = successResponseSchema.extend
   sponsorSharing: registrationSponsorSharingSchema,
   registration: registrationManageRegistrationSchema,
   identityId: databaseIdSchema.nullable().optional(),
+  /** Only the signed-in registrant can choose another representation. */
+  canChangeIdentity: z.boolean().default(false),
   badgeVersion: z.string().optional(),
   event: eventSummarySchema.extend({ startsAt: utcInstantSchema.nullable() }),
   user: registrationManageUserSchema,
@@ -440,7 +447,6 @@ export const registrationManageReadResponseSchema = successResponseSchema.extend
 });
 
 export const registrationManageUpdateResponseSchema = successResponseSchema.extend({
-  emailChanged: z.boolean(),
   sponsorSharing: registrationSponsorSharingSchema,
 });
 

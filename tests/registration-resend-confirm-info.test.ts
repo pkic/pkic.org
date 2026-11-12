@@ -1,3 +1,6 @@
+import { getEventBySlug } from "../functions/_lib/services/events";
+import { queueRegistrationManageLinkRecovery } from "../functions/_lib/services/registrations/manage-link-recovery";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { insertOrganization } from "./helpers/membership";
 import { seedMemberApplication } from "./helpers/member-applications";
@@ -23,8 +26,10 @@ import { callApi } from "./helpers/app";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 import {
   registrationConfirmInfoResponseSchema,
-  registrationManageUpdateResponseSchema,
+  registrationManageReadResponseSchema,
 } from "../assets/shared/schemas/registration";
+import { eventRegistrationManagementUpdateResponseSchema } from "../assets/shared/schemas/route-contracts-event-registration-management";
+import { createAdminSession } from "./helpers/auth";
 
 const signingSecret = "test-signing-secret";
 
@@ -33,6 +38,17 @@ function resendManageLink(environment: typeof env, email: string, clientIp = "20
     method: "POST",
     headers: { "content-type": "application/json", "cf-connecting-ip": clientIp },
     body: JSON.stringify({ email }),
+  });
+}
+
+/** Organizers correct a registrant's address; an attendee's address follows their identity. */
+async function organizerChangesEmail(registrationId: string, email: string): Promise<Response> {
+  const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
+  const token = await createAdminSession(env.DB, admin.id, `organizer-${crypto.randomUUID()}`);
+  return callApi(env, `/api/v1/events/pqc-2026/registrations/${encodeURIComponent(registrationId)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ action: "update", email }),
   });
 }
 
@@ -153,6 +169,37 @@ describe("confirm-info endpoint", () => {
     expect(body.email).toBe("resendtest@pkic.org");
     expect(body.eventName).toBe("PQC Conference 2026");
     expect(body.expired).toBe(false);
+  });
+
+  it("advances only the canonical guard revision for a pending registration's name-only edit", async () => {
+    await seedEventAndAdmin(env.DB);
+    const { confirmationToken, manageToken, registrationId } = await registerAttendee();
+    const response = await callApi(
+      env,
+      `/api/v1/events/pqc-2026/registrations/confirm-info?token=${encodeURIComponent(confirmationToken)}`,
+    );
+    const info = registrationConfirmInfoResponseSchema.parse(await response.json());
+    expect(info.organizationProof).toBeTruthy();
+    const revisions = () =>
+      queryAll<{ transition_revision: number }>(env.DB, "SELECT transition_revision FROM registrations WHERE id=?", [
+        registrationId,
+      ]);
+    const [before] = await revisions();
+    const updated = await callApi(env, `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "update", firstName: "Updated" }),
+    });
+    expect(updated.status, await updated.clone().text()).toBe(200);
+    const [after] = await revisions();
+    expect(after.transition_revision).toBe(before.transition_revision + 1);
+    const proof = await callApi(env, "/api/v1/events/pqc-2026/registrations/proof/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: info.organizationProof }),
+    });
+    expect(proof.status).toBe(409);
+    expect(await proof.json()).toMatchObject({ error: { code: "REGISTRATION_CHANGED" } });
   });
 
   it("refuses a confirmation mailbox proof after its pending registration changes", async () => {
@@ -336,7 +383,7 @@ describe("resend-confirmation endpoint", () => {
     const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
 
-    const { confirmationToken, registrationId, manageToken } = await registerAttendee();
+    const { confirmationToken, registrationId } = await registerAttendee();
     const [{ user_id: userId }] = await queryAll<{ user_id: string }>(
       env.DB,
       "SELECT user_id FROM registrations WHERE id=?",
@@ -378,16 +425,11 @@ describe("resend-confirmation endpoint", () => {
     );
     await gate.reached;
 
-    const emailChange = await callApi(env, `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "update", email: "resend-corrected@example.test" }),
-    });
-    expect(emailChange.status).toBe(200);
-    expect(registrationManageUpdateResponseSchema.parse(await emailChange.json())).toEqual({
+    const emailChange = await organizerChangesEmail(registrationId, "resend-corrected@example.test");
+    expect(emailChange.status, await emailChange.clone().text()).toBe(200);
+    expect(eventRegistrationManagementUpdateResponseSchema.parse(await emailChange.json())).toMatchObject({
       success: true,
       emailChanged: true,
-      sponsorSharing: { allowed: false, withdrawnAt: null },
     });
 
     gate.release();
@@ -480,14 +522,10 @@ describe("resend-confirmation endpoint", () => {
     await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
-    const { registrationId, manageToken } = await registerAttendee();
+    const { registrationId } = await registerAttendee();
 
-    const emailChange = await callApi(env, `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "update", email: "delayed-new@example.test" }),
-    });
-    expect(emailChange.status).toBe(200);
+    const emailChange = await organizerChangesEmail(registrationId, "delayed-new@example.test");
+    expect(emailChange.status, await emailChange.clone().text()).toBe(200);
     const newAddressRows = await queryAll<{ payload_json: string }>(
       env.DB,
       `SELECT payload_json FROM email_outbox
@@ -639,6 +677,148 @@ describe("resend-manage-link endpoint", () => {
     vi.unstubAllGlobals();
   });
 
+  async function setupRepresentationRecipient() {
+    await seedEventAndAdmin(env.DB);
+    const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
+    await seedWorkflowEmailTemplates(env.DB, admin.id);
+    const registered = await registerAttendee();
+    const [{ user_id: userId }] = await queryAll<{ user_id: string }>(
+      env.DB,
+      "SELECT user_id FROM registrations WHERE id=?",
+      [registered.registrationId],
+    );
+    const identity = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId: await insertOrganization(env.DB, "Recovery representation"),
+      source: "account",
+      startImmediately: true,
+    });
+    const emailId = crypto.randomUUID();
+    const at = new Date().toISOString();
+    await env.DB.batch([
+      identity.statement,
+      env.DB.prepare(`INSERT INTO user_emails (id,user_id,email,normalized_email,verified_at,verification_method,created_at)
+        VALUES (?,?,'work@example.test','work@example.test',?,'staff',?)`).bind(emailId, userId, at, at),
+      env.DB.prepare("UPDATE identities SET email_id=? WHERE id=?").bind(emailId, identity.identityId),
+      env.DB.prepare("UPDATE registrations SET registration_identity_id=?,status='registered' WHERE id=?").bind(
+        identity.identityId,
+        registered.registrationId,
+      ),
+    ]);
+    return { ...registered, emailId, identityId: identity.identityId };
+  }
+
+  it("matches and delivers recovery to the verified representation address", async () => {
+    await setupRepresentationRecipient();
+    expect((await resendManageLink(env, "WORK@example.test")).status).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'"),
+    ).toEqual([{ recipient_email: "work@example.test" }]);
+  });
+
+  it.each(["not started", "ended", "blocked"])(
+    "uses the account mailbox after the representation is %s",
+    async (state) => {
+      const f = await setupRepresentationRecipient();
+      const recoveryEnvironment = {
+        ...env,
+        EMAIL_RATE_LIMITER: createTestRateLimiter(100),
+        IP_RATE_LIMITER: createTestRateLimiter(100),
+      };
+      const at = new Date().toISOString();
+      // The identities constraint requires blocked identities to be ended too.
+      await env.DB.prepare("UPDATE identities SET started_at=?, ended_at=?, blocked_at=? WHERE id=?")
+        .bind(
+          state === "not started" ? null : at,
+          state === "ended" || state === "blocked" ? at : null,
+          state === "blocked" ? at : null,
+          f.identityId,
+        )
+        .run();
+      const path = `/api/v1/registrations/access/${encodeURIComponent(f.manageToken)}`;
+      const view = await callApi(env, path);
+      expect(view.status).toBe(200);
+      expect(registrationManageReadResponseSchema.parse(await view.json()).user.email).toBe(f.email);
+      const updated = await callApi(env, path, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "update", firstName: "Updated" }),
+      });
+      expect(updated.status, await updated.clone().text()).toBe(200);
+      expect(
+        await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_updated'"),
+      ).toEqual([{ recipient_email: f.email }]);
+      expect((await resendManageLink(recoveryEnvironment, "work@example.test")).status).toBe(200);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'",
+        ),
+      ).toHaveLength(0);
+      expect((await resendManageLink(recoveryEnvironment, f.email)).status).toBe(200);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'",
+        ),
+      ).toEqual([{ recipient_email: f.email }]);
+    },
+  );
+
+  it.each(["work@bücher.example", "WORK@xn--bcher-kva.example"])(
+    "matches the stored normalized representation mailbox for %s",
+    async (email) => {
+      const f = await setupRepresentationRecipient();
+      await env.DB.prepare("UPDATE user_emails SET email=?,normalized_email=? WHERE id=?")
+        .bind("work@bücher.example", "work@xn--bcher-kva.example", f.emailId)
+        .run();
+      expect((await resendManageLink(env, email)).status).toBe(200);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'",
+        ),
+      ).toEqual([{ recipient_email: "work@bücher.example" }]);
+    },
+  );
+
+  it("recovers through the account address when the registration uses another verified mailbox", async () => {
+    const f = await setupRepresentationRecipient();
+    expect((await resendManageLink(env, f.email)).status).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'"),
+    ).toEqual([{ recipient_email: f.email }]);
+  });
+
+  it("uses the account address while registration awaits confirmation", async () => {
+    const f = await setupRepresentationRecipient();
+    await env.DB.prepare("UPDATE registrations SET status='pending_email_confirmation' WHERE id=?")
+      .bind(f.registrationId)
+      .run();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    expect(
+      await queueRegistrationManageLinkRecovery(env.DB, event, "work@example.test", "https://app.test"),
+    ).toBeNull();
+    expect(await queueRegistrationManageLinkRecovery(env.DB, event, f.email, "https://app.test")).not.toBeNull();
+    expect(
+      await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'"),
+    ).toEqual([{ recipient_email: f.email }]);
+  });
+
+  it("suppresses recovery when the representation address changes before enqueueing", async () => {
+    const f = await setupRepresentationRecipient();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("INSERT") && sql.includes("email_outbox"),
+      () => env.DB.prepare("UPDATE user_emails SET verified_at=NULL WHERE id=?").bind(f.emailId).run(),
+    );
+    expect(await queueRegistrationManageLinkRecovery(db, event, "work@example.test", "https://app.test")).toBeNull();
+    expect(
+      await queryAll(env.DB, "SELECT recipient_email FROM email_outbox WHERE template_key='registration_manage_link'"),
+    ).toHaveLength(0);
+  });
+
   it("sends a fresh manage link without invalidating the earlier link", async () => {
     await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
@@ -698,14 +878,10 @@ describe("resend-manage-link endpoint", () => {
     await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
-    const { manageToken, email } = await registerAttendee();
+    const { registrationId, email } = await registerAttendee();
 
-    const change = await callApi(env, `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "update", email: "unverified-pending@example.test" }),
-    });
-    expect(change.status).toBe(200);
+    const change = await organizerChangesEmail(registrationId, "unverified-pending@example.test");
+    expect(change.status, await change.clone().text()).toBe(200);
 
     const before = await queryAll<{ total: number }>(
       env.DB,

@@ -35,7 +35,6 @@ import {
   prepareRegistrationTransitionGuard,
   registrationChangedError,
 } from "./transition-guard";
-import { isOrganizationContactForRepresentative } from "../membership/representative-roles";
 import {
   prepareRotateUserProposalSpeakerManageSecrets,
   prepareRotateUserRegistrationCapabilities,
@@ -53,10 +52,8 @@ export interface ChangeEmailResult {
   outboxIds: string[];
 }
 
-export type RegistrationEmailChangeAuthority =
-  | { kind: "registration_capability" }
-  | { kind: "authenticated_actor"; actorUserId: string }
-  | { kind: "event_manager"; actorUserId: string };
+/** Only organizers change a registrant's address; an attendee's address follows their identity. */
+export type RegistrationEmailChangeAuthority = { kind: "event_manager"; actorUserId: string };
 
 export interface ChangeRegistrationEmailParams {
   registrationId: string;
@@ -96,32 +93,6 @@ export async function prepareRegistrationEmailChange(
 
   if (!params.allowCancelled && registration.status === "cancelled") {
     throw new AppError(409, "ALREADY_CANCELLED", "Cannot change email on a cancelled registration");
-  }
-
-  const ownsBootstrapIdentity =
-    registration.status === "pending_email_confirmation" &&
-    registration.confirmed_at === null &&
-    registration.created_identity_user_id === registration.user_id;
-  if (params.authority.kind === "registration_capability") {
-    if (!ownsBootstrapIdentity) {
-      throw new AppError(
-        403,
-        "ACCOUNT_AUTH_REQUIRED",
-        "Sign in to your account before changing its login email address",
-      );
-    }
-  } else if (params.authority.kind === "authenticated_actor") {
-    const isAccountOwner = params.authority.actorUserId === registration.user_id;
-    const isOrganizationContact =
-      !isAccountOwner &&
-      (await isOrganizationContactForRepresentative(db, params.authority.actorUserId, registration.user_id));
-    if (!isAccountOwner && !isOrganizationContact && !ownsBootstrapIdentity) {
-      throw new AppError(
-        403,
-        "FORBIDDEN",
-        "Only the account owner or an authorized organization contact can change this login email address",
-      );
-    }
   }
 
   // Fetch current user

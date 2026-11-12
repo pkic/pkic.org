@@ -36,7 +36,10 @@ import { newCapabilityLinkSecret } from "../capability-links";
 import type { AuthAdmin } from "../../types";
 import { requirePermission, preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 
+import type { RegistrationIdentityChange } from "./change-identity";
+
 export interface RegistrationUpdatePayload {
+  identityChange?: RegistrationIdentityChange;
   action: "update" | "cancel" | "report_unauthorized";
   dayAttendance?: DayAttendanceSelection[];
   /** Offered day seats are accepted only when the caller explicitly names them. */
@@ -86,7 +89,6 @@ export interface BuiltRegistrationUpdate {
   registration: RegistrationRecord;
   statements: StatementLike[];
   notificationChanged: boolean;
-  notificationRevision: number;
   dayAttendance?: Array<{
     dayDate: string;
     attendanceType: string;
@@ -154,7 +156,6 @@ export async function buildRegistrationUpdate(
       registration: cancelled,
       statements,
       notificationChanged: true,
-      notificationRevision: registration.transition_revision + 1,
       dayWaitlist: [],
     };
   }
@@ -207,7 +208,6 @@ export async function buildRegistrationUpdate(
       registration: updated,
       statements,
       notificationChanged: true,
-      notificationRevision: registration.transition_revision + 1,
       dayWaitlist: [],
     };
   }
@@ -387,7 +387,6 @@ export async function buildRegistrationUpdate(
     registration: updated,
     statements,
     notificationChanged,
-    notificationRevision: registration.transition_revision + (notificationChanged ? 1 : 0),
     dayAttendance: plannedDayAttendance,
     dayWaitlist: plannedDayWaitlist,
   };

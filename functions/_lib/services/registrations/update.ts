@@ -1,3 +1,8 @@
+import { userSessionRequestAuthorizationEvidence } from "../../auth/user-session-evidence";
+import { AppError } from "../../errors";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { isAuditChangeGuardFailure } from "../audit";
+import { prepareRegistrationIdentityChange, registrationIdentityChangeEvidence } from "./change-identity";
 import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types";
 import type { ChangeRegistrationEmailParams } from "./change-email";
 import { prepareRegistrationEmailChange } from "./change-email";
@@ -28,12 +33,44 @@ async function executeRegistrationUpdate<T>(
   changedBy: string | undefined,
   commit: (built: RegistrationUpdatePlan) => Promise<T>,
 ): Promise<T> {
+  let attemptedRegistrationId: string | undefined;
   try {
     return await withDayCapacityRetry(async () => {
       const registration = await load();
-      return commit(await buildRegistrationUpdate(db, registration, payload, changedBy));
+      attemptedRegistrationId = registration.id;
+      const built = await buildRegistrationUpdate(db, registration, payload, changedBy);
+      if (
+        payload.identityChange &&
+        registration.registration_identity_id !== payload.identityChange.change.identityId
+      ) {
+        built.statements.push(...prepareRegistrationIdentityChange(db, registration.id, payload.identityChange));
+        built.registration = {
+          ...built.registration,
+          registration_identity_id: payload.identityChange.change.identityId,
+        };
+        built.notificationChanged = true;
+      }
+      return commit(built);
     });
   } catch (error) {
+    if (attemptedRegistrationId && payload.identityChange && isAuthorizationGuardFailure(error)) {
+      // Diagnose only the refused operation, using the same evidence as its guards.
+      const session = userSessionRequestAuthorizationEvidence(payload.identityChange.claims);
+      const identity = registrationIdentityChangeEvidence(attemptedRegistrationId, payload.identityChange);
+      const current = await db
+        .prepare(`SELECT EXISTS (${session.sql}) AS session_active, EXISTS (${identity.sql}) AS identity_available`)
+        .bind(...session.bindings, ...identity.bindings)
+        .first<{ session_active: number; identity_available: number }>();
+      if (!current?.session_active)
+        throw new AppError(401, "AUTH_REQUIRED", "Sign in again to change your representation.");
+      if (current.identity_available) throw registrationChangedError();
+      throw new AppError(
+        403,
+        "REGISTRATION_IDENTITY_UNAVAILABLE",
+        "Choose an active identity on your own registration.",
+      );
+    }
+    if (payload.identityChange && isAuditChangeGuardFailure(error)) throw registrationChangedError();
     if (isFormSubmissionContextConflict(error)) throw formSubmissionContextChangedError();
     if (isEmailReservationConflict(error)) throw emailTakenError();
     if (isRegistrationTransitionConflict(error)) {
@@ -56,9 +93,11 @@ async function commitUpdateWithNotification(
     await commitBatch(built.statements);
     return { registration: built.registration, outboxId: null, outboxIds: [] };
   }
+  // The atomic transition guard advances this persisted revision for every
+  // accepted edit; retries share a key and later edits get distinct keys.
   const idempotencyKey =
     payload.notification.idempotencyKey ??
-    `registration-status:${built.registration.id}:${built.notificationRevision}:` +
+    `registration-update:${built.registration.id}:from-revision:${built.registration.transition_revision}:` +
       `${payload.notification.templateKey}:${payload.notification.noticeKind ?? "status_update"}`;
   const outboxId = payload.notification.outboxId ?? (await outboxIdForOperation(idempotencyKey));
   const email = await prepareRegistrationStatusEmail(db, {
@@ -131,23 +170,6 @@ export async function updateRegistrationByManageTokenWithNotification(
     () => getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret),
     undefined,
     (built) => commitUpdateWithNotification(db, built, payload),
-  );
-}
-
-export async function updateRegistrationByManageTokenWithEmailChange(
-  db: DatabaseLike,
-  payload: {
-    manageToken: ParticipantAuthority;
-    signingSecret: string;
-    emailChange: UpdateEmailChange;
-  } & RegistrationUpdatePayload,
-): Promise<{ registration: RegistrationRecord; outboxId: string | null; outboxIds: string[] }> {
-  return executeRegistrationUpdate(
-    db,
-    payload,
-    () => getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret),
-    undefined,
-    (built) => commitUpdateWithEmailChange(db, built, payload),
   );
 }
 

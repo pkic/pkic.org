@@ -201,6 +201,34 @@ describe("useData request ordering", () => {
     await act(flush);
     expect(latest.data).toBe("Second resource");
   });
+
+  it("lets an editor own a failed post-save refresh without discarding its draft, then accepts a retry", async () => {
+    const refusal = new ApiClientError({ error: { code: "FORBIDDEN", message: "Access removed" } }, 403);
+    const fetcher = vi
+      .fn<() => Promise<string>>()
+      .mockResolvedValueOnce("original")
+      .mockRejectedValueOnce(refusal)
+      .mockResolvedValueOnce("refreshed")
+      .mockRejectedValueOnce(refusal);
+    let latest!: State;
+    const container = document.createElement("div");
+    mounted.push(container);
+    await act(() =>
+      render(<Harness resourceId="same" fetcher={fetcher} onState={(state) => (latest = state)} />, container),
+    );
+    await act(flush);
+    await act(async () => {
+      await expect(latest.refresh()).rejects.toBe(refusal);
+    });
+    expect(latest.data).toBe("original");
+    expect(latest.error).toBeNull();
+    expect(latest.refreshing).toBe(false);
+    await act(async () => latest.refresh());
+    expect(latest.data).toBe("refreshed");
+    await act(async () => latest.reload());
+    expect(latest.data).toBeNull();
+    expect(latest.error).toBe("Access removed");
+  });
 });
 
 describe("useRevisionEffect", () => {

@@ -6,7 +6,6 @@ export { confirmRegistrationByToken } from "./confirm";
 export {
   updateRegistrationByManageToken,
   updateRegistrationByManageTokenWithNotification,
-  updateRegistrationByManageTokenWithEmailChange,
   updateRegistrationById,
   updateRegistrationByIdWithNotification,
   updateRegistrationByIdWithEmailChange,
