@@ -31,6 +31,7 @@ export function LiveOverlay({
         status={room.status}
         roomId={roomId}
         broadcast
+        playsSounds
       />
     </main>
   );

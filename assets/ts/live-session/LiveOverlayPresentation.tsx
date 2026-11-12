@@ -9,7 +9,8 @@ import type { ComponentChildren } from "preact";
 import { liveTimerLayout } from "../../shared/live-timer-policy";
 import type { LiveRoomState } from "./live-room-state";
 import { FormFieldStatChart } from "../components/forms/FormResponseStats";
-import { useLiveTimerReading } from "./useLiveCountdown";
+import { useLiveTimerGraphicReading } from "./useLiveCountdown";
+import { LiveTimerSounds } from "./useLiveTimerSounds";
 import "./LiveOverlay.css";
 import "./LiveSpeakerMessageTones.css";
 import { liveSpeakerMessageFit } from "../../shared/live-room-outputs";
@@ -91,15 +92,15 @@ function PollOverlay({ stage, polls }: { stage: LiveStage; polls: readonly LiveP
 
 /** A timer graphic: the timer it names, in its format, color and label. */
 function TimerOverlay({ graphic, state }: { graphic: LiveTimerGraphic; state: LiveRoomState }) {
-  const reading = useLiveTimerReading(graphic, state.timers, state.session);
+  const reading = useLiveTimerGraphicReading(graphic, state.timers, state.session);
   if (!reading) return null;
-  const { timer, text, tone, label } = reading;
+  const { running, text, tone, label } = reading;
   return (
     <div class="pk-live-overlay__timer" data-tone={tone} data-presentation={graphic.presentation}>
       {graphic.showLogo && graphic.presentation === "ring" ? (
-        <LiveCountdownEmblem text={text} running={timer.running} over={tone === "over"} />
+        <LiveCountdownEmblem text={text} running={running} over={tone === "over"} />
       ) : graphic.showLogo ? (
-        <div class="pk-live-overlay__timer-emblem" data-running={timer.running ? "" : undefined}>
+        <div class="pk-live-overlay__timer-emblem" data-running={running ? "" : undefined}>
           <OverlayEmblem />
         </div>
       ) : null}
@@ -246,6 +247,7 @@ export function LiveOverlayPresentation({
   focus = null,
   broadcast = false,
   stageAside,
+  playsSounds = false,
   children,
 }: {
   view: LiveOverlayView;
@@ -263,6 +265,8 @@ export function LiveOverlayPresentation({
   broadcast?: boolean;
   /** Drawn at the end of the stage display's bottom line by the page that hosts it, such as a screen's status. */
   stageAside?: ComponentChildren;
+  /** A real stage display, not a monitor of one: it plays the cues of the timers it shows that sound on the stage display. */
+  playsSounds?: boolean;
   /** Drawn over every layer by the page that hosts the output, such as a screen's connection status. */
   children?: ComponentChildren;
 }) {
@@ -271,8 +275,13 @@ export function LiveOverlayPresentation({
   const view = liveOutputView(requested);
   const elements = draft ?? resolveLiveOverlayLayout(state?.overlayLayouts ?? [], layout);
   const layers = view === "stage-display" ? STAGE_DISPLAY_LAYERS(roomId, stageAside) : PROGRAM_LAYERS;
+  const sounding =
+    playsSounds && state && view === "stage-display"
+      ? state.timers.filter((timer) => state.stage.timerGraphics.some((graphic) => graphic.timerId === timer.id))
+      : null;
   return (
     <LiveOverlayFrame view={requested} status={status}>
+      {sounding && state ? <LiveTimerSounds timers={sounding} session={state.session} place="stage-display" /> : null}
       {state
         ? layers.map(({ element, draw }) => {
             const placement = elements[element];

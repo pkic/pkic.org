@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { liveTimerCounts } from "../../../../../../../shared/live-timer-policy";
 import {
   LIVE_TIMER_DIRECTIONS,
   LIVE_TIMER_FORMATS,
@@ -15,13 +16,11 @@ import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../ui/TextControl";
-import { LiveGraphicRow } from "./LiveGraphicRow";
 import { LiveLayerTargets } from "./LiveLayerTargets";
 import type { LiveTargets } from "./live-output-targets";
 
 const FORMAT_LABELS: Record<LiveTimerGraphic["format"], string> = {
-  "mm:ss": "Minutes (12:34)",
-  "hh:mm:ss": "Hours (01:02:34)",
+  clock: "Clock (12:34, 1:02:34, 3 d 04:12)",
   ss: "Seconds (754)",
   custom: "Custom duration",
 };
@@ -80,21 +79,24 @@ function ChoiceField<Key extends "format" | "direction" | "presentation" | "plac
   );
 }
 
-/**
- * The timer graphic: which of the room's timers it shows and how, then where
- * it goes. Each output keeps the graphic it was sent, so Program can show the
- * session while the stage display shows another timer.
- */
-export function LiveTimerGraphicControls({ targets, timerId }: { targets: LiveTargets; timerId: string }) {
-  const { state } = targets;
-  const shown =
-    state.preview.timerGraphics.find((graphic) => graphic.timerId === timerId) ??
-    (targets.programActive ? state.stage.timerGraphics.find((graphic) => graphic.timerId === timerId) : undefined);
-  const [graphic, setGraphic] = useState<LiveTimerGraphic>(shown ?? defaultLiveTimerGraphic(timerId));
+/** The timer graphic's settings, drafted from the graphic as the dialog opens. */
+function LiveTimerGraphicDialog({
+  graphic,
+  timerName,
+  counts,
+  onSave,
+  onClose,
+}: {
+  graphic: LiveTimerGraphic;
+  timerName: string;
+  /** False for a clock, which reads the time of day in one fixed way. */
+  counts: boolean;
+  onSave: (graphic: LiveTimerGraphic) => void;
+  onClose: () => void;
+}) {
   const [draft, setDraft] = useState(graphic);
   const [warning, setWarning] = useState(String(graphic.warningSeconds));
   const [overrun, setOverrun] = useState(String(graphic.overrunSeconds));
-  const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const body = {
     ...draft,
@@ -102,67 +104,45 @@ export function LiveTimerGraphicControls({ targets, timerId }: { targets: LiveTa
     overrunSeconds: overrun.trim() ? Number(overrun) : null,
   };
   const form = useContractForm(liveTimerGraphicSchema, body);
-  const timer = state.timers.find((entry) => entry.id === graphic.timerId);
   const update = <Key extends keyof LiveTimerGraphic>(key: Key, value: LiveTimerGraphic[Key]) =>
     setDraft((previous) => ({ ...previous, [key]: value }));
   return (
-    <LiveGraphicRow
-      name={timer?.name ?? "Timer"}
-      detail={timer ? `${timer.name} · ${DIRECTION_LABELS[graphic.direction].toLowerCase()}` : "No timer in this room"}
-      settings={{
-        label: `${timer?.name ?? "Timer"} graphic settings`,
-        disabled: targets.disabled || !timer,
-        onOpen: () => {
-          setDraft(graphic);
-          setWarning(String(graphic.warningSeconds));
-          setOverrun(String(graphic.overrunSeconds));
-          setError(null);
-          form.reset();
-          setOpen(true);
-        },
+    <Dialog
+      open
+      title={`${timerName} graphic`}
+      confirmLabel="Save"
+      onCancel={onClose}
+      onConfirm={() => {
+        const checked = form.submit();
+        if (!checked.data) return setError(checked.formMessage);
+        onSave(checked.data);
+        onClose();
       }}
     >
-      <LiveLayerTargets targets={targets} subject="timer" layer={{ kind: "timer", graphic }} disabled={!timer} />
-      {open ? (
-        <Dialog
-          open
-          title="Timer graphic"
-          confirmLabel="Save"
-          onCancel={() => setOpen(false)}
-          onConfirm={() => {
-            const checked = form.submit();
-            if (!checked.data) return setError(checked.formMessage);
-            setGraphic(checked.data);
-            setOpen(false);
-          }}
-        >
-          <form
-            noValidate
-            {...form.handlers}
-            class="pk-stack pk-stack--snug"
-            onSubmit={(event) => event.preventDefault()}
-          >
-            <Checkbox
-              name="showLabel"
-              checked={draft.showLabel}
-              onChange={(event) => update("showLabel", event.currentTarget.checked)}
-              label="Show a label"
-            />
-            {draft.showLabel ? (
-              <Field label="Label" help="Leave empty to use the timer's name." {...form.of("label")}>
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    name="label"
-                    value={draft.label ?? ""}
-                    placeholder={state.timers.find((entry) => entry.id === draft.timerId)?.name}
-                    onInput={(event) =>
-                      update("label", event.currentTarget.value.trim() ? event.currentTarget.value : null)
-                    }
-                  />
-                )}
-              </Field>
-            ) : null}
+      <form noValidate {...form.handlers} class="pk-stack pk-stack--snug" onSubmit={(event) => event.preventDefault()}>
+        <Checkbox
+          name="showLabel"
+          checked={draft.showLabel}
+          onChange={(event) => update("showLabel", event.currentTarget.checked)}
+          label="Show a label"
+        />
+        {draft.showLabel ? (
+          <Field label="Label" help="Leave empty to use the timer's name." {...form.of("label")}>
+            {(control) => (
+              <TextInput
+                {...control}
+                name="label"
+                value={draft.label ?? ""}
+                placeholder={timerName}
+                onInput={(event) =>
+                  update("label", event.currentTarget.value.trim() ? event.currentTarget.value : null)
+                }
+              />
+            )}
+          </Field>
+        ) : null}
+        {counts ? (
+          <>
             <ChoiceField
               field="direction"
               label="Shows"
@@ -196,75 +176,115 @@ export function LiveTimerGraphicControls({ targets, timerId }: { targets: LiveTa
                 )}
               </Field>
             ) : null}
-            <Checkbox
-              label="Show logo"
-              checked={draft.showLogo}
-              onChange={(event) => update("showLogo", event.currentTarget.checked)}
-              {...form.of("showLogo")}
-            />
-            <div class="pk-cluster">
-              <Field label="Warn at (seconds left)" {...form.of("warningSeconds")}>
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    name="warningSeconds"
-                    type="number"
-                    min="0"
-                    max="3600"
-                    inputMode="numeric"
-                    value={warning}
-                    onInput={(event) => setWarning(event.currentTarget.value)}
-                  />
-                )}
-              </Field>
-              <Field label="Overrun after (seconds over)" {...form.of("overrunSeconds")}>
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    name="overrunSeconds"
-                    type="number"
-                    min="0"
-                    max="3600"
-                    inputMode="numeric"
-                    value={overrun}
-                    onInput={(event) => setOverrun(event.currentTarget.value)}
-                  />
-                )}
-              </Field>
-            </div>
-            <ChoiceField
-              field="presentation"
-              label="Look"
-              options={LIVE_TIMER_PRESENTATIONS}
-              labels={PRESENTATION_LABELS}
-              draft={draft}
-              presentation={form.of("presentation")}
-              update={(value) => update("presentation", value)}
-            />
-            <div class="pk-cluster">
-              <ChoiceField
-                field="placement"
-                label="Position"
-                options={LIVE_TIMER_PLACEMENTS}
-                labels={PLACEMENT_LABELS}
-                draft={draft}
-                presentation={form.of("placement")}
-                update={(value) => update("placement", value)}
-              />
-              <ChoiceField
-                field="size"
-                label="Size"
-                options={LIVE_TIMER_SIZES}
-                labels={SIZE_LABELS}
-                draft={draft}
-                presentation={form.of("size")}
-                update={(value) => update("size", value)}
-              />
-            </div>
-            {error ? <Alert tone="danger">{error}</Alert> : null}
-          </form>
-        </Dialog>
+          </>
+        ) : null}
+        <Checkbox
+          label="Show logo"
+          checked={draft.showLogo}
+          onChange={(event) => update("showLogo", event.currentTarget.checked)}
+          {...form.of("showLogo")}
+        />
+        {counts ? (
+          <div class="pk-cluster">
+            <Field label="Warn at (seconds left)" {...form.of("warningSeconds")}>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name="warningSeconds"
+                  type="number"
+                  min="0"
+                  max="3600"
+                  inputMode="numeric"
+                  value={warning}
+                  onInput={(event) => setWarning(event.currentTarget.value)}
+                />
+              )}
+            </Field>
+            <Field label="Overrun after (seconds over)" {...form.of("overrunSeconds")}>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name="overrunSeconds"
+                  type="number"
+                  min="0"
+                  max="3600"
+                  inputMode="numeric"
+                  value={overrun}
+                  onInput={(event) => setOverrun(event.currentTarget.value)}
+                />
+              )}
+            </Field>
+          </div>
+        ) : null}
+        <ChoiceField
+          field="presentation"
+          label="Look"
+          options={LIVE_TIMER_PRESENTATIONS}
+          labels={PRESENTATION_LABELS}
+          draft={draft}
+          presentation={form.of("presentation")}
+          update={(value) => update("presentation", value)}
+        />
+        <div class="pk-cluster">
+          <ChoiceField
+            field="placement"
+            label="Position"
+            options={LIVE_TIMER_PLACEMENTS}
+            labels={PLACEMENT_LABELS}
+            draft={draft}
+            presentation={form.of("placement")}
+            update={(value) => update("placement", value)}
+          />
+          <ChoiceField
+            field="size"
+            label="Size"
+            options={LIVE_TIMER_SIZES}
+            labels={SIZE_LABELS}
+            draft={draft}
+            presentation={form.of("size")}
+            update={(value) => update("size", value)}
+          />
+        </div>
+        {error ? <Alert tone="danger">{error}</Alert> : null}
+      </form>
+    </Dialog>
+  );
+}
+
+/**
+ * Where one timer's graphic goes, and its settings when the timer row's menu
+ * opens them. Each output keeps the graphic it was sent, so Program can show
+ * the session while the stage display shows another timer.
+ */
+export function LiveTimerGraphicControls({
+  targets,
+  timerId,
+  settingsOpen,
+  onSettingsClose,
+}: {
+  targets: LiveTargets;
+  timerId: string;
+  settingsOpen: boolean;
+  onSettingsClose: () => void;
+}) {
+  const { state } = targets;
+  const shown =
+    state.preview.timerGraphics.find((graphic) => graphic.timerId === timerId) ??
+    (targets.programActive ? state.stage.timerGraphics.find((graphic) => graphic.timerId === timerId) : undefined);
+  const [graphic, setGraphic] = useState<LiveTimerGraphic>(shown ?? defaultLiveTimerGraphic(timerId));
+  const timer = state.timers.find((entry) => entry.id === timerId);
+  return (
+    <>
+      <LiveLayerTargets targets={targets} subject="timer" layer={{ kind: "timer", graphic }} disabled={!timer} />
+      {settingsOpen && timer ? (
+        <LiveTimerGraphicDialog
+          graphic={graphic}
+          timerName={timer.name}
+          counts={liveTimerCounts(timer)}
+          onSave={setGraphic}
+          onClose={onSettingsClose}
+        />
       ) : null}
-    </LiveGraphicRow>
+    </>
   );
 }

@@ -82,9 +82,14 @@ function StudioTimerSpecimen() {
                 <path d="M5.5 3v10M10.5 3v10" />
               </StrokeIcon>
             </Button>
+            <Button aria-label="Reset Session">Reset</Button>
             <Button aria-label="Take a minute from Session">−1m</Button>
             <Button aria-label="Add a minute to Session">+1m</Button>
-            <Menu label="Session timer" align="end" items={[{ id: "reset", label: "Reset", onSelect: () => {} }]} />
+            <Menu
+              label="Session timer"
+              align="end"
+              items={[{ id: "settings", label: "Timer settings", onSelect: () => {} }]}
+            />
           </span>
         </li>
       </ul>

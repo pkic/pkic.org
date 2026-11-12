@@ -10,6 +10,7 @@ import {
 } from "../../../shared/schemas/live-session-room";
 import { liveScheduleProjectionSchema } from "../../../shared/schemas/live-session-schedule";
 import { defaultLiveTimerGraphic } from "../../../shared/schemas/live-session-timer";
+import { sessionLiveTimer } from "../../../shared/live-timer-policy";
 import { applyLiveRoomMessage, type LiveRoomState } from "../../live-session/live-room-state";
 import type { ScreenCachedAgenda } from "../../event-screens/screen-cache";
 
@@ -93,19 +94,7 @@ function stageDisplayState(
     outputs: { ...EMPTY_LIVE_OUTPUTS, "stage-display": stageDisplay },
     speakerMessage: null,
     preview: EMPTY_LIVE_AUX_COMPOSITION,
-    timers: [
-      {
-        id: "session",
-        name: "Session",
-        kind: "session",
-        targetAt: null,
-        durationSeconds: null,
-        running: false,
-        anchorAt: null,
-        heldMs,
-        change: null,
-      },
-    ],
+    timers: [{ ...sessionLiveTimer(), followsAgenda: false, heldMs }],
     reactionTotals: {},
     queue: { question: [], "lower-third": [], poll: [], change: null },
     operators: [],

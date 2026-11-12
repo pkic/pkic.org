@@ -156,7 +156,7 @@ export class LiveRoomControls {
     visible: boolean,
     at: string,
   ): LiveControlOutcome {
-    if (!this.store.timers(session).some((entry) => entry.id === timer.timerId))
+    if (!this.store.timers().some((entry) => entry.id === timer.timerId))
       return { code: "LIVE_TIMER_NOT_FOUND", message: "That timer is no longer in this room. Choose another one." };
     const current = this.store.stage();
     const timerGraphics = updateLiveTimerGraphics(current.timerGraphics, timer, visible);
@@ -218,7 +218,7 @@ export class LiveRoomControls {
    */
   adoptProgram(stage: LiveStage): LiveRoomServerMessage {
     const room = this.store.session();
-    const timers = room ? this.store.timers(room.session) : [];
+    const timers = room ? this.store.timers() : [];
     this.store.saveStage({
       ...stage,
       question: null,

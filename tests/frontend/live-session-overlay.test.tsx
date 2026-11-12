@@ -212,11 +212,11 @@ describe("broadcast overlays", () => {
       live.latest().deliver({ type: "timers.changed", timers: [{ ...SESSION_TIMER, heldMs: 42_000 }] });
       live.latest().deliver({
         type: "stage.changed",
-        stage: { ...ON_STAGE, timerGraphics: [{ ...graphic, format: "hh:mm:ss" }] },
+        stage: { ...ON_STAGE, timerGraphics: [{ ...graphic, format: "ss" }] },
       });
     });
     const drawn = host.querySelector<HTMLElement>(".pk-live-overlay__timer")!;
-    expect(drawn.querySelector(".pk-live-overlay__timer-value")?.textContent).toBe("00:00:42");
+    expect(drawn.querySelector(".pk-live-overlay__timer-value")?.textContent).toBe("42");
     expect(drawn.querySelector(".pk-live-overlay__timer-label")?.textContent).toBe("Time left");
     expect(drawn.dataset.tone).toBe("warn");
     void act(() =>
@@ -374,7 +374,7 @@ describe("broadcast overlays", () => {
         speakerMessage: { text: "Please wrap up", tone: "warning", flash: false, change: null },
       });
     });
-    expect(host.querySelector(".pk-live-stage-display__countdown")?.textContent).toBe("05:00");
+    expect(host.querySelector(".pk-live-stage-display__countdown")?.textContent).toBe("5:00");
     expect(host.querySelector(".pk-live-stage-display__timer .pk-live-stage-display__label")?.textContent).toBe(
       "Pitch",
     );

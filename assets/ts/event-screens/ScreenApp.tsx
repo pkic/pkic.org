@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { ScreenManagerCommand } from "../../shared/schemas/event-screen-monitor";
 import type { ScreenId } from "../../shared/schemas/event-screens";
-import { formatLiveTimer } from "../../shared/live-timer-policy";
+import { formatLiveDuration } from "../../shared/live-timer-format";
 import { LiveOverlayPresentation } from "../live-session/LiveOverlayPresentation";
 import type { LiveRoomState } from "../live-session/live-room-state";
 import { useLiveTimerNow } from "../live-session/useLiveCountdown";
@@ -35,7 +35,7 @@ export function ScreenView({ screenId, display, now }: { screenId: ScreenId; dis
           pairing={
             display.pairing && {
               code: display.pairing.code,
-              expiresIn: formatLiveTimer(Math.max(0, Date.parse(display.pairing.expiresAt) - now), "mm:ss"),
+              expiresIn: formatLiveDuration(Math.max(0, Date.parse(display.pairing.expiresAt) - now)),
             }
           }
         />
@@ -75,6 +75,7 @@ export function ScreenView({ screenId, display, now }: { screenId: ScreenId; dis
           status={display.marker ? "offline" : "live"}
           roomId={display.roomId}
           broadcast
+          playsSounds
           stageAside={<ScreenMarker marker={display.marker} />}
         >
           {display.output === "stage-display" ? null : <ScreenMarker marker={display.marker} placement="corner" />}

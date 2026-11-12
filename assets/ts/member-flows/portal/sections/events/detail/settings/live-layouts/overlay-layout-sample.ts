@@ -1,7 +1,7 @@
 import { DEFAULT_LIVE_CHECK_IN_TEXT } from "../../../../../../../../shared/schemas/live-session-graphic-settings";
 import { LIVE_MODERATOR_ROLE_LABEL } from "../../../../../../../../shared/live-room-credits";
 import { formFieldStatFromTallies } from "../../../../../../../../shared/form-field-statistics";
-import { LIVE_SESSION_TIMER_ID } from "../../../../../../../../shared/live-timer-policy";
+import { LIVE_SESSION_TIMER_ID, sessionLiveTimer } from "../../../../../../../../shared/live-timer-policy";
 import { livePollFieldSchema } from "../../../../../../../../shared/schemas/live-session-poll";
 import {
   EMPTY_LIVE_AUX_COMPOSITION,
@@ -139,19 +139,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
     outputs: EMPTY_LIVE_OUTPUTS,
     speakerMessage: { text: "Please wrap up", tone: "warning", flash: false, change: null },
     preview: EMPTY_LIVE_AUX_COMPOSITION,
-    timers: [
-      {
-        id: LIVE_SESSION_TIMER_ID,
-        name: "Session",
-        kind: "session",
-        targetAt: null,
-        durationSeconds: null,
-        running: false,
-        anchorAt: null,
-        heldMs: 12 * 60_000 + 30_000,
-        change: null,
-      },
-    ],
+    timers: [{ ...sessionLiveTimer(), followsAgenda: false, heldMs: 12 * 60_000 + 30_000 }],
     reactionTotals: {},
     queue: { question: [], "lower-third": [], poll: [], change: null },
     operators: [],
