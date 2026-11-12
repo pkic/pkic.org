@@ -12,6 +12,7 @@ interface AttendanceStatusRow {
   expired: number;
   pending: number;
   cancelled: number;
+  confirmed: number;
 }
 
 interface AttendanceChangeSummaryRow {
@@ -76,6 +77,8 @@ export interface AttendanceChangeStatistics {
  * as waitlisted when at least one is, so someone with a seat on Monday and a
  * place in Tuesday's queue is in both. These are the same tests the list's
  * "Waitlist" filter applies, so a card and its filtered list agree.
+ * `confirmed` counts the accepted among the registered: confirmed, with a
+ * seat on at least one day of the type — the people expected there.
  */
 export function prepareAttendanceStatusByTypeStatement(db: DatabaseLike, eventId: string): StatementLike {
   const dayEntry = (statusClause: string) =>
@@ -94,6 +97,7 @@ export function prepareAttendanceStatusByTypeStatement(db: DatabaseLike, eventId
      ),
      typed AS (
        SELECT attendance_type, status = 'cancelled' AS cancelled, status = 'pending_email_confirmation' AS pending,
+              status = 'registered' AS registered,
               MIN(waiting) AS all_waiting, MAX(waiting) AS any_waiting, MAX(expired) AS any_expired
        FROM selected_days GROUP BY registration_id, attendance_type
      )
@@ -101,7 +105,8 @@ export function prepareAttendanceStatusByTypeStatement(db: DatabaseLike, eventId
             SUM(CASE WHEN cancelled THEN 0 ELSE 1 - all_waiting END) AS accepted,
             SUM(CASE WHEN cancelled THEN 0 ELSE any_waiting END) AS waitlisted,
             SUM(CASE WHEN cancelled THEN 0 ELSE any_expired END) AS expired,
-            SUM(pending) AS pending, SUM(cancelled) AS cancelled
+            SUM(pending) AS pending, SUM(cancelled) AS cancelled,
+            SUM(CASE WHEN registered THEN 1 - all_waiting ELSE 0 END) AS confirmed
      FROM typed GROUP BY attendance_type`,
     )
     .bind(eventId);
@@ -118,6 +123,7 @@ export function decodeAttendanceStatusByType(result: D1StatementResult): Record<
         expired: Number(row.expired ?? 0),
         pending: Number(row.pending ?? 0),
         cancelled: Number(row.cancelled ?? 0),
+        confirmed: Number(row.confirmed ?? 0),
       },
     ]),
   );

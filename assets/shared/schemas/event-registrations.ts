@@ -116,6 +116,8 @@ export const attendanceStatusCountSchema = z.object({
   pending: z.number().default(0),
   /** Cancelled registrations that chose the type; not in `total`. */
   cancelled: z.number().default(0),
+  /** Of `total`, the confirmed registrations with a seat on at least one such day: the people expected there. */
+  confirmed: z.number(),
 });
 export type AttendanceStatusCount = z.infer<typeof attendanceStatusCountSchema>;
 export const eventRegistrationsStatsSchema = z.object({
@@ -124,6 +126,8 @@ export const eventRegistrationsStatsSchema = z.object({
   byStatus: z.record(z.string(), z.number()),
   /** Registrations, cancelled ones aside, waiting for or offered a seat on at least one day. */
   waitlistedCount: z.number(),
+  /** Confirmed registrations waiting for no seat on any day: the people expected to attend. */
+  confirmedCount: z.number(),
   bouncedCount: z.number(),
   consentCount: z.number(),
 });
@@ -230,6 +234,7 @@ export const eventAttendanceRegistrationsStatsSchema = eventRegistrationsStatsSc
   attendanceStatusByType: true,
   byStatus: true,
   waitlistedCount: true,
+  confirmedCount: true,
 });
 export type EventAttendanceRegistrationsStats = z.infer<typeof eventAttendanceRegistrationsStatsSchema>;
 

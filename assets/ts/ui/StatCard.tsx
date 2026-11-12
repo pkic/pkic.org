@@ -20,6 +20,8 @@ export type StatCardTone = "accent" | "ok" | "warn" | "danger" | "info" | "neutr
  */
 export interface StatCardPart {
   text: string;
+  /** A decorative mark before the text, such as the tick beside "2,980 confirmed". */
+  icon?: ComponentChildren;
   href?: string;
   onPress?: () => void;
   pressed?: boolean;
@@ -36,6 +38,12 @@ export interface StatCardProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 
    * the value, separated by a middle dot, each one pressable on its own.
    */
   breakdown?: readonly StatCardPart[];
+  /**
+   * The one part that matters most, beside the value rather than under it:
+   * "✓ 2,980 confirmed" next to "3,529". It wraps under the value when the
+   * card is narrow, and presses or links like the parts under it.
+   */
+  highlight?: StatCardPart;
   trend?: StatCardTrend;
   /**
    * Makes the whole card a link to the rows behind the number.
@@ -90,11 +98,46 @@ export interface StatCardProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 
   pressLabel?: string;
 }
 
+/** A part of the figure: a link, a toggle, or plain text when it does neither. */
+function Part({ part, extraClass }: { part: StatCardPart; extraClass?: string }) {
+  const content = (
+    <>
+      {part.icon && (
+        <span class="pk-stat-card__part-icon" aria-hidden="true">
+          {part.icon}
+        </span>
+      )}
+      {part.text}
+    </>
+  );
+  const pressable = ["pk-stat-card__part", extraClass].filter(Boolean).join(" ");
+  if (part.href)
+    return (
+      <a class={pressable} href={part.href} aria-label={part.pressLabel}>
+        {content}
+      </a>
+    );
+  if (part.onPress)
+    return (
+      <button
+        type="button"
+        class={pressable}
+        aria-pressed={part.pressed ?? false}
+        aria-label={part.pressLabel}
+        onClick={part.onPress}
+      >
+        {content}
+      </button>
+    );
+  return <span class={extraClass}>{content}</span>;
+}
+
 export function StatCard({
   label,
   value,
   note,
   breakdown,
+  highlight,
   trend,
   href,
   density = "default",
@@ -148,7 +191,14 @@ export function StatCard({
           label
         )}
       </div>
-      <div class="pk-stat-card__value">{value}</div>
+      {highlight ? (
+        <div class="pk-stat-card__figure">
+          <div class="pk-stat-card__value">{value}</div>
+          <Part part={highlight} extraClass="pk-stat-card__highlight" />
+        </div>
+      ) : (
+        <div class="pk-stat-card__value">{value}</div>
+      )}
       {note && (
         <div class={noteClasses}>
           {/* The direction is carried by color, which not every reader can
@@ -163,23 +213,7 @@ export function StatCard({
           {breakdown.map((part, index) => (
             <Fragment key={part.text}>
               {index > 0 && <span aria-hidden="true">{" · "}</span>}
-              {part.href ? (
-                <a class="pk-stat-card__part" href={part.href} aria-label={part.pressLabel}>
-                  {part.text}
-                </a>
-              ) : part.onPress ? (
-                <button
-                  type="button"
-                  class="pk-stat-card__part"
-                  aria-pressed={part.pressed ?? false}
-                  aria-label={part.pressLabel}
-                  onClick={part.onPress}
-                >
-                  {part.text}
-                </button>
-              ) : (
-                <span>{part.text}</span>
-              )}
+              <Part part={part} />
             </Fragment>
           ))}
         </div>

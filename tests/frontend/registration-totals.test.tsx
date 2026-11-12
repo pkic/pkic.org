@@ -37,11 +37,12 @@ afterEach(() => {
 const stats: EventAttendanceRegistrationsStats & { bouncedCount?: number } = {
   byAttendanceType: {},
   attendanceStatusByType: {
-    in_person: { total: 12, accepted: 10, waitlisted: 2, expired: 0, pending: 1, cancelled: 2 },
-    virtual: { total: 5, accepted: 5, waitlisted: 0, expired: 0, pending: 0, cancelled: 0 },
+    in_person: { total: 12, accepted: 10, waitlisted: 2, expired: 0, pending: 1, cancelled: 2, confirmed: 9 },
+    virtual: { total: 5, accepted: 5, waitlisted: 0, expired: 0, pending: 0, cancelled: 0, confirmed: 5 },
   },
   byStatus: { registered: 15, pending_email_confirmation: 1, cancelled: 3 },
   waitlistedCount: 2,
+  confirmedCount: 13,
   bouncedCount: 1,
 };
 
@@ -123,8 +124,26 @@ describe("RegistrationTotals figures", () => {
       row.querySelector("dt")?.textContent,
       row.querySelector("dd")?.textContent,
     ]);
-    expect(rows).toHaveLength(3);
-    expect(rows.map(([, count]) => count)).toEqual(["1", "2", "2"]);
+    expect(rows).toHaveLength(4);
+    expect(rows[0]).toEqual(["Confirmed, with a seat on at least one day", "9"]);
+    expect(rows.slice(1).map(([, count]) => count)).toEqual(["1", "2", "2"]);
+  });
+
+  it("states the confirmed people beside each figure and filters the list to them", () => {
+    const list = filters({});
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} filters={list} />);
+    const registered = card(container, "Registered").querySelector<HTMLButtonElement>(".pk-stat-card__highlight");
+    expect(registered?.textContent).toBe("13 confirmed");
+    void act(() => registered?.click());
+    expect(list.apply).toHaveBeenLastCalledWith({ status: "registered", waitlisted: "false" });
+    const inPerson = card(container, "In-person").querySelector<HTMLButtonElement>(".pk-stat-card__highlight");
+    expect(inPerson?.getAttribute("aria-label")).toBe("Show only the 9 confirmed In-person registrations");
+    void act(() => inPerson?.click());
+    expect(list.apply).toHaveBeenLastCalledWith({
+      attendance_type: "in_person",
+      status: "registered",
+      waitlisted: "false",
+    });
   });
 });
 
@@ -212,7 +231,15 @@ describe("RegistrationTotals attendance cards", () => {
           ...stats,
           attendanceStatusByType: {
             ...stats.attendanceStatusByType,
-            livestream_lounge: { total: 3, accepted: 3, waitlisted: 0, expired: 0, pending: 0, cancelled: 0 },
+            livestream_lounge: {
+              total: 3,
+              accepted: 3,
+              waitlisted: 0,
+              expired: 0,
+              pending: 0,
+              cancelled: 0,
+              confirmed: 3,
+            },
           },
         }}
         attendanceOptions={configured}
@@ -275,7 +302,7 @@ describe("RegistrationTotals breakdown", () => {
         stats={{
           ...stats,
           attendanceStatusByType: {
-            virtual: { total: 0, accepted: 0, waitlisted: 0, expired: 0, pending: 0, cancelled: 4 },
+            virtual: { total: 0, accepted: 0, waitlisted: 0, expired: 0, pending: 0, cancelled: 4, confirmed: 0 },
           },
         }}
         attendanceOptions={options}

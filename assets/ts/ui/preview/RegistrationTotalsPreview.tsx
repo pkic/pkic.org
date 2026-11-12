@@ -8,12 +8,13 @@ import type { EventAttendanceOption } from "../../../shared/schemas/event-config
 const STATS: EventAttendanceRegistrationsStats = {
   byAttendanceType: {},
   attendanceStatusByType: {
-    in_person: { total: 1268, accepted: 912, waitlisted: 356, expired: 0, pending: 0, cancelled: 41 },
-    virtual: { total: 1388, accepted: 1388, waitlisted: 0, expired: 0, pending: 1, cancelled: 143 },
-    livestream_lounge: { total: 86, accepted: 86, waitlisted: 0, expired: 0, pending: 0, cancelled: 2 },
+    in_person: { total: 1268, accepted: 912, waitlisted: 356, expired: 0, pending: 0, cancelled: 41, confirmed: 912 },
+    virtual: { total: 1388, accepted: 1388, waitlisted: 0, expired: 0, pending: 1, cancelled: 143, confirmed: 1387 },
+    livestream_lounge: { total: 86, accepted: 86, waitlisted: 0, expired: 0, pending: 0, cancelled: 2, confirmed: 86 },
   },
   byStatus: { registered: 3344, pending_email_confirmation: 1, cancelled: 184 },
   waitlistedCount: 356,
+  confirmedCount: 2988,
 };
 
 /** A custom option with the icon its settings chose, beside the built-in two. */

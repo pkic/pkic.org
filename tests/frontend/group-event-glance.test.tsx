@@ -53,6 +53,7 @@ function stubEndpoints({ published }: { published: number }) {
             byAttendanceType: {},
             attendanceStatusByType: {},
             waitlistedCount: 0,
+            confirmedCount: 0,
           },
         });
       }
@@ -133,7 +134,7 @@ describe("group event overview at a glance", () => {
     );
     await settle();
     await settle();
-    const part = container.querySelector<HTMLAnchorElement>("a.pk-stat-card__part");
+    const part = container.querySelector<HTMLAnchorElement>(".pk-stat-card__note a.pk-stat-card__part");
     expect(part?.getAttribute("href")).toBe("#/events/registrations?registrations.f.status=cancelled");
     expect(part?.getAttribute("aria-label")).toBe("Show only the 4 cancelled registrations");
     // A link, not a toggle: nothing on the Overview is pressed.

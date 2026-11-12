@@ -232,7 +232,7 @@ export async function listEventRegistrations(
     getAttendanceStatusByType(db, eventId),
   ]);
 
-  const { byAttendanceType, byStatus, waitlistedCount } = statRows;
+  const { byAttendanceType, byStatus, waitlistedCount, confirmedCount } = statRows;
 
   return {
     registrations: registrations.map((registration) => eventRegistrationSummarySchema.parse(registration)),
@@ -242,6 +242,7 @@ export async function listEventRegistrations(
       attendanceStatusByType,
       byStatus,
       waitlistedCount,
+      confirmedCount,
       bouncedCount: Number(bouncedCountRow?.bounced_count ?? 0),
       consentCount: Number(consentCountRow?.consent_count ?? 0),
     }),

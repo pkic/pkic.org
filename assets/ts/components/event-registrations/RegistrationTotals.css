@@ -57,6 +57,12 @@
     color: var(--pk-ink-muted);
   }
 
+  /* Confirmed leads: the people expected to attend, in full ink. */
+  .pk-totals-tip__row--lead dt {
+    color: var(--pk-ink);
+    font-weight: 600;
+  }
+
   .pk-totals-tip__row dd {
     margin: 0;
     font-weight: 600;

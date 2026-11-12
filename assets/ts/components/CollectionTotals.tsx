@@ -33,6 +33,8 @@ export interface CollectionTotal {
   note?: string;
   /** The figure's parts, in place of `note`, each pressable on its own; see StatCard's `breakdown`. */
   breakdown?: readonly StatCardPart[];
+  /** The part that matters most, beside the figure; see StatCard's `highlight`. */
+  highlight?: StatCardPart;
   /** The state the figure reports, when it reports one. */
   tone?: StatCardTone;
   /** What exactly the figure counts, opened from its label. */
@@ -73,6 +75,7 @@ export function CollectionTotalCard({ item }: { item: CollectionTotal }) {
       value={value}
       note={item.note}
       breakdown={item.breakdown}
+      highlight={item.highlight}
       tone={tone}
       tooltip={item.tooltip}
       icon={item.icon}

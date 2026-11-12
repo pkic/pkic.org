@@ -44,9 +44,10 @@ export function registrationList() {
     ],
     stats: {
       byAttendanceType: { in_person: 1 },
-      attendanceStatusByType: { in_person: { total: 1, accepted: 1, waitlisted: 1 } },
+      attendanceStatusByType: { in_person: { total: 1, accepted: 1, waitlisted: 1, confirmed: 1 } },
       byStatus: { registered: 1 },
       waitlistedCount: 1,
+      confirmedCount: 0,
     },
     page: { limit: 50, offset: 0, total: 1, hasMore: false },
   };

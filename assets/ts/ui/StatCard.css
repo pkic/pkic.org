@@ -133,6 +133,48 @@
     line-height: 1.15;
   }
 
+  /*
+   * The value with its highlight beside it, on one baseline: "3,529" then
+   * "✓ 2,980 confirmed". In a narrow card the highlight wraps under the
+   * value, still ahead of the line of parts.
+   */
+  .pk-stat-card__figure {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--pk-2);
+  }
+
+  /*
+   * The part that matters most: in full ink and weight, a size above the
+   * parts, with the tick in the ok tone as the only color. It is a plain
+   * statement of the expected state, not a badge. Scoped to the figure, so
+   * it wins over the part's own `font: inherit` when it is pressable too.
+   */
+  .pk-stat-card__figure .pk-stat-card__highlight {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--pk-ink);
+  }
+
+  .pk-stat-card__part-icon {
+    display: inline-flex;
+    flex: none;
+  }
+
+  .pk-stat-card__part-icon svg {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+
+  .pk-stat-card__figure .pk-stat-card__highlight .pk-stat-card__part-icon {
+    color: var(--pk-ok);
+  }
+
   .pk-stat-card__note {
     font-size: var(--pk-text-xs);
     line-height: 1.35;

@@ -1,6 +1,7 @@
 /**
  * The registration list's figures. Every card counts people the same way:
- * the figure is everyone in it, the line under it breaks that down, and the
+ * the figure is everyone in it, beside it is how many of them are confirmed
+ * and expected to attend, the line under it breaks the rest down, and the
  * label opens a tooltip that says exactly what was counted. There is one
  * attendance card for each option the event's attendance settings offer, in
  * its wording and with its icon. It counts each person who chose that option
@@ -14,6 +15,7 @@
  */
 import type { ComponentChildren } from "preact";
 import { AttendanceIcon } from "../AttendanceIcon";
+import { IconCheckmark } from "../../ui/MediaIcons";
 import type { StatCardTone } from "../../ui/StatCard";
 import { CollectionTotals, type CollectionTotal } from "../CollectionTotals";
 
@@ -108,6 +110,11 @@ interface CardSource {
   filter: CardFilter | null;
   /** What the card's parts are narrowed to as well: its attendance type. */
   scope?: CardFilter;
+  /**
+   * The people expected to attend: confirmed, and not waiting for a seat.
+   * The card states it beside its figure, the most important part of it.
+   */
+  confirmed?: { count: number; description: string };
   pending?: number;
   waitlisted?: number;
   cancelled?: number;
@@ -153,10 +160,27 @@ function registrationCard(source: CardSource, target: CardTarget | undefined): C
   const pressable = target && source.filter ? target : undefined;
   // "In-person registrations", or just "registrations" for the card that counts them all.
   const whose = source.label === "registered" ? "registrations" : `${source.label} registrations`;
+  // Confirmed and not waitlisted: on the whole event for the registered card,
+  // on at least one day of the type for an attendance card.
+  const confirmedFilter = { ...scope, status: "registered", waitlisted: "false" };
   return {
     label: source.label,
     value: source.total,
     icon: source.icon,
+    ...(source.confirmed
+      ? {
+          highlight: {
+            text: `${formatNumber(source.confirmed.count)} confirmed`,
+            icon: <IconCheckmark />,
+            ...(pressable
+              ? {
+                  ...action(confirmedFilter, pressable),
+                  pressLabel: `Show only the ${formatNumber(source.confirmed.count)} confirmed ${whose}`,
+                }
+              : {}),
+          },
+        }
+      : {}),
     ...(pressable && source.filter
       ? { ...action(source.filter, pressable), pressLabel: source.pressLabel ?? `Show ${source.label} only` }
       : {}),
@@ -173,8 +197,14 @@ function registrationCard(source: CardSource, target: CardTarget | undefined): C
     tooltip: (
       <div class="pk-totals-tip">
         <p class="pk-totals-tip__title">{source.title}</p>
-        {parts.length > 0 && (
+        {(source.confirmed || parts.length > 0) && (
           <dl class="pk-totals-tip__rows">
+            {source.confirmed && (
+              <div class="pk-totals-tip__row pk-totals-tip__row--ok pk-totals-tip__row--lead">
+                <dt>{source.confirmed.description}</dt>
+                <dd>{formatNumber(source.confirmed.count)}</dd>
+              </div>
+            )}
             {parts.map((part) => (
               <div key={part.word} class={`pk-totals-tip__row pk-totals-tip__row--${part.tone}`}>
                 <dt>{part.description}</dt>
@@ -184,7 +214,7 @@ function registrationCard(source: CardSource, target: CardTarget | undefined): C
           </dl>
         )}
         {pressable && !("href" in pressable) && (
-          <p class="pk-totals-tip__hint">Select the card or a figure under it to list those registrations.</p>
+          <p class="pk-totals-tip__hint">Select the card or any figure on it to list those registrations.</p>
         )}
       </div>
     ),
@@ -193,7 +223,7 @@ function registrationCard(source: CardSource, target: CardTarget | undefined): C
 
 /** The card for everyone who registered: the list's first, and the event Overview's registration figure. */
 export function registeredTotal(
-  stats: Pick<EventAttendanceRegistrationsStats, "byStatus" | "waitlistedCount">,
+  stats: Pick<EventAttendanceRegistrationsStats, "byStatus" | "waitlistedCount" | "confirmedCount">,
   target?: CardTarget,
 ): CollectionTotal {
   return registrationCard(
@@ -203,6 +233,7 @@ export function registeredTotal(
       total: Object.values(stats.byStatus).reduce((sum, count) => sum + count, 0),
       filter: {},
       pressLabel: "Show all registrations",
+      confirmed: { count: stats.confirmedCount, description: "Confirmed, not waiting for any seat" },
       pending: stats.byStatus.pending_email_confirmation ?? 0,
       waitlisted: stats.waitlistedCount,
       cancelled: stats.byStatus.cancelled ?? 0,
@@ -241,6 +272,7 @@ export function RegistrationTotals({
             total: counts.total,
             filter: filters?.byAttendanceType ? { ...scope, status: LIVE_STATUSES } : null,
             scope,
+            confirmed: { count: counts.confirmed, description: "Confirmed, with a seat on at least one day" },
             pending: counts.pending,
             waitlisted: counts.waitlisted,
             cancelled: counts.cancelled,
