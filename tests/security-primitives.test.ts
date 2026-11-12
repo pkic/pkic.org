@@ -15,7 +15,8 @@ import { generateSignedRsvpAddress, verifySignedRsvpAddressFull } from "../funct
 import { parseTaggedInboundAddress } from "../functions/_lib/email/tagged-address";
 import { readBoundedStream } from "../functions/_lib/utils/bounded-stream";
 import { hmacSha256Bytes, hmacSha256Hex } from "../functions/_lib/utils/crypto";
-import { detectImageFormat, resolveImageAttachmentFormat } from "../functions/_lib/utils/image-format";
+import { detectImageFormat } from "../assets/shared/image-signature";
+import { resolveImageAttachmentFormat } from "../functions/_lib/utils/image-format";
 import { signJwt, verifyJwt } from "../functions/_lib/utils/jwt";
 
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
