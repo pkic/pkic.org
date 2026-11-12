@@ -1,6 +1,6 @@
 import type { AgendaOccurrence } from "../../../../../../../shared/schemas/event-agenda";
 import { agendaCreditRoleSchema } from "../../../../../../../shared/schemas/event-agenda";
-import { SPEAKER_ROLE_OPTIONS } from "../../../../../../shared/speaker-roles";
+import { SPEAKER_ROLE_OPTIONS } from "../../../../../../../shared/speaker-roles";
 import { AffiliationRow } from "../../../../../../ui/AffiliationRow";
 import { Avatar } from "../../../../../../ui/Avatar";
 import { RowActions } from "../../../../../../ui/RowActions";

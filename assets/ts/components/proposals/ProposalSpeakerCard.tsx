@@ -36,7 +36,7 @@ import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { statusLabel } from "../Badge";
 import { confirmAction } from "../ConfirmDialog";
 import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
-import { SPEAKER_ROLE_OPTIONS } from "../../shared/speaker-roles";
+import { ProposalSpeakerRoleStanding } from "./ProposalSpeakerRoleStanding";
 import { requestJson } from "../../shared/api-client";
 import { HeadshotTile } from "../../shared/headshot/HeadshotTile";
 import {
@@ -99,8 +99,6 @@ export interface ProposalSpeakerProfileAccess {
 export const NO_PROFILE_ACCESS: ProposalSpeakerProfileAccess = { canEditIdentity: false, canEditHeadshot: false };
 
 const quiet: (message: string, type: ToastType) => void = () => {};
-
-const ROLE_LABELS = new Map(SPEAKER_ROLE_OPTIONS.map((option) => [option.value, option.label]));
 
 /** "Participation confirmed Oct 3, 2026", "Declined …": the answer, when it is a normal one. Open invitations are attention items. */
 function participationText(speaker: ProposalSpeaker): string | null {
@@ -385,10 +383,8 @@ export function ProposalSpeakerCard({
       },
     });
   }
-  if (canFinalize && !isCurrentProposer) {
-    actions.push({ id: "role", label: "Change role…", onSelect: () => setChangingRole(true) });
-  }
   if (canFinalize) {
+    actions.push({ id: "role", label: "Change role…", onSelect: () => setChangingRole(true) });
     actions.push({
       id: "remind-profile",
       label: "Send profile reminder",
@@ -458,9 +454,7 @@ export function ProposalSpeakerCard({
               </span>
             )}
           </div>
-          <dl class="pk-speaker-portrait-standing" aria-label={`Where ${name} stands`}>
-            <dt class="pk-sr-only">Role</dt>
-            <dd>{ROLE_LABELS.get(speaker.role) ?? statusLabel(speaker.role)}</dd>
+          <ProposalSpeakerRoleStanding name={name} role={speaker.role} isCurrentProposer={isCurrentProposer}>
             <dt class="pk-sr-only">Status</dt>
             <dd>
               {[participationText(speaker), registration === undefined ? null : speakerRegistrationText(registration)]
@@ -473,7 +467,7 @@ export function ProposalSpeakerCard({
                 <dd>“{speaker.declineReason}”</dd>
               </>
             )}
-          </dl>
+          </ProposalSpeakerRoleStanding>
           {independentCapacity && <IndependentCapacityBadge status={independentCapacity.status} />}
           <AttentionList label={`Still needed for ${name}`} items={speakerAttention(speaker)} />
         </div>
@@ -520,6 +514,7 @@ export function ProposalSpeakerCard({
         <ProposalSpeakerRoleDialog
           name={name}
           role={speaker.role}
+          isCurrentProposer={isCurrentProposer}
           path={speakerPath()}
           notify={notify}
           onSaved={(role) => onSaved(speaker.userId, { role })}

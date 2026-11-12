@@ -1,5 +1,4 @@
-import { PROPOSAL_SPEAKER_ROLES } from "../../shared/schemas/participant-roles";
-import { statusLabel } from "../../shared/status-display";
+import { assignableSpeakerRoleOptions } from "../../shared/speaker-roles";
 import { Field } from "../ui/Field";
 import { Select, TextInput, Textarea } from "../ui/TextControl";
 import { Button } from "../ui/Button";
@@ -81,9 +80,9 @@ export function EventProposalManagement() {
               <Field id="cs-role" label="Role">
                 {(control) => (
                   <Select {...control} name="cs-role">
-                    {PROPOSAL_SPEAKER_ROLES.filter((role) => role !== "proposer").map((role) => (
-                      <option value={role} key={role}>
-                        {statusLabel(role)}
+                    {assignableSpeakerRoleOptions({ isCurrentProposer: false }).map((option) => (
+                      <option value={option.value} key={option.value}>
+                        {option.label}
                       </option>
                     ))}
                   </Select>

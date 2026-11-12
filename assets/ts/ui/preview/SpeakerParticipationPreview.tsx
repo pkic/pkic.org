@@ -58,6 +58,7 @@ function speakerParticipationData(late: boolean) {
       updatedAt: at,
     },
     presentationTerms: [],
+    acceptedConsents: [],
   });
   return data;
 }
@@ -67,7 +68,7 @@ export function SpeakerParticipationPreview({ late = false }: { late?: boolean }
   return <ParticipantSpeaker data={data} eventSlug="example-event" terms={[]} reload={async () => {}} />;
 }
 
-export function ConfirmedSpeakerPreview() {
+export function ConfirmedSpeakerPreview({ proposer = false }: { proposer?: boolean }) {
   const data = speakerParticipationData(false);
   const speaker = proposalSpeakerSchema.parse({
     ...data.profile,
@@ -89,7 +90,7 @@ export function ConfirmedSpeakerPreview() {
       <ProposalSpeakerCard
         speaker={speaker}
         proposalId={id}
-        isCurrentProposer={false}
+        isCurrentProposer={proposer}
         replacementSpeakers={[]}
         endpoints={{ speakerPath: () => `/api/v1/proposals/${id}/speakers/${id}` }}
         onSaved={() => {}}

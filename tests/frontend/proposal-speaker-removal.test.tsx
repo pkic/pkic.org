@@ -30,6 +30,7 @@ vi.mock("../../assets/ts/shared/headshot/upload", async (original) => ({
   showHeadshotDisclaimer: () => Promise.resolve(true),
 }));
 import { openCardMenu, runCardAction } from "./helpers/row-actions";
+import { formatDate } from "../../assets/ts/shared/ui";
 import { SPEAKER_NOT_YET_ACCEPTED_LABEL } from "../../assets/shared/proposal-speaker-acceptance";
 
 let container: HTMLElement | null = null;
@@ -333,7 +334,7 @@ describe("proposal speaker removal UI", () => {
     expect(root.querySelector("dialog")).toBeNull();
     // The answer is said once, in words with its date, not as a pill.
     expect(root.textContent?.match(/Participation confirmed/g)).toHaveLength(1);
-    expect(root.querySelector(".pk-speaker-portrait-standing")?.textContent).toMatch(/Participation confirmed \w/);
+    expect(root.querySelector(".pk-proposal-speaker-standing")?.textContent).toMatch(/Participation confirmed \w/);
     expect(root.querySelector(".pk-badge")).toBeNull();
     // The role is read once.
     expect(root.textContent?.match(/Proposer/g)).toHaveLength(1);
@@ -412,15 +413,37 @@ describe("proposal speaker removal UI", () => {
     await runCardAction(root, "Casey Speaker", "Change role…");
 
     // Derived from the vocabulary rather than listed here: a role added to the
-    // contract becomes available to every speaker but the proposer, whose role
-    // moves by promoting someone else.
+    // contract becomes available to every speaker. Only the proposal owner may
+    // hold the proposer role; ownership moves through explicit promotion.
     const dialog = root.querySelector<HTMLDialogElement>("dialog")!;
     expect(optionValues(controlFor<HTMLSelectElement>(dialog, "Role"))).toEqual(
       PROPOSAL_SPEAKER_ROLES.filter((role) => role !== "proposer"),
     );
   });
 
-  it("holds the proposer's own card to the proposer role", async () => {
+  it.each([
+    { role: "speaker", isCurrentProposer: true, labels: ["Speaker", "Proposer"] },
+    { role: "speaker", isCurrentProposer: false, labels: ["Speaker"] },
+    { role: "proposer", isCurrentProposer: true, labels: ["Proposer"] },
+  ] as const)("shows $role with proposer ownership $isCurrentProposer", ({ role, isCurrentProposer, labels }) => {
+    const root = mount(
+      <SpeakerCard
+        speaker={proposalSpeaker({ role })}
+        proposalId="proposal-1"
+        isCurrentProposer={isCurrentProposer}
+        replacementSpeakers={[]}
+        onSaved={() => {}}
+        onRemoved={() => {}}
+      />,
+    );
+    const standing = root.querySelector('dl[aria-label="Where Casey Speaker stands"]')!;
+    expect([...standing.querySelectorAll("dd")].map((item) => item.textContent)).toEqual([
+      ...labels,
+      `Participation confirmed ${formatDate("2026-08-01T00:00:00.000Z")}`,
+    ]);
+  });
+
+  it("lets the proposer take any role in the contract, the proposer's included", async () => {
     const root = mount(
       <SpeakerCard
         speaker={proposalSpeaker({ role: "proposer" })}
@@ -433,52 +456,62 @@ describe("proposal speaker removal UI", () => {
       />,
     );
 
-    const labels = (await openCardMenu(root, "Casey Speaker")).map((item) => item.textContent?.trim());
-    expect(labels).not.toContain("Change role…");
-  });
-
-  it("changes the role through the proposal's own contract", async () => {
-    const requests: Array<{ url: string; method: string; body: string | null }> = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-        requests.push({ url, method: init?.method ?? "GET", body: init?.body?.toString() ?? null });
-        return Response.json({
-          success: true,
-          speaker: { ...proposalSpeaker(), userId: "40000000-0000-4000-8000-000000000001", role: "moderator" },
-        });
-      }),
-    );
-    const onSaved = vi.fn();
-    const root = mount(
-      <SpeakerCard
-        speaker={proposalSpeaker()}
-        canFinalize
-        proposalId="proposal-1"
-        isCurrentProposer={false}
-        replacementSpeakers={[]}
-        onSaved={onSaved}
-        onRemoved={() => {}}
-      />,
-    );
-
     await runCardAction(root, "Casey Speaker", "Change role…");
+
     const dialog = root.querySelector<HTMLDialogElement>("dialog")!;
     const select = controlFor<HTMLSelectElement>(dialog, "Role");
-    await act(async () => {
-      select.value = "moderator";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    const save = [...dialog.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Save role")!;
-    await act(() => save.click());
-    await settle();
-
-    expect(requests).toHaveLength(1);
-    expect(requests[0]).toMatchObject({ url: "/api/v1/proposals/proposal-1/speakers/speaker-1", method: "PATCH" });
-    expect(proposalSpeakerPatchSchema.parse(JSON.parse(requests[0].body!))).toEqual({ role: "moderator" });
-    expect(onSaved).toHaveBeenCalledWith("speaker-1", { role: "moderator" });
+    expect(optionValues(select)).toEqual([...PROPOSAL_SPEAKER_ROLES]);
+    expect(select.value).toBe("proposer");
   });
+
+  it.each([
+    { isCurrentProposer: false, initialRole: "co_speaker", nextRole: "moderator" },
+    { isCurrentProposer: true, initialRole: "proposer", nextRole: "speaker" },
+  ] as const)(
+    "changes $initialRole to $nextRole through the proposal's own contract",
+    async ({ isCurrentProposer, initialRole, nextRole }) => {
+      const requests: Array<{ url: string; method: string; body: string | null }> = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+          requests.push({ url, method: init?.method ?? "GET", body: init?.body?.toString() ?? null });
+          return Response.json({
+            success: true,
+            speaker: { ...proposalSpeaker(), userId: "40000000-0000-4000-8000-000000000001", role: nextRole },
+          });
+        }),
+      );
+      const onSaved = vi.fn();
+      const root = mount(
+        <SpeakerCard
+          speaker={proposalSpeaker({ role: initialRole })}
+          canFinalize
+          proposalId="proposal-1"
+          isCurrentProposer={isCurrentProposer}
+          replacementSpeakers={[]}
+          onSaved={onSaved}
+          onRemoved={() => {}}
+        />,
+      );
+
+      await runCardAction(root, "Casey Speaker", "Change role…");
+      const dialog = root.querySelector<HTMLDialogElement>("dialog")!;
+      const select = controlFor<HTMLSelectElement>(dialog, "Role");
+      await act(async () => {
+        select.value = nextRole;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      const save = [...dialog.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Save role")!;
+      await act(() => save.click());
+      await settle();
+
+      expect(requests).toHaveLength(1);
+      expect(requests[0]).toMatchObject({ url: "/api/v1/proposals/proposal-1/speakers/speaker-1", method: "PATCH" });
+      expect(proposalSpeakerPatchSchema.parse(JSON.parse(requests[0].body!))).toEqual({ role: nextRole });
+      expect(onSaved).toHaveBeenCalledWith("speaker-1", { role: nextRole });
+    },
+  );
 
   it("reports a refused identity save and keeps the reader in the form", async () => {
     const requests: Array<{ url: string; method: string; body: string | null }> = [];

@@ -3,8 +3,8 @@
  * panelist — the one thing about them the proposal itself holds. Asked in a
  * dialog from the card's menu rather than a select standing open on the card.
  *
- * The proposer's role is never offered: the proposal moves to another speaker
- * by promoting them, not by relabelling this one.
+ * The proposer may take any role; only the proposer may hold the proposer
+ * role. Transfer ownership by promoting another speaker.
  */
 import { useState } from "preact/hooks";
 import { proposalSpeakerPatchSchema } from "../../../shared/schemas/proposal-management";
@@ -12,7 +12,7 @@ import { proposalSpeakerPatchResponseSchema } from "../../../shared/schemas/prop
 import { speakerRoleSchema, type SpeakerRole } from "../../../shared/schemas/registration";
 import { useContractForm } from "../../hooks/useContractForm";
 import { requestJson } from "../../shared/api-client";
-import { SPEAKER_ROLE_OPTIONS } from "../../shared/speaker-roles";
+import { assignableSpeakerRoleOptions } from "../../../shared/speaker-roles";
 import type { ToastType } from "../../shared/ui";
 import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
@@ -21,6 +21,7 @@ import { Select } from "../../ui/TextControl";
 export function ProposalSpeakerRoleDialog({
   name,
   role,
+  isCurrentProposer,
   path,
   onSaved,
   onClose,
@@ -28,6 +29,8 @@ export function ProposalSpeakerRoleDialog({
 }: {
   name: string;
   role: SpeakerRole;
+  /** Whether this speaker is the proposal's proposer, the only one who may hold the proposer role. */
+  isCurrentProposer: boolean;
   /** The speaker on this proposal's roster. */
   path: string;
   onSaved: (role: SpeakerRole) => void;
@@ -81,7 +84,7 @@ export function ProposalSpeakerRoleDialog({
             value={draft}
             onChange={(event) => setDraft(speakerRoleSchema.parse(event.currentTarget.value))}
           >
-            {SPEAKER_ROLE_OPTIONS.filter((option) => option.value !== "proposer").map((option) => (
+            {assignableSpeakerRoleOptions({ isCurrentProposer }).map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>

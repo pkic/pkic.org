@@ -14,7 +14,7 @@ import { Markdown } from "../../ui/Markdown";
 import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
 import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { proposalSpeakerRemovalResponseSchema } from "../../../shared/schemas/proposal-management";
-import { SPEAKER_ROLE_OPTIONS } from "../../shared/speaker-roles";
+import { ProposalSpeakerRoleStanding } from "./ProposalSpeakerRoleStanding";
 import { proposalAccessPath, type ProposalResourceAccess } from "../../../shared/proposal-access-paths";
 import { ProposerSpeakerEditor } from "./ProposerSpeakerEditor";
 import { Avatar } from "../../ui/Avatar";
@@ -76,7 +76,6 @@ export function ProposalManageSpeakerCard({
     }
   }
 
-  const roleLabel = SPEAKER_ROLE_OPTIONS.find((option) => option.value === speaker.role)?.label ?? speaker.role;
   const busy = reminding || removing;
   const actions: MenuItem[] = [{ id: "edit", label: "Change role…", disabled: busy, onSelect: onEdit }];
   if (speaker.status === "invited" || speaker.status === "confirmed")
@@ -113,7 +112,12 @@ export function ProposalManageSpeakerCard({
         <div class="pk-cluster">
           {/* An invited speaker without a name is titled by the address already; it is not repeated. */}
           {speakerName !== speaker.email && <span>{speaker.email}</span>}
-          <Badge tone="neutral">{roleLabel}</Badge>
+          <ProposalSpeakerRoleStanding
+            name={speakerName}
+            role={speaker.role}
+            isCurrentProposer={isCurrentProposer}
+            badges
+          />
           <Badge tone={statusTone(speaker.status)}>{formatStatusLabel(speaker.status)}</Badge>
         </div>
         {speaker.declineReason && <p class="pk-small">Reason for declining: {speaker.declineReason}</p>}
