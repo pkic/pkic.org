@@ -57,6 +57,7 @@ describe("GET /api/v1/email/outbox", () => {
       recipientEmail: "alex@example.test",
       data: { token: "private-capability" },
       messageType: "transactional",
+      attachments: [{ kind: "r2-badge-image", r2Key: "og-badges/private-key", filenameBase: "attendee-badge-alex" }],
     });
     await env.DB.prepare("UPDATE email_outbox SET status = 'failed', last_error = ? WHERE id = ?")
       .bind("Provider refused delivery", id)
@@ -65,6 +66,9 @@ describe("GET /api/v1/email/outbox", () => {
     expect(response.status).toBe(200);
     const body = emailOutboxDetailResponseSchema.parse(await response.json());
     expect(body.message.lastError).toBe("Provider refused delivery");
+    // The reader sees what is attached, not where it is stored.
+    expect(body.message.attachments).toEqual([{ name: "attendee-badge-alex" }]);
+    expect(JSON.stringify(body)).not.toContain("private-key");
     expect(JSON.stringify(body)).not.toContain("private-capability");
     expect((await callAdmin("/api/v1/email/outbox/ffffffffffffffffffffffffffffffff")).status).toBe(404);
     const anonymous = await app.fetch(

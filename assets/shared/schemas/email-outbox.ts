@@ -166,6 +166,8 @@ export const emailOutboxDetailResponseSchema = z.object({
   message: emailOutboxRowSchema.extend({
     bodyContent: z.string().nullable(),
     customText: z.string().nullable(),
+    /** The files attached when it is sent, by name; the file type follows from the stored file. */
+    attachments: z.array(z.object({ name: z.string() })),
   }),
 });
 export const emailOutboxDetailRouteSchema = {

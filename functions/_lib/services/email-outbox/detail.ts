@@ -4,6 +4,7 @@ import type { DatabaseLike } from "../../types";
 import { EMAIL_OUTBOX_SELECT, type OutboxListRow } from "./query";
 import { buildEmailOutboxRows } from "./preview";
 import { readDirectEmailBody } from "../../email/direct-body";
+import { parseQueuedEmailAttachments } from "../../email/attachments";
 import { parseJsonSafe } from "../../utils/json";
 
 export async function getEmailOutboxDetail(db: DatabaseLike, id: string) {
@@ -16,6 +17,7 @@ export async function getEmailOutboxDetail(db: DatabaseLike, id: string) {
       ...(await buildEmailOutboxRows(db, [row]))[0],
       bodyContent: readDirectEmailBody(payload),
       customText: typeof customText === "string" && customText.trim() ? customText : null,
+      attachments: parseQueuedEmailAttachments(payload).map((file) => ({ name: file.filenameBase })),
     },
   };
 }
