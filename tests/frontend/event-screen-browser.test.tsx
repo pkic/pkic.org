@@ -109,6 +109,8 @@ describe("setting up a browser as a screen", () => {
     [{ fullscreen: false }, ["fullscreen"], { fullscreen: false, capture: "live" }],
     [{ wakeLock: false }, ["fullscreen", "wake-lock"], { wakeLock: false }],
     [{ capture: "declined" as const }, ["capture", "fullscreen"], { capture: "off", fullscreen: false }],
+    // A capture whose video never plays gives no frames, so it is not reported live.
+    [{ videoPlays: false }, ["capture", "fullscreen"], { capture: "off", fullscreen: false }],
   ])("goes on without what is refused (%o) and says so", async (grants, problems, state) => {
     const { platform, click } = fakePlatform(grants);
     const screen = createBrowserScreen(platform);

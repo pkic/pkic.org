@@ -274,6 +274,35 @@ describe("event screen pairing", () => {
     expect(((await old.json()) as { error: { code: string } }).error.code).toBe("SCREEN_SESSION_REVOKED");
   });
 
+  it("refuses a pairing over a sign-in that lands between the read and the write, and rolls it back", async () => {
+    const first = await startPairing();
+    expect((await approve("manager", { pairingCode: first.code })).status).toBe(201);
+    // The first approval is collected while the second one is being written.
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.startsWith("INSERT INTO screens("),
+      () =>
+        env.DB.prepare(
+          "UPDATE screen_sessions SET activated_at=?,expires_at=? WHERE screen_id=? AND activated_at IS NULL",
+        )
+          .bind(new Date().toISOString(), new Date(Date.now() + 86_400_000).toISOString(), SCREEN)
+          .run(),
+    );
+    const second = await startPairing();
+    const refused = await callApi({ ...testEnv, DB: db } as Env, `/api/v1/events/${EVENT.slug}/screens`, {
+      method: "POST",
+      headers: staff("manager"),
+      body: JSON.stringify({ screenId: SCREEN, name: "Foyer", pairingCode: second.code }),
+    });
+    expect(refused.status).toBe(409);
+    expect(((await refused.json()) as { error: { code: string } }).error.code).toBe("SCREEN_ID_IN_USE");
+    expect(await auditCount("screen.paired")).toBe(1);
+    const sessions = await env.DB.prepare("SELECT COUNT(*) AS total FROM screen_sessions WHERE screen_id=?")
+      .bind(SCREEN)
+      .first<number>("total");
+    expect(sessions).toBe(1);
+  });
+
   it("tells a screen without a sign-in to pair", async () => {
     const response = await callApi(testEnv, `/api/v1/screens/${SCREEN}`, {}, { maxRoundTrips: 0 });
     expect(response.status).toBe(401);
@@ -815,5 +844,25 @@ describe("replacing a screen's device", () => {
       (await approve("manager", { screenId: NEW_SCREEN, pairingCode: (await startPairing(NEW_SCREEN)).code })).status,
     ).toBe(201);
     expect((await remove("manager", NEW_SCREEN)).status).toBe(204);
+  });
+
+  it("removes nothing when the screen moved or changed after the read", async () => {
+    await pair();
+    await callApi(testEnv, `/api/v1/screens/${SCREEN}/session`, { method: "DELETE", headers: staff("manager") });
+    const db = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.startsWith("DELETE FROM screens"),
+      () =>
+        env.DB.prepare("UPDATE screens SET event_id=?,revision=revision+1 WHERE id=?")
+          .bind(OTHER_EVENT.id, SCREEN)
+          .run(),
+    );
+    const response = await callApi({ ...testEnv, DB: db } as Env, `/api/v1/screens/${SCREEN}`, {
+      method: "DELETE",
+      headers: staff("manager"),
+    });
+    expect(response.status).toBe(409);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe("SCREEN_REVISION_CONFLICT");
+    expect([await rows("screens", SCREEN), await audits("screen.removed", SCREEN)]).toEqual([1, 0]);
   });
 });

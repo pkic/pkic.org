@@ -21,7 +21,7 @@ import {
   screenRoomNotInEvent,
 } from "./screen-assignment";
 import { decodeScreenRecordRow, prepareScreenRecordRead, toScreenRecord, type ScreenRecordRow } from "./screen-record";
-import { screenSignedIn } from "./screen-pairing";
+import { SCREEN_LIVE_SIGN_IN, screenSignedIn } from "./screen-pairing";
 import {
   readScreenForStaff,
   screenPermissionContext,
@@ -137,14 +137,11 @@ export async function revokeScreenSessions(
   ]);
 }
 
-/** A live sign-in of the screen the statement names, as a guard on removing it. */
-const LIVE_SIGN_IN = `EXISTS(SELECT 1 FROM screen_sessions live WHERE live.screen_id=? AND live.activated_at IS NOT NULL
-  AND live.revoked_at IS NULL AND live.expires_at>?)`;
-
 /**
  * Removes a screen that is not signed in: one revoked, or approved and never
- * collected. Its pairing approvals cascade. A screen that signed in since
- * the read is refused, and the audit row's guard rolls the batch back.
+ * collected. Its pairing approvals cascade. The delete matches the screen's
+ * event and revision as read, so a screen that signed in, moved or changed
+ * since then deletes nothing and the audit row's guard rolls the batch back.
  */
 export async function removeScreen(db: DatabaseLike, request: Request, env: StaffEnv, screenId: string): Promise<void> {
   const { actor, row } = await readScreenForStaff(db, request, env, screenId, [SCREEN_MANAGE_PERMISSION]);
@@ -155,7 +152,10 @@ export async function removeScreen(db: DatabaseLike, request: Request, env: Staf
   const details = { name: row.name };
   try {
     await write.batch([
-      write.prepare(`DELETE FROM screens WHERE id=? AND NOT ${LIVE_SIGN_IN}`).bind(screenId, screenId, now),
+      // The screen as authorized: a move to another event or any other change since the read deletes nothing.
+      write
+        .prepare(`DELETE FROM screens WHERE id=? AND event_id IS ? AND revision=? AND NOT ${SCREEN_LIVE_SIGN_IN}`)
+        .bind(screenId, row.event_id, row.revision, screenId, now),
       context
         ? prepareScopedAuditLogAfterOneChange(
             write,
@@ -171,7 +171,8 @@ export async function removeScreen(db: DatabaseLike, request: Request, env: Staf
         : prepareAuditLogAfterOneChange(write, "user", actor.id, "screen.removed", "screen", screenId, details, now),
     ]);
   } catch (error) {
-    if (isAuditChangeGuardFailure(error)) throw screenSignedInRefusal();
+    // It signed in, moved or changed since the read: the list reloads and shows it as it stands.
+    if (isAuditChangeGuardFailure(error)) throw screenRevisionConflict();
     throw error;
   }
 }

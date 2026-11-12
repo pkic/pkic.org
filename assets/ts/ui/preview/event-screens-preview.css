@@ -1,9 +1,14 @@
 /* A venue screen's 16:9 frame in the gallery column, and the stand-in for its livestream player. */
 @layer components {
   .pk-preview__screen {
+    position: relative;
     inline-size: 100%;
     aspect-ratio: 16 / 9;
     background: var(--pk-chrome-deep);
+  }
+  /* In the gallery every specimen shows at once: the corner control sits in its own screen, not the window's. */
+  .pk-preview__screen .pk-screen-resume {
+    position: absolute;
   }
   .pk-preview__screen-player {
     display: grid;

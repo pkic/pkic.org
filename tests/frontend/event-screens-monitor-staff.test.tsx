@@ -11,7 +11,6 @@ import { screenIssues, type ScreenIssue } from "../../assets/shared/event-screen
 import {
   SCREEN_MONITOR_PROTOCOL,
   screenMonitorStaffMessageSchema,
-  type ScreenLiveStatus,
   type ScreenMonitorServerMessage,
 } from "../../assets/shared/schemas/event-screen-monitor";
 import type { ScreenRecord } from "../../assets/shared/schemas/event-screens";
@@ -147,16 +146,15 @@ describe("a browser screen in the status line", () => {
           browser: { fullscreen: false, wakeLock: true, sound: "none", capture },
         },
       });
-    const condition = (live: ScreenLiveStatus) =>
-      screenCondition(record, live, screenIssues({ status: live, samples: [], screenshotAt: null, now: NOW }), NOW);
-    expect(condition(browser("off"))).toEqual({
-      tone: "warning",
-      text: "Browser · Needs a click to resume, following the studio",
-    });
-    expect(condition(browser("stopped"))).toEqual({
-      tone: "warning",
-      text: "Browser · No picture (sharing stopped), following the studio",
-    });
+    // Said as a browser, with the issue's own label first, as a warning; not the sentence's exact wording.
+    for (const capture of ["off", "stopped"] as const) {
+      const live = browser(capture);
+      const found = screenIssues({ status: live, samples: [], screenshotAt: null, now: NOW });
+      expect(found.map((issue) => issue.code)).toEqual([capture === "off" ? "browser-resume" : "browser-sharing"]);
+      const condition = screenCondition(record, live, found, NOW);
+      expect(condition.tone).toBe("warning");
+      expect(condition.text.startsWith(`Browser · ${found[0]!.label}`)).toBe(true);
+    }
   });
 
   it("shows a WebP screenshot as WebP", () => {

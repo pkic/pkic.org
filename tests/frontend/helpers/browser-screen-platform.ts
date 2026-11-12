@@ -21,6 +21,8 @@ export function fakePlatform(
     pickerExitsFullscreen?: boolean;
     /** The browser window is full screen (F11) from the start. */
     windowFullscreen?: boolean;
+    /** The captured video plays; when false its `play()` rejects. */
+    videoPlays?: boolean;
   } = {},
 ) {
   const {
@@ -30,6 +32,7 @@ export function fakePlatform(
     spends,
     pickerExitsFullscreen = false,
     windowFullscreen = false,
+    videoPlays = true,
   } = grants;
   let windowFull = windowFullscreen;
   let windowChanged: (() => void) | null = null;
@@ -93,7 +96,15 @@ export function fakePlatform(
     getDisplayMedia,
     windowFullscreen: { matches: () => windowFull, onChange: (listener) => void (windowChanged = listener) },
     frames: () => ({
-      video: { srcObject: null, muted: false, videoWidth: 1920, videoHeight: 1080, play: async () => undefined },
+      video: {
+        srcObject: null,
+        muted: false,
+        videoWidth: 1920,
+        videoHeight: 1080,
+        play: async () => {
+          if (!videoPlays) throw new DOMException("The element has no supported sources.", "NotSupportedError");
+        },
+      },
       canvas: Object.assign(fakeCanvas([["image/webp", 30_000]]), {
         width: 0,
         height: 0,

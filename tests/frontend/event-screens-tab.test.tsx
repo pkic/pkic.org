@@ -356,6 +356,35 @@ describe("Replacing a screen's device", () => {
     expect(root.textContent).toContain("N3WD7V");
   });
 
+  it("reads the screen again after a revision conflict and replaces from the new revision", async () => {
+    let latest = record();
+    let attempts = 0;
+    const requests = api(
+      () => [latest],
+      (request) => {
+        if (request.method === "GET" && request.pathname === "/api/v1/screens/K7M2QA")
+          return json({ viewer: "staff", screen: latest });
+        if (request.method !== "PUT") return undefined;
+        attempts += 1;
+        if (attempts === 1) {
+          latest = record({ name: "Foyer, by the stairs", revision: 4 });
+          return refusal(409, "SCREEN_REVISION_CONFLICT");
+        }
+        return json(record({ id: "N3WD7V", name: "Foyer, by the stairs", revision: 5 }));
+      },
+    );
+    const root = await mount(true);
+    const dialog = await fillAndReplace(root);
+    expect(openDialog()).toBe(dialog);
+    expect(dialog.textContent).toContain("Foyer, by the stairs");
+
+    await act(() => button(dialog, "Replace device")!.click());
+    await settle();
+    const puts = requests.filter((request) => request.method === "PUT");
+    expect(puts.map((request) => screenDeviceReplacementSchema.parse(request.body).expectedRevision)).toEqual([3, 4]);
+    expect(openDialog()).toBeNull();
+  });
+
   it("keeps the dialog open on the screen ID another screen has", async () => {
     api(
       () => [record()],

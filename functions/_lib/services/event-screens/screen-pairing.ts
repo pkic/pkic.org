@@ -29,6 +29,8 @@ import { requireScreenTransfer, screenRevisionConflict, screenWriteDatabase } fr
  * the event (or moves it here), supersedes any earlier pending approval, holds
  * a pending sign-in with the code's hash, and records the pairing. Nothing
  * signs the screen in until its browser presents the matching challenge.
+ * Without `replace`, the write itself refuses a screen that is signed in, so
+ * a sign-in that lands after the read rolls the whole batch back.
  */
 export async function approveScreenPairing(
   db: DatabaseLike,
@@ -71,7 +73,7 @@ export async function approveScreenPairing(
                  ON CONFLICT(id) DO UPDATE SET name=excluded.name,event_id=excluded.event_id,room_id=excluded.room_id,
                    output=excluded.output,layout=excluded.layout,assigned_by=excluded.assigned_by,
                    assigned_at=excluded.assigned_at,revision=screens.revision+1
-                 WHERE screens.revision IS ?`,
+                 WHERE screens.revision IS ? AND (? OR NOT ${SCREEN_LIVE_SIGN_IN})`,
               )
               .bind(
                 input.screenId,
@@ -84,6 +86,9 @@ export async function approveScreenPairing(
                 columns[0],
                 event.id,
                 existing?.revision ?? null,
+                input.replace ? 1 : 0,
+                input.screenId,
+                now,
               ),
             prepareScopedAuditLogAfterOneChange(
               write,
@@ -110,8 +115,12 @@ export async function approveScreenPairing(
           ]);
           return toScreenRecord(decodeScreenRecordRow(results.at(-1)!) as ScreenRecordRow);
         } catch (error) {
-          if (isAuditChangeGuardFailure(error)) throw screenRevisionConflict();
-          throw error;
+          if (!isAuditChangeGuardFailure(error)) throw error;
+          // A sign-in that landed since the read is told apart from any other change.
+          const current = input.replace
+            ? null
+            : await prepareScreenRecordRead(db, input.screenId).first<ScreenRecordRow>();
+          throw current && screenSignedIn(current, nowIso()) ? screenIdInUse(current.name) : screenRevisionConflict();
         }
       },
     };
@@ -144,6 +153,13 @@ export async function prepareScreenPairingApproval(
       addMinutes(now, SCREEN_POLICY.pairingMinutes),
     );
 }
+
+/**
+ * The same as SQL, for a statement that binds the screen ID and now: a live
+ * sign-in guards a write that must not land over a screen that is signed in.
+ */
+export const SCREEN_LIVE_SIGN_IN = `EXISTS(SELECT 1 FROM screen_sessions live WHERE live.screen_id=?
+  AND live.activated_at IS NOT NULL AND live.revoked_at IS NULL AND live.expires_at>?)`;
 
 /** A screen signed in now: an activated sign-in that has not run out. */
 export function screenSignedIn(

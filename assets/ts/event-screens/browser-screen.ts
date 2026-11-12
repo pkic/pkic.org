@@ -196,7 +196,11 @@ export function createBrowserScreen(platform: BrowserScreenPlatform = browserPla
     frames ??= platform.frames();
     frames.video.muted = true;
     frames.video.srcObject = next;
-    void frames.video.play().catch(() => undefined);
+    // Not awaited: a video that starts late must not hold up the click's other requests. One that
+    // cannot play gives no fresh frames, so its capture ends and Resume offers sharing again.
+    void frames.video.play().catch(() => {
+      if (stream === next) endCapture("off");
+    });
     set({ capture: "live" });
     return null;
   }

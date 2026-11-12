@@ -198,12 +198,14 @@ describe("a screen's issues", () => {
     expect(issues(browser({ sound: "starting" }))).toEqual([]);
     expect(issues(browser({ sound: "none" }))).toEqual([]);
     expect(issues(browser({ sound: "blocked" })).map((issue) => issue.code)).toEqual(["browser-resume"]);
-    expect(issues(browser({ fullscreen: false, sound: "blocked", capture: "off" }))).toEqual([
-      { code: "browser-resume", label: "Needs a click to resume", severity: "warning", since: ago(20) },
+    // The classification, not the wording of its label.
+    const classified = (found: ReturnType<typeof issues>) => found.map(({ label: _label, ...issue }) => issue);
+    expect(classified(issues(browser({ fullscreen: false, sound: "blocked", capture: "off" })))).toEqual([
+      { code: "browser-resume", severity: "warning", since: ago(20) },
     ]);
     // Refused or without a wake lock, the laptop may sleep.
-    expect(issues(browser({ wakeLock: false }))).toEqual([
-      { code: "browser-awake", label: "May sleep", severity: "warning", since: ago(20) },
+    expect(classified(issues(browser({ wakeLock: false })))).toEqual([
+      { code: "browser-awake", severity: "warning", since: ago(20) },
     ]);
     // Sharing stopped: its last screenshot ages without counting against it.
     const stopped = screenIssues({
@@ -212,8 +214,6 @@ describe("a screen's issues", () => {
       screenshotAt: ago(RULES.pictureMinutes.critical + 5),
       now: NOW,
     });
-    expect(stopped).toEqual([
-      { code: "browser-sharing", label: "No picture (sharing stopped)", severity: "warning", since: ago(20) },
-    ]);
+    expect(classified(stopped)).toEqual([{ code: "browser-sharing", severity: "warning", since: ago(20) }]);
   });
 });

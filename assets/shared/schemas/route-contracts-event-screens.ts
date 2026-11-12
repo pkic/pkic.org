@@ -146,7 +146,10 @@ export const screenDeleteRouteSchema = {
   request: { params: screenParamsSchema },
   responses: {
     ...noContent("The screen is removed."),
-    ...authErrors({ notFound: "Screen not found", conflict: "The screen is signed in, or your permission changed" }),
+    ...authErrors({
+      notFound: "Screen not found",
+      conflict: "The screen is signed in, changed since it was read, or your permission changed",
+    }),
   },
 };
 
