@@ -18,7 +18,7 @@ import { Select, TextInput } from "../../../../../../ui/TextControl";
 import { liveTimerGraphicReplacements, type LiveTargets } from "./live-output-targets";
 
 const FORMAT_LABELS: Record<LiveTimerGraphic["format"], string> = {
-  clock: "Clock (12:34, 1:02:34, 3 d 04:12)",
+  clock: "Clock (12:34, 1:02:34, 3d 04:12)",
   ss: "Seconds (754)",
   custom: "Custom duration",
 };
