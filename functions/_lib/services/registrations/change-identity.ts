@@ -22,7 +22,7 @@ export function prepareRegistrationIdentityChange(
 ) {
   const userId = claims.sub;
   const now = nowIso();
-  const owned = ownedIdentityAtEvidence({ userId, identityId: change.identityId, at: now });
+  const owned = ownedIdentityAtEvidence({ userId, identityId: change.identityId });
   return [
     prepareAuthorizationGuard(db, userSessionRequestAuthorizationEvidence(claims)),
     prepareAuthorizationGuard(db, {

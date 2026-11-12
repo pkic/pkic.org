@@ -237,6 +237,32 @@ describe("registration representation changes", () => {
     expect((await change(f)).status).toBe(200);
   });
 
+  it("rolls back when the chosen identity ends after preflight but before the write batch", async () => {
+    const f = await setupChange();
+    const before = await getRegistrationById(env.DB, f.registrationId);
+    const raced = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("UPDATE registrations SET registration_identity_id"),
+      () =>
+        env.DB.prepare("UPDATE identities SET ended_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?")
+          .bind(f.personalId)
+          .run(),
+    );
+    registrationEnvironment = { ...registrationEnvironment, DB: raced };
+    const response = await change(f, f.personalId, f.token, f.identityId, f.path, { firstName: "Must roll back" });
+    expect(response.status, await response.clone().text()).toBe(403);
+    expect(await getRegistrationById(env.DB, f.registrationId)).toEqual(before);
+    expect((await readAttribution(f.registrationId)).user.first_name).not.toBe("Must roll back");
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id=? AND action='registration_identity_changed'", [
+        f.registrationId,
+      ]),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='registration_updated'"),
+    ).toHaveLength(0);
+  });
+
   it("requires the owner's live session, including when the caller holds a public manage link", async () => {
     const f = await setupChange();
     expect((await change(f, f.personalId, null)).status).toBe(401);
