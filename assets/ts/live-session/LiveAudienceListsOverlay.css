@@ -2,7 +2,7 @@
  * Audience lists on air: top questions and the latest chat. Each card has
  * one fixed width on the 1080p frame and grows only in height, so a layout
  * box scales every list by the same amount, however many lines it holds.
- * The card wears the question card's paper, stripe and shadow.
+ * The card's surface is the one every card on air shares (LiveOverlay.css).
  */
 @layer components {
   .pk-live-overlay__list {
@@ -13,12 +13,6 @@
     max-block-size: 728px;
     padding: 24px 32px;
     overflow: hidden;
-    border-block-start: 10px solid transparent;
-    border-image: var(--pk-pqc-stripe) 1;
-    border-radius: var(--pk-radius-card);
-    background: var(--pk-pqc-paper);
-    box-shadow: var(--pk-shadow-3);
-    animation: pk-live-overlay-rise var(--pk-dur-slow) var(--pk-ease) both;
   }
   .pk-live-overlay__list[data-list="chat"] {
     inline-size: 768px;
@@ -110,10 +104,5 @@
   .pk-live-overlay__list[data-list="chat"] .pk-live-overlay__list-text {
     font-size: calc(var(--pk-text-lg) * 1.5);
     font-weight: 500;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .pk-live-overlay__list {
-      animation: none;
-    }
   }
 }
