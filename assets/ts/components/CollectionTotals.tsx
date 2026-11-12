@@ -17,7 +17,7 @@
  */
 import type { ComponentChildren } from "preact";
 import { formatNumber } from "../../shared/format-number";
-import { StatCard, type StatCardTone } from "../ui/StatCard";
+import { StatCard, type StatCardPart, type StatCardTone } from "../ui/StatCard";
 
 import "./CollectionTotals.css";
 
@@ -31,6 +31,8 @@ export interface CollectionTotal {
   value: number | string;
   /** A qualifier under the figure — "+2 waitlisted". */
   note?: string;
+  /** The figure's parts, in place of `note`, each pressable on its own; see StatCard's `breakdown`. */
+  breakdown?: readonly StatCardPart[];
   /** The state the figure reports, when it reports one. */
   tone?: StatCardTone;
   /** What exactly the figure counts, opened from its label. */
@@ -75,6 +77,7 @@ export function CollectionTotals({ label, items }: { label: string; items: reado
             label={sentenceCase(item.label)}
             value={value}
             note={item.note}
+            breakdown={item.breakdown}
             tone={tone}
             tooltip={item.tooltip}
             icon={item.icon}

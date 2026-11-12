@@ -1,4 +1,4 @@
-import type { ComponentChildren, JSX } from "preact";
+import { Fragment, type ComponentChildren, type JSX } from "preact";
 import { Tooltip } from "./Tooltip";
 
 import "./StatCard.css";
@@ -12,10 +12,28 @@ export type StatCardTrend = "up" | "down" | "flat";
  */
 export type StatCardTone = "accent" | "ok" | "warn" | "danger" | "info" | "neutral";
 
+/**
+ * One figure in the line under the value: "356 waitlisted". With `onPress`
+ * it is a toggle of its own, above the card's, that narrows the list to just
+ * those rows; `pressed` is whether it does now.
+ */
+export interface StatCardPart {
+  text: string;
+  onPress?: () => void;
+  pressed?: boolean;
+  /** Names the toggle for assistive technology: "Show 356 waitlisted registrations only". */
+  pressLabel?: string;
+}
+
 export interface StatCardProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, "value"> {
   label: string;
   value: string;
   note?: string;
+  /**
+   * The figure broken down, in place of `note`: its parts in a line under
+   * the value, separated by a middle dot, each one pressable on its own.
+   */
+  breakdown?: readonly StatCardPart[];
   trend?: StatCardTrend;
   /**
    * Makes the whole card a link to the rows behind the number.
@@ -74,6 +92,7 @@ export function StatCard({
   label,
   value,
   note,
+  breakdown,
   trend,
   href,
   density = "default",
@@ -135,6 +154,28 @@ export function StatCard({
               readable: "6 this quarter" is the substance, not decoration. */}
           {trend && <span class="pk-stat-card__trend-label">{TREND_LABEL[trend]}, </span>}
           <span>{note}</span>
+        </div>
+      )}
+      {breakdown && breakdown.length > 0 && (
+        <div class="pk-stat-card__note">
+          {breakdown.map((part, index) => (
+            <Fragment key={part.text}>
+              {index > 0 && <span aria-hidden="true">{" · "}</span>}
+              {part.onPress ? (
+                <button
+                  type="button"
+                  class="pk-stat-card__part"
+                  aria-pressed={part.pressed ?? false}
+                  aria-label={part.pressLabel}
+                  onClick={part.onPress}
+                >
+                  {part.text}
+                </button>
+              ) : (
+                <span>{part.text}</span>
+              )}
+            </Fragment>
+          ))}
         </div>
       )}
       {onPress && (

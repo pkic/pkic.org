@@ -63,6 +63,71 @@ function toggle(container: HTMLElement, name: string): HTMLButtonElement {
   return button;
 }
 
+function card(container: HTMLElement, label: string): HTMLElement {
+  const found = [...container.querySelectorAll<HTMLElement>(".pk-stat-card")].find(
+    (candidate) => candidate.querySelector(".pk-stat-card__label")?.textContent === label,
+  );
+  if (!found) throw new Error(`No card labelled "${label}"`);
+  return found;
+}
+
+/** A figure under a card's value, found by what it shows: "2 waitlisted". */
+function part(container: HTMLElement, label: string, text: string): HTMLButtonElement {
+  const button = [...card(container, label).querySelectorAll<HTMLButtonElement>(".pk-stat-card__part")].find(
+    (candidate) => candidate.textContent === text,
+  );
+  if (!button) throw new Error(`No figure "${text}" on "${label}"`);
+  return button;
+}
+
+describe("RegistrationTotals figures", () => {
+  it("filters the list to an attendance card's waitlisted people on that type", () => {
+    const list = filters({ country: "NL" });
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} filters={list} />);
+    const waitlisted = part(container, "In-person", "2 waitlisted");
+    expect(waitlisted.getAttribute("aria-pressed")).toBe("false");
+    expect(waitlisted.getAttribute("aria-label")).toBe("Show only the 2 waitlisted In-person registrations");
+    void act(() => waitlisted.click());
+    expect(list.apply).toHaveBeenCalledWith({
+      country: "",
+      attendance_type: "in_person",
+      status: "registered,pending_email_confirmation",
+      waitlisted: "true",
+    });
+  });
+
+  it("filters the registered card's figures by status alone", () => {
+    const list = filters({});
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} filters={list} />);
+    void act(() => part(container, "Registered", "1 pending").click());
+    expect(list.apply).toHaveBeenLastCalledWith({ status: "pending_email_confirmation" });
+    void act(() => part(container, "Registered", "3 cancelled").click());
+    expect(list.apply).toHaveBeenLastCalledWith({ status: "cancelled" });
+  });
+
+  it("shows the applied figure as pressed, not its card, and clears the list on a second press", () => {
+    const list = filters({ attendance_type: "in_person", status: "cancelled" });
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} filters={list} />);
+    const cancelled = part(container, "In-person", "2 cancelled");
+    expect(cancelled.getAttribute("aria-pressed")).toBe("true");
+    expect(toggle(container, "Show In-person only").getAttribute("aria-pressed")).toBe("false");
+    void act(() => cancelled.click());
+    expect(list.apply).toHaveBeenCalledWith({ attendance_type: "", status: "" });
+  });
+
+  it("states each figure as a row in the card's tooltip", () => {
+    const container = mount(<RegistrationTotals stats={stats} attendanceOptions={options} />);
+    const trigger = card(container, "In-person").querySelector<HTMLButtonElement>(".pk-tooltip__trigger");
+    void act(() => trigger?.click());
+    const rows = [...document.querySelectorAll(".pk-totals-tip__row")].map((row) => [
+      row.querySelector("dt")?.textContent,
+      row.querySelector("dd")?.textContent,
+    ]);
+    expect(rows).toHaveLength(3);
+    expect(rows.map(([, count]) => count)).toEqual(["1", "2", "2"]);
+  });
+});
+
 describe("RegistrationTotals filters", () => {
   it("filters an attendance card by its type and every status but cancelled, clearing other filters", () => {
     const list = filters({ country: "NL", waitlisted: "true" });
@@ -123,7 +188,10 @@ describe("RegistrationTotals filters", () => {
       <RegistrationTotals stats={stats} attendanceOptions={options} filters={filters({}, false)} />,
     );
     expect(toggle(container, "Show all registrations").getAttribute("aria-pressed")).toBe("true");
-    expect(container.querySelectorAll("button[aria-pressed]")).toHaveLength(2);
+    // Registered and bounced filter, with the registered card's figures; the attendance cards do not.
+    expect(container.querySelectorAll(".pk-stat-card__press")).toHaveLength(2);
+    const inPerson = card(container, "In-person");
+    expect(inPerson.querySelectorAll("button")).toHaveLength(1);
   });
 
   it("renders figures without toggles when the list offers no filters", () => {

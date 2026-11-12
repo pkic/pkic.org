@@ -252,6 +252,41 @@
   }
 
   /*
+   * The figures under the value, each a toggle of its own. They sit above
+   * the card's covering button, as the label's tooltip does, so a press on
+   * "356 waitlisted" lists those people rather than the card's. At rest
+   * they read as the note they replace; hover underlines the one under the
+   * pointer, and the pressed one takes the accent's ink.
+   */
+  .pk-stat-card__part {
+    position: relative;
+    z-index: 1;
+    padding: 0;
+    border: 0;
+    border-radius: var(--pk-radius-sm);
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-decoration: underline dotted;
+    text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+    text-underline-offset: 0.2em;
+  }
+
+  .pk-stat-card__part:hover {
+    color: var(--pk-ink);
+    text-decoration-style: solid;
+    text-decoration-color: currentColor;
+  }
+
+  .pk-stat-card__part[aria-pressed="true"] {
+    color: var(--pk-accent-ink);
+    font-weight: 600;
+    text-decoration-style: solid;
+    text-decoration-color: currentColor;
+  }
+
+  /*
    * The glance density: figure first, label under it, centered.
    *
    * `column-reverse` rather than reordering the markup — the tile is
