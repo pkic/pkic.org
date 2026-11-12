@@ -18,28 +18,16 @@ import { ExternalLink } from "../../../../../../ui/ExternalLink";
 export function VirtualRoomPlayer({
   stream,
   locationName,
-  presentation = "watch",
   startsAt,
 }: {
   stream: LiveStream | null;
   locationName: string;
-  presentation?: "watch" | "monitor";
   startsAt?: string;
 }) {
-  if (!stream && presentation === "monitor")
-    return (
-      <div
-        class="pk-virtual-room__player pk-virtual-room__player--monitor"
-        role="img"
-        aria-label={`${locationName}: no livestream`}
-      >
-        <span>No livestream</span>
-      </div>
-    );
   if (!stream) return <WaitingRoomPlayer locationName={locationName} startsAt={startsAt} />;
   // One provider today; another joins here as its own player when the stream union grows.
   return (
-    <div class={`pk-virtual-room__player${presentation === "monitor" ? " pk-virtual-room__player--monitor" : ""}`}>
+    <div class="pk-virtual-room__player">
       <iframe
         key={stream.videoId}
         class="pk-embed"

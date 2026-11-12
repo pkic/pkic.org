@@ -2,7 +2,7 @@ import { storedAgendaSnapshotSchema } from "../assets/shared/schemas/event-agend
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
-import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-session-room";
+import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-overlay-access";
 import { livePollResultsResponseSchema } from "../assets/shared/schemas/live-session-poll-results";
 import { livePollDraftSchema, livePollFieldSchema, type LivePoll } from "../assets/shared/schemas/live-session-poll";
 import { callApi } from "./helpers/app";

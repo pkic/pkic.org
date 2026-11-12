@@ -42,7 +42,6 @@ import {
 } from "./live-session-credit";
 import { liveOverlayLayoutGeometriesSchema } from "./live-overlay-layout";
 import { z } from "zod";
-import { liveProgramParamsSchema } from "./live-room-program";
 import { publicSessionPortraitUrlSchema } from "./event-session-history";
 import {
   liveAuthorAffiliationSchema,
@@ -57,9 +56,14 @@ import {
 } from "./live-session-chat";
 import { databaseIdSchema } from "./identifiers";
 import { eventSlugParamsSchema, utcInstantSchema } from "./api-common";
-import { authErrors, created, requiresPermissions } from "./route-contract";
 import { LIVE_REACTION_IDS, LIVE_ROOM_POLICY, LIVE_STAGE_VIEWS } from "../live-session-policy";
 import { liveChangeSchema, livePersonNameSchema } from "./live-session-change";
+import {
+  liveChatFeedConfigSchema,
+  liveChatFeedOnAirSchema,
+  liveTopQuestionsConfigSchema,
+  liveTopQuestionsOnAirSchema,
+} from "./live-session-on-screen";
 import { LIVE_AUX_OUTPUTS, LIVE_SPEAKER_MESSAGE_MAX_LENGTH, LIVE_SPEAKER_MESSAGE_TONES } from "../live-room-outputs";
 import { livePollClientMessageSchemas, livePollSchema, livePollServerMessageSchemas } from "./live-session-poll";
 import {
@@ -213,6 +217,12 @@ export const liveStageSchema = z
     pollChange: liveChangeSchema.nullable(),
     /** The timer graphic: which of the room's timers, and how it looks. */
     timerGraphics: liveTimerGraphicsSchema.default([]),
+    /** The open questions with the most votes, as the room last filled them. */
+    topQuestions: liveTopQuestionsOnAirSchema.nullable().default(null),
+    /** The latest attendee chat the broadcast may show, as the room last filled it. */
+    chatFeed: liveChatFeedOnAirSchema.nullable().default(null),
+    /** Viewers' reactions float up over the output while this is on. */
+    reactions: z.boolean().default(false),
   })
   .strict();
 export type LiveStage = z.infer<typeof liveStageSchema>;
@@ -231,6 +241,9 @@ export const EMPTY_LIVE_STAGE: LiveStage = {
   poll: null,
   pollChange: null,
   timerGraphics: [],
+  topQuestions: null,
+  chatFeed: null,
+  reactions: false,
 };
 
 export const liveAuxOutputSchema = z.enum(LIVE_AUX_OUTPUTS);
@@ -467,6 +480,9 @@ export const liveCompositionInputSchema = z
     /** How the check-in code is colored on this composition. */
     checkInTheme: liveGraphicThemeSchema.default(LIVE_GRAPHIC_THEME_DEFAULTS.checkIn),
     checkInText: liveCheckInTextSchema.default(DEFAULT_LIVE_CHECK_IN_TEXT),
+    topQuestions: liveTopQuestionsConfigSchema.nullable().default(null),
+    chatFeed: liveChatFeedConfigSchema.nullable().default(null),
+    reactions: z.boolean().default(false),
   })
   .strict();
 export type LiveCompositionInput = z.infer<typeof liveCompositionInputSchema>;
@@ -498,6 +514,9 @@ export const livePreviewSetSchema = z
         checkInText: liveCheckInTextSchema,
         lowerThirdMotion: liveLowerThirdMotionSchema,
         timerGraphics: liveTimerGraphicsSchema,
+        topQuestions: liveTopQuestionsConfigSchema.nullable(),
+        chatFeed: liveChatFeedConfigSchema.nullable(),
+        reactions: z.boolean(),
       })
       .partial()
       .strict(),
@@ -574,20 +593,3 @@ export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
   ...liveAuthorClientMessageSchemas,
 ]);
 export type LiveRoomClientMessage = z.infer<typeof liveRoomClientMessageSchema>;
-
-// ── Overlay access ──────────────────────────────────────────────────────────
-
-export const liveOverlayAccessResponseSchema = z
-  .object({ token: z.string().min(1).max(2000), expiresAt: utcInstantSchema })
-  .strict();
-
-export const liveOverlayAccessRouteSchema = {
-  ...requiresPermissions("agenda:live_moderate"),
-  tags: ["Events"],
-  summary: "Issue read-only, expiring sources for a physical room's complete broadcast program",
-  request: { params: liveProgramParamsSchema },
-  responses: {
-    ...created("Overlay access for broadcast browser sources", liveOverlayAccessResponseSchema),
-    ...authErrors({ notFound: "The physical room is not on the approved agenda." }),
-  },
-};

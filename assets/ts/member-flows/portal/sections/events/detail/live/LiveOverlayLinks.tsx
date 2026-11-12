@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { liveOverlayAccessResponseSchema } from "../../../../../../../shared/schemas/live-session-room";
+import { liveOverlayAccessResponseSchema } from "../../../../../../../shared/schemas/live-overlay-access";
 import { formatDateTime } from "../../../../../../../shared/format-date";
 import { postJson } from "../../../../../../shared/api-client";
 import { CopyLinkRow } from "../../../../../../shared/widgets/copy-link-row";

@@ -31,6 +31,7 @@ import { useSponsorDisplay } from "../../../../../sponsors-wall-data";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { VirtualRoomPanels } from "./VirtualRoomPanels";
 import { VirtualRoomNowPlaying, VirtualRoomPlayer } from "./VirtualRoomPlayer";
+import { SessionReactions } from "../../../../../../live-session/SessionReactions";
 import {
   chooseLocation,
   locationSessions,
@@ -132,6 +133,15 @@ export function VirtualRoom({ slug, eventName }: { slug: string; eventName: stri
           locationName={room.name}
           startsAt={waiting ? startsAt : undefined}
         />
+        {moment.current && stream && !waiting ? (
+          <SessionReactions
+            key={moment.current.id}
+            slug={slug}
+            occurrenceId={moment.current.id}
+            startAt={moment.current.startAt}
+            endAt={moment.current.endAt}
+          />
+        ) : null}
         <VirtualRoomNowPlaying slug={slug} moment={moment} stream={stream} formatTime={formatTime} />
       </div>
       {program.error && <ErrorAlert error={program.error} />}

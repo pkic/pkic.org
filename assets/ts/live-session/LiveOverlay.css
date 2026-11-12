@@ -110,6 +110,10 @@
     max-inline-size: 1600px;
     margin: 0;
     padding: 40px 56px;
+  }
+  /* The surface every card on air shares: paper, the event stripe along the top, a lifted shadow, rising in. */
+  .pk-live-overlay__card,
+  .pk-live-overlay__list {
     border-block-start: 10px solid transparent;
     border-image: var(--pk-pqc-stripe) 1;
     border-radius: var(--pk-radius-card);
@@ -489,6 +493,7 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .pk-live-overlay__card,
+    .pk-live-overlay__list,
     .pk-live-overlay__reaction {
       animation: none;
     }

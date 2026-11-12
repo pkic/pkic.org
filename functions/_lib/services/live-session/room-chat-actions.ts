@@ -74,6 +74,8 @@ export class LiveRoomChatActions {
     private readonly hooks: {
       /** Attendee chat changed; a chat ticker may show something else now. */
       tickerChanged: () => Promise<void>;
+      /** Attendee chat changed; a chat list on air may show something else now. */
+      listed: () => void;
       /** A moderator acted or a question was created; the durable copy, with its audit rows, is due. */
       audited: () => Promise<void>;
     },
@@ -354,6 +356,7 @@ export class LiveRoomChatActions {
   }
 
   private nudgeTicker(): void {
+    this.hooks.listed();
     this.tickerTimer ??= setTimeout(() => {
       this.tickerTimer = null;
       this.ctx.waitUntil(this.hooks.tickerChanged());

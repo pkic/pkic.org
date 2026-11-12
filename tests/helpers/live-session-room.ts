@@ -10,6 +10,7 @@ import {
   liveRoomServerMessageSchema,
   type LiveRoomServerMessage,
 } from "../../assets/shared/schemas/live-session-room";
+import { liveOverlayAccessResponseSchema } from "../../assets/shared/schemas/live-overlay-access";
 import { getAgenda } from "../../functions/_lib/services/event-agenda/read";
 import { liveRoomName } from "../../functions/_lib/services/live-session/room-admission";
 import { grantAdministrator } from "./administrator";
@@ -233,6 +234,20 @@ export function createLiveRoomFixture() {
     return client;
   }
 
+  /** Puts this session on air in its physical room and connects a read-only source for one of its outputs. */
+  async function connectSource(output?: string) {
+    const headers = { authorization: `Bearer ${tokens.operator}`, origin: ORIGIN };
+    const programPath = `/api/v1/events/${EVENT_SLUG}/agenda/rooms/${roomId}/live`;
+    await callApi(env, `${programPath}/program`, {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({ occurrenceId, expectedRevision: 0 }),
+    });
+    const issued = await callApi(env, `${programPath}/overlays`, { method: "POST", headers });
+    const { token } = liveOverlayAccessResponseSchema.parse(await issued.json());
+    return connect({ overlay: token, ...(output ? { output } : {}) });
+  }
+
   return {
     eventId,
     eventSlug: EVENT_SLUG,
@@ -243,6 +258,7 @@ export function createLiveRoomFixture() {
     upgrade,
     refusal,
     connect,
+    connectSource,
     get roomId() {
       return roomId;
     },

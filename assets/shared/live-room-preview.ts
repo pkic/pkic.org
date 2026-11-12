@@ -25,6 +25,9 @@ export function liveCompositionInput(stage: LiveStage): LiveCompositionInput {
     pollId: stage.poll?.id ?? null,
     pollPresentation: stage.poll?.presentation ?? DEFAULT_LIVE_POLL_PRESENTATION,
     timerGraphics: stage.timerGraphics,
+    topQuestions: stage.topQuestions?.config ?? null,
+    chatFeed: stage.chatFeed?.config ?? null,
+    reactions: stage.reactions,
   };
 }
 

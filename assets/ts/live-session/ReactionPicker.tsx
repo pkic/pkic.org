@@ -8,17 +8,14 @@
  */
 
 import type { ComponentChildren } from "preact";
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useId, useRef, useState } from "preact/hooks";
 
 import { usePopupPlacement } from "../ui/popup-placement";
 import "../ui/Menu.css";
 import "./ReactionPicker.css";
+import { ReactionToolbar, type ReactionChoice } from "./ReactionToolbar";
 
-export interface ReactionChoice {
-  id: string;
-  label: string;
-  emoji: string;
-}
+export type { ReactionChoice } from "./ReactionToolbar";
 
 export function ReactionPicker({
   label,
@@ -43,11 +40,9 @@ export function ReactionPicker({
 }) {
   const popupId = useId();
   const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const close = useCallback((returnFocus: boolean) => {
     setOpen(false);
@@ -65,40 +60,6 @@ export function ReactionPicker({
     return () => document.removeEventListener("pointerdown", outside, true);
   }, [open, close]);
 
-  useLayoutEffect(() => {
-    if (open) buttonRefs.current[active]?.focus({ preventScroll: true });
-  }, [open, active]);
-
-  function keyDown(event: KeyboardEvent) {
-    event.stopPropagation();
-    const last = reactions.length - 1;
-    switch (event.key) {
-      case "ArrowRight":
-        event.preventDefault();
-        setActive(active >= last ? 0 : active + 1);
-        break;
-      case "ArrowLeft":
-        event.preventDefault();
-        setActive(active <= 0 ? last : active - 1);
-        break;
-      case "Home":
-        event.preventDefault();
-        setActive(0);
-        break;
-      case "End":
-        event.preventDefault();
-        setActive(last);
-        break;
-      case "Escape":
-        event.preventDefault();
-        close(true);
-        break;
-      case "Tab":
-        close(false);
-        break;
-    }
-  }
-
   return (
     <div class="pk-menu" ref={rootRef}>
       <button
@@ -112,49 +73,32 @@ export function ReactionPicker({
         aria-controls={open ? popupId : undefined}
         onClick={() => {
           if (open) close(true);
-          else {
-            setActive(0);
-            setOpen(true);
-          }
+          else setOpen(true);
         }}
       >
         {children}
       </button>
       {open && (
-        <div
-          ref={popupRef}
+        <ReactionToolbar
           id={popupId}
-          role="toolbar"
-          tabIndex={-1}
-          aria-label="Reactions"
-          aria-orientation="horizontal"
+          toolbarRef={popupRef}
+          label="Reactions"
           class="pk-reaction-picker"
-          onKeyDown={keyDown}
-        >
-          {reactions.map((reaction, index) => {
-            const on = pressed.includes(reaction.id);
-            return (
-              <button
-                key={reaction.id}
-                ref={(element) => {
-                  buttonRefs.current[index] = element;
-                }}
-                type="button"
-                class="pk-reaction-picker__button"
-                aria-label={reaction.label}
-                aria-pressed={on ? "true" : "false"}
-                title={reaction.label}
-                tabIndex={index === active ? 0 : -1}
-                onClick={() => {
-                  close(true);
-                  onReact(reaction.id, !on);
-                }}
-              >
-                <span aria-hidden="true">{reaction.emoji}</span>
-              </button>
-            );
-          })}
-        </div>
+          reactions={reactions}
+          pressed={pressed}
+          autoFocus
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === "Escape") {
+              event.preventDefault();
+              close(true);
+            } else if (event.key === "Tab") close(false);
+          }}
+          onChoose={(reaction, on) => {
+            close(true);
+            onReact(reaction.id, on);
+          }}
+        />
       )}
     </div>
   );

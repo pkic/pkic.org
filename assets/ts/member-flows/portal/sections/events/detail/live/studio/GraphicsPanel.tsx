@@ -3,6 +3,7 @@ import { formatClockInZone } from "../../../../../../../../shared/format-date";
 import { resolveUpcomingRooms } from "../../../../../../../../shared/live-session-schedule";
 import type { AgendaSnapshot } from "../../../../../../../../shared/schemas/event-agenda";
 import { DEFAULT_LIVE_SCHEDULE_CONFIG } from "../../../../../../../../shared/schemas/live-session-schedule";
+import { LiveChatFeedControls, LiveReactionsControls, LiveTopQuestionsControls } from "../LiveAudienceListControls";
 import { LiveCheckInControls } from "../LiveCheckInControls";
 import { LivePanelistControls } from "../LivePanelistControls";
 import { LiveScheduleControls } from "../LiveScheduleControls";
@@ -69,6 +70,9 @@ export const LIVE_GRAPHICS: ReadonlyArray<{
       );
     },
   },
+  { id: "top-questions", Row: ({ targets }) => <LiveTopQuestionsControls targets={targets} /> },
+  { id: "chat", Row: ({ targets }) => <LiveChatFeedControls targets={targets} /> },
+  { id: "reactions", Row: ({ targets }) => <LiveReactionsControls targets={targets} /> },
 ];
 
 /** The room's graphics beyond people and questions, each with its own outputs. */

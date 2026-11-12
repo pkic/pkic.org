@@ -4,11 +4,18 @@ Each entry is the full anatomy of a control. The gallery id renders it (`pnpm ga
 
 ## Reaction picker (`reaction-picker`)
 
-- Use: `assets/ts/live-session/ReactionPicker.tsx` with `LIVE_CHAT_REACTIONS` (`assets/shared/live-chat-policy.ts`).
+- Use: `assets/ts/live-session/ReactionPicker.tsx` with `LIVE_CHAT_REACTIONS` (`assets/shared/live-chat-policy.ts`). The row is the shared `ReactionToolbar`.
 - Shape: one horizontal row of emoji buttons in a popover, `role="toolbar"`, each a toggle (`aria-pressed`). Never a vertical menu, never icon-only items in `Menu`. Reference: Slack, Teams, WhatsApp, GitHub.
 - Placement: above the trigger, right edges aligned (`side: "top", align: "end"`); below only without room. The trigger sits beside the message's ellipsis menu.
 - Dismissal: Escape (focus back to the trigger), outside click, Tab, or choosing a reaction.
 - Keyboard: focus moves to the first emoji on open; Left/Right wrap, Home/End.
+
+## Reaction bar (`reaction-bar`)
+
+- Use: `assets/ts/live-session/SessionReactions.tsx` (`LiveReactionBar`) with `LIVE_REACTIONS` (`assets/shared/live-session-policy.ts`), on the shared `ReactionToolbar`. Wherever attendees watch a session: under the virtual room's player and in the session's details.
+- Shape: the same row of emoji as the picker, in place rather than in a popover, `role="toolbar"` named "React to this session". Each press sends one reaction; no `aria-pressed`. Reference: YouTube and Facebook Live, Zoom and Teams reactions.
+- Feedback: none on an ordinary press; the reaction floats on the outputs an operator turned reactions on for. At the room's allowance the bar stops sending and says so in a quiet status line beside it, never an alert or toast, until the window passes. Shown only while the session's room takes reactions.
+- Keyboard: one tab stop; Left/Right wrap, Home/End; Enter/Space send.
 
 ## Layout picker (`content-layout`)
 

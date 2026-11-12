@@ -19,6 +19,7 @@ import { AGENDA_CALENDAR_TITLE, AgendaCalendarSettings } from "./AgendaCalendarS
 import { SessionCheckInLink, SessionParticipation, SessionParticipationManager } from "./SessionParticipation";
 import { setSessionStar } from "./session-star";
 import { SessionQuestions } from "../../../../../../live-session/SessionQuestions";
+import { SessionReactions } from "../../../../../../live-session/SessionReactions";
 import { Spinner } from "../../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { EmptyState } from "../../../../../../ui/EmptyState";
@@ -279,7 +280,10 @@ function PersonalAgenda({
                 onChanged={sessionChanged}
               />
               {scheduled?.endAt ? (
-                <SessionQuestions slug={slug} occurrenceId={id} startAt={scheduled.startAt} endAt={scheduled.endAt} />
+                <>
+                  <SessionReactions slug={slug} occurrenceId={id} startAt={scheduled.startAt} endAt={scheduled.endAt} />
+                  <SessionQuestions slug={slug} occurrenceId={id} startAt={scheduled.startAt} endAt={scheduled.endAt} />
+                </>
               ) : null}
             </>
           ) : undefined,

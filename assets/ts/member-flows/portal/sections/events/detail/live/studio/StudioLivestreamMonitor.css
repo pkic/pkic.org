@@ -1,0 +1,19 @@
+/* The LIVE monitor's player fills its picture; it takes no clicks, so the monitor's own double-click opens full screen. */
+@layer components {
+  .pk-studio-livestream,
+  .pk-studio-livestream__host {
+    display: grid;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+  .pk-studio-livestream > * {
+    grid-area: 1 / 1;
+  }
+  .pk-studio-livestream__host iframe {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    border: 0;
+    pointer-events: none;
+  }
+}

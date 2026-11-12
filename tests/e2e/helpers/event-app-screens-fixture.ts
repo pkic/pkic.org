@@ -12,7 +12,7 @@ import {
   agendaSnapshotSchema,
 } from "../../../assets/shared/schemas/event-agenda";
 import { locationLiveStreamUpdateSchema } from "../../../assets/shared/schemas/event-live-stream";
-import { liveOverlayAccessResponseSchema } from "../../../assets/shared/schemas/live-session-room";
+import { liveOverlayAccessResponseSchema } from "../../../assets/shared/schemas/live-overlay-access";
 import { organizationsListResponseSchema } from "../../../assets/shared/schemas/organization-management";
 import { usersListResponseSchema } from "../../../assets/shared/schemas/user-management";
 import { liveOverlayAddress } from "../../../assets/ts/live-session/live-overlay-address";

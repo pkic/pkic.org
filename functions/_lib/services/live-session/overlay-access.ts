@@ -1,5 +1,5 @@
 import { liveProgramOverlayAccessHours } from "../../../../assets/shared/live-room-program-policy";
-import { liveOverlayAccessResponseSchema } from "../../../../assets/shared/schemas/live-session-room";
+import { liveOverlayAccessResponseSchema } from "../../../../assets/shared/schemas/live-overlay-access";
 import { signLiveOverlayToken } from "../../auth/live-session-overlay-token";
 import type { DatabaseLike, Env } from "../../types";
 import { addHours, nowIso } from "../../utils/time";
