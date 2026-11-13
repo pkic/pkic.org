@@ -25,7 +25,10 @@ vi.mock("../../assets/ts/shared/passkey-authentication", () => ({
   authenticateWithPasskey: () => authenticateWithPasskey(),
 }));
 
-const PAGE = "/events/2026/pqc-2026/propose/?invite=abc12345&source=newsletter";
+const INVITE_ID = "0b7e9d1c-5a4f-4c2e-9f3a-2d6b8e1c4a70";
+const PAGE = `/events/2026/pqc-2026/propose/?invite=abc12345&id=${INVITE_ID}&source=newsletter`;
+// The emailed link returns here with the invitation id; its token stays in this browser.
+const RETURN_PATH = `/events/2026/pqc-2026/propose/?id=${INVITE_ID}&source=newsletter`;
 const copy = EMAIL_FIRST_COPY.proposal;
 
 interface Captured {
@@ -140,7 +143,7 @@ describe("proposal sign-in step", () => {
 
     const sent = requests.filter(({ path }) => path === "/api/v1/auth/request-link");
     expect(sent).toHaveLength(1);
-    expect(userAuthRequestSchema.parse(sent[0].body)).toEqual({ email: "ada@example.test", returnPath: PAGE });
+    expect(userAuthRequestSchema.parse(sent[0].body)).toEqual({ email: "ada@example.test", returnPath: RETURN_PATH });
     await vi.waitFor(() => expect(card.querySelector('[role="status"]')).not.toBeNull());
     expect(pageSubmits).toBe(0);
     expect(requests.some(({ path }) => path.includes("/proposals/proof"))).toBe(false);
@@ -150,7 +153,7 @@ describe("proposal sign-in step", () => {
     const requests = installApi(signedOut);
     await mount();
     const card = await shownSignInCard();
-    await act(() => buttonNamed(card, "Continue with your email").click());
+    await act(() => buttonNamed(card, "Start your proposal").click());
     await typeInto(controlFor(card, copy.work.label), "ada@organization.example");
     await act(async () => {
       buttonNamed(card, copy.work.action).click();
@@ -163,7 +166,7 @@ describe("proposal sign-in step", () => {
     expect(userSignUpRequestSchema.parse(sent[0].body)).toEqual({
       email: "ada@organization.example",
       unaffiliatedAttestation: false,
-      returnPath: PAGE,
+      returnPath: RETURN_PATH,
     });
     await vi.waitFor(() => expect(card.textContent).toContain(copy.sent("ada@organization.example")));
     expect(pageSubmits).toBe(0);

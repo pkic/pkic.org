@@ -10,6 +10,7 @@
  */
 import { mcpOauthRequestIdSchema } from "../../../shared/schemas/mcp-oauth";
 import { portalReturnPathSchema } from "../../../shared/schemas/user-auth";
+import { MEMBERSHIP_JOIN_PATH } from "../../../shared/membership-join-path";
 import { parseEventFlowPath } from "../../../shared/event-flow-paths";
 
 /** The route part of a hash location: `#/groups/cm?tab=x` → `/groups/cm`. */
@@ -50,9 +51,6 @@ export function portalMagicLinkReturnPath(hash: string): string | null {
   const next = hashQuery(hash).get("next");
   return next && portalReturnPathSchema.safeParse(next).success ? next : null;
 }
-
-/** The public page a person joins the consortium from. */
-export const MEMBERSHIP_JOIN_PATH = "/join/";
 
 /**
  * A sign-in link requested from a public form (registering, proposing,

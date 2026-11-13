@@ -161,7 +161,7 @@ for (const colorScheme of ["light", "dark"] as const) {
       await page.goto(`${eventPath}/register/`);
       // Signed out, the first step is the sign-in card; its "New here?" band opens the work-email step.
       const signIn = page.locator("[data-registration-sign-in]").getByRole("region", { name: "Sign in", exact: true });
-      await signIn.getByRole("button", { name: "Continue with your email", exact: true }).click();
+      await signIn.getByRole("button", { name: "Start registration", exact: true }).click();
       const input = signIn.getByRole("textbox", { name: EMAIL_FIRST_COPY.registration.work.label, exact: true });
       await expect(input).toBeVisible();
       await expect(page.getByLabel("Representation")).toHaveCount(0);

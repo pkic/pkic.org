@@ -43,6 +43,8 @@ describe("joining without a session", () => {
     button("Sign in with a passkey");
     button("Sign in with an email link");
     expect(card.textContent).toContain("New here?");
+    // The card words itself for joining, not as a bare sign-in.
+    expect(card.querySelector("h1, h2")?.textContent).toBe("Join the PKI Consortium");
     // The page already says what it is; the embedded card brings no brand panel of its own.
     expect(card.querySelector(".pk-login__brand")).toBeNull();
     // Nothing is asked about a membership path before someone is signed in.
@@ -72,7 +74,7 @@ describe("joining without a session", () => {
     await import("../../assets/ts/member-flows/join-form");
     const card = document.querySelector<HTMLElement>("[data-join-sign-in-card]")!;
     await vi.waitFor(() => expect(card.querySelector("button")).not.toBeNull());
-    await act(async () => button("Continue with your email").click());
+    await act(async () => button("Start your application").click());
     expect(card.textContent).toContain(EMAIL_FIRST_COPY.join.work.label);
     expect(card.textContent).toContain(EMAIL_FIRST_COPY.join.personal.description);
   });

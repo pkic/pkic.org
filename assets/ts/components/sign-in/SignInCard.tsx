@@ -34,6 +34,7 @@ import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { userAuthRequestSchema, userSignUpRequestSchema } from "../../../shared/schemas/user-auth";
 import { EmailFirstStep } from "../EmailFirstStep";
 import type { SignInDestination, SignInDestinationDetail } from "./sign-in-destination";
+import { signInDestination } from "./sign-in-destinations";
 import { Alert } from "../../ui/Alert";
 import { SectionHeading } from "../../ui/SectionHeading";
 import { Button } from "../../ui/Button";
@@ -80,8 +81,8 @@ export function SignInCard({
   destination?: SignInDestination | null;
   /**
    * A public flow's first step embeds this same card: where its links return
-   * the person, and which wording the email step uses. The flow's page already
-   * names the flow and shows its progress, so the card adds neither.
+   * the person, and which wording the email step uses. The card words itself
+   * for that flow; the page already shows the flow's progress.
    */
   embedded?: { returnPath: string; emailFlow: EmailFirstFlow };
 }) {
@@ -93,12 +94,14 @@ export function SignInCard({
   const [individual, setIndividual] = useState(false);
   const [createSentTo, setCreateSentTo] = useState<string | null>(null);
   const returnPath = embedded ? embedded.returnPath : pageReturnPath;
-  // The card says what the reader came to do: the flow sign-in returns them to describes itself.
-  const destination = embedded ? null : pageDestination;
+  // The card says what the reader came to do: the flow sign-in returns them to describes itself, on its
+  // public page as on its portal route.
+  const destination = embedded ? signInDestination(embedded.returnPath) : pageDestination;
   // The flow's own progress and title load on demand; the plain sign-in card shows neither. They arrive as
-  // state, so the card the page was pre-rendered with is updated in place.
+  // state, so the card the page was pre-rendered with is updated in place. An embedding page already names
+  // the flow and shows its progress, so it loads neither.
   const [detail, setDetail] = useState<SignInDestinationDetail>({});
-  const loadDetail = destination?.load;
+  const loadDetail = embedded ? undefined : destination?.load;
   useEffect(() => {
     let current = true;
     setDetail({});

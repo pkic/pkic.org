@@ -236,7 +236,10 @@ export function EventProposalIdentityStep({
                 // The shared sign-in card: its links return here, and a passkey continues in place.
                 <div>
                   <SignInCard
-                    embedded={{ returnPath: signInReturnPath(location), emailFlow: "proposal" }}
+                    embedded={{
+                      returnPath: signInReturnPath(`${location.pathname}${location.search}`),
+                      emailFlow: "proposal",
+                    }}
                     onSignedIn={identity.reloadSession}
                   />
                 </div>

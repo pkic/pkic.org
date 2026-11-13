@@ -34,7 +34,7 @@ test("maintenance refusal preserves a public form and recovery never replays it"
     else await route.continue();
   });
   await page.goto("/join/");
-  await page.getByRole("button", { name: "Continue with your email", exact: true }).click();
+  await page.getByRole("button", { name: "Start your application", exact: true }).click();
   const email = page.getByLabel(EMAIL_FIRST_COPY.join.work.label);
   const address = `maintenance-${Date.now()}@organization.test`;
   await email.fill(address);

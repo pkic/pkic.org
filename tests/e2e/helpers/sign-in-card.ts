@@ -23,6 +23,15 @@ function requestTo(page: Page, path: string) {
  * that already signs in receives a sign-in link from the same step. Pass
  * `returning` to use "Sign in with an email link" instead.
  */
+/** The "New here?" action each flow's card starts an account with. */
+const START_LABELS: Record<EmailFirstFlow, string> = {
+  registration: "Start registration",
+  proposal: "Start your proposal",
+  speaker: "Start your proposal",
+  join: "Start your application",
+  representation: "Continue with your email",
+};
+
 export async function signInThroughCard(
   page: Page,
   email: string,
@@ -47,7 +56,7 @@ export async function signInThroughCard(
   } else {
     const copy = EMAIL_FIRST_COPY[options.emailFlow ?? "registration"];
     const choice = options.individual ? copy.personal : copy.work;
-    await card.getByRole("button", { name: "Continue with your email", exact: true }).click();
+    await card.getByRole("button", { name: START_LABELS[options.emailFlow ?? "registration"], exact: true }).click();
     if (options.individual) await card.getByRole("radio", { name: copy.personal.title, exact: true }).check();
     await card.getByLabel(choice.label, { exact: true }).fill(email);
     const requested = requestTo(page, "/api/v1/auth/sign-up");

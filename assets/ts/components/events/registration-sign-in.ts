@@ -4,14 +4,22 @@
  * demand and knows nothing else about registration.
  */
 import { eventDetailResponseSchema } from "../../../shared/schemas/event-management";
-import { getJson } from "../../shared/api-client";
+import { requestJson } from "../../shared/api-client";
 
 export { RegistrationProgress } from "./RegistrationProgress";
 
-/** The event's public name, or null when the event cannot be read. */
+/**
+ * The event's public name, or null when the event cannot be read. Read while
+ * signed out, so the response must not enter the browser cache: the event app
+ * reads the same URL once signed in, and a cached signed-out copy would show
+ * the person as not registered.
+ */
 export async function registrationEventName(eventSlug: string): Promise<string | null> {
   try {
-    const { event } = await getJson(`/api/v1/events/${encodeURIComponent(eventSlug)}`, eventDetailResponseSchema);
+    const { event } = await requestJson(`/api/v1/events/${encodeURIComponent(eventSlug)}`, eventDetailResponseSchema, {
+      method: "GET",
+      cache: "no-store",
+    });
     return event.name;
   } catch {
     return null;

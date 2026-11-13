@@ -65,12 +65,17 @@ function rememberInvitation(inviteId: string | null, inviteToken: string | null)
   return inviteToken;
 }
 
-/** The current page as a sign-in return path, without the invitation token. */
-export function signInReturnPath(location: Pick<Location, "pathname" | "search">): string {
-  const query = new URLSearchParams(location.search);
+/**
+ * A path, with its query, as a sign-in return path: the invitation token is
+ * kept in this browser under its invitation id and left out of the path.
+ */
+export function signInReturnPath(path: string): string {
+  const [pathname = "", search = ""] = path.split(/\?(.*)/s, 2);
+  const query = new URLSearchParams(search);
+  rememberInvitation(read(query, "id"), read(query, "invite"));
   query.delete("invite");
-  const search = query.toString();
-  return `${location.pathname}${search ? `?${search}` : ""}`;
+  const rest = query.toString();
+  return `${pathname}${rest ? `?${rest}` : ""}`;
 }
 
 export function parseQueryContext(search: string): QueryContext {

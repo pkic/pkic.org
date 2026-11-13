@@ -51,7 +51,7 @@ import {
 } from "../../shared/schemas/member-join";
 import { identityAffiliationPreviewResponseSchema } from "../../shared/schemas/identity-affiliation";
 import { ButtonLink } from "../ui/Button";
-import { MEMBERSHIP_JOIN_PATH } from "./portal/hash-route";
+import { MEMBERSHIP_JOIN_PATH } from "../../shared/membership-join-path";
 // This module writes design-system class names into markup it builds itself,
 // so it has to pull in the stylesheets that define them: component CSS ships
 // in the chunk of whoever imports it, not in the entry sheet.

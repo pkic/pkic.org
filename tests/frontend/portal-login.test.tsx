@@ -473,7 +473,7 @@ describe("portal login", () => {
 
   it("starts a new person with the work-email step and returns them to the flow they came for", async () => {
     browserSupportsWebAuthn.mockReturnValue(true);
-    window.location.hash = "#/events/pqc-2027/register?invite=abc";
+    window.location.hash = "#/events/pqc-2027/register?invite=abc&id=0b7e9d1c-5a4f-4c2e-9f3a-2d6b8e1c4a70";
     const requests: Array<{ url: string; body: unknown }> = [];
     vi.stubGlobal(
       "fetch",
@@ -514,8 +514,10 @@ describe("portal login", () => {
       expect(userSignUpRequestSchema.parse(requests[0].body)).toEqual({
         email: "ada@organization.example",
         unaffiliatedAttestation: false,
-        returnPath: "/events/pqc-2027/register?invite=abc",
+        // The invitation token stays in this browser; the emailed link carries only the invitation id.
+        returnPath: "/events/pqc-2027/register?id=0b7e9d1c-5a4f-4c2e-9f3a-2d6b8e1c4a70",
       });
+      expect(localStorage.getItem("pkic_invite:0b7e9d1c-5a4f-4c2e-9f3a-2d6b8e1c4a70")).toBe("abc");
     } finally {
       window.location.hash = "";
     }

@@ -34,7 +34,7 @@ test("public join preserves input on cancel and submits once after verification"
     }
   });
   await page.goto("/join/");
-  await page.getByRole("button", { name: "Continue with your email", exact: true }).click();
+  await page.getByRole("button", { name: "Start your application", exact: true }).click();
   const email = page.getByLabel("Your official work or organization email address");
   await email.fill(`turnstile-${Date.now()}@organization.test`);
   await page.getByRole("button", { name: "Verify your work email", exact: true }).click();

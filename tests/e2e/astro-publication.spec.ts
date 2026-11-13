@@ -75,7 +75,7 @@ test("published membership starts from the sign-in card", async ({ page }) => {
   await page.route("**/api/**", (route) => route.abort());
   await page.goto("/join/");
   const card = page.locator("[data-join-sign-in-card]").getByRole("region", { name: "Sign in", exact: true });
-  await expect(card.getByRole("button", { name: "Continue with your email", exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Start your application", exact: true })).toBeVisible();
   // Nothing is asked on the page itself before the person is signed in.
   await expect(page.locator("[data-join-application-form]")).toBeHidden();
   await expect(page.locator('input[type="radio"][name="applicantKind"]')).toHaveCount(0);

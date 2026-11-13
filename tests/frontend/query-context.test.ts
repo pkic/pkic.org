@@ -46,13 +46,9 @@ describe("query context", () => {
 
   it("keeps the invitation token out of a sign-in return path and finds it again by invitation id", () => {
     localStorage.clear();
-    parseQueryContext("?invite=secret-token&id=inv-1&source=invite");
-
-    const returnPath = signInReturnPath({
-      pathname: "/events/2027/toronto/register/",
-      search: "?invite=secret-token&id=inv-1&source=invite",
-    });
-    expect(returnPath).toBe("/events/2027/toronto/register/?id=inv-1&source=invite");
+    // The portal's sign-in screen sees the route before any page has read it, so the path alone keeps the token.
+    const returnPath = signInReturnPath("/events/toronto-2027/register?invite=secret-token&id=inv-1&source=invite");
+    expect(returnPath).toBe("/events/toronto-2027/register?id=inv-1&source=invite");
     expect(returnPath).not.toContain("secret-token");
 
     expect(parseQueryContext("?id=inv-1&source=invite").inviteToken).toBe("secret-token");

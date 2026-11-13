@@ -203,7 +203,7 @@ describe("registration contact step", () => {
     expect(ready).toBe(false);
     expect(signingIn).toBe(true);
 
-    await act(async () => buttonNamed(card, "Continue with your email")!.click());
+    await act(async () => buttonNamed(card, "Start registration")!.click());
     await act(() => {
       const control = controlFor(card, copy.work.label);
       control.value = "Ada@Example.test";

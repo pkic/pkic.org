@@ -20,7 +20,7 @@ test("starts from the sign-in card and steers a personal address to the explicit
 
   // Signed out, the shared sign-in card is the first step; a new person starts with their email.
   const card = page.locator("[data-join-sign-in-card]").getByRole("region", { name: "Sign in", exact: true });
-  await card.getByRole("button", { name: "Continue with your email", exact: true }).click();
+  await card.getByRole("button", { name: "Start your application", exact: true }).click();
   await expect(card.getByRole("radio", { name: EMAIL_FIRST_COPY.join.work.title, exact: true })).toBeChecked();
   const organizationEmail = card.getByLabel(EMAIL_FIRST_COPY.join.work.label);
   await expect(organizationEmail).toBeVisible();

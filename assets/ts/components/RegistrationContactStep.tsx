@@ -248,7 +248,10 @@ export function RegistrationContactStep({
   if (!signInSlot.current) return null;
   // Invitation and source parameters ride along, so the emailed link returns to the same registration.
   return createPortal(
-    <SignInCard embedded={{ returnPath: signInReturnPath(location), emailFlow: "registration" }} onSignedIn={load} />,
+    <SignInCard
+      embedded={{ returnPath: signInReturnPath(`${location.pathname}${location.search}`), emailFlow: "registration" }}
+      onSignedIn={load}
+    />,
     signInSlot.current,
   );
 }

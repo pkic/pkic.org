@@ -1,7 +1,7 @@
 /**
  * What a flow tells the sign-in card about itself. The card draws what it is
  * handed and knows nothing else about the flow; the registry of flows lives
- * with the screen that reads return paths.
+ * beside it in `sign-in-destinations.ts`.
  */
 import type { ComponentType } from "preact";
 import type { EmailFirstFlow } from "../../../shared/email-first-copy";
@@ -13,8 +13,8 @@ export interface SignInDestinationDetail {
 }
 
 export interface SignInDestination {
-  /** The portal return paths this flow owns. */
-  pattern: RegExp;
+  /** Whether a return path (a public flow page or a portal route) belongs to this flow. */
+  matches: (returnPath: string) => boolean;
   title: string;
   lede: string;
   /** Under "New here?": what starting with an email leads to. */
