@@ -204,6 +204,21 @@ export const stageBreakState: LiveRoomState = timersRoomState([sessionTimer], []
   speakerMessage: { text: "Coffee break", tone: "warning", flash: false, change: null },
 });
 
+/** Before the session, with the pitch timer also sent: both show, the pitch large, and nothing is covered. */
+export const stageBeforeWithTimerState: LiveRoomState = timersRoomState(
+  [sessionTimer, { ...pitch, durationSeconds: 60, running: false, anchorAt: null, heldMs: 60_000 }],
+  [],
+  {
+    session: session(
+      "From inventory to migration: lessons from a national post-quantum transition program",
+      11 * MINUTE + 57_000,
+      56 * MINUTE + 57_000,
+      [credit("jane", "Jane Doe", "Ministry of the Interior")],
+    ),
+    outputs: stageDisplay([sessionGraphic, { ...defaultLiveTimerGraphic(pitch.id), label: "Pitch" }]),
+  },
+);
+
 /** A session over time by 2:14: the overtime takes the main area and the footer names what is next. */
 export const stageOvertimeState: LiveRoomState = timersRoomState([sessionTimer], [], {
   session: session(

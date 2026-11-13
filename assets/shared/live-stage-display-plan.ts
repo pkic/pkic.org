@@ -190,8 +190,10 @@ function main(input: LiveStageDisplayInput, items: readonly LiveTimerGraphicText
       kind: "overtime",
       timer: { ...large(over), label: over.remainingMs! < 0 ? `${over.name ?? "Time"} over by` : over.name },
     };
+  // A break is the countdown to the session alone; beside other timers it takes its place among them.
   const waiting = items.find((item) => item.startsInMs !== null);
-  if (waiting) return { kind: "break", timer: { ...large(waiting), label: "Next session starts in" } };
+  if (waiting && items.length === 1)
+    return { kind: "break", timer: { ...large(waiting), label: "Next session starts in" } };
   const ordered = [...items].sort(endsBefore);
   const shown = content(input);
   if (shown) return { kind: "content", timer: ordered[0] ? { ...ordered[0], size: "small" } : null, content: shown };

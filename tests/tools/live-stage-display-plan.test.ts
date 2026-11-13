@@ -145,6 +145,14 @@ describe("stage display plan", () => {
     expect(plan.footer).toMatchObject({ marker: "next", title: "Opening keynote" });
   });
 
+  it("keeps the session countdown beside other timers sent before it starts, not over them", () => {
+    const plan = liveStageDisplayPlan(input(11 * MINUTE + 57_000, 40 * MINUTE, { own: both }));
+    expect(plan.main.kind).toBe("timers");
+    expect(JSON.stringify(plan.main)).toContain("Pitch");
+    expect(JSON.stringify(plan.main)).toContain("starts in");
+    expect(plan.footer).toMatchObject({ marker: "next", title: "Opening keynote" });
+  });
+
   it("names the session as next before it starts, even with no countdown shown", () => {
     const plan = liveStageDisplayPlan(
       input(11 * MINUTE, 40 * MINUTE, { own: { ...EMPTY_LIVE_STAGE, schedule: nextSession } }),
