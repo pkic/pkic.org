@@ -178,7 +178,7 @@ describe("the lower third on screen", () => {
 
   it("underlines the name bar with the conference stripe, revealed with the bar", () => {
     const view = mount(SAM);
-    const underline = view.graphic()!.querySelector(".pk-live-overlay__lower-third-underline")!;
+    const underline = view.graphic()!.querySelector('path[fill^="url(#"]')!;
     const stripe = underline.getAttribute("fill")!.match(/^url\(#(.+)\)$/)![1]!;
     expect(view.graphic()!.querySelector(`linearGradient[id="${stripe}"]`)?.querySelectorAll("stop")).toHaveLength(3);
     expect(underline.closest("g")?.getAttribute("clip-path")).toMatch(/-name\)$/);

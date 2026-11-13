@@ -28,7 +28,7 @@ function Bars({ credit, stripe }: { credit: LiveCredit; stripe: string }) {
   return (
     <>
       <path class="pk-live-overlay__name-background" d={NAME_BAR} />
-      <path class="pk-live-overlay__lower-third-underline" d={UNDERLINE} fill={`url(#${stripe})`} />
+      <path d={UNDERLINE} fill={`url(#${stripe})`} />
       {credit.roleLabel ? (
         <text class="pk-live-overlay__role" x={nameX} y="84" font-size="48">
           {credit.roleLabel}
