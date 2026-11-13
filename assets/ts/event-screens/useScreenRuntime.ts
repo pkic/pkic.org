@@ -66,12 +66,13 @@ export function useScreenRuntime({
 
   const refresh = useCallback(async () => {
     try {
-      const { response, sentAt, receivedAt, release } = await api.read(
+      const { response, sentAt, receivedAt } = await api.read(
         screenId,
         screenAgendaRevision(agendaRef.current, clock.now()),
+        undefined,
+        (release) => releaseSeen.current?.(release),
       );
       reached();
-      releaseSeen.current?.(release ?? null);
       if (response.viewer !== "screen")
         throw new ApiClientError({ error: { code: "SCREEN_SESSION_MISSING", message: "" } }, 401);
       clock.record(screenClockSample(sentAt, receivedAt, response.serverNow));

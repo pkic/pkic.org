@@ -1,4 +1,6 @@
 import { expect, it, vi } from "vitest";
+import { SCREEN_RELEASE_HEADER } from "../../assets/shared/schemas/event-screens";
+import { screenApi } from "../../assets/ts/event-screens/screen-api";
 import { reloadForServerRelease } from "../../assets/ts/event-screens/screen-release";
 
 const memory = () => {
@@ -35,4 +37,19 @@ it("keeps the page when it cannot note the reload, so a reload can never repeat"
   };
   expect(reloadForServerRelease("d4e5f6", broken, reload, "a1b2c3")).toBe(false);
   expect(reload).not.toHaveBeenCalled();
+});
+
+it("names the server's release even when the screen cannot read the body that carries it", async () => {
+  const fetch = vi.fn(
+    async () =>
+      new Response(JSON.stringify({ viewer: "screen", fromANewerRelease: true }), {
+        status: 200,
+        headers: { "content-type": "application/json", [SCREEN_RELEASE_HEADER]: "d4e5f6" },
+      }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const onRelease = vi.fn();
+  await expect(screenApi.read("K7M2QA", null, undefined, onRelease)).rejects.toThrow();
+  expect(onRelease).toHaveBeenCalledWith("d4e5f6");
+  vi.unstubAllGlobals();
 });

@@ -17,16 +17,15 @@ export const screenApi = {
     screenId: ScreenId,
     agendaRevision: number | null,
     device: () => number = () => Date.now(),
-  ): Promise<{ response: ScreenReadResponse; sentAt: number; receivedAt: number; release?: string | null }> {
+    /** The server's release, as soon as the headers arrive: a body this page cannot read still names it. */
+    onRelease?: (release: string | null) => void,
+  ): Promise<{ response: ScreenReadResponse; sentAt: number; receivedAt: number }> {
     const query = agendaRevision === null ? "" : `?${new URLSearchParams({ agendaRevision: String(agendaRevision) })}`;
     const sentAt = device();
-    let release: string | null = null;
     const response = await requestJson(`${screenPath(screenId)}${query}`, screenReadResponseSchema, {
-      onHeaders: (headers) => {
-        release = headers.get(SCREEN_RELEASE_HEADER);
-      },
+      onHeaders: (headers) => onRelease?.(headers.get(SCREEN_RELEASE_HEADER)),
     });
-    return { response, sentAt, receivedAt: device(), release };
+    return { response, sentAt, receivedAt: device() };
   },
   startPairing: (screenId: ScreenId) =>
     requestJson(`${screenPath(screenId)}/pairings`, screenPairingResponseSchema, { method: "POST" }),
