@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, beforeEach } from "vitest";
-import { parseQueryContext, clearReferralSession } from "../../assets/ts/shared/query-context";
+import { parseQueryContext, clearReferralSession, signInReturnPath } from "../../assets/ts/shared/query-context";
 
 describe("query context", () => {
   beforeEach(() => {
@@ -42,5 +42,20 @@ describe("query context", () => {
     clearReferralSession();
     const after = parseQueryContext("?event=pqc-2026");
     expect(after.referralCode).toBeNull();
+  });
+
+  it("keeps the invitation token out of a sign-in return path and finds it again by invitation id", () => {
+    localStorage.clear();
+    parseQueryContext("?invite=secret-token&id=inv-1&source=invite");
+
+    const returnPath = signInReturnPath({
+      pathname: "/events/2027/toronto/register/",
+      search: "?invite=secret-token&id=inv-1&source=invite",
+    });
+    expect(returnPath).toBe("/events/2027/toronto/register/?id=inv-1&source=invite");
+    expect(returnPath).not.toContain("secret-token");
+
+    expect(parseQueryContext("?id=inv-1&source=invite").inviteToken).toBe("secret-token");
+    expect(parseQueryContext("?id=inv-2").inviteToken).toBeNull();
   });
 });

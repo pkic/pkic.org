@@ -28,6 +28,7 @@ import { TextInput } from "../ui/TextControl";
 import { FormSection } from "../ui/FormSection";
 import { EmailFirstStep } from "./EmailFirstStep";
 import { SignInCard } from "./sign-in/SignInCard";
+import { signInReturnPath } from "../shared/query-context";
 import { ADDRESS_IN_USE_COPY, EMAIL_FIRST_COPY } from "../../shared/email-first-copy";
 import { ProposalProofSupportNotice } from "./ProposalProofSupportNotice";
 import { ParticipationRepresentation } from "./ParticipationRepresentation";
@@ -235,7 +236,7 @@ export function EventProposalIdentityStep({
                 // The shared sign-in card: its links return here, and a passkey continues in place.
                 <div>
                   <SignInCard
-                    embedded={{ returnPath: `${location.pathname}${location.search}`, emailFlow: "proposal" }}
+                    embedded={{ returnPath: signInReturnPath(location), emailFlow: "proposal" }}
                     onSignedIn={identity.reloadSession}
                   />
                 </div>

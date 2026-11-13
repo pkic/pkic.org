@@ -31,14 +31,6 @@ Speaker participation does not accept the proposal or guarantee inclusion in the
     messageType: "transactional",
   },
   {
-    key: "registration_email_verify",
-    subjectTemplate: "Verify your email for {{eventName}}",
-    content:
-      'Verify your email address to continue your registration for **{{eventName}}**.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify email and continue &rarr;</a></div>\n\nIf you did not start a registration, you can ignore this email.',
-    contentType: "markdown",
-    messageType: "transactional",
-  },
-  {
     key: "user_email_verification",
     subjectTemplate: "Verify your email address",
     content:

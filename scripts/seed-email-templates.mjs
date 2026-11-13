@@ -564,7 +564,7 @@ We apologise for any inconvenience.
     subjectTemplate: "Your management link for {{eventName}}",
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
 
-{{#if alreadyRegistered}}You're already registered for **{{eventName}}**, so there's no need to register again. Use this link to review, update, or cancel your registration.{{else}}Here is your management link for **{{eventName}}**. Use it to review, update, or cancel your registration at any time.{{/if}}
+Here is your management link for **{{eventName}}**. Use it to review, update, or cancel your registration at any time.
 
 <div class="cta"><a href="{{manageUrl}}">Manage your registration &rarr;</a></div>
 

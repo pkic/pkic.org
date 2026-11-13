@@ -109,7 +109,7 @@ test("checks invitation access before signup and preserves the review on late ex
       },
     }),
   );
-  await page.goto(`${registrationPath}?invite=valid-invitation-test-token`);
+  await page.goto(`${registrationPath}?invite=valid-invitation-test-token&id=0b7e9d1c-5a4f-4c2e-9f3a-2d6b8e1c4a70`);
   // Signed out, the sign-in card stands in for the form: nothing is asked before the person is signed in.
   await expect(signInCard).toBeVisible();
   await expect(page.getByLabel("First name")).toHaveCount(0);

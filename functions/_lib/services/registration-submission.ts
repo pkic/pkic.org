@@ -74,7 +74,11 @@ export async function prepareRegistrationSubmission(
   if (!payload.verifiedIdentity) {
     const claim = await findUserEmailOwner(db, normalizeEmail(payload.user.email));
     if (claim?.kind === "pending" || (claim?.kind === "secondary" && !claim.verified))
-      throw new AppError(422, "REGISTRATION_EMAIL_PROOF_REQUIRED", "Sign in to register with this email address.");
+      throw new AppError(
+        422,
+        "REGISTRATION_EMAIL_PROOF_REQUIRED",
+        "Confirm this email address in the portal before registering with it.",
+      );
   }
   const preparedUser = await buildFindOrCreateUserStatement(db, payload.user);
   if (payload.verifiedIdentity && preparedUser.user.id !== payload.verifiedIdentity.userId) {

@@ -10,7 +10,6 @@ const agendaMigration = "0038_event_agenda_platform.sql";
 const templateKeys = [
   "agenda_changed",
   "event_proposal_verify",
-  "registration_email_verify",
   "proposal_representation_review",
   "user_email_verification",
   "agenda_session_reminder",

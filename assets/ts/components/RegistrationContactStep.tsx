@@ -15,6 +15,7 @@ import { Alert } from "../ui/Alert";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
 import { SignInCard } from "./sign-in/SignInCard";
+import { signInReturnPath } from "../shared/query-context";
 import { RegistrationIdentityField } from "./RegistrationIdentitySelect";
 
 /** The signed-in person's saved details; names may still be missing. */
@@ -247,10 +248,7 @@ export function RegistrationContactStep({
   if (!signInSlot.current) return null;
   // Invitation and source parameters ride along, so the emailed link returns to the same registration.
   return createPortal(
-    <SignInCard
-      embedded={{ returnPath: `${location.pathname}${location.search}`, emailFlow: "registration" }}
-      onSignedIn={load}
-    />,
+    <SignInCard embedded={{ returnPath: signInReturnPath(location), emailFlow: "registration" }} onSignedIn={load} />,
     signInSlot.current,
   );
 }

@@ -31,6 +31,8 @@ export async function signInThroughCard(
   // Independent people arrive from independent clients; see `signInToPortal`.
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
   const returnTo = new URL(page.url());
+  // The invitation token stays in the browser, never in the emailed link; the id finds it again.
+  returnTo.searchParams.delete("invite");
   const card = page.getByRole("region", { name: "Sign in", exact: true });
   await expect(card.getByRole("button", { name: "Sign in with a passkey" })).toBeEnabled({ timeout: 30_000 });
   const since = await capturedEmailCount();

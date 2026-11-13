@@ -109,7 +109,8 @@ export async function prepareProposalSubmitter(
   });
   if (kind === "organization" && !identity.representation.organizationName)
     throw new AppError(422, "PROPOSAL_QUALIFICATION_CONFLICT", "Choose your organization affiliation.");
-  if (identity.identityId) {
+  // The selected identity's email was read and guarded above; only a different resolved identity needs its own.
+  if (identity.identityId && identity.identityId !== selected) {
     const selectedEmail = await first<{ email_id: string | null; email: string }>(
       db,
       "SELECT identity.email_id,COALESCE(address.normalized_email,user.normalized_email) AS email FROM identities identity JOIN users user ON user.id=identity.user_id LEFT JOIN user_emails address ON address.id=identity.email_id AND address.user_id=identity.user_id WHERE identity.id=? AND identity.user_id=?",
