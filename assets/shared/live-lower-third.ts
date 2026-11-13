@@ -1,6 +1,6 @@
 /**
  * The lower third: the consortium emblem with the white name bar coming out
- * of its orange seat and the grey title bar under it, and how it moves on and
+ * of its orange seat and the conference-field title bar under it, and how it moves on and
  * off air. Pure, so the overlay, its tests and the control room agree.
  */
 
@@ -56,27 +56,23 @@ export function liveLowerThirdEmblemPoint(point: Point): Point {
 
 /**
  * The lower third in the brand's 2500 x 417 drawing: the white name bar,
- * whose left edge runs under the orange seat, the wider grey title bar set
- * off to the right of the name, and the emblem's parts in the drawing's own
- * coordinates. The emblem is drawn over the bars, so its orange seat is the
- * edge the name bar comes out of.
+ * whose left edge runs under the orange seat, the wider title bar set
+ * off to the right of the name. The emblem (`LIVE_EMBLEM`, placed by
+ * `liveLowerThirdEmblemBox`) is drawn over the bars, so its orange seat is
+ * the edge the name bar comes out of.
  */
 export const LIVE_LOWER_THIRD_BRAND = {
   nameBar: "m2331 6v228h-1949.5l-19.9-138.3-109.6-89.7z",
-  titleBar: "m2484 233v184h-1929v-184z",
+  /** The title bar, under the name bar's foot and set off to the right of the name. */
+  titleBar: { x: 555, y: 233, width: 1929, height: 184 },
+  /**
+   * The conference stripe along the name bar's foot, to the bar's end. Its left end is the bar's own
+   * slanted edge under the orange seat, so no part of it shows outside the bar.
+   */
+  underline: "M379.49 220H2331V234H381.5Z",
   /** The name's left margin, and the title's, which starts further right like its bar. */
   nameX: 482,
   titleX: 625,
-  emblem: {
-    blue: "M238.89 372.277C228.093 390.99 225.977 416.818 201.84 416.818C177.703 416.818 175.587 390.99 164.79 372.277A187.916 187.916 0 0 1 70.81 322.747L89.356 305.216A162.421 162.421 0 0 0 314.324 305.216L332.87 322.747A187.916 187.916 0 0 1 238.89 372.277Z",
-    orange:
-      "M342.86 63.85C364.464 63.844 387.891 52.762 399.959 73.666C412.028 94.569 390.717 109.316 379.91 128.023A187.916 187.916 0 0 1 384.006 234.177L359.551 226.881A162.421 162.421 0 0 0 247.067 32.053L252.976 7.226A187.916 187.916 0 0 1 342.86 63.85Z",
-    green:
-      "M23.77 128.023C12.963 109.316 -8.348 94.569 3.721 73.666C15.789 52.762 39.216 63.844 60.82 63.85A187.916 187.916 0 0 1 150.704 7.226L156.613 32.053A162.421 162.421 0 0 0 44.129 226.881L19.674 234.177A187.916 187.916 0 0 1 23.77 128.023Z",
-    table:
-      "M214.581 60.919A127.768 127.768 0 0 1 318.309 240.582L370.95 270.974L358.209 293.042L305.569 262.65A127.768 127.768 0 0 1 98.111 262.65L45.471 293.042L32.73 270.974L85.371 240.582A127.768 127.768 0 0 1 189.099 60.919L189.099 0.134L214.581 0.134ZM201.84 85.763A102.287 102.287 0 0 0 201.84 290.337A102.287 102.287 0 0 0 201.84 85.763Z",
-    keyhole: "M187.723 182.519L170.062 250.873L233.618 250.873L215.957 182.519A30.389 30.389 0 1 0 187.723 182.519Z",
-  },
 } as const;
 
 // ── Motion ──────────────────────────────────────────────────────────────────

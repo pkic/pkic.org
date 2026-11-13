@@ -1,13 +1,15 @@
 import { useEffect, useId, useReducer, useRef } from "preact/hooks";
 import type { LiveCredit } from "../../shared/schemas/live-session-room";
 import {
+  LIVE_EMBLEM,
   LIVE_LOWER_THIRD_BRAND,
   LIVE_LOWER_THIRD_DRAWING,
   initialLiveLowerThird,
   liveLowerThirdEmblemBox,
   stepLiveLowerThird,
 } from "../../shared/live-lower-third";
-import { liveCreditAffiliation } from "../../shared/live-room-credits";
+import { LiveCreditTitles } from "./LiveCreditTitles";
+import { LiveEmblemLock, LiveEmblemWheel } from "./LiveEmblem";
 import "./LiveLowerThird.css";
 
 /** The animations that span a whole phase, one per phase; the end of one moves the lower third on. */
@@ -17,14 +19,15 @@ const PHASE_FALLBACK_MS = 2000;
 
 const EMBLEM = liveLowerThirdEmblemBox();
 const { nameBarSeat, width, height } = LIVE_LOWER_THIRD_DRAWING;
-const { nameBar: NAME_BAR, titleBar: TITLE_BAR, nameX, emblem: BRAND_EMBLEM } = LIVE_LOWER_THIRD_BRAND;
+const { nameBar: NAME_BAR, titleBar: TITLE_BAR, underline: UNDERLINE, nameX } = LIVE_LOWER_THIRD_BRAND;
 /** The title bar's top, where the name bar's foot is. */
 const TITLE_TOP = 233;
 
-function Bars({ credit }: { credit: LiveCredit }) {
+function Bars({ credit, stripe }: { credit: LiveCredit; stripe: string }) {
   return (
     <>
       <path class="pk-live-overlay__name-background" d={NAME_BAR} />
+      <path d={UNDERLINE} fill={`url(#${stripe})`} />
       {credit.roleLabel ? (
         <text class="pk-live-overlay__role" x={nameX} y="84" font-size="48">
           {credit.roleLabel}
@@ -44,7 +47,7 @@ function Bars({ credit }: { credit: LiveCredit }) {
 
 /**
  * The lower third: the emblem, with the white name bar coming out of its
- * orange seat and the grey title bar under it. It moves only when who is on
+ * orange seat and the conference-field title bar under it. It moves only when who is on
  * air changes: the emblem rolls in about its own center and the bars extend
  * from it, the reverse on the way out, and for another speaker the bars
  * retract and return with the new name while the emblem stays. A cut, or
@@ -91,9 +94,15 @@ export function LiveLowerThird({ credit, animate }: { credit: LiveCredit | null;
         <div class="pk-live-overlay__lower-third-graphic" data-phase={state.phase} ref={graphic}>
           <svg class="pk-live-overlay__lower-third-bars" viewBox={`0 0 ${width} ${height}`} aria-label={shown.name}>
             <defs>
+              {/* The conference stripe, from the orange of the seat it leaves through blue to green. */}
+              <linearGradient id={`${clip}-stripe`} gradientUnits="userSpaceOnUse" x1="380" x2="2331" y1="0" y2="0">
+                <stop offset="0%" class="pk-live-overlay__stripe-orange" />
+                <stop offset="50%" class="pk-live-overlay__stripe-blue" />
+                <stop offset="100%" class="pk-live-overlay__stripe-green" />
+              </linearGradient>
               {/*
                * The name bar is revealed from the seat outward, its curved left end in place from the
-               * first frame; the title bar shows nothing above the name bar's foot.
+               * first frame; the title bar's field shows nothing above the name bar's foot.
                */}
               <clipPath id={`${clip}-name`}>
                 <rect
@@ -110,11 +119,14 @@ export function LiveLowerThird({ credit, animate }: { credit: LiveCredit | null;
             </defs>
             <g clip-path={`url(#${clip}-title)`}>
               <g class="pk-live-overlay__lower-third-title-bar">
-                <path class="pk-live-overlay__title-background" d={TITLE_BAR} />
+                {/* The conference field, painted with the kit's own tokens. */}
+                <foreignObject {...TITLE_BAR}>
+                  <div class="pk-live-overlay__title-field" />
+                </foreignObject>
               </g>
             </g>
             <g clip-path={`url(#${clip}-name)`}>
-              <Bars credit={shown} />
+              <Bars credit={shown} stripe={`${clip}-stripe`} />
             </g>
             <g class="pk-live-overlay__lower-third-emblem-roll">
               <svg
@@ -123,22 +135,22 @@ export function LiveLowerThird({ credit, animate }: { credit: LiveCredit | null;
                 y={EMBLEM.y}
                 width={EMBLEM.size}
                 height={EMBLEM.size}
-                viewBox={`${EMBLEM.x} ${EMBLEM.y} ${EMBLEM.size} ${EMBLEM.size}`}
+                viewBox={`0 0 ${LIVE_EMBLEM.box} ${LIVE_EMBLEM.box}`}
                 aria-hidden="true"
               >
-                {/* The brand emblem in the drawing's coordinates; its box is centered on the emblem, so it spins true. */}
+                {/*
+                 * The exact emblem in its square box, centered on the ring, so it spins true. Only the seats
+                 * and their spokes turn: the keyhole rolls in upright at the center.
+                 */}
                 <g class="pk-live-overlay__lower-third-emblem-spin">
-                  <path class="pk-live-overlay__emblem-blue" d={BRAND_EMBLEM.blue} />
-                  <path class="pk-live-overlay__emblem-orange" d={BRAND_EMBLEM.orange} />
-                  <path class="pk-live-overlay__emblem-green" d={BRAND_EMBLEM.green} />
-                  <path class="pk-live-overlay__emblem-ink" fill-rule="evenodd" d={BRAND_EMBLEM.table} />
-                  <path class="pk-live-overlay__emblem-ink" d={BRAND_EMBLEM.keyhole} />
+                  <LiveEmblemWheel />
                 </g>
+                <LiveEmblemLock />
               </svg>
             </g>
           </svg>
           <div class="pk-live-overlay__title">
-            <span>{liveCreditAffiliation(shown)}</span>
+            <LiveCreditTitles credit={shown} />
           </div>
         </div>
       ) : null}

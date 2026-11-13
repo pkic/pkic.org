@@ -45,6 +45,33 @@ it.each(["panel", "list", "columns"] as const)(
     expect(host.textContent).toBe("");
   },
 );
+it("rolls a panelist's identities in turn and shows a single identity still", async () => {
+  const session = liveSnapshot().session;
+  const credit = session.credits[0]!;
+  session.credits = [
+    {
+      ...credit,
+      key: "speaker:two",
+      identity: { title: "Principal architect", organization: "Example Trust" },
+      additionalIdentities: [{ title: "Co-chair", organization: "Example Working Group" }],
+    },
+    {
+      ...credit,
+      key: "speaker:one",
+      identity: { title: "Engineer", organization: "Example" },
+      additionalIdentities: [],
+    },
+  ];
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LivePanelistsOverlay session={session} panelists={{ layout: "panel" }} />, host!));
+  const [two, one] = [...host.querySelectorAll(".pk-live-panelists__title")];
+  expect([...two!.querySelectorAll(".pk-affiliation-rotation__unit")].map((unit) => unit.textContent)).toEqual([
+    "Principal architect, Example Trust",
+    "Co-chair, Example Working Group",
+  ]);
+  expect(two!.querySelector(".pk-affiliation-rotation--rotate-2")).not.toBeNull();
+  expect([one!.querySelector(".pk-affiliation-rotation"), one!.textContent]).toEqual([null, "Engineer, Example"]);
+});
 it("routes panelist preview and program independently and preserves canonical atomic state", async () => {
   const state = applyLiveRoomMessage(null, liveSnapshot());
   if (!state) throw new Error("Missing fixture");

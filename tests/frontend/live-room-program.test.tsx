@@ -69,6 +69,7 @@ describe("continuous physical-room source", () => {
               name: "First presenter",
               photoUrl: null,
               identity: null,
+              additionalIdentities: [],
             },
             lowerThirdChange: null,
             lowerThirdMotion: "animated" as const,

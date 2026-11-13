@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { LIVE_ADDED_CREDITS_MAX } from "../live-room-credits";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { publicSessionPortraitUrlSchema } from "./event-session-history";
+import { MAX_SESSION_AFFILIATIONS, publicSessionPortraitUrlSchema } from "./event-session-history";
 import { databaseIdSchema } from "./identifiers";
 import { livePersonNameSchema } from "./live-session-change";
 
@@ -27,6 +27,14 @@ export const liveCreditFieldsSchema = z
     photoUrl: publicSessionPortraitUrlSchema.nullable().default(null),
     /** The identity the person acts as; null for someone who appears as themselves. */
     identity: liveCreditIdentitySchema.nullable().default(null),
+    /**
+     * Every further identity the person speaks for in this session, after `identity`: an approved
+     * appearance can name more than one. The lower third shows each in turn.
+     */
+    additionalIdentities: z
+      .array(liveCreditIdentitySchema)
+      .max(MAX_SESSION_AFFILIATIONS - 1)
+      .default([]),
     /** The role the lower third names above the person, "Moderator" or a host's duty; null for a speaker. */
     roleLabel: z.string().trim().min(1).max(80).nullable().default(null),
   })
