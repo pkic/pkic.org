@@ -65,14 +65,18 @@ function PersonRow({
   const layer = { kind: "lowerThird" as const, key: credit.key };
   const { where, onAir } = onAirOf(targets, credit.key);
   const item = livePresenceItem(layer);
-  const affiliation = personRoleAt({ title: credit.identity?.title, organization: credit.identity?.organization });
-  // Further identities the lower third rolls through; the row stays still and only counts them.
+  // The first identity with a title or organization, as the lower third starts with; the row stays still
+  // and only counts the further ones it rolls through.
+  const shownIdentity = [credit.identity, ...credit.additionalIdentities].find(
+    (identity) => identity?.title || identity?.organization,
+  );
+  const affiliation = personRoleAt({ title: shownIdentity?.title, organization: shownIdentity?.organization });
   const moreIdentities = Math.max(0, liveCreditAffiliations(credit).length - 1);
   const card = usePersonCard<HTMLLIElement>({
     person: {
       name: credit.name,
       photoUrl: credit.photoUrl,
-      affiliation: personAffiliation(credit.identity?.title, credit.identity?.organization),
+      affiliation: personAffiliation(shownIdentity?.title, shownIdentity?.organization),
       sessionRole,
     },
     side: "right",

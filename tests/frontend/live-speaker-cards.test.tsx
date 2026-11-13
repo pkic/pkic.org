@@ -79,6 +79,28 @@ it("counts a speaker's further identities beside the one shown, without rolling 
   expect(row.querySelector(".pk-affiliation-rotation")).toBeNull();
 });
 
+it("shows the first identity that names something when the primary one is empty", async () => {
+  const state = roomState();
+  state.session.credits = [
+    liveCreditSchema.parse({
+      key: "speaker:empty-primary",
+      name: "Sam Speaker",
+      identity: { title: null, organization: null },
+      additionalIdentities: [
+        { title: "Co-chair", organization: "Example Working Group" },
+        { title: "Advisor", organization: "Example Trust" },
+      ],
+    }),
+  ];
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveSpeakerCards targets={liveTargets(state)} />, host!));
+  const row = host.querySelector<HTMLButtonElement>('button[aria-label="Prepare Sam Speaker in Preview"]')!;
+  expect(row.querySelector(".pk-live-person__affiliation > span")?.textContent).toBe(
+    "Co-chair at Example Working Group",
+  );
+  expect(row.querySelector(".pk-live-person__more")?.textContent).toBe("+1and 1 more identity");
+});
+
 it("shows a person's card with a large portrait on focus and on a tap of their photo", async () => {
   const state = roomState();
   state.session.credits = [
