@@ -16,6 +16,7 @@ export const health = (overrides: Partial<ScreenHealth>): ScreenHealth => ({
   display: "output",
   output: "projector",
   mode: "live",
+  studioRefusal: null,
   player: null,
   clockOffsetMs: 120,
   metrics: { uptime: 3 * 3600 + 12 * 60, temps: { cpu: 54.2, nvme: 41 } },
@@ -96,7 +97,16 @@ export const MONITOR: ScreenMonitorView = {
         MONITOR_SCREENS.stage,
         health({ output: "stage-display", mode: "auto", clockOffsetMs: 2400, metrics: { network: network(42) } }),
       ),
-      status(MONITOR_SCREENS.projector, health({ output: "projector", metrics: { network: network(81) } })),
+      // Online, but the studio's room turned it away: it holds its last state.
+      status(
+        MONITOR_SCREENS.projector,
+        health({
+          output: "projector",
+          mode: "offline",
+          studioRefusal: "LIVE_OVERLAY_ACCESS_INVALID",
+          metrics: { network: network(81) },
+        }),
+      ),
       status(MONITOR_SCREENS.greenRoom, health({ output: "projector" }), false),
       status(
         MONITOR_SCREENS.laptop,

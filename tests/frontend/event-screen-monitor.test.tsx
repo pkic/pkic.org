@@ -14,7 +14,7 @@ import { LIVE_PERSISTENT_RETRY_MAX_MS } from "../../assets/ts/live-session/live-
 import type { ScreenApi } from "../../assets/ts/event-screens/screen-api";
 import { ScreenApp } from "../../assets/ts/event-screens/ScreenApp";
 import { createScreenClock } from "../../assets/ts/event-screens/screen-clock";
-import { screenPageVersion } from "../../assets/ts/event-screens/screen-health";
+import { screenHealth, screenPageVersion } from "../../assets/ts/event-screens/screen-health";
 import { useScreenMonitor } from "../../assets/ts/event-screens/useScreenMonitor";
 import { LivestreamStallLog, livestreamPlayback } from "../../assets/ts/event-screens/livestream-playback";
 import type { YouTubePlayer } from "../../assets/ts/event-screens/youtube-iframe-api";
@@ -29,6 +29,7 @@ const HEALTH: Omit<ScreenHealth, "metrics"> = {
   display: "waiting",
   output: null,
   mode: "live",
+  studioRefusal: null,
   player: null,
   clockOffsetMs: 0,
 };
@@ -307,5 +308,25 @@ describe("the livestream player's readings", () => {
       loadedFraction: null,
       reportedQuality: null,
     });
+  });
+});
+
+describe("the screen's health report", () => {
+  const report = (marker: { kind: "offline-dot" } | null) =>
+    screenHealth({
+      display: { kind: "idle", name: "Stage", roomName: "Red hall", marker },
+      assignment: null,
+      player: null,
+      clockOffsetMs: 0,
+      pageVersion: "screen.js",
+      studioRefusal: "LIVE_OVERLAY_ACCESS_INVALID",
+    });
+
+  it("says why the studio turned it away while it holds its last state, and drops the reason once back", () => {
+    expect(report({ kind: "offline-dot" })).toMatchObject({
+      mode: "offline",
+      studioRefusal: "LIVE_OVERLAY_ACCESS_INVALID",
+    });
+    expect(report(null)).toMatchObject({ mode: "live", studioRefusal: null });
   });
 });

@@ -5,7 +5,7 @@
  * same issues, labels and tiers. The thresholds live in one place.
  */
 import { formatNumber } from "./format-number";
-import { screenBrowserNeedsResume } from "./event-screen-health";
+import { screenBrowserNeedsResume, screenStudioLinkLabel } from "./event-screen-health";
 import { screenNetworkReadings } from "./event-screen-quality";
 import type { ScreenLiveStatus, ScreenQualitySample } from "./schemas/event-screen-monitor";
 
@@ -180,7 +180,7 @@ export function screenIssues({
     add(
       "cached-agenda",
       // The same words as the screen's health badge, which then is not repeated.
-      health.mode === "auto" ? "Running on the agenda" : "Holding last picture",
+      health.mode === "auto" ? "Running on the agenda" : screenStudioLinkLabel(health.studioRefusal),
       "warning",
       stateSince,
     );

@@ -25,6 +25,7 @@ const HEALTH: ScreenHealth = {
   display: "output",
   output: "projector",
   mode: "live",
+  studioRefusal: null,
   player: null,
   clockOffsetMs: 0,
   metrics: { network: { wifi: { signal: 70 } } },
@@ -164,7 +165,11 @@ describe("a screen's issues", () => {
     expect(issues(online({ mode: "auto" }))).toEqual([
       { code: "cached-agenda", label: "Running on the agenda", severity: "warning", since: ago(20) },
     ]);
-    expect(tierOf(issues(online({ mode: "offline" })), "cached-agenda")).toEqual(["Holding last picture", "warning"]);
+    expect(tierOf(issues(online({ mode: "offline" })), "cached-agenda")).toEqual(["Studio link down", "warning"]);
+    // The room's reason for turning the screen away names the fault.
+    expect(
+      tierOf(issues(online({ mode: "offline", studioRefusal: "LIVE_OVERLAY_ACCESS_INVALID" })), "cached-agenda"),
+    ).toEqual(["Studio link down (access refused)", "warning"]);
   });
 
   it("lists critical issues first, sorts screens by their worst and counts them by tier", () => {

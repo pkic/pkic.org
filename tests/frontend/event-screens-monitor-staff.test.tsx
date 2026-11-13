@@ -268,7 +268,8 @@ describe("the multi-view", () => {
     const summary = [...host.querySelectorAll<HTMLButtonElement>(".pk-chip__toggle")].find((chip) =>
       chip.textContent?.includes("critical"),
     )!;
-    expect(summary.textContent).toBe("1 critical · 1 warning");
+    // The full count, which a narrow toolbar shortens on screen but not for screen readers.
+    expect(summary.querySelector(".pk-toolbar-control-label")!.textContent).toBe("1 critical · 1 warning");
     await act(() => summary.click());
     await settle();
     expect(lists.at(-1)!.searchParams.get("screenIds")).toBe("BBB234,CCC234");

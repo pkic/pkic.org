@@ -123,7 +123,10 @@ export function useLiveRoom({
         } catch {
           return;
         }
-        if (!parsed.success) return;
+        if (!parsed.success) {
+          persistence.current?.onUnreadable?.();
+          return;
+        }
         const message = parsed.data;
         if (message.type === "presence.changed" || message.type === "presence.left") {
           presence.current?.(message);

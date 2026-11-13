@@ -219,6 +219,8 @@ export const screenHealthSchema = z
     /** The output it is assigned and shows; null while it shows none. */
     output: screenOutputSchema.nullable(),
     mode: z.enum(SCREEN_RUN_MODES),
+    /** Why the studio's room last turned the screen away, as its error code, while the screen holds its last state; null when it gave no reason. */
+    studioRefusal: z.string().min(1).max(64).nullable().default(null),
     /** The livestream player, while one runs. */
     player: z
       .object({

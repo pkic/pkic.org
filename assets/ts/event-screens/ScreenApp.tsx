@@ -92,6 +92,23 @@ export function ScreenView({ screenId, display, now }: { screenId: ScreenId; dis
  * last good state through any outage and handing the device back to its
  * local status page only when it has nothing good to show.
  */
+/** A page that still cannot read the room after one reload is not outdated: it tries again only after this long. */
+const OUTDATED_RELOAD_EVERY_MS = 10 * 60_000;
+const OUTDATED_RELOAD_KEY = "pkic.screen.outdatedReloadAt";
+
+/** Loads the server's newer release, at most once a while, so a fault that is not a release never loops. */
+export function reloadOutdatedPage(storage: Storage, reload: () => void) {
+  try {
+    const last = Number(storage.getItem(OUTDATED_RELOAD_KEY));
+    if (Date.now() - last < OUTDATED_RELOAD_EVERY_MS) return;
+    storage.setItem(OUTDATED_RELOAD_KEY, String(Date.now()));
+  } catch {
+    // Without a place to note the reload, it could loop: the screen keeps what it has.
+    return;
+  }
+  reload();
+}
+
 export function ScreenApp({
   screenId,
   storage,
@@ -99,6 +116,7 @@ export function ScreenApp({
   api,
   onHandoff,
   onReload = () => window.location.reload(),
+  onOutdated = () => window.location.reload(),
   monitor,
   browser = null,
 }: {
@@ -109,6 +127,8 @@ export function ScreenApp({
   onHandoff: () => void;
   /** A screen manager's Reload. */
   onReload?: () => void;
+  /** Loads the page again for the server's newer release, which a redraw does not. */
+  onOutdated?: () => void;
   /** The monitor connection's socket and device readers, replaced in tests. */
   monitor?: Pick<Parameters<typeof useScreenMonitor>[0], "createSocket" | "readMetrics" | "readScreenshot">;
   /**
@@ -135,24 +155,29 @@ export function ScreenApp({
     lastFeed.current = feedKey;
   }, [feedKey]);
 
-  const onReport = useCallback(
-    (report: ScreenLiveReport) =>
-      setLive((held) => ({
-        connected: report.connected,
-        lastUpdateAt: held.lastUpdateAt,
-        state: report.state === undefined ? held.state : report.state,
-      })),
-    [],
-  );
+  const [studioRefusal, setStudioRefusal] = useState<string | null>(null);
+  const onReport = useCallback((report: ScreenLiveReport) => {
+    if (report.connected) setStudioRefusal(null);
+    setLive((held) => ({
+      connected: report.connected,
+      lastUpdateAt: held.lastUpdateAt,
+      state: report.state === undefined ? held.state : report.state,
+    }));
+  }, []);
+  const outdated = useRef(onOutdated);
+  outdated.current = onOutdated;
   const persistence = useMemo(
     () => ({
       onActivity: () => setLive((held) => ({ ...held, lastUpdateAt: clock.now() })),
+      // The room speaks a newer release than this page: after a deploy, only a reload brings the screen back.
+      onUnreadable: () => reloadOutdatedPage(storage, () => outdated.current()),
       // Expired access or a changed assignment: read again, which brings fresh access.
       onRefusal: (code: string) => {
+        setStudioRefusal(code);
         if (code !== "LIVE_PROGRAM_SELECTION_CHANGED") void refresh();
       },
     }),
-    [clock, refresh],
+    [clock, refresh, storage],
   );
 
   const display = screenDisplay({
@@ -226,6 +251,7 @@ export function ScreenApp({
       clockOffsetMs: clock.offset(),
       pageVersion,
       browser: grants ? { ...grants, sound } : null,
+      studioRefusal,
     }),
     onCommand,
     ...readers,

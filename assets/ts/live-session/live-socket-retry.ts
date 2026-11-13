@@ -20,4 +20,6 @@ export function persistentRetryDelay(attempt: number, random: () => number = Mat
 export interface LivePersistence {
   onRefusal?: (code: string) => void;
   onActivity?: () => void;
+  /** A message this page cannot read: the server runs a newer release than the page. */
+  onUnreadable?: () => void;
 }

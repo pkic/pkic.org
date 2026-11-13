@@ -27,9 +27,29 @@ export function screenHealthDisplay(health: ScreenHealth): {
   }
   if (health.display === "livestream") return { label: "No stream", tone: "warn" };
   if (health.mode === "auto") return { label: "Running on the agenda", tone: "info" };
-  if (health.mode === "offline") return { label: "Holding last picture", tone: "warn" };
+  if (health.mode === "offline") return { label: screenStudioLinkLabel(health.studioRefusal), tone: "warn" };
   if (health.display === "idle") return { label: "Waiting for the studio", tone: null };
   return { label: "Following the studio", tone: null };
+}
+
+const STUDIO_REFUSALS: Readonly<Record<string, string>> = {
+  LIVE_OVERLAY_ACCESS_INVALID: "access refused",
+  LIVE_ROOM_ACCESS_EXPIRED: "access refused",
+  LIVE_PROGRAM_SELECTION_CHANGED: "session switched",
+  LIVE_PROGRAM_ROOM_NOT_FOUND: "room not on the agenda",
+  LIVE_SESSION_NOT_FOUND: "no live room",
+  EVENT_NOT_FOUND: "event removed",
+  LIVE_ROOMS_UNAVAILABLE: "live rooms unavailable",
+};
+
+/**
+ * A screen whose link to the studio is down: it keeps drawing the last state
+ * it had, its timers still counting, so its picture still changes. The label
+ * names the link and, when the room turned the screen away, why.
+ */
+export function screenStudioLinkLabel(refusal: string | null): string {
+  if (!refusal) return "Studio link down";
+  return `Studio link down (${STUDIO_REFUSALS[refusal] ?? refusal})`;
 }
 
 /** What a screen draws, as one comparable value: a change starts its `stateSince` over. */

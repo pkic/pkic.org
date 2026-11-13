@@ -84,7 +84,8 @@ export function useLiveRoomProgram({
         if (event.data === "pong") return;
         try {
           const parsed = liveProgramMessageSchema.safeParse(JSON.parse(String(event.data)));
-          if (parsed.success && parsed.data.selection.roomId === roomId) {
+          if (!parsed.success) persistence.current?.onUnreadable?.();
+          else if (parsed.data.selection.roomId === roomId) {
             setSelection((previous) =>
               previous && previous.revision > parsed.data.selection.revision ? previous : parsed.data.selection,
             );

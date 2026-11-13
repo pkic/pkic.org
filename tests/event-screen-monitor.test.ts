@@ -38,6 +38,7 @@ const HEALTH: ScreenHealth = {
   display: "output",
   output: "stage-display",
   mode: "live",
+  studioRefusal: null,
   player: null,
   clockOffsetMs: 40,
   metrics: { uptime: 3600, temps: { cpu: 51 } },
