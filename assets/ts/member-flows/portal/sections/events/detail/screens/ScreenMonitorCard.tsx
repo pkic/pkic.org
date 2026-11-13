@@ -9,8 +9,12 @@
 import type { ComponentChildren } from "preact";
 import { screenConnection, screenConnectionDisplay } from "../../../../../../../shared/event-screen-connection";
 import { screenHealthDisplay, screenOwnRunHint } from "../../../../../../../shared/event-screen-health";
-
-type ScreenOwnRunHint = NonNullable<ReturnType<typeof screenOwnRunHint>>;
+import {
+  screenSoftwareBuild,
+  screenSoftwareDetail,
+  screenUpdatesDetail,
+  type ScreenSoftwareBuild,
+} from "../../../../../../../shared/event-screen-software";
 import { screenIssueSeverity, type ScreenIssue } from "../../../../../../../shared/event-screen-issues";
 import { formatAge } from "../../../../../../../shared/format-date";
 import { LIVE_SCREEN_OUTPUT_DETAILS } from "../../../../../../../shared/live-room-outputs";
@@ -23,6 +27,14 @@ import { useSectionHeading } from "../../../../../../ui/HeadingOutline";
 import type { ScreenMonitorScreenshot } from "./screen-monitor-view";
 import { ScreenQualityTrend } from "./ScreenQualityTrend";
 import "./ScreenMonitorCard.css";
+
+type ScreenOwnRunHint = NonNullable<ReturnType<typeof screenOwnRunHint>>;
+
+/** What the screen's device runs, shown on request in its status tooltip. */
+interface ScreenDeviceDetails {
+  software: ScreenSoftwareBuild | null;
+  updates: string | null;
+}
 
 /** Where the screen is and what it is assigned: "Blue room · Livestream". */
 export function screenPlacement(screen: ScreenRecord): string {
@@ -49,7 +61,7 @@ export function screenCondition(
   lostSince: number | null = null,
   /** The monitor watches the event's screens; one it does not know about has no issue it tracks. */
   monitored = true,
-): { tone: ScreenConditionTone; text: string; hint?: ScreenOwnRunHint } {
+): { tone: ScreenConditionTone; text: string; hint?: ScreenOwnRunHint; device?: ScreenDeviceDetails } {
   if (lostSince !== null && status)
     return { tone: "neutral", text: `Status unknown · last update ${formatAge(now - lostSince)}` };
   if (!status) {
@@ -77,8 +89,11 @@ export function screenCondition(
   const severity = screenIssueSeverity(issues);
   // A screen on its own still sends screenshots: say what reaches it and what does not.
   const hint = status.online && status.health ? screenOwnRunHint(status.health) : null;
+  const software = screenSoftwareBuild(status.health);
+  const updates = screenUpdatesDetail(status.health, now);
   return {
     ...(hint ? { hint } : {}),
+    ...(software || updates ? { device: { software, updates } } : {}),
     tone: severity ?? (status.online ? "ok" : "critical"),
     text: details.length
       ? `${connection} · ${details.map((label, index) => (index ? label.charAt(0).toLowerCase() + label.slice(1) : label)).join(", ")}`
@@ -113,44 +128,78 @@ const TONE_WORDS: Record<ScreenConditionTone, string> = {
   critical: "Critical: ",
 };
 
-/** What still reaches a screen running on its own, and what does not. */
-function ScreenOwnRunHelp({ text, hint }: { text: string; hint: ScreenOwnRunHint }) {
+/**
+ * The whole condition line, then what still reaches a screen running on its
+ * own, then what its device runs.
+ */
+function ScreenConditionHelp({
+  condition,
+  newestSoftware,
+}: {
+  condition: ReturnType<typeof screenCondition>;
+  newestSoftware: string | null;
+}) {
+  const { hint, device } = condition;
+  const software = device?.software ? screenSoftwareDetail(device.software, newestSoftware) : null;
   return (
-    <dl class="pk-screen-own-run">
+    <dl class="pk-screen-status-help">
       {/* The whole line first: the card cuts it at two lines. */}
       <dt>Status</dt>
-      <dd>{text}</dd>
-      <dt>Still works</dt>
-      <dd>{hint.works}</dd>
-      <dt>Not reaching it</dt>
-      <dd>{hint.stopped}</dd>
-      <dt>Next</dt>
-      <dd>{hint.next}</dd>
+      <dd>{condition.text}</dd>
+      {hint && (
+        <>
+          <dt>Still works</dt>
+          <dd>{hint.works}</dd>
+          <dt>Not reaching it</dt>
+          <dd>{hint.stopped}</dd>
+          <dt>Next</dt>
+          <dd>{hint.next}</dd>
+        </>
+      )}
+      {software && (
+        <>
+          <dt>Screen software</dt>
+          <dd>{software.text}</dd>
+        </>
+      )}
+      {device?.updates && (
+        <>
+          <dt>Updates</dt>
+          <dd>{device.updates}</dd>
+        </>
+      )}
     </dl>
   );
 }
 
 /**
  * The condition line: a dot in its tone, then the words, cut at two lines
- * with the whole line on hover. A screen running on its own opens a tooltip
- * on what still reaches it, on hover, focus or tap.
+ * with the whole line on hover. When there is more to say (what still
+ * reaches a screen running on its own, what its device runs) the words open
+ * a tooltip on hover, focus or tap.
  */
-export function ScreenConditionLine({ condition }: { condition: ReturnType<typeof screenCondition> }) {
+export function ScreenConditionLine({
+  condition,
+  newestSoftware = null,
+}: {
+  condition: ReturnType<typeof screenCondition>;
+  /** The newest build among the event's screens, the reference for an older one. */
+  newestSoftware?: string | null;
+}) {
+  const more = Boolean(condition.hint || condition.device);
   const words = (
-    <span
-      class={condition.hint ? "pk-screen-condition__text pk-screen-condition__text--hint" : "pk-screen-condition__text"}
-    >
+    <span class={more ? "pk-screen-condition__text pk-screen-condition__text--hint" : "pk-screen-condition__text"}>
       {TONE_WORDS[condition.tone] && <span class="pk-sr-only">{TONE_WORDS[condition.tone]}</span>}
       {condition.text}
     </span>
   );
   return (
-    <p class="pk-screen-condition" data-tone={condition.tone} title={condition.hint ? undefined : condition.text}>
+    <p class="pk-screen-condition" data-tone={condition.tone} title={more ? undefined : condition.text}>
       <span class="pk-screen-condition__dot" aria-hidden="true" />
-      {condition.hint ? (
+      {more ? (
         <Tooltip
           label={`${TONE_WORDS[condition.tone]}${condition.text}`}
-          content={<ScreenOwnRunHelp text={condition.text} hint={condition.hint} />}
+          content={<ScreenConditionHelp condition={condition} newestSoftware={newestSoftware} />}
         >
           {words}
         </Tooltip>
@@ -193,12 +242,15 @@ export function ScreenMonitorCard({
   issues,
   now,
   lostSince = null,
+  newestSoftware = null,
   actions,
 }: {
   screen: ScreenRecord;
   status: ScreenLiveStatus | undefined;
   issues: readonly ScreenIssue[];
   lostSince?: number | null;
+  /** The newest build among the event's screens. */
+  newestSoftware?: string | null;
   samples: readonly ScreenQualitySample[];
   screenshot: ScreenMonitorScreenshot | undefined;
   now: number;
@@ -216,7 +268,7 @@ export function ScreenMonitorCard({
       <div class="pk-screen-card__body">
         <Heading class="pk-screen-card__title">{screen.name}</Heading>
         <p class="pk-screen-card__meta">{screenPlacement(screen)}</p>
-        <ScreenConditionLine condition={condition} />
+        <ScreenConditionLine condition={condition} newestSoftware={newestSoftware} />
         <ScreenQualityTrend
           screenName={screen.name}
           samples={samples}

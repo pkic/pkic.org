@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { screenHealthDisplay, screenOwnRunHint } from "../assets/shared/event-screen-health";
 import {
+  newestScreenSoftware,
+  screenSoftwareBuild,
+  screenSoftwareDetail,
+  screenUpdatesDetail,
+} from "../assets/shared/event-screen-software";
+import {
   addScreenQualityReading,
   screenNetworkReadings,
   screenQualityReading,
@@ -33,11 +39,12 @@ describe("device metrics a screen forwards", () => {
     expect(JSON.stringify(metrics)).not.toMatch(/secret|hunter2|management/);
   });
 
-  it("reads the device agent's own report: uptime in seconds and the network group, nothing else", () => {
+  it("reads the device agent's own report: uptime in seconds, network, build and updates, nothing else", () => {
     const metrics = screenDeviceMetricsFrom({
       id: "device-1",
       uptime_s: 7260,
       updates: { last_result: "ok" },
+      versions: { agent: { commit: "50a7960", date: "2026-11-12T09:30:00Z" } },
       timezone: { zone: "Europe/Amsterdam", source: "network" },
       network: {
         window_s: 300,
@@ -51,7 +58,7 @@ describe("device metrics a screen forwards", () => {
       management: { secret_sha256: "a".repeat(64) },
     });
     expect(metrics?.uptime).toBe(7260);
-    expect(Object.keys(metrics!)).toEqual(["uptime", "network"]);
+    expect(Object.keys(metrics!)).toEqual(["uptime", "network", "versions", "updates"]);
     expect(screenNetworkReadings(metrics)).toEqual({
       internetLatencyMs: 18.2,
       internetLossPercent: 1.7,
@@ -271,5 +278,59 @@ describe("health badges", () => {
     expect(
       screenOwnRunHint({ ...base, kind: "browser", mode: "offline", studioLinkReason: "SCREEN_PAGE_OUTDATED" })?.next,
     ).toContain("reload its browser tab");
+  });
+});
+
+describe("what a screen's device runs", () => {
+  const withMetrics = (metrics: ScreenHealth["metrics"]) => ({ metrics }) as ScreenHealth;
+  const build = (commit: string, date: string) => withMetrics({ versions: { agent: { commit, date } } });
+
+  it("reads the build its software came from, and nothing that is not one", () => {
+    expect(screenSoftwareBuild(build("50a7960", "2026-11-12T09:30:00Z"))).toEqual({
+      commit: "50a7960",
+      date: "2026-11-12T09:30:00Z",
+    });
+    expect(screenSoftwareBuild(withMetrics({ versions: { agent: null } }))).toBeNull();
+    expect(screenSoftwareBuild(withMetrics({ versions: { agent: "0.4.1" } }))).toBeNull();
+    expect(screenSoftwareBuild(build("50a7960", "yesterday"))).toBeNull();
+    expect(screenSoftwareBuild(withMetrics(null))).toBeNull();
+    expect(screenSoftwareBuild(null)).toBeNull();
+  });
+
+  it("says when a build is older than the newest among the event's screens", () => {
+    const statuses = [
+      { health: build("50a7960", "2026-11-12T09:30:00Z") },
+      { health: build("fc53eba", "2026-11-13T12:00:00Z") },
+      { health: null },
+    ] as unknown as Parameters<typeof newestScreenSoftware>[0];
+    const newest = newestScreenSoftware(statuses);
+    expect(newest).toBe("2026-11-13T12:00:00Z");
+    expect(newestScreenSoftware([])).toBeNull();
+    const old = screenSoftwareDetail({ commit: "50a7960", date: "2026-11-12T09:30:00Z" }, newest);
+    expect(old.older).toBe(true);
+    expect(old.text).toMatch(/^50a7960, .+ · older than other screens \(.+\)$/);
+    expect(screenSoftwareDetail({ commit: "fc53eba", date: "2026-11-13T12:00:00Z" }, newest)).toEqual({
+      text: expect.stringMatching(/^fc53eba, [^·]+$/),
+      older: false,
+    });
+  });
+
+  it("says how its updates went", () => {
+    const now = Date.parse("2026-11-13T12:00:00Z");
+    const updates = (value: ScreenMetricValue) => withMetrics({ updates: value });
+    expect(screenUpdatesDetail(updates({ last_success: null, last_result: null }), now)).toBe("Not updated yet");
+    expect(
+      screenUpdatesDetail(
+        updates({ last_success: 1_794_452_400, last_result: "failed", reboot_pending: true, paused_until: null }),
+        now,
+      ),
+    ).toMatch(/^Last updated .+ · last attempt failed · restart pending$/);
+    expect(
+      screenUpdatesDetail(updates({ last_success: 1_794_452_400, paused_until: now / 1000 + 86_400 }), now),
+    ).toMatch(/ · paused until /);
+    expect(
+      screenUpdatesDetail(updates({ last_success: 1_794_452_400, paused_until: now / 1000 - 1 }), now),
+    ).not.toMatch(/paused/);
+    expect(screenUpdatesDetail(withMetrics({}), now)).toBeNull();
   });
 });

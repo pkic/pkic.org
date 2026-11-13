@@ -39,7 +39,7 @@ export const SCREEN_MONITOR_LIMITS = {
  * The device's own metrics groups the screen forwards. Everything else the
  * device reports, its management secret above all, stays on the device.
  */
-export const SCREEN_DEVICE_METRICS_GROUPS = ["uptime", "temps", "network", "versions"] as const;
+export const SCREEN_DEVICE_METRICS_GROUPS = ["uptime", "temps", "network", "versions", "updates"] as const;
 
 /** Keys whose values a screen never forwards, at any depth. */
 const SECRET_KEY = /secret|password|passphrase|token|credential|psk|private|key/i;

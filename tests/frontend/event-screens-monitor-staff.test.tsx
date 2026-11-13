@@ -291,6 +291,55 @@ describe("the multi-view", () => {
       "Balcony",
     ]);
   });
+
+  it("tells, on request, which build a screen runs and that it is older than the others", async () => {
+    const agent = (commit: string, date: string) => ({ versions: { agent: { commit, date } } });
+    const builds: ScreenMonitorView = {
+      ...view,
+      live: new Map([
+        [
+          "AAA234",
+          status("AAA234", {
+            health: {
+              ...status("AAA234").health!,
+              metrics: {
+                ...agent("50a7960", "2026-11-12T09:30:00Z"),
+                updates: { last_success: 1_794_452_400, last_result: "ok", reboot_pending: true },
+              },
+            },
+          }),
+        ],
+        [
+          "BBB234",
+          status("BBB234", {
+            health: { ...status("BBB234").health!, metrics: agent("fc53eba", "2026-11-13T12:00:00Z") },
+          }),
+        ],
+      ]),
+    };
+    host = document.body.appendChild(document.createElement("div"));
+    await act(() =>
+      render(
+        <EventScreens slug={SLUG} canManage={false} now={NOW} monitor={{ view: builds, now: NOW, control: false }} />,
+        host!,
+      ),
+    );
+    await settle();
+    const card = (name: string) =>
+      [...host!.querySelectorAll("article")].find(
+        (each) => each.querySelector(".pk-screen-card__title")?.textContent === name,
+      )!;
+    // Nothing more on the card: the build waits behind the status line.
+    expect(card("Atrium").textContent).not.toMatch(/50a7960/);
+    const tooltip = async (name: string) => {
+      await act(() => card(name).querySelector<HTMLButtonElement>(".pk-tooltip__trigger")!.click());
+      return [...document.querySelectorAll("[role=tooltip]")].at(-1)!.textContent;
+    };
+    const atrium = await tooltip("Atrium");
+    expect(atrium).toMatch(/Screen software50a7960, .+ · older than other screens/);
+    expect(atrium).toMatch(/UpdatesLast updated .+ · restart pending/);
+    expect(await tooltip("Balcony")).toMatch(/Screen softwarefc53eba, [^·]+$/);
+  });
 });
 
 describe("the studio's room screens", () => {

@@ -33,6 +33,11 @@ const status = (screenId: string, report: ScreenHealth, online = true): ScreenLi
   health: report,
 });
 
+// The build each device's software came from: the livestream screen missed the last reinstall.
+const agent = (commit: string, date: string) => ({ agent: { commit, date } });
+const NEW_BUILD = agent("fc53eba", "2026-11-13T12:00:00Z");
+const updated = { last_success: 1_794_452_400, last_result: "ok", reboot_pending: false, paused_until: null };
+
 const network = (signal: number) => ({
   internet: { avg_ms: 18, loss_pct: 0, samples: 60 },
   gateway: { avg_ms: 2, loss_pct: 0, samples: 60 },
@@ -90,12 +95,22 @@ export const MONITOR: ScreenMonitorView = {
           display: "livestream",
           output: "livestream",
           player: { status: "playing", muted: true, changedAt: at(40), playback: null },
-          metrics: { uptime: 3 * 3600 + 12 * 60, network: network(68) },
+          metrics: {
+            uptime: 3 * 3600 + 12 * 60,
+            network: network(68),
+            versions: agent("50a7960", "2026-11-02T09:30:00Z"),
+            updates: { ...updated, reboot_pending: true },
+          },
         }),
       ),
       status(
         MONITOR_SCREENS.stage,
-        health({ output: "stage-display", mode: "auto", clockOffsetMs: 2400, metrics: { network: network(42) } }),
+        health({
+          output: "stage-display",
+          mode: "auto",
+          clockOffsetMs: 2400,
+          metrics: { network: network(42), versions: NEW_BUILD, updates: updated },
+        }),
       ),
       // Online, but the studio's room turned it away: it holds its last state.
       status(
@@ -104,7 +119,7 @@ export const MONITOR: ScreenMonitorView = {
           output: "projector",
           mode: "offline",
           studioLinkReason: "LIVE_OVERLAY_ACCESS_INVALID",
-          metrics: { network: network(81) },
+          metrics: { network: network(81), versions: NEW_BUILD, updates: updated },
         }),
       ),
       status(MONITOR_SCREENS.greenRoom, health({ output: "projector" }), false),

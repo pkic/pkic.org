@@ -7,6 +7,7 @@
  * same screens without those actions.
  */
 import { useRef, useState } from "preact/hooks";
+import { newestScreenSoftware } from "../../../../../../../shared/event-screen-software";
 import { screenIssueCounts, sortByScreenIssues } from "../../../../../../../shared/event-screen-issues";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import { formatDateTime } from "../../../../../../../shared/format-date";
@@ -100,6 +101,7 @@ export function EventScreens({
   const [error, setError] = useState<Error | null>(null);
   const { view, setView } = useDiscoveryView();
   const live = monitor?.live;
+  const newestSoftware = live ? newestScreenSoftware(live.values()) : null;
   const reload = async () => {
     await actions.current?.reload();
   };
@@ -256,6 +258,7 @@ export function EventScreens({
                       status={monitor.live.get(screen.id)}
                       issues={controller.issuesOf(screen.id)}
                       lostSince={controller.lostSince}
+                      newestSoftware={newestSoftware}
                       samples={monitor.quality.get(screen.id) ?? []}
                       screenshot={monitor.screenshots.get(screen.id)}
                       now={now}
@@ -298,6 +301,7 @@ export function EventScreens({
                   controller.lostSince,
                   Boolean(monitor),
                 )}
+                newestSoftware={newestSoftware}
               />
             ),
           },
