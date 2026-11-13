@@ -179,8 +179,13 @@ export function screenIssues({
   if (health?.mode === "auto" || health?.mode === "offline")
     add(
       "cached-agenda",
-      // The same words as the screen's health badge, which then is not repeated.
-      health.mode === "auto" ? "Running on the agenda" : screenStudioLinkLabel(health.studioRefusal),
+      // The screen's health badge in more words (how long), which then is not repeated.
+      health.mode === "auto"
+        ? "Running on the agenda"
+        : screenStudioLinkLabel(
+            health.studioLinkReason,
+            status.stateSince ? now - Date.parse(status.stateSince) : null,
+          ),
       "warning",
       stateSince,
     );

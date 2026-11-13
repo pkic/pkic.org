@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
-import type { ScreenManagerCommand } from "../../shared/schemas/event-screen-monitor";
+import { SCREEN_PAGE_OUTDATED, type ScreenManagerCommand } from "../../shared/schemas/event-screen-monitor";
 import type { ScreenId } from "../../shared/schemas/event-screens";
 import { formatLiveDuration } from "../../shared/live-timer-format";
 import { LiveOverlayPresentation } from "../live-session/LiveOverlayPresentation";
@@ -18,6 +18,7 @@ import { BrowserScreenResume } from "./BrowserScreenResume";
 import { useBrowserScreenState } from "./useBrowserScreenState";
 import { livestreamPlayerReport, subscribeLivestreamPlayerReport } from "./livestream-player-report";
 import { screenHealth, screenPageVersion } from "./screen-health";
+import { reloadForServerRelease } from "./screen-release";
 import { useScreenMonitor } from "./useScreenMonitor";
 import { ScreenMarker } from "./ScreenMarker";
 import { ScreenPairing, ScreenWaiting } from "./ScreenStatus";
@@ -92,23 +93,6 @@ export function ScreenView({ screenId, display, now }: { screenId: ScreenId; dis
  * last good state through any outage and handing the device back to its
  * local status page only when it has nothing good to show.
  */
-/** A page that still cannot read the room after one reload is not outdated: it tries again only after this long. */
-const OUTDATED_RELOAD_EVERY_MS = 10 * 60_000;
-const OUTDATED_RELOAD_KEY = "pkic.screen.outdatedReloadAt";
-
-/** Loads the server's newer release, at most once a while, so a fault that is not a release never loops. */
-export function reloadOutdatedPage(storage: Storage, reload: () => void) {
-  try {
-    const last = Number(storage.getItem(OUTDATED_RELOAD_KEY));
-    if (Date.now() - last < OUTDATED_RELOAD_EVERY_MS) return;
-    storage.setItem(OUTDATED_RELOAD_KEY, String(Date.now()));
-  } catch {
-    // Without a place to note the reload, it could loop: the screen keeps what it has.
-    return;
-  }
-  reload();
-}
-
 export function ScreenApp({
   screenId,
   storage,
@@ -127,8 +111,8 @@ export function ScreenApp({
   onHandoff: () => void;
   /** A screen manager's Reload. */
   onReload?: () => void;
-  /** Loads the page again for the server's newer release, which a redraw does not. */
-  onOutdated?: () => void;
+  /** Loads the page again for the server's newer release; null where a reload would cost more than it fixes. */
+  onOutdated?: (() => void) | null;
   /** The monitor connection's socket and device readers, replaced in tests. */
   monitor?: Pick<Parameters<typeof useScreenMonitor>[0], "createSocket" | "readMetrics" | "readScreenshot">;
   /**
@@ -137,7 +121,21 @@ export function ScreenApp({
    */
   browser?: BrowserScreen | null;
 }) {
-  const runtime = useScreenRuntime({ screenId, storage, clock, api });
+  const outdated = useRef(onOutdated);
+  outdated.current = onOutdated;
+  const runtime = useScreenRuntime({
+    screenId,
+    storage,
+    clock,
+    api,
+    onRelease: useCallback(
+      (release: string | null) => {
+        const reload = outdated.current;
+        if (reload) reloadForServerRelease(release, storage, reload);
+      },
+      [storage],
+    ),
+  });
   const { view, agenda, overlayToken, refresh } = runtime;
   const [live, setLive] = useState<HeldLive>(() => ({
     connected: false,
@@ -155,29 +153,27 @@ export function ScreenApp({
     lastFeed.current = feedKey;
   }, [feedKey]);
 
-  const [studioRefusal, setStudioRefusal] = useState<string | null>(null);
+  const [studioLinkReason, setStudioLinkReason] = useState<string | null>(null);
   const onReport = useCallback((report: ScreenLiveReport) => {
-    if (report.connected) setStudioRefusal(null);
+    if (report.connected) setStudioLinkReason(null);
     setLive((held) => ({
       connected: report.connected,
       lastUpdateAt: held.lastUpdateAt,
       state: report.state === undefined ? held.state : report.state,
     }));
   }, []);
-  const outdated = useRef(onOutdated);
-  outdated.current = onOutdated;
   const persistence = useMemo(
     () => ({
       onActivity: () => setLive((held) => ({ ...held, lastUpdateAt: clock.now() })),
-      // The room speaks a newer release than this page: after a deploy, only a reload brings the screen back.
-      onUnreadable: () => reloadOutdatedPage(storage, () => outdated.current()),
+      // The room speaks a newer release than this page: the release check reloads it, the card says why meanwhile.
+      onUnreadable: () => setStudioLinkReason(SCREEN_PAGE_OUTDATED),
       // Expired access or a changed assignment: read again, which brings fresh access.
       onRefusal: (code: string) => {
-        setStudioRefusal(code);
+        setStudioLinkReason(code);
         if (code !== "LIVE_PROGRAM_SELECTION_CHANGED") void refresh();
       },
     }),
-    [clock, refresh, storage],
+    [clock, refresh],
   );
 
   const display = screenDisplay({
@@ -251,7 +247,7 @@ export function ScreenApp({
       clockOffsetMs: clock.offset(),
       pageVersion,
       browser: grants ? { ...grants, sound } : null,
-      studioRefusal,
+      studioLinkReason,
     }),
     onCommand,
     ...readers,

@@ -92,7 +92,7 @@ describe("a screen's quality samples", () => {
     display: "output",
     output: "projector",
     mode: "live",
-    studioRefusal: null,
+    studioLinkReason: null,
     player: null,
     clockOffsetMs: 0,
     metrics: null,
@@ -168,7 +168,7 @@ describe("stalls in the quality samples", () => {
     display: "livestream",
     output: "livestream",
     mode: "live",
-    studioRefusal: null,
+    studioLinkReason: null,
     player: {
       status: "playing",
       muted: false,
@@ -240,7 +240,7 @@ describe("health badges", () => {
       display: "livestream",
       output: "livestream",
       mode: "live",
-      studioRefusal: null,
+      studioLinkReason: null,
       player: { status: "playing", muted: true, changedAt: "2026-11-11T10:00:00.000Z", playback: null },
       clockOffsetMs: 0,
       metrics: null,
@@ -257,7 +257,7 @@ describe("health badges", () => {
         output: "stage-display",
         player: null,
         mode: "offline",
-        studioRefusal: "SOMETHING_NEW",
+        studioLinkReason: "SOMETHING_NEW",
       }),
     ).toEqual({ label: "Studio link down (SOMETHING_NEW)", tone: "warn" });
   });

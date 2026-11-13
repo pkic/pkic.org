@@ -5,7 +5,6 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { LIVE_OVERLAY_PROTOCOL_PREFIX, liveRoomRefusalCloseCode } from "../../assets/shared/schemas/live-session-room";
 import { useLiveRoom } from "../../assets/ts/live-session/useLiveRoom";
 import { useLiveRoomProgram } from "../../assets/ts/live-session/useLiveRoomProgram";
-import { reloadOutdatedPage } from "../../assets/ts/event-screens/ScreenApp";
 import { fakeLiveSockets, LIVE_OCCURRENCE, liveSnapshot } from "./helpers/live-room-socket";
 
 let host: HTMLElement | undefined;
@@ -143,7 +142,7 @@ it("backs off a screen's program retries while each attempt opens and is then re
   expect(sockets.sockets).toHaveLength(3);
 });
 
-it("tells a screen when the room sends what its page cannot read, as after a deploy, and reloads it once a while", async () => {
+it("tells a screen when the room sends what its page cannot read, as after a deploy", async () => {
   const sockets = fakeLiveSockets();
   const onUnreadable = vi.fn();
   let seen: ReturnType<typeof useLiveRoom> | undefined;
@@ -168,17 +167,4 @@ it("tells a screen when the room sends what its page cannot read, as after a dep
   });
   expect(onUnreadable).toHaveBeenCalledOnce();
   expect(seen?.status).not.toBe("live");
-
-  const storage = new Map<string, string>();
-  const store = {
-    getItem: (key: string) => storage.get(key) ?? null,
-    setItem: (key: string, value: string) => void storage.set(key, value),
-  } as Storage;
-  const reload = vi.fn();
-  reloadOutdatedPage(store, reload);
-  reloadOutdatedPage(store, reload);
-  expect(reload).toHaveBeenCalledOnce();
-  await vi.advanceTimersByTimeAsync(10 * 60_000);
-  reloadOutdatedPage(store, reload);
-  expect(reload).toHaveBeenCalledTimes(2);
 });

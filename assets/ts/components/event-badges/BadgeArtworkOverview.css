@@ -1,4 +1,11 @@
 @layer components {
-  .pk-badge-artwork { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: var(--pk-5); align-items: start; }
-  .pk-badge-artwork > section { min-width: 0; }
+  .pk-badge-artwork {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    gap: var(--pk-5);
+    align-items: start;
+  }
+  .pk-badge-artwork > section {
+    min-width: 0;
+  }
 }

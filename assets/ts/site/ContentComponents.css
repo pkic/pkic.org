@@ -46,7 +46,6 @@
   .pk-content-alert .pk-alert__body > :last-child {
     margin-block-end: 0;
   }
-
 }
 
 @layer utilities {

@@ -67,7 +67,9 @@ export function screenCondition(
   const details = issues.map((issue) => issue.label);
   if (status.online && status.health) {
     const { label } = screenHealthDisplay(status.health);
-    if (!details.includes(label)) details.push(label);
+    // A fallback's issue already says what the badge says, with how long.
+    const said = issues.some((issue) => issue.code === "cached-agenda");
+    if (!said && !details.includes(label)) details.push(label);
   }
   const severity = screenIssueSeverity(issues);
   return {

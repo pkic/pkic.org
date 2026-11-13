@@ -76,7 +76,9 @@
     margin-block: var(--pk-2);
     font-size: var(--pk-text-md);
   }
-  .pk-layout-size [role="grid"] { inline-size: max-content; }
+  .pk-layout-size [role="grid"] {
+    inline-size: max-content;
+  }
   .pk-layout-size__row {
     display: grid;
     grid-template-columns: repeat(4, var(--pk-6));

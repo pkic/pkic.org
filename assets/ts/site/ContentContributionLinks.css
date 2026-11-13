@@ -40,7 +40,9 @@
     block-size: 1rem;
   }
   @media (max-width: 50rem) {
-    .content-contribution__invitation p { max-inline-size: 21rem; }
+    .content-contribution__invitation p {
+      max-inline-size: 21rem;
+    }
   }
   /* A phone has no margin beside the content, so a floating pencil covered
      badges and actions at the cards' right edge. It joins the invitation. */
@@ -51,6 +53,8 @@
     }
   }
   @media print {
-    .content-contribution { display: none; }
+    .content-contribution {
+      display: none;
+    }
   }
 }

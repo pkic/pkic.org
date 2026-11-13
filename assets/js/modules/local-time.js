@@ -36,7 +36,8 @@ function renderAgendaClocks(root) {
   // The event's clock is named by the event's city; any other zone by its own.
   const eventCity = root.dataset.agendaClockCity || agendaZoneCity(eventZone);
   const requested = root.dataset.agendaTimeChoice ?? storedAgendaTimeChoice() ?? "venue";
-  const selection = requested === "venue" || requested === "browser" || isValidTimeZone(requested) ? requested : "venue";
+  const selection =
+    requested === "venue" || requested === "browser" || isValidTimeZone(requested) ? requested : "venue";
   const alternateZone = selection === "venue" ? browserZone : selection === "browser" ? browserZone : selection;
   const distinct = alternateZone !== eventZone;
   root.dataset.agendaTimeChoice = selection;

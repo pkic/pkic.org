@@ -122,7 +122,13 @@
     padding: var(--pk-1);
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-xs);
-    background: repeating-linear-gradient(135deg, var(--pk-surface-sunk) 0, var(--pk-surface-sunk) 0.25rem, var(--pk-surface) 0.25rem, var(--pk-surface) 0.5rem);
+    background: repeating-linear-gradient(
+      135deg,
+      var(--pk-surface-sunk) 0,
+      var(--pk-surface-sunk) 0.25rem,
+      var(--pk-surface) 0.25rem,
+      var(--pk-surface) 0.5rem
+    );
   }
   .pk-attendance-matrix__mode-button.pk-btn {
     display: flex;

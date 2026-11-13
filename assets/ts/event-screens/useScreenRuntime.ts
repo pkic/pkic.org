@@ -31,12 +31,17 @@ export function useScreenRuntime({
   storage,
   clock,
   api = screenApi,
+  onRelease,
 }: {
   screenId: ScreenId;
   storage: Storage;
   clock: ScreenClock;
   api?: ScreenApi;
+  /** The release the server named on its read. */
+  onRelease?: (release: string | null) => void;
 }) {
+  const releaseSeen = useRef(onRelease);
+  releaseSeen.current = onRelease;
   const [cached] = useState<ScreenCache | null>(() => readScreenCache(storage, screenId));
   const [view, setView] = useState<ScreenOwnView | ScreenCache["view"] | null>(cached?.view ?? null);
   const [agenda, setAgenda] = useState<ScreenCachedAgenda | null>(cached?.agenda ?? null);
@@ -61,11 +66,12 @@ export function useScreenRuntime({
 
   const refresh = useCallback(async () => {
     try {
-      const { response, sentAt, receivedAt } = await api.read(
+      const { response, sentAt, receivedAt, release } = await api.read(
         screenId,
         screenAgendaRevision(agendaRef.current, clock.now()),
       );
       reached();
+      releaseSeen.current?.(release ?? null);
       if (response.viewer !== "screen")
         throw new ApiClientError({ error: { code: "SCREEN_SESSION_MISSING", message: "" } }, 401);
       clock.record(screenClockSample(sentAt, receivedAt, response.serverNow));

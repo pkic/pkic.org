@@ -24,7 +24,8 @@
   [data-graphic-theme="white-on-transparent"] {
     --graphic-ground: transparent;
     --graphic-ink-muted: color-mix(in srgb, var(--graphic-ink) 88%, var(--graphic-contrast));
-    --graphic-halo: 0 2px 3px color-mix(in srgb, var(--graphic-contrast) 85%, transparent),
+    --graphic-halo:
+      0 2px 3px color-mix(in srgb, var(--graphic-contrast) 85%, transparent),
       0 0 18px color-mix(in srgb, var(--graphic-contrast) 70%, transparent);
   }
   [data-graphic-theme="black-on-transparent"],
@@ -36,7 +37,8 @@
   [data-graphic-theme="black-on-transparent"] {
     --graphic-ground: transparent;
     --graphic-ink-muted: color-mix(in srgb, var(--graphic-ink) 88%, var(--graphic-contrast));
-    --graphic-halo: 0 1px 3px color-mix(in srgb, var(--graphic-contrast) 90%, transparent),
+    --graphic-halo:
+      0 1px 3px color-mix(in srgb, var(--graphic-contrast) 90%, transparent),
       0 0 18px color-mix(in srgb, var(--graphic-contrast) 75%, transparent);
   }
 }

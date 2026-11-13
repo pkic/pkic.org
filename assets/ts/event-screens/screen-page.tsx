@@ -94,6 +94,8 @@ function mount(): void {
             browser={runsOn === "browser" ? browser : null}
             // A staff Reload refreshes a browser screen in place: a page reload would end its sharing.
             onReload={runsOn === "browser" ? redraw : undefined}
+            // A reload would end a browser screen's sharing: it keeps its page, and the card says why its link is down.
+            onOutdated={runsOn === "browser" ? null : undefined}
           />
         </LiveClockContext.Provider>
       </ScreenRecovery>

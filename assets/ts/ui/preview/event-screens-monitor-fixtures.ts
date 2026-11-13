@@ -16,7 +16,7 @@ export const health = (overrides: Partial<ScreenHealth>): ScreenHealth => ({
   display: "output",
   output: "projector",
   mode: "live",
-  studioRefusal: null,
+  studioLinkReason: null,
   player: null,
   clockOffsetMs: 120,
   metrics: { uptime: 3 * 3600 + 12 * 60, temps: { cpu: 54.2, nvme: 41 } },
@@ -103,7 +103,7 @@ export const MONITOR: ScreenMonitorView = {
         health({
           output: "projector",
           mode: "offline",
-          studioRefusal: "LIVE_OVERLAY_ACCESS_INVALID",
+          studioLinkReason: "LIVE_OVERLAY_ACCESS_INVALID",
           metrics: { network: network(81) },
         }),
       ),

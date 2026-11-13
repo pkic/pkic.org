@@ -9,10 +9,12 @@ import {
   eventScreensListSchema,
   screenPairingResponseSchema,
   screenReadResponseSchema,
+  SCREEN_RELEASE_HEADER,
   screenRecordSchema,
   screenSessionPollResponseSchema,
   type ScreenOwnView,
 } from "../assets/shared/schemas/event-screens";
+import { PKIC_RELEASE } from "../assets/shared/release";
 import { dateTimeLocalToIso, instantToCalendarDate } from "../assets/shared/timezone";
 import { verifyLiveOverlayToken } from "../functions/_lib/auth/live-session-overlay-token";
 import { signJwt } from "../functions/_lib/utils/jwt";
@@ -179,6 +181,8 @@ describe("event screen pairing", () => {
     const own = await readAsScreen(`pkic_screen_session=${cookieValue(activated, "pkic_screen_session")}`);
     expect(own.status, await own.clone().text()).toBe(200);
     expect(own.headers.get("cache-control")).toContain("no-store");
+    // The server's release, which a screen compares with its page's, rides a header the body's contract never sees.
+    expect(own.headers.get(SCREEN_RELEASE_HEADER)).toBe(PKIC_RELEASE);
     const view = screenReadResponseSchema.parse(await own.json()) as ScreenOwnView;
     expect(view.viewer).toBe("screen");
     expect(view.screen.assignment).toEqual({

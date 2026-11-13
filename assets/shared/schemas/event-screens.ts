@@ -265,5 +265,8 @@ export type ScreenOwnView = z.infer<typeof screenOwnViewSchema>;
 
 export const screenStaffViewSchema = z.object({ viewer: z.literal("staff"), screen: screenRecordSchema }).strict();
 
+/** The server's release, on the screen's read: a screen whose page is of another reloads for the new one. */
+export const SCREEN_RELEASE_HEADER = "x-pkic-release";
+
 export const screenReadResponseSchema = z.discriminatedUnion("viewer", [screenOwnViewSchema, screenStaffViewSchema]);
 export type ScreenReadResponse = z.infer<typeof screenReadResponseSchema>;

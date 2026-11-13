@@ -1,10 +1,11 @@
 import { formatDuration } from "./format-date";
 import { formatNumber } from "./format-number";
-import type {
-  ScreenBrowserState,
-  ScreenHealth,
-  ScreenLiveStatus,
-  ScreenMetricValue,
+import {
+  SCREEN_PAGE_OUTDATED,
+  type ScreenBrowserState,
+  type ScreenHealth,
+  type ScreenLiveStatus,
+  type ScreenMetricValue,
 } from "./schemas/event-screen-monitor";
 
 /**
@@ -27,12 +28,13 @@ export function screenHealthDisplay(health: ScreenHealth): {
   }
   if (health.display === "livestream") return { label: "No stream", tone: "warn" };
   if (health.mode === "auto") return { label: "Running on the agenda", tone: "info" };
-  if (health.mode === "offline") return { label: screenStudioLinkLabel(health.studioRefusal), tone: "warn" };
+  if (health.mode === "offline") return { label: screenStudioLinkLabel(health.studioLinkReason), tone: "warn" };
   if (health.display === "idle") return { label: "Waiting for the studio", tone: null };
   return { label: "Following the studio", tone: null };
 }
 
-const STUDIO_REFUSALS: Readonly<Record<string, string>> = {
+const STUDIO_LINK_REASONS: Readonly<Record<string, string>> = {
+  [SCREEN_PAGE_OUTDATED]: "page outdated",
   LIVE_OVERLAY_ACCESS_INVALID: "access refused",
   LIVE_ROOM_ACCESS_EXPIRED: "access refused",
   LIVE_PROGRAM_SELECTION_CHANGED: "session switched",
@@ -42,14 +44,22 @@ const STUDIO_REFUSALS: Readonly<Record<string, string>> = {
   LIVE_ROOMS_UNAVAILABLE: "live rooms unavailable",
 };
 
+/** "4 min", "12 h": how long, coarse; nothing under a minute. */
+function downFor(milliseconds: number): string | null {
+  const minutes = Math.floor(milliseconds / 60_000);
+  if (minutes < 1) return null;
+  return minutes < 60 ? `${formatNumber(minutes)} min` : `${formatNumber(Math.floor(minutes / 60))} h`;
+}
+
 /**
  * A screen whose link to the studio is down: it keeps drawing the last state
- * it had, its timers still counting, so its picture still changes. The label
- * names the link and, when the room turned the screen away, why.
+ * it had, its clocks still running, so its screenshots still change. The
+ * label names the link, how long it has been down when known, and why.
  */
-export function screenStudioLinkLabel(refusal: string | null): string {
-  if (!refusal) return "Studio link down";
-  return `Studio link down (${STUDIO_REFUSALS[refusal] ?? refusal})`;
+export function screenStudioLinkLabel(reason: string | null, downForMs: number | null = null): string {
+  const span = downForMs === null ? null : downFor(downForMs);
+  const why = reason ? ` (${STUDIO_LINK_REASONS[reason] ?? reason})` : "";
+  return `Studio link down${span ? ` for ${span}` : ""}${why}`;
 }
 
 /** What a screen draws, as one comparable value: a change starts its `stateSince` over. */

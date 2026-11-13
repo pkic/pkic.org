@@ -2,8 +2,11 @@ import { logPublicationBuildCache } from "./publication/log-build-cache.mjs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { publicationEnvironment } from "./publication/build-context.mjs";
+import { releaseId } from "./lib/release-id.mjs";
 
 process.env.CLOUDFLARE_ENV = publicationEnvironment();
+// One release for the Worker and the pages, whichever build runs first.
+process.env.PKIC_RELEASE = releaseId();
 const environment = process.env.CLOUDFLARE_ENV;
 function run(command, args) {
   const result = spawnSync(command, args, { stdio: "inherit", env: process.env });

@@ -60,6 +60,8 @@ async function parseJson(response: Response, signal?: AbortSignal): Promise<unkn
 export interface JsonRequestInit extends RequestInit {
   mapError?: (payload: ApiErrorPayload, status: number) => ApiErrorPayload;
   responseType?: "json" | "blob";
+  /** Sees the final response's headers, answered or refused, before its body is judged. */
+  onHeaders?: (headers: Headers) => void;
 }
 
 export type UnauthorizedHandler = (status: number) => void;
@@ -116,7 +118,7 @@ async function sendJsonRequest<Schema extends z.ZodType>(
   schema: Schema,
   init?: JsonRequestInit,
 ): Promise<z.output<Schema>> {
-  const { mapError, responseType = "json", ...requestInit } = init ?? {};
+  const { mapError, responseType = "json", onHeaders, ...requestInit } = init ?? {};
   const known = serviceAvailability.value;
   const path = new URL(url, typeof window === "undefined" ? "https://app.test" : window.location.href).pathname;
   if (known && known.mode !== "normal" && path.startsWith("/api/") && path !== "/api/v1/" && path !== "/api/v1") {
@@ -159,6 +161,7 @@ async function sendJsonRequest<Schema extends z.ZodType>(
     response = await send();
     body = await readBody(response);
   }
+  onHeaders?.(response.headers);
   if (!response.ok) {
     const fallback: ApiErrorPayload = {
       error: {

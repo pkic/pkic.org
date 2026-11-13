@@ -29,7 +29,7 @@ const HEALTH: Omit<ScreenHealth, "metrics"> = {
   display: "waiting",
   output: null,
   mode: "live",
-  studioRefusal: null,
+  studioLinkReason: null,
   player: null,
   clockOffsetMs: 0,
 };
@@ -319,14 +319,14 @@ describe("the screen's health report", () => {
       player: null,
       clockOffsetMs: 0,
       pageVersion: "screen.js",
-      studioRefusal: "LIVE_OVERLAY_ACCESS_INVALID",
+      studioLinkReason: "LIVE_OVERLAY_ACCESS_INVALID",
     });
 
   it("says why the studio turned it away while it holds its last state, and drops the reason once back", () => {
     expect(report({ kind: "offline-dot" })).toMatchObject({
       mode: "offline",
-      studioRefusal: "LIVE_OVERLAY_ACCESS_INVALID",
+      studioLinkReason: "LIVE_OVERLAY_ACCESS_INVALID",
     });
-    expect(report(null)).toMatchObject({ mode: "live", studioRefusal: null });
+    expect(report(null)).toMatchObject({ mode: "live", studioLinkReason: null });
   });
 });

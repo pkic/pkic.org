@@ -10,6 +10,7 @@ import { contentMediaPlugin } from "./scripts/lib/content-media-plugin.mjs";
 import { bylinesPlugin } from "./scripts/lib/bylines-plugin.mjs";
 import { trustListPlugin } from "./scripts/lib/trust-list-plugin.mjs";
 import { preactAlias, preactEsbuild } from "./scripts/lib/preact-vite.mjs";
+import { releaseId } from "./scripts/lib/release-id.mjs";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
@@ -40,6 +41,8 @@ export default defineConfig(() => {
 
   return {
     clearScreen: false,
+    // The Worker's release, which a screen compares with its page's own.
+    define: { __PKIC_RELEASE__: JSON.stringify(releaseId()) },
     esbuild: preactEsbuild,
     publicDir: resolve(projectRoot, "public"),
     resolve: { alias: preactAlias },

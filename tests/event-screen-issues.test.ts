@@ -25,7 +25,7 @@ const HEALTH: ScreenHealth = {
   display: "output",
   output: "projector",
   mode: "live",
-  studioRefusal: null,
+  studioLinkReason: null,
   player: null,
   clockOffsetMs: 0,
   metrics: { network: { wifi: { signal: 70 } } },
@@ -161,15 +161,18 @@ describe("a screen's issues", () => {
     expect(screenIssues({ status: online(), samples: [], screenshotAt: null, now: NOW })).toEqual([]);
   });
 
-  it("warns while the screen runs on its cached agenda, in its health badge's words", () => {
+  it("warns while the screen runs on its cached agenda or its studio link is down, saying how long and why", () => {
     expect(issues(online({ mode: "auto" }))).toEqual([
       { code: "cached-agenda", label: "Running on the agenda", severity: "warning", since: ago(20) },
     ]);
-    expect(tierOf(issues(online({ mode: "offline" })), "cached-agenda")).toEqual(["Studio link down", "warning"]);
+    expect(tierOf(issues(online({ mode: "offline" })), "cached-agenda")).toEqual([
+      "Studio link down for 20 min",
+      "warning",
+    ]);
     // The room's reason for turning the screen away names the fault.
     expect(
-      tierOf(issues(online({ mode: "offline", studioRefusal: "LIVE_OVERLAY_ACCESS_INVALID" })), "cached-agenda"),
-    ).toEqual(["Studio link down (access refused)", "warning"]);
+      tierOf(issues(online({ mode: "offline", studioLinkReason: "LIVE_OVERLAY_ACCESS_INVALID" })), "cached-agenda"),
+    ).toEqual(["Studio link down for 20 min (access refused)", "warning"]);
   });
 
   it("lists critical issues first, sorts screens by their worst and counts them by tier", () => {
