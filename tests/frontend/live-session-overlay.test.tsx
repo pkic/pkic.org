@@ -46,6 +46,7 @@ const ON_STAGE = {
     name: "Sam Speaker",
     photoUrl: null,
     identity: { title: "Architect", organization: "Example" },
+    additionalIdentities: [],
   },
   lowerThirdChange: { operatorName: "Olga Operator", at: new Date().toISOString() },
   lowerThirdMotion: "cut" as const,

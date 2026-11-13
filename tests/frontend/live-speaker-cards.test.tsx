@@ -324,6 +324,7 @@ it("reads credits a room stored before identities, dropping their copied title",
     moderator: false,
     photoUrl: null,
     identity: null,
+    additionalIdentities: [],
     roleLabel: null,
   });
 });

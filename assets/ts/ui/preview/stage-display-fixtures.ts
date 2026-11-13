@@ -33,6 +33,7 @@ const credit = (key: string, name: string, organization: string | null = null): 
   moderator: false,
   photoUrl: null,
   identity: organization ? { title: null, organization } : null,
+  additionalIdentities: [],
   roleLabel: null,
 });
 

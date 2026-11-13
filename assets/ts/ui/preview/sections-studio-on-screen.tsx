@@ -362,6 +362,12 @@ export const studioOnScreenSections: PreviewSection[] = [
     render: () => <LivestreamOverlay state={roomWith({}, LISTS)} />,
   },
   {
+    id: "onscreen-lower-third-identities",
+    title: "Lower third for a speaker with two identities",
+    note: "The title line shows each identity in turn; the conference stripe underlines the name bar.",
+    render: () => <LivestreamOverlay state={roomWith({}, { lowerThird: ROOM.session.credits[0]! })} />,
+  },
+  {
     id: "onscreen-reactions-screen",
     title: "Reactions floating on a projector screen",
     note: "Viewers' reactions float up the side while an operator has them on for this output.",

@@ -1,7 +1,7 @@
 import { LIVE_EMBLEM } from "../../shared/live-lower-third";
 
-/** The consortium emblem's shapes in its own square box (`LIVE_EMBLEM`), in the event kit's colors. */
-export function LiveEmblemPaths() {
+/** The consortium emblem's seats and spokes in its own square box (`LIVE_EMBLEM`): the part that turns. */
+export function LiveEmblemWheel() {
   return (
     <>
       <path
@@ -21,10 +21,26 @@ export function LiveEmblemPaths() {
         fill-rule="evenodd"
         d="M189.905 81.165A99.33 99.33 0 0 1 270.546 220.839L311.47 244.467L301.565 261.623L260.641 237.995A99.33 99.33 0 0 1 99.359 237.995L58.435 261.623L48.53 244.467L89.454 220.839A99.33 99.33 0 0 1 170.095 81.165L170.095 33.91L189.905 33.91ZM180 100.48A79.52 79.52 0 0 0 180 259.52A79.52 79.52 0 0 0 180 100.48Z"
       />
-      <path
-        class="pk-live-overlay__emblem-ink"
-        d="M169.025 175.7L155.295 228.84L204.705 228.84L190.975 175.7A23.625 23.625 0 1 0 169.025 175.7Z"
-      />
+    </>
+  );
+}
+
+/** The emblem's keyhole, centered in its box (`LIVE_EMBLEM`): it stays upright while the wheel turns. */
+export function LiveEmblemLock() {
+  return (
+    <path
+      class="pk-live-overlay__emblem-ink"
+      d="M169.025 175.7L155.295 228.84L204.705 228.84L190.975 175.7A23.625 23.625 0 1 0 169.025 175.7Z"
+    />
+  );
+}
+
+/** The consortium emblem's shapes in its own square box (`LIVE_EMBLEM`), in the event kit's colors. */
+export function LiveEmblemPaths() {
+  return (
+    <>
+      <LiveEmblemWheel />
+      <LiveEmblemLock />
     </>
   );
 }

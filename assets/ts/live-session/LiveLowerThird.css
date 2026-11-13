@@ -2,11 +2,12 @@
  * The lower third's motion. Each phase is one orchestrated sequence of
  * transforms and opacity only, so it composites smoothly at broadcast frame
  * rates; the graphic's own phase animation spans the whole sequence, and its
- * end tells the lower third to move on. In: the emblem rolls in, turning about
- * its exact center as far as it travels; the white name bar then extends from
- * the orange seat, its curved end held in the seat while it is revealed to the
- * right; the grey title bar follows from under it. Out is the
- * reverse. Replacing a speaker retracts and extends the bars only.
+ * end tells the lower third to move on. In: the emblem rolls in, its seats
+ * turning about its exact center as far as it travels while the keyhole stays
+ * upright; the white name bar then extends from the orange seat, its curved
+ * end held in the seat while it is revealed to the right; the title bar
+ * follows from under it. Out is the reverse. Replacing a speaker retracts and
+ * extends the bars only.
  */
 @layer components {
   .pk-live-overlay__lower-third-graphic {
@@ -163,6 +164,111 @@
     to {
       opacity: 0;
       transform: translateY(-44%);
+    }
+  }
+
+  /*
+   * A person with more than one identity: the title line rolls up to the next one instead of
+   * crossfading, on the shared rotation's timing (one every --pk-dur-affiliation). Each identity
+   * rises in from under the line while the one before leaves over its top; the title clips both.
+   * Reduced motion keeps the rotation's still view.
+   */
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes pk-live-overlay-title-roll-2 {
+      0% {
+        opacity: 0;
+        transform: translateY(180%);
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      7.5%,
+      50% {
+        opacity: 1;
+        transform: none;
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      57.5%,
+      100% {
+        opacity: 0;
+        transform: translateY(-180%);
+        visibility: hidden;
+      }
+    }
+    .pk-live-overlay__title .pk-affiliation-rotation--rotate-2 .pk-affiliation-rotation__unit {
+      animation-name: pk-live-overlay-title-roll-2;
+    }
+    @keyframes pk-live-overlay-title-roll-3 {
+      0% {
+        opacity: 0;
+        transform: translateY(180%);
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      5%,
+      33.333% {
+        opacity: 1;
+        transform: none;
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      38.333%,
+      100% {
+        opacity: 0;
+        transform: translateY(-180%);
+        visibility: hidden;
+      }
+    }
+    .pk-live-overlay__title .pk-affiliation-rotation--rotate-3 .pk-affiliation-rotation__unit {
+      animation-name: pk-live-overlay-title-roll-3;
+    }
+    @keyframes pk-live-overlay-title-roll-4 {
+      0% {
+        opacity: 0;
+        transform: translateY(180%);
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      3.75%,
+      25% {
+        opacity: 1;
+        transform: none;
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      28.75%,
+      100% {
+        opacity: 0;
+        transform: translateY(-180%);
+        visibility: hidden;
+      }
+    }
+    .pk-live-overlay__title .pk-affiliation-rotation--rotate-4 .pk-affiliation-rotation__unit {
+      animation-name: pk-live-overlay-title-roll-4;
+    }
+    @keyframes pk-live-overlay-title-roll-5 {
+      0% {
+        opacity: 0;
+        transform: translateY(180%);
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      3%,
+      20% {
+        opacity: 1;
+        transform: none;
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      23%,
+      100% {
+        opacity: 0;
+        transform: translateY(-180%);
+        visibility: hidden;
+      }
+    }
+    .pk-live-overlay__title .pk-affiliation-rotation--rotate-5 .pk-affiliation-rotation__unit {
+      animation-name: pk-live-overlay-title-roll-5;
     }
   }
 }

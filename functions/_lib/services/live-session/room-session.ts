@@ -12,6 +12,8 @@ import { first } from "../../db/queries";
 import { z } from "zod";
 import { agendaDisplayRoleShiftSchema } from "../../../../assets/shared/schemas/event-agenda";
 import { LIVE_MODERATOR_ROLE_LABEL, liveSessionHosts } from "../../../../assets/shared/live-room-credits";
+import type { SessionAffiliation } from "../../../../assets/shared/schemas/event-session-history";
+import type { LiveCreditIdentity } from "../../../../assets/shared/schemas/live-session-credit";
 import { parseJsonSafe } from "../../utils/json";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
@@ -80,38 +82,43 @@ export function prepareLiveRoomSessionRead(
       if (occurrence.kind === "break" || occurrence.placeholder || !occurrence.startAt || !occurrence.endAt)
         throw unavailable();
       const displayed = sessionDisplayCredits(occurrence);
-      // Each person appears as the identity they act as: an approved appearance names it; someone credited
-      // without one appears as the agenda's one rule resolves it (their proposal choice, else primary).
-      // Its title and organization are read now.
-      const acting = displayed.map((credit) =>
-        "userId" in credit ? (creditAffiliations(credit)[0]?.identityId ?? null) : null,
+      // Each person appears as every identity they act as: an approved appearance names them, primary
+      // first; someone credited without one appears as the agenda's one rule resolves it (their proposal
+      // choice, else primary). Titles and organizations are read now. A source credit, or an appearance as
+      // an individual, keeps the capacity its record names: there is no identity to read.
+      const affiliations = displayed.map((credit) => creditAffiliations(credit));
+      const acting = displayed.flatMap((credit, index) =>
+        "userId" in credit ? affiliations[index]!.flatMap((affiliation) => affiliation.identityId ?? []) : [],
       );
       const unnamed = displayed.flatMap((credit, index) =>
-        "userId" in credit && acting[index] === null && !creditAffiliations(credit).length ? [credit.userId] : [],
+        "userId" in credit && !affiliations[index]!.length ? [credit.userId] : [],
       );
       const read = options.people
-        ? await readLiveCreditIdentities(
-            db,
-            acting.filter((id): id is string => id !== null),
-            { occurrenceId: occurrence.id, userIds: unnamed },
-          )
+        ? await readLiveCreditIdentities(db, acting, { occurrenceId: occurrence.id, userIds: unnamed })
         : { identities: new Map(), primary: new Map<string, string>() };
+      const capacityOf = (affiliation: SessionAffiliation, person: boolean): LiveCreditIdentity | null => {
+        if (person && affiliation.identityId) return read.identities.get(affiliation.identityId) ?? null;
+        const title = affiliation.title?.trim() || null;
+        const organization = affiliation.organizationName?.trim() || null;
+        return title || organization ? { title, organization } : null;
+      };
       const credits = displayed.map((credit, index) => {
         const content = agendaSpeakerContent(occurrence, credit);
-        const identityId = acting[index] ?? ("userId" in credit ? read.primary.get(credit.userId) : undefined);
-        // A source credit, or an appearance as an individual, keeps the capacity its record names: there is no identity to read.
-        const recorded = identityId ? null : creditAffiliations(credit)[0];
+        const person = "userId" in credit;
+        const primaryId = person && !affiliations[index]!.length ? read.primary.get(credit.userId) : undefined;
+        const capacities = primaryId
+          ? [read.identities.get(primaryId) ?? null]
+          : affiliations[index]!.map((affiliation) => capacityOf(affiliation, person));
+        const [identity = null, ...rest] = capacities;
+        const additionalIdentities = rest.filter((capacity): capacity is LiveCreditIdentity => capacity !== null);
         return {
-          key: "userId" in credit ? `user:${credit.userId}` : `credit:${index}`,
+          key: person ? `user:${credit.userId}` : `credit:${index}`,
           name: content.name,
           moderator: publicSessionCreditRole(occurrence, credit) === "moderator",
           roleLabel: publicSessionCreditRole(occurrence, credit) === "moderator" ? LIVE_MODERATOR_ROLE_LABEL : null,
           photoUrl: content.imageSrc ?? null,
-          identity: identityId
-            ? (read.identities.get(identityId) ?? null)
-            : recorded && (recorded.title || recorded.organizationName)
-              ? { title: recorded.title?.trim() || null, organization: recorded.organizationName?.trim() || null }
-              : null,
+          identity,
+          additionalIdentities,
         };
       });
       const hosts = options.people
@@ -125,6 +132,7 @@ export function prepareLiveRoomSessionRead(
             moderator: false,
             photoUrl: null,
             identity: null,
+            additionalIdentities: [],
             roleLabel: host.roleLabel,
           }))
         : [];

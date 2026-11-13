@@ -59,6 +59,7 @@ export class LiveRoomAddedCredits {
       moderator: false,
       photoUrl: person?.photoUrl ?? null,
       identity: person?.identity ?? null,
+      additionalIdentities: [],
       roleLabel: null,
     };
     const next = [...current, credit];
