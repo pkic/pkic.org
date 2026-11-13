@@ -44,8 +44,26 @@
     margin-block-start: -540px;
     margin-inline-start: -960px;
     overflow: hidden;
+    /*
+     * An output reads the same wherever it is drawn. Text styles inherit, so a host page would leak
+     * into it: a monitor's figure centers its text, the studio's .pk sets its own size and leading.
+     * The root states every inherited text style as a venue screen's bare page gives it.
+     */
     color: var(--pk-pqc-ink);
     font-family: var(--pk-font);
+    font-size: 1rem;
+    font-style: normal;
+    font-weight: 400;
+    line-height: normal;
+    letter-spacing: normal;
+    word-spacing: normal;
+    text-align: start;
+    text-indent: 0;
+    text-transform: none;
+    text-shadow: none;
+    white-space: normal;
+    -webkit-font-smoothing: auto;
+    text-rendering: auto;
     transform-origin: 50% 50%;
   }
   @container live-frame not ((width: 1920px) and (height: 1080px)) {
