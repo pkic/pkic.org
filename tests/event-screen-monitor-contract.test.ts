@@ -331,6 +331,8 @@ describe("what a screen's device runs", () => {
     expect(
       screenUpdatesDetail(updates({ last_success: 1_794_452_400, paused_until: now / 1000 - 1 }), now),
     ).not.toMatch(/paused/);
+    // A timestamp no date can hold reads as none, never as an error.
+    expect(screenUpdatesDetail(updates({ last_success: 1e20, paused_until: 1e20 }), now)).toBe("Not updated yet");
     expect(screenUpdatesDetail(withMetrics({}), now)).toBeNull();
   });
 });

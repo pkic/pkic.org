@@ -3,7 +3,7 @@
  * its software came from and how its updates went. Staff see it on request,
  * in the screen's status tooltip; nothing here raises an issue.
  */
-import { formatDate } from "./format-date";
+import { formatDate, formatDateTime } from "./format-date";
 import type { ScreenHealth, ScreenLiveStatus, ScreenMetricValue } from "./schemas/event-screen-monitor";
 
 export interface ScreenSoftwareBuild {
@@ -50,19 +50,23 @@ export function screenSoftwareDetail(
   return older ? { text: `${text} · older than other screens (${formatDate(newest)})`, older } : { text, older };
 }
 
-function dateOf(seconds: ScreenMetricValue | undefined): string | null {
-  return typeof seconds === "number" && seconds > 0 ? formatDate(new Date(seconds * 1000).toISOString()) : null;
+/** An instant from seconds since the epoch; null when it is not one a date can hold. */
+function instantOf(seconds: ScreenMetricValue | undefined): string | null {
+  if (typeof seconds !== "number" || seconds <= 0) return null;
+  const date = new Date(seconds * 1000);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 /** "Last updated Nov 12, 2026 · restart pending": how the device's updates went; null when it does not say. */
 export function screenUpdatesDetail(health: ScreenHealth | null | undefined, now: number): string | null {
   const updates = health?.metrics?.updates;
   if (updates === undefined || updates === null) return null;
-  const lastSuccess = dateOf(field(updates, "last_success"));
-  const parts = [lastSuccess ? `Last updated ${lastSuccess}` : "Not updated yet"];
+  const lastSuccess = instantOf(field(updates, "last_success"));
+  const parts = [lastSuccess ? `Last updated ${formatDate(lastSuccess)}` : "Not updated yet"];
   if (field(updates, "last_result") === "failed") parts.push("last attempt failed");
   if (field(updates, "reboot_pending") === true) parts.push("restart pending");
-  const pausedUntil = field(updates, "paused_until");
-  if (typeof pausedUntil === "number" && pausedUntil * 1000 > now) parts.push(`paused until ${dateOf(pausedUntil)}`);
+  // A pause can end later today: say the time it resumes, not only the day.
+  const pausedUntil = instantOf(field(updates, "paused_until"));
+  if (pausedUntil && Date.parse(pausedUntil) > now) parts.push(`paused until ${formatDateTime(pausedUntil)}`);
   return parts.join(" · ");
 }
