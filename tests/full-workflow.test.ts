@@ -1,5 +1,6 @@
 import { confirmWorkRegistration } from "./helpers/registration-confirmation";
-import { prepareProposalProof } from "./helpers/proposal-proof";
+import { signInProposer } from "./helpers/proposal-proof";
+import { withIndependentCapacity } from "./helpers/independent-capacity";
 import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 import { describe, it, expect, vi } from "vitest";
@@ -226,20 +227,14 @@ describe("full workflow", () => {
         resourceId: speakerInvite.id,
       });
 
-      const proof = await prepareProposalProof({
-        environment: env,
-        eventSlug: "pqc-2026",
-        email: "speaker@example.test",
-        consents: [{ termKey: "speaker-terms", version: "v1" }],
-        unaffiliatedAttestation: true,
-      });
+      const proposer = await signInProposer({ environment: env, email: "speaker@example.test" });
       const proposalResponse = await callMountedApp(
         new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...proposer.headers },
           body: JSON.stringify({
             inviteToken: speakerInviteToken,
-            ...proof,
+            ...withIndependentCapacity({ unaffiliatedAttestation: true }),
             proposer: {
               firstName: "Speaker",
               lastName: "One",

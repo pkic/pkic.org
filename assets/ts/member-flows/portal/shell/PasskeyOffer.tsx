@@ -15,7 +15,7 @@ import { usePasskeyEnrollment } from "../../../components/passkey-enrollment";
 import { Alert } from "../../../ui/Alert";
 import { Button } from "../../../ui/Button";
 import { Checkbox } from "../../../ui/Checkbox";
-import { LoginFrame } from "./LoginFrame";
+import { LoginFrame } from "../../../components/sign-in/LoginFrame";
 
 const DECLINED_ON_DEVICE = "pk-passkey-offer-declined";
 

@@ -1,42 +1,41 @@
 /**
  * Membership application form.
  *
- * Starts from the shared email-first step and mailbox verification, then
- * renders only the server-authorized application path. The browser never decides whether a person may join for
- * an organization or as an individual.
+ * Joining starts signed in: a person without a session signs in or starts an
+ * account through the shared sign-in card and returns here. Their account's
+ * proved address then stands for them, and the page renders only the
+ * server-authorized application path. The browser never decides whether a
+ * person may join for an organization or as an individual.
  */
 import {
   forgetJoinDraft,
-  hasJoinAnswers,
-  rememberJoinToken,
+  rememberJoinApplicant,
   rememberJoinChoice,
   rememberedJoinChoice,
-  rememberedJoinToken,
   restoreJoinAnswers,
   saveJoinAnswers,
+  type JoinChoice,
 } from "./join-draft";
 import { ApiClientError, getJson, postJson } from "../shared/api-client";
 import { readCustomFieldValues } from "../shared/widgets/custom-fields";
 import { render } from "preact";
-import { useState } from "preact/hooks";
 import { withLoadingButton, focusSubmitError } from "../shared/form/submit";
 import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { replaceFormWithSuccess } from "../shared/form/success-panel";
-import { focusFirstInvalidField, normalizeValidation } from "../shared/form/validation-map";
+import { focusFirstInvalidField, normalizeValidation, refusalSentence } from "../shared/form/validation-map";
 import { membershipApplicationFields } from "../../shared/schemas/membership-application-form";
 import {
   applyCategoryUI,
   configureMembershipLegalFields,
   filterCategoriesForApplicantKind,
-  renderMembershipCategorySummary,
   renderMembershipCategories,
   renderMembershipApplicationQuestions,
 } from "./join-application-fields";
 import type { SessionActingIdentity } from "../../shared/session-acting-identity";
 import { JoinOrganizationChoice } from "./join-organization-choice";
 import { JoinSignedInApplicant, joinRefusalFor, readSignedInApplicant } from "./join-signed-in";
-import type { JoinRefusal, SignedInApplicant } from "./join-signed-in";
+import type { JoinPath, JoinRefusal, SignedInApplicant } from "./join-signed-in";
 import {
   memberApplicationCreateAsIdentitySchemaForCategory,
   memberApplicationCreateResponseSchema,
@@ -47,14 +46,12 @@ import {
 import { z } from "zod";
 import {
   memberJoinAffiliationPreviewSchema,
-  memberJoinStartResponseSchema,
-  memberJoinStartSchema,
   memberJoinVerifyResponseSchema,
   memberJoinVerifySchema,
 } from "../../shared/schemas/member-join";
 import { identityAffiliationPreviewResponseSchema } from "../../shared/schemas/identity-affiliation";
 import { ButtonLink } from "../ui/Button";
-import { EmailFirstStep } from "../components/EmailFirstStep";
+import { MEMBERSHIP_JOIN_PATH } from "./portal/hash-route";
 // This module writes design-system class names into markup it builds itself,
 // so it has to pull in the stylesheets that define them: component CSS ships
 // in the chunk of whoever imports it, not in the entry sheet.
@@ -141,38 +138,12 @@ function showSuccessPanel(
   );
 }
 
-/** Joining starts from the shared email-first step; the individual path is the explicit attestation. */
-function JoinEmailStep({ onIndividualChange }: { onIndividualChange: (individual: boolean) => void }) {
-  const [email, setEmail] = useState("");
-  const [individual, setIndividual] = useState(false);
-  const [sentTo, setSentTo] = useState<string | null>(null);
-  return (
-    <EmailFirstStep
-      flow="join"
-      schema={memberJoinStartSchema}
-      email={email}
-      onEmailChange={setEmail}
-      individual={individual}
-      onIndividualChange={(value) => {
-        setIndividual(value);
-        onIndividualChange(value);
-      }}
-      onContinue={async (step) => {
-        await postJson(`${API_BASE}/members/join/start`, step, memberJoinStartResponseSchema);
-        setSentTo(step.email);
-      }}
-      sentTo={sentTo}
-      onChangeEmail={() => setSentTo(null)}
-    />
-  );
-}
-
 async function main(): Promise<void> {
   const root = document.querySelector<HTMLElement>("[data-member-application]");
   if (!root) return;
   const statusEl = root.querySelector<HTMLElement>("[data-flow-status]");
-  const startSection = root.querySelector<HTMLElement>("[data-join-start]");
-  const emailStep = root.querySelector<HTMLElement>("[data-join-email-step]");
+  const startSection = root.querySelector<HTMLElement>("[data-join-sign-in]");
+  const signInCard = root.querySelector<HTMLElement>("[data-join-sign-in-card]");
   const applicationForm = root.querySelector<HTMLFormElement>("[data-join-application-form]");
   const accessSection = root.querySelector<HTMLElement>("[data-join-organization-access]");
   const existingMemberSection = root.querySelector<HTMLElement>("[data-join-already-member]");
@@ -181,17 +152,15 @@ async function main(): Promise<void> {
   const organizationInProgressSection = root.querySelector<HTMLElement>(
     "[data-join-organization-application-in-progress]",
   );
-  const individualCategories = root.querySelector<HTMLElement>("[data-join-individual-categories]");
-  const verifiedEmail = root.querySelector<HTMLElement>("[data-verified-application-email]");
-  const verifiedKind = root.querySelector<HTMLElement>("[data-verified-application-kind]");
   const categoryContainer = root.querySelector<HTMLElement>("[data-membership-categories]");
   const customFieldsContainer = root.querySelector<HTMLElement>("[data-custom-fields]");
-  const individualCategoryList = root.querySelector<HTMLElement>("[data-join-individual-category-list]");
   const signedInSection = root.querySelector<HTMLElement>("[data-join-signed-in]");
+  const typedIdentity = root.querySelector<HTMLElement>("[data-join-typed-identity]");
   if (
     !statusEl ||
     !startSection ||
-    !emailStep ||
+    !signInCard ||
+    !signedInSection ||
     !applicationForm ||
     !accessSection ||
     !supportSection ||
@@ -202,10 +171,16 @@ async function main(): Promise<void> {
     return;
 
   let legalValidation: ReturnType<typeof installMembershipLegalValidation> | undefined;
+  /** The continuation of an application for an organization the person does not represent yet. */
   let applicationContext: JoinApplicationContext | null = null;
-  /** The identity a signed-in person applies as; null on the verified-email path. */
+  /** The identity the person applies as; null while they apply through a continuation. */
   let signedInIdentity: SessionActingIdentity | null = null;
-  let signedInName = "";
+  let applicant: SignedInApplicant | null = null;
+  /** The identity whose membership path the server resolves, and the path chosen for it. */
+  let pathIdentity: SessionActingIdentity | null = null;
+  let pathChoice: JoinChoice = { unaffiliatedAttestation: false };
+  /** Counts the choices made, so an answer to an earlier choice never lands on a later one. */
+  let chosen = 0;
   let categories: MembershipCategory[] = [];
   let applicationFields: MembershipApplicationField[] = [];
   let applicationFormFields: MembershipApplicationField[] = [];
@@ -220,23 +195,8 @@ async function main(): Promise<void> {
     return definitionPromise;
   };
 
-  const loadIndividualCategorySummary = async () => {
-    if (!individualCategoryList) return;
-    individualCategoryList.textContent = "Loading eligible categories…";
-    try {
-      const definition = await getApplicationDefinition();
-      renderMembershipCategorySummary(
-        individualCategoryList,
-        filterCategoriesForApplicantKind(definition.categories, "individual"),
-      );
-    } catch {
-      individualCategoryList.textContent = "Could not load the eligible individual categories. Please try again.";
-    }
-  };
-
-  const showSection = (section: HTMLElement) => {
+  const showSection = (section: HTMLElement | null) => {
     for (const candidate of [
-      startSection,
       accessSection,
       existingMemberSection,
       inProgressSection,
@@ -247,7 +207,7 @@ async function main(): Promise<void> {
     ]) {
       candidate.hidden = candidate !== section;
     }
-    section.focus();
+    section?.focus();
   };
 
   /** Resolves whether the application form is on screen, ready for its answers. */
@@ -271,11 +231,8 @@ async function main(): Promise<void> {
           customFieldsContainer,
           membershipApplicationFields(applicationFields, categories[0], { fromIdentity: Boolean(signedInIdentity) }),
         );
-      if (applicationContext && verifiedEmail) verifiedEmail.textContent = applicationContext.applicantEmail;
-      if (verifiedKind) {
-        verifiedKind.textContent =
-          applicantKind === "individual" ? "Individual application" : "Organization application";
-      }
+      // The identity supplies the name and organization; a continuation asks for them.
+      if (typedIdentity) typedIdentity.hidden = Boolean(signedInIdentity);
       applyCategoryUI(applicationForm, categories[0]);
       showSection(applicationForm);
       const firstControl = applicationForm.querySelector<HTMLElement>('input[name="membershipCategory"]');
@@ -338,16 +295,6 @@ async function main(): Promise<void> {
         : {};
     },
   );
-  render(
-    <JoinEmailStep
-      onIndividualChange={(individual) => {
-        if (individualCategories) individualCategories.hidden = !individual;
-        if (individual) void loadIndividualCategorySummary();
-      }}
-    />,
-    emailStep,
-  );
-
   applicationForm.addEventListener("change", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement) || target.name !== "membershipCategory") return;
@@ -373,7 +320,7 @@ async function main(): Promise<void> {
       const context = applicationContext;
       const identity = signedInIdentity;
       if (!category || (!context && !identity)) {
-        setStatus(statusEl, "Your verified membership path has expired. Please start again.", true);
+        setStatus(statusEl, "Your membership path has expired. Refresh the page to continue.", true);
         return;
       }
       await withLoadingButton(findSubmitButton(applicationForm), async () => {
@@ -382,7 +329,7 @@ async function main(): Promise<void> {
           if (!configuredCategory) throw new Error("Choose an available membership category");
           const formFields = applicationFormFields;
           let payload: object;
-          let applicantName = signedInName;
+          let applicantName = applicant?.name ?? "";
           if (identity) {
             payload = memberApplicationCreateAsIdentitySchemaForCategory(configuredCategory, formFields).parse({
               identityId: identity.id,
@@ -411,8 +358,7 @@ async function main(): Promise<void> {
           ) {
             saveJoinAnswers(applicationForm);
             applicationContext = null;
-            rememberJoinChoice();
-            await verifyFromLocation(undefined, undefined, false, error.message);
+            await resolvePath({}, error.message);
             return;
           }
           applicationValidation.refuse(error);
@@ -429,50 +375,44 @@ async function main(): Promise<void> {
     });
   });
 
-  const verifyFromLocation = async (
-    organizationId?: string,
-    added?: { name: string; domain: string },
-    continueAsIndividual = false,
+  /**
+   * Asks the server which membership path the signed-in person is on. `selection` is what they chose on
+   * the way (an organization, a new one, or continuing as an individual); the path itself is `pathChoice`.
+   */
+  const resolvePath = async (
+    selection: Omit<JoinChoice, "unaffiliatedAttestation"> = {},
     recoveryMessage?: string,
-  ) => {
-    const linked = new URLSearchParams(window.location.hash.slice(1)).get("verify");
-    // The link's token leaves the address bar; this tab keeps it so a reload continues the application.
-    if (linked) history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
-    const token = linked ?? rememberedJoinToken();
-    if (!token) return;
-    const choice =
-      organizationId || added || continueAsIndividual
-        ? { organizationId, organizationName: added?.name, domain: added?.domain, continueAsIndividual }
-        : linked
-          ? undefined
-          : rememberedJoinChoice();
+  ): Promise<void> => {
+    const person = applicant;
+    const identity = pathIdentity;
+    if (!person || !identity) return;
+    const turn = chosen;
+    const choice: JoinChoice = { unaffiliatedAttestation: pathChoice.unaffiliatedAttestation, ...selection };
+    const again = (next: Omit<JoinChoice, "unaffiliatedAttestation">) => resolvePath(next);
     try {
       const result = await postJson(
         `${API_BASE}/members/join/verify`,
-        memberJoinVerifySchema.parse({ token, ...choice }),
+        memberJoinVerifySchema.parse(choice),
         memberJoinVerifyResponseSchema,
       );
+      if (turn !== chosen) return;
       if (result.status === "organization_selection_required") {
-        rememberJoinToken(token);
-        rememberJoinChoice();
+        rememberJoinChoice({ unaffiliatedAttestation: choice.unaffiliatedAttestation });
         render(
           <JoinOrganizationChoice
-            token={token}
             domain={result.domain}
             affiliation={result.affiliation}
             organizations={result.organizations}
-            onChoose={verifyFromLocation}
-            onIndividual={
-              result.canApplyAsIndividual ? () => verifyFromLocation(undefined, undefined, true) : undefined
-            }
-            onAdd={(name, domain) => verifyFromLocation(undefined, { name, domain })}
-            onResolve={async (domain) => {
-              return postJson(
+            onChoose={(organizationId) => again({ organizationId })}
+            onIndividual={result.canApplyAsIndividual ? () => again({ continueAsIndividual: true }) : undefined}
+            onAdd={(organizationName, domain) => again({ organizationName, domain })}
+            onResolve={(domain) =>
+              postJson(
                 `${API_BASE}/members/join/affiliations`,
-                memberJoinAffiliationPreviewSchema.parse({ token, domain }),
+                memberJoinAffiliationPreviewSchema.parse({ domain }),
                 identityAffiliationPreviewResponseSchema,
-              );
-            }}
+              )
+            }
           />,
           organizationChoiceSection,
         );
@@ -481,11 +421,14 @@ async function main(): Promise<void> {
         return;
       }
       if (result.status === "application_ready") {
-        rememberJoinToken(token);
         rememberJoinChoice(choice);
-        applicationContext = result;
+        // An individual applies as the identity they already hold; an organization they do not represent
+        // yet is applied for through the continuation, with its name and theirs asked on the form.
+        if (result.applicantKind === "individual") signedInIdentity = identity;
+        else applicationContext = result;
         // A failed load leaves the kept answers alone for the next reload.
-        if (!(await loadApplication(result.applicantKind))) return;
+        if (!(await loadApplication(result.applicantKind)) || turn !== chosen) return;
+        if (result.applicantKind === "individual") return;
         // The kept draft stands until the next edit: stateful widgets take restored values after this render.
         restoringAnswers = true;
         const restored = restoreJoinAnswers(applicationForm, (answers) => {
@@ -493,6 +436,13 @@ async function main(): Promise<void> {
           renderQuestionsFor(selected ?? categories[0], answers);
         });
         restoringAnswers = false;
+        for (const [name, value] of [
+          ["firstName", person.firstName],
+          ["lastName", person.lastName],
+        ] as const) {
+          const control = applicationForm.querySelector<HTMLInputElement>(`[name="${name}"]`);
+          if (control && !control.value) control.value = value;
+        }
         const organizationName = applicationForm.querySelector<HTMLInputElement>('[name="organizationName"]');
         if (organizationName) {
           organizationName.readOnly = Boolean(result.organizationName);
@@ -519,75 +469,94 @@ async function main(): Promise<void> {
         showSection(supportSection);
       }
     } catch (error) {
+      if (turn !== chosen) return;
       if (
         error instanceof ApiClientError &&
         ["ORGANIZATION_AFFILIATION_CHANGED", "IDENTITY_DOMAIN_MISMATCH", "ORGANIZATION_NAME_IN_USE"].includes(
           error.code ?? "",
         )
       ) {
-        if (choice && !recoveryMessage) {
-          rememberJoinToken(token);
-          rememberJoinChoice();
-          await verifyFromLocation(undefined, undefined, false, error.message);
-          return;
-        }
+        // A selection the server no longer accepts returns to the choice it was made from, once.
+        if (Object.keys(selection).length > 0 && !recoveryMessage) return resolvePath({}, error.message);
         setStatus(statusEl, error.message, true);
         return;
       }
-      if (!(error instanceof ApiClientError) || ![404, 409, 410].includes(error.status)) {
-        // Retry the newly opened proof after a reload, never a previous applicant's draft.
-        if (linked) rememberJoinToken(linked);
-        showSection(startSection);
-        setStatus(
-          statusEl,
-          hasJoinAnswers()
-            ? "We could not verify your email right now. Your saved answers are still available in this tab. Refresh to try again."
-            : rememberedJoinToken()
-              ? "We could not verify your email right now. Refresh to try again."
-              : "We could not verify your email right now. Open your email link again to try again.",
-          true,
-        );
-        return;
-      }
-      forgetJoinDraft();
+      showSection(null);
+      // The work-address rule and an ended session say what to do next; anything else is ours to retry.
       setStatus(
         statusEl,
-        linked
-          ? "This verification link is invalid or has expired. Please start again."
-          : "Your email verification has expired, so your answers were not kept. Please start again.",
+        error instanceof ApiClientError && [400, 401].includes(error.status)
+          ? error.status === 401
+            ? "Your session has ended. Refresh the page to sign in again."
+            : refusalSentence(error)
+          : "We could not load your membership options right now. Refresh to try again.",
         true,
       );
-      showSection(startSection);
     }
   };
-  const startSignedIn = (applicant: SignedInApplicant) => {
-    if (!signedInSection) return;
-    signedInName = applicant.name;
-    // The identity supplies name, organization and the verified address, so the typed fields leave the form.
-    for (const typed of applicationForm.querySelectorAll("[data-join-verified-context], [data-join-typed-identity]"))
-      typed.remove();
-    const applyAs = (identity: SessionActingIdentity, refusal: JoinRefusal | null) => {
+
+  /** The signed-in person's identity and, for an individual identity, how they are joining. */
+  const applyAs = (identity: SessionActingIdentity, refusal: JoinRefusal | null, path: JoinPath | null) => {
+    chosen += 1;
+    signedInIdentity = null;
+    applicationContext = null;
+    pathIdentity = null;
+    // An earlier notice no longer applies; an empty one must not stay on screen as a bare strip.
+    statusEl.textContent = "";
+    statusEl.classList.add("pk-sr-only");
+    showSection(null);
+    if (refusal) return;
+    if (identity.organizationId) {
       signedInIdentity = identity;
-      if (refusal) {
-        startSection.hidden = true;
-        applicationForm.hidden = true;
-        return;
-      }
-      void loadApplication(identity.organizationId ? "organization" : "individual");
-    };
-    signedInSection.hidden = false;
-    render(<JoinSignedInApplicant applicant={applicant} onIdentityChange={applyAs} />, signedInSection);
-    applyAs(applicant.preferred, joinRefusalFor(applicant.preferred, applicant.identities));
+      void loadApplication("organization");
+      return;
+    }
+    if (!path || !applicant) return;
+    pathIdentity = identity;
+    const unaffiliatedAttestation = path === "individual";
+    // A reload continues the selection kept for the same path; a new path starts from its own beginning.
+    const kept = rememberedJoinChoice(applicant.userId);
+    const { unaffiliatedAttestation: keptPath, ...selection } = kept ?? { unaffiliatedAttestation };
+    rememberJoinApplicant(applicant.userId);
+    pathChoice = { unaffiliatedAttestation };
+    void resolvePath(keptPath === unaffiliatedAttestation ? selection : {});
   };
 
-  window.addEventListener("hashchange", () => void verifyFromLocation());
-  // A verified path kept for this tab continues after a reload, like a fresh verification link.
-  if (new URLSearchParams(window.location.hash.slice(1)).has("verify") || rememberedJoinToken()) {
-    await verifyFromLocation();
-    return;
-  }
-  const applicant = await readSignedInApplicant();
-  if (applicant) startSignedIn(applicant);
+  const startSignedIn = (person: SignedInApplicant) => {
+    applicant = person;
+    startSection.hidden = true;
+    render(null, signInCard);
+    const kept = person.preferred.organizationId ? undefined : rememberedJoinChoice(person.userId);
+    const path: JoinPath | null = kept ? (kept.unaffiliatedAttestation ? "individual" : "organization") : null;
+    signedInSection.hidden = false;
+    render(
+      <JoinSignedInApplicant
+        applicant={person}
+        initialPath={path}
+        onChange={applyAs}
+        onNamesSaved={(named) => {
+          applicant = named;
+        }}
+      />,
+      signedInSection,
+    );
+    applyAs(person.preferred, joinRefusalFor(person.preferred, person.identities), path);
+  };
+
+  /** Continues with the session when there is one; otherwise the shared sign-in card is the first step. */
+  const start = async (): Promise<void> => {
+    const person = await readSignedInApplicant();
+    if (person) return startSignedIn(person);
+    const { SignInCard } = await import("../components/sign-in/SignInCard");
+    render(
+      <SignInCard
+        embedded={{ returnPath: `${MEMBERSHIP_JOIN_PATH}${window.location.search}`, emailFlow: "join" }}
+        onSignedIn={start}
+      />,
+      signInCard,
+    );
+  };
+  await start();
 }
 
 void main();

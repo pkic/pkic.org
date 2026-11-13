@@ -382,7 +382,7 @@ test("organizer reloads two independent QR credentials, replaces only one and re
   test.setTimeout(180_000);
   const templateEmail = ownDomainEmail("badge-template");
   const template = await registerInBrowser(page, templateEmail, undefined, undefined, {
-    organization: "Badge Template Org",
+    organization: `Badge Template Org ${Date.now()}`,
   });
   const email = ownDomainEmail("scanner");
   const since = await capturedEmailCount();
@@ -396,7 +396,7 @@ test("organizer reloads two independent QR credentials, replaces only one and re
   expect(registration.status(), await registration.text()).toBe(200);
   const confirmation = await waitForCapturedEmail(email, "Confirm your registration", { since });
   await page.goto(extractEmailUrl(confirmation, "/register/confirm"));
-  await confirmRegistration(page, "Scanner Credential Org");
+  await confirmRegistration(page, `Scanner Credential Org ${Date.now()}`);
   await waitForCapturedEmail(email, "registration is confirmed", { since });
   await signInAsE2eStaff(page, e2eAdminEmail("default"));
   // Reuse earlier scenarios' approved capture context without publishing their current draft.

@@ -116,7 +116,7 @@ describe("public capability links", () => {
         reason: "invalid",
       });
       await expect(
-        verifyStatelessCapabilityToken({ signingSecret, purpose: "member_join_verify", token }),
+        verifyStatelessCapabilityToken({ signingSecret, purpose: "member_join_apply", token }),
       ).resolves.toEqual({ ok: false, reason: "invalid" });
       const expired = await signStatelessCapabilityToken({
         signingSecret,

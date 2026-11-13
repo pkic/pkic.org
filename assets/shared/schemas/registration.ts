@@ -290,11 +290,10 @@ export const registrationConfirmOrganizationSchema = z
 export type RegistrationConfirmOrganization = z.infer<typeof registrationConfirmOrganizationSchema>;
 
 /**
- * A public registration starts from the shared email-first step, including its
- * individual capacity. `emailProof` is the verification link the person
- * opened, which makes the registration final on submission; without it (and
- * without a signed-in session for the same address) the registration waits
- * for email confirmation.
+ * A registration names its address and how the person reached the form. A
+ * signed-in person registers with their session and is registered at once;
+ * a submission without a session for the address waits for email
+ * confirmation.
  */
 export const registrationCreateSchema = attendeeRegistrationFieldsSchema
   .extend(registrationEntrySchema.shape)
@@ -302,8 +301,6 @@ export const registrationCreateSchema = attendeeRegistrationFieldsSchema
     unaffiliatedAttestation: workEmailStepSchema.shape.unaffiliatedAttestation,
     sourceType: defaultedSourceTypeSchema,
     sourceRef: trimmedString(2, 200).optional(),
-    emailProof: registrationEmailProofTokenSchema.optional(),
-    organization: registrationConfirmOrganizationSchema.optional(),
   })
   .strict();
 
@@ -365,7 +362,6 @@ export const registrationSubmissionResponseSchema = registrationCompletionRespon
   // A newly created identity may still receive the immediate correction link.
   manageUrl: httpCapabilityUrlSchema.nullable(),
   manageToken: tokenSchema.nullable(),
-  organizationOutcome: registrationOrganizationOutcomeSchema.default(null),
 });
 export type RegistrationSubmissionResponse = z.infer<typeof registrationSubmissionResponseSchema>;
 

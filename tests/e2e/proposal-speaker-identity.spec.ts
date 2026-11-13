@@ -7,18 +7,11 @@ import {
   usersListResponseSchema,
 } from "../../assets/shared/schemas/user-management";
 import {
-  eventProposalProofStartSchema,
-  eventProposalProofStartResponseSchema,
-  eventProposalProofVerifySchema,
-  eventProposalProofVerifyResponseSchema,
-} from "../../assets/shared/schemas/event-proposal-proof";
-import {
   identitiesListResponseSchema,
   identityUpdateSchema,
   type ActingIdentity,
 } from "../../assets/shared/schemas/identity";
 import {
-  authenticatedProposalCreateSchema,
   proposalCreateSchema,
   proposalAccessReadResponseSchema,
   proposalCreateResponseSchema,
@@ -30,6 +23,7 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { createMember } from "./helpers/member-provisioning";
 import { signInToPortal } from "./helpers/portal-auth";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
+import { signInThroughCard } from "./helpers/sign-in-card";
 import { PROPOSAL_EVENT_SLUG } from "./helpers/proposals";
 import { fieldLabel, acceptVisibleTerms, answerRequiredProposalFields } from "./helpers/proposal-entry-ui";
 import { completeIndependentCapacityDisclosure } from "./helpers/independent-capacity";
@@ -170,14 +164,14 @@ test("terms-first proposals and invited speakers verify identity without duplica
     await ownerPage.getByRole("button", { name: "Submit proposal →", exact: true }).click();
     const submittedResponse = await submitted;
     expect(submittedResponse.status(), await submittedResponse.text()).toBe(200);
-    const submittedBody = authenticatedProposalCreateSchema.parse(submittedResponse.request().postDataJSON());
+    const submittedBody = proposalCreateSchema.parse(submittedResponse.request().postDataJSON());
     expect(submittedBody.proposer.actingIdentityId).toBe(own.identityId);
     expect(submittedBody.proposer.firstName).toBeUndefined();
     expect(submittedBody.proposer.lastName).toBeUndefined();
     expect(submittedBody.proposer.email).toBeUndefined();
     expect("actingIdentityId" in submittedBody.speakers[0]).toBe(false);
     const created = proposalCreateResponseSchema.parse(await submittedResponse.json());
-    const guestInvitation = await waitForCapturedEmail(guest.email, "You have been added as a speaker", {
+    const guestInvitation = await waitForCapturedEmail(guest.email, "Speaker invitation: please confirm", {
       since: sinceOwn,
     });
     const guestSpeakerUrl = extractEmailUrl(guestInvitation, "/portal/");
@@ -223,7 +217,8 @@ test("terms-first proposals and invited speakers verify identity without duplica
     expect(afterSourceEdit.profile.organizationName).toBe(beforeSourceEdit.profile.organizationName);
     expect(afterSourceEdit.profile.actingIdentitySelectedAt).toBe(beforeSourceEdit.profile.actingIdentitySelectedAt);
 
-    // A fresh individual accepts the terms, takes the email step's individual escape and verifies the mailbox.
+    // A fresh individual accepts the terms, starts an account from the sign-in card with a personal
+    // address, and returns to the form signed in.
     const anonymousEmail = `proposal-individual-${crypto.randomUUID()}@gmail.com`;
     const initialProposalRequests: string[] = [];
     guestPage.on("request", (request) => {
@@ -242,40 +237,18 @@ test("terms-first proposals and invited speakers verify identity without duplica
     await expect(proposerIdentity.getByRole("textbox")).toHaveCount(0);
     await acceptVisibleTerms(guestPage, "[data-consents]");
     await guestPage.getByRole("button", { name: "Continue →", exact: true }).click();
-    // The email step is the gate: the wizard offers no way past it until the person is confirmed.
+    // The sign-in card is the gate: the wizard offers no way past it until the person is signed in.
+    await expect(proposerIdentity.getByRole("region", { name: "Sign in", exact: true })).toBeVisible();
     await expect(guestPage.getByRole("button", { name: "Continue →", exact: true })).toBeHidden();
-    await expect(proposerIdentity.getByLabel(EMAIL_FIRST_COPY.proposal.work.label, { exact: true })).toBeVisible();
-    await proposerIdentity.getByRole("radio", { name: EMAIL_FIRST_COPY.proposal.personal.title, exact: true }).check();
-    await proposerIdentity.getByLabel(EMAIL_FIRST_COPY.proposal.personal.label, { exact: true }).fill(anonymousEmail);
-    const proofSince = await capturedEmailCount();
-    const proofStart = guestPage.waitForResponse(
-      (response) => new URL(response.url()).pathname === `${PROPOSALS}/proof` && response.request().method() === "POST",
-    );
+    await signInThroughCard(guestPage, anonymousEmail, { emailFlow: "proposal", individual: true });
+    expect(initialProposalRequests).toEqual([]);
+    // Opening the link created the account; the form starts again with its terms.
+    expect(await userCount()).toBe(1);
+    await acceptVisibleTerms(guestPage, "[data-consents]");
+    await guestPage.getByRole("button", { name: "Continue →", exact: true }).click();
     await proposerIdentity
-      .getByRole("button", { name: EMAIL_FIRST_COPY.proposal.personal.action, exact: true })
+      .getByRole("button", { name: EMAIL_FIRST_COPY.proposal.individualSwitch, exact: true })
       .click();
-    const started = await proofStart;
-    expect(started.status()).toBe(200);
-    expect(eventProposalProofStartSchema.parse(started.request().postDataJSON()).unaffiliatedAttestation).toBe(true);
-    expect(eventProposalProofStartResponseSchema.parse(await started.json()).status).toBe("verification_sent");
-    expect(initialProposalRequests).toEqual([]);
-    expect(await userCount()).toBe(0);
-    const proofMail = await waitForCapturedEmail(anonymousEmail, "Verify your email for", { since: proofSince });
-    const proofVerify = guestPage.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === `${PROPOSALS}/proof/verify` && response.request().method() === "POST",
-    );
-    // The terms were agreed before the email was sent: the link continues on the contact step.
-    await guestPage.goto(extractEmailUrl(proofMail, "/propose/"));
-    const verified = await proofVerify;
-    expect(verified.status()).toBe(200);
-    eventProposalProofVerifySchema.parse(verified.request().postDataJSON());
-    const verifiedPerson = eventProposalProofVerifyResponseSchema.parse(await verified.json());
-    if (verifiedPerson.status !== "ready") throw new Error("The browser must verify its mailbox before continuing.");
-    expect(verifiedPerson.email).toBe(anonymousEmail);
-    expect(verifiedPerson.applicantKind).toBe("individual");
-    expect(initialProposalRequests).toEqual([]);
-    expect(await userCount()).toBe(0);
     await guestPage.getByLabel(fieldLabel("First name")).fill("Independent");
     await guestPage.getByLabel(fieldLabel("Last name")).fill("Fixture");
     await expect(
@@ -301,7 +274,6 @@ test("terms-first proposals and invited speakers verify identity without duplica
     const anonymousCreated = await anonymousSubmitted;
     expect(anonymousCreated.status()).toBe(200);
     const anonymousInput = proposalCreateSchema.parse(anonymousCreated.request().postDataJSON());
-    expect(anonymousInput.continuationToken).toBe(verifiedPerson.continuationToken);
     expect(anonymousInput.unaffiliatedAttestation).toBe(true);
     expect(anonymousInput.proposer.actingIdentityId).toBeNull();
     expect(anonymousInput.proposer.firstName).toBe("Independent");
@@ -312,6 +284,8 @@ test("terms-first proposals and invited speakers verify identity without duplica
     // The invitation identifies its recipient even if the proposer opens it while signed in.
     await ownerPage.goto(guestSpeakerUrl);
     await expect(ownerPage.getByText(/invitation is for a different account/i)).toBeVisible();
+    // The invited speaker arrives in the same browser with a session of their own.
+    await guestContext.clearCookies();
     await signInToPortal(guestPage, guest.email);
     await guestPage.goto(guestSpeakerUrl);
     await expect(guestPage.getByRole("heading", { name: "Speaker participation" })).toBeVisible();

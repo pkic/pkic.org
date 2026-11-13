@@ -1,52 +1,60 @@
 import { expect, type Page } from "@playwright/test";
-import { memberJoinVerifyResponseSchema } from "../../../assets/shared/schemas/member-join";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
+import { memberJoinVerifyResponseSchema, memberJoinVerifySchema } from "../../../assets/shared/schemas/member-join";
+import { signedInRequest, signInThroughCard } from "./sign-in-card";
 
 /**
- * Performs the public mailbox-proof portion of the canonical membership join
- * flow and returns the server-authorized continuation. This is shared by E2E
- * fixtures so no test bypasses the same verification boundary the UI uses.
+ * Signs the applicant in the way the join page's sign-in card does (starting
+ * their account when the address is new) and returns the membership path the
+ * server decides for that session. The applicant gets a session of their own,
+ * so whoever is signed in on `page` stays signed in. This is shared by E2E
+ * fixtures so no test bypasses the boundary the UI uses.
  */
 export async function verifyMembershipJoinEmail(
   page: Page,
   email: string,
-  options: { unaffiliatedAttestation?: boolean } = {},
+  options: { unaffiliatedAttestation?: boolean; organizationName?: string } = {},
 ) {
-  const since = await capturedEmailCount();
-  const started = await page.evaluate(
-    async ({ address, unaffiliatedAttestation }) => {
-      const response = await fetch("/api/v1/members/join/start", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: address, unaffiliatedAttestation }),
+  const unaffiliatedAttestation = options.unaffiliatedAttestation ?? false;
+  const applicant = await signedInRequest(new URL(page.url()).origin, email, { individual: unaffiliatedAttestation });
+  try {
+    const decide = async (selection: { organizationId?: string } = {}) => {
+      const verified = await applicant.post("/api/v1/members/join/verify", {
+        data: memberJoinVerifySchema.parse({ unaffiliatedAttestation, ...selection }),
       });
-      return { status: response.status, body: await response.json() };
-    },
-    { address: email, unaffiliatedAttestation: options.unaffiliatedAttestation ?? false },
-  );
-  expect(started.status, JSON.stringify(started.body)).toBe(200);
-  expect(started.body).toEqual({ status: "verification_sent" });
-
-  const message = await waitForCapturedEmail(email, "Verify your email address", { since });
-  const verificationUrl = extractEmailUrl(message, "/join/");
-  const token = new URL(verificationUrl).hash.slice(1);
-  const verificationToken = new URLSearchParams(token).get("verify");
-  expect(verificationToken).toBeTruthy();
-
-  const verified = await page.evaluate(async (joinToken) => {
-    const response = await fetch("/api/v1/members/join/verify", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token: joinToken }),
-    });
-    return { status: response.status, body: await response.json() };
-  }, verificationToken!);
-  expect(verified.status, JSON.stringify(verified.body)).toBe(200);
-  return memberJoinVerifyResponseSchema.parse(verified.body);
+      expect(verified.status(), await verified.text()).toBe(200);
+      return memberJoinVerifyResponseSchema.parse(await verified.json());
+    };
+    const path = await decide();
+    // A person on a claimed domain says which of its organizations they represent, as the page asks them to.
+    if (path.status !== "organization_selection_required" || !options.organizationName) return path;
+    const chosen = path.organizations.find((organization) => organization.name === options.organizationName);
+    if (!chosen) throw new Error(`"${options.organizationName}" is not offered for ${email}`);
+    return await decide({ organizationId: chosen.id });
+  } finally {
+    await applicant.dispose();
+  }
 }
 
-/** Open the email in a fresh document, without racing the join page's hash handler. */
-export async function openMembershipVerificationLink(page: Page, url: string): Promise<void> {
-  await page.goto("about:blank");
-  await page.goto(url);
+/**
+ * Opens the join page as a signed-out visitor, signs them in through its
+ * sign-in card (starting an account for a new address), and answers "How are
+ * you joining?". Leaves the page on whatever the server decides for that path.
+ */
+export async function startJoinInBrowser(
+  page: Page,
+  email: string,
+  options: { individual?: boolean } = {},
+): Promise<void> {
+  await page.goto("/join/");
+  await signInThroughCard(page, email, { emailFlow: "join", individual: options.individual });
+  await chooseJoinPath(page, options.individual ? "individual" : "organization");
+}
+
+/** Answers "How are you joining?" for a signed-in person who represents no organization yet. */
+export async function chooseJoinPath(page: Page, path: "organization" | "individual"): Promise<void> {
+  const choice = page.getByRole("radiogroup", { name: "How are you joining?", exact: true });
+  await expect(choice).toBeVisible({ timeout: 30_000 });
+  await choice
+    .getByRole("radio", { name: path === "individual" ? "As an individual" : "For my organization", exact: true })
+    .check();
 }

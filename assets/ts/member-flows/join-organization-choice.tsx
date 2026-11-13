@@ -11,7 +11,6 @@ import { InputGroup } from "../ui/InputGroup";
 import { Select } from "../ui/TextControl";
 
 export function JoinOrganizationChoice({
-  token,
   domain,
   affiliation,
   organizations,
@@ -20,7 +19,6 @@ export function JoinOrganizationChoice({
   onAdd,
   onIndividual,
 }: {
-  token: string;
   domain: string;
   affiliation: Extract<
     z.infer<typeof memberJoinVerifyResponseSchema>,
@@ -35,7 +33,7 @@ export function JoinOrganizationChoice({
   const [organizationId, setOrganizationId] = useState("");
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
-  const form = useContractForm(memberJoinVerifySchema.required({ organizationId: true }), { token, organizationId });
+  const form = useContractForm(memberJoinVerifySchema.required({ organizationId: true }), { organizationId });
   return (
     <form
       noValidate

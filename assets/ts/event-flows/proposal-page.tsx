@@ -10,22 +10,12 @@ import { installStepNavigation } from "../shared/form/step-navigation";
 import { renderSharePanel } from "../shared/widgets/share-panel";
 import { eventFormsResponseSchema } from "../../shared/schemas/forms";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
-import { applyFieldErrors, normalizeValidation } from "../shared/form/validation-map";
 import { handleSubmitError, withLoadingButton } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
-import {
-  authenticatedProposalCreateSchema,
-  proposalContactSchema,
-  proposalCreateSchema,
-  proposalCreateResponseSchema,
-} from "../../shared/schemas/proposal-management";
+import { proposalCreateSchema, proposalCreateResponseSchema } from "../../shared/schemas/proposal-management";
 import { readField, findSubmitButton } from "../shared/form/helpers";
 import { EventProposalIdentityStep } from "../components/EventProposalIdentityStep";
-import {
-  newAffiliationDetails,
-  prepareProposalEntry,
-  type ProposalEntrySelection,
-} from "../components/useProposalEntryIdentity";
+import type { ProposalEntrySelection } from "../components/useProposalEntryIdentity";
 import { ParticipationIdentitySummary } from "../components/ParticipationIdentitySummary";
 import { SpeakerFormCard } from "../components/SpeakerFormCard";
 import { ConfirmDialogHost } from "../components/ConfirmDialog";
@@ -37,8 +27,6 @@ import type { ProfileLinksHandle } from "../components/ProfileLinksInput";
 import { handleFormInviteSubmitError } from "../shared/widgets/invite-recovery";
 import { proposalSessionTypeLabel, type ProposalSessionType } from "../../shared/proposal-session-types";
 import { proposalEntryContextSchema } from "../../shared/schemas/proposal-entry";
-import type { RequiredTerm } from "../../shared/schemas/forms";
-import type { ConsentItem } from "../../shared/schemas/registration";
 
 // ── Session type labels ───────────────────────────────────────────────────────
 
@@ -242,20 +230,6 @@ function showSuccessPanel(
   root.appendChild(container);
 }
 
-/** The identity step's part of the proposal, as the contract reads it. */
-function contactOf(entry: ProposalEntrySelection) {
-  return {
-    continuationToken: entry.continuationToken,
-    unaffiliatedAttestation: entry.unaffiliatedAttestation,
-    proposer: { ...newAffiliationDetails(entry), actingIdentityId: entry.actingIdentityId },
-  };
-}
-
-/** The page was opened from a proposal email confirmation link. */
-function hasEmailConfirmation(): boolean {
-  return new URLSearchParams(location.hash.slice(1)).has("verify");
-}
-
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -291,35 +265,21 @@ async function main(): Promise<void> {
 
   let eventName = eventSlug;
   let formsLoaded = false;
-  let requiredTerms: RequiredTerm[] = [];
-  /** The terms a confirmed email recorded before its link was sent: agreed once, never asked again. */
-  let recordedConsents: ConsentItem[] | null = null;
 
   // ── Proposer speaker card management ─────────────────────────────────────
 
   let proposerCardEl: HTMLElement | null = null;
   let entry: ProposalEntrySelection | null = null;
   const identityContainer = boot.root.querySelector<HTMLElement>("[data-proposer-identity]");
-  // The terms come first: they can stop someone from continuing, so nobody is asked for an address
-  // before accepting them. The contact step then continues through its own email action, and the
-  // wizard's Continue appears once it has.
+  // The terms come first: they can stop someone from continuing, so nobody is asked to sign in
+  // before accepting them. The contact step then shows who is signed in, or the sign-in card, and
+  // the wizard's Continue appears once the person has chosen who they take part as.
   const CONTACT_STEP = 2;
   const nextButton = boot.root.querySelector<HTMLButtonElement>("[data-step-next]");
   let currentStep = 1;
   let identityActivated = false;
   const syncEntryGate = () => {
     if (nextButton && currentStep === CONTACT_STEP) nextButton.hidden = !entry;
-  };
-  const TERMS_STEP = 1;
-  let steps: ReturnType<typeof installStepNavigation> | null = null;
-  function applyRecordedTerms(): void {
-    if (!formsLoaded || !recordedConsents || !consentsContainer) return;
-    renderConsentInputs(consentsContainer, requiredTerms, recordedConsents);
-    steps?.continueFrom(TERMS_STEP);
-  }
-  const recordTerms = (consents: ConsentItem[]): void => {
-    recordedConsents = consents;
-    applyRecordedTerms();
   };
   const updateEntry = (selection: ProposalEntrySelection | null): void => {
     entry = selection;
@@ -336,8 +296,6 @@ async function main(): Promise<void> {
         eventSlug={eventSlug}
         consents={() => readConsentValues(form)}
         onChange={updateEntry}
-        onTermsRecorded={recordTerms}
-        entryContext={originalEntryContext}
       />,
       identityContainer,
     );
@@ -384,7 +342,7 @@ async function main(): Promise<void> {
 
   // ── Step navigation ───────────────────────────────────────────────────────
 
-  steps = installStepNavigation(
+  installStepNavigation(
     boot.root,
     form,
     statusEl,
@@ -394,19 +352,8 @@ async function main(): Promise<void> {
         return false;
       }
       if (step === CONTACT_STEP && !entry) {
-        setStatus(statusEl, "Confirm your participation details and email before continuing.", true);
+        setStatus(statusEl, "Sign in and confirm your participation details before continuing.", true);
         return false;
-      }
-      if (step === CONTACT_STEP && entry) {
-        if (entry.validateAffiliation?.() === false) return false;
-        // The contract's own rule for who the contact takes part as, checked where it is asked.
-        const contact = proposalContactSchema.safeParse(contactOf(entry));
-        if (!contact.success) {
-          const refused = normalizeValidation(contact.error);
-          applyFieldErrors(form, refused.fields);
-          setStatus(statusEl, refused.globalMessage, true);
-          return false;
-        }
       }
       if (step === 3 && abstractEditor && !abstractEditor.validate()) return false;
     },
@@ -417,8 +364,6 @@ async function main(): Promise<void> {
     },
   );
   syncEntryGate();
-  // A returning email confirmation already carries the terms it was sent under, so it is read at once.
-  if (hasEmailConfirmation()) activateIdentity();
 
   // ── Add speaker button ────────────────────────────────────────────────────
 
@@ -479,9 +424,7 @@ async function main(): Promise<void> {
     }
     eventName = forms.event.name;
     formsLoaded = true;
-    requiredTerms = forms.requiredTerms;
-    if (consentsContainer) renderConsentInputs(consentsContainer, requiredTerms, recordedConsents ?? undefined);
-    applyRecordedTerms();
+    if (consentsContainer) renderConsentInputs(consentsContainer, forms.requiredTerms);
     // Whatever the event allows, and only that. The fallback that used to
     // stand here named three session types of its own — a second copy of the
     // backend's `DEFAULT_SESSION_TYPES`, which `resolveSessionTypes` already
@@ -508,25 +451,24 @@ async function main(): Promise<void> {
       if (!validateBeforeSubmit(form, statusEl) || (abstractEditor && !abstractEditor.validate())) return;
 
       if (!entry) {
-        setStatus(statusEl, "Confirm your participation details and email before submitting.", true);
+        setStatus(statusEl, "Sign in and confirm your participation details before submitting.", true);
         return;
       }
       await withLoadingButton(findSubmitButton(form), async () => {
         try {
-          const submittedEntry = await prepareProposalEntry(entry!);
+          const submittedEntry = entry!;
           const isPresenting = isPresentingCheckbox?.checked ?? false;
           const firstName = submittedEntry.person.firstName ?? "";
 
-          const payload = (
-            submittedEntry.authenticated ? authenticatedProposalCreateSchema : proposalCreateSchema
-          ).parse({
-            continuationToken: submittedEntry.continuationToken,
+          const payload = proposalCreateSchema.parse({
             unaffiliatedAttestation: submittedEntry.unaffiliatedAttestation,
             independentCapacity: submittedEntry.independentCapacity,
-            ...(submittedEntry.entryContext ?? originalEntryContext),
+            ...originalEntryContext,
 
             proposer: {
-              ...newAffiliationDetails(submittedEntry),
+              // Names typed here because the account has none yet; saved names are never sent again.
+              firstName: submittedEntry.missingDetails.firstName,
+              lastName: submittedEntry.missingDetails.lastName,
               actingIdentityId: submittedEntry.actingIdentityId,
               bio: isPresenting ? readField(form, "proposerBio") || undefined : undefined,
               links: isPresenting && proposerLinksRef?.current ? proposerLinksRef.current.getLinks() : [],

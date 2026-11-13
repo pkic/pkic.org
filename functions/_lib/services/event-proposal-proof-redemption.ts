@@ -13,10 +13,8 @@ import {
   eventProposalProofRedemptionKey,
   proposalTermsDigest,
   verifyEventProposalCapability,
-  type EventProposalProofPayload,
 } from "./event-proposal-proof-capabilities";
 import { first } from "../db/queries";
-import { prepareEventProposalEntry } from "./event-proposal-proof-entry";
 
 export function isEventProposalProofReplay(error: unknown): boolean {
   return (
@@ -34,7 +32,6 @@ export async function prepareEventProposalProofRedemption(
     continuationToken: string;
     signingSecret: string;
     at: string;
-    operation: EventProposalProofPayload["operation"];
     actor?: Pick<AuthenticatedIdentity, "userId" | "sessionId">;
     speakerAuthority?: ParticipantAuthority;
     speakerId?: string;
@@ -48,7 +45,6 @@ export async function prepareEventProposalProofRedemption(
     true,
   );
   const contextGuards = await prepareEventProposalProofContext(db, { ...input, payload });
-  const entry = await prepareEventProposalEntry(db, input.eventId, payload.entryContext);
   if (
     await first(db, "SELECT id FROM audit_log WHERE idempotency_key=?", [
       eventProposalProofRedemptionKey(payload.capabilityId),
@@ -78,10 +74,8 @@ export async function prepareEventProposalProofRedemption(
     applicantKind: payload.applicantKind,
     terms,
     proofEvidence,
-    entryContext: payload.entryContext,
     statements: [
       ...contextGuards,
-      ...entry.statements,
       prepareActiveTermsSnapshotGuard(db, input.eventId, terms, audience),
       prepareAuthorizationGuard(db, {
         sql: "SELECT 1 WHERE CAST(strftime('%s','now') AS INTEGER) < ?",
@@ -94,7 +88,7 @@ export async function prepareEventProposalProofRedemption(
         "event_mailbox_confirmed",
         "event",
         input.eventId,
-        { email: payload.email, applicantKind: payload.applicantKind, operation: payload.operation },
+        { email: payload.email, applicantKind: payload.applicantKind, operation: "speaker_profile" },
         input.at,
         proofKey,
         { type: "event", id: input.eventId },
@@ -121,11 +115,7 @@ export async function assertInvitedSpeakerClaimSelection(
     input.eventId,
     true,
   );
-  if (
-    !payload.speakerClaimSessionId ||
-    payload.context?.kind !== "speaker" ||
-    payload.context.speakerId !== input.speakerId
-  )
+  if (!payload.speakerClaimSessionId || payload.context.speakerId !== input.speakerId)
     throw new AppError(403, "PROPOSAL_IDENTITY_AUTHORITY_REQUIRED", "Select only your own speaker representation.");
   await prepareInvitedSpeakerAccountClaim(db, payload, input.actor);
 }

@@ -14,6 +14,7 @@ const SIGNING_DOMAIN = "pkic-public-capability:v1";
 
 export type EmailAuthCapabilityPurpose =
   | "user_sign_in"
+  | "user_sign_up"
   | "sponsor_sign_in"
   | "identity_invitation"
   | "identity_reinstatement"
@@ -27,7 +28,6 @@ export type CapabilityPurpose =
   | "proposal_manage"
   | "speaker_manage"
   | "meeting_guest_verify"
-  | "member_join_verify"
   | "member_join_apply"
   | "event_proposal_verify"
   | "event_proposal_continue"
@@ -36,7 +36,6 @@ export type CapabilityPurpose =
   | EmailAuthCapabilityPurpose;
 
 export type StatelessCapabilityPurpose =
-  | "member_join_verify"
   | "member_join_apply"
   | "event_proposal_verify"
   | "event_proposal_continue"
@@ -63,13 +62,13 @@ const purposeCodes: Record<CapabilityPurpose, string> = {
   proposal_manage: "pm",
   speaker_manage: "sm",
   meeting_guest_verify: "mgv",
-  member_join_verify: "mjv",
   member_join_apply: "mja",
   event_proposal_verify: "epv",
   event_proposal_continue: "epc",
   registration_email_verify: "rev",
   attendance_point: "ap",
   user_sign_in: "usi",
+  user_sign_up: "usu",
   sponsor_sign_in: "ssi",
   identity_invitation: "iid",
   identity_reinstatement: "irs",
@@ -192,12 +191,12 @@ export async function verifyCapabilityToken(payload: {
 
 export function isStatelessCapabilityPurpose(purpose: CapabilityPurpose): purpose is StatelessCapabilityPurpose {
   return (
-    purpose === "member_join_verify" ||
     purpose === "member_join_apply" ||
     purpose === "event_proposal_verify" ||
     purpose === "event_proposal_continue" ||
     purpose === "registration_email_verify" ||
     purpose === "user_sign_in" ||
+    purpose === "user_sign_up" ||
     purpose === "sponsor_sign_in" ||
     purpose === "identity_invitation" ||
     purpose === "identity_reinstatement" ||

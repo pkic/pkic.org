@@ -103,7 +103,7 @@ test("continuous local eligibility checks queue a burst while attempt uploads ar
   const templateEmail = ownDomainEmail("fast-template");
   const templateSince = await capturedEmailCount();
   const template = await registerInBrowser(page, templateEmail, undefined, undefined, {
-    organization: "Fast Scanner Template Org",
+    organization: `Fast Scanner Template Org ${Date.now()}`,
   });
   // A verified registration is final when submitted: no confirmation step follows.
   await waitForCapturedEmail(templateEmail, "registration is confirmed", { since: templateSince });
@@ -122,7 +122,7 @@ test("continuous local eligibility checks queue a burst while attempt uploads ar
     const confirmation = await waitForCapturedEmail(email, "Confirm your registration", { since });
     await page.goto(extractEmailUrl(confirmation, "/register/confirm"));
     // Each address has its own domain, and a named organization belongs to the one domain that claimed it.
-    await confirmRegistration(page, `Fast Scanner Attendee Org ${index + 1}`);
+    await confirmRegistration(page, `Fast Scanner Attendee Org ${index + 1} ${Date.now()}`);
     await waitForCapturedEmail(email, "registration is confirmed", { since });
   }
   await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-fast-scanner-burst"));

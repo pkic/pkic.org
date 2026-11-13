@@ -46,6 +46,8 @@ const emailAuthCapabilityPayloadSchema = z
       })
       .strict()
       .optional(),
+    /** The address a sign-up link proves; no user exists yet to name as the subject. */
+    signUpEmail: normalizedEmailSchema.optional(),
     capabilityId: z.string().min(16).max(64),
     emailFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     ipHash: z
@@ -77,6 +79,7 @@ export async function queueEmailAuthCapability(options: {
   email: string;
   authorizationRevision?: string;
   addressRequest?: { userId: string; email: string; purpose?: "representation" };
+  signUpEmail?: string;
   ttlSeconds: number;
   ipHash?: string | null;
   userAgentHash?: string | null;
@@ -88,6 +91,7 @@ export async function queueEmailAuthCapability(options: {
     subjectId: options.subjectId,
     ...(options.addressRequest ? { addressRequest: options.addressRequest } : {}),
     ...(options.authorizationRevision ? { authorizationRevision: options.authorizationRevision } : {}),
+    ...(options.signUpEmail ? { signUpEmail: options.signUpEmail } : {}),
     capabilityId,
     emailFingerprint: await hmacSha256Hex(options.signingSecret, emailFingerprintInput(options.email)),
     ipHash: options.ipHash ?? null,

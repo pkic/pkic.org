@@ -3,6 +3,7 @@ import { expect, type Page } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
 import { userAuthSessionResponseSchema } from "../../../assets/shared/schemas/user-auth";
 import { sessionActingIdentityChoiceRequired } from "../../../assets/shared/session-acting-identity";
+import { USER_SESSION_COOKIE_NAME } from "../../../functions/_lib/auth/session-cookies";
 
 /** A stable per-identity client address, so parallel sign-ins do not share one rate-limit bucket. */
 export function clientIpForIdentity(email: string): string {
@@ -83,6 +84,8 @@ export async function signInToPortal(page: Page, email: string, options: { conti
   // serial suite otherwise funnels every sign-in through Wrangler's one local
   // address and exhausts the production-equivalent per-IP limiter.
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
+  // A public flow may have left this browser signed in as someone else; this person arrives without that session.
+  await page.context().clearCookies({ name: USER_SESSION_COOKIE_NAME });
   await page.goto("/portal/");
   await openEmailSignIn(page);
   await page.getByLabel("Email").fill(email);

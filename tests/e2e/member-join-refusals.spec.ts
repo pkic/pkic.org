@@ -109,18 +109,9 @@ test("a second application from the same applicant does not create a second reco
    * holding two live applications for one applicant, because staff would then
    * review one and approve the other.
    */
-  const second = await page.evaluate(
-    async ({ email: applicantEmail }) => {
-      const response = await fetch("/api/v1/members/join/verify", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: applicantEmail }),
-      });
-      return { status: response.status, body: await response.text() };
-    },
-    { email },
-  );
-  expect(second.status, second.body).toBeLessThan(500);
+  const second = await verifyMembershipJoinEmail(page, email);
+  // Asking again leads to the application already made, never to a second one.
+  expect(second.status).toBe("application_in_progress");
 
   await ensureAppOrigin(page);
   const applications = await page.evaluate(

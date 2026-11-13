@@ -2,13 +2,13 @@ import { membershipWorkflowVersionResponseSchema } from "../../../assets/shared/
 import { membershipWorkflowReviewResponseSchema } from "../../../assets/shared/schemas/membership-review-routes";
 /**
  * Real Worker/D1 member provisioning through the public HTTP APIs and the
- * normal mailbox capability flow: no route interception and no D1 files. A
+ * normal sign-in and join flow: no route interception and no D1 files. A
  * spec that needs an approved member with a live organization capacity, such
  * as a person who can hold a seat or a leadership term in a group, creates
  * one here rather than seeding the database behind the application's back.
  */
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
+import { verifyMembershipJoinEmail } from "./member-join";
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -52,21 +52,11 @@ export async function createMember(
 ): Promise<{ email: string; userId: string; memberId: string; identityId: string }> {
   const identity = crypto.randomUUID();
   const email = `e2e-persona-${identity}@persona-${identity}.test`;
-  const startSince = await capturedEmailCount();
-  const start = await jsonResponse(page.request, "POST", "/api/v1/members/join/start", {
-    email,
+  if (!page.url().startsWith("http")) await page.goto("/");
+  const verified = await verifyMembershipJoinEmail(page, email, {
     unaffiliatedAttestation: options.individual ?? false,
   });
-  expect(stringProperty(start, "status")).toBe("verification_sent");
-
-  const verificationEmail = await waitForCapturedEmail(email, "verify your email address", { since: startSince });
-  const verificationUrl = extractEmailUrl(verificationEmail, "/join/");
-  const verificationToken = new URL(verificationUrl).hash.replace(/^#verify=/, "");
-  expect(verificationToken.length).toBeGreaterThan(32);
-  const verified = await jsonResponse(page.request, "POST", "/api/v1/members/join/verify", {
-    token: verificationToken,
-  });
-  expect(stringProperty(verified, "status")).toBe("application_ready");
+  if (verified.status !== "application_ready") throw new Error(`Expected an application, received ${verified.status}`);
 
   const application = await jsonResponse(page.request, "POST", "/api/v1/members/applications", {
     applicantEmail: email,
@@ -75,7 +65,7 @@ export async function createMember(
     ...(options.individual
       ? {}
       : { organizationName: options.organizationName ?? `Persona Test Organization ${identity}` }),
-    joinToken: stringProperty(verified, "joinToken"),
+    joinToken: verified.joinToken,
     answers: {
       reason: "Real Worker/D1 portal persona coverage",
       about_yourself: "I work on PKI interoperability.",
@@ -91,14 +81,23 @@ export async function createMember(
   const approved = await completeSyntheticMembershipReview(page.request, stringProperty(application, "applicationId"));
   const userId = stringProperty(approved, "userId");
   const userDetail = recordProperty(await jsonResponse(page.request, "GET", `/api/v1/users/${userId}`), "user");
-  const identities = arrayProperty(userDetail, "identities");
-  expect(identities).toHaveLength(1);
+  // The account keeps the individual identity it started with; the membership is on the identity that holds it.
+  const memberIdentity = memberIdentityOf(userDetail);
   return {
     email,
     userId,
     memberId: stringProperty(approved, "memberId"),
-    identityId: stringProperty(identities[0] as JsonRecord, "identityId"),
+    identityId: stringProperty(memberIdentity, "identityId"),
   };
+}
+
+/** The identity a person holds their membership through, beside the individual identity every account starts with. */
+export function memberIdentityOf(user: JsonRecord): JsonRecord {
+  const identity = (arrayProperty(user, "identities") as JsonRecord[]).find(
+    (item) => typeof item.memberId === "string",
+  );
+  if (!identity) throw new Error(`Expected a member identity in ${JSON.stringify(user.identities)}`);
+  return identity;
 }
 
 let staffWorkflowVersion: Promise<string> | null = null;
@@ -164,7 +163,7 @@ export async function completeSyntheticMembershipReview(request: APIRequestConte
   expect(user).toBeTruthy();
   const userId = stringProperty(user, "id");
   const detail = recordProperty(await jsonResponse(request, "GET", `/api/v1/users/${userId}`), "user");
-  const identity = arrayProperty(detail, "identities")[0] as JsonRecord;
+  const identity = memberIdentityOf(detail);
   return {
     userId,
     memberId: stringProperty(identity, "memberId"),

@@ -46,6 +46,18 @@ function sessionTokenFrom(response: Response): string {
   return decodeURIComponent(cookie.split(";")[0].split("=")[1]);
 }
 
+/** A sponsor contact has no separate way in: they start with their email like anyone else. */
+async function signUpToken(email: string): Promise<string> {
+  expect((await call(jsonRequest("/api/v1/auth/sign-up", { email }))).status).toBe(200);
+  const [outbox] = await queryAll<{ payload_json: string }>(
+    env.DB,
+    "SELECT payload_json FROM email_outbox WHERE template_key = 'user_magic_link' ORDER BY rowid DESC LIMIT 1",
+  );
+  const payload = await deliveredEmailPayload<{ magicLinkUrl: string }>(env.DB, env, outbox.payload_json);
+  const query = new URL(payload.magicLinkUrl).hash.split("?", 2)[1] ?? "";
+  return new URLSearchParams(query).get("token")!;
+}
+
 async function readSponsorAccessToken(): Promise<string> {
   const [outbox] = await queryAll<{ payload_json: string }>(
     env.DB,
@@ -144,16 +156,14 @@ describe("sponsor capacity in the canonical portal session", () => {
     return createAdminSession(env.DB, user.id, `sponsor-user-${crypto.randomUUID()}`);
   }
 
-  it("redeems a sponsor access link into pkic_session and lists only consenting attendees", async () => {
+  it("signs a sponsor contact up into pkic_session and lists only consenting attendees", async () => {
     const sponsorId = await createActiveEventSponsor("Leader", "leader@sponsor.test");
     await seedConsentingRegistration(eventId, "yes@attendee.test", "sponsor-data-sharing");
     await seedConsentingRegistration(eventId, "no@attendee.test", "privacy-policy");
 
-    const requested = await call(
-      jsonRequest("/api/v1/sponsors/access-links", { email: "leader@sponsor.test", eventSlug: "pqc-2026" }),
+    const verified = await call(
+      jsonRequest("/api/v1/auth/verify-link", { token: await signUpToken("leader@sponsor.test") }),
     );
-    expect(requested.status).toBe(200);
-    const verified = await call(jsonRequest("/api/v1/auth/verify-link", { token: await readSponsorAccessToken() }));
     expect(verified.status).toBe(200);
     const body = (await verified.json()) as {
       identity: { email: string };
@@ -382,11 +392,9 @@ describe("sponsor capacity in the canonical portal session", () => {
 
   it("logs out through canonical auth and revokes the one user session", async () => {
     await createActiveEventSponsor("Leader", "logout@sponsor.test");
-    const requested = await call(
-      jsonRequest("/api/v1/sponsors/access-links", { email: "logout@sponsor.test", eventSlug: "pqc-2026" }),
+    const verified = await call(
+      jsonRequest("/api/v1/auth/verify-link", { token: await signUpToken("logout@sponsor.test") }),
     );
-    expect(requested.status).toBe(200);
-    const verified = await call(jsonRequest("/api/v1/auth/verify-link", { token: await readSponsorAccessToken() }));
     const token = sessionTokenFrom(verified);
     const logout = await call(
       new Request("https://app.test/api/v1/auth/logout", {

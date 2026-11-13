@@ -1,25 +1,23 @@
 import { emailDomainOf } from "../../../../../assets/shared/schemas/email-domains";
 import type { MemberJoinVerifyResponse } from "./types";
-import type { AuthMember, DatabaseLike } from "../../../types";
+import type { DatabaseLike } from "../../../types";
 import { nowIso } from "../../../utils/time";
 import { buildFindOrCreateUserStatement } from "../../users";
 import { isEmailReservationConflict } from "../../user-emails";
 import { provedMailboxUserId } from "../../email-ownership";
-import { prepareVerifyOwnedEmailStatements } from "../../email-verification";
 import { prepareExplicitVerifiedDomainIdentity } from "../../identities";
 import { prepareAuditLog } from "../../audit";
 import { workEmailDomain } from "../../../email-domains/classification";
-import { prepareOneTimeAuditLog } from "../../audit";
-import { prepareUserSession } from "../../../auth/user-session";
 import { AppError } from "../../../errors";
 import {
   issueMemberJoinApplicationToken,
-  verifyMemberJoinVerificationToken,
+  newMemberJoinCapabilityPayload,
   type MemberJoinApplicationCapabilityPayload,
+  type MemberJoinCapabilityPayload,
 } from "./capabilities";
+import type { MemberJoinApplicantKind } from "../../../../../assets/shared/schemas/member-join";
 import { resolveOpenJoinApplication } from "./open-application";
 import { readJoinVerification } from "./verification-read";
-import { prepareEligibleMemberRead } from "../../../auth/identity-capacities";
 import {
   isStateGuardFailure,
   isAuthorizationGuardFailure,
@@ -51,9 +49,9 @@ async function applicationOrganizationSelection(basis: VerifiedAffiliationBasis,
 
 async function issueApplicationContinuation(
   signingSecret: string,
-  payload: Awaited<ReturnType<typeof verifyMemberJoinVerificationToken>>,
+  payload: MemberJoinCapabilityPayload,
   ttlSeconds: number,
-  applicantUserId: string | null,
+  applicantUserId: string,
   organization?: MemberJoinApplicationCapabilityPayload["organization"],
 ): Promise<MemberJoinVerifyResponse> {
   return {
@@ -69,48 +67,40 @@ async function issueApplicationContinuation(
   };
 }
 
+/**
+ * Decides the membership path of a signed-in person. Their session stands for
+ * the mailbox proof: the address is the account's own, and only an address the
+ * account has proved continues. Nothing here starts or changes a session.
+ */
 export async function verifyMemberJoin(
   db: DatabaseLike,
   input: {
-    token: string;
+    userId: string;
+    email: string;
+    applicantKind: MemberJoinApplicantKind;
     organizationId?: string;
     organizationName?: string;
     domain?: string;
     continueAsIndividual?: boolean;
     signingSecret: string;
     applicationTtlSeconds: number;
-    sessionTtlHours: number;
   },
-): Promise<
-  | MemberJoinVerifyResponse
-  | {
-      status: "organization_session_ready";
-      userId: string;
-      identityId: string;
-      memberId: string;
-      sessionId: string;
-      expiresAt: string;
-      member: AuthMember;
-    }
-> {
-  const capability = await verifyMemberJoinVerificationToken(input.signingSecret, input.token);
-  // A valid mailbox proof can show sign-in guidance even if a previous visit
-  // already consumed the join link. It must never mint another session.
+): Promise<MemberJoinVerifyResponse | { status: "organization_identity_ready"; identityId: string }> {
+  const capability = newMemberJoinCapabilityPayload(input.email, input.applicantKind);
   if (input.organizationId && input.organizationName)
     throw new AppError(422, "IDENTITY_ORGANIZATION_RESOLVED", "Choose an organization or add one.");
-  const observed = await readJoinVerification(db, capability.email, capability.capabilityId, input.organizationId, {
+  const observed = await readJoinVerification(db, capability.email, input.organizationId, {
     domain: input.domain,
     organizationName: input.organizationName,
   });
+  // The session's address continues only while this account is the one that proved it.
+  if (provedMailboxUserId(observed.ownership) !== input.userId) return { status: "support_required" };
   if (observed.existingMembership) return { status: "already_member" };
-  if (observed.consumed) {
-    throw new AppError(409, "MEMBER_JOIN_LINK_USED", "Membership verification link already used");
-  }
   if (observed.openApplication.own) {
     const open = await resolveOpenJoinApplication(input.signingSecret, observed.openApplication);
     if (open?.kind === "own") return { status: "application_in_progress", statusPath: open.statusPath };
   }
-  const provedUserId = provedMailboxUserId(observed.ownership);
+  const provedUserId = input.userId;
   if (input.continueAsIndividual) {
     if (capability.applicantKind !== "individual" || input.organizationId || input.organizationName || input.domain)
       throw new AppError(422, "MEMBERSHIP_CATEGORY_TYPE_MISMATCH", "Choose an individual application path.");
@@ -226,18 +216,9 @@ export async function verifyMemberJoin(
       creation: observed.creation,
     },
   );
-  const session = await prepareUserSession(db, preparedUser.user.id, input.sessionTtlHours);
-  const projection = prepareEligibleMemberRead(db, preparedUser.user.id, identity.identityId);
-  let member: AuthMember | null;
   try {
-    const results = await db.batch([
+    await db.batch([
       ...preparedUser.statements,
-      ...prepareVerifyOwnedEmailStatements(db, {
-        userId: preparedUser.user.id,
-        normalizedEmail: capability.email,
-        method: "magic_link",
-        verifiedAt,
-      }),
       ...observedDomainClaimsEvidence(capability.email, observed.affiliation?.basis.claims ?? [], {
         id: claimedMember.organization_id,
         name: organizations.find((organization) => organization.id === claimedMember.organization_id)!.name,
@@ -249,12 +230,12 @@ export async function verifyMemberJoin(
         db,
         "user",
         preparedUser.user.id,
-        "membership_join_email_verified",
+        "membership_join_representation_added",
         "member",
         claimedMember.member_id,
         { domain, applicantKind: capability.applicantKind },
         verifiedAt,
-        `membership_join_email_verified:${capability.capabilityId}`,
+        null,
         { type: "organization", id: claimedMember.member_id },
       ),
       prepareAuthorizationGuard(db, {
@@ -262,43 +243,13 @@ export async function verifyMemberJoin(
           AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
         bindings: [identity.identityId, preparedUser.user.id, claimedMember.organization_id],
       }),
-      prepareOneTimeAuditLog(
-        db,
-        "user",
-        preparedUser.user.id,
-        "membership_join_link_consumed",
-        "member",
-        claimedMember.member_id,
-        { domain },
-        verifiedAt,
-        `membership_join_link_consumed:${capability.capabilityId}`,
-        { type: "organization", id: claimedMember.member_id },
-      ),
-      ...session.statements,
-      ...projection.statements,
     ]);
-    member = projection.decode(results.slice(-projection.statements.length));
   } catch (error) {
     if (isEmailReservationConflict(error)) return { status: "support_required" };
     if (isAuthorizationGuardFailure(error)) return { status: "support_required" };
     if (isStateGuardFailure(error))
       throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose an organization from the updated list.");
-    if (
-      error instanceof Error &&
-      (error.message.includes("uq_audit_log_idempotency_key") || error.message.includes("audit_log.idempotency_key"))
-    ) {
-      throw new AppError(409, "MEMBER_JOIN_LINK_USED", "Membership verification link already used");
-    }
     throw error;
   }
-  if (!member) throw new AppError(500, "MEMBER_JOIN_SESSION_FAILED", "Member portal access could not be established");
-  return {
-    status: "organization_session_ready",
-    member,
-    userId: preparedUser.user.id,
-    identityId: identity.identityId,
-    memberId: claimedMember.member_id,
-    sessionId: session.sessionId,
-    expiresAt: session.expiresAt,
-  };
+  return { status: "organization_identity_ready", identityId: identity.identityId };
 }

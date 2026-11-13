@@ -13,21 +13,27 @@ import { publicOperation, requiresSession } from "./route-contract";
 import { sponsorCapacitySchema } from "./sponsor-access";
 import { sessionActingIdentitySchema } from "../session-acting-identity";
 import { publicStaffCapacitySchema } from "./staff-capacity";
+import { screensWorkEmailDomain, workEmailStepSchema } from "./work-email";
 
 /**
  * A portal route a sign-in link may return to once the session exists: a path
  * under the portal's own `#`, never a scheme or a host, so the link can only
  * land inside the portal.
  */
+// Long enough for a registration route that carries its invitation token back after sign-in.
 export const portalReturnPathSchema = z
   .string()
-  .max(200)
+  .max(512)
   .regex(/^\/(?!\/)[A-Za-z0-9\-._~!$&'()*+,;=:@/%?]*$/, "Must be a portal path");
 
 export const userAuthRequestSchema = emailRecoveryRequestSchema.extend({
   returnPath: portalReturnPathSchema.optional(),
 });
 export const userAuthVerifySchema = magicLinkVerifySchema;
+/** Starting an account: the shared work-email step, and where the link returns the person. */
+export const userSignUpRequestSchema = workEmailStepSchema.extend({
+  returnPath: portalReturnPathSchema.optional(),
+});
 
 export const userIdentitySchema = z.object({
   id: databaseIdSchema,
@@ -86,6 +92,25 @@ export const userAuthRequestRouteSchema = {
   responses: {
     "200": {
       description: "Sign-in link request accepted.",
+      content: { "application/json": { schema: successResponseSchema } },
+    },
+  },
+};
+
+export const userSignUpRouteSchema = {
+  ...protectsPublicAction("login_email", "email:manage"),
+  ...publicOperation(),
+  ...screensWorkEmailDomain(),
+  tags: ["Authentication"],
+  summary: "Start an account with an emailed link",
+  description:
+    "Sends a link that proves the address. An address that already signs in receives a sign-in link instead, so the response never says which.",
+  request: {
+    body: { content: { "application/json": { schema: userSignUpRequestSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Link request accepted.",
       content: { "application/json": { schema: successResponseSchema } },
     },
   },

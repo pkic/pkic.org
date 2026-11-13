@@ -7,8 +7,7 @@ import {
   membershipApplicationFormDefinitionUpdateSchema,
 } from "../../assets/shared/schemas/membership-application-form";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { extractEmailUrl, capturedEmailCount, waitForCapturedEmail } from "./helpers/sendgrid";
-import { openMembershipVerificationLink } from "./helpers/member-join";
+import { startJoinInBrowser } from "./helpers/member-join";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { runRowAction } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
@@ -227,19 +226,20 @@ test(
       await expect(page.getByRole("list", { name: "Membership application form fields" })).toContainText(changedLabel);
       await publishE2eSite(page, "/join/");
 
-      const email = `membership-form-${Date.now()}@organization-e2e.test`;
-      const sinceVerification = await capturedEmailCount();
-      await page.goto("/join/");
-      await page.getByLabel("Your official work or organization email address").fill(email);
-      await page.getByRole("button", { name: "Continue" }).click();
-      await expect(page.getByText("Check your email", { exact: true })).toBeVisible();
-
-      const verification = await waitForCapturedEmail(email, "Verify your email address", {
-        since: sinceVerification,
-      });
-      await openMembershipVerificationLink(page, extractEmailUrl(verification, "#verify="));
-      await expect(page.getByRole("heading", { name: "Membership Application", exact: true })).toBeVisible();
-      await expect(page.getByLabel(changedLabel, { exact: true })).toBeVisible();
+      const email = `membership-form-${Date.now()}@organization-e2e-${Date.now()}.test`;
+      // The applicant arrives in a browser of their own; the staff session stays on `page`.
+      const applicantContext = await page
+        .context()
+        .browser()!
+        .newContext({ baseURL: new URL(page.url()).origin });
+      try {
+        const applicant = await applicantContext.newPage();
+        await startJoinInBrowser(applicant, email);
+        await expect(applicant.getByRole("heading", { name: "Membership Application", exact: true })).toBeVisible();
+        await expect(applicant.getByLabel(changedLabel, { exact: true })).toBeVisible();
+      } finally {
+        await applicantContext.close();
+      }
       expect(legacyAdminFormRequests).toEqual([]);
     } finally {
       if (changed) {

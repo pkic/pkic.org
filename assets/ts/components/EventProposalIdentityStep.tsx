@@ -4,7 +4,6 @@ import type { ComponentChildren } from "preact";
 import type { z } from "zod";
 import { useEffect, useMemo, useState, useRef } from "preact/hooks";
 import type { RequiredTerm } from "../../shared/schemas/forms";
-import type { ProposalEntryContext } from "../../shared/schemas/proposal-entry";
 import type { ConsentItem } from "../../shared/schemas/registration";
 import {
   eventProposalProofStartSchema,
@@ -28,6 +27,7 @@ import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
 import { FormSection } from "../ui/FormSection";
 import { EmailFirstStep } from "./EmailFirstStep";
+import { SignInCard } from "./sign-in/SignInCard";
 import { ADDRESS_IN_USE_COPY, EMAIL_FIRST_COPY } from "../../shared/email-first-copy";
 import { ProposalProofSupportNotice } from "./ProposalProofSupportNotice";
 import { ParticipationRepresentation } from "./ParticipationRepresentation";
@@ -55,7 +55,6 @@ export function EventProposalIdentityStep({
   speakerManagementToken,
   speakerProposalId,
   expectedSpeakerUserId,
-  entryContext,
   onSavePersonalDetails,
   personalDetails,
   startWithEmailProof,
@@ -76,7 +75,6 @@ export function EventProposalIdentityStep({
   speakerManagementToken?: string;
   speakerProposalId?: string;
   expectedSpeakerUserId?: string | null;
-  entryContext?: ProposalEntryContext;
   onSavePersonalDetails?: (names: z.infer<typeof personNamePatchSchema>) => Promise<ParticipationPerson>;
 }) {
   const endpoint = `/api/v1/events/${encodeURIComponent(eventSlug)}/proposals/proof`;
@@ -97,16 +95,7 @@ export function EventProposalIdentityStep({
   const flow = speakerManagementToken || speakerProposalId ? "speaker" : "proposal";
   // Each page names its own save, not the other flow's.
   const savedWhen = flow === "speaker" ? "when you save your speaker identity" : "when you submit your proposal";
-  const proofBody = {
-    consents: consents(),
-    speakerManagementToken: identity.proofOwnerToken ? undefined : speakerManagementToken,
-    continuationToken: identity.proofOwnerToken,
-    speakerProposalId,
-    entryContext:
-      identity.proofOwnerToken || speakerManagementToken || speakerProposalId
-        ? undefined
-        : (identity.entryContext ?? entryContext),
-  };
+  const proofBody = { consents: consents(), speakerManagementToken, speakerProposalId };
   const [disclosure, setDisclosure] = useState<IndependentCapacityDraft>({});
   const organization = useRef<VerifiedOrganizationController>({});
   const [organizationDraftRevision, setOrganizationDraftRevision] = useState(0);
@@ -242,7 +231,16 @@ export function EventProposalIdentityStep({
                     </Button>
                   </div>
                 </>
+              ) : identity.signInRequired ? (
+                // The shared sign-in card: its links return here, and a passkey continues in place.
+                <div>
+                  <SignInCard
+                    embedded={{ returnPath: `${location.pathname}${location.search}`, emailFlow: "proposal" }}
+                    onSignedIn={identity.reloadSession}
+                  />
+                </div>
               ) : (
+                flow === "speaker" &&
                 !identity.continuationToken && (
                   <EmailFirstStep
                     flow={flow}
@@ -403,7 +401,8 @@ export function EventProposalIdentityStep({
                   onUseWorkEmail={() => {
                     setDisclosure({});
                     identity.setKind("organization");
-                    identity.useDifferentEmail();
+                    // A signed-in person adds the representation; a speaker confirms the work address.
+                    if (!identity.authenticated) identity.useDifferentEmail();
                     setSent(false);
                     setChanging(false);
                   }}

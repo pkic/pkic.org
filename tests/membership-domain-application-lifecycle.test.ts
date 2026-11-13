@@ -2,9 +2,6 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { memberJoinVerifyResponseSchema } from "../assets/shared/schemas/member-join";
 import { memberApplicationCreateResponseSchema } from "../assets/shared/schemas/member-applications";
-import { signStatelessCapabilityToken } from "../functions/_lib/auth/capability-links";
-import { encodeCapabilityPayload } from "../functions/_lib/auth/capability-payload";
-import { newMemberJoinCapabilityPayload } from "../functions/_lib/services/membership/join/capabilities";
 import { buildApplicationApproval } from "../functions/_lib/services/membership/applications/provision-application";
 import { getMemberApplicationById } from "../functions/_lib/services/membership/applications/queries";
 import { transitionApplicationStage } from "../functions/_lib/services/membership/applications/transition";
@@ -21,8 +18,8 @@ import {
   verifiedMemberApplicationPayload,
 } from "./helpers/member-applications";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
+import { joinPath, signInJoinApplicant, type JoinApplicant } from "./helpers/member-join";
 import { resetDb } from "./helpers/reset-db";
-import { profileD1Flow } from "./helpers/d1-flow-profile";
 
 const testEnv = {
   ...env,
@@ -42,13 +39,9 @@ function post(path: string, body: unknown) {
     body: JSON.stringify(body),
   });
 }
-async function verification(kind: "organization" | "individual" = "organization") {
-  return signStatelessCapabilityToken({
-    signingSecret: env.INTERNAL_SIGNING_SECRET!,
-    purpose: "member_join_verify",
-    resourceId: encodeCapabilityPayload(newMemberJoinCapabilityPayload(`applicant@${domain}`, kind)),
-    ttlSeconds: 900,
-  });
+/** The signed-in applicant at the reviewed domain, joining for an organization or as an individual. */
+function applicant(kind: "organization" | "individual" = "organization", email = `applicant@${domain}`) {
+  return signInJoinApplicant(testEnv, email, kind === "individual");
 }
 async function claim(organizationId: string) {
   await env.DB.prepare(
@@ -65,12 +58,8 @@ async function derived(organizationId: string, blocked = false) {
     .bind(crypto.randomUUID(), userId, organizationId, domain, at, blocked ? at : null, blocked ? at : null, at, at, at)
     .run();
 }
-async function apply(selection: { organizationId?: string; organizationName?: string }, token?: string) {
-  const response = await post("/api/v1/members/join/verify", {
-    token: token ?? (await verification()),
-    domain,
-    ...selection,
-  });
+async function apply(selection: { organizationId?: string; organizationName?: string }, person?: JoinApplicant) {
+  const response = await joinPath(testEnv, person ?? (await applicant()), { domain, ...selection });
   expect(response.status, await response.clone().text()).toBe(200);
   const continuation = memberJoinVerifyResponseSchema.parse(await response.json());
   if (continuation.status !== "application_ready")
@@ -109,7 +98,7 @@ describe("membership domain claim lifecycle", () => {
       if (kind === "claimed") await claim(first);
       else await derived(first);
       if (kind === "ambiguous") await claim(await insertOrganization(env.DB, "Second Nonmember"));
-      const response = await post("/api/v1/members/join/verify", { token: await verification("individual") });
+      const response = await joinPath(testEnv, await applicant("individual"));
       expect(response.status, await response.clone().text()).toBe(200);
       const continuation = memberJoinVerifyResponseSchema.parse(await response.json());
       expect(continuation).toMatchObject({ status: "application_ready", applicantKind: "individual" });
@@ -129,46 +118,31 @@ describe("membership domain claim lifecycle", () => {
     },
   );
 
-  it("previews a subdomain without signing in or consuming the individual join proof", async () => {
+  it("previews a subdomain for the signed-in account's address without changing anything", async () => {
     const member = await insertOrganization(env.DB, "Preview Member");
     await seedOrganizationAggregate(env.DB, member);
     await claim(member);
-    const token = await signStatelessCapabilityToken({
-      signingSecret: env.INTERNAL_SIGNING_SECRET!,
-      purpose: "member_join_verify",
-      resourceId: encodeCapabilityPayload(newMemberJoinCapabilityPayload(`applicant@eu.${domain}`, "individual")),
-      ttlSeconds: 900,
+    const person = await applicant("individual", `applicant@eu.${domain}`);
+    const preview = await callApi(testEnv, "/api/v1/members/join/affiliations", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: person.cookie },
+      body: JSON.stringify({ domain: `eu.${domain}` }),
     });
-    const profile = profileD1Flow(env.DB);
-    const preview = await callApi(
-      { ...testEnv, DB: profile.db },
-      "/api/v1/members/join/affiliations",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token, domain: `eu.${domain}` }),
-      },
-      { maxRoundTrips: 1 },
-    );
     expect(preview.status, await preview.clone().text()).toBe(200);
-    expect(profile.summary().statements).toBe(8);
-    expect(preview.headers.get("set-cookie")).toBeNull();
-    expect(await queryAll(env.DB, "SELECT id FROM sessions")).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='membership_join_link_consumed'")).toEqual([]);
-    const chooser = await post("/api/v1/members/join/verify", { token });
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE organization_id IS NOT NULL")).toEqual([]);
+    const chooser = await joinPath(testEnv, person);
     expect(await chooser.json()).toMatchObject({
       status: "organization_selection_required",
       canApplyAsIndividual: true,
     });
-    const continued = await post("/api/v1/members/join/verify", { token, continueAsIndividual: true });
+    const continued = await joinPath(testEnv, person, { continueAsIndividual: true });
     expect(await continued.json()).toMatchObject({ status: "application_ready", applicantKind: "individual" });
-    expect(continued.headers.get("set-cookie")).toBeNull();
-    expect(await queryAll(env.DB, "SELECT id FROM sessions")).toEqual([]);
-    const joined = await post("/api/v1/members/join/verify", { token, organizationId: member });
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE organization_id IS NOT NULL")).toEqual([]);
+    const joined = await joinPath(testEnv, person, { organizationId: member });
     expect(joined.status, await joined.clone().text()).toBe(200);
-    const consumedPreview = await post("/api/v1/members/join/affiliations", { token, domain });
-    expect(consumedPreview.status).toBe(409);
-    expect(await consumedPreview.json()).toMatchObject({ error: { code: "MEMBER_JOIN_LINK_USED" } });
+    expect(await joined.json()).toEqual({ status: "organization_access_ready" });
+    // Once the person represents the member, the path says so instead of offering the choice again.
+    expect(await (await joinPath(testEnv, person)).json()).toEqual({ status: "already_member" });
   });
 
   it("lets an individual apply on a lapsed member's domain", async () => {
@@ -176,7 +150,7 @@ describe("membership domain claim lifecycle", () => {
     await seedOrganizationAggregate(env.DB, member);
     await claim(member);
     await env.DB.prepare("UPDATE members SET status='inactive' WHERE organization_id=?").bind(member).run();
-    const response = await post("/api/v1/members/join/verify", { token: await verification("individual") });
+    const response = await joinPath(testEnv, await applicant("individual"));
     expect(await response.json()).toMatchObject({ status: "application_ready", applicantKind: "individual" });
   });
 
@@ -261,10 +235,7 @@ describe("membership domain claim lifecycle", () => {
   it("returns a review refusal when claims overflow after the organization was chosen", async () => {
     const selected = await insertOrganization(env.DB, "Chosen Organization");
     await claim(selected);
-    const verified = await post("/api/v1/members/join/verify", {
-      token: await verification(),
-      organizationId: selected,
-    });
+    const verified = await joinPath(testEnv, await applicant(), { organizationId: selected });
     const continuation = memberJoinVerifyResponseSchema.parse(await verified.json());
     if (continuation.status !== "application_ready") throw new Error("Expected application");
     for (let index = 0; index < 128; index++) await claim(await insertOrganization(env.DB, `Other Claimant ${index}`));
@@ -291,10 +262,7 @@ describe("membership domain claim lifecycle", () => {
         applicantEmail: `pending@${domain}`,
         organizationDomain: domain,
       });
-      const response = await post("/api/v1/members/join/verify", {
-        token: await verification(),
-        organizationId: selected,
-      });
+      const response = await joinPath(testEnv, await applicant(), { organizationId: selected });
       const continuation = memberJoinVerifyResponseSchema.parse(await response.json());
       if (continuation.status !== "application_ready") throw new Error("Expected application continuation");
       const other = await insertOrganization(env.DB, "Other Organization");
@@ -338,14 +306,10 @@ describe("membership domain claim lifecycle", () => {
     await seedOrganizationAggregate(env.DB, selected);
     await claim(selected);
     await claim(await insertOrganization(env.DB, "Nonmember Organization"));
-    const response = await post("/api/v1/members/join/verify", {
-      token: await verification(),
-      organizationId: selected,
-    });
+    const response = await joinPath(testEnv, await applicant(), { organizationId: selected });
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ status: "support_required" });
-    expect(await queryAll(env.DB, "SELECT id FROM sessions")).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT id FROM identities")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE organization_id IS NOT NULL")).toEqual([]);
   });
 
   it("does not report a lost identity authorization guard as a changed organization", async () => {
@@ -359,14 +323,10 @@ describe("membership domain claim lifecycle", () => {
         throw new Error("AUTHORIZATION_CONTEXT_CHANGED");
       },
     );
-    const response = await callApi({ ...testEnv, DB: racingDb }, "/api/v1/members/join/verify", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token: await verification(), organizationId: selected }),
-    });
+    const person = await applicant();
+    const response = await joinPath({ ...testEnv, DB: racingDb }, person, { organizationId: selected });
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ status: "support_required" });
-    expect(await queryAll(env.DB, "SELECT id FROM sessions")).toEqual([]);
   });
 
   it("honors an explicit member choice despite another organization's blocked domain fact", async () => {
@@ -374,13 +334,13 @@ describe("membership domain claim lifecycle", () => {
     await seedOrganizationAggregate(env.DB, member);
     await claim(member);
     await derived(await insertOrganization(env.DB, "Former Employer"), true);
-    const token = await verification();
-    const chooser = await post("/api/v1/members/join/verify", { token });
+    const person = await applicant();
+    const chooser = await joinPath(testEnv, person);
     expect(memberJoinVerifyResponseSchema.parse(await chooser.json())).toMatchObject({
       status: "organization_selection_required",
       organizations: [{ id: member }],
     });
-    const selected = await post("/api/v1/members/join/verify", { token, organizationId: member });
+    const selected = await joinPath(testEnv, person, { organizationId: member });
     expect(selected.status, await selected.clone().text()).toBe(200);
     expect(memberJoinVerifyResponseSchema.parse(await selected.json()).status).toBe("organization_access_ready");
   });
@@ -516,13 +476,10 @@ describe("membership domain claim lifecycle", () => {
   it("preserves the most-specific domain boundary for an explicitly chosen application", async () => {
     await claim(await insertOrganization(env.DB, "Existing Organization"));
     const email = `applicant@division.${domain}`;
-    const token = await signStatelessCapabilityToken({
-      signingSecret: env.INTERNAL_SIGNING_SECRET!,
-      purpose: "member_join_verify",
-      resourceId: encodeCapabilityPayload(newMemberJoinCapabilityPayload(email, "organization")),
-      ttlSeconds: 900,
+    const response = await joinPath(testEnv, await applicant("organization", email), {
+      domain,
+      organizationName: "New Organization",
     });
-    const response = await post("/api/v1/members/join/verify", { token, domain, organizationName: "New Organization" });
     const continuation = memberJoinVerifyResponseSchema.parse(await response.json());
     if (continuation.status !== "application_ready") throw new Error("Expected application continuation");
     const organizationId = await insertOrganization(env.DB, "Division Organization");

@@ -9,6 +9,7 @@ import {
   eventProposalProofVerifyResponseSchema,
 } from "../../assets/shared/schemas/event-proposal-proof";
 import type { ProposalEntrySelection } from "../../assets/ts/components/useProposalEntryIdentity";
+import { SPEAKER_LINK } from "./helpers/proposal-identity-fixture";
 
 let host: HTMLDivElement | undefined;
 let selection: ProposalEntrySelection | null = null;
@@ -22,6 +23,7 @@ function mount(enabled: boolean) {
       <EventProposalIdentityStep
         enabled={enabled}
         eventSlug="proof-lifecycle"
+        {...SPEAKER_LINK}
         consents={() => []}
         onChange={(value) => {
           selection = value;
@@ -70,7 +72,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("proposal mailbox proof lifecycle", () => {
+/**
+ * Only a speaker confirms a mailbox on these pages (a proposer signs in), so the proof lifecycle is
+ * driven with a speaker's link throughout.
+ */
+describe("speaker mailbox proof lifecycle", () => {
   it("consumes a current hash only after terms activation and removes its listener on disable or unmount", async () => {
     const tokens: string[] = [];
     vi.stubGlobal(
@@ -189,8 +195,7 @@ describe("proposal mailbox proof lifecycle", () => {
         <EventProposalIdentityStep
           enabled
           eventSlug="proof-lifecycle"
-          speakerManagementToken={"s".repeat(40)}
-          expectedSpeakerUserId="speaker-1"
+          {...SPEAKER_LINK}
           invitedEmail="invited@speaker.example"
           consents={() => []}
           onChange={(value) => {

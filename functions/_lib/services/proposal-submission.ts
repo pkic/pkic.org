@@ -11,6 +11,7 @@ import { normalizeEmail } from "../validation";
 import { buildAddProposalSpeaker, buildCreateProposal, formatInvitePerson } from "./proposals";
 import { prepareConsentStatements, prepareActiveTermsSnapshotGuard, validateRequiredConsents } from "./consent";
 import { prepareAcceptInviteStatements, type InviteRecord } from "./invites";
+import { isStaleInviteTransition } from "./invite-lifecycle";
 import { prepareReferralCodeStatement } from "./referrals";
 import { prepareQueueEmailStatement } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
@@ -37,7 +38,6 @@ import { proposalInviteEmailTextVariables } from "./proposal-invite-email-contex
 import { formatProposalSpeakerLineup } from "./proposal-invite-person";
 import { eventInviteWindowEvidence, resolveEventInviteExpiry } from "../invite-validity";
 import { nowIso } from "../utils/time";
-import { isEmailReservationConflict } from "./user-emails";
 import { proposalTermsDigest } from "./event-proposal-proof-capabilities";
 import { prepareIndependentDisclosure, requireIndependentDisclosure } from "./proposal-speaker-independent-disclosure";
 import { prepareInvitedSpeakerRepresentation } from "./proposal-invited-speaker-identity";
@@ -64,8 +64,8 @@ export interface ProposalSubmissionInput {
 export interface ProposalSubmissionResult {
   proposalId: string;
   status: string;
-  manageToken: string | null;
-  manageUrl: string | null;
+  manageToken: string;
+  manageUrl: string;
   referralCode: string;
   shareUrl: string;
   proposer: UserRecord;
@@ -109,9 +109,7 @@ export async function submitProposal(
     eventId: input.event.id,
     body: input.body,
     actor: input.actor,
-    signingSecret: input.signingSecret,
     at: inviteNow,
-    acceptedInvite: input.acceptedInvite,
   });
   statements.push(...submitter.statements);
   const proposer = submitter.user;
@@ -359,18 +357,6 @@ export async function submitProposal(
       throw new AppError(409, "PROPOSAL_TERMS_CHANGED", "The event terms changed. Review them before submitting.", {
         consents: "Review the current event terms.",
       });
-    if (
-      input.body.continuationToken &&
-      error instanceof Error &&
-      (error.message.includes("uq_audit_log_idempotency_key") || error.message.includes("audit_log.idempotency_key"))
-    )
-      throw new AppError(409, "PROPOSAL_PROOF_USED", "This email confirmation has already submitted a proposal.");
-    if (isEmailReservationConflict(error))
-      throw new AppError(
-        409,
-        "PROPOSAL_PERSON_CHANGED",
-        "The confirmed email's account changed. Confirm your email again.",
-      );
     if (actingIdentity && isAuthorizationGuardFailure(error)) {
       throw new AppError(
         409,
@@ -378,7 +364,7 @@ export async function submitProposal(
         "Your session or identity changed while the proposal was submitted.",
       );
     }
-    if (input.acceptedInvite && isAuthorizationGuardFailure(error)) {
+    if (input.acceptedInvite && (isAuthorizationGuardFailure(error) || isStaleInviteTransition(error))) {
       throw new AppError(410, "INVITE_EXPIRED", "Invite link has expired");
     }
     if (isFormSubmissionContextConflict(error)) throw formSubmissionContextChangedError();
@@ -390,13 +376,9 @@ export async function submitProposal(
   return {
     proposalId: created.proposal.id,
     status: created.proposal.status,
-    // Do not turn anonymous email equality into ownership of an existing
-    // account. Existing identities receive the durable proposal management
-    // capability only at their canonical email address. New identities remain
-    // able to continue immediately because they carry no pre-existing account
-    // authority or data.
-    manageToken: submitter.created ? created.manageToken : null,
-    manageUrl: submitter.created ? proposalManagePageUrl(input.appBaseUrl, input.event, created.manageToken) : null,
+    // The proposer is signed in, so the proposal's management link is theirs to continue with at once.
+    manageToken: created.manageToken,
+    manageUrl: proposalManagePageUrl(input.appBaseUrl, input.event, created.manageToken),
     referralCode: referral.code,
     shareUrl: `${input.appBaseUrl}/r/${referral.code}`,
     proposer,

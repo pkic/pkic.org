@@ -95,7 +95,6 @@ async function proof(
     capabilityId: crypto.randomUUID(),
     termsDigest: await proposalTermsDigest(await getRequiredTerms(env.DB, f.eventId, "speaker")),
     consents: [{ termKey: "speaker-terms", version: "v1" }],
-    operation: "speaker_profile",
     context: {
       kind: "speaker",
       userId: f.userId,
@@ -369,37 +368,35 @@ describe("speaker affiliation mailbox proof", () => {
     expect(accepted.status, await accepted.clone().text()).toBe(200);
   });
 
-  it.each(["initial_proposal", "other_speaker", "other_event", "old_generation"] as const)(
+  it.each(["other_speaker", "other_event", "old_generation"] as const)(
     "rejects %s confirmation context",
     async (kind) => {
       const f = await fixture();
       await claimedOrganization();
       const overrides: Partial<EventProposalContinuationPayload> =
-        kind === "initial_proposal"
-          ? { operation: "proposal_submission", context: null }
-          : kind === "other_speaker"
-            ? {
+        kind === "other_speaker"
+          ? {
+              context: {
+                kind: "speaker",
+                userId: f.userId,
+                speakerId: crypto.randomUUID(),
+                inviteGeneration: 0,
+                expiresAt: f.expiresAt,
+                secretDigest: await sha256Hex(f.secret),
+              },
+            }
+          : kind === "other_event"
+            ? { eventId: crypto.randomUUID() }
+            : {
                 context: {
                   kind: "speaker",
                   userId: f.userId,
-                  speakerId: crypto.randomUUID(),
-                  inviteGeneration: 0,
+                  speakerId: f.speakerId,
+                  inviteGeneration: 1,
                   expiresAt: f.expiresAt,
                   secretDigest: await sha256Hex(f.secret),
                 },
-              }
-            : kind === "other_event"
-              ? { eventId: crypto.randomUUID() }
-              : {
-                  context: {
-                    kind: "speaker",
-                    userId: f.userId,
-                    speakerId: f.speakerId,
-                    inviteGeneration: 1,
-                    expiresAt: f.expiresAt,
-                    secretDigest: await sha256Hex(f.secret),
-                  },
-                };
+              };
       const p = await proof(f, overrides);
       const response = await patch(f, { continuationToken: p.token, unaffiliatedAttestation: false });
       expect(response.status).toBeGreaterThanOrEqual(400);

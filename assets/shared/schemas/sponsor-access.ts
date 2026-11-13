@@ -1,14 +1,7 @@
-import { protectsPublicAction } from "./abuse-protection";
 import { z } from "zod";
-import { eventIdSchema, normalizedEmailSchema, successResponseSchema } from "./api-common";
+import { eventIdSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-
-/** Enumeration-safe request for a sponsor-bound portal sign-in capability. */
-export const sponsorAccessLinkRequestSchema = z.object({
-  email: normalizedEmailSchema,
-  eventSlug: eventIdSchema,
-});
 
 /** Live sponsor capacity projected into the canonical user session. */
 export const sponsorCapacitySchema = z.object({
@@ -20,23 +13,6 @@ export const sponsorCapacitySchema = z.object({
   contactEmail: z.email(),
 });
 export type SponsorCapacity = z.infer<typeof sponsorCapacitySchema>;
-
-export const sponsorAccessLinkCreateRouteSchema = {
-  ...protectsPublicAction("sponsor_access", "sponsorships:write"),
-  tags: ["Sponsors"],
-  summary: "Request a sponsor access link",
-  description:
-    "Always returns success regardless of whether the email and event match an active sponsorship, preventing sponsorship enumeration.",
-  request: {
-    body: { content: { "application/json": { schema: sponsorAccessLinkRequestSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Access-link request accepted.",
-      content: { "application/json": { schema: successResponseSchema } },
-    },
-  },
-};
 
 /** Contact data and mailbox classification shared with a sponsor, without internal user or registration IDs. */
 export const sponsorAttendeeSchema = z.object({

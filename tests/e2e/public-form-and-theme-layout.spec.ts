@@ -159,12 +159,13 @@ for (const colorScheme of ["light", "dark"] as const) {
       }
 
       await page.goto(`${eventPath}/register/`);
-      await expect(
-        page.getByRole("textbox", { name: EMAIL_FIRST_COPY.registration.work.label, exact: true }),
-      ).toBeVisible();
+      // Signed out, the first step is the sign-in card; its "New here?" band opens the work-email step.
+      const signIn = page.locator("[data-registration-sign-in]").getByRole("region", { name: "Sign in", exact: true });
+      await signIn.getByRole("button", { name: "Continue with your email", exact: true }).click();
+      const input = signIn.getByRole("textbox", { name: EMAIL_FIRST_COPY.registration.work.label, exact: true });
+      await expect(input).toBeVisible();
       await expect(page.getByLabel("Representation")).toHaveCount(0);
       if (colorScheme === "dark") {
-        const input = page.getByRole("textbox", { name: EMAIL_FIRST_COPY.registration.work.label, exact: true });
         expect(await input.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(
           await page.locator("body").evaluate((element) => getComputedStyle(element).backgroundColor),
         );

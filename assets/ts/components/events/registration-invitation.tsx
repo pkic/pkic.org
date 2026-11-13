@@ -145,10 +145,13 @@ export function registrationInvitation(boot: FlowBoot) {
   const mount = document.createElement("div");
   mount.tabIndex = -1;
   const stepper = boot.root.querySelector<HTMLElement>(".event-flow-stepper");
+  // The sign-in card stands beside the form, so it waits for the invitation too.
+  const signIn = boot.root.querySelector<HTMLElement>("[data-registration-sign-in]");
   boot.root.prepend(mount);
   function visible(show: boolean) {
     boot.form.hidden = !show;
     if (stepper) stepper.hidden = !show;
+    if (signIn) signIn.hidden = !show;
     mount.hidden = show;
   }
   visible(allowed);

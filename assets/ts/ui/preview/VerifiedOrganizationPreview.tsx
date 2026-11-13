@@ -44,6 +44,8 @@ export function ProposalIdentityPreview() {
     <EventProposalIdentityStep
       enabled
       eventSlug="example-conference"
+      // A confirmed address belongs to a speaker's link; a proposer signs in instead.
+      speakerManagementToken="synthetic-speaker-link-0123456789012345678901"
       consents={() => []}
       onChange={() => {}}
       initialProof={{

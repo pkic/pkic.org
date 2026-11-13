@@ -4,14 +4,12 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { JOB_TITLE_REQUIRED } from "../../assets/shared/schemas/api-common";
-import { EventProposalIdentityStep } from "../../assets/ts/components/EventProposalIdentityStep";
 import {
   eventProposalProofVerifySchema,
   eventProposalProofStartSchema,
   eventProposalProofPersonPatchSchema,
   eventProposalProofIdentityPatchSchema,
 } from "../../assets/shared/schemas/event-proposal-proof";
-import type { ProposalEntryContext } from "../../assets/shared/schemas/proposal-entry";
 import type { ProposalEntrySelection } from "../../assets/ts/components/useProposalEntryIdentity";
 
 import {
@@ -20,17 +18,56 @@ import {
   proposalProofToken as TOKEN,
 } from "./helpers/proposal-proof-response";
 
-import { chooseProposalOrganization, mountProposalIdentityStep } from "./helpers/proposal-identity-fixture";
+import {
+  chooseProposalOrganization,
+  chooseProposerIdentity,
+  mountProposalIdentityStep,
+  proposerIdentity,
+  PROPOSER_IDENTITY_ID as identityId,
+  signedInProposer,
+  SPEAKER_LINK,
+} from "./helpers/proposal-identity-fixture";
 
 let host: HTMLDivElement | undefined;
 let selection: ProposalEntrySelection | null;
-async function mount(enabled = true, entryContext?: ProposalEntryContext) {
+/** A proposer's step, or, with `speaker`, a speaker's on their own link: only a speaker confirms a mailbox. */
+async function mount(enabled = true, speaker = false) {
   host = await mountProposalIdentityStep({
     enabled,
-    entryContext,
     onChange: (value) => {
       selection = value;
     },
+    ...(speaker ? SPEAKER_LINK : {}),
+  });
+}
+/** Answers a signed-in proposer's reads, hands every other request to `other`, and records each URL. */
+function stubAccount(
+  account: ReturnType<typeof signedInProposer>,
+  other: (url: URL, init: RequestInit) => Response = () => {
+    throw new Error("Unexpected request");
+  },
+): URL[] {
+  const urls: URL[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = new URL(String(input), location.origin);
+      urls.push(url);
+      return account(url.pathname) ?? other(url, init);
+    }),
+  );
+  return urls;
+}
+function clickButton(root: ParentNode, label: string) {
+  return act(async () => {
+    [...root.querySelectorAll("button")].find((button) => button.textContent === label)!.click();
+  });
+}
+function type(root: ParentNode, name: string, value: string) {
+  return act(() => {
+    const input = root.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
 afterEach(async () => {
@@ -42,7 +79,7 @@ afterEach(async () => {
   history.replaceState({}, "", "/");
   vi.unstubAllGlobals();
 });
-describe("verified event entry", () => {
+describe("proposal and speaker identity step", () => {
   it("does not resolve profiles or send proof before the terms step activates", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
@@ -66,52 +103,19 @@ describe("verified event entry", () => {
         });
       }),
     );
-    host = document.createElement("div");
-    document.body.append(host);
-    await act(() =>
-      render(
-        <EventProposalIdentityStep
-          enabled
-          eventSlug="pqc-2026"
-          consents={() => []}
-          speakerManagementToken={"s".repeat(40)}
-          expectedSpeakerUserId="00000000-0000-4000-8000-000000000041"
-          onChange={(value) => {
-            selection = value;
-          }}
-        />,
-        host!,
-      ),
-    );
+    await mount(true, true);
     await vi.waitFor(() => expect(host!.querySelector('input[name="email"], [role="combobox"]')).not.toBeNull());
     expect(host!.querySelector('input[name="email"]')).not.toBeNull();
     expect(host!.querySelector('[role="combobox"]')).toBeNull();
     expect(paths).toEqual(["/api/v1/auth/session"]);
     expect(selection).toBeNull();
   });
-  it("uses verified known details as a summary without personal inputs", async () => {
-    history.replaceState({}, "", `/events/2026/pqc-2026/propose/#verify=${TOKEN}`);
+  it("uses a speaker's confirmed details as a summary without personal inputs", async () => {
+    history.replaceState({}, "", `/events/2026/pqc-2026/speaker/#verify=${TOKEN}`);
     const requests: unknown[] = [];
-    const nameRequests: unknown[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (_url, init) => {
-        if (init.method === "PATCH") {
-          nameRequests.push(JSON.parse(init.body));
-          if (nameRequests.length === 1)
-            return response({ error: { code: "SAVE_REFUSED", message: "Please retry saving your name." } }, 500);
-          return response({
-            person: {
-              email: "ada@example.test",
-              firstName: "Augusta Ada",
-              lastName: "Lovelace",
-              organizationName: null,
-              jobTitle: null,
-              bio: null,
-              links: [],
-            },
-          });
-        }
         requests.push(JSON.parse(init.body));
         return response({
           status: "ready",
@@ -132,196 +136,105 @@ describe("verified event entry", () => {
         });
       }),
     );
-    await mount();
+    await mount(true, true);
     await vi.waitFor(() => expect(selection?.person.firstName).toBe("Ada"));
-    expect(eventProposalProofVerifySchema.parse(requests[0]).token).toBe(TOKEN);
+    expect(eventProposalProofVerifySchema.parse(requests[0])).toMatchObject({
+      token: TOKEN,
+      speakerManagementToken: SPEAKER_LINK.speakerManagementToken,
+    });
     expect(host!.querySelector(".pk-datalist")?.textContent).toContain("Ada Lovelace");
     expect(host!.querySelector(".pk-datalist")?.textContent).not.toContain("Example Organization");
-    expect(host!.querySelector(".pk-datalist")?.textContent).not.toContain("Engineer");
     expect(host!.querySelector('input[name="firstName"]')).toBeNull();
     expect(host!.querySelector('input[name="organizationName"]')).toBeNull();
     expect(host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')?.required).toBe(true);
-    expect(host!.textContent).toContain("Your representation is saved when you submit your proposal.");
-    expect(host!.textContent).not.toContain("This new representation");
     await chooseProposalOrganization(host!, "00000000-0000-4000-8000-000000000044");
     await vi.waitFor(() => expect(selection?.missingDetails).toEqual({ organizationName: "Example Organization" }));
-    await act(() => {
-      Array.from(host!.querySelectorAll("button"))
-        .find((button) => button.textContent === "Edit my details")!
-        .click();
+    expect(selection?.continuationToken).toBe("c".repeat(40));
+    expect(host!.querySelector('input[name="firstName"]')).toBeNull();
+    expect(host!.querySelector('input[name="organizationName"]')).toBeNull();
+  });
+  it("saves a signed-in proposer's corrected name, keeping the entry when the first save is refused", async () => {
+    const nameRequests: unknown[] = [];
+    stubAccount(signedInProposer({ identities: [proposerIdentity()] }), (url, init) => {
+      if (url.pathname !== `${endpoint}/person` || init.method !== "PATCH") throw new Error("Unexpected request");
+      nameRequests.push(JSON.parse(String(init.body)));
+      if (nameRequests.length === 1)
+        return response({ error: { code: "SAVE_REFUSED", message: "Please retry saving your name." } }, 500);
+      return response({
+        person: {
+          email: "ada@example.test",
+          firstName: "Augusta Ada",
+          lastName: "Lovelace",
+          organizationName: null,
+          jobTitle: null,
+          bio: null,
+          links: [],
+        },
+      });
     });
-    await act(() => {
-      const first = document.querySelector<HTMLInputElement>('input[name="firstName"]')!;
-      first.value = "Augusta";
-      first.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      Array.from(document.querySelectorAll("button"))
-        .find((button) => button.textContent === "Save my details")!
-        .click();
-    });
+    await mount();
+    await chooseProposerIdentity(host!, identityId);
+    await vi.waitFor(() => expect(selection?.person.firstName).toBe("Ada"));
+    await clickButton(host!, "Edit my details");
+    await type(document, "firstName", "Augusta");
+    await clickButton(document, "Save my details");
     await vi.waitFor(() => expect(document.body.textContent).toContain("Please retry saving your name."));
     expect(document.querySelector<HTMLInputElement>('input[name="firstName"]')!.value).toBe("Augusta");
-    await act(async () => {
-      Array.from(document.querySelectorAll("button"))
-        .find((button) => button.textContent === "Save my details")!
-        .click();
-    });
+    await clickButton(document, "Save my details");
     await vi.waitFor(() => expect(host!.querySelector(".pk-datalist")?.textContent).toContain("Augusta Ada Lovelace"));
     expect(nameRequests).toHaveLength(2);
     expect(eventProposalProofPersonPatchSchema.parse(nameRequests[1])).toEqual(
       eventProposalProofPersonPatchSchema.parse(nameRequests[0]),
     );
-    const savedNames = eventProposalProofPersonPatchSchema.parse(nameRequests[0]);
-    expect(savedNames).toEqual({ firstName: "Augusta", lastName: "Lovelace", continuationToken: "c".repeat(40) });
+    expect(eventProposalProofPersonPatchSchema.parse(nameRequests[0])).toEqual({
+      firstName: "Augusta",
+      lastName: "Lovelace",
+    });
+    // The saved names are the account's: the proposal sends none, and keeps the chosen identity.
     expect(selection?.person.firstName).toBe("Augusta Ada");
-    expect(selection?.missingDetails).toEqual({ organizationName: "Example Organization" });
+    expect(selection?.missingDetails).toEqual({});
+    expect(selection?.actingIdentityId).toBe(identityId);
     expect(host!.querySelector('input[name="firstName"]')).toBeNull();
-    expect(host!.querySelector('input[name="organizationName"]')).toBeNull();
   });
   it("selects an owned organization identity using canonical names without duplicate profile inputs", async () => {
-    const userId = "00000000-0000-4000-8000-000000000041";
-    const identityId = "00000000-0000-4000-8000-000000000042";
-    const now = "2026-01-01T00:00:00.000Z";
-    const urls: URL[] = [];
     const roleRequests: unknown[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input, init) => {
-        const url = new URL(String(input), location.origin);
-        urls.push(url);
-        if (url.pathname === `${endpoint}/identities/${identityId}`) {
-          roleRequests.push(JSON.parse(init.body));
-          return response({
-            identityId,
-            organizationId: null,
-            jobTitle: roleRequests.length === 1 ? "Principal Engineer" : null,
-            biography: null,
-            links: [],
-          });
-        }
-        if (url.pathname === "/api/v1/auth/session")
-          return response({
-            success: true,
-            sessionId: "00000000-0000-4000-8000-000000000096",
-            identity: { id: userId, email: "ada@example.test" },
-            eventParticipation: true,
-            expiresAt: "2099-12-31T23:59:59.000Z",
-            idleExpiresAt: "2099-12-31T23:59:59.000Z",
-          });
-        if (url.pathname === `/api/v1/users/${userId}`)
-          return response({
-            user: {
-              id: userId,
-              email: "ada@example.test",
-              first_name: "Ada",
-              last_name: "Lovelace",
-              preferred_name: null,
-              active: true,
-              isEcMember: false,
-              created_at: now,
-              updated_at: now,
-              pii_redacted_at: null,
-              headshotUrl: null,
-              identities: [],
-              formerIdentities: [],
-            },
-          });
-        if (url.pathname === "/api/v1/users/current/identities")
-          return response({
-            identities: [
-              {
-                id: identityId,
-                memberId: null,
-                organizationId: "00000000-0000-4000-8000-000000000044",
-                organizationName: "Nonmember Organization",
-                membershipCategory: null,
-                userId,
-                userName: "Do not split this display name",
-                emailId: "00000000-0000-4000-8000-000000000046",
-                email: "ada@example.test",
-                jobTitle: "Engineer",
-                biography: null,
-                links: [],
-                headshotUrl: null,
-                source: "verified_email",
-                state: "active",
-                showOnOrganizationProfile: true,
-                invitedAt: now,
-                startedAt: now,
-                endedAt: null,
-                blockedAt: null,
-                blockedByUserId: null,
-                predecessorIdentityId: null,
-                createdAt: now,
-                updatedAt: now,
-              },
-            ],
-            page: { limit: 25, offset: 0, total: 1, hasMore: false },
-          });
-        throw new Error("Unexpected request");
-      }),
-    );
+    const urls = stubAccount(signedInProposer({ identities: [proposerIdentity()] }), (url, init) => {
+      if (url.pathname !== `${endpoint}/identities/${identityId}`) throw new Error("Unexpected request");
+      roleRequests.push(JSON.parse(String(init.body)));
+      return response({
+        identityId,
+        organizationId: null,
+        jobTitle: roleRequests.length === 1 ? "Principal Engineer" : null,
+        biography: null,
+        links: [],
+      });
+    });
     await mount();
-    await vi.waitFor(() => expect(host!.querySelector('input[name="email"], [role="combobox"]')).not.toBeNull());
-    await vi.waitFor(() => expect(host!.querySelector('[role="combobox"]')).not.toBeNull());
-    await act(() => {
-      host!.querySelector<HTMLElement>('[role="combobox"]')!.click();
-    });
-    await vi.waitFor(() => expect(host!.querySelector(`[role="option"][data-key="${identityId}"]`)).not.toBeNull());
-    await act(() => {
-      host!.querySelector<HTMLElement>(`[role="option"][data-key="${identityId}"]`)!.click();
-    });
-    expect(selection?.actingIdentityId).toBe(identityId);
+    await chooseProposerIdentity(host!, identityId);
+    expect(selection).toMatchObject({ authenticated: true, actingIdentityId: identityId });
+    expect(selection?.continuationToken).toBeUndefined();
     expect(selection?.person.organizationName).toBe("Nonmember Organization");
     expect(host!.querySelector('input[name="firstName"]')).toBeNull();
     expect(host!.querySelector('input[name="organizationName"]')).toBeNull();
     expect(host!.querySelector('input[name="jobTitle"]')).toBeNull();
     expect(urls.find((url) => url.pathname.endsWith("identities"))?.searchParams.get("organizationOnly")).toBe("true");
+    expect(urls.some((url) => url.pathname.startsWith(endpoint))).toBe(false);
     expect(host!.textContent).not.toContain("Your current representation is updated.");
-    await act(() => {
-      [...host!.querySelectorAll("button")].find((button) => button.textContent === "Add representation")!.click();
-    });
+    await clickButton(host!, "Add representation");
     const add = document.querySelector<HTMLDialogElement>("dialog[open]")!;
     expect(add.textContent).toContain(EMAIL_FIRST_COPY.representation.work.label);
     expect(add.querySelector('input[name="email"]')).not.toBeNull();
     expect(add.querySelector('[role="combobox"], input[name="organizationName"]')).toBeNull();
-    await act(() => {
-      [...add.querySelectorAll("button")].find((button) => button.textContent === "Cancel")!.click();
-    });
-    await act(() => {
-      Array.from(host!.querySelectorAll("button"))
-        .find((button) => button.textContent === "Update current representation")!
-        .click();
-    });
-    await act(() => {
-      const role = host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
-      role.value = "Principal Engineer";
-      role.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      Array.from(host!.querySelectorAll("button"))
-        .find((button) => button.textContent === "Save representation")!
-        .click();
-    });
+    await clickButton(add, "Cancel");
+    await clickButton(host!, "Update current representation");
+    await type(host!, "jobTitle", "Principal Engineer");
+    await clickButton(host!, "Save representation");
     await vi.waitFor(() => expect(selection?.person.jobTitle).toBe("Principal Engineer"));
     expect(eventProposalProofIdentityPatchSchema.parse(roleRequests[0])).toEqual({ jobTitle: "Principal Engineer" });
     expect(host!.querySelector('[role="status"]')?.textContent).toBe("Your current representation is updated.");
-    await act(() => {
-      Array.from(host!.querySelectorAll("button"))
-        .find((button) => button.textContent === "Update current representation")!
-        .click();
-    });
-    await act(() => {
-      const role = host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
-      role.value = "";
-      role.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      Array.from(host!.querySelectorAll("button"))
-        .find((button) => button.textContent === "Save representation")!
-        .click();
-    });
+    await clickButton(host!, "Update current representation");
+    await type(host!, "jobTitle", "");
+    await clickButton(host!, "Save representation");
     const cleared = host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
     expect(cleared.required).toBe(true);
     expect(cleared.getAttribute("aria-invalid")).toBe("true");
@@ -329,8 +242,50 @@ describe("verified event entry", () => {
     expect(roleRequests).toHaveLength(1);
     expect(selection?.person.jobTitle).toBe("Principal Engineer");
   });
-  it("asks only missing verified-person details and retains a claimed organization name", async () => {
-    history.replaceState({}, "", `/events/2026/pqc-2026/propose/#verify=${TOKEN}`);
+  it("holds a signed-in proposer on a representation without a job title until one is saved", async () => {
+    const roleRequests: unknown[] = [];
+    stubAccount(signedInProposer({ identities: [proposerIdentity({ jobTitle: null })] }), (url, init) => {
+      if (url.pathname !== `${endpoint}/identities/${identityId}`) throw new Error("Unexpected request");
+      roleRequests.push(JSON.parse(String(init.body)));
+      return response({ identityId, organizationId: null, jobTitle: "Security Architect", biography: null, links: [] });
+    });
+    await mount();
+    await chooseProposerIdentity(host!, identityId);
+    // The representation opens for its job title; nothing is selected for the proposal yet.
+    const jobTitle = host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
+    expect(jobTitle.required).toBe(true);
+    expect(selection).toBeNull();
+    await clickButton(host!, "Save representation");
+    expect(host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')!.getAttribute("aria-invalid")).toBe("true");
+    expect(roleRequests).toHaveLength(0);
+    expect(selection).toBeNull();
+    await type(host!, "jobTitle", "Security Architect");
+    await clickButton(host!, "Save representation");
+    await vi.waitFor(() => expect(selection?.person.jobTitle).toBe("Security Architect"));
+    expect(eventProposalProofIdentityPatchSchema.parse(roleRequests[0])).toEqual({ jobTitle: "Security Architect" });
+    expect(selection).toMatchObject({ authenticated: true, actingIdentityId: identityId });
+  });
+  it("asks a signed-in proposer whose account has no name for it, and sends it with the proposal", async () => {
+    stubAccount(signedInProposer({ firstName: null, lastName: null, identities: [proposerIdentity()] }));
+    await mount();
+    await chooseProposerIdentity(host!, identityId);
+    await vi.waitFor(() => expect(host!.querySelector('input[name="firstName"]')).not.toBeNull());
+    expect(host!.querySelector<HTMLInputElement>('input[name="firstName"]')!.required).toBe(true);
+    expect(host!.querySelector<HTMLInputElement>('input[name="lastName"]')!.required).toBe(true);
+    expect(host!.querySelector('input[name="email"]')).toBeNull();
+    await type(host!, "firstName", "Ada");
+    await type(host!, "lastName", "Lovelace");
+    expect(selection?.missingDetails).toEqual({ firstName: "Ada", lastName: "Lovelace" });
+    expect(selection?.person).toMatchObject({ firstName: "Ada", lastName: "Lovelace" });
+    expect(host!.querySelectorAll('input[name="firstName"]')).toHaveLength(1);
+    // Choosing how to take part does not discard what the person typed about themselves.
+    await clickButton(host!, "Choose another representation");
+    await clickButton(host!, EMAIL_FIRST_COPY.proposal.individualSwitch!);
+    expect(host!.querySelector<HTMLInputElement>('input[name="firstName"]')!.value).toBe("Ada");
+    expect(host!.querySelector<HTMLInputElement>('input[name="lastName"]')!.value).toBe("Lovelace");
+  });
+  it("asks a speaker only for missing confirmed-person details and retains a claimed organization name", async () => {
+    history.replaceState({}, "", `/events/2026/pqc-2026/speaker/#verify=${TOKEN}`);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -345,18 +300,12 @@ describe("verified event entry", () => {
         }),
       ),
     );
-    await mount();
+    await mount(true, true);
     await vi.waitFor(() => expect(host!.querySelector('input[name="firstName"]')).not.toBeNull());
     expect(host!.querySelector('input[name="organizationName"]')).toBeNull();
     expect(host!.querySelector('input[name="email"]')).toBeNull();
-    await act(() => {
-      const first = host!.querySelector<HTMLInputElement>('input[name="firstName"]')!;
-      first.value = "Ada";
-      first.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    await type(host!, "firstName", "Ada");
     expect(selection?.missingDetails.firstName).toBe("Ada");
-    expect(host!.textContent).toContain("These new details are not saved yet.");
-    expect(host!.textContent).not.toContain("verified profile");
     expect(host!.querySelectorAll('input[name="firstName"]')).toHaveLength(1);
     expect(host!.querySelector(".pk-datalist")?.textContent).not.toContain("Ada");
     expect(host!.querySelector("select")?.textContent).toContain("Example Organization");
@@ -364,8 +313,8 @@ describe("verified event entry", () => {
     await chooseProposalOrganization(host!, "00000000-0000-4000-8000-000000000044");
     expect(selection?.person.organizationName).toBe("Example Organization");
   });
-  it("keeps known names read-only while new affiliation drafts appear only in missing-detail inputs", async () => {
-    history.replaceState({}, "", `/events/2026/pqc-2026/propose/#verify=${TOKEN}`);
+  it("keeps a speaker's known names read-only while new affiliation drafts appear only in missing-detail inputs", async () => {
+    history.replaceState({}, "", `/events/2026/pqc-2026/speaker/#verify=${TOKEN}`);
     const addRequests: unknown[] = [];
     const verifiedTokens: string[] = [];
     vi.stubGlobal(
@@ -382,7 +331,6 @@ describe("verified event entry", () => {
           status: "ready",
           consents: [],
           continuationToken: "c".repeat(40),
-          entryContext: { sourceType: "direct" },
           applicantKind: "organization",
           email: verifiedEmail,
           organization: null,
@@ -398,26 +346,16 @@ describe("verified event entry", () => {
         });
       }),
     );
-    await mount();
+    await mount(true, true);
     await vi.waitFor(() => expect(selection?.person.firstName).toBe("Ada"));
-    await act(() => {
-      for (const [name, value] of [
-        ["organizationName", "New affiliation"],
-        ["jobTitle", "New role"],
-      ]) {
-        const input = host!.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
-        input.value = value!;
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      }
-    });
+    await type(host!, "organizationName", "New affiliation");
+    await type(host!, "jobTitle", "New role");
     expect([...host!.querySelectorAll("legend")].map((legend) => legend.textContent)).toContain(
       "Your personal details",
     );
     expect([...host!.querySelectorAll("legend")].map((legend) => legend.textContent)).toContain(
       "Your representation for this proposal",
     );
-    expect(host!.textContent).toContain("Your representation is saved when you submit your proposal.");
-    expect(host!.textContent).not.toContain("This new representation");
     expect(host!.querySelectorAll('input[name="organizationName"]')).toHaveLength(1);
     const summary = host!.querySelector(".pk-datalist")!;
     expect(summary.textContent).toContain("Ada Lovelace");
@@ -429,39 +367,24 @@ describe("verified event entry", () => {
     expect(selection?.missingDetails).toEqual({ organizationName: "New affiliation", jobTitle: "New role" });
     expect(host!.querySelector('input[name="firstName"]')).toBeNull();
     expect(host!.querySelector('[role="combobox"]')).toBeNull();
-    await act(() => {
-      Array.from(host!.querySelectorAll("button"))
-        .find((button) => button.textContent === "Clear unsaved changes")!
-        .click();
-    });
+    await clickButton(host!, "Clear unsaved changes");
     expect(host!.querySelector<HTMLInputElement>('input[name="organizationName"]')!.value).toBe("");
     expect(host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')!.value).toBe("");
     expect(selection?.person.firstName).toBe("Ada");
     expect(selection?.missingDetails).toEqual({});
     expect(addRequests).toHaveLength(0);
-    await act(() => {
-      Array.from(host!.querySelectorAll("button"))
-        .find((button) => button.textContent === "Add representation")!
-        .click();
-    });
-    await act(() => {
-      const email = host!.querySelector<HTMLInputElement>('input[name="email"]')!;
-      email.value = "ada@another-work.example.test";
-      email.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      Array.from(host!.querySelectorAll("button"))
-        .find((button) => button.textContent === EMAIL_FIRST_COPY.proposal.work.action)!
-        .click();
-    });
+    // Another representation is another address of theirs, confirmed under the same speaker link.
+    await clickButton(host!, "Add representation");
+    await type(host!, "email", "ada@another-work.example.test");
+    await clickButton(host!, EMAIL_FIRST_COPY.speaker.work.action);
     await vi.waitFor(() => expect(addRequests).toHaveLength(1));
-    const add = eventProposalProofStartSchema.parse(addRequests[0]);
-    expect(add.continuationToken).toBe("c".repeat(40));
-    expect(add.entryContext).toBeUndefined();
-    expect(add.speakerManagementToken).toBeUndefined();
-    expect(add.email).toBe("ada@another-work.example.test");
+    expect(eventProposalProofStartSchema.parse(addRequests[0])).toMatchObject({
+      email: "ada@another-work.example.test",
+      unaffiliatedAttestation: false,
+      speakerManagementToken: SPEAKER_LINK.speakerManagementToken,
+    });
     expect(selection).toBeNull();
-    await vi.waitFor(() => expect(host!.textContent).toContain("Check your email"));
+    await vi.waitFor(() => expect(host!.textContent).toContain(EMAIL_FIRST_COPY.speaker.sentTitle));
     await act(async () => {
       const changed = new Promise<void>((resolve) =>
         window.addEventListener("hashchange", () => resolve(), { once: true }),
@@ -472,123 +395,6 @@ describe("verified event entry", () => {
     await vi.waitFor(() => expect(selection?.person.email).toBe("ada@another-work.example.test"));
     expect(verifiedTokens).toEqual([TOKEN, "n".repeat(40)]);
     expect(selection?.person.firstName).toBe("Ada");
-    expect(host!.textContent).not.toContain("Check your email");
-  });
-  it("keeps the names a person entered when they add or choose another representation", async () => {
-    history.replaceState({}, "", `/events/2026/pqc-2026/propose/#verify=${TOKEN}`);
-    const second = "n".repeat(40);
-    const nameless = (email: string) => ({
-      email,
-      firstName: null,
-      lastName: null,
-      organizationName: null,
-      jobTitle: null,
-      bio: null,
-      links: [],
-    });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url, init) => {
-        if (String(url) === endpoint) return response({ status: "verification_sent" });
-        const verified = eventProposalProofVerifySchema.parse(JSON.parse(init.body));
-        const email = verified.token === TOKEN ? "ada@first-work.example.test" : "ada@second-work.example.test";
-        return response({
-          status: "ready",
-          consents: [],
-          continuationToken: (verified.token === TOKEN ? "c" : "d").repeat(40),
-          applicantKind: "organization",
-          email,
-          organization: {
-            id: "00000000-0000-4000-8000-000000000044",
-            name: verified.token === TOKEN ? "First Organization" : "Second Organization",
-            jobTitle: null,
-          },
-          person: nameless(email),
-        });
-      }),
-    );
-    await mount();
-    await vi.waitFor(() => expect(host!.querySelector('input[name="firstName"]')).not.toBeNull());
-    const type = (name: string, value: string) =>
-      act(() => {
-        const input = host!.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
-        input.value = value;
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-    await type("firstName", "Ada");
-    await type("lastName", "Lovelace");
-    await type("jobTitle", "Engineer");
-
-    // Adding a representation asks for its email; the names typed so far belong to the person, not to it.
-    await act(() => {
-      [...host!.querySelectorAll("button")].find((button) => button.textContent === "Add representation")!.click();
-    });
-    await type("email", "ada@second-work.example.test");
-    await act(async () => {
-      [...host!.querySelectorAll("button")]
-        .find((button) => button.textContent === EMAIL_FIRST_COPY.proposal.work.action)!
-        .click();
-    });
-    await vi.waitFor(() => expect(host!.textContent).toContain("Check your email"));
-    await act(async () => {
-      const changed = new Promise<void>((resolve) =>
-        window.addEventListener("hashchange", () => resolve(), { once: true }),
-      );
-      location.hash = `verify=${second}`;
-      await changed;
-    });
-    await vi.waitFor(() => expect(selection?.person.email).toBe("ada@second-work.example.test"));
-    // The same person's names survive the new representation; its organization's title is asked afresh.
-    expect(host!.querySelector<HTMLInputElement>('input[name="firstName"]')!.value).toBe("Ada");
-    expect(host!.querySelector<HTMLInputElement>('input[name="lastName"]')!.value).toBe("Lovelace");
-    expect(selection?.missingDetails).toMatchObject({ firstName: "Ada", lastName: "Lovelace" });
-    expect(selection?.person).toMatchObject({ firstName: "Ada", lastName: "Lovelace" });
-    expect(host!.querySelector<HTMLInputElement>('input[name="jobTitle"]')!.value).toBe("");
-  });
-
-  it("sends joining qualification and accepted terms before revealing personal fields", async () => {
-    const captured: unknown[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url, init) => {
-        if (String(url).includes("auth/session"))
-          return response({ error: { code: "UNAUTHORIZED", message: "Sign in" } }, 401);
-        if (String(url) === endpoint) {
-          captured.push(JSON.parse(init.body));
-          return response({ status: "verification_sent" });
-        }
-        throw new Error("Unexpected identity enumeration");
-      }),
-    );
-    await mount(true, {
-      inviteToken: "original-invitation-capability",
-      sourceType: "invite",
-      sourceRef: "invite",
-      referralCode: "ABC12345",
-    });
-    await vi.waitFor(() => expect(host!.querySelector('input[name="email"], [role="combobox"]')).not.toBeNull());
-    await act(() => {
-      const email = host!.querySelector<HTMLInputElement>('input[name="email"]')!;
-      email.value = "ada@example.test";
-      email.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      Array.from(host!.querySelectorAll("button"))
-        .find((button) => button.textContent === EMAIL_FIRST_COPY.proposal.work.action)!
-        .click();
-    });
-    await vi.waitFor(() => expect(captured).toHaveLength(1));
-    const parsed = eventProposalProofStartSchema.parse(captured[0]);
-    expect(parsed.email).toBe("ada@example.test");
-    expect(parsed.entryContext).toMatchObject({
-      inviteToken: "original-invitation-capability",
-      sourceType: "invite",
-      sourceRef: "invite",
-      referralCode: "ABC12345",
-    });
-    expect(parsed.unaffiliatedAttestation).toBe(false);
-    expect(parsed.consents).toEqual([{ termKey: "speaker-agreement", version: "1" }]);
-    expect(host!.querySelector('input[name="firstName"]')).toBeNull();
-    expect(selection).toBeNull();
+    expect(host!.textContent).not.toContain(EMAIL_FIRST_COPY.speaker.sentTitle);
   });
 });

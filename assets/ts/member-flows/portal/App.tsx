@@ -43,7 +43,6 @@ import {
   subscribeUserSessionState,
 } from "../../shared/pending-user-logout";
 import { resumePendingUserLogout } from "./logout-session";
-import { SponsorAccess } from "./sections/sponsors/Access";
 import { eventFlowReturnPath, portalHashPath, portalMagicLinkReturnPath, portalMagicLinkToken } from "./hash-route";
 import { IdentityInvitationAcceptance } from "./shell/IdentityInvitationAcceptance";
 import { EmailVerificationConfirmation } from "./shell/EmailVerificationConfirmation";
@@ -391,28 +390,6 @@ export function App() {
           </Suspense>
         </ScannerCodePreparation.Provider>
         <ConfirmDialogHost />
-      </>
-    );
-  }
-
-  if (portalHashPath(window.location.hash).startsWith("/sponsors")) {
-    return (
-      <>
-        {verifyError && (
-          // Laid out like the panel it sits above, so the banner and the card
-          // share one measure. The cross that used to lead the sentence is
-          // gone: `Alert`'s danger tone already carries role="alert", and the
-          // title says what failed in words.
-          <div class="pk pk-container pk-section pk-cluster pk-cluster--center">
-            <div class="content-width-sm">
-              <Alert tone="danger" title="Sponsor access failed">
-                {verifyError}
-              </Alert>
-            </div>
-          </div>
-        )}
-        {pendingNotice}
-        <SponsorAccess />
       </>
     );
   }

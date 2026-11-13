@@ -1,3 +1,4 @@
+import { addMissingName, addRepresentationBio } from "./helpers/person-details";
 import {
   organizationCreateSchema,
   organizationCreateResponseSchema,
@@ -19,11 +20,10 @@ import { completeSyntheticMembershipReview, createMember } from "./helpers/membe
  * never exercised in a browser.
  */
 import { expect, test, type Page } from "@playwright/test";
-import { EMAIL_FIRST_COPY, WORK_EMAIL_STEER } from "../../assets/shared/email-first-copy";
+import { WORK_EMAIL_STEER } from "../../assets/shared/email-first-copy";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
-import { openMembershipVerificationLink, verifyMembershipJoinEmail } from "./helpers/member-join";
+import { startJoinInBrowser, verifyMembershipJoinEmail } from "./helpers/member-join";
 import { ensureAppOrigin, submitMembershipApplication, uniqueSuffix } from "./helpers/membership";
 
 /** Reaches the rendered application form the way an applicant does. */
@@ -32,15 +32,8 @@ async function openVerifiedApplicationForm(
   email: string,
   options: { unaffiliated?: boolean } = {},
 ): Promise<void> {
-  const since = await capturedEmailCount();
-  await page.goto("/join/");
-  const choice = options.unaffiliated ? EMAIL_FIRST_COPY.join.personal : EMAIL_FIRST_COPY.join.work;
-  if (options.unaffiliated) await page.getByRole("radio", { name: choice.title, exact: true }).check();
-  await page.getByLabel(choice.label).fill(email);
-  await page.getByRole("button", { name: choice.action, exact: true }).click();
-  const verification = await waitForCapturedEmail(email, "Verify your email address", { since });
-  await openMembershipVerificationLink(page, extractEmailUrl(verification, "#verify="));
-  await expect(page.locator("[data-verified-application-email]")).toHaveText(email);
+  await startJoinInBrowser(page, email, { individual: options.unaffiliated });
+  await expect(page.locator("[data-join-signed-in]")).toContainText(email);
   await expect(page.locator('[data-membership-categories] input[name="membershipCategory"]').first()).toBeVisible();
 }
 
@@ -102,8 +95,8 @@ test("an organization applicant submits in a category other than the default", a
   for (const document of await page.locator(".membership-legal-card").all()) {
     expect((await document.boundingBox())!.width).toBeGreaterThan(formWidth * 0.9);
   }
-  await page.getByLabel("First name").fill("Alex");
-  await page.getByLabel("Last name").fill("Applicant");
+  await applicationForm.getByLabel("First name").fill("Alex");
+  await applicationForm.getByLabel("Last name").fill("Applicant");
   await page.getByLabel("Organization name").fill(`Category ${chosen} Organization ${suffix}`);
   for (const agreement of await page.locator('[data-join-application-form] input[type="checkbox"][required]').all()) {
     await agreement.check();
@@ -146,28 +139,24 @@ test("an individual can submit on a claimed nonmember domain without an organiza
     unaffiliated: true,
   });
   await expect(page.getByRole("heading", { name: "Choose your organization" })).toHaveCount(0);
+  const applicant = page.locator("[data-join-signed-in]");
+  await addMissingName(page, applicant, { firstName: "Ivy", lastName: "Individual" });
+  await addRepresentationBio(page, applicant, "I contribute to PKI interoperability research.");
   await page.getByLabel(/H6 —/).check();
   for (const width of [1280, 375]) {
     await page.setViewportSize({ width, height: 900 });
     await page.screenshot({ path: testInfo.outputPath(`individual-claimed-domain-${width}.png`) });
   }
-  await page.getByLabel("First name").fill("Individual");
-  await page.getByLabel("Last name").fill("Applicant");
   await page.locator('[name="custom.reason"]').fill("I contribute to PKI interoperability.");
   for (const agreement of await page.locator('[data-join-application-form] input[type="checkbox"][required]').all())
     await agreement.check();
   await expect(page.getByLabel("About your organization", { exact: false })).toHaveCount(0);
-  await page.getByLabel("About yourself", { exact: false }).fill("   ");
-  await page.getByRole("button", { name: "Submit membership application" }).click();
-  await expect(page.locator("#custom-about_yourself-error")).toContainText("required");
-  await expect(page.getByLabel("First name")).toHaveValue("Individual");
-  await page.getByLabel("About yourself", { exact: false }).fill("I work on PKI interoperability.");
   const submission = page.waitForResponse(
     (response) => response.url().endsWith("/api/v1/members/applications") && response.request().method() === "POST",
   );
   await page.getByRole("button", { name: "Submit membership application" }).click();
   expect((await submission).status()).toBe(201);
-  await expect(page.getByRole("heading", { name: /Thanks, Individual Applicant!/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Thanks/ })).toBeVisible();
 });
 
 test("a signed-in member is shown their membership instead of a new application", async ({ page }, testInfo) => {
@@ -175,7 +164,7 @@ test("a signed-in member is shown their membership instead of a new application"
   await signInToPortal(page, e2eAdminEmail("portal-join-categories"));
   const member = await createMember(page, { organizationName });
   await page.context().clearCookies();
-  await signInToPortal(page, member.email);
+  await signInToPortal(page, member.email, { continueAs: organizationName });
 
   await page.goto("/join/");
   const signedIn = page.locator("[data-join-signed-in]");
@@ -187,14 +176,14 @@ test("a signed-in member is shown their membership instead of a new application"
     /^\/portal\/#\/organizations\//,
   );
   // Nothing to type: neither the email step nor the application form is offered.
-  await expect(page.locator("[data-join-start]")).toBeHidden();
+  await expect(page.locator("[data-join-sign-in]")).toBeHidden();
   await expect(page.locator("[data-join-application-form]")).toBeHidden();
   await page.screenshot({ path: testInfo.outputPath("join-signed-in-member-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 375, height: 812 });
   await page.screenshot({ path: testInfo.outputPath("join-signed-in-member-phone.png"), fullPage: true });
 });
 
-test("a personal address cannot start an organization application without the explicit attestation", async ({
+test("a personal address cannot start an account for an organization without the explicit attestation", async ({
   page,
 }) => {
   const suffix = uniqueSuffix();
@@ -202,7 +191,7 @@ test("a personal address cannot start an organization application without the ex
 
   await ensureAppOrigin(page);
   const outcome = await page.evaluate(async (address) => {
-    const response = await fetch("/api/v1/members/join/start", {
+    const response = await fetch("/api/v1/auth/sign-up", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email: address, unaffiliatedAttestation: false }),
@@ -249,14 +238,14 @@ test("a verified claimed domain continues into organization access without a sec
    */
   await page.context().clearCookies();
   await ensureAppOrigin(page);
-  const join = await verifyMembershipJoinEmail(page, colleagueEmail);
+  // They name the organization their domain is claimed by, and represent it at once.
+  const join = await verifyMembershipJoinEmail(page, colleagueEmail, {
+    organizationName: `Claimed Domain Organization ${suffix}`,
+  });
   expect(join.status).toBe("organization_access_ready");
-  if (join.status !== "organization_access_ready") throw new Error("Expected organization access");
-  // The membership they were admitted under is the founder's organization,
-  // named on the capacity they now act in.
-  expect(join.member.activeIdentities.map((identity) => identity.organizationName)).toContain(
-    `Claimed Domain Organization ${suffix}`,
-  );
+  // The membership they were admitted under is the founder's organization:
+  // signing in, they continue as its representative.
+  await signInToPortal(page, colleagueEmail, { continueAs: `Claimed Domain Organization ${suffix}` });
 
   /*
    * And it is a real session, not a claim about one: the portal opens, and

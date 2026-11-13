@@ -89,6 +89,8 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
     jobTitle: "Security engineer",
   });
   await waitForCapturedEmail(deniedEmail, "registration is confirmed", { since: deniedSince });
+  // Registering signed this browser in as the denied attendee; the fixture's other attendee is someone else.
+  await attendee.context().clearCookies();
   const termsResponse = await attendee.request.get(`${eventApi}/terms?audience=attendee`);
   expect(termsResponse.status()).toBe(200);
   const terms = eventTermsResponseSchema.parse(await termsResponse.json()).terms;
@@ -163,8 +165,8 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
     }
     const consenting = await issueBadge(staff, email);
     const denied = await issueBadge(staff, deniedEmail);
-    if (!template.result.manageToken) throw new Error("Denied fixture needs its own registration capability");
-    const canceled = await attendee.request.patch(`/api/v1/registrations/access/${template.result.manageToken}`, {
+    const deniedManage = await template.manageLink();
+    const canceled = await attendee.request.patch(`/api/v1/registrations/access/${deniedManage.manageToken}`, {
       data: registrationManageSchema.parse({ action: "cancel" }),
     });
     expect(canceled.status()).toBe(200);

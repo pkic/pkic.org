@@ -2,6 +2,7 @@ import { publicUserSession } from "../../../_lib/auth/public-user-session";
 import { prepareMagicLinkVerificationHttp, createSessionEstablishedResponse } from "../../../_lib/auth/http-flow";
 import { redeemUserSignInCapability, serializeUserSessionCookie } from "../../../_lib/auth/user-session";
 import { redeemSponsorSignInCapability } from "../../../_lib/auth/sponsor-sign-in-session";
+import { redeemUserSignUpCapability } from "../../../_lib/auth/user-sign-up";
 import { parseCapabilityToken } from "../../../_lib/auth/capability-token";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import type { AdminContext } from "../../../_lib/db/context";
@@ -17,7 +18,9 @@ export const UserAuthVerifyLink = openApiRoute(userAuthVerifyRouteSchema, async 
   const http = await prepareMagicLinkVerificationHttp(c, USER_MAGIC_LINK_VERIFY_RATE_LIMIT_NAMESPACE);
   const redeem = parseCapabilityToken(data.body.token, "sponsor_sign_in")
     ? redeemSponsorSignInCapability
-    : redeemUserSignInCapability;
+    : parseCapabilityToken(data.body.token, "user_sign_up")
+      ? redeemUserSignUpCapability
+      : redeemUserSignInCapability;
   const result = await redeem(http.db, {
     token: data.body.token,
     signingSecret: http.secret,

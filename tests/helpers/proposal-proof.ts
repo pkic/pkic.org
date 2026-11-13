@@ -9,6 +9,7 @@ import {
 } from "../../assets/shared/schemas/event-proposal-proof";
 import type { Env } from "../../functions/_lib/types";
 import { callApi } from "./app";
+import { createMemberSession } from "./auth";
 import { deliveredEmailPayload, queryAll } from "./context";
 import { withIndependentCapacity } from "./independent-capacity";
 
@@ -17,14 +18,51 @@ async function mailedProofToken(environment: Env, payloadJson: string): Promise<
   return new URLSearchParams(new URL(delivered.verificationUrl).hash.slice(1)).get("verify");
 }
 
-/** Explicit positive-fixture mailbox authorization through the mounted email API. */
+/**
+ * A signed-in proposer for positive fixtures: an account whose address is
+ * verified, as sign-in leaves it, and a session for it. Spread `headers` into
+ * the proposal request; the proposal body names the identity (`actingIdentityId`).
+ */
+export async function signInProposer(input: {
+  environment: Env;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+}): Promise<{ userId: string; headers: { authorization: string } }> {
+  const db = input.environment.DB;
+  const at = new Date().toISOString();
+  const existing = await db
+    .prepare("SELECT id FROM users WHERE normalized_email=?")
+    .bind(input.email)
+    .first<{ id: string }>();
+  const userId = existing?.id ?? crypto.randomUUID();
+  if (!existing)
+    await db
+      .prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, email_verified_at,
+                            email_verification_method, active, created_at, updated_at)
+         VALUES (?1, ?2, ?2, ?3, ?4, ?5, 'magic_link', 1, ?5, ?5)`,
+      )
+      .bind(userId, input.email, input.firstName ?? null, input.lastName ?? null, at)
+      .run();
+  const token = await createMemberSession(
+    db,
+    userId,
+    crypto.randomUUID(),
+    input.environment.INTERNAL_SIGNING_SECRET,
+    null,
+  );
+  return { userId, headers: { authorization: `Bearer ${token}` } };
+}
+
+/** Explicit positive-fixture speaker mailbox authorization through the mounted email API. */
 export async function prepareProposalProof(input: {
   environment: Env;
   eventSlug: string;
   email: string;
   consents: Array<{ termKey: string; version: string }>;
   unaffiliatedAttestation: boolean;
-  speakerManagementToken?: string;
+  speakerManagementToken: string;
 }) {
   const body = eventProposalProofStartSchema.parse({
     email: input.email,

@@ -1,12 +1,9 @@
-import type { RegistrationOrganizationOutcome } from "../../../../assets/shared/schemas/registration";
-import { readEventAffiliationContext } from "../identities/event-affiliation-context";
 import {
   personalPromotionImagePath,
   personalPromotionSharePath,
 } from "../../../../assets/shared/personal-promotion-image";
 import type { z } from "zod";
 import type {
-  RegistrationConfirmOrganization,
   RegistrationSubmissionResponse,
   registrationCreateSchema,
 } from "../../../../assets/shared/schemas/registration";
@@ -29,8 +26,7 @@ import { commitRegistrationSubmission } from "../registration-submission";
 import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
 import { readRegistrationAffiliation } from "./selected-identity";
 import type { VerifiedRegistrationIdentityContext } from "./types";
-import { nowIso, persistedUtcInstant } from "../../utils/time";
-import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
+import { persistedUtcInstant } from "../../utils/time";
 import { findRegistrationGroup, prepareGroupEventRegistrationGuard } from "./authorization";
 import { eventTakesRegistrations } from "./email-proof";
 
@@ -58,8 +54,6 @@ export interface EventRegistrationSubmissionMetadata {
   signingSecret: string;
   config: PublicRegistrationSubmissionConfig;
   verifiedIdentity?: VerifiedRegistrationIdentityContext;
-  /** The submission carried a verification link for its address: it is registered without a confirmation email. */
-  mailboxVerified?: boolean;
   authorizationGuards?: readonly StatementLike[];
 }
 
@@ -87,26 +81,6 @@ function requireRegistrationPolicy(
     return;
   }
   throw new AppError(403, "EVENT_REGISTRATION_ACCESS_REQUIRED", "Registration requires an invitation or group access");
-}
-
-/**
- * After a verified registration commits, link the organization chosen on the
- * form or queue it for review without undoing the registration.
- */
-async function linkVerifiedRegistrant(
-  db: DatabaseLike,
-  input: {
-    registrationId: string;
-    organization?: RegistrationConfirmOrganization;
-  },
-): Promise<RegistrationOrganizationOutcome | null> {
-  return input.organization
-    ? linkConfirmedRegistrationOrganization(db, {
-        registrationId: input.registrationId,
-        organization: input.organization,
-        at: nowIso(),
-      })
-    : null;
 }
 
 /** Canonical registration use case shared by public and authenticated group adapters. */
@@ -155,7 +129,7 @@ export async function submitEventRegistration(
     authorizedByGroup: Boolean(verifiedIdentity?.registrationGroupId),
   });
 
-  if (!metadata.verifiedIdentity && !metadata.mailboxVerified) {
+  if (!metadata.verifiedIdentity) {
     const mxResult = await checkEmailDomainMx(body.email);
     if (!mxResult.hasMxRecords) {
       throw new AppError(
@@ -166,25 +140,6 @@ export async function submitEventRegistration(
     }
   }
 
-  if (body.organization?.organizationId !== undefined && !body.organization.contextToken)
-    throw new AppError(409, "IDENTITY_CONTEXT_REQUIRED", "Confirm your organization details again before registering.");
-  const affiliationContext =
-    body.organization?.contextToken && metadata.mailboxVerified
-      ? await readEventAffiliationContext(
-          metadata.signingSecret,
-          body.organization.contextToken,
-          event.id,
-          body.email,
-          "registration-affiliation",
-          body.organization,
-        )
-      : undefined;
-  if (body.organization?.contextToken && !affiliationContext)
-    throw new AppError(
-      422,
-      "REGISTRATION_EMAIL_PROOF_REQUIRED",
-      "Verify your email before confirming the organization.",
-    );
   const { prepared, requiredTerms, formResponse } = await prepareValidatedAttendeeRegistration(db, body, {
     sourceType: invite ? "invite" : body.sourceType,
     sourceRef: body.sourceRef,
@@ -202,8 +157,6 @@ export async function submitEventRegistration(
     authorizationGuards,
     event: { id: event.id, source_mode: event.source_mode },
     verifiedIdentity,
-    affiliationContext,
-    mailboxVerified: metadata.mailboxVerified,
   });
   const { user, referralCode } = prepared;
   const registration = prepared.registration;
@@ -213,20 +166,18 @@ export async function submitEventRegistration(
   // anonymous submitter owns it. Existing identities receive their management
   // capability only through the durable email outbox. A newly created,
   // unprivileged identity may keep the immediate correction link so a typo can
-  // still be fixed before confirmation. A verified mailbox is that proof.
-  const exposeManageCapability = prepared.identityWasCreated || Boolean(metadata.mailboxVerified);
+  // still be fixed before confirmation.
+  const exposeManageCapability = prepared.identityWasCreated;
   const shareUrl = `${metadata.appBaseUrl}${personalPromotionSharePath(referralCode)}`;
   const dayWaitlist = prepared.plannedDayWaitlist;
   const attendanceData = buildAttendanceEmailData(prepared.dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const customAnswerRows = buildCustomAnswerRows(formResponse.answers, formResponse.form?.fields);
   const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
-  const affiliation =
-    prepared.representation ??
-    (await readRegistrationAffiliation(db, {
-      identityId: registration.registration_identity_id,
-      userId: user.id,
-    }));
+  const affiliation = await readRegistrationAffiliation(db, {
+    identityId: registration.registration_identity_id,
+    userId: user.id,
+  });
   const commonData = {
     ...buildEventEmailVariables(event, metadata.appBaseUrl),
     firstName: user.first_name ?? "",
@@ -319,14 +270,6 @@ export async function submitEventRegistration(
 
   const badgeRenderJob = prepareBadgeRenderJob(db, referralCode);
   await commitRegistrationSubmission(db, prepared, [queuedEmail.statement, badgeRenderJob.statement]);
-  const organizationOutcome = affiliationContext
-    ? (prepared.organizationOutcome ?? null)
-    : metadata.mailboxVerified
-      ? await linkVerifiedRegistrant(db, {
-          registrationId: registration.id,
-          organization: body.organization,
-        })
-      : null;
   return {
     response: {
       success: true,
@@ -338,7 +281,6 @@ export async function submitEventRegistration(
       shareUrl,
       dayAttendance: prepared.dayAttendance,
       dayWaitlist,
-      organizationOutcome,
     },
     backgroundTasks: [
       seedGravatarAndProcessBadgeRenderJob(db, env, {

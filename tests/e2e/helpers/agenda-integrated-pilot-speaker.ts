@@ -30,7 +30,7 @@ export async function preparePilotSpeaker(staff: Page, speaker: Page, info: Test
   });
   expect(invitation.status(), await invitation.text()).toBe(200);
   expect(coSpeakerInviteResponseSchema.parse(await invitation.json()).email).toBe(email);
-  const message = await waitForCapturedEmail(email, "You have been added as a speaker", { since });
+  const message = await waitForCapturedEmail(email, "Speaker invitation: please confirm", { since });
   const speakerUrl = extractEmailUrl(message, "/portal/");
   const path = `/api/v1/proposals/${encodeURIComponent(proposal.proposalId)}/participation`;
   await signInToPortal(speaker, email);
@@ -40,7 +40,7 @@ export async function preparePilotSpeaker(staff: Page, speaker: Page, info: Test
   expect(before.speaker.status).toBe("invited");
   expect(before.profile.actingIdentitySelection).toBe("unrecorded");
   expect(before.profile.email).toBe(email);
-  const confirmation = speaker.getByRole("button", { name: "Confirm participation", exact: true });
+  const confirmation = speaker.getByRole("button", { name: "Confirm willingness to participate", exact: true });
   await expect(confirmation).toBeDisabled();
   const terms = speaker.locator("[data-term-key] input[type='checkbox']");
   await expect(terms.first()).toBeVisible();
@@ -55,7 +55,11 @@ export async function preparePilotSpeaker(staff: Page, speaker: Page, info: Test
   );
   await confirmation.click();
   expect((await confirming).status()).toBe(200);
-  await expect(speaker.getByText("Participation confirmed.")).toBeVisible();
+  await expect(
+    speaker.getByText(
+      "Your willingness to participate in this proposal is confirmed. Committee acceptance and scheduling are separate decisions.",
+    ),
+  ).toBeVisible();
   const after = speakerSelfServiceReadResponseSchema.parse(await (await speaker.request.get(path)).json());
   expect(after.speaker.status).toBe("confirmed");
   expect(after.speaker.userId).toBe(before.speaker.userId);

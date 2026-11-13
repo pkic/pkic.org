@@ -21,7 +21,7 @@ import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { declinePasskeyOffer, openEmailSignIn, openMyProfile, signInToPortal } from "./helpers/portal-auth";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
-import { ensureAppOrigin, uniqueSuffix } from "./helpers/membership";
+import { uniqueSuffix } from "./helpers/membership";
 
 /** Requests one sign-in link and returns the URL from the delivered mail. */
 async function requestSignInLink(page: import("@playwright/test").Page, email: string): Promise<string> {
@@ -196,36 +196,3 @@ for (const withoutRandomUUID of [false, true]) {
     expect(after.status(), "sign out must revoke the session, not just the rendered state").toBe(401);
   });
 }
-
-test("a membership join capability cannot be redeemed as a portal sign-in", async ({ page }) => {
-  const suffix = uniqueSuffix();
-  const email = `wrong-purpose-${suffix}@wrong-purpose-${suffix}.test`;
-  await ensureAppOrigin(page);
-
-  // Start a join flow to obtain a capability issued for a different purpose.
-  const since = await capturedEmailCount();
-  const started = await page.evaluate(async (address) => {
-    const response = await fetch("/api/v1/members/join/start", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: address, unaffiliatedAttestation: false }),
-    });
-    return response.status;
-  }, email);
-  expect(started).toBe(200);
-
-  const message = await waitForCapturedEmail(email, "Verify your email address", { since });
-  const joinUrl = extractEmailUrl(message, "/join/");
-  const joinToken = new URLSearchParams(new URL(joinUrl).hash.slice(1)).get("verify");
-  expect(joinToken).toBeTruthy();
-
-  // Present it where a portal sign-in capability is expected, in the portal's own sign-in link form.
-  const presented = await openSignInLink(page, `/portal/#/verify?token=${encodeURIComponent(joinToken!)}`);
-  expect(presented.ok(), "a join capability must be refused as a sign-in").toBe(false);
-  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
-  const session = await page.evaluate(async () => {
-    const response = await fetch("/api/v1/auth/session", { credentials: "same-origin" });
-    return response.status;
-  });
-  expect(session, "a join capability must not authenticate a portal session").toBe(401);
-});

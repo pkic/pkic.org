@@ -24,7 +24,7 @@ vi.mock("../../assets/ts/shared/passkey-authentication", () => ({
 }));
 
 const { Login } = await import("../../assets/ts/member-flows/portal/shell/Login");
-const { userAuthRequestSchema } = await import("../../assets/shared/schemas/user-auth");
+const { userAuthRequestSchema, userSignUpRequestSchema } = await import("../../assets/shared/schemas/user-auth");
 
 let container: HTMLDivElement;
 
@@ -469,5 +469,65 @@ describe("portal login", () => {
     expect(controlLabeled("Email").value).toBe("synthetic@example.test");
     expect(controlLabeled("Email").matches(":disabled")).toBe(false);
     expect(container.querySelector("[role='status']")).toBeNull();
+  });
+
+  it("starts a new person with the work-email step and returns them to the flow they came for", async () => {
+    browserSupportsWebAuthn.mockReturnValue(true);
+    window.location.hash = "#/events/pqc-2027/register?invite=abc";
+    const requests: Array<{ url: string; body: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = input instanceof Request ? input.url : String(input);
+        // The event's public read: unavailable here, so the card keeps its general title.
+        if (!init?.body) return Response.json({ error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 });
+        requests.push({ url, body: JSON.parse(String(init.body)) });
+        return Response.json({ success: true });
+      }),
+    );
+    try {
+      await act(() => render(<Login onSignedIn={vi.fn()} />, container));
+      // The card names what the reader came to do, and signing in stays the first thing on it.
+      expect(container.querySelector("h1")?.textContent).toBe("Register for this event");
+      expect(buttonLabeled("Sign in with a passkey")).toBeTruthy();
+
+      await act(() => buttonLabeled("Start registration").click());
+      // The start step loads on demand.
+      await waitFor(
+        () =>
+          Array.from(container.querySelectorAll("label")).some((el) => el.textContent?.includes("work email address")),
+        "the email step",
+      );
+      await act(() => {
+        const control = controlLabeled("Your work email address");
+        control.value = "ada@organization.example";
+        control.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => {
+        buttonLabeled("Verify your work email").click();
+        await Promise.resolve();
+      });
+      await waitFor(() => (container.textContent ?? "").includes("Check your email"), "the sent confirmation");
+
+      expect(requests).toHaveLength(1);
+      expect(requests[0].url).toContain("/api/v1/auth/sign-up");
+      expect(userSignUpRequestSchema.parse(requests[0].body)).toEqual({
+        email: "ada@organization.example",
+        unaffiliatedAttestation: false,
+        returnPath: "/events/pqc-2027/register?invite=abc",
+      });
+    } finally {
+      window.location.hash = "";
+    }
+  });
+
+  it("offers a plain start with an email when no flow describes itself", async () => {
+    browserSupportsWebAuthn.mockReturnValue(true);
+    await act(() => render(<Login onSignedIn={vi.fn()} />, container));
+    expect(container.querySelector("h1")?.textContent).toBe("Sign in");
+    expect(buttonLabeled("Continue with your email")).toBeTruthy();
+    await act(() => buttonLabeled("Continue with your email").click());
+    await act(() => buttonLabeled("Back to sign in").click());
+    expect(buttonLabeled("Sign in with a passkey")).toBeTruthy();
   });
 });

@@ -49,8 +49,6 @@ export interface CreateRegistrationPayload {
   /** True only when this registration transaction creates the user identity. */
   unverifiedEmailCorrectionAllowed?: boolean;
   verifiedIdentity?: VerifiedRegistrationIdentityContext;
-  /** The registrant opened the verification link for this address: no confirmation email follows. */
-  mailboxVerified?: boolean;
 }
 
 function initialRegistrationStatus(
@@ -106,7 +104,7 @@ export async function buildCreateRegistration(
 }> {
   const status = initialRegistrationStatus(
     payload.inviteId ?? null,
-    Boolean(payload.verifiedIdentity || payload.mailboxVerified || payload.acceptedProposalRoles?.length),
+    Boolean(payload.verifiedIdentity || payload.acceptedProposalRoles?.length),
   );
   const selection = { eventId: payload.event.id, userId: payload.userId };
   const roles = prepareRoleBasedCapacityExemption(db, {
@@ -134,10 +132,7 @@ export async function buildCreateRegistration(
   const previousAttendance = batchRows<PreviousRegistrationDayAttendanceRow>(details[capacity.statements.length]);
   if (existing) {
     if (payload.acceptedProposalRoles) assertRegistrationRestorationAllowed(existing);
-    if (
-      existing.status !== "cancelled" &&
-      !(payload.mailboxVerified && existing.status === "pending_email_confirmation")
-    ) {
+    if (existing.status !== "cancelled") {
       throw new AppError(409, "REGISTRATION_EXISTS", "This user is already registered for the event");
     }
   }
