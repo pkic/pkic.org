@@ -36,7 +36,10 @@ import {
   publicKeyCredentialEnvelopeSchema,
   registrationResponseSchema,
 } from "../assets/shared/schemas/passkeys";
-import { successResponseSchema } from "../assets/shared/schemas/api-common";
+import { jobTitleSchema, organizationNameSchema, successResponseSchema } from "../assets/shared/schemas/api-common";
+import { organizationIdentityJobTitleSchema } from "../assets/shared/schemas/identity-job-title";
+import { identityProfileUpdateSchema } from "../assets/shared/schemas/own-identity-profile";
+import { meetingLocationSchema } from "../assets/shared/schemas/event-series";
 import { headshotUploadResponseSchema } from "../assets/shared/schemas/registration";
 import { memberAuthVerifyResponseSchema } from "../assets/shared/schemas/member-auth";
 import { userAuthEstablishedResponseSchema } from "../assets/shared/schemas/user-auth";
@@ -352,6 +355,31 @@ describe("explicit attendance choices", () => {
     ]).parse(payload);
     expect(completed.dayAttendance).toEqual(payload.dayAttendance);
   });
+});
+
+it.each([1, 200])(
+  "accepts the same job-title and organization-name bounds across participation and profile contracts: %i",
+  (length) => {
+    const value = "X".repeat(length);
+    expect(jobTitleSchema.parse(value)).toBe(value);
+    expect(organizationIdentityJobTitleSchema.parse(value)).toBe(value);
+    expect(organizationNameSchema.parse(value)).toBe(value);
+    expect(identityProfileUpdateSchema.parse({ jobTitle: value }).jobTitle).toBe(value);
+  },
+);
+
+it("rejects empty required affiliations and overlong affiliation text while allowing a personal title to be cleared", () => {
+  for (const schema of [jobTitleSchema, organizationIdentityJobTitleSchema, organizationNameSchema]) {
+    expect(schema.safeParse("   ").success).toBe(false);
+    expect(schema.safeParse("X".repeat(201)).success).toBe(false);
+  }
+  expect(identityProfileUpdateSchema.parse({ jobTitle: "   " }).jobTitle).toBe("");
+});
+
+it.each(["", "   ", null])("round-trips a cleared meeting location through the shared contract: %j", (value) => {
+  const parsed = meetingLocationSchema.parse(value);
+  expect(parsed).toBeNull();
+  expect(meetingLocationSchema.parse(parsed)).toBeNull();
 });
 
 it("requires explicit saved speaker agreements in the read response", () => {

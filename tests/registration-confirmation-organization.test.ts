@@ -143,6 +143,19 @@ describe("organization named on registration confirmation", () => {
     expect((await confirm({ token })).status).toBe("registered");
   });
 
+  it.each([1, 200])(
+    "confirms organization names and job titles of %i characters accepted by identity creation",
+    async (length) => {
+      const name = "X".repeat(length);
+      const jobTitle = "R".repeat(length);
+      const email = "limits@profile-fields.example";
+      const token = await register(email);
+      const confirmed = await confirm({ token, organization: { name, jobTitle } });
+      expect(confirmed.organizationOutcome).toBe("linked");
+      expect(await affiliations(email)).toEqual([{ name, job_title: jobTitle }]);
+    },
+  );
+
   it("asks an unknown work domain once and creates the affiliation through the canonical rule", async () => {
     const token = await register("person@unknown-works.example");
     expect((await info(token)).asksOrganization).toBe(true);

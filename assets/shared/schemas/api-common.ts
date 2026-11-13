@@ -146,17 +146,13 @@ export const organizationNameSchema = z
   .string({ error: ORGANIZATION_NAME_REQUIRED })
   .trim()
   .min(1, ORGANIZATION_NAME_REQUIRED)
-  .min(2, "Enter at least 2 characters.")
-  .max(160);
+  .max(200);
 /** Said wherever someone takes part on behalf of an organization without a job title. */
 export const JOB_TITLE_REQUIRED = "Enter your job title at this organization.";
-/** Required wherever it is asked: someone taking part on behalf of an organization says what they do there. */
-export const jobTitleSchema = z
-  .string({ error: JOB_TITLE_REQUIRED })
-  .trim()
-  .min(1, JOB_TITLE_REQUIRED)
-  .min(2, "Enter at least 2 characters.")
-  .max(120);
+/** Shared job-title text, including an empty edit that clears a personal title. */
+export const jobTitleTextSchema = z.string({ error: JOB_TITLE_REQUIRED }).trim().max(200);
+/** Someone taking part on behalf of an organization says what they do there. */
+export const jobTitleSchema = jobTitleTextSchema.min(1, JOB_TITLE_REQUIRED);
 export const tokenSchema = z.string().trim().min(16).max(512).regex(tokenCharactersPattern, "Invalid token format");
 export const emailAuthTokenSchema = z
   .string()
