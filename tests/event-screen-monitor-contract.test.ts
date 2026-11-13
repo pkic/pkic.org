@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { screenHealthDisplay } from "../assets/shared/event-screen-health";
+import { screenHealthDisplay, screenOwnRunHint } from "../assets/shared/event-screen-health";
 import {
   addScreenQualityReading,
   screenNetworkReadings,
@@ -92,6 +92,7 @@ describe("a screen's quality samples", () => {
     display: "output",
     output: "projector",
     mode: "live",
+    studioLinkReason: null,
     player: null,
     clockOffsetMs: 0,
     metrics: null,
@@ -167,6 +168,7 @@ describe("stalls in the quality samples", () => {
     display: "livestream",
     output: "livestream",
     mode: "live",
+    studioLinkReason: null,
     player: {
       status: "playing",
       muted: false,
@@ -238,6 +240,7 @@ describe("health badges", () => {
       display: "livestream",
       output: "livestream",
       mode: "live",
+      studioLinkReason: null,
       player: { status: "playing", muted: true, changedAt: "2026-11-11T10:00:00.000Z", playback: null },
       clockOffsetMs: 0,
       metrics: null,
@@ -246,6 +249,27 @@ describe("health badges", () => {
     expect(screenHealthDisplay({ ...base, player: null })).toEqual({ label: "No stream", tone: "warn" });
     expect(
       screenHealthDisplay({ ...base, display: "output", output: "projector", player: null, mode: "offline" }),
-    ).toEqual({ label: "Holding last picture", tone: "warn" });
+    ).toEqual({ label: "Studio link down", tone: "warn" });
+    expect(
+      screenHealthDisplay({
+        ...base,
+        display: "output",
+        output: "stage-display",
+        player: null,
+        mode: "offline",
+        studioLinkReason: "SOMETHING_NEW",
+      }),
+    ).toEqual({ label: "Studio link down (SOMETHING_NEW)", tone: "warn" });
+    // Its screenshots still change, so staff are told what reaches the screen and what does not.
+    expect(screenOwnRunHint(base)).toBeNull();
+    expect(screenOwnRunHint({ ...base, mode: "offline", studioLinkReason: "SCREEN_PAGE_OUTDATED" })).toMatchObject({
+      stopped: expect.stringContaining("Updates from the studio"),
+      next: expect.stringContaining("loads the new one by itself"),
+    });
+    expect(screenOwnRunHint({ ...base, mode: "auto" })?.works).toContain("copy of the agenda");
+    // A browser screen never reloads by itself: its staff reload the tab.
+    expect(
+      screenOwnRunHint({ ...base, kind: "browser", mode: "offline", studioLinkReason: "SCREEN_PAGE_OUTDATED" })?.next,
+    ).toContain("reload its browser tab");
   });
 });

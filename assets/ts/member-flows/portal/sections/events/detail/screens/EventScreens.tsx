@@ -20,7 +20,7 @@ import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
 import { Chip } from "../../../../../../ui/Chip";
 import { EmptyState } from "../../../../../../ui/EmptyState";
-import { Menu } from "../../../../../../ui/Menu";
+import { Menu, type MenuItem } from "../../../../../../ui/Menu";
 import { RowActions } from "../../../../../../ui/RowActions";
 import { toast } from "../../../../ui";
 import { DiscoveryViewToggle, useDiscoveryView } from "../../../DiscoveryView";
@@ -58,6 +58,12 @@ function attentionSummary(counts: { critical: number; warning: number }): string
     counts.warning ? `${formatNumber(counts.warning)} ${counts.warning === 1 ? "warning" : "warnings"}` : "",
   ].filter(Boolean);
   return parts.length ? parts.join(" · ") : "No screens need attention";
+}
+
+/** The chip's words where the toolbar is narrow: one count. */
+function attentionCount(counts: { critical: number; warning: number }): string {
+  const total = counts.critical + counts.warning;
+  return total ? `${formatNumber(total)} ${total === 1 ? "issue" : "issues"}` : "None";
 }
 
 export function EventScreens({
@@ -185,6 +191,16 @@ export function EventScreens({
     />
   );
 
+  // Beside the view toggle on a wide list, and in the list's one menu on a narrow one.
+  const notifyItem: MenuItem = {
+    id: "notify",
+    label: "Notify me in this browser",
+    checked: controller.notifications.enabled,
+    multiple: true,
+    disabled: !controller.notifications.supported,
+    onSelect: () => void controller.notifications.toggle(),
+  };
+
   return (
     <div class="pk pk-stack">
       {error && <ErrorAlert error={error} />}
@@ -212,27 +228,23 @@ export function EventScreens({
                 <>
                   {(needAttention.length > 0 || attention) && (
                     <Chip pressed={Boolean(attentionIds)} onToggle={() => setAttention(attention ? "" : "1")}>
-                      {attentionSummary(counts)}
+                      <span class="pk-toolbar-control-label">{attentionSummary(counts)}</span>
+                      <span class="pk-toolbar-compact-icon" aria-hidden="true">
+                        {attentionCount(counts)}
+                      </span>
                     </Chip>
                   )}
                   <DiscoveryViewToggle view={view} onChange={setView} />
-                  <Menu
-                    label="Screen notifications"
-                    items={[
-                      {
-                        id: "notify",
-                        label: "Notify me in this browser",
-                        checked: controller.notifications.enabled,
-                        multiple: true,
-                        disabled: !controller.notifications.supported,
-                        onSelect: () => void controller.notifications.toggle(),
-                      },
-                    ]}
-                  />
+                  <span class="pk-toolbar-secondary">
+                    <Menu label="Screen notifications" items={[notifyItem]} />
+                  </span>
                 </>
               )
             : undefined
         }
+        toolbarClass={monitor ? "pk-discovery-toolbar pk-toolbar-row" : undefined}
+        compactToolbarLabel="Screens: filters and actions"
+        compactToolbarActions={monitor ? [notifyItem] : undefined}
         renderItems={
           monitor && view === "grid"
             ? (screens) => (
@@ -254,9 +266,7 @@ export function EventScreens({
               )
             : undefined
         }
-        createAction={
-          canManage ? { label: "Pair screen", showLabel: true, onSelect: () => setPairing(true) } : undefined
-        }
+        createAction={canManage ? { label: "Pair screen", onSelect: () => setPairing(true) } : undefined}
         rowKey={(screen) => screen.id}
         columns={[
           {

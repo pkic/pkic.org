@@ -8,13 +8,16 @@
  */
 import type { ComponentChildren } from "preact";
 import { screenConnection, screenConnectionDisplay } from "../../../../../../../shared/event-screen-connection";
-import { screenHealthDisplay } from "../../../../../../../shared/event-screen-health";
+import { screenHealthDisplay, screenOwnRunHint } from "../../../../../../../shared/event-screen-health";
+
+type ScreenOwnRunHint = NonNullable<ReturnType<typeof screenOwnRunHint>>;
 import { screenIssueSeverity, type ScreenIssue } from "../../../../../../../shared/event-screen-issues";
 import { formatAge } from "../../../../../../../shared/format-date";
 import { LIVE_SCREEN_OUTPUT_DETAILS } from "../../../../../../../shared/live-room-outputs";
 import type { ScreenLiveStatus, ScreenQualitySample } from "../../../../../../../shared/schemas/event-screen-monitor";
 import type { ScreenRecord } from "../../../../../../../shared/schemas/event-screens";
 import { Alert } from "../../../../../../ui/Alert";
+import { Tooltip } from "../../../../../../ui/Tooltip";
 import { CollectionCardFooter, CollectionCardSurface } from "../../../../../../ui/CollectionCard";
 import { useSectionHeading } from "../../../../../../ui/HeadingOutline";
 import type { ScreenMonitorScreenshot } from "./screen-monitor-view";
@@ -46,7 +49,7 @@ export function screenCondition(
   lostSince: number | null = null,
   /** The monitor watches the event's screens; one it does not know about has no issue it tracks. */
   monitored = true,
-): { tone: ScreenConditionTone; text: string } {
+): { tone: ScreenConditionTone; text: string; hint?: ScreenOwnRunHint } {
   if (lostSince !== null && status)
     return { tone: "neutral", text: `Status unknown · last update ${formatAge(now - lostSince)}` };
   if (!status) {
@@ -67,10 +70,15 @@ export function screenCondition(
   const details = issues.map((issue) => issue.label);
   if (status.online && status.health) {
     const { label } = screenHealthDisplay(status.health);
-    if (!details.includes(label)) details.push(label);
+    // A fallback's issue already says what the badge says, with how long.
+    const said = issues.some((issue) => issue.code === "cached-agenda");
+    if (!said && !details.includes(label)) details.push(label);
   }
   const severity = screenIssueSeverity(issues);
+  // A screen on its own still sends screenshots: say what reaches it and what does not.
+  const hint = status.online && status.health ? screenOwnRunHint(status.health) : null;
   return {
+    ...(hint ? { hint } : {}),
     tone: severity ?? (status.online ? "ok" : "critical"),
     text: details.length
       ? `${connection} · ${details.map((label, index) => (index ? label.charAt(0).toLowerCase() + label.slice(1) : label)).join(", ")}`
@@ -105,15 +113,50 @@ const TONE_WORDS: Record<ScreenConditionTone, string> = {
   critical: "Critical: ",
 };
 
-/** The condition line: a dot in its tone, then the words, cut to one line with the whole line on hover. */
-export function ScreenConditionLine({ condition }: { condition: ReturnType<typeof screenCondition> }) {
+/** What still reaches a screen running on its own, and what does not. */
+function ScreenOwnRunHelp({ text, hint }: { text: string; hint: ScreenOwnRunHint }) {
   return (
-    <p class="pk-screen-condition" data-tone={condition.tone} title={condition.text}>
+    <dl class="pk-screen-own-run">
+      {/* The whole line first: the card cuts it at two lines. */}
+      <dt>Status</dt>
+      <dd>{text}</dd>
+      <dt>Still works</dt>
+      <dd>{hint.works}</dd>
+      <dt>Not reaching it</dt>
+      <dd>{hint.stopped}</dd>
+      <dt>Next</dt>
+      <dd>{hint.next}</dd>
+    </dl>
+  );
+}
+
+/**
+ * The condition line: a dot in its tone, then the words, cut at two lines
+ * with the whole line on hover. A screen running on its own opens a tooltip
+ * on what still reaches it, on hover, focus or tap.
+ */
+export function ScreenConditionLine({ condition }: { condition: ReturnType<typeof screenCondition> }) {
+  const words = (
+    <span
+      class={condition.hint ? "pk-screen-condition__text pk-screen-condition__text--hint" : "pk-screen-condition__text"}
+    >
+      {TONE_WORDS[condition.tone] && <span class="pk-sr-only">{TONE_WORDS[condition.tone]}</span>}
+      {condition.text}
+    </span>
+  );
+  return (
+    <p class="pk-screen-condition" data-tone={condition.tone} title={condition.hint ? undefined : condition.text}>
       <span class="pk-screen-condition__dot" aria-hidden="true" />
-      <span class="pk-screen-condition__text">
-        {TONE_WORDS[condition.tone] && <span class="pk-sr-only">{TONE_WORDS[condition.tone]}</span>}
-        {condition.text}
-      </span>
+      {condition.hint ? (
+        <Tooltip
+          label={`${TONE_WORDS[condition.tone]}${condition.text}`}
+          content={<ScreenOwnRunHelp text={condition.text} hint={condition.hint} />}
+        >
+          {words}
+        </Tooltip>
+      ) : (
+        words
+      )}
     </p>
   );
 }

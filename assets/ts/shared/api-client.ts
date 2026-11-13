@@ -60,6 +60,8 @@ async function parseJson(response: Response, signal?: AbortSignal): Promise<unkn
 export interface JsonRequestInit extends RequestInit {
   mapError?: (payload: ApiErrorPayload, status: number) => ApiErrorPayload;
   responseType?: "json" | "blob";
+  /** Sees each response's headers, answered or refused, before its body is read. */
+  onHeaders?: (headers: Headers) => void;
 }
 
 export type UnauthorizedHandler = (status: number) => void;
@@ -116,7 +118,7 @@ async function sendJsonRequest<Schema extends z.ZodType>(
   schema: Schema,
   init?: JsonRequestInit,
 ): Promise<z.output<Schema>> {
-  const { mapError, responseType = "json", ...requestInit } = init ?? {};
+  const { mapError, responseType = "json", onHeaders, ...requestInit } = init ?? {};
   const known = serviceAvailability.value;
   const path = new URL(url, typeof window === "undefined" ? "https://app.test" : window.location.href).pathname;
   if (known && known.mode !== "normal" && path.startsWith("/api/") && path !== "/api/v1/" && path !== "/api/v1") {
@@ -137,6 +139,8 @@ async function sendJsonRequest<Schema extends z.ZodType>(
     }
   };
   let response = await send();
+  // Headers are read before the body, so an interrupted or unreadable body still delivers them.
+  onHeaders?.(response.headers);
 
   const readBody = (value: Response) =>
     responseType === "blob" && value.ok ? value.blob() : parseJson(value, requestInit.signal ?? undefined);
@@ -157,6 +161,7 @@ async function sendJsonRequest<Schema extends z.ZodType>(
     headers.set(TURNSTILE_TOKEN_HEADER, token);
     // The server's challenge refusal guarantees the handler has not run. Retry once only.
     response = await send();
+    onHeaders?.(response.headers);
     body = await readBody(response);
   }
   if (!response.ok) {

@@ -141,3 +141,35 @@ it("backs off a screen's program retries while each attempt opens and is then re
   }
   expect(sockets.sockets).toHaveLength(3);
 });
+
+it("tells a screen when the room sends what its page cannot read, as after a deploy", async () => {
+  const sockets = fakeLiveSockets();
+  const onUnreadable = vi.fn();
+  let seen: ReturnType<typeof useLiveRoom> | undefined;
+  function Probe() {
+    seen = useLiveRoom({
+      slug: "pqc-2026",
+      occurrenceId: LIVE_OCCURRENCE,
+      overlayToken: "access",
+      output: "stage-display",
+      createSocket: sockets.factory,
+      persistent: { onUnreadable },
+    });
+    return null;
+  }
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<Probe />, host!));
+  sockets.latest().open();
+  await act(() => sockets.latest().deliver(liveSnapshot()));
+  expect(seen?.status).toBe("live");
+  // A newer release's frame carries a field this page's contract does not know; the socket stays open.
+  const data = JSON.stringify({ ...liveSnapshot(), fromANewerRelease: true });
+  await act(() => {
+    sockets.latest().dispatchEvent(new MessageEvent("message", { data }));
+  });
+  expect(onUnreadable).toHaveBeenCalledOnce();
+  expect(seen?.status).toBe("offline");
+  // The next snapshot it can read brings it back.
+  await act(() => sockets.latest().deliver(liveSnapshot()));
+  expect(seen?.status).toBe("live");
+});

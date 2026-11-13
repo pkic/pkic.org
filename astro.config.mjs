@@ -31,6 +31,7 @@ import { bylinesPlugin } from "./scripts/lib/bylines-plugin.mjs";
 import { trustListPlugin } from "./scripts/lib/trust-list-plugin.mjs";
 import { finishAstroRelease } from "./scripts/publication/finish-astro-release.mjs";
 import { fileURLToPath } from "node:url";
+import { releaseId } from "./scripts/lib/release-id.mjs";
 
 process.env.CLOUDFLARE_ENV = publicationEnvironment();
 process.env.PKIC_PUBLICATION_BUILD_ID = randomUUID();
@@ -89,6 +90,8 @@ export default defineConfig({
     },
   ],
   vite: {
+    // The pages' release, which a screen compares with the server's.
+    define: { __PKIC_RELEASE__: JSON.stringify(releaseId()) },
     resolve: {
       // Use the native processor for every authored document and shortcode in
       // Astro. The standalone Worker retains its supported runtime processor.

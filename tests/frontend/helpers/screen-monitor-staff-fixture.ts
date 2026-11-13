@@ -22,6 +22,7 @@ export const status = (screenId: string, overrides: Partial<ScreenLiveStatus> = 
     display: "output",
     output: "projector",
     mode: "live",
+    studioLinkReason: null,
     player: null,
     clockOffsetMs: 0,
     metrics: null,

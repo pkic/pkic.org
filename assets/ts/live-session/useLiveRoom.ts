@@ -123,7 +123,14 @@ export function useLiveRoom({
         } catch {
           return;
         }
-        if (!parsed.success) return;
+        if (!parsed.success) {
+          // A screen cannot follow a room it cannot read: it holds its last state until the next snapshot.
+          if (keepsTrying) {
+            setStatus("offline");
+            persistence.current?.onUnreadable?.();
+          }
+          return;
+        }
         const message = parsed.data;
         if (message.type === "presence.changed" || message.type === "presence.left") {
           presence.current?.(message);

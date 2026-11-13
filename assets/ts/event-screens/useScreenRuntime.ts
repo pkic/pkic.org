@@ -31,12 +31,17 @@ export function useScreenRuntime({
   storage,
   clock,
   api = screenApi,
+  onRelease,
 }: {
   screenId: ScreenId;
   storage: Storage;
   clock: ScreenClock;
   api?: ScreenApi;
+  /** The release the server named on its read. */
+  onRelease?: (release: string | null) => void;
 }) {
+  const releaseSeen = useRef(onRelease);
+  releaseSeen.current = onRelease;
   const [cached] = useState<ScreenCache | null>(() => readScreenCache(storage, screenId));
   const [view, setView] = useState<ScreenOwnView | ScreenCache["view"] | null>(cached?.view ?? null);
   const [agenda, setAgenda] = useState<ScreenCachedAgenda | null>(cached?.agenda ?? null);
@@ -64,6 +69,8 @@ export function useScreenRuntime({
       const { response, sentAt, receivedAt } = await api.read(
         screenId,
         screenAgendaRevision(agendaRef.current, clock.now()),
+        undefined,
+        (release) => releaseSeen.current?.(release),
       );
       reached();
       if (response.viewer !== "screen")

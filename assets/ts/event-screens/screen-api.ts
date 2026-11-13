@@ -2,8 +2,10 @@ import {
   screenPairingResponseSchema,
   screenReadResponseSchema,
   screenSessionPollResponseSchema,
+  SCREEN_RELEASE_HEADER,
   SCREEN_SESSION_ERROR_CODES,
   type ScreenId,
+  type ScreenReadResponse,
 } from "../../shared/schemas/event-screens";
 import { ApiClientError, requestJson } from "../shared/api-client";
 
@@ -11,10 +13,18 @@ const screenPath = (screenId: ScreenId) => `/api/v1/screens/${encodeURIComponent
 
 /** The screen's own calls to the API, each timed so the screen can correct its clock. */
 export const screenApi = {
-  async read(screenId: ScreenId, agendaRevision: number | null, device: () => number = () => Date.now()) {
+  async read(
+    screenId: ScreenId,
+    agendaRevision: number | null,
+    device: () => number = () => Date.now(),
+    /** The server's release, as soon as the headers arrive: a body this page cannot read still names it. */
+    onRelease?: (release: string | null) => void,
+  ): Promise<{ response: ScreenReadResponse; sentAt: number; receivedAt: number }> {
     const query = agendaRevision === null ? "" : `?${new URLSearchParams({ agendaRevision: String(agendaRevision) })}`;
     const sentAt = device();
-    const response = await requestJson(`${screenPath(screenId)}${query}`, screenReadResponseSchema);
+    const response = await requestJson(`${screenPath(screenId)}${query}`, screenReadResponseSchema, {
+      onHeaders: (headers) => onRelease?.(headers.get(SCREEN_RELEASE_HEADER)),
+    });
     return { response, sentAt, receivedAt: device() };
   },
   startPairing: (screenId: ScreenId) =>

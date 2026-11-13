@@ -3,6 +3,8 @@ import {
   screenGetRouteSchema,
   screenUpdateRouteSchema,
 } from "../../../../assets/shared/schemas/route-contracts-event-screens";
+import { PKIC_RELEASE } from "../../../../assets/shared/release";
+import { SCREEN_RELEASE_HEADER } from "../../../../assets/shared/schemas/event-screens";
 import { serializeScreenSessionCookie } from "../../../_lib/auth/screen-session";
 import { markResponseSensitive, requestDb, type AdminContext } from "../../../_lib/db/context";
 import { json, jsonPrivate, noContent } from "../../../_lib/http";
@@ -23,6 +25,7 @@ export const ScreenGet = openApiRoute(screenGetRouteSchema, async (c: AdminConte
     data.query.agendaRevision ?? null,
   );
   const response = jsonPrivate(body);
+  response.headers.set(SCREEN_RELEASE_HEADER, PKIC_RELEASE);
   if (renewedToken) response.headers.append("set-cookie", serializeScreenSessionCookie(renewedToken, c.req.raw));
   return response;
 });

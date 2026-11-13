@@ -207,6 +207,9 @@ export const screenPlaybackSchema = z
   .strict();
 export type ScreenPlayback = z.infer<typeof screenPlaybackSchema>;
 
+/** A screen's page cannot read what the studio's room sends: the server runs a newer release. */
+export const SCREEN_PAGE_OUTDATED = "SCREEN_PAGE_OUTDATED";
+
 export const screenHealthSchema = z
   .object({
     /** The page's build, so staff see a screen still running an old release. */
@@ -219,6 +222,8 @@ export const screenHealthSchema = z
     /** The output it is assigned and shows; null while it shows none. */
     output: screenOutputSchema.nullable(),
     mode: z.enum(SCREEN_RUN_MODES),
+    /** Why the screen's studio link is down while it holds its last state: the room's refusal code, or SCREEN_PAGE_OUTDATED; null without a reason. */
+    studioLinkReason: z.string().min(1).max(64).nullable().default(null),
     /** The livestream player, while one runs. */
     player: z
       .object({

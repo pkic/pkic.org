@@ -26,15 +26,20 @@ export function screenHealth(input: {
   pageVersion: string;
   /** A browser screen's grants; a device has none. */
   browser?: ScreenBrowserState | null;
+  /** Why the studio link is down: the room's refusal code, or that this page cannot read the room. */
+  studioLinkReason?: string | null;
 }): Omit<ScreenHealth, "metrics"> {
   const { display } = input;
+  const mode = runMode(display);
   return {
     pageVersion: input.pageVersion,
     kind: input.browser ? "browser" : "device",
     browser: input.browser ?? null,
     display: display.kind,
     output: display.kind === "pairing" || display.kind === "waiting" ? null : (input.assignment?.output ?? null),
-    mode: runMode(display),
+    mode,
+    // Only while the screen holds its last state does the reason say why.
+    studioLinkReason: mode === "offline" ? (input.studioLinkReason ?? null) : null,
     player:
       display.kind === "livestream" && input.player
         ? {

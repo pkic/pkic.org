@@ -42,18 +42,22 @@
   }
 
   /* The condition: a dot in its tone and one line of words, never taller than one line. */
+  /* Up to two lines, so a fault's duration and reason are read, not cut. */
   .pk-screen-condition {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--pk-2);
     min-inline-size: 0;
-    block-size: 1.5em;
+    min-block-size: 1.5em;
+    line-height: 1.5;
     margin: 0;
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-sm);
   }
   .pk-screen-condition__dot {
     flex: none;
+    /* Centered on the first line. */
+    margin-block-start: calc((1.5em - 0.5rem) / 2);
     inline-size: 0.5rem;
     block-size: 0.5rem;
     border-radius: 50%;
@@ -68,11 +72,36 @@
   .pk-screen-condition[data-tone="neutral"] .pk-screen-condition__dot {
     background: var(--pk-ink-faint);
   }
+  .pk-screen-condition .pk-tooltip,
+  .pk-screen-condition .pk-tooltip__trigger {
+    min-inline-size: 0;
+    text-align: start;
+  }
+  .pk-screen-own-run {
+    display: grid;
+    gap: var(--pk-1);
+    margin: 0;
+  }
+  .pk-screen-own-run dt {
+    font-weight: 600;
+  }
+  .pk-screen-own-run dd {
+    margin: 0 0 var(--pk-2);
+  }
+  .pk-screen-own-run dd:last-child {
+    margin-block-end: 0;
+  }
+  .pk-screen-condition__text--hint {
+    text-decoration: underline dotted;
+    text-underline-offset: 0.2em;
+  }
   .pk-screen-condition__text {
     min-inline-size: 0;
     overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 
   /* A screen with a warning or a critical issue carries its tone along the card's top edge. */
