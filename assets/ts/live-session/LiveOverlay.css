@@ -51,7 +51,7 @@
      */
     color: var(--pk-pqc-ink);
     font-family: var(--pk-font);
-    font-size: 1rem;
+    font-size: var(--pk-text-lg);
     font-style: normal;
     font-weight: 400;
     line-height: normal;
