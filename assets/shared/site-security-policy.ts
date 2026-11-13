@@ -10,6 +10,9 @@ const featurePaths = {
   screen: ["/live/screen/"],
 } as const;
 
+/** YouTube's IFrame API: its loader, and the player API it loads from the player's static files. */
+const YOUTUBE_PLAYER_API_SCRIPTS = ["https://www.youtube.com/iframe_api", "https://www.youtube.com/s/player/"] as const;
+
 /** The same allowlist protects native static responses and Worker-rendered shells. */
 export function siteContentSecurityPolicy(pathname = "/"): string {
   if (pathname === EMAIL_PREVIEW_DOCUMENT_PATH) {
@@ -33,6 +36,9 @@ export function siteContentSecurityPolicy(pathname = "/"): string {
   if (portal) frames.push("'self'");
   // A livestream screen drives YouTube's player through its IFrame API, which loads from this host only.
   if (screen) script.push("https://www.youtube.com");
+  // The studio's LIVE monitor drives the same player. The signed-in portal allows only the API's loader and
+  // the player's static files, never youtube.com's other endpoints, some of which answer with script.
+  if (portal) script.push(...YOUTUBE_PLAYER_API_SCRIPTS);
   // A venue screen reads its own device's metrics from the device's local service, and nothing else local.
   if (screen) connect.push("http://127.0.0.1:8080");
   if (payment) {

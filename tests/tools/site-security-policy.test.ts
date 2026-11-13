@@ -66,7 +66,7 @@ it("lets the portal's virtual room frame YouTube's privacy-enhanced player", () 
   expect(frames).not.toContain("*");
 });
 
-it("lets only the venue screen page load YouTube's player API, and send its origin to the player", async () => {
+it("lets the venue screen page load YouTube's player API, the portal only its loader and player files, and send its origin", async () => {
   const screen = siteContentSecurityPolicy("/live/screen/");
   expect(directive(screen, "script-src")?.split(" ")).toEqual([
     "script-src",
@@ -76,8 +76,14 @@ it("lets only the venue screen page load YouTube's player API, and send its orig
     "https://www.youtube.com",
   ]);
   expect(directive(screen, "frame-src")).toContain("https://www.youtube-nocookie.com");
-  for (const path of ["/live/overlay/", "/portal/", "/events/example/"])
+  for (const path of ["/live/overlay/", "/events/example/"])
     expect(directive(siteContentSecurityPolicy(path), "script-src")).not.toContain("youtube");
+  // The studio's LIVE monitor uses the same API: the portal allows its loader and the player's files only.
+  expect(
+    directive(siteContentSecurityPolicy("/portal/"), "script-src")
+      ?.split(" ")
+      .filter((source) => source.includes("youtube")),
+  ).toEqual(["https://www.youtube.com/iframe_api", "https://www.youtube.com/s/player/"]);
   expect(siteSecurityHeaders("/live/screen/")["Referrer-Policy"]).toBe("strict-origin-when-cross-origin");
   const page = await readFile("site/pages/live/screen.astro", "utf8");
   expect(page).not.toMatch(/name="referrer" content="no-referrer"/u);
