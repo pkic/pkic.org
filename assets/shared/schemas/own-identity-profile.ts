@@ -5,13 +5,14 @@
  * holds, whichever one the session acts as.
  */
 import { z } from "zod";
+import { jobTitleTextSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { requiresSession } from "./route-contract";
 
 /** The fields of an identity its owner edits; `myProfileUpdateSchema` extends it with the person's names. */
 export const identityProfileUpdateSchema = z.object({
-  jobTitle: z.string().trim().max(160).optional(),
+  jobTitle: jobTitleTextSchema.optional(),
   biography: z.string().trim().max(5000).optional(),
   links: linksSchema.optional(),
 });

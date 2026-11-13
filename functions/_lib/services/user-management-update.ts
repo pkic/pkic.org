@@ -41,7 +41,7 @@ function profilePatch(input: UserUpdateInput): UserProfilePatch {
   return {
     ...(input.firstName !== undefined ? { firstName: input.firstName || null } : {}),
     ...(input.lastName !== undefined ? { lastName: input.lastName || null } : {}),
-    ...(input.preferredName !== undefined ? { preferredName: input.preferredName || null } : {}),
+    ...(input.preferredName !== undefined ? { preferredName: input.preferredName } : {}),
   };
 }
 

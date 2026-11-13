@@ -1,7 +1,7 @@
 /** Verified approval is the default; staff overrides are explicit, separately authorized decisions. */
 import type { AffiliationReviewApprove } from "../../../../assets/shared/schemas/affiliation-reviews";
 import { hostWithinDomainSql } from "../../email-domains/sql";
-import { all } from "../../db/queries";
+import { all, first } from "../../db/queries";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
 import { guardPermissionMutationDatabase } from "../../auth/permissions";
 import { AppError } from "../../errors";
@@ -48,6 +48,14 @@ export async function approveAffiliationReviewGroup(
   const decisionId = uuid();
   let decided = 0;
   for (const person of people.slice(0, PEOPLE_PER_PASS)) {
+    const review = await first<{ job_title: string }>(
+      protectedDb,
+      `SELECT job_title FROM affiliation_reviews
+       WHERE group_key = ? AND user_id = ? AND resolved_at IS NULL AND job_title IS NOT NULL
+       ORDER BY created_at DESC, id DESC LIMIT 1`,
+      [groupKey, person.user_id],
+    );
+    const jobTitle = review?.job_title;
     if (input.activation && overrideActor) {
       decided += await overrideAffiliationReviewVerification(
         protectedDb,
@@ -56,6 +64,7 @@ export async function approveAffiliationReviewGroup(
           groupKey,
           decisionId,
           activation: input.activation,
+          jobTitle,
         },
         overrideActor,
       );
@@ -88,6 +97,7 @@ export async function approveAffiliationReviewGroup(
         userId: person.user_id,
         normalizedEmail: address.normalized_email,
         onlyOrganizationId: address.organization_id,
+        jobTitle,
         reviewDecision: { groupKey, staffId: staff.id, decisionId },
       });
       if (linked) {

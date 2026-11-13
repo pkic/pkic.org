@@ -169,6 +169,12 @@ export const groupEventSeriesSchema = eventSeriesSchema.extend({
 });
 export type GroupEventSeries = z.infer<typeof groupEventSeriesSchema>;
 
+/** A blank meeting location clears it; a blank occurrence override restores the series location. */
+export const meetingLocationSchema = trimmedString(0, 500)
+  .transform((value) => value || null)
+  .nullable()
+  .refine((value) => !isMeetingLocationUrl(value), "Use the private meeting destination field for URLs");
+
 export const eventSeriesCreateSchema = z.object({
   existingEventId: eventIdSchema.optional(),
   eventName: trimmedString(1, 200),
@@ -183,10 +189,7 @@ export const eventSeriesCreateSchema = z.object({
     .int()
     .min(1)
     .max(7 * 24 * 60),
-  location: trimmedString(0, 500)
-    .nullable()
-    .refine((value) => !isMeetingLocationUrl(value), "Use the private meeting destination field for URLs")
-    .optional(),
+  location: meetingLocationSchema.optional(),
   providerType: eventProviderTypeSchema.nullable().optional(),
   providerJoinUrl: httpsCapabilityUrlSchema.nullable().optional(),
 });
@@ -274,10 +277,7 @@ export const eventOccurrenceInvitationsResponseSchema = z.object({
 const eventOccurrenceInputSchema = z.object({
   startsAt: utcInstantSchema,
   endsAt: utcInstantSchema,
-  locationOverride: trimmedString(0, 500)
-    .nullable()
-    .refine((value) => !isMeetingLocationUrl(value), "Use the private meeting destination field for URLs")
-    .optional(),
+  locationOverride: meetingLocationSchema.optional(),
   providerJoinUrl: httpsCapabilityUrlSchema.nullable().optional(),
 });
 export const eventOccurrenceCreateSchema = eventOccurrenceInputSchema.refine((value) => value.endsAt > value.startsAt, {

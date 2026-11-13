@@ -166,6 +166,30 @@ describe("Current-user and application self-service", () => {
     expect(rows[0].show_on_organization_profile).toBe(0);
   });
 
+  it.each(["", "   ", null])(
+    "stores a cleared preferred name %j as NULL through self-service",
+    async (preferredName) => {
+      const userId = await insertActiveMember("clear-preferred@example.test", "H6");
+      const token = await createMemberSession(env.DB, userId, "clear-preferred-token");
+      await env.DB.prepare("UPDATE users SET preferred_name='Former name' WHERE id=?").bind(userId).run();
+      const response = await call(token, "/api/v1/users/current", {
+        method: "PATCH",
+        body: JSON.stringify({ preferredName }),
+      });
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(myProfileSchema.parse(await response.json()).preferredName).toBeNull();
+      expect(await env.DB.prepare("SELECT preferred_name FROM users WHERE id=?").bind(userId).first()).toEqual({
+        preferred_name: null,
+      });
+      const audit = await env.DB.prepare(
+        "SELECT details_json FROM audit_log WHERE action='identity_profile_updated' AND actor_id=? ORDER BY created_at DESC LIMIT 1",
+      )
+        .bind(userId)
+        .first<{ details_json: string }>();
+      expect(JSON.parse(audit!.details_json)).toMatchObject({ preferredName: { from: "Former name", to: null } });
+    },
+  );
+
   it("queues public name changes through the owner's form, but not unchanged or preferred-only saves", async () => {
     const userId = await insertActiveMember("name-publication@example.test", "H6");
     const token = await createMemberSession(env.DB, userId, "name-publication-token");

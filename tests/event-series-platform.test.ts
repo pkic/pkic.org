@@ -42,7 +42,7 @@ async function addGroupMember(): Promise<string> {
   return userId;
 }
 
-async function createMeetingFixture() {
+async function createMeetingFixture(location: string | null = "Online") {
   const admin = await insertAdmin();
   const userId = await addGroupMember();
   const startsAt = new Date(Date.now() + 3_600_000).toISOString();
@@ -59,7 +59,7 @@ async function createMeetingFixture() {
     recurrenceRule: "FREQ=WEEKLY;BYDAY=TU",
     timezone: "Europe/Amsterdam",
     durationMinutes: 60,
-    location: "Online",
+    location,
     providerType: "external_url",
   });
   const endsAt = new Date(Date.now() + 7_200_000).toISOString();
@@ -91,6 +91,104 @@ beforeEach(async () => {
 afterEach(() => vi.useRealTimers());
 
 describe("group-owned event series", () => {
+  it.each(["", "   ", null])("stores a cleared series location %j as NULL", async (location) => {
+    const { admin, series } = await createMeetingFixture(location);
+    const stored = () =>
+      env.DB.prepare("SELECT location FROM event_series WHERE id=?").bind(series.id).first("location");
+    expect(await stored()).toBeNull();
+    const current = await getGroupEventSeries(env.DB, GROUP_ID, series.id);
+    const named = await updateGroupEventSeries(env.DB, admin, GROUP_ID, series.id, {
+      location: "  Room 2  ",
+      expectedUpdatedAt: current.updatedAt,
+    });
+    expect(named.location).toBe("Room 2");
+    await updateGroupEventSeries(env.DB, admin, GROUP_ID, series.id, {
+      location,
+      expectedUpdatedAt: named.updatedAt,
+    });
+    expect(await stored()).toBeNull();
+    const audit = await env.DB.prepare(
+      "SELECT details_json FROM audit_log WHERE action='event_series_updated' AND entity_id=? ORDER BY rowid DESC LIMIT 1",
+    )
+      .bind(series.id)
+      .first<string>("details_json");
+    expect(JSON.parse(audit!).location).toEqual({ from: "Room 2", to: null });
+  });
+
+  it.each(["", "   ", null])(
+    "restores the inherited location when an override is cleared with %j",
+    async (locationOverride) => {
+      const { admin, series, occurrence } = await createMeetingFixture();
+      const named = await updateSeriesOccurrence(
+        env.DB,
+        admin,
+        GROUP_ID,
+        series.id,
+        occurrence.id,
+        {
+          locationOverride: "  Room 2  ",
+          expectedUpdatedAt: occurrence.updatedAt,
+        },
+        ENCRYPTION_SECRET,
+      );
+      const omitted = await updateSeriesOccurrence(
+        env.DB,
+        admin,
+        GROUP_ID,
+        series.id,
+        occurrence.id,
+        {
+          expectedUpdatedAt: named.updatedAt,
+        },
+        ENCRYPTION_SECRET,
+      );
+      expect(omitted.location).toBe("Room 2");
+      const cleared = await updateSeriesOccurrence(
+        env.DB,
+        admin,
+        GROUP_ID,
+        series.id,
+        occurrence.id,
+        {
+          locationOverride,
+          expectedUpdatedAt: omitted.updatedAt,
+        },
+        ENCRYPTION_SECRET,
+      );
+      expect(cleared.location).toBe("Online");
+      expect(
+        await env.DB.prepare("SELECT location_override FROM event_occurrences WHERE id=?")
+          .bind(occurrence.id)
+          .first("location_override"),
+      ).toBeNull();
+      const audit = await env.DB.prepare(
+        "SELECT details_json FROM audit_log WHERE action='event_occurrence_updated' AND entity_id=? ORDER BY rowid DESC LIMIT 1",
+      )
+        .bind(occurrence.id)
+        .first<string>("details_json");
+      expect(JSON.parse(audit!).locationOverride).toEqual({ from: "Room 2", to: null });
+      const startsAt = new Date(Date.parse(occurrence.startsAt) + 86400_000).toISOString();
+      const created = await configureMeetingOccurrence(
+        env.DB,
+        admin,
+        GROUP_ID,
+        series.id,
+        {
+          startsAt,
+          endsAt: new Date(Date.parse(startsAt) + 3600_000).toISOString(),
+          locationOverride,
+        },
+        ENCRYPTION_SECRET,
+      );
+      expect(created.location).toBe("Online");
+      expect(
+        await env.DB.prepare("SELECT location_override FROM event_occurrences WHERE id=?")
+          .bind(created.id)
+          .first("location_override"),
+      ).toBeNull();
+    },
+  );
+
   it("rolls back creation when group-management authority changes during the D1 batch", async () => {
     const admin = await insertAdmin();
     const eventSlug = `authorization-race-${crypto.randomUUID()}`;

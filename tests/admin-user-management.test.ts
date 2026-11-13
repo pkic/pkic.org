@@ -395,6 +395,20 @@ describe("admin user deactivation", () => {
     });
   });
 
+  it.each(["", "   ", null])(
+    "stores a cleared preferred name %j as NULL through staff editing",
+    async (preferredName) => {
+      await setup();
+      const userId = await seedUser(env.DB, "clear-preferred-staff@example.test");
+      await env.DB.prepare("UPDATE users SET preferred_name='Former name' WHERE id=?").bind(userId).run();
+      const response = await callApi(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { preferredName }));
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(await env.DB.prepare("SELECT preferred_name FROM users WHERE id=?").bind(userId).first()).toEqual({
+        preferred_name: null,
+      });
+    },
+  );
+
   it("preserves users:write name updates without access:grant", async () => {
     await setup();
     const staffId = await seedUser(env.DB, "profile-editor@example.test");
