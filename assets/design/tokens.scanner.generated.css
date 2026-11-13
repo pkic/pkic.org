@@ -28,15 +28,7 @@
     --pk-scanner-field-print-blue-start: 15%;
     --pk-scanner-field-print-blue-end: 20%;
     --pk-scanner-field-print-orange-start: 40%;
-    --pk-grad-state-warning: linear-gradient(
-      135deg,
-      color-mix(in oklab, #ffc000 28%, #000),
-      color-mix(in oklab, #ffc000 48%, #000)
-    );
-    --pk-grad-state-error: linear-gradient(
-      135deg,
-      color-mix(in oklab, #dc3545 38%, #000),
-      color-mix(in oklab, #dc3545 80%, #000)
-    );
+    --pk-grad-state-warning: linear-gradient(135deg, color-mix(in oklab, #ffc000 28%, #000), color-mix(in oklab, #ffc000 48%, #000));
+    --pk-grad-state-error: linear-gradient(135deg, color-mix(in oklab, #dc3545 38%, #000), color-mix(in oklab, #dc3545 80%, #000));
   }
 }

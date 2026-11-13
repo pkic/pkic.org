@@ -2,9 +2,7 @@
   .content-version-navigation,
   .content-version-navigation + .pk-container {
     --content-version-notice-height: calc(var(--pk-text-sm) * 1.5 + var(--pk-2) * 2 + 1px);
-    --content-version-sidebar-top: calc(
-      var(--pkic-navbar-height) + 2.75rem + var(--pk-6) + var(--content-version-notice-height)
-    );
+    --content-version-sidebar-top: calc(var(--pkic-navbar-height) + 2.75rem + var(--pk-6) + var(--content-version-notice-height));
   }
   .content-version-navigation + .pk-container .wg-sidebar-wrap {
     top: var(--content-version-sidebar-top);

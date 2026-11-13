@@ -53,10 +53,7 @@
     padding: 0.75rem 0.5rem 0.5rem;
     border-radius: 0.5rem 0.5rem 0 0;
     text-decoration: none;
-    transition:
-      filter 0.18s ease,
-      transform 0.18s ease,
-      box-shadow 0.18s ease;
+    transition: filter 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
     position: relative;
   }
   .maturity-staircase .maturity-step-bar::after {

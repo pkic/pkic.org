@@ -83,13 +83,7 @@
   }
   .pk-attendance-settings__capacity[data-unavailable] {
     justify-content: center;
-    background: repeating-linear-gradient(
-      135deg,
-      var(--pk-surface-sunk) 0,
-      var(--pk-surface-sunk) 0.25rem,
-      var(--pk-surface) 0.25rem,
-      var(--pk-surface) 0.5rem
-    );
+    background: repeating-linear-gradient(135deg, var(--pk-surface-sunk) 0, var(--pk-surface-sunk) 0.25rem, var(--pk-surface) 0.25rem, var(--pk-surface) 0.5rem);
   }
   .pk-attendance-settings__capacity[data-full] {
     background: var(--pk-warn-soft);
