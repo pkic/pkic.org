@@ -1,0 +1,111 @@
+/*
+ * A person's titles on a stream graphic: one identity, or each of several in turn. The line rolls up
+ * to the next identity instead of crossfading, on the shared affiliation rotation's timing (one every
+ * --pk-dur-affiliation): each rises in from below while the one before leaves over the top. The
+ * graphic's own title box clips both; it sets --pk-live-credit-titles-travel when that box is taller
+ * than the line. Reduced motion keeps the rotation's still view.
+ */
+@layer components {
+  .pk-live-credit-titles {
+    --pk-live-credit-titles-travel: 100%;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes pk-live-credit-titles-roll-2 {
+      0% {
+        opacity: 0;
+        transform: translateY(var(--pk-live-credit-titles-travel));
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      7.5%,
+      50% {
+        opacity: 1;
+        transform: none;
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      57.5%,
+      100% {
+        opacity: 0;
+        transform: translateY(calc(var(--pk-live-credit-titles-travel) * -1));
+        visibility: hidden;
+      }
+    }
+    .pk-live-credit-titles .pk-affiliation-rotation--rotate-2 .pk-affiliation-rotation__unit {
+      animation-name: pk-live-credit-titles-roll-2;
+    }
+    @keyframes pk-live-credit-titles-roll-3 {
+      0% {
+        opacity: 0;
+        transform: translateY(var(--pk-live-credit-titles-travel));
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      5%,
+      33.333% {
+        opacity: 1;
+        transform: none;
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      38.333%,
+      100% {
+        opacity: 0;
+        transform: translateY(calc(var(--pk-live-credit-titles-travel) * -1));
+        visibility: hidden;
+      }
+    }
+    .pk-live-credit-titles .pk-affiliation-rotation--rotate-3 .pk-affiliation-rotation__unit {
+      animation-name: pk-live-credit-titles-roll-3;
+    }
+    @keyframes pk-live-credit-titles-roll-4 {
+      0% {
+        opacity: 0;
+        transform: translateY(var(--pk-live-credit-titles-travel));
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      3.75%,
+      25% {
+        opacity: 1;
+        transform: none;
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      28.75%,
+      100% {
+        opacity: 0;
+        transform: translateY(calc(var(--pk-live-credit-titles-travel) * -1));
+        visibility: hidden;
+      }
+    }
+    .pk-live-credit-titles .pk-affiliation-rotation--rotate-4 .pk-affiliation-rotation__unit {
+      animation-name: pk-live-credit-titles-roll-4;
+    }
+    @keyframes pk-live-credit-titles-roll-5 {
+      0% {
+        opacity: 0;
+        transform: translateY(var(--pk-live-credit-titles-travel));
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      3%,
+      20% {
+        opacity: 1;
+        transform: none;
+        visibility: visible;
+        animation-timing-function: var(--pk-ease);
+      }
+      23%,
+      100% {
+        opacity: 0;
+        transform: translateY(calc(var(--pk-live-credit-titles-travel) * -1));
+        visibility: hidden;
+      }
+    }
+    .pk-live-credit-titles .pk-affiliation-rotation--rotate-5 .pk-affiliation-rotation__unit {
+      animation-name: pk-live-credit-titles-roll-5;
+    }
+  }
+}

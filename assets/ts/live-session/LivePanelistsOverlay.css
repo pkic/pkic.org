@@ -60,7 +60,9 @@
     font-size: clamp(var(--pk-agenda-type-8), 2.4cqw, calc(var(--pk-agenda-type-20) * 1.6));
     line-height: 1.15;
   }
+  /* Clips a title rolling to a person's next identity. */
   .pk-live-panelists__title {
+    overflow: hidden;
     margin-block-start: var(--pk-2);
     font-size: clamp(var(--pk-agenda-type-8), 1.5cqw, var(--pk-agenda-type-20));
     line-height: 1.35;

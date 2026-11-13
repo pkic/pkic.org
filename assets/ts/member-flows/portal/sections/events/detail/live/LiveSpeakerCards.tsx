@@ -1,11 +1,16 @@
 import { personRoleAt } from "../../../../../../../shared/person-display";
+import { formatNumber } from "../../../../../../../shared/format-number";
 import "./LiveSpeakerCards.css";
 import "./live-tally.css";
 import { signal } from "@preact/signals";
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import { LIVE_AUX_OUTPUTS } from "../../../../../../../shared/live-room-outputs";
-import { LIVE_ADDED_CREDITS_MAX, liveCreditHasRole } from "../../../../../../../shared/live-room-credits";
+import {
+  LIVE_ADDED_CREDITS_MAX,
+  liveCreditAffiliations,
+  liveCreditHasRole,
+} from "../../../../../../../shared/live-room-credits";
 import type { LiveCredit } from "../../../../../../../shared/schemas/live-session-room";
 import { Avatar } from "../../../../../../ui/Avatar";
 import { Button } from "../../../../../../ui/Button";
@@ -61,6 +66,8 @@ function PersonRow({
   const { where, onAir } = onAirOf(targets, credit.key);
   const item = livePresenceItem(layer);
   const affiliation = personRoleAt({ title: credit.identity?.title, organization: credit.identity?.organization });
+  // Further identities the lower third rolls through; the row stays still and only counts them.
+  const moreIdentities = Math.max(0, liveCreditAffiliations(credit).length - 1);
   const card = usePersonCard<HTMLLIElement>({
     person: {
       name: credit.name,
@@ -99,7 +106,21 @@ function PersonRow({
           <span class="pk-live-person__text">
             <strong>{credit.name}</strong>
             {credit.roleLabel ? <span class="pk-live-person__role">{credit.roleLabel}</span> : null}
-            {affiliation ? <span>{affiliation}</span> : null}
+            {affiliation ? (
+              <span class="pk-live-person__affiliation">
+                <span>{affiliation}</span>
+                {moreIdentities > 0 ? (
+                  <span class="pk-live-person__more">
+                    <span aria-hidden="true">+{formatNumber(moreIdentities)}</span>
+                    <span class="pk-sr-only">
+                      {moreIdentities === 1
+                        ? "and 1 more identity"
+                        : `and ${formatNumber(moreIdentities)} more identities`}
+                    </span>
+                  </span>
+                ) : null}
+              </span>
+            ) : null}
           </span>
         </button>
         {card.card}

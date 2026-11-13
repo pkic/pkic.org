@@ -28,6 +28,7 @@ import { ScreenView } from "../../event-screens/ScreenApp";
 import { LiveReactionBar } from "../../live-session/LiveReactionBar";
 import { LiveOverlayPresentation } from "../../live-session/LiveOverlayPresentation";
 import type { LiveRoomState } from "../../live-session/live-room-state";
+import { LiveSpeakerCards } from "../../member-flows/portal/sections/events/detail/live/LiveSpeakerCards";
 import { GraphicsPanel } from "../../member-flows/portal/sections/events/detail/live/studio/GraphicsPanel";
 import { monitorPanelView } from "../../member-flows/portal/sections/events/detail/live/studio/MonitorPanel";
 import { StudioPanelFrame } from "../../member-flows/portal/sections/events/detail/live/studio/StudioPanelFrame";
@@ -364,8 +365,22 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "onscreen-lower-third-identities",
     title: "Lower third for a speaker with two identities",
-    note: "The title line shows each identity in turn; the conference stripe underlines the name bar.",
+    note: "The title line rolls up to each identity in turn; the conference stripe underlines the name bar.",
     render: () => <LivestreamOverlay state={roomWith({}, { lowerThird: ROOM.session.credits[0]! })} />,
+  },
+  {
+    id: "onscreen-panelists-identities",
+    title: "Panelists with a speaker's two identities",
+    note: "A panelist with more than one identity rolls through them, as the lower third does.",
+    render: () => <LivestreamOverlay state={roomWith({}, { panelists: { layout: "panel" } })} />,
+  },
+  {
+    id: "studio-speakers-identities",
+    title: "Speakers in the studio, one with two identities",
+    note: "The row stays still: it shows the first identity and counts the rest.",
+    render: () => (
+      <LiveSpeakerCards targets={{ state: ROOM, programActive: true, disabled: false, sendProgram: () => true }} />
+    ),
   },
   {
     id: "onscreen-reactions-screen",

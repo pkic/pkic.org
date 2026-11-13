@@ -8,8 +8,7 @@ import {
   liveLowerThirdEmblemBox,
   stepLiveLowerThird,
 } from "../../shared/live-lower-third";
-import { liveCreditAffiliations } from "../../shared/live-room-credits";
-import { AgendaAffiliationRotation } from "../site/AgendaSpeakerAffiliations";
+import { LiveCreditTitles } from "./LiveCreditTitles";
 import { LiveEmblemLock, LiveEmblemWheel } from "./LiveEmblem";
 import "./LiveLowerThird.css";
 
@@ -150,27 +149,11 @@ export function LiveLowerThird({ credit, animate }: { credit: LiveCredit | null;
               </svg>
             </g>
           </svg>
-          <TitleLine credit={shown} />
+          <div class="pk-live-overlay__title">
+            <LiveCreditTitles credit={shown} />
+          </div>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-/** The title line: the person's identity, or each of several in turn, rolling up to the next on the agenda's timing. */
-function TitleLine({ credit }: { credit: LiveCredit }) {
-  const lines = liveCreditAffiliations(credit);
-  return (
-    <div class="pk-live-overlay__title">
-      {lines.length > 1 ? (
-        <AgendaAffiliationRotation labels={lines}>
-          {lines.map((line) => (
-            <span key={line}>{line}</span>
-          ))}
-        </AgendaAffiliationRotation>
-      ) : (
-        <span>{lines[0] ?? ""}</span>
-      )}
     </div>
   );
 }

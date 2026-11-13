@@ -62,6 +62,23 @@ it("shows a speaker as the identity they act as, and lines them up in Preview fr
   });
 });
 
+it("counts a speaker's further identities beside the one shown, without rolling the row", async () => {
+  const state = roomState();
+  state.session.credits = [
+    liveCreditSchema.parse({
+      key: "speaker:two",
+      name: "Sam Speaker",
+      identity: { title: "Principal architect", organization: "Example Trust" },
+      additionalIdentities: [{ title: "Co-chair", organization: "Example Working Group" }],
+    }),
+  ];
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveSpeakerCards targets={liveTargets(state)} />, host!));
+  const row = host.querySelector<HTMLButtonElement>('button[aria-label="Prepare Sam Speaker in Preview"]')!;
+  expect(row.querySelector(".pk-live-person__more")?.textContent).toBe("+1and 1 more identity");
+  expect(row.querySelector(".pk-affiliation-rotation")).toBeNull();
+});
+
 it("shows a person's card with a large portrait on focus and on a tap of their photo", async () => {
   const state = roomState();
   state.session.credits = [
