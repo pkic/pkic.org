@@ -114,9 +114,12 @@ const TONE_WORDS: Record<ScreenConditionTone, string> = {
 };
 
 /** What still reaches a screen running on its own, and what does not. */
-function ScreenOwnRunHelp({ hint }: { hint: ScreenOwnRunHint }) {
+function ScreenOwnRunHelp({ text, hint }: { text: string; hint: ScreenOwnRunHint }) {
   return (
     <dl class="pk-screen-own-run">
+      {/* The whole line first: the card cuts it at two lines. */}
+      <dt>Status</dt>
+      <dd>{text}</dd>
       <dt>Still works</dt>
       <dd>{hint.works}</dd>
       <dt>Not reaching it</dt>
@@ -147,7 +150,7 @@ export function ScreenConditionLine({ condition }: { condition: ReturnType<typeo
       {condition.hint ? (
         <Tooltip
           label={`${TONE_WORDS[condition.tone]}${condition.text}`}
-          content={<ScreenOwnRunHelp hint={condition.hint} />}
+          content={<ScreenOwnRunHelp text={condition.text} hint={condition.hint} />}
         >
           {words}
         </Tooltip>

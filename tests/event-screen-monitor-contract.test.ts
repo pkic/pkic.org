@@ -264,8 +264,12 @@ describe("health badges", () => {
     expect(screenOwnRunHint(base)).toBeNull();
     expect(screenOwnRunHint({ ...base, mode: "offline", studioLinkReason: "SCREEN_PAGE_OUTDATED" })).toMatchObject({
       stopped: expect.stringContaining("Updates from the studio"),
-      next: expect.stringContaining("reloads by itself"),
+      next: expect.stringContaining("loads the new one by itself"),
     });
     expect(screenOwnRunHint({ ...base, mode: "auto" })?.works).toContain("copy of the agenda");
+    // A browser screen never reloads by itself: its staff reload the tab.
+    expect(
+      screenOwnRunHint({ ...base, kind: "browser", mode: "offline", studioLinkReason: "SCREEN_PAGE_OUTDATED" })?.next,
+    ).toContain("reload its browser tab");
   });
 });

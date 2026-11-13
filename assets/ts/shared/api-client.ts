@@ -60,7 +60,7 @@ async function parseJson(response: Response, signal?: AbortSignal): Promise<unkn
 export interface JsonRequestInit extends RequestInit {
   mapError?: (payload: ApiErrorPayload, status: number) => ApiErrorPayload;
   responseType?: "json" | "blob";
-  /** Sees the final response's headers, answered or refused, before its body is judged. */
+  /** Sees each response's headers, answered or refused, before its body is read. */
   onHeaders?: (headers: Headers) => void;
 }
 
@@ -139,6 +139,8 @@ async function sendJsonRequest<Schema extends z.ZodType>(
     }
   };
   let response = await send();
+  // Headers are read before the body, so an interrupted or unreadable body still delivers them.
+  onHeaders?.(response.headers);
 
   const readBody = (value: Response) =>
     responseType === "blob" && value.ok ? value.blob() : parseJson(value, requestInit.signal ?? undefined);
@@ -159,9 +161,9 @@ async function sendJsonRequest<Schema extends z.ZodType>(
     headers.set(TURNSTILE_TOKEN_HEADER, token);
     // The server's challenge refusal guarantees the handler has not run. Retry once only.
     response = await send();
+    onHeaders?.(response.headers);
     body = await readBody(response);
   }
-  onHeaders?.(response.headers);
   if (!response.ok) {
     const fallback: ApiErrorPayload = {
       error: {

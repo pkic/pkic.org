@@ -53,3 +53,26 @@ it("names the server's release even when the screen cannot read the body that ca
   expect(onRelease).toHaveBeenCalledWith("d4e5f6");
   vi.unstubAllGlobals();
 });
+
+it("names the server's release even when the body is cut off on its way", async () => {
+  const cut = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('{"viewer":'));
+      controller.error(new TypeError("network lost"));
+    },
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(cut, {
+          status: 200,
+          headers: { "content-type": "application/json", [SCREEN_RELEASE_HEADER]: "d4e5f6" },
+        }),
+    ),
+  );
+  const onRelease = vi.fn();
+  await expect(screenApi.read("K7M2QA", null, undefined, onRelease)).rejects.toThrow();
+  expect(onRelease).toHaveBeenCalledWith("d4e5f6");
+  vi.unstubAllGlobals();
+});
