@@ -62,6 +62,36 @@ export function screenStudioLinkLabel(reason: string | null, downForMs: number |
   return `Studio link down${span ? ` for ${span}` : ""}${why}`;
 }
 
+const STUDIO_LINK_NEXT: Readonly<Record<string, string>> = {
+  [SCREEN_PAGE_OUTDATED]: "Its page is older than the server's: it reloads by itself, or use Reload.",
+  LIVE_OVERLAY_ACCESS_INVALID:
+    "The room refused its access: it asks for new access by itself. If this lasts, use Reload.",
+  LIVE_ROOM_ACCESS_EXPIRED: "The room refused its access: it asks for new access by itself. If this lasts, use Reload.",
+  LIVE_PROGRAM_SELECTION_CHANGED: "The studio switched sessions: it follows the new one by itself.",
+};
+
+/**
+ * What still works and what does not while a screen runs on its own, for the
+ * staff who see its screenshots still change: they come over the monitor
+ * connection, not from the studio. Null while it follows the studio.
+ */
+export function screenOwnRunHint(health: ScreenHealth): { works: string; stopped: string; next: string } | null {
+  if (health.mode === "auto")
+    return {
+      works: "Online, screenshots and its own copy of the agenda, with the coming sessions and their countdowns.",
+      stopped: "The studio: its session ended and the link is down, so nothing the studio changes reaches the screen.",
+      next: "It follows the studio again once the link is back.",
+    };
+  if (health.mode !== "offline") return null;
+  return {
+    works: "Online, screenshots and its clocks: it keeps showing the last state the studio sent.",
+    stopped: "Updates from the studio: timers, messages and stage changes do not reach the screen.",
+    next:
+      (health.studioLinkReason && STUDIO_LINK_NEXT[health.studioLinkReason]) ??
+      "If this lasts, check its network or use Reload.",
+  };
+}
+
 /** What a screen draws, as one comparable value: a change starts its `stateSince` over. */
 export function screenHealthState(health: ScreenHealth): string {
   const browser = health.browser;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { screenHealthDisplay } from "../assets/shared/event-screen-health";
+import { screenHealthDisplay, screenOwnRunHint } from "../assets/shared/event-screen-health";
 import {
   addScreenQualityReading,
   screenNetworkReadings,
@@ -260,5 +260,12 @@ describe("health badges", () => {
         studioLinkReason: "SOMETHING_NEW",
       }),
     ).toEqual({ label: "Studio link down (SOMETHING_NEW)", tone: "warn" });
+    // Its screenshots still change, so staff are told what reaches the screen and what does not.
+    expect(screenOwnRunHint(base)).toBeNull();
+    expect(screenOwnRunHint({ ...base, mode: "offline", studioLinkReason: "SCREEN_PAGE_OUTDATED" })).toMatchObject({
+      stopped: expect.stringContaining("Updates from the studio"),
+      next: expect.stringContaining("reloads by itself"),
+    });
+    expect(screenOwnRunHint({ ...base, mode: "auto" })?.works).toContain("copy of the agenda");
   });
 });

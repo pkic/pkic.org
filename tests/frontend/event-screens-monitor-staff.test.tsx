@@ -242,11 +242,24 @@ describe("the multi-view", () => {
     expect(titles).toEqual(["Cloakroom", "Balcony", "Atrium", "Depot"]);
     const cards = [...host.querySelectorAll("article")];
     const condition = (card: Element) => card.querySelector(".pk-screen-condition")!;
-    expect(cards.map((card) => condition(card).getAttribute("title"))).toEqual([
+    // The whole line, as read: the tone word is for screen readers only.
+    const words = (card: Element) => {
+      const text = card.querySelector(".pk-screen-condition__text")!.cloneNode(true) as Element;
+      text.querySelector(".pk-sr-only")?.remove();
+      return text.textContent;
+    };
+    expect(cards.map(words)).toEqual([
       "Last heard 10 min ago · Offline",
       "Online · Weak Wi-Fi, no recent picture, running on the agenda",
       "Online · Following the studio",
       "Offline · 192 h",
+    ]);
+    // Only the screen running on its agenda explains what still reaches it.
+    expect(cards.map((card) => Boolean(condition(card).querySelector(".pk-tooltip__trigger")))).toEqual([
+      false,
+      true,
+      false,
+      false,
     ]);
     expect(cards.map((card) => condition(card).getAttribute("data-tone"))).toEqual([
       "critical",
