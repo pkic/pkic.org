@@ -128,9 +128,12 @@
     color: var(--pk-ink);
     font-weight: 600;
   }
-  .pk-live-person > .pk-output-target,
-  .pk-live-person > .pk-btn {
+  .pk-live-person__outputs {
+    display: flex;
     flex: none;
+    align-items: center;
+    gap: var(--pk-1);
+    margin-inline-start: auto;
   }
   .pk-live-speakers__note {
     margin: 0;

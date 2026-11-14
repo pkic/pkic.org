@@ -533,6 +533,26 @@ export const studioOnScreenSections: PreviewSection[] = [
     ),
   },
   {
+    id: "studio-speakers-added",
+    title: "Speakers in a narrow studio panel, one added for this session",
+    note: "Two columns: the outputs and the remove move under the name together.",
+    render: () => (
+      <div style={{ inlineSize: "42rem" }}>
+        <LiveSpeakerCards
+          targets={{
+            state: {
+              ...ROOM,
+              addedCredits: [{ ...ROOM.session.credits[0]!, key: "added:chris", name: "Chris Bailey" }],
+            },
+            programActive: true,
+            disabled: false,
+            sendProgram: () => true,
+          }}
+        />
+      </div>
+    ),
+  },
+  {
     id: "onscreen-reactions-screen",
     title: "Reactions floating on a projector screen",
     note: "Viewers' reactions float up the side while an operator has them on for this output.",

@@ -129,20 +129,23 @@ function PersonRow({
         </button>
         {card.card}
       </div>
-      {/* The outputs name the other operators on this person, once. */}
-      <LiveLayerTargets targets={targets} subject={credit.name} layer={layer} />
-      {onRemove ? (
-        <Button
-          icon
-          variant="ghost"
-          aria-label={`Remove ${credit.name}`}
-          title="Remove from this session"
-          disabled={targets.disabled}
-          onClick={onRemove}
-        >
-          <IconRemove />
-        </Button>
-      ) : null}
+      {/* The outputs and the remove move under the name together, so the remove never wraps alone. */}
+      <span class="pk-live-person__outputs">
+        {/* The outputs name the other operators on this person, once. */}
+        <LiveLayerTargets targets={targets} subject={credit.name} layer={layer} />
+        {onRemove ? (
+          <Button
+            icon
+            variant="ghost"
+            aria-label={`Remove ${credit.name}`}
+            title="Remove from this session"
+            disabled={targets.disabled}
+            onClick={onRemove}
+          >
+            <IconRemove />
+          </Button>
+        ) : null}
+      </span>
     </li>
   );
 }
