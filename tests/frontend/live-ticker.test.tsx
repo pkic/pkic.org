@@ -208,7 +208,12 @@ describe("multi-message live ticker", () => {
     const send = vi.fn((command: LiveRoomClientMessage) => command.type === "preview.set");
     try {
       void act(() => render(<LiveTickerControls targets={tickerTargets(stage, { sendProgram: send })} />, host));
-      void act(() => host.querySelector<HTMLButtonElement>('[aria-label="Edit ticker messages"]')!.click());
+      void act(() => host.querySelector<HTMLButtonElement>('[aria-label="News ticker actions"]')!.click());
+      void act(() =>
+        [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+          .find((item) => item.textContent?.includes("Edit ticker messages"))!
+          .click(),
+      );
       const add = Array.from(document.querySelectorAll("button")).find(
         (button) => button.textContent === "Add message",
       )!;

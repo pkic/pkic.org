@@ -63,9 +63,11 @@ export function commands(live: ReturnType<typeof fakeLiveSockets>) {
     .filter((message) => message.type !== "presence.update");
 }
 
-/** The Transition control's button, which replaces Program with the preview. */
-export function take(host: HTMLElement) {
-  const found = host.querySelector<HTMLButtonElement>('.pk-studio-transition button[aria-label="Transition"]');
+/** The Transition control's button, which replaces Program with the preview, or sets a screen to it. */
+export function take(host: HTMLElement, output = "Program") {
+  const found = host.querySelector<HTMLButtonElement>(
+    `.pk-studio-transition button[aria-label="Transition to ${output}"]`,
+  );
   if (!found) throw new Error("No Transition button");
   return found;
 }

@@ -1,9 +1,11 @@
 import type { ComponentChildren } from "preact";
-import { Button } from "../../../../../../ui/Button";
-import { StrokeIcon } from "../../../../../../ui/MediaIcons";
+import { Menu } from "../../../../../../ui/Menu";
 import "./LiveGraphicRow.css";
 
-/** One graphic in the Graphics panel: its name, what it shows now, its settings and where it goes. */
+/**
+ * One graphic in the Graphics panel, like a timer's row: its name, what it
+ * shows now, where it goes, and its settings in the row's menu.
+ */
 export function LiveGraphicRow({
   name,
   detail,
@@ -23,22 +25,15 @@ export function LiveGraphicRow({
           {detail}
         </span>
       </div>
-      {settings ? (
-        <Button
-          icon
-          variant="ghost"
-          aria-label={settings.label}
-          title={settings.label}
-          disabled={settings.disabled}
-          onClick={settings.onOpen}
-        >
-          <StrokeIcon>
-            <path d="M2 4h12M2 8h12M2 12h12" />
-            <path d="M5 2v4M11 6v4M7 10v4" />
-          </StrokeIcon>
-        </Button>
-      ) : null}
       {children}
+      {settings ? (
+        <Menu
+          label={`${name} actions`}
+          heading={name}
+          align="end"
+          items={[{ id: "settings", label: settings.label, disabled: settings.disabled, onSelect: settings.onOpen }]}
+        />
+      ) : null}
     </div>
   );
 }

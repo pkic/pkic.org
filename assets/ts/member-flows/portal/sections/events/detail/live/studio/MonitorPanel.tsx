@@ -12,8 +12,8 @@ import { SectionHeading } from "../../../../../../../ui/SectionHeading";
 import { LiveDeskStream } from "../LiveDeskStream";
 import { LiveMonitorPointers, useLivePointerReport } from "../presence/LiveMonitorPointers";
 import {
-  STUDIO_OUTPUTS,
   STUDIO_OUTPUT_DETAILS,
+  studioMonitorChoices,
   setStudioOutputLayout,
   studioOutputLayout,
   toggleStudioOutput,
@@ -43,8 +43,8 @@ export interface MonitorSources {
   startAt: string;
 }
 
-const tally = (output: StudioOutput) =>
-  output === "preview" || output === "program" ? output : output === "livestream" ? "stream" : "aux";
+/** Each output's tally color, which its border and dot take; see live-tally.css. */
+const tally = (output: StudioOutput) => output;
 
 /** The room as one output composes it: Preview from the shared Preview, every other output from the room on air. */
 const projectionOf = (output: StudioOutput, sources: MonitorSources) =>
@@ -366,7 +366,7 @@ export function monitorPanelView(
         title="Choose outputs"
         triggerClass="pk-studio-monitor__picker pk-studio-monitor__output"
         heading="Show one or more"
-        items={STUDIO_OUTPUTS.map((output) => ({
+        items={studioMonitorChoices(outputs).map((output) => ({
           id: output,
           label: STUDIO_OUTPUT_DETAILS[output].label,
           checked: outputs.includes(output),
@@ -400,7 +400,7 @@ export function monitorPanelView(
       ),
     };
   const { columns, rows } = multiviewGrid(outputs.length);
-  const missing = STUDIO_OUTPUTS.filter((output) => !outputs.includes(output));
+  const missing = studioMonitorChoices(outputs).filter((output) => !outputs.includes(output));
   const free = missing.length ? Math.min(columns * rows - outputs.length, missing.length) : 0;
   return {
     title,

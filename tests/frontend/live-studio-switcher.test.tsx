@@ -86,7 +86,9 @@ describe("the studio's switcher, session bar and phone layout", () => {
       expect(location.hash).toContain("panel=questions");
       expect(host.querySelector('section[aria-label="Questions"]')).not.toBeNull();
       void act(() =>
-        bar.querySelector<HTMLButtonElement>('.pk-studio-transition button[aria-label="Transition"]')!.click(),
+        bar
+          .querySelector<HTMLButtonElement>('.pk-studio-transition button[aria-label="Transition to Program"]')!
+          .click(),
       );
       expect(commands(live).at(-1)).toEqual({ type: "preview.take" });
     } finally {

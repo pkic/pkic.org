@@ -50,21 +50,20 @@ describe("output target control", () => {
     expect(host.querySelector('[aria-label="Show timer in preview"]')?.textContent).toBe("PVW");
     void mount(["projector"]);
     expect(aux().textContent).toContain("PRJ");
-    expect(host.querySelector(".pk-output-target")?.getAttribute("data-aux-active")).toBe("true");
+    expect(host.querySelector(".pk-output-target")?.getAttribute("data-aux-active")).toBe("projector");
     void mount(["projector", "stage-display"]);
     expect(aux().textContent).toContain("PRJ DSP");
     void act(() => aux().click());
     const items = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]')];
     expect(items.map((item) => [item.textContent?.trim(), item.getAttribute("aria-checked")])).toEqual([
       ["✓Projector", "true"],
-      ["Stage preview", "false"],
       ["✓Stage display", "true"],
     ]);
     void act(() => items[1]!.click());
     // The menu stays open so several outputs can be chosen together.
     expect(document.querySelector('[role="menu"]')).not.toBeNull();
     void act(() => host!.querySelector<HTMLButtonElement>('[aria-label="Show timer on air"]')!.click());
-    expect(onToggle.mock.calls).toEqual([["stage-preview"], ["program"]]);
+    expect(onToggle.mock.calls).toEqual([["stage-display"], ["program"]]);
   });
 });
 

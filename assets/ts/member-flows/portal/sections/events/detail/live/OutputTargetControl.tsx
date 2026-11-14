@@ -1,6 +1,6 @@
 import {
-  LIVE_AUX_OUTPUTS,
   LIVE_AUX_OUTPUT_DETAILS,
+  LIVE_STUDIO_AUX_OUTPUTS,
   LIVE_PREVIEW_OUTPUT_DETAILS,
   LIVE_PROGRAM_OUTPUT_DETAILS,
   type LiveAuxOutput,
@@ -78,14 +78,14 @@ export function OutputTargetControl({
   presence?: readonly OutputTargetPresence[];
   onToggle: (destination: LiveDestination) => void;
 }) {
-  const active = LIVE_AUX_OUTPUTS.filter((output) => aux(output));
+  const active = LIVE_STUDIO_AUX_OUTPUTS.filter((output) => aux(output));
   return (
     <div
       class="pk-output-target pk-segmented"
       role="group"
       aria-label={`${subject} outputs`}
       data-integrated={integrated ? "true" : undefined}
-      data-aux-active={active.length ? "true" : undefined}
+      data-aux-active={active[0]}
       data-presence-item={presenceItem}
       data-presence-aux={presenceOn(presence, "aux")}
     >
@@ -122,7 +122,7 @@ export function OutputTargetControl({
         }
         triggerClass={buttonClasses({}, `pk-output-target__button ${AUX_TRIGGER}`)}
         heading="Show on"
-        items={LIVE_AUX_OUTPUTS.map((output) => ({
+        items={LIVE_STUDIO_AUX_OUTPUTS.map((output) => ({
           id: output,
           label: LIVE_AUX_OUTPUT_DETAILS[output].label,
           checked: aux(output),

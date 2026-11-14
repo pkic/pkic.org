@@ -81,8 +81,13 @@
     background: var(--live-tally-program);
     color: var(--pk-on-solid);
   }
-  .pk-output-target[data-aux-active] .pk-output-target__aux {
-    background: var(--live-tally-aux);
+  /* The screens button takes the color of the first screen the graphic is on; the row's bands show every one. */
+  .pk-output-target[data-aux-active="projector"] .pk-output-target__aux {
+    background: var(--live-tally-projector);
+    color: var(--pk-on-solid);
+  }
+  .pk-output-target[data-aux-active="stage-display"] .pk-output-target__aux {
+    background: var(--live-tally-stage-display);
     color: var(--pk-on-solid);
   }
 }

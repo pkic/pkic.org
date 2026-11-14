@@ -2,6 +2,7 @@ import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { ClockZone } from "../../../../../../../shared/event-clock";
 import { liveCompositionInput } from "../../../../../../../shared/live-room-preview";
+import type { LiveTakeTarget } from "../../../../../../../shared/live-room-outputs";
 import type { AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
 import { EMPTY_LIVE_STAGE, type LiveRoomClientMessage } from "../../../../../../../shared/schemas/live-session-room";
 import { useBoundaryClock } from "../../../../../../hooks/useBoundaryClock";
@@ -120,6 +121,8 @@ export function LiveSessionDesk({
   const [broadcasting, setBroadcasting] = useState(false);
   const [lowerThirdSettings, setLowerThirdSettings] = useState(false);
   const [releaseTimes, setReleaseTimes] = useState(false);
+  // Where this operator's Transition goes: Program, or one of the room's screens.
+  const [takeTarget, setTakeTarget] = useState<LiveTakeTarget>("program");
   const runningBroadcast = useRef(false);
   const state = room.state;
   // Where the others were is unknown after a reconnect; they appear again as they move.
@@ -152,7 +155,17 @@ export function LiveSessionDesk({
     });
     return true;
   };
-  useTakeShortcut(() => sendProgram({ type: "preview.take" }), live && !broadcasting);
+  /** Program takes Preview through the room's Take; a screen is set to what Preview holds. */
+  const take = () => {
+    if (!room.state) return;
+    if (takeTarget === "program") return void sendProgram({ type: "preview.take" });
+    sendProgram({
+      type: "aux.set",
+      output: takeTarget,
+      composition: liveCompositionInput(previewProjection(room.state).stage),
+    });
+  };
+  useTakeShortcut(take, live && !broadcasting);
   const phone = useStudioPhone();
   if (!state)
     return room.admissionRefusal ? (
@@ -165,10 +178,17 @@ export function LiveSessionDesk({
   const programActive = activeOccurrenceId === occurrenceId;
   const disabled = !live || broadcasting;
   const targets: LiveTargets = { state, programActive, disabled, sendProgram, sendPrograms };
-  const take = () => sendProgram({ type: "preview.take" });
   const agenda = approvedAgenda ?? null;
   const preview = previewProjection(state);
-  const transition = <TransitionControl disabled={disabled} transitioning={broadcasting} onTransition={take} />;
+  const transition = (
+    <TransitionControl
+      disabled={disabled}
+      transitioning={broadcasting}
+      target={takeTarget}
+      onTarget={setTakeTarget}
+      onTransition={take}
+    />
+  );
   const clearProgram = () => sendProgram({ type: "program.clear" });
   const empty = liveCompositionInput(EMPTY_LIVE_STAGE);
   const switcher = {
@@ -224,6 +244,8 @@ export function LiveSessionDesk({
               disabled={disabled}
               transitioning={broadcasting}
               labeled={panel.labeled}
+              target={takeTarget}
+              onTarget={setTakeTarget}
               onTransition={take}
             />
           ),

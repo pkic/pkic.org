@@ -157,7 +157,8 @@ it("shows each destination's state on the row edge and toggles Program and an au
   const sendProgram = vi.fn((_message: LiveRoomClientMessage) => true);
   host = document.body.appendChild(document.createElement("div"));
   await act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
-  expect(host.querySelector(".pk-live-person")!.getAttribute("data-on-air")).toBe("program");
+  const bands = host.querySelectorAll(".pk-live-person .pk-live-tally-bands > [data-tally]");
+  expect([...bands].map((band) => band.getAttribute("data-tally"))).toEqual(["program"]);
   const program = host.querySelector<HTMLButtonElement>(`button[aria-label="Show ${credit.name} on air"]`)!;
   expect(program.getAttribute("aria-pressed")).toBe("true");
   program.click();

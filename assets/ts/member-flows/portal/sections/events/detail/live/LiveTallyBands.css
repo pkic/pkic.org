@@ -1,0 +1,21 @@
+@layer components {
+  /* The studio rows that carry tally bands are their anchor. */
+  :is(.pk-studio-row, .pk-live-graphic-row, .pk-studio-time__row, .pk-live-person):has(.pk-live-tally-bands) {
+    position: relative;
+  }
+  .pk-live-tally-bands {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    display: flex;
+    gap: 1px;
+    overflow: hidden;
+    border-start-start-radius: inherit;
+    border-end-start-radius: inherit;
+    pointer-events: none;
+  }
+  .pk-live-tally-bands > * {
+    inline-size: 0.1875rem;
+    background: var(--tally);
+  }
+}

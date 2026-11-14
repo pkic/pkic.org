@@ -2,7 +2,7 @@ import { useContext, useState } from "preact/hooks";
 import { toast } from "../../../../../ui";
 import type { ClockZone } from "../../../../../../../../shared/event-clock";
 import { format24HourClockInZone } from "../../../../../../../../shared/format-date";
-import { LIVE_AUX_OUTPUTS, LIVE_AUX_OUTPUT_DETAILS } from "../../../../../../../../shared/live-room-outputs";
+import { LIVE_STUDIO_AUX_OUTPUTS, LIVE_AUX_OUTPUT_DETAILS } from "../../../../../../../../shared/live-room-outputs";
 import { formatLiveDuration } from "../../../../../../../../shared/live-timer-format";
 import { countsUp, liveTimerCounts, liveTimerTotalMs } from "../../../../../../../../shared/live-timer-policy";
 import type {
@@ -50,7 +50,7 @@ function outputItems(
   return [
     item("preview", "Preview", where.preview, true),
     item("program", "Program", where.program),
-    ...LIVE_AUX_OUTPUTS.map((output) => item(output, LIVE_AUX_OUTPUT_DETAILS[output].label, where.aux(output))),
+    ...LIVE_STUDIO_AUX_OUTPUTS.map((output) => item(output, LIVE_AUX_OUTPUT_DETAILS[output].label, where.aux(output))),
   ];
 }
 

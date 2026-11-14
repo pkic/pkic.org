@@ -1,3 +1,4 @@
+import { LiveTallyBands } from "./LiveTallyBands";
 import { OutputTargetControl } from "./OutputTargetControl";
 import { liveLayerTargets, sendLayerToggle, type LiveLayer, type LiveTargets } from "./live-output-targets";
 import { livePresenceItem, useLivePresence } from "./presence/live-presence";
@@ -5,7 +6,8 @@ import { LivePresenceTag } from "./presence/LivePresenceTag";
 
 /**
  * The output control for one graphic of this room: where it is now, a toggle
- * per destination, and which other operators are on it. An integrated control
+ * per destination, a tally band per output on its row, and which other
+ * operators are on it. An integrated control
  * leaves the operators' chips to the card it sits on.
  */
 export function LiveLayerTargets({
@@ -28,6 +30,8 @@ export function LiveLayerTargets({
   return (
     <>
       {integrated ? null : <LivePresenceTag marks={marks} />}
+      {/* The row this control sits in carries a band per output the graphic is on. */}
+      <LiveTallyBands where={where} />
       <OutputTargetControl
         subject={subject}
         integrated={integrated}

@@ -198,7 +198,12 @@ it("sends independent config-only Preview/Program commands and does not clear an
     composition: { schedule: DEFAULT_LIVE_SCHEDULE_CONFIG },
   });
   expect(sendProgram).toHaveBeenCalledTimes(1);
-  await act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Up next settings"]')!.click());
+  await act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Up next actions"]')!.click());
+  await act(() =>
+    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+      .find((item) => item.textContent?.includes("Up next settings"))!
+      .click(),
+  );
   expect(document.querySelector('select[name="scope"]')).toBeNull();
   const layout = controlFor<HTMLSelectElement>(document, "Layout");
   await act(() => {

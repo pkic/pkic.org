@@ -48,7 +48,7 @@ async function stageTimers(page: Page, path: (name: string) => string) {
     await expect(preview).toHaveAttribute("aria-pressed", "true");
   }
   await page.getByRole("tab", { name: "Show", exact: true }).click();
-  await page.getByRole("button", { name: "Transition", exact: true }).click();
+  await page.getByRole("button", { name: "Transition to Program", exact: true }).click();
   await page.getByRole("button", { name: "Full screen Program", exact: true }).first().click();
   const program = page.getByRole("dialog", { name: "Program", exact: true });
   await expect(program.getByText("Session", { exact: true })).toBeVisible();

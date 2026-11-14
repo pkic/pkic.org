@@ -28,6 +28,7 @@ import { ScreenView } from "../../event-screens/ScreenApp";
 import { LiveReactionBar } from "../../live-session/LiveReactionBar";
 import { LiveOverlayPresentation } from "../../live-session/LiveOverlayPresentation";
 import type { LiveRoomState } from "../../live-session/live-room-state";
+import { TransitionControl } from "../../member-flows/portal/sections/events/detail/live/studio/StudioSwitcher";
 import { LiveSpeakerCards } from "../../member-flows/portal/sections/events/detail/live/LiveSpeakerCards";
 import { GraphicsPanel } from "../../member-flows/portal/sections/events/detail/live/studio/GraphicsPanel";
 import { monitorPanelView } from "../../member-flows/portal/sections/events/detail/live/studio/MonitorPanel";
@@ -289,12 +290,47 @@ function LiveMonitor() {
           resizeHandle={() => noHandlers}
         >
           <div class="pk-studio-monitor-frame">
-            <div class="pk-studio-monitor" data-single="" data-tally="stream">
+            <div class="pk-studio-monitor" data-single="" data-tally="livestream">
               <div class="pk-studio-monitor__screen">
                 <p class="pk-studio-monitor__idle">Livestream player, playing muted</p>
               </div>
             </div>
           </div>
+        </StudioPanelFrame>
+      </div>
+    </div>
+  );
+}
+
+const MULTIVIEW_PANEL: StudioPanel = {
+  id: "multiview-1",
+  type: "monitor",
+  x: 0,
+  y: 0,
+  w: 8,
+  h: 14,
+  outputs: ["preview", "program", "projector", "stage-display"],
+};
+
+/** A multiview of Preview, Program and the room's screens, each edged in its own tally color. */
+function Multiview() {
+  const view = monitorPanelView(MULTIVIEW_PANEL, MONITOR_SOURCES, noCommand, { clear: noCommand, disabled: false });
+  return (
+    <div class="pk-studio-grid-frame" data-density="compact">
+      <div class="pk-studio-grid">
+        <StudioPanelFrame
+          panel={MULTIVIEW_PANEL}
+          panels={[MULTIVIEW_PANEL]}
+          title={view.title}
+          heading={view.heading}
+          actions={view.actions}
+          change={noCommand}
+          defaultSize={{ w: 8, h: 14 }}
+          cell={noCommand}
+          dragHandle={noHandlers}
+          resizeHandle={() => noHandlers}
+        >
+          {view.body}
         </StudioPanelFrame>
       </div>
     </div>
@@ -548,6 +584,42 @@ export const studioOnScreenSections: PreviewSection[] = [
             disabled: false,
             sendProgram: () => true,
           }}
+        />
+      </div>
+    ),
+  },
+  {
+    id: "studio-multiview",
+    title: "Multiview with each output in its own color",
+    note: "Program red, Preview green, the projector blue and the stage display amber, on the border and the dot.",
+    render: () => <Multiview />,
+  },
+  {
+    id: "studio-transition",
+    title: "Transition to Program or to a screen",
+    note: "Red to Program by default; the menu beside it sends Preview to a screen instead, in that screen's color.",
+    render: () => (
+      <div class="pk-cluster">
+        <TransitionControl
+          disabled={false}
+          transitioning={false}
+          target="program"
+          onTarget={() => undefined}
+          onTransition={() => undefined}
+        />
+        <TransitionControl
+          disabled={false}
+          transitioning={false}
+          target="projector"
+          onTarget={() => undefined}
+          onTransition={() => undefined}
+        />
+        <TransitionControl
+          disabled={false}
+          transitioning={false}
+          target="stage-display"
+          onTarget={() => undefined}
+          onTransition={() => undefined}
         />
       </div>
     ),

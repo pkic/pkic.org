@@ -57,6 +57,24 @@ describe("live control room Transition", () => {
     expect(panel(host, "Preview").querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
   });
 
+  it("transitions Preview to a screen instead of Program when the operator chooses one", () => {
+    const { host, live } = mountDesk();
+    const snapshot = liveSnapshot({ viewer: OPERATOR });
+    const credit = snapshot.session.credits[0]!;
+    void act(() =>
+      live.latest().deliver({ type: "preview.changed", composition: { ...snapshot.preview, lowerThird: credit } }),
+    );
+    void act(() => labeled(host, "Transition to").click());
+    void act(() =>
+      [...document.querySelectorAll<HTMLElement>('[role^="menuitem"]')]
+        .find((item) => item.textContent?.includes("Projector"))!
+        .click(),
+    );
+    void act(() => take(host, "Projector").click());
+    const sent = liveRoomClientMessageSchema.parse(commands(live).at(-1));
+    expect(sent).toMatchObject({ type: "aux.set", output: "projector", composition: { creditKey: credit.key } });
+  });
+
   it("clears the shared Preview from its monitor", () => {
     const { host, live } = mountDesk();
     const snapshot = liveSnapshot({ viewer: OPERATOR });

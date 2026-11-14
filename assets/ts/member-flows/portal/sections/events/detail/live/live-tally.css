@@ -1,13 +1,35 @@
 /*
- * Tally colors: what a broadcast crew reads at a glance. Preview is the
- * ok tone, Program the danger tone, the auxiliary outputs the info tone and
- * the livestream a neutral rule. They follow the site theme like every token.
+ * Tally colors: what a broadcast crew reads at a glance. Program is always
+ * the danger tone and Preview the ok tone; each of the room's screens has a
+ * color of its own, so a band or a border names the output by color alone.
+ * They follow the site theme like every token.
  */
 @layer components {
   :root {
     --live-tally-preview: var(--pk-ok);
     --live-tally-program: var(--pk-danger);
-    --live-tally-aux: var(--pk-info);
-    --live-tally-stream: var(--pk-line-strong);
+    --live-tally-projector: var(--pk-info);
+    --live-tally-stage-display: var(--pk-warn);
+    --live-tally-stage-preview: color-mix(in oklch, var(--pk-info), var(--pk-danger));
+    --live-tally-livestream: var(--pk-line-strong);
+  }
+  /* Any element naming one output by data-tally reads its color as --tally. */
+  [data-tally="preview"] {
+    --tally: var(--live-tally-preview);
+  }
+  [data-tally="program"] {
+    --tally: var(--live-tally-program);
+  }
+  [data-tally="projector"] {
+    --tally: var(--live-tally-projector);
+  }
+  [data-tally="stage-display"] {
+    --tally: var(--live-tally-stage-display);
+  }
+  [data-tally="stage-preview"] {
+    --tally: var(--live-tally-stage-preview);
+  }
+  [data-tally="livestream"] {
+    --tally: var(--live-tally-livestream);
   }
 }

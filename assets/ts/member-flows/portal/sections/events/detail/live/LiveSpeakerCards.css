@@ -33,7 +33,7 @@
     list-style: none;
   }
 
-  /* One person: the tally on its leading edge, the outputs at its end. */
+  /* One person: the tally bands on its leading edge, the outputs at its end. */
   /* The outputs move under the name when the row is too narrow for both. */
   .pk-live-person {
     display: flex;
@@ -43,18 +43,8 @@
     min-inline-size: 0;
     padding: var(--pk-1) var(--pk-1) var(--pk-1) var(--pk-2);
     border: 1px solid var(--pk-line-soft);
-    border-inline-start: 4px solid var(--pk-line);
     border-radius: var(--pk-radius);
     background: var(--pk-surface);
-  }
-  .pk-live-person[data-on-air="preview"] {
-    border-color: var(--live-tally-preview);
-  }
-  .pk-live-person[data-on-air="program"] {
-    border-color: var(--live-tally-program);
-  }
-  .pk-live-person[data-on-air="aux"] {
-    border-color: var(--live-tally-aux);
   }
   .pk-live-person__who {
     display: flex;
