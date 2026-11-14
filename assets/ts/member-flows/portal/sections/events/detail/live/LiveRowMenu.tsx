@@ -1,6 +1,5 @@
 import {
   LIVE_AUX_OUTPUT_DETAILS,
-  LIVE_PROGRAM_OUTPUT_DETAILS,
   LIVE_STUDIO_AUX_OUTPUTS,
   type LiveAuxOutput,
 } from "../../../../../../../shared/live-room-outputs";
@@ -24,9 +23,6 @@ export interface LiveScreens {
 
 /** A graphic that goes nowhere yet, such as a pending question or a draft poll. */
 export const NO_LIVE_SCREENS: LiveScreens = { on: [], following: false };
-
-const STAGE_DISPLAY = LIVE_AUX_OUTPUT_DETAILS["stage-display"].label;
-const PROGRAM = LIVE_PROGRAM_OUTPUT_DETAILS.label;
 
 /** Whether the stage display shows a graphic because it is on Program, not because it was put there. */
 function followsProgram(targets: LiveTargets, layer: LiveLayer, where: ReturnType<typeof liveLayerTargets>): boolean {
@@ -57,15 +53,27 @@ export function liveScreens(targets: LiveTargets, layer: LiveLayer): LiveScreens
   };
 }
 
-/** A switch per screen of the room, checked where the graphic was put. */
+/** Kinds the stage display shows from Program when it has none of its own. */
+const FOLLOWS_PROGRAM: ReadonlySet<LiveLayer["kind"]> = new Set(["question", "poll", "timer"]);
+
+/** What a click on a screen's item does, in the words of the room: the audience's screen and the speaker's. */
+function screenDescription(output: LiveAuxOutput, on: boolean, following: boolean, keptWhileLive: boolean): string {
+  if (output === "projector")
+    return on ? "On the audience screen. Click to take it off." : "Show it on the audience screen.";
+  if (keptWhileLive) return "Kept on the speaker’s screen. Click to show it there only while it is live.";
+  if (on) return "On the speaker’s screen. Click to take it off.";
+  if (following) return "On the speaker’s screen because it is live. Click to keep it there after it goes off air.";
+  return "Show it on the speaker’s screen.";
+}
+
+/** A switch per screen of the room, checked where the graphic was put, each saying what a click does. */
 export function liveScreenItems(targets: LiveTargets, layer: LiveLayer): MenuItem[] {
   const { on, following } = liveScreens(targets, layer);
+  const live = liveLayerTargets(targets, layer).program && FOLLOWS_PROGRAM.has(layer.kind);
   return LIVE_STUDIO_AUX_OUTPUTS.map((output) => ({
     id: `screen-${output}`,
-    label:
-      output === "stage-display" && following
-        ? `${STAGE_DISPLAY} (from ${PROGRAM})`
-        : LIVE_AUX_OUTPUT_DETAILS[output].label,
+    label: LIVE_AUX_OUTPUT_DETAILS[output].label,
+    description: screenDescription(output, on.includes(output), following, live && on.includes(output)),
     checked: on.includes(output),
     multiple: true,
     keepOpen: true,
@@ -83,7 +91,7 @@ export function withScreenItems(screens: readonly MenuItem[], items: readonly Me
 export function liveScreensTitle({ on, following }: LiveScreens): string {
   const parts = [
     on.length ? `On ${on.map((output) => LIVE_AUX_OUTPUT_DETAILS[output].label).join(" and ")}.` : null,
-    following ? `On the ${STAGE_DISPLAY.toLowerCase()} because it is on ${PROGRAM}.` : null,
+    following ? "On the stage display because it is live." : null,
   ].filter(Boolean);
   return ["Room screens and more actions.", ...parts].join(" ");
 }

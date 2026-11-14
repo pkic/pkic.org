@@ -31,19 +31,25 @@ export const STUDIO_TOUR_STEPS: readonly GuidedTourStep[] = [
     id: "screens",
     target: ".pk-menu__trigger:has(> .pk-live-screen-dots), .pk-studio-panel__body .pk-menu__trigger",
     title: "Screens in the room",
-    body: "The room has a projector for the audience and a screen for the speaker. Open ⋯ on an item to show it there. A dot under ⋯ means it is on one of them. An empty circle means the speaker’s screen shows it by itself, because it is live.",
+    body: "The room has a projector for the audience and a screen for the speaker. Open ⋯ on an item and click Projector or Stage display to show it there; click again to take it off. A dot under ⋯ means you put it on one of them.",
   },
   {
     id: "stage-display",
     target: panel("message"),
     title: "The speaker’s screen",
-    body: "The speaker’s screen shows the time, plus any question, poll or timer that is live. Type a short note here, like “5 minutes left”, and only the speaker sees it.",
+    body: "The speaker’s screen follows what is live by itself: when you put a question, poll or timer live, the speaker sees it too, shown as an empty circle under ⋯. Put it on Stage display yourself to keep it there after it goes off air. Type a short note here, like “5 minutes left”, and only the speaker sees it.",
   },
   {
     id: "time",
     target: panel("time"),
     title: "Timers",
-    body: "Start, pause, or add a minute here. When a timer is live, the speaker sees it counting down.",
+    body: "Here are the room’s timers, up to 12. The Session timer follows the agenda: it counts down to the start, then the session to its end, all by itself. Start, pause or add a minute to take over; Follow the agenda in its ⋯ hands it back.",
+  },
+  {
+    id: "time-shown",
+    target: panel("time"),
+    title: "Which timers people see",
+    body: "Viewers see every timer you put live. The speaker always sees the time of day, plus at most two countdowns: the one that ends first is the big one. When a countdown runs out, it fills the speaker’s screen.",
   },
   {
     id: "layout",

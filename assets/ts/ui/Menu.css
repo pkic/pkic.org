@@ -157,6 +157,19 @@
    * on the half of the menu that had it. Marking at the end lets every label
    * in a menu start on the same line whether or not it is a choice.
    */
+  /* A label with a line under it on what the item does; it wraps rather than widening the menu. */
+  .pk-menu__text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    max-inline-size: 16rem;
+  }
+  .pk-menu__description {
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    line-height: 1.35;
+    white-space: normal;
+  }
   .pk-menu__check {
     display: inline-block;
     color: var(--pk-accent-ink);

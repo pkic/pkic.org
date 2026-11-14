@@ -49,6 +49,21 @@ export function button(host: ParentNode, name: string) {
   return found;
 }
 
+/** A menu item's label, without its check mark or the line under it on what it does. */
+export function menuItemLabel(item: Element): string {
+  const label = item.querySelector(".pk-menu__text > :first-child") ?? item;
+  return (label.textContent ?? "").replace("✓", "").trim();
+}
+
+/** The open menu's item with this label. */
+export function menuItem(host: ParentNode, label: string): HTMLElement {
+  const found = [...host.querySelectorAll<HTMLElement>("[role^='menuitem']")].find(
+    (item) => menuItemLabel(item) === label,
+  );
+  if (!found) throw new Error(`No menu item named ${label}`);
+  return found;
+}
+
 export function labeled(host: ParentNode, name: string) {
   const found = host.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
   if (!found) throw new Error(`No button labeled ${name}`);

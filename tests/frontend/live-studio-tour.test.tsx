@@ -38,5 +38,5 @@ it("walks through the studio's controls and leaves out the panels this layout ha
   expect(tour().textContent).toContain("Go live with your practice");
   await act(() => next().click());
   expect(tour().textContent).toContain("Arrange your studio");
-  expect(STUDIO_TOUR_STEPS).toHaveLength(7);
+  expect(STUDIO_TOUR_STEPS).toHaveLength(8);
 });

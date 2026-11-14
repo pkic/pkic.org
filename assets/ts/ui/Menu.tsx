@@ -37,6 +37,8 @@ import "./Menu.css";
 interface MenuItemBase {
   id: string;
   label: string;
+  /** A short second line under the label: what choosing the item does, when the label alone cannot say it. */
+  description?: string;
   icon?: ComponentChildren;
   /** A command; omit for link items with `href`. */
   onSelect?: () => void;

@@ -8,6 +8,7 @@ import {
 } from "../../assets/ts/member-flows/portal/sections/events/detail/live/LivePollsPanel";
 import { applyLiveRoomMessage, type LiveRoomState } from "../../assets/ts/live-session/live-room-state";
 import { liveSnapshot, livePoll, livePollResults, liveTargets } from "./helpers/live-room-socket";
+import { menuItemLabel } from "./helpers/live-desk";
 
 const hosts: HTMLElement[] = [];
 afterEach(() => {
@@ -55,12 +56,7 @@ it("shows one compact row per poll with its state, answers and leading answer, o
   expect(rows[1].textContent).toContain("Prepared");
   const items = await menu(rows[0]);
   // The room's screens come first in the row's menu, then the poll's own actions.
-  expect(items.map((item) => item.textContent?.replace("✓", "").trim())).toEqual([
-    "Projector",
-    "Stage display",
-    "Results and settings",
-    "Reopen voting",
-  ]);
+  expect(items.map(menuItemLabel)).toEqual(["Projector", "Stage display", "Results and settings", "Reopen voting"]);
   await act(async () => items[3].click());
   expect(send.mock.calls.map(([message]) => liveRoomClientMessageSchema.parse(message))).toEqual([
     { type: "poll.status", pollId: closed.id, status: "open" },

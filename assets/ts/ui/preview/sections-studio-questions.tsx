@@ -197,7 +197,7 @@ export const studioQuestionSections: PreviewSection[] = [
   {
     id: "studio-screens-menu-following",
     title: "Studio: the row menu while the stage display follows Program",
-    note: "Stage display is not checked, since no one put the question there, and says it shows it from Program. Checking it keeps it there after Program changes.",
+    note: "Each screen says under its name what a click does. Stage display is not checked, since no one put the question there; it shows it because it is live, and a click keeps it there after it goes off air.",
     render: () => (
       <div
         data-density="compact"
