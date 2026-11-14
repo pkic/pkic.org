@@ -28,6 +28,7 @@ import { stageDisplaySettingsMenu } from "./studio/stage-display-settings-menu";
 import { StudioGrid, type StudioPanelView } from "./studio/StudioGrid";
 import { StudioHeader, type StudioNoticeContent } from "./studio/StudioHeader";
 import { StudioToolbar } from "./studio/StudioToolbar";
+import { StudioTour } from "./studio/StudioTour";
 import { LiveAddTimerAction, TimePanel } from "./studio/TimePanel";
 import {
   STUDIO_PANEL_LABELS,
@@ -118,6 +119,8 @@ export function LiveSessionDesk({
     enabled: layout.panels.some((panel) => panel.type === "screens"),
   });
   const fullscreen = useStudioFullscreen();
+  const studio = useRef<HTMLDivElement>(null);
+  const [touring, setTouring] = useState(false);
   const [broadcasting, setBroadcasting] = useState(false);
   const [lowerThirdSettings, setLowerThirdSettings] = useState(false);
   const [releaseTimes, setReleaseTimes] = useState(false);
@@ -368,6 +371,7 @@ export function LiveSessionDesk({
   return (
     <LivePresenceContext.Provider value={presence}>
       <div
+        ref={studio}
         class="pk-studio"
         data-phone={phone ? "" : undefined}
         data-expanded={fullscreen.expanded ? "true" : undefined}
@@ -421,11 +425,14 @@ export function LiveSessionDesk({
             reset={layout.reset}
             expanded={fullscreen.expanded}
             toggleExpanded={fullscreen.toggle}
+            touring={touring}
+            toggleTour={() => setTouring(!touring)}
           />
         </div>
         {phone ? null : (
           <StudioGrid workspace={layout.workspace} panels={layout.panels} change={layout.change} render={render} />
         )}
+        {touring && !phone ? <StudioTour scope={studio} onClose={() => setTouring(false)} /> : null}
         <ProgramUndoToast
           undo={state.programUndo}
           onUndo={(snapshotId) => sendProgram({ type: "program.restore", snapshotId })}

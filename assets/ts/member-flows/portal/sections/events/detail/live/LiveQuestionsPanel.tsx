@@ -19,7 +19,14 @@ import { StrokeIcon } from "../../../../../../ui/MediaIcons";
 import { Menu } from "../../../../../../ui/Menu";
 import { toast } from "../../../../ui";
 import { LiveLayerTargets } from "./LiveLayerTargets";
-import { LiveScreenTrigger, liveScreenItems, liveScreensOn, liveScreensTitle, withScreenItems } from "./LiveRowMenu";
+import {
+  LiveScreenTrigger,
+  NO_LIVE_SCREENS,
+  liveScreenItems,
+  liveScreens,
+  liveScreensTitle,
+  withScreenItems,
+} from "./LiveRowMenu";
 import { LivePreparedQuestionDialog, LivePreparedQuestionWindowDialog } from "./LivePreparedQuestionDialogs";
 import { LiveQuestionRewrite } from "./LiveQuestionRewrite";
 import type { LiveTargets } from "./live-output-targets";
@@ -150,7 +157,7 @@ function OpenQuestionRow({
   const item = livePresenceItem({ kind: "question", id: question.id });
   const layer = { kind: "question", id: question.id } as const;
   // A pending question goes nowhere yet, so its menu has no screens.
-  const on = pending ? [] : liveScreensOn(targets, layer);
+  const screens = pending ? NO_LIVE_SCREENS : liveScreens(targets, layer);
   const actions = [
     { id: "open", label: "Open question", onSelect: onOpen },
     { id: "edit", label: "Edit text", disabled, onSelect: onEdit },
@@ -195,8 +202,8 @@ function OpenQuestionRow({
           role="operator"
           disabled={disabled}
           menuLabel="Question actions"
-          menuTrigger={<LiveScreenTrigger on={on} />}
-          menuTitle={liveScreensTitle(on)}
+          menuTrigger={<LiveScreenTrigger screens={screens} />}
+          menuTitle={liveScreensTitle(screens)}
           additionalActions={pending ? actions : withScreenItems(liveScreenItems(targets, layer), actions)}
           onMove={moderate}
         />

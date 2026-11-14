@@ -14,7 +14,14 @@ import { Button } from "../../../../../../ui/Button";
 import { EmptyState } from "../../../../../../ui/EmptyState";
 import { Menu, type MenuItem } from "../../../../../../ui/Menu";
 import { LiveLayerTargets } from "./LiveLayerTargets";
-import { LiveScreenTrigger, liveScreenItems, liveScreensOn, liveScreensTitle, withScreenItems } from "./LiveRowMenu";
+import {
+  LiveScreenTrigger,
+  NO_LIVE_SCREENS,
+  liveScreenItems,
+  liveScreens,
+  liveScreensTitle,
+  withScreenItems,
+} from "./LiveRowMenu";
 import { LivePollDialog, livePollWritten } from "./LivePollDialog";
 import { LivePollEditor } from "./LivePollEditor";
 import { LivePollStatusBadge } from "./LivePollStatusBadge";
@@ -84,7 +91,7 @@ function LivePollRow({
   const top = leading(poll);
   const layer = { kind: "poll", id: poll.id, presentation } as const;
   // A draft poll goes nowhere yet, so its menu has no screens.
-  const on = poll.status === "draft" ? [] : liveScreensOn(targets, layer);
+  const screens = poll.status === "draft" ? NO_LIVE_SCREENS : liveScreens(targets, layer);
   const actions = disabled ? [] : rowMenu(poll, send, onOpen);
   return (
     <StudioItemRow
@@ -111,11 +118,11 @@ function LivePollRow({
       menu={
         <Menu
           label={`Poll actions, ${poll.field.label}`}
-          title={liveScreensTitle(on)}
+          title={liveScreensTitle(screens)}
           items={poll.status === "draft" ? actions : withScreenItems(liveScreenItems(targets, layer), actions)}
           align="end"
         >
-          <LiveScreenTrigger on={on} />
+          <LiveScreenTrigger screens={screens} />
         </Menu>
       }
     />

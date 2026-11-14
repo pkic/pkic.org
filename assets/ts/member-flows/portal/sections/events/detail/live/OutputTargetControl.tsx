@@ -18,6 +18,21 @@ export function liveDestinationOf(element: Element): LivePresenceTarget | null {
   return destination === "preview" || destination === "program" ? destination : null;
 }
 
+/**
+ * What PVW and PGM do, on hover. Preview is an optional check of the look and
+ * the details before air; Program puts the graphic on air at once.
+ */
+export const OUTPUT_TARGET_HINTS = {
+  preview: {
+    off: "Preview: check how it looks and that the details are right before it goes on air. Optional.",
+    on: "In Preview. Transition puts it on air; click to take it out of Preview.",
+  },
+  program: {
+    off: "Program: put it on air now. Preview is not needed first.",
+    on: "On air. Click to take it off air.",
+  },
+} as const;
+
 /** The color slot of the first other operator on a button, which draws a ring in their color. */
 function presenceOn(presence: readonly OutputTargetPresence[], target: LivePresenceTarget): number | undefined {
   return presence.find((mark) => mark.target === target)?.color;
@@ -70,7 +85,7 @@ export function OutputTargetControl({
         data-destination="preview"
         data-presence-color={presenceOn(presence, "preview")}
         aria-label={`Show ${subject} in preview`}
-        title={LIVE_PREVIEW_OUTPUT_DETAILS.label}
+        title={OUTPUT_TARGET_HINTS.preview[preview ? "on" : "off"]}
         aria-pressed={preview}
         disabled={disabled}
         onClick={() => onToggle("preview")}
@@ -82,7 +97,7 @@ export function OutputTargetControl({
         data-destination="program"
         data-presence-color={presenceOn(presence, "program")}
         aria-label={`Show ${subject} on air`}
-        title={LIVE_PROGRAM_OUTPUT_DETAILS.label}
+        title={OUTPUT_TARGET_HINTS.program[program ? "on" : "off"]}
         aria-pressed={program}
         disabled={disabled}
         onClick={() => onToggle("program")}

@@ -22,4 +22,9 @@
     border-radius: 50%;
     background: var(--tally);
   }
+  /* The stage display shows the graphic from Program: a ring, not a dot, since no one put it there. */
+  .pk-live-screen-dots > [data-following] {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--tally);
+  }
 }

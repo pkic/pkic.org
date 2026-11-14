@@ -24,6 +24,8 @@ function Harness() {
         reset={layout.reset}
         expanded={false}
         toggleExpanded={() => {}}
+        touring={false}
+        toggleTour={() => {}}
       />
       <StudioGrid
         workspace={layout.workspace}

@@ -85,6 +85,7 @@ function PersonRow({
           disabled={targets.disabled}
           aria-pressed={where.preview}
           aria-label={`Prepare ${credit.name} in Preview`}
+          title="Put their lower third in Preview to check it before air"
           onClick={() => {
             if (!where.preview) sendLayerToggle(targets, layer, "preview");
           }}

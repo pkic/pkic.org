@@ -181,7 +181,7 @@ it("shows Program on the row edge, a screen as a dot on the menu, and toggles Pr
   state.outputs = { ...state.outputs, projector: { ...EMPTY_LIVE_AUX_COMPOSITION, lowerThird: credit } };
   await act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
   expect(menu().querySelector('.pk-live-screen-dots > [data-tally="projector"]')).not.toBeNull();
-  expect(menu().getAttribute("title")).toBe("On Projector");
+  expect(menu().getAttribute("title")).toBe("Room screens and more actions. On Projector.");
 });
 
 it("does not show Program as pressed while another session is on air, and puts the speaker on with the first press", async () => {

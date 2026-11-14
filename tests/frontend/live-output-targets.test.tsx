@@ -8,7 +8,9 @@ import { applyLiveRoomMessage } from "../../assets/ts/live-session/live-room-sta
 import { OutputTargetControl } from "../../assets/ts/member-flows/portal/sections/events/detail/live/OutputTargetControl";
 import { liveAuxToggle } from "../../assets/ts/member-flows/portal/sections/events/detail/live/live-output-targets";
 import { livePreviewDifferences } from "../../assets/ts/member-flows/portal/sections/events/detail/live/live-stage-preview";
-import { liveSnapshot } from "./helpers/live-room-socket";
+import { liveScreens } from "../../assets/ts/member-flows/portal/sections/events/detail/live/LiveRowMenu";
+import { liveStageQuestionSchema } from "../../assets/shared/schemas/live-session-room";
+import { LIVE_QUESTION, liveSnapshot, liveTargets } from "./helpers/live-room-socket";
 
 let host: HTMLElement | undefined;
 afterEach(() => {
@@ -42,6 +44,33 @@ describe("output target control", () => {
     expect(host.querySelectorAll("button")).toHaveLength(2);
     void act(() => program.click());
     expect(onToggle.mock.calls).toEqual([["program"]]);
+    // Each says what it does: Preview is an optional check, Program goes on air at once.
+    expect(preview.title).toMatch(/^In Preview\./);
+    expect(program.title).toMatch(/^Program: put it on air now/);
+  });
+});
+
+describe("room screens", () => {
+  const question = liveStageQuestionSchema.parse({ id: LIVE_QUESTION, text: "How do we migrate?", authorName: null });
+  const layer = { kind: "question", id: LIVE_QUESTION } as const;
+
+  it("marks the stage display as following when it shows Program's question, and as put there when it has its own", () => {
+    const state = roomState();
+    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: [], following: false });
+    state.stage = { ...state.stage, question };
+    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: [], following: true });
+    // Off air the stage display does not show Program's question.
+    expect(liveScreens(liveTargets(state, { programActive: false }), layer).following).toBe(false);
+    state.outputs = { ...state.outputs, "stage-display": { ...EMPTY_LIVE_AUX_COMPOSITION, question } };
+    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: ["stage-display"], following: false });
+  });
+
+  it("does not follow when the stage display has its own question in place of Program's", () => {
+    const state = roomState();
+    const own = { ...question, id: "20000000-0000-4000-8000-0000000000c1", text: "Pinned" };
+    state.stage = { ...state.stage, question };
+    state.outputs = { ...state.outputs, "stage-display": { ...EMPTY_LIVE_AUX_COMPOSITION, question: own } };
+    expect(liveScreens(liveTargets(state), layer).following).toBe(false);
   });
 });
 

@@ -5,7 +5,14 @@
  */
 import type { PreviewSection } from "./PreviewShell";
 import type { LivePreparedQuestion } from "../../../shared/schemas/live-session-prepared-question";
-import type { LiveQuestion } from "../../../shared/schemas/live-session-room";
+import { useRef } from "preact/hooks";
+import {
+  EMPTY_LIVE_AUX_COMPOSITION,
+  liveStageQuestionSchema,
+  type LiveQuestion,
+} from "../../../shared/schemas/live-session-room";
+import { LiveRowMenu } from "../../member-flows/portal/sections/events/detail/live/LiveRowMenu";
+import { StudioTour } from "../../member-flows/portal/sections/events/detail/live/studio/StudioTour";
 import type { LiveRoomState } from "../../live-session/live-room-state";
 import {
   LivePreparedQuestionDialog,
@@ -98,7 +105,24 @@ const ROOM: LiveRoomState = {
 const TARGETS = { state: ROOM, programActive: true, disabled: false, sendProgram: send };
 const PANEL: StudioPanel = { id: "questions-1", type: "questions", x: 0, y: 0, w: 5, h: 14 };
 
-function QuestionsPanelSpecimen() {
+/** One question on Program, which the stage display follows, and one put on the projector directly. */
+const ON_AIR = "40000000-0000-4000-8000-000000000031";
+const PINNED = "40000000-0000-4000-8000-000000000033";
+const stageQuestion = (id: string, text: string) => liveStageQuestionSchema.parse({ id, text, authorName: null });
+const SCREENS_ROOM: LiveRoomState = {
+  ...ROOM,
+  questions: [ROOM.questions[0]!, asked(PINNED, "Can we keep RSA for the root and go hybrid below it?", { votes: 4 })],
+  preparedQuestions: [],
+  stage: { ...ROOM.stage, question: stageQuestion(ON_AIR, ROOM.questions[0]!.text) },
+  outputs: {
+    ...ROOM.outputs,
+    projector: { ...EMPTY_LIVE_AUX_COMPOSITION, question: stageQuestion(PINNED, "Pinned") },
+    "stage-display": EMPTY_LIVE_AUX_COMPOSITION,
+  },
+};
+const SCREENS_TARGETS = { ...TARGETS, state: SCREENS_ROOM };
+
+function QuestionsPanelSpecimen({ targets = TARGETS }: { targets?: typeof TARGETS }) {
   return (
     <div class="pk-studio-grid-frame" data-density="compact">
       <div class="pk-studio-grid">
@@ -106,7 +130,7 @@ function QuestionsPanelSpecimen() {
           panel={PANEL}
           panels={[PANEL]}
           title="Questions"
-          actions={<LiveQuestionsHeader targets={TARGETS} send={send} />}
+          actions={<LiveQuestionsHeader targets={targets} send={send} />}
           menu={[{ id: "release-times", label: "Release times", onSelect: noCommand }]}
           change={noCommand}
           defaultSize={{ w: 5, h: 14 }}
@@ -114,9 +138,19 @@ function QuestionsPanelSpecimen() {
           dragHandle={noHandlers}
           resizeHandle={() => noHandlers}
         >
-          <LiveQuestionsPanel targets={TARGETS} clock="UTC" send={send} />
+          <LiveQuestionsPanel targets={targets} clock="UTC" send={send} />
         </StudioPanelFrame>
       </div>
+    </div>
+  );
+}
+
+function TourSpecimen() {
+  const scope = useRef<HTMLDivElement>(null);
+  return (
+    <div ref={scope} style={{ paddingBlockStart: "14rem" }}>
+      <QuestionsPanelSpecimen targets={SCREENS_TARGETS} />
+      <StudioTour scope={scope} onClose={noCommand} />
     </div>
   );
 }
@@ -153,5 +187,37 @@ export const studioQuestionSections: PreviewSection[] = [
         />
       </div>
     ),
+  },
+  {
+    id: "studio-screens-following",
+    title: "Studio: a question the stage display follows from Program",
+    note: "The first question is on Program, so the stage display shows it too: a ring under ⋯. The second was put on the projector itself: a solid dot.",
+    render: () => <QuestionsPanelSpecimen targets={SCREENS_TARGETS} />,
+  },
+  {
+    id: "studio-screens-menu-following",
+    title: "Studio: the row menu while the stage display follows Program",
+    note: "Stage display is not checked, since no one put the question there, and says it shows it from Program. Checking it keeps it there after Program changes.",
+    render: () => (
+      <div
+        data-density="compact"
+        data-gallery-open
+        style={{ display: "flex", justifyContent: "end", minBlockSize: "18rem" }}
+      >
+        <LiveRowMenu
+          targets={SCREENS_TARGETS}
+          layer={{ kind: "question", id: ON_AIR }}
+          label="Question actions"
+          heading="Question"
+          items={[{ id: "answered", label: "Mark answered", onSelect: noCommand }]}
+        />
+      </div>
+    ),
+  },
+  {
+    id: "studio-tour",
+    title: "Studio tour",
+    note: "From Studio tour in the layout row. Each step points at one control; steps for closed panels are left out.",
+    render: () => <TourSpecimen />,
   },
 ];
