@@ -381,8 +381,9 @@ describe("proposal submission gate", () => {
     expect(parsed.proposer.actingIdentityId).toBeNull();
     expect(parsed.proposer.firstName).toBeUndefined();
     expect(parsed.proposer.email).toBeUndefined();
-    expect(parsed.proposer.organizationName).toBeUndefined();
-    expect(parsed.proposer.jobTitle).toBeUndefined();
+    // A proposer speaks as an identity they hold; the proposal carries no affiliation of its own.
+    expect(parsed.proposer).not.toHaveProperty("organizationName");
+    expect(parsed.proposer).not.toHaveProperty("jobTitle");
     expect(parsed.proposer.bio).toContain("speaker biography");
     // Private notes travel apart from the abstract, which is what gets published.
     expect(parsed.proposal.committeeNotes).toBe("Happy to adapt this into a panel.");
@@ -446,8 +447,8 @@ describe("proposal submission gate", () => {
       lastName: "Lovelace",
       role: "proposer",
     });
-    expect(parsed.proposer.jobTitle).toBeUndefined();
-    expect(parsed.proposer.organizationName).toBeUndefined();
+    expect(parsed.proposer).not.toHaveProperty("organizationName");
+    expect(parsed.proposer).not.toHaveProperty("jobTitle");
     // A refused submission leaves the form in place for another attempt.
     expect(form.hidden).toBe(false);
   });

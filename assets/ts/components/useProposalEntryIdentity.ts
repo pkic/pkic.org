@@ -15,7 +15,7 @@ import {
   eventProposalProofIdentityPatchResponseSchema,
   eventProposalProofPersonPatchResponseSchema,
 } from "../../shared/schemas/event-proposal-proof";
-import type { proposalCreateSchema } from "../../shared/schemas/proposal-management";
+import type { proposalCreateSchema, speakerSelfProfilePatchSchema } from "../../shared/schemas/proposal-management";
 import type { ConsentItem } from "../../shared/schemas/registration";
 import type { identityAffiliationPreviewResponseSchema } from "../../shared/schemas/identity-affiliation";
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
@@ -30,7 +30,11 @@ export type VerifiedProposalEntry = {
 export type ParticipationPerson = z.infer<typeof eventProposalProofPersonSchema>;
 type Proposer = z.infer<typeof proposalCreateSchema>["proposer"];
 type NameDrafts = Pick<Proposer, "firstName" | "lastName">;
-type AffiliationDrafts = Pick<Proposer, "organizationName" | "jobTitle" | "organizationContextToken">;
+// Only a speaker creates an affiliation from a confirmed email; a proposer chooses an identity they hold.
+type AffiliationDrafts = Pick<
+  z.infer<typeof speakerSelfProfilePatchSchema>,
+  "organizationName" | "jobTitle" | "organizationContextToken"
+>;
 export interface ProposalEntrySelection {
   authenticated: boolean;
   /** A speaker's confirmed address; a proposer continues with their session instead. */

@@ -188,7 +188,7 @@ describe("registration entry", () => {
       });
       await act(async () => button("Save my details").click());
       await settle();
-      const correction = requests.findLast((request) => request.path === "/api/v1/users/current" && request.body)!;
+      const correction = requests.filter(({ path, body }) => path === "/api/v1/users/current" && body).at(-1)!;
       expect(myProfileUpdateSchema.parse(correction.body)).toMatchObject({ firstName: "Zoë", lastName: "Fixture" });
       expect(document.querySelector<HTMLInputElement>('input[type="hidden"][name="firstName"]')!.value).toBe("Zoë");
       await act(() => next.click());

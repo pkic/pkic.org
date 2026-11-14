@@ -1,5 +1,6 @@
 import { render, createRef, type ComponentChildren } from "preact";
 import type { RegistrationSubmissionResponse } from "../../shared/schemas/registration";
+import { Alert } from "../ui/Alert";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { PersonalAddressPrompt } from "../components/events/PersonalAddressPrompt";
 import {
