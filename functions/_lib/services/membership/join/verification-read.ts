@@ -55,7 +55,8 @@ export async function readJoinVerification(
   const organization = {
     sql: organizationId
       ? `SELECT entry.organization_id FROM organization_domain_claims entry
-          WHERE entry.organization_id=? AND entry.domain IN (SELECT value FROM json_each(?)) LIMIT 1`
+          WHERE entry.organization_id=? AND entry.domain IN (SELECT value FROM json_each(?))
+          ORDER BY length(entry.domain) DESC LIMIT 1`
       : `SELECT entry.organization_id FROM organization_domain_claims entry
           WHERE entry.domain=(SELECT domain FROM (${claim.sql})) AND entry.organization_id IS NOT NULL
             AND (SELECT COUNT(*) FROM organization_domain_claims candidate WHERE candidate.domain=entry.domain)=1
@@ -96,6 +97,12 @@ export async function readJoinVerification(
       ) LIMIT 129`,
       bindings: [JSON.stringify(organizationDomainCandidates(email))],
     },
+    // The domain the chosen organization claims, which the access guards check, not another organization's claim.
+    {
+      sql: `SELECT domain FROM organization_domain_claims
+        WHERE organization_id=? AND domain IN (SELECT value FROM json_each(?)) ORDER BY length(domain) DESC LIMIT 1`,
+      bindings: [organizationId ?? null, JSON.stringify(organizationDomainCandidates(email))],
+    },
   ];
   const results = await db.batch([
     ...reads.map((read) => db.prepare(read.sql).bind(...read.bindings)),
@@ -124,6 +131,7 @@ export async function readJoinVerification(
     activeMemberOrganizationIds: new Set(
       batchRows<{ organization_id: string }>(results[13]).map((row) => row.organization_id),
     ),
+    selectedClaimDomain: batchFirst<{ domain: string }>(results[14])?.domain ?? null,
     affiliation: affiliation?.decode(results.slice(reads.length)) ?? null,
   };
 }

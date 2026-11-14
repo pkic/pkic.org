@@ -148,7 +148,11 @@ export async function verifyMemberJoin(
     resolveDomainOrganization(facts).kind === "ambiguous"
   )
     return { status: "support_required" };
-  const domain = observed.claim?.domain ?? workEmailDomain(capability.email) ?? emailDomainOf(capability.email);
+  const domain =
+    (input.organizationId ? observed.selectedClaimDomain : null) ??
+    observed.claim?.domain ??
+    workEmailDomain(capability.email) ??
+    emailDomainOf(capability.email);
   const claimedMember = input.organizationId ? observed.member : null;
   if (!claimedMember) {
     // One open application per organization, whether it was chosen or resolved from the domain.
