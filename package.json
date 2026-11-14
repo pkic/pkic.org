@@ -96,7 +96,7 @@
     "@tiptap/pm": "3.31.3",
     "@tiptap/starter-kit": "3.31.3",
     "agents": "^0.13.3",
-    "astro": "7.4.2",
+    "astro": "7.4.7",
     "chanfana": "^3.3.0",
     "client-zip": "^2.5.0",
     "fast-xml-parser": "^5.11.1",
