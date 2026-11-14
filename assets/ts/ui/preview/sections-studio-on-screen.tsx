@@ -106,7 +106,7 @@ const LISTS: Pick<LiveStage, "topQuestions" | "chatFeed"> = {
  * is sized in the event's layout settings like any other card.
  */
 const FULL_FRAME = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
-/** A busy chat: short greetings between messages long enough to reach the broadcast's cut. */
+/** A busy chat: short greetings between messages longer than the board's three lines. */
 const CHAT_MIXED: LiveStage["chatFeed"] = {
   config: { count: 6, delaySeconds: 10 },
   messages: [
@@ -114,7 +114,7 @@ const CHAT_MIXED: LiveStage["chatFeed"] = {
     {
       id: "40000000-0000-4000-8000-000000000022",
       authorName: "Casey Demo",
-      text: "We ran the inventory step last year and found almost twice the certificates we expected, most of them in internal…",
+      text: "We ran the inventory step last year and found almost twice the certificates we expected, most of them in internal services nobody had listed anywhere. The scan took three weeks, and keeping the list current turned out to be the harder part of the whole exercise.",
     },
     { id: "40000000-0000-4000-8000-000000000023", authorName: "Riley Sample", text: "Same here." },
     {
@@ -422,7 +422,7 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "onscreen-chat-long",
     title: "Chat with long messages",
-    note: "Each message shows whole, up to the broadcast's 140-character cut; when they no longer fit, the oldest fade off the top.",
+    note: "Each message shows up to three lines and is clamped at the end of a line; when they no longer fit, the oldest fade off the top.",
     render: () => <ProjectorScreen state={roomWith({ chatFeed: CHAT_MIXED })} />,
   },
   {

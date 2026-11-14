@@ -111,9 +111,10 @@
     background: color-mix(in srgb, var(--pk-pqc-on-field) 18%, transparent);
   }
   /*
-   * Chat: each message whole, as the room cut it for the broadcast. The list
-   * fills the board from the bottom, newest last; when the messages outgrow
-   * it, the oldest slide off the top under a fade, as in the chat itself.
+   * Chat: each message up to three lines, clamped at the end of a line so a
+   * cut never strands a word. The list fills the board from the bottom,
+   * newest last; when the messages outgrow it, the oldest slide off the top
+   * under a fade, as in the chat itself.
    */
   .pk-live-lists__items[data-list="chat"] {
     --text-type: 38px;
@@ -137,10 +138,9 @@
     gap: 6px;
   }
   .pk-live-lists__items[data-list="chat"] .pk-live-lists__text {
-    display: block;
     font-weight: 500;
-    -webkit-line-clamp: none;
-    line-clamp: none;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
   }
   .pk-live-lists__items[data-list="chat"] .pk-live-lists__byline {
     color: var(--pk-pqc-on-field);
