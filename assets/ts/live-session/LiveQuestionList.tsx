@@ -84,7 +84,6 @@ export function LiveQuestionList({
   actions,
   thread,
   compact = false,
-  votesInline = false,
   photos = false,
   credits = [],
 }: {
@@ -92,7 +91,6 @@ export function LiveQuestionList({
   /** The session's credits, which name the person a question is for. */
   credits?: readonly LiveCredit[];
   compact?: boolean;
-  votesInline?: boolean;
   /** Shows the asker's photo beside their name, when they asked by name and have one. */
   photos?: boolean;
   emptyText: string;
@@ -109,19 +107,17 @@ export function LiveQuestionList({
     <ol class="pk-live-questions__list">
       {questions.map((question) => (
         <li key={question.id} class="pk-live-question">
-          {!votesInline ? (
-            <button
-              type="button"
-              class="pk-live-question__vote"
-              aria-pressed={question.votedByMe}
-              aria-label={`${question.votedByMe ? "Remove your vote" : "Vote"}: ${formatNumber(question.votes)} ${question.votes === 1 ? "vote" : "votes"}`}
-              disabled={!onVote || question.status !== "approved"}
-              onClick={() => onVote?.(question)}
-            >
-              <span aria-hidden="true">▲</span>
-              <span>{formatNumber(question.votes)}</span>
-            </button>
-          ) : null}
+          <button
+            type="button"
+            class="pk-live-question__vote"
+            aria-pressed={question.votedByMe}
+            aria-label={`${question.votedByMe ? "Remove your vote" : "Vote"}: ${formatNumber(question.votes)} ${question.votes === 1 ? "vote" : "votes"}`}
+            disabled={!onVote || question.status !== "approved"}
+            onClick={() => onVote?.(question)}
+          >
+            <span aria-hidden="true">▲</span>
+            <span>{formatNumber(question.votes)}</span>
+          </button>
 
           <div class="pk-live-question__body">
             <p class={compact ? "pk-live-question__excerpt" : undefined}>{question.text}</p>
@@ -143,7 +139,6 @@ export function LiveQuestionList({
                 roles={question.authorRoles}
               />
               {addressee(question) ? <span>For {addressee(question)}</span> : null}
-              {votesInline ? <span>{formatNumber(question.votes)} votes</span> : null}
               {question.prepared ? <span>Prepared</span> : null}
               {question.anonymous && question.authorName ? <span>Anonymous to attendees</span> : null}
               {question.withdrawn ? (

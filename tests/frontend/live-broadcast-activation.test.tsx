@@ -129,9 +129,7 @@ it("warns that the agenda moved on, offers to go there, and never switches by it
 it("moderates a question without changing the active program", async () => {
   if (state) state.questions = [liveQuestion({ status: "pending" })];
   await mount();
-  const approve = Array.from(host.querySelectorAll("button")).find(
-    (button) => button.textContent?.trim() === "Approve",
-  )!;
+  const approve = host.querySelector<HTMLButtonElement>('button[aria-label="Approve"]')!;
   await act(() => approve.click());
   expect(mocks.select).not.toHaveBeenCalled();
   expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({ type: "question.moderate" }));

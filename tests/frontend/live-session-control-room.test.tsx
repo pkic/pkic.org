@@ -197,9 +197,9 @@ describe("live control room panels", () => {
     const pending = liveQuestion({ status: "pending", votes: 0, anonymous: true, authorName: "Ada Attendee" });
     const { host, live } = mountDesk(liveSnapshot({ viewer: OPERATOR, questions: [pending] }));
     const questions = panel(host, "Questions");
-    expect(questions.textContent).toContain("Awaiting moderation");
+    expect(questions.textContent).toContain("Pending");
     expect(questions.textContent).toContain("1 open");
-    void act(() => button(questions, "Approve").click());
+    void act(() => labeled(questions, "Approve").click());
     void act(() =>
       live.latest().deliver({
         type: "question.changed",
@@ -207,7 +207,7 @@ describe("live control room panels", () => {
       }),
     );
     void act(() => labeled(questions, "Show question on air").click());
-    void act(() => button(questions, "Answered").click());
+    void act(() => labeled(questions, "Mark answered").click());
     expect(commands(live)).toEqual([
       { type: "question.moderate", questionId: LIVE_QUESTION, expectedRevision: 0, status: "approved" },
       { type: "stage.question", questionId: LIVE_QUESTION },
@@ -243,7 +243,7 @@ describe("live control room panels", () => {
     );
     expect(questions.textContent).toContain("0 open · 1 prepared");
     expect(questions.textContent).toContain("For Sam Speaker");
-    void act(() => button(questions, "Release now").click());
+    void act(() => labeled(questions, "Release now").click());
     expect(commands(live)).toEqual([
       { type: "question.prepare", preparedId: null, text: "Where do we start?", addressedTo: "user:speaker" },
       { type: "question.prepared.release", preparedId: "0123456789abcdef0123456789abcdef" },
@@ -287,9 +287,9 @@ describe("live control room panels", () => {
       }),
     );
     const questions = panel(host, "Questions");
-    const pictured = [...questions.querySelectorAll<HTMLImageElement>(".pk-live-question img")];
+    const pictured = [...questions.querySelectorAll<HTMLImageElement>(".pk-studio-row img")];
     expect(pictured).toHaveLength(1);
-    expect(pictured[0]!.closest(".pk-live-question")?.textContent).toContain("Bea Attendee");
+    expect(pictured[0]!.closest(".pk-studio-row")?.textContent).toContain("Bea Attendee");
   });
 
   it("keeps a message flashing until an operator stops it from the on-stage footer", () => {

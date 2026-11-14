@@ -17,6 +17,7 @@ import { LiveLayerTargets } from "./LiveLayerTargets";
 import { LivePollDialog, livePollWritten } from "./LivePollDialog";
 import { LivePollEditor } from "./LivePollEditor";
 import { LivePollStatusBadge } from "./LivePollStatusBadge";
+import { StudioItemRow } from "./studio/StudioItemRow";
 import type { LiveTargets } from "./live-output-targets";
 import { takeLiveStage } from "./live-stage-preview";
 import "./LivePollsPanel.css";
@@ -81,24 +82,20 @@ function LivePollRow({
   const answers = poll.results?.totalAnswers ?? 0;
   const top = leading(poll);
   return (
-    <li class="pk-live-polls__row">
-      <button
-        type="button"
-        class="pk-live-polls__open"
-        title={`${poll.field.label}: results, edit and settings`}
-        onClick={onOpen}
-      >
-        <span class="pk-live-polls__question">{poll.field.label}</span>
-        <span class="pk-live-polls__summary">
+    <StudioItemRow
+      text={poll.field.label}
+      open={{ title: `${poll.field.label}: results, edit and settings`, onOpen }}
+      summary={
+        <>
           <LivePollStatusBadge status={poll.status} />
-          <span class="pk-live-polls__count">
+          <span>
             {formatNumber(answers)} {answers === 1 ? "answer" : "answers"}
             {top ? ` · ${top}` : ""}
           </span>
-        </span>
-      </button>
-      <span class="pk-live-polls__outputs">
-        {poll.status === "draft" ? (
+        </>
+      }
+      actions={
+        poll.status === "draft" ? (
           <Button disabled={disabled} onClick={() => send({ type: "poll.status", pollId: poll.id, status: "open" })}>
             Open voting
           </Button>
@@ -108,14 +105,16 @@ function LivePollRow({
             subject="poll results"
             layer={{ kind: "poll", id: poll.id, presentation }}
           />
-        )}
-      </span>
-      <Menu
-        label={`Poll actions, ${poll.field.label}`}
-        items={disabled ? [] : rowMenu(poll, send, onOpen)}
-        align="end"
-      />
-    </li>
+        )
+      }
+      menu={
+        <Menu
+          label={`Poll actions, ${poll.field.label}`}
+          items={disabled ? [] : rowMenu(poll, send, onOpen)}
+          align="end"
+        />
+      }
+    />
   );
 }
 
@@ -159,7 +158,7 @@ export function LivePollsPanel({ targets, send }: { targets: LiveTargets; send: 
   return (
     <div class="pk-live-polls">
       {state.polls.length ? (
-        <ol class="pk-live-polls__list">
+        <ol class="pk-studio-rows">
           {state.polls.map((poll) => (
             <LivePollRow
               key={poll.id}

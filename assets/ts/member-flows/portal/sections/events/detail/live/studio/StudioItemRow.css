@@ -1,0 +1,89 @@
+/* A studio list's compact rows: text and summary, then the actions and the menu, on one line where they fit. */
+@layer components {
+  .pk-studio-rows {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-block-start: 1px solid var(--pk-line-soft);
+    container-type: inline-size;
+  }
+  .pk-studio-row {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    min-block-size: 3rem;
+    padding-inline-end: var(--pk-1);
+    border-block-end: 1px solid var(--pk-line-soft);
+  }
+  .pk-studio-row__open {
+    display: flex;
+    flex: 1 1 10rem;
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 0;
+    padding: var(--pk-1) var(--pk-2);
+    border: 0;
+    border-radius: var(--pk-radius-sm);
+    background: none;
+    color: var(--pk-ink);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+  .pk-studio-row__open:hover {
+    background: var(--pk-surface-sunk);
+  }
+  .pk-studio-row__text {
+    display: -webkit-box;
+    min-inline-size: 0;
+    overflow: hidden;
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+  .pk-studio-row__summary {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .pk-studio-row__summary > * {
+    flex: none;
+  }
+  .pk-studio-row__summary > :last-child {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pk-studio-row__summary .pk-avatar {
+    --pk-avatar-size: 1rem;
+  }
+  .pk-studio-row__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--pk-1);
+  }
+
+  /* A narrow panel wraps actions that do not fit beside the text onto a line under it. */
+  @container (max-width: 24rem) {
+    .pk-studio-row {
+      flex-wrap: wrap;
+      padding-block-end: var(--pk-1);
+    }
+    .pk-studio-row__actions {
+      margin-inline-start: var(--pk-2);
+    }
+  }
+}
