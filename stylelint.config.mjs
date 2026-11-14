@@ -31,6 +31,7 @@ export default {
       // frames (scaled as a whole by their layout box), and printed pages.
       files: [
         "assets/ts/live-session/Live*Overlay.css",
+        "assets/ts/live-session/LiveBoard.css",
         "assets/ts/live-session/LiveLowerThird.css",
         "assets/ts/live-session/LiveStageDisplay.css",
         "assets/ts/live-session/LiveGraphicTheme.css",

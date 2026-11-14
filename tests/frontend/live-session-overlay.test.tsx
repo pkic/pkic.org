@@ -125,14 +125,16 @@ describe("broadcast overlays", () => {
     expect(host.querySelector(".pk-live-overlay__question-text")?.textContent).toBe("What about hybrid certificates?");
     // Sized by its length, as on the stage display, inside a card of one fixed size.
     expect(host.querySelector<HTMLElement>(".pk-live-overlay__question-text")?.dataset.fit).toBe("regular");
-    expect(host.querySelector(".pk-live-overlay__question-asker")?.textContent).toBe("Audience question");
+    // Anonymous: the eyebrow says whose question it is, and no byline repeats it.
+    expect(host.querySelector(".pk-live-board__eyebrow")?.textContent).toBe("Audience question");
+    expect(host.querySelector(".pk-live-overlay__question-asker")).toBeNull();
     expect(host.textContent).not.toContain("Sam Speaker");
   });
 
-  it("shows the asker's photo, or their initials, in place of the emblem when they asked by name", () => {
+  it("shows the asker's photo, or their initials, beside their name when they asked by name", () => {
     const { host, live } = mountOverlay("program", "question-only", [savedLayout("question-only", ["question"])]);
-    expect(host.querySelector(".pk-live-overlay__asker")).toBeNull();
-    expect(host.querySelector(".pk-live-overlay__card .pk-live-overlay__emblem")).not.toBeNull();
+    expect(host.querySelector(".pk-live-question__asker")).toBeNull();
+    expect(host.querySelector(".pk-live-board__head .pk-live-overlay__emblem")).not.toBeNull();
     const ask = (authorPhotoUrl: string | null) =>
       void act(() =>
         live.latest().deliver({
@@ -141,10 +143,10 @@ describe("broadcast overlays", () => {
         }),
       );
     ask(null);
-    expect(host.querySelector(".pk-live-overlay__asker .pk-avatar__initials")?.textContent).toBe("BA");
+    expect(host.querySelector(".pk-live-question__asker .pk-avatar__initials")?.textContent).toBe("BA");
     const photo = "/api/v1/users/u1/headshots/portrait.jpg";
     ask(photo);
-    expect(host.querySelector(".pk-live-overlay__asker img")?.getAttribute("srcset")).toContain(photo);
+    expect(host.querySelector(".pk-live-question__asker img")?.getAttribute("srcset")).toContain(photo);
     expect(host.querySelector(".pk-live-overlay__question-asker")?.textContent).toBe("Bea Attendee");
   });
 

@@ -7,6 +7,10 @@
     --pk-live-question-type-longer: 44px;
     --pk-live-question-type-longest: 36px;
     --pk-live-question-byline-type: 32px;
+    --pk-live-board-eyebrow-type: 28px;
+    --pk-live-board-headline-type: 64px;
+    --pk-live-board-headline-type-compact: 52px;
+    --pk-live-board-body-type: 34px;
     --pk-live-control-scrim: rgba(0, 0, 0, 0.6);
     --pk-dur-timer-warning: 1s;
     --pk-pqc-ink: #0b0d0c;

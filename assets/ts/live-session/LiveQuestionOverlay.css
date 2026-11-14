@@ -1,0 +1,76 @@
+/*
+ * The audience question on the conference board. The text steps down with its
+ * length, from the stage display's fit, and is clamped to the lines its size
+ * allows, so a long question never pushes past the board.
+ */
+@layer components {
+  .pk-live-question__body {
+    display: grid;
+    align-content: start;
+    gap: 40px;
+    min-block-size: 0;
+    margin-block-start: 20px;
+    padding-inline-start: 44px;
+    border-inline-start: 12px solid transparent;
+    border-image: linear-gradient(180deg, var(--pk-pqc-green), var(--pk-pqc-blue) 50%, var(--pk-pqc-orange)) 1;
+  }
+  .pk-live-question .pk-live-overlay__question-text {
+    --question-lines: 5;
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    color: var(--pk-pqc-on-field);
+    font-size: calc(var(--pk-live-question-type) * 1.1);
+    font-weight: 700;
+    line-height: 1.14;
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--question-lines);
+    line-clamp: var(--question-lines);
+  }
+  .pk-live-question .pk-live-overlay__question-text[data-fit="long"] {
+    --question-lines: 6;
+    font-size: calc(var(--pk-live-question-type-long) * 1.1);
+  }
+  .pk-live-question .pk-live-overlay__question-text[data-fit="longer"] {
+    --question-lines: 7;
+    font-size: calc(var(--pk-live-question-type-longer) * 1.1);
+  }
+  .pk-live-question .pk-live-overlay__question-text[data-fit="longest"] {
+    --question-lines: 8;
+    font-size: calc(var(--pk-live-question-type-longest) * 1.1);
+  }
+  /* A thin strip centers the question in the band and holds fewer lines at each size. */
+  .pk-live-board[data-shape="strip"] .pk-live-question__body {
+    margin-block: auto;
+  }
+  .pk-live-board[data-shape="strip"] .pk-live-overlay__question-text {
+    --question-lines: 3;
+  }
+  .pk-live-board[data-shape="strip"] .pk-live-overlay__question-text[data-fit="long"] {
+    --question-lines: 4;
+  }
+  .pk-live-board[data-shape="strip"] .pk-live-overlay__question-text[data-fit="longer"] {
+    --question-lines: 5;
+  }
+  .pk-live-board[data-shape="strip"] .pk-live-overlay__question-text[data-fit="longest"] {
+    --question-lines: 6;
+  }
+  .pk-live-question .pk-live-overlay__question-asker {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    margin: 0;
+    color: var(--pk-pqc-on-field-muted);
+    font-size: var(--pk-live-question-byline-type);
+    font-weight: 500;
+  }
+  .pk-live-question .pk-live-question__asker {
+    --pk-avatar-size: 80px;
+    flex: none;
+    box-shadow:
+      0 0 0 4px var(--pk-pqc-forest),
+      0 0 0 7px var(--pk-pqc-blue);
+  }
+}

@@ -3,21 +3,19 @@ import { LiveTickerOverlay } from "./LiveTickerOverlay";
 import "../ui/Spinner.css";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { LIVE_REACTIONS, type LiveReactionId } from "../../shared/live-session-policy";
-import type { LivePoll } from "../../shared/schemas/live-session-poll";
-import type { LiveOverlayView, LiveStage, LiveTimerGraphic } from "../../shared/schemas/live-session-room";
+import type { LiveOverlayView, LiveTimerGraphic } from "../../shared/schemas/live-session-room";
 import type { ComponentChildren } from "preact";
 import { liveTimerLayout } from "../../shared/live-timer-policy";
 import type { LiveRoomState } from "./live-room-state";
-import { FormFieldStatChart } from "../components/forms/FormResponseStats";
 import { useLiveTimerGraphicReading } from "./useLiveCountdown";
 import { LiveTimerSounds } from "./useLiveTimerSounds";
 import "./LiveOverlay.css";
-import { liveQuestionFit } from "../../shared/live-stage-display";
 import { liveStageDisplayGraphics } from "../../shared/live-stage-display-plan";
-import { Avatar } from "../ui/Avatar";
 import { LiveOverlayFrame } from "./LiveOverlayFrame";
 import { LiveOverlayLayer } from "./LiveOverlayLayer";
 import { LivePanelistsOverlay } from "./LivePanelistsOverlay";
+import { LivePollOverlay } from "./LivePollOverlay";
+import { LiveQuestionOverlay } from "./LiveQuestionOverlay";
 import { LiveCheckInOverlay } from "./LiveCheckInOverlay";
 import { LiveChatFeedOverlay, LiveTopQuestionsOverlay } from "./LiveAudienceListsOverlay";
 import type {
@@ -33,62 +31,6 @@ import { LiveLowerThird } from "./LiveLowerThird";
 import { LiveStageDisplay, LiveStageDisplayBanner } from "./LiveStageDisplay";
 import { isLiveAuxOutput, liveOutputProjection, liveOutputView } from "./live-output-projection";
 import "../../design/tokens.event.generated.css";
-
-function QuestionOverlay({ stage }: { stage: LiveStage }) {
-  const question = stage.question;
-  return (
-    <div class="pk-live-overlay__question" data-showing={question ? "" : undefined} data-overlay-shell>
-      {question ? (
-        <figure key={question.id} class="pk-live-overlay__card">
-          {question.authorName ? (
-            <Avatar
-              class="pk-live-overlay__asker"
-              name={question.authorName}
-              src={question.authorPhotoUrl ?? undefined}
-              sizes="120px"
-              decoding="async"
-            />
-          ) : (
-            <OverlayEmblem />
-          )}
-          <div>
-            <p class="pk-live-overlay__question-text" data-fit={liveQuestionFit(question.text)}>
-              {question.text}
-            </p>
-            <p class="pk-live-overlay__question-asker">{question.authorName ?? "Audience question"}</p>
-          </div>
-        </figure>
-      ) : null}
-    </div>
-  );
-}
-
-/** The poll on air with its live tallies, on the forms results chart; the bars grow as answers arrive. */
-function PollOverlay({ stage, polls }: { stage: LiveStage; polls: readonly LivePoll[] }) {
-  const poll = stage.poll ? polls.find((entry) => entry.id === stage.poll?.id) : undefined;
-  return (
-    <div class="pk-live-overlay__poll" data-overlay-shell>
-      {poll ? (
-        <figure key={poll.id} class="pk-live-overlay__card">
-          <OverlayEmblem />
-          <div class="pk-live-overlay__poll-body">
-            <p class="pk-live-overlay__poll-question">{poll.field.label}</p>
-            {poll.results ? (
-              <div class="pk-live-overlay__poll-results">
-                <FormFieldStatChart
-                  field={poll.field}
-                  stat={poll.results}
-                  visualization={stage.poll?.presentation.chart ?? "bar"}
-                  presentation
-                />
-              </div>
-            ) : null}
-          </div>
-        </figure>
-      ) : null}
-    </div>
-  );
-}
 
 /** A timer graphic: the timer it names, in its format, color and label. */
 function TimerOverlay({ graphic, state }: { graphic: LiveTimerGraphic; state: LiveRoomState }) {
@@ -166,8 +108,14 @@ function prefersReducedMotion(): boolean {
 const PROGRAM_LAYERS: readonly Layer[] = [
   {
     element: "panelists",
-    draw: (state) =>
-      state.stage.panelists ? <LivePanelistsOverlay session={state.session} panelists={state.stage.panelists} /> : null,
+    draw: (state, { placement }) =>
+      state.stage.panelists ? (
+        <LivePanelistsOverlay
+          session={state.session}
+          panelists={state.stage.panelists}
+          box={overlayBoxPixels(placement)}
+        />
+      ) : null,
   },
   {
     element: "schedule",
@@ -180,7 +128,11 @@ const PROGRAM_LAYERS: readonly Layer[] = [
     element: "checkIn",
     draw: (state) => (state.stage.checkIn ? <LiveCheckInOverlay checkIn={state.stage.checkIn} /> : null),
   },
-  { element: "question", draw: (state) => <QuestionOverlay stage={state.stage} /> },
+  {
+    element: "question",
+    draw: (state, { placement }) =>
+      state.stage.question ? <LiveQuestionOverlay stage={state.stage} box={overlayBoxPixels(placement)} /> : null,
+  },
   {
     element: "lowerThird",
     draw: (state, { animate }) => (
@@ -190,7 +142,13 @@ const PROGRAM_LAYERS: readonly Layer[] = [
       />
     ),
   },
-  { element: "poll", draw: (state) => <PollOverlay stage={state.stage} polls={state.polls} /> },
+  {
+    element: "poll",
+    draw: (state, { placement }) =>
+      state.stage.poll ? (
+        <LivePollOverlay stage={state.stage} polls={state.polls} box={overlayBoxPixels(placement)} />
+      ) : null,
+  },
   {
     element: "topQuestions",
     draw: (state) =>

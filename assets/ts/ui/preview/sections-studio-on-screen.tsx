@@ -174,10 +174,10 @@ function ProjectorScreen({ state, layout = null }: { state: LiveRoomState; layou
 }
 
 /** The livestream overlay over a stand-in for the camera, as the production software composes it. */
-function LivestreamOverlay({ state }: { state: LiveRoomState }) {
+function LivestreamOverlay({ state, elements }: { state: LiveRoomState; elements?: LiveOverlayLayoutElements }) {
   return (
     <div class="pk-preview__screen pk-preview__camera">
-      <LiveOverlayPresentation view="program" projection={state} broadcast />
+      <LiveOverlayPresentation view="program" projection={state} elements={elements} broadcast />
     </div>
   );
 }
@@ -196,6 +196,40 @@ function Reacting({ state, children }: { state: LiveRoomState; children: (state:
   ][sequence % 3]!;
   return children({ ...state, burst: { sequence, counts } });
 }
+
+/** A layout preset with only the named elements on. */
+function presetWith(
+  preset: keyof typeof LIVE_OVERLAY_PRESET_LAYOUTS,
+  shown: readonly (typeof LIVE_OVERLAY_ELEMENTS)[number][],
+): LiveOverlayLayoutElements {
+  const elements = LIVE_OVERLAY_PRESET_LAYOUTS[preset].elements;
+  return Object.fromEntries(
+    LIVE_OVERLAY_ELEMENTS.map((element) => [element, { ...elements[element], visible: shown.includes(element) }]),
+  ) as LiveOverlayLayoutElements;
+}
+
+/** The sample session with these speakers, the moderator last as the room lists them. */
+function sessionWith(count: number): LiveRoomState {
+  const [first, second, moderator] = ROOM.session.credits;
+  const extra = ["Avery Placeholder", "Jordan Sample", "Riley Example"].map((name, index) => ({
+    ...second!,
+    key: `sample:extra-${index}`,
+    name,
+    identity: { title: ["CISO", "Cryptography lead", "Standards editor"][index]!, organization: "Example Corp" },
+  }));
+  const speakers = [first!, second!, ...extra].slice(0, count - 1);
+  return {
+    ...ROOM,
+    session: { ...ROOM.session, credits: count === 2 ? [first!, second!] : [...speakers, moderator!] },
+  };
+}
+
+const NAMED_QUESTION = {
+  ...ROOM.stage.question!,
+  text: "Is hybrid signing worth the extra certificate size on constrained devices?",
+  authorName: "Bea Attendee",
+};
+const ON_POLL: Partial<LiveStage> = { poll: ROOM.stage.poll };
 
 const LIVE_PANEL: StudioPanel = { id: "live-1", type: "monitor", x: 0, y: 0, w: 6, h: 9, outputs: ["livestream"] };
 const MONITOR_SOURCES = {
@@ -373,6 +407,70 @@ export const studioOnScreenSections: PreviewSection[] = [
     title: "Panelists with a speaker's two identities",
     note: "A panelist with more than one identity rolls through them, as the lower third does.",
     render: () => <LivestreamOverlay state={roomWith({}, { panelists: { layout: "panel" } })} />,
+  },
+  {
+    id: "onscreen-panelists-two",
+    title: "Two speakers on the board",
+    note: "Two people sit large side by side; the same board fills the projector and the stream.",
+    render: () => (
+      <LivestreamOverlay
+        state={{ ...sessionWith(2), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
+        elements={presetWith("full-frame", ["panelists"])}
+      />
+    ),
+  },
+  {
+    id: "onscreen-panelists-six",
+    title: "A full panel of six, moderator set apart",
+    note: "Five speakers and the moderator in one row; the moderator sits last, after a rule.",
+    render: () => (
+      <LivestreamOverlay
+        state={{ ...sessionWith(6), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
+        elements={presetWith("full-frame", ["panelists"])}
+      />
+    ),
+  },
+  {
+    id: "onscreen-panelists-side-by-side",
+    title: "Panelists beside the camera",
+    note: "In the Side by side box the board turns tall and lists the people one under the other.",
+    render: () => (
+      <LivestreamOverlay
+        state={{ ...sessionWith(6), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
+        elements={presetWith("side-by-side", ["panelists", "lowerThird"])}
+      />
+    ),
+  },
+  {
+    id: "onscreen-question-poll-board",
+    title: "Question and poll on the board",
+    note: "The audience question and the live poll, each on its own board in the Full frame boxes.",
+    render: () => (
+      <LivestreamOverlay
+        state={roomWith({}, { question: NAMED_QUESTION, ...ON_POLL })}
+        elements={presetWith("full-frame", ["question", "poll"])}
+      />
+    ),
+  },
+  {
+    id: "onscreen-poll-side-by-side",
+    title: "Poll beside the camera",
+    note: "The same poll board, scaled into the Side by side column.",
+    render: () => <LivestreamOverlay state={roomWith({}, ON_POLL)} elements={presetWith("side-by-side", ["poll"])} />,
+  },
+  {
+    id: "onscreen-panel-question",
+    title: "A question over the panel",
+    note: "The Panel layout: the question above, the panelists across the lower half.",
+    render: () => (
+      <LivestreamOverlay
+        state={{
+          ...sessionWith(4),
+          stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" }, question: NAMED_QUESTION },
+        }}
+        elements={presetWith("panel", ["panelists", "question"])}
+      />
+    ),
   },
   {
     id: "studio-speakers-identities",

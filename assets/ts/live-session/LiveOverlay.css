@@ -2,7 +2,7 @@
  * Broadcast overlays: a 1920 × 1080 transparent browser source. The lower
  * third keeps the existing stream overlay's layout (emblem, white name bar,
  * translucent title bar) in the design system's type and the event kit's
- * colors; the question card follows the session details' header.
+ * colors; the panelists, question and poll draw on the conference board.
  */
 
 @layer components {
@@ -113,24 +113,7 @@
     fill: var(--pk-pqc-forest);
   }
 
-  /* Question on air: a card centered above the lower-third band. */
-  .pk-live-overlay__question {
-    position: absolute;
-    inset-inline: 160px;
-    inset-block-end: 96px;
-    display: flex;
-    justify-content: center;
-  }
-  .pk-live-overlay__card {
-    display: flex;
-    align-items: center;
-    gap: 40px;
-    max-inline-size: 1600px;
-    margin: 0;
-    padding: 40px 56px;
-  }
-  /* The surface every card on air shares: paper, the event stripe along the top, a lifted shadow, rising in. */
-  .pk-live-overlay__card,
+  /* The surface every list on air shares: paper, the event stripe along the top, a lifted shadow, rising in. */
   .pk-live-overlay__list {
     border-block-start: 10px solid transparent;
     border-image: var(--pk-pqc-stripe) 1;
@@ -138,121 +121,6 @@
     background: var(--pk-pqc-paper);
     box-shadow: var(--pk-shadow-3);
     animation: pk-live-overlay-rise var(--pk-dur-slow) var(--pk-ease) both;
-  }
-  .pk-live-overlay__card .pk-live-overlay__emblem {
-    inline-size: 96px;
-  }
-  /* The asker's photo, or their initials, where the emblem would be, when they asked by name. */
-  .pk-live-overlay__asker {
-    --pk-avatar-size: 120px;
-    flex: none;
-    box-shadow:
-      0 0 0 4px var(--pk-pqc-paper),
-      0 0 0 7px var(--pk-pqc-blue);
-  }
-  /*
-   * The question card is one fixed size, the default slot, in every view, so
-   * a layout box scales every question alike and it never moves or grows with
-   * its text. The text steps down with its length, from the stage display's
-   * fit, and never below 36px on the 1080p frame, where it is clamped.
-   */
-  .pk-live-overlay__question > .pk-live-overlay__card {
-    box-sizing: border-box;
-    align-items: start;
-    gap: 32px;
-    inline-size: 840px;
-    block-size: 568px;
-    max-inline-size: none;
-    padding: 32px;
-  }
-  .pk-live-overlay__question .pk-live-overlay__asker {
-    --pk-avatar-size: 96px;
-  }
-  .pk-live-overlay__question .pk-live-overlay__emblem {
-    inline-size: calc(96px * 360 / 314);
-  }
-  .pk-live-overlay__question-text {
-    --question-lines: 5;
-    display: -webkit-box;
-    margin: 0;
-    overflow: hidden;
-    font-size: var(--pk-live-question-type);
-    font-weight: 700;
-    line-height: 1.2;
-    text-align: start;
-    overflow-wrap: anywhere;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: var(--question-lines);
-    line-clamp: var(--question-lines);
-  }
-  .pk-live-overlay__question-text[data-fit="long"] {
-    --question-lines: 7;
-    font-size: var(--pk-live-question-type-long);
-  }
-  .pk-live-overlay__question-text[data-fit="longer"] {
-    --question-lines: 8;
-    font-size: var(--pk-live-question-type-longer);
-  }
-  .pk-live-overlay__question-text[data-fit="longest"] {
-    --question-lines: 10;
-    font-size: var(--pk-live-question-type-longest);
-  }
-  /* Paragraphs, not blockquote and figcaption: the site's own rules for those sit outside the layers and would win. */
-  .pk-live-overlay__question-asker {
-    margin: 16px 0 0;
-    color: var(--pk-pqc-ink-muted);
-    font-size: var(--pk-live-question-byline-type);
-    font-weight: 500;
-    text-align: start;
-  }
-
-  /* Poll results: the question card's frame around the forms results chart, scaled for the frame. */
-  .pk-live-overlay__poll {
-    position: absolute;
-    inset-inline: 160px;
-    inset-block-end: 96px;
-    display: flex;
-    justify-content: center;
-  }
-  .pk-live-overlay__poll .pk-live-overlay__card {
-    align-items: start;
-    min-inline-size: 1200px;
-  }
-  .pk-live-overlay__poll-body {
-    min-inline-size: 0;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    flex: 1;
-    gap: 24px;
-  }
-  .pk-live-overlay__poll-question {
-    margin: 0;
-    font-size: calc(var(--pk-text-xl) * 1.8);
-    font-weight: 700;
-    line-height: 1.2;
-    overflow-wrap: anywhere;
-  }
-  .pk-live-overlay__poll-results {
-    font-size: calc(var(--pk-text-lg) * 2);
-    font-weight: 600;
-    line-height: 1.25;
-  }
-  .pk-live-overlay__poll-results .pk-chart__bars {
-    gap: var(--pk-1);
-  }
-  .pk-live-overlay__poll-results .pk-chart__bar-label {
-    min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  /* The forms chart's presentation variant takes this size; the bars wear the event kit's blue. */
-  .pk-live-overlay__poll-results .pk-meter {
-    --tone: var(--pk-pqc-blue);
-    --tone-track: color-mix(in srgb, var(--pk-pqc-blue) 14%, transparent);
-  }
-  .pk-live-overlay__poll-results .pk-chart__bar-count {
-    color: var(--pk-pqc-ink-muted);
   }
 
   /* Preserve the original Hugo lower-third SVG's geometry and typographic hierarchy. */
@@ -334,37 +202,6 @@
     font-weight: 500;
     line-height: 1.25;
   }
-  .pk-live-overlay[data-view="program"] .pk-live-overlay__question,
-  .pk-live-overlay[data-view="program"] .pk-live-overlay__poll {
-    inset-block-start: 256px;
-    inset-block-end: auto;
-    inline-size: 840px;
-    --pk-live-overlay-scale: 1;
-  }
-  .pk-live-overlay[data-view="program"] .pk-live-overlay__question {
-    inset-inline-start: 96px;
-    inset-inline-end: auto;
-  }
-  .pk-live-overlay[data-view="program"] .pk-live-overlay__poll {
-    inset-inline-start: auto;
-    inset-inline-end: 96px;
-  }
-  .pk-live-overlay[data-view="program"] .pk-live-overlay__poll > .pk-live-overlay__card {
-    gap: 24px;
-    min-inline-size: 0;
-    max-inline-size: 100%;
-    padding: 24px;
-  }
-  .pk-live-overlay[data-view="program"] .pk-live-overlay__poll-question {
-    font-size: var(--pk-text-xl);
-  }
-  .pk-live-overlay[data-view="program"] .pk-live-overlay__poll-results {
-    font-size: var(--pk-text-md);
-  }
-  .pk-live-overlay[data-view="program"] .pk-live-overlay__poll .pk-live-overlay__emblem {
-    inline-size: calc(64px * 360 / 314);
-  }
-
   .pk-live-overlay__countdown-logo {
     inline-size: 168px;
     block-size: 168px;
@@ -533,7 +370,6 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .pk-live-overlay__card,
     .pk-live-overlay__list,
     .pk-live-overlay__reaction {
       animation: none;
