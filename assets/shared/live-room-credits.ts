@@ -87,6 +87,19 @@ export function liveCreditHasRole(credit: { roleLabel: string | null }): boolean
   return credit.roleLabel !== null;
 }
 
+type AddressableCredit = { key: string; name: string; moderator: boolean; roleLabel: string | null };
+
+/** Whom an attendee may address a question to: the session's speakers and its moderator, not its hosts. */
+export function liveQuestionAddressees<Credit extends AddressableCredit>(credits: readonly Credit[]): Credit[] {
+  return credits.filter((credit) => credit.moderator || !liveCreditHasRole(credit));
+}
+
+/** The name of the person a question is for, read from the session's credits; null when it is for everyone. */
+export function liveQuestionAddresseeName(credits: readonly AddressableCredit[], key: string | null): string | null {
+  if (key === null) return null;
+  return liveQuestionAddressees(credits).find((credit) => credit.key === key)?.name ?? null;
+}
+
 type DisplayRoleShift = NonNullable<AgendaSnapshot["displayRoles"]>[number];
 
 /** A stable key for a host: the same duty and name give the same key on every admission. */

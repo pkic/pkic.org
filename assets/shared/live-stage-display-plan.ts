@@ -1,4 +1,5 @@
 import { format24HourClockInZone } from "./format-date";
+import { liveQuestionAddresseeName } from "./live-room-credits";
 import { liveSpeakerMessageFit, type LiveSpeakerMessageFit } from "./live-room-outputs";
 import {
   liveStageDisplayQuestions,
@@ -113,6 +114,8 @@ export type LiveStageContent =
       kind: "question";
       /** The question being answered; null when only the next one is lined up. */
       question: LiveStageQuestion | null;
+      /** Whom the question being answered is for, when its asker named someone. */
+      addressee: string | null;
       onAir: boolean;
       next: { question: LiveStageQuestion; votes: number | null } | null;
     }
@@ -175,11 +178,18 @@ function content(input: LiveStageDisplayInput): LiveStageContent | null {
   const { own, program, polls } = input;
   const { current: question, next: lined } = liveStageDisplayQuestions(own, program, input.next);
   const next = lined ? { question: lined, votes: input.nextVotes } : null;
-  if (question) return { kind: "question", question, onAir: program.question?.id === question.id, next };
+  if (question)
+    return {
+      kind: "question",
+      question,
+      addressee: liveQuestionAddresseeName(input.session.credits, question.addressedTo),
+      onAir: program.question?.id === question.id,
+      next,
+    };
   const pollId = own.poll?.id ?? program.poll?.id;
   const poll = pollId ? polls.find((entry) => entry.id === pollId) : undefined;
   if (poll) return { kind: "poll", poll, onAir: program.poll?.id === poll.id };
-  return next ? { kind: "question", question: null, onAir: false, next } : null;
+  return next ? { kind: "question", question: null, addressee: null, onAir: false, next } : null;
 }
 
 function main(input: LiveStageDisplayInput, items: readonly LiveTimerGraphicText[]): LiveStageMain {

@@ -4,7 +4,6 @@ import type { ClockZone } from "../../../../../../../shared/event-clock";
 import { liveCompositionInput } from "../../../../../../../shared/live-room-preview";
 import type { AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
 import { EMPTY_LIVE_STAGE, type LiveRoomClientMessage } from "../../../../../../../shared/schemas/live-session-room";
-import { formatNumber } from "../../../../../../../shared/format-number";
 import { useBoundaryClock } from "../../../../../../hooks/useBoundaryClock";
 import { liveRoomOpenFailure } from "../../../../../../live-session/live-room-copy";
 import type { LiveRoomState } from "../../../../../../live-session/live-room-state";
@@ -14,7 +13,7 @@ import { Alert } from "../../../../../../ui/Alert";
 import { LiveChatPanel } from "./LiveChatPanel";
 
 import { LivePollsCreateAction, LivePollsPanel } from "./LivePollsPanel";
-import { LiveQuestionsPanel, openLiveQuestions } from "./LiveQuestionsPanel";
+import { LivePreparedQuestionTimes, LiveQuestionsHeader, LiveQuestionsPanel } from "./LiveQuestionsPanel";
 import { LiveLowerThirdSettings } from "./LiveLowerThirdSettings";
 import { LiveAddPersonAction, LiveSpeakerCards } from "./LiveSpeakerCards";
 import type { LiveTargets } from "./live-output-targets";
@@ -120,6 +119,7 @@ export function LiveSessionDesk({
   const fullscreen = useStudioFullscreen();
   const [broadcasting, setBroadcasting] = useState(false);
   const [lowerThirdSettings, setLowerThirdSettings] = useState(false);
+  const [releaseTimes, setReleaseTimes] = useState(false);
   const runningBroadcast = useRef(false);
   const state = room.state;
   // Where the others were is unknown after a reconnect; they appear again as they move.
@@ -266,10 +266,21 @@ export function LiveSessionDesk({
       case "questions":
         return {
           title,
-          actions: (
-            <span class="pk-studio-panel__meta">{formatNumber(openLiveQuestions(state.questions).length)} open</span>
+          actions: <LiveQuestionsHeader targets={targets} send={sendProgram} />,
+          menu: [{ id: "release-times", label: "Release times", disabled, onSelect: () => setReleaseTimes(true) }],
+          body: (
+            <>
+              <LiveQuestionsPanel targets={targets} clock={clock ?? state.session.timeZone} send={sendProgram} />
+              {releaseTimes ? (
+                <LivePreparedQuestionTimes
+                  targets={targets}
+                  clock={clock ?? state.session.timeZone}
+                  send={sendProgram}
+                  onClose={() => setReleaseTimes(false)}
+                />
+              ) : null}
+            </>
           ),
-          body: <LiveQuestionsPanel targets={targets} send={sendProgram} />,
         };
       case "time":
         return {

@@ -134,7 +134,7 @@ describe("broadcast overlays", () => {
 
   it("shows the asker's photo, or their initials, beside their name when they asked by name", () => {
     const { host, live } = mountOverlay("program", "question-only", [savedLayout("question-only", ["question"])]);
-    expect(host.querySelector(".pk-live-question__asker")).toBeNull();
+    expect(host.querySelector(".pk-live-board-question__asker")).toBeNull();
     expect(host.querySelector(".pk-live-board__head .pk-live-board__logo")).not.toBeNull();
     const ask = (authorPhotoUrl: string | null) =>
       void act(() =>
@@ -144,10 +144,10 @@ describe("broadcast overlays", () => {
         }),
       );
     ask(null);
-    expect(host.querySelector(".pk-live-question__asker .pk-avatar__initials")?.textContent).toBe("BA");
+    expect(host.querySelector(".pk-live-board-question__asker .pk-avatar__initials")?.textContent).toBe("BA");
     const photo = "/api/v1/users/u1/headshots/portrait.jpg";
     ask(photo);
-    expect(host.querySelector(".pk-live-question__asker img")?.getAttribute("srcset")).toContain(photo);
+    expect(host.querySelector(".pk-live-board-question__asker img")?.getAttribute("srcset")).toContain(photo);
     expect(host.querySelector(".pk-live-overlay__question-asker")?.textContent).toBe("Bea Attendee");
   });
 

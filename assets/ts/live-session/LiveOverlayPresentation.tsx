@@ -156,7 +156,7 @@ const PROGRAM_LAYERS: readonly Layer[] = [
     element: "question",
     draw: (state, { placement, panel }) =>
       state.stage.question && !panel ? (
-        <LiveQuestionOverlay stage={state.stage} box={overlayBoxPixels(placement)} />
+        <LiveQuestionOverlay stage={state.stage} credits={state.session.credits} box={overlayBoxPixels(placement)} />
       ) : null,
   },
   {

@@ -64,9 +64,12 @@ export function LiveStageContent({ content }: { content: Content }) {
     <div class="pk-live-stage-display__questions">
       {question ? (
         <>
-          {content.onAir ? (
+          {content.onAir || content.addressee ? (
             <p class="pk-live-stage-display__line">
-              <StageTag tone="live">On air</StageTag>
+              {content.onAir ? <StageTag tone="live">On air</StageTag> : null}
+              {content.addressee ? (
+                <span class="pk-live-stage-display__poll-count">For {content.addressee}</span>
+              ) : null}
             </p>
           ) : null}
           <p class="pk-live-stage-display__question-text">{question.text}</p>

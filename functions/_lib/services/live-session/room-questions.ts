@@ -9,7 +9,7 @@ import type {
   LiveRoomServerMessage,
   LiveRoomSession,
 } from "../../../../assets/shared/schemas/live-session-room";
-import { sessionLiveCreditUserId } from "../../../../assets/shared/live-room-credits";
+import { liveQuestionAddressees, sessionLiveCreditUserId } from "../../../../assets/shared/live-room-credits";
 import { deterministicUuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import type { LiveRoomParticipant } from "./room-admission";
@@ -50,8 +50,9 @@ export const LIVE_QUESTION_REFUSALS = {
 const REFUSALS = LIVE_QUESTION_REFUSALS;
 
 /**
- * The person a question is for, read from the session's current credits,
- * which every viewer holds and names them from. Null asks everyone; a key
+ * The person a question is for: one of the session's speakers or its
+ * moderator, read from its current credits, which every viewer holds and
+ * names them from. Null asks everyone; a key
  * the session no longer credits is refused.
  */
 export function resolveLiveQuestionAddressee(
@@ -59,7 +60,7 @@ export function resolveLiveQuestionAddressee(
   creditKey: string | null,
 ): LiveQuestionAddressee | null | LiveRefusal {
   if (creditKey === null) return null;
-  if (!session.credits.some((credit) => credit.key === creditKey)) return REFUSALS.addressee;
+  if (!liveQuestionAddressees(session.credits).some((credit) => credit.key === creditKey)) return REFUSALS.addressee;
   return { creditKey, userId: sessionLiveCreditUserId(creditKey) };
 }
 

@@ -168,6 +168,26 @@ describe("stage display plan", () => {
     expect(roomless.footer).toMatchObject({ marker: "next", title: "Crypto agility in HSMs" });
   });
 
+  it("names whom the question being answered is for", () => {
+    const credit = {
+      key: "user:sam",
+      name: "Sam Speaker",
+      photoUrl: null,
+      moderator: false,
+      roleLabel: null,
+      identity: { title: "Architect", organization: "Example" },
+      additionalIdentities: [],
+    };
+    const base = input(-10 * MINUTE, 20 * MINUTE, {
+      program: { ...EMPTY_LIVE_STAGE, question: { ...question, addressedTo: "user:sam" } },
+    });
+    const plan = liveStageDisplayPlan({
+      ...base,
+      session: { ...base.session, credits: [credit] },
+    });
+    expect(plan.main).toMatchObject({ content: { kind: "question", addressee: "Sam Speaker" } });
+  });
+
   it("sets a question beside the small timer, tagged on air, with the next one and its votes", () => {
     const lined = { ...question, id: "q2", text: "And HSMs?" };
     const plan = liveStageDisplayPlan(

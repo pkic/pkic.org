@@ -215,6 +215,41 @@ describe("live control room panels", () => {
     ]);
   });
 
+  it("prepares a question for a speaker, lists it under the open ones and releases it on demand", () => {
+    const releaseAt = new Date(Date.now() + 15 * 60_000).toISOString();
+    const prepared = {
+      id: "0123456789abcdef0123456789abcdef",
+      text: "Where do we start?",
+      addressedTo: "user:speaker",
+      releaseAt,
+      revision: 0,
+    };
+    const { host, live } = mountDesk();
+    const questions = panel(host, "Questions");
+    void act(() => questions.querySelector<HTMLButtonElement>("button[aria-label='Prepare question']")!.click());
+    type(host.querySelector<HTMLTextAreaElement>("textarea[name=text]")!, "Where do we start?");
+    const addressee = host.querySelector<HTMLSelectElement>("select[name=addressedTo]")!;
+    void act(() => {
+      addressee.value = "user:speaker";
+      addressee.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    void act(() => button(host, "Prepare question").click());
+    void act(() =>
+      live.latest().deliver({
+        type: "question.prepared.changed",
+        preparedQuestions: [prepared],
+        window: { from: new Date().toISOString(), until: releaseAt },
+      }),
+    );
+    expect(questions.textContent).toContain("0 open · 1 prepared");
+    expect(questions.textContent).toContain("For Sam Speaker");
+    void act(() => button(questions, "Release now").click());
+    expect(commands(live)).toEqual([
+      { type: "question.prepare", preparedId: null, text: "Where do we start?", addressedTo: "user:speaker" },
+      { type: "question.prepared.release", preparedId: "0123456789abcdef0123456789abcdef" },
+    ]);
+  });
+
   it("edits a question's shown text and keeps the author's words in view", () => {
     const rewritten = liveQuestion({
       text: "What about hybrid certificates?",

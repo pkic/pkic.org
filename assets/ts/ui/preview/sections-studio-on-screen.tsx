@@ -257,6 +257,7 @@ const NAMED_QUESTION = {
   ...ROOM.stage.question!,
   text: "Is hybrid signing worth the extra certificate size on constrained devices?",
   authorName: "Bea Attendee",
+  addressedTo: "sample:panelist",
 };
 const ON_POLL: Partial<LiveStage> = { poll: ROOM.stage.poll };
 

@@ -2,7 +2,7 @@ import type { OverlayRect } from "../../shared/live-overlay-geometry";
 import type { LiveRoomSession, LiveStage } from "../../shared/schemas/live-session-room";
 import { LiveBoard, liveBoardSize } from "./LiveBoard";
 import { LivePanelistsCredits } from "./LivePanelistsOverlay";
-import { LiveQuestionBody } from "./LiveQuestionOverlay";
+import { liveQuestionEyebrow, LiveQuestionBody } from "./LiveQuestionOverlay";
 import "./LivePanelQuestionOverlay.css";
 
 /**
@@ -25,9 +25,9 @@ export function LivePanelQuestionOverlay({
   return (
     <LiveBoard
       box={box}
-      class="pk-live-question pk-live-panelists pk-live-panel"
+      class="pk-live-board-question pk-live-panelists pk-live-panel"
       label="Audience question to the panel"
-      eyebrow="Audience question"
+      eyebrow={liveQuestionEyebrow(question, session.credits)}
     >
       <LiveQuestionBody key={question.id} question={question} />
       <div class="pk-live-panel__people">

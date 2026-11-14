@@ -25,6 +25,7 @@ import { eventScreenSections } from "./sections-event-screens";
 import { eventScreenStaffSections } from "./sections-event-screens-staff";
 import { eventScreenMonitorSections } from "./sections-event-screens-monitor";
 import { studioOnScreenSections } from "./sections-studio-on-screen";
+import { studioQuestionSections } from "./sections-studio-questions";
 import { studioTimerSections } from "./sections-studio-timers";
 import { eventScreenBrowserSections } from "./sections-event-screens-browser";
 import { stageDisplaySections } from "./sections-stage-display";
@@ -50,6 +51,7 @@ function main(): void {
     ...eventScreenStaffSections,
     ...eventScreenMonitorSections,
     ...studioOnScreenSections,
+    ...studioQuestionSections,
     ...studioTimerSections,
     ...eventScreenBrowserSections,
     ...stageDisplaySections,

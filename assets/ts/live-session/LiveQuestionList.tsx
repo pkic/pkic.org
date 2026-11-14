@@ -1,7 +1,8 @@
 import type { ComponentChildren } from "preact";
 import { liveQuestionTransitions, type LiveQuestionStatus, type LiveRoomRole } from "../../shared/live-session-policy";
 import { formatNumber } from "../../shared/format-number";
-import type { LiveQuestion } from "../../shared/schemas/live-session-room";
+import { liveQuestionAddresseeName } from "../../shared/live-room-credits";
+import type { LiveCredit, LiveQuestion } from "../../shared/schemas/live-session-room";
 import { Menu, type MenuItem } from "../ui/Menu";
 import { Badge, type BadgeTone } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -85,8 +86,11 @@ export function LiveQuestionList({
   compact = false,
   votesInline = false,
   photos = false,
+  credits = [],
 }: {
   questions: readonly LiveQuestion[];
+  /** The session's credits, which name the person a question is for. */
+  credits?: readonly LiveCredit[];
   compact?: boolean;
   votesInline?: boolean;
   /** Shows the asker's photo beside their name, when they asked by name and have one. */
@@ -100,6 +104,7 @@ export function LiveQuestionList({
   thread?: (question: LiveQuestion) => ComponentChildren;
 }) {
   if (!questions.length) return <p class="pk-live-questions__empty">{emptyText}</p>;
+  const addressee = (question: LiveQuestion) => liveQuestionAddresseeName(credits, question.addressedTo);
   return (
     <ol class="pk-live-questions__list">
       {questions.map((question) => (
@@ -137,7 +142,9 @@ export function LiveQuestionList({
                 affiliation={question.authorAffiliation}
                 roles={question.authorRoles}
               />
+              {addressee(question) ? <span>For {addressee(question)}</span> : null}
               {votesInline ? <span>{formatNumber(question.votes)} votes</span> : null}
+              {question.prepared ? <span>Prepared</span> : null}
               {question.anonymous && question.authorName ? <span>Anonymous to attendees</span> : null}
               {question.withdrawn ? (
                 <span>Withdrawn</span>
