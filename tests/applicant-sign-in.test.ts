@@ -75,11 +75,12 @@ describe("sign-in for someone whose membership application is pending", () => {
     await seedMembershipApplicationForm();
   });
 
-  it.each([
-    ["an organization", "applicant@new-org.test", "A", "New Org"],
-    ["an individual", "applicant@individual.test", "H6", undefined],
-  ] as const)("lets %s applicant sign in and see their application", async (_kind, email, category, organization) => {
-    await apply(email, category, organization);
+  // An organization applicant already holds the organization identity it applies through, so only an
+  // individual applicant can have an application before any identity.
+  it("lets an individual applicant sign in and see their application", async () => {
+    const email = "applicant@individual.test";
+    const category = "H6";
+    await apply(email, category);
     // The membership identity comes at approval, so a new member is not asked to choose between identities.
     expect(
       await queryAll(
