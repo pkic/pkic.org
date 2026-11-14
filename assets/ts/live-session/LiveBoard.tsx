@@ -57,7 +57,13 @@ export function LiveBoard({
   children: ComponentChildren;
 }) {
   const { width, height, shape } = liveBoardSize(box);
-  const geometry = useNumericCssProperties({ "--board-width": width, "--board-height": height });
+  // Board pixels to one pixel of the frame, so the margins keep to the frame's graphics-safe area at any scale.
+  const framePixel = box.width > 0 ? width / box.width : 1;
+  const geometry = useNumericCssProperties({
+    "--board-width": width,
+    "--board-height": height,
+    "--board-frame-px": framePixel,
+  });
   return (
     <section
       class={`pk-live-board ${className}`}

@@ -3,11 +3,13 @@
  * soft light and a faint mark. It is drawn at its own size in pixels of the
  * 1080p frame and its layout box scales it whole. Everything that must be
  * read sits from the top down, so a seated panel in front of the projector
- * covers only the bottom of it.
+ * covers only the bottom of it. Its margins are set in pixels of the frame,
+ * whatever the board's scale: 64 from the top and bottom and 96 from the
+ * sides, inside the broadcast graphics-safe area. The graphic keeps a clear
+ * band under the logo, the same on every board.
  */
 @layer components {
   .pk-live-board {
-    --board-pad: 72px;
     position: absolute;
     inset-block-start: 0;
     inset-inline-start: 0;
@@ -17,7 +19,7 @@
     gap: 28px;
     inline-size: calc(var(--board-width) * 1px);
     block-size: calc(var(--board-height) * 1px);
-    padding: calc(var(--board-pad) * 0.9) var(--board-pad);
+    padding: calc(64px * var(--board-frame-px, 1)) calc(96px * var(--board-frame-px, 1));
     overflow: hidden;
     isolation: isolate;
     background: var(--pk-pqc-light), var(--pk-pqc-field);
@@ -45,14 +47,12 @@
     color: var(--pk-pqc-on-field);
     opacity: 0.06;
   }
-  .pk-live-board[data-shape="tall"] {
-    --board-pad: 64px;
-  }
   .pk-live-board__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 32px;
+    margin-block-end: 28px;
   }
   .pk-live-board__eyebrow {
     margin: 0;

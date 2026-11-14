@@ -9,7 +9,6 @@
     align-content: start;
     gap: 40px;
     min-block-size: 0;
-    margin-block-start: 20px;
     padding-inline-start: 44px;
     border-inline-start: 12px solid transparent;
     border-image: linear-gradient(180deg, var(--pk-pqc-green), var(--pk-pqc-blue) 50%, var(--pk-pqc-orange)) 1;
