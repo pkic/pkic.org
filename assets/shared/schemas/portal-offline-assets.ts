@@ -31,7 +31,8 @@ export const portalOfflineInventorySchema = z
   .object({
     version: z.literal(1),
     entrypoints: z.array(portalOfflineAssetPathSchema).min(1).max(32),
-    assets: z.array(portalOfflineAssetPathSchema).min(1).max(512),
+    // A sanity bound on the list, not a budget: the portal shell alone reached 512, and the byte cap below still holds.
+    assets: z.array(portalOfflineAssetPathSchema).min(1).max(1024),
   })
   .strict()
   .refine(

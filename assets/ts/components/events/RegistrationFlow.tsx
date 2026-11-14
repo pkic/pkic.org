@@ -20,7 +20,6 @@ import { registrationEntry } from "./registration-entry";
 import { registrationInvitation } from "./registration-invitation";
 import { updateRegistrationReview } from "./registration-review";
 import { clearReferralSession } from "../../shared/query-context";
-import { forgetRegistrationEmailProof } from "../useRegistrationEmailProof";
 import { useContractForm } from "../../hooks/useContractForm";
 import { postJson } from "../../shared/api-client";
 import { readField } from "../../shared/form/helpers";
@@ -30,7 +29,7 @@ import { splitHash } from "../../ui/url-query";
 import { CustomFieldList, readCustomFieldValues } from "../../shared/widgets/custom-fields";
 import { readConsentValues } from "../../shared/widgets/consents";
 import { readDayAttendance, readDayAttendanceChoices } from "../../shared/widgets/day-attendance";
-import { EventFlowProgress } from "../../site/EventFlowProgress";
+import { RegistrationProgress } from "./RegistrationProgress";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { Field } from "../../ui/Field";
@@ -38,7 +37,6 @@ import { TextInput } from "../../ui/TextControl";
 import { ConsentList } from "../ConsentCard";
 import { DayAttendancePicker } from "../DayAttendancePicker";
 import { RegistrationContactStep } from "../RegistrationContactStep";
-import type { ConfirmOrganizationController } from "../RegistrationConfirmOrganization";
 import { RegistrationEmailAddress } from "./RegistrationEmailAddress";
 import { RegistrationRepresentationField } from "./RegistrationRepresentationField";
 import { useFormAnswers } from "../forms/useFormAnswers";
@@ -76,14 +74,14 @@ export function RegistrationFlow(props: Props) {
   const termsAvailable = forms.requiredTerms.some((term) => term.required);
   const daysAvailable = forms.eventDays.length > 0;
   const available = updating || (termsAvailable && daysAvailable);
-  const entry = props.mode === "create" ? registrationEntry(props.context.query) : {};
   const initial = updating ? props.data : null;
   const root = useRef<HTMLDivElement>(null);
   const status = useRef<HTMLParagraphElement>(null);
   const review = useRef<HTMLDivElement>(null);
-  const organization = useRef<ConfirmOrganizationController>({});
+  const signInSlot = useRef<HTMLDivElement>(null);
   const invitation = useRef<ReturnType<typeof registrationInvitation> | null>(null);
   const [ready, setReady] = useState(updating);
+  const [signingIn, setSigningIn] = useState(false);
   const [personalDraft, setPersonalDraft] = useState({
     firstName: initial?.user.first_name ?? "",
     lastName: initial?.user.last_name ?? "",
@@ -120,7 +118,6 @@ export function RegistrationFlow(props: Props) {
             ? { identityId, expectedIdentityId: savedIdentityId.current }
             : undefined,
       };
-    const named = organization.current.read?.();
     const liveEntry = registrationEntry(props.context.query);
     return {
       ...shared,
@@ -128,11 +125,9 @@ export function RegistrationFlow(props: Props) {
       identityId: readField(form, "identityId") || undefined,
       unaffiliatedAttestation: readField(form, "unaffiliatedAttestation") === "true",
       consents: readConsentValues(form),
-      emailProof: readField(form, "emailProof") || undefined,
       ...liveEntry,
       sourceType: liveEntry.sourceType ?? "direct",
       sourceRef: liveEntry.sourceType,
-      organization: named && !("refused" in named) ? named.organization : undefined,
     };
   };
   const choices = useCallback(() => (element.current ? readDayAttendanceChoices(element.current) : []), [element]);
@@ -182,7 +177,6 @@ export function RegistrationFlow(props: Props) {
             setError(checked.formMessage ?? "");
             return false;
           }
-          if (organization.current.validate?.() === false) return false;
         }
         if (step === 2) {
           const checked = attendanceContract.submit();
@@ -236,13 +230,14 @@ export function RegistrationFlow(props: Props) {
 
   return (
     <div class="event-flow pk" ref={root} data-registration-flow={props.mode}>
-      {!updating && available && (
-        <EventFlowProgress label="Registration progress" steps={["You", "Attendance", "Profile", "Review"]} />
-      )}
+      {!updating && available && <RegistrationProgress />}
+      {/* The sign-in card has a form of its own, so it stands beside the registration form, not inside it. */}
+      <div ref={signInSlot} data-registration-sign-in />
       <form
         ref={element}
         class="pk-stack needs-validation"
         noValidate
+        hidden={signingIn}
         {...{ [CONTRACT_VALIDATION_ATTRIBUTE]: "" }}
         data-contact-ready={String(ready)}
         onInput={(event) => {
@@ -289,19 +284,13 @@ export function RegistrationFlow(props: Props) {
             if (!updating) {
               const contact = contactContract.submit();
               if (!contact.data) return setError(contact.formMessage ?? "");
-              if (organization.current.validate?.() === false) return;
             }
             const answered = currentQuestions.current.submit();
-            let checked = contract.submit();
+            const checked = contract.submit();
             if (!answered.data) return setError(answered.formMessage ?? "");
             if (!checked.data) return setError(checked.formMessage ?? "");
             setBusy(true);
             try {
-              if (!updating && organization.current.prepare) {
-                if (!(await organization.current.prepare())) return;
-                checked = contract.submit();
-                if (!checked.data) return setError(checked.formMessage ?? "");
-              }
               if (props.mode === "update") {
                 await props.save(registrationManageSchema.parse(checked.data));
               } else {
@@ -315,7 +304,6 @@ export function RegistrationFlow(props: Props) {
                       props.context.eventPagePath ? { "x-event-base-path": props.context.eventPagePath } : undefined,
                     );
                 clearReferralSession();
-                forgetRegistrationEmailProof();
                 await props.onRegistered(result, body, element.current!);
               }
             } catch (cause) {
@@ -349,11 +337,9 @@ export function RegistrationFlow(props: Props) {
               <div data-registration-contact>
                 {available && (
                   <RegistrationContactStep
-                    endpoint={`${props.context.apiBase}/events/${encodeURIComponent(props.context.eventSlug)}/registrations`}
-                    entry={entry}
-                    organization={organization.current}
+                    signInSlot={signInSlot}
                     onReadyChange={contactReady}
-                    autoSession={props.autoSession}
+                    onSignInChange={setSigningIn}
                     presentationOf={(name) => {
                       const current = contract.of(name);
                       return current.state === "invalid" ? current : contactContract.of(name);

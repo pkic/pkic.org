@@ -7,7 +7,7 @@ import { createTestRateLimiter, queryAll, seedEventAndAdmin } from "./helpers/co
 import type { Env } from "../functions/_lib/types";
 
 let environment: Env;
-const path = "/api/v1/members/join/start";
+const path = "/api/v1/auth/sign-up";
 const body = { email: "new@company.example", unaffiliatedAttestation: true };
 function post(headers: Record<string, string> = {}, payload: unknown = body, endpoint = path) {
   return callApi(environment, endpoint, {
@@ -43,7 +43,7 @@ describe("public route Turnstile policy", () => {
     expect(response.status).toBe(403);
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(await response.json()).toMatchObject({
-      error: { code: "TURNSTILE_REQUIRED", details: { siteKey: "test-site-key", action: "membership_join" } },
+      error: { code: "TURNSTILE_REQUIRED", details: { siteKey: "test-site-key", action: "login_email" } },
     });
     await noEffects();
   });
@@ -71,7 +71,7 @@ describe("public route Turnstile policy", () => {
     expect((await post()).status).toBe(503);
   });
   it("verifies a token before queuing exactly one email", async () => {
-    const remote = verify({ success: true, action: "membership_join", hostname: "app.test" });
+    const remote = verify({ success: true, action: "login_email", hostname: "app.test" });
     expect((await post({ "x-turnstile-token": "fresh-token" })).status).toBe(200);
     expect(remote).toHaveBeenCalledOnce();
     expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(1);
@@ -81,8 +81,8 @@ describe("public route Turnstile policy", () => {
   });
   it.each([
     { success: false, "error-codes": ["timeout-or-duplicate"] },
-    { success: true, action: "login_email", hostname: "app.test" },
-    { success: true, action: "membership_join", hostname: "evil.example" },
+    { success: true, action: "event_registration", hostname: "app.test" },
+    { success: true, action: "login_email", hostname: "evil.example" },
   ])("rejects failed, replayed and incorrectly bound tokens: %j", async (result) => {
     verify(result);
     expect((await post({ "x-turnstile-token": "bad-token" })).status).toBe(403);
@@ -116,7 +116,7 @@ describe("public route Turnstile policy", () => {
     );
     const limited = await createMcpSession(env.DB, actor, "limited", ["membership:read"]);
     expect((await post({ authorization: `Bearer ${limited}`, "x-pkic-machine-auth": "mcp" })).status).toBe(403);
-    const allowed = await createMcpSession(env.DB, actor, "allowed", ["membership:write"]);
+    const allowed = await createMcpSession(env.DB, actor, "allowed", ["email:manage"]);
     expect((await post({ authorization: `Bearer ${allowed}`, "x-pkic-machine-auth": "mcp" })).status).toBe(200);
     await env.DB.prepare("UPDATE sessions SET revoked_at = '2026-01-01T00:00:00.000Z' WHERE user_id = ?")
       .bind(actor.id)
@@ -124,7 +124,7 @@ describe("public route Turnstile policy", () => {
     expect((await post({ authorization: `Bearer ${allowed}`, "x-pkic-machine-auth": "mcp" })).status).toBe(401);
   });
   it("leaves email link verification challenge-free", async () => {
-    const response = await post({}, { token: "x".repeat(64) }, "/api/v1/members/join/verify");
+    const response = await post({}, { token: "x".repeat(64) }, "/api/v1/auth/verify-link");
     expect(await response.json()).not.toMatchObject({ error: { code: "TURNSTILE_REQUIRED" } });
   });
 });

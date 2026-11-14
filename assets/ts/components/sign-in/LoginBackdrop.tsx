@@ -1,14 +1,15 @@
 import { useEffect, useState } from "preact/hooks";
-import { publicMembersListResponseSchema } from "../../../../shared/schemas/members-directory";
+import { publicMembersListResponseSchema } from "../../../shared/schemas/members-directory";
 import {
   PORTAL_LOGIN_COPY_ID,
   portalLoginCopySchema,
   type PortalLoginCopy,
   type PortalLoginFact,
-} from "../../../../shared/schemas/portal-login-copy";
-import { getJson } from "../../../shared/api-client";
+} from "../../../shared/schemas/portal-login-copy";
+import { getJson } from "../../shared/api-client";
+import { SectionHeading } from "../../ui/SectionHeading";
 // The brand panel stands on the same dark brand field as the event app's header.
-import "../../../../design/tokens.event.generated.css";
+import "../../../design/tokens.event.generated.css";
 
 /**
  * What the brand panel says, as Hugo wrote it.
@@ -87,7 +88,9 @@ export function LoginBackdrop({ copy: publishedCopy }: { copy?: PortalLoginCopy 
     <div class="pk-login__backdrop">
       <div class="pk-login__lede">
         <p class="pk-login__kicker">{copy.kicker ?? "Member portal"}</p>
-        <h2 class="pk-login__headline">{copy.headline ?? "The work behind trusted digital assets happens here."}</h2>
+        <SectionHeading level={2} class="pk-login__headline">
+          {copy.headline ?? "The work behind trusted digital assets happens here."}
+        </SectionHeading>
         {copy.blurb && <p class="pk-login__blurb">{copy.blurb}</p>}
       </div>
       {facts.length > 0 && (

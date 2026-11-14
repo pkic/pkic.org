@@ -3,6 +3,7 @@ import { expect, type Page } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
 import { userAuthSessionResponseSchema } from "../../../assets/shared/schemas/user-auth";
 import { sessionActingIdentityChoiceRequired } from "../../../assets/shared/session-acting-identity";
+import { USER_SESSION_COOKIE_NAME } from "../../../functions/_lib/auth/session-cookies";
 
 /** A stable per-identity client address, so parallel sign-ins do not share one rate-limit bucket. */
 export function clientIpForIdentity(email: string): string {
@@ -83,6 +84,8 @@ export async function signInToPortal(page: Page, email: string, options: { conti
   // serial suite otherwise funnels every sign-in through Wrangler's one local
   // address and exhausts the production-equivalent per-IP limiter.
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
+  // A public flow may have left this browser signed in as someone else; this person arrives without that session.
+  await page.context().clearCookies({ name: USER_SESSION_COOKIE_NAME });
   await page.goto("/portal/");
   await openEmailSignIn(page);
   await page.getByLabel("Email").fill(email);
@@ -122,17 +125,13 @@ export async function signInToPortal(page: Page, email: string, options: { conti
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toHaveCount(0, { timeout: 15_000 });
   // A person holding several identities is asked which one to continue as, unless this device remembers a choice.
   const chooser = page.getByRole("heading", { name: "Choose how you take part" });
-  let chooseIdentity = false;
   if (sessionActingIdentityChoiceRequired(session)) {
     // Verification can briefly mount the shell before its canonical refresh
     // asks for representation. A visible shell alone is not a settled choice.
     await expect
       .poll(
         async () => {
-          if (await chooser.isVisible()) {
-            chooseIdentity = true;
-            return true;
-          }
+          if (await chooser.isVisible()) return true;
           if (!(await page.getByRole("button", { name: "Account menu", exact: true }).isVisible())) return false;
           const currentResponse = await page.request.get("/api/v1/auth/session");
           if (currentResponse.status() !== 200) return false;
@@ -143,23 +142,34 @@ export async function signInToPortal(page: Page, email: string, options: { conti
       )
       .toBe(true);
   }
-  if (chooseIdentity || (await chooser.isVisible())) {
+  // A choice this device remembers resolves the chooser on its own, so it may be gone by the time it is answered.
+  if (await chooser.isVisible()) {
     const choices = page.getByRole("region", { name: "Choose how you take part" }).getByRole("button");
     // A long identity name wraps inside its choice, on a phone as on a desktop.
-    for (const choice of await choices.all())
-      expect(await choice.evaluate((button) => button.scrollWidth <= button.clientWidth)).toBe(true);
+    const overflowing = await choices.evaluateAll((buttons) =>
+      buttons.filter((button) => button.scrollWidth > button.clientWidth).map((button) => button.textContent),
+    );
+    expect(overflowing).toEqual([]);
     // Without a named identity the helper continues personally, as it did when that choice was listed first.
     const personal = choices.filter({ hasText: "Personal" });
-    await (
-      options.continueAs
-        ? choices.filter({ hasText: options.continueAs })
-        : (await personal.count()) > 0
-          ? personal.first()
-          : choices.first()
-    ).click();
+    const choice = options.continueAs
+      ? choices.filter({ hasText: options.continueAs })
+      : (await personal.count()) > 0
+        ? personal.first()
+        : choices.first();
+    // Only a chooser that is still asking may refuse the click; a vanished one was answered by this device.
+    await choice.click({ timeout: 10_000 }).catch(async (cause: unknown) => {
+      if (await chooser.isVisible()) throw cause;
+    });
   }
   await declinePasskeyOffer(page);
   await expect(page).toHaveURL(/\/portal\/#\/(?!verify(?:$|[/?]))[^?#]+/, { timeout: 15_000 });
+  // Chosen here or remembered by this device, the session must act for the organization asked for.
+  if (options.continueAs) {
+    const current = userAuthSessionResponseSchema.parse(await (await page.request.get("/api/v1/auth/session")).json());
+    const acting = current.actingIdentities.find((identity) => identity.id === current.actingIdentityId);
+    expect(acting?.organizationName, JSON.stringify(current.actingIdentities)).toBe(options.continueAs);
+  }
 }
 
 /** Email sign-in can offer passkey enrollment before the shell mounts: follows its visible opt-out. */

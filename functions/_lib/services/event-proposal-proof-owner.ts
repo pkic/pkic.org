@@ -4,7 +4,6 @@ import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
 import { prepareCurrentEventProposalProof } from "./event-proposal-proof-current";
 import { eventProposalSpeakerAuthority, prepareEventProposalProofContext } from "./event-proposal-proof-context";
-import { prepareEventProposalEntry } from "./event-proposal-proof-entry";
 import { prepareProposalProofPerson } from "./event-proposal-proof-person";
 import { verifyEventProposalCapability } from "./event-proposal-proof-capabilities";
 import { getSpeakerByManageToken } from "./proposals";
@@ -45,6 +44,8 @@ export async function prepareEventProposalPersonOwner(
     );
   }
   if (input.continuationToken) {
+    // A confirmed address belongs to a speaker's own invitation; anyone else edits with their session.
+    if (!authority) throw new AppError(403, "PROPOSAL_PERSON_MISMATCH", "Sign in to edit your details.");
     const payload = await verifyEventProposalCapability(
       input.signingSecret,
       input.continuationToken,
@@ -59,11 +60,9 @@ export async function prepareEventProposalPersonOwner(
         payload,
         signingSecret: input.signingSecret,
         actor: input.actor,
-        operation: authority ? "speaker_profile" : "proposal_submission",
         speakerId,
         speakerAuthority: authority,
       })),
-      ...(await prepareEventProposalEntry(db, input.eventId, payload.entryContext)).statements,
     );
     const person = await prepareProposalProofPerson(db, payload, { email: payload.email }, input.at);
     guards.push(...person.statements);

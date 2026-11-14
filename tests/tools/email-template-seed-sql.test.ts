@@ -28,7 +28,6 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "event_proposal_verify",
   "membership-participation-warning",
   "membership-workflow-review-digest",
-  "membership_join_verify",
   "msg_attendee_inperson_check_plans",
   "msg_attendee_session_favorites",
   "msg_attendee_session_reminder",
@@ -58,7 +57,6 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "registration_confirm_email",
   "registration_confirmation_reminder",
   "registration_confirmed",
-  "registration_email_verify",
   "registration_manage_link",
   "registration_unauthorized",
   "registration_updated",
@@ -97,23 +95,6 @@ describe("buildTemplateSqlStatements", () => {
     }
     expect(rendered.html).not.toContain("{{");
     expect(rendered.text).not.toContain("{{");
-  });
-
-  it("renders registration verification as the shared email CTA with a usable plain-text link", async () => {
-    const template = DEFAULT_TEMPLATES.find((item) => item.key === "registration_email_verify")!;
-    const url = "https://example.test/register/#verify=synthetic-proof";
-    const rendered = await renderEmail(
-      template.content,
-      { verificationUrl: url, eventName: "Example conference" },
-      DEFAULT_LAYOUT_HTML,
-      template.contentType,
-      "https://example.test",
-    );
-    expect(template.contentType).toBe("markdown");
-    expect(rendered.html).toContain('href="' + url + '"');
-    expect(rendered.html).toContain("Verify email and continue");
-    expect(rendered.html).toContain("cta-navy");
-    expect(rendered.text).toContain(url);
   });
 
   it.each([1, 2, 51])("renders the bounded organization digest with %s pending profiles", async (pendingCount) => {
@@ -290,7 +271,7 @@ describe("buildTemplateSqlStatements", () => {
     expect(rendered.html).not.toContain("http://localhost:8788/img/logo-white.png");
   });
 
-  it.each(["registration_email_verify", "event_proposal_verify"])(
+  it.each(["event_proposal_verify"])(
     "renders the %s verification link as a button and keeps the plain-text URL on one line",
     async (key) => {
       const template = DEFAULT_TEMPLATES.find((item) => item.key === key);

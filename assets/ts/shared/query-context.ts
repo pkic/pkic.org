@@ -46,6 +46,38 @@ export function clearReferralSession(): void {
   }
 }
 
+/**
+ * An invitation token never rides in a sign-in link's return path: that link
+ * is stored in the email outbox, and D1 holds no usable capability token. The
+ * page keeps the token in this browser under the invitation id instead, so a
+ * person who signs in from the emailed link lands back on their invitation.
+ */
+const INVITATION_STORAGE_PREFIX = "pkic_invite:";
+
+function rememberInvitation(inviteId: string | null, inviteToken: string | null): string | null {
+  if (!inviteId) return inviteToken;
+  try {
+    if (inviteToken) localStorage.setItem(`${INVITATION_STORAGE_PREFIX}${inviteId}`, inviteToken);
+    else return localStorage.getItem(`${INVITATION_STORAGE_PREFIX}${inviteId}`);
+  } catch {
+    // localStorage may be restricted; the token then stays in this page only.
+  }
+  return inviteToken;
+}
+
+/**
+ * A path, with its query, as a sign-in return path: the invitation token is
+ * kept in this browser under its invitation id and left out of the path.
+ */
+export function signInReturnPath(path: string): string {
+  const [pathname = "", search = ""] = path.split(/\?(.*)/s, 2);
+  const query = new URLSearchParams(search);
+  rememberInvitation(read(query, "id"), read(query, "invite"));
+  query.delete("invite");
+  const rest = query.toString();
+  return `${pathname}${rest ? `?${rest}` : ""}`;
+}
+
 export function parseQueryContext(search: string): QueryContext {
   const query = new URLSearchParams(search);
 
@@ -75,7 +107,7 @@ export function parseQueryContext(search: string): QueryContext {
   return {
     eventSlug: read(query, "event"),
     id: read(query, "id"),
-    inviteToken: read(query, "invite"),
+    inviteToken: rememberInvitation(read(query, "id"), read(query, "invite")),
     inviteId: read(query, "id"),
     referralCode,
     sourceType: readSourceType(query),

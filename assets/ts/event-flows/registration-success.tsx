@@ -1,6 +1,5 @@
 import { render, createRef, type ComponentChildren } from "preact";
 import type { RegistrationSubmissionResponse } from "../../shared/schemas/registration";
-import { REGISTRATION_ORGANIZATION_COPY } from "../../shared/email-first-copy";
 import { Alert } from "../ui/Alert";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { PersonalAddressPrompt } from "../components/events/PersonalAddressPrompt";
@@ -10,6 +9,7 @@ import {
 } from "../components/RegistrationDayStatusSummary";
 import { renderSharePanel } from "../shared/widgets/share-panel";
 import { renderDonationCta } from "../shared/donation/cta";
+import { eventParticipantRecordPath } from "../member-flows/portal/sections/events/event-participant-paths";
 
 function formatSubmittedEmail(email: string): ComponentChildren {
   return <span class="event-flow-address">{email || "the email address you entered"}</span>;
@@ -22,7 +22,6 @@ export function showRegistrationSuccess(
   firstName: string,
   lastName: string,
   email: string,
-  organization: string,
   eventName: string,
   eventSlug: string,
 ): void {
@@ -41,6 +40,9 @@ export function showRegistrationSuccess(
   let title: string;
   let body: ComponentChildren;
   let showShare = false;
+  // A signed-in registrant manages the registration in the portal; only a new identity gets a direct link.
+  const manageHref =
+    result.manageUrl ?? `/portal/#${eventParticipantRecordPath(eventSlug, "registration", result.registrationId)}`;
 
   if (result.status === "pending_email_confirmation") {
     // Only a submission without a verified address waits; the browser verifies first, so this is the exception.
@@ -65,7 +67,7 @@ export function showRegistrationSuccess(
           <p class="event-flow-success-body">
             Your registration is confirmed, but one or more selected days are still waiting for a place.
           </p>
-          {result.manageUrl && <a href={result.manageUrl}>Review or change registration</a>}
+          <a href={manageHref}>Review or change registration</a>
         </div>
         <RegistrationDayStatusSummary dayAttendance={result.dayAttendance} dayWaitlist={result.dayWaitlist} />
         <PersonalAddressPrompt email={email} waiting />
@@ -79,17 +81,12 @@ export function showRegistrationSuccess(
       <>
         <p class="event-flow-success-body">
           A confirmation email with your calendar invite is on its way.{" "}
-          {result.manageUrl && <a href={result.manageUrl}>Manage your registration</a>}
+          <a href={manageHref}>Manage your registration</a>
         </p>
         <PersonalAddressPrompt email={email} />
       </>
     );
   }
-  const organizationNote =
-    result.organizationOutcome === "review_required" ? (
-      <Alert tone="info">{REGISTRATION_ORGANIZATION_COPY.reviewRequired}</Alert>
-    ) : null;
-
   const container = document.createElement("div");
   const shareRef = createRef<HTMLDivElement>();
   const donateRef = createRef<HTMLDivElement>();
@@ -97,7 +94,6 @@ export function showRegistrationSuccess(
   render(
     <SuccessPanel icon={icon} title={title}>
       {body}
-      {organizationNote}
       {showShare && <div ref={shareRef} />}
       <div ref={donateRef} />
     </SuccessPanel>,
@@ -121,7 +117,6 @@ export function showRegistrationSuccess(
     renderDonationCta(donateRef.current, {
       name: fullName || undefined,
       email,
-      organizationName: organization || undefined,
       source: window.location.pathname,
     });
   }

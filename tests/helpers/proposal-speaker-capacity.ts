@@ -1,6 +1,7 @@
 import { nowIso } from "../../functions/_lib/utils/time";
 import type { DatabaseLike } from "../../functions/_lib/types";
-import { prepareProposalProof } from "./proposal-proof";
+import { signInProposer } from "./proposal-proof";
+import { withIndependentCapacity } from "./independent-capacity";
 import { ADMINISTRATOR_FIXTURE_USER_SQL, administratorGrants } from "./administrator";
 import { env } from "cloudflare:workers";
 import { queryAll, seedEventAndAdmin } from "./context";
@@ -92,20 +93,14 @@ export async function inviteSpeakerAndSubmitCapacityProposal(
     purpose: "invite",
     resourceId: invite.id,
   });
-  const proof = await prepareProposalProof({
-    environment: env,
-    eventSlug: "pqc-2026",
-    email: "speaker@example.test",
-    consents: [{ termKey: "speaker-terms", version: "v1" }],
-    unaffiliatedAttestation: true,
-  });
+  const proposer = await signInProposer({ environment: env, email: "speaker@example.test" });
   const proposalResponse = await requestProposalSpeakerCapacity(
     new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...proposer.headers },
       body: JSON.stringify({
         inviteToken,
-        ...proof,
+        ...withIndependentCapacity({ unaffiliatedAttestation: true }),
         proposer: {
           firstName: "Speaker",
           lastName: "Test",

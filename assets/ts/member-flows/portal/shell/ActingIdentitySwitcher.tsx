@@ -24,7 +24,7 @@ import { PkicMark } from "../../../ui/PkicMark";
 import type { MenuItem } from "../../../ui/Menu";
 import { selectActingIdentity } from "../acting-identity";
 import type { PortalSession } from "../types";
-import { LoginFrame } from "./LoginFrame";
+import { LoginFrame } from "../../../components/sign-in/LoginFrame";
 
 const SWITCH_FAILED = "Could not switch identity. Please try again.";
 

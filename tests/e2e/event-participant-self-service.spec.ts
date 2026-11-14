@@ -72,13 +72,11 @@ test("a signed-in group member completes required registration through the porta
   expect(updated.status(), await updated.text()).toBe(200);
 
   const email = `attendee@group-${crypto.randomUUID()}.test`;
-  await approveMemberThroughReview(page, {
-    email,
-    name: "Group Attendee",
-    organizationName: `Synthetic Group ${crypto.randomUUID()}`,
-  });
+  const organizationName = `Synthetic Group ${crypto.randomUUID()}`;
+  await approveMemberThroughReview(page, { email, name: "Group Attendee", organizationName });
   await page.context().clearCookies();
-  await signInToPortal(page, email);
+  // The account also holds its individual identity; the group is joined as the member organization's representative.
+  await signInToPortal(page, email, { continueAs: organizationName });
   const joined = await page.request.post(`/api/v1/groups/${event.ownerGroupId}/join`, {
     data: { capacitySelection: { mode: "all_eligible", confirmed: true } },
   });
@@ -86,6 +84,13 @@ test("a signed-in group member completes required registration through the porta
   await page.goto(`/portal/#/events/${fixture.slug}/register`);
   const form = page.getByRole("region", { name: "Event registration", exact: true });
   await expect(form).toBeVisible();
+  // The account was started with an email alone, so the form asks for the name it lacks.
+  await form.getByRole("button", { name: "Edit personal details", exact: true }).click();
+  const names = page.getByRole("dialog", { name: "Edit my details", exact: true });
+  await names.getByRole("textbox", { name: /^First name/ }).fill("Group");
+  await names.getByRole("textbox", { name: /^Last name/ }).fill("Attendee");
+  await names.getByRole("button", { name: "Save my details", exact: true }).click();
+  await expect(names).not.toBeVisible();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.getByRole("radio", { name: "In person — Workshop day", exact: true }).check();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
@@ -184,7 +189,10 @@ test("a signed-in user registers from event home without another email challenge
   }
   const challenged: string[] = [];
   page.on("request", (request) => {
-    if (request.method() === "POST" && /\/(?:proof|auth\/request)(?:\/|$)/.test(new URL(request.url()).pathname))
+    if (
+      request.method() === "POST" &&
+      /\/(?:proof|auth\/(?:request-link|sign-up))(?:\/|$)/.test(new URL(request.url()).pathname)
+    )
       challenged.push(request.url());
   });
   await page.getByRole("link", { name: "Register", exact: true }).click();
@@ -357,7 +365,6 @@ test("a signed-in user registers from event home without another email challenge
   const body = registrationCreateSchema.parse(response.request().postDataJSON());
   expect(body.identityId).toBe(representations[0].id);
   expect(body.email).toBe(email);
-  expect(body.emailProof).toBeUndefined();
   expect(body.dayAttendance).toEqual([{ dayDate, attendanceType: "in_person" }]);
   expect(result.status).toBe("registered");
   await expect(page).toHaveURL(new RegExp(`#/events/${event.slug}/ticket$`));

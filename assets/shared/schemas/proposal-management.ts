@@ -60,8 +60,8 @@ export const MAX_PROPOSAL_ADDITIONAL_SPEAKERS = 8;
 export const MAX_PROPOSAL_PARTICIPANTS = MAX_PROPOSAL_ADDITIONAL_SPEAKERS + 1;
 
 /**
- * Details of the organization identity the CFP identity step creates from a
- * confirmed email (a continuation token). They are identity-creation input
+ * Details of the organization identity a speaker's identity step creates from
+ * a confirmed email (a continuation token). They are identity-creation input
  * only: a speaker's organization and job title are always projected from
  * identities, never stored on the person or overridden on a proposal roster row.
  */
@@ -87,56 +87,36 @@ function checkNewAffiliation(
     jobTitle?: string | null;
   },
   context: z.core.$RefinementCtx,
-  path: readonly (string | number)[] = [],
 ): void {
   if (value.continuationToken === undefined) {
     for (const key of ["organizationName", "jobTitle"] as const) {
       if (value[key])
         context.addIssue({
           code: "custom",
-          path: [...path, key],
+          path: [key],
           message: "Organization and job title come from the identity you speak as.",
         });
     }
     return;
   }
   if (value.unaffiliatedAttestation === false && value.actingIdentityId === undefined && !value.jobTitle)
-    context.addIssue({ code: "custom", path: [...path, "jobTitle"], message: JOB_TITLE_REQUIRED });
+    context.addIssue({ code: "custom", path: ["jobTitle"], message: JOB_TITLE_REQUIRED });
 }
 
 /**
- * Who a proposal's contact takes part as: the identity step's part of the
- * proposal contract, checked when the contact step is left and again by the
- * route through `proposalCreateSchema`.
+ * A proposal is submitted by the signed-in person. They take part as one of
+ * their own identities, chosen explicitly: an organization identity, or `null`
+ * for the individual capacity.
  */
-export const proposalContactSchema = z
-  .object({
-    continuationToken: eventProposalContinuationTokenSchema.optional(),
-    unaffiliatedAttestation: z.boolean().default(false),
-    proposer: z.object({ ...proposalActingIdentitySelectionShape, ...proposalNewAffiliationShape }),
-  })
-  .superRefine((value, context) =>
-    checkNewAffiliation(
-      {
-        continuationToken: value.continuationToken,
-        unaffiliatedAttestation: value.unaffiliatedAttestation,
-        ...value.proposer,
-      },
-      context,
-      ["proposer"],
-    ),
-  );
-
 export const proposalCreateSchema = boundedJsonObject(
   {
     ...proposalEntryContextShape,
-    continuationToken: eventProposalContinuationTokenSchema.optional(),
     unaffiliatedAttestation: z.boolean().default(false),
     /** Required with, and only with, the individual capacity. */
     independentCapacity: independentCapacityDisclosureSchema.optional(),
     proposer: proposerProfileSchema
       .partial({ email: true, firstName: true, lastName: true })
-      .extend({ ...proposalActingIdentitySelectionShape, ...proposalNewAffiliationShape }),
+      .extend(proposalActingIdentitySelectionShape),
     proposal: z.object({
       type: proposalTypeSchema,
       title: proposalTitleSchema,
@@ -156,15 +136,12 @@ export const proposalCreateSchema = boundedJsonObject(
   40_000,
 ).superRefine((value, ctx) => {
   requireIndependentCapacity(value, value.unaffiliatedAttestation, ctx);
-  checkNewAffiliation(
-    {
-      continuationToken: value.continuationToken,
-      unaffiliatedAttestation: value.unaffiliatedAttestation,
-      ...value.proposer,
-    },
-    ctx,
-    ["proposer"],
-  );
+  if (value.proposer.actingIdentityId === undefined)
+    ctx.addIssue({
+      code: "custom",
+      path: ["proposer", "actingIdentityId"],
+      message: "Choose the identity you will speak as, or choose individual presentation.",
+    });
   const participantEmails = [value.proposer.email, ...value.speakers.map((speaker) => speaker.email)].filter(
     (email) => email !== undefined,
   );
@@ -187,22 +164,11 @@ export const proposalCreateSchema = boundedJsonObject(
   }
 });
 
-/** The signed-in proposer must make an explicit choice, including individual presentation. */
-export const authenticatedProposalCreateSchema = proposalCreateSchema.superRefine((value, context) => {
-  if (value.proposer.actingIdentityId === undefined) {
-    context.addIssue({
-      code: "custom",
-      path: ["proposer", "actingIdentityId"],
-      message: "Choose the identity you will speak as, or choose individual presentation.",
-    });
-  }
-});
-
 export const proposalCreateResponseSchema = successResponseSchema.extend({
   proposalId: databaseIdSchema,
   status: proposalStatusSchema,
-  manageToken: z.string().nullable(),
-  manageUrl: httpCapabilityUrlSchema.nullable(),
+  manageToken: z.string(),
+  manageUrl: httpCapabilityUrlSchema,
   shareUrl: httpUrlSchema,
 });
 

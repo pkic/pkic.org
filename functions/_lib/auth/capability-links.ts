@@ -207,12 +207,12 @@ function capabilitySecretQuery(purpose: CapabilityPurpose, allowInactiveInvite =
     case "attendance_point":
       // The event's check-in key is resolved by the attendance point service, which parses the event first.
       throw new Error("Attendance point capabilities resolve their key in the attendance point service");
-    case "member_join_verify":
     case "member_join_apply":
     case "event_proposal_verify":
     case "event_proposal_continue":
     case "registration_email_verify":
     case "user_sign_in":
+    case "user_sign_up":
     case "sponsor_sign_in":
     case "identity_invitation":
     case "identity_reinstatement":

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { memberJoinStartSchema } from "../../assets/shared/schemas/member-join";
+import { userSignUpRequestSchema } from "../../assets/shared/schemas/user-auth";
 
 // Synthetic widget responses exercise our browser integration; live Cloudflare verification is separate.
 test("public join preserves input on cancel and submits once after verification", async ({ page }) => {
@@ -14,8 +14,8 @@ test("public join preserves input on cancel and submits once after verification"
     }, remove() {} };`,
     }),
   );
-  await page.route("**/api/v1/members/join/start", async (route) => {
-    memberJoinStartSchema.parse(route.request().postDataJSON());
+  await page.route("**/api/v1/auth/sign-up", async (route) => {
+    userSignUpRequestSchema.parse(route.request().postDataJSON());
     if (!route.request().headers()["x-turnstile-token"]) {
       await route.fulfill({
         status: 403,
@@ -23,7 +23,7 @@ test("public join preserves input on cancel and submits once after verification"
           error: {
             code: "TURNSTILE_REQUIRED",
             message: "Verify",
-            details: { siteKey: "test-site", action: "membership_join" },
+            details: { siteKey: "test-site", action: "login_email" },
           },
         },
       });
@@ -34,6 +34,7 @@ test("public join preserves input on cancel and submits once after verification"
     }
   });
   await page.goto("/join/");
+  await page.getByRole("button", { name: "Start your application", exact: true }).click();
   const email = page.getByLabel("Your official work or organization email address");
   await email.fill(`turnstile-${Date.now()}@organization.test`);
   await page.getByRole("button", { name: "Verify your work email", exact: true }).click();

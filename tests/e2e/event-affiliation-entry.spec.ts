@@ -4,10 +4,8 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import {
   eventProposalProofPersonPatchSchema,
   eventProposalProofPersonPatchResponseSchema,
-  eventProposalProofIdentitiesSchema,
   eventProposalProofStartSchema,
   eventProposalProofStartResponseSchema,
-  eventProposalProofVerifySchema,
   eventProposalProofVerifyResponseSchema,
 } from "../../assets/shared/schemas/event-proposal-proof";
 import { identitiesListResponseSchema } from "../../assets/shared/schemas/identity";
@@ -21,11 +19,12 @@ import {
 import { speakerSelfServiceReadResponseSchema } from "../../assets/shared/schemas/speaker-self-service";
 import { userDetailResponseSchema, usersListResponseSchema } from "../../assets/shared/schemas/user-management";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { clientIpForIdentity, signInToPortal } from "./helpers/portal-auth";
+import { signInToPortal } from "./helpers/portal-auth";
 import { acceptVisibleTerms, answerRequiredProposalFields, fieldLabel } from "./helpers/proposal-entry-ui";
 import { PROPOSAL_EVENT_SLUG, submitProposal } from "./helpers/proposals";
 import { completeIndependentCapacityDisclosure } from "./helpers/independent-capacity";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
+import { signInThroughCard } from "./helpers/sign-in-card";
 
 const pagePath = `/events/2026/${PROPOSAL_EVENT_SLUG}/propose/`;
 const endpoint = `/api/v1/events/${PROPOSAL_EVENT_SLUG}/proposals`;
@@ -70,45 +69,63 @@ async function capture(page: Page, info: TestInfo, phase: string) {
   await page.setViewportSize({ width: 1280, height: 900 });
 }
 
-async function requestOrganizationProof(
-  page: Page,
-  email: string,
-  speakerToken?: string,
-  continuationToken?: string,
-  linkPath = "/propose/",
-) {
+/** A speaker's own mailbox proof, started from the speaker step's email-first entry. */
+async function requestSpeakerOrganizationProof(page: Page, email: string, linkPath: string) {
   // Email-first: a work address takes part on behalf of its organization unless the person says otherwise.
-  await page.getByLabel(EMAIL_FIRST_COPY.proposal.work.label, { exact: true }).fill(email);
+  await page.getByLabel(EMAIL_FIRST_COPY.speaker.work.label, { exact: true }).fill(email);
   const since = await capturedEmailCount();
   const sent = responseFor(page, `${endpoint}/proof`);
-  await page.getByRole("button", { name: EMAIL_FIRST_COPY.proposal.work.action, exact: true }).click();
+  await page.getByRole("button", { name: EMAIL_FIRST_COPY.speaker.work.action, exact: true }).click();
   const response = await sent;
   expect(response.status(), await response.text()).toBe(200);
-  const started = eventProposalProofStartSchema.parse(response.request().postDataJSON());
-  expect(started).toMatchObject({
+  expect(eventProposalProofStartSchema.parse(response.request().postDataJSON())).toMatchObject({
     email,
     unaffiliatedAttestation: false,
   });
-  expect(started.speakerManagementToken).toBe(speakerToken);
-  expect(started.continuationToken).toBe(continuationToken);
   expect(eventProposalProofStartResponseSchema.parse(await response.json()).status).toBe("verification_sent");
   return extractEmailUrl(await waitForCapturedEmail(email, "Verify your email for", { since }), linkPath);
 }
 
-async function openProposalProof(page: Page, mailUrl: string) {
-  // The link carries the terms agreed before it was sent: it is read at once, and they are not asked again.
-  const verified = responseFor(page, `${endpoint}/proof/verify`);
-  await page.goto(mailUrl);
-  const response = await verified;
-  await expect(page.locator('[data-step="2"]')).toBeVisible();
-  expect(response.status(), await response.text()).toBe(200);
-  eventProposalProofVerifySchema.parse(response.request().postDataJSON());
-  const result = eventProposalProofVerifyResponseSchema.parse(await response.json());
-  if (result.status !== "ready") throw new Error("The actual mailbox proof must be ready");
-  return result;
+/** The proposal form opens on its terms; the contact step follows them. */
+async function openContactStep(page: Page) {
+  await page.goto(pagePath);
+  await acceptVisibleTerms(page, "[data-consents]");
+  await page.getByRole("button", { name: "Continue →", exact: true }).click();
 }
 
-async function submitOwnProofProposal(page: Page, title: string, continuationToken: string) {
+/**
+ * Adds a representation from the signed-in contact step. An address the
+ * account has not proved yet is verified from its own email first; the
+ * organization is then named, or already decided by what the person holds.
+ */
+async function addRepresentation(
+  page: Page,
+  email: string,
+  details: { organizationName?: string; jobTitle?: string; verify: boolean },
+) {
+  const dialog = page.getByRole("dialog", { name: "Add identity", exact: true });
+  await dialog.getByLabel(EMAIL_FIRST_COPY.representation.work.label, { exact: true }).fill(email);
+  const since = await capturedEmailCount();
+  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  if (details.verify) {
+    await expect(dialog).toContainText("Open the verification email");
+    const message = await waitForCapturedEmail(email, "Verify your email", { since });
+    const verification = await page.context().newPage();
+    await verification.goto(extractEmailUrl(message, "/email-verifications"));
+    await verification.getByRole("button", { name: "Verify this address", exact: true }).click();
+    await expect(verification.getByText(`${email} is verified`, { exact: true })).toBeVisible();
+    await verification.close();
+    await dialog.getByRole("button", { name: "Check verification", exact: true }).click();
+  }
+  const add = dialog.getByRole("button", { name: "Add representation", exact: true });
+  await expect(add).toBeVisible();
+  if (details.organizationName)
+    await dialog.getByRole("textbox", { name: /^Organization name/ }).fill(details.organizationName);
+  if (details.jobTitle) await dialog.getByRole("textbox", { name: /^Job title/ }).fill(details.jobTitle);
+  return { dialog, add };
+}
+
+async function submitOwnProposal(page: Page, title: string, actingIdentityId: string) {
   await page.getByRole("button", { name: "Continue →", exact: true }).click();
   await page.getByRole("radio", { name: "Talk", exact: true }).check();
   await page.getByLabel(fieldLabel("Title")).fill(title);
@@ -124,7 +141,9 @@ async function submitOwnProofProposal(page: Page, title: string, continuationTok
   await page.getByRole("button", { name: "Submit proposal →", exact: true }).click();
   const response = await submitted;
   expect(response.status(), await response.text()).toBe(200);
-  expect(proposalCreateSchema.parse(response.request().postDataJSON()).continuationToken).toBe(continuationToken);
+  const input = proposalCreateSchema.parse(response.request().postDataJSON());
+  expect(input.proposer.actingIdentityId).toBe(actingIdentityId);
+  expect(input.unaffiliatedAttestation).toBe(false);
   proposalCreateResponseSchema.parse(await response.json());
 }
 
@@ -146,7 +165,7 @@ async function readSpeaker(page: Page, proposalId: string) {
   return speakerSelfServiceReadResponseSchema.parse(await response.json());
 }
 
-test("guest event entry creates a nonmember affiliation and an invited known person proves a different work mailbox", async ({
+test("a new proposer signs in, adds a nonmember affiliation, and an invited known person proves a different work mailbox", async ({
   page: staff,
   browser,
 }, info) => {
@@ -183,52 +202,77 @@ test("guest event entry creates a nonmember affiliation and an invited known per
   const resumeContext = await browser.newContext({ baseURL: new URL(staff.url()).origin });
   try {
     const guest = await guestContext.newPage();
+    guest.setDefaultTimeout(20_000);
     const newEmail = `person@nonmember-${suffix}.test`;
     expect((await usersByEmail(staff, newEmail)).page.total).toBe(0);
-    await guest.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(newEmail) });
     await guest.goto(pagePath);
     const identity = guest.locator("[data-proposer-identity]");
-    // The terms come first; the contact step then asks which email, with the work email chosen and its field alone.
+    // The terms come first; signed out, the contact step is the shared sign-in card and asks nothing itself.
     await expect(guest.locator("[data-consents]").getByRole("checkbox").first()).toBeVisible();
     await expect(identity.getByRole("textbox")).toHaveCount(0);
     await acceptVisibleTerms(guest, "[data-consents]");
     await guest.getByRole("button", { name: "Continue →", exact: true }).click();
-    await expect(identity.getByRole("radio")).toHaveCount(2);
-    await expect(
-      identity.getByRole("radio", { name: EMAIL_FIRST_COPY.proposal.work.title, exact: true }),
-    ).toBeChecked();
-    await expect(identity.getByRole("textbox")).toHaveCount(1);
-    const mailUrl = await requestOrganizationProof(guest, newEmail);
-    await expect(identity.getByLabel(fieldLabel("First name"))).toHaveCount(0);
-    const proof = await openProposalProof(guest, mailUrl);
-    expect(proof).toMatchObject({ email: newEmail, applicantKind: "organization", person: null, organization: null });
-    expect((await usersByEmail(staff, newEmail)).page.total).toBe(0);
+    await expect(identity.getByRole("region", { name: "Sign in", exact: true })).toBeVisible();
+    await expect(identity.getByRole("radio")).toHaveCount(0);
+    await expect(identity.getByRole("textbox")).toHaveCount(0);
+    await signInThroughCard(guest, newEmail, { emailFlow: "proposal" });
+    // Opening the link creates the account with its individual identity alone: no organization is assumed.
+    const newPeople = await usersByEmail(staff, newEmail);
+    expect(newPeople.page.total).toBe(1);
+    const createdId = newPeople.users[0]!.id;
+    expect((await readUser(staff, createdId)).identities).toEqual([
+      expect.objectContaining({ organizationId: null, organizationName: null, memberId: null }),
+    ]);
+    await acceptVisibleTerms(guest, "[data-consents]");
+    await guest.getByRole("button", { name: "Continue →", exact: true }).click();
+    const picker = guest.getByRole("combobox", { name: "Representation", exact: true });
+    await expect(picker).toBeVisible();
+    await expect(guest.getByRole("button", { name: "Continue →", exact: true })).toBeHidden();
+    // The work address is the account's own, proved at sign-in: the organization is named without another email.
     const organizationName = `Nonmember affiliation ${suffix}`;
+    await identity.getByRole("button", { name: "Add identity", exact: true }).click();
+    const first = await addRepresentation(guest, newEmail, {
+      organizationName,
+      jobTitle: "Conference engineer",
+      verify: false,
+    });
+    await first.add.click();
+    await expect(first.dialog).not.toBeVisible();
+    const createdUser = await readUser(staff, createdId);
+    // The account holds its individual identity beside the organization one just added.
+    expect(createdUser.identities).toHaveLength(2);
+    expect(createdUser.identities.find((entry) => entry.organizationId === null)).toMatchObject({
+      organizationName: null,
+      memberId: null,
+    });
+    let affiliation = createdUser.identities.find((entry) => entry.organizationId !== null)!;
+    expect(affiliation).toMatchObject({
+      email: newEmail,
+      organizationName,
+      jobTitle: "Conference engineer",
+      memberId: null,
+      membershipCategory: null,
+      status: null,
+    });
+    await expect(identity.getByText(organizationName, { exact: true })).toBeVisible();
+    // A new account has no name yet: it is asked here and saved with the proposal.
     for (const [label, value] of [
       ["First name", "New"],
       ["Last name", "Participant"],
-      ["Organization name", organizationName],
-      ["Job title", "Conference engineer"],
     ]) {
       const control = identity.getByLabel(fieldLabel(label));
       await expect(control).toHaveCount(1);
       await control.fill(value);
     }
     await guest.getByRole("button", { name: "Clear unsaved changes", exact: true }).click();
-    for (const label of ["First name", "Last name", "Organization name", "Job title"])
+    for (const label of ["First name", "Last name"])
       await expect(identity.getByLabel(fieldLabel(label))).toHaveValue("");
-    expect((await usersByEmail(staff, newEmail)).page.total).toBe(0);
-    for (const [label, value] of [
-      ["First name", "New"],
-      ["Last name", "Participant"],
-      ["Organization name", organizationName],
-      ["Job title", "Conference engineer"],
-    ])
-      await identity.getByLabel(fieldLabel(label)).fill(value);
-    await expect(identity.locator(".pk-datalist")).not.toContainText("New Participant");
-    await expect(identity.locator(".pk-datalist")).not.toContainText(organizationName);
-    await expect(identity.getByRole("combobox")).toHaveCount(0);
+    expect(await readUser(staff, createdId)).toMatchObject({ first_name: null, last_name: null });
+    await identity.getByLabel(fieldLabel("First name")).fill("New");
+    await identity.getByLabel(fieldLabel("Last name")).fill("Participant");
     await capture(guest, info, "new-nonmember-details");
+    for (const label of ["Organization name", "Job title"])
+      await expect(identity.getByRole("textbox", { name: fieldLabel(label) })).toHaveCount(0);
     await guest.getByRole("button", { name: "Continue →", exact: true }).click();
     await guest.getByRole("radio", { name: "Talk", exact: true }).check();
     await guest.getByLabel(fieldLabel("Title")).fill(`New nonmember affiliation ${suffix}`);
@@ -259,39 +303,29 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     const response = await submitted;
     expect(response.status(), await response.text()).toBe(200);
     const input = proposalCreateSchema.parse(response.request().postDataJSON());
-    expect(input.proposer).toMatchObject({ firstName: "New", lastName: "Participant", organizationName });
-    expect(input.proposer.actingIdentityId).toBeUndefined();
-    expect(input.continuationToken).toBe(proof.continuationToken);
+    expect(input.proposer).toMatchObject({ firstName: "New", lastName: "Participant" });
+    expect(input.proposer.actingIdentityId).toBe(affiliation.identityId);
     expect(input.unaffiliatedAttestation).toBe(false);
     const submittedProposal = proposalCreateResponseSchema.parse(await response.json());
-    const newPeople = await usersByEmail(staff, newEmail);
-    expect(newPeople.page.total).toBe(1);
-    const createdUser = await readUser(staff, newPeople.users[0]!.id);
-    // The new account holds its individual identity beside the organization one the proof created.
-    expect(createdUser.identities).toHaveLength(2);
-    expect(createdUser.identities.find((entry) => entry.organizationId === null)).toMatchObject({
-      organizationName: null,
-      memberId: null,
-    });
-    const affiliation = createdUser.identities.find((entry) => entry.organizationId !== null)!;
-    expect(affiliation).toMatchObject({
-      email: newEmail,
-      organizationName,
-      jobTitle: "Conference engineer",
-      memberId: null,
-      membershipCategory: null,
-      status: null,
-    });
-    expect(affiliation.organizationId).not.toBeNull();
+    expect(await readUser(staff, createdId)).toMatchObject({ first_name: "New", last_name: "Participant" });
+    // The speaker biography belongs to the identity spoken as, so submitting saved it there and nowhere else.
+    const submittedUser = await readUser(staff, createdId);
+    expect(submittedUser.identities).toEqual(
+      createdUser.identities.map((entry) =>
+        entry.identityId === affiliation.identityId ? { ...entry, biography } : entry,
+      ),
+    );
+    affiliation = submittedUser.identities.find((entry) => entry.identityId === affiliation.identityId)!;
 
-    // Repeat mailbox proof to reuse the new link through the actual owned catalog.
-    await guest.goto(pagePath);
-    await acceptVisibleTerms(guest, "[data-consents]");
-    await guest.getByRole("button", { name: "Continue →", exact: true }).click();
-    const reused = await openProposalProof(guest, await requestOrganizationProof(guest, newEmail));
-    expect(reused.person).toMatchObject({ firstName: "New", lastName: "Participant" });
-    await expect(guest.getByRole("combobox", { name: "Representation", exact: true })).toHaveCount(0);
-    const beforeNames = await readUser(staff, createdUser.id);
+    // Returning signed in, the saved name and the representation already held are reused.
+    await openContactStep(guest);
+    await picker.click();
+    await guest
+      .getByRole("listbox", { name: "Your identities" })
+      .getByRole("option")
+      .filter({ hasText: organizationName })
+      .click();
+    const beforeNames = await readUser(staff, createdId);
     await expect(identity.getByText("New Participant", { exact: true })).toBeVisible();
     await guest.getByRole("button", { name: "Edit my details", exact: true }).click();
     // Editing opens a dialog on the page, outside the identity step it was opened from.
@@ -302,10 +336,9 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     await detailsDialog.getByRole("button", { name: "Save my details", exact: true }).click();
     const namesResponse = await savedNames;
     expect(namesResponse.status(), await namesResponse.text()).toBe(200);
-    expect(eventProposalProofPersonPatchSchema.parse(namesResponse.request().postDataJSON())).toMatchObject({
+    expect(eventProposalProofPersonPatchSchema.parse(namesResponse.request().postDataJSON())).toEqual({
       firstName: "Renamed",
       lastName: "Participant",
-      continuationToken: reused.continuationToken,
     });
     expect(eventProposalProofPersonPatchResponseSchema.parse(await namesResponse.json()).person).toMatchObject({
       firstName: "Renamed",
@@ -313,111 +346,66 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     });
     await expect(identity.getByText("Renamed Participant", { exact: true })).toBeVisible();
     await expect(detailsDialog).toHaveCount(0);
-    const renamed = await readUser(staff, createdUser.id);
-    expect(renamed).toMatchObject({ id: createdUser.id, first_name: "Renamed", last_name: "Participant" });
+    const renamed = await readUser(staff, createdId);
+    expect(renamed).toMatchObject({ id: createdId, first_name: "Renamed", last_name: "Participant" });
     expect(renamed.identities).toEqual(beforeNames.identities);
     await capture(guest, info, "known-person-names-saved");
-    // The picker loads its catalog as soon as it opens, before anything is chosen.
-    const listed = responseFor(guest, `${endpoint}/proof/identities`);
+    // The picker lists the account's own organization identities.
+    const listed = responseFor(guest, "/api/v1/users/current/identities", "GET");
     await guest.getByRole("button", { name: "Choose another representation", exact: true }).click();
-    const picker = guest.getByRole("combobox", { name: "Representation", exact: true });
     await picker.click();
     const listResponse = await listed;
     expect(listResponse.status(), await listResponse.text()).toBe(200);
-    expect(eventProposalProofIdentitiesSchema.parse(listResponse.request().postDataJSON()).continuationToken).toBe(
-      reused.continuationToken,
-    );
     const catalog = identitiesListResponseSchema.parse(await listResponse.json());
     expect(catalog.identities).toHaveLength(1);
-    expect(catalog.identities[0]).toMatchObject({ id: affiliation.identityId, userId: createdUser.id, memberId: null });
+    expect(catalog.identities[0]).toMatchObject({ id: affiliation.identityId, userId: createdId, memberId: null });
     await guest
       .getByRole("listbox", { name: "Your identities" })
       .getByRole("option")
       .filter({ hasText: organizationName })
       .click();
     await expect(identity.getByText("Renamed Participant", { exact: true })).toBeVisible();
-    expect((await readUser(staff, createdUser.id)).first_name).toBe("Renamed");
-    expect((await readUser(staff, createdUser.id)).identities).toEqual(renamed.identities);
+    expect((await readUser(staff, createdId)).identities).toEqual(renamed.identities);
     for (const label of ["First name", "Last name", "Organization name", "Job title"])
       await expect(identity.getByRole("textbox", { name: fieldLabel(label) })).toHaveCount(0);
-
-    const alternateEmail = `alternate@nonmember-${suffix}.test`;
-    await guest.getByRole("button", { name: "Add representation", exact: true }).click();
-    const alternateMail = await requestOrganizationProof(guest, alternateEmail, undefined, reused.continuationToken);
-    expect((await usersByEmail(staff, alternateEmail)).page.total).toBe(0);
-    expect(await readUser(staff, createdUser.id)).toEqual(renamed);
-    const alternateProof = await openProposalProof(guest, alternateMail);
-    expect(alternateProof.person).toMatchObject({ firstName: "Renamed", lastName: "Participant" });
-    // The representation already held carries its job title: the person is not asked for it again.
-    expect(alternateProof.organization).toEqual({
-      id: affiliation.organizationId,
-      name: organizationName,
-      jobTitle: "Conference engineer",
-    });
-    await expect(identity.getByLabel(fieldLabel("Job title"))).toHaveCount(0);
-    await expect(identity.getByRole("textbox", { name: fieldLabel("Organization name") })).toHaveCount(0);
-    // The organization is chosen in the proof's own organization list, with the role it already holds.
-    await expect(identity.getByRole("combobox", { name: /^Organization/ })).toHaveValue(affiliation.organizationId!);
-    await expect(identity.getByText("Conference engineer", { exact: true })).toBeVisible();
-    await submitOwnProofProposal(guest, `Verified alternate mailbox ${suffix}`, alternateProof.continuationToken);
-    const aliasPeople = await usersByEmail(staff, alternateEmail);
-    expect(aliasPeople.page.total).toBe(1);
-    expect(aliasPeople.users[0]!.id).toBe(createdUser.id);
-    const parallelUser = await readUser(staff, createdUser.id);
-    expect(parallelUser).toMatchObject({ email: renamed.email, first_name: "Renamed", last_name: "Participant" });
-    expect(parallelUser.identities).toEqual(renamed.identities);
-    expect(parallelUser.identities.find((entry) => entry.identityId === affiliation.identityId)).toEqual(affiliation);
-    await guest.goto(pagePath);
-    await acceptVisibleTerms(guest, "[data-consents]");
-    await guest.getByRole("button", { name: "Continue →", exact: true }).click();
-    const parallelProof = await openProposalProof(guest, await requestOrganizationProof(guest, alternateEmail));
-    expect(parallelProof.person).toMatchObject({ firstName: "Renamed", lastName: "Participant" });
-    await guest.getByRole("button", { name: "Choose another representation", exact: true }).click();
-    await picker.click();
-    await guest
-      .getByRole("listbox", { name: "Your identities" })
-      .getByRole("option")
-      .filter({ hasText: "Conference engineer" })
-      .click();
-    await expect(identity.getByText("Renamed Participant", { exact: true })).toBeVisible();
-    await expect(identity.getByText("Conference engineer", { exact: true })).toBeVisible();
-    expect(await readUser(staff, createdUser.id)).toEqual(parallelUser);
     await capture(guest, info, "canonical-representation-reused");
+
+    // A second work mailbox on another domain is proved from its own email and adds a parallel representation.
     const parallelEmail = `person@parallel-${suffix}.test`;
-    await guest.getByRole("button", { name: "Add representation", exact: true }).click();
-    const parallelMail = await requestOrganizationProof(
-      guest,
-      parallelEmail,
-      undefined,
-      parallelProof.continuationToken,
-    );
-    const additionalProof = await openProposalProof(guest, parallelMail);
-    expect(additionalProof.person).toMatchObject({ firstName: "Renamed", lastName: "Participant" });
-    expect(additionalProof.organization).toBeNull();
     const parallelOrganization = `Parallel organization ${suffix}`;
-    await identity.getByLabel(fieldLabel("Organization name")).fill(parallelOrganization);
-    await identity.getByLabel(fieldLabel("Job title")).fill("Parallel role");
-    await submitOwnProofProposal(guest, `Parallel representation ${suffix}`, additionalProof.continuationToken);
-    const twoRepresentations = await readUser(staff, createdUser.id);
-    expect((await usersByEmail(staff, parallelEmail)).users[0]!.id).toBe(createdUser.id);
-    expect(twoRepresentations.identities).toHaveLength(3);
-    expect(twoRepresentations.identities.find((entry) => entry.identityId === affiliation.identityId)).toEqual(
-      affiliation,
-    );
-    expect(twoRepresentations.identities.find((entry) => entry.email === parallelEmail)).toMatchObject({
+    await guest.getByRole("button", { name: "Add representation", exact: true }).click();
+    const parallel = await addRepresentation(guest, parallelEmail, {
+      organizationName: parallelOrganization,
+      jobTitle: "Parallel role",
+      verify: true,
+    });
+    await parallel.add.click();
+    await expect(parallel.dialog).not.toBeVisible();
+    expect((await usersByEmail(staff, parallelEmail)).users[0]!.id).toBe(createdId);
+    const added = await readUser(staff, createdId);
+    expect(added.identities).toHaveLength(3);
+    expect(added.identities.find((entry) => entry.identityId === affiliation.identityId)).toEqual(affiliation);
+    const parallelIdentity = added.identities.find((entry) => entry.email === parallelEmail)!;
+    expect(parallelIdentity).toMatchObject({
       organizationName: parallelOrganization,
       jobTitle: "Parallel role",
       memberId: null,
     });
-    await guest.goto(pagePath);
-    await acceptVisibleTerms(guest, "[data-consents]");
-    await guest.getByRole("button", { name: "Continue →", exact: true }).click();
-    await openProposalProof(guest, await requestOrganizationProof(guest, parallelEmail));
+    await expect(identity.getByText("Parallel role", { exact: true })).toBeVisible();
+    await submitOwnProposal(guest, `Parallel representation ${suffix}`, parallelIdentity.identityId);
+    const twoRepresentations = await readUser(staff, createdId);
+    expect(twoRepresentations.identities).toHaveLength(3);
+    expect(twoRepresentations.identities.find((entry) => entry.identityId === affiliation.identityId)).toEqual(
+      affiliation,
+    );
+    await openContactStep(guest);
     for (const [organization, role] of [
       [organizationName, "Conference engineer"],
       [parallelOrganization, "Parallel role"],
     ]) {
-      await guest.getByRole("button", { name: "Choose another representation", exact: true }).click();
+      const another = guest.getByRole("button", { name: "Choose another representation", exact: true });
+      await expect(picker.or(another).first()).toBeVisible();
+      if (!(await picker.isVisible())) await another.click();
       await picker.click();
       await guest
         .getByRole("listbox", { name: "Your identities" })
@@ -427,11 +415,11 @@ test("guest event entry creates a nonmember affiliation and an invited known per
         .click();
       await expect(identity.getByText("Renamed Participant", { exact: true })).toBeVisible();
       await expect(identity.getByText(role, { exact: true })).toBeVisible();
-      expect(await readUser(staff, createdUser.id)).toEqual(twoRepresentations);
+      expect(await readUser(staff, createdId)).toEqual(twoRepresentations);
     }
     await capture(guest, info, "parallel-representation-selected");
 
-    const invitation = await waitForCapturedEmail(knownEmail, "You have been added as a speaker", { since });
+    const invitation = await waitForCapturedEmail(knownEmail, "Speaker invitation: please confirm", { since });
     const speakerUrl = extractEmailUrl(invitation, "/portal/");
     const proposalId = submittedProposal.proposalId!;
     const resumed = await resumeContext.newPage();
@@ -452,7 +440,7 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     const beforeAffiliation = await readSpeaker(resumed, proposalId);
     await resumed.getByRole("button", { name: "Add representation", exact: true }).click();
     const secondaryEmail = `person@secondary-${suffix}.test`;
-    const secondaryMail = await requestOrganizationProof(resumed, secondaryEmail, undefined, undefined, "/portal/");
+    const secondaryMail = await requestSpeakerOrganizationProof(resumed, secondaryEmail, "/portal/");
     expect(await readUser(staff, knownId)).toEqual(beforeMailboxProof);
     expect((await readSpeaker(resumed, proposalId)).profile).toEqual(beforeAffiliation.profile);
 

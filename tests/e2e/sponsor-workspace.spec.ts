@@ -148,7 +148,7 @@ test.describe("portal sponsor workspace", () => {
       onReviewReady: optIn,
     });
     await registerInBrowser(attendee, deniedEmail, undefined, undefined, {
-      organization: "Synthetic Private Services",
+      organization: `Synthetic Private Services ${stamp}`,
     });
 
     // ── Sponsor clicks the capability-bearing unified portal link ──────────
@@ -174,7 +174,9 @@ test.describe("portal sponsor workspace", () => {
     await expect(page.getByText(attendeeEmail)).toBeVisible();
     await expect(page.getByText(personalEmail, { exact: true })).toBeVisible();
     await expect(page.getByText(deniedEmail, { exact: true })).toBeHidden();
-    await expect(page.getByText("Personal email address", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("row").filter({ hasText: personalEmail }).getByText("Personal email address", { exact: true }),
+    ).toBeVisible();
     const endpoint = `/api/v1/sponsors/${sponsorship.id}/events/${event.id}/attendees`;
     const rosterResponse = await page.request.get(endpoint);
     expect(rosterResponse.status()).toBe(200);
@@ -219,9 +221,9 @@ test.describe("portal sponsor workspace", () => {
     expect(csv).not.toContain(workRegistration.result.registrationId);
     expect(csv).not.toContain(personalRegistration.result.registrationId);
 
-    const personalManage = personalRegistration.result.manageUrl;
-    expect(personalManage).toBeTruthy();
-    await attendee.goto(personalManage!);
+    // The browser is still signed in as the last registrant; consent is withdrawn by its owner alone, from their own link.
+    await attendee.context().clearCookies();
+    await attendee.goto((await personalRegistration.manageLink()).manageUrl);
     await attendee.getByRole("button", { name: "Withdraw sharing…", exact: true }).click();
     await acceptConfirmDialog(attendee, "Withdraw sharing");
     await expect(attendee.getByText("Sharing withdrawn", { exact: true })).toBeVisible();
@@ -238,7 +240,7 @@ test.describe("portal sponsor workspace", () => {
     await page.getByRole("menuitem", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/portal\/#\/sponsors$/);
     // Sign-out retains the sponsor destination, whose anonymous entry is
-    // the sponsor-link request form rather than an authorized attendee view.
+    // the shared sign-in card titled for it rather than an authorized attendee view.
     await expect(page.getByRole("heading", { name: "Sponsor access", exact: true })).toBeVisible();
     await expect(page.getByRole("table", { name: /^Consenting attendees for/ })).toHaveCount(0);
     await expect(page.getByText(attendeeEmail, { exact: true })).toHaveCount(0);
@@ -246,21 +248,18 @@ test.describe("portal sponsor workspace", () => {
     await expect(page.getByRole("heading", { name: "Sponsor access", exact: true })).toBeVisible();
     expect((await page.request.get(csvEndpoint!)).status()).toBe(401);
 
-    // ── Self-service "request a new link" flow, keyed by the event's public
-    // slug rather than its internal id (a sponsor
-    // contact only ever knows the slug) ────────────────────────────────────
+    // ── Asking for a new link: a sponsor contact signs in from the same
+    // card as everyone else and returns to the sponsor destination ─────────
     const resendAfterIndex = (await readOutbox()).length;
     await page.goto("/");
-    await page.goto(`/portal/#/sponsors/access?event=${encodeURIComponent(EVENT_SLUG)}`);
-    await expect(page.getByRole("heading", { name: "Sponsor access" })).toBeVisible();
-    // By accessible name rather than by id: the two controls are design-system
-    // Fields now, which own their own `for`/`id` pair.
+    await page.goto("/portal/#/sponsors");
+    await expect(page.getByRole("heading", { name: "Sponsor access", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Sign in with an email link" }).click();
     await page.getByLabel("Email").fill(contactEmail);
-    await expect(page.getByLabel("Event")).toHaveValue(EVENT_SLUG);
     await page.getByRole("button", { name: "Send sign-in link" }).click();
     await expect(page.getByText(/you'll receive a sign-in link shortly/i)).toBeVisible();
 
-    const resendEmail = await waitForCapturedEmail(contactEmail, "sponsor workspace", { since: resendAfterIndex });
+    const resendEmail = await waitForCapturedEmail(contactEmail, "sign-in link", { since: resendAfterIndex });
     const resendUrl = extractUrlFromEmail(resendEmail, "/portal/#/verify");
     expect(resendUrl).not.toBe(portalUrl);
 

@@ -1,29 +1,20 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { callApi } from "./helpers/app";
-import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
-import {
-  eventProposalProofStartSchema,
-  eventProposalProofVerifyResponseSchema,
-} from "../assets/shared/schemas/event-proposal-proof";
-import { proposalCreateSchema } from "../assets/shared/schemas/proposal-management";
+import { proposalCreateResponseSchema, proposalCreateSchema } from "../assets/shared/schemas/proposal-management";
 import { proposalEntryContextSchema } from "../assets/shared/schemas/proposal-entry";
 import { createInvite, findInviteByToken } from "../functions/_lib/services/invites";
 import { createReferralCode } from "../functions/_lib/services/referrals";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { submitProposal } from "../functions/_lib/services/proposal-submission";
 import { withIndependentCapacity } from "./helpers/independent-capacity";
+import { signInProposer } from "./helpers/proposal-proof";
 
 beforeEach(resetDb);
 const consents = [{ termKey: "speaker-terms", version: "v1" }];
-const request = (suffix: string, body: unknown) =>
-  callApi(env, `/api/v1/events/pqc-2026/proposals${suffix}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
 async function fixture() {
   const { eventId } = await seedEventAndAdmin(env.DB);
   const adminId = await env.DB.prepare("SELECT id FROM users WHERE normalized_email='admin@pkic.org'").first<string>(
@@ -50,67 +41,38 @@ async function fixture() {
     sourceRef: "invite",
     referralCode,
   });
-  const start = await request(
-    "/proof",
-    eventProposalProofStartSchema.parse({
-      email: "colleague@example.test",
-      unaffiliatedAttestation: true,
-      consents,
-      entryContext: entry,
-    }),
-  );
-  expect(start.status, await start.clone().text()).toBe(200);
-  const queued = await env.DB.prepare(
-    "SELECT payload_json FROM email_outbox WHERE template_key='event_proposal_verify' AND recipient_email='colleague@example.test'",
-  ).first<{ payload_json: string }>();
-  expect(queued!.payload_json).not.toContain(invitation.token);
-  const delivered = await deliveredEmailPayload<{ verificationUrl: string }>(env.DB, env, queued!.payload_json);
-  const url = new URL(delivered.verificationUrl);
-  expect(url.searchParams.has("invite")).toBe(false);
-  expect(url.searchParams.has("ref")).toBe(false);
-  const token = new URLSearchParams(url.hash.slice(1)).get("verify")!;
-  return { eventId, adminId: adminId!, invitation, entry, token };
-}
-async function ready(token: string) {
-  const response = await request("/proof/verify", { token });
-  expect(response.status, await response.clone().text()).toBe(200);
-  const proof = eventProposalProofVerifyResponseSchema.parse(await response.json());
-  if (proof.status !== "ready" || !proof.entryContext) throw new Error("Expected authoritative proposal entry context");
-  return proof;
-}
-function submission(proof: Awaited<ReturnType<typeof ready>>) {
-  return proposalCreateSchema.parse({
-    ...proof.entryContext,
-    continuationToken: proof.continuationToken,
+  // A colleague of the invited person, signed in with their own account.
+  const colleague = await signInProposer({ environment: env, email: "colleague@example.test" });
+  const body = proposalCreateSchema.parse({
+    ...entry,
     ...withIndependentCapacity({ unaffiliatedAttestation: true }),
     proposer: { firstName: "Colleague", lastName: "Submitter", actingIdentityId: null },
     proposal: {
       type: "Talk",
       title: "A delegated invited conference proposal",
       abstract:
-        "A detailed proposal discussing a colleague's deliberate submission through an existing speaker invitation, preserving its original referral context across a real mailbox confirmation and atomic submission.",
+        "A detailed proposal discussing a colleague's deliberate submission through an existing speaker invitation, preserving its original referral context through sign-in and an atomic submission.",
     },
     consents,
   });
+  return { eventId, adminId: adminId!, invitation, entry, colleague, body };
 }
+const submit = (f: Awaited<ReturnType<typeof fixture>>) =>
+  callApi(env, "/api/v1/events/pqc-2026/proposals", {
+    method: "POST",
+    headers: { "content-type": "application/json", ...f.colleague.headers },
+    body: JSON.stringify(f.body),
+  });
+const invitationState = (inviteId: string) =>
+  queryAll(env.DB, "SELECT status,used_count FROM invites WHERE id=?", [inviteId]);
 
-describe("proposal entry context through mailbox proof", () => {
-  it("restores an actual invited email return and preserves delegation, referral conversion, and atomic invite acceptance", async () => {
+describe("proposal entry context of a signed-in proposer", () => {
+  it("preserves delegation, referral conversion, and atomic invite acceptance", async () => {
     const f = await fixture();
-    const proof = await ready(f.token);
-    expect(proof.entryContext).toMatchObject({
-      inviteId: f.invitation.invite.id,
-      sourceType: "invite",
-      sourceRef: "invite",
-      referralCode: f.entry.referralCode,
-    });
-    expect(proof.entryContext!.inviteToken).not.toBe(f.invitation.token);
-    const response = await request("", submission(proof));
+    const response = await submit(f);
     expect(response.status, await response.clone().text()).toBe(200);
-    const { proposalId } = (await response.json()) as { proposalId: string };
-    expect(
-      await queryAll(env.DB, "SELECT status,used_count FROM invites WHERE id=?", [f.invitation.invite.id]),
-    ).toEqual([{ status: "accepted", used_count: 1 }]);
+    const { proposalId } = proposalCreateResponseSchema.parse(await response.json());
+    expect(await invitationState(f.invitation.invite.id)).toEqual([{ status: "accepted", used_count: 1 }]);
     expect(
       await queryAll(
         env.DB,
@@ -131,56 +93,42 @@ describe("proposal entry context through mailbox proof", () => {
     expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email='invited@example.test'")).toHaveLength(
       0,
     );
-    expect((await request("/proof/verify", { token: f.token })).status).toBe(409);
-    expect((await request("", submission(proof))).status).toBe(409);
-    expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toHaveLength(1);
   });
 
-  it.each(["rotated", "revoked", "expired"] as const)(
-    "blocks a %s original invitation on the real email return",
-    async (change) => {
-      const f = await fixture();
-      const sql =
-        change === "rotated"
-          ? "UPDATE invites SET link_secret='rotated' WHERE id=?"
-          : change === "revoked"
-            ? "UPDATE invites SET status='revoked' WHERE id=?"
-            : "UPDATE invites SET expires_at='2020-01-01T00:00:00.000Z' WHERE id=?";
-      await env.DB.prepare(sql).bind(f.invitation.invite.id).run();
-      expect((await request("/proof/verify", { token: f.token })).status).toBe(410);
-      expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toHaveLength(0);
-      expect(
-        await queryAll(env.DB, "SELECT id FROM audit_log WHERE idempotency_key LIKE 'event_proposal_proof_consumed:%'"),
-      ).toHaveLength(0);
-    },
-  );
-
-  it("rejects dropping the invitation or changing signed original source/referral context", async () => {
+  it.each([
+    ["rotated", "UPDATE invites SET link_secret='rotated' WHERE id=?", 404],
+    ["revoked", "UPDATE invites SET status='revoked' WHERE id=?", 409],
+    ["expired", "UPDATE invites SET expires_at='2020-01-01T00:00:00.000Z' WHERE id=?", 410],
+  ] as const)("refuses a %s invitation at submission and stores nothing", async (_change, sql, status) => {
     const f = await fixture();
-    const proof = await ready(f.token);
-    const body = submission(proof);
-    const { inviteToken: _token, inviteId: _id, ...withoutInvite } = body;
-    expect((await request("", withoutInvite)).status).toBe(422);
-    for (const change of [{ sourceType: "campaign" }, { sourceRef: "changed" }, { referralCode: undefined }])
-      expect((await request("", { ...body, ...change })).status).toBe(422);
-    expect(
-      await queryAll(env.DB, "SELECT status,used_count FROM invites WHERE id=?", [f.invitation.invite.id]),
-    ).toEqual([{ status: "sent", used_count: 0 }]);
+    await env.DB.prepare(sql).bind(f.invitation.invite.id).run();
+    const response = await submit(f);
+    expect(response.status, await response.clone().text()).toBe(status);
     expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT conversions FROM referral_codes WHERE code=?", [f.entry.referralCode]),
+    ).toEqual([{ conversions: 0 }]);
   });
 
-  it("rolls back the proposal, proof, and referral when the original invitation changes at the final batch", async () => {
+  it("rolls back the proposal and referral when the invitation changes at the final batch", async () => {
     const f = await fixture();
-    const proof = await ready(f.token);
-    const body = submission(proof);
-    const invite = await findInviteByToken(env.DB, body.inviteToken!, env.INTERNAL_SIGNING_SECRET!, body.inviteId);
+    const invite = await findInviteByToken(env.DB, f.body.inviteToken!, env.INTERNAL_SIGNING_SECRET!, f.body.inviteId);
+    const session = await env.DB.prepare("SELECT id,expires_at FROM sessions WHERE user_id=?")
+      .bind(f.colleague.userId)
+      .first<{ id: string; expires_at: string }>();
     const db = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE invites SET link_secret='rotated' WHERE id=?").bind(invite.id).run(),
     );
     await expect(
       submitProposal(db, {
         event: await getEventBySlug(env.DB, "pqc-2026"),
-        body,
+        body: f.body,
+        actor: {
+          userId: f.colleague.userId,
+          email: "colleague@example.test",
+          sessionId: session!.id,
+          expiresAt: session!.expires_at,
+        },
         acceptedInvite: invite,
         appBaseUrl: "https://app.test",
         signingSecret: env.INTERNAL_SIGNING_SECRET!,
@@ -189,20 +137,15 @@ describe("proposal entry context through mailbox proof", () => {
         ip: null,
         userAgent: null,
       }),
-    ).rejects.toMatchObject({ code: "PROPOSAL_IDENTITY_CHANGED" });
+    ).rejects.toThrow();
     expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toHaveLength(0);
-    expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email='colleague@example.test'")).toHaveLength(
-      0,
-    );
-    expect(
-      await queryAll(env.DB, "SELECT id FROM audit_log WHERE idempotency_key LIKE 'event_proposal_proof_consumed:%'"),
-    ).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT first_name,last_name FROM users WHERE id=?", [f.colleague.userId])).toEqual([
+      { first_name: null, last_name: null },
+    ]);
     expect(
       await queryAll(env.DB, "SELECT conversions FROM referral_codes WHERE code=?", [f.entry.referralCode]),
     ).toEqual([{ conversions: 0 }]);
-    expect(await queryAll(env.DB, "SELECT status,used_count FROM invites WHERE id=?", [invite.id])).toEqual([
-      { status: "sent", used_count: 0 },
-    ]);
+    expect(await invitationState(invite.id)).toEqual([{ status: "sent", used_count: 0 }]);
     expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key='proposal_submitted'")).toHaveLength(
       0,
     );

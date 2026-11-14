@@ -8,29 +8,43 @@
  * submitted. Refusals the session already shows (an existing membership, or an
  * individual application while representing an organization) replace the form
  * before anyone fills it in; the server refuses them again on submit.
+ *
+ * Someone who represents no organization yet says how they are joining: for
+ * their organization, or as an individual. That answer is the explicit
+ * individual capacity; it is never read from their address.
  */
 import { useState } from "preact/hooks";
-import { getJson } from "../shared/api-client";
+import { EMAIL_FIRST_COPY } from "../../shared/email-first-copy";
+import { ChoiceCard, ChoiceCards } from "../ui/ChoiceCard";
+import { StateIcon } from "../ui/Field";
+import { IconOrganization } from "../components/icons";
+import { IconPerson } from "../components/icons/app-navigation";
+import { getJson, patchJson } from "../shared/api-client";
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
-import { myProfileSchema } from "../../shared/schemas/me";
+import { myProfileSchema, myProfileUpdateSchema } from "../../shared/schemas/me";
 import type { SessionActingIdentity } from "../../shared/session-acting-identity";
 import {
   INDIVIDUAL_ALREADY_MEMBER_MESSAGE,
   individualWhileRepresentingMessage,
 } from "../../shared/membership-application-refusals";
 import { RegistrationIdentityField } from "../components/RegistrationIdentitySelect";
-import { DescriptionList } from "../ui/DescriptionList";
 import { ButtonLink } from "../ui/Button";
+import { PersonDetailsSummary } from "../components/PersonDetailsSummary";
+
+/** How a person who represents no organization yet is joining. */
+export type JoinPath = "organization" | "individual";
 
 export interface SignedInApplicant {
   userId: string;
+  firstName: string;
+  lastName: string;
   name: string;
   email: string;
   identities: SessionActingIdentity[];
   preferred: SessionActingIdentity;
 }
 
-/** The signed-in person who can apply as one of their identities, or null to use the verified-email path. */
+/** The signed-in person who can apply as one of their identities, or null when nobody is signed in. */
 export async function readSignedInApplicant(): Promise<SignedInApplicant | null> {
   const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema).catch(() => null);
   if (!session || session.actingIdentities.length === 0) return null;
@@ -39,6 +53,8 @@ export async function readSignedInApplicant(): Promise<SignedInApplicant | null>
   const identities = session.actingIdentities;
   return {
     userId: session.identity.id,
+    firstName: profile.firstName ?? "",
+    lastName: profile.lastName ?? "",
     name: [profile.firstName, profile.lastName].filter(Boolean).join(" "),
     email: profile.email || session.identity.email,
     identities,
@@ -105,54 +121,106 @@ function Refusal({ refusal }: { refusal: JoinRefusal }) {
   );
 }
 
-/** Name, email and representation of the signed-in applicant, and the refusal for the chosen identity, if any. */
+/** The two ways in for someone who represents no organization yet, each with what it means. */
+function JoinPathChoice({ path, onChoose }: { path: JoinPath | null; onChoose: (path: JoinPath) => void }) {
+  return (
+    <ChoiceCards legend="How are you joining?">
+      <ChoiceCard
+        name="joinPath"
+        value="organization"
+        checked={path === "organization"}
+        onChange={() => onChoose("organization")}
+        icon={<IconOrganization />}
+        title="For my organization"
+        description="I work for or own the organization that is joining."
+        points={EMAIL_FIRST_COPY.join.work.points}
+      />
+      <ChoiceCard
+        name="joinPath"
+        value="individual"
+        checked={path === "individual"}
+        onChange={() => onChoose("individual")}
+        icon={<IconPerson />}
+        iconMark={<StateIcon state="advisory" />}
+        title="As an individual"
+        description={EMAIL_FIRST_COPY.join.personal.description}
+        points={EMAIL_FIRST_COPY.join.personal.points}
+        pointTone="cost"
+      />
+    </ChoiceCards>
+  );
+}
+
+/**
+ * Name, email and representation of the signed-in applicant, the refusal for the chosen identity, if any,
+ * and, for an identity without an organization, the choice of how they are joining. A new account has
+ * no name yet, and the application needs one, so the name is edited in place.
+ */
 export function JoinSignedInApplicant({
   applicant,
-  onIdentityChange,
+  initialPath = null,
+  onChange,
+  onNamesSaved,
 }: {
   applicant: SignedInApplicant;
-  onIdentityChange: (identity: SessionActingIdentity, refusal: JoinRefusal | null) => void;
+  /** The applicant with the name they just saved to their profile. */
+  onNamesSaved?: (applicant: SignedInApplicant) => void;
+  /** The path kept from earlier in this tab. */
+  initialPath?: JoinPath | null;
+  onChange: (identity: SessionActingIdentity, refusal: JoinRefusal | null, path: JoinPath | null) => void;
 }) {
   const [identity, setIdentity] = useState(applicant.preferred);
   const [identities, setIdentities] = useState(applicant.identities);
+  const [path, setPath] = useState<JoinPath | null>(initialPath);
+  const [names, setNames] = useState({ firstName: applicant.firstName, lastName: applicant.lastName });
   const refusal = joinRefusalFor(identity, identities);
   const choose = (next: SessionActingIdentity, roster: readonly SessionActingIdentity[] = identities) => {
     setIdentity(next);
-    onIdentityChange(next, joinRefusalFor(next, roster));
+    onChange(next, joinRefusalFor(next, roster), path);
   };
   return (
     <div class="pk-stack">
-      <DescriptionList
-        align="baseline"
-        items={[
-          ...(applicant.name ? [{ term: "Name", value: applicant.name }] : []),
-          { term: "Email", value: <span class="pk-break">{applicant.email}</span> },
-          {
-            term: "Representation",
-            value: (
-              <RegistrationIdentityField
-                preferred={applicant.preferred}
-                available={applicant.identities}
-                userId={applicant.userId}
-                personalAdvisory={false}
-                onSelect={(next) => {
-                  if (!next) return;
-                  // A representation added in the dialog joins the roster the refusal reads.
-                  const roster = identities.some((item) => item.id === next.id) ? identities : [...identities, next];
-                  setIdentities(roster);
-                  choose(next, roster);
-                }}
-                onUpdated={(updated) => {
-                  const roster = identities.map((item) => (item.id === updated.id ? updated : item));
-                  setIdentities(roster);
-                  if (updated.id === identity.id) choose(updated, roster);
-                }}
-              />
-            ),
-          },
-        ]}
+      <PersonDetailsSummary
+        email={applicant.email}
+        firstName={names.firstName}
+        lastName={names.lastName}
+        saveNames={async (patch) => {
+          const saved = await patchJson("/api/v1/users/current", myProfileUpdateSchema.parse(patch), myProfileSchema);
+          const next = { firstName: saved.firstName ?? "", lastName: saved.lastName ?? "" };
+          setNames(next);
+          onNamesSaved?.({ ...applicant, ...next, name: [next.firstName, next.lastName].filter(Boolean).join(" ") });
+        }}
+        representation={
+          <RegistrationIdentityField
+            preferred={applicant.preferred}
+            available={applicant.identities}
+            userId={applicant.userId}
+            personalAdvisory={false}
+            onSelect={(next) => {
+              if (!next) return;
+              // A representation added in the dialog joins the roster the refusal reads.
+              const roster = identities.some((item) => item.id === next.id) ? identities : [...identities, next];
+              setIdentities(roster);
+              choose(next, roster);
+            }}
+            onUpdated={(updated) => {
+              const roster = identities.map((item) => (item.id === updated.id ? updated : item));
+              setIdentities(roster);
+              if (updated.id === identity.id) choose(updated, roster);
+            }}
+          />
+        }
       />
       {refusal && <Refusal refusal={refusal} />}
+      {!refusal && !identity.organizationId && (
+        <JoinPathChoice
+          path={path}
+          onChoose={(next) => {
+            setPath(next);
+            onChange(identity, null, next);
+          }}
+        />
+      )}
     </div>
   );
 }

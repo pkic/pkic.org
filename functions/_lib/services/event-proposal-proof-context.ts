@@ -6,9 +6,7 @@ import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
 import { sha256Hex } from "../utils/crypto";
 import { first } from "../db/queries";
-import { prepareCurrentEventProposalProof } from "./event-proposal-proof-current";
-import { prepareInvitedSpeakerAccountClaim, resolveProposalProofPerson } from "./event-proposal-proof-person";
-import { ownedIdentityEmailEvidence } from "./identities/owned-email";
+import { prepareInvitedSpeakerAccountClaim } from "./event-proposal-proof-person";
 import { issueDatabaseCapability } from "../auth/capability-links";
 import { getSpeakerByManageToken } from "./proposals";
 import type { ParticipantAuthority } from "./participant-authority";
@@ -44,36 +42,34 @@ export async function createEventProposalProofContext(
   },
 ): Promise<EventProposalProofContext> {
   const authority = eventProposalSpeakerAuthority(input);
-  if (authority) {
-    const { speaker, proposal } = await getSpeakerByManageToken(db, authority, input.signingSecret);
-    const session =
+  // Only a speaker confirms an address here; a proposer signs in.
+  if (!authority)
+    throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Open your speaker invitation to confirm an email.");
+  const { speaker, proposal } = await getSpeakerByManageToken(db, authority, input.signingSecret);
+  const session =
+    typeof authority === "string"
+      ? null
+      : await first<{ expires_at: string }>(
+          db,
+          "SELECT expires_at FROM sessions WHERE id=? AND user_id=? AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+          [authority.sessionId ?? "", authority.userId],
+        );
+  if (typeof authority !== "string" && !session)
+    throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Your speaker session has ended.");
+  if (proposal.event_id !== input.eventId || (input.actor && input.actor.userId !== speaker.user_id))
+    throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Use your own speaker invitation.");
+  return {
+    kind: "speaker" as const,
+    userId: speaker.user_id,
+    speakerId: speaker.id,
+    inviteGeneration: speaker.invite_generation,
+    secretDigest: await sha256Hex(speaker.manage_link_secret ?? ""),
+    expiresAt:
       typeof authority === "string"
-        ? null
-        : await first<{ expires_at: string }>(
-            db,
-            "SELECT expires_at FROM sessions WHERE id=? AND user_id=? AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')",
-            [authority.sessionId ?? "", authority.userId],
-          );
-    if (typeof authority !== "string" && !session)
-      throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Your speaker session has ended.");
-    if (proposal.event_id !== input.eventId || (input.actor && input.actor.userId !== speaker.user_id))
-      throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Use your own speaker invitation.");
-    return {
-      kind: "speaker" as const,
-      userId: speaker.user_id,
-      speakerId: speaker.id,
-      inviteGeneration: speaker.invite_generation,
-      secretDigest: await sha256Hex(speaker.manage_link_secret ?? ""),
-      expiresAt:
-        typeof authority === "string"
-          ? parseCapabilityToken(authority, "speaker_manage")!.expiresAt
-          : Math.floor(Date.parse(session!.expires_at) / 1000),
-      ...(typeof authority !== "string" ? { sessionId: authority.sessionId } : {}),
-    };
-  }
-  return input.actor
-    ? { kind: "session" as const, userId: input.actor.userId, sessionId: input.actor.sessionId }
-    : null;
+        ? parseCapabilityToken(authority, "speaker_manage")!.expiresAt
+        : Math.floor(Date.parse(session!.expires_at) / 1000),
+    ...(typeof authority !== "string" ? { sessionId: authority.sessionId } : {}),
+  };
 }
 
 export async function prepareEventProposalProofContext(
@@ -84,81 +80,10 @@ export async function prepareEventProposalProofContext(
     actor?: Pick<AuthenticatedIdentity, "userId" | "sessionId">;
     speakerAuthority?: ParticipantAuthority;
     speakerId?: string;
-    operation: EventProposalProofPayload["operation"];
   },
 ): Promise<StatementLike[]> {
   const context = input.payload.context;
-  if (input.payload.operation !== input.operation)
-    throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "This confirmation belongs to a different action.");
-  if (!context) {
-    if (input.operation !== "proposal_submission")
-      throw new AppError(
-        403,
-        "PROPOSAL_PROOF_CONTEXT_MISMATCH",
-        "A speaker confirmation must identify its invited person.",
-      );
-    return [];
-  }
-  if (context.kind === "mailbox") {
-    if (
-      input.operation !== "proposal_submission" ||
-      (input.actor && input.actor.userId !== context.userId) ||
-      (context.sessionId && (!input.actor || input.actor.sessionId !== context.sessionId))
-    )
-      throw new AppError(
-        403,
-        "PROPOSAL_PROOF_CONTEXT_MISMATCH",
-        "Continue with the person who confirmed the original mailbox.",
-      );
-    const resolved = await resolveProposalProofPerson(db, context.email);
-    if (!resolved?.user || resolved.user.id !== context.userId || resolved.emailId !== context.emailId)
-      throw new AppError(409, "PROPOSAL_PERSON_CHANGED", "The original confirmed mailbox's account changed.");
-    return [
-      ...(await prepareCurrentEventProposalProof(db, {
-        ...input.payload,
-        capabilityId: context.capabilityId,
-        termsDigest: context.termsDigest,
-        expiresAt: context.expiresAt,
-      })),
-      prepareAuthorizationGuard(db, {
-        sql: "SELECT 1 FROM users WHERE id=? AND active=1 AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL",
-        bindings: [context.userId],
-      }),
-      prepareAuthorizationGuard(
-        db,
-        ownedIdentityEmailEvidence({
-          userId: context.userId,
-          emailId: context.emailId,
-          normalizedEmail: context.email,
-        }),
-      ),
-      ...(context.sessionId
-        ? [
-            prepareAuthorizationGuard(db, {
-              sql: "SELECT 1 FROM sessions WHERE id=? AND user_id=? AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')",
-              bindings: [context.sessionId, context.userId],
-            }),
-          ]
-        : []),
-    ];
-  }
-  if (context.kind === "session") {
-    if (input.operation !== "proposal_submission")
-      throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "This confirmation does not identify a speaker.");
-    if (!input.actor || input.actor.userId !== context.userId || input.actor.sessionId !== context.sessionId)
-      throw new AppError(
-        403,
-        "PROPOSAL_PROOF_CONTEXT_MISMATCH",
-        "Continue with the account that requested this confirmation.",
-      );
-    return [
-      prepareAuthorizationGuard(db, {
-        sql: "SELECT 1 FROM sessions WHERE id=? AND user_id=? AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')",
-        bindings: [context.sessionId, context.userId],
-      }),
-    ];
-  }
-  if (input.operation !== "speaker_profile" || input.speakerId !== context.speakerId || !input.speakerAuthority)
+  if (input.speakerId !== context.speakerId || !input.speakerAuthority)
     throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Continue with the same speaker invitation.");
   if (
     context.sessionId &&
@@ -221,7 +146,7 @@ async function prepareInvitationMailboxProof(
 ): Promise<StatementLike[]> {
   if (payload.basis !== "invitation") return [];
   const context = payload.context;
-  if (context?.kind !== "speaker" || context.sessionId)
+  if (context.sessionId)
     throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Invalid speaker confirmation context.");
   const invitation = { speakerId: context.speakerId, userId: context.userId, email: payload.email };
   const evidence = invitationMailboxEvidence(invitation);
@@ -236,7 +161,7 @@ export async function resumeEventProposalSpeakerProof(
   input: { payload: EventProposalProofPayload & { expiresAt: number }; signingSecret: string },
 ): Promise<string> {
   const context = input.payload.context;
-  if (input.payload.operation !== "speaker_profile" || context?.kind !== "speaker" || context.sessionId)
+  if (context.sessionId)
     throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Invalid speaker confirmation context.");
   const row = await first<{ manage_link_secret: string }>(
     db,

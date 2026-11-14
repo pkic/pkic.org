@@ -1,17 +1,15 @@
 // @vitest-environment jsdom
-import { renderToString } from "preact-render-to-string";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { memberJoinVerifySchema } from "../../assets/shared/schemas/member-join";
-import { JoinFlow } from "../../assets/ts/site/JoinFlow";
 import {
   forgetJoinDraft,
-  rememberJoinToken,
+  rememberJoinApplicant,
   rememberJoinChoice,
   rememberedJoinChoice,
-  rememberedJoinToken,
   restoreJoinAnswers,
   saveJoinAnswers,
 } from "../../assets/ts/member-flows/join-draft";
+import { JOIN_USER_ID, openJoinPage, personalIdentity } from "./helpers/join-page";
 import { renderMembershipApplicationQuestions } from "../../assets/ts/member-flows/join-application-fields";
 import { readCustomFieldValues } from "../../assets/ts/shared/widgets/custom-fields";
 const organizationContext = {
@@ -20,17 +18,24 @@ const organizationContext = {
   applicantKind: "organization",
   joinToken: "a".repeat(32),
 };
+const organizationPath = { unaffiliatedAttestation: false };
 
-describe("a verified application kept for this tab", () => {
-  it("restores the verified organization selection only for the same link", () => {
-    rememberJoinToken("token-1");
-    rememberJoinChoice({ organizationName: "Example Organization", domain: "division.example.test" });
-    expect(rememberedJoinChoice()).toEqual({
+const OTHER_USER_ID = "00000000-0000-4000-8000-000000000099";
+const STORAGE_KEY = "pkic.join.verifiedApplication";
+
+describe("a membership application kept for this tab", () => {
+  it("restores the chosen path and organization only for the same account", () => {
+    rememberJoinApplicant(JOIN_USER_ID);
+    const choice = {
+      unaffiliatedAttestation: false,
       organizationName: "Example Organization",
       domain: "division.example.test",
-    });
-    rememberJoinToken("token-2");
-    expect(rememberedJoinChoice()).toBeUndefined();
+    };
+    rememberJoinChoice(choice);
+    expect(rememberedJoinChoice(JOIN_USER_ID)).toEqual(choice);
+    expect(rememberedJoinChoice(OTHER_USER_ID)).toBeUndefined();
+    rememberJoinApplicant(OTHER_USER_ID);
+    expect(rememberedJoinChoice(JOIN_USER_ID)).toBeUndefined();
   });
   afterEach(() => {
     document.body.innerHTML = "";
@@ -55,18 +60,15 @@ describe("a verified application kept for this tab", () => {
   }
 
   it("restores answers after a reload but never an agreement", () => {
-    rememberJoinToken("token-1");
+    rememberJoinApplicant(JOIN_USER_ID);
     const before = applicationForm();
     before.querySelector<HTMLInputElement>('input[value="B"]')!.checked = true;
     before.querySelector<HTMLInputElement>('[name="firstName"]')!.value = "Jane";
     before.querySelector<HTMLInputElement>('[name="custom.agrees_bylaws"]')!.checked = true;
     saveJoinAnswers(before);
-    expect(JSON.parse(sessionStorage.getItem("pkic.join.verifiedApplication")!).answers).not.toHaveProperty(
-      "agrees_bylaws",
-    );
+    expect(JSON.parse(sessionStorage.getItem(STORAGE_KEY)!).answers).not.toHaveProperty("agrees_bylaws");
     before.remove();
 
-    expect(rememberedJoinToken()).toBe("token-1");
     const after = applicationForm();
     const categoryChanges: string[] = [];
     after.addEventListener("change", (event) => categoryChanges.push((event.target as HTMLInputElement).value));
@@ -77,7 +79,7 @@ describe("a verified application kept for this tab", () => {
   });
 
   it("preserves an unfinished answer even when it exceeds the submission limit", () => {
-    rememberJoinToken("token-1");
+    rememberJoinApplicant(JOIN_USER_ID);
     const before = applicationForm();
     const question = document.createElement("textarea");
     question.name = "custom.reason";
@@ -89,24 +91,24 @@ describe("a verified application kept for this tab", () => {
     expect(restored[0].reason).toBe(question.value.trim());
   });
 
-  it.each(["{", JSON.stringify({ token: "token-1", values: { firstName: {} }, checked: [], answers: {} })])(
-    "ignores malformed stored drafts",
-    (stored) => {
-      sessionStorage.setItem("pkic.join.verifiedApplication", stored);
-      expect(rememberedJoinToken()).toBeNull();
-      expect(restoreJoinAnswers(applicationForm(), () => undefined)).toBe(false);
-    },
-  );
+  it.each([
+    "{",
+    JSON.stringify({ applicantUserId: JOIN_USER_ID, values: { firstName: {} }, checked: [], answers: {} }),
+  ])("ignores malformed stored drafts", (stored) => {
+    sessionStorage.setItem(STORAGE_KEY, stored);
+    expect(rememberedJoinChoice(JOIN_USER_ID)).toBeUndefined();
+    expect(restoreJoinAnswers(applicationForm(), () => undefined)).toBe(false);
+  });
 
-  it("starts a fresh draft for another link and forgets everything after submitting", () => {
-    rememberJoinToken("token-1");
+  it("starts a fresh draft for another account and forgets everything after submitting", () => {
+    rememberJoinApplicant(JOIN_USER_ID);
     const form = applicationForm();
     form.querySelector<HTMLInputElement>('[name="firstName"]')!.value = "Jane";
     saveJoinAnswers(form);
-    rememberJoinToken("token-2");
+    rememberJoinApplicant(OTHER_USER_ID);
     expect(restoreJoinAnswers(applicationForm(), () => undefined)).toBe(false);
     forgetJoinDraft();
-    expect(rememberedJoinToken()).toBeNull();
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 
   it("keeps and restores every question widget, including the stateful ones", async () => {
@@ -116,7 +118,7 @@ describe("a verified application kept for this tab", () => {
       { key: "reason", fieldType: "textarea" },
       { key: "authority", fieldType: "boolean" },
     ].map((field, sortOrder) => ({ label: field.key, required: false, sortOrder, ...field })) as never;
-    rememberJoinToken("token-1");
+    rememberJoinApplicant(JOIN_USER_ID);
 
     const before = applicationForm();
     const beforeQuestions = before.querySelector<HTMLElement>("[data-custom-fields]")!;
@@ -124,7 +126,7 @@ describe("a verified application kept for this tab", () => {
     const saves: unknown[] = [];
     before.addEventListener("change", () => {
       saveJoinAnswers(before);
-      saves.push(JSON.parse(sessionStorage.getItem("pkic.join.verifiedApplication")!).answers);
+      saves.push(JSON.parse(sessionStorage.getItem(STORAGE_KEY)!).answers);
     });
     beforeQuestions.querySelector<HTMLButtonElement>('[data-tag-chip][data-value="pqc"]')!.click();
     await vi.waitFor(() => expect(saves.at(-1)).toMatchObject({ topics: ["pqc"] }));
@@ -152,171 +154,112 @@ describe("a verified application kept for this tab", () => {
     );
   });
 
-  it.each([503, 429, "network"] as const)(
-    "retries a new verification link after a temporary failure without restoring the previous draft (%s)",
-    async (failure) => {
-      rememberJoinToken(organizationContext.joinToken);
-      const oldForm = applicationForm();
-      oldForm.querySelector<HTMLInputElement>('[name="firstName"]')!.value = "Jane";
-      saveJoinAnswers(oldForm);
-      const newToken = "b".repeat(32);
-      history.replaceState({}, "", `/join/#verify=${newToken}`);
-      document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
-      const verifiedTokens: string[] = [];
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-          if (!String(input).endsWith("/members/join/verify")) return new Response(null, { status: 500 });
-          verifiedTokens.push(memberJoinVerifySchema.parse(JSON.parse(String(init?.body))).token);
-          if (verifiedTokens.length === 1) {
-            if (failure === "network") throw new TypeError("Network unavailable");
-            return Response.json({ error: { code: "TEMPORARY_FAILURE", message: "Try again" } }, { status: failure });
-          }
-          return Response.json({ ...organizationContext, applicantEmail: "new@example-corp.test" });
-        }),
-      );
-      vi.resetModules();
-      await import("../../assets/ts/member-flows/join-form");
-      await vi.waitFor(() =>
-        expect(document.querySelector("[data-flow-status]")?.textContent).toMatch(/could not verify/i),
-      );
-      expect(document.querySelector("[data-flow-status]")?.textContent).toBe(
-        "We could not verify your email right now. Refresh to try again.",
-      );
-      expect(window.location.hash).toBe("");
-      expect(rememberedJoinToken()).toBe(newToken);
+  /** The draft a signed-in applicant left in this tab: their path, and one answer. */
+  function keepDraft(choice: Parameters<typeof rememberJoinChoice>[0] = organizationPath): string {
+    rememberJoinApplicant(JOIN_USER_ID);
+    rememberJoinChoice(choice);
+    const form = applicationForm();
+    form.querySelector<HTMLInputElement>('[name="firstName"]')!.value = "Jane";
+    saveJoinAnswers(form);
+    form.remove();
+    return sessionStorage.getItem(STORAGE_KEY)!;
+  }
 
-      // A fresh controller represents reloading after the address-bar link was removed.
-      document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
-      vi.resetModules();
-      await import("../../assets/ts/member-flows/join-form");
+  async function reload(): Promise<HTMLElement> {
+    vi.resetModules();
+    await import("../../assets/ts/member-flows/join-form");
+    return document.querySelector<HTMLElement>("[data-flow-status]")!;
+  }
+
+  it.each([503, 429, "network"] as const)(
+    "keeps the path and answers when the membership path cannot be read right now (%s)",
+    async (failure) => {
+      const kept = keepDraft();
+      const requests = openJoinPage([personalIdentity], () => {
+        if (failure === "network") throw new TypeError("Network unavailable");
+        return Response.json({ error: { code: "TEMPORARY_FAILURE", message: "Try again" } }, { status: failure });
+      });
+      const status = await reload();
       await vi.waitFor(() =>
-        expect(document.querySelector("[data-flow-status]")?.textContent).toMatch(/could not load/i),
+        expect(status.textContent).toBe("We could not load your membership options right now. Refresh to try again."),
       );
-      expect(verifiedTokens).toEqual([newToken, newToken]);
-      const reloaded = applicationForm();
-      expect(restoreJoinAnswers(reloaded, () => undefined)).toBe(false);
-      expect(reloaded.querySelector<HTMLInputElement>('[name="firstName"]')!.value).toBe("");
+      expect(requests.map(({ path }) => path)).toEqual(["/api/v1/members/join/verify"]);
+      expect(sessionStorage.getItem(STORAGE_KEY)).toBe(kept);
     },
   );
+
+  it("asks to sign in again when the session ended, and keeps the answers", async () => {
+    const kept = keepDraft();
+    openJoinPage([personalIdentity], () =>
+      Response.json({ error: { code: "AUTH_REQUIRED", message: "Sign in" } }, { status: 401 }),
+    );
+    const status = await reload();
+    await vi.waitFor(() =>
+      expect(status.textContent).toBe("Your session has ended. Refresh the page to sign in again."),
+    );
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBe(kept);
+  });
+
+  it("never shows one account's draft to another account on the same tab", async () => {
+    keepDraft({ unaffiliatedAttestation: false, organizationName: "Saved Organization", domain: "example-corp.test" });
+    sessionStorage.setItem(STORAGE_KEY, sessionStorage.getItem(STORAGE_KEY)!.replace(JOIN_USER_ID, OTHER_USER_ID));
+    const requests = openJoinPage([personalIdentity]);
+    await reload();
+    await vi.waitFor(() => expect(document.querySelector('input[name="joinPath"]')).not.toBeNull());
+    // No path is chosen for this account yet, so nothing was asked or restored on its behalf.
+    expect(document.querySelector('input[name="joinPath"]:checked')).toBeNull();
+    expect(requests).toEqual([]);
+  });
 
   it.each(["IDENTITY_DOMAIN_MISMATCH", "ORGANIZATION_AFFILIATION_CHANGED", "ORGANIZATION_NAME_IN_USE"])(
     "refreshes a stale saved choice once and preserves its refusal and answers (%s)",
     async (code) => {
-      rememberJoinToken(organizationContext.joinToken);
-      rememberJoinChoice({ organizationName: "Saved Organization", domain: "example-corp.test" });
-      const before = applicationForm();
-      before.querySelector<HTMLInputElement>('[name="firstName"]')!.value = "Jane";
-      saveJoinAnswers(before);
-      document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
-      const requests: Array<ReturnType<typeof memberJoinVerifySchema.parse>> = [];
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-          requests.push(memberJoinVerifySchema.parse(JSON.parse(String(init?.body))));
-          if (requests.length === 1)
-            return Response.json(
-              { error: { code, message: "Choose your organization again." } },
-              { status: code === "IDENTITY_DOMAIN_MISMATCH" ? 422 : 409 },
-            );
-          return Response.json({
-            status: "organization_selection_required",
+      keepDraft({
+        unaffiliatedAttestation: false,
+        organizationName: "Saved Organization",
+        domain: "example-corp.test",
+      });
+      const requests = openJoinPage([personalIdentity], ({ path }) => {
+        if (!path.endsWith("/members/join/verify")) return new Response(null, { status: 500 });
+        if (requests.length === 1)
+          return Response.json(
+            { error: { code, message: "Choose your organization again." } },
+            { status: code === "IDENTITY_DOMAIN_MISMATCH" ? 422 : 409 },
+          );
+        return Response.json({
+          status: "organization_selection_required",
+          domain: "example-corp.test",
+          organizations: [],
+          affiliation: {
+            email: organizationContext.applicantEmail,
             domain: "example-corp.test",
+            domains: [],
+            organization: null,
             organizations: [],
-            affiliation: {
-              email: organizationContext.applicantEmail,
-              domain: "example-corp.test",
-              domains: [],
-              organization: null,
-              organizations: [],
-            },
-          });
-        }),
-      );
-      vi.resetModules();
-      await import("../../assets/ts/member-flows/join-form");
-      await vi.waitFor(() =>
-        expect(document.querySelector("[data-flow-status]")?.textContent).toContain("Choose your organization again."),
-      );
-      expect(requests).toHaveLength(2);
-      expect(requests[1].domain).toBeUndefined();
-      expect(rememberedJoinChoice()).toBeUndefined();
+          },
+        });
+      });
+      const status = await reload();
+      await vi.waitFor(() => expect(status.textContent).toContain("Choose your organization again."));
+      const choices = requests.map(({ body }) => memberJoinVerifySchema.parse(body));
+      expect(choices).toEqual([
+        { unaffiliatedAttestation: false, organizationName: "Saved Organization", domain: "example-corp.test" },
+        organizationPath,
+      ]);
+      expect(rememberedJoinChoice(JOIN_USER_ID)).toEqual(organizationPath);
       const restored = applicationForm();
       expect(restoreJoinAnswers(restored, () => undefined)).toBe(true);
       expect(restored.querySelector<HTMLInputElement>('[name="firstName"]')!.value).toBe("Jane");
     },
   );
 
-  it("offers a refresh without claiming saved answers for a first verification link", async () => {
-    history.replaceState({}, "", `/join/#verify=${organizationContext.joinToken}`);
-    document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(null, { status: 503 })),
-    );
-    vi.resetModules();
-    await import("../../assets/ts/member-flows/join-form");
-    await vi.waitFor(() =>
-      expect(document.querySelector("[data-flow-status]")?.textContent).toBe(
-        "We could not verify your email right now. Refresh to try again.",
-      ),
-    );
-    expect(rememberedJoinToken()).toBe(organizationContext.joinToken);
-  });
-
   it("leaves the kept answers alone when the application fails to load on a reload", async () => {
-    rememberJoinToken(organizationContext.joinToken);
-    const form = applicationForm();
-    form.querySelector<HTMLInputElement>('[name="firstName"]')!.value = "Jane";
-    saveJoinAnswers(form);
-    const kept = sessionStorage.getItem("pkic.join.verifiedApplication");
-    form.remove();
-
-    document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) =>
-      String(input).endsWith("/members/join/verify")
-        ? Response.json(organizationContext)
-        : new Response(null, { status: 500 }),
+    const kept = keepDraft();
+    openJoinPage([personalIdentity], ({ path }) =>
+      path.endsWith("/members/join/verify") ? Response.json(organizationContext) : new Response(null, { status: 500 }),
     );
-    vi.stubGlobal("fetch", fetchMock);
-    vi.resetModules();
-    await import("../../assets/ts/member-flows/join-form");
-
-    const status = document.querySelector<HTMLElement>("[data-flow-status]")!;
-    await vi.waitFor(() => expect(status.textContent).toMatch(/could not load/i));
-    expect(sessionStorage.getItem("pkic.join.verifiedApplication")).toBe(kept);
+    const status = await reload();
+    await vi.waitFor(() => expect(status.textContent).toMatch(/could not load the membership application/i));
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBe(kept);
   });
 });
-
-it.each([503, 410])(
-  "keeps saved answers on a temporary verification refusal but clears an expired proof (%s)",
-  async (statusCode) => {
-    rememberJoinToken(organizationContext.joinToken);
-    const form = document.createElement("form");
-    form.innerHTML = '<input name="firstName" value="Jane" />';
-    saveJoinAnswers(form);
-    document.body.innerHTML = renderToString(<JoinFlow documents={[]} />);
-    const kept = sessionStorage.getItem("pkic.join.verifiedApplication");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        Response.json(
-          {
-            error: {
-              code: statusCode === 410 ? "MEMBER_JOIN_LINK_EXPIRED" : "SERVICE_UNAVAILABLE",
-              message: "Verification unavailable",
-            },
-          },
-          { status: statusCode },
-        ),
-      ),
-    );
-    vi.resetModules();
-    await import("../../assets/ts/member-flows/join-form");
-    const status = document.querySelector<HTMLElement>("[data-flow-status]")!;
-    await vi.waitFor(() => expect(status.textContent).toMatch(statusCode === 410 ? /expired/ : /saved answers/));
-    expect(sessionStorage.getItem("pkic.join.verifiedApplication")).toBe(statusCode === 410 ? null : kept);
-    vi.unstubAllGlobals();
-    sessionStorage.clear();
-  },
-);

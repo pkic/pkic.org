@@ -1,10 +1,7 @@
-import { protectsPublicAction } from "./abuse-protection";
 import { z } from "zod";
 import { normalizedEmailSchema, organizationNameSchema } from "./api-common";
 import { sameOriginPathSchema } from "./urls";
-import { authMemberSchema } from "./member-auth";
-import { publicOperation } from "./route-contract";
-import { screensWorkEmailDomain, workEmailStepSchema } from "./work-email";
+import { authErrors, ok, requiresSession } from "./route-contract";
 import { databaseIdSchema } from "./identifiers";
 import { emailDomainNameSchema } from "./email-domains";
 import { identityAffiliationPreviewResponseSchema } from "./identity-affiliation";
@@ -12,13 +9,13 @@ import { identityAffiliationPreviewResponseSchema } from "./identity-affiliation
 export const memberJoinApplicantKindSchema = z.enum(["organization", "individual"]);
 export type MemberJoinApplicantKind = z.infer<typeof memberJoinApplicantKindSchema>;
 
-/** Joining starts from the shared email-first step; the individual capacity is an explicit attestation. */
-export const memberJoinStartSchema = workEmailStepSchema;
-
-export const memberJoinStartResponseSchema = z.object({ status: z.literal("verification_sent") });
-
+/**
+ * A signed-in person's choice of membership path. The account's own proved
+ * address stands for the applicant; the individual capacity stays an explicit
+ * attestation and is never inferred from that address.
+ */
 export const memberJoinVerifySchema = z.object({
-  token: z.string().min(32).max(1024),
+  unaffiliatedAttestation: z.boolean().default(false),
   organizationId: databaseIdSchema.optional(),
   organizationName: organizationNameSchema.optional(),
   domain: emailDomainNameSchema.optional(),
@@ -32,11 +29,8 @@ export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
     organizationName: organizationNameSchema.optional(),
     joinToken: z.string().min(32).max(1024),
   }),
-  z.object({
-    status: z.literal("organization_access_ready"),
-    expiresAt: z.string(),
-    member: authMemberSchema,
-  }),
+  /** The person now represents an active member organization; their session acts as that representation. */
+  z.object({ status: z.literal("organization_access_ready") }),
   z.object({ status: z.literal("support_required") }),
   z.object({
     status: z.literal("organization_selection_required"),
@@ -53,61 +47,40 @@ export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
       .max(256),
   }),
   z.object({ status: z.literal("already_member") }),
-  /** The proved address already has an open application; the path is a status-only link to it. */
+  /** The account already has an open application; the path is a status-only link to it. */
   z.object({ status: z.literal("application_in_progress"), statusPath: sameOriginPathSchema }),
   /** Someone else's open application already holds the organization domain the address links through. */
   z.object({ status: z.literal("organization_application_in_progress") }),
 ]);
 
-export const memberJoinStartRouteSchema = {
-  ...protectsPublicAction("membership_join", "membership:write"),
-  ...publicOperation(),
-  ...screensWorkEmailDomain(),
-  tags: ["Members"],
-  summary: "Start a verified membership join flow",
-  description:
-    "Queues a short-lived mailbox verification link without disclosing whether the email domain belongs to a member organization.",
-  request: { body: { content: { "application/json": { schema: memberJoinStartSchema } }, required: true } },
-  responses: {
-    "200": {
-      description: "A generic next step that does not disclose organization membership.",
-      content: { "application/json": { schema: memberJoinStartResponseSchema } },
-    },
-    "400": { description: "Invalid, disposable, or free email address without the individual capacity." },
-    "429": { description: "Too many verification requests." },
-  },
-};
-
 export const memberJoinVerifyRouteSchema = {
-  ...publicOperation(),
+  ...requiresSession(),
   tags: ["Members"],
-  summary: "Verify a membership join email",
+  summary: "Resolve a signed-in person's membership path",
   description:
-    "Verifies a short-lived mailbox proof, reuses an existing claimed organization membership when possible, or issues a short-lived application capability.",
+    "Decides from the signed-in account's proved address whether the person represents an existing member organization, chooses an organization, or continues with a short-lived application capability.",
   request: { body: { content: { "application/json": { schema: memberJoinVerifySchema } }, required: true } },
   responses: {
-    "200": {
-      description: "Verified join decision.",
-      content: { "application/json": { schema: memberJoinVerifyResponseSchema } },
-    },
-    "404": { description: "Invalid verification link." },
-    "409": { description: "Verification link already used." },
-    "410": { description: "Verification link expired." },
+    ...ok("Membership path decision.", memberJoinVerifyResponseSchema),
+    ...authErrors({
+      badRequest: "A personal mailbox without the individual capacity, or a disposable mailbox.",
+      conflict: "The organization affiliation changed; choose again.",
+      unprocessable: "The choice does not fit this membership path.",
+      tooManyRequests: "Too many requests.",
+    }),
   },
 };
 
-export const memberJoinAffiliationPreviewSchema = memberJoinVerifySchema.pick({ token: true, domain: true });
+export const memberJoinAffiliationPreviewSchema = memberJoinVerifySchema.pick({ domain: true });
 export const memberJoinAffiliationPreviewRouteSchema = {
-  ...publicOperation(),
+  ...requiresSession(),
   tags: ["Members"],
-  summary: "Preview organizations for a verified join email",
+  summary: "Preview organizations for a signed-in person's address",
   request: {
     body: { content: { "application/json": { schema: memberJoinAffiliationPreviewSchema } }, required: true },
   },
   responses: {
-    "200": {
-      description: "Read-only affiliation preview.",
-      content: { "application/json": { schema: identityAffiliationPreviewResponseSchema } },
-    },
+    ...ok("Read-only affiliation preview.", identityAffiliationPreviewResponseSchema),
+    ...authErrors({ unprocessable: "The account's address is not a work address." }),
   },
 };

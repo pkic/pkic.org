@@ -29,7 +29,6 @@ async function main() {
             body.firstName,
             body.lastName,
             body.email,
-            body.organization?.name ?? "",
             forms.event.name,
             context.eventSlug,
           );

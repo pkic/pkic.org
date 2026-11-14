@@ -16,12 +16,8 @@ export function requireRegistrationWorkRepresentation(input: {
   email: string;
   verified: boolean;
   organizationId?: string | null;
-  organizationContextToken?: string;
-  organizationIdSubmitted?: boolean;
 }) {
-  if (input.organizationIdSubmitted && !input.organizationContextToken)
-    throw new AppError(409, "IDENTITY_CONTEXT_REQUIRED", "Confirm your organization details again before registering.");
-  if (input.verified && workEmailDomain(input.email) && !input.organizationId && !input.organizationContextToken)
+  if (input.verified && workEmailDomain(input.email) && !input.organizationId)
     throw new AppError(
       422,
       "REGISTRATION_REPRESENTATION_REQUIRED",

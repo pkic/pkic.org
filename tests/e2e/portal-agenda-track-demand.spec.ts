@@ -44,7 +44,7 @@ test("organizers preserve exact track filters and inspect canonical demand outsi
   const track = `Cryptography ${suffix}`;
   const roomName = `Track workshop hall ${suffix}`;
   const template = await registerInBrowser(page, ownDomainEmail("track-template"), undefined, undefined, {
-    organization: "Track Template Org",
+    organization: `Track Template Org ${suffix}`,
   });
   const attendeeEmail = ownDomainEmail("track-attendee");
   const since = await capturedEmailCount();
@@ -52,14 +52,13 @@ test("organizers preserve exact track filters and inspect canonical demand outsi
     data: registrationCreateSchema.parse({
       ...template.request,
       email: attendeeEmail,
-      attendanceType: "in_person",
       dayAttendance: template.request.dayAttendance?.map((day) => ({ ...day, attendanceType: "in_person" })),
     }),
   });
   expect(registration.status(), await registration.text()).toBe(200);
   const confirmation = await waitForCapturedEmail(attendeeEmail, "Confirm your registration", { since });
   await page.goto(extractEmailUrl(confirmation, "/register/confirm"));
-  await confirmRegistration(page, "Track Demand Org");
+  await confirmRegistration(page, `Track Demand Org ${suffix}`);
   await waitForCapturedEmail(attendeeEmail, "registration is confirmed", { since });
   await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-track-demand"));
   const base = `/api/v1/events/${slug}/agenda`;

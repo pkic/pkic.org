@@ -12,7 +12,6 @@ import {
   configureMembershipLegalFields,
   filterCategoriesForApplicantKind,
   membershipCategoryFeeText,
-  renderMembershipCategorySummary,
   renderMembershipCategories,
   renderMembershipApplicationQuestions,
 } from "../../assets/ts/member-flows/join-application-fields";
@@ -126,7 +125,6 @@ describe("join-form helpers", () => {
       await act(async () =>
         render(
           <JoinOrganizationChoice
-            token={"a".repeat(40)}
             domain="shared.example"
             affiliation={{
               email: "person@shared.example",
@@ -502,24 +500,6 @@ describe("join-form helpers", () => {
     expect(form.querySelector("label")?.textContent).toBe(
       "I confirm that I am submitting this application for myself and agree to be bound by these terms",
     );
-  });
-
-  it("renders an informational summary of eligible individual categories", () => {
-    const container = document.createElement("div");
-    renderMembershipCategorySummary(container, filterCategoriesForApplicantKind(categories, "individual"));
-    expect(container.querySelectorAll("li")).toHaveLength(1);
-    expect(container.textContent).toContain("H6 — Independent consultant");
-    expect(container.textContent).not.toContain("Certification authority");
-    // The list keeps its bullet without the browser's 40px indent, so the
-    // summary lines up with the label above it.
-    expect(container.querySelector("ul")?.className).toBe("pk-answer-list");
-  });
-
-  it("says so in words when no individual category is available", () => {
-    const container = document.createElement("div");
-    renderMembershipCategorySummary(container, []);
-    expect(container.querySelector("ul")).toBeNull();
-    expect(container.textContent).toBe("No eligible individual categories are currently available.");
   });
 });
 

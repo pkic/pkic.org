@@ -15,7 +15,6 @@ import { publicOperation } from "./route-contract";
 import { jsonResponse, requiredJsonBody } from "./openapi";
 import { databaseIdSchema } from "./identifiers";
 import { httpCapabilityUrlSchema } from "./urls";
-import { proposalEntryContextSchema } from "./proposal-entry";
 import { screensWorkEmailDomain, workEmailStepSchema } from "./work-email";
 import { identityAffiliationPrepareBaseSchema, identityAffiliationPreviewResponseSchema } from "./identity-affiliation";
 
@@ -31,17 +30,16 @@ export const speakerMailboxProofHeadersSchema = z.object({
 });
 
 /**
- * Starts mailbox proof for a proposal contact or speaker from the shared
- * email-first step. `unaffiliatedAttestation` is the capacity: `true` takes
- * part as an individual, `false` on behalf of an organization, which only that
+ * Starts mailbox proof for a speaker from the shared email-first step, under
+ * their speaker link or their own speaker record; a proposer signs in instead.
+ * `unaffiliatedAttestation` is the capacity: `true` takes part as an
+ * individual, `false` on behalf of an organization, which only that
  * organization's own mailbox can show.
  */
 export const eventProposalProofStartSchema = workEmailStepSchema
   .extend({
     speakerManagementToken: eventProposalContinuationTokenSchema.optional(),
     speakerProposalId: databaseIdSchema.optional(),
-    continuationToken: eventProposalContinuationTokenSchema.optional(),
-    entryContext: proposalEntryContextSchema.optional(),
     /** The terms accepted before the email step; no mailbox is emailed until they are. */
     consents: z.array(consentItemSchema).max(20),
   })
@@ -73,14 +71,12 @@ export const eventProposalProofPersonSchema = z.object({
   bio: z.string().nullable(),
   links: linksSchema,
 });
-export const eventProposalProofPersonPatchSchema = personNamePatchSchema.safeExtend({
-  continuationToken: eventProposalContinuationTokenSchema.optional(),
-});
+export const eventProposalProofPersonPatchSchema = personNamePatchSchema;
 export const eventProposalProofPersonPatchResponseSchema = z.object({ person: eventProposalProofPersonSchema });
 export const eventProposalProofPersonPatchRouteSchema = {
   ...publicOperation(),
   tags: ["Proposals"],
-  summary: "Update the confirmed submitter's own name",
+  summary: "Update the signed-in proposer's own name",
   request: { params: eventSlugParamsSchema, body: requiredJsonBody(eventProposalProofPersonPatchSchema) },
   responses: { "200": jsonResponse("Saved canonical personal details.", eventProposalProofPersonPatchResponseSchema) },
 };
@@ -148,7 +144,6 @@ export const eventProposalProofVerifyResponseSchema = z.discriminatedUnion("stat
     speakerManagementToken: eventProposalContinuationTokenSchema.optional(),
     speakerProposalId: databaseIdSchema.optional(),
     speakerManageUrl: httpCapabilityUrlSchema.optional(),
-    entryContext: proposalEntryContextSchema.optional(),
   }),
   /** Nothing was linked or created; the person is told why and what to do next. */
   z.object({
@@ -173,25 +168,25 @@ export const eventProposalProofStartRouteSchema = {
   ...protectsPublicAction("proposal_proof", "proposals:manage"),
   ...screensWorkEmailDomain(),
   tags: ["Proposals"],
-  summary: "Confirm a proposal submitter's mailbox",
+  summary: "Confirm a speaker's mailbox",
   request: { params: eventSlugParamsSchema, body: requiredJsonBody(eventProposalProofStartSchema) },
   responses: { "200": jsonResponse("Mailbox confirmation next step.", eventProposalProofStartResponseSchema) },
 };
 export const eventProposalProofVerifyRouteSchema = {
   ...publicOperation(),
   tags: ["Proposals"],
-  summary: "Continue a proposal after mailbox confirmation",
+  summary: "Continue as a speaker after mailbox confirmation",
   request: { params: eventSlugParamsSchema, body: requiredJsonBody(eventProposalProofVerifySchema) },
-  responses: { "200": jsonResponse("Confirmed submitter context.", eventProposalProofVerifyResponseSchema) },
+  responses: { "200": jsonResponse("Confirmed speaker context.", eventProposalProofVerifyResponseSchema) },
 };
 export const eventProposalProofIdentitiesRouteSchema = {
   ...publicOperation(),
   tags: ["Proposals"],
-  summary: "List the confirmed proposal submitter's own affiliations",
+  summary: "List the confirmed speaker's own affiliations",
   request: {
     params: eventSlugParamsSchema,
     query: identitiesListQuerySchema,
     body: requiredJsonBody(eventProposalProofIdentitiesSchema),
   },
-  responses: { "200": jsonResponse("Confirmed submitter affiliations.", identitiesListResponseSchema) },
+  responses: { "200": jsonResponse("Confirmed speaker affiliations.", identitiesListResponseSchema) },
 };

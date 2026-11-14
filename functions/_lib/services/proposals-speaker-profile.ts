@@ -206,7 +206,6 @@ export async function updateSpeakerProfile(
           )?.event_id ?? "",
         continuationToken: payload.continuationToken!,
         signingSecret: context.signingSecret!,
-        operation: "speaker_profile",
         speakerId: context.proposalSpeakerId,
         speakerAuthority: context.authority!,
         actor: selectionAuthority?.sessionId

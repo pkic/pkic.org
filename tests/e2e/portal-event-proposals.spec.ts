@@ -240,7 +240,7 @@ test("portal proposal detail registers accepted speakers through canonical resou
   await expect(acceptedRow.getByText("Accepted", { exact: true }).first()).toHaveClass(/pk-badge--ok/);
   await openRow(acceptedRow, "Open Canonical portal proposal journey");
   await tab(page.getByRole("navigation", { name: "Proposal sections" }), "Speakers").click();
-  await expect(page.getByRole("region", { name: "Proposal speakers" }).getByText(/(^|· )Registered \(/)).toHaveCount(2);
+  await expect(page.getByRole("region", { name: "Proposal speakers" }).getByText(/(^|· )Registered$/)).toHaveCount(2);
   await page.goto(`/portal/#/groups/${GROUP_ID}/events/${event.id}/proposals`);
   await expect(page.getByRole("columnheader", { name: /^Decision/ })).toHaveCount(0);
   await expect(page.getByRole("columnheader", { name: /^Reviews/ })).toHaveCount(0);
@@ -263,7 +263,7 @@ test("portal proposal detail registers accepted speakers through canonical resou
   await expect(
     roster.getByRole("row").filter({ hasText: "Portal Co Speaker" }).getByText("Registered", { exact: true }),
   ).toBeVisible();
-  await expect(roster.getByText("In-person", { exact: true })).toHaveCount(2);
+  await expect(roster.getByText("In person", { exact: true })).toHaveCount(2);
   await expect(page.getByText("Decision saved", { exact: true })).toBeHidden();
   await page.screenshot({ path: testInfo.outputPath("proposal-speakers.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });

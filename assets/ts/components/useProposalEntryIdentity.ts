@@ -15,8 +15,7 @@ import {
   eventProposalProofIdentityPatchResponseSchema,
   eventProposalProofPersonPatchResponseSchema,
 } from "../../shared/schemas/event-proposal-proof";
-import type { proposalCreateSchema } from "../../shared/schemas/proposal-management";
-import type { ProposalEntryContext } from "../../shared/schemas/proposal-entry";
+import type { proposalCreateSchema, speakerSelfProfilePatchSchema } from "../../shared/schemas/proposal-management";
 import type { ConsentItem } from "../../shared/schemas/registration";
 import type { identityAffiliationPreviewResponseSchema } from "../../shared/schemas/identity-affiliation";
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
@@ -31,11 +30,15 @@ export type VerifiedProposalEntry = {
 export type ParticipationPerson = z.infer<typeof eventProposalProofPersonSchema>;
 type Proposer = z.infer<typeof proposalCreateSchema>["proposer"];
 type NameDrafts = Pick<Proposer, "firstName" | "lastName">;
-type AffiliationDrafts = Pick<Proposer, "organizationName" | "jobTitle" | "organizationContextToken">;
+// Only a speaker creates an affiliation from a confirmed email; a proposer chooses an identity they hold.
+type AffiliationDrafts = Pick<
+  z.infer<typeof speakerSelfProfilePatchSchema>,
+  "organizationName" | "jobTitle" | "organizationContextToken"
+>;
 export interface ProposalEntrySelection {
   authenticated: boolean;
+  /** A speaker's confirmed address; a proposer continues with their session instead. */
   continuationToken?: string;
-  entryContext?: ProposalEntryContext;
   unaffiliatedAttestation: boolean;
   /** The completed independence disclosure; present exactly when taking part as an individual. */
   independentCapacity?: IndependentCapacityDisclosure;
@@ -64,7 +67,11 @@ export function newAffiliationDetails(entry: ProposalEntrySelection): ProposalEn
   return entry.person.jobTitle ? { ...entry.missingDetails, jobTitle: entry.person.jobTitle } : entry.missingDetails;
 }
 
-/** Resolve an owned person only after the terms step has activated this entry. */
+/**
+ * Resolve an owned person only after the terms step has activated this entry.
+ * A proposer is the signed-in person; only a speaker (their link or their
+ * speaker record) confirms an address here.
+ */
 export function useProposalEntryIdentity(
   enabled: boolean,
   endpoint: string,
@@ -84,8 +91,9 @@ export function useProposalEntryIdentity(
   const [authenticated, setAuthenticated] = useState(false);
   const [storedPerson, setStoredPerson] = useState(false);
   const [continuationToken, setContinuationToken] = useState<string>();
-  const [proofOwnerToken, setProofOwnerToken] = useState<string>();
-  const [entryContext, setEntryContext] = useState<ProposalEntryContext>();
+  /** Counts the sign-ins completed in place, so the session is read again after each. */
+  const [sessionRevision, setSessionRevision] = useState(0);
+  const proposer = !speakerManagementToken && !speakerProposalId;
   const [selected, setSelected] = useState<ActingIdentity | null | undefined>();
   const [affiliation, setAffiliation] = useState<z.infer<typeof identityAffiliationPreviewResponseSchema>>();
   const [verificationToken, setVerificationToken] = useState<string>();
@@ -93,13 +101,11 @@ export function useProposalEntryIdentity(
   const [missingDetails, setMissingDetails] = useState<AffiliationDrafts>({});
   /**
    * Names the person typed because none are saved yet. They belong to the
-   * person, not to a representation, so choosing or adding a representation
-   * keeps them; only another person's address or "Clear unsaved changes"
+   * person, not to a representation, so choosing another representation
+   * keeps them; a newly confirmed address or "Clear unsaved changes"
    * discards them.
    */
   const [nameDrafts, setNameDrafts] = useState<NameDrafts>({});
-  const proofOwner = useRef<string>();
-  proofOwner.current = proofOwnerToken;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   /** A proved address that signs in to another account; nothing was linked. */
@@ -139,15 +145,12 @@ export function useProposalEntryIdentity(
     setSupportRequired(undefined);
     setEmailState(value);
     setPerson(null);
-    if (!proofOwnerToken) {
-      setKnownPerson(null);
-      setStoredPerson(false);
-      setNameDrafts({});
-    }
+    setKnownPerson(null);
+    setStoredPerson(false);
+    setNameDrafts({});
     setAuthenticated(false);
   }
   function useDifferentEmail(): void {
-    setProofOwnerToken(storedPerson && !speakerManagementToken && !speakerProposalId ? continuationToken : undefined);
     clearResolution();
     setSupportRequired(undefined);
     setEmailState("");
@@ -208,10 +211,7 @@ export function useProposalEntryIdentity(
       : (
           await patchJson(
             `${endpoint}/person`,
-            eventProposalProofPersonPatchSchema.parse({
-              ...names,
-              continuationToken: continuationToken ?? proofOwnerToken,
-            }),
+            eventProposalProofPersonPatchSchema.parse(names),
             eventProposalProofPersonPatchResponseSchema,
           )
         ).person;
@@ -257,16 +257,6 @@ export function useProposalEntryIdentity(
         setError("This verification does not belong to this speaker record.");
         return;
       }
-      if (result.speakerManageUrl && !speakerManagementToken && !speakerProposalId) {
-        const destination = new URL(result.speakerManageUrl);
-        if (result.speakerProposalId) {
-          const route = new URL(destination.hash.slice(1), destination.origin);
-          route.searchParams.set("verify", token);
-          destination.hash = `${route.pathname}${route.search}`;
-        } else destination.hash = `verify=${encodeURIComponent(token)}`;
-        location.assign(destination.href);
-        return;
-      }
       const resolved = eventProposalProofPersonSchema.parse(
         result.person ?? {
           email: result.email,
@@ -292,14 +282,10 @@ export function useProposalEntryIdentity(
       setStoredPerson(Boolean(result.person));
       setAuthenticated(false);
       setContinuationToken(result.continuationToken);
-      setProofOwnerToken(undefined);
-      setEntryContext(result.entryContext);
       setRecordedConsents(result.consents);
       setSelected(result.applicantKind === "individual" ? null : undefined);
       setAffiliation(result.affiliation);
       setVerificationToken(token);
-      if (!speakerManagementToken && !speakerProposalId)
-        history.replaceState({}, "", `${location.pathname}${location.search}`);
     } catch (caught) {
       if (proofAttempt.current === attempt) proofAttempt.current = null;
       if (currentGeneration === generation.current)
@@ -316,6 +302,8 @@ export function useProposalEntryIdentity(
     let active = true;
     let initializingSession = false;
     const consumeProof = (): boolean => {
+      // A proposer has no address to confirm here: they signed in.
+      if (proposer) return false;
       const token =
         new URLSearchParams(location.hash.slice(1)).get("verify") ??
         new URL(location.hash.slice(1), location.origin).searchParams.get("verify") ??
@@ -327,8 +315,7 @@ export function useProposalEntryIdentity(
       setKnownPerson(null);
       setStoredPerson(false);
       setAuthenticated(false);
-      // A new representation confirmed for the same person keeps their typed names; anyone else starts afresh.
-      if (!proofOwner.current) setNameDrafts({});
+      setNameDrafts({});
       void verifyCurrent.current(token);
       return true;
     };
@@ -370,7 +357,11 @@ export function useProposalEntryIdentity(
               currentGeneration === generation.current &&
               !(caught instanceof ApiClientError && caught.status === 401)
             )
-              setError("We could not load your saved profile. You can verify your email to continue.");
+              setError(
+                proposer
+                  ? "We could not load your account. Reload the page to try again."
+                  : "We could not load your saved profile. You can verify your email to continue.",
+              );
           } finally {
             initializingSession = false;
             if (active && currentGeneration === generation.current) setLoading(false);
@@ -396,6 +387,8 @@ export function useProposalEntryIdentity(
     startWithEmailProof,
     initialProofToken,
     proofScope,
+    proposer,
+    sessionRevision,
   ]);
 
   // The person as shown and sent: saved names first, otherwise the names typed here.
@@ -428,14 +421,13 @@ export function useProposalEntryIdentity(
         ? {
             authenticated,
             continuationToken,
-            entryContext,
             unaffiliatedAttestation: kind === "individual",
             actingIdentityId: selected?.id ?? (selected === null ? null : undefined),
             person: draftedPerson ?? person,
             missingDetails: draftedDetails,
           }
         : null,
-    [ready, person, draftedPerson, authenticated, continuationToken, entryContext, kind, selected, draftedDetails],
+    [ready, person, draftedPerson, authenticated, continuationToken, kind, selected, draftedDetails],
   );
   return {
     kind,
@@ -446,12 +438,17 @@ export function useProposalEntryIdentity(
     knownPerson,
     authenticated,
     storedPerson,
-    proofOwnerToken,
+    /** Nobody is signed in on a proposal: the person signs in or starts an account before continuing. */
+    signInRequired: proposer && enabled && initialized.current && !loading && !authenticated && !error,
+    /** Reads the session again after a sign-in completed on this page. */
+    reloadSession: () => {
+      initialized.current = false;
+      setSessionRevision((revision) => revision + 1);
+    },
     savePersonalDetails,
     saveRepresentation,
     clearUnsaved,
     continuationToken,
-    entryContext,
     recordedConsents,
     selected,
     affiliation,

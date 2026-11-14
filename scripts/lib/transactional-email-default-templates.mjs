@@ -31,22 +31,6 @@ Speaker participation does not accept the proposal or guarantee inclusion in the
     messageType: "transactional",
   },
   {
-    key: "membership_join_verify",
-    subjectTemplate: "Verify your email address to join the PKI Consortium",
-    content:
-      "Use the secure link below to verify your email address and continue joining the PKI Consortium. The link works for {{expiresInMinutes}} minutes.\n\n[Verify email and continue]({{verificationUrl}})\n\nIf you did not request this link, you can safely ignore this email.",
-    contentType: "markdown",
-    messageType: "transactional",
-  },
-  {
-    key: "registration_email_verify",
-    subjectTemplate: "Verify your email for {{eventName}}",
-    content:
-      'Verify your email address to continue your registration for **{{eventName}}**.\n\n<div class="cta-navy"><a href="{{verificationUrl}}">Verify email and continue &rarr;</a></div>\n\nIf you did not start a registration, you can ignore this email.',
-    contentType: "markdown",
-    messageType: "transactional",
-  },
-  {
     key: "user_email_verification",
     subjectTemplate: "Verify your email address",
     content:

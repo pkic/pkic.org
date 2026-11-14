@@ -13,7 +13,7 @@ import {
   registrationManageSchema,
   registrationManageUpdateResponseSchema,
 } from "../../assets/shared/schemas/registration";
-import { EMAIL_FIRST_COPY, REGISTRATION_ORGANIZATION_COPY } from "../../assets/shared/email-first-copy";
+import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { userDetailResponseSchema, usersListResponseSchema } from "../../assets/shared/schemas/user-management";
 import { userParticipationResponseSchema } from "../../assets/shared/schemas/user-participation";
 import {
@@ -101,24 +101,20 @@ test("verified approved-domain registration affiliates once and an organization 
         await review.scrollIntoViewIfNeeded();
         await formPage.screenshot({ path: testInfo.outputPath("registration-review-phone.png") });
       },
+      organization: organizationName,
       onContactReady: async (formPage) => {
         await expect(formPage.locator('[aria-invalid="true"]')).toHaveCount(0);
-        const first = formPage.getByRole("textbox", { name: /^First name/ });
-        const last = formPage.getByRole("textbox", { name: /^Last name/ });
-        await first.fill("");
-        await last.fill("");
-        await formPage.getByRole("button", { name: "Continue", exact: true }).click();
-        await expect(first).toBeFocused();
-        await first.fill("Synthetic");
-        await last.fill("Attendee");
-        const chooser = formPage.getByRole("combobox", { name: /^Organization/ });
+      },
+      // The domain belongs to a member organization: it is offered, never assumed.
+      onOrganizationReady: async (formPage, dialog) => {
+        const chooser = dialog.getByRole("combobox", { name: /^Organization/ });
         await expect(chooser).toHaveValue("");
         await chooser.selectOption(ownerIdentity.organizationId!);
         await formPage.setViewportSize({ width: 1280, height: 900 });
         await formPage.screenshot({ path: testInfo.outputPath("public-organization-choice-desktop.png") });
         await formPage.setViewportSize({ width: 375, height: 812 });
         await formPage.screenshot({ path: testInfo.outputPath("public-organization-choice-phone.png") });
-        await formPage.getByRole("button", { name: "Add organization", exact: true }).click();
+        await dialog.getByRole("button", { name: "Add organization", exact: true }).click();
         const addOrganization = formPage.getByRole("dialog", { name: "Add organization", exact: true });
         await expect(addOrganization.getByRole("textbox", { name: /^Organization name/ })).toBeVisible();
         await formPage.setViewportSize({ width: 1280, height: 900 });
@@ -134,8 +130,8 @@ test("verified approved-domain registration affiliates once and an organization 
         await expect(chooser).toHaveValue(ownerIdentity.organizationId!);
       },
     });
-    expect(initial.request.identityId).toBeUndefined();
-    // The registrant explicitly confirms the organization on the verified domain.
+    // The registrant explicitly chose the organization on the verified domain and registered as that identity.
+    expect(initial.identityId).toBeTruthy();
     expect(initial.result.status).toBe("registered");
     await expect(attendee.getByRole("heading", { name: /You're registered/i })).toBeVisible();
     const confirmedEmail = await waitForCapturedEmail(email, "registration is confirmed", { since });
@@ -160,18 +156,6 @@ test("verified approved-domain registration affiliates once and an organization 
       fullPage: true,
     });
 
-    // An affiliated member receives sign-in guidance, not a new join capability.
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const sinceJoin = await capturedEmailCount();
-      await attendee.goto("/join/");
-      await attendee.getByLabel(EMAIL_FIRST_COPY.join.work.label).fill(email);
-      await attendee.getByRole("button", { name: EMAIL_FIRST_COPY.join.work.action, exact: true }).click();
-      await expect(attendee.getByText("Check your email", { exact: true })).toBeVisible();
-      const joinEmail = await waitForCapturedEmail(email, "already have PKI Consortium member access", {
-        since: sinceJoin,
-      });
-      expect(new URL(extractEmailUrl(joinEmail, "/portal/")).pathname).toBe("/portal/");
-    }
     await signInToPortal(attendee, email, { continueAs: organizationName });
     await expect(attendee.getByRole("navigation", { name: "Portal navigation" })).toBeVisible();
     // Joining again reuses the automatically created organization identity.
@@ -194,7 +178,7 @@ test("verified approved-domain registration affiliates once and an organization 
     await expect(attendee.getByRole("heading", { name: "Registration cancelled", exact: true })).toBeVisible();
     const sinceSelected = await capturedEmailCount();
     const selected = await registerInBrowser(attendee, email, organizationName);
-    expect(selected.request.identityId).toBe(organizationIdentities[0]!.id);
+    expect(selected.identityId).toBe(organizationIdentities[0]!.id);
     expect(selected.result.registrationId).toBe(initial.result.registrationId);
     expect(selected.result.status).toBe("registered");
     await expect(attendee.getByRole("heading", { name: /You're registered/i })).toBeVisible();
@@ -547,7 +531,7 @@ test("a proved work address requires organization confirmation and an incorrect 
 
 test("a pending membership domain can register while affiliation awaits review", async ({ page }, info) => {
   const applicant = ownDomainEmail("pending-membership");
-  const name = "Pending Membership Research";
+  const name = `Pending Membership Research ${Date.now()}`;
   await submitMembershipApplication(page, {
     email: applicant,
     name: "Casey Applicant",
@@ -557,36 +541,27 @@ test("a pending membership domain can register while affiliation awaits review",
   const email = `attendee@${applicant.split("@")[1]}`;
   const registration = await registerInBrowser(page, email, undefined, undefined, {
     organization: name,
-    onContactReady: async (contact) => {
-      await expect(contact.getByRole("textbox", { name: /^Organization name/ })).toHaveAccessibleDescription(
-        /linked to .*pending application.*review/i,
-      );
+    onOrganizationReady: async (contact, dialog) => {
+      const organization = dialog.getByRole("textbox", { name: /^Organization name/ });
+      await expect(organization).toHaveAccessibleDescription(/linked to .*pending application.*review/i);
       for (const [width, height, device] of [
         [1280, 900, "desktop"],
         [375, 812, "phone"],
       ] as const) {
         await contact.setViewportSize({ width, height });
-        await contact.getByRole("textbox", { name: /^Organization name/ }).scrollIntoViewIfNeeded();
+        await organization.scrollIntoViewIfNeeded();
         await contact.screenshot({ path: info.outputPath(`pending-affiliation-contact-${device}.png`) });
       }
     },
   });
-  expect(registration.result).toMatchObject({ status: "registered", organizationOutcome: "review_required" });
+  expect(registration.result.status).toBe("registered");
   await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible();
-  for (const [width, height, device] of [
-    [1280, 900, "desktop"],
-    [375, 812, "phone"],
-  ] as const) {
-    await page.setViewportSize({ width, height });
-    await page.getByText(REGISTRATION_ORGANIZATION_COPY.reviewRequired, { exact: true }).scrollIntoViewIfNeeded();
-    await page.screenshot({ path: info.outputPath(`pending-affiliation-success-${device}.png`) });
-  }
 });
 
-test("a verified new work domain shows organization fields directly in public registration", async ({
+test("a verified new work domain names its organization in the identity dialog of public registration", async ({
   page,
 }, testInfo) => {
-  const name = "New Domain Research";
+  const name = `New Domain Research ${Date.now()}`;
   const detected = geolocationCountryResponseSchema.parse(
     await (await page.request.get("/api/v1/geolocation/country")).json(),
   ).country;
@@ -610,12 +585,12 @@ test("a verified new work domain shows organization fields directly in public re
       await formPage.goForward();
       await expect(country).toHaveValue("CA");
     },
-    onContactReady: async (formPage) => {
-      const organization = formPage.getByRole("textbox", { name: /^Organization name/ });
-      await expect(formPage.getByRole("combobox", { name: /^Organization/ })).toHaveCount(0);
-      await expect(formPage.getByRole("button", { name: "Add organization", exact: true })).toHaveCount(0);
+    onOrganizationReady: async (formPage, dialog) => {
+      const organization = dialog.getByRole("textbox", { name: /^Organization name/ });
+      await expect(dialog.getByRole("combobox", { name: /^Organization/ })).toHaveCount(0);
+      await expect(dialog.getByRole("button", { name: "Add organization", exact: true })).toHaveCount(0);
       await organization.fill("");
-      await formPage.locator("[data-event-registration] [data-step-next]").click();
+      await dialog.getByRole("button", { name: "Add representation", exact: true }).click();
       await expect(organization).toHaveAttribute("aria-invalid", "true");
       for (const [width, height, device] of [
         [1280, 900, "desktop"],
@@ -632,7 +607,6 @@ test("a verified new work domain shows organization fields directly in public re
       expect(iconBox).not.toBeNull();
       expect(iconBox!.x).toBeGreaterThan(inputBox!.x);
       expect(iconBox!.x + iconBox!.width).toBeLessThan(inputBox!.x + inputBox!.width);
-      await organization.fill(name);
     },
   });
   expect(result.result.status).toBe("registered");
@@ -653,15 +627,16 @@ for (const legacyName of ["ZoÃ«", "email@example.test", null]) {
     const context = await browser.newContext({ baseURL: new URL(page.url()).origin });
     const attendee = await context.newPage();
     // Simulate legacy stored text at the tolerant read boundary; the save and registration use the real Worker.
-    await attendee.route("**/registrations/proof/verify", async (route) => {
+    await attendee.route("**/api/v1/users/current", async (route) => {
+      if (route.request().method() !== "GET") return route.continue();
       const response = await route.fetch();
       const body = await response.json();
-      body.person.firstName = legacyName;
+      body.firstName = legacyName;
       await route.fulfill({ response, json: body });
     });
     try {
       await registerInBrowser(attendee, email, undefined, undefined, {
-        organization: "Unicode Trust Services",
+        organization: `Unicode Trust Services ${Date.now()}`,
         onContactReady: async (current) => {
           await current.getByRole("button", { name: "Continue", exact: true }).click();
           const editor = current.getByRole("dialog", { name: "Edit my details", exact: true });

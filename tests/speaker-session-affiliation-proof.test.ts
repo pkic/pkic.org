@@ -107,7 +107,6 @@ async function ready(f: Awaited<ReturnType<typeof fixture>>) {
     f.eventId,
     true,
   );
-  expect(payload.operation).toBe("speaker_profile");
   expect(payload.context).toMatchObject({
     kind: "speaker",
     speakerId: f.speakerId,
@@ -420,32 +419,16 @@ describe("authenticated speaker resource mailbox proof", () => {
     },
   );
 
-  it("refuses a generic proposal proof at the speaker profile and bound catalog without writes", async () => {
+  it("refuses to start a mailbox proof that names no speaker invitation or session, without writes", async () => {
     const f = await fixture();
-    const response = await request(base, { email: "speaker@official.example", consents }, f.session);
-    expect(response.status).toBe(200);
-    const row = (
-      await queryAll<{ payload_json: string }>(
-        env.DB,
-        "SELECT payload_json FROM email_outbox WHERE template_key='event_proposal_verify' ORDER BY rowid DESC LIMIT 1",
-      )
-    )[0];
-    const mail = await deliveredEmailPayload<{ verificationUrl: string }>(env.DB, env, row.payload_json);
-    const token = new URLSearchParams(new URL(mail.verificationUrl).hash.slice(1)).get("verify");
-    const verified = await request(`${base}/verify`, { token }, f.session);
-    const proof = eventProposalProofVerifyResponseSchema.parse(await verified.json());
-    if (proof.status !== "ready") throw new Error("Expected ordinary proposal proof");
     const before = await state();
-    expect((await profile(f, proof.continuationToken)).status).toBe(403);
-    expect(
-      (
-        await request(
-          `${base}/identities`,
-          { continuationToken: proof.continuationToken, speakerProposalId: f.proposalId },
-          f.session,
-        )
-      ).status,
-    ).toBe(403);
+    const response = await request(
+      base,
+      eventProposalProofStartSchema.parse({ email: "speaker@official.example", consents }),
+      f.session,
+    );
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_PROOF_CONTEXT_MISMATCH" } });
     expect(await state()).toEqual(before);
   });
 

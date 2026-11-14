@@ -16,11 +16,12 @@ afterEach(() => {
 });
 
 /**
- * The contact step decides between a saved profile and the email form only once it knows who is signed
- * in. Until then it shows that it is loading, so nothing typed lands in a form that is about to be replaced.
+ * The contact step decides between the signed-in person's details and the sign-in card only once it
+ * knows who is signed in. Until then it shows that it is loading, so nothing typed lands in a card that
+ * is about to be replaced.
  */
 describe("event entry contact step", () => {
-  it("shows the loading state from the first render, so an email is never typed into a form that resets", async () => {
+  it("shows the loading state from the first render, and the sign-in card only once the session has answered", async () => {
     let answerSession: ((value: Response) => void) | undefined;
     vi.stubGlobal(
       "fetch",
@@ -36,20 +37,19 @@ describe("event entry contact step", () => {
       <EventProposalIdentityStep enabled eventSlug="pqc-2026" consents={() => []} onChange={() => undefined} />,
       host,
     );
-    expect(host.textContent).toContain("Loading your details");
-    expect(host.querySelector('input[name="email"]')).toBeNull();
+    const loading = () => host!.querySelector('[role="status"]');
+    const signIn = () => host!.querySelector('section[aria-label="Sign in"]');
+    expect(loading()).not.toBeNull();
+    expect(signIn()).toBeNull();
+    expect(host.querySelector("input")).toBeNull();
     // Still loading while the session probe is out.
     await vi.waitFor(() => expect(answerSession).toBeDefined());
-    expect(host.textContent).toContain("Loading your details");
+    expect(loading()).not.toBeNull();
+    expect(signIn()).toBeNull();
     await act(async () => {
       answerSession!(response({ error: { code: "UNAUTHORIZED", message: "Sign in" } }, 401));
     });
-    await vi.waitFor(() => expect(host!.querySelector('input[name="email"]')).not.toBeNull());
-    await act(() => {
-      const email = host!.querySelector<HTMLInputElement>('input[name="email"]')!;
-      email.value = "ada@example.test";
-      email.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    expect(host.querySelector<HTMLInputElement>('input[name="email"]')!.value).toBe("ada@example.test");
+    await vi.waitFor(() => expect(signIn()).not.toBeNull());
+    expect(loading()).toBeNull();
   });
 });

@@ -2,7 +2,6 @@ import { proposalIdentityFixture as fixture, submitIdentityProposal as submit } 
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { callApi } from "./helpers/app";
-import { prepareProposalProof } from "./helpers/proposal-proof";
 import { createMemberSession } from "./helpers/auth";
 import { deliveredEmailPayload, queryAll } from "./helpers/context";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
@@ -280,7 +279,9 @@ describe("proposal speaker acting identity", () => {
 
   it("requires the real signed-in owner and refuses identity selection through roster contracts", async () => {
     const f = await fixture();
-    expect((await submit(f.body)).status).toBe(403);
+    const anonymous = await submit(f.body);
+    expect(anonymous.status).toBe(401);
+    await expect(anonymous.json()).resolves.toMatchObject({ error: { code: "AUTH_REQUIRED" } });
     const stranger = await insertUser(env.DB, "stranger@example.test");
     const organization = await insertOrganization(env.DB, "Stranger employer");
     const member = await seedOrganizationAggregate(env.DB, organization, "A");
@@ -339,16 +340,9 @@ describe("proposal speaker acting identity", () => {
     ).toBe("Chosen organization");
   });
 
-  it("records a proved guest's own canonical identity without repeating known personal fields", async () => {
+  it("records a signed-in proposer's chosen identity without repeating known personal fields", async () => {
     const f = await fixture();
-    const proof = await prepareProposalProof({
-      environment: env,
-      eventSlug: "pqc-2026",
-      email: f.email,
-      consents: f.body.consents,
-      unaffiliatedAttestation: false,
-    });
-    const response = await submit({ ...f.body, ...proof, proposer: { actingIdentityId: f.secondIdentityId } });
+    const response = await submit({ ...f.body, proposer: { actingIdentityId: f.secondIdentityId } }, f.token);
     expect(response.status, await response.clone().text()).toBe(200);
     const { proposalId } = (await response.json()) as { proposalId: string };
     const read = speakerSelfServiceReadResponseSchema.parse(

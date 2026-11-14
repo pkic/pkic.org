@@ -85,7 +85,7 @@ export async function prepareProposalProofPerson(
   const resolved = await resolveProposalProofPerson(
     db,
     payload.email,
-    payload.speakerClaimSessionId ? (payload.userId ?? undefined) : payload.context?.userId,
+    payload.speakerClaimSessionId ? (payload.userId ?? undefined) : payload.context.userId,
   );
   if (!resolved || (resolved.user?.id ?? null) !== payload.userId)
     throw new AppError(
@@ -139,12 +139,7 @@ export async function prepareProposalProofPerson(
         verifiedAt: at,
         // This exact invitation is independently bound into the verified continuation.
         // Preserve its scoped flow while revoking the account's earlier access.
-        provedSpeakerId:
-          payload.operation === "speaker_profile" &&
-          payload.context?.kind === "speaker" &&
-          payload.context.userId === prepared.user.id
-            ? payload.context.speakerId
-            : undefined,
+        provedSpeakerId: payload.context.userId === prepared.user.id ? payload.context.speakerId : undefined,
       }),
       // Verify and recheck only the exact address authorized by this same-person proof.
       prepareAuthorizationGuard(
@@ -169,8 +164,6 @@ export async function prepareInvitedSpeakerAccountClaim(
   if (!payload.speakerClaimSessionId) return [];
   const context = payload.context;
   if (
-    payload.operation !== "speaker_profile" ||
-    context?.kind !== "speaker" ||
     context.sessionId ||
     !payload.userId ||
     payload.userId === context.userId ||

@@ -142,6 +142,12 @@
     max-width: 26rem;
   }
 
+  /* The card on a page of its own: centered in the page's column, at the card's own width. */
+  .pk-login__embedded {
+    display: flex;
+    justify-content: center;
+  }
+
   .pk-login__card {
     background: var(--pk-surface);
     border: 1px solid var(--pk-line-soft);
@@ -166,11 +172,19 @@
     letter-spacing: -0.01em;
   }
 
-  /* The card's own footer: what to do when you are not a member at all. */
+  /* The card's lower band: where someone without an account starts. */
   .pk-login__card-foot {
     border-block-start: 1px solid var(--pk-line-soft);
     background: var(--pk-surface-sunk);
     padding: var(--pk-4) clamp(1.5rem, 3vw, 2.25rem);
+  }
+
+  /* The band's heading sits a step under the card's title, so the two sections read as one card. */
+  .pk-login__start-title {
+    margin: 0;
+    font-size: var(--pk-text-lg);
+    font-weight: 650;
+    letter-spacing: -0.01em;
   }
 
   .pk-login__note {

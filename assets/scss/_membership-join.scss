@@ -1,14 +1,3 @@
-// The verified banner is the `ok` tone: the soft ground, the tone's ink, and a
-// line derived from the strong tone the way `pk-badge` derives its own. There
-// is no separate "subtle success line" token, and inventing one would put a
-// second definition of the tone beside the scale in tokens.ts.
-.membership-verified-context {
-  padding: 0.9rem 1rem;
-  border: 1px solid color-mix(in srgb, var(--pk-ok) 25%, transparent);
-  border-radius: var(--pk-radius);
-  background: var(--pk-ok-soft);
-  color: var(--pk-ok-ink);
-}
 .join-application-form {
   width: 100%;
 }

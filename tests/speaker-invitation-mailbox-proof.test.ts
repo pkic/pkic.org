@@ -264,7 +264,6 @@ describe("speaker invitation mailbox proof", () => {
       continuationToken: ready.status === "ready" ? ready.continuationToken : "",
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
       at: new Date().toISOString(),
-      operation: "speaker_profile",
       speakerAuthority: token,
       speakerId,
     });
@@ -287,7 +286,6 @@ describe("speaker photo in the mailbox proof step", () => {
       continuationToken,
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
       at: new Date().toISOString(),
-      operation: "speaker_profile",
       speakerAuthority: speaker.token,
       speakerId: speaker.speakerId,
     });

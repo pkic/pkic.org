@@ -35,7 +35,7 @@ export type FeedbackSample = { kind: "eligible" | "revoked" | "unknown" | "malfo
 /** Fixture construction is outside the measured window; every transition uses the mounted API/mailbox. */
 export async function prepareScannerMeasurement(page: Page) {
   const template = await registerInBrowser(page, ownDomainEmail("measurement-template"), undefined, undefined, {
-    organization: "Measurement Template Org",
+    organization: `Measurement Template Org ${randomUUID()}`,
   });
   const email = ownDomainEmail("measurement-physical");
   const malformed = `not-a-credential-${randomUUID()}`;
@@ -44,7 +44,6 @@ export async function prepareScannerMeasurement(page: Page) {
     data: registrationCreateSchema.parse({
       ...template.request,
       email,
-      attendanceType: "in_person",
       dayAttendance: template.request.dayAttendance?.map((day) => ({ ...day, attendanceType: "in_person" })),
     }),
   });
@@ -53,7 +52,7 @@ export async function prepareScannerMeasurement(page: Page) {
   if (!registration.manageToken) throw new Error("Fresh attendee must receive its registration management capability");
   const mail = await waitForCapturedEmail(email, "Confirm your registration", { since });
   await page.goto(extractEmailUrl(mail, "/register/confirm"));
-  await confirmRegistration(page, "Scanner Measurement Org");
+  await confirmRegistration(page, `Scanner Measurement Org ${randomUUID()}`);
   await waitForCapturedEmail(email, "registration is confirmed", { since });
   const operatorEmail = e2eAdminEmail("scanner-measurement-operator");
   await signInAsE2eStaff(page, operatorEmail);

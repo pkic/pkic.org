@@ -2,7 +2,7 @@
 import { expect, test } from "@playwright/test";
 import { userCreateSchema } from "../../assets/shared/schemas/user-create";
 import { memberApplicationCreateSchema } from "../../assets/shared/schemas/member-applications";
-import { EMAIL_FIRST_COPY, ORGANIZATION_JOB_TITLE_COPY } from "../../assets/shared/email-first-copy";
+import { ORGANIZATION_JOB_TITLE_COPY } from "../../assets/shared/email-first-copy";
 import { memberJoinVerifyResponseSchema } from "../../assets/shared/schemas/member-join";
 import {
   organizationCreateSchema,
@@ -11,70 +11,62 @@ import {
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { approveMemberThroughReview, submitMembershipApplication, uniqueSuffix } from "./helpers/membership";
 import { openMyProfile, signInToPortal } from "./helpers/portal-auth";
-import { openMembershipVerificationLink } from "./helpers/member-join";
+import { startJoinInBrowser } from "./helpers/member-join";
+import { signInThroughCard } from "./helpers/sign-in-card";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 import {
   createMember,
   jsonResponse,
   recordProperty,
-  arrayProperty,
+  memberIdentityOf,
   stringProperty,
 } from "./helpers/member-provisioning";
 
-test("existing members get sign-in instructions and old join links remain helpful", async ({ page }) => {
+test("an existing member who returns to the join page is sent to the portal, not to another application", async ({
+  page,
+  browser,
+}) => {
   const suffix = uniqueSuffix();
   const email = `returning-${suffix}@returning-${suffix}.test`;
-  const requestJoin = async () => {
-    await page.goto("/join/");
-    await page.getByLabel("Your official work or organization email address").fill(email);
-    await page.getByRole("button", { name: "Verify your work email", exact: true }).click();
-    await expect(page.getByText("Check your email", { exact: true })).toBeVisible();
-  };
-  const beforeVerification = await capturedEmailCount();
-  await requestJoin();
-  const verification = await waitForCapturedEmail(email, "Verify your email address", { since: beforeVerification });
-  const oldLink = extractEmailUrl(verification, "/join/");
-
+  const organizationName = `Returning Organization ${suffix}`;
   await signInToPortal(page, e2eAdminEmail("portal-vote-election"));
-  await approveMemberThroughReview(page, {
-    email,
-    name: `Returning Member ${suffix}`,
-    organizationName: `Returning Organization ${suffix}`,
-  });
-  await page.context().clearCookies();
-  await openMembershipVerificationLink(page, oldLink);
-  await expect(page.getByRole("heading", { name: "You already have member access" })).toBeVisible();
-  await expect(page.locator("[data-join-application-form]")).toBeHidden();
-  await page
-    .locator("[data-join-already-member]")
-    .screenshot({ path: test.info().outputPath("returning-member-guidance.png") });
-  await page.getByRole("link", { name: "Sign in to the member portal" }).click();
-  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible();
+  await approveMemberThroughReview(page, { email, name: `Returning Member ${suffix}`, organizationName });
 
-  const sinceGuidance = await capturedEmailCount();
-  await requestJoin();
-  const guidance = await waitForCapturedEmail(email, "You already have PKI Consortium member access", {
-    since: sinceGuidance,
-  });
-  const rendered = JSON.stringify(guidance.payload);
-  expect(rendered).toContain("You do not need to submit another membership application");
-  expect(rendered).toContain("Enter the same email address");
-  expect(rendered).not.toContain("#verify=");
-  const loginUrl = extractEmailUrl(guidance, "/portal/");
-  await page.goto(loginUrl);
-  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible();
-  await signInToPortal(page, email);
-  await expect(page.getByRole("button", { name: "Account menu" })).toBeVisible();
+  const memberContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
+  try {
+    const member = await memberContext.newPage();
+    await member.goto("/join/");
+    await signInThroughCard(member, email, { emailFlow: "join", returning: true });
+    // Signed in personally, a representative cannot apply as an individual beside their organization.
+    await expect(member.getByRole("heading", { name: "Apply for your organization instead" })).toBeVisible();
+    await expect(member.locator("[data-join-application-form]")).toBeHidden();
+    await member.getByRole("button", { name: "Change representation", exact: true }).click();
+    const chooser = member.getByRole("dialog", { name: "Change representation", exact: true });
+    await chooser.getByRole("combobox", { name: "Representation", exact: true }).click();
+    await member.getByRole("option").filter({ hasText: organizationName }).click();
+    await chooser.getByRole("button", { name: "Use representation", exact: true }).click();
+    await expect(member.getByRole("heading", { name: `${organizationName} is already a member` })).toBeVisible();
+    await expect(member.locator("[data-join-application-form]")).toBeHidden();
+    await member
+      .locator("[data-join-signed-in]")
+      .screenshot({ path: test.info().outputPath("returning-member-guidance.png") });
+    await member.getByRole("link", { name: "Manage membership", exact: true }).click();
+    await expect(member).toHaveURL(/\/portal\/#\/organizations\//);
+    await expect(member.getByRole("button", { name: "Account menu" })).toBeVisible();
+  } finally {
+    await memberContext.close();
+  }
 });
 
-test("a verified address on a shared domain needs approval for member access", async ({ page }) => {
+test("a verified address on a shared domain needs approval for member access", async ({ page: staff, browser }) => {
+  let page = staff;
   const suffix = uniqueSuffix();
   await signInToPortal(page, e2eAdminEmail("shared-organization-domains"));
   const first = await createMember(page, { organizationName: `Shared First ${suffix}` });
   const second = await createMember(page, { organizationName: `Shared Second ${suffix}` });
   const later = await createMember(page, { organizationName: `Later Organization ${suffix}` });
   const secondUser = recordProperty(await jsonResponse(page.request, "GET", `/api/v1/users/${second.userId}`), "user");
-  const secondIdentity = arrayProperty(secondUser, "identities")[0] as Record<string, unknown>;
+  const secondIdentity = memberIdentityOf(secondUser);
   const secondOrganization = stringProperty(secondIdentity, "organizationId");
   const domain = first.email.split("@")[1];
   await page.goto(`/portal/#/organizations/${secondOrganization}/domains/new`);
@@ -98,14 +90,12 @@ test("a verified address on a shared domain needs approval for member access", a
   });
   expect(independentUser.status(), await independentUser.text()).toBe(201);
 
-  await page.context().clearCookies();
+  // Each person arrives in a browser of their own.
+  const origin = new URL(staff.url()).origin;
+  const colleagueContext = await browser.newContext({ baseURL: origin });
+  page = await colleagueContext.newPage();
   const email = `colleague-${suffix}@${domain}`;
-  const since = await capturedEmailCount();
-  await page.goto("/join/");
-  await page.getByLabel("Your official work or organization email address").fill(email);
-  await page.getByRole("button", { name: "Verify your work email", exact: true }).click();
-  const verification = await waitForCapturedEmail(email, "Verify your email address", { since });
-  await openMembershipVerificationLink(page, extractEmailUrl(verification, "/join/"));
+  await startJoinInBrowser(page, email);
   const choice = page.getByRole("combobox", { name: "Organization (required)", exact: true });
   await expect(choice).toBeVisible();
   await expect(page.getByText(`Choose the organization you represent at @${domain}.`)).toBeVisible();
@@ -125,22 +115,14 @@ test("a verified address on a shared domain needs approval for member access", a
   await choice.selectOption({ label: `Shared Second ${suffix}` });
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.locator("[data-join-support-required]")).toBeVisible();
-  expect((await page.context().cookies()).some((cookie) => cookie.name === "pkic_session")).toBe(false);
   for (const width of [1280, 375]) {
     await page.setViewportSize({ width, height: 812 });
     await page.screenshot({ path: test.info().outputPath(`shared-member-review-required-${width}.png`) });
   }
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.context().clearCookies();
-  const beforeIndependent = await capturedEmailCount();
-  await page.goto("/join/");
-  await page.getByRole("radio", { name: EMAIL_FIRST_COPY.join.personal.title, exact: true }).check();
-  await page.getByLabel(EMAIL_FIRST_COPY.join.personal.label).fill(independentEmail);
-  await page.getByRole("button", { name: EMAIL_FIRST_COPY.join.personal.action, exact: true }).click();
-  const individualProof = await waitForCapturedEmail(independentEmail, "Verify your email address", {
-    since: beforeIndependent,
-  });
-  await openMembershipVerificationLink(page, extractEmailUrl(individualProof, "/join/"));
+  await colleagueContext.close();
+  const independentContext = await browser.newContext({ baseURL: origin });
+  page = await independentContext.newPage();
+  await startJoinInBrowser(page, independentEmail, { individual: true });
   const independent = page.getByRole("button", { name: "Continue as an individual", exact: true });
   await expect(independent).toBeVisible();
   await expect(page.getByText("Choose an organization only if you want to join it.", { exact: false })).toBeVisible();
@@ -153,9 +135,8 @@ test("a verified address on a shared domain needs approval for member access", a
   await independent.focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("[data-join-application-form]")).toBeVisible();
-  await expect(page.locator("[data-verified-application-kind]")).toHaveText("Individual application");
-  expect((await page.context().cookies()).some((cookie) => cookie.name === "pkic_session")).toBe(false);
-  await signInToPortal(page, independentEmail);
+  await expect(page.locator('[data-join-application-form] input[name="organizationName"]')).toBeHidden();
+  // Joining signed them in, so the portal opens with the same session.
   await page.goto("/portal/#/home");
   const offer = page.getByRole("region", { name: "Your organization", exact: true });
   await expect(offer).toBeVisible();
@@ -200,6 +181,7 @@ test("a verified address on a shared domain needs approval for member access", a
   await page.reload();
   await expect(page.getByRole("button", { name: "Account menu" })).toBeVisible();
   await expect(offer).toHaveCount(0);
+  await independentContext.close();
 });
 
 test("a verified address can apply for a nonmember organization on a shared domain", async ({ page }) => {
@@ -217,12 +199,7 @@ test("a verified address can apply for a nonmember organization on a shared doma
   expect(claim.status(), await claim.text()).toBe(201);
   await page.context().clearCookies();
   const email = `nonmember-${suffix}@${domain}`;
-  const since = await capturedEmailCount();
-  await page.goto("/join/");
-  await page.getByLabel("Your official work or organization email address").fill(email);
-  await page.getByRole("button", { name: "Verify your work email", exact: true }).click();
-  const verification = await waitForCapturedEmail(email, "Verify your email address", { since });
-  await openMembershipVerificationLink(page, extractEmailUrl(verification, "/join/"));
+  await startJoinInBrowser(page, email);
   await page.getByRole("combobox", { name: "Organization (required)", exact: true }).selectOption({ label: name });
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   const organizationName = page.locator('[data-join-application-form] input[name="organizationName"]');
@@ -276,12 +253,7 @@ test("a verified address adds an organization on a dedicated subdomain", async (
   await page.context().clearCookies();
   const subdomain = `division.${domain}`;
   const email = `colleague-${suffix}@${subdomain}`;
-  const since = await capturedEmailCount();
-  await page.goto("/join/");
-  await page.getByLabel("Your official work or organization email address").fill(email);
-  await page.getByRole("button", { name: "Verify your work email", exact: true }).click();
-  const verification = await waitForCapturedEmail(email, "Verify your email address", { since });
-  await openMembershipVerificationLink(page, extractEmailUrl(verification, "/join/"));
+  await startJoinInBrowser(page, email);
   await page.getByRole("button", { name: "Add organization", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add organization" });
   const domainChoice = dialog.getByRole("combobox", { name: /^Email domain/ });
@@ -310,12 +282,7 @@ test("a new organization chooses its domain when no organization is known", asyn
   const suffix = uniqueSuffix();
   const domain = `new-${suffix}.test`;
   const email = `person@division.${domain}`;
-  const since = await capturedEmailCount();
-  await page.goto("/join/");
-  await page.getByLabel("Your official work or organization email address").fill(email);
-  await page.getByRole("button", { name: "Verify your work email", exact: true }).click();
-  const verification = await waitForCapturedEmail(email, "Verify your email address", { since });
-  await openMembershipVerificationLink(page, extractEmailUrl(verification, "/join/"));
+  await startJoinInBrowser(page, email);
   await page.getByRole("button", { name: "Add organization", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add organization" });
   await dialog.getByRole("combobox", { name: /^Email domain/ }).selectOption(domain);
@@ -338,12 +305,7 @@ test("another organization applies while the same domain has a pending applicati
     organizationName: `Pending Organization ${suffix}`,
   });
   const email = `other@${domain}`;
-  const since = await capturedEmailCount();
-  await page.goto("/join/");
-  await page.getByLabel("Your official work or organization email address").fill(email);
-  await page.getByRole("button", { name: "Verify your work email", exact: true }).click();
-  const verification = await waitForCapturedEmail(email, "Verify your email address", { since });
-  await openMembershipVerificationLink(page, extractEmailUrl(verification, "/join/"));
+  await startJoinInBrowser(page, email);
   await page.getByRole("button", { name: "Add organization", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add organization" });
   const name = `Different Organization ${suffix}`;

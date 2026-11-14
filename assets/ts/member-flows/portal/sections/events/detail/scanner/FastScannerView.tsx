@@ -21,7 +21,7 @@ import { CloseButton } from "../../../../../../ui/CloseButton";
 import { IconTools } from "../../../../../../components/icons/indicators";
 import { IconRefresh, IconVirtual, IconSearch, IconBulletList } from "../../../../../../components/icons";
 import { scannerSwipeDirection, trapScannerDrawerTab } from "./scanner-gestures";
-import "../../../../shell/Login.css";
+import "../../../../../../components/sign-in/Login.css";
 import "./FastScannerView.css";
 import { HeadingOutline } from "../../../../../../ui/HeadingOutline";
 import { SectionHeading } from "../../../../../../ui/SectionHeading";
