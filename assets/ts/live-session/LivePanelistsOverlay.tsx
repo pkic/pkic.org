@@ -34,7 +34,7 @@ function seated(credits: readonly LiveCredit[]): LiveCredit[] {
 
 /**
  * The session's title and its people, each with their photo, name and the
- * titles they speak under, the moderator set apart, arranged for the board's
+ * titles they speak under, the moderator last, arranged for the board's
  * shape. The panelists' board draws them alone; the panel board draws them
  * under the audience question.
  */
@@ -49,7 +49,6 @@ export function LivePanelistsCredits({
 }) {
   const people = seated(session.credits);
   const arrangement = livePanelistsArrangement(panelists.layout, shape, people.length);
-  const firstModerator = people.findIndex((credit) => credit.moderator);
   return (
     <>
       <div class="pk-live-panelists__heading">
@@ -64,19 +63,17 @@ export function LivePanelistsCredits({
         data-arrangement={arrangement}
         data-count={Math.min(people.length, LIVE_PANEL_SEATS)}
       >
-        {people.map((credit, index) => (
-          <div
-            class="pk-live-panelists__speaker"
-            key={credit.key}
-            data-moderator={credit.moderator ? "" : undefined}
-            data-set-apart={index > 0 && index === firstModerator ? "" : undefined}
-          >
+        {people.map((credit) => (
+          <div class="pk-live-panelists__speaker" key={credit.key} data-moderator={credit.moderator ? "" : undefined}>
             <div class="pk-live-panelists__headshot">
               <Avatar name={credit.name} src={credit.photoUrl ?? undefined} size="xl" original />
               {credit.moderator ? <p class="pk-live-panelists__moderator">Moderator</p> : null}
             </div>
             <div class="pk-live-panelists__info">
-              <p class="pk-live-panelists__name">{credit.name}</p>
+              <p class="pk-live-panelists__name">
+                {credit.name}
+                {credit.moderator ? <span class="pk-live-panelists__role">Moderator</span> : null}
+              </p>
               <div class="pk-live-panelists__title">
                 <LiveCreditTitles credit={credit} />
               </div>

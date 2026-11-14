@@ -38,9 +38,9 @@ it.each(["panel", "list", "columns"] as const)(
     host = document.body.appendChild(document.createElement("div"));
     await act(() => render(<LivePanelistsOverlay session={session} panelists={{ layout }} box={BOX} />, host!));
     expect(host.querySelector("[data-layout]")?.getAttribute("data-layout")).toBe(layout);
-    // The moderator sits after the speakers, set apart from them.
+    // The moderator sits after the speakers, named by the badge on their photo.
     const speakers = [...host.querySelectorAll(".pk-live-panelists__speaker")];
-    expect(speakers.at(-1)?.hasAttribute("data-set-apart")).toBe(true);
+    expect(speakers.at(-1)?.hasAttribute("data-moderator")).toBe(true);
     expect(speakers.at(-1)?.querySelector(".pk-live-panelists__moderator")?.textContent).toBe("Moderator");
     expect(host.textContent).toContain(session.title);
     expect(host.querySelectorAll(".pk-live-panelists__speaker")).toHaveLength(6);
