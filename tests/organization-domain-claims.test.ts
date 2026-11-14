@@ -20,10 +20,6 @@ import {
   domainClaimsObservationSelection,
   observedDomainClaimsEvidence,
 } from "../functions/_lib/services/identities/affiliation-evidence";
-import {
-  prepareReleaseApplicationDomainClaim,
-  prepareTransferApplicationDomainClaim,
-} from "../functions/_lib/services/membership/organization-domain-claims";
 
 async function claimDomain(organizationId: string, domain: string): Promise<void> {
   await env.DB.prepare(
@@ -77,67 +73,6 @@ describe("staff manage an organization's email domains", () => {
     await expect(env.DB.batch(guards)).rejects.toThrow("authorization_guards.authorized");
   });
 
-  it("saves a staff claim even if an unrelated provisional claim is released during the write", async () => {
-    const domain = "concurrent-shared.example";
-    const applicationId = await seedMemberApplication({
-      applicantEmail: `person@${domain}`,
-      organizationDomain: domain,
-    });
-    const organizationId = await insertOrganization(env.DB, "New Claimant");
-    const raced = mutateBeforeMatchingQuery(
-      env.DB,
-      (sql) => sql.includes("INSERT INTO organization_domain_claims"),
-      () => env.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id=?").bind(applicationId).run(),
-    );
-    const response = await callApi({ ...env, DB: raced }, `/api/v1/organizations/${organizationId}/domains`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ domain, reason: "Staff confirmed the shared domain" }),
-    });
-    expect(response.status, await response.clone().text()).toBe(201);
-    expect((await domainsOf(organizationId)).map((entry) => entry.domain)).toContain(domain);
-  });
-
-  it.each(["release", "approve"])(
-    "preserves additional claims when a pending application is decided (%s)",
-    async (decision) => {
-      const applicationId = await seedMemberApplication({
-        applicantEmail: "person@pending-shared.example",
-        organizationDomain: "pending-shared.example",
-      });
-      const first = await insertOrganization(env.DB, "First Organization");
-      const second = await insertOrganization(env.DB, "Second Organization");
-      const claimId = await env.DB.prepare("SELECT id FROM organization_domain_claims WHERE application_id=?")
-        .bind(applicationId)
-        .first<string>("id");
-      const at = nowIso();
-      await env.DB.batch(
-        [first, second].map((organizationId) =>
-          env.DB.prepare(
-            `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
-          ).bind(crypto.randomUUID(), claimId, organizationId, at, at),
-        ),
-      );
-      const statements =
-        decision === "release"
-          ? [prepareReleaseApplicationDomainClaim(env.DB, applicationId)]
-          : await prepareTransferApplicationDomainClaim(env.DB, {
-              domain: "pending-shared.example",
-              applicationId,
-              organizationId: first,
-              now: at,
-            });
-      await env.DB.batch(statements);
-      const rows = await queryAll<{ organization_id: string; application_id: string | null }>(
-        env.DB,
-        "SELECT organization_id,application_id FROM organization_domain_claims WHERE domain=? ORDER BY organization_id",
-        ["pending-shared.example"],
-      );
-      expect(rows).toEqual(
-        [first, second].sort().map((organization_id) => ({ organization_id, application_id: null })),
-      );
-    },
-  );
   let token: string;
 
   beforeEach(async () => {
@@ -164,7 +99,7 @@ describe("staff manage an organization's email domains", () => {
     return organizationDomainsListResponseSchema.parse(await response.json()).domains;
   }
 
-  it("lists claimed, derived and held domains with the people linked through each", async () => {
+  it("lists claimed and derived domains with the people linked through each, whatever applications are open", async () => {
     const acme = await insertOrganization(env.DB, "Acme");
     await claimDomain(acme, "acme.example");
     await linkedPerson(acme, "ana@acme.example");
@@ -175,7 +110,7 @@ describe("staff manage an organization's email domains", () => {
 
     expect(await domainsOf(acme)).toEqual([
       { domain: "acme-labs.example", status: "derived", people: 1, claimedAt: null },
-      { domain: "acme-pending.example", status: "held", people: 1, claimedAt: null },
+      { domain: "acme-pending.example", status: "derived", people: 1, claimedAt: null },
       { domain: "acme.example", status: "claimed", people: 2, claimedAt: expect.any(String) },
     ]);
   });
@@ -259,29 +194,20 @@ describe("staff manage an organization's email domains", () => {
     ).toEqual([{ organization_id: keepId }]);
   });
 
-  it("enforces distinct claimants and allows a pending application to share its domain", async () => {
+  it("enforces distinct claimants on one domain", async () => {
     const first = await insertOrganization(env.DB, "First Organization");
     const second = await insertOrganization(env.DB, "Second Organization");
     await claimDomain(first, "shared-work.example");
-    await seedMemberApplication({ applicantEmail: "applicant@pending.example" });
-    const roots = await queryAll<{ id: string; domain: string }>(
-      env.DB,
-      "SELECT id,domain FROM organization_domain_claims WHERE domain IN (?,?)",
-      ["shared-work.example", "pending.example"],
-    );
-    const rootId = roots.find((item) => item.domain === "shared-work.example")!.id;
-    const pendingId = roots.find((item) => item.domain === "pending.example")!.id;
-    const insert = (root: string, organization: string) =>
+    const insert = (organization: string) =>
       env.DB.prepare(
-        `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
+        `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)`,
       )
-        .bind(crypto.randomUUID(), root, organization, nowIso(), nowIso())
+        .bind(crypto.randomUUID(), "shared-work.example", organization, nowIso(), nowIso())
         .run();
-    await expect(insert(rootId, first)).rejects.toThrow();
-    await insert(pendingId, second);
-    await insert(rootId, second);
-    await expect(insert(rootId, second)).rejects.toThrow();
-    await env.DB.prepare("DELETE FROM organization_domain_claims WHERE id=?").bind(rootId).run();
+    await expect(insert(first)).rejects.toThrow();
+    await insert(second);
+    await expect(insert(second)).rejects.toThrow();
+    await env.DB.prepare("DELETE FROM organization_domain_claims WHERE organization_id=?").bind(first).run();
     expect(
       await queryAll(env.DB, "SELECT organization_id FROM organization_domain_claims WHERE domain=?", [
         "shared-work.example",
@@ -289,7 +215,7 @@ describe("staff manage an organization's email domains", () => {
     ).toEqual([{ organization_id: second }]);
   });
 
-  it("refuses ineligible and duplicate claims while allowing a pending domain to be shared", async () => {
+  it("refuses ineligible and duplicate claims while an open application leaves its domain claimable", async () => {
     const acme = await insertOrganization(env.DB, "Acme");
     await claimDomain(acme, "acme.example");
     await seedMemberApplication({ applicantEmail: "applicant@pending.example" });
@@ -311,15 +237,13 @@ describe("staff manage an organization's email domains", () => {
       "ORGANIZATION_DOMAIN_ALREADY_CLAIMED",
     );
 
-    const held = await claim("pending.example");
-    expect(held.status, await held.clone().text()).toBe(201);
+    const pending = await claim("pending.example");
+    expect(pending.status, await pending.clone().text()).toBe(201);
     expect(
-      await queryAll(
-        env.DB,
-        "SELECT application_id IS NOT NULL AS held FROM organization_domain_claims WHERE domain=? AND application_id IS NOT NULL",
-        ["pending.example"],
-      ),
-    ).toEqual([{ held: 1 }]);
+      await queryAll(env.DB, "SELECT organization_id FROM organization_domain_claims WHERE domain=?", [
+        "pending.example",
+      ]),
+    ).toEqual([{ organization_id: acme }]);
 
     expect(await queryAll(env.DB, "SELECT action FROM audit_log WHERE action LIKE 'organization_domain_%'")).toEqual([
       { action: "organization_domain_claimed" },

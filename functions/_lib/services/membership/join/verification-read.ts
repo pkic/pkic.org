@@ -84,7 +84,7 @@ export async function readJoinVerification(
     creation.latest,
     verifiedOwnedEmailSelection(owner, email),
     ownOpenApplicationSelection(email, owner),
-    organizationOpenApplicationSelection(claim),
+    organizationOpenApplicationSelection(organization),
     {
       sql: `SELECT organization_id FROM members WHERE status='active' AND organization_id IN (
         SELECT organization_id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
@@ -102,7 +102,7 @@ export async function readJoinVerification(
     person: batchFirst<UserRecord>(results[1]),
     existingMembership: batchFirst<MemberEligibleUserRow>(results[2]),
     consumed: batchFirst<{ id: string }>(results[3]) !== null,
-    claim: batchFirst<{ domain: string; application_id: string | null }>(results[4]),
+    claim: batchFirst<{ domain: string }>(results[4]),
     member: batchFirst<{ member_id: string; organization_id: string }>(results[5]),
     state: batchFirst<{ active: number; individual_conflict: number }>(results[6]),
     blocked: batchFirst<{ id: string }>(results[7]) !== null,
@@ -114,7 +114,7 @@ export async function readJoinVerification(
     },
     openApplication: {
       own: batchFirst<OwnOpenApplicationRow>(results[11]),
-      organizationHeld: batchFirst<{ id: string }>(results[12]) !== null,
+      organizationOpen: batchFirst<{ id: string }>(results[12]) !== null,
     },
     activeMemberOrganizationIds: new Set(
       batchRows<{ organization_id: string }>(results[13]).map((row) => row.organization_id),

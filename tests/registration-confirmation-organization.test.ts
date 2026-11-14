@@ -10,8 +10,6 @@ import { resetDb } from "./helpers/reset-db";
 import { seedMemberApplication } from "./helpers/member-applications";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { callApi } from "./helpers/app";
-import { buildRegistrationManageView } from "../functions/_lib/services/registrations/manage-view";
-import type { RegistrationRecord } from "../functions/_lib/services/registrations/types";
 import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 import {
@@ -157,10 +155,10 @@ describe("organization named on registration confirmation", () => {
       JOIN organizations organization ON organization.id=claim.organization_id WHERE claim.domain=?`,
         ["unknown-works.example"],
       ),
-    ).toEqual([]);
+    ).toEqual([{ name: "Unknown Works" }]);
   });
 
-  it("links a newly named organization to a domain already claimed by another organization", async () => {
+  it("shares a claimed domain with a newly named organization that claims it too", async () => {
     const existing = await insertOrganization(env.DB, "Existing Organization");
     const at = new Date().toISOString();
     await env.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
@@ -191,7 +189,15 @@ describe("organization named on registration confirmation", () => {
       JOIN organizations organization ON organization.id=claim.organization_id WHERE claim.domain=? ORDER BY organization.name`,
         ["new-shared.example"],
       ),
-    ).toEqual([{ name: "Existing Organization" }]);
+    ).toEqual([{ name: "Existing Organization" }, { name: "New Organization" }]);
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT organization.name FROM identities identity JOIN organizations organization ON organization.id=identity.organization_id
+      WHERE identity.verified_email_domain=?`,
+        ["new-shared.example"],
+      ),
+    ).toEqual([{ name: "New Organization" }]);
   });
 
   it("refuses an organization named without a job title, before anything is linked", async () => {
@@ -206,7 +212,10 @@ describe("organization named on registration confirmation", () => {
     expect(await affiliations("person@unknown-works.example")).toEqual([]);
   });
 
-  it("confirms a reserved work domain and queues its affiliation for review", async () => {
+  it.each([
+    ["the organization it names", "Pending Confirmation Organization"],
+    ["a differently spelled organization", "Different Organization"],
+  ])("links %s while a membership application uses the domain", async (_case, organizationName) => {
     const email = "registrant@pending-confirmation.example";
     await seedMemberApplication({
       organizationDomain: "pending-confirmation.example",
@@ -217,56 +226,16 @@ describe("organization named on registration confirmation", () => {
     expect(confirmation.asksOrganization).toBe(true);
     const prepared = await verifyOrganization(confirmation.organizationProof!, {
       organizationId: null,
-      organizationName: "Pending Confirmation Organization",
+      organizationName,
       jobTitle: "Engineer",
     });
     const result = await confirm({
       token,
-      organization: {
-        name: "Pending Confirmation Organization",
-        jobTitle: "Engineer",
-        contextToken: prepared.contextToken,
-      },
+      organization: { name: organizationName, jobTitle: "Engineer", contextToken: prepared.contextToken },
     });
-    expect(result.organizationOutcome).toBe("review_required");
-    expect(await affiliations(email)).toEqual([]);
-    expect(
-      await queryAll(
-        env.DB,
-        `SELECT review.organization_name FROM affiliation_reviews review
-      JOIN registrations registration ON registration.id=review.source_id
-      JOIN users person ON person.id=registration.user_id WHERE person.normalized_email=?`,
-        [email],
-      ),
-    ).toEqual([{ organization_name: "Pending Confirmation Organization" }]);
-    const [registration] = await queryAll<RegistrationRecord>(
-      env.DB,
-      `SELECT registration.* FROM registrations registration
-      JOIN users person ON person.id=registration.user_id WHERE person.normalized_email=?`,
-      [email],
-    );
-    // The manage page names the organization awaiting review rather than showing the registrant as Personal.
-    expect(await buildRegistrationManageView(env.DB, registration, "https://app.test")).toMatchObject({
-      user: { organization_name: null },
-      pendingOrganizationName: "Pending Confirmation Organization",
-    });
-  });
-
-  it("queues a differently spelled organization for review while an application uses its domain", async () => {
-    const applicationId = await seedMemberApplication({
-      organizationDomain: "pending-other.example",
-      organizationName: "Pending Organization",
-    });
-    const token = await register("person@pending-other.example");
-    const confirmed = await confirm({ token, organization: { name: "Different Organization", jobTitle: "Engineer" } });
-    expect(confirmed.organizationOutcome).toBe("review_required");
-    expect(await affiliations("person@pending-other.example")).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT id FROM organizations WHERE name='Different Organization'")).toEqual([]);
-    expect(
-      await env.DB.prepare("SELECT application_id FROM organization_domain_claims WHERE domain=?")
-        .bind("pending-other.example")
-        .first("application_id"),
-    ).toBe(applicationId);
+    expect(result.organizationOutcome).toBe("linked");
+    expect(await affiliations(email)).toEqual([{ name: organizationName, job_title: "Engineer" }]);
+    expect(await queryAll(env.DB, "SELECT id FROM affiliation_reviews")).toEqual([]);
   });
 
   it("does not ask a consumer address for an organization", async () => {
@@ -427,7 +396,7 @@ describe("organization named on registration confirmation", () => {
       { organization_name: "Closed Member Corp", source_type: "registration", email_domain: "closed-member.example" },
     ]);
   });
-  it("registers a selected member on a shared domain for affiliation review without granting member access", async () => {
+  it("links a selected member on a shared domain like any other organization", async () => {
     const selected = await insertOrganization(env.DB, "Shared Member");
     await seedOrganizationAggregate(env.DB, selected);
     const other = await insertOrganization(env.DB, "Other Claimant");
@@ -455,12 +424,10 @@ describe("organization named on registration confirmation", () => {
         contextToken: prepared.contextToken,
       },
     });
-    expect(result.organizationOutcome).toBe("review_required");
+    expect(result.organizationOutcome).toBe("linked");
     expect(result.status).toBe("registered");
-    expect(await affiliations(email)).toEqual([]);
-    expect(
-      await queryAll(env.DB, "SELECT organization_name FROM affiliation_reviews WHERE source_type='registration'"),
-    ).toEqual([{ organization_name: "Shared Member" }]);
+    expect(await affiliations(email)).toEqual([{ name: "Shared Member", job_title: "Engineer" }]);
+    expect(await queryAll(env.DB, "SELECT id FROM affiliation_reviews")).toEqual([]);
   });
 
   it("queues a confirmed named organization on an owned domain when no signed chooser context was supplied", async () => {

@@ -189,8 +189,6 @@ it("restarts completed reviews when a category-only edit resolves a different or
   const id = await reviewedApplication(2, "sub.example.test");
   const before = await getMembershipExecution(env.DB, id);
   expect(before.application).toMatchObject({ organization_id: null, organization_domain: "sub.example.test" });
-  // Removing the explicit subdomain claim makes the resolver fall back to the registrable parent.
-  await env.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id = ?").bind(id).run();
   const response = await callApi(env, `/api/v1/members/applications/${id}`, {
     method: "PATCH",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
@@ -202,9 +200,7 @@ it("restarts completed reviews when a category-only edit resolves a different or
   expect(restarted.generation).toBe(before.generation + 1);
   expect(restarted.application).toMatchObject({ membership_category: "A", organization_domain: "example.test" });
   expect(restarted.steps.every((step) => step.state === "waiting" && step.completed_at === null)).toBe(true);
-  expect(await queryAll(env.DB, "SELECT domain FROM organization_domain_claims WHERE application_id = ?", id)).toEqual([
-    { domain: "example.test" },
-  ]);
+  expect(await queryAll(env.DB, "SELECT id FROM organization_domain_claims")).toEqual([]);
   expect(
     await queryAll(
       env.DB,

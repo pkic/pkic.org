@@ -12,7 +12,7 @@ export function identityEmailDomainSupportSql(address: string, identity = "ident
   const host = `substr(${address},instr(${address},'@')+1)`;
   return `(${hostWithinDomainSql(host, `COALESCE(${identity}.verified_email_domain,${fallbackDomain})`)} OR EXISTS (
     SELECT 1 FROM organization_domain_claims claim WHERE claim.organization_id=${identity}.organization_id
-      AND claim.application_id IS NULL AND ${governingDomainClaimSql(host)}))`;
+      AND ${governingDomainClaimSql(host)}))`;
 }
 
 /** Recheck domain-derived authority atomically with an email-binding change. */

@@ -2,7 +2,6 @@ import { prepareApplicationEditEvidenceGuard } from "./edit-evidence";
 import { preparePermissionsAuthorizationGuard } from "../../../auth/permissions";
 import { isAuthorizationGuardFailure, isStateGuardFailure } from "../../../db/authorization-guard";
 import { getRequestedApplicationGroups } from "./queries";
-import { isApplicationTerminalStage } from "../../../../../assets/shared/schemas/member-applications";
 import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
 import { mailboxKind, organizationDomainCandidates } from "../../../email-domains/classification";
 /**
@@ -37,11 +36,7 @@ import {
   validateCustomAnswersAgainstForm,
 } from "../../forms";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../../audit";
-import {
-  organizationLinkDomain,
-  prepareClaimDomainForApplication,
-  prepareReleaseApplicationDomainClaim,
-} from "../organization-domain-claims";
+import { organizationLinkDomain } from "../organization-domain-claims";
 import {
   MEMBERSHIP_APPLICATIONS_SORT_COLUMNS,
   membershipApplicationDetailSchema,
@@ -301,9 +296,7 @@ export async function updateMembershipApplication(
     changedFields.push("applicantEmail");
   }
 
-  // Keep the denormalized application snapshot and canonical claim registry
-  // in lockstep. The delete + replacement insert joins the application
-  // update below in one batch; other organizations and applications may share the domain.
+  // The application keeps a snapshot of the domain its applicant applied through; it never claims the domain.
   if (
     !nextIsIndividual &&
     application.organization_id &&
@@ -331,26 +324,18 @@ export async function updateMembershipApplication(
     }
     setClauses.push("organization_domain = ?");
     values.push(nextOrganizationDomain);
-    if (application.stage !== "declined" && application.stage !== "withdrawn") {
-      dependentStatements.push(prepareReleaseApplicationDomainClaim(db, application.id));
-      if (nextOrganizationDomain) {
-        dependentStatements.push(prepareClaimDomainForApplication(db, nextOrganizationDomain, application.id, now));
-      }
-    }
   }
 
   if (input.organizationName !== undefined && input.organizationName !== application.organization_name) {
+    // The application names the organization its applicant represents; that organization's own record holds its name.
+    if (application.organization_id && !nextIsIndividual)
+      throw new AppError(
+        409,
+        "APPLICATION_ORGANIZATION_LINKED",
+        "This application is linked to an organization. Rename the organization under Organizations, and the application will show the new name.",
+      );
     setClauses.push("organization_name = ?");
     values.push(nextOrganizationName);
-    if (application.organization_id) setClauses.push("organization_id = NULL");
-    // A name correction restores a provisional claim, including one lost during review.
-    if (
-      !nextIsIndividual &&
-      nextOrganizationDomain &&
-      !organizationDomainChanged &&
-      !isApplicationTerminalStage(application.stage)
-    )
-      dependentStatements.push(prepareClaimDomainForApplication(db, nextOrganizationDomain, application.id, now));
     changedFields.push("organizationName");
   } else if (
     nextIsIndividual !== currentCategory.isIndividual &&

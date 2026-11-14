@@ -10,7 +10,7 @@ import type { IdentityManagerActor } from "./types";
 function overrideEvidence(userId: string, groupKey: string): AuthorizationEvidence {
   return {
     sql: `SELECT claim.organization_id, person.normalized_email FROM users person
-      JOIN organization_domain_claims claim ON claim.application_id IS NULL
+      JOIN organization_domain_claims claim ON claim.organization_id IS NOT NULL
         AND ${hostWithinDomainSql("substr(person.normalized_email, instr(person.normalized_email, '@') + 1)", "claim.domain")}
       JOIN organizations organization ON organization.id = claim.organization_id
       WHERE person.id = ? AND person.active = 1 AND person.email_verified_at IS NULL

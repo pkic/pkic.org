@@ -1,5 +1,5 @@
 import { membershipApplicationFields } from "../assets/shared/schemas/membership-application-form";
-import { APPLICATION_ALREADY_PENDING } from "../assets/shared/membership-application-refusals";
+import { ORGANIZATION_IDENTITY_REQUIRED } from "../assets/shared/membership-application-refusals";
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -14,6 +14,7 @@ function getApplicationStatus(context: ReturnType<typeof createContext>) {
 }
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 import {
+  membershipApplicationDescriptionAnswers,
   requiredMembershipApplicationAnswers,
   seedMembershipApplicationForm,
   verifiedMemberApplicationPayload,
@@ -30,6 +31,10 @@ import {
 } from "../assets/shared/schemas/member-applications";
 import { JSON_REQUEST_MAX_BYTES } from "../functions/_lib/http-body";
 import { normalizeOrgName } from "../assets/shared/organization-name";
+import { memberApplicationCreateAsIdentitySchema } from "../assets/shared/schemas/member-applications";
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
+import { createMemberSession } from "./helpers/auth";
+import { insertOrganization, insertUser } from "./helpers/membership";
 
 function makeEnv(overrides: Partial<typeof env> = {}) {
   return {
@@ -67,6 +72,51 @@ const validPayload = {
   organizationName: "Example Corp",
   answers: { reason: "We want to contribute to the PKI community.", ...requiredMembershipApplicationAnswers },
 };
+
+/** An application whose organization plays no part: the same person applying as an individual. */
+const individualPayload = { ...validPayload, membershipCategory: "H6", organizationName: undefined };
+
+/** A person who represents `organizationId` through an active organization identity. */
+async function organizationApplicant(email: string, organizationId: string) {
+  const userId = await insertUser(env.DB, email);
+  await env.DB.prepare("UPDATE users SET first_name = 'Alice', last_name = 'Example' WHERE id = ?").bind(userId).run();
+  const created = await buildCreateIdentityStatement(env.DB, {
+    userId,
+    organizationId,
+    source: "staff",
+    jobTitle: "Security architect",
+    biography: "I work on PKI interoperability.",
+    linksJson: JSON.stringify([]),
+    startImmediately: true,
+  });
+  await env.DB.batch([created.statement]);
+  return { userId, identityId: created.identityId };
+}
+
+/** An organization applies through the signed-in identity of the person who represents it. */
+async function organizationApplicationRequest(
+  applicant: Awaited<ReturnType<typeof organizationApplicant>>,
+  answers: Record<string, unknown> = { ...validPayload.answers, ...membershipApplicationDescriptionAnswers("A") },
+): Promise<Request> {
+  const token = await createMemberSession(
+    env.DB,
+    applicant.userId,
+    `session-${crypto.randomUUID()}`,
+    undefined,
+    applicant.identityId,
+  );
+  return new Request("https://pkic.org/api/v1/members/applications", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify(
+      memberApplicationCreateAsIdentitySchema.parse({
+        identityId: applicant.identityId,
+        membershipCategory: "A",
+        answers,
+      }),
+    ),
+  });
+}
 
 describe("POST /api/v1/members/applications", () => {
   beforeEach(async () => {
@@ -118,22 +168,6 @@ describe("POST /api/v1/members/applications", () => {
   it("requires the job title of someone applying on behalf of an organization, and asks no individual for one", async () => {
     // The stored question is optional; the shared projection still requires it of an organization's applicant.
     await env.DB.prepare("UPDATE form_fields SET required = 0 WHERE key = 'job_title'").run();
-    const refused = await callApi(makeEnv(), "/api/v1/members/applications", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(
-        await verifiedMemberApplicationPayload({
-          ...validPayload,
-          answers: { ...validPayload.answers, job_title: "" },
-        }),
-      ),
-    });
-    expect(refused.status).toBe(422);
-    expect(await refused.json()).toMatchObject({
-      error: { details: { fieldErrors: { job_title: [expect.any(String)] } } },
-    });
-    expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toHaveLength(0);
-
     const formResponse = await callApi(makeEnv(), "/api/v1/members/applications/form");
     const definition = memberApplicationFormResponseSchema.parse(await formResponse.json());
     const organization = definition.categories.find((category) => !category.isIndividual)!;
@@ -144,41 +178,58 @@ describe("POST /api/v1/members/applications", () => {
     expect(asked(individual)).toBeUndefined();
   });
 
-  it.each([
-    ["A", "about_yourself", ""],
-    ["A", "about_yourself", " \n "],
-    ["A", "about_organization", ""],
-    ["A", "about_organization", " \t "],
-    ["H6", "about_yourself", ""],
-    ["H6", "about_yourself", " \n "],
-  ])("refuses %s applications with a blank %s description (%j)", async (category, field, value) => {
-    const response = await callApi(makeEnv(), "/api/v1/members/applications", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(
-        await verifiedMemberApplicationPayload({
-          ...validPayload,
-          membershipCategory: category,
-          applicantEmail: category === "H6" ? "individual@gmail.com" : validPayload.applicantEmail,
-          organizationName: category === "H6" ? undefined : validPayload.organizationName,
-          answers: { ...validPayload.answers, [field]: value },
-        }),
-      ),
-    });
-    expect(response.status).toBe(422);
-    expect(await response.json()).toMatchObject({
-      error: { details: { fieldErrors: { [field]: [expect.any(String)] } } },
-    });
-    expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toHaveLength(0);
-    expect(await queryAll(env.DB, "SELECT id FROM form_submissions")).toHaveLength(0);
-  });
+  it.each(["", " \n "])(
+    "refuses an individual application with a blank about_yourself description (%j)",
+    async (value) => {
+      const response = await callApi(makeEnv(), "/api/v1/members/applications", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(
+          await verifiedMemberApplicationPayload({
+            ...individualPayload,
+            applicantEmail: "individual@gmail.com",
+            answers: { ...validPayload.answers, about_yourself: value },
+          }),
+        ),
+      });
+      expect(response.status).toBe(422);
+      expect(await response.json()).toMatchObject({
+        error: { details: { fieldErrors: { about_yourself: [expect.any(String)] } } },
+      });
+      expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toHaveLength(0);
+      expect(await queryAll(env.DB, "SELECT id FROM form_submissions")).toHaveLength(0);
+    },
+  );
 
-  it.each(["A", "H6"])("refuses a direct %s submission with omitted descriptions", async (membershipCategory) => {
+  it.each(["", " \t "])(
+    "refuses an organization application with a blank about_organization description (%j)",
+    async (value) => {
+      const field = "about_organization";
+      const applicant = await organizationApplicant(
+        "alice@example-corp.test",
+        await insertOrganization(env.DB, "Example Corp"),
+      );
+      const response = await callApi(
+        makeEnv(),
+        await organizationApplicationRequest(applicant, {
+          ...validPayload.answers,
+          ...membershipApplicationDescriptionAnswers("A"),
+          [field]: value,
+        }),
+      );
+      expect(response.status).toBe(422);
+      expect(await response.json()).toMatchObject({
+        error: { details: { fieldErrors: { [field]: [expect.any(String)] } } },
+      });
+      expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toHaveLength(0);
+      expect(await queryAll(env.DB, "SELECT id FROM form_submissions")).toHaveLength(0);
+    },
+  );
+
+  it("refuses a direct individual submission with omitted descriptions", async () => {
     const verified = await verifiedMemberApplicationPayload({
-      ...validPayload,
-      membershipCategory,
-      applicantEmail: membershipCategory === "H6" ? "individual@gmail.com" : validPayload.applicantEmail,
-      organizationName: membershipCategory === "H6" ? undefined : validPayload.organizationName,
+      ...individualPayload,
+      applicantEmail: "individual@gmail.com",
     });
     const response = await callApi(makeEnv(), "/api/v1/members/applications", {
       method: "POST",
@@ -189,10 +240,7 @@ describe("POST /api/v1/members/applications", () => {
     expect(await response.json()).toMatchObject({
       error: {
         details: {
-          fieldErrors: {
-            about_yourself: [expect.any(String)],
-            ...(membershipCategory === "A" ? { about_organization: [expect.any(String)] } : {}),
-          },
+          fieldErrors: { about_yourself: [expect.any(String)] },
         },
       },
     });
@@ -215,7 +263,7 @@ describe("POST /api/v1/members/applications", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(
         await verifiedMemberApplicationPayload({
-          ...validPayload,
+          ...individualPayload,
           answers: { ...validPayload.answers, working_groups: [id] },
         }),
       ),
@@ -228,7 +276,7 @@ describe("POST /api/v1/members/applications", () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(
       createApplication,
-      createContext(testEnv, await applicationRequest(validPayload), {}),
+      createContext(testEnv, await applicationRequest(individualPayload), {}),
     );
 
     expect(response.status).toBe(201);
@@ -301,75 +349,6 @@ describe("POST /api/v1/members/applications", () => {
     expect(response.status).toBe(201);
   });
 
-  it("returns 409 when an active application already exists for the same organization domain", async () => {
-    const testEnv = makeEnv();
-    const first = await callEndpoint(
-      createApplication,
-      createContext(testEnv, await applicationRequest(validPayload), {}),
-    );
-    expect(first.status).toBe(201);
-
-    const second = await callEndpoint(
-      createApplication,
-      createContext(
-        testEnv,
-        await applicationRequest({
-          ...validPayload,
-          applicantEmail: "bob@example-corp.test",
-          applicantName: "Bob Example",
-        }),
-        {},
-      ),
-    );
-
-    expect(second.status).toBe(409);
-    const body = (await second.json()) as { error: { code: string } };
-    expect(body.error.code).toBe(APPLICATION_ALREADY_PENDING);
-  });
-
-  it("does not 409 when the applicant changes the email domain before submitting", async () => {
-    // Regression test for a reported bug: a user filling out the join form
-    // changes the email's domain before submitting and (allegedly) still
-    // gets DUPLICATE_APPLICATION even though no organization or application
-    // exists yet for the new domain. Investigation (manual reproduction via
-    // `npm run dev` against both a fresh D1 instance and a production-backup
-    // snapshot) found no code defect: emailDomain() is derived fresh from
-    // the request body on every call, hasActiveApplicationForDomain only
-    // matches an *exact* domain already present in member_applications, and
-    // hasConflictingOrganizationDomain only matches organizations that
-    // actually have that domain in organization_domains. Two
-    // submissions for two different, never-before-seen domains must both
-    // succeed. (A second open application for the same organization name is
-    // refused on its own, so the second one names another organization.)
-    const testEnv = makeEnv();
-    const first = await callEndpoint(
-      createApplication,
-      createContext(
-        testEnv,
-        await applicationRequest({
-          ...validPayload,
-          applicantEmail: "dana@first-domain.test",
-        }),
-        {},
-      ),
-    );
-    expect(first.status).toBe(201);
-
-    const second = await callEndpoint(
-      createApplication,
-      createContext(
-        testEnv,
-        await applicationRequest({
-          ...validPayload,
-          applicantEmail: "dana@second-domain.test",
-          organizationName: "Second Domain Corp",
-        }),
-        {},
-      ),
-    );
-    expect(second.status).toBe(201);
-  });
-
   it("does not duplicate-check individual (org-less) categories", async () => {
     const testEnv = makeEnv();
     const payload = {
@@ -408,21 +387,18 @@ describe("POST /api/v1/members/applications", () => {
     expect(body.error.details).toBeTruthy();
   });
 
-  it("returns 422 when organizationName is missing for an org-tied category", async () => {
+  it("refuses an organization application without the identity of the person who represents it", async () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(
       createApplication,
-      createContext(
-        testEnv,
-        await applicationRequest({
-          applicantEmail: "carol@example-corp.test",
-          applicantName: "Carol Example",
-          membershipCategory: "B",
-        }),
-        {},
-      ),
+      createContext(testEnv, await applicationRequest(validPayload), {}),
     );
-    expect(response.status).toBe(422);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: ORGANIZATION_IDENTITY_REQUIRED } });
+    expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(0);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM form_submissions")).toHaveLength(0);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM organizations")).toHaveLength(0);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM organization_domain_claims")).toHaveLength(0);
   });
 
   it("validates answers against the active form, including required and unknown fields", async () => {
@@ -432,7 +408,7 @@ describe("POST /api/v1/members/applications", () => {
       createContext(
         testEnv,
         await applicationRequest({
-          ...validPayload,
+          ...individualPayload,
           answers: {},
         }),
         {},
@@ -445,7 +421,7 @@ describe("POST /api/v1/members/applications", () => {
       createContext(
         testEnv,
         await applicationRequest({
-          ...validPayload,
+          ...individualPayload,
           answers: {
             reason: "Valid reason",
             ...requiredMembershipApplicationAnswers,
@@ -459,30 +435,22 @@ describe("POST /api/v1/members/applications", () => {
     expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(0);
   });
 
-  it("allows exactly one of two concurrent submissions to claim an organization domain", async () => {
+  it("allows exactly one of two concurrent applications for the same organization", async () => {
     const testEnv = makeEnv();
-    const responses = await Promise.all(
-      ["alice", "bob"].map(async (name) =>
-        callEndpoint(
-          createApplication,
-          createContext(
-            testEnv,
-            await applicationRequest({
-              ...validPayload,
-              applicantEmail: `${name}@concurrent-domain.test`,
-              applicantName: name,
-            }),
-            {},
-          ),
-        ),
-      ),
-    );
+    const organizationId = await insertOrganization(env.DB, "Concurrent Corp");
+    const applicants = [
+      await organizationApplicant("alice@concurrent-domain.test", organizationId),
+      await organizationApplicant("bob@concurrent-domain.test", organizationId),
+    ];
+    const requests = await Promise.all(applicants.map((applicant) => organizationApplicationRequest(applicant)));
+    const responses = await Promise.all(requests.map((request) => callApi(testEnv, request)));
 
     expect(responses.map(({ status }) => status).sort()).toEqual([201, 409]);
-    expect(
-      await queryAll(testEnv.DB, "SELECT id FROM organization_domain_claims WHERE domain = 'concurrent-domain.test'"),
-    ).toHaveLength(1);
-    expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(1);
+    expect(await queryAll(testEnv.DB, "SELECT organization_id FROM member_applications")).toEqual([
+      { organization_id: organizationId },
+    ]);
+    // An application holds no email domain.
+    expect(await queryAll(testEnv.DB, "SELECT id FROM organization_domain_claims")).toHaveLength(0);
     expect(
       await queryAll(testEnv.DB, "SELECT id FROM email_outbox WHERE template_key = 'application-received'"),
     ).toHaveLength(1);
@@ -513,55 +481,21 @@ describe("POST /api/v1/members/applications", () => {
         .run();
     }
 
-    it("refuses the application and names the organization, however it was spelled", async () => {
-      await seedMemberOrganization("Example Corp");
-      const response = await callEndpoint(
-        createApplication,
-        createContext(
-          makeEnv(),
-          // A different address entirely, and a spelling that only matches
-          // once the shared normalizer has had it.
-          await applicationRequest({
-            ...validPayload,
-            applicantEmail: "outsider@unrelated.test",
-            organizationName: "  EXAMPLE   corp ",
-          }),
-          {},
-        ),
-      );
-
-      expect(response.status).toBe(409);
-      const body = (await response.json()) as {
-        error: { code: string; message: string; details: { fieldErrors: Record<string, string[]> } };
-      };
-      expect(body.error.code).toBe("ORGANIZATION_ALREADY_MEMBER");
-      // Named as the consortium spells it, not as the applicant typed it, and
-      // carried on the box they would have to change.
-      expect(body.error.message).toContain("Example Corp");
-      expect(body.error.details.fieldErrors.organizationName?.[0]).toContain("Example Corp");
-      expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toHaveLength(0);
-      expect(await queryAll(env.DB, "SELECT id FROM organization_domain_claims")).toHaveLength(0);
-    });
-
     it("accepts one for an organization that is known but is not a member", async () => {
       // An `organizations` row is not a membership: sponsors, speakers and
       // migrated contacts all have one. Refusing on the row alone would lock
       // those organizations out of applying.
       await seedMemberOrganization("Example Corp", "");
-      const response = await callEndpoint(
-        createApplication,
-        createContext(makeEnv(), await applicationRequest(validPayload), {}),
-      );
+      const applicant = await organizationApplicant(validPayload.applicantEmail, "org-existing");
+      const response = await callApi(makeEnv(), await organizationApplicationRequest(applicant));
 
       expect(response.status).toBe(201);
     });
 
     it("accepts one for an organization whose membership has lapsed", async () => {
       await seedMemberOrganization("Example Corp", "lapsed");
-      const response = await callEndpoint(
-        createApplication,
-        createContext(makeEnv(), await applicationRequest(validPayload), {}),
-      );
+      const applicant = await organizationApplicant(validPayload.applicantEmail, "org-existing");
+      const response = await callApi(makeEnv(), await organizationApplicationRequest(applicant));
 
       expect(response.status).toBe(201);
     });
@@ -580,8 +514,12 @@ describe("POST /api/v1/members/applications", () => {
     });
   });
 
-  it("rolls back application, answers, domain claim, event, and outbox when the atomic audit insert fails", async () => {
+  it("rolls back application, answers, event, and outbox when the atomic audit insert fails", async () => {
     const testEnv = makeEnv();
+    const applicant = await organizationApplicant(
+      validPayload.applicantEmail,
+      await insertOrganization(env.DB, "Example Corp"),
+    );
     await testEnv.DB.prepare(
       `CREATE TRIGGER fail_application_submission_audit
        BEFORE INSERT ON audit_log
@@ -592,16 +530,12 @@ describe("POST /api/v1/members/applications", () => {
     ).run();
 
     try {
-      const response = await callEndpoint(
-        createApplication,
-        createContext(testEnv, await applicationRequest(validPayload), {}),
-      );
+      const response = await callApi(testEnv, await organizationApplicationRequest(applicant));
       expect(response.status).toBe(500);
       expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(0);
       expect(
         await queryAll(testEnv.DB, "SELECT id FROM form_submissions WHERE context_type = 'membership'"),
       ).toHaveLength(0);
-      expect(await queryAll(testEnv.DB, "SELECT id FROM organization_domain_claims")).toHaveLength(0);
       expect(await queryAll(testEnv.DB, "SELECT id FROM member_application_events")).toHaveLength(0);
       expect(
         await queryAll(testEnv.DB, "SELECT id FROM email_outbox WHERE template_key = 'application-received'"),
@@ -615,7 +549,7 @@ describe("POST /api/v1/members/applications", () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(
       createApplication,
-      createContext(testEnv, await applicationRequest(validPayload), {}),
+      createContext(testEnv, await applicationRequest(individualPayload), {}),
     );
     expect(response.status).toBe(201);
 
@@ -637,7 +571,7 @@ describe("GET /api/v1/members/applications/:id/status", () => {
   async function createTestApplication(testEnv: typeof env) {
     const response = await callEndpoint(
       createApplication,
-      createContext(testEnv, await applicationRequest(validPayload), {}),
+      createContext(testEnv, await applicationRequest(individualPayload), {}),
     );
     return memberApplicationCreateResponseSchema.parse(await response.json());
   }
@@ -660,8 +594,8 @@ describe("GET /api/v1/members/applications/:id/status", () => {
     expect(response.status).toBe(200);
     const body = memberApplicationStatusResponseSchema.parse(await response.json());
     expect(body.stage).toBe("submitted");
-    const label = await testEnv.DB.prepare("SELECT label FROM membership_categories WHERE code = 'A'").first("label");
-    expect(body).toMatchObject({ membershipCategory: "A", membershipCategoryLabel: label });
+    const label = await testEnv.DB.prepare("SELECT label FROM membership_categories WHERE code = 'H6'").first("label");
+    expect(body).toMatchObject({ membershipCategory: "H6", membershipCategoryLabel: label });
     expect(label).toBeTruthy();
   });
 
@@ -1285,7 +1219,7 @@ describe("POST/GET /api/v1/members/applications/:id/documents", () => {
 async function createApplicationForDocumentTest(testEnv: typeof env, overrides: Partial<typeof validPayload> = {}) {
   const response = await callEndpoint(
     createApplication,
-    createContext(testEnv, await applicationRequest({ ...validPayload, ...overrides }), {}),
+    createContext(testEnv, await applicationRequest({ ...individualPayload, ...overrides }), {}),
   );
   return (await response.json()) as { applicationId: string; manageToken: string };
 }

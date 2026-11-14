@@ -521,9 +521,9 @@ describe("registration verifies the email address first", () => {
     expect(await response.json()).toMatchObject({ error: { code: "EVENT_DAYS_NOT_SCHEDULED" } });
     expect(await queryAll(env.DB, "SELECT id FROM registrations")).toEqual([]);
   });
-  it.each([false, true])("registers a reserved work domain with review; released claim: %s", async (released) => {
+  it("links an attendee on a domain with a pending membership application", async () => {
     const email = "attendee@reserved-work.example";
-    const applicationId = await seedMemberApplication({
+    await seedMemberApplication({
       applicantEmail: "applicant@reserved-work.example",
       organizationDomain: "reserved-work.example",
       organizationName: "Pending Work Organization",
@@ -534,7 +534,6 @@ describe("registration verifies the email address first", () => {
     expect(registrationEmailProofVerifyResponseSchema.parse(await verified.json()).affiliation).toMatchObject({
       organization: null,
       organizations: [],
-      reviewRequired: true,
     });
     const prepared = await post("/proof/verify", {
       token: proof,
@@ -543,8 +542,6 @@ describe("registration verifies the email address first", () => {
     expect(prepared.status, await prepared.clone().text()).toBe(200);
     const contextToken = registrationEmailProofVerifyResponseSchema.parse(await prepared.json()).affiliation!
       .contextToken!;
-    if (released)
-      await env.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id=?").bind(applicationId).run();
     const response = await post(
       "",
       registration(email, proof, {
@@ -553,48 +550,21 @@ describe("registration verifies the email address first", () => {
     );
     expect(response.status, await response.clone().text()).toBe(200);
     const result = registrationSubmissionResponseSchema.parse(await response.json());
-    expect(result).toMatchObject({ status: "registered", organizationOutcome: "review_required" });
-    const [stored] = await queryAll<{ registration_identity_id: string | null; email_verified_at: string | null }>(
+    expect(result).toMatchObject({ status: "registered", organizationOutcome: "linked" });
+    const [stored] = await queryAll<{ registration_identity_id: string | null }>(
       env.DB,
-      "SELECT registration.registration_identity_id,person.email_verified_at FROM registrations registration JOIN users person ON person.id=registration.user_id WHERE registration.id=?",
+      "SELECT registration_identity_id FROM registrations WHERE id=?",
       [result.registrationId],
     );
-    expect(stored.registration_identity_id).toBeNull();
-    expect(stored.email_verified_at).toBeTruthy();
-    expect(await queryAll(env.DB, "SELECT organization_name,job_title,source_id FROM affiliation_reviews")).toEqual([
-      { organization_name: "Pending Work Organization", job_title: "Engineer", source_id: result.registrationId },
-    ]);
-    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE organization_id IS NOT NULL")).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT id FROM organizations")).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT application_id,organization_id FROM organization_domain_claims")).toEqual(
-      released ? [] : [{ application_id: applicationId, organization_id: null }],
+    expect(stored.registration_identity_id).toBeTruthy();
+    expect(await queryAll(env.DB, "SELECT id FROM affiliation_reviews")).toEqual([]);
+    const [organization] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM organizations WHERE name='Pending Work Organization'",
     );
-    const personId = await env.DB.prepare("SELECT user_id FROM registrations WHERE id=?")
-      .bind(result.registrationId)
-      .first<string>("user_id");
-    const unrelatedOrg = await insertOrganization(env.DB, "Unrelated existing organization");
-    const unrelated = await buildCreateIdentityStatement(env.DB, {
-      userId: personId!,
-      organizationId: unrelatedOrg,
-      source: "account",
-      startImmediately: true,
-    });
-    await unrelated.statement.run();
-    const attribution = async () =>
-      (
-        await queryAll<{ organization: string | null }>(
-          env.DB,
-          `SELECT ${REGISTRATION_ORGANIZATION_SQL} AS organization FROM registrations r WHERE r.id=?`,
-          [result.registrationId],
-        )
-      )[0].organization;
-    expect(await attribution()).toBeNull();
-    await env.DB.prepare(
-      "UPDATE affiliation_reviews SET resolved_identity_id=?,resolved_at=?,resolved_by_user_id=? WHERE source_type='registration' AND source_id=?",
-    )
-      .bind(unrelated.identityId, new Date().toISOString(), personId, result.registrationId)
-      .run();
-    expect(await attribution()).toBe("Unrelated existing organization");
+    expect(await queryAll(env.DB, "SELECT domain,organization_id FROM organization_domain_claims")).toEqual([
+      { domain: "reserved-work.example", organization_id: organization.id },
+    ]);
   });
 
   it("offers all organizations when another organization claims the same domain", async () => {

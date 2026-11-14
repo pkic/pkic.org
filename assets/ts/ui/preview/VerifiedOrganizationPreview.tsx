@@ -20,21 +20,29 @@ const initial = identityAffiliationPreviewResponseSchema.parse({
     { id: "00000000-0000-4000-8000-000000000011", name: "Example Research", identityId: null, jobTitle: null },
   ],
 });
+/** A parent-domain organization, one reached on the same domain, and one claiming a subdomain below the address. */
+const choices = identityAffiliationPreviewResponseSchema.parse({
+  ...initial,
+  organizations: [
+    ...initial.organizations,
+    { id: "00000000-0000-4000-8000-000000000012", name: "Example Labs", identityId: null, jobTitle: null },
+    {
+      id: "00000000-0000-4000-8000-000000000013",
+      name: "Example Research Europe",
+      identityId: null,
+      jobTitle: null,
+      domain: "eu.research.example.test",
+    },
+  ],
+});
 export function VerifiedOrganizationPreview() {
   const controller = useRef<VerifiedOrganizationController>({});
   return (
     <VerifiedOrganizationDetails
-      initial={{
-        ...initial,
-        organization: null,
-        organizations: [
-          ...initial.organizations,
-          { id: "00000000-0000-4000-8000-000000000012", name: "Example Labs", identityId: null, jobTitle: null },
-        ],
-      }}
+      initial={{ ...choices, organization: null }}
       emailId={null}
       controller={controller.current}
-      resolve={async (domain) => ({ ...initial, domain: domain ?? initial.domain })}
+      resolve={async (domain) => ({ ...choices, domain: domain ?? choices.domain })}
       prepare={async () => ({ ...initial, contextToken: "synthetic-context-01234567890123456789" })}
     />
   );
@@ -71,7 +79,7 @@ export function ProposalIdentityPreview() {
   );
 }
 
-export function OrganizationReviewDomainPreview() {
+export function OrganizationBeforeDomainPreview() {
   const [name, setName] = useState("");
-  return <VerifiedOrganizationNameField domain="" reviewRequired value={name} onChange={setName} validation={{}} />;
+  return <VerifiedOrganizationNameField domain="" value={name} onChange={setName} validation={{}} />;
 }

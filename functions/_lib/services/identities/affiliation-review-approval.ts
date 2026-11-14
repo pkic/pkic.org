@@ -68,7 +68,7 @@ export async function approveAffiliationReviewGroup(
          UNION ALL SELECT address.normalized_email FROM user_emails address JOIN users person ON person.id = address.user_id
            WHERE address.user_id = ? AND address.verified_at IS NOT NULL AND person.active = 1
        ) SELECT MIN(address.normalized_email) AS normalized_email, claim.organization_id FROM addresses address
-         JOIN organization_domain_claims claim ON claim.application_id IS NULL
+         JOIN organization_domain_claims claim ON claim.organization_id IS NOT NULL
            AND ${hostWithinDomainSql("substr(address.normalized_email, instr(address.normalized_email, '@') + 1)", "claim.domain")}
          JOIN organizations organization ON organization.id = claim.organization_id
          WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims closer

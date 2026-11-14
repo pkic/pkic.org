@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { callApi } from "./helpers/app";
-import { prepareProposalProof } from "./helpers/proposal-proof";
+import { confirmedProposalAffiliation, prepareProposalProof } from "./helpers/proposal-proof";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
@@ -178,9 +178,9 @@ describe("event proposal mailbox proof", () => {
     expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toHaveLength(0);
   });
 
-  it("requires review for a differently named organization on a reserved domain", async () => {
+  it("lets a new organization be chosen on a domain with a pending membership application", async () => {
     await seedEventAndAdmin(env.DB);
-    const pending = await seedMemberApplication({ applicantEmail: "pending@held-domain.example" });
+    await seedMemberApplication({ applicantEmail: "pending@held-domain.example" });
     const token = await start("dana@held-domain.example");
     const response = await request("/proof/verify", { token });
     expect(response.status).toBe(200);
@@ -189,7 +189,7 @@ describe("event proposal mailbox proof", () => {
       status: "ready",
       email: "dana@held-domain.example",
       applicantKind: "organization",
-      affiliation: { reviewRequired: true, organization: null, organizations: [] },
+      affiliation: { organization: null, organizations: [] },
     });
     expect(
       await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", ["dana@held-domain.example"]),
@@ -203,15 +203,12 @@ describe("event proposal mailbox proof", () => {
         jobTitle: "Researcher",
       },
     });
-    expect(selected.status, await selected.clone().text()).toBe(409);
-    expect(await selected.json()).toMatchObject({ error: { code: "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED" } });
-    expect(
-      await queryAll(
-        env.DB,
-        "SELECT claim.application_id,claim.organization_id FROM organization_domain_claims claim WHERE domain=?",
-        ["held-domain.example"],
-      ),
-    ).toEqual([{ application_id: pending, organization_id: null }]);
+    expect(selected.status, await selected.clone().text()).toBe(200);
+    expect(eventProposalProofVerifyResponseSchema.parse(await selected.json())).toMatchObject({
+      status: "ready",
+      affiliation: { contextToken: expect.any(String) },
+    });
+    expect(await queryAll(env.DB, "SELECT id FROM organization_domain_claims")).toEqual([]);
     expect(
       await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", ["dana@held-domain.example"]),
     ).toEqual([]);
@@ -243,7 +240,7 @@ describe("event proposal mailbox proof", () => {
   });
 
   it("derives member capacity from a completed canonical organization link without a membership application", async () => {
-    await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedEventAndAdmin(env.DB);
     const organizationId = await insertOrganization(env.DB, "Canonical organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
     await env.DB.prepare(
@@ -258,10 +255,16 @@ describe("event proposal mailbox proof", () => {
       consents,
       unaffiliatedAttestation: false,
     });
-    const response = await request(
-      "",
-      proposal(proof, { firstName: "New", lastName: "Person", jobTitle: "Security engineer" }),
-    );
+    // The proposer confirms the organization the verified domain resolves to; nobody has an account yet.
+    const confirmed = await confirmedProposalAffiliation({
+      environment: env,
+      eventId,
+      email: "new@official.example",
+      userId: crypto.randomUUID(),
+      organizationId,
+      jobTitle: "Security engineer",
+    });
+    const response = await request("", proposal(proof, { firstName: "New", lastName: "Person", ...confirmed }));
     expect(response.status, await response.clone().text()).toBe(200);
     expect(
       await queryAll(

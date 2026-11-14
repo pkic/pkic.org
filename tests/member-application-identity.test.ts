@@ -144,7 +144,7 @@ describe("membership application as a signed-in identity", () => {
   });
 
   it.each(["own", "another", "pending"])(
-    "accepts an owned organization identity on a domain with a %s claim",
+    "accepts an owned organization identity on a domain with an %s claim or application",
     async (kind) => {
       const userId = await person("applicant@identity-claim.test");
       const organizationId = await insertOrganization(env.DB, "Identity Organization");
@@ -174,13 +174,10 @@ describe("membership application as a signed-in identity", () => {
       expect(
         await queryAll(env.DB, "SELECT organization_id FROM member_applications WHERE applicant_user_id=?", [userId]),
       ).toEqual([{ organization_id: organizationId }]);
+      // An application grants membership only; it never holds a domain.
       expect(
-        await queryAll(
-          env.DB,
-          "SELECT claim.id FROM organization_domain_claims claim JOIN member_applications application ON application.id=claim.application_id WHERE application.applicant_user_id=?",
-          [userId],
-        ),
-      ).toHaveLength(kind === "own" ? 0 : 1);
+        await queryAll(env.DB, "SELECT id FROM organization_domain_claims WHERE application_id IS NOT NULL"),
+      ).toEqual([]);
     },
   );
 

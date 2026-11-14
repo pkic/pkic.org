@@ -260,7 +260,8 @@ export async function updateSpeakerProfile(
               proofEvidence: proof.proofEvidence,
               profile: { ...payload, jobTitle: payload.jobTitle || null },
             },
-            observed.input,
+            // A mailbox proved in this same batch has no row when the token observed it; use the proof's address.
+            { ...observed.input, emailId: proof.emailId },
             observed.basis,
             at,
           )
