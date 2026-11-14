@@ -2,8 +2,10 @@
  * Audience lists on the conference board. Top questions lead with their
  * votes in a fixed column and a bar of their votes against the leader's, in
  * the event stripe; chat sets each message on a light panel beside its
- * author's initials, the newest last and marked with the stripe. Type steps
- * down as a list grows, so a full list still fits its board.
+ * author's initials, the newest last and marked with the stripe. Each
+ * question or message shows up to three lines, clamped at the end of a line
+ * so a cut never strands a word. Type steps down as a list grows, so a full
+ * list still fits its board.
  */
 @layer components {
   .pk-live-lists__items {
@@ -39,8 +41,8 @@
     text-wrap: pretty;
     overflow-wrap: anywhere;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
   }
   .pk-live-lists__byline {
     margin: 0;
@@ -111,10 +113,9 @@
     background: color-mix(in srgb, var(--pk-pqc-on-field) 18%, transparent);
   }
   /*
-   * Chat: each message up to three lines, clamped at the end of a line so a
-   * cut never strands a word. The list fills the board from the bottom,
-   * newest last; when the messages outgrow it, the oldest slide off the top
-   * under a fade, as in the chat itself.
+   * Chat: the list fills the board from the bottom, newest last; when the
+   * messages outgrow it, the oldest slide off the top under a fade, as in the
+   * chat itself.
    */
   .pk-live-lists__items[data-list="chat"] {
     --text-type: 38px;
@@ -139,8 +140,6 @@
   }
   .pk-live-lists__items[data-list="chat"] .pk-live-lists__text {
     font-weight: 500;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
   }
   .pk-live-lists__items[data-list="chat"] .pk-live-lists__byline {
     color: var(--pk-pqc-on-field);

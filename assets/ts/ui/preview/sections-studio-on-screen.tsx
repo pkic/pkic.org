@@ -61,7 +61,7 @@ const LISTS: Pick<LiveStage, "topQuestions" | "chatFeed"> = {
       },
       {
         id: "40000000-0000-4000-8000-000000000002",
-        text: "Which algorithms should we pilot first in a private CA?",
+        text: "Which algorithms should we pilot first in a private CA, and how do we keep the relying parties that cannot verify them yet working while the pilot runs alongside our current hierarchy?",
         authorName: null,
         votes: 17,
       },
@@ -428,7 +428,7 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "onscreen-lists-overlay",
     title: "Top questions beside the camera",
-    note: "Graphics on the left: the list fills a full-height column and the camera fills the rest.",
+    note: "Graphics on the left: the list fills a full-height column and the camera fills the rest. Each question shows up to three lines, clamped at the end of a line.",
     render: () => (
       <LivestreamOverlay
         state={roomWith({}, LISTS)}
