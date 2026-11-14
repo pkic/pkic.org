@@ -31,9 +31,14 @@ export function LiveQuestionTransitions({
   disabled,
   onMove,
   menuLabel,
+  menuTrigger,
+  menuTitle,
   additionalActions = [],
 }: {
   menuLabel?: string;
+  /** The menu trigger's content and tooltip, when the row marks something on it; a ⋯ otherwise. */
+  menuTrigger?: ComponentChildren;
+  menuTitle?: string;
   additionalActions?: readonly MenuItem[];
   question: LiveQuestion;
   role: LiveRoomRole;
@@ -46,6 +51,7 @@ export function LiveQuestionTransitions({
     return (
       <Menu
         label={menuLabel}
+        title={menuTitle}
         items={[
           ...additionalActions,
           ...transitions.map((status) => ({
@@ -56,7 +62,9 @@ export function LiveQuestionTransitions({
             onSelect: () => onMove(status),
           })),
         ]}
-      />
+      >
+        {menuTrigger}
+      </Menu>
     );
   if (!transitions.length) return null;
   return (

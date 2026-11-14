@@ -75,7 +75,7 @@ describe("reactions in the Graphics panel", () => {
   it("sends reactions to a room screen in that screen's own composition", async () => {
     const state = roomState();
     const row = await graphicsRow(LiveReactionsControls, state);
-    await row.press("Send reactions to the room's screens");
+    await row.press("Reactions actions");
     const projector = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]')].find((item) =>
       item.textContent?.includes("Projector"),
     )!;

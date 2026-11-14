@@ -18,10 +18,6 @@
     font-size: var(--pk-text-sm);
     font-weight: 600;
   }
-  .pk-live-graphic-row__menu-slot {
-    flex: none;
-    inline-size: var(--pk-control-size);
-  }
   .pk-live-graphic-row__detail {
     overflow: hidden;
     color: var(--pk-ink-muted);

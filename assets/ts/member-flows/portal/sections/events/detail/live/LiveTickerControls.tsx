@@ -20,7 +20,6 @@ import { ListDetail } from "../../../../../../ui/ListDetail";
 import { Select, TextInput } from "../../../../../../ui/TextControl";
 import { Alert } from "../../../../../../ui/Alert";
 import { LiveGraphicRow } from "./LiveGraphicRow";
-import { LiveLayerTargets } from "./LiveLayerTargets";
 import type { LiveTargets } from "./live-output-targets";
 import "./LiveTickerControls.css";
 
@@ -164,6 +163,7 @@ export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
   return (
     <LiveGraphicRow
       name="News ticker"
+      outputs={{ targets, subject: "news ticker", layer: { kind: "ticker", config } }}
       detail={`${formatNumber(config.messages.length)} messages · ${formatNumber(fromAgenda)} from the agenda`}
       settings={{
         label: "Edit ticker messages",
@@ -175,7 +175,6 @@ export function LiveTickerControls({ targets }: { targets: LiveTargets }) {
         },
       }}
     >
-      <LiveLayerTargets targets={targets} subject="news ticker" layer={{ kind: "ticker", config }} />
       {draft ? (
         <Dialog
           open

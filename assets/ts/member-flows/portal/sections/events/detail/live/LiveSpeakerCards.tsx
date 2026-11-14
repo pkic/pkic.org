@@ -12,12 +12,11 @@ import {
 } from "../../../../../../../shared/live-room-credits";
 import type { LiveCredit } from "../../../../../../../shared/schemas/live-session-room";
 import { Avatar } from "../../../../../../ui/Avatar";
-import { Button } from "../../../../../../ui/Button";
 import { SectionHeading } from "../../../../../../ui/SectionHeading";
-import { IconRemove } from "../../../../../../ui/MediaIcons";
 import { LiveAddPersonDialog } from "./LiveAddPersonDialog";
 import { StudioCreateAction } from "./studio/StudioCreateAction";
 import { LiveLayerTargets } from "./LiveLayerTargets";
+import { LiveRowMenu } from "./LiveRowMenu";
 import { liveLayerTargets, sendLayerToggle, type LiveTargets } from "./live-output-targets";
 import { livePresenceItem } from "./presence/live-presence";
 import { personAffiliation, usePersonCard } from "../../../../../../site/PersonCard";
@@ -112,22 +111,29 @@ function PersonRow({
         </button>
         {card.card}
       </div>
-      {/* The outputs and the remove move under the name together, so the remove never wraps alone. */}
+      {/* The outputs and the menu move under the name together, so the menu never wraps alone. */}
       <span class="pk-live-person__outputs">
         {/* The outputs name the other operators on this person, once. */}
         <LiveLayerTargets targets={targets} subject={credit.name} layer={layer} />
-        {onRemove ? (
-          <Button
-            icon
-            variant="ghost"
-            aria-label={`Remove ${credit.name}`}
-            title="Remove from this session"
-            disabled={targets.disabled}
-            onClick={onRemove}
-          >
-            <IconRemove />
-          </Button>
-        ) : null}
+        <LiveRowMenu
+          targets={targets}
+          layer={layer}
+          label={`${credit.name} actions`}
+          heading={credit.name}
+          items={
+            onRemove
+              ? [
+                  {
+                    id: "remove",
+                    label: "Remove from this session",
+                    danger: true,
+                    disabled: targets.disabled,
+                    onSelect: onRemove,
+                  },
+                ]
+              : []
+          }
+        />
       </span>
     </li>
   );

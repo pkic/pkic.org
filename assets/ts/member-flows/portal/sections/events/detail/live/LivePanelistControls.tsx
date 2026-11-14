@@ -5,7 +5,6 @@ import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
 import { Select } from "../../../../../../ui/TextControl";
 import { LiveGraphicRow } from "./LiveGraphicRow";
-import { LiveLayerTargets } from "./LiveLayerTargets";
 import type { LiveTargets } from "./live-output-targets";
 
 const LAYOUT_LABELS: Record<LivePanelists["layout"], string> = {
@@ -24,6 +23,7 @@ export function LivePanelistControls({ targets }: { targets: LiveTargets }) {
   return (
     <LiveGraphicRow
       name="Panel"
+      outputs={{ targets, subject: "panelists", layer: { kind: "panelists", panelists: { layout } } }}
       detail={`All speakers, moderator included · ${LAYOUT_LABELS[layout].toLowerCase()}`}
       settings={{
         label: "Panel layout",
@@ -33,7 +33,6 @@ export function LivePanelistControls({ targets }: { targets: LiveTargets }) {
         },
       }}
     >
-      <LiveLayerTargets targets={targets} subject="panelists" layer={{ kind: "panelists", panelists: { layout } }} />
       {open && (
         <Dialog
           open

@@ -1,15 +1,10 @@
 import {
-  LIVE_AUX_OUTPUT_DETAILS,
-  LIVE_STUDIO_AUX_OUTPUTS,
   LIVE_PREVIEW_OUTPUT_DETAILS,
   LIVE_PROGRAM_OUTPUT_DETAILS,
   type LiveAuxOutput,
 } from "../../../../../../../shared/live-room-outputs";
 import type { LivePresenceTarget } from "../../../../../../../shared/live-room-presence";
 import { Button } from "../../../../../../ui/Button";
-import { buttonClasses } from "../../../../../../ui/button-classes";
-import { StrokeIcon } from "../../../../../../ui/MediaIcons";
-import { Menu } from "../../../../../../ui/Menu";
 import "../../../../../../ui/ButtonToggle.css";
 import "./live-tally.css";
 import "./presence/LivePresence.css";
@@ -17,13 +12,10 @@ import "./OutputTargetControl.css";
 
 export type LiveDestination = "preview" | "program" | LiveAuxOutput;
 
-const AUX_TRIGGER = "pk-output-target__aux";
-
-/** Which output button an element is on, for operator presence; the aux menu counts as one. */
+/** Which output button an element is on, for operator presence. */
 export function liveDestinationOf(element: Element): LivePresenceTarget | null {
   const destination = element.closest<HTMLElement>(".pk-output-target__button[data-destination]")?.dataset.destination;
-  if (destination === "preview" || destination === "program") return destination;
-  return element.closest(`.${AUX_TRIGGER}`) ? "aux" : null;
+  return destination === "preview" || destination === "program" ? destination : null;
 }
 
 /** The color slot of the first other operator on a button, which draws a ring in their color. */
@@ -37,28 +29,16 @@ export interface OutputTargetPresence {
   color: number;
 }
 
-/** A screen icon when on none, else the screens' switcher abbreviations: PRJ, or PRJ DSP. */
-function auxLabel(active: readonly LiveAuxOutput[]) {
-  if (active.length) return active.map((output) => LIVE_AUX_OUTPUT_DETAILS[output].short).join(" ");
-  return (
-    <StrokeIcon>
-      <rect x="2" y="3" width="12" height="8" rx="1" />
-      <path d="M6 14h4M8 11v3" />
-    </StrokeIcon>
-  );
-}
-
 /**
  * Where one graphic goes, in words anyone running the room reads at once:
- * Preview (the next composition), Program (what is on air) and the room's
- * other screens, chosen together in one menu. Each destination toggles on
- * its own; pressed buttons and checked items say where it is now.
+ * Preview (the next composition) and Program (what is on air), each a
+ * toggle of its own, pressed where it is now. The room's screens are in the
+ * row's menu, so the row keeps its width.
  */
 export function OutputTargetControl({
   subject,
   preview,
   program,
-  aux,
   disabled,
   integrated = false,
   presenceItem,
@@ -69,7 +49,6 @@ export function OutputTargetControl({
   subject: string;
   preview: boolean;
   program: boolean;
-  aux: (output: LiveAuxOutput) => boolean;
   disabled: boolean;
   /** Spans the foot of a card instead of sitting inline. */
   integrated?: boolean;
@@ -78,16 +57,13 @@ export function OutputTargetControl({
   presence?: readonly OutputTargetPresence[];
   onToggle: (destination: LiveDestination) => void;
 }) {
-  const active = LIVE_STUDIO_AUX_OUTPUTS.filter((output) => aux(output));
   return (
     <div
       class="pk-output-target pk-segmented"
       role="group"
       aria-label={`${subject} outputs`}
       data-integrated={integrated ? "true" : undefined}
-      data-aux-active={active[0]}
       data-presence-item={presenceItem}
-      data-presence-aux={presenceOn(presence, "aux")}
     >
       <Button
         class="pk-output-target__button"
@@ -113,28 +89,6 @@ export function OutputTargetControl({
       >
         {LIVE_PROGRAM_OUTPUT_DETAILS.short}
       </Button>
-      <Menu
-        variant="plain"
-        align="end"
-        label={`Send ${subject} to the room's screens`}
-        title={
-          active.length ? `On ${active.map((output) => LIVE_AUX_OUTPUT_DETAILS[output].label).join(", ")}` : "Screens"
-        }
-        triggerClass={buttonClasses({}, `pk-output-target__button ${AUX_TRIGGER}`)}
-        heading="Show on"
-        items={LIVE_STUDIO_AUX_OUTPUTS.map((output) => ({
-          id: output,
-          label: LIVE_AUX_OUTPUT_DETAILS[output].label,
-          checked: aux(output),
-          multiple: true,
-          keepOpen: true,
-          disabled,
-          onSelect: () => onToggle(output),
-        }))}
-      >
-        {auxLabel(active)}
-        <span aria-hidden="true"> ▾</span>
-      </Menu>
     </div>
   );
 }

@@ -18,6 +18,7 @@ import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { Menu, type MenuItem } from "../../../../../../../ui/Menu";
 import { Meter } from "../../../../../../../ui/Meter";
 import { LiveLayerTargets } from "../LiveLayerTargets";
+import { LiveScreenTrigger, liveScreensOn, liveScreensTitle } from "../LiveRowMenu";
 import { useLiveTimerGraphic } from "../LiveTimerGraphicControls";
 import { liveLayerTargets, sendLayerToggle, type LiveTargets } from "../live-output-targets";
 import type { LiveDestination } from "../OutputTargetControl";
@@ -222,7 +223,15 @@ export function TimerRow({
         </span>
       ) : null}
       <span class="pk-studio-time__menu">
-        <Menu label={`${timer.name} timer`} heading={timer.name} align="end" items={items} />
+        <Menu
+          label={`${timer.name} timer`}
+          heading={timer.name}
+          align="end"
+          title={liveScreensTitle(liveScreensOn(targets, layer))}
+          items={items}
+        >
+          <LiveScreenTrigger on={liveScreensOn(targets, layer)} />
+        </Menu>
       </span>
       {dialog ? (
         <LiveTimerDialog

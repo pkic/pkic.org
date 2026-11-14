@@ -15,7 +15,7 @@
     pointer-events: none;
   }
   .pk-live-tally-bands > * {
-    inline-size: 0.1875rem;
+    inline-size: 0.25rem;
     background: var(--tally);
   }
 }

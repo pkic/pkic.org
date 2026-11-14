@@ -19,6 +19,7 @@ import { StrokeIcon } from "../../../../../../ui/MediaIcons";
 import { Menu } from "../../../../../../ui/Menu";
 import { toast } from "../../../../ui";
 import { LiveLayerTargets } from "./LiveLayerTargets";
+import { LiveScreenTrigger, liveScreenItems, liveScreensOn, liveScreensTitle, withScreenItems } from "./LiveRowMenu";
 import { LivePreparedQuestionDialog, LivePreparedQuestionWindowDialog } from "./LivePreparedQuestionDialogs";
 import { LiveQuestionRewrite } from "./LiveQuestionRewrite";
 import type { LiveTargets } from "./live-output-targets";
@@ -147,6 +148,13 @@ function OpenQuestionRow({
     send({ type: "question.moderate", questionId: question.id, expectedRevision: question.revision, status });
   const pending = question.status === "pending";
   const item = livePresenceItem({ kind: "question", id: question.id });
+  const layer = { kind: "question", id: question.id } as const;
+  // A pending question goes nowhere yet, so its menu has no screens.
+  const on = pending ? [] : liveScreensOn(targets, layer);
+  const actions = [
+    { id: "open", label: "Open question", onSelect: onOpen },
+    { id: "edit", label: "Edit text", disabled, onSelect: onEdit },
+  ];
   return (
     <StudioItemRow
       text={question.text}
@@ -174,7 +182,7 @@ function OpenQuestionRow({
           </>
         ) : (
           <>
-            <LiveLayerTargets targets={targets} subject="question" layer={{ kind: "question", id: question.id }} />
+            <LiveLayerTargets targets={targets} subject="question" layer={layer} />
             <RowAction label="Mark answered" disabled={disabled} onClick={() => moderate("answered")}>
               {ANSWERED}
             </RowAction>
@@ -187,10 +195,9 @@ function OpenQuestionRow({
           role="operator"
           disabled={disabled}
           menuLabel="Question actions"
-          additionalActions={[
-            { id: "open", label: "Open question", onSelect: onOpen },
-            { id: "edit", label: "Edit text", disabled, onSelect: onEdit },
-          ]}
+          menuTrigger={<LiveScreenTrigger on={on} />}
+          menuTitle={liveScreensTitle(on)}
+          additionalActions={pending ? actions : withScreenItems(liveScreenItems(targets, layer), actions)}
           onMove={moderate}
         />
       }

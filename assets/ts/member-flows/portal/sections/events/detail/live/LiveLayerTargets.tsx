@@ -5,9 +5,9 @@ import { livePresenceItem, useLivePresence } from "./presence/live-presence";
 import { LivePresenceTag } from "./presence/LivePresenceTag";
 
 /**
- * The output control for one graphic of this room: where it is now, a toggle
- * per destination, a tally band per output on its row, and which other
- * operators are on it. An integrated control
+ * The output control for one graphic of this room: Preview and Program,
+ * their tally edge on its row, and which other operators are on it. The
+ * room's screens are in the row's menu (LiveRowMenu). An integrated control
  * leaves the operators' chips to the card it sits on.
  */
 export function LiveLayerTargets({
@@ -30,7 +30,7 @@ export function LiveLayerTargets({
   return (
     <>
       {integrated ? null : <LivePresenceTag marks={marks} />}
-      {/* The row this control sits in carries a band per output the graphic is on. */}
+      {/* The row this control sits in carries the Program and Preview edge. */}
       <LiveTallyBands where={where} />
       <OutputTargetControl
         subject={subject}
@@ -39,7 +39,6 @@ export function LiveLayerTargets({
         presence={marks.map((mark) => ({ target: mark.focus?.target ?? null, color: mark.color }))}
         preview={where.preview}
         program={where.program}
-        aux={where.aux}
         disabled={targets.disabled || disabled}
         onToggle={(destination) => sendLayerToggle(targets, layer, destination)}
       />

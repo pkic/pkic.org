@@ -25,45 +25,23 @@ function roomState() {
 }
 
 describe("output target control", () => {
-  it("presses each bus that shows the graphic, names the aux outputs and toggles each destination", () => {
+  it("presses each bus that shows the graphic and toggles Preview and Program, with no screens button", () => {
     const onToggle = vi.fn();
     host = document.body.appendChild(document.createElement("div"));
-    const mount = (aux: string[]) =>
-      act(() =>
-        render(
-          <OutputTargetControl
-            subject="timer"
-            preview
-            program={false}
-            aux={(output) => aux.includes(output)}
-            disabled={false}
-            onToggle={onToggle}
-          />,
-          host!,
-        ),
-      );
-    void mount([]);
-    expect(host.querySelector('[aria-label="Show timer in preview"]')?.getAttribute("aria-pressed")).toBe("true");
-    expect(host.querySelector('[aria-label="Show timer on air"]')?.getAttribute("aria-pressed")).toBe("false");
-    const aux = () => host!.querySelector<HTMLButtonElement>(`[aria-label="Send timer to the room's screens"]`)!;
-    expect(aux().querySelector("svg")).not.toBeNull();
-    expect(host.querySelector('[aria-label="Show timer in preview"]')?.textContent).toBe("PVW");
-    void mount(["projector"]);
-    expect(aux().textContent).toContain("PRJ");
-    expect(host.querySelector(".pk-output-target")?.getAttribute("data-aux-active")).toBe("projector");
-    void mount(["projector", "stage-display"]);
-    expect(aux().textContent).toContain("PRJ DSP");
-    void act(() => aux().click());
-    const items = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]')];
-    expect(items.map((item) => [item.textContent?.trim(), item.getAttribute("aria-checked")])).toEqual([
-      ["✓Projector", "true"],
-      ["✓Stage display", "true"],
-    ]);
-    void act(() => items[1]!.click());
-    // The menu stays open so several outputs can be chosen together.
-    expect(document.querySelector('[role="menu"]')).not.toBeNull();
-    void act(() => host!.querySelector<HTMLButtonElement>('[aria-label="Show timer on air"]')!.click());
-    expect(onToggle.mock.calls).toEqual([["stage-display"], ["program"]]);
+    void act(() =>
+      render(
+        <OutputTargetControl subject="timer" preview program={false} disabled={false} onToggle={onToggle} />,
+        host!,
+      ),
+    );
+    const preview = host.querySelector<HTMLButtonElement>('[aria-label="Show timer in preview"]')!;
+    const program = host.querySelector<HTMLButtonElement>('[aria-label="Show timer on air"]')!;
+    expect([preview.textContent, preview.getAttribute("aria-pressed")]).toEqual(["PVW", "true"]);
+    expect([program.textContent, program.getAttribute("aria-pressed")]).toEqual(["PGM", "false"]);
+    // The room's screens are in the row's menu, so the control is two buttons wide.
+    expect(host.querySelectorAll("button")).toHaveLength(2);
+    void act(() => program.click());
+    expect(onToggle.mock.calls).toEqual([["program"]]);
   });
 });
 

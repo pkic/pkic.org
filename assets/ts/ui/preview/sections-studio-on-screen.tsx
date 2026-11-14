@@ -409,7 +409,7 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "studio-graphics-audience",
     title: "Graphics panel with the audience graphics",
-    note: "Top questions, Chat and Reactions sit with the other graphics, each with Preview, Program and Screens; the lists' settings choose how many lines show.",
+    note: "Top questions, Chat and Reactions sit with the other graphics, each with PVW and PGM; the row's menu holds the room's screens, shown as dots on it, and the settings.",
     render: () => <Graphics />,
   },
   {
@@ -571,7 +571,7 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "studio-speakers-added",
     title: "Speakers in a studio panel, one added for this session",
-    note: "One row per person like every studio list: the outputs and the remove at the end, under the name when the panel is narrow.",
+    note: "One row per person like every studio list: PVW, PGM and the menu at the end, which holds the screens and Remove for someone added.",
     render: () => (
       <div style={{ maxInlineSize: "42rem" }}>
         <LiveSpeakerCards

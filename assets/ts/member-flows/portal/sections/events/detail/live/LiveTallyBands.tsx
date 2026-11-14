@@ -1,25 +1,19 @@
-import { LIVE_STUDIO_AUX_OUTPUTS, type LiveAuxOutput } from "../../../../../../../shared/live-room-outputs";
 import "./live-tally.css";
 import "./LiveTallyBands.css";
 
-/** Where a graphic is now, as the output controls read it. */
+/** Whether a graphic is in Preview and on Program now. */
 export interface LiveTallyWhere {
   preview: boolean;
   program: boolean;
-  aux: (output: LiveAuxOutput) => boolean;
 }
 
 /**
- * A thin band in each output's color on the leading edge of a studio row,
- * one per output the graphic is on: Program first, then Preview and the
- * room's screens. The row's output buttons say the same in words.
+ * The leading edge of a studio row in Program red or Preview green, both
+ * side by side when the graphic is on both. The room's screens show as dots
+ * on the row's menu instead.
  */
 export function LiveTallyBands({ where }: { where: LiveTallyWhere }) {
-  const on = [
-    ...(where.program ? (["program"] as const) : []),
-    ...(where.preview ? (["preview"] as const) : []),
-    ...LIVE_STUDIO_AUX_OUTPUTS.filter((output) => where.aux(output)),
-  ];
+  const on = [...(where.program ? (["program"] as const) : []), ...(where.preview ? (["preview"] as const) : [])];
   if (!on.length) return null;
   return (
     <span class="pk-live-tally-bands" aria-hidden="true">
