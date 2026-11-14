@@ -134,7 +134,7 @@ describe("broadcast overlays", () => {
   it("shows the asker's photo, or their initials, beside their name when they asked by name", () => {
     const { host, live } = mountOverlay("program", "question-only", [savedLayout("question-only", ["question"])]);
     expect(host.querySelector(".pk-live-question__asker")).toBeNull();
-    expect(host.querySelector(".pk-live-board__head .pk-live-overlay__emblem")).not.toBeNull();
+    expect(host.querySelector(".pk-live-board__head .pk-live-board__logo")).not.toBeNull();
     const ask = (authorPhotoUrl: string | null) =>
       void act(() =>
         live.latest().deliver({

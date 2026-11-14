@@ -2,7 +2,6 @@ import type { ComponentChildren } from "preact";
 import type { OverlayRect } from "../../shared/live-overlay-geometry";
 import { useNumericCssProperties } from "../hooks/useNumericCssProperties";
 import { PkicMark } from "../ui/PkicMark";
-import { OverlayEmblem } from "./LiveEmblem";
 import "./LiveBoard.css";
 
 /**
@@ -39,7 +38,7 @@ export function liveBoardSize(box: Pick<OverlayRect, "width" | "height">): {
 
 /**
  * The conference board every audience-facing graphic is drawn on: the
- * conference field, its dots and the mark, the emblem at the top, an eyebrow
+ * conference field, its dots and the mark, the white logo at the top, an eyebrow
  * that names what the board shows, then the graphic. It takes its box's shape,
  * so the same board fills the projector, a band of the stream or a column
  * beside the camera, and each graphic arranges itself for that shape.
@@ -69,7 +68,7 @@ export function LiveBoard({
       <PkicMark class="pk-live-board__watermark" />
       <header class="pk-live-board__head">
         <p class="pk-live-board__eyebrow">{eyebrow}</p>
-        <OverlayEmblem />
+        <img class="pk-live-board__logo" src="/img/logo.svg" width="1256" height="324" alt="PKI Consortium" />
       </header>
       {children}
     </section>

@@ -64,13 +64,11 @@
     line-height: 1.2;
     text-transform: uppercase;
   }
-  /* The emblem in the corner, its ink white on the field. */
-  .pk-live-board__head .pk-live-overlay__emblem {
+  /* The full logo in white in the corner, as on the event's banners. */
+  .pk-live-board__logo {
     flex: none;
-    inline-size: calc(88px * 360 / 314);
-  }
-  .pk-live-board__head .pk-live-overlay__emblem-ink {
-    fill: var(--pk-pqc-on-field);
+    inline-size: auto;
+    block-size: 72px;
   }
   /* The event stripe under a board's headline, as under the lower third's name. */
   .pk-live-board__stripe {
