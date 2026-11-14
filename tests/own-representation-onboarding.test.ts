@@ -631,6 +631,31 @@ describe("verified subdomain organization mappings", () => {
       expect(identityAffiliationPreviewResponseSchema.parse(await response.json()).organization?.name).toBe(expected);
     }
   });
+  it("never claims a selected new subdomain for the parent organization chosen with it", async () => {
+    const parent = await insertOrganization(env.DB, "Parent Company");
+    await claim("team-parent.test", parent);
+    const p = await person("person@team.team-parent.test");
+    const response = await preview(p, {
+      phase: "prepare",
+      domain: "team.team-parent.test",
+      email: p.email,
+      emailId: null,
+      organizationId: parent,
+      jobTitle: "Security engineer",
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    const prepared = identityAffiliationPreviewResponseSchema.parse(await response.json());
+    expect((await create(p, prepared.contextToken!)).status).toBe(201);
+    expect(
+      await env.DB.prepare("SELECT organization_id FROM identities WHERE user_id=? AND organization_id IS NOT NULL")
+        .bind(p.userId)
+        .first("organization_id"),
+    ).toBe(parent);
+    expect(
+      (await env.DB.prepare("SELECT domain,organization_id FROM organization_domain_claims ORDER BY domain").all())
+        .results,
+    ).toEqual([{ domain: "team-parent.test", organization_id: parent }]);
+  });
   it("suggests the exact unclaimed work subdomain when no organization is known", async () => {
     const p = await person("person@division.new-company.test");
     const response = await preview(p, { phase: "resolve", email: p.email, emailId: null });

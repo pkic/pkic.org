@@ -341,6 +341,8 @@ describe("Immutable verified-email organization resolution", () => {
         startImmediately: true,
       });
       await env.DB.batch([identity.statement]);
+      // The sharer claims the domain too, so the confirmed join outlives a second claimant, not just a derived fact.
+      await claim(sharing);
     });
     await raced.batch(prepared.statements);
     expect(await queryAll(env.DB, "SELECT organization_id FROM identities WHERE user_id=?", [person.userId])).toEqual([

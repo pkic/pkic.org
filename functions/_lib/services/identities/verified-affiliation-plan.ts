@@ -54,7 +54,11 @@ export async function planVerifiedAffiliation(
     },
     basis,
   );
-  const domainToLink = selectedNewSubdomain;
+  // A parent or subdomain organization chosen for this address keeps its own domain: it never claims this one.
+  const chosenRelated =
+    !plan.organizationWasCreated &&
+    (basis.facts?.related ?? []).some((related) => related.organizationId === plan.organizationId);
+  const domainToLink = chosenRelated ? null : selectedNewSubdomain;
   // A chosen subdomain must still be unclaimed when the command commits.
   const unclaimedGuard = domainToLink
     ? [

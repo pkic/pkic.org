@@ -389,10 +389,7 @@ describe("POST /api/v1/members/applications", () => {
 
   it("refuses an organization application without the identity of the person who represents it", async () => {
     const testEnv = makeEnv();
-    const response = await callEndpoint(
-      createApplication,
-      createContext(testEnv, await applicationRequest(validPayload), {}),
-    );
+    const response = await callApi(testEnv, await applicationRequest(validPayload));
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ error: { code: ORGANIZATION_IDENTITY_REQUIRED } });
     expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(0);

@@ -627,6 +627,38 @@ describe("verified-email-first membership join", () => {
     expect(await queryAll(testEnv.DB, "SELECT id FROM user_emails WHERE user_id=?", [userId])).toEqual([]);
   });
 
+  it("finds the open application of a parent organization chosen from a subdomain address", async () => {
+    const testEnv = makeEnv();
+    const parent = await insertOrganization(testEnv.DB, "Parent Join Org");
+    const department = await insertOrganization(testEnv.DB, "Department Join Org");
+    const applicationId = await seedMemberApplication({
+      applicantEmail: "lead@parent-join.example",
+      organizationDomain: "parent-join.example",
+      stage: "processing",
+    });
+    await testEnv.DB.batch([
+      testEnv.DB.prepare(
+        "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
+      ).bind(crypto.randomUUID(), "parent-join.example", parent, nowIso(), nowIso()),
+      // The address's most specific claim belongs to another organization.
+      testEnv.DB.prepare(
+        "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
+      ).bind(crypto.randomUUID(), "dept.parent-join.example", department, nowIso(), nowIso()),
+      testEnv.DB.prepare("UPDATE member_applications SET organization_id=? WHERE id=?").bind(parent, applicationId),
+    ]);
+    const token = await startAndMaterializeVerification(testEnv, "person@dept.parent-join.example");
+    const verification = memberJoinVerifyResponseSchema.parse(
+      await (
+        await postJson(testEnv, "/api/v1/members/join/verify", {
+          token,
+          domain: "parent-join.example",
+          organizationId: parent,
+        })
+      ).json(),
+    );
+    expect(verification).toEqual({ status: "organization_application_in_progress" });
+  });
+
   it("tells an applicant about their open application before the form, with a working status link", async () => {
     const testEnv = makeEnv();
     const applicationId = await seedMemberApplication({

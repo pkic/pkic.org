@@ -348,8 +348,9 @@ export async function updateMembershipApplication(
     // categories never carry an organization_name).
     setClauses.push("organization_name = ?");
     values.push(null);
-    if (application.organization_id) setClauses.push("organization_id = NULL");
   }
+  // An individual category never links an organization, whichever branch above changed the name.
+  if (nextIsIndividual && application.organization_id) setClauses.push("organization_id = NULL");
 
   if (input.answers) {
     const currentAnswers = await getApplicationAnswers(db, application.form_submission_id);

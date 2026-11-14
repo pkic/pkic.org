@@ -50,12 +50,17 @@ export async function readJoinVerification(
 ) {
   const owner = provedMailboxUserIdSelection(email);
   const claim = organizationDomainClaimForEmailSelection(email);
+  // A chosen organization may claim any of the address's domains, such as the parent the person selected;
+  // without a choice, only the sole claimant of the most specific claimed domain.
   const organization = {
-    sql: `SELECT entry.organization_id FROM organization_domain_claims entry
-      WHERE entry.domain=(SELECT domain FROM (${claim.sql})) AND entry.organization_id IS NOT NULL
-        AND ((? IS NOT NULL AND entry.organization_id=?) OR (? IS NULL AND
-          (SELECT COUNT(*) FROM organization_domain_claims candidate WHERE candidate.domain=entry.domain)=1)) LIMIT 1`,
-    bindings: [...claim.bindings, organizationId ?? null, organizationId ?? null, organizationId ?? null],
+    sql: organizationId
+      ? `SELECT entry.organization_id FROM organization_domain_claims entry
+          WHERE entry.organization_id=? AND entry.domain IN (SELECT value FROM json_each(?)) LIMIT 1`
+      : `SELECT entry.organization_id FROM organization_domain_claims entry
+          WHERE entry.domain=(SELECT domain FROM (${claim.sql})) AND entry.organization_id IS NOT NULL
+            AND (SELECT COUNT(*) FROM organization_domain_claims candidate WHERE candidate.domain=entry.domain)=1
+          LIMIT 1`,
+    bindings: organizationId ? [organizationId, JSON.stringify(organizationDomainCandidates(email))] : claim.bindings,
   };
   const creation = identityCreationSelections(owner, organization);
   const affiliation = prepareJoinAffiliationRead(db, email, selection);
