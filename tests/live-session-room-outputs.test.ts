@@ -6,6 +6,7 @@ import { decodeAttendancePointResource } from "../assets/shared/attendance-point
 import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-overlay-access";
 import { defaultLiveTimerGraphic } from "../assets/shared/schemas/live-session-timer";
 import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../assets/shared/schemas/live-stage-display-settings";
+import { DEFAULT_LIVE_SCREEN_SYNC } from "../assets/shared/schemas/live-screen-sync";
 import { parseCapabilityToken } from "../functions/_lib/auth/capability-token";
 import { callApi } from "./helpers/app";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
@@ -94,6 +95,21 @@ describe("live room auxiliary outputs", () => {
     expect(attendee.received.some((m) => m.type === "stage.display.settings.changed")).toBe(false);
     const rejoined = await f.connect({ person: "operator" });
     expect((await rejoined.next("room.snapshot")).stageDisplaySettings).toEqual(settings);
+  });
+
+  it("keeps each screen's sync with Program for the session, on by default and set by operators only", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const attendee = await f.connect({ person: "attendee" });
+    const overlay = await f.connect({ overlay: await overlayToken() });
+    expect((await overlay.next("room.snapshot")).screenSync).toEqual(DEFAULT_LIVE_SCREEN_SYNC);
+    operator.send({ type: "screen.sync", output: "projector", sync: false });
+    const changed = { projector: false, "stage-display": true };
+    expect((await overlay.next("screen.sync.changed")).screenSync).toEqual(changed);
+    attendee.send({ type: "screen.sync", output: "stage-display", sync: false });
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect(attendee.received.some((m) => m.type === "screen.sync.changed")).toBe(false);
+    const rejoined = await f.connect({ person: "operator" });
+    expect((await rejoined.next("room.snapshot")).screenSync).toEqual(changed);
   });
 
   it("merges each stage display change into the room's copy, so quick changes never undo each other", async () => {

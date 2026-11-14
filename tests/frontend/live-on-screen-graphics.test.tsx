@@ -114,11 +114,12 @@ describe("audience graphics on an output", () => {
     await draw(on);
     await draw({ ...on, burst: { ...burst, sequence: 2 } });
     expect(floating()).toBe(3);
-    // The projector draws its own composition: reactions on Program do not reach it.
-    await draw({ ...on, burst: { ...burst, sequence: 3 } }, "projector");
+    // A projector that does not sync draws its own composition: reactions on Program do not reach it.
+    const unsynced = { ...on, screenSync: { projector: false, "stage-display": true } };
+    await draw({ ...unsynced, burst: { ...burst, sequence: 3 } }, "projector");
     expect(floating()).toBe(0);
     const projector = {
-      ...on,
+      ...unsynced,
       outputs: { ...on.outputs, projector: { ...EMPTY_LIVE_AUX_COMPOSITION, reactions: true } },
     };
     await draw(projector, "projector");

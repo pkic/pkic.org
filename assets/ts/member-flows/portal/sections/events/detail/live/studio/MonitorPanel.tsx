@@ -2,6 +2,8 @@ import { signal } from "@preact/signals";
 import { memo } from "preact/compat";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import type { LiveAuxOutput } from "../../../../../../../../shared/live-room-outputs";
+import type { LiveScreenSync, LiveSyncedScreen } from "../../../../../../../../shared/schemas/live-screen-sync";
+import { liveOutputProjection } from "../../../../../../../live-session/live-output-projection";
 import { liveOverlayLayoutChoices } from "../../../../../../../../shared/live-overlay-layout-presets";
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
 import { Button } from "../../../../../../../ui/Button";
@@ -30,6 +32,9 @@ import "./MonitorPanel.css";
 export interface MonitorSwitcher {
   /** Takes every graphic off one output at once; Program's clear the desk offers to undo. */
   clear: (output: StudioOutput) => void;
+  /** Whether the projector and the stage display follow Program, and the switch for each. */
+  screenSync: LiveScreenSync;
+  sync: (output: LiveSyncedScreen, sync: boolean) => void;
   disabled: boolean;
 }
 
@@ -54,7 +59,9 @@ const projectionOf = (output: StudioOutput, sources: MonitorSources) =>
 function showsGraphics(output: StudioOutput, state: LiveRoomState): boolean {
   if (output === "stage-display" || output === "stage-preview") return true;
   const composition: Record<string, unknown> =
-    output === "preview" || output === "program" ? state.stage : state.outputs[output as LiveAuxOutput];
+    output === "preview" || output === "program"
+      ? state.stage
+      : liveOutputProjection(state, output as LiveAuxOutput).stage;
   return Object.entries(composition).some(
     ([key, value]) =>
       value !== null &&
@@ -78,7 +85,14 @@ function samePicture(output: StudioOutput, left: LiveRoomState | null, right: Li
     left.session === right.session &&
     left.overlayLayouts === right.overlayLayouts &&
     left.burst === right.burst &&
-    left.speakerMessage === right.speakerMessage
+    left.speakerMessage === right.speakerMessage &&
+    // A room screen that syncs also draws what is on Program, and the question lined up next.
+    (output === "preview" ||
+      output === "program" ||
+      output === "livestream" ||
+      (left.stage === right.stage &&
+        left.screenSync === right.screenSync &&
+        left.stageDisplayNext === right.stageDisplayNext))
   );
 }
 
@@ -207,12 +221,51 @@ function LayoutPicker({ output, context }: { output: StudioOutput; context: Moni
   );
 }
 
+/** A chain link, broken while the screen does not sync. */
+function SyncIcon({ synced }: { synced: boolean }) {
+  return (
+    <StrokeIcon>
+      <path d="M7 4.5l1.3-1.3a2.6 2.6 0 0 1 3.7 3.7L10.7 8.2M9 11.5l-1.3 1.3a2.6 2.6 0 0 1-3.7-3.7L5.3 7.8" />
+      <path d={synced ? "M6.5 9.5 9.5 6.5" : "M2 2l12 12"} />
+    </StrokeIcon>
+  );
+}
+
+/** What a room screen shows besides its own graphics, said for an operator who is unsure mid-show. */
+const SYNC_HINTS = {
+  on: "Sync on: shows what is live on Program, plus anything you put here. Click to show only what you put here.",
+  off: "Sync off: shows only what you put here. Click to also show what is live on Program.",
+} as const;
+
+/** Whether a room screen follows Program: on by default, a red PGM chip while on. */
+function SyncToggle({ output, switcher }: { output: LiveSyncedScreen; switcher: MonitorSwitcher }) {
+  const synced = switcher.screenSync[output];
+  return (
+    <Button
+      variant="ghost"
+      class="pk-studio-monitor__sync"
+      data-tally="program"
+      aria-pressed={synced}
+      aria-label={`Sync ${STUDIO_OUTPUT_DETAILS[output].label} with Program`}
+      title={synced ? SYNC_HINTS.on : SYNC_HINTS.off}
+      disabled={switcher.disabled}
+      onClick={() => switcher.sync(output, !synced)}
+    >
+      <SyncIcon synced={synced} />
+      <span class="pk-studio-monitor__sync-text" aria-hidden="true">
+        PGM
+      </span>
+    </Button>
+  );
+}
+
 /** What an operator does with one monitor's output, as icons at the end of its header: clear it, and full screen. */
 function MonitorActions({ output, context }: { output: StudioOutput; context: MonitorContext }) {
   const { panel, switcher } = context;
   const details = STUDIO_OUTPUT_DETAILS[output];
   return (
     <span class="pk-studio-monitor__controls">
+      {output === "projector" || output === "stage-display" ? <SyncToggle output={output} switcher={switcher} /> : null}
       {output === "livestream" ? (
         <LivestreamSoundToggle />
       ) : (

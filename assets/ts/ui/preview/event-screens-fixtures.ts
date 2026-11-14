@@ -3,6 +3,7 @@
  * morning, so every screenshot reads the same.
  */
 import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../../shared/schemas/live-stage-display-settings";
+import { DEFAULT_LIVE_SCREEN_SYNC } from "../../../shared/schemas/live-screen-sync";
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../../shared/schemas/live-session-ticker";
 import {
   EMPTY_LIVE_AUX_COMPOSITION,
@@ -105,6 +106,7 @@ function stageDisplayState(
     stageDisplayNext: null,
     stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
+    screenSync: DEFAULT_LIVE_SCREEN_SYNC,
   };
   return applyLiveRoomMessage(null, snapshot)!;
 }

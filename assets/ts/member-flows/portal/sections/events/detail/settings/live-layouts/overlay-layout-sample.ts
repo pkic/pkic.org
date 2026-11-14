@@ -1,4 +1,5 @@
 import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../../../../../../../../shared/schemas/live-stage-display-settings";
+import { DEFAULT_LIVE_SCREEN_SYNC } from "../../../../../../../../shared/schemas/live-screen-sync";
 import {
   DEFAULT_LIVE_CHAT_FEED_CONFIG,
   DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,
@@ -181,6 +182,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
     stageDisplayNext: null,
     stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
+    screenSync: DEFAULT_LIVE_SCREEN_SYNC,
     burst: null,
     refusal: null,
   };

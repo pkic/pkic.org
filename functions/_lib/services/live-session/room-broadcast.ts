@@ -33,7 +33,8 @@ function roomOutputMessage(message: LiveRoomServerMessage): boolean {
   return (
     message.type === "aux.changed" ||
     message.type === "speaker.message.changed" ||
-    message.type === "stage.display.settings.changed"
+    message.type === "stage.display.settings.changed" ||
+    message.type === "screen.sync.changed"
   );
 }
 
@@ -103,6 +104,7 @@ export class LiveRoomBroadcast {
       stageDisplayNext: seesStageDisplayNext(viewer) ? this.store.preview().question : null,
       stageDisplayNextVotes: seesStageDisplayNext(viewer) ? this.nextVotes() : null,
       stageDisplaySettings: this.store.stageDisplaySettings(),
+      screenSync: this.store.screenSync(),
     });
   }
 

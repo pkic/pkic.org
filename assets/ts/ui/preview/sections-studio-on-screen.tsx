@@ -13,6 +13,7 @@ import {
   EMPTY_LIVE_OUTPUTS,
   type LiveStage,
 } from "../../../shared/schemas/live-session-room";
+import { DEFAULT_LIVE_SCREEN_SYNC } from "../../../shared/schemas/live-screen-sync";
 import {
   LIVE_OVERLAY_DEFAULT_POSITIONS,
   LIVE_OVERLAY_PRESET_LAYOUTS,
@@ -273,7 +274,12 @@ const MONITOR_SOURCES = {
 
 /** The LIVE monitor as an operator opens it; the box stands in for the YouTube player. */
 function LiveMonitor() {
-  const view = monitorPanelView(LIVE_PANEL, MONITOR_SOURCES, noCommand, { clear: noCommand, disabled: false });
+  const view = monitorPanelView(LIVE_PANEL, MONITOR_SOURCES, noCommand, {
+    clear: noCommand,
+    screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    sync: noCommand,
+    disabled: false,
+  });
   return (
     <div class="pk-studio-grid-frame" data-density="compact">
       <div class="pk-studio-grid">
@@ -314,7 +320,12 @@ const MULTIVIEW_PANEL: StudioPanel = {
 
 /** A multiview of Preview, Program and the room's screens, each edged in its own tally color. */
 function Multiview() {
-  const view = monitorPanelView(MULTIVIEW_PANEL, MONITOR_SOURCES, noCommand, { clear: noCommand, disabled: false });
+  const view = monitorPanelView(MULTIVIEW_PANEL, MONITOR_SOURCES, noCommand, {
+    clear: noCommand,
+    screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    sync: noCommand,
+    disabled: false,
+  });
   return (
     <div class="pk-studio-grid-frame" data-density="compact">
       <div class="pk-studio-grid">

@@ -342,9 +342,19 @@ describe("broadcast overlays", () => {
     ]);
   });
 
-  it("renders each auxiliary output from its own composition, not Program's", () => {
+  it("adds Program to the projector while it syncs, and draws only its own composition once sync is off", () => {
     const projector = mountOverlay("projector");
-    expect(projector.host.querySelector(".pk-live-overlay__name")).toBeNull();
+    const sync = (on: boolean) =>
+      void act(() =>
+        projector.live
+          .latest()
+          .deliver({ type: "screen.sync.changed", screenSync: { projector: on, "stage-display": true } }),
+      );
+    const questionText = () => projector.host.querySelector(".pk-live-overlay__question-text")?.textContent ?? null;
+    // Sync is on by default: the projector shows what is live.
+    expect(questionText()).toBe("What about hybrid certificates?");
+    sync(false);
+    expect(questionText()).toBeNull();
     void act(() =>
       projector.live.latest().deliver({
         type: "aux.changed",
@@ -353,8 +363,11 @@ describe("broadcast overlays", () => {
       }),
     );
     expect(projector.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
-    expect(projector.host.querySelector(".pk-live-overlay__question-text")).toBeNull();
+    expect(questionText()).toBeNull();
     expect(projector.host.querySelector(".pk-live-overlay__timer")).not.toBeNull();
+    sync(true);
+    expect(questionText()).toBe("What about hybrid certificates?");
+    // The stage preview follows the room on its own and never takes Program's graphics.
     const preview = mountOverlay("stage-preview");
     expect(preview.host.querySelector(".pk-live-overlay__name")).toBeNull();
   });

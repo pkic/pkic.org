@@ -160,7 +160,9 @@ it("shows Program on the row edge, a screen as a dot on the menu, and toggles Pr
   const bands = host.querySelectorAll(".pk-live-person .pk-live-tally-bands > [data-tally]");
   expect([...bands].map((band) => band.getAttribute("data-tally"))).toEqual(["program"]);
   const menu = () => host!.querySelector<HTMLButtonElement>(`button[aria-label="${credit.name} actions"]`)!;
-  expect(menu().querySelector(".pk-live-screen-dots")).toBeNull();
+  // The projector syncs with Program, so it shows the live lower third: a ring, not a dot.
+  expect(menu().querySelector('.pk-live-screen-dots > [data-tally="projector"][data-following]')).not.toBeNull();
+  expect(menu().getAttribute("title")).toBe("Room screens and more actions. On Projector because it is live.");
   const program = host.querySelector<HTMLButtonElement>(`button[aria-label="Show ${credit.name} on air"]`)!;
   expect(program.getAttribute("aria-pressed")).toBe("true");
   program.click();
@@ -180,7 +182,7 @@ it("shows Program on the row edge, a screen as a dot on the menu, and toggles Pr
   expect(sendProgram.mock.calls.some(([message]) => message.type === "preview.set")).toBe(false);
   state.outputs = { ...state.outputs, projector: { ...EMPTY_LIVE_AUX_COMPOSITION, lowerThird: credit } };
   await act(() => render(<LiveSpeakerCards targets={liveTargets(state, { sendProgram })} />, host!));
-  expect(menu().querySelector('.pk-live-screen-dots > [data-tally="projector"]')).not.toBeNull();
+  expect(menu().querySelector('.pk-live-screen-dots > [data-tally="projector"]:not([data-following])')).not.toBeNull();
   expect(menu().getAttribute("title")).toBe("Room screens and more actions. On Projector.");
 });
 

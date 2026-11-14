@@ -81,6 +81,7 @@ import {
 } from "./live-session-timer";
 import { attendancePointSelectionSchema } from "../attendance-points";
 import * as stageDisplaySettings from "./live-stage-display-settings";
+import * as screenSync from "./live-screen-sync";
 import { LIVE_GRAPHIC_THEME_DEFAULTS, liveGraphicThemeSchema } from "../live-graphic-theme";
 import { DEFAULT_LIVE_LOWER_THIRD_MOTION } from "../live-lower-third";
 import {
@@ -409,6 +410,8 @@ export const liveRoomSnapshotSchema = z
     /** The votes of the question lined up next, so a stage display source shows them without the question list. */
     stageDisplayNextVotes: stageDisplaySettings.liveStageDisplayVotesSchema.default(null),
     stageDisplaySettings: stageDisplaySettings.liveStageDisplaySettingsSnapshotSchema,
+    /** Whether the projector and the stage display follow Program. */
+    screenSync: screenSync.liveScreenSyncSnapshotSchema,
   })
   .strict();
 export type LiveRoomSnapshot = z.infer<typeof liveRoomSnapshotSchema>;
@@ -450,6 +453,7 @@ export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("overlay.mode.changed"), mode: liveOverlayModeSchema }).strict(),
   stageDisplaySettings.liveStageDisplayNextChangedSchema(liveStageQuestionSchema),
   stageDisplaySettings.liveStageDisplaySettingsChangedSchema,
+  screenSync.liveScreenSyncChangedSchema,
   /** Operators only: Program was cleared, and this snapshot restores it. */
   z
     .object({
@@ -608,6 +612,7 @@ export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
   ...liveTimerCommandSchemas,
   z.object({ type: z.literal("overlay.mode"), mode: liveOverlayModeSchema }).strict(),
   stageDisplaySettings.liveStageDisplaySettingsCommandSchema,
+  screenSync.liveScreenSyncCommandSchema,
   ...liveChatClientMessageSchemas,
   ...liveAuthorClientMessageSchemas,
 ]);

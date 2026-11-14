@@ -5,6 +5,7 @@ import { liveCompositionInput } from "../../../../../../../shared/live-room-prev
 import type { LiveTakeTarget } from "../../../../../../../shared/live-room-outputs";
 import type { AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
 import { EMPTY_LIVE_STAGE, type LiveRoomClientMessage } from "../../../../../../../shared/schemas/live-session-room";
+import type { LiveSyncedScreen } from "../../../../../../../shared/schemas/live-screen-sync";
 import { useBoundaryClock } from "../../../../../../hooks/useBoundaryClock";
 import { liveRoomOpenFailure } from "../../../../../../live-session/live-room-copy";
 import type { LiveRoomState } from "../../../../../../live-session/live-room-state";
@@ -53,6 +54,7 @@ function changesBroadcast(message: LiveRoomClientMessage): boolean {
     message.type === "program.clear" ||
     message.type === "program.restore" ||
     message.type === "aux.set" ||
+    message.type === "screen.sync" ||
     message.type === "speaker.message"
   );
 }
@@ -204,6 +206,8 @@ export function LiveSessionDesk({
           : output === "livestream"
             ? undefined
             : sendProgram({ type: "aux.set", output, composition: empty }),
+    screenSync: state.screenSync,
+    sync: (output: LiveSyncedScreen, sync: boolean) => sendProgram({ type: "screen.sync", output, sync }),
     disabled,
   };
   const sources = {

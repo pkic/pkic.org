@@ -26,6 +26,7 @@ const question = {
   authorName: null,
   authorPhotoUrl: null,
   authorAffiliation: null,
+  addressedTo: null,
 };
 const nextSession = {
   config: { scope: "this-room" as const, layout: "list" as const, theme: "white-on-black" as const },
@@ -58,6 +59,7 @@ function input(startMs: number, endMs: number, overrides: Partial<LiveStageDispl
     },
     own: { ...EMPTY_LIVE_STAGE, timerGraphics: [defaultLiveTimerGraphic("session")], schedule: nextSession },
     program: EMPTY_LIVE_STAGE,
+    followsProgram: true,
     next: null,
     nextVotes: null,
     polls: [],
@@ -186,6 +188,17 @@ describe("stage display plan", () => {
       session: { ...base.session, credits: [credit] },
     });
     expect(plan.main).toMatchObject({ content: { kind: "question", addressee: "Sam Speaker" } });
+  });
+
+  it("takes nothing from Program or Preview once its sync is off, and keeps what was put on it", () => {
+    const lined = { ...question, id: "q2", text: "And HSMs?" };
+    const synced = input(-10 * MINUTE, 20 * MINUTE, { program: { ...EMPTY_LIVE_STAGE, question }, next: lined });
+    expect(liveStageDisplayPlan(synced).main).toMatchObject({ kind: "content", content: { question } });
+    const plan = liveStageDisplayPlan({ ...synced, followsProgram: false });
+    expect(plan.main).toMatchObject({ kind: "timers", timers: [{ timerId: "session" }] });
+    const own = liveStageDisplayPlan({ ...synced, followsProgram: false, own: { ...synced.own, question } });
+    // Its own question still says whether it is on air.
+    expect(own.main).toMatchObject({ kind: "content", content: { question, onAir: true, next: null } });
   });
 
   it("sets a question beside the small timer, tagged on air, with the next one and its votes", () => {

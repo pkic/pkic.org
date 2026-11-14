@@ -28,16 +28,22 @@ export const STUDIO_TOUR_STEPS: readonly GuidedTourStep[] = [
     body: `Happy with the practice area? Press Transition, or the ${TAKE_SHORTCUT.toLowerCase()} bar, and it goes live in place of what was live before. The small arrow next to it sends it to a screen in the room instead.`,
   },
   {
+    id: "sync",
+    target: ".pk-studio-monitor__sync",
+    title: "Screens follow what is live",
+    body: "The projector and the speaker’s screen show what is live by themselves: that is Sync, the red PGM button on their monitor. Click it to turn Sync off, and that screen shows only what you put on it. Click it again to turn Sync back on.",
+  },
+  {
     id: "screens",
     target: ".pk-menu__trigger:has(> .pk-live-screen-dots), .pk-studio-panel__body .pk-menu__trigger",
     title: "Screens in the room",
-    body: "The room has a projector for the audience and a screen for the speaker. Open ⋯ on an item and click Projector or Stage display to show it there; click again to take it off. A dot under ⋯ means you put it on one of them.",
+    body: "To show something on one screen only, open ⋯ on it and click Projector or Stage display; click again to take it off. A dot under ⋯ means you put it there and it stays after it goes off air. An empty circle means a screen shows it only because it is live.",
   },
   {
     id: "stage-display",
     target: panel("message"),
     title: "The speaker’s screen",
-    body: "The speaker’s screen follows what is live by itself: when you put a question, poll or timer live, the speaker sees it too, shown as an empty circle under ⋯. Put it on Stage display yourself to keep it there after it goes off air. Type a short note here, like “5 minutes left”, and only the speaker sees it.",
+    body: "Type a short note here, like “5 minutes left”, and only the speaker sees it. While Sync is on, the speaker also sees the question you lined up in Preview, so they know what is coming.",
   },
   {
     id: "time",

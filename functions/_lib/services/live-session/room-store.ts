@@ -32,6 +32,11 @@ import {
   liveStageDisplaySettingsSnapshotSchema,
   type LiveStageDisplaySettings,
 } from "../../../../assets/shared/schemas/live-stage-display-settings";
+import {
+  liveScreenSyncSchema,
+  liveScreenSyncSnapshotSchema,
+  type LiveScreenSync,
+} from "../../../../assets/shared/schemas/live-screen-sync";
 import { copyableLivePolls, type LivePollCopy } from "./room-poll-store";
 import type { LiveRoomSql } from "./room-sql";
 
@@ -435,6 +440,16 @@ export class LiveRoomStore {
 
   saveStageDisplaySettings(settings: LiveStageDisplaySettings): void {
     this.saveControl("stageDisplaySettings", liveStageDisplaySettingsSchema.parse(settings));
+  }
+
+  /** Whether each room screen follows Program; a stored value that no longer parses reads as the defaults. */
+  screenSync(): LiveScreenSync {
+    const saved = liveScreenSyncSnapshotSchema.safeParse(this.control("screenSync") ?? undefined);
+    return saved.success ? saved.data : liveScreenSyncSnapshotSchema.parse(undefined);
+  }
+
+  saveScreenSync(sync: LiveScreenSync): void {
+    this.saveControl("screenSync", liveScreenSyncSchema.parse(sync));
   }
 
   queue(): LiveQueue {

@@ -11,6 +11,7 @@ import { useLiveTimerGraphicReading } from "./useLiveCountdown";
 import { LiveTimerSounds } from "./useLiveTimerSounds";
 import "./LiveOverlay.css";
 import { liveStageDisplayGraphics } from "../../shared/live-stage-display-plan";
+import { liveScreenProgram } from "../../shared/live-screen-sync";
 import { LiveOverlayFrame } from "./LiveOverlayFrame";
 import { LiveOverlayLayer } from "./LiveOverlayLayer";
 import { LivePanelistsOverlay } from "./LivePanelistsOverlay";
@@ -275,7 +276,11 @@ export function LiveOverlayPresentation({
   // An output sounds the timers it shows: the stage display its own and those on Program, any other its own.
   const shown =
     view === "stage-display" && projection
-      ? liveStageDisplayGraphics(projection.outputs["stage-display"], projection.stage, projection.timers)
+      ? liveStageDisplayGraphics(
+          projection.outputs["stage-display"],
+          liveScreenProgram(projection.stage, projection.screenSync, "stage-display"),
+          projection.timers,
+        )
       : (state?.stage.timerGraphics ?? []);
   // The stage display draws its timers itself, so its own layer decides whether they show.
   const timersShow = view === "stage-display" ? elements.stageDisplay.visible : elements.timer.visible;

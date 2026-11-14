@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LIVE_OVERLAY_PRESET_LAYOUTS } from "../../assets/shared/live-overlay-layout-presets";
+import { DEFAULT_LIVE_SCREEN_SYNC } from "../../assets/shared/schemas/live-screen-sync";
 import { applyLiveRoomMessage } from "../../assets/ts/live-session/live-room-state";
 import { monitorPanelView } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/MonitorPanel";
 import {
@@ -47,7 +48,7 @@ const room = applyLiveRoomMessage(
 )!;
 const sources = { preview: room, program: room, slug: "pqc-2026", roomId: "room", startAt: room.session.startAt };
 
-const switcher = { clear: vi.fn(), disabled: false };
+const switcher = { clear: vi.fn(), screenSync: DEFAULT_LIVE_SCREEN_SYNC, sync: vi.fn(), disabled: false };
 
 function Harness({ panel = 0 }: { panel?: number }) {
   const layout = useStudioLayout();
@@ -157,6 +158,22 @@ describe("studio monitor layouts", () => {
       "livestream",
       "stage-display",
     ]);
+  });
+
+  it("syncs the projector and the stage display with Program from their own headers", () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    void act(() => render(<Harness panel={2} />, host!));
+    const sync = (label: string) =>
+      host!.querySelector<HTMLButtonElement>(`button[aria-label="Sync ${label} with Program"]`);
+    expect(sync("Program")).toBeNull();
+    expect(sync("Livestream")).toBeNull();
+    const projector = sync("Projector")!;
+    expect(projector.getAttribute("aria-pressed")).toBe("true");
+    expect(projector.title).toMatch(/^Sync on: shows what is live on Program/);
+    void act(() => projector.click());
+    expect(switcher.sync).toHaveBeenLastCalledWith("projector", false);
+    expect(sync("Stage display")!.getAttribute("aria-pressed")).toBe("true");
   });
 
   it("reads a saved arrangement from before layouts, and drops an unreadable layout choice rather than the arrangement", () => {

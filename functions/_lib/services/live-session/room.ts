@@ -556,6 +556,8 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       case "speaker.message":
       case "stage.display.settings":
         return this.outputs.setStageDisplay(actor, message, at);
+      case "screen.sync":
+        return this.outputs.setScreenSync(actor, message.output, message.sync, at);
       case "program.clear":
         return this.controls.clearProgram(actor, at);
       case "program.restore":

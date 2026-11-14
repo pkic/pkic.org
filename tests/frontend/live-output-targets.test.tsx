@@ -54,23 +54,36 @@ describe("room screens", () => {
   const question = liveStageQuestionSchema.parse({ id: LIVE_QUESTION, text: "How do we migrate?", authorName: null });
   const layer = { kind: "question", id: LIVE_QUESTION } as const;
 
-  it("marks the stage display as following when it shows Program's question, and as put there when it has its own", () => {
+  it("marks each synced screen as following when it shows Program's question, and as put there when it has its own", () => {
     const state = roomState();
-    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: [], following: false });
+    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: [], following: [] });
     state.stage = { ...state.stage, question };
-    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: [], following: true });
-    // Off air the stage display does not show Program's question.
-    expect(liveScreens(liveTargets(state, { programActive: false }), layer).following).toBe(false);
+    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: [], following: ["projector", "stage-display"] });
+    // Off air no screen shows Program's question.
+    expect(liveScreens(liveTargets(state, { programActive: false }), layer).following).toEqual([]);
     state.outputs = { ...state.outputs, "stage-display": { ...EMPTY_LIVE_AUX_COMPOSITION, question } };
-    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: ["stage-display"], following: false });
+    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: ["stage-display"], following: ["projector"] });
   });
 
-  it("does not follow when the stage display has its own question in place of Program's", () => {
+  it("does not follow on a screen with its own question in place of Program's", () => {
     const state = roomState();
     const own = { ...question, id: "20000000-0000-4000-8000-0000000000c1", text: "Pinned" };
     state.stage = { ...state.stage, question };
-    state.outputs = { ...state.outputs, "stage-display": { ...EMPTY_LIVE_AUX_COMPOSITION, question: own } };
-    expect(liveScreens(liveTargets(state), layer).following).toBe(false);
+    state.outputs = {
+      ...state.outputs,
+      projector: { ...EMPTY_LIVE_AUX_COMPOSITION, question: own },
+      "stage-display": { ...EMPTY_LIVE_AUX_COMPOSITION, question: own },
+    };
+    expect(liveScreens(liveTargets(state), layer).following).toEqual([]);
+  });
+
+  it("does not follow on a screen whose sync is off", () => {
+    const state = roomState();
+    state.stage = { ...state.stage, question };
+    state.screenSync = { projector: false, "stage-display": true };
+    expect(liveScreens(liveTargets(state), layer).following).toEqual(["stage-display"]);
+    state.screenSync = { projector: false, "stage-display": false };
+    expect(liveScreens(liveTargets(state), layer).following).toEqual([]);
   });
 });
 

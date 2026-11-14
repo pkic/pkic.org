@@ -16,6 +16,7 @@ export function useLiveStageDisplayPlan(state: LiveRoomState, roomId?: string): 
     session: state.session,
     own: state.outputs["stage-display"],
     program: state.stage,
+    followsProgram: state.screenSync["stage-display"],
     next,
     // Operators' monitors read the votes from the question list; a stage display source receives them with the question.
     nextVotes: next

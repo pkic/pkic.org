@@ -94,6 +94,8 @@ export function applyLiveRoomMessage(
       return { ...state, stageDisplayNext: message.question, stageDisplayNextVotes: message.votes ?? null };
     case "stage.display.settings.changed":
       return { ...state, stageDisplaySettings: message.settings };
+    case "screen.sync.changed":
+      return { ...state, screenSync: message.screenSync };
     case "program.cleared":
       return { ...state, programUndo: { snapshotId: message.snapshotId, change: message.change } };
     case "credits.added.changed":

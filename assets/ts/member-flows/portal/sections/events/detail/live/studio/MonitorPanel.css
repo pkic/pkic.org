@@ -176,9 +176,25 @@
     gap: var(--pk-1);
     margin-inline-start: auto;
   }
+  /* Sync with Program: a small chip beside the icons, red like Program while on, quiet while off. */
+  .pk-studio-monitor__sync.pk-btn {
+    gap: var(--pk-1);
+    min-block-size: 0;
+    padding: 0.125rem var(--pk-2);
+    border: 1px solid var(--pk-line);
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    color: var(--pk-ink-faint);
+  }
+  .pk-studio-monitor__sync.pk-btn[aria-pressed="true"] {
+    border-color: var(--tally);
+    background: color-mix(in oklch, var(--tally) 10%, transparent);
+    color: var(--tally);
+  }
   /*
    * On a small card the purpose goes first, then the layout's name, then the
-   * output's name beside its tag; Clear and full screen always stay.
+   * output's name beside its tag, and Sync keeps only its link; Clear and
+   * full screen always stay.
    */
   @container monitor-card (width < 24rem) {
     .pk-studio-monitor__caption .pk-studio-monitor__purpose {
@@ -187,6 +203,9 @@
   }
   @container monitor-card (width < 18rem) {
     .pk-studio-monitor__caption .pk-studio-monitor__layout {
+      display: none;
+    }
+    .pk-studio-monitor__sync-text {
       display: none;
     }
   }
