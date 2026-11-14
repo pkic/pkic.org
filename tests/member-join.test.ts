@@ -20,11 +20,10 @@ import {
   queuedMemberJoinVerificationToken,
 } from "../functions/_lib/services/membership/join/capabilities";
 import { verifyApplicationManageToken } from "../functions/_lib/services/membership/applications/queries";
-import { createMemberApplication } from "../functions/_lib/services/membership/applications/create";
 import { prepareIndividualIdentityStatement } from "../functions/_lib/services/users";
 import { nowIso } from "../functions/_lib/utils/time";
 import { createMemberSession } from "./helpers/auth";
-import { mutateBeforeNextBatch, mutateBeforeMatchingQuery } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import type { D1RoundTripBudget } from "./helpers/d1-round-trip-budget";
 
 function makeEnv() {
@@ -242,304 +241,50 @@ describe("verified-email-first membership join", () => {
     expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toHaveLength(1);
   });
 
-  it.each(["first", "second"])("requires review for the %s member organization on a shared domain", async (choice) => {
-    const testEnv = makeEnv();
-    const first = await insertOrganization(testEnv.DB, "First Organization");
-    const second = await insertOrganization(testEnv.DB, "Second Organization");
-    await seedOrganizationAggregate(testEnv.DB, first, "A");
-    await seedOrganizationAggregate(testEnv.DB, second, "A");
-    const claimId = crypto.randomUUID();
-    const at = nowIso();
-    await testEnv.DB.batch([
-      testEnv.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
-        VALUES (?,'shared-join.example',?,?,?)`).bind(claimId, first, at, at),
-      testEnv.DB.prepare(
-        `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
-      ).bind(crypto.randomUUID(), claimId, second, at, at),
-    ]);
-    const token = await startAndMaterializeVerification(testEnv, "new-person@shared-join.example");
-    const firstResponse = await verifyJoin(testEnv, token);
-    const selection = memberJoinVerifyResponseSchema.parse(await firstResponse.json());
-    expect(selection).toMatchObject({ status: "organization_selection_required", domain: "shared-join.example" });
-    if (selection.status !== "organization_selection_required") throw new Error("Expected an organization choice");
-    expect(selection.organizations.map((item) => item.id).sort()).toEqual([first, second].sort());
-    expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toEqual([]);
-    const unrelated = await insertOrganization(testEnv.DB, "Unrelated Organization");
-    const forged = await postJson(testEnv, "/api/v1/members/join/verify", { token, organizationId: unrelated });
-    expect(forged.status).toBe(409);
-    expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toEqual([]);
-    const selected = choice === "first" ? first : second;
-    const response = await postJson(testEnv, "/api/v1/members/join/verify", { token, organizationId: selected });
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(memberJoinVerifyResponseSchema.parse(await response.json())).toMatchObject({
-      status: "support_required",
-    });
-    expect(
-      await queryAll(
-        testEnv.DB,
-        `SELECT identity.organization_id FROM identities identity JOIN users person
-      ON person.id=identity.user_id WHERE person.normalized_email=? AND identity.organization_id IS NOT NULL`,
-        ["new-person@shared-join.example"],
-      ),
-    ).toEqual([]);
-  });
-
-  it("lets a selected nonmember organization apply on a shared domain", async () => {
-    const testEnv = makeEnv();
-    const member = await insertOrganization(testEnv.DB, "Member Organization");
-    const nonmember = await insertOrganization(testEnv.DB, "Nonmember Organization");
-    await seedOrganizationAggregate(testEnv.DB, member, "A");
-    const rootId = crypto.randomUUID();
-    const at = nowIso();
-    await testEnv.DB.batch([
-      testEnv.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
-        VALUES (?,'mixed-shared.example',?,?,?)`).bind(rootId, member, at, at),
-      testEnv.DB.prepare(
-        `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
-      ).bind(crypto.randomUUID(), rootId, nonmember, at, at),
-    ]);
-    const token = await startAndMaterializeVerification(testEnv, "person@mixed-shared.example");
-    const selection = memberJoinVerifyResponseSchema.parse(await (await verifyJoin(testEnv, token)).json());
-    expect(selection.status).toBe("organization_selection_required");
-    const response = await postJson(testEnv, "/api/v1/members/join/verify", { token, organizationId: nonmember });
-    const continuation = memberJoinVerifyResponseSchema.parse(await response.json());
-    expect(continuation).toMatchObject({ status: "application_ready", organizationName: "Nonmember Organization" });
-    if (continuation.status !== "application_ready") throw new Error("Expected an application capability");
-    const body = {
-      applicantEmail: continuation.applicantEmail,
-      applicantName: "Synthetic Applicant",
-      membershipCategory: "F",
-      organizationName: "Nonmember Organization",
-      joinToken: continuation.joinToken,
-      answers: {
-        reason: "Apply for membership.",
-        ...requiredMembershipApplicationAnswers,
-        ...membershipApplicationDescriptionAnswers("F"),
-      },
-    };
-    expect(
-      (await postJson(testEnv, "/api/v1/members/applications", { ...body, organizationName: "Another Organization" }))
-        .status,
-    ).toBe(409);
-    await testEnv.DB.prepare(
-      "DELETE FROM organization_domain_claims WHERE domain=(SELECT domain FROM organization_domain_claims WHERE id=?) AND organization_id=?",
-    )
-      .bind(rootId, nonmember)
-      .run();
-    expect((await postJson(testEnv, "/api/v1/members/applications", body)).status).toBe(409);
-    expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toEqual([]);
-    await testEnv.DB.prepare(
-      `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
-    )
-      .bind(crypto.randomUUID(), rootId, nonmember, at, at)
-      .run();
-    const refreshed = memberJoinVerifyResponseSchema.parse(
-      await (await postJson(testEnv, "/api/v1/members/join/verify", { token, organizationId: nonmember })).json(),
-    );
-    if (refreshed.status !== "application_ready") throw new Error(`Unexpected ${refreshed.status}`);
-    const application = await postJson(testEnv, "/api/v1/members/applications", {
-      ...body,
-      joinToken: refreshed.joinToken,
-    });
-    expect(application.status, await application.clone().text()).toBe(201);
-    expect(
-      await queryAll(
-        testEnv.DB,
-        "SELECT organization_id,organization_name,organization_domain FROM member_applications",
-      ),
-    ).toEqual([
-      {
-        organization_id: nonmember,
-        organization_name: "Nonmember Organization",
-        organization_domain: "mixed-shared.example",
-      },
-    ]);
-    expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toEqual([]);
-  });
-
-  it.each(["shared-create.example", "division.shared-create.example"])(
-    "holds the selected domain %s for the new application until approval",
-    async (domain) => {
+  it.each(["first", "second"])(
+    "joins the %s member organization a person chooses on a shared domain",
+    async (choice) => {
       const testEnv = makeEnv();
-      const member = await insertOrganization(testEnv.DB, "Existing Member");
-      await seedOrganizationAggregate(testEnv.DB, member, "A");
+      const first = await insertOrganization(testEnv.DB, "First Organization");
+      const second = await insertOrganization(testEnv.DB, "Second Organization");
+      await seedOrganizationAggregate(testEnv.DB, first, "A");
+      await seedOrganizationAggregate(testEnv.DB, second, "A");
+      const claimId = crypto.randomUUID();
       const at = nowIso();
-      await testEnv.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
-        VALUES (?,'shared-create.example',?,?,?)`)
-        .bind(crypto.randomUUID(), member, at, at)
-        .run();
-      const token = await startAndMaterializeVerification(testEnv, "person@division.shared-create.example");
-      const initial = memberJoinVerifyResponseSchema.parse(
-        await (await postJson(testEnv, "/api/v1/members/join/verify", { token })).json(),
-      );
-      expect(initial.status).toBe("organization_selection_required");
-      const choice = memberJoinVerifyResponseSchema.parse(
-        await (await postJson(testEnv, "/api/v1/members/join/verify", { token, domain })).json(),
-      );
-      expect(choice.status).toBe("organization_selection_required");
-      const result = await postJson(testEnv, "/api/v1/members/join/verify", {
-        token,
-        domain,
-        organizationName: "New Organization",
+      await testEnv.DB.batch([
+        testEnv.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
+        VALUES (?,'shared-join.example',?,?,?)`).bind(claimId, first, at, at),
+        testEnv.DB.prepare(
+          `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
+        ).bind(crypto.randomUUID(), claimId, second, at, at),
+      ]);
+      const token = await startAndMaterializeVerification(testEnv, "new-person@shared-join.example");
+      const firstResponse = await verifyJoin(testEnv, token);
+      const selection = memberJoinVerifyResponseSchema.parse(await firstResponse.json());
+      expect(selection).toMatchObject({ status: "organization_selection_required", domain: "shared-join.example" });
+      if (selection.status !== "organization_selection_required") throw new Error("Expected an organization choice");
+      expect(selection.organizations.map((item) => item.id).sort()).toEqual([first, second].sort());
+      expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toEqual([]);
+      const unrelated = await insertOrganization(testEnv.DB, "Unrelated Organization");
+      const forged = await postJson(testEnv, "/api/v1/members/join/verify", { token, organizationId: unrelated });
+      expect(forged.status).toBe(409);
+      expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toEqual([]);
+      const selected = choice === "first" ? first : second;
+      const response = await postJson(testEnv, "/api/v1/members/join/verify", { token, organizationId: selected });
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(memberJoinVerifyResponseSchema.parse(await response.json())).toMatchObject({
+        status: "organization_access_ready",
       });
-      expect(result.status, await result.clone().text()).toBe(200);
-      const continuation = memberJoinVerifyResponseSchema.parse(await result.json());
-      if (continuation.status !== "application_ready") throw new Error(`Unexpected ${continuation.status}`);
-      const application = await postJson(testEnv, "/api/v1/members/applications", {
-        applicantEmail: continuation.applicantEmail,
-        applicantName: "Synthetic Applicant",
-        membershipCategory: "F",
-        organizationName: "New Organization",
-        joinToken: continuation.joinToken,
-        answers: {
-          reason: "Apply for membership.",
-          ...requiredMembershipApplicationAnswers,
-          ...membershipApplicationDescriptionAnswers("F"),
-        },
-      });
-      expect(application.status, await application.clone().text()).toBe(201);
       expect(
         await queryAll(
           testEnv.DB,
-          `SELECT organization.name FROM organization_domain_claims claim
-        JOIN organizations organization ON organization.id=claim.organization_id WHERE claim.domain=? ORDER BY organization.name`,
-          [domain],
+          `SELECT identity.organization_id FROM identities identity JOIN users person
+      ON person.id=identity.user_id WHERE person.normalized_email=? AND identity.organization_id IS NOT NULL`,
+          ["new-person@shared-join.example"],
         ),
-      ).toEqual(domain === "shared-create.example" ? [{ name: "Existing Member" }] : []);
+      ).toEqual([{ organization_id: selected }]);
     },
   );
-
-  it("asks a new organization to choose between an unclaimed parent domain and subdomain", async () => {
-    const testEnv = makeEnv();
-    const email = "person@division.unclaimed-company.example";
-    const token = await startAndMaterializeVerification(testEnv, email);
-    const response = memberJoinVerifyResponseSchema.parse(
-      await (await postJson(testEnv, "/api/v1/members/join/verify", { token })).json(),
-    );
-    if (response.status !== "organization_selection_required") throw new Error(`Unexpected ${response.status}`);
-    expect(response.organizations).toEqual([]);
-    expect(response.affiliation.domains.map((item) => item.domain)).toEqual(
-      expect.arrayContaining(["unclaimed-company.example", "division.unclaimed-company.example"]),
-    );
-    const confirmed = memberJoinVerifyResponseSchema.parse(
-      await (
-        await postJson(testEnv, "/api/v1/members/join/verify", {
-          token,
-          organizationName: "New Division",
-          domain: "division.unclaimed-company.example",
-        })
-      ).json(),
-    );
-    if (confirmed.status !== "application_ready") throw new Error(`Unexpected ${confirmed.status}`);
-    const application = await postJson(testEnv, "/api/v1/members/applications", {
-      applicantEmail: email,
-      applicantName: "Synthetic Applicant",
-      membershipCategory: "F",
-      organizationName: "New Division",
-      joinToken: confirmed.joinToken,
-      answers: {
-        reason: "Apply for membership.",
-        ...requiredMembershipApplicationAnswers,
-        ...membershipApplicationDescriptionAnswers("F"),
-      },
-    });
-    expect(application.status, await application.clone().text()).toBe(201);
-    expect(
-      await queryAll(
-        testEnv.DB,
-        `SELECT organization.name FROM organization_domain_claims claim
-      JOIN organizations organization ON organization.id=claim.organization_id WHERE claim.domain=?`,
-        ["division.unclaimed-company.example"],
-      ),
-    ).toEqual([]);
-  });
-
-  it("keeps a new organization provisional when an unrelated claimant appears before application submission", async () => {
-    const testEnv = makeEnv();
-    const member = await insertOrganization(testEnv.DB, "Existing Member");
-    const newcomer = await insertOrganization(testEnv.DB, "Concurrent Organization");
-    await seedOrganizationAggregate(testEnv.DB, member, "A");
-    const claimId = crypto.randomUUID();
-    const at = nowIso();
-    await testEnv.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
-      VALUES (?,'race-create.example',?,?,?)`)
-      .bind(claimId, member, at, at)
-      .run();
-    const token = await startAndMaterializeVerification(testEnv, "person@race-create.example");
-    const response = await postJson(testEnv, "/api/v1/members/join/verify", {
-      token,
-      domain: "race-create.example",
-      organizationName: "New Organization",
-    });
-    const continuation = memberJoinVerifyResponseSchema.parse(await response.json());
-    if (continuation.status !== "application_ready") throw new Error(`Unexpected ${continuation.status}`);
-    await testEnv.DB.prepare(
-      `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
-    )
-      .bind(crypto.randomUUID(), claimId, newcomer, at, at)
-      .run();
-    const application = await postJson(testEnv, "/api/v1/members/applications", {
-      applicantEmail: continuation.applicantEmail,
-      applicantName: "Synthetic Applicant",
-      membershipCategory: "F",
-      organizationName: "New Organization",
-      joinToken: continuation.joinToken,
-      answers: {
-        reason: "Apply for membership.",
-        ...requiredMembershipApplicationAnswers,
-        ...membershipApplicationDescriptionAnswers("F"),
-      },
-    });
-    expect(application.status, await application.clone().text()).toBe(201);
-    expect(await queryAll(testEnv.DB, "SELECT id FROM organizations WHERE name=?", ["New Organization"])).toEqual([]);
-    expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(1);
-  });
-
-  it("asks for a choice when another organization is known from a verified affiliation", async () => {
-    const testEnv = makeEnv();
-    const member = await insertOrganization(testEnv.DB, "Member Organization");
-    const other = await insertOrganization(testEnv.DB, "Other Organization");
-    await seedOrganizationAggregate(testEnv.DB, member, "A");
-    const at = nowIso();
-    const otherUser = await insertUser(testEnv.DB, "other@derived-shared.example");
-    await testEnv.DB.batch([
-      testEnv.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
-        VALUES (?,'derived-shared.example',?,?,?)`).bind(crypto.randomUUID(), member, at, at),
-      testEnv.DB.prepare(`INSERT INTO identities(id,user_id,organization_id,verified_email_domain,source,invited_at,started_at,created_at,updated_at)
-        VALUES (?,?,?,'derived-shared.example','verified_email',?,?,?,?)`).bind(
-        crypto.randomUUID(),
-        otherUser,
-        other,
-        at,
-        at,
-        at,
-        at,
-      ),
-    ]);
-    const token = await startAndMaterializeVerification(testEnv, "person@derived-shared.example");
-    const selection = memberJoinVerifyResponseSchema.parse(await (await verifyJoin(testEnv, token)).json());
-    expect(selection.status).toBe("organization_selection_required");
-    if (selection.status !== "organization_selection_required") throw new Error("Expected an organization choice");
-    expect(selection.organizations.map((item) => item.id).sort()).toEqual([member, other].sort());
-    expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toEqual([]);
-    const selected = memberJoinVerifyResponseSchema.parse(
-      await (await postJson(testEnv, "/api/v1/members/join/verify", { token, organizationId: other })).json(),
-    );
-    if (selected.status !== "application_ready") throw new Error(`Unexpected ${selected.status}`);
-    const application = await postJson(testEnv, "/api/v1/members/applications", {
-      applicantEmail: selected.applicantEmail,
-      applicantName: "Synthetic Applicant",
-      membershipCategory: "F",
-      organizationName: "Other Organization",
-      joinToken: selected.joinToken,
-      answers: {
-        reason: "Apply for membership.",
-        ...requiredMembershipApplicationAnswers,
-        ...membershipApplicationDescriptionAnswers("F"),
-      },
-    });
-    expect(application.status, await application.clone().text()).toBe(201);
-  });
 
   it("rolls back a join when domain authority disappears after the shared preflight", async () => {
     const testEnv = makeEnv();
@@ -569,7 +314,7 @@ describe("verified-email-first membership join", () => {
     );
   });
 
-  it("does not grant membership when a second organization claims the domain during verification", async () => {
+  it("keeps the confirmed organization when a second organization claims the domain during verification", async () => {
     const testEnv = makeEnv();
     const first = await insertOrganization(testEnv.DB, "First Organization");
     const second = await insertOrganization(testEnv.DB, "Second Organization");
@@ -593,16 +338,14 @@ describe("verified-email-first membership join", () => {
           .run(),
     );
     const result = await verifyJoin({ ...testEnv, DB: racingDb }, token);
-    expect(result.status).toBe(409);
-    expect(
-      await queryAll(testEnv.DB, "SELECT id FROM users WHERE normalized_email=?", ["person@shared-race.example"]),
-    ).toEqual([]);
-    expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toEqual([]);
-    const retry = memberJoinVerifyResponseSchema.parse(await (await verifyJoin(testEnv, token)).json());
-    expect(retry.status).toBe("organization_selection_required");
+    expect(result.status, await result.clone().text()).toBe(200);
+    expect(await result.json()).toMatchObject({
+      status: "organization_access_ready",
+      member: { organizationId: first },
+    });
   });
 
-  it("requires a new choice if another verified affiliation appears during verification", async () => {
+  it("keeps the confirmed organization when another organization's person appears during verification", async () => {
     const testEnv = makeEnv();
     const first = await insertOrganization(testEnv.DB, "First Organization");
     const second = await insertOrganization(testEnv.DB, "Second Organization");
@@ -624,9 +367,11 @@ describe("verified-email-first membership join", () => {
           .run(),
     );
     const result = await verifyJoin({ ...testEnv, DB: racingDb }, token);
-    expect(result.status, await result.clone().text()).toBe(409);
-    expect(await result.json()).toMatchObject({ error: { code: "ORGANIZATION_AFFILIATION_CHANGED" } });
-    expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toEqual([]);
+    expect(result.status, await result.clone().text()).toBe(200);
+    expect(await result.json()).toMatchObject({
+      status: "organization_access_ready",
+      member: { organizationId: first },
+    });
   });
 
   it("binds a verified secondary work mailbox to the same person instead of their primary personal mailbox", async () => {
@@ -882,47 +627,69 @@ describe("verified-email-first membership join", () => {
     expect(await queryAll(testEnv.DB, "SELECT id FROM user_emails WHERE user_id=?", [userId])).toEqual([]);
   });
 
-  it("binds a previously verified secondary alias to the same canonical applicant", async () => {
+  it("finds the open application of a parent organization chosen from a subdomain address", async () => {
     const testEnv = makeEnv();
-    const userId = await insertUser(testEnv.DB, "canonical-applicant@example.test");
-    await testEnv.DB.prepare(
-      `INSERT INTO user_emails
-         (id, user_id, email, normalized_email, verified_at, verification_method, created_at)
-       VALUES (?, ?, ?, ?, datetime('now'), 'staff', datetime('now'))`,
-    )
-      .bind(
-        crypto.randomUUID(),
-        userId,
-        "verified-applicant@organization.example",
-        "verified-applicant@organization.example",
-      )
-      .run();
-    const verificationToken = await startAndMaterializeVerification(testEnv, "verified-applicant@organization.example");
-    const verification = memberJoinVerifyResponseSchema.parse(
-      await (await verifyJoin(testEnv, verificationToken)).json(),
-    );
-    if (verification.status !== "application_ready") throw new Error("Expected application capability");
-
-    const response = await postJson(testEnv, "/api/v1/members/applications", {
-      applicantEmail: verification.applicantEmail,
-      applicantName: "Verified Alias Applicant",
-      membershipCategory: "F",
-      organizationName: "Verified Alias Organization",
-      joinToken: verification.joinToken,
-      answers: {
-        reason: "Apply through a verified alias.",
-        ...requiredMembershipApplicationAnswers,
-        ...membershipApplicationDescriptionAnswers("F"),
-      },
+    const parent = await insertOrganization(testEnv.DB, "Parent Join Org");
+    const department = await insertOrganization(testEnv.DB, "Department Join Org");
+    const applicationId = await seedMemberApplication({
+      applicantEmail: "lead@parent-join.example",
+      organizationDomain: "parent-join.example",
+      stage: "processing",
     });
+    await testEnv.DB.batch([
+      testEnv.DB.prepare(
+        "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
+      ).bind(crypto.randomUUID(), "parent-join.example", parent, nowIso(), nowIso()),
+      // The address's most specific claim belongs to another organization.
+      testEnv.DB.prepare(
+        "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
+      ).bind(crypto.randomUUID(), "dept.parent-join.example", department, nowIso(), nowIso()),
+      testEnv.DB.prepare("UPDATE member_applications SET organization_id=? WHERE id=?").bind(parent, applicationId),
+    ]);
+    const token = await startAndMaterializeVerification(testEnv, "person@dept.parent-join.example");
+    const verification = memberJoinVerifyResponseSchema.parse(
+      await (
+        await postJson(testEnv, "/api/v1/members/join/verify", {
+          token,
+          domain: "parent-join.example",
+          organizationId: parent,
+        })
+      ).json(),
+    );
+    expect(verification).toEqual({ status: "organization_application_in_progress" });
+  });
 
-    expect(response.status).toBe(201);
+  it("joins a parent member organization from a subdomain claimed by another organization", async () => {
+    const testEnv = makeEnv();
+    const parent = await insertOrganization(testEnv.DB, "Parent Member Org");
+    const memberId = await seedOrganizationAggregate(testEnv.DB, parent, "A");
+    const department = await insertOrganization(testEnv.DB, "Department Member Org");
+    await testEnv.DB.batch([
+      testEnv.DB.prepare(
+        "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
+      ).bind(crypto.randomUUID(), "parent-member.example", parent, nowIso(), nowIso()),
+      // The address's most specific claim belongs to another organization.
+      testEnv.DB.prepare(
+        "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
+      ).bind(crypto.randomUUID(), "dept.parent-member.example", department, nowIso(), nowIso()),
+    ]);
+    const token = await startAndMaterializeVerification(testEnv, "person@dept.parent-member.example");
+    const response = await postJson(testEnv, "/api/v1/members/join/verify", {
+      token,
+      domain: "parent-member.example",
+      organizationId: parent,
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(memberJoinVerifyResponseSchema.parse(await response.json())).toMatchObject({
+      status: "organization_access_ready",
+      member: { memberId },
+    });
     expect(
-      await queryAll<{ applicant_user_id: string | null; applicant_email: string }>(
+      await queryAll(
         testEnv.DB,
-        "SELECT applicant_user_id, applicant_email FROM member_applications",
+        "SELECT organization_id FROM identities WHERE organization_id IS NOT NULL AND ended_at IS NULL",
       ),
-    ).toEqual([{ applicant_user_id: userId, applicant_email: "verified-applicant@organization.example" }]);
+    ).toEqual([{ organization_id: parent }]);
   });
 
   it("tells an applicant about their open application before the form, with a working status link", async () => {
@@ -932,6 +699,17 @@ describe("verified-email-first membership join", () => {
       organizationDomain: "acmegrp.example.com",
       stage: "processing",
     });
+    // The applicant's email challenge linked the organization to its domain; the application names it by id.
+    const organizationId = await insertOrganization(testEnv.DB, "Example Org");
+    await testEnv.DB.batch([
+      testEnv.DB.prepare(
+        "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
+      ).bind(crypto.randomUUID(), "acmegrp.example.com", organizationId, nowIso(), nowIso()),
+      testEnv.DB.prepare("UPDATE member_applications SET organization_id=? WHERE id=?").bind(
+        organizationId,
+        applicationId,
+      ),
+    ]);
     const verification = memberJoinVerifyResponseSchema.parse(
       await (
         await verifyJoin(testEnv, await startAndMaterializeVerification(testEnv, "jane@acmegrp.example.com"), {
@@ -956,18 +734,14 @@ describe("verified-email-first membership join", () => {
       verifyApplicationManageToken(testEnv.DB, applicationId, statusLink.searchParams.get("token")!),
     ).resolves.toBeNull();
 
-    // A colleague can choose another organization, while the pending organization keeps its application.
+    // A colleague choosing the same organization learns that it already has an open application.
     const colleagueToken = await startAndMaterializeVerification(testEnv, "omar@acmegrp.example.com");
-    const colleague = memberJoinVerifyResponseSchema.parse(
-      await (await postJson(testEnv, "/api/v1/members/join/verify", { token: colleagueToken })).json(),
-    );
-    expect(colleague.status).toBe("organization_selection_required");
     const sameOrganization = memberJoinVerifyResponseSchema.parse(
       await (
         await postJson(testEnv, "/api/v1/members/join/verify", {
           token: colleagueToken,
           domain: "acmegrp.example.com",
-          organizationName: "Example Org",
+          organizationId,
         })
       ).json(),
     );
@@ -977,9 +751,6 @@ describe("verified-email-first membership join", () => {
     await testEnv.DB.prepare("UPDATE member_applications SET stage = 'withdrawn' WHERE id = ?")
       .bind(applicationId)
       .run();
-    await testEnv.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id = ?")
-      .bind(applicationId)
-      .run();
     const again = memberJoinVerifyResponseSchema.parse(
       await (
         await verifyJoin(testEnv, await startAndMaterializeVerification(testEnv, "jane@acmegrp.example.com"), {
@@ -987,97 +758,13 @@ describe("verified-email-first membership join", () => {
         })
       ).json(),
     );
-    expect(again.status).toBe("organization_selection_required");
-  });
-
-  it("lets another organization apply on a domain with a pending application", async () => {
-    const testEnv = makeEnv();
-    const pending = await seedMemberApplication({
-      applicantEmail: "owner@pending-shared.example",
-      organizationName: "Pending Organization",
-      organizationDomain: "pending-shared.example",
-      stage: "processing",
-    });
-    const token = await startAndMaterializeVerification(testEnv, "person@pending-shared.example");
-    const selection = memberJoinVerifyResponseSchema.parse(
-      await (await postJson(testEnv, "/api/v1/members/join/verify", { token })).json(),
-    );
-    expect(selection.status).toBe("organization_selection_required");
-    const ready = memberJoinVerifyResponseSchema.parse(
-      await (
-        await postJson(testEnv, "/api/v1/members/join/verify", {
-          token,
-          domain: "pending-shared.example",
-          organizationName: "Different Organization",
-        })
-      ).json(),
-    );
-    if (ready.status !== "application_ready") throw new Error(`Unexpected ${ready.status}`);
-    const submitted = await postJson(testEnv, "/api/v1/members/applications", {
-      applicantEmail: ready.applicantEmail,
-      applicantName: "Synthetic Applicant",
-      membershipCategory: "F",
-      organizationName: "Different Organization",
-      joinToken: ready.joinToken,
-      answers: {
-        reason: "Apply for membership.",
-        ...requiredMembershipApplicationAnswers,
-        ...membershipApplicationDescriptionAnswers("F"),
-      },
-    });
-    expect(submitted.status, await submitted.clone().text()).toBe(201);
-    expect(
-      await queryAll(
-        testEnv.DB,
-        "SELECT application_id FROM organization_domain_claims WHERE domain=? AND application_id IS NOT NULL",
-        ["pending-shared.example"],
-      ),
-    ).toEqual(expect.arrayContaining([{ application_id: pending }, { application_id: expect.any(String) }]));
-    expect(
-      await queryAll(testEnv.DB, "SELECT application_id FROM organization_domain_claims WHERE domain=?", [
-        "pending-shared.example",
-      ]),
-    ).toHaveLength(2);
-    expect(await queryAll(testEnv.DB, "SELECT id FROM organizations WHERE name=?", ["Different Organization"])).toEqual(
-      [],
-    );
-  });
-
-  it("requires member approval while another application uses the domain", async () => {
-    const testEnv = makeEnv();
-    const pending = await seedMemberApplication({
-      applicantEmail: "owner@pending-member.example",
-      organizationName: "Pending Organization",
-      organizationDomain: "pending-member.example",
-      stage: "processing",
-    });
-    const member = await insertOrganization(testEnv.DB, "Existing Member");
-    await seedOrganizationAggregate(testEnv.DB, member, "A");
-    const root = await testEnv.DB.prepare("SELECT id FROM organization_domain_claims WHERE application_id=?")
-      .bind(pending)
-      .first<string>("id");
-    const at = nowIso();
-    await testEnv.DB.prepare(
-      `INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,(SELECT domain FROM organization_domain_claims WHERE id=?),?,?,?)`,
-    )
-      .bind(crypto.randomUUID(), root, member, at, at)
-      .run();
-    const token = await startAndMaterializeVerification(testEnv, "person@pending-member.example");
-    const first = memberJoinVerifyResponseSchema.parse(
-      await (await postJson(testEnv, "/api/v1/members/join/verify", { token })).json(),
-    );
-    expect(first).toMatchObject({ status: "organization_selection_required", organizations: [{ id: member }] });
-    const response = await postJson(testEnv, "/api/v1/members/join/verify", { token, organizationId: member });
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(memberJoinVerifyResponseSchema.parse(await response.json())).toMatchObject({
-      status: "support_required",
-    });
+    expect(again).toMatchObject({ status: "application_ready", organizationName: "Example Org" });
   });
 
   it("does not create an application when another account claims the verified email before the atomic write", async () => {
     const testEnv = makeEnv();
-    const email = "person@ownership-race.example";
-    const token = await startAndMaterializeVerification(testEnv, email);
+    const email = "ownership-race@gmail.com";
+    const token = await startAndMaterializeVerification(testEnv, email, true);
     const ready = memberJoinVerifyResponseSchema.parse(await (await verifyJoin(testEnv, token)).json());
     if (ready.status !== "application_ready") throw new Error(`Unexpected ${ready.status}`);
     const racingDb = mutateBeforeMatchingQuery(
@@ -1088,61 +775,17 @@ describe("verified-email-first membership join", () => {
     const response = await postJson({ ...testEnv, DB: racingDb }, "/api/v1/members/applications", {
       applicantEmail: email,
       applicantName: "Synthetic Applicant",
-      membershipCategory: "F",
-      organizationName: "Ownership Race Organization",
+      membershipCategory: "H6",
       joinToken: ready.joinToken,
       answers: {
         reason: "Apply for membership.",
         ...requiredMembershipApplicationAnswers,
-        ...membershipApplicationDescriptionAnswers("F"),
+        ...membershipApplicationDescriptionAnswers("H6"),
       },
     });
     expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "MEMBER_JOIN_CONTEXT_CHANGED" } });
     expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications WHERE applicant_email=?", [email])).toEqual(
-      [],
-    );
-  });
-
-  it("rejects a new membership application when a pending organization changes after selection", async () => {
-    const testEnv = makeEnv();
-    const pending = await seedMemberApplication({
-      applicantEmail: "owner@pending-race.example",
-      organizationDomain: "pending-race.example",
-      organizationName: "Pending Organization",
-    });
-    const token = await startAndMaterializeVerification(testEnv, "person@pending-race.example");
-    const ready = memberJoinVerifyResponseSchema.parse(
-      await (
-        await postJson(testEnv, "/api/v1/members/join/verify", {
-          token,
-          domain: "pending-race.example",
-          organizationName: "Different Organization",
-        })
-      ).json(),
-    );
-    if (ready.status !== "application_ready") throw new Error(`Unexpected ${ready.status}`);
-    const racingDb = mutateBeforeMatchingQuery(
-      testEnv.DB,
-      (sql) => sql.includes("INSERT INTO users"),
-      () =>
-        testEnv.DB.prepare("UPDATE member_applications SET organization_name=?,updated_at=? WHERE id=?")
-          .bind("Different Organization", "2099-01-01T00:00:00.000Z", pending)
-          .run(),
-    );
-    const response = await postJson({ ...testEnv, DB: racingDb }, "/api/v1/members/applications", {
-      applicantEmail: ready.applicantEmail,
-      applicantName: "Synthetic Applicant",
-      membershipCategory: "F",
-      organizationName: "Different Organization",
-      joinToken: ready.joinToken,
-      answers: {
-        reason: "Apply for membership.",
-        ...requiredMembershipApplicationAnswers,
-        ...membershipApplicationDescriptionAnswers("F"),
-      },
-    });
-    expect(response.status).toBe(409);
-    expect(await queryAll(testEnv.DB, "SELECT id FROM organizations WHERE name=?", ["Different Organization"])).toEqual(
       [],
     );
   });
@@ -1258,71 +901,6 @@ describe("verified-email-first membership join", () => {
     // The open application already refuses the replay before the spent capability does.
     await expect(replay.json()).resolves.toMatchObject({ error: { code: "APPLICATION_ALREADY_PENDING" } });
     expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(1);
-  });
-
-  it("binds an existing primary-email applicant to the canonical user instead of the email string", async () => {
-    const testEnv = makeEnv();
-    const userId = await insertUser(testEnv.DB, "existing-applicant@organization.example");
-    const verificationToken = await startAndMaterializeVerification(testEnv, "existing-applicant@organization.example");
-    const verification = memberJoinVerifyResponseSchema.parse(
-      await (await verifyJoin(testEnv, verificationToken)).json(),
-    );
-    if (verification.status !== "application_ready") throw new Error("Expected application capability");
-
-    const response = await postJson(testEnv, "/api/v1/members/applications", {
-      applicantEmail: verification.applicantEmail,
-      applicantName: "Existing Applicant",
-      membershipCategory: "F",
-      organizationName: "Existing Applicant Organization",
-      joinToken: verification.joinToken,
-      answers: {
-        reason: "Apply through the verified canonical identity.",
-        ...requiredMembershipApplicationAnswers,
-        ...membershipApplicationDescriptionAnswers("F"),
-      },
-    });
-    expect(response.status).toBe(201);
-    expect(
-      await queryAll<{ applicant_user_id: string | null; applicant_email: string }>(
-        testEnv.DB,
-        "SELECT applicant_user_id, applicant_email FROM member_applications",
-      ),
-    ).toEqual([
-      {
-        applicant_user_id: userId,
-        applicant_email: "existing-applicant@organization.example",
-      },
-    ]);
-  });
-
-  it("rolls back an application when its verified canonical identity changes before commit", async () => {
-    const testEnv = makeEnv();
-    const userId = await insertUser(testEnv.DB, "application-race@organization.example");
-    const racingDb = mutateBeforeNextBatch(testEnv.DB, () =>
-      testEnv.DB.prepare("UPDATE users SET email = ?, normalized_email = ?, updated_at = ? WHERE id = ?")
-        .bind("changed@organization.example", "changed@organization.example", new Date().toISOString(), userId)
-        .run(),
-    );
-
-    await expect(
-      createMemberApplication(racingDb, {
-        applicantEmail: "application-race@organization.example",
-        applicantName: "Application Race",
-        membershipCategory: "F",
-        organizationName: "Application Race Organization",
-        answers: {
-          reason: "Race the verified account binding.",
-          ...requiredMembershipApplicationAnswers,
-          ...membershipApplicationDescriptionAnswers("F"),
-        },
-        appBaseUrl: "https://app.test",
-        joinCapabilityId: crypto.randomUUID(),
-        applicantKind: "organization",
-        applicantUserId: userId,
-      }),
-    ).rejects.toMatchObject({ status: 409, code: "MEMBER_JOIN_CONTEXT_CHANGED" });
-    expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toEqual([]);
-    expect(await queryAll(testEnv.DB, "SELECT id FROM form_submissions")).toEqual([]);
   });
 
   it("does not let a verified capability authorize a different mailbox or category kind", async () => {

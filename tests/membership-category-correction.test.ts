@@ -123,12 +123,14 @@ it.each([
 );
 
 it.each([
-  { position: 1, category: "A", rename: true, completed: false },
-  { position: 1, category: "A", rename: true, completed: true },
-  { position: 2, category: "H6", rename: false, completed: true },
+  { position: 1, category: "A", rename: true, completed: false, organizationName: undefined },
+  { position: 1, category: "A", rename: true, completed: true, organizationName: undefined },
+  { position: 2, category: "H6", rename: false, completed: true, organizationName: undefined },
+  // An individual category drops the organization link even when the same patch sends another organization name.
+  { position: 2, category: "H6", rename: false, completed: true, organizationName: "Different Organization" },
 ])(
-  "restarts review for category $category with other changes (completed evidence: $completed)",
-  async ({ position, category, rename, completed }) => {
+  "restarts review for category $category with other changes (completed evidence: $completed, organization: $organizationName)",
+  async ({ position, category, rename, completed, organizationName }) => {
     const id = await reviewedApplication(position);
     if (!completed)
       await env.DB.prepare(
@@ -148,7 +150,11 @@ it.each([
     const response = await callApi(env, `/api/v1/members/applications/${id}`, {
       method: "PATCH",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ membershipCategory: category, ...(rename ? { applicantName: "Renamed Applicant" } : {}) }),
+      body: JSON.stringify({
+        membershipCategory: category,
+        ...(rename ? { applicantName: "Renamed Applicant" } : {}),
+        ...(organizationName ? { organizationName } : {}),
+      }),
     });
     expect(response.status, await response.clone().text()).toBe(200);
     const restarted = await getMembershipExecution(env.DB, id);
@@ -189,8 +195,6 @@ it("restarts completed reviews when a category-only edit resolves a different or
   const id = await reviewedApplication(2, "sub.example.test");
   const before = await getMembershipExecution(env.DB, id);
   expect(before.application).toMatchObject({ organization_id: null, organization_domain: "sub.example.test" });
-  // Removing the explicit subdomain claim makes the resolver fall back to the registrable parent.
-  await env.DB.prepare("DELETE FROM organization_domain_claims WHERE application_id = ?").bind(id).run();
   const response = await callApi(env, `/api/v1/members/applications/${id}`, {
     method: "PATCH",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
@@ -202,9 +206,7 @@ it("restarts completed reviews when a category-only edit resolves a different or
   expect(restarted.generation).toBe(before.generation + 1);
   expect(restarted.application).toMatchObject({ membership_category: "A", organization_domain: "example.test" });
   expect(restarted.steps.every((step) => step.state === "waiting" && step.completed_at === null)).toBe(true);
-  expect(await queryAll(env.DB, "SELECT domain FROM organization_domain_claims WHERE application_id = ?", id)).toEqual([
-    { domain: "example.test" },
-  ]);
+  expect(await queryAll(env.DB, "SELECT id FROM organization_domain_claims")).toEqual([]);
   expect(
     await queryAll(
       env.DB,

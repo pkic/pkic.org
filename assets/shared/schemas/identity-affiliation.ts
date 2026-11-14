@@ -44,11 +44,11 @@ export const identityAffiliationPreviewResponseSchema = z.object({
         name: z.string(),
         identityId: databaseIdSchema.nullable(),
         jobTitle: organizationIdentityJobTitleSchema.nullable(),
+        /** The domain the organization claims when it is a parent domain or a subdomain of the address's own. */
+        domain: emailDomainNameSchema.nullable().default(null),
       }),
     )
     .max(256),
-  /** The selected work domain is reserved by a pending membership application. */
-  reviewRequired: z.boolean().optional(),
   contextToken: identityAffiliationContextSchema.optional(),
   identityId: databaseIdSchema.optional(),
 });

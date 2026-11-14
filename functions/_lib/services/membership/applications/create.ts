@@ -4,8 +4,12 @@
  * The route validates the transport envelope and rate limit. This service
  * owns the complete durable command: resolve and validate the active form,
  * create its normalized answer rows, create the application and initial
- * event, reserve an organization domain, enqueue the confirmation, and
- * write the audit record in one D1 transaction.
+ * event, enqueue the confirmation, and write the audit record in one D1
+ * transaction.
+ *
+ * An organization applies through the identity of the person who represents
+ * it: their email challenge already linked the organization and its domain,
+ * so an application only asks for membership and never holds a domain.
  */
 import { requireCategoryWorkflow, prepareMembershipWorkflowPin } from "../workflows/pinning";
 import { prepareQueueEmailStatement } from "../../../email/outbox";
@@ -29,11 +33,11 @@ import { prepareApplicationWorkingGroups, type ApplicationWorkingGroupRow } from
 import { prepareGlobalFormDefinition } from "../../forms/read";
 import { batchRows } from "../../../db/pagination";
 import { requireMembershipApplicationPolicyFields } from "../application-form";
-import { getOrganizationDomainClaimForEmail, prepareClaimDomainForApplication } from "../organization-domain-claims";
+import { organizationLinkDomain } from "../organization-domain-claims";
 import { prepareMembershipCategoryRead, requireMembershipCategoryResult } from "../categories";
 import { prepareMembershipWorkflowVersionRead } from "../workflows/catalog";
 import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
-import { mailboxKind, workEmailDomain } from "../../../email-domains/classification";
+import { mailboxKind } from "../../../email-domains/classification";
 import {
   APPLICATION_ALREADY_PENDING,
   APPLICATION_ALREADY_PENDING_MESSAGE,
@@ -41,6 +45,8 @@ import {
   INDIVIDUAL_ALREADY_MEMBER_MESSAGE,
   INDIVIDUAL_WHILE_REPRESENTING,
   ORGANIZATION_ALREADY_MEMBER,
+  ORGANIZATION_IDENTITY_REQUIRED,
+  ORGANIZATION_IDENTITY_REQUIRED_MESSAGE,
   individualWhileRepresentingMessage,
   organizationAlreadyMemberMessage,
   organizationApplicationPendingMessage,
@@ -59,18 +65,7 @@ import {
   isAuthorizationGuardFailure,
   isStateGuardFailure,
   prepareAuthorizationGuard,
-  prepareStateGuard,
 } from "../../../db/authorization-guard";
-import { verifiedEmailDomainResolutionEvidence } from "../../identities/verified-email-domain";
-import {
-  decodeDomainClaimsObservation,
-  domainClaimsObservationSelection,
-  domainClaimsObservationFingerprint,
-  observedDomainClaimsEvidence,
-} from "../../identities/affiliation-evidence";
-import { normalizeOrgName, ORGANIZATION_NAME_IN_USE_MESSAGE } from "../../../../../assets/shared/organization-name";
-import type { MemberJoinApplicationCapabilityPayload } from "../join/capabilities";
-import { first } from "../../../db/queries";
 
 /**
  * Refuses an application whose outcome is already decided before review: the
@@ -177,11 +172,13 @@ export interface CreateMemberApplicationInput {
   joinCapabilityId: string | null;
   applicantKind: "organization" | "individual";
   applicantUserId: string | null;
-  /** The identity a signed-in applicant applies as; its holding is rechecked when the application commits. */
+  /**
+   * The identity a signed-in applicant applies as; its holding is rechecked when the application commits.
+   * An organization application requires one.
+   */
   applicantIdentityId?: string | null;
   /** The organization of that identity, matched by id rather than by name. */
   organizationId?: string | null;
-  selectedOrganization?: MemberJoinApplicationCapabilityPayload["organization"];
   /**
    * Answers copied from that identity (title, first link, bio). They replace
    * whatever the request sent under those keys and are kept as the
@@ -215,10 +212,7 @@ export async function createMemberApplication(
   db: DatabaseLike,
   input: CreateMemberApplicationInput,
 ): Promise<CreateMemberApplicationResult> {
-  const selection = input.selectedOrganization;
-  const organizationId = selection?.id ?? input.organizationId;
-  if (selection && input.organizationName !== selection.name)
-    throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Confirm your organization again before applying.");
+  const organizationId = input.organizationId;
   const categoryRead = prepareMembershipCategoryRead(db, input.membershipCategory);
   const workflowRead = prepareMembershipWorkflowVersionRead(db, {
     sql: "SELECT workflow_version_id FROM membership_categories WHERE code = ?",
@@ -229,17 +223,12 @@ export async function createMemberApplication(
     sql: "SELECT ? AS code",
     bindings: [input.membershipCategory],
   });
-  const claimsRead = selection ? domainClaimsObservationSelection(input.applicantEmail) : null;
   const results = await db.batch([
     categoryRead.statement,
     workflowRead.statement,
     ...formRead.statements,
     groupsRead.statement,
-    ...(claimsRead ? [db.prepare(claimsRead.sql).bind(...claimsRead.bindings)] : []),
   ]);
-  const claims = selection ? decodeDomainClaimsObservation(results[3 + formRead.statements.length]) : [];
-  if (selection && (await domainClaimsObservationFingerprint(claims, selection)) !== selection.claimsFingerprint)
-    throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Confirm your organization again before applying.");
   const category = requireMembershipCategoryResult(categoryRead.decode(results[0]), input.membershipCategory);
   const workflow = await requireCategoryWorkflow(
     db,
@@ -247,6 +236,11 @@ export async function createMemberApplication(
     category.active && category.workflowVersionId ? workflowRead.decode(results[1]) : null,
   );
   const isIndividual = category.isIndividual;
+  if (!isIndividual && !(input.applicantIdentityId && organizationId))
+    throw new AppError(409, ORGANIZATION_IDENTITY_REQUIRED, ORGANIZATION_IDENTITY_REQUIRED_MESSAGE, {
+      formErrors: [ORGANIZATION_IDENTITY_REQUIRED_MESSAGE],
+      fieldErrors: {},
+    });
   const applicantPolicy = membershipApplicantPolicySchema(category, mailboxKind(input.applicantEmail)).safeParse({
     applicantEmail: input.applicantEmail,
     organizationName: input.organizationName ?? undefined,
@@ -305,15 +299,8 @@ export async function createMemberApplication(
     applicantUserId: input.applicantUserId,
     applicantEmail: input.applicantEmail,
   };
-  // An organization application holds the domain its address links through (normally the registrable domain).
-  const existingDomainClaim =
-    !isIndividual && !selection && input.applicantIdentityId
-      ? await getOrganizationDomainClaimForEmail(db, input.applicantEmail)
-      : null;
-  const organizationDomain = isIndividual
-    ? null
-    : (selection?.domain ?? existingDomainClaim?.domain ?? workEmailDomain(input.applicantEmail));
-  const newOrganizationName = !isIndividual && selection?.domain && !organizationId ? input.organizationName : null;
+  // A record of the domain the applicant's address links through; the application never claims it.
+  const organizationDomain = isIndividual ? null : await organizationLinkDomain(db, input.applicantEmail);
   const statusUrl = `${input.appBaseUrl}/application-status/?id=${encodeURIComponent(id)}&token=${encodeURIComponent(manageToken)}`;
 
   const applicantAccount = await prepareApplicantAccount(db, input);
@@ -321,22 +308,6 @@ export async function createMemberApplication(
   const statements: StatementLike[] = [
     ...(applicantAccount?.statements ?? []),
     ...prepareMembershipApplicationConflictGuards(db, conflictInput),
-    ...(organizationDomain && !selection?.domain && !input.applicantIdentityId
-      ? observedDomainClaimsEvidence(input.applicantEmail, []).map((evidence) => prepareStateGuard(db, evidence))
-      : []),
-    ...(selection
-      ? observedDomainClaimsEvidence(input.applicantEmail, claims, selection).map((evidence) =>
-          prepareStateGuard(db, evidence),
-        )
-      : []),
-    ...(newOrganizationName
-      ? [
-          prepareStateGuard(db, {
-            sql: "SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM organizations WHERE normalized_name=?)",
-            bindings: [normalizeOrgName(newOrganizationName)],
-          }),
-        ]
-      : []),
     ...(input.applicantUserId
       ? [
           prepareAuthorizationGuard(db, {
@@ -395,23 +366,6 @@ export async function createMemberApplication(
 
   statements.push(...prepareMembershipWorkflowPin(db, id, category, workflow, 1, now));
 
-  if (organizationDomain) {
-    if (organizationId && selection?.domain) {
-      const derived = verifiedEmailDomainResolutionEvidence(organizationDomain, organizationId, false, true);
-      statements.push(
-        prepareStateGuard(db, {
-          sql: `SELECT 1 FROM organizations organization WHERE organization.id=? AND organization.name=?
-          AND organization.merged_into_organization_id IS NULL AND (
-            EXISTS (SELECT 1 FROM organization_domain_claims claim WHERE claim.domain=?
-              AND claim.organization_id=organization.id AND claim.application_id IS NULL)
-            OR EXISTS (${derived.sql}))`,
-          bindings: [organizationId, input.organizationName, organizationDomain, ...derived.bindings],
-        }),
-      );
-    }
-    statements.push(prepareClaimDomainForApplication(db, organizationDomain, id, now));
-  }
-
   statements.push(
     db
       .prepare(
@@ -456,13 +410,6 @@ export async function createMemberApplication(
   } catch (error) {
     if (isStateGuardFailure(error)) {
       await refuseConflictingApplication(db, conflictInput);
-      if (
-        newOrganizationName &&
-        (await first(db, "SELECT id FROM organizations WHERE normalized_name=?", [
-          normalizeOrgName(newOrganizationName),
-        ]))
-      )
-        throw new AppError(409, "ORGANIZATION_NAME_IN_USE", ORGANIZATION_NAME_IN_USE_MESSAGE);
       throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Confirm your organization again before applying.");
     }
     if (isAuthorizationGuardFailure(error)) {

@@ -146,8 +146,7 @@ export async function buildApplicationApproval(
   const provisioning = await buildProvisionOrganizationMembership(db, {
     organizationName: isIndividual ? null : application.organization_name,
     organizationId: isIndividual ? null : application.organization_id,
-    organizationDomain: isIndividual ? null : application.organization_domain,
-    domainClaimApplicationId: isIndividual ? null : application.id,
+    // Approval grants membership only; the applicant's email challenge already linked the organization's domain.
     membershipCategory: application.membership_category,
     identities: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, links }],
     identitySource: "membership_approval",

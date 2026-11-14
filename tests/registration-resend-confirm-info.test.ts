@@ -231,7 +231,7 @@ describe("confirm-info endpoint", () => {
   });
 
   it.each(["shared claim", "pending application"])(
-    "rechecks only relevant organization evidence on confirmation (%s)",
+    "confirms the organization despite an unrelated change on its domain (%s)",
     async (change) => {
       await seedEventAndAdmin(env.DB);
       const { confirmationToken, registrationId } = await registerAttendee();
@@ -255,19 +255,17 @@ describe("confirm-info endpoint", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ token: confirmationToken, id: registrationId, organization }),
       });
-      const pending = change === "pending application";
-      expect(response.status, await response.clone().text()).toBe(pending ? 409 : 200);
-      if (pending) expect(await response.json()).toMatchObject({ error: { code: "ORGANIZATION_AFFILIATION_CHANGED" } });
+      expect(response.status, await response.clone().text()).toBe(200);
       const registration = await env.DB.prepare("SELECT status,registration_identity_id FROM registrations WHERE id=?")
         .bind(registrationId)
         .first<{ status: string; registration_identity_id: string | null }>();
-      expect(registration?.status).toBe(pending ? "pending_email_confirmation" : "registered");
-      expect(Boolean(registration?.registration_identity_id)).toBe(!pending);
+      expect(registration?.status).toBe("registered");
+      expect(registration?.registration_identity_id).toBeTruthy();
       expect(
         await env.DB.prepare("SELECT COUNT(*) AS total FROM organizations WHERE name=?")
           .bind(organization.name)
           .first(),
-      ).toMatchObject({ total: pending ? 0 : 1 });
+      ).toMatchObject({ total: 1 });
     },
   );
 

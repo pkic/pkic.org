@@ -25,6 +25,51 @@ beforeEach(resetDb);
 const consents = [{ termKey: "speaker-terms", version: "v1" }];
 
 describe("shared verified organization choice in a public proposal", () => {
+  it("never joins the organization of a single-organization domain without the person's confirmation", async () => {
+    await seedEventAndAdmin(env.DB);
+    const owner = await insertOrganization(env.DB, "Sole Organization");
+    const at = nowIso();
+    await env.DB.prepare(`INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at)
+      VALUES(?,'sole.example',?,?,?)`)
+      .bind(crypto.randomUUID(), owner, at, at)
+      .run();
+    const email = "new@sole.example";
+    const proof = await prepareProposalProof({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email,
+      consents,
+      unaffiliatedAttestation: false,
+    });
+    const saved = await callApi(env, "/api/v1/events/pqc-2026/proposals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(
+        proposalCreateSchema.parse({
+          ...proof,
+          proposer: {
+            email,
+            firstName: "Casey",
+            lastName: "Example",
+            organizationName: "Some Other Organization",
+            jobTitle: "Researcher",
+          },
+          proposal: {
+            type: "talk",
+            title: "An unconfirmed organization",
+            abstract:
+              "A synthetic proposal that verifies the shared organization chooser, subdomain selection, mailbox evidence, and guarded canonical identity creation across public event flows.",
+          },
+          consents,
+        }),
+      ),
+    });
+    expect(saved.status, await saved.clone().text()).toBe(409);
+    expect(await saved.json()).toMatchObject({ error: { code: "IDENTITY_CONTEXT_REQUIRED" } });
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE organization_id IS NOT NULL")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toEqual([]);
+  });
+
   it("reuses an approved owned representation while a domain application prevents new affiliations", async () => {
     await seedEventAndAdmin(env.DB);
     const email = "speaker@held-company.test";

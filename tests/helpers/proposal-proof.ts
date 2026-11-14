@@ -11,6 +11,10 @@ import type { Env } from "../../functions/_lib/types";
 import { callApi } from "./app";
 import { deliveredEmailPayload, queryAll } from "./context";
 import { withIndependentCapacity } from "./independent-capacity";
+import { identityAffiliationPrepareSchema } from "../../assets/shared/schemas/identity-affiliation";
+import { prepareVerifiedAffiliationRead } from "../../functions/_lib/services/identities/verified-affiliation-read";
+import { signEventAffiliationContext } from "../../functions/_lib/services/identities/event-affiliation-context";
+import { nowIso } from "../../functions/_lib/utils/time";
 
 async function mailedProofToken(environment: Env, payloadJson: string): Promise<string | null> {
   const delivered = await deliveredEmailPayload<{ verificationUrl: string }>(environment.DB, environment, payloadJson);
@@ -103,4 +107,49 @@ export async function selectIndividualSpeakerRepresentation(input: {
   const saved = speakerProfileUpdateResponseSchema.parse(result);
   expect(saved.currentRepresentation?.actingIdentitySelection).toBe("individual");
   expect(saved.currentRepresentation?.actingIdentityId).toBeNull();
+}
+
+/**
+ * The organization a person confirmed on the proposal or speaker screen: the same
+ * observation and signed context `/proof/verify` returns for a chosen organization.
+ */
+export async function confirmedProposalAffiliation(input: {
+  environment: Env;
+  eventId: string;
+  email: string;
+  userId: string;
+  organizationId?: string | null;
+  organizationName?: string;
+  domain?: string;
+  jobTitle: string;
+}): Promise<{ organizationName: string; jobTitle: string; organizationContextToken: string }> {
+  const db = input.environment.DB;
+  const read = prepareVerifiedAffiliationRead(
+    db,
+    input.userId,
+    { email: input.email, emailId: null, domain: input.domain, organizationName: input.organizationName },
+    { verifiedAt: nowIso() },
+  );
+  const observed = read.decode(await db.batch(read.statements));
+  const selection = identityAffiliationPrepareSchema.parse({
+    phase: "prepare",
+    email: input.email,
+    emailId: observed.address.id,
+    organizationId: input.organizationId ?? null,
+    organizationName: input.organizationId ? undefined : input.organizationName,
+    domain: input.domain,
+    jobTitle: input.jobTitle,
+  });
+  const organizationName = input.organizationId
+    ? observed.basis.organizations.find((organization) => organization.id === input.organizationId)!.name
+    : input.organizationName!;
+  return {
+    organizationName,
+    jobTitle: input.jobTitle,
+    organizationContextToken: await signEventAffiliationContext(
+      input.environment.INTERNAL_SIGNING_SECRET!,
+      { eventId: input.eventId, input: selection, basis: observed.basis },
+      "proposal-affiliation",
+    ),
+  };
 }

@@ -85,7 +85,7 @@ export async function assessIdentityDomain(
     `SELECT claim.organization_id
        FROM organization_domain_claims claim
        JOIN organizations organization ON organization.id = claim.organization_id
-      WHERE claim.domain = ? AND claim.organization_id IS NOT NULL AND claim.application_id IS NULL
+      WHERE claim.domain = ? AND claim.organization_id IS NOT NULL
       ORDER BY claim.organization_id
       LIMIT 2`,
     [domain],
@@ -135,7 +135,6 @@ export async function listVerifiedIdentityDomainMatches(
     email: string;
     domain: string;
     organization_id: string | null;
-    application_id: string | null;
   }>(
     db,
     `WITH verified_emails(email, domain) AS (
@@ -150,14 +149,14 @@ export async function listVerifiedIdentityDomainMatches(
         WHERE user_id = ? AND verified_at IS NOT NULL
           AND EXISTS (SELECT 1 FROM users person WHERE person.id = user_emails.user_id AND person.active = 1)
      )
-     SELECT verified.email, claim.domain, claim.organization_id, claim.application_id
+     SELECT verified.email, claim.domain, claim.organization_id
        FROM verified_emails verified
        JOIN organization_domain_claims claim ON ${governingDomainClaimSql("verified.domain")}
       ORDER BY verified.email, length(claim.domain) DESC`,
     [userId, userId],
   );
   return rows
-    .filter((row) => row.organization_id !== null && row.application_id === null)
+    .filter((row) => row.organization_id !== null)
     .filter((row) => organizationDomainCandidates(row.email).includes(row.domain))
     .sort(
       (left, right) =>

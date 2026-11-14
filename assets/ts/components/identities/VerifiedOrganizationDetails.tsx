@@ -154,7 +154,6 @@ export function VerifiedOrganizationDetails({
       {resolved.organizations.length === 0 ? (
         <VerifiedOrganizationNameField
           domain={domainConfirmed ? resolved.domain : ""}
-          reviewRequired={resolved.reviewRequired}
           value={organizationName}
           disabled={busy}
           onChange={setOrganizationName}
@@ -168,7 +167,7 @@ export function VerifiedOrganizationDetails({
             !domainConfirmed
               ? "Choose an email domain first, or use + to add your organization."
               : resolved.domain
-                ? `Organizations linked to your verified email domain, ${resolved.domain}, and organizations you already represent using this address are listed. Use + to add your organization if it is missing.`
+                ? `Organizations on your email address's domain, its parent domains and its subdomains are listed, as are organizations you already represent. Use + to add your organization if it is missing.`
                 : "Use + to add your organization."
           }
           {...detailsForm.of(organizationId ? "organizationId" : "organizationName")}
@@ -183,7 +182,7 @@ export function VerifiedOrganizationDetails({
               >
                 {resolved.organizations.map((organization) => (
                   <option key={organization.id} value={organization.id}>
-                    {organization.name}
+                    {organization.domain ? `${organization.name} (${organization.domain})` : organization.name}
                   </option>
                 ))}
                 <option value="" disabled={!organizationName}>

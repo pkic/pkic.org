@@ -7,7 +7,7 @@ import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertOrganization, insertUser } from "./helpers/membership";
-import { prepareProposalProof } from "./helpers/proposal-proof";
+import { confirmedProposalAffiliation, prepareProposalProof } from "./helpers/proposal-proof";
 import { resetDb } from "./helpers/reset-db";
 import { withIndependentCapacity } from "./helpers/independent-capacity";
 
@@ -106,18 +106,23 @@ describe("proposal contact capacity and identity", () => {
   });
 
   it("adds the verified work address and its domain's organization to the signed-in personal account", async () => {
-    await seedEventAndAdmin(env.DB);
+    const { eventId } = await seedEventAndAdmin(env.DB);
     const organizationId = await claimedOrganization();
     const { userId, session } = await signedInPersonalAccount();
     const before = await people();
     const proof = await proveWorkAddress("speaker@official.example", session);
     if (proof.status !== "ready") throw new Error(`Expected a ready proof, got ${proof.status}`);
     expect(proof.organization).toEqual({ id: organizationId, name: "Claimed Organization", jobTitle: null });
-    const submitted = await post(
-      "",
-      proposal(proof.continuationToken, false, { jobTitle: "Security engineer" }),
-      session,
-    );
+    // The person confirms the organization the work address resolves to, as the identity step does.
+    const confirmed = await confirmedProposalAffiliation({
+      environment: env,
+      eventId,
+      email: "speaker@official.example",
+      userId,
+      organizationId,
+      jobTitle: "Security engineer",
+    });
+    const submitted = await post("", proposal(proof.continuationToken, false, confirmed), session);
     expect(submitted.status, await submitted.clone().text()).toBe(200);
     const after = await people();
     expect(after.users).toEqual(before.users);

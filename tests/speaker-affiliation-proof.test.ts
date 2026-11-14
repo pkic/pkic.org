@@ -22,6 +22,7 @@ import { confirmSpeakerParticipation } from "../functions/_lib/services/proposal
 import { parseCapabilityToken } from "../functions/_lib/auth/capability-token";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { callApi } from "./helpers/app";
+import { confirmedProposalAffiliation } from "./helpers/proposal-proof";
 import { createMemberSession } from "./helpers/auth";
 import { seedEventAndAdmin, deliveredEmailPayload, queryAll } from "./helpers/context";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
@@ -114,6 +115,22 @@ async function proof(
       Math.floor(Date.now() / 1000) + 3600,
     ),
   };
+}
+
+/** The guest confirms the organization they represent, as the speaker screen does. */
+async function confirmed(
+  f: Awaited<ReturnType<typeof fixture>>,
+  organizationId: string,
+  { email = f.email, jobTitle = "Security engineer" }: { email?: string; jobTitle?: string } = {},
+) {
+  return confirmedProposalAffiliation({
+    environment: env,
+    eventId: f.eventId,
+    email,
+    userId: f.userId,
+    organizationId,
+    jobTitle,
+  });
 }
 
 /** A new affiliation on behalf of the organization carries the job title the contract requires. */
@@ -295,7 +312,7 @@ describe("speaker affiliation mailbox proof", () => {
     const response = await patch(f, {
       continuationToken: p.token,
       unaffiliatedAttestation: false,
-      jobTitle: "Verified speaker role",
+      ...(await confirmed(f, organizationId, { jobTitle: "Verified speaker role" })),
       firstName: "Duplicate name",
       lastName: "Duplicate surname",
     });
@@ -420,7 +437,11 @@ describe("speaker affiliation mailbox proof", () => {
     const organizationId = await claimedOrganization();
     const email = "guest@speaker-employer.example";
     const p = await proof(f, { email });
-    const response = await patch(f, { continuationToken: p.token, unaffiliatedAttestation: false });
+    const response = await patch(f, {
+      continuationToken: p.token,
+      unaffiliatedAttestation: false,
+      ...(await confirmed(f, organizationId, { email })),
+    });
     expect(response.status, await response.clone().text()).toBe(200);
     const address = await env.DB.prepare("SELECT id,user_id,verified_at FROM user_emails WHERE normalized_email=?")
       .bind(email)
@@ -659,12 +680,12 @@ describe("speaker affiliation mailbox proof", () => {
       kind === "individual" ? "individual-confirm@gmail.com" : "organization-confirm@speaker-employer.example",
       "pending",
     );
-    if (kind === "organization") await claimedOrganization();
+    const organizationId = kind === "organization" ? await claimedOrganization() : null;
     const p = await proof(f, { applicantKind: kind });
     const selected = await patch(f, {
       continuationToken: p.token,
       unaffiliatedAttestation: kind === "individual",
-      ...(kind === "individual" ? { actingIdentityId: null } : {}),
+      ...(organizationId ? await confirmed(f, organizationId) : { actingIdentityId: null }),
     });
     expect(selected.status, await selected.clone().text()).toBe(200);
     const response = await callApi(env, `${f.path}/participation`, {
@@ -706,9 +727,13 @@ describe("speaker affiliation mailbox proof", () => {
 
   it("rolls back confirmation if the selected organization identity ends after preflight", async () => {
     const f = await fixture("confirmation-race@speaker-employer.example", "pending");
-    await claimedOrganization();
+    const organizationId = await claimedOrganization();
     const p = await proof(f);
-    const selected = await patch(f, { continuationToken: p.token, unaffiliatedAttestation: false });
+    const selected = await patch(f, {
+      continuationToken: p.token,
+      unaffiliatedAttestation: false,
+      ...(await confirmed(f, organizationId)),
+    });
     expect(selected.status, await selected.clone().text()).toBe(200);
     const identityId = await env.DB.prepare("SELECT acting_identity_id FROM proposal_speakers WHERE id=?")
       .bind(f.speakerId)
@@ -736,9 +761,13 @@ describe("speaker affiliation mailbox proof", () => {
     "rolls back confirmation when active speaker terms are %s after preflight",
     async (change) => {
       const f = await fixture(`terms-${change}@speaker-employer.example`, "pending");
-      await claimedOrganization();
+      const organizationId = await claimedOrganization();
       const p = await proof(f);
-      const selected = await patch(f, { continuationToken: p.token, unaffiliatedAttestation: false });
+      const selected = await patch(f, {
+        continuationToken: p.token,
+        unaffiliatedAttestation: false,
+        ...(await confirmed(f, organizationId)),
+      });
       expect(selected.status, await selected.clone().text()).toBe(200);
       const before = await speakerState(f.speakerId);
       const sourceRevision = await getEventParticipantSourceRevision(env.DB, f.eventId, f.userId);

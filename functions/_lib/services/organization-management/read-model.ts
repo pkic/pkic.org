@@ -112,7 +112,7 @@ function toOrgSummary(row: OrgSummaryRow) {
 function organizationConnectionDomainsSql(organizationIdSql?: string) {
   const organization = (column: string) =>
     organizationIdSql ? `${column}=${organizationIdSql}` : `${column} IS NOT NULL`;
-  return `SELECT organization_id,domain FROM organization_domain_claims WHERE ${organization("organization_id")} AND application_id IS NULL
+  return `SELECT organization_id,domain FROM organization_domain_claims WHERE ${organization("organization_id")}
     UNION SELECT identity.organization_id,identity.verified_email_domain FROM identities identity JOIN users person ON person.id=identity.user_id
       WHERE ${organization("identity.organization_id")} AND person.active=1
         AND identity.verified_email_domain IS NOT NULL AND identity.source='verified_email'
@@ -291,7 +291,7 @@ async function fetchClaimedDomains(db: DatabaseLike, organizationId: string): Pr
   const rows = await all<{ domain: string }>(
     db,
     `SELECT domain FROM organization_domain_claims
-      WHERE organization_id = ? AND application_id IS NULL ORDER BY domain LIMIT ${EMAIL_DOMAIN_LIMIT}`,
+      WHERE organization_id = ? ORDER BY domain LIMIT ${EMAIL_DOMAIN_LIMIT}`,
     [organizationId],
   );
   return rows.map((row) => row.domain);

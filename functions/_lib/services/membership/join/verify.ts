@@ -12,11 +12,7 @@ import { workEmailDomain } from "../../../email-domains/classification";
 import { prepareOneTimeAuditLog } from "../../audit";
 import { prepareUserSession } from "../../../auth/user-session";
 import { AppError } from "../../../errors";
-import {
-  issueMemberJoinApplicationToken,
-  verifyMemberJoinVerificationToken,
-  type MemberJoinApplicationCapabilityPayload,
-} from "./capabilities";
+import { issueMemberJoinApplicationToken, verifyMemberJoinVerificationToken } from "./capabilities";
 import { resolveOpenJoinApplication } from "./open-application";
 import { readJoinVerification } from "./verification-read";
 import { prepareEligibleMemberRead } from "../../../auth/identity-capacities";
@@ -26,46 +22,24 @@ import {
   prepareAuthorizationGuard,
   prepareStateGuard,
 } from "../../../db/authorization-guard";
-import {
-  resolveDomainOrganization,
-  requiresMemberAffiliationReview,
-} from "../../../../../assets/shared/organization-domain";
-import { memberAffiliationApprovalEvidence } from "../../identities/verified-email-domain";
+import { resolveDomainOrganization } from "../../../../../assets/shared/organization-domain";
 import { verifiedAffiliationPreview } from "../../identities/verified-affiliation-preview";
-import {
-  domainClaimsObservationFingerprint,
-  observedDomainClaimsEvidence,
-  pendingOrganizationApplicationClaim,
-} from "../../identities/affiliation-evidence";
-import type { VerifiedAffiliationBasis } from "../../identities/verified-affiliation-basis";
+import { observedDomainClaimsEvidence } from "../../identities/affiliation-evidence";
 import { normalizeOrgName, ORGANIZATION_NAME_IN_USE_MESSAGE } from "../../../../../assets/shared/organization-name";
-
-async function applicationOrganizationSelection(basis: VerifiedAffiliationBasis, name: string, id?: string) {
-  return {
-    id,
-    name,
-    domain: basis.domain,
-    claimsFingerprint: await domainClaimsObservationFingerprint(basis.claims, { id, name, domain: basis.domain }),
-  };
-}
 
 async function issueApplicationContinuation(
   signingSecret: string,
   payload: Awaited<ReturnType<typeof verifyMemberJoinVerificationToken>>,
   ttlSeconds: number,
   applicantUserId: string | null,
-  organization?: MemberJoinApplicationCapabilityPayload["organization"],
+  organizationName?: string,
 ): Promise<MemberJoinVerifyResponse> {
   return {
     status: "application_ready",
     applicantEmail: payload.email,
     applicantKind: payload.applicantKind,
-    ...(organization ? { organizationName: organization.name } : {}),
-    joinToken: await issueMemberJoinApplicationToken(
-      signingSecret,
-      { ...payload, applicantUserId, organization },
-      ttlSeconds,
-    ),
+    ...(organizationName ? { organizationName } : {}),
+    joinToken: await issueMemberJoinApplicationToken(signingSecret, { ...payload, applicantUserId }, ttlSeconds),
   };
 }
 
@@ -121,8 +95,10 @@ export async function verifyMemberJoin(
   const organizations = facts
     ? observed.affiliation!.basis.organizations.filter((organization) => {
         const resolution = resolveDomainOrganization(facts, { organizationId: organization.id });
+        // The join links the address's own domain; a parent or subdomain organization is chosen when adding the identity.
         return (
           resolution.kind === "organization" &&
+          resolution.via !== "related" &&
           (capability.applicantKind === "organization" || observed.activeMemberOrganizationIds.has(organization.id))
         );
       })
@@ -136,14 +112,12 @@ export async function verifyMemberJoin(
       )
     )
       throw new AppError(409, "ORGANIZATION_NAME_IN_USE", ORGANIZATION_NAME_IN_USE_MESSAGE);
-    if (pendingOrganizationApplicationClaim(observed.affiliation.basis, input.organizationName, "name"))
-      return { status: "organization_application_in_progress" };
     return issueApplicationContinuation(
       input.signingSecret,
       capability,
       input.applicationTtlSeconds,
       provedUserId,
-      await applicationOrganizationSelection(observed.affiliation.basis, input.organizationName),
+      input.organizationName,
     );
   }
   if (input.organizationId && !organizations.some((organization) => organization.id === input.organizationId))
@@ -157,8 +131,7 @@ export async function verifyMemberJoin(
     !input.organizationId &&
     (organizations.length > 0 ||
       (capability.applicantKind === "organization" && input.domain) ||
-      (capability.applicantKind === "organization" &&
-        (facts.heldByApplication || affiliationPreview.domains.length > 1)))
+      (capability.applicantKind === "organization" && affiliationPreview.domains.length > 1))
   ) {
     return {
       status: "organization_selection_required",
@@ -175,9 +148,17 @@ export async function verifyMemberJoin(
     resolveDomainOrganization(facts).kind === "ambiguous"
   )
     return { status: "support_required" };
-  const domain = observed.claim?.domain ?? workEmailDomain(capability.email) ?? emailDomainOf(capability.email);
+  const domain =
+    (input.organizationId ? observed.selectedClaimDomain : null) ??
+    observed.claim?.domain ??
+    workEmailDomain(capability.email) ??
+    emailDomainOf(capability.email);
   const claimedMember = input.organizationId ? observed.member : null;
   if (!claimedMember) {
+    // One open application per organization, whether it was chosen or resolved from the domain.
+    if (observed.openApplication.organizationOpen && capability.applicantKind === "organization") {
+      return { status: "organization_application_in_progress" };
+    }
     if (input.organizationId) {
       const selected = organizations.find((organization) => organization.id === input.organizationId);
       if (!selected || capability.applicantKind !== "organization" || !observed.affiliation)
@@ -187,20 +168,14 @@ export async function verifyMemberJoin(
         capability,
         input.applicationTtlSeconds,
         provedUserId,
-        await applicationOrganizationSelection(observed.affiliation.basis, selected.name, selected.id),
+        selected.name,
       );
-    }
-    if (observed.openApplication.organizationHeld && capability.applicantKind === "organization") {
-      return { status: "organization_application_in_progress" };
     }
     if (capability.applicantKind === "individual" && observed.state?.individual_conflict) {
       return { status: "support_required" };
     }
     return issueApplicationContinuation(input.signingSecret, capability, input.applicationTtlSeconds, provedUserId);
   }
-
-  if (facts && requiresMemberAffiliationReview(facts, claimedMember.organization_id))
-    return { status: "support_required" };
 
   const preparedUser = await buildFindOrCreateUserStatement(
     db,
@@ -243,7 +218,6 @@ export async function verifyMemberJoin(
         name: organizations.find((organization) => organization.id === claimedMember.organization_id)!.name,
         domain,
       }).map((evidence) => prepareStateGuard(db, evidence)),
-      prepareStateGuard(db, memberAffiliationApprovalEvidence(domain, claimedMember.organization_id)),
       ...identity.statements,
       prepareAuditLog(
         db,

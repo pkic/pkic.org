@@ -4,10 +4,7 @@ import { z } from "zod";
 const observedDomainClaimSchema = z.object({
   id: z.string(),
   domain: z.string(),
-  applicationId: z.string().nullable(),
-  organizationId: z.string().nullable(),
-  applicationName: z.string().nullable().optional(),
-  applicationUpdatedAt: z.string().nullable().optional(),
+  organizationId: z.string(),
 });
 
 export const verifiedAffiliationBasisSchema = z.object({
@@ -15,19 +12,19 @@ export const verifiedAffiliationBasisSchema = z.object({
   claim: observedDomainClaimSchema.nullable(),
   claims: z.array(observedDomainClaimSchema).max(128),
   facts: z.object({
-    claimed: z.array(z.object({ organizationId: z.string(), isMember: z.boolean() })).max(128),
-    heldByApplication: z.boolean(),
+    claimed: z.array(z.object({ organizationId: z.string() })).max(128),
     derived: z
       .array(
         z.object({
           organizationId: z.string(),
-          isMember: z.boolean(),
           active: z.boolean(),
           disputed: z.boolean(),
           unknownProvenance: z.boolean(),
         }),
       )
       .max(256),
+    /** Claims on a parent domain or a subdomain of the address, open to an explicit choice. */
+    related: z.array(observedDomainClaimSchema).max(256),
   }),
   organizations: z
     .array(

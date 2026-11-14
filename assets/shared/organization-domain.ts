@@ -2,13 +2,17 @@
  * The one rule for which organization a verified email address belongs to.
  *
  * A verified work domain can support several explicitly confirmed organizations.
- * Automatic resolution remains conservative. A single approved claim may
- * identify an organization; without a claim, the one
- * non-member organization people already reached through a verified address
- * on the domain (a derived domain) does. Free, consumer and disposable
- * domains say nothing about an employer, so an address there is always
- * independent. A domain a pending membership application holds belongs to no
- * one yet.
+ * Automatic resolution remains conservative. A single claim identifies an
+ * organization; without a claim, the one organization people already reached
+ * through a verified address on the domain (a derived domain) does. A person
+ * may also choose an organization claiming a parent of their address's domain
+ * or a subdomain below it, within the registrable domain, but never a sibling:
+ * an address at council.europa.eu reaches europa.eu, not parliament.europa.eu. A person's
+ * email challenge is what links an organization to its domain, and that claim
+ * stays until someone removes it. Membership plays no part: a member
+ * organization and any other organization resolve alike. Free, consumer and
+ * disposable domains say nothing about an employer, so an address there is
+ * always independent.
  *
  * Which domain an address speaks for — its registrable domain, or a more
  * specific subdomain an organization claims explicitly — and which domains are
@@ -23,7 +27,6 @@
 
 export interface DomainOrganizationCandidate {
   organizationId: string;
-  isMember: boolean;
 }
 
 /** An organization people already reached through a verified address on the domain. */
@@ -37,20 +40,18 @@ export interface DerivedDomainFact extends DomainOrganizationCandidate {
 }
 
 export interface DomainOwnershipFacts {
-  /** Organizations holding an approved claim on the domain. */
+  /** Organizations claiming the domain. */
   claimed: readonly DomainOrganizationCandidate[];
-  /** A pending membership application holds the domain. */
-  heldByApplication: boolean;
   /** Every organization a verified address on the domain already reached. */
   derived: readonly DerivedDomainFact[];
+  /** Organizations claiming a parent domain or a subdomain of the address; offered only for an explicit choice. */
+  related: readonly DomainOrganizationCandidate[];
 }
 
 export type DomainOrganizationResolution =
-  | { kind: "organization"; organizationId: string; isMember: boolean; via: "claim" | "derived" }
+  | { kind: "organization"; organizationId: string; via: "claim" | "derived" | "related" }
   /** Nobody owns the domain yet. */
   | { kind: "none" }
-  /** A pending application holds the domain. */
-  | { kind: "held" }
   /** The facts disagree, so staff decide. */
   | { kind: "ambiguous" };
 
@@ -63,34 +64,26 @@ export function resolveDomainOrganization(
     if (choice.organizationId === null) return { kind: "none" };
     const selectedClaim = facts.claimed.find((claim) => claim.organizationId === choice.organizationId);
     if (selectedClaim) return { kind: "organization", ...selectedClaim, via: "claim" };
+    // An organization that claims a parent or subdomain stays there: people who chose it through
+    // this address never turn into a claim on this domain.
+    const related = facts.related.find((claim) => claim.organizationId === choice.organizationId);
+    if (related) return { kind: "organization", organizationId: related.organizationId, via: "related" };
     const selected = facts.derived.find((fact) => fact.organizationId === choice.organizationId);
-    return selected && selected.active && !selected.disputed && !selected.unknownProvenance && !selected.isMember
-      ? { kind: "organization", organizationId: selected.organizationId, isMember: false, via: "derived" }
+    return selected && isUsableDerivedFact(selected)
+      ? { kind: "organization", organizationId: selected.organizationId, via: "derived" }
       : { kind: "ambiguous" };
   }
-  if (facts.heldByApplication)
-    return facts.claimed.length || facts.derived.length ? { kind: "ambiguous" } : { kind: "held" };
   if (facts.claimed.length > 1) return { kind: "ambiguous" };
+  // The one claimant stays the default even where people chose other organizations through the domain.
   const claimed = facts.claimed[0];
-  if (claimed) {
-    const elsewhere = facts.derived.some((fact) => fact.organizationId !== claimed.organizationId);
-    return elsewhere
-      ? { kind: "ambiguous" }
-      : { kind: "organization", organizationId: claimed.organizationId, isMember: claimed.isMember, via: "claim" };
-  }
+  if (claimed) return { kind: "organization", organizationId: claimed.organizationId, via: "claim" };
   if (facts.derived.length === 0) return { kind: "none" };
   const [only] = facts.derived;
-  if (facts.derived.length > 1 || !only!.active || only!.disputed || only!.unknownProvenance || only!.isMember)
-    return { kind: "ambiguous" };
-  return { kind: "organization", organizationId: only!.organizationId, isMember: false, via: "derived" };
+  if (facts.derived.length > 1 || !isUsableDerivedFact(only!)) return { kind: "ambiguous" };
+  return { kind: "organization", organizationId: only!.organizationId, via: "derived" };
 }
 
-/** Mailbox proof alone cannot grant a new member identity when other organizations share the domain. */
-export function requiresMemberAffiliationReview(facts: DomainOwnershipFacts, organizationId: string): boolean {
-  return (
-    facts.claimed.some((claim) => claim.organizationId === organizationId && claim.isMember) &&
-    (facts.heldByApplication ||
-      facts.claimed.some((claim) => claim.organizationId !== organizationId) ||
-      facts.derived.some((fact) => fact.organizationId !== organizationId && fact.active))
-  );
+/** People still reach the organization through the domain, nobody disputes it, and its provenance is recorded. */
+function isUsableDerivedFact(fact: DerivedDomainFact): boolean {
+  return fact.active && !fact.disputed && !fact.unknownProvenance;
 }
