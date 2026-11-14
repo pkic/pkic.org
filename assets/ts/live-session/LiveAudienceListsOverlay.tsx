@@ -1,7 +1,6 @@
 import type { ComponentChildren } from "preact";
 import { formatNumber } from "../../shared/format-number";
 import type { LiveChatFeedOnAir, LiveTopQuestionsOnAir } from "../../shared/schemas/live-session-on-screen";
-import { OverlayEmblem } from "./LiveEmblem";
 import "./LiveAudienceListsOverlay.css";
 
 /**
@@ -21,10 +20,7 @@ function ListCard({
 }) {
   return (
     <section class="pk-live-overlay__list" data-list={kind} aria-label={title}>
-      <header class="pk-live-overlay__list-header">
-        <OverlayEmblem />
-        <p class="pk-live-overlay__list-title">{title}</p>
-      </header>
+      <p class="pk-live-overlay__list-title">{title}</p>
       {children}
     </section>
   );

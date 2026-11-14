@@ -17,14 +17,6 @@
   .pk-live-overlay__list[data-list="chat"] {
     inline-size: 768px;
   }
-  .pk-live-overlay__list-header {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-  .pk-live-overlay__list-header .pk-live-overlay__emblem {
-    inline-size: calc(48px * 360 / 314);
-  }
   .pk-live-overlay__list-title {
     margin: 0;
     font-size: var(--pk-text-3xl);
