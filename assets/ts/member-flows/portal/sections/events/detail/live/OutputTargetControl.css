@@ -28,8 +28,11 @@
     border: 0;
     border-radius: 0;
     white-space: nowrap;
-    /* The menu's plain trigger drops its padding; this segment keeps the same inset as its neighbours. */
+    /* The menu's plain trigger drops its padding; this segment keeps the same inset as its neighbors. */
     padding-inline: var(--pk-2);
+    /* One width for the icon and one screen's name, so a row's controls stay in line as screens change. */
+    min-inline-size: 3.75rem;
+    justify-content: center;
   }
   .pk-output-target[data-integrated="true"] {
     display: grid;

@@ -570,10 +570,10 @@ export const studioOnScreenSections: PreviewSection[] = [
   },
   {
     id: "studio-speakers-added",
-    title: "Speakers in a narrow studio panel, one added for this session",
-    note: "Two columns: the outputs and the remove move under the name together.",
+    title: "Speakers in a studio panel, one added for this session",
+    note: "One row per person like every studio list: the outputs and the remove at the end, under the name when the panel is narrow.",
     render: () => (
-      <div style={{ inlineSize: "42rem" }}>
+      <div style={{ maxInlineSize: "42rem" }}>
         <LiveSpeakerCards
           targets={{
             state: {

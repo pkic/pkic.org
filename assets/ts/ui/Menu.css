@@ -21,7 +21,8 @@
     background: transparent;
     color: var(--pk-ink-muted);
     border: 1px solid transparent;
-    border-radius: var(--pk-radius-sm);
+    /* The ghost icon button's corner and hover, so a menu sits with the buttons beside it as one set. */
+    border-radius: var(--pk-radius);
     cursor: pointer;
     line-height: 1;
   }
@@ -48,7 +49,6 @@
   .pk-menu__trigger:hover,
   .pk-menu__trigger[aria-expanded="true"] {
     background: var(--pk-surface-sunk);
-    border-color: var(--pk-line);
     color: var(--pk-ink);
   }
 

@@ -14,7 +14,7 @@
     align-items: center;
     gap: var(--pk-2);
     min-block-size: 3rem;
-    padding-inline-end: var(--pk-1);
+    padding-inline: var(--pk-1) var(--pk-2);
     border-block-end: 1px solid var(--pk-line-soft);
   }
   .pk-studio-row__open {

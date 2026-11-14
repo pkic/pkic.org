@@ -132,8 +132,8 @@ export function StudioPanelFrame({
             </SectionHeading>
           )}
           <span class="pk-studio-panel__actions">
-            <Menu label={`${title} panel`} align="end" items={items} />
             {actions}
+            <Menu label={`${title} panel`} align="end" items={items} />
             <CloseButton label={`Close ${title}`} onClick={() => change((all) => closeStudioPanel(all, panel.id))} />
           </span>
         </header>

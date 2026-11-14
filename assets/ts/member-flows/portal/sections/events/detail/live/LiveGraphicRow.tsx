@@ -33,7 +33,10 @@ export function LiveGraphicRow({
           align="end"
           items={[{ id: "settings", label: settings.label, disabled: settings.disabled, onSelect: settings.onOpen }]}
         />
-      ) : null}
+      ) : (
+        // Holds the menu's place, so a row without one keeps its outputs in line with the rest.
+        <span class="pk-live-graphic-row__menu-slot" aria-hidden="true" />
+      )}
     </div>
   );
 }
