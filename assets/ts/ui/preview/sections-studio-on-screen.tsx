@@ -115,7 +115,7 @@ const QA_ELEMENTS = Object.fromEntries(
 QA_ELEMENTS.topQuestions = {
   visible: true,
   shared: false,
-  ...liveOverlayPixelBox(96, 96, 1400, 888, { horizontal: "left", vertical: "middle" }),
+  ...liveOverlayPixelBox(0, 0, 1920, 1080, { horizontal: "center", vertical: "middle" }),
 };
 const QA_LAYOUT: LiveOverlayLayout = {
   slug: "projector-qa",
@@ -355,7 +355,7 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "onscreen-questions-projector-large",
     title: "Top questions sized for a projector",
-    note: "The screen shows the event's Projector Q&A layout, where an organizer made the Top questions box large in the layout settings.",
+    note: "The screen shows the event's Projector Q&A layout: Top questions fill the screen, with the reactions rising over them.",
     render: () => (
       <Reacting
         state={roomWith({
@@ -392,9 +392,22 @@ export const studioOnScreenSections: PreviewSection[] = [
   },
   {
     id: "onscreen-lists-overlay",
-    title: "Top questions and chat on the livestream overlay",
-    note: "The same lists on Program, in their Full frame boxes beside the speaker.",
-    render: () => <LivestreamOverlay state={roomWith({}, LISTS)} />,
+    title: "Top questions beside the camera",
+    note: "Graphics on the left: the list fills a full-height column and the camera fills the rest.",
+    render: () => (
+      <LivestreamOverlay
+        state={roomWith({}, LISTS)}
+        elements={presetWith("side-by-side", ["topQuestions", "lowerThird"])}
+      />
+    ),
+  },
+  {
+    id: "onscreen-chat-side-right",
+    title: "Chat beside the camera, on the right",
+    note: "Graphics on the right: the same column on the other side of the frame.",
+    render: () => (
+      <LivestreamOverlay state={roomWith({}, LISTS)} elements={presetWith("side-by-side-right", ["chat"])} />
+    ),
   },
   {
     id: "onscreen-lower-third-identities",
@@ -433,7 +446,7 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "onscreen-panelists-side-by-side",
     title: "Panelists beside the camera",
-    note: "In the Side by side box the board turns tall and lists the people one under the other.",
+    note: "In the Graphics on the left column the board turns tall and lists the people one under the other.",
     render: () => (
       <LivestreamOverlay
         state={{ ...sessionWith(6), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
@@ -443,25 +456,25 @@ export const studioOnScreenSections: PreviewSection[] = [
   },
   {
     id: "onscreen-question-poll-board",
-    title: "Question and poll on the board",
-    note: "The audience question and the live poll, each on its own board in the Full frame boxes.",
+    title: "Question on the board",
+    note: "In Full frame a board covers the whole frame; one board shows at a time.",
     render: () => (
       <LivestreamOverlay
-        state={roomWith({}, { question: NAMED_QUESTION, ...ON_POLL })}
-        elements={presetWith("full-frame", ["question", "poll"])}
+        state={roomWith({}, { question: NAMED_QUESTION })}
+        elements={presetWith("full-frame", ["question"])}
       />
     ),
   },
   {
     id: "onscreen-poll-side-by-side",
     title: "Poll beside the camera",
-    note: "The same poll board, scaled into the Side by side column.",
+    note: "The same poll board, scaled into the Graphics on the left column.",
     render: () => <LivestreamOverlay state={roomWith({}, ON_POLL)} elements={presetWith("side-by-side", ["poll"])} />,
   },
   {
     id: "onscreen-panel-question",
     title: "A question over the panel",
-    note: "The Panel layout: the question above, the panelists across the lower half.",
+    note: "The Panel layout: the question in the upper half, the panelists in the lower half, edge to edge.",
     render: () => (
       <LivestreamOverlay
         state={{

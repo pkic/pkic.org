@@ -96,11 +96,11 @@ describe("studio monitor layouts", () => {
       screen().querySelector<HTMLElement>('[data-overlay-element="lowerThird"] > .pk-live-overlay__surface')!.style
         .cssText;
     const fullFrame = lowerThird();
-    void act(() => menuItem("Side by side").click());
+    void act(() => menuItem("Graphics on the left").click());
     // The tile redraws in the chosen layout: the lower third moves to that layout's box.
     expect(lowerThird()).not.toBe(fullFrame);
     void act(() =>
-      host!.querySelector<HTMLButtonElement>('button[aria-label="Layout on Preview: Side by side"]')!.click(),
+      host!.querySelector<HTMLButtonElement>('button[aria-label="Layout on Preview: Graphics on the left"]')!.click(),
     );
     void act(() => menuItem("Lower third only").click());
     expect(screen().querySelector(".pk-live-overlay__question-text")).toBeNull();

@@ -141,7 +141,7 @@ describe("audience graphics on an output", () => {
     });
     const questions = host!.querySelector('[data-overlay-element="topQuestions"]');
     expect(questions?.textContent).toContain("Which algorithms first?");
-    expect(questions?.textContent).toContain("Audience question");
+    expect(questions?.textContent).toContain("Top questions");
     expect(host!.querySelector('[data-overlay-element="chat"]')).toBeNull();
   });
 
