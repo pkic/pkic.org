@@ -235,7 +235,7 @@ describe("multi-message live ticker", () => {
       );
       void act(() =>
         Array.from(host.querySelectorAll("button"))
-          .find((button) => button.textContent === "Preview")!
+          .find((button) => button.textContent === "PVW")!
           .click(),
       );
       const payload = send.mock.calls[0][0];
@@ -259,11 +259,11 @@ describe("multi-message live ticker", () => {
       void act(() => render(<LiveTickerControls targets={tickerTargets(stage, { sendProgram: program })} />, host));
       const buttons = Array.from(host.querySelectorAll("button"));
       expect(buttons).toHaveLength(4);
-      const programButton = buttons.find((button) => button.textContent === "Program")!;
+      const programButton = buttons.find((button) => button.textContent === "PGM")!;
       expect(programButton.getAttribute("aria-pressed")).toBe("false");
       void act(() => programButton.click());
       expect(program).toHaveBeenCalledWith({ type: "stage.ticker", ticker: config });
-      void act(() => buttons.find((button) => button.textContent === "Preview")!.click());
+      void act(() => buttons.find((button) => button.textContent === "PVW")!.click());
       expect(program).toHaveBeenLastCalledWith({ type: "preview.set", composition: { ticker: null } });
     } finally {
       void act(() => render(null, host));

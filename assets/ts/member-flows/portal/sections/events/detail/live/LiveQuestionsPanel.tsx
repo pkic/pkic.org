@@ -174,12 +174,7 @@ function OpenQuestionRow({
           </>
         ) : (
           <>
-            <LiveLayerTargets
-              targets={targets}
-              subject="question"
-              layer={{ kind: "question", id: question.id }}
-              short
-            />
+            <LiveLayerTargets targets={targets} subject="question" layer={{ kind: "question", id: question.id }} />
             <RowAction label="Mark answered" disabled={disabled} onClick={() => moderate("answered")}>
               {ANSWERED}
             </RowAction>

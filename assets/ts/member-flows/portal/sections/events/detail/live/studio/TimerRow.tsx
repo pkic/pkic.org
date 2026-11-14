@@ -176,7 +176,7 @@ export function TimerRow({
         )}
       </span>
       <span class="pk-studio-time__outputs">
-        <LiveLayerTargets targets={targets} subject={`${timer.name} timer`} layer={layer} short />
+        <LiveLayerTargets targets={targets} subject={`${timer.name} timer`} layer={layer} />
       </span>
       {counts ? (
         // One joined control, like PVW | PGM: Start or Pause, Reset, and a minute either way.

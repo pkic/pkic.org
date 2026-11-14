@@ -8,6 +8,7 @@ import {
 import type { LivePresenceTarget } from "../../../../../../../shared/live-room-presence";
 import { Button } from "../../../../../../ui/Button";
 import { buttonClasses } from "../../../../../../ui/button-classes";
+import { StrokeIcon } from "../../../../../../ui/MediaIcons";
 import { Menu } from "../../../../../../ui/Menu";
 import "../../../../../../ui/ButtonToggle.css";
 import "./live-tally.css";
@@ -36,10 +37,15 @@ export interface OutputTargetPresence {
   color: number;
 }
 
-/** "Screens" when on none, the screen's name for one, and how many when several. */
-function auxLabel(active: readonly LiveAuxOutput[]): string {
-  if (!active.length) return "Screens";
-  return active.length === 1 ? LIVE_AUX_OUTPUT_DETAILS[active[0]].label : `${active.length} screens`;
+/** A screen icon when on none, else the screens' switcher abbreviations: PRJ, or PRJ DSP. */
+function auxLabel(active: readonly LiveAuxOutput[]) {
+  if (active.length) return active.map((output) => LIVE_AUX_OUTPUT_DETAILS[output].short).join(" ");
+  return (
+    <StrokeIcon>
+      <rect x="2" y="3" width="12" height="8" rx="1" />
+      <path d="M6 14h4M8 11v3" />
+    </StrokeIcon>
+  );
 }
 
 /**
@@ -55,7 +61,6 @@ export function OutputTargetControl({
   aux,
   disabled,
   integrated = false,
-  short = false,
   presenceItem,
   presence = [],
   onToggle,
@@ -68,8 +73,6 @@ export function OutputTargetControl({
   disabled: boolean;
   /** Spans the foot of a card instead of sitting inline. */
   integrated?: boolean;
-  /** Names Preview and Program by their switcher abbreviations, PVW and PGM, for a dense row. */
-  short?: boolean;
   /** The graphic's presence id, so other operators see this operator on it. */
   presenceItem?: string;
   presence?: readonly OutputTargetPresence[];
@@ -91,33 +94,31 @@ export function OutputTargetControl({
         data-destination="preview"
         data-presence-color={presenceOn(presence, "preview")}
         aria-label={`Show ${subject} in preview`}
-        title={short ? LIVE_PREVIEW_OUTPUT_DETAILS.label : "Show in preview, ready to put on air"}
+        title={LIVE_PREVIEW_OUTPUT_DETAILS.label}
         aria-pressed={preview}
         disabled={disabled}
         onClick={() => onToggle("preview")}
       >
-        {short ? LIVE_PREVIEW_OUTPUT_DETAILS.short : LIVE_PREVIEW_OUTPUT_DETAILS.label}
+        {LIVE_PREVIEW_OUTPUT_DETAILS.short}
       </Button>
       <Button
         class="pk-output-target__button"
         data-destination="program"
         data-presence-color={presenceOn(presence, "program")}
         aria-label={`Show ${subject} on air`}
-        title={short ? LIVE_PROGRAM_OUTPUT_DETAILS.label : "Show on air now, on the program output"}
+        title={LIVE_PROGRAM_OUTPUT_DETAILS.label}
         aria-pressed={program}
         disabled={disabled}
         onClick={() => onToggle("program")}
       >
-        {short ? LIVE_PROGRAM_OUTPUT_DETAILS.short : LIVE_PROGRAM_OUTPUT_DETAILS.label}
+        {LIVE_PROGRAM_OUTPUT_DETAILS.short}
       </Button>
       <Menu
         variant="plain"
         align="end"
         label={`Send ${subject} to the room's screens`}
         title={
-          active.length
-            ? `On ${active.map((output) => LIVE_AUX_OUTPUT_DETAILS[output].label).join(", ")}`
-            : "Show on the projector or the stage screens"
+          active.length ? `On ${active.map((output) => LIVE_AUX_OUTPUT_DETAILS[output].label).join(", ")}` : "Screens"
         }
         triggerClass={buttonClasses({}, `pk-output-target__button ${AUX_TRIGGER}`)}
         heading="Show on"

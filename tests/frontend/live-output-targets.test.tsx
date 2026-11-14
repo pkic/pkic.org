@@ -46,12 +46,13 @@ describe("output target control", () => {
     expect(host.querySelector('[aria-label="Show timer in preview"]')?.getAttribute("aria-pressed")).toBe("true");
     expect(host.querySelector('[aria-label="Show timer on air"]')?.getAttribute("aria-pressed")).toBe("false");
     const aux = () => host!.querySelector<HTMLButtonElement>(`[aria-label="Send timer to the room's screens"]`)!;
-    expect(aux().textContent).toContain("Screens");
+    expect(aux().querySelector("svg")).not.toBeNull();
+    expect(host.querySelector('[aria-label="Show timer in preview"]')?.textContent).toBe("PVW");
     void mount(["projector"]);
-    expect(aux().textContent).toContain("Projector");
+    expect(aux().textContent).toContain("PRJ");
     expect(host.querySelector(".pk-output-target")?.getAttribute("data-aux-active")).toBe("true");
     void mount(["projector", "stage-display"]);
-    expect(aux().textContent).toContain("2 screens");
+    expect(aux().textContent).toContain("PRJ DSP");
     void act(() => aux().click());
     const items = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]')];
     expect(items.map((item) => [item.textContent?.trim(), item.getAttribute("aria-checked")])).toEqual([
