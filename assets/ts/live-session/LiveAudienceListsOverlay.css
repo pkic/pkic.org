@@ -110,9 +110,23 @@
     border-image: linear-gradient(180deg, var(--pk-pqc-green), var(--pk-pqc-blue), var(--pk-pqc-orange)) 1;
     background: color-mix(in srgb, var(--pk-pqc-on-field) 18%, transparent);
   }
+  /*
+   * Chat: each message whole, as the room cut it for the broadcast. The list
+   * fills the board from the bottom, newest last; when the messages outgrow
+   * it, the oldest slide off the top under a fade, as in the chat itself.
+   */
   .pk-live-lists__items[data-list="chat"] {
     --text-type: 38px;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: flex-end;
     gap: 16px;
+    overflow: hidden;
+    mask-image: linear-gradient(180deg, transparent 0, var(--pk-pqc-on-field) 96px);
+  }
+  .pk-live-lists__items[data-list="chat"] > .pk-live-lists__message {
+    flex: none;
   }
   .pk-live-lists__items[data-list="chat"]:is([data-count="5"], [data-count="6"]) {
     --text-type: 28px;
@@ -123,7 +137,10 @@
     gap: 6px;
   }
   .pk-live-lists__items[data-list="chat"] .pk-live-lists__text {
+    display: block;
     font-weight: 500;
+    -webkit-line-clamp: none;
+    line-clamp: none;
   }
   .pk-live-lists__items[data-list="chat"] .pk-live-lists__byline {
     color: var(--pk-pqc-on-field);

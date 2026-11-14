@@ -106,6 +106,35 @@ const LISTS: Pick<LiveStage, "topQuestions" | "chatFeed"> = {
  * is sized in the event's layout settings like any other card.
  */
 const FULL_FRAME = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
+/** A busy chat: short greetings between messages long enough to reach the broadcast's cut. */
+const CHAT_MIXED: LiveStage["chatFeed"] = {
+  config: { count: 6, delaySeconds: 10 },
+  messages: [
+    { id: "40000000-0000-4000-8000-000000000021", authorName: "Alex Example", text: "Good morning from Toronto!" },
+    {
+      id: "40000000-0000-4000-8000-000000000022",
+      authorName: "Casey Demo",
+      text: "We ran the inventory step last year and found almost twice the certificates we expected, most of them in internal…",
+    },
+    { id: "40000000-0000-4000-8000-000000000023", authorName: "Riley Sample", text: "Same here." },
+    {
+      id: "40000000-0000-4000-8000-000000000024",
+      authorName: "Jordan Placeholder",
+      text: "Does the maturity model say anything about code signing keys that live in a cloud HSM rather than on premises?",
+    },
+    {
+      id: "40000000-0000-4000-8000-000000000025",
+      authorName: "Pat Panelist",
+      text: "For anyone joining late: the slides are linked on the session page, and the recording follows tomorrow afternoon.",
+    },
+    {
+      id: "40000000-0000-4000-8000-000000000026",
+      authorName: "Morgan Moderator",
+      text: "Thanks everyone, we'll take two of these questions after the demo.",
+    },
+  ],
+};
+
 const QA_ELEMENTS = Object.fromEntries(
   LIVE_OVERLAY_ELEMENTS.map((element) => [
     element,
@@ -391,6 +420,12 @@ export const studioOnScreenSections: PreviewSection[] = [
     render: () => <ProjectorScreen state={roomWith({ chatFeed: LISTS.chatFeed })} />,
   },
   {
+    id: "onscreen-chat-long",
+    title: "Chat with long messages",
+    note: "Each message shows whole, up to the broadcast's 140-character cut; when they no longer fit, the oldest fade off the top.",
+    render: () => <ProjectorScreen state={roomWith({ chatFeed: CHAT_MIXED })} />,
+  },
+  {
     id: "onscreen-lists-overlay",
     title: "Top questions beside the camera",
     note: "Graphics on the left: the list fills a full-height column and the camera fills the rest.",
@@ -406,7 +441,10 @@ export const studioOnScreenSections: PreviewSection[] = [
     title: "Chat beside the camera, on the right",
     note: "Graphics on the right: the same column on the other side of the frame.",
     render: () => (
-      <LivestreamOverlay state={roomWith({}, LISTS)} elements={presetWith("side-by-side-right", ["chat"])} />
+      <LivestreamOverlay
+        state={roomWith({}, { chatFeed: CHAT_MIXED })}
+        elements={presetWith("side-by-side-right", ["chat"])}
+      />
     ),
   },
   {
