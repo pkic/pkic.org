@@ -9,7 +9,7 @@ import {
   liveRoomClientMessageSchema,
   type LiveRoomClientMessage,
 } from "../../assets/shared/schemas/live-session-room";
-import { LiveOverlayPresentation } from "../../assets/ts/live-session/LiveOverlayPresentation";
+import { LiveOverlayPresentation, stackedPanelBox } from "../../assets/ts/live-session/LiveOverlayPresentation";
 import { applyLiveRoomMessage, type LiveRoomState } from "../../assets/ts/live-session/live-room-state";
 import {
   LiveReactionsControls,
@@ -143,6 +143,14 @@ describe("audience graphics on an output", () => {
     expect(questions?.textContent).toContain("Which algorithms first?");
     expect(questions?.textContent).toContain("Top questions");
     expect(host!.querySelector('[data-overlay-element="chat"]')).toBeNull();
+  });
+
+  it("joins the question and panelists into one board only where a layout stacks them", () => {
+    const panel = LIVE_OVERLAY_PRESET_LAYOUTS.panel.elements;
+    expect(stackedPanelBox(panel)).toMatchObject({ x: 0, y: 0, w: 1, h: 1 });
+    expect(stackedPanelBox({ ...panel, question: { ...panel.question, visible: false } })).toBeNull();
+    // Full frame lays both over the whole frame: they overlap rather than stack.
+    expect(stackedPanelBox(LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements)).toBeNull();
   });
 
   it("reads a layout saved before the audience lists existed, with the lists at their usual place", () => {

@@ -14,6 +14,7 @@ import { liveStageDisplayGraphics } from "../../shared/live-stage-display-plan";
 import { LiveOverlayFrame } from "./LiveOverlayFrame";
 import { LiveOverlayLayer } from "./LiveOverlayLayer";
 import { LivePanelistsOverlay } from "./LivePanelistsOverlay";
+import { LivePanelQuestionOverlay } from "./LivePanelQuestionOverlay";
 import { LivePollOverlay } from "./LivePollOverlay";
 import { LiveQuestionOverlay } from "./LiveQuestionOverlay";
 import { LiveCheckInOverlay } from "./LiveCheckInOverlay";
@@ -93,7 +94,28 @@ function ReactionsOverlay({ burst }: { burst: LiveRoomState["burst"] }) {
 }
 
 /** How an output is being watched: a browser source on air plays motion even where a monitor would not. */
-type DrawContext = { placement: LiveOverlayElementPlacement; animate: boolean };
+type DrawContext = {
+  placement: LiveOverlayElementPlacement;
+  animate: boolean;
+  /** The question's and panelists' boxes joined, when the layout stacks them and both are on air. */
+  panel: LiveOverlayElementPlacement | null;
+};
+
+const EDGE = 0.001;
+
+/**
+ * The one box a layout's question and panelists fill together when it stacks
+ * them, edge to edge at the same width, so both on air draw as one board with
+ * one field and one logo. Null when they are apart, overlap or one is hidden.
+ */
+export function stackedPanelBox(elements: LiveOverlayLayoutElements): LiveOverlayElementPlacement | null {
+  const { question, panelists } = elements;
+  if (!question.visible || !panelists.visible) return null;
+  if (Math.abs(question.x - panelists.x) > EDGE || Math.abs(question.w - panelists.w) > EDGE) return null;
+  const [top, bottom] = question.y <= panelists.y ? [question, panelists] : [panelists, question];
+  if (Math.abs(top.y + top.h - bottom.y) > EDGE) return null;
+  return { ...question, y: top.y, h: top.h + bottom.h, horizontal: "center", vertical: "middle" };
+}
 type Layer = {
   element: LiveOverlayElement;
   /** Draws the element for the room; a graphic that adapts to its box reads the placement. */
@@ -108,8 +130,10 @@ function prefersReducedMotion(): boolean {
 const PROGRAM_LAYERS: readonly Layer[] = [
   {
     element: "panelists",
-    draw: (state, { placement }) =>
-      state.stage.panelists ? (
+    draw: (state, { placement, panel }) =>
+      panel ? (
+        <LivePanelQuestionOverlay stage={state.stage} session={state.session} box={overlayBoxPixels(panel)} />
+      ) : state.stage.panelists ? (
         <LivePanelistsOverlay
           session={state.session}
           panelists={state.stage.panelists}
@@ -130,8 +154,10 @@ const PROGRAM_LAYERS: readonly Layer[] = [
   },
   {
     element: "question",
-    draw: (state, { placement }) =>
-      state.stage.question ? <LiveQuestionOverlay stage={state.stage} box={overlayBoxPixels(placement)} /> : null,
+    draw: (state, { placement, panel }) =>
+      state.stage.question && !panel ? (
+        <LiveQuestionOverlay stage={state.stage} box={overlayBoxPixels(placement)} />
+      ) : null,
   },
   {
     element: "lowerThird",
@@ -253,6 +279,8 @@ export function LiveOverlayPresentation({
       : (state?.stage.timerGraphics ?? []);
   // The stage display draws its timers itself, so its own layer decides whether they show.
   const timersShow = view === "stage-display" ? elements.stageDisplay.visible : elements.timer.visible;
+  const panel =
+    state?.stage.question && state.stage.panelists && view !== "stage-display" ? stackedPanelBox(elements) : null;
   const sounding =
     playsSounds && state && timersShow
       ? state.timers.filter((timer) => shown.some((graphic) => graphic.timerId === timer.id))
@@ -283,13 +311,14 @@ export function LiveOverlayPresentation({
                   </LiveOverlayLayer>
                 );
               });
-            const content = placement.visible ? draw(state, { placement, animate }) : null;
+            const content = placement.visible ? draw(state, { placement, animate, panel }) : null;
+            const joined = element === "panelists" && panel !== null;
             return content ? (
               <LiveOverlayLayer
-                key={element}
+                key={joined ? "panel" : element}
                 element={element}
-                dimmed={focus !== null && focus !== element}
-                placement={placement}
+                dimmed={focus !== null && focus !== element && !(joined && focus === "question")}
+                placement={joined ? panel : placement}
               >
                 {content}
               </LiveOverlayLayer>

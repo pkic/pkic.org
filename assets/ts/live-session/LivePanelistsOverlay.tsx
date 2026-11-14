@@ -33,31 +33,25 @@ function seated(credits: readonly LiveCredit[]): LiveCredit[] {
 }
 
 /**
- * The session's speakers on the conference board: its time, its title, and
- * each person with their photo, name and the titles they speak under, the
- * moderator set apart. Two speakers sit large side by side; a panel of up to
- * six fits one row across a wide board, and a column lists them.
+ * The session's title and its people, each with their photo, name and the
+ * titles they speak under, the moderator set apart, arranged for the board's
+ * shape. The panelists' board draws them alone; the panel board draws them
+ * under the audience question.
  */
-export function LivePanelistsOverlay({
+export function LivePanelistsCredits({
   session,
   panelists,
-  box,
+  shape,
 }: {
   session: LiveRoomSession;
-  panelists: LivePanelists | null;
-  box: Pick<OverlayRect, "width" | "height">;
+  panelists: LivePanelists;
+  shape: LiveBoardShape;
 }) {
-  if (!panelists) return null;
   const people = seated(session.credits);
-  const arrangement = livePanelistsArrangement(panelists.layout, liveBoardSize(box).shape, people.length);
+  const arrangement = livePanelistsArrangement(panelists.layout, shape, people.length);
   const firstModerator = people.findIndex((credit) => credit.moderator);
   return (
-    <LiveBoard
-      box={box}
-      class="pk-live-panelists"
-      label="Session panelists"
-      eyebrow={formatClockRangeInZone(session.startAt, session.endAt, session.timeZone)}
-    >
+    <>
       <div class="pk-live-panelists__heading">
         <SectionHeading level={2} class="pk-live-board__headline pk-live-panelists__session">
           {session.title}
@@ -90,6 +84,33 @@ export function LivePanelistsOverlay({
           </div>
         ))}
       </div>
+    </>
+  );
+}
+
+/**
+ * The session's speakers on the conference board, under its time. Two
+ * speakers sit large side by side; a panel of up to six fits one row across a
+ * wide board, and a column lists them.
+ */
+export function LivePanelistsOverlay({
+  session,
+  panelists,
+  box,
+}: {
+  session: LiveRoomSession;
+  panelists: LivePanelists | null;
+  box: Pick<OverlayRect, "width" | "height">;
+}) {
+  if (!panelists) return null;
+  return (
+    <LiveBoard
+      box={box}
+      class="pk-live-panelists"
+      label="Session panelists"
+      eyebrow={formatClockRangeInZone(session.startAt, session.endAt, session.timeZone)}
+    >
+      <LivePanelistsCredits session={session} panelists={panelists} shape={liveBoardSize(box).shape} />
     </LiveBoard>
   );
 }

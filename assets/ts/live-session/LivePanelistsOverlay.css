@@ -112,9 +112,9 @@
     flex-direction: column;
     align-items: flex-start;
   }
+  /* The rule opens the moderator's column, with the same gap on its far side as between the speakers. */
   .pk-live-panelists__credits[data-arrangement="row"] [data-set-apart] {
-    margin-inline-start: calc(var(--gap) / -2);
-    padding-inline-start: calc(var(--gap) / 2 - 2px);
+    padding-inline-start: calc(var(--gap) - 2px);
     border-inline-start: 2px solid color-mix(in srgb, var(--pk-pqc-on-field) 28%, transparent);
   }
   .pk-live-panelists__credits[data-arrangement="row"][data-count="1"],
