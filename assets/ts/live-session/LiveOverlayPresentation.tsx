@@ -151,13 +151,17 @@ const PROGRAM_LAYERS: readonly Layer[] = [
   },
   {
     element: "topQuestions",
-    draw: (state) =>
-      state.stage.topQuestions?.questions.length ? <LiveTopQuestionsOverlay list={state.stage.topQuestions} /> : null,
+    draw: (state, { placement }) =>
+      state.stage.topQuestions?.questions.length ? (
+        <LiveTopQuestionsOverlay list={state.stage.topQuestions} box={overlayBoxPixels(placement)} />
+      ) : null,
   },
   {
     element: "chat",
-    draw: (state) =>
-      state.stage.chatFeed?.messages.length ? <LiveChatFeedOverlay list={state.stage.chatFeed} /> : null,
+    draw: (state, { placement }) =>
+      state.stage.chatFeed?.messages.length ? (
+        <LiveChatFeedOverlay list={state.stage.chatFeed} box={overlayBoxPixels(placement)} />
+      ) : null,
   },
   {
     element: "timer",

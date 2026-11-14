@@ -2,7 +2,8 @@
  * Broadcast overlays: a 1920 × 1080 transparent browser source. The lower
  * third keeps the existing stream overlay's layout (emblem, white name bar,
  * translucent title bar) in the design system's type and the event kit's
- * colors; the panelists, question and poll draw on the conference board.
+ * colors; the panelists, question, poll and audience lists draw on the
+ * conference board.
  */
 
 @layer components {
@@ -111,16 +112,6 @@
   }
   .pk-live-overlay__emblem-ink {
     fill: var(--pk-pqc-forest);
-  }
-
-  /* The surface every list on air shares: paper, the event stripe along the top, a lifted shadow, rising in. */
-  .pk-live-overlay__list {
-    border-block-start: 10px solid transparent;
-    border-image: var(--pk-pqc-stripe) 1;
-    border-radius: var(--pk-radius-card);
-    background: var(--pk-pqc-paper);
-    box-shadow: var(--pk-shadow-3);
-    animation: pk-live-overlay-rise var(--pk-dur-slow) var(--pk-ease) both;
   }
 
   /* Preserve the original Hugo lower-third SVG's geometry and typographic hierarchy. */
@@ -349,12 +340,6 @@
     inset-inline-start: 320px;
     animation-delay: 300ms;
   }
-  @keyframes pk-live-overlay-rise {
-    from {
-      opacity: 0;
-      transform: translateY(40px);
-    }
-  }
   @keyframes pk-live-overlay-float {
     0% {
       opacity: 0;
@@ -370,7 +355,6 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .pk-live-overlay__list,
     .pk-live-overlay__reaction {
       animation: none;
     }
