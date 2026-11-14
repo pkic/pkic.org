@@ -18,10 +18,13 @@ export const liveCreditIdentitySchema = z
   .strict();
 export type LiveCreditIdentity = z.infer<typeof liveCreditIdentitySchema>;
 
+/** The key that names one person offered as a lower third in this room: a session credit, a host or an added person. */
+export const liveCreditKeySchema = z.string().min(1).max(80);
+
 /** The fields of a person offered as a lower third. */
 export const liveCreditFieldsSchema = z
   .object({
-    key: z.string().min(1).max(80),
+    key: liveCreditKeySchema,
     name: livePersonNameSchema,
     moderator: z.boolean().default(false),
     photoUrl: publicSessionPortraitUrlSchema.nullable().default(null),

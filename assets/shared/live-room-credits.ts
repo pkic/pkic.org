@@ -17,6 +17,17 @@ export const LIVE_ADDED_CREDITS_MAX = 12;
 
 const ADDED_KEY_PREFIX = "added:";
 const HOST_KEY_PREFIX = "host:";
+const SESSION_PERSON_KEY_PREFIX = "user:";
+
+/** The lower-third key of a person with an account credited on the approved session. */
+export function sessionLivePersonKey(userId: string): string {
+  return `${SESSION_PERSON_KEY_PREFIX}${userId}`;
+}
+
+/** The account a session credit names, or null for a credit without one (a source credit or a host). */
+export function sessionLiveCreditUserId(key: string): string | null {
+  return key.startsWith(SESSION_PERSON_KEY_PREFIX) ? key.slice(SESSION_PERSON_KEY_PREFIX.length) || null : null;
+}
 
 /** The lower-third key of a person operators added for this session. */
 export function addedLiveCreditKey(id: string): string {
@@ -37,7 +48,9 @@ export function liveCreditAlreadyListed(
   keys: ReadonlySet<string>,
   person: { userId: string; identityId: string | null },
 ): boolean {
-  return keys.has(addedLivePersonKey(person.userId, person.identityId)) || keys.has(`user:${person.userId}`);
+  return (
+    keys.has(addedLivePersonKey(person.userId, person.identityId)) || keys.has(sessionLivePersonKey(person.userId))
+  );
 }
 
 export function isAddedLiveCreditKey(key: string): boolean {

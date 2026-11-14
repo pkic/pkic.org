@@ -61,6 +61,7 @@ export function onAirQuestion(
     authorName: anonymous ? null : row.author_name,
     authorPhotoUrl: anonymous ? null : row.author_photo_url,
     authorAffiliation: anonymous ? null : parseLiveAuthorStamp(row.author_json).affiliation,
+    addressedTo: row.addressed_to,
   };
 }
 

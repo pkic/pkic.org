@@ -98,6 +98,8 @@ export function applyLiveRoomMessage(
       return { ...state, programUndo: { snapshotId: message.snapshotId, change: message.change } };
     case "credits.added.changed":
       return { ...state, addedCredits: message.addedCredits };
+    case "question.prepared.changed":
+      return { ...state, preparedQuestions: message.preparedQuestions, preparedQuestionWindow: message.window };
     case "chat.message":
     case "chat.removed":
     case "chat.reactions":

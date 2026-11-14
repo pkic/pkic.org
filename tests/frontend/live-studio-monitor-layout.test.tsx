@@ -39,6 +39,7 @@ const room = applyLiveRoomMessage(
         authorName: null,
         authorPhotoUrl: null,
         authorAffiliation: null,
+        addressedTo: null,
       },
       lowerThird: { ...liveSnapshot().session.credits[0]! },
     },

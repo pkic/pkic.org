@@ -88,6 +88,8 @@ export function screenAutoState(
     chat: [],
     questions: [],
     polls: [],
+    preparedQuestions: [],
+    preparedQuestionWindow: null,
     stage: EMPTY_LIVE_AUX_COMPOSITION,
     outputs: { ...EMPTY_LIVE_OUTPUTS, "stage-display": stageDisplay },
     speakerMessage: null,

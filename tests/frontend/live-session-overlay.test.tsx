@@ -37,6 +37,7 @@ const ON_STAGE = {
     authorName: null,
     authorPhotoUrl: null,
     authorAffiliation: null,
+    addressedTo: null,
   },
   questionChange: { operatorName: "Olga Operator", at: new Date().toISOString() },
   lowerThird: {
@@ -400,6 +401,7 @@ describe("broadcast overlays", () => {
       authorName: "Riley Chen",
       authorPhotoUrl: null,
       authorAffiliation: { organization: { name: "Example Bank" } },
+      addressedTo: null,
     };
     const shown = () => ({
       tag: host.querySelector(".pk-live-stage-display__questions .pk-live-stage-display__tag")?.textContent ?? null,

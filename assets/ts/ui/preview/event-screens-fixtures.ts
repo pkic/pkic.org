@@ -90,6 +90,8 @@ function stageDisplayState(
     chat: [],
     questions: [],
     polls: [],
+    preparedQuestions: [],
+    preparedQuestionWindow: null,
     stage: EMPTY_LIVE_AUX_COMPOSITION,
     // The stage display draws its own composition: the session timer and the room's Up next.
     outputs: { ...EMPTY_LIVE_OUTPUTS, "stage-display": stageDisplay },

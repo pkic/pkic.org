@@ -126,6 +126,8 @@ export function liveSnapshot(overrides: Partial<Omit<LiveRoomSnapshot, "type">> 
     chat: [],
     questions: [],
     polls: [],
+    preparedQuestions: [],
+    preparedQuestionWindow: null,
     stage: {
       schedule: null,
       checkIn: null,
@@ -180,6 +182,8 @@ export function liveQuestion(overrides: Record<string, unknown> = {}) {
     moderated: null,
     originalText: null,
     rewritten: null,
+    addressedTo: null,
+    prepared: false,
     ...overrides,
   };
 }

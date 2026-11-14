@@ -11,7 +11,11 @@ import {
 import { first } from "../../db/queries";
 import { z } from "zod";
 import { agendaDisplayRoleShiftSchema } from "../../../../assets/shared/schemas/event-agenda";
-import { LIVE_MODERATOR_ROLE_LABEL, liveSessionHosts } from "../../../../assets/shared/live-room-credits";
+import {
+  LIVE_MODERATOR_ROLE_LABEL,
+  liveSessionHosts,
+  sessionLivePersonKey,
+} from "../../../../assets/shared/live-room-credits";
 import type { SessionAffiliation } from "../../../../assets/shared/schemas/event-session-history";
 import type { LiveCreditIdentity } from "../../../../assets/shared/schemas/live-session-credit";
 import { parseJsonSafe } from "../../utils/json";
@@ -112,7 +116,7 @@ export function prepareLiveRoomSessionRead(
         const [identity = null, ...rest] = capacities;
         const additionalIdentities = rest.filter((capacity): capacity is LiveCreditIdentity => capacity !== null);
         return {
-          key: person ? `user:${credit.userId}` : `credit:${index}`,
+          key: person ? sessionLivePersonKey(credit.userId) : `credit:${index}`,
           name: content.name,
           moderator: publicSessionCreditRole(occurrence, credit) === "moderator",
           roleLabel: publicSessionCreditRole(occurrence, credit) === "moderator" ? LIVE_MODERATOR_ROLE_LABEL : null,

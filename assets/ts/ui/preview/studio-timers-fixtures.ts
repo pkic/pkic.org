@@ -94,6 +94,8 @@ export function timersRoomState(
     chat: [],
     questions: [],
     polls: [],
+    preparedQuestions: [],
+    preparedQuestionWindow: null,
     stage: { ...EMPTY_LIVE_AUX_COMPOSITION, timerGraphics: [defaultLiveTimerGraphic(base.id)] },
     outputs: {
       ...EMPTY_LIVE_OUTPUTS,

@@ -4,14 +4,19 @@ import {
   liveQuestionTransitionAllowed,
   type LiveQuestionStatus,
 } from "../../../../assets/shared/live-session-policy";
-import type { LiveRoomClientMessage, LiveRoomServerMessage } from "../../../../assets/shared/schemas/live-session-room";
+import type {
+  LiveRoomClientMessage,
+  LiveRoomServerMessage,
+  LiveRoomSession,
+} from "../../../../assets/shared/schemas/live-session-room";
+import { sessionLiveCreditUserId } from "../../../../assets/shared/live-room-credits";
 import { deterministicUuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import type { LiveRoomParticipant } from "./room-admission";
 import type { LiveRoomAuthors } from "./room-authors";
 import type { LiveRoomBroadcast } from "./room-broadcast";
 import type { LiveControlOutcome, LiveRefusal, LiveRoomControls } from "./room-controls";
-import type { LiveRoomStore } from "./room-store";
+import type { LiveQuestionAddressee, LiveRoomStore } from "./room-store";
 
 type Handled = LiveRefusal | void;
 type Actor = { userId: string; name: string };
@@ -37,8 +42,26 @@ export const LIVE_QUESTION_REFUSALS = {
   closed: { code: "LIVE_ROOM_CLOSED", message: "This session is not taking questions now." },
   missing: { code: "LIVE_QUESTION_NOT_FOUND", message: "That question is no longer available." },
   transition: { code: "LIVE_QUESTION_TRANSITION", message: "That question cannot move to this status." },
+  addressee: {
+    code: "LIVE_QUESTION_ADDRESSEE_NOT_FOUND",
+    message: "That person is no longer on this session. Choose someone else, or ask everyone.",
+  },
 } satisfies Record<string, LiveRefusal>;
 const REFUSALS = LIVE_QUESTION_REFUSALS;
+
+/**
+ * The person a question is for, read from the session's current credits,
+ * which every viewer holds and names them from. Null asks everyone; a key
+ * the session no longer credits is refused.
+ */
+export function resolveLiveQuestionAddressee(
+  session: LiveRoomSession,
+  creditKey: string | null,
+): LiveQuestionAddressee | null | LiveRefusal {
+  if (creditKey === null) return null;
+  if (!session.credits.some((credit) => credit.key === creditKey)) return REFUSALS.addressee;
+  return { creditKey, userId: sessionLiveCreditUserId(creditKey) };
+}
 
 /**
  * The room's question use cases: ask, vote, moderate and rewrite. Each
@@ -65,11 +88,11 @@ export class LiveRoomQuestions {
   async ask(
     viewer: LiveRoomParticipant,
     actor: Actor,
-    text: string,
-    anonymous: boolean,
+    input: { text: string; anonymous: boolean; addressedTo: string | null },
     operationId: string,
     open: boolean,
   ): Promise<LiveRefusal | { questionId: string }> {
+    const { text, anonymous, addressedTo } = input;
     const room = this.store.session();
     if (!room) throw new Error("LIVE_ROOM_SESSION_REQUIRED");
     const id = await deterministicUuid([
@@ -84,13 +107,16 @@ export class LiveRoomQuestions {
       if (!question) return null;
       return question.author_user_id === actor.userId &&
         question.submitted_body === text &&
-        Boolean(question.anonymous) === anonymous
+        Boolean(question.anonymous) === anonymous &&
+        question.addressed_to === addressedTo
         ? { questionId: id }
         : REFUSALS.conflict;
     };
     const existing = replay();
     if (existing) return existing;
     if (!open) return REFUSALS.closed;
+    const addressee = resolveLiveQuestionAddressee(room.session, addressedTo);
+    if (addressee && "code" in addressee) return addressee;
     const stamp = await this.authors.writing(viewer);
     // Author resolution yields: another invocation may have accepted this request.
     const accepted = replay();
@@ -105,6 +131,7 @@ export class LiveRoomQuestions {
       body: text,
       askedAt: nowIso(),
       authorPhotoUrl: viewer.photoUrl ?? null,
+      addressee,
     });
     this.authors.recordQuestion(id, stamp);
     await this.broadcast.question(id);

@@ -48,3 +48,9 @@ export function randomToken(byteLength = 32): string {
     .replace(/\//g, "_")
     .replace(/=+$/g, "");
 }
+
+/** A uniform random number in [0, 1) from the platform's cryptographic source. */
+export function randomFraction(): number {
+  const [value] = crypto.getRandomValues(new Uint32Array(1));
+  return value / 2 ** 32;
+}

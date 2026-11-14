@@ -79,6 +79,8 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
     },
     viewer: { role: "operator", name: "Sample operator" },
     questions: [],
+    preparedQuestions: [],
+    preparedQuestionWindow: null,
     polls: [
       {
         id: POLL,
@@ -110,6 +112,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
         authorName: null,
         authorPhotoUrl: null,
         authorAffiliation: null,
+        addressedTo: null,
       },
       questionChange: null,
       lowerThird: credits[0]!,

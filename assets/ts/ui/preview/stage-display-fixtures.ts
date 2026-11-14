@@ -121,6 +121,8 @@ const askedQuestion = (id: string, text: string, votes: number): LiveQuestion =>
   moderated: null,
   originalText: null,
   rewritten: null,
+  addressedTo: null,
+  prepared: false,
 });
 const onStage = (question: LiveQuestion): LiveStageQuestion => ({
   id: question.id,
@@ -128,6 +130,7 @@ const onStage = (question: LiveQuestion): LiveStageQuestion => ({
   authorName: question.authorName,
   authorPhotoUrl: null,
   authorAffiliation: null,
+  addressedTo: question.addressedTo,
 });
 const answering = askedQuestion(
   "20000000-0000-4000-8000-0000000000c1",

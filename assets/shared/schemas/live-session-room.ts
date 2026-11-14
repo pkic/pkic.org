@@ -1,4 +1,5 @@
 import {
+  liveQuestionAddresseeSchema,
   liveQuestionSchema,
   liveQuestionStatusSchema,
   liveQuestionAskSchema,
@@ -66,6 +67,12 @@ import {
 } from "./live-session-on-screen";
 import { LIVE_AUX_OUTPUTS, LIVE_SPEAKER_MESSAGE_MAX_LENGTH, LIVE_SPEAKER_MESSAGE_TONES } from "../live-room-outputs";
 import { livePollClientMessageSchemas, livePollSchema, livePollServerMessageSchemas } from "./live-session-poll";
+import {
+  livePreparedQuestionClientMessageSchemas,
+  livePreparedQuestionServerMessageSchemas,
+  livePreparedQuestionWindowSchema,
+  livePreparedQuestionsSchema,
+} from "./live-session-prepared-question";
 import {
   liveTimerCommandSchemas,
   liveTimerGraphicsSchema,
@@ -190,6 +197,8 @@ export const liveStageQuestionSchema = z
     authorPhotoUrl: publicSessionPortraitUrlSchema.nullable().default(null),
     /** The capacity the author asked in, frozen with the question; null when anonymous or unaffiliated. */
     authorAffiliation: liveAuthorAffiliationSchema.nullable().default(null),
+    /** The credited person the question is for, so an output can name them from the session's credits. */
+    addressedTo: liveQuestionAddresseeSchema.default(null),
   })
   .strict();
 export type LiveStageQuestion = z.infer<typeof liveStageQuestionSchema>;
@@ -366,6 +375,10 @@ export const liveRoomSnapshotSchema = z
     questions: z.array(liveQuestionSchema).max(LIVE_ROOM_POLICY.maxQuestionsPerRoom),
     /** In the order they were prepared; drafts for operators only, the poll on air only for overlays. */
     polls: z.array(livePollSchema),
+    /** Questions waiting for their release moment, soonest first; operators only, empty for everyone else. */
+    preparedQuestions: livePreparedQuestionsSchema.default([]),
+    /** The span prepared questions are released in; operators only, null for everyone else. */
+    preparedQuestionWindow: livePreparedQuestionWindowSchema.nullable().default(null),
     overlayMode: liveOverlayModeSchema.default("direct"),
     /** The event's saved overlay layouts; a browser source draws the one it names, else a built-in one. */
     overlayLayouts: liveOverlayLayoutGeometriesSchema.default([]),
@@ -416,6 +429,7 @@ export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("question.accepted"), operationId: z.uuid(), questionId: databaseIdSchema }).strict(),
   z.object({ type: z.literal("question.removed"), questionId: databaseIdSchema }).strict(),
   ...livePollServerMessageSchemas,
+  ...livePreparedQuestionServerMessageSchemas,
   z.object({ type: z.literal("stage.changed"), stage: liveStageSchema }).strict(),
   z
     .object({ type: z.literal("aux.changed"), output: liveAuxOutputSchema, composition: liveAuxCompositionSchema })
@@ -545,6 +559,7 @@ export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
     .strict(),
   liveQuestionRewriteSchema.extend({ type: z.literal("question.rewrite"), questionId: databaseIdSchema }),
   ...livePollClientMessageSchemas,
+  ...livePreparedQuestionClientMessageSchemas,
   z.object({ type: z.literal("stage.question"), questionId: databaseIdSchema.nullable() }).strict(),
   z
     .object({
