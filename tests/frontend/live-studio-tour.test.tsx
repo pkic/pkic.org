@@ -31,12 +31,12 @@ it("walks through the studio's controls and leaves out the panels this layout ha
     ),
   );
   const tour = () => host!.querySelector<HTMLElement>(".pk-guided-tour")!;
-  expect(tour().textContent).toContain("Watch the outputs");
+  expect(tour().textContent).toContain("Practice and live");
   expect(tour().textContent).toContain("1 of 3");
   const next = () => [...tour().querySelectorAll("button")].find((button) => button.textContent === "Next")!;
   await act(() => next().click());
-  expect(tour().textContent).toContain("Transition");
+  expect(tour().textContent).toContain("Go live with your practice");
   await act(() => next().click());
-  expect(tour().textContent).toContain("Make the studio yours");
+  expect(tour().textContent).toContain("Arrange your studio");
   expect(STUDIO_TOUR_STEPS).toHaveLength(7);
 });
