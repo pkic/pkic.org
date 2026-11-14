@@ -7,8 +7,11 @@ import type { LiveScreenSync, LiveSyncedScreen } from "./schemas/live-screen-syn
  * How a room screen follows Program, one rule for the projector and the
  * stage display: while it syncs, it shows what was put on it, and Program's
  * graphic wherever it has none of its own. Each screen follows only the
- * graphics it can show: the projector all of them, the stage display the
- * question, the poll, the timers and the agenda its footer reads. A
+ * graphics that belong on it: the projector the boards and the timers the
+ * room reads, not the stream's own graphics (the lower third, the ticker and
+ * the panelists' names, which caption a camera picture the room does not
+ * see); the stage display the question, the poll, the timers and the agenda
+ * its footer reads. A
  * graphic a screen cannot draw does not take Program's place: the stage
  * display reads the time of day in its top row, so a clock of its own leaves
  * room for Program's countdowns.
@@ -30,11 +33,12 @@ const GRAPHICS = {
 } as const satisfies Record<string, ReadonlyArray<keyof LiveStage>>;
 export type LiveScreenGraphic = keyof typeof GRAPHICS;
 
-const ALL_GRAPHICS = Object.keys(GRAPHICS) as LiveScreenGraphic[];
+/** The stream's own graphics: they caption the camera picture, so a room screen never copies them. */
+const STREAM_ONLY: readonly LiveScreenGraphic[] = ["lowerThird", "ticker", "panelists"];
 
 /** The graphics each screen takes from Program while it syncs. */
 export const LIVE_SCREEN_FOLLOWS: Record<LiveSyncedScreen, readonly LiveScreenGraphic[]> = {
-  projector: ALL_GRAPHICS,
+  projector: (Object.keys(GRAPHICS) as LiveScreenGraphic[]).filter((graphic) => !STREAM_ONLY.includes(graphic)),
   "stage-display": ["question", "poll", "timerGraphics", "schedule"],
 };
 

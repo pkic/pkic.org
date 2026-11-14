@@ -5,6 +5,7 @@ import { useNumericCssProperties } from "../hooks/useNumericCssProperties";
 import { Avatar } from "../ui/Avatar";
 import { LiveBoard } from "./LiveBoard";
 import "./LiveAudienceListsOverlay.css";
+import { LiveScreenText } from "./LiveScreenText";
 
 /**
  * The audience lists on the conference board: the top questions and the
@@ -26,7 +27,9 @@ function TopQuestion({ question, lead }: { question: LiveTopQuestionsOnAir["ques
         <span class="pk-live-lists__votes-label">{question.votes === 1 ? "vote" : "votes"}</span>
       </p>
       <div class="pk-live-lists__body">
-        <p class="pk-live-lists__text">{question.text}</p>
+        <p class="pk-live-lists__text">
+          <LiveScreenText text={question.text} />
+        </p>
         {question.authorName ? <p class="pk-live-lists__byline">{question.authorName}</p> : null}
         <span class="pk-live-lists__share" data-numeric-css-properties={share} />
       </div>

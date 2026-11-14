@@ -1,3 +1,5 @@
+import { liveOverlayCoveredBy } from "../assets/shared/live-overlay-cover";
+import { EMPTY_LIVE_STAGE, type LiveStage } from "../assets/shared/schemas/live-session-room";
 import { describe, expect, it } from "vitest";
 import { liveOverlayLayerTransform, placeOverlayGraphic } from "../assets/shared/live-overlay-geometry";
 import {
@@ -94,9 +96,10 @@ describe("built-in layouts", () => {
     expect(resolveLiveOverlayLayout([saved], "keynote")).toBe(saved.elements);
     expect(resolveLiveOverlayLayout([saved], "lower-third").lowerThird.visible).toBe(true);
     expect(resolveLiveOverlayLayout([saved], "lower-third").question.visible).toBe(false);
-    expect(liveOverlayLayoutChoices([saved, { ...saved, slug: "panel", name: "Our panel" }]).slice(-3)).toEqual([
+    expect(liveOverlayLayoutChoices([saved, { ...saved, slug: "panel", name: "Our panel" }]).slice(-4)).toEqual([
       { slug: "panel", name: "Our panel" },
       { slug: "ticker-only", name: "Ticker only" },
+      { slug: "break", name: "Break" },
       { slug: "keynote", name: "Keynote" },
     ]);
   });
@@ -162,5 +165,27 @@ describe("editing a box", () => {
     expect(layoutSlugFor("Keynote — Main Hall", new Set())).toBe("keynote-main-hall");
     expect(layoutSlugFor("Full frame", new Set(["full-frame"]))).toBe("full-frame-2");
     expect(layoutSlugFor("!!!", new Set())).toBe("layout");
+  });
+});
+
+describe("a graphic a board covers", () => {
+  const fullFrame = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
+  const onAir = (stage: Partial<LiveStage>): LiveStage => ({ ...EMPTY_LIVE_STAGE, ...stage }) as LiveStage;
+  const schedule = { config: {} } as unknown as LiveStage["schedule"];
+  const question = { id: "q1" } as unknown as LiveStage["question"];
+
+  it("names the full-screen question that hides Up next, and nothing once the question is off", () => {
+    expect(liveOverlayCoveredBy(onAir({ schedule, question }), fullFrame, "schedule")).toBe("question");
+    expect(liveOverlayCoveredBy(onAir({ schedule }), fullFrame, "schedule")).toBeNull();
+  });
+
+  it("never reports a graphic drawn above the board, such as a timer over a question", () => {
+    const timerGraphics = [{ timerId: "t1" }] as unknown as LiveStage["timerGraphics"];
+    expect(liveOverlayCoveredBy(onAir({ question, timerGraphics }), fullFrame, "timer")).toBeNull();
+  });
+
+  it("keeps Up next and the check-in code clear of each other in Full frame", () => {
+    const checkIn = { selection: {} } as unknown as LiveStage["checkIn"];
+    expect(liveOverlayCoveredBy(onAir({ schedule, checkIn }), fullFrame, "schedule")).toBeNull();
   });
 });

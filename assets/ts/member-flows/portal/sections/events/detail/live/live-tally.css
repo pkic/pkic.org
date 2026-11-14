@@ -10,10 +10,19 @@
     --live-tally-program: var(--pk-danger);
     --live-tally-projector: var(--pk-info);
     --live-tally-stage-display: var(--pk-warn);
-    --live-tally-stage-preview: color-mix(in oklch, var(--pk-info), var(--pk-danger));
+    /* The stage display's lineup before it goes on: its own color, drawn dashed where it is a line. */
+    --live-tally-stage-preview: var(--live-tally-stage-display);
     --live-tally-livestream: var(--pk-line-strong);
   }
-  /* Any element naming one output by data-tally reads its color as --tally. */
+  /*
+   * Any element naming one output by data-tally reads its color as --tally,
+   * and --tally-solid behind white text: the tone deepened, so it stays
+   * legible in both themes, where the dark theme's light tones would not.
+   */
+  [data-tally] {
+    --tally-line: solid;
+    --tally-solid: color-mix(in oklab, var(--tally) 72%, #000);
+  }
   [data-tally="preview"] {
     --tally: var(--live-tally-preview);
   }
@@ -28,6 +37,7 @@
   }
   [data-tally="stage-preview"] {
     --tally: var(--live-tally-stage-preview);
+    --tally-line: dashed;
   }
   [data-tally="livestream"] {
     --tally: var(--live-tally-livestream);

@@ -1,11 +1,10 @@
 import { LiveScheduleOverlay } from "./LiveScheduleOverlay";
 import { LiveTickerOverlay } from "./LiveTickerOverlay";
-import "../ui/Spinner.css";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { LIVE_REACTIONS, type LiveReactionId } from "../../shared/live-session-policy";
 import type { LiveOverlayView, LiveTimerGraphic } from "../../shared/schemas/live-session-room";
 import type { ComponentChildren } from "preact";
-import { liveTimerLayout } from "../../shared/live-timer-policy";
+import { liveTimerLayout, liveTimerTotalMs } from "../../shared/live-timer-policy";
 import type { LiveRoomState } from "./live-room-state";
 import { useLiveTimerGraphicReading } from "./useLiveCountdown";
 import { LiveTimerSounds } from "./useLiveTimerSounds";
@@ -27,33 +26,84 @@ import type {
 import { overlayBoxPixels } from "../../shared/live-overlay-geometry";
 import { resolveLiveOverlayLayout } from "../../shared/live-overlay-layout-presets";
 import { LiveCountdownEmblem } from "./LiveCountdownEmblem";
-import { OverlayEmblem } from "./LiveEmblem";
 import { LiveLowerThird } from "./LiveLowerThird";
 import { LiveStageDisplay, LiveStageDisplayBanner } from "./LiveStageDisplay";
 import { isLiveAuxOutput, liveOutputProjection, liveOutputView } from "./live-output-projection";
 import "../../design/tokens.event.generated.css";
+import { LIVE_PROGRAM_LAYER_ORDER, type LiveProgramLayer } from "../../shared/live-overlay-cover";
 
-/** A timer graphic: the timer it names, in its format, color and label. */
+/**
+ * A timer graphic: the timer it names, on a plate in the event's colors,
+ * readable on a corner of the stream. Its label over the time, and with the
+ * logo, the mark beside it; the ring presentation rings the mark with the
+ * time left.
+ */
 function TimerOverlay({ graphic, state }: { graphic: LiveTimerGraphic; state: LiveRoomState }) {
   const reading = useLiveTimerGraphicReading(graphic, state.timers, state.session);
-  if (!reading) return null;
+  const timer = state.timers.find((entry) => entry.id === graphic.timerId);
+  if (!reading || !timer) return null;
   const { running, text, tone, label } = reading;
+  const total = liveTimerTotalMs(timer, state.session);
+  const progress =
+    graphic.presentation === "ring" && reading.remainingMs !== null && reading.startsInMs === null && total
+      ? reading.remainingMs / total
+      : null;
   return (
-    <div class="pk-live-overlay__timer" data-tone={tone} data-presentation={graphic.presentation}>
-      {graphic.showLogo && graphic.presentation === "ring" ? (
-        <LiveCountdownEmblem text={text} running={running} over={tone === "over"} />
-      ) : graphic.showLogo ? (
-        <div class="pk-live-overlay__timer-emblem" data-running={running ? "" : undefined}>
-          <OverlayEmblem />
-        </div>
-      ) : null}
-      <div>
+    <div
+      class="pk-live-overlay__timer"
+      data-tone={tone}
+      data-presentation={graphic.presentation}
+      data-paused={running ? undefined : ""}
+    >
+      {graphic.showLogo ? <LiveCountdownEmblem progress={progress} running={running} /> : null}
+      <div class="pk-live-overlay__timer-text">
         {label ? <p class="pk-live-overlay__timer-label">{label}</p> : null}
-        {graphic.presentation === "digital" || !graphic.showLogo ? (
-          <span class="pk-live-overlay__timer-value">{text}</span>
-        ) : null}
+        <span class="pk-live-overlay__timer-value">{text}</span>
       </div>
     </div>
+  );
+}
+
+/** The space between timers stacked in the layout's timer box, in fractions of the frame's height. */
+const TIMER_STACK_GAP = 16 / 1080;
+
+/**
+ * Where each timer graphic sits: those in the layout's box stack from it,
+ * down from a box at the top or up from one at the bottom, each at the box's
+ * full size, so a second timer never shrinks the first; one with a position
+ * of its own sits there.
+ */
+function timerSlots(graphics: readonly LiveTimerGraphic[], box: LiveOverlayElementPlacement) {
+  const stacked = graphics.filter((entry) => entry.placement === "layout");
+  return graphics.map((graphic) => {
+    const index = stacked.indexOf(graphic);
+    const sized = liveTimerLayout(graphic, box);
+    const step = (box.vertical === "bottom" ? -1 : 1) * index * (sized.h + TIMER_STACK_GAP);
+    const slot = index > 0 ? { ...sized, y: sized.y + step } : sized;
+    return { graphic, slot };
+  });
+}
+
+/** The boards: each carries the logo in its top-right corner. */
+const BOARDS: ReadonlySet<LiveOverlayElement> = new Set([
+  "question",
+  "poll",
+  "panelists",
+  "topQuestions",
+  "chat",
+  "schedule",
+  "checkIn",
+]);
+
+/** Whether a timer sits on a board's logo corner: the right two fifths of its top fifth. */
+function coversLogo(board: LiveOverlayElementPlacement, timers: readonly LiveOverlayElementPlacement[]) {
+  const corner = { x: board.x + board.w * 0.6, y: board.y, w: board.w * 0.4, h: board.h * 0.2 };
+  return timers.some(
+    (timer) =>
+      timer.x < corner.x + corner.w &&
+      timer.x + timer.w > corner.x &&
+      timer.y < corner.y + corner.h &&
+      timer.y + timer.h > corner.y,
   );
 }
 
@@ -126,80 +176,89 @@ function prefersReducedMotion(): boolean {
   return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-/** Program's layers, bottom to top; each draws only while the room has something for it. */
-const PROGRAM_LAYERS: readonly Layer[] = [
-  {
-    element: "panelists",
-    draw: (state, { placement, panel }) =>
-      panel ? (
-        <LivePanelQuestionOverlay stage={state.stage} session={state.session} box={overlayBoxPixels(panel)} />
-      ) : state.stage.panelists ? (
-        <LivePanelistsOverlay
-          session={state.session}
-          panelists={state.stage.panelists}
-          box={overlayBoxPixels(placement)}
+/**
+ * Program's layers, each drawn only while the room has something for it,
+ * bottom to top in the one order the studio also reads to tell a graphic a
+ * board hides.
+ */
+const PROGRAM_LAYERS: readonly Layer[] = (
+  [
+    {
+      element: "panelists",
+      draw: (state, { placement, panel }) =>
+        panel ? (
+          <LivePanelQuestionOverlay stage={state.stage} session={state.session} box={overlayBoxPixels(panel)} />
+        ) : state.stage.panelists ? (
+          <LivePanelistsOverlay
+            session={state.session}
+            panelists={state.stage.panelists}
+            box={overlayBoxPixels(placement)}
+          />
+        ) : null,
+    },
+    {
+      element: "schedule",
+      draw: (state, { placement }) =>
+        state.stage.schedule ? (
+          <LiveScheduleOverlay schedule={state.stage.schedule} box={overlayBoxPixels(placement)} />
+        ) : null,
+    },
+    {
+      element: "checkIn",
+      draw: (state) => (state.stage.checkIn ? <LiveCheckInOverlay checkIn={state.stage.checkIn} /> : null),
+    },
+    {
+      element: "question",
+      draw: (state, { placement, panel }) =>
+        state.stage.question && !panel ? (
+          <LiveQuestionOverlay stage={state.stage} credits={state.session.credits} box={overlayBoxPixels(placement)} />
+        ) : null,
+    },
+    {
+      element: "lowerThird",
+      draw: (state, { animate }) => (
+        <LiveLowerThird
+          credit={state.stage.lowerThird}
+          animate={animate && state.stage.lowerThirdMotion === "animated"}
         />
-      ) : null,
-  },
-  {
-    element: "schedule",
-    draw: (state, { placement }) =>
-      state.stage.schedule ? (
-        <LiveScheduleOverlay schedule={state.stage.schedule} box={overlayBoxPixels(placement)} />
-      ) : null,
-  },
-  {
-    element: "checkIn",
-    draw: (state) => (state.stage.checkIn ? <LiveCheckInOverlay checkIn={state.stage.checkIn} /> : null),
-  },
-  {
-    element: "question",
-    draw: (state, { placement, panel }) =>
-      state.stage.question && !panel ? (
-        <LiveQuestionOverlay stage={state.stage} credits={state.session.credits} box={overlayBoxPixels(placement)} />
-      ) : null,
-  },
-  {
-    element: "lowerThird",
-    draw: (state, { animate }) => (
-      <LiveLowerThird
-        credit={state.stage.lowerThird}
-        animate={animate && state.stage.lowerThirdMotion === "animated"}
-      />
-    ),
-  },
-  {
-    element: "poll",
-    draw: (state, { placement }) =>
-      state.stage.poll ? (
-        <LivePollOverlay stage={state.stage} polls={state.polls} box={overlayBoxPixels(placement)} />
-      ) : null,
-  },
-  {
-    element: "topQuestions",
-    draw: (state, { placement }) =>
-      state.stage.topQuestions?.questions.length ? (
-        <LiveTopQuestionsOverlay list={state.stage.topQuestions} box={overlayBoxPixels(placement)} />
-      ) : null,
-  },
-  {
-    element: "chat",
-    draw: (state, { placement }) =>
-      state.stage.chatFeed?.messages.length ? (
-        <LiveChatFeedOverlay list={state.stage.chatFeed} box={overlayBoxPixels(placement)} />
-      ) : null,
-  },
-  {
-    element: "timer",
-    draw: () => null,
-  },
-  {
-    element: "ticker",
-    draw: (state) => (state.stage.ticker?.segments.length ? <LiveTickerOverlay ticker={state.stage.ticker} /> : null),
-  },
-  // Reactions float only while an operator has them on for this output.
-  { element: "reactions", draw: (state) => (state.stage.reactions ? <ReactionsOverlay burst={state.burst} /> : null) },
-];
+      ),
+    },
+    {
+      element: "poll",
+      draw: (state, { placement }) =>
+        state.stage.poll ? (
+          <LivePollOverlay stage={state.stage} polls={state.polls} box={overlayBoxPixels(placement)} />
+        ) : null,
+    },
+    {
+      element: "topQuestions",
+      draw: (state, { placement }) =>
+        state.stage.topQuestions?.questions.length ? (
+          <LiveTopQuestionsOverlay list={state.stage.topQuestions} box={overlayBoxPixels(placement)} />
+        ) : null,
+    },
+    {
+      element: "chat",
+      draw: (state, { placement }) =>
+        state.stage.chatFeed?.messages.length ? (
+          <LiveChatFeedOverlay list={state.stage.chatFeed} box={overlayBoxPixels(placement)} />
+        ) : null,
+    },
+    {
+      element: "timer",
+      draw: () => null,
+    },
+    {
+      element: "ticker",
+      draw: (state) => (state.stage.ticker?.segments.length ? <LiveTickerOverlay ticker={state.stage.ticker} /> : null),
+    },
+    // Reactions float only while an operator has them on for this output.
+    {
+      element: "reactions",
+      draw: (state) => (state.stage.reactions ? <ReactionsOverlay burst={state.burst} /> : null),
+    },
+  ] satisfies Array<Layer & { element: LiveProgramLayer }>
+).sort((a, b) => LIVE_PROGRAM_LAYER_ORDER.indexOf(a.element) - LIVE_PROGRAM_LAYER_ORDER.indexOf(b.element));
 
 /**
  * The stage display's layers: the speaker-facing screen, the code to check
@@ -281,6 +340,10 @@ export function LiveOverlayPresentation({
   const timersShow = view === "stage-display" ? elements.stageDisplay.visible : elements.timer.visible;
   const panel =
     state?.stage.question && state.stage.panelists && view !== "stage-display" ? stackedPanelBox(elements) : null;
+  const timerBoxes =
+    state && view !== "stage-display" && elements.timer.visible
+      ? timerSlots(state.stage.timerGraphics, elements.timer).map(({ slot }) => slot)
+      : [];
   const sounding =
     playsSounds && state && timersShow
       ? state.timers.filter((timer) => shown.some((graphic) => graphic.timerId === timer.id))
@@ -292,20 +355,13 @@ export function LiveOverlayPresentation({
         ? layers.map(({ element, draw }) => {
             const placement = elements[element];
             if (element === "timer" && placement.visible)
-              return state.stage.timerGraphics.map((graphic, _index, graphics) => {
-                const stacked = graphics.filter((entry) => entry.placement === "layout");
-                const count = graphic.placement === "layout" ? stacked.length : 1;
-                const slotIndex = stacked.findIndex((entry) => entry.timerId === graphic.timerId);
-                const slot =
-                  graphic.placement === "layout"
-                    ? { ...placement, h: placement.h / count, y: placement.y + (slotIndex * placement.h) / count }
-                    : placement;
+              return timerSlots(state.stage.timerGraphics, placement).map(({ graphic, slot }) => {
                 return (
                   <LiveOverlayLayer
                     key={`timer:${graphic.timerId}`}
                     element="timer"
                     dimmed={focus !== null && focus !== "timer"}
-                    placement={liveTimerLayout(graphic, slot)}
+                    placement={slot}
                   >
                     <TimerOverlay graphic={graphic} state={state} />
                   </LiveOverlayLayer>
@@ -318,6 +374,7 @@ export function LiveOverlayPresentation({
                 key={joined ? "panel" : element}
                 element={element}
                 dimmed={focus !== null && focus !== element && !(joined && focus === "question")}
+                logoCovered={BOARDS.has(element) && coversLogo(joined ? panel : placement, timerBoxes)}
                 placement={joined ? panel : placement}
               >
                 {content}

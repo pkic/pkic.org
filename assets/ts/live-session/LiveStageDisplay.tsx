@@ -97,7 +97,7 @@ export function LiveStageDisplay({
       <footer class="pk-live-stage-display__footer">
         <p class="pk-live-stage-display__title">
           <span class="pk-live-stage-display__marker" data-marker={plan.footer.marker}>
-            {plan.footer.marker === "live" ? "Live" : "Next"}
+            {plan.footer.marker === "live" ? "Live" : "Next session"}
           </span>
           {plan.footer.title}
         </p>

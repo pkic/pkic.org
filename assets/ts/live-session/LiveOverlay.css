@@ -85,6 +85,13 @@
     opacity: 0.12;
     filter: grayscale(1);
   }
+  /* A timer on a board's logo corner: the logo fades out of its way, as the timer carries the mark. */
+  .pk-live-overlay__layer .pk-live-board__logo {
+    transition: opacity var(--pk-dur) var(--pk-ease);
+  }
+  .pk-live-overlay__layer[data-logo-covered] .pk-live-board__logo {
+    opacity: 0;
+  }
   .pk-live-overlay__surface {
     position: relative;
     inline-size: 1920px;
@@ -193,16 +200,7 @@
     font-weight: 500;
     line-height: 1.25;
   }
-  .pk-live-overlay__countdown-logo {
-    inline-size: 168px;
-    block-size: 168px;
-  }
-  .pk-live-overlay__countdown-logo text {
-    fill: var(--pk-pqc-paper);
-    font-family: var(--pk-font-mono);
-    font-weight: 700;
-  }
-  /* The conference stripe's stops, for SVG gradients: the countdown ring and the lower third's underline. */
+  /* The conference stripe's stops, for SVG gradients: the lower third's underline. */
   .pk-live-overlay__stripe-green {
     stop-color: var(--pk-pqc-green);
   }
@@ -212,71 +210,111 @@
   .pk-live-overlay__stripe-orange {
     stop-color: var(--pk-pqc-orange);
   }
-  .pk-live-overlay__countdown-ring {
-    transform-origin: 217px 217px;
-  }
-  .pk-live-overlay__countdown-logo[data-running] .pk-live-overlay__countdown-ring {
-    animation: pk-spinner-spin calc(var(--pk-dur-shimmer) * 2) linear infinite;
-  }
-  .pk-live-overlay__countdown-logo[data-over] text {
-    fill: var(--pk-danger);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .pk-live-overlay__countdown-logo[data-running] .pk-live-overlay__countdown-ring {
-      animation: none;
-    }
-  }
-  /* Timer: a countdown in the top-right safe area. */
+  /*
+   * Timer: a plate in the event's colors in its layout box, drawn at the
+   * corner box's own size (336 x 120 of the frame): the mark, then the label
+   * over the time. The event stripe runs along its foot, as under the lower
+   * third's name. A corner of a stream stays readable: the time is set large
+   * in tabular figures, the label in the eyebrow's mono capitals.
+   */
   .pk-live-overlay__timer {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
-    gap: 24px;
-    position: absolute;
-    inset-block-start: 64px;
-    inset-inline-end: 96px;
-    padding: 0;
-    background: transparent;
-    color: var(--pk-pqc-paper);
-    text-shadow: 0 1px 3px var(--pk-pqc-ink);
+    gap: 20px;
+    min-inline-size: 336px;
+    block-size: 120px;
+    padding: 0 28px 6px 20px;
+    background: var(--pk-pqc-field);
+    color: var(--pk-pqc-on-field);
     font-family: var(--pk-font-mono);
-    font-size: calc(var(--pk-text-3xl) * 2);
-    font-variant-numeric: tabular-nums;
-    font-weight: 700;
+    white-space: nowrap;
   }
-  .pk-live-overlay__timer-emblem .pk-live-overlay__emblem {
-    inline-size: calc(96px * 360 / 314);
+  .pk-live-overlay__timer::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    block-size: 6px;
+    background: var(--pk-pqc-stripe);
   }
-  .pk-live-overlay__timer-emblem .pk-live-overlay__emblem-ink {
-    fill: var(--pk-pqc-on-field);
+  /* The mark, alone or inside the ring of time left. */
+  .pk-live-overlay__timer-mark {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 80px;
+    block-size: 80px;
   }
-  /* A flex box hugs the square emblem, so the spin turns about its exact center. */
-  .pk-live-overlay__timer-emblem {
+  .pk-live-overlay__timer-logo {
+    inline-size: 48px;
+    block-size: 48px;
+  }
+  .pk-live-overlay__timer[data-presentation="digital"] .pk-live-overlay__timer-logo {
+    inline-size: 64px;
+    block-size: 64px;
+  }
+  .pk-live-overlay__timer-ring {
+    position: absolute;
+    inset: 0;
+    transform: rotate(-90deg);
+  }
+  .pk-live-overlay__timer-ring circle {
+    fill: none;
+    stroke-width: 7;
+  }
+  .pk-live-overlay__timer-ring-track {
+    stroke: var(--pk-pqc-on-field);
+    opacity: 0.22;
+  }
+  .pk-live-overlay__timer-ring-left {
+    stroke: currentColor;
+    transition: stroke-dashoffset var(--pk-dur) linear;
+  }
+  .pk-live-overlay__timer-text {
     display: flex;
-  }
-  .pk-live-overlay__timer-emblem[data-running] {
-    animation: pk-spinner-spin calc(var(--pk-dur-shimmer) * 2) linear infinite;
-  }
-  .pk-live-overlay__timer-value {
-    font-variant-numeric: tabular-nums;
+    flex-direction: column;
+    gap: 2px;
   }
   .pk-live-overlay__timer-label {
     margin: 0;
-    font-family: var(--pk-font);
-    font-size: var(--pk-text-3xl);
+    color: var(--pk-pqc-on-field-muted);
+    font-size: 18px;
     font-weight: 500;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    text-transform: uppercase;
   }
-  @media (prefers-reduced-motion: reduce) {
-    .pk-live-overlay__timer-emblem[data-running] {
-      animation: none;
-    }
+  .pk-live-overlay__timer-value {
+    font-size: 56px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    line-height: 1;
   }
-  /* Warning and overtime tint the digits red and briefly pulse the element. */
-  .pk-live-overlay__timer[data-tone="warn"] {
-    color: var(--pk-danger);
-    animation: pk-timer-warning var(--pk-dur-timer-warning) ease-in-out 3;
+  /* A paused timer reads as held: the time stays, a little fainter. */
+  .pk-live-overlay__timer[data-paused] .pk-live-overlay__timer-value {
+    opacity: 0.72;
+  }
+  /*
+   * The warning turns the time and the ring to the event's orange; time over
+   * fills the plate with the event's copper, both with a brief pulse. The
+   * conference palette, not the portal's state colors, so it reads as the
+   * event's own graphic on air.
+   */
+  .pk-live-overlay__timer[data-tone="warn"] :is(.pk-live-overlay__timer-value, .pk-live-overlay__timer-mark) {
+    color: var(--pk-pqc-orange);
   }
   .pk-live-overlay__timer[data-tone="over"] {
-    color: var(--pk-danger);
+    background: var(--pk-pqc-copper);
+  }
+  .pk-live-overlay__timer[data-tone="over"]::after {
+    background: var(--pk-pqc-on-field);
+  }
+  .pk-live-overlay__timer:is([data-tone="warn"], [data-tone="over"]) {
     animation: pk-timer-warning var(--pk-dur-timer-warning) ease-in-out 3;
   }
   @keyframes pk-timer-warning {
@@ -285,13 +323,12 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .pk-live-overlay__timer[data-tone="warn"],
-    .pk-live-overlay__timer[data-tone="over"] {
+    .pk-live-overlay__timer:is([data-tone="warn"], [data-tone="over"]) {
       animation: none;
     }
-  }
-  .pk-live-overlay__timer[data-tone="warn"] .pk-live-overlay__countdown-logo text {
-    fill: var(--pk-danger);
+    .pk-live-overlay__timer-ring-left {
+      transition: none;
+    }
   }
 
   /* The stage display's banner: over its top row, between the brand stripe and the main area, the same height. */

@@ -16,13 +16,22 @@
     box-sizing: border-box;
     inline-size: 1680px;
     padding: 40px 48px 32px;
-    border-radius: var(--pk-radius-card);
-    background: var(--graphic-ground);
+    border-radius: var(--graphic-radius);
+    background: var(--graphic-plate);
     color: var(--graphic-ink);
     font-family: var(--pk-font);
     font-size: calc(var(--pk-text-3xl) * 1.0625);
     line-height: 1.2;
     text-shadow: var(--graphic-halo);
+  }
+  /* The event theme's stripe along the foot, as under the lower third's name; none in the other themes. */
+  .pk-live-schedule::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    block-size: 8px;
+    background: var(--graphic-stripe);
   }
   .pk-live-schedule[data-fit="medium"] {
     inline-size: 1200px;
@@ -92,6 +101,16 @@
   }
   .pk-live-schedule__room[data-accent="5"] {
     --live-room-accent: var(--pk-palette-teal);
+  }
+  /* On the event's field the rooms take the stripe's light colors, white first, so each bar stands off the green. */
+  .pk-live-schedule[data-graphic-theme="event"] .pk-live-schedule__room {
+    --live-room-accent: var(--pk-pqc-on-field);
+  }
+  .pk-live-schedule[data-graphic-theme="event"] .pk-live-schedule__room[data-accent="1"] {
+    --live-room-accent: var(--pk-pqc-blue);
+  }
+  .pk-live-schedule[data-graphic-theme="event"] .pk-live-schedule__room[data-accent="2"] {
+    --live-room-accent: var(--pk-pqc-orange);
   }
   .pk-live-schedule__when {
     grid-area: when;

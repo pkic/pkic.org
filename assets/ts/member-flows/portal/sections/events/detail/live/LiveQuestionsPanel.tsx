@@ -3,7 +3,7 @@ import { useState } from "preact/hooks";
 import type { ClockZone } from "../../../../../../../shared/event-clock";
 import { format24HourClockInZone } from "../../../../../../../shared/format-date";
 import { formatNumber } from "../../../../../../../shared/format-number";
-import { liveQuestionAddresseeName } from "../../../../../../../shared/live-room-credits";
+import { liveQuestionAddresseeName, liveQuestionAskerName } from "../../../../../../../shared/live-room-credits";
 import {
   defaultLivePreparedQuestionWindow,
   type LiveQuestionStatus,
@@ -151,6 +151,7 @@ function OpenQuestionRow({
 }) {
   const { state, disabled } = targets;
   const addressee = liveQuestionAddresseeName(state.session.credits, question.addressedTo);
+  const asker = liveQuestionAskerName(question);
   const moderate = (status: LiveQuestionStatus) =>
     send({ type: "question.moderate", questionId: question.id, expectedRevision: question.revision, status });
   const pending = question.status === "pending";
@@ -171,12 +172,10 @@ function OpenQuestionRow({
         <>
           {pending ? <span class="pk-live-desk__question-state">Pending</span> : null}
           <span>▲ {formatNumber(question.votes)}</span>
-          {question.authorPhotoUrl && question.authorName ? (
-            <Avatar name={question.authorName} src={question.authorPhotoUrl} size="sm" alt="" />
+          {question.authorPhotoUrl && asker ? (
+            <Avatar name={asker} src={question.authorPhotoUrl} size="sm" alt="" />
           ) : null}
-          <span>
-            {[addressee ? `For ${addressee}` : null, question.authorName ?? "Anonymous"].filter(Boolean).join(" · ")}
-          </span>
+          <span>{[addressee ? `For ${addressee}` : null, asker ?? "Anonymous"].filter(Boolean).join(" · ")}</span>
         </>
       }
       actions={
@@ -344,7 +343,7 @@ export function LiveQuestionsPanel({ targets, clock, send }: { targets: LiveTarg
         <Dialog
           open
           title="Audience question"
-          meta={inspected.authorName ?? "Anonymous"}
+          meta={liveQuestionAskerName(inspected) ?? "Anonymous"}
           closeLabel="Close question"
           confirmLabel="Done"
           cancelLabel="Back to studio"

@@ -35,6 +35,7 @@ const CENTER: Anchor = { horizontal: "center", vertical: "middle" };
 const CENTER_BOTTOM: Anchor = { horizontal: "center", vertical: "bottom" };
 const RIGHT_TOP: Anchor = { horizontal: "right", vertical: "top" };
 const RIGHT_MIDDLE: Anchor = { horizontal: "right", vertical: "middle" };
+const RIGHT_BOTTOM: Anchor = { horizontal: "right", vertical: "bottom" };
 
 /**
  * A board never floats in the frame: it fills the frame, or a full-height
@@ -67,14 +68,20 @@ function boardColumn(side: "left" | "right"): Partial<LiveOverlayLayoutElements>
   };
 }
 
-/** Today's broadcast: the lower third, timer and ticker in the title-safe area, and each board over the whole frame. */
+/**
+ * Today's broadcast: the lower third, timer and ticker in the title-safe
+ * area, and each board over the whole frame. The graphics an operator puts on
+ * together never overlap: the timer keeps the top-right corner, the check-in
+ * code the right side under it, Up next the left above the lower third.
+ */
 const FULL_FRAME: LiveOverlayLayoutElements = {
   lowerThird: box(48, 776, 1248, 208, LEFT_BOTTOM),
   question: FILL,
   poll: FILL,
   timer: box(1536, 48, 336, 120, RIGHT_TOP),
   ticker: box(0, 1000, 1920, 80, CENTER_BOTTOM),
-  schedule: box(192, 108, 1536, 864, CENTER),
+  // Up next on the left, above the lower third and clear of the check-in code, so the two can show together.
+  schedule: box(96, 168, 1248, 584, LEFT_MIDDLE),
   panelists: FILL,
   checkIn: box(1392, 216, 480, 648, RIGHT_MIDDLE),
   topQuestions: { visible: true, ...LIVE_OVERLAY_ADDED_ELEMENT_BOXES.topQuestions, shared: true },
@@ -144,6 +151,15 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
     ),
   },
   "ticker-only": { name: "Ticker only", elements: only(FULL_FRAME, ["ticker"]) },
+  /**
+   * A break, over the sponsors' clips or a holding slide: only the time until
+   * the program is back, large in the bottom-right corner above the ticker,
+   * so nothing covers the picture.
+   */
+  break: {
+    name: "Break",
+    elements: only({ ...FULL_FRAME, timer: box(1392, 808, 480, 172, RIGHT_BOTTOM) }, ["timer", "ticker"]),
+  },
 };
 
 export const LIVE_OVERLAY_PRESET_LAYOUTS = Object.fromEntries(

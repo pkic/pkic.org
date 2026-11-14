@@ -17,11 +17,14 @@ export function LiveOverlayLayer({
   element,
   placement,
   dimmed = false,
+  logoCovered = false,
   children,
 }: {
   element: LiveOverlayElement;
   /** Drawn faintly, behind the element the layout editor has selected. */
   dimmed?: boolean;
+  /** A timer sits on the board's logo corner: the logo steps aside, as the timer carries the mark. */
+  logoCovered?: boolean;
   placement: LiveOverlayElementPlacement;
   children: ComponentChildren;
 }) {
@@ -67,7 +70,12 @@ export function LiveOverlayLayer({
       node.style.setProperty(name, value);
   }, [transform.dx, transform.dy, transform.scale]);
   return (
-    <div class="pk-live-overlay__layer" data-overlay-element={element} data-dimmed={dimmed ? "" : undefined}>
+    <div
+      class="pk-live-overlay__layer"
+      data-overlay-element={element}
+      data-dimmed={dimmed ? "" : undefined}
+      data-logo-covered={logoCovered ? "" : undefined}
+    >
       <div ref={surface} class="pk-live-overlay__surface" data-placed={transform.identity ? undefined : ""}>
         {children}
       </div>

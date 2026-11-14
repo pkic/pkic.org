@@ -233,7 +233,6 @@ export function TimerRow({
       {dialog ? (
         <LiveTimerDialog
           timer={timer}
-          session={session}
           clock={clock}
           graphic={graphic}
           send={send}

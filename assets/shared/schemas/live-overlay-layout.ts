@@ -175,6 +175,7 @@ export const LIVE_OVERLAY_PRESETS = [
   "close-up",
   "panel",
   "ticker-only",
+  "break",
 ] as const;
 export type LiveOverlayPreset = (typeof LIVE_OVERLAY_PRESETS)[number];
 /** The layout a browser source uses when it names none, or one the event does not have. */

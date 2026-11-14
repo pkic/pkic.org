@@ -17,7 +17,7 @@ import { LIVE_AUX_OUTPUTS } from "../../../../../../../shared/live-room-outputs"
 import { liveTimerGraphicReplacements, sendLivePrograms, type LiveTargets } from "./live-output-targets";
 
 const FORMAT_LABELS: Record<LiveTimerGraphic["format"], string> = {
-  clock: "Clock (12:34, 1:02:34, 3d 04:12)",
+  clock: "Clock (12:34, 1:02:34, 3d 4h 12m)",
   ss: "Seconds (754)",
   custom: "Custom duration",
 };
@@ -25,7 +25,10 @@ const DIRECTION_LABELS: Record<LiveTimerGraphic["direction"], string> = {
   remaining: "Time left",
   elapsed: "Time elapsed",
 };
-const PRESENTATION_LABELS: Record<LiveTimerGraphic["presentation"], string> = { ring: "Logo ring", digital: "Digital" };
+const PRESENTATION_LABELS: Record<LiveTimerGraphic["presentation"], string> = {
+  ring: "Ring of time left",
+  digital: "Digital",
+};
 const PLACEMENT_LABELS: Record<LiveTimerGraphic["placement"], string> = {
   layout: "As the source's layout",
   "top-left": "Top left",

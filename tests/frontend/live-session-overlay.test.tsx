@@ -417,14 +417,17 @@ describe("broadcast overlays", () => {
       addressedTo: null,
     };
     const shown = () => ({
-      tag: host.querySelector(".pk-live-stage-display__questions .pk-live-stage-display__tag")?.textContent ?? null,
+      tag:
+        host.querySelector(
+          ".pk-live-stage-display__questions :is(.pk-live-stage-display__tag, .pk-live-stage-display__next-label)",
+        )?.textContent ?? null,
       text: host.querySelector(".pk-live-stage-display__question-text")?.textContent ?? null,
       next: host.querySelector(".pk-live-stage-display__next-text")?.textContent ?? null,
     });
     void act(() => live.latest().deliver({ type: "stage.display.next.changed", question: next, votes: 31 }));
     expect(shown()).toEqual({ tag: "On air", text: "What about hybrid certificates?", next: next.text });
     // The room sends its votes with it, since a stage display source has no question list.
-    expect(host.querySelector(".pk-live-stage-display__votes")?.textContent).toBe("31");
+    expect(host.querySelector(".pk-live-stage-display__votes")?.textContent).toBe("31 votes");
     // Taken to Program, the next question becomes the current one and is not repeated below it.
     void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, question: next } }));
     expect(shown()).toEqual({ tag: "On air", text: next.text, next: null });
@@ -433,7 +436,7 @@ describe("broadcast overlays", () => {
     void act(() =>
       live.latest().deliver({ type: "stage.display.next.changed", question: { ...next, id: LIVE_QUESTION } }),
     );
-    expect(shown()).toEqual({ tag: "Next", text: null, next: "Which clients still fail a hybrid handshake?" });
+    expect(shown()).toEqual({ tag: "Next question", text: null, next: "Which clients still fail a hybrid handshake?" });
   });
 
   it("never shows Preview's question on an audience output", () => {

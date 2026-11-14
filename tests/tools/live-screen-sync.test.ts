@@ -30,16 +30,22 @@ const program: LiveStage = {
 };
 
 describe("room screens synced with Program", () => {
-  it("shows all of Program on the projector by default, and only its own composition once sync is off", () => {
+  it("shows Program on the projector by default, but never the stream's own captions, and only its own composition once sync is off", () => {
     expect(DEFAULT_LIVE_SCREEN_SYNC).toEqual({ projector: true, "stage-display": true });
-    expect(
-      liveScreenComposition("projector", {
-        own: EMPTY_LIVE_STAGE,
-        program,
-        sync: DEFAULT_LIVE_SCREEN_SYNC,
-        timers: [],
-      }),
-    ).toEqual(program);
+    const shown = liveScreenComposition("projector", {
+      own: EMPTY_LIVE_STAGE,
+      program,
+      sync: DEFAULT_LIVE_SCREEN_SYNC,
+      timers: [],
+    });
+    expect(shown).toEqual({
+      ...program,
+      lowerThird: EMPTY_LIVE_STAGE.lowerThird,
+      lowerThirdChange: EMPTY_LIVE_STAGE.lowerThirdChange,
+      lowerThirdMotion: EMPTY_LIVE_STAGE.lowerThirdMotion,
+      ticker: EMPTY_LIVE_STAGE.ticker,
+      panelists: EMPTY_LIVE_STAGE.panelists,
+    });
     const off = { ...DEFAULT_LIVE_SCREEN_SYNC, projector: false };
     expect(liveScreenComposition("projector", { own: EMPTY_LIVE_STAGE, program, sync: off, timers: [] })).toBe(
       EMPTY_LIVE_STAGE,
@@ -55,7 +61,7 @@ describe("room screens synced with Program", () => {
       sync: DEFAULT_LIVE_SCREEN_SYNC,
       timers: [],
     });
-    expect(shown).toMatchObject({ question: own, lowerThird: credit, timerGraphics: [pitch], reactions: true });
+    expect(shown).toMatchObject({ question: own, lowerThird: null, timerGraphics: [pitch], reactions: true });
   });
 
   it("takes only what the stage display shows from Program: no lower third or reactions there", () => {

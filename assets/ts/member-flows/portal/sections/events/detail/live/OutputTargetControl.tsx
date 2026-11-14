@@ -33,6 +33,10 @@ export const OUTPUT_TARGET_HINTS = {
   },
 } as const;
 
+/** Why a graphic on air is not seen: a board drawn over it, named as the studio names it. */
+export const outputTargetCoveredHint = (board: string) =>
+  `On air, but the ${board.toLowerCase()} covers it, so nobody sees it. Take the ${board.toLowerCase()} off air to show it, or click to take this off air.`;
+
 /** The color slot of the first other operator on a button, which draws a ring in their color. */
 function presenceOn(presence: readonly OutputTargetPresence[], target: LivePresenceTarget): number | undefined {
   return presence.find((mark) => mark.target === target)?.color;
@@ -54,6 +58,7 @@ export function OutputTargetControl({
   subject,
   preview,
   program,
+  coveredBy = null,
   disabled,
   integrated = false,
   presenceItem,
@@ -64,6 +69,8 @@ export function OutputTargetControl({
   subject: string;
   preview: boolean;
   program: boolean;
+  /** The board that hides it on air, such as "Question"; the PGM button then reads on air but covered. */
+  coveredBy?: string | null;
   disabled: boolean;
   /** Spans the foot of a card instead of sitting inline. */
   integrated?: boolean;
@@ -97,7 +104,13 @@ export function OutputTargetControl({
         data-destination="program"
         data-presence-color={presenceOn(presence, "program")}
         aria-label={`Show ${subject} on air`}
-        title={OUTPUT_TARGET_HINTS.program[program ? "on" : "off"]}
+        aria-description={program && coveredBy ? `Covered by the ${coveredBy.toLowerCase()}` : undefined}
+        data-covered={program && coveredBy ? "" : undefined}
+        title={
+          program && coveredBy
+            ? outputTargetCoveredHint(coveredBy)
+            : OUTPUT_TARGET_HINTS.program[program ? "on" : "off"]
+        }
         aria-pressed={program}
         disabled={disabled}
         onClick={() => onToggle("program")}

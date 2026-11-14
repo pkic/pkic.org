@@ -100,6 +100,16 @@ export function liveQuestionAddresseeName(credits: readonly AddressableCredit[],
   return liveQuestionAddressees(credits).find((credit) => credit.key === key)?.name ?? null;
 }
 
+/**
+ * Who a desk shows as the asker. A prepared question was written by the
+ * operator who prepared it, who is not its asker: it comes in anonymously,
+ * so no desk names that operator. Other anonymous questions still name their
+ * author to operators, who moderate them.
+ */
+export function liveQuestionAskerName(question: { prepared: boolean; authorName: string | null }): string | null {
+  return question.prepared ? null : question.authorName;
+}
+
 type DisplayRoleShift = NonNullable<AgendaSnapshot["displayRoles"]>[number];
 
 /** A stable key for a host: the same duty and name give the same key on every admission. */

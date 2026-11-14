@@ -315,12 +315,7 @@ export function LiveSessionDesk({
         return {
           title,
           actions: (
-            <LiveAddTimerAction
-              state={state}
-              clock={clock ?? state.session.timeZone}
-              send={sendProgram}
-              disabled={disabled}
-            />
+            <LiveAddTimerAction clock={clock ?? state.session.timeZone} send={sendProgram} disabled={disabled} />
           ),
           body: (
             <TimePanel

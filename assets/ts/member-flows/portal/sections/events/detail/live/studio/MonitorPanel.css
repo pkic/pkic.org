@@ -123,7 +123,7 @@
     min-inline-size: 0;
     margin: 0;
     overflow: hidden;
-    border: 2px solid var(--tally, var(--pk-line));
+    border: 2px var(--tally-line, solid) var(--tally, var(--pk-line));
     border-radius: var(--pk-radius);
     background: var(--pk-surface-sunk);
   }
@@ -188,6 +188,7 @@
   }
   .pk-studio-monitor__sync.pk-btn[aria-pressed="true"] {
     border-color: var(--tally);
+    border-style: var(--tally-line);
     background: color-mix(in oklch, var(--tally) 10%, transparent);
     color: var(--tally);
   }
@@ -216,7 +217,7 @@
     place-items: center;
     aspect-ratio: 16 / 9;
     overflow: hidden;
-    border: 2px solid var(--tally, var(--pk-line));
+    border: 2px var(--tally-line, solid) var(--tally, var(--pk-line));
     border-radius: var(--pk-radius);
     background: var(--pk-chrome-deep);
     cursor: zoom-in;
@@ -235,6 +236,18 @@
     color: color-mix(in srgb, var(--pk-on-solid) 62%, transparent);
     font-size: var(--pk-text-sm);
     text-align: center;
+    /* A graphic still leaving is drawn beneath it: the line waits out the slowest exit before it fades in. */
+    animation: pk-studio-monitor-idle-in var(--pk-dur) var(--pk-ease) calc(var(--pk-dur-slow) * 1.6) both;
+  }
+  @keyframes pk-studio-monitor-idle-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-studio-monitor__idle {
+      animation: none;
+    }
   }
 
   /* A free place: as large as a card, dashed, offering another output. */

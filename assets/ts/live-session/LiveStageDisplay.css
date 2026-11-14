@@ -149,10 +149,6 @@
     background: var(--pk-stage-live);
     color: var(--pk-stage-live-ink);
   }
-  .pk-live-stage-display__tag[data-tone="next"] {
-    background: var(--pk-stage-next);
-    color: var(--pk-stage-next-ink);
-  }
   .pk-live-stage-display__question-text {
     display: -webkit-box;
     margin: 0;
@@ -177,6 +173,11 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+  .pk-live-stage-display__next-label {
+    flex: none;
+    color: var(--pk-stage-ink-muted);
+    font-weight: 700;
   }
   .pk-live-stage-display__votes {
     flex: none;
@@ -292,7 +293,7 @@
     color: var(--pk-stage-live);
   }
   .pk-live-stage-display__marker[data-marker="next"] {
-    color: var(--pk-stage-next);
+    color: var(--pk-stage-ink-muted);
   }
   .pk-live-stage-display__speakers {
     display: flex;

@@ -1,3 +1,4 @@
+import { LIVE_OVERLAY_ELEMENT_LABELS } from "../../../../../../../shared/schemas/live-overlay-layout";
 import { LiveTallyBands } from "./LiveTallyBands";
 import { OutputTargetControl } from "./OutputTargetControl";
 import { liveLayerTargets, sendLayerToggle, type LiveLayer, type LiveTargets } from "./live-output-targets";
@@ -39,6 +40,7 @@ export function LiveLayerTargets({
         presence={marks.map((mark) => ({ target: mark.focus?.target ?? null, color: mark.color }))}
         preview={where.preview}
         program={where.program}
+        coveredBy={where.coveredBy ? LIVE_OVERLAY_ELEMENT_LABELS[where.coveredBy] : null}
         disabled={targets.disabled || disabled}
         onToggle={(destination) => sendLayerToggle(targets, layer, destination)}
       />

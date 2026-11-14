@@ -46,3 +46,16 @@
     color: var(--pk-on-solid);
   }
 }
+
+/* On air but covered by a board: Program's color, hatched, so it reads as live yet unseen. */
+@layer utilities {
+  .pk-output-target > .pk-output-target__button[aria-pressed="true"][data-destination="program"][data-covered] {
+    background: repeating-linear-gradient(
+      -45deg,
+      color-mix(in oklab, var(--live-tally-program) 22%, transparent) 0 4px,
+      transparent 4px 8px
+    );
+    box-shadow: inset 0 0 0 1px var(--live-tally-program);
+    color: var(--pk-danger-ink);
+  }
+}

@@ -155,7 +155,7 @@ export type LiveTimerDraft = z.infer<typeof liveTimerDraftSchema>;
 // ── The timer graphic ───────────────────────────────────────────────────────
 
 /**
- * `clock` grows with the time it shows (12:34, 1:02:34, 3d 04:12, 2y 145d)
+ * `clock` grows with the time it shows (12:34, 1:02:34, 3d 4h 12m)
  * and reads the same in the studio and on every screen; `ss` is total seconds.
  */
 export const LIVE_TIMER_FORMATS = ["clock", "ss", "custom"] as const;

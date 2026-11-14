@@ -5,13 +5,14 @@ import type { LiveCredit, LiveStage } from "../../shared/schemas/live-session-ro
 import { Avatar } from "../ui/Avatar";
 import { LiveBoard } from "./LiveBoard";
 import "./LiveQuestionOverlay.css";
+import { LiveScreenText } from "./LiveScreenText";
 
 /** The question large beside the event stripe, and who asked it when they asked by name. */
 export function LiveQuestionBody({ question }: { question: NonNullable<LiveStage["question"]> }) {
   return (
     <div class="pk-live-board-question__body">
       <p class="pk-live-overlay__question-text" data-fit={liveQuestionFit(question.text)}>
-        {question.text}
+        <LiveScreenText text={question.text} />
       </p>
       {question.authorName ? (
         <p class="pk-live-overlay__question-asker">

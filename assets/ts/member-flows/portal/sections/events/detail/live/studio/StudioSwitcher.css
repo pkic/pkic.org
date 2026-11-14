@@ -7,13 +7,14 @@
   }
   /* A 44px target wherever it sits, desk or phone, solid in the tally color of the output it goes to. */
   .pk-studio-transition__split {
-    border-color: var(--tally);
+    border-color: var(--tally-solid);
+    border-style: var(--tally-line);
   }
   .pk-studio-transition__split > .pk-btn,
   .pk-studio-transition__split .pk-studio-transition__target {
     min-block-size: 2.75rem;
     border: 0;
-    background: var(--tally);
+    background: var(--tally-solid);
     color: var(--pk-on-solid);
     font-family: var(--pk-font-mono);
     font-weight: 600;
@@ -29,7 +30,7 @@
   }
   .pk-studio-transition__split > .pk-btn:hover:not(:disabled),
   .pk-studio-transition__split .pk-studio-transition__target:hover {
-    background: color-mix(in srgb, var(--tally) 85%, black);
+    background: color-mix(in oklab, var(--tally-solid) 85%, #000);
   }
   /* The Undo after a clear, above the panels at the foot of the window, out of the way of the header. */
   .pk-studio__toast {

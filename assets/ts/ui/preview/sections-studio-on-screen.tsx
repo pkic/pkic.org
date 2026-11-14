@@ -29,6 +29,7 @@ import { ScreenView } from "../../event-screens/ScreenApp";
 import { LiveReactionBar } from "../../live-session/LiveReactionBar";
 import { LiveOverlayPresentation } from "../../live-session/LiveOverlayPresentation";
 import type { LiveRoomState } from "../../live-session/live-room-state";
+import { OutputTargetControl } from "../../member-flows/portal/sections/events/detail/live/OutputTargetControl";
 import { TransitionControl } from "../../member-flows/portal/sections/events/detail/live/studio/StudioSwitcher";
 import { LiveSpeakerCards } from "../../member-flows/portal/sections/events/detail/live/LiveSpeakerCards";
 import { GraphicsPanel } from "../../member-flows/portal/sections/events/detail/live/studio/GraphicsPanel";
@@ -502,6 +503,25 @@ export const studioOnScreenSections: PreviewSection[] = [
     render: () => <LivestreamOverlay state={roomWith({}, { lowerThird: ROOM.session.credits[0]! })} />,
   },
   {
+    id: "onscreen-lower-third-name-only",
+    title: "Lower third for a speaker with no title",
+    note: "With no title or organization, the name bar shows alone; no empty field sits under it.",
+    render: () => (
+      <LivestreamOverlay
+        state={roomWith(
+          {},
+          {
+            lowerThird: {
+              ...ROOM.session.credits[0]!,
+              identity: { title: null, organization: null },
+              additionalIdentities: [],
+            },
+          },
+        )}
+      />
+    ),
+  },
+  {
     id: "onscreen-panelists-identities",
     title: "Panelists with a speaker's two identities",
     note: "A panelist with more than one identity rolls through them, as the lower third does.",
@@ -604,6 +624,31 @@ export const studioOnScreenSections: PreviewSection[] = [
     title: "Multiview with each output in its own color",
     note: "Program red, Preview green, the projector blue and the stage display amber, on the border and the dot.",
     render: () => <Multiview />,
+  },
+  {
+    id: "studio-output-target-covered",
+    title: "On air, but covered",
+    note: "PGM stays lit while a graphic is on air; hatched when a full-screen board, such as the question, hides it. Its tooltip says which board.",
+    render: () => (
+      <div class="pk-cluster">
+        <OutputTargetControl
+          subject="Up next"
+          preview={false}
+          program={false}
+          disabled={false}
+          onToggle={() => undefined}
+        />
+        <OutputTargetControl subject="Up next" preview program disabled={false} onToggle={() => undefined} />
+        <OutputTargetControl
+          subject="Up next"
+          preview={false}
+          program
+          coveredBy="Question"
+          disabled={false}
+          onToggle={() => undefined}
+        />
+      </div>
+    ),
   },
   {
     id: "studio-transition",

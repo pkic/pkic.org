@@ -56,7 +56,7 @@ describe("the studio's switcher, session bar and phone layout", () => {
         tone: "warning",
         flash: false,
       });
-      expect(home.textContent).not.toMatch(/Take off air|Nothing on the stage display/);
+      expect(home.textContent).not.toMatch(/Take off air|No message on the stage display/);
 
       // A touch on Program shows its tag, Clear and Full screen on the picture.
       const program = bar.querySelector<HTMLButtonElement>('button[aria-label="Program"]')!;
