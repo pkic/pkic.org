@@ -79,9 +79,9 @@ export function LivePanelistsOverlay({
           >
             <div class="pk-live-panelists__headshot">
               <Avatar name={credit.name} src={credit.photoUrl ?? undefined} size="xl" original />
+              {credit.moderator ? <p class="pk-live-panelists__moderator">Moderator</p> : null}
             </div>
             <div class="pk-live-panelists__info">
-              {credit.moderator ? <p class="pk-live-panelists__moderator">Moderator</p> : null}
               <p class="pk-live-panelists__name">{credit.name}</p>
               <div class="pk-live-panelists__title">
                 <LiveCreditTitles credit={credit} />
