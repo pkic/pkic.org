@@ -17,15 +17,16 @@ import {
   liveTimerTone,
 } from "./live-timer-policy";
 import type { LivePoll } from "./schemas/live-session-poll";
-import {
-  EMPTY_LIVE_STAGE,
-  type LiveRoomSession,
-  type LiveSpeakerMessage,
-  type LiveStage,
-  type LiveStageQuestion,
-  type LiveTimer,
-  type LiveTimerGraphic,
+import type {
+  LiveRoomSession,
+  LiveSpeakerMessage,
+  LiveStage,
+  LiveStageQuestion,
+  LiveTimer,
+  LiveTimerGraphic,
 } from "./schemas/live-session-room";
+import type { LiveScreenSync } from "./schemas/live-screen-sync";
+import { liveScreenComposition, liveScreenSyncs } from "./live-screen-sync";
 import type { LiveScheduleRoom } from "./schemas/live-session-schedule";
 import type { LiveStageDisplaySettings } from "./schemas/live-stage-display-settings";
 
@@ -40,7 +41,7 @@ import type { LiveStageDisplaySettings } from "./schemas/live-stage-display-sett
  * a question or poll sits beside the timer that ends first; else up to two
  * timers, the one ending first large. Questions, polls and timers are the
  * stage display's own when operators put any there, else Program's while it
- * syncs with Program. The banner is the operators' message, else the near-end cue.
+ * syncs, by the rule every room screen follows (see live-screen-sync). The banner is the operators' message, else the near-end cue.
  */
 
 type SessionTime = Pick<LiveRoomSession, "startAt" | "endAt" | "timeZone">;
@@ -91,22 +92,18 @@ export function liveTimerGraphicText(
 }
 
 /**
- * The countdowns the stage display shows: its own timer graphics, else, like
- * its question and poll, those on Program. A clock is left out: the top row
- * always reads the time of day.
+ * The countdowns the stage display shows of the timers on it, its own or,
+ * while it syncs, Program's. A clock is left out: the top row always reads
+ * the time of day.
  */
 export function liveStageDisplayGraphics(
-  own: Pick<LiveStage, "timerGraphics">,
-  program: Pick<LiveStage, "timerGraphics">,
+  shown: Pick<LiveStage, "timerGraphics">,
   timers: readonly LiveTimer[],
 ): LiveTimerGraphic[] {
-  const countdowns = (graphics: readonly LiveTimerGraphic[]) =>
-    graphics.filter((graphic) => {
-      const timer = timers.find((entry) => entry.id === graphic.timerId);
-      return timer !== undefined && liveTimerCounts(timer);
-    });
-  const pinned = countdowns(own.timerGraphics);
-  return pinned.length ? pinned : countdowns(program.timerGraphics);
+  return shown.timerGraphics.filter((graphic) => {
+    const timer = timers.find((entry) => entry.id === graphic.timerId);
+    return timer !== undefined && liveTimerCounts(timer);
+  });
 }
 
 export type LiveStageTimer = LiveTimerGraphicText & { size: "large" | "small" };
@@ -159,8 +156,8 @@ export interface LiveStageDisplayInput {
   own: LiveStage;
   /** What is on air. */
   program: LiveStage;
-  /** Whether the stage display syncs with Program: shows its question, poll and timers, and the next question. */
-  followsProgram: boolean;
+  /** Whether each room screen syncs with Program; while the stage display does, it also shows the next question. */
+  screenSync: LiveScreenSync;
   /** The question lined up in Preview. */
   next: LiveStageQuestion | null;
   /** Its votes, when this screen knows them. */
@@ -178,17 +175,21 @@ export interface LiveStageDisplayInput {
 const endsBefore = (left: LiveTimerGraphicText, right: LiveTimerGraphicText) =>
   (left.remainingMs ?? Number.POSITIVE_INFINITY) - (right.remainingMs ?? Number.POSITIVE_INFINITY);
 
-/** What the stage display takes from Program: all of it while it syncs, nothing once sync is off. */
-const followedProgram = (input: LiveStageDisplayInput): LiveStage =>
-  input.followsProgram ? input.program : EMPTY_LIVE_STAGE;
+/** The stage display's composition: its own, with Program's where it syncs. */
+const stageDisplayShown = (input: LiveStageDisplayInput): LiveStage =>
+  liveScreenComposition("stage-display", {
+    own: input.own,
+    program: input.program,
+    sync: input.screenSync,
+    timers: input.timers,
+  });
 
 function content(input: LiveStageDisplayInput): LiveStageContent | null {
-  const { own, program, polls } = input;
-  const followed = followedProgram(input);
+  const { program, polls } = input;
+  const shown = stageDisplayShown(input);
   const { current: question, next: lined } = liveStageDisplayQuestions(
-    own,
-    followed,
-    input.followsProgram ? input.next : null,
+    shown,
+    liveScreenSyncs(input.screenSync, "stage-display") ? input.next : null,
   );
   const next = lined ? { question: lined, votes: input.nextVotes } : null;
   if (question)
@@ -199,7 +200,7 @@ function content(input: LiveStageDisplayInput): LiveStageContent | null {
       onAir: program.question?.id === question.id,
       next,
     };
-  const pollId = own.poll?.id ?? followed.poll?.id;
+  const pollId = shown.poll?.id;
   const poll = pollId ? polls.find((entry) => entry.id === pollId) : undefined;
   if (poll) return { kind: "poll", poll, onAir: program.poll?.id === poll.id };
   return next ? { kind: "question", question: null, addressee: null, onAir: false, next } : null;
@@ -247,7 +248,7 @@ function sessionAhead(input: LiveStageDisplayInput): boolean {
 }
 
 function upcoming(input: LiveStageDisplayInput): LiveScheduleRoom | undefined {
-  const schedule = input.own.schedule ?? input.program.schedule;
+  const schedule = stageDisplayShown(input).schedule;
   const rooms = schedule?.available ? schedule.rooms : [];
   // Another room's next session is never this room's; only a screen without a room takes the first.
   return input.roomId === undefined ? rooms[0] : rooms.find((room) => room.roomId === input.roomId);
@@ -260,7 +261,7 @@ export function liveStageDisplayPlan(input: LiveStageDisplayInput): LiveStageDis
   const { session, settings, now } = input;
   const left = sessionLeftMs(input);
   const nearEnd = settings.nearEndSeconds > 0 && left !== null && left > 0 && left <= settings.nearEndSeconds * 1000;
-  const items = liveStageDisplayGraphics(input.own, followedProgram(input), input.timers)
+  const items = liveStageDisplayGraphics(stageDisplayShown(input), input.timers)
     .map((graphic) => {
       const item = liveTimerGraphicText(
         graphic,

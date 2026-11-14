@@ -4,7 +4,13 @@ import {
   type LiveAuxOutput,
 } from "../../../../../../../shared/live-room-outputs";
 import { liveStageDisplayGraphics } from "../../../../../../../shared/live-stage-display-plan";
-import { liveSyncedComposition } from "../../../../../../../shared/live-screen-sync";
+import {
+  liveScreenComposition,
+  liveScreenFollows,
+  liveScreenSyncs,
+  type LiveScreenGraphic,
+} from "../../../../../../../shared/live-screen-sync";
+import type { LiveStage } from "../../../../../../../shared/schemas/live-session-room";
 import type { LiveSyncedScreen } from "../../../../../../../shared/schemas/live-screen-sync";
 import { Menu, type MenuItem } from "../../../../../../ui/Menu";
 import {
@@ -32,12 +38,24 @@ export interface LiveScreens {
 /** A graphic that goes nowhere yet, such as a pending question or a draft poll. */
 export const NO_LIVE_SCREENS: LiveScreens = { on: [], following: [] };
 
-/** Kinds the stage display takes from Program; the projector takes every kind. */
-const STAGE_DISPLAY_FOLLOWS: ReadonlySet<LiveLayer["kind"]> = new Set(["question", "poll", "timer"]);
+/** The graphic of a composition a row's layer is. */
+const graphicOf = (layer: LiveLayer): LiveScreenGraphic => (layer.kind === "timer" ? "timerGraphics" : layer.kind);
 
-/** Whether a screen that syncs with Program would show this graphic while it is live. */
-function screenFollows(output: LiveSyncedScreen, layer: LiveLayer): boolean {
-  return output === "projector" || STAGE_DISPLAY_FOLLOWS.has(layer.kind);
+/**
+ * Whether a screen that syncs shows this kind of graphic from Program: the
+ * graphics it follows that it draws. The stage display reads Program's
+ * agenda only for its footer, so an agenda graphic is not shown there.
+ */
+function followsKind(output: LiveSyncedScreen, layer: LiveLayer): boolean {
+  return liveScreenFollows(output, graphicOf(layer)) && !(output === "stage-display" && layer.kind === "schedule");
+}
+
+/** Whether a screen draws a graphic of its composition: the stage display only a question in place of a poll, and only countdowns. */
+function draws(output: LiveSyncedScreen, shown: LiveStage, layer: LiveLayer, timers: LiveTargets["state"]["timers"]) {
+  if (output === "stage-display" && layer.kind === "poll" && shown.question) return false;
+  if (output === "stage-display" && layer.kind === "timer")
+    return liveStageDisplayGraphics(shown, timers).some((graphic) => graphic.timerId === layer.graphic.timerId);
+  return liveLayerShown(shown, layer);
 }
 
 /** Whether a screen shows a graphic because it is on Program, not because it was put there. */
@@ -48,23 +66,15 @@ function followsProgram(
   output: LiveSyncedScreen,
 ): boolean {
   const { state } = targets;
-  if (!where.program || where.aux(output) || !state.screenSync[output]) return false;
-  const own = state.outputs[output];
-  const program = state.stage;
-  if (output === "projector") return liveLayerShown(liveSyncedComposition(own, program), layer);
-  switch (layer.kind) {
-    case "question":
-      return !own.question;
-    case "poll":
-      // A question on the stage display, its own or Program's, takes the place of a poll.
-      return !own.question && !program.question && !own.poll;
-    case "timer":
-      return liveStageDisplayGraphics(own, program, state.timers).some(
-        (graphic) => graphic.timerId === layer.graphic.timerId,
-      );
-    default:
-      return false;
-  }
+  if (!where.program || where.aux(output) || !liveScreenSyncs(state.screenSync, output)) return false;
+  if (!followsKind(output, layer)) return false;
+  const shown = liveScreenComposition(output, {
+    own: state.outputs[output],
+    program: state.stage,
+    sync: state.screenSync,
+    timers: state.timers,
+  });
+  return draws(output, shown, layer, state.timers);
 }
 
 /** The room's screens a graphic is on now. */
@@ -97,7 +107,7 @@ export function liveScreenItems(targets: LiveTargets, layer: LiveLayer): MenuIte
   const live = liveLayerTargets(targets, layer).program;
   return LIVE_STUDIO_AUX_OUTPUTS.map((output) => {
     const put = on.includes(output);
-    const kept = put && live && targets.state.screenSync[output] && screenFollows(output, layer);
+    const kept = put && live && liveScreenSyncs(targets.state.screenSync, output) && followsKind(output, layer);
     return {
       id: `screen-${output}`,
       label: LIVE_AUX_OUTPUT_DETAILS[output].label,
