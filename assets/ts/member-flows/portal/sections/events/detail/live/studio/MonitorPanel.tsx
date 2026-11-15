@@ -299,14 +299,15 @@ function SourceCount({ output, sources }: { output: StudioOutput; sources: Monit
   );
 }
 
-/** What an operator does with one monitor's output, as icons at the end of its header: clear it, and full screen. */
+/** What an operator does with one monitor's output, at the end of its header: its sync chip, then clear it, and full screen. */
 function MonitorActions({ output, context }: { output: StudioOutput; context: MonitorContext }) {
   const { panel, switcher } = context;
   const details = STUDIO_OUTPUT_DETAILS[output];
   return (
     <span class="pk-studio-monitor__controls">
-      <SourceCount output={output} sources={context.sources} />
+      {/* The sync chip leads, so the count and the icons keep the same place on every monitor. */}
       {output === "projector" || output === "stage-display" ? <SyncToggle output={output} switcher={switcher} /> : null}
+      <SourceCount output={output} sources={context.sources} />
       {output === "livestream" ? (
         <LivestreamSoundToggle />
       ) : (
