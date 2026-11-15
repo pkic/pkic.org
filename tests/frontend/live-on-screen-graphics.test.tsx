@@ -206,6 +206,32 @@ describe("timers over a board", () => {
     expect(plate().hasAttribute("data-on-board")).toBe(true);
   });
 
+  it("draws a timer bare or as a tab from the frame's top edge, the next timer under the tab's plate", async () => {
+    const [first, ...rest] = stageClockState.stage.timerGraphics;
+    const looked = (presentation: "bare" | "tab") => ({
+      ...stageClockState,
+      stage: { ...stageClockState.stage, timerGraphics: [{ ...first!, presentation }, ...rest] },
+    });
+    const timers = () => [...host!.querySelectorAll<HTMLElement>(".pk-live-overlay__timer")];
+    await draw(looked("bare"));
+    expect(timers()[0]!.dataset.look).toBe("bare");
+    await draw(looked("tab"));
+    const tab = timers()[0]!;
+    expect(tab.dataset.look).toBe("tab");
+    expect(tab.dataset.edge).toBe("top");
+    // The full-frame timer box sits 48 px below the top: the tab runs those 48 px on to the edge.
+    const rule = document.adoptedStyleSheets
+      .flatMap((sheet) => [...sheet.cssRules].map((entry) => entry.cssText))
+      .find((entry) => entry.includes(tab.dataset.numericCssProperties!));
+    expect(Number(/--timer-reach: ([\d.]+)/u.exec(rule ?? "")?.[1])).toBeCloseTo(48, 0);
+    // Only the first timer of the stack reaches the edge; the others stay plates.
+    expect(
+      timers()
+        .slice(1)
+        .every((timer) => timer.dataset.look === undefined),
+    ).toBe(true);
+  });
+
   it("keeps timers off the check-in card: the pitch reads as digits when the mark has no room", async () => {
     vi.useFakeTimers({ now: TIMERS_FIXTURE_NOW, toFake: ["Date"] });
     const timers = [...stageClockState.stage.timerGraphics, pitchMarkGraphic()];

@@ -279,6 +279,50 @@
     margin-inline-start: 0;
     font-size: 72px;
   }
+  /*
+   * Bare: white digits on the picture with no plate, a soft shadow so they
+   * read on a bright shot as well as a dark one.
+   */
+  .pk-live-overlay__timer[data-look="bare"] {
+    justify-content: flex-end;
+    background: none;
+    color: var(--pk-pqc-on-field);
+    text-shadow:
+      0 2px 4px rgb(0 0 0 / 0.55),
+      0 0 24px rgb(0 0 0 / 0.45);
+  }
+  .pk-live-overlay__timer[data-look="bare"]::after {
+    content: none;
+  }
+  .pk-live-overlay__timer[data-look="bare"] .pk-live-overlay__timer-label {
+    color: var(--pk-pqc-on-field);
+  }
+  .pk-live-overlay__timer[data-look="bare"] .pk-live-overlay__timer-value {
+    margin-inline-start: 0;
+    font-size: 72px;
+  }
+  /*
+   * A tab: the plate run on to the frame's edge by its reach, with rounded
+   * corners and the stripe on the side that faces the picture.
+   */
+  .pk-live-overlay__timer[data-look="tab"] {
+    block-size: calc(120px + var(--timer-reach, 0) * 1px);
+    box-shadow: 0 8px 30px rgb(0 0 0 / 0.35);
+    overflow: hidden;
+  }
+  .pk-live-overlay__timer[data-look="tab"][data-edge="top"] {
+    padding-block-start: calc(var(--timer-reach, 0) * 1px);
+    border-end-start-radius: 18px;
+    border-end-end-radius: 18px;
+  }
+  .pk-live-overlay__timer[data-look="tab"][data-edge="bottom"] {
+    padding-block: 6px calc(var(--timer-reach, 0) * 1px);
+    border-start-start-radius: 18px;
+    border-start-end-radius: 18px;
+  }
+  .pk-live-overlay__timer[data-look="tab"][data-edge="bottom"]::after {
+    inset-block: 0 auto;
+  }
   /* A paused timer reads as held: the time stays, a little fainter. */
   .pk-live-overlay__timer[data-paused] .pk-live-overlay__timer-value {
     opacity: 0.6;

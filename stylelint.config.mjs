@@ -35,6 +35,7 @@ export default {
         "assets/ts/live-session/LiveLowerThird.css",
         "assets/ts/live-session/LiveStageDisplay.css",
         "assets/ts/live-session/LiveTimerMark.css",
+        "assets/ts/live-session/LiveTimerLookSample.css",
         "assets/ts/live-session/LiveGraphicTheme.css",
         "assets/ts/event-screens/Screen*.css",
         "assets/ts/site/AgendaPrint.css",

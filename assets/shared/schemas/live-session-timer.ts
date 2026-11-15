@@ -171,7 +171,12 @@ export const LIVE_TIMER_PLACEMENTS = [
   "center",
 ] as const;
 export const LIVE_TIMER_SIZES = ["small", "medium", "large"] as const;
-export const LIVE_TIMER_PRESENTATIONS = ["digital", "ring"] as const;
+/**
+ * How a timer looks on air: digits on a white plate (`digital`), white digits
+ * with no background (`bare`), a plate that hangs from the frame's top or
+ * bottom edge (`tab`), or the time in the consortium emblem (`ring`).
+ */
+export const LIVE_TIMER_PRESENTATIONS = ["digital", "bare", "tab", "ring"] as const;
 
 export const liveTimerGraphicSchema = z
   .object({

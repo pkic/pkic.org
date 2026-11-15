@@ -11,6 +11,8 @@ import {
 } from "../../../../../../../shared/schemas/live-session-timer";
 import type { FieldPresentation } from "../../../../../../hooks/useContractForm";
 import { Checkbox } from "../../../../../../ui/Checkbox";
+import { ChoiceCard, ChoiceCards } from "../../../../../../ui/ChoiceCard";
+import { LiveTimerLookSample } from "../../../../../../live-session/LiveTimerLookSample";
 import { Field } from "../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../ui/TextControl";
 import { LIVE_AUX_OUTPUTS } from "../../../../../../../shared/live-room-outputs";
@@ -26,8 +28,10 @@ const DIRECTION_LABELS: Record<LiveTimerGraphic["direction"], string> = {
   elapsed: "Time elapsed",
 };
 const PRESENTATION_LABELS: Record<LiveTimerGraphic["presentation"], string> = {
-  digital: "Digits",
-  ring: "Time in the logo",
+  digital: "White plate",
+  bare: "No background",
+  tab: "Tab from the edge",
+  ring: "In the logo",
 };
 const PLACEMENT_LABELS: Record<LiveTimerGraphic["placement"], string> = {
   layout: "As the source's layout",
@@ -40,7 +44,7 @@ const PLACEMENT_LABELS: Record<LiveTimerGraphic["placement"], string> = {
 const SIZE_LABELS: Record<LiveTimerGraphic["size"], string> = { small: "Small", medium: "Medium", large: "Large" };
 
 /** A select over one of the graphic's choice fields, with its labels. */
-function ChoiceField<Key extends "format" | "direction" | "presentation" | "placement" | "size">({
+function ChoiceField<Key extends "format" | "direction" | "placement" | "size">({
   field,
   label,
   options,
@@ -80,8 +84,39 @@ function ChoiceField<Key extends "format" | "direction" | "presentation" | "plac
 }
 
 /**
- * How the timer looks wherever it shows: its label, what it reads and in
- * which format, the logo, the look, and its position and size. Controls are
+ * The looks to pick from, each drawn as it shows on air with the timer's own
+ * label, so the operator sees what the stream gets before saving.
+ */
+function LookPicker({
+  draft,
+  label,
+  update,
+}: {
+  draft: LiveTimerGraphic;
+  label: string | null;
+  update: (value: LiveTimerGraphic["presentation"]) => void;
+}) {
+  return (
+    <ChoiceCards legend="Look" compact>
+      {LIVE_TIMER_PRESENTATIONS.map((look) => (
+        <ChoiceCard
+          key={look}
+          name="graphic.presentation"
+          value={look}
+          checked={draft.presentation === look}
+          onChange={() => update(look)}
+          picture={<LiveTimerLookSample look={look} label={label} />}
+          title={PRESENTATION_LABELS[look]}
+          pointTone="neutral"
+        />
+      ))}
+    </ChoiceCards>
+  );
+}
+
+/**
+ * How the timer looks wherever it shows: the look, its label, what it reads
+ * and in which format, and its position and size. Controls are
  * named `graphic.<field>` for the form around them.
  */
 export function LiveTimerLookFields({
@@ -99,9 +134,14 @@ export function LiveTimerLookFields({
   of: (field: keyof LiveTimerGraphic) => FieldPresentation;
   update: <Key extends keyof LiveTimerGraphic>(key: Key, value: LiveTimerGraphic[Key]) => void;
 }) {
-  const digits = draft.presentation === "digital";
+  const digits = draft.presentation !== "ring";
   return (
     <>
+      <LookPicker
+        draft={draft}
+        label={draft.showLabel ? (draft.label ?? timerName) : null}
+        update={(value) => update("presentation", value)}
+      />
       <Checkbox
         name="graphic.showLabel"
         checked={draft.showLabel}
@@ -165,15 +205,6 @@ export function LiveTimerLookFields({
         </>
       ) : null}
       <div class="pk-cluster">
-        <ChoiceField
-          field="presentation"
-          label="Look"
-          options={LIVE_TIMER_PRESENTATIONS}
-          labels={PRESENTATION_LABELS}
-          draft={draft}
-          presentation={of("presentation")}
-          update={(value) => update("presentation", value)}
-        />
         <ChoiceField
           field="placement"
           label="Position"

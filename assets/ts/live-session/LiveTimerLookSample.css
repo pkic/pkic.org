@@ -1,0 +1,39 @@
+/*
+ * A timer look as it shows on air: the top right of the 1920 x 1080 frame at
+ * a fifth of its size, over a camera-like shot so a look without a plate is
+ * judged as it will read. The timer sits in the default layout's timer box.
+ */
+@layer components {
+  .pk-live-timer-look {
+    position: relative;
+    display: block;
+    block-size: 100%;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse 60% 120% at 30% 110%, rgb(107 97 87) 0%, rgb(61 58 55) 45%, transparent 75%),
+      linear-gradient(180deg, rgb(141 154 164) 0%, rgb(88 99 107) 45%, rgb(44 50 56) 100%);
+  }
+  .pk-live-timer-look__frame {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+    inline-size: 1920px;
+    block-size: 1080px;
+    transform: scale(0.2);
+    transform-origin: 100% 0;
+  }
+  .pk-live-timer-look__frame > .pk-live-overlay__timer {
+    position: absolute;
+    inset-block-start: 48px;
+    inset-inline: auto 48px;
+    inline-size: 336px;
+  }
+  .pk-live-timer-look__frame[data-look="tab"] > .pk-live-overlay__timer {
+    inset-block-start: 0;
+  }
+  .pk-live-timer-look__frame > .pk-live-timer-mark {
+    position: absolute;
+    inset-block-start: 48px;
+    inset-inline-end: 96px;
+  }
+}

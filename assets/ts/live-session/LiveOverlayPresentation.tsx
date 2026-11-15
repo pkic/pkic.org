@@ -26,6 +26,7 @@ import type {
 import { overlayBoxPixels } from "../../shared/live-overlay-geometry";
 import { resolveLiveOverlayLayout } from "../../shared/live-overlay-layout-presets";
 import { LiveTimerMark } from "./LiveTimerMark";
+import { LiveTimerPlate } from "./LiveTimerPlate";
 import { formatLiveTimerMark } from "../../shared/live-timer-format";
 import { LiveLowerThird } from "./LiveLowerThird";
 import { LiveStageDisplay, LiveStageDisplayBanner } from "./LiveStageDisplay";
@@ -35,21 +36,22 @@ import { LIVE_PROGRAM_LAYER_ORDER, liveOverlayDrawn, type LiveProgramLayer } fro
 
 /**
  * A timer graphic: the timer it names, readable on a corner of the stream.
- * As digits, its label beside the time on a white plate with the event
- * stripe at its foot, as the lower third is set; on a board it drops the
- * plate and sets the time on the board itself, so no card sits on a card.
- * As the mark, the time sits in the consortium mark (see LiveTimerMark).
+ * As digits, in the look it was given (see LiveTimerPlate); as the mark, the
+ * time sits in the consortium emblem (see LiveTimerMark).
  */
 function TimerOverlay({
   graphic,
   state,
   mark,
+  tab,
   onBoard,
 }: {
   graphic: LiveTimerGraphic;
   state: LiveRoomState;
   /** Whether the frame has room for the mark here; without it the timer reads as digits. */
   mark: boolean;
+  /** The edge a tab runs on to; without one a tab reads as a plate. */
+  tab: TimerTab | null;
   onBoard: boolean;
 }) {
   const reading = useLiveTimerGraphicReading(graphic, state.timers, state.session);
@@ -65,16 +67,18 @@ function TimerOverlay({
         label={label}
       />
     );
+  const look = graphic.presentation === "bare" ? "bare" : tab ? "tab" : "plate";
   return (
-    <div
-      class="pk-live-overlay__timer"
-      data-tone={tone}
-      data-on-board={onBoard ? "" : undefined}
-      data-paused={running ? undefined : ""}
-    >
-      {label ? <span class="pk-live-overlay__timer-label">{label}</span> : null}
-      <span class="pk-live-overlay__timer-value">{text}</span>
-    </div>
+    <LiveTimerPlate
+      label={label}
+      text={text}
+      tone={tone}
+      running={running}
+      look={look}
+      onBoard={onBoard}
+      edge={tab?.edge}
+      reach={tab?.reach}
+    />
   );
 }
 
@@ -85,6 +89,33 @@ const TIMER_COLUMN_GAP = 16 / 1920;
 
 /** The mark stands taller than the digits' plate: its box keeps the plate's width and grows from its anchor. */
 const MARK_HEIGHT = 2.4;
+
+/** The plate's own height, in px of its 336 x 120 size, for a tab's reach in the same units. */
+const PLATE_HEIGHT = 120;
+
+/** A tab: the frame edge it runs on to, and how far past the plate, in px of the plate's own size. */
+type TimerTab = { edge: "top" | "bottom"; reach: number };
+
+/**
+ * A tab's box for a plate's: the plate run on to the frame's edge it sits
+ * against, top or bottom. Null for a plate in the middle of the frame, or one
+ * stacked under another timer, which stays a plate.
+ */
+function tabBox(plate: LiveOverlayElementPlacement, first: boolean) {
+  if (!first || plate.h <= 0) return null;
+  const reach = (past: number) => Math.round((past / plate.h) * PLATE_HEIGHT * 1000) / 1000;
+  if (plate.vertical === "top")
+    return {
+      slot: { ...plate, y: 0, h: plate.y + plate.h },
+      tab: { edge: "top", reach: reach(plate.y) } satisfies TimerTab,
+    };
+  if (plate.vertical === "bottom")
+    return {
+      slot: { ...plate, h: 1 - plate.y },
+      tab: { edge: "bottom", reach: reach(1 - plate.y - plate.h) } satisfies TimerTab,
+    };
+  return null;
+}
 
 /** The mark's box for a plate's: as wide, taller, growing from the same anchor. */
 function markBox(plate: LiveOverlayElementPlacement): LiveOverlayElementPlacement {
@@ -100,7 +131,8 @@ function markBox(plate: LiveOverlayElementPlacement): LiveOverlayElementPlacemen
  * shrinks the first; one with a position of its own sits there. A timer
  * never covers a card (the schedule or the check-in code): one that would
  * starts a new column inward from the box, and the mark that has no room
- * reads as digits on the plate's footprint instead.
+ * reads as digits on the plate's footprint instead. A tab is the first timer
+ * of its stack run on to the frame's edge; the next one sits under its plate.
  */
 function timerSlots(
   graphics: readonly LiveTimerGraphic[],
@@ -114,8 +146,12 @@ function timerSlots(
   return graphics.map((graphic) => {
     const plate = liveTimerLayout(graphic, box);
     const ring = graphic.presentation === "ring";
-    if (graphic.placement !== "layout")
-      return ring ? { graphic, slot: markBox(plate), mark: true } : { graphic, slot: plate, mark: false };
+    const tabbed = graphic.presentation === "tab";
+    if (graphic.placement !== "layout") {
+      if (ring) return { graphic, slot: markBox(plate), mark: true, tab: null };
+      const tab = tabbed ? tabBox(plate, true) : null;
+      return { graphic, slot: tab?.slot ?? plate, mark: false, tab: tab?.tab ?? null };
+    }
     const at = (row: number, col: number) => ({
       ...plate,
       x: plate.x + inward * col * (plate.w + TIMER_COLUMN_GAP),
@@ -123,8 +159,11 @@ function timerSlots(
     });
     const place = (row: number, col: number) => {
       const spot = at(row, col);
-      if (ring && clear(markBox(spot))) return { slot: markBox(spot), mark: true };
-      return clear(spot) ? { slot: spot, mark: false } : null;
+      if (ring && clear(markBox(spot)))
+        return { slot: markBox(spot), mark: true, tab: null, advance: spot.h * MARK_HEIGHT };
+      const tab = tabbed ? tabBox(spot, row === 0) : null;
+      if (tab && clear(tab.slot)) return { slot: tab.slot, mark: false, tab: tab.tab, advance: spot.h };
+      return clear(spot) ? { slot: spot, mark: false, tab: null, advance: spot.h } : null;
     };
     let placed = place(offset, column);
     if (!placed && offset > 0 && inward !== 0) {
@@ -132,9 +171,10 @@ function timerSlots(
       offset = 0;
       placed = place(0, column);
     }
-    placed ??= { slot: at(offset, column), mark: false };
-    offset += placed.slot.h + TIMER_STACK_GAP;
-    return { graphic, ...placed };
+    placed ??= { slot: at(offset, column), mark: false, tab: null, advance: plate.h };
+    // A tab runs on to the edge away from the stack, so the next timer goes under its plate.
+    offset += placed.advance + TIMER_STACK_GAP;
+    return { graphic, slot: placed.slot, mark: placed.mark, tab: placed.tab };
   });
 }
 
@@ -443,7 +483,7 @@ export function LiveOverlayPresentation({
         ? layers.map(({ element, draw }) => {
             const placement = elements[element];
             if (element === "timer" && placement.visible)
-              return timers.map(({ graphic, slot, mark }) => {
+              return timers.map(({ graphic, slot, mark, tab }) => {
                 const onBoard = boardBoxes.some((board) => meets(board, slot));
                 return (
                   <LiveOverlayLayer
@@ -452,7 +492,7 @@ export function LiveOverlayPresentation({
                     dimmed={focus !== null && focus !== "timer"}
                     placement={slot}
                   >
-                    <TimerOverlay graphic={graphic} state={state} mark={mark} onBoard={onBoard} />
+                    <TimerOverlay graphic={graphic} state={state} mark={mark} tab={tab} onBoard={onBoard} />
                   </LiveOverlayLayer>
                 );
               });
