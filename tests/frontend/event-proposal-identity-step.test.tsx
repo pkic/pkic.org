@@ -40,6 +40,7 @@ async function mount(enabled = true, speaker = false) {
     ...(speaker ? SPEAKER_LINK : {}),
   });
 }
+const unexpectedRequests: string[] = [];
 /** Answers a signed-in proposer's reads, hands every other request to `other`, and records each URL. */
 function stubAccount(
   account: ReturnType<typeof signedInProposer>,
@@ -53,7 +54,13 @@ function stubAccount(
     vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
       const url = new URL(String(input), location.origin);
       urls.push(url);
-      return account(url.pathname) ?? other(url, init);
+      try {
+        return account(url.pathname) ?? other(url, init);
+      } catch (cause) {
+        // The component catches a refused fetch, so a stray request is recorded and failed in teardown.
+        unexpectedRequests.push(`${init.method ?? "GET"} ${url.pathname}`);
+        throw cause;
+      }
     }),
   );
   return urls;
@@ -78,6 +85,8 @@ afterEach(async () => {
   selection = null;
   history.replaceState({}, "", "/");
   vi.unstubAllGlobals();
+  const stray = unexpectedRequests.splice(0);
+  expect(stray, "requests no stub answers").toEqual([]);
 });
 describe("proposal and speaker identity step", () => {
   it("does not resolve profiles or send proof before the terms step activates", async () => {

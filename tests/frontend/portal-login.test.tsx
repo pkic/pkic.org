@@ -87,6 +87,7 @@ beforeEach(() => {
 afterEach(() => {
   void act(() => render(null, container));
   container.remove();
+  localStorage.clear();
   vi.unstubAllGlobals();
 });
 

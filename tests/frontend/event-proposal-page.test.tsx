@@ -176,6 +176,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  localStorage.clear();
   document.body.innerHTML = "";
   window.history.replaceState({}, "", "/");
 });

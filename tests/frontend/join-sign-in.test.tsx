@@ -9,7 +9,8 @@
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
-import { userAuthRequestSchema } from "../../assets/shared/schemas/user-auth";
+import { userAuthRequestSchema, userSignUpRequestSchema } from "../../assets/shared/schemas/user-auth";
+import { controlFor, typeInto } from "./helpers/labeled-control";
 import { openJoinPage } from "./helpers/join-page";
 
 vi.mock("@simplewebauthn/browser", () => ({ browserSupportsWebAuthn: () => true }));
@@ -69,13 +70,28 @@ describe("joining without a session", () => {
     });
   });
 
-  it("starts a new account with the membership wording for a work or personal address", async () => {
-    openJoinPage(null);
+  it("starts a new account with the membership wording, returning to this page", async () => {
+    history.replaceState({}, "", "/join/?category=A");
+    const requests = openJoinPage(null, () => Response.json({ success: true }));
     await import("../../assets/ts/member-flows/join-form");
     const card = document.querySelector<HTMLElement>("[data-join-sign-in-card]")!;
     await vi.waitFor(() => expect(card.querySelector("button")).not.toBeNull());
     await act(async () => button("Start your application").click());
     expect(card.textContent).toContain(EMAIL_FIRST_COPY.join.work.label);
     expect(card.textContent).toContain(EMAIL_FIRST_COPY.join.personal.description);
+
+    await typeInto(controlFor(card, EMAIL_FIRST_COPY.join.work.label), "ada@example-corp.test");
+    await act(async () => {
+      button(EMAIL_FIRST_COPY.join.work.action).click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await vi.waitFor(() => expect(requests.some(({ path }) => path === "/api/v1/auth/sign-up")).toBe(true));
+    const sent = requests.filter(({ path }) => path === "/api/v1/auth/sign-up");
+    expect(sent).toHaveLength(1);
+    expect(userSignUpRequestSchema.parse(sent[0]!.body)).toEqual({
+      email: "ada@example-corp.test",
+      unaffiliatedAttestation: false,
+      returnPath: "/join/?category=A",
+    });
   });
 });

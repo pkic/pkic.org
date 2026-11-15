@@ -156,7 +156,7 @@ describe("proposal and speaker contact capacity", () => {
     });
     await vi.waitFor(() => expect(host!.textContent).toContain(ADDRESS_IN_USE_COPY.title));
     expect(host!.textContent).toContain(ADDRESS_IN_USE_COPY.body("speaker@official.example"));
-    expect(host!.querySelector<HTMLAnchorElement>('a[href="/portal/"]')).not.toBeNull();
+    expect(host!.querySelector<HTMLAnchorElement>('a[href="/portal/"]')?.textContent).toBe(ADDRESS_IN_USE_COPY.action);
     expect(selection).toBeNull();
   });
 });

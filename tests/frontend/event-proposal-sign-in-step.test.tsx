@@ -103,6 +103,7 @@ afterEach(async () => {
   document.body.innerHTML = "";
   selection = null;
   history.replaceState({}, "", "/");
+  localStorage.clear();
   vi.unstubAllGlobals();
 });
 
@@ -122,6 +123,10 @@ describe("proposal sign-in step", () => {
     expect(host.querySelector('input[type="radio"]')).toBeNull();
     expect(host.querySelector('input[name="email"]')).toBeNull();
     expect(selection).toBeNull();
+    // A confirmation call fired a tick later would still be caught.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     expect(requests.map(({ path }) => path)).toEqual(["/api/v1/auth/session"]);
   });
 
@@ -147,6 +152,26 @@ describe("proposal sign-in step", () => {
     await vi.waitFor(() => expect(card.querySelector('[role="status"]')).not.toBeNull());
     expect(pageSubmits).toBe(0);
     expect(requests.some(({ path }) => path.includes("/proposals/proof"))).toBe(false);
+  });
+
+  it("sends the link on Enter in the email field without letting the proposal form submit", async () => {
+    const requests = installApi(signedOut);
+    await mount();
+    const card = await shownSignInCard();
+    await act(() => {
+      [...card.querySelectorAll("button")].find((button) => /email link/i.test(button.textContent ?? ""))!.click();
+    });
+    const email = controlFor(card, "Email");
+    await typeInto(email, "ada@example.test");
+    // The card stands inside the proposal form, so Enter there must be kept from submitting it.
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    await act(async () => {
+      email.dispatchEvent(enter);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(enter.defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(requests.filter(({ path }) => path === "/api/v1/auth/request-link")).toHaveLength(1));
+    expect(pageSubmits).toBe(0);
   });
 
   it("starts an account from the card with a link that returns to this page", async () => {

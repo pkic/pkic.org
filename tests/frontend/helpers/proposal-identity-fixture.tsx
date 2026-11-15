@@ -1,5 +1,6 @@
 import { render, type ComponentProps } from "preact";
 import { act } from "preact/test-utils";
+import { expect } from "vitest";
 import { EventProposalIdentityStep } from "../../../assets/ts/components/EventProposalIdentityStep";
 import {
   actingIdentitySchema,
@@ -11,7 +12,7 @@ import { userDetailResponseSchema } from "../../../assets/shared/schemas/user-ma
 
 export const PROPOSER_USER_ID = "00000000-0000-4000-8000-000000000041";
 export const PROPOSER_IDENTITY_ID = "00000000-0000-4000-8000-000000000042";
-export const PROPOSER_ORGANIZATION_ID = "00000000-0000-4000-8000-000000000044";
+const PROPOSER_ORGANIZATION_ID = "00000000-0000-4000-8000-000000000044";
 const NOW = "2026-01-01T00:00:00.000Z";
 
 /**
@@ -129,13 +130,16 @@ export async function chooseProposerIdentity(host: HTMLElement, identityId: stri
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
+  const picker = host.querySelector<HTMLElement>('[role="combobox"]');
+  expect(picker, "no representation picker").not.toBeNull();
   await act(() => {
-    host.querySelector<HTMLElement>('[role="combobox"]')!.click();
+    picker!.click();
   });
   while (!option() && Date.now() < deadline)
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
+  expect(option(), `no representation option ${identityId}`).not.toBeNull();
   await act(() => {
     option()!.click();
   });

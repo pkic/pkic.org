@@ -4,8 +4,9 @@ import { parseQueryContext, clearReferralSession, signInReturnPath } from "../..
 
 describe("query context", () => {
   beforeEach(() => {
-    // Prevent sessionStorage referral state leaking between tests
+    // Prevent referral and remembered-invitation state leaking between tests
     clearReferralSession();
+    localStorage.clear();
   });
 
   it("parses invite, referral, source and event values", () => {
@@ -45,7 +46,6 @@ describe("query context", () => {
   });
 
   it("keeps the invitation token out of a sign-in return path and finds it again by invitation id", () => {
-    localStorage.clear();
     // The portal's sign-in screen sees the route before any page has read it, so the path alone keeps the token.
     const returnPath = signInReturnPath("/events/toronto-2027/register?invite=secret-token&id=inv-1&source=invite");
     expect(returnPath).toBe("/events/toronto-2027/register?id=inv-1&source=invite");
@@ -53,5 +53,11 @@ describe("query context", () => {
 
     expect(parseQueryContext("?id=inv-1&source=invite").inviteToken).toBe("secret-token");
     expect(parseQueryContext("?id=inv-2").inviteToken).toBeNull();
+  });
+
+  it("keeps a token without an invitation id out of the return path too, though it cannot be found again", () => {
+    // Every emailed invitation carries its id; a hand-made link without one loses the invitation rather than leak it.
+    expect(signInReturnPath("/events/toronto-2027/register?invite=secret-token")).toBe("/events/toronto-2027/register");
+    expect(localStorage.length).toBe(0);
   });
 });

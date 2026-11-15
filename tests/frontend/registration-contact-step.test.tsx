@@ -130,7 +130,11 @@ function installResponses(organizationName: string | null | undefined, signedIn 
             hasMore: false,
           },
         });
-      } else throw new Error(`Unexpected request: ${url.pathname}`);
+      } else {
+        // The component catches a refused fetch, so a stray request is recorded and failed in teardown.
+        unexpectedRequests.push(`${method} ${url.pathname}`);
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }
       return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
     }),
   );
@@ -169,12 +173,16 @@ function value(form: HTMLFormElement, name: string): string | undefined {
 
 const copy = EMAIL_FIRST_COPY.registration;
 
+const unexpectedRequests: string[] = [];
+
 afterEach(() => {
   history.replaceState({}, "", "/");
   if (host) render(null, host.querySelector("form > div")!);
   host?.remove();
   host = null;
   vi.unstubAllGlobals();
+  const stray = unexpectedRequests.splice(0);
+  expect(stray, "requests no stub answers").toEqual([]);
 });
 
 function contactStep(onReadyChange: (ready: boolean) => void = () => {}, onSignInChange?: (shown: boolean) => void) {
