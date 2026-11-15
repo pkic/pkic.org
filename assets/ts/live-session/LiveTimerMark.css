@@ -154,16 +154,9 @@
     }
   }
 
-  /*
-   * Once over, the ring between the seats blinks red; the time stays white.
-   * A screen with a color of its own for it sets it here.
-   */
+  /* Once over, the ring between the seats blinks; it stays white, as the time does. */
   .pk-live-timer-mark[data-tone="over"] .pk-live-overlay__emblem-ink {
-    fill: var(--pk-live-timer-mark-over, var(--pk-danger));
     animation: pk-live-timer-mark-blink 1s ease-in-out infinite;
-  }
-  .pk-live-timer-mark[data-tone="over"] .pk-live-timer-mark__ripple {
-    stroke: var(--pk-live-timer-mark-over, var(--pk-danger));
   }
   @keyframes pk-live-timer-mark-blink {
     50% {

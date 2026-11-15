@@ -33,7 +33,7 @@ function fillFraction(spent: number | null, shownMs: number, tone: "warn" | "ove
  * clockwise from the top as the time goes, in the event's colors from green
  * to orange, with a soft glow and a glare riding the leading edge, and on
  * every second it beats once. Once over the seats are full and the ring
- * between them blinks red while the time over reads with a `+`. A paused
+ * between them blinks while the time over reads with a `+`. A paused
  * timer holds still. It draws at its own size in the mark's units, so
  * whatever box it is set in scales it whole.
  */
