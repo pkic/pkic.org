@@ -2,10 +2,17 @@
  * The timer as the mark: the emblem white on the picture, the time in its
  * open middle.
  * It is drawn 240 px square of the 1080p frame with its label under it; a
- * layout box or a stage display column scales it whole. The seats step with
- * the seconds on a short spring, and each second the mark beats twice, close
- * together, like a pulse, while a faint ring goes out from it.
+ * layout box or a stage display column scales it whole. Its faint seats fill
+ * clockwise in the event's colors as the time goes, easing on between
+ * seconds, and each second the mark beats twice, close together, like a
+ * pulse, while a faint ring goes out from it.
  */
+@property --mark-fill {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
 @layer components {
   .pk-live-timer-mark {
     --pk-live-timer-mark-size: 240px;
@@ -15,6 +22,7 @@
     gap: 8px;
     inline-size: var(--pk-live-timer-mark-size);
     color: var(--pk-pqc-on-field);
+    transition: --mark-fill 1s linear;
   }
   .pk-live-timer-mark__mark {
     display: block;
@@ -25,15 +33,36 @@
     /* A tight edge so it reads on a bright picture, with no glow around it. */
     filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.55));
   }
-  /* One color: the event kit's seat colors stay on the lower third. */
-  .pk-live-timer-mark__wheel > path {
-    fill: currentColor;
+  /* A fill that goes back, on a reset or a new minute, jumps there. */
+  .pk-live-timer-mark[data-fill-back] {
+    transition: none;
   }
-  .pk-live-timer-mark__wheel {
-    transform: rotate(calc(var(--mark-turn, 0) * 1deg));
+  /* The seats the time has still to fill: faint white on the picture. */
+  .pk-live-timer-mark__track > path {
+    fill: rgb(255 255 255 / 0.28);
+  }
+  /* The fill: the event's colors swept round from the top, cut off where the time has got to. */
+  .pk-live-timer-mark__sweep {
+    box-sizing: border-box;
+    inline-size: 100%;
+    block-size: 100%;
+    background: conic-gradient(var(--pk-pqc-green), var(--pk-pqc-blue) 0.5turn, var(--pk-pqc-orange));
+    mask-image: conic-gradient(#000 calc(var(--mark-fill) * 1turn), transparent 0);
+  }
+  /* A soft glare on the fill's leading edge; none before it starts or once full. */
+  .pk-live-timer-mark__glare {
+    transform: rotate(calc(var(--mark-fill) * 1turn));
     transform-origin: 180px 180px;
     transform-box: view-box;
-    transition: transform 450ms cubic-bezier(0.3, 1.6, 0.5, 1);
+  }
+  .pk-live-timer-mark__glare > circle {
+    fill: rgb(255 255 255 / 0.85);
+  }
+  .pk-live-timer-mark[data-tone="over"] .pk-live-timer-mark__glare {
+    display: none;
+  }
+  .pk-live-timer-mark .pk-live-overlay__emblem-ink {
+    fill: currentColor;
   }
   .pk-live-timer-mark__time {
     fill: currentColor;
@@ -126,20 +155,20 @@
   }
 
   /*
-   * The warning turns the seats to the event's orange; time over turns the
-   * whole mark. A screen with colors of its own for both sets them here.
+   * Once over, the ring between the seats blinks red; the time stays white.
+   * A screen with a color of its own for it sets it here.
    */
-  .pk-live-timer-mark[data-tone="warn"] .pk-live-timer-mark__wheel > path:not(.pk-live-overlay__emblem-ink) {
-    fill: var(--pk-live-timer-mark-warn, var(--pk-pqc-orange));
-  }
-  .pk-live-timer-mark[data-tone="over"] :is(.pk-live-timer-mark__wheel > path, .pk-live-timer-mark__time) {
-    fill: var(--pk-live-timer-mark-over, var(--pk-pqc-orange));
-  }
-  .pk-live-timer-mark[data-tone="warn"] .pk-live-timer-mark__ripple {
-    stroke: var(--pk-live-timer-mark-warn, var(--pk-pqc-orange));
+  .pk-live-timer-mark[data-tone="over"] .pk-live-overlay__emblem-ink {
+    fill: var(--pk-live-timer-mark-over, var(--pk-danger));
+    animation: pk-live-timer-mark-blink 1s ease-in-out infinite;
   }
   .pk-live-timer-mark[data-tone="over"] .pk-live-timer-mark__ripple {
-    stroke: var(--pk-live-timer-mark-over, var(--pk-pqc-orange));
+    stroke: var(--pk-live-timer-mark-over, var(--pk-danger));
+  }
+  @keyframes pk-live-timer-mark-blink {
+    50% {
+      opacity: 0.3;
+    }
   }
   /* A paused timer reads as held: the mark stays, a little fainter. */
   .pk-live-timer-mark:not([data-running]) .pk-live-timer-mark__mark {
@@ -147,8 +176,11 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    :root:not(:has([data-live-broadcast-source])) .pk-live-timer-mark__wheel {
+    :root:not(:has([data-live-broadcast-source])) .pk-live-timer-mark {
       transition: none;
+    }
+    :root:not(:has([data-live-broadcast-source])) .pk-live-timer-mark[data-tone="over"] .pk-live-overlay__emblem-ink {
+      animation: none;
     }
     :root:not(:has([data-live-broadcast-source]))
       .pk-live-timer-mark[data-running][data-beat]

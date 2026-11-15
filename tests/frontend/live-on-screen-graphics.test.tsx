@@ -252,17 +252,18 @@ describe("timers over a board", () => {
     vi.useRealTimers();
   });
 
-  it("draws a pitch in the mark: its seconds in the middle, its rings a step a second", async () => {
+  it("draws a pitch in the mark: its seconds in the middle, its seats filled as far as the time has gone", async () => {
     vi.useFakeTimers({ now: TIMERS_FIXTURE_NOW, toFake: ["Date"] });
     await draw({ ...stageClockState, stage: { ...stageClockState.stage, timerGraphics: [pitchMarkGraphic()] } });
     const mark = host!.querySelector<HTMLElement>(".pk-live-timer-mark")!;
     expect(mark.querySelector(".pk-live-timer-mark__time")!.textContent).toBe("42");
-    // The round emblem's wheel only: the time takes the keyhole's place.
-    expect(mark.querySelectorAll(".pk-live-timer-mark__wheel > path")).toHaveLength(4);
+    // The round emblem's seats and ring only: the time takes the keyhole's place.
+    expect(mark.querySelectorAll(".pk-live-timer-mark__track > path")).toHaveLength(3);
+    expect(mark.querySelectorAll(".pk-live-overlay__emblem-ink")).toHaveLength(1);
     expect(mark.hasAttribute("data-running")).toBe(true);
     const rules = document.adoptedStyleSheets.flatMap((sheet) => [...sheet.cssRules].map((rule) => rule.cssText));
     expect(
-      rules.some((rule) => rule.includes(mark.dataset.numericCssProperties!) && rule.includes("--mark-turn: -252")),
+      rules.some((rule) => rule.includes(mark.dataset.numericCssProperties!) && rule.includes("--mark-fill: 0.766")),
     ).toBe(true);
     expect(host!.querySelector(".pk-live-overlay__timer")).toBeNull();
     vi.useRealTimers();

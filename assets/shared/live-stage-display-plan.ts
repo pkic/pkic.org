@@ -15,6 +15,7 @@ import {
   liveTimerReading,
   liveTimerShownMs,
   liveTimerTone,
+  liveTimerTotalMs,
 } from "./live-timer-policy";
 import type { LivePoll } from "./schemas/live-session-poll";
 import type {
@@ -65,6 +66,8 @@ export interface LiveTimerGraphicText {
   shownMs: number | null;
   /** The text at its most compact, for a timer that shares the screen with a question or a poll. */
   compactText: string;
+  /** How much of a countdown's length has gone, 0 to 1, and 1 once over; null for a timer with no length. */
+  spentFraction: number | null;
 }
 
 /** A timer graphic's reading, the same in the overlay graphics and on the stage display. */
@@ -80,6 +83,7 @@ export function liveTimerGraphicText(
   const counts = liveTimerCounts(timer);
   const shownMs = counts ? liveTimerShownMs(timer, graphic, session, now) : null;
   const clock = format24HourClockInZone(now, session.timeZone);
+  const total = counts && !countsUp(timer) ? liveTimerTotalMs(timer, session) : null;
   return {
     timerId: timer.id,
     name,
@@ -99,6 +103,8 @@ export function liveTimerGraphicText(
     startsInMs: reading.startsInMs,
     kind: timer.kind,
     shownMs,
+    // Before its session starts none of it has gone.
+    spentFraction: before ? 0 : total ? Math.min(1, Math.max(0, 1 - reading.valueMs / total)) : null,
   };
 }
 

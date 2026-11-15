@@ -56,12 +56,13 @@ function TimerOverlay({
 }) {
   const reading = useLiveTimerGraphicReading(graphic, state.timers, state.session);
   if (!reading) return null;
-  const { running, text, tone, label, shownMs } = reading;
+  const { running, text, tone, label, shownMs, spentFraction } = reading;
   if (mark && shownMs !== null)
     return (
       <LiveTimerMark
         text={formatLiveTimerMark(shownMs)}
         shownMs={shownMs}
+        spent={spentFraction}
         tone={tone}
         running={running}
         label={label}
