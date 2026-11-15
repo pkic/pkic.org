@@ -1,4 +1,5 @@
 import { DEFAULT_LIVE_CHECK_IN_TEXT } from "../../assets/shared/schemas/live-session-graphic-settings";
+import { LIVE_GRAPHIC_THEME_DEFAULTS } from "../../assets/shared/live-graphic-theme";
 // @vitest-environment jsdom
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -101,7 +102,7 @@ describe("live control room Transition", () => {
           panelists: null,
           schedule: null,
           checkIn: null,
-          checkInTheme: "black-on-white",
+          checkInTheme: LIVE_GRAPHIC_THEME_DEFAULTS.checkIn,
           checkInText: DEFAULT_LIVE_CHECK_IN_TEXT,
           lowerThirdMotion: "animated",
           timerGraphics: [],
