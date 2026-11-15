@@ -187,7 +187,10 @@ export const liveTimerGraphicSchema = z
       .max(300)
       .refine((value) => validateOverlayTextTemplate(value) === null, "Use a valid duration template.")
       .default("{{hours}}h {{minutes}}m {{seconds}}s"),
-    /** A small logo beside the digits; the mark look is the logo already. */
+    /**
+     * No longer drawn: timers carry no logo. Kept so timers saved with it
+     * still load; nothing sets or reads it.
+     */
     showLogo: z.boolean().default(false),
     direction: z.enum(LIVE_TIMER_DIRECTIONS),
     /** The graphic turns to its warning color with this much time left. */

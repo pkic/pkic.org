@@ -39,7 +39,6 @@ async function stageTimers(page: Page, path: (name: string) => string) {
   const settings = page.getByRole("dialog", { name: "Timer graphic", exact: true });
   await settings.getByLabel("Format", { exact: true }).selectOption("custom");
   await settings.getByLabel("Custom duration", { exact: true }).fill("{{minutes}} minutes and {{seconds}} seconds");
-  await settings.getByLabel("Show logo", { exact: true }).uncheck();
   await settings.getByRole("button", { name: "Save", exact: true }).click();
   for (const name of ["Session", "Pitch"]) {
     const controls = page.getByRole("group", { name: `${name} controls`, exact: true });

@@ -1,7 +1,8 @@
 /*
- * The timer as the mark: white on the picture, the time in its open middle.
+ * The timer as the mark: the emblem white on the picture, the time in its
+ * open middle.
  * It is drawn 240 px square of the 1080p frame with its label under it; a
- * layout box or a stage display column scales it whole. The rings step with
+ * layout box or a stage display column scales it whole. The seats step with
  * the seconds on a short spring, and each second the mark beats twice, close
  * together, like a pulse, while a faint ring goes out from it.
  */
@@ -19,11 +20,15 @@
     display: block;
     inline-size: var(--pk-live-timer-mark-size);
     block-size: auto;
-    aspect-ratio: 320 / 330;
+    aspect-ratio: 1;
     overflow: visible;
     filter: drop-shadow(0 6px 28px rgb(0 0 0 / 0.45));
   }
-  .pk-live-timer-mark :is(.pk-pkic-mark__arc, .pk-pkic-mark__table) {
+  /* One color: the event kit's seat colors stay on the lower third. */
+  .pk-live-timer-mark__wheel > path {
+    fill: currentColor;
+  }
+  .pk-live-timer-mark__wheel {
     transform: rotate(calc(var(--mark-turn, 0) * 1deg));
     transform-origin: 180px 180px;
     transform-box: view-box;
@@ -120,13 +125,13 @@
   }
 
   /*
-   * The warning turns the arcs to the event's orange; time over turns the
+   * The warning turns the seats to the event's orange; time over turns the
    * whole mark. A screen with colors of its own for both sets them here.
    */
-  .pk-live-timer-mark[data-tone="warn"] .pk-pkic-mark__arc {
+  .pk-live-timer-mark[data-tone="warn"] .pk-live-timer-mark__wheel > path:not(.pk-live-overlay__emblem-ink) {
     fill: var(--pk-live-timer-mark-warn, var(--pk-pqc-orange));
   }
-  .pk-live-timer-mark[data-tone="over"] :is(.pk-pkic-mark__arc, .pk-pkic-mark__table, .pk-live-timer-mark__time) {
+  .pk-live-timer-mark[data-tone="over"] :is(.pk-live-timer-mark__wheel > path, .pk-live-timer-mark__time) {
     fill: var(--pk-live-timer-mark-over, var(--pk-pqc-orange));
   }
   .pk-live-timer-mark[data-tone="warn"] .pk-live-timer-mark__ripple {
@@ -141,7 +146,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .pk-live-timer-mark :is(.pk-pkic-mark__arc, .pk-pkic-mark__table) {
+    .pk-live-timer-mark__wheel {
       transition: none;
     }
     .pk-live-timer-mark[data-running][data-beat] :is(.pk-live-timer-mark__mark, .pk-live-timer-mark__ripple) {

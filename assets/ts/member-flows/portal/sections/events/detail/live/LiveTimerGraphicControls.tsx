@@ -164,15 +164,6 @@ export function LiveTimerLookFields({
           ) : null}
         </>
       ) : null}
-      {digits ? (
-        <Checkbox
-          name="graphic.showLogo"
-          label="Show logo"
-          checked={draft.showLogo}
-          onChange={(event) => update("showLogo", event.currentTarget.checked)}
-          {...of("showLogo")}
-        />
-      ) : null}
       <div class="pk-cluster">
         <ChoiceField
           field="presentation"

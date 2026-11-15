@@ -231,7 +231,8 @@ describe("timers over a board", () => {
     await draw({ ...stageClockState, stage: { ...stageClockState.stage, timerGraphics: [pitchMarkGraphic()] } });
     const mark = host!.querySelector<HTMLElement>(".pk-live-timer-mark")!;
     expect(mark.querySelector(".pk-live-timer-mark__time")!.textContent).toBe("42");
-    expect(mark.querySelector(".pk-pkic-mark__keyhole")).toBeNull();
+    // The round emblem's wheel only: the time takes the keyhole's place.
+    expect(mark.querySelectorAll(".pk-live-timer-mark__wheel > path")).toHaveLength(4);
     expect(mark.hasAttribute("data-running")).toBe(true);
     const rules = document.adoptedStyleSheets.flatMap((sheet) => [...sheet.cssRules].map((rule) => rule.cssText));
     expect(

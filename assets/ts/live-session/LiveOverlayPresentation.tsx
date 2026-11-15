@@ -26,7 +26,6 @@ import type {
 import { overlayBoxPixels } from "../../shared/live-overlay-geometry";
 import { resolveLiveOverlayLayout } from "../../shared/live-overlay-layout-presets";
 import { LiveTimerMark } from "./LiveTimerMark";
-import { PkicMark } from "../ui/PkicMark";
 import { formatLiveTimerMark } from "../../shared/live-timer-format";
 import { LiveLowerThird } from "./LiveLowerThird";
 import { LiveStageDisplay, LiveStageDisplayBanner } from "./LiveStageDisplay";
@@ -73,7 +72,6 @@ function TimerOverlay({
       data-on-board={onBoard ? "" : undefined}
       data-paused={running ? undefined : ""}
     >
-      {graphic.showLogo ? <PkicMark class="pk-live-overlay__timer-logo" /> : null}
       {label ? <span class="pk-live-overlay__timer-label">{label}</span> : null}
       <span class="pk-live-overlay__timer-value">{text}</span>
     </div>

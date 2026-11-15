@@ -61,8 +61,6 @@ export interface LiveTimerGraphicText {
   /** An agenda session timer before its session starts: the time until it does. */
   startsInMs: number | null;
   kind: LiveTimer["kind"];
-  /** How the graphic draws the time: in the mark, or as digits. */
-  presentation: LiveTimerGraphic["presentation"];
   /** The time the graphic shows, for a timer that counts; null for a clock. */
   shownMs: number | null;
   /** The text at its most compact, for a timer that shares the screen with a question or a poll. */
@@ -100,7 +98,6 @@ export function liveTimerGraphicText(
     remainingMs: counts && !countsUp(timer) ? reading.valueMs : null,
     startsInMs: reading.startsInMs,
     kind: timer.kind,
-    presentation: graphic.presentation,
     shownMs,
   };
 }

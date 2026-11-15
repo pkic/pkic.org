@@ -70,9 +70,9 @@ it("moves on with the synced clock while the countdowns keep pace", async () => 
 
 it("keeps the clock in the top row, out of the countdowns, which fall back to Program's", async () => {
   const shown = await draw(stageClockState, syncedClock().now);
-  // The session timer as digits, the pitch in the mark as the stream draws it.
-  expect(shown.countdowns()).toEqual(["15:00"]);
-  expect(shown.marks()).toEqual(["42"]);
+  // Both as plain digits: the stage display draws no mark, whatever the stream shows.
+  expect(shown.countdowns()).toEqual(["15:00", "0:42"]);
+  expect(shown.marks()).toEqual([]);
   // With only a clock of its own, the stage display shows Program's timers and the clock above them.
   const clockOnly = timersOn(stageClockState, ["clock"]);
   const alone = await draw(clockOnly, syncedClock().now);

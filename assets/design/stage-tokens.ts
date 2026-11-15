@@ -11,7 +11,6 @@ export const stageTokens = {
   "stage-type-lead": "84px",
   "stage-type-clock": "120px",
   "stage-type-timer-small": "150px",
-  "stage-type-mark": "220px",
   "stage-type-timer": "400px",
   "stage-ground": "#020202",
   "stage-ink": "#f5f6f7",

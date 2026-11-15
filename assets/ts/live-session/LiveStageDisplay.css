@@ -113,24 +113,10 @@
   .pk-live-stage-display__timer[data-size="small"] .pk-live-stage-display__countdown {
     font-size: var(--pk-stage-type-timer-small);
   }
-  /* The mark: as large as its column allows on its own, the set size beside a question. */
-  /* The mark in the stage display's own colors: amber to warn, red once over. */
-  .pk-live-stage-display__timer[data-mark] {
-    --pk-live-timer-mark-warn: var(--pk-stage-warn);
-    --pk-live-timer-mark-over: var(--pk-stage-live);
-    align-items: center;
-  }
-  .pk-live-stage-display__timer[data-mark][data-size="large"] .pk-live-timer-mark {
-    --pk-live-timer-mark-size: min(100cqi, 400px);
-  }
-  .pk-live-stage-display__timer[data-mark][data-size="small"] .pk-live-timer-mark {
-    --pk-live-timer-mark-size: var(--pk-stage-type-mark);
-  }
-
   /*
    * The timers beside a question or a poll: one column as wide as their
-   * digits, so the content keeps the rest. Two fit the area's height, the
-   * mark among them, with a closer label.
+   * digits, so the content keeps the rest. Two fit the area's height, each
+   * with a closer label.
    */
   .pk-live-stage-display__timers {
     display: flex;

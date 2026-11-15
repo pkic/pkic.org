@@ -208,7 +208,7 @@ function LayoutPicker({ output, context }: { output: StudioOutput; context: Moni
     <Menu
       variant="plain"
       label={`Layout on ${details.label}: ${current.name}`}
-      title="Choose layout"
+      title={`Layout: ${current.name}`}
       triggerClass="pk-studio-monitor__picker pk-studio-monitor__layout"
       heading="Show as the layout"
       items={choices.map((choice) => ({
@@ -218,9 +218,18 @@ function LayoutPicker({ output, context }: { output: StudioOutput; context: Moni
         onSelect: () => change((panels) => setStudioOutputLayout(panels, panel.id, output, choice.slug)),
       }))}
     >
-      {current.name}
-      <span aria-hidden="true"> ▾</span>
+      <LayoutIcon />
     </Menu>
+  );
+}
+
+/** A frame with its graphics' boxes: the layout an output is drawn in, named in its tooltip. */
+function LayoutIcon() {
+  return (
+    <StrokeIcon>
+      <rect x="1.5" y="3" width="13" height="10" rx="1" />
+      <path d="M4 10.5h5M10.5 5.5h2" />
+    </StrokeIcon>
   );
 }
 

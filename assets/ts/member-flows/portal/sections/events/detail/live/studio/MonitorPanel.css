@@ -212,9 +212,9 @@
     color: var(--tally);
   }
   /*
-   * On a small card the purpose goes first, then the layout's name, then the
-   * output's name beside its tag, and Sync keeps only its link; Clear and
-   * full screen always stay.
+   * On a small card the purpose goes first, then the output's name beside
+   * its tag, and Sync keeps only its link; the layout, Clear and full
+   * screen always stay.
    */
   @container monitor-card (width < 24rem) {
     .pk-studio-monitor__caption .pk-studio-monitor__purpose {
@@ -222,9 +222,6 @@
     }
   }
   @container monitor-card (width < 18rem) {
-    .pk-studio-monitor__caption .pk-studio-monitor__layout {
-      display: none;
-    }
     .pk-studio-monitor__sync-text {
       display: none;
     }
@@ -295,14 +292,11 @@
     font: inherit;
     white-space: nowrap;
   }
-  /* The layout, named quietly; it gives way first on a narrow header. */
+  /* The layout as an icon, its name in the tooltip, so the header keeps its room. */
   .pk-studio-monitor__layout {
-    flex: 0 1 auto;
-    min-inline-size: 0;
+    flex: none;
     min-block-size: 1.5rem;
-    overflow: hidden;
     color: var(--pk-ink-muted);
-    text-overflow: ellipsis;
   }
   /* Full screen, an output takes the whole window at 16:9, its title bar the only chrome. */
   .pk-dialog.pk-studio-monitor__viewer {

@@ -85,7 +85,7 @@
     opacity: 0.12;
     filter: grayscale(1);
   }
-  /* A timer on a board's logo corner: the logo fades out of its way, as the timer carries the mark. */
+  /* A timer on a board's logo corner: the logo fades out of its way, so the two never overlap. */
   .pk-live-overlay__layer .pk-live-board__logo {
     transition: opacity var(--pk-dur) var(--pk-ease);
   }
@@ -247,12 +247,6 @@
     block-size: 6px;
     background: var(--pk-pqc-stripe);
   }
-  .pk-live-overlay__timer-logo {
-    flex: none;
-    inline-size: 56px;
-    block-size: 56px;
-    color: var(--pk-pqc-blue);
-  }
   .pk-live-overlay__timer-label {
     color: var(--pk-pqc-ink-muted);
     font-size: 20px;
@@ -280,9 +274,6 @@
   .pk-live-overlay__timer[data-on-board] .pk-live-overlay__timer-label {
     color: var(--pk-pqc-on-field-muted);
     font-size: 24px;
-  }
-  .pk-live-overlay__timer[data-on-board] .pk-live-overlay__timer-logo {
-    color: currentColor;
   }
   .pk-live-overlay__timer[data-on-board] .pk-live-overlay__timer-value {
     margin-inline-start: 0;

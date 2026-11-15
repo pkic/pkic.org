@@ -4,39 +4,22 @@ import type { LiveStageBanner, LiveStageMain, LiveStageTimer } from "../../share
 import type { LiveRoomState } from "./live-room-state";
 import { useNumericCssProperties } from "../hooks/useNumericCssProperties";
 import { LiveStageContent } from "./LiveStageContent";
-import { LiveTimerMark } from "./LiveTimerMark";
-import { formatLiveTimerMark } from "../../shared/live-timer-format";
 import { useLiveStageDisplayPlan, useLiveStageReactions } from "./useLiveStageDisplay";
 import "./LiveStageDisplay.css";
 
 /**
  * One timer: its label over its value, sized by its role and fitted to its
- * column by its length. A timer the graphic draws in the mark is the mark
- * here too, so the speaker sees the pitch as the stream does.
+ * column by its length. Always plain digits: the stage display spends its
+ * room on reading the time, not on the stream's designs.
  */
 function StageTimer({ timer }: { timer: LiveStageTimer }) {
   const geometry = useNumericCssProperties({ "--timer-chars": Math.max(4, [...timer.text].length) });
-  const mark = timer.presentation === "ring" && timer.shownMs !== null;
   return (
-    <div
-      class="pk-live-stage-display__timer"
-      data-size={timer.size}
-      data-mark={mark ? "" : undefined}
-      data-numeric-css-properties={geometry}
-    >
+    <div class="pk-live-stage-display__timer" data-size={timer.size} data-numeric-css-properties={geometry}>
       {timer.label ? <p class="pk-live-stage-display__label">{timer.label}</p> : null}
-      {mark ? (
-        <LiveTimerMark
-          text={formatLiveTimerMark(timer.shownMs!)}
-          shownMs={timer.shownMs!}
-          tone={timer.tone}
-          running={timer.running}
-        />
-      ) : (
-        <p class="pk-live-stage-display__countdown" data-tone={timer.tone}>
-          {timer.text}
-        </p>
-      )}
+      <p class="pk-live-stage-display__countdown" data-tone={timer.tone}>
+        {timer.text}
+      </p>
     </div>
   );
 }
