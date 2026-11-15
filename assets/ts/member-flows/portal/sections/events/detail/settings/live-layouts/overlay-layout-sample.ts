@@ -154,7 +154,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
         text: DEFAULT_LIVE_CHECK_IN_TEXT,
       },
       timerGraphics: [
-        { ...defaultLiveTimerGraphic(LIVE_SESSION_TIMER_ID), presentation: "digital", label: "Time left" },
+        { ...defaultLiveTimerGraphic(LIVE_SESSION_TIMER_ID), presentation: "digital", showLabel: true, label: "Time left" },
       ],
       topQuestions: {
         config: DEFAULT_LIVE_TOP_QUESTIONS_CONFIG,

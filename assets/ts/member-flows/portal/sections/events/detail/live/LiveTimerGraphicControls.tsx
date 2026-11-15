@@ -142,25 +142,24 @@ export function LiveTimerLookFields({
         label={draft.showLabel ? (draft.label ?? timerName) : null}
         update={(value) => update("presentation", value)}
       />
+      <Field label="Label" help="Leave empty to use the timer's name." {...of("label")}>
+        {(control) => (
+          <TextInput
+            {...control}
+            name="graphic.label"
+            value={draft.label ?? ""}
+            placeholder={timerName}
+            onInput={(event) => update("label", event.currentTarget.value.trim() ? event.currentTarget.value : null)}
+          />
+        )}
+      </Field>
       <Checkbox
         name="graphic.showLabel"
         checked={draft.showLabel}
         onChange={(event) => update("showLabel", event.currentTarget.checked)}
-        label="Show a label"
+        label="Show the label on Program and Projector"
+        hint="The stage display always shows it."
       />
-      {draft.showLabel ? (
-        <Field label="Label" help="Leave empty to show the timer's name." {...of("label")}>
-          {(control) => (
-            <TextInput
-              {...control}
-              name="graphic.label"
-              value={draft.label ?? ""}
-              placeholder={timerName}
-              onInput={(event) => update("label", event.currentTarget.value.trim() ? event.currentTarget.value : null)}
-            />
-          )}
-        </Field>
-      ) : null}
       {counts ? (
         <>
           <div class="pk-cluster">

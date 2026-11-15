@@ -18,7 +18,7 @@ it("shows each look as it goes on air, with the timer's own label, and picks one
   await act(() =>
     render(
       <LiveTimerLookFields
-        draft={defaultLiveTimerGraphic("talk")}
+        draft={{ ...defaultLiveTimerGraphic("talk"), showLabel: true }}
         timerName="Talk"
         counts
         of={() => ({})}

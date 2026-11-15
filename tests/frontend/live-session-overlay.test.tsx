@@ -214,7 +214,12 @@ describe("broadcast overlays", () => {
 
   it("draws the program timer graphic in its own format, label and warning color", () => {
     const { host, live } = mountOverlay("program");
-    const graphic = { ...defaultLiveTimerGraphic("session"), presentation: "digital" as const, label: "Time left" };
+    const graphic = {
+      ...defaultLiveTimerGraphic("session"),
+      presentation: "digital" as const,
+      showLabel: true,
+      label: "Time left",
+    };
     void act(() => {
       live.latest().deliver({ type: "timers.changed", timers: [{ ...SESSION_TIMER, heldMs: 42_000 }] });
       live.latest().deliver({

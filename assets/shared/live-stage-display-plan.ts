@@ -287,7 +287,8 @@ export function liveStageDisplayPlan(input: LiveStageDisplayInput): LiveStageDis
   const items = liveStageDisplayGraphics(stageDisplayShown(input), input.timers)
     .map((graphic) => {
       const item = liveTimerGraphicText(
-        graphic,
+        // The speaker always sees which timer is which, whether the stream shows its label or not.
+        { ...graphic, showLabel: true },
         input.timers.find((timer) => timer.id === graphic.timerId)!,
         session,
         now,

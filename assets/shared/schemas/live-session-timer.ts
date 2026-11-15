@@ -228,7 +228,8 @@ export function defaultLiveTimerGraphic(timerId: string): LiveTimerGraphic {
   return {
     timerId,
     label: null,
-    showLabel: true,
+    // The stream and the projector read the time alone; the stage display names it anyway.
+    showLabel: false,
     format: "clock",
     customFormat: "{{hours}}h {{minutes}}m {{seconds}}s",
     showLogo: false,
