@@ -18,6 +18,18 @@
     align-items: center;
   }
 
+  .pk-datalist--stacked {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pk-datalist--stacked > dt {
+    overflow-wrap: anywhere;
+  }
+
+  .pk-datalist--stacked > dt:not(:first-of-type) {
+    margin-top: var(--pk-2);
+  }
+
   /*
    * The smaller of the two densities. Sidebars and cards were pairing the list
    * with a separate small-text class to get this; a modifier on the block keeps

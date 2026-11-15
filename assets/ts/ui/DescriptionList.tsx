@@ -37,7 +37,8 @@ export interface DescriptionListProps {
    * decision inside the component instead of beside it.
    */
   density?: "default" | "compact";
-  layout?: "default" | "status";
+  /** Stack each value beneath its term when a narrow panel needs the full width. */
+  layout?: "default" | "status" | "stacked";
   /** Align text with values that include inline actions. */
   align?: "start" | "baseline";
 }
@@ -61,6 +62,7 @@ export function DescriptionList({
     "pk-datalist",
     density === "compact" ? "pk-datalist--compact" : null,
     layout === "status" ? "pk-datalist--status" : null,
+    layout === "stacked" ? "pk-datalist--stacked" : null,
     align === "baseline" ? "pk-datalist--baseline" : null,
   ]
     .filter(Boolean)

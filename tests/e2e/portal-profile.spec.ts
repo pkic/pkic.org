@@ -23,10 +23,39 @@ import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 test("a member edits their name fields and toggles organization-page visibility", async ({ page }) => {
   const suffix = uniqueSuffix();
   const email = `profile-fields-${suffix}@profile-fields-${suffix}.test`;
-  const organizationName = `Profile Fields Org ${suffix}`;
+  const organizationName = `Synthetic Authority for Identity, Certificates, Customs and Port Security ${suffix}`;
 
   await signInToPortal(page, e2eAdminEmail("portal-membership-form"));
   await approveMemberThroughReview(page, { email, name: `Profile Fields ${suffix}`, organizationName });
+
+  // Open the new person's record from the directory as staff. Long names must
+  // leave every visibility value readable even in a narrow desktop sidebar.
+  await page.goto("/portal/#/users");
+  const search = page.getByPlaceholder("email or name");
+  await search.fill(email);
+  await search.press("Enter");
+  await page.getByRole("row").filter({ hasText: email }).click();
+  const visibility = page.getByRole("region", {
+    name: "Visibility",
+    exact: true,
+  });
+  await expect(visibility).toBeVisible();
+  for (const width of [1440, 1280, 768, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(visibility.getByRole("term").filter({ hasText: organizationName })).toBeVisible();
+    const values = visibility.getByRole("definition");
+    await expect(values).toHaveCount(2);
+    for (const value of await values.all()) {
+      const box = await value.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.width).toBeGreaterThan(200);
+      expect(box!.height).toBeLessThan(60);
+    }
+    await visibility.screenshot({
+      path: `test-results/profile-visibility-${width}.png`,
+    });
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
 
   await page.context().clearCookies();
   await signInToPortal(page, email);
