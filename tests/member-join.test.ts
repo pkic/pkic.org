@@ -630,7 +630,8 @@ describe("signed-in membership join", () => {
         testEnv.DB.prepare("DELETE FROM organization_domain_claims WHERE organization_id=?").bind(organizationId).run(),
     );
     const response = await verifyJoin({ ...testEnv, DB: racingDb }, applicant);
-    expect(response.ok).toBe(false);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "ORGANIZATION_AFFILIATION_CHANGED" } });
     expect(await queryAll(testEnv.DB, "SELECT id FROM identities WHERE organization_id=?", [organizationId])).toEqual(
       [],
     );

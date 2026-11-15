@@ -338,8 +338,11 @@ async function fillProposalParticipant(
   const identity = page.locator("[data-proposer-identity]");
   await expect(identity.getByRole("region", { name: "Sign in", exact: true })).toBeVisible();
   await signInThroughCard(page, person.email, { emailFlow: "proposal", individual: true });
-  // The emailed link returns to the same address, invitation included, and the form starts again with its terms.
-  expect(new URL(page.url()).searchParams.toString()).toBe(originalQuery.toString());
+  // The emailed link returns to the same address without the invitation token, which stays in this browser;
+  // the submission below still carries it. The form starts again with its terms.
+  const returnedQuery = new URLSearchParams(originalQuery);
+  returnedQuery.delete("invite");
+  expect(new URL(page.url()).searchParams.toString()).toBe(returnedQuery.toString());
   await agreeToAllTerms(page);
   await page.getByRole("button", { name: /Continue/i }).click();
   await identity.getByRole("button", { name: EMAIL_FIRST_COPY.proposal.individualSwitch, exact: true }).click();
@@ -635,7 +638,7 @@ test.describe("browser workflows", () => {
       firstName: "Alice",
       lastName: "Attendee",
       email: alice,
-      organization: "Test Org",
+      organization: `Test Org ${Date.now()}`,
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page, { dietaryRestriction: "Vegetarian" });
@@ -708,7 +711,7 @@ test.describe("browser workflows", () => {
       firstName: "First",
       lastName: "Friend",
       email: "friend-accept@example.test",
-      organization: "Friend Org",
+      organization: `Friend Org ${Date.now()}`,
     });
     await expect(page.getByRole("heading", { name: /You're registered, First!/i })).toBeVisible();
     await screenshot("04-invited-attendee-registered");
@@ -889,7 +892,7 @@ test.describe("browser workflows", () => {
       firstName: "Sec",
       lastName: "Tester",
       email: sec,
-      organization: "Security Test Org",
+      organization: `Security Test Org ${Date.now()}`,
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);
@@ -1013,7 +1016,7 @@ test.describe("browser workflows", () => {
       firstName: "Resend",
       lastName: "Tester",
       email: resendTester,
-      organization: "Resend Test Org",
+      organization: `Resend Test Org ${Date.now()}`,
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);
@@ -1078,7 +1081,7 @@ test.describe("browser workflows", () => {
       firstName: "Nominator",
       lastName: "User",
       email: nominator,
-      organization: "Nominator Test Org",
+      organization: `Nominator Test Org ${Date.now()}`,
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);

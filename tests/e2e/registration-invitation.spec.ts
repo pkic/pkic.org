@@ -85,6 +85,9 @@ async function captureStep(page: Page, info: TestInfo, step: number, name: strin
 }
 
 test("checks invitation access before signup and preserves the review on late expiry", async ({ page }, info) => {
+  // An organization name belongs to the domain that first claimed it, so each run names its own.
+  const runId = Date.now();
+  const reviewEmail = `signup-review-${runId}@example.com`;
   await page.route("**/invites/*/info*", (route) => route.fulfill({ json: { status: "expired" } }));
   await page.goto(`${registrationPath}?invite=expired-invitation-test-token`);
   await expect(page.getByRole("heading", { name: "This invitation has expired" })).toBeVisible();
@@ -122,10 +125,10 @@ test("checks invitation access before signup and preserves the review on late ex
   }
   await page.screenshot({ path: "test-results/registration-shared-fields.png", fullPage: true });
   await continueRegistrationWithEmail(page, {
-    email: "signup-review@example.com",
+    email: reviewEmail,
     firstName: "Signup",
     lastName: "Review",
-    organization: "Signup Review Org",
+    organization: `Signup Review Org ${runId}`,
   });
   await captureStep(page, info, 2, "attendance");
   await page.getByRole("button", { name: /^Choose On[- ]demand for every available day$/ }).click();
@@ -148,16 +151,21 @@ test("checks invitation access before signup and preserves the review on late ex
   await page.locator("[data-step='4']").screenshot({ path: "test-results/registration-shared-consents-dark.png" });
   await page.emulateMedia({ colorScheme: "light" });
 
-  let submittedWithoutInvite = false;
+  const submissions: Array<{ inviteToken?: string | null; inviteId?: string | null }> = [];
   await page.route(`**/api/v1/events/${slug}/registrations`, (route) => {
-    const body = registrationCreateSchema.parse(route.request().postDataJSON());
-    submittedWithoutInvite = !body.inviteToken;
+    submissions.push(registrationCreateSchema.parse(route.request().postDataJSON()));
     return route.fulfill({ status: 400, json: { error: { code: "INVITE_EXPIRED", message: "Invitation expired" } } });
   });
   await page.getByRole("button", { name: "Register", exact: true }).click();
   await expect(page.getByRole("heading", { name: "This invitation has expired" })).toBeVisible();
+  // The token left the address at sign-in; this browser kept it, so the first submission still carries it.
+  expect(submissions[0]).toMatchObject({
+    inviteToken: "valid-invitation-test-token",
+    inviteId: "0b7e9d1c-5a4f-4c2e-9f3a-2d6b8e1c4a70",
+  });
   await page.getByRole("button", { name: "Continue without invitation" }).click();
-  await expect(page.locator("[data-registration-review]")).toContainText("signup-review@example.com");
+  await expect(page.locator("[data-registration-review]")).toContainText(reviewEmail);
   await page.getByRole("button", { name: "Register", exact: true }).click();
-  await expect.poll(() => submittedWithoutInvite).toBe(true);
+  await expect.poll(() => submissions.length).toBe(2);
+  expect(submissions[1]?.inviteToken).toBeFalsy();
 });

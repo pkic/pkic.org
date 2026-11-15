@@ -50,6 +50,6 @@ describe("existing member on the join page", () => {
       await env.DB.prepare("UPDATE members SET status = 'inactive' WHERE id = ?").bind(member.memberId).run();
     const response = await joinPath(testEnv, await signInJoinApplicant(testEnv, address, true));
     expect(response.status).toBe(200);
-    expect(memberJoinVerifyResponseSchema.parse(await response.json()).status).not.toBe("already_member");
+    expect(memberJoinVerifyResponseSchema.parse(await response.json()).status).toBe("support_required");
   });
 });

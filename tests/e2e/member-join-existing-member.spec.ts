@@ -93,95 +93,101 @@ test("a verified address on a shared domain needs approval for member access", a
   // Each person arrives in a browser of their own.
   const origin = new URL(staff.url()).origin;
   const colleagueContext = await browser.newContext({ baseURL: origin });
-  page = await colleagueContext.newPage();
-  const email = `colleague-${suffix}@${domain}`;
-  await startJoinInBrowser(page, email);
-  const choice = page.getByRole("combobox", { name: "Organization (required)", exact: true });
-  await expect(choice).toBeVisible();
-  await expect(page.getByText(`Choose the organization you represent at @${domain}.`)).toBeVisible();
-  await expect(choice).toHaveValue("");
-  await expect(choice.locator("option")).toHaveText([
-    "Choose an organization",
-    `Shared First ${suffix}`,
-    `Shared Second ${suffix}`,
-  ]);
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await choice.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: test.info().outputPath("shared-organization-desktop.png") });
-  await page.setViewportSize({ width: 375, height: 812 });
-  await choice.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: test.info().outputPath("shared-organization-phone.png") });
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await choice.selectOption({ label: `Shared Second ${suffix}` });
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(page.locator("[data-join-support-required]")).toBeVisible();
-  for (const width of [1280, 375]) {
-    await page.setViewportSize({ width, height: 812 });
-    await page.screenshot({ path: test.info().outputPath(`shared-member-review-required-${width}.png`) });
+  try {
+    page = await colleagueContext.newPage();
+    const email = `colleague-${suffix}@${domain}`;
+    await startJoinInBrowser(page, email);
+    const choice = page.getByRole("combobox", { name: "Organization (required)", exact: true });
+    await expect(choice).toBeVisible();
+    await expect(page.getByText(`Choose the organization you represent at @${domain}.`)).toBeVisible();
+    await expect(choice).toHaveValue("");
+    await expect(choice.locator("option")).toHaveText([
+      "Choose an organization",
+      `Shared First ${suffix}`,
+      `Shared Second ${suffix}`,
+    ]);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await choice.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: test.info().outputPath("shared-organization-desktop.png") });
+    await page.setViewportSize({ width: 375, height: 812 });
+    await choice.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: test.info().outputPath("shared-organization-phone.png") });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await choice.selectOption({ label: `Shared Second ${suffix}` });
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(page.locator("[data-join-support-required]")).toBeVisible();
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 812 });
+      await page.screenshot({ path: test.info().outputPath(`shared-member-review-required-${width}.png`) });
+    }
+  } finally {
+    await colleagueContext.close();
   }
-  await colleagueContext.close();
   const independentContext = await browser.newContext({ baseURL: origin });
-  page = await independentContext.newPage();
-  await startJoinInBrowser(page, independentEmail, { individual: true });
-  const independent = page.getByRole("button", { name: "Continue as an individual", exact: true });
-  await expect(independent).toBeVisible();
-  await expect(page.getByText("Choose an organization only if you want to join it.", { exact: false })).toBeVisible();
-  for (const width of [1280, 375]) {
-    await page.setViewportSize({ width, height: 812 });
-    await independent.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: test.info().outputPath(`individual-choice-${width}.png`) });
-  }
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await independent.focus();
-  await page.keyboard.press("Enter");
-  await expect(page.locator("[data-join-application-form]")).toBeVisible();
-  await expect(page.locator('[data-join-application-form] input[name="organizationName"]')).toBeHidden();
-  // Joining signed them in, so the portal opens with the same session.
-  await page.goto("/portal/#/home");
-  const offer = page.getByRole("region", { name: "Your organization", exact: true });
-  await expect(offer).toBeVisible();
-  for (const width of [1280, 375]) {
-    await page.setViewportSize({ width, height: 812 });
-    await offer.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: test.info().outputPath(`shared-domain-offer-${width}.png`) });
-  }
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await offer.getByRole("button", { name: "I am independent", exact: true }).click();
-  await expect(offer).toBeHidden();
-  await page.reload();
-  await expect(page.getByRole("button", { name: "Account menu" })).toBeVisible();
-  await expect(offer).toHaveCount(0);
+  try {
+    page = await independentContext.newPage();
+    await startJoinInBrowser(page, independentEmail, { individual: true });
+    const independent = page.getByRole("button", { name: "Continue as an individual", exact: true });
+    await expect(independent).toBeVisible();
+    await expect(page.getByText("Choose an organization only if you want to join it.", { exact: false })).toBeVisible();
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 812 });
+      await independent.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: test.info().outputPath(`individual-choice-${width}.png`) });
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await independent.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("[data-join-application-form]")).toBeVisible();
+    await expect(page.locator('[data-join-application-form] input[name="organizationName"]')).toBeHidden();
+    // Joining signed them in, so the portal opens with the same session.
+    await page.goto("/portal/#/home");
+    const offer = page.getByRole("region", { name: "Your organization", exact: true });
+    await expect(offer).toBeVisible();
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 812 });
+      await offer.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: test.info().outputPath(`shared-domain-offer-${width}.png`) });
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await offer.getByRole("button", { name: "I am independent", exact: true }).click();
+    await expect(offer).toBeHidden();
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Account menu" })).toBeVisible();
+    await expect(offer).toHaveCount(0);
 
-  await openMyProfile(page);
-  await page.getByRole("button", { name: "Email addresses actions" }).click();
-  await page.getByRole("menuitem", { name: "Add email address" }).click();
-  // Independence dismissed both shared candidates; a new organization must still be offered.
-  const aliasEmail = `independent-${suffix}@${later.email.split("@")[1]}`;
-  await page.getByRole("textbox", { name: /^Email address/ }).fill(aliasEmail);
-  const beforeAlias = await capturedEmailCount();
-  await page.getByRole("button", { name: "Send verification link", exact: true }).click();
-  const aliasProof = await waitForCapturedEmail(aliasEmail, "Verify your email address", { since: beforeAlias });
-  await page.goto(extractEmailUrl(aliasProof, "/portal/"));
-  await page.getByRole("button", { name: "Verify this address", exact: true }).click();
-  await expect(page.getByText(`${aliasEmail} is verified`, { exact: true })).toBeVisible();
-  await page.goto("/portal/#/home");
-  const joinOrganization = offer.getByRole("button", { name: `Join Later Organization ${suffix}`, exact: true });
-  await expect(joinOrganization).toBeVisible();
-  for (const width of [1280, 375]) {
-    await page.setViewportSize({ width, height: 812 });
-    await offer.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: test.info().outputPath(`organization-after-dismissal-${width}.png`) });
+    await openMyProfile(page);
+    await page.getByRole("button", { name: "Email addresses actions" }).click();
+    await page.getByRole("menuitem", { name: "Add email address" }).click();
+    // Independence dismissed both shared candidates; a new organization must still be offered.
+    const aliasEmail = `independent-${suffix}@${later.email.split("@")[1]}`;
+    await page.getByRole("textbox", { name: /^Email address/ }).fill(aliasEmail);
+    const beforeAlias = await capturedEmailCount();
+    await page.getByRole("button", { name: "Send verification link", exact: true }).click();
+    const aliasProof = await waitForCapturedEmail(aliasEmail, "Verify your email address", { since: beforeAlias });
+    await page.goto(extractEmailUrl(aliasProof, "/portal/"));
+    await page.getByRole("button", { name: "Verify this address", exact: true }).click();
+    await expect(page.getByText(`${aliasEmail} is verified`, { exact: true })).toBeVisible();
+    await page.goto("/portal/#/home");
+    const joinOrganization = offer.getByRole("button", { name: `Join Later Organization ${suffix}`, exact: true });
+    await expect(joinOrganization).toBeVisible();
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 812 });
+      await offer.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: test.info().outputPath(`organization-after-dismissal-${width}.png`) });
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await offer
+      .getByRole("textbox", { name: ORGANIZATION_JOB_TITLE_COPY.label, exact: false })
+      .fill("Security architect");
+    await joinOrganization.click();
+    await expect(offer).toBeHidden();
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Account menu" })).toBeVisible();
+    await expect(offer).toHaveCount(0);
+  } finally {
+    await independentContext.close();
   }
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await offer
-    .getByRole("textbox", { name: ORGANIZATION_JOB_TITLE_COPY.label, exact: false })
-    .fill("Security architect");
-  await joinOrganization.click();
-  await expect(offer).toBeHidden();
-  await page.reload();
-  await expect(page.getByRole("button", { name: "Account menu" })).toBeVisible();
-  await expect(offer).toHaveCount(0);
-  await independentContext.close();
 });
 
 test("a verified address can apply for a nonmember organization on a shared domain", async ({ page }) => {

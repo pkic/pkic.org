@@ -13,6 +13,15 @@ function requestTo(page: Page, path: string) {
   );
 }
 
+/** The "New here?" action each flow's card starts an account with. */
+const START_LABELS: Record<EmailFirstFlow, string> = {
+  registration: "Start registration",
+  proposal: "Start your proposal",
+  speaker: "Start your proposal",
+  join: "Start your application",
+  representation: "Continue with your email",
+};
+
 /**
  * Signs a person in through the shared sign-in card a public page shows a
  * signed-out visitor (registration, the proposal form, joining), and comes
@@ -23,15 +32,6 @@ function requestTo(page: Page, path: string) {
  * that already signs in receives a sign-in link from the same step. Pass
  * `returning` to use "Sign in with an email link" instead.
  */
-/** The "New here?" action each flow's card starts an account with. */
-const START_LABELS: Record<EmailFirstFlow, string> = {
-  registration: "Start registration",
-  proposal: "Start your proposal",
-  speaker: "Start your proposal",
-  join: "Start your application",
-  representation: "Continue with your email",
-};
-
 export async function signInThroughCard(
   page: Page,
   email: string,

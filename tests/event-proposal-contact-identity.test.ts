@@ -102,6 +102,7 @@ describe("proposal contact capacity and identity", () => {
     const before = await stored();
     const response = await post("", proposal(person.identityId), person.headers);
     expect(response.status, await response.clone().text()).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "PROPOSAL_IDENTITY_CHANGED" } });
     expect(await stored()).toEqual(before);
   });
 

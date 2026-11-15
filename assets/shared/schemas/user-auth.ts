@@ -20,19 +20,28 @@ import { screensWorkEmailDomain, workEmailStepSchema } from "./work-email";
  * under the portal's own `#`, never a scheme or a host, so the link can only
  * land inside the portal.
  */
-// Long enough for a registration route that carries its invitation token back after sign-in.
 export const portalReturnPathSchema = z
   .string()
   .max(512)
   .regex(/^\/(?!\/)[A-Za-z0-9\-._~!$&'()*+,;=:@/%?]*$/, "Must be a portal path");
 
+/**
+ * Where an emailed sign-in link returns. The link is stored in the email
+ * outbox, and D1 holds no usable capability token, so the path never carries
+ * an invitation token: the page keeps it in the browser under the invitation id.
+ */
+const signInReturnPathSchema = portalReturnPathSchema.refine(
+  (path) => !/[?&]invite=/.test(path),
+  "Leave the invitation token out of the return path",
+);
+
 export const userAuthRequestSchema = emailRecoveryRequestSchema.extend({
-  returnPath: portalReturnPathSchema.optional(),
+  returnPath: signInReturnPathSchema.optional(),
 });
 export const userAuthVerifySchema = magicLinkVerifySchema;
 /** Starting an account: the shared work-email step, and where the link returns the person. */
 export const userSignUpRequestSchema = workEmailStepSchema.extend({
-  returnPath: portalReturnPathSchema.optional(),
+  returnPath: signInReturnPathSchema.optional(),
 });
 
 export const userIdentitySchema = z.object({

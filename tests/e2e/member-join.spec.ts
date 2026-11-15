@@ -196,30 +196,33 @@ test("signs in with an organization email before submitting the D1-backed member
   await expect(page.getByRole("heading", { name: "Application status", exact: true })).toBeVisible();
   // A colleague on the same domain arrives in a browser of their own.
   const colleagueContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
-  const colleague = await colleagueContext.newPage();
-  await startJoinInBrowser(colleague, `colleague@${email.split("@")[1]}`);
-  const organizationNotice = colleague.getByRole("heading", {
-    name: "An application for your organization is already in progress",
-    exact: true,
-  });
-  // The domain is held by that application, so they name their organization; naming the same one says so.
-  await colleague.getByRole("button", { name: "Add organization", exact: true }).click();
-  const adding = colleague.getByRole("dialog", { name: "Add organization", exact: true });
-  await adding.getByRole("textbox", { name: /^Organization name/ }).fill(`E2E Organization ${unique}`);
-  await adding.getByRole("button", { name: "Use organization", exact: true }).click();
-  await expect(organizationNotice).toBeVisible();
-  await expect(colleague.locator("[data-join-application-form]")).toBeHidden();
-  await expect(colleague.getByRole("link", { name: "Check application status", exact: true })).toHaveCount(0);
-  await expect(colleague.getByRole("link", { name: "Email the secretariat", exact: true })).toHaveAttribute(
-    "href",
-    "mailto:contact@pkic.org",
-  );
-  for (const width of [1280, 375]) {
-    await colleague.setViewportSize({ width, height: 900 });
-    await organizationNotice.scrollIntoViewIfNeeded();
-    await colleague.screenshot({ path: testInfo.outputPath(`organization-application-in-progress-${width}.png`) });
+  try {
+    const colleague = await colleagueContext.newPage();
+    await startJoinInBrowser(colleague, `colleague@${email.split("@")[1]}`);
+    const organizationNotice = colleague.getByRole("heading", {
+      name: "An application for your organization is already in progress",
+      exact: true,
+    });
+    // The domain is held by that application, so they name their organization; naming the same one says so.
+    await colleague.getByRole("button", { name: "Add organization", exact: true }).click();
+    const adding = colleague.getByRole("dialog", { name: "Add organization", exact: true });
+    await adding.getByRole("textbox", { name: /^Organization name/ }).fill(`E2E Organization ${unique}`);
+    await adding.getByRole("button", { name: "Use organization", exact: true }).click();
+    await expect(organizationNotice).toBeVisible();
+    await expect(colleague.locator("[data-join-application-form]")).toBeHidden();
+    await expect(colleague.getByRole("link", { name: "Check application status", exact: true })).toHaveCount(0);
+    await expect(colleague.getByRole("link", { name: "Email the secretariat", exact: true })).toHaveAttribute(
+      "href",
+      "mailto:contact@pkic.org",
+    );
+    for (const width of [1280, 375]) {
+      await colleague.setViewportSize({ width, height: 900 });
+      await organizationNotice.scrollIntoViewIfNeeded();
+      await colleague.screenshot({ path: testInfo.outputPath(`organization-application-in-progress-${width}.png`) });
+    }
+  } finally {
+    await colleagueContext.close();
   }
-  await colleagueContext.close();
 });
 
 test("keeps the individual path an explicit policy exception for an institutional email", async ({ page }) => {

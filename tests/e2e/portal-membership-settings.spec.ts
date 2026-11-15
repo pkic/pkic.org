@@ -1,7 +1,7 @@
 /**
  * @covers system.12.7
  */
-import { expect, test } from "@playwright/test";
+import { expect, test, type Request } from "@playwright/test";
 import {
   membershipApplicationFormDefinitionResponseSchema,
   membershipApplicationFormDefinitionUpdateSchema,
@@ -162,12 +162,13 @@ test(
   async ({ page }) => {
     test.setTimeout(240_000);
     const legacyAdminFormRequests: string[] = [];
-    page.on("request", (request) => {
+    const recordLegacyRequest = (request: Request) => {
       const pathname = new URL(request.url()).pathname;
       if (pathname === LEGACY_ADMIN_FORMS_API || pathname.startsWith(`${LEGACY_ADMIN_FORMS_API}/`)) {
         legacyAdminFormRequests.push(`${request.method()} ${pathname}`);
       }
-    });
+    };
+    page.on("request", recordLegacyRequest);
 
     await signInToPortal(page, e2eAdminEmail("portal-membership-form"));
     await page.goto("/portal/#/settings/membership-application-form");
@@ -232,6 +233,8 @@ test(
         .context()
         .browser()!
         .newContext({ baseURL: new URL(page.url()).origin });
+      // The public join page runs in the applicant's browser, so its requests are watched there too.
+      applicantContext.on("request", recordLegacyRequest);
       try {
         const applicant = await applicantContext.newPage();
         await startJoinInBrowser(applicant, email);

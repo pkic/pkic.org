@@ -137,7 +137,7 @@ describe("proposal entry context of a signed-in proposer", () => {
         ip: null,
         userAgent: null,
       }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ code: "INVITE_EXPIRED" });
     expect(await queryAll(env.DB, "SELECT id FROM session_proposals")).toHaveLength(0);
     expect(await queryAll(env.DB, "SELECT first_name,last_name FROM users WHERE id=?", [f.colleague.userId])).toEqual([
       { first_name: null, last_name: null },
