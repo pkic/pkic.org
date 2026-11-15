@@ -61,9 +61,9 @@ function boardColumn(side: "left" | "right"): Partial<LiveOverlayLayoutElements>
     chat: column,
     schedule: column,
     checkIn: column,
-    lowerThird: box(camera + 48, 856, 1056, 192, LEFT_BOTTOM),
+    lowerThird: box(camera + 48, 738, 1056, 192, LEFT_BOTTOM),
     timer: box(left ? 1536 : 1920 - BOARD_COLUMN_WIDTH - 384, 48, 336, 120, RIGHT_TOP),
-    ticker: box(camera, 1000, 1920 - BOARD_COLUMN_WIDTH, 80, CENTER_BOTTOM),
+    ticker: box(camera, 954, 1920 - BOARD_COLUMN_WIDTH, 126, CENTER_BOTTOM),
     reactions: box(left ? 1492 : 48, 48, 380, 760, left ? RIGHT_MIDDLE : LEFT_MIDDLE, false),
   };
 }
@@ -75,11 +75,11 @@ function boardColumn(side: "left" | "right"): Partial<LiveOverlayLayoutElements>
  * code the right side under it, Up next the left above the lower third.
  */
 const FULL_FRAME: LiveOverlayLayoutElements = {
-  lowerThird: box(48, 776, 1248, 208, LEFT_BOTTOM),
+  lowerThird: box(48, 722, 1248, 208, LEFT_BOTTOM),
   question: FILL,
   poll: FILL,
   timer: box(1536, 48, 336, 120, RIGHT_TOP),
-  ticker: box(0, 1000, 1920, 80, CENTER_BOTTOM),
+  ticker: box(0, 954, 1920, 126, CENTER_BOTTOM),
   // Up next on the left, above the lower third and clear of the check-in code, so the two can show together.
   schedule: box(96, 168, 1248, 584, LEFT_MIDDLE),
   panelists: FILL,
@@ -158,7 +158,7 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
    */
   break: {
     name: "Break",
-    elements: only({ ...FULL_FRAME, timer: box(1392, 808, 480, 172, RIGHT_BOTTOM) }, ["timer", "ticker"]),
+    elements: only({ ...FULL_FRAME, timer: box(1392, 758, 480, 172, RIGHT_BOTTOM) }, ["timer", "ticker"]),
   },
 };
 

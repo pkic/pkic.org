@@ -6,7 +6,10 @@
     display: flex;
     align-items: stretch;
     inline-size: 1920px;
-    block-size: 80px;
+    /* Solid to the frame's foot; the text keeps to the 72px row above the 54px title-safe margin. */
+    box-sizing: border-box;
+    block-size: 126px;
+    padding-block-end: 54px;
     color: var(--pk-on-solid);
     background: var(--pk-on-solid-ink);
     overflow: hidden;
