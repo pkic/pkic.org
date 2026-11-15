@@ -68,7 +68,7 @@ it.each(["cards", "list"] as const)(
     const schedule = frame();
     schedule.config.layout = layout;
     host = document.body.appendChild(document.createElement("div"));
-    await act(() => render(<LiveScheduleOverlay schedule={schedule} />, host!));
+    await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
     // Two rooms read best as rows, whichever layout was chosen.
     expect(host.querySelector("[data-arrangement]")?.getAttribute("data-arrangement")).toBe("rows");
     expect(host.querySelectorAll(".pk-live-schedule__room")).toHaveLength(2);
@@ -91,7 +91,7 @@ it.each(LIVE_GRAPHIC_THEMES)("draws Up next in the %s theme, with the same conte
   const schedule = busyFrame();
   schedule.config = { ...schedule.config, theme };
   host = document.body.appendChild(document.createElement("div"));
-  await act(() => render(<LiveScheduleOverlay schedule={schedule} />, host!));
+  await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
   const graphic = host.querySelector<HTMLElement>(".pk-live-schedule")!;
   expect(graphic.dataset.graphicTheme).toBe(theme);
   expect(host.querySelector("h2")?.textContent).toBe("Up next");
@@ -114,7 +114,7 @@ it("sets itself for the box it is drawn into: cards for one wide row of rooms, r
   expect(liveScheduleArrangement("cards", "narrow", 6)).toBe("rows");
   expect(liveScheduleArrangement("list", "wide", 6)).toBe("rows");
   host = document.body.appendChild(document.createElement("div"));
-  await act(() => render(<LiveScheduleOverlay schedule={busyFrame()} box={{ width: 560 }} />, host!));
+  await act(() => render(<LiveScheduleOverlay schedule={busyFrame()} box={{ width: 560 }} animate />, host!));
   expect(host.querySelector<HTMLElement>(".pk-live-schedule")!.dataset).toMatchObject({
     fit: "narrow",
     arrangement: "rows",
@@ -122,7 +122,7 @@ it("sets itself for the box it is drawn into: cards for one wide row of rooms, r
 });
 it("shows each speaker's public headshot", async () => {
   host = document.body.appendChild(document.createElement("div"));
-  await act(() => render(<LiveScheduleOverlay schedule={frame()} />, host!));
+  await act(() => render(<LiveScheduleOverlay schedule={frame()} animate />, host!));
   const portraits = [...host.querySelectorAll<HTMLImageElement>(".pk-live-schedule__speaker img")];
   expect(portraits.map((image) => image.getAttribute("src"))).toEqual(["/approved-photo.jpg", "/approved-photo.jpg"]);
 });
@@ -144,7 +144,7 @@ it("brings one card forward at a time when several rooms are next", async () => 
   vi.useFakeTimers();
   try {
     host = document.body.appendChild(document.createElement("div"));
-    await act(() => render(<LiveScheduleOverlay schedule={busyFrame()} />, host!));
+    await act(() => render(<LiveScheduleOverlay schedule={busyFrame()} animate />, host!));
     expect(host.querySelector("[data-spotlight]")).not.toBeNull();
     expect(activeRoom()).toBe("Room 0");
     await act(() => {
@@ -156,17 +156,12 @@ it("brings one card forward at a time when several rooms are next", async () => 
     vi.useRealTimers();
   }
 });
-it("keeps every card still for a viewer who prefers reduced motion", async () => {
-  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("reduce"), media: query }));
-  try {
-    host = document.body.appendChild(document.createElement("div"));
-    await act(() => render(<LiveScheduleOverlay schedule={busyFrame()} />, host!));
-    expect(host.querySelector("[data-spotlight]")).toBeNull();
-    expect(host.querySelector(".pk-live-schedule__room[data-active]")).toBeNull();
-    expect(host.querySelectorAll(".pk-live-schedule__room")).toHaveLength(4);
-  } finally {
-    vi.unstubAllGlobals();
-  }
+it("keeps every card still where the graphic may not move", async () => {
+  host = document.body.appendChild(document.createElement("div"));
+  await act(() => render(<LiveScheduleOverlay schedule={busyFrame()} animate={false} />, host!));
+  expect(host.querySelector("[data-spotlight]")).toBeNull();
+  expect(host.querySelector(".pk-live-schedule__room[data-active]")).toBeNull();
+  expect(host.querySelectorAll(".pk-live-schedule__room")).toHaveLength(4);
 });
 it("silently removes missing/empty schedule graphics rather than broadcasting diagnostic copy", async () => {
   host = document.body.appendChild(document.createElement("div"));
@@ -175,7 +170,7 @@ it("silently removes missing/empty schedule graphics rather than broadcasting di
     { ...frame(), available: false, timeZone: null, rooms: [] },
     { ...frame(), rooms: [] },
   ]) {
-    await act(() => render(<LiveScheduleOverlay schedule={schedule} />, host!));
+    await act(() => render(<LiveScheduleOverlay schedule={schedule} animate />, host!));
     expect(host.textContent).toBe("");
   }
 });
@@ -212,6 +207,7 @@ it("sends independent config-only Preview/Program commands and does not clear an
   });
   const colors = controlFor<HTMLSelectElement>(document, "Colors");
   expect([...colors.options].map((option) => option.textContent)).toEqual([
+    "Event colors",
     "White on transparent",
     "White on black",
     "Black on transparent",

@@ -316,9 +316,9 @@ const PROGRAM_LAYERS: readonly Layer[] = (
     },
     {
       element: "schedule",
-      draw: (state, { placement }) =>
+      draw: (state, { placement, animate }) =>
         state.stage.schedule ? (
-          <LiveScheduleOverlay schedule={state.stage.schedule} box={overlayBoxPixels(placement)} />
+          <LiveScheduleOverlay schedule={state.stage.schedule} box={overlayBoxPixels(placement)} animate={animate} />
         ) : null,
     },
     {

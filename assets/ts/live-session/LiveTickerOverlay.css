@@ -1,5 +1,7 @@
 @layer components {
   .pk-live-ticker {
+    /* Its own loop time: an output page loads the live tokens only, never the website's. */
+    --pk-live-ticker-duration: 30s;
     position: absolute;
     inset-inline: 0;
     bottom: 0;
@@ -58,7 +60,7 @@
     align-items: center;
     width: max-content;
     block-size: 100%;
-    animation: pk-live-ticker-scroll var(--pk-public-member-wall-duration) linear infinite;
+    animation: pk-live-ticker-scroll var(--pk-live-ticker-duration) linear infinite;
   }
   .pk-live-ticker__group {
     min-inline-size: 1920px;
@@ -80,21 +82,21 @@
   }
   @media (prefers-reduced-motion: reduce) {
     /* Text that stands still keeps to the title-safe area at both sides, as it does at the foot. */
-    .pk-live-ticker__window {
+    :root:not(:has([data-live-broadcast-source])) .pk-live-ticker__window {
       padding-inline: 96px;
     }
-    .pk-live-ticker__track {
+    :root:not(:has([data-live-broadcast-source])) .pk-live-ticker__track {
       animation: none;
       width: auto;
       overflow: auto;
     }
-    .pk-live-ticker__group[aria-hidden] {
+    :root:not(:has([data-live-broadcast-source])) .pk-live-ticker__group[aria-hidden] {
       display: none;
     }
-    .pk-live-ticker .pk-live-ticker__message {
+    :root:not(:has([data-live-broadcast-source])) .pk-live-ticker .pk-live-ticker__message {
       white-space: normal;
     }
-    .pk-live-ticker__group {
+    :root:not(:has([data-live-broadcast-source])) .pk-live-ticker__group {
       min-inline-size: 0;
       flex-wrap: wrap;
       block-size: auto;

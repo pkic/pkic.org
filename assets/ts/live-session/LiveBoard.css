@@ -94,7 +94,7 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .pk-live-board {
+    :root:not(:has([data-live-broadcast-source])) .pk-live-board {
       animation: none;
     }
   }

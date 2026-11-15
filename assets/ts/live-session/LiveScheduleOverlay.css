@@ -320,11 +320,11 @@
     column-gap: 22px;
   }
   @media (prefers-reduced-motion: reduce) {
-    .pk-live-schedule__room,
-    .pk-live-schedule[data-spotlight] .pk-live-schedule__room {
+    :root:not(:has([data-live-broadcast-source])) .pk-live-schedule__room,
+    :root:not(:has([data-live-broadcast-source])) .pk-live-schedule[data-spotlight] .pk-live-schedule__room {
       transition: none;
     }
-    .pk-live-schedule__room[data-active]::after {
+    :root:not(:has([data-live-broadcast-source])) .pk-live-schedule__room[data-active]::after {
       animation: none;
     }
   }

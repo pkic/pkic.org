@@ -345,7 +345,9 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .pk-live-overlay__timer:is([data-tone="warn"], [data-tone="over"]) .pk-live-overlay__timer-value {
+    :root:not(:has([data-live-broadcast-source]))
+      .pk-live-overlay__timer:is([data-tone="warn"], [data-tone="over"])
+      .pk-live-overlay__timer-value {
       animation: none;
     }
   }
@@ -411,7 +413,7 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .pk-live-overlay__reaction {
+    :root:not(:has([data-live-broadcast-source])) .pk-live-overlay__reaction {
       animation: none;
     }
   }

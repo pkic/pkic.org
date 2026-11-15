@@ -22,7 +22,8 @@
     block-size: auto;
     aspect-ratio: 1;
     overflow: visible;
-    filter: drop-shadow(0 6px 28px rgb(0 0 0 / 0.45));
+    /* A tight edge so it reads on a bright picture, with no glow around it. */
+    filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.55));
   }
   /* One color: the event kit's seat colors stay on the lower third. */
   .pk-live-timer-mark__wheel > path {
@@ -146,10 +147,12 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .pk-live-timer-mark__wheel {
+    :root:not(:has([data-live-broadcast-source])) .pk-live-timer-mark__wheel {
       transition: none;
     }
-    .pk-live-timer-mark[data-running][data-beat] :is(.pk-live-timer-mark__mark, .pk-live-timer-mark__ripple) {
+    :root:not(:has([data-live-broadcast-source]))
+      .pk-live-timer-mark[data-running][data-beat]
+      :is(.pk-live-timer-mark__mark, .pk-live-timer-mark__ripple) {
       animation: none;
     }
   }
