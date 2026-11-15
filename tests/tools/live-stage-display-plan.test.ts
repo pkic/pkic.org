@@ -204,6 +204,21 @@ describe("stage display plan", () => {
     expect(own.main).toMatchObject({ kind: "content", content: { question, onAir: true, next: null } });
   });
 
+  it("sets a question beside both timers, the pitch's first, each as compact as it reads", () => {
+    const plan = liveStageDisplayPlan(
+      input(-10 * MINUTE, 80 * MINUTE, { own: both, program: { ...EMPTY_LIVE_STAGE, question } }),
+    );
+    expect(plan.main).toMatchObject({
+      kind: "content",
+      timers: [
+        { timerId: "pitch", text: "1:10", size: "small" },
+        // Past an hour the hours and minutes are enough: the question keeps the room.
+        { timerId: "session", text: "1h 20m", size: "small" },
+      ],
+      content: { kind: "question", question },
+    });
+  });
+
   it("sets a question beside the small timer, tagged on air, with the next one and its votes", () => {
     const lined = { ...question, id: "q2", text: "And HSMs?" };
     const plan = liveStageDisplayPlan(
@@ -211,7 +226,7 @@ describe("stage display plan", () => {
     );
     expect(plan.main).toMatchObject({
       kind: "content",
-      timer: { timerId: "session", size: "small" },
+      timers: [{ timerId: "session", size: "small" }],
       content: { kind: "question", question, onAir: true, next: { question: lined, votes: 31 } },
     });
   });

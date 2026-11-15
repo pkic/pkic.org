@@ -14,7 +14,12 @@ import {
   updateLiveTimerGraphics,
 } from "../../assets/shared/live-timer-policy";
 import { format24HourClockInZone } from "../../assets/shared/format-date";
-import { formatLiveDuration, formatLiveTimer } from "../../assets/shared/live-timer-format";
+import {
+  formatLiveDuration,
+  formatLiveDurationCompact,
+  formatLiveTimer,
+  formatLiveTimerMark,
+} from "../../assets/shared/live-timer-format";
 import {
   DEFAULT_LIVE_TIMER_SOUND,
   defaultLiveTimerGraphic,
@@ -414,6 +419,21 @@ describe("the shared clock format", () => {
         "{{years}} year, {{months}} months, {{days}} days, {{hours}} hours, {{minutes}} minutes and {{seconds}} seconds",
       ),
     ).toBe("1 year, 2 months, 5 days, 3 hours, 20 minutes and 10 seconds");
+  });
+
+  it("drops the seconds past an hour where the timer shares the screen", () => {
+    expect(formatLiveDurationCompact(754_000)).toBe("12:34");
+    expect(formatLiveDurationCompact(3_723_000)).toBe("1h 03m");
+    expect(formatLiveDurationCompact(-3_600_000)).toBe("+1h 00m");
+    expect(formatLiveDurationCompact((86_400 + 30) * 1000)).toBe("1d 0h 1m");
+  });
+
+  it("reads whole seconds in the mark while two digits fit", () => {
+    expect(formatLiveTimerMark(42_000)).toBe("42");
+    expect(formatLiveTimerMark(400)).toBe("1");
+    expect(formatLiveTimerMark(-5_000)).toBe("+5");
+    expect(formatLiveTimerMark(100_000)).toBe("1:40");
+    expect(formatLiveTimerMark((10 * 60 + 35) * MINUTE - 5_000)).toBe("10h 35m");
   });
 });
 

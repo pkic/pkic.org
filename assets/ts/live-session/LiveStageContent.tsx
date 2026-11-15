@@ -1,4 +1,5 @@
 import { formatNumber } from "../../shared/format-number";
+import { liveQuestionFit } from "../../shared/live-stage-display";
 import type { LiveStageContent as Content } from "../../shared/live-stage-display-plan";
 import type { LivePoll } from "../../shared/schemas/live-session-poll";
 import { useNumericCssProperties } from "../hooks/useNumericCssProperties";
@@ -75,7 +76,7 @@ export function LiveStageContent({ content }: { content: Content }) {
               ) : null}
             </p>
           ) : null}
-          <p class="pk-live-stage-display__question-text">
+          <p class="pk-live-stage-display__question-text" data-fit={liveQuestionFit(question.text)}>
             <LiveScreenText text={question.text} />
           </p>
         </>
@@ -83,7 +84,7 @@ export function LiveStageContent({ content }: { content: Content }) {
       {next ? (
         <p class="pk-live-stage-display__next" data-leads={question ? undefined : ""}>
           <span class="pk-live-stage-display__next-label">Next question</span>
-          <span class="pk-live-stage-display__next-text">
+          <span class="pk-live-stage-display__next-text" data-fit={liveQuestionFit(next.question.text)}>
             <LiveScreenText text={next.question.text} />
           </span>
           {next.votes ? (

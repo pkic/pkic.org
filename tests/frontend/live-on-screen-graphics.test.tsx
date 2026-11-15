@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LIVE_OVERLAY_PRESET_LAYOUTS } from "../../assets/shared/live-overlay-layout-presets";
 import { liveOverlayLayoutElementsSchema } from "../../assets/shared/schemas/live-overlay-layout";
+import { liveCheckInOnAirSchema } from "../../assets/shared/schemas/live-session-graphic-settings";
 import {
   EMPTY_LIVE_AUX_COMPOSITION,
   liveRoomClientMessageSchema,
@@ -16,7 +17,11 @@ import {
   LiveTopQuestionsControls,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/live/LiveAudienceListControls";
 import type { LiveTargets } from "../../assets/ts/member-flows/portal/sections/events/detail/live/live-output-targets";
-import { stageClockState } from "../../assets/ts/ui/preview/studio-timers-fixtures";
+import {
+  pitchMarkGraphic,
+  stageClockState,
+  TIMERS_FIXTURE_NOW,
+} from "../../assets/ts/ui/preview/studio-timers-fixtures";
 import { liveSnapshot } from "./helpers/live-room-socket";
 
 let host: HTMLElement | undefined;
@@ -191,5 +196,48 @@ describe("timers over a board", () => {
     await draw({ ...shown, stage: { ...shown.stage, timerGraphics: [] } });
     expect(board().hasAttribute("data-logo-covered")).toBe(false);
     expect(reserve()).toBe(0);
+  });
+
+  it("sets digits on a plate over the camera and bare on a board, so no card sits on a card", async () => {
+    await draw(stageClockState);
+    const plate = () => host!.querySelector<HTMLElement>(".pk-live-overlay__timer")!;
+    expect(plate().hasAttribute("data-on-board")).toBe(false);
+    await draw({ ...stageClockState, stage: { ...stageClockState.stage, topQuestions: questions } });
+    expect(plate().hasAttribute("data-on-board")).toBe(true);
+  });
+
+  it("keeps timers off the check-in card: the pitch reads as digits when the mark has no room", async () => {
+    vi.useFakeTimers({ now: TIMERS_FIXTURE_NOW, toFake: ["Date"] });
+    const timers = [...stageClockState.stage.timerGraphics, pitchMarkGraphic()];
+    const stage = { ...stageClockState.stage, timerGraphics: timers };
+    await draw({ ...stageClockState, stage });
+    expect(host!.querySelectorAll(".pk-live-timer-mark")).toHaveLength(1);
+    const checkIn = liveCheckInOnAirSchema.parse({
+      selection: { kind: "session", occurrenceId: "50000000-0000-4000-8000-000000000001" },
+      label: "Post-quantum migration",
+      path: "/portal/#/events/pqc-2026/check-in/code",
+    });
+    await draw({ ...stageClockState, stage: { ...stage, checkIn } });
+    expect(host!.querySelector(".pk-live-timer-mark")).toBeNull();
+    expect([...host!.querySelectorAll(".pk-live-overlay__timer-value")].map((value) => value.textContent)).toEqual([
+      "15:00",
+      "0:42",
+    ]);
+    vi.useRealTimers();
+  });
+
+  it("draws a pitch in the mark: its seconds in the middle, its rings a step a second", async () => {
+    vi.useFakeTimers({ now: TIMERS_FIXTURE_NOW, toFake: ["Date"] });
+    await draw({ ...stageClockState, stage: { ...stageClockState.stage, timerGraphics: [pitchMarkGraphic()] } });
+    const mark = host!.querySelector<HTMLElement>(".pk-live-timer-mark")!;
+    expect(mark.querySelector(".pk-live-timer-mark__time")!.textContent).toBe("42");
+    expect(mark.querySelector(".pk-pkic-mark__keyhole")).toBeNull();
+    expect(mark.hasAttribute("data-running")).toBe(true);
+    const rules = document.adoptedStyleSheets.flatMap((sheet) => [...sheet.cssRules].map((rule) => rule.cssText));
+    expect(
+      rules.some((rule) => rule.includes(mark.dataset.numericCssProperties!) && rule.includes("--mark-turn: -252")),
+    ).toBe(true);
+    expect(host!.querySelector(".pk-live-overlay__timer")).toBeNull();
+    vi.useRealTimers();
   });
 });

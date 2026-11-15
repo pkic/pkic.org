@@ -7,7 +7,7 @@ import {
   liveStageTitle,
   type LiveStageSpeaker,
 } from "./live-stage-display";
-import { formatLiveTimer } from "./live-timer-format";
+import { formatLiveDurationCompact, formatLiveTimer } from "./live-timer-format";
 import {
   countsUp,
   LIVE_TIMER_STALE_OVERTIME_MS,
@@ -38,7 +38,7 @@ import type { LiveStageDisplaySettings } from "./schemas/live-stage-display-sett
  *
  * The main area follows one order, highest first: a timer at zero or over
  * takes all of it; before the session starts it counts down to the start;
- * a question or poll sits beside the timer that ends first; else up to two
+ * a question or poll sits beside the two timers that end first; else up to two
  * timers, the one ending first large. Questions, polls and timers are the
  * stage display's own when operators put any there, else Program's while it
  * syncs, by the rule every room screen follows (see live-screen-sync). The banner is the operators' message, else the near-end cue.
@@ -61,6 +61,12 @@ export interface LiveTimerGraphicText {
   /** An agenda session timer before its session starts: the time until it does. */
   startsInMs: number | null;
   kind: LiveTimer["kind"];
+  /** How the graphic draws the time: in the mark, or as digits. */
+  presentation: LiveTimerGraphic["presentation"];
+  /** The time the graphic shows, for a timer that counts; null for a clock. */
+  shownMs: number | null;
+  /** The text at its most compact, for a timer that shares the screen with a question or a poll. */
+  compactText: string;
 }
 
 /** A timer graphic's reading, the same in the overlay graphics and on the stage display. */
@@ -74,20 +80,28 @@ export function liveTimerGraphicText(
   const before = reading.startsInMs !== null;
   const name = graphic.showLabel ? (graphic.label ?? timer.name) : null;
   const counts = liveTimerCounts(timer);
+  const shownMs = counts ? liveTimerShownMs(timer, graphic, session, now) : null;
+  const clock = format24HourClockInZone(now, session.timeZone);
   return {
     timerId: timer.id,
     name,
     label: before ? (name ? `${name} starts in` : "Starts in") : name,
     // A clock reads the event's time of day on the same clock as the countdowns beside it.
-    text: counts
-      ? formatLiveTimer(liveTimerShownMs(timer, graphic, session, now), graphic.format, graphic.customFormat)
-      : format24HourClockInZone(now, session.timeZone),
+    text: shownMs === null ? clock : formatLiveTimer(shownMs, graphic.format, graphic.customFormat),
+    compactText:
+      shownMs === null
+        ? clock
+        : graphic.format === "clock"
+          ? formatLiveDurationCompact(shownMs)
+          : formatLiveTimer(shownMs, graphic.format, graphic.customFormat),
     // A start coming up is no warning.
     tone: before ? undefined : liveTimerTone(timer, reading.valueMs, graphic),
     running: reading.running,
     remainingMs: counts && !countsUp(timer) ? reading.valueMs : null,
     startsInMs: reading.startsInMs,
     kind: timer.kind,
+    presentation: graphic.presentation,
+    shownMs,
   };
 }
 
@@ -123,7 +137,8 @@ export type LiveStageContent =
 export type LiveStageMain =
   | { kind: "empty" }
   | { kind: "timers"; timers: LiveStageTimer[] }
-  | { kind: "content"; timer: LiveStageTimer | null; content: LiveStageContent }
+  /** A question or a poll beside the timers that end first, at most two, each at its most compact. */
+  | { kind: "content"; timers: LiveStageTimer[]; content: LiveStageContent }
   | { kind: "overtime"; timer: LiveStageTimer }
   | { kind: "break"; timer: LiveStageTimer };
 
@@ -220,7 +235,12 @@ function main(input: LiveStageDisplayInput, items: readonly LiveTimerGraphicText
     return { kind: "break", timer: { ...large(waiting), label: "Next session starts in" } };
   const ordered = [...items].sort(endsBefore);
   const shown = content(input);
-  if (shown) return { kind: "content", timer: ordered[0] ? { ...ordered[0], size: "small" } : null, content: shown };
+  if (shown)
+    return {
+      kind: "content",
+      timers: ordered.slice(0, 2).map((item) => ({ ...item, text: item.compactText, size: "small" })),
+      content: shown,
+    };
   if (!ordered.length) return { kind: "empty" };
   // At most two, each on its own side; the one that ends first is the large one.
   const pair = new Set(ordered.slice(0, 2));

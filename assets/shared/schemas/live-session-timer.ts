@@ -171,7 +171,7 @@ export const LIVE_TIMER_PLACEMENTS = [
   "center",
 ] as const;
 export const LIVE_TIMER_SIZES = ["small", "medium", "large"] as const;
-export const LIVE_TIMER_PRESENTATIONS = ["ring", "digital"] as const;
+export const LIVE_TIMER_PRESENTATIONS = ["digital", "ring"] as const;
 
 export const liveTimerGraphicSchema = z
   .object({
@@ -187,7 +187,8 @@ export const liveTimerGraphicSchema = z
       .max(300)
       .refine((value) => validateOverlayTextTemplate(value) === null, "Use a valid duration template.")
       .default("{{hours}}h {{minutes}}m {{seconds}}s"),
-    showLogo: z.boolean().default(true),
+    /** A small logo beside the digits; the mark look is the logo already. */
+    showLogo: z.boolean().default(false),
     direction: z.enum(LIVE_TIMER_DIRECTIONS),
     /** The graphic turns to its warning color with this much time left. */
     warningSeconds: z
@@ -222,11 +223,11 @@ export function defaultLiveTimerGraphic(timerId: string): LiveTimerGraphic {
     showLabel: true,
     format: "clock",
     customFormat: "{{hours}}h {{minutes}}m {{seconds}}s",
-    showLogo: true,
+    showLogo: false,
     direction: "remaining",
     warningSeconds: 120,
     overrunSeconds: 0,
-    presentation: "ring",
+    presentation: "digital",
     placement: "layout",
     size: "large",
   };

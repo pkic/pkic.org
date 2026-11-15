@@ -94,7 +94,9 @@
   }
   /* The board keeps the timers' column clear, with the board's gap before it, so no line runs under a timer. */
   .pk-live-overlay__layer[data-logo-covered] .pk-live-board {
-    padding-inline-end: calc(var(--board-width) * var(--overlay-timer-reserve, 0) * 1px + 32px * var(--board-frame-px, 1));
+    padding-inline-end: calc(
+      var(--board-width) * var(--overlay-timer-reserve, 0) * 1px + 32px * var(--board-frame-px, 1)
+    );
   }
   .pk-live-overlay__surface {
     position: relative;
@@ -215,11 +217,11 @@
     stop-color: var(--pk-pqc-orange);
   }
   /*
-   * Timer: a plate in the event's colors in its layout box, drawn at the
-   * corner box's own size (336 x 120 of the frame): the mark, then the label
-   * over the time. The event stripe runs along its foot, as under the lower
-   * third's name. A corner of a stream stays readable: the time is set large
-   * in tabular figures, the label in the eyebrow's mono capitals.
+   * Timer as digits: a white plate set as the lower third is, at the corner
+   * box's own size (336 x 120 of the frame), the label in the eyebrow's mono
+   * capitals over the time in tabular figures, the event stripe at its foot.
+   * Over a board it drops the plate and sets the time on the board, in the
+   * board's white, so no card sits on a card.
    */
   .pk-live-overlay__timer {
     position: absolute;
@@ -231,9 +233,9 @@
     gap: 20px;
     min-inline-size: 336px;
     block-size: 120px;
-    padding: 0 28px 6px 20px;
-    background: var(--pk-pqc-field);
-    color: var(--pk-pqc-on-field);
+    padding: 0 32px 6px;
+    background: var(--pk-pqc-paper);
+    color: var(--pk-pqc-ink);
     font-family: var(--pk-font-mono);
     white-space: nowrap;
   }
@@ -245,80 +247,61 @@
     block-size: 6px;
     background: var(--pk-pqc-stripe);
   }
-  /* The mark, alone or inside the ring of time left. */
-  .pk-live-overlay__timer-mark {
-    position: relative;
-    display: grid;
-    flex: none;
-    place-items: center;
-    inline-size: 80px;
-    block-size: 80px;
-  }
   .pk-live-overlay__timer-logo {
-    inline-size: 48px;
-    block-size: 48px;
-  }
-  .pk-live-overlay__timer[data-presentation="digital"] .pk-live-overlay__timer-logo {
-    inline-size: 64px;
-    block-size: 64px;
-  }
-  .pk-live-overlay__timer-ring {
-    position: absolute;
-    inset: 0;
-    transform: rotate(-90deg);
-  }
-  .pk-live-overlay__timer-ring circle {
-    fill: none;
-    stroke-width: 7;
-  }
-  .pk-live-overlay__timer-ring-track {
-    stroke: var(--pk-pqc-on-field);
-    opacity: 0.22;
-  }
-  .pk-live-overlay__timer-ring-left {
-    stroke: currentColor;
-    transition: stroke-dashoffset var(--pk-dur) linear;
-  }
-  .pk-live-overlay__timer-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    flex: none;
+    inline-size: 56px;
+    block-size: 56px;
+    color: var(--pk-pqc-blue);
   }
   .pk-live-overlay__timer-label {
-    margin: 0;
-    color: var(--pk-pqc-on-field-muted);
-    font-size: 18px;
+    color: var(--pk-pqc-ink-muted);
+    font-size: 20px;
     font-weight: 500;
     letter-spacing: 0.12em;
     line-height: 1.2;
     text-transform: uppercase;
   }
   .pk-live-overlay__timer-value {
-    font-size: 56px;
+    margin-inline-start: auto;
+    font-size: 60px;
     font-variant-numeric: tabular-nums;
     font-weight: 700;
+    letter-spacing: -0.02em;
     line-height: 1;
+  }
+  .pk-live-overlay__timer[data-on-board] {
+    justify-content: flex-end;
+    background: none;
+    color: var(--pk-pqc-on-field);
+  }
+  .pk-live-overlay__timer[data-on-board]::after {
+    content: none;
+  }
+  .pk-live-overlay__timer[data-on-board] .pk-live-overlay__timer-label {
+    color: var(--pk-pqc-on-field-muted);
+    font-size: 24px;
+  }
+  .pk-live-overlay__timer[data-on-board] .pk-live-overlay__timer-logo {
+    color: currentColor;
+  }
+  .pk-live-overlay__timer[data-on-board] .pk-live-overlay__timer-value {
+    margin-inline-start: 0;
+    font-size: 72px;
   }
   /* A paused timer reads as held: the time stays, a little fainter. */
   .pk-live-overlay__timer[data-paused] .pk-live-overlay__timer-value {
-    opacity: 0.72;
+    opacity: 0.6;
   }
   /*
-   * The warning turns the time and the ring to the event's orange; time over
-   * fills the plate with the event's copper, both with a brief pulse. The
-   * conference palette, not the portal's state colors, so it reads as the
-   * event's own graphic on air.
+   * The warning turns the time to the event's orange; time over turns the
+   * stripe orange too, both with a brief pulse. The conference palette, not
+   * the portal's state colors, so it reads as the event's own graphic on air.
    */
-  .pk-live-overlay__timer[data-tone="warn"] :is(.pk-live-overlay__timer-value, .pk-live-overlay__timer-mark) {
-    color: var(--pk-pqc-orange);
-  }
-  .pk-live-overlay__timer[data-tone="over"] {
-    background: var(--pk-pqc-copper);
-  }
   .pk-live-overlay__timer[data-tone="over"]::after {
-    background: var(--pk-pqc-on-field);
+    background: var(--pk-pqc-orange);
   }
-  .pk-live-overlay__timer:is([data-tone="warn"], [data-tone="over"]) {
+  .pk-live-overlay__timer:is([data-tone="warn"], [data-tone="over"]) .pk-live-overlay__timer-value {
+    color: var(--pk-pqc-orange);
     animation: pk-timer-warning var(--pk-dur-timer-warning) ease-in-out 3;
   }
   @keyframes pk-timer-warning {
@@ -327,11 +310,8 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .pk-live-overlay__timer:is([data-tone="warn"], [data-tone="over"]) {
+    .pk-live-overlay__timer:is([data-tone="warn"], [data-tone="over"]) .pk-live-overlay__timer-value {
       animation: none;
-    }
-    .pk-live-overlay__timer-ring-left {
-      transition: none;
     }
   }
 

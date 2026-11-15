@@ -52,11 +52,13 @@ function upNext(
 }
 
 /**
- * The stage display a screen runs on its own once the studio's session has
- * ended and the studio cannot be reached: the session under way, else the
- * next one, with its session timer following the agenda, so it reads the
- * time until the next session starts and then counts it down. Null when the
- * agenda holds nothing more for the room.
+ * The outputs a screen runs on its own once the studio's session has ended
+ * and the studio cannot be reached. The stage display: the session under
+ * way, else the next one, with its session timer following the agenda, so
+ * it reads the time until the next session starts and then counts it down.
+ * The projector, for the audience: the session coming up and the time until
+ * it starts, or during a session the one after it, without a countdown.
+ * Null when the agenda holds nothing more for the room.
  */
 export function screenAutoState(
   agenda: ScreenCachedAgenda,
@@ -72,6 +74,11 @@ export function screenAutoState(
     ...EMPTY_LIVE_AUX_COMPOSITION,
     schedule: upNext(after, agenda, room, now),
     timerGraphics: [graphic],
+  };
+  const projector = {
+    ...EMPTY_LIVE_AUX_COMPOSITION,
+    schedule: upNext(current ? next : shown, agenda, room, now),
+    timerGraphics: current ? [] : [graphic],
   };
   const snapshot: LiveRoomSnapshot = {
     type: "room.snapshot",
@@ -93,7 +100,7 @@ export function screenAutoState(
     preparedQuestions: [],
     preparedQuestionWindow: null,
     stage: EMPTY_LIVE_AUX_COMPOSITION,
-    outputs: { ...EMPTY_LIVE_OUTPUTS, "stage-display": stageDisplay },
+    outputs: { ...EMPTY_LIVE_OUTPUTS, "stage-display": stageDisplay, projector },
     speakerMessage: null,
     preview: EMPTY_LIVE_AUX_COMPOSITION,
     timers: [timer],

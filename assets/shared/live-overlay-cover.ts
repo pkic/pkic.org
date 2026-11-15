@@ -36,7 +36,7 @@ const BOARDS: ReadonlySet<LiveProgramLayer> = new Set([
 const HIDDEN_SHARE = 0.6;
 
 /** Whether a composition has something for this graphic to draw. */
-function drawn(stage: LiveStage, layer: LiveProgramLayer): boolean {
+export function liveOverlayDrawn(stage: LiveStage, layer: LiveProgramLayer): boolean {
   switch (layer) {
     case "panelists":
       return stage.panelists !== null;
@@ -82,14 +82,14 @@ export function liveOverlayCoveredBy(
   elements: LiveOverlayLayoutElements,
   layer: LiveProgramLayer,
 ): LiveProgramLayer | null {
-  if (!elements[layer].visible || !drawn(stage, layer)) return null;
+  if (!elements[layer].visible || !liveOverlayDrawn(stage, layer)) return null;
   const above = LIVE_PROGRAM_LAYER_ORDER.slice(LIVE_PROGRAM_LAYER_ORDER.indexOf(layer) + 1);
   return (
     above.find(
       (board) =>
         BOARDS.has(board) &&
         elements[board].visible &&
-        drawn(stage, board) &&
+        liveOverlayDrawn(stage, board) &&
         coveredShare(elements[layer], elements[board]) >= HIDDEN_SHARE,
     ) ?? null
   );

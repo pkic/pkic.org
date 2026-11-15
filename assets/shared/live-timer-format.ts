@@ -39,6 +39,30 @@ export function formatLiveDuration(milliseconds: number): string {
   return `${sign}${formatNumber(Math.floor(days / 365))}y ${formatNumber(days % 365)}d`;
 }
 
+/**
+ * The clock format at its most compact, for a timer that shares the screen:
+ * as `formatLiveDuration`, but from an hour on it reads hours and minutes
+ * ("1h 05m"), so the time takes no more room than it needs.
+ */
+export function formatLiveDurationCompact(milliseconds: number): string {
+  const total = wholeSeconds(milliseconds);
+  if (total < HOUR || total >= DAY) return formatLiveDuration(milliseconds);
+  const sign = milliseconds < 0 ? "+" : "";
+  const minutes = Math.ceil(total / MINUTE);
+  return `${sign}${Math.floor(minutes / 60)}h ${pad(minutes % 60)}m`;
+}
+
+/** Below this, the mark reads whole seconds alone: two digits fit inside it. */
+export const LIVE_TIMER_MARK_SECONDS = 100;
+
+/** What the mark reads in its center: whole seconds while they fit ("42", "+5"), then the clock, then hours and minutes. */
+export function formatLiveTimerMark(milliseconds: number): string {
+  const total = wholeSeconds(milliseconds);
+  if (total >= HOUR) return formatLiveDurationCompact(milliseconds);
+  if (total >= LIVE_TIMER_MARK_SECONDS) return formatLiveDuration(milliseconds);
+  return `${milliseconds < 0 ? "+" : ""}${total}`;
+}
+
 /** A timer graphic's text in its own format: the clock, total seconds, or the operators' template. */
 export function formatLiveTimer(
   milliseconds: number,

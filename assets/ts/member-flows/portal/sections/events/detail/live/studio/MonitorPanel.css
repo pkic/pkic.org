@@ -176,12 +176,20 @@
     gap: var(--pk-1);
     margin-inline-start: auto;
   }
-  /* How many sources show the output: plain words, amber only when nothing shows Program. */
+  /* How many sources show the output: a screen and the number, amber only when nothing shows Program. */
   .pk-studio-monitor__sources {
+    display: inline-flex;
     flex: none;
+    align-items: center;
+    gap: var(--pk-1);
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-xs);
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
+  }
+  .pk-studio-monitor__sources-icon {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
   }
   .pk-studio-monitor__sources[data-tone="warn"] {
     color: var(--pk-warn-ink);

@@ -26,8 +26,8 @@ const DIRECTION_LABELS: Record<LiveTimerGraphic["direction"], string> = {
   elapsed: "Time elapsed",
 };
 const PRESENTATION_LABELS: Record<LiveTimerGraphic["presentation"], string> = {
-  ring: "Ring of time left",
-  digital: "Digital",
+  digital: "Digits",
+  ring: "Time in the logo",
 };
 const PLACEMENT_LABELS: Record<LiveTimerGraphic["placement"], string> = {
   layout: "As the source's layout",
@@ -99,6 +99,7 @@ export function LiveTimerLookFields({
   of: (field: keyof LiveTimerGraphic) => FieldPresentation;
   update: <Key extends keyof LiveTimerGraphic>(key: Key, value: LiveTimerGraphic[Key]) => void;
 }) {
+  const digits = draft.presentation === "digital";
   return (
     <>
       <Checkbox
@@ -132,17 +133,20 @@ export function LiveTimerLookFields({
               presentation={of("direction")}
               update={(value) => update("direction", value)}
             />
-            <ChoiceField
-              field="format"
-              label="Format"
-              options={LIVE_TIMER_FORMATS}
-              labels={FORMAT_LABELS}
-              draft={draft}
-              presentation={of("format")}
-              update={(value) => update("format", value)}
-            />
+            {/* The logo look sets its own time: seconds while they fit, then the clock. */}
+            {digits ? (
+              <ChoiceField
+                field="format"
+                label="Format"
+                options={LIVE_TIMER_FORMATS}
+                labels={FORMAT_LABELS}
+                draft={draft}
+                presentation={of("format")}
+                update={(value) => update("format", value)}
+              />
+            ) : null}
           </div>
-          {draft.format === "custom" ? (
+          {digits && draft.format === "custom" ? (
             <Field
               label="Custom duration"
               help="Use {{years}}, {{months}}, {{days}}, {{hours}}, {{minutes}} and {{seconds}}. Years are 365 days; months are 30 days."
@@ -160,13 +164,15 @@ export function LiveTimerLookFields({
           ) : null}
         </>
       ) : null}
-      <Checkbox
-        name="graphic.showLogo"
-        label="Show logo"
-        checked={draft.showLogo}
-        onChange={(event) => update("showLogo", event.currentTarget.checked)}
-        {...of("showLogo")}
-      />
+      {digits ? (
+        <Checkbox
+          name="graphic.showLogo"
+          label="Show logo"
+          checked={draft.showLogo}
+          onChange={(event) => update("showLogo", event.currentTarget.checked)}
+          {...of("showLogo")}
+        />
+      ) : null}
       <div class="pk-cluster">
         <ChoiceField
           field="presentation"

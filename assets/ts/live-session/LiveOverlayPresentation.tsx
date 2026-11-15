@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { LIVE_REACTIONS, type LiveReactionId } from "../../shared/live-session-policy";
 import type { LiveOverlayView, LiveTimerGraphic } from "../../shared/schemas/live-session-room";
 import type { ComponentChildren } from "preact";
-import { liveTimerLayout, liveTimerTotalMs } from "../../shared/live-timer-policy";
+import { liveTimerLayout } from "../../shared/live-timer-policy";
 import type { LiveRoomState } from "./live-room-state";
 import { useLiveTimerGraphicReading } from "./useLiveCountdown";
 import { LiveTimerSounds } from "./useLiveTimerSounds";
@@ -25,64 +25,137 @@ import type {
 } from "../../shared/schemas/live-overlay-layout";
 import { overlayBoxPixels } from "../../shared/live-overlay-geometry";
 import { resolveLiveOverlayLayout } from "../../shared/live-overlay-layout-presets";
-import { LiveCountdownEmblem } from "./LiveCountdownEmblem";
+import { LiveTimerMark } from "./LiveTimerMark";
+import { PkicMark } from "../ui/PkicMark";
+import { formatLiveTimerMark } from "../../shared/live-timer-format";
 import { LiveLowerThird } from "./LiveLowerThird";
 import { LiveStageDisplay, LiveStageDisplayBanner } from "./LiveStageDisplay";
 import { isLiveAuxOutput, liveOutputProjection, liveOutputView } from "./live-output-projection";
 import "../../design/tokens.event.generated.css";
-import { LIVE_PROGRAM_LAYER_ORDER, type LiveProgramLayer } from "../../shared/live-overlay-cover";
+import { LIVE_PROGRAM_LAYER_ORDER, liveOverlayDrawn, type LiveProgramLayer } from "../../shared/live-overlay-cover";
 
 /**
- * A timer graphic: the timer it names, on a plate in the event's colors,
- * readable on a corner of the stream. Its label over the time, and with the
- * logo, the mark beside it; the ring presentation rings the mark with the
- * time left.
+ * A timer graphic: the timer it names, readable on a corner of the stream.
+ * As digits, its label beside the time on a white plate with the event
+ * stripe at its foot, as the lower third is set; on a board it drops the
+ * plate and sets the time on the board itself, so no card sits on a card.
+ * As the mark, the time sits in the consortium mark (see LiveTimerMark).
  */
-function TimerOverlay({ graphic, state }: { graphic: LiveTimerGraphic; state: LiveRoomState }) {
+function TimerOverlay({
+  graphic,
+  state,
+  mark,
+  onBoard,
+}: {
+  graphic: LiveTimerGraphic;
+  state: LiveRoomState;
+  /** Whether the frame has room for the mark here; without it the timer reads as digits. */
+  mark: boolean;
+  onBoard: boolean;
+}) {
   const reading = useLiveTimerGraphicReading(graphic, state.timers, state.session);
-  const timer = state.timers.find((entry) => entry.id === graphic.timerId);
-  if (!reading || !timer) return null;
-  const { running, text, tone, label } = reading;
-  const total = liveTimerTotalMs(timer, state.session);
-  const progress =
-    graphic.presentation === "ring" && reading.remainingMs !== null && reading.startsInMs === null && total
-      ? reading.remainingMs / total
-      : null;
+  if (!reading) return null;
+  const { running, text, tone, label, shownMs } = reading;
+  if (mark && shownMs !== null)
+    return (
+      <LiveTimerMark
+        text={formatLiveTimerMark(shownMs)}
+        shownMs={shownMs}
+        tone={tone}
+        running={running}
+        label={label}
+      />
+    );
   return (
     <div
       class="pk-live-overlay__timer"
       data-tone={tone}
-      data-presentation={graphic.presentation}
+      data-on-board={onBoard ? "" : undefined}
       data-paused={running ? undefined : ""}
     >
-      {graphic.showLogo ? <LiveCountdownEmblem progress={progress} running={running} /> : null}
-      <div class="pk-live-overlay__timer-text">
-        {label ? <p class="pk-live-overlay__timer-label">{label}</p> : null}
-        <span class="pk-live-overlay__timer-value">{text}</span>
-      </div>
+      {graphic.showLogo ? <PkicMark class="pk-live-overlay__timer-logo" /> : null}
+      {label ? <span class="pk-live-overlay__timer-label">{label}</span> : null}
+      <span class="pk-live-overlay__timer-value">{text}</span>
     </div>
   );
 }
 
 /** The space between timers stacked in the layout's timer box, in fractions of the frame's height. */
 const TIMER_STACK_GAP = 16 / 1080;
+/** The space between two columns of timers, in fractions of the frame's width. */
+const TIMER_COLUMN_GAP = 16 / 1920;
+
+/** The mark stands taller than the digits' plate: its box keeps the plate's width and grows from its anchor. */
+const MARK_HEIGHT = 2.4;
+
+/** The mark's box for a plate's: as wide, taller, growing from the same anchor. */
+function markBox(plate: LiveOverlayElementPlacement): LiveOverlayElementPlacement {
+  const h = plate.h * MARK_HEIGHT;
+  const grow = plate.vertical === "bottom" ? plate.h - h : plate.vertical === "middle" ? (plate.h - h) / 2 : 0;
+  return { ...plate, h, y: plate.y + grow };
+}
 
 /**
- * Where each timer graphic sits: those in the layout's box stack from it,
- * down from a box at the top or up from one at the bottom, each at the box's
- * full size, so a second timer never shrinks the first; one with a position
- * of its own sits there.
+ * Where each timer graphic sits, and whether it has room for the mark. Those
+ * in the layout's box stack from it, down from a box at the top or up from
+ * one at the bottom, each at the box's full size, so a second timer never
+ * shrinks the first; one with a position of its own sits there. A timer
+ * never covers a card (the schedule or the check-in code): one that would
+ * starts a new column inward from the box, and the mark that has no room
+ * reads as digits on the plate's footprint instead.
  */
-function timerSlots(graphics: readonly LiveTimerGraphic[], box: LiveOverlayElementPlacement) {
-  const stacked = graphics.filter((entry) => entry.placement === "layout");
+function timerSlots(
+  graphics: readonly LiveTimerGraphic[],
+  box: LiveOverlayElementPlacement,
+  cards: readonly LiveOverlayElementPlacement[] = [],
+) {
+  const clear = (slot: LiveOverlayElementPlacement) => !cards.some((card) => meets(card, slot));
+  const inward = box.horizontal === "right" ? -1 : box.horizontal === "left" ? 1 : 0;
+  let offset = 0;
+  let column = 0;
   return graphics.map((graphic) => {
-    const index = stacked.indexOf(graphic);
-    const sized = liveTimerLayout(graphic, box);
-    const step = (box.vertical === "bottom" ? -1 : 1) * index * (sized.h + TIMER_STACK_GAP);
-    const slot = index > 0 ? { ...sized, y: sized.y + step } : sized;
-    return { graphic, slot };
+    const plate = liveTimerLayout(graphic, box);
+    const ring = graphic.presentation === "ring";
+    if (graphic.placement !== "layout")
+      return ring ? { graphic, slot: markBox(plate), mark: true } : { graphic, slot: plate, mark: false };
+    const at = (row: number, col: number) => ({
+      ...plate,
+      x: plate.x + inward * col * (plate.w + TIMER_COLUMN_GAP),
+      y: plate.y + (box.vertical === "bottom" ? -row : row),
+    });
+    const place = (row: number, col: number) => {
+      const spot = at(row, col);
+      if (ring && clear(markBox(spot))) return { slot: markBox(spot), mark: true };
+      return clear(spot) ? { slot: spot, mark: false } : null;
+    };
+    let placed = place(offset, column);
+    if (!placed && offset > 0 && inward !== 0) {
+      column += 1;
+      offset = 0;
+      placed = place(0, column);
+    }
+    placed ??= { slot: at(offset, column), mark: false };
+    offset += placed.slot.h + TIMER_STACK_GAP;
+    return { graphic, ...placed };
   });
 }
+
+/** Whether two boxes of the frame meet. */
+function meets(one: LiveOverlayElementPlacement, other: LiveOverlayElementPlacement) {
+  return one.x < other.x + other.w && one.x + one.w > other.x && one.y < other.y + other.h && one.y + one.h > other.y;
+}
+
+/** The cards with colors of their own, which a timer never covers. */
+const CARD_BOARDS: ReadonlySet<LiveOverlayElement> = new Set(["schedule", "checkIn"]);
+
+/** The boards drawn on the event's field; the schedule and the check-in code are cards of their own colors. */
+const FIELD_BOARDS: ReadonlySet<LiveOverlayElement> = new Set([
+  "question",
+  "poll",
+  "panelists",
+  "topQuestions",
+  "chat",
+]);
 
 /** The boards: each carries the logo in its top-right corner. */
 const BOARDS: ReadonlySet<LiveOverlayElement> = new Set([
@@ -347,10 +420,20 @@ export function LiveOverlayPresentation({
   const timersShow = view === "stage-display" ? elements.stageDisplay.visible : elements.timer.visible;
   const panel =
     state?.stage.question && state.stage.panelists && view !== "stage-display" ? stackedPanelBox(elements) : null;
-  const timerBoxes =
-    state && view !== "stage-display" && elements.timer.visible
-      ? timerSlots(state.stage.timerGraphics, elements.timer).map(({ slot }) => slot)
+  const drawnBoards = (kinds: ReadonlySet<LiveOverlayElement>) =>
+    state
+      ? LIVE_PROGRAM_LAYER_ORDER.filter(
+          (layer) => kinds.has(layer) && elements[layer].visible && liveOverlayDrawn(state.stage, layer),
+        ).map((layer) => (layer === "panelists" && panel ? panel : elements[layer]))
       : [];
+  // The boards on the field drawn now, so a timer over one sets its time on the board instead of on a plate.
+  const boardBoxes = drawnBoards(FIELD_BOARDS);
+  const cardBoxes = drawnBoards(CARD_BOARDS);
+  const timers =
+    state && view !== "stage-display" && elements.timer.visible
+      ? timerSlots(state.stage.timerGraphics, elements.timer, cardBoxes)
+      : [];
+  const timerBoxes = timers.map(({ slot }) => slot);
   const sounding =
     playsSounds && state && timersShow
       ? state.timers.filter((timer) => shown.some((graphic) => graphic.timerId === timer.id))
@@ -362,7 +445,8 @@ export function LiveOverlayPresentation({
         ? layers.map(({ element, draw }) => {
             const placement = elements[element];
             if (element === "timer" && placement.visible)
-              return timerSlots(state.stage.timerGraphics, placement).map(({ graphic, slot }) => {
+              return timers.map(({ graphic, slot, mark }) => {
+                const onBoard = boardBoxes.some((board) => meets(board, slot));
                 return (
                   <LiveOverlayLayer
                     key={`timer:${graphic.timerId}`}
@@ -370,7 +454,7 @@ export function LiveOverlayPresentation({
                     dimmed={focus !== null && focus !== "timer"}
                     placement={slot}
                   >
-                    <TimerOverlay graphic={graphic} state={state} />
+                    <TimerOverlay graphic={graphic} state={state} mark={mark} onBoard={onBoard} />
                   </LiveOverlayLayer>
                 );
               });

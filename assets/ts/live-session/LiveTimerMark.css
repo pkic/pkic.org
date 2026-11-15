@@ -1,0 +1,151 @@
+/*
+ * The timer as the mark: white on the picture, the time in its open middle.
+ * It is drawn 240 px square of the 1080p frame with its label under it; a
+ * layout box or a stage display column scales it whole. The rings step with
+ * the seconds on a short spring, and each second the mark beats twice, close
+ * together, like a pulse, while a faint ring goes out from it.
+ */
+@layer components {
+  .pk-live-timer-mark {
+    --pk-live-timer-mark-size: 240px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    inline-size: var(--pk-live-timer-mark-size);
+    color: var(--pk-pqc-on-field);
+  }
+  .pk-live-timer-mark__mark {
+    display: block;
+    inline-size: var(--pk-live-timer-mark-size);
+    block-size: auto;
+    aspect-ratio: 320 / 330;
+    overflow: visible;
+    filter: drop-shadow(0 6px 28px rgb(0 0 0 / 0.45));
+  }
+  .pk-live-timer-mark :is(.pk-pkic-mark__arc, .pk-pkic-mark__table) {
+    transform: rotate(calc(var(--mark-turn, 0) * 1deg));
+    transform-origin: 180px 180px;
+    transform-box: view-box;
+    transition: transform 450ms cubic-bezier(0.3, 1.6, 0.5, 1);
+  }
+  .pk-live-timer-mark__time {
+    fill: currentColor;
+    font-family: var(--pk-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    text-anchor: middle;
+    dominant-baseline: central;
+  }
+  .pk-live-timer-mark__ripple {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 4;
+    opacity: 0;
+    transform-origin: 180px 180px;
+    transform-box: view-box;
+  }
+  .pk-live-timer-mark__label {
+    margin: 0;
+    font-family: var(--pk-font-mono);
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    text-shadow: 0 2px 12px rgb(0 0 0 / 0.6);
+  }
+
+  /* The beat, only while it runs; the two names let each second play it again. */
+  .pk-live-timer-mark[data-running][data-beat="odd"] .pk-live-timer-mark__mark {
+    animation: pk-live-timer-mark-beat-odd 700ms ease-out;
+  }
+  .pk-live-timer-mark[data-running][data-beat="even"] .pk-live-timer-mark__mark {
+    animation: pk-live-timer-mark-beat-even 700ms ease-out;
+  }
+  .pk-live-timer-mark[data-running][data-beat="odd"] .pk-live-timer-mark__ripple {
+    animation: pk-live-timer-mark-ripple-odd 900ms ease-out;
+  }
+  .pk-live-timer-mark[data-running][data-beat="even"] .pk-live-timer-mark__ripple {
+    animation: pk-live-timer-mark-ripple-even 900ms ease-out;
+  }
+  @keyframes pk-live-timer-mark-beat-odd {
+    12% {
+      transform: scale(1.075);
+    }
+    26% {
+      transform: scale(0.985);
+    }
+    40% {
+      transform: scale(1.035);
+    }
+    70% {
+      transform: scale(1);
+    }
+  }
+  @keyframes pk-live-timer-mark-beat-even {
+    12% {
+      transform: scale(1.075);
+    }
+    26% {
+      transform: scale(0.985);
+    }
+    40% {
+      transform: scale(1.035);
+    }
+    70% {
+      transform: scale(1);
+    }
+  }
+  @keyframes pk-live-timer-mark-ripple-odd {
+    0% {
+      opacity: 0.55;
+      transform: scale(0.62);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.18);
+    }
+  }
+  @keyframes pk-live-timer-mark-ripple-even {
+    0% {
+      opacity: 0.55;
+      transform: scale(0.62);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.18);
+    }
+  }
+
+  /*
+   * The warning turns the arcs to the event's orange; time over turns the
+   * whole mark. A screen with colors of its own for both sets them here.
+   */
+  .pk-live-timer-mark[data-tone="warn"] .pk-pkic-mark__arc {
+    fill: var(--pk-live-timer-mark-warn, var(--pk-pqc-orange));
+  }
+  .pk-live-timer-mark[data-tone="over"] :is(.pk-pkic-mark__arc, .pk-pkic-mark__table, .pk-live-timer-mark__time) {
+    fill: var(--pk-live-timer-mark-over, var(--pk-pqc-orange));
+  }
+  .pk-live-timer-mark[data-tone="warn"] .pk-live-timer-mark__ripple {
+    stroke: var(--pk-live-timer-mark-warn, var(--pk-pqc-orange));
+  }
+  .pk-live-timer-mark[data-tone="over"] .pk-live-timer-mark__ripple {
+    stroke: var(--pk-live-timer-mark-over, var(--pk-pqc-orange));
+  }
+  /* A paused timer reads as held: the mark stays, a little fainter. */
+  .pk-live-timer-mark:not([data-running]) .pk-live-timer-mark__mark {
+    opacity: 0.72;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pk-live-timer-mark :is(.pk-pkic-mark__arc, .pk-pkic-mark__table) {
+      transition: none;
+    }
+    .pk-live-timer-mark[data-running][data-beat] :is(.pk-live-timer-mark__mark, .pk-live-timer-mark__ripple) {
+      animation: none;
+    }
+  }
+}

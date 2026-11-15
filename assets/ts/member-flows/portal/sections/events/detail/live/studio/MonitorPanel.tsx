@@ -8,7 +8,8 @@ import { liveOverlayLayoutChoices } from "../../../../../../../../shared/live-ov
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
 import { Button } from "../../../../../../../ui/Button";
 import { Dialog } from "../../../../../../../ui/Dialog";
-import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
+import { IconMonitor, StrokeIcon } from "../../../../../../../ui/MediaIcons";
+import { formatNumber } from "../../../../../../../../shared/format-number";
 import { Menu } from "../../../../../../../ui/Menu";
 import { SectionHeading } from "../../../../../../../ui/SectionHeading";
 import { LiveDeskStream } from "../LiveDeskStream";
@@ -270,17 +271,21 @@ function SourceCount({ output, sources }: { output: StudioOutput; sources: Monit
   if (output === "preview" || output === "livestream" || !sources.program || !sources.connected) return null;
   const count = sources.program.sources[output];
   const label = STUDIO_OUTPUT_DETAILS[output].label;
+  const sentence =
+    count === 0
+      ? `Nothing shows ${label} now. Check the browser source in your production software, or the screen in the room.`
+      : `${formatNumber(count)} ${count === 1 ? "browser source or screen shows" : "browser sources and screens show"} ${label} now.`;
+  // An icon and the number, as the header is narrow; the sentence is its name and tooltip.
   return (
     <span
       class="pk-studio-monitor__sources"
+      role="img"
+      aria-label={sentence}
+      title={sentence}
       data-tone={count === 0 && output === "program" ? "warn" : undefined}
-      title={
-        count === 0
-          ? `Nothing shows ${label} now. Check the browser source in your production software, or the screen in the room.`
-          : `${count} ${count === 1 ? "browser source or screen shows" : "browser sources and screens show"} ${label} now.`
-      }
     >
-      {count === 0 ? "Not connected" : `${count} connected`}
+      <IconMonitor class="pk-studio-monitor__sources-icon" />
+      {formatNumber(count)}
     </span>
   );
 }

@@ -403,6 +403,8 @@ describe("broadcast overlays", () => {
     expect(host.querySelector(".pk-live-stage-display__question-text")?.textContent).toBe(
       "What about hybrid certificates?",
     );
+    // Sized by its length, as on Program: a longer question steps down so none of it is cut.
+    expect(host.querySelector<HTMLElement>(".pk-live-stage-display__question-text")?.dataset.fit).toBe("regular");
     expect(host.querySelector(".pk-live-overlay__lower-third-bars")).toBeNull();
   });
 

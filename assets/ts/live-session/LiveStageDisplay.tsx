@@ -4,18 +4,39 @@ import type { LiveStageBanner, LiveStageMain, LiveStageTimer } from "../../share
 import type { LiveRoomState } from "./live-room-state";
 import { useNumericCssProperties } from "../hooks/useNumericCssProperties";
 import { LiveStageContent } from "./LiveStageContent";
+import { LiveTimerMark } from "./LiveTimerMark";
+import { formatLiveTimerMark } from "../../shared/live-timer-format";
 import { useLiveStageDisplayPlan, useLiveStageReactions } from "./useLiveStageDisplay";
 import "./LiveStageDisplay.css";
 
-/** One timer: its label over its value, sized by its role and fitted to its column by its length. */
+/**
+ * One timer: its label over its value, sized by its role and fitted to its
+ * column by its length. A timer the graphic draws in the mark is the mark
+ * here too, so the speaker sees the pitch as the stream does.
+ */
 function StageTimer({ timer }: { timer: LiveStageTimer }) {
   const geometry = useNumericCssProperties({ "--timer-chars": Math.max(4, [...timer.text].length) });
+  const mark = timer.presentation === "ring" && timer.shownMs !== null;
   return (
-    <div class="pk-live-stage-display__timer" data-size={timer.size} data-numeric-css-properties={geometry}>
+    <div
+      class="pk-live-stage-display__timer"
+      data-size={timer.size}
+      data-mark={mark ? "" : undefined}
+      data-numeric-css-properties={geometry}
+    >
       {timer.label ? <p class="pk-live-stage-display__label">{timer.label}</p> : null}
-      <p class="pk-live-stage-display__countdown" data-tone={timer.tone}>
-        {timer.text}
-      </p>
+      {mark ? (
+        <LiveTimerMark
+          text={formatLiveTimerMark(timer.shownMs!)}
+          shownMs={timer.shownMs!}
+          tone={timer.tone}
+          running={timer.running}
+        />
+      ) : (
+        <p class="pk-live-stage-display__countdown" data-tone={timer.tone}>
+          {timer.text}
+        </p>
+      )}
     </div>
   );
 }
@@ -39,7 +60,13 @@ function StageMain({ main }: { main: LiveStageMain }) {
     case "content":
       return (
         <>
-          {main.timer ? <StageTimer timer={main.timer} /> : null}
+          {main.timers.length > 0 ? (
+            <div class="pk-live-stage-display__timers">
+              {main.timers.map((timer) => (
+                <StageTimer key={timer.timerId} timer={timer} />
+              ))}
+            </div>
+          ) : null}
           <LiveStageContent content={main.content} />
         </>
       );
@@ -83,7 +110,12 @@ export function LiveStageDisplay({
 }) {
   const plan = useLiveStageDisplayPlan(state, roomId);
   const covered = bannerShown && plan.banner !== null;
-  const items = plan.main.kind === "timers" ? plan.main.timers.length : plan.main.kind === "content" ? 2 : 1;
+  const items =
+    plan.main.kind === "timers"
+      ? plan.main.timers.length
+      : plan.main.kind === "content"
+        ? Math.min(plan.main.timers.length, 1) + 1
+        : 1;
   return (
     <div class="pk-live-stage-display" data-main={plan.main.kind} data-items={items}>
       <div class="pk-live-stage-display__stripe" />

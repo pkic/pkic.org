@@ -183,6 +183,21 @@ describe("studio monitor layouts", () => {
     expect(sync("Stage display")!.getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("counts each output's sources as a screen and a number, amber only when nothing shows Program", () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    void act(() => render(<Harness panel={2} />, host!));
+    const counts = () =>
+      [...host!.querySelectorAll<HTMLElement>(".pk-studio-monitor__sources")].map((count) => ({
+        text: count.textContent,
+        warn: count.dataset.tone === "warn",
+        name: count.getAttribute("aria-label")!,
+      }));
+    const [program, ...others] = counts();
+    expect(program).toEqual({ text: "0", warn: true, name: expect.stringMatching(/^Nothing shows Program now/) });
+    expect(others.every((count) => count.text === "0" && !count.warn)).toBe(true);
+  });
+
   it("reads a saved arrangement from before layouts, and drops an unreadable layout choice rather than the arrangement", () => {
     const show = defaultStudioLayouts().show;
     stored.set(STUDIO_LAYOUT_STORAGE_KEY, JSON.stringify({ ...defaultStudioLayouts(), show }));

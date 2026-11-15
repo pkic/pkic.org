@@ -80,6 +80,12 @@ export const breakTimer: LiveTimer = {
   heldMs: 4 * MINUTE + 12_000,
 };
 
+/** The pitch as the stream draws it: its time in the mark. */
+export const pitchMarkGraphic = (timerId = pitchTimer.id): LiveTimerGraphic => ({
+  ...defaultLiveTimerGraphic(timerId),
+  presentation: "ring",
+});
+
 /** A room holding these timers, with these graphics on its stage display. */
 export function timersRoomState(
   timers: LiveTimer[],
@@ -104,7 +110,7 @@ export function timersRoomState(
       "stage-display": { ...EMPTY_LIVE_AUX_COMPOSITION, timerGraphics: stageDisplay },
     },
     speakerMessage: null,
-    preview: { ...EMPTY_LIVE_AUX_COMPOSITION, timerGraphics: [defaultLiveTimerGraphic(pitchTimer.id)] },
+    preview: { ...EMPTY_LIVE_AUX_COMPOSITION, timerGraphics: [pitchMarkGraphic()] },
     timers,
     reactionTotals: {},
     queue: { question: [], "lower-third": [], poll: [], change: null },
@@ -130,11 +136,7 @@ export const stageDisplayWith = (timer: LiveTimer) =>
  */
 export const stageClockState = timersRoomState(
   [agendaSessionTimer, pitchTimer, clockTimer],
-  [
-    defaultLiveTimerGraphic(agendaSessionTimer.id),
-    defaultLiveTimerGraphic(pitchTimer.id),
-    defaultLiveTimerGraphic(clockTimer.id),
-  ],
+  [defaultLiveTimerGraphic(agendaSessionTimer.id), pitchMarkGraphic(), defaultLiveTimerGraphic(clockTimer.id)],
   {
     session: {
       ...TIMERS_FIXTURE_SESSION,
