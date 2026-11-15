@@ -79,6 +79,10 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
+    /* Text that stands still keeps to the title-safe area at both sides, as it does at the foot. */
+    .pk-live-ticker__window {
+      padding-inline: 96px;
+    }
     .pk-live-ticker__track {
       animation: none;
       width: auto;
