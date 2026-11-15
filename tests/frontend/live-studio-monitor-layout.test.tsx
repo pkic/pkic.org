@@ -46,7 +46,14 @@ const room = applyLiveRoomMessage(
     },
   }),
 )!;
-const sources = { preview: room, program: room, slug: "pqc-2026", roomId: "room", startAt: room.session.startAt };
+const sources = {
+  preview: room,
+  program: room,
+  connected: true,
+  slug: "pqc-2026",
+  roomId: "room",
+  startAt: room.session.startAt,
+};
 
 const switcher = { clear: vi.fn(), screenSync: DEFAULT_LIVE_SCREEN_SYNC, sync: vi.fn(), disabled: false };
 

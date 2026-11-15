@@ -21,6 +21,7 @@ import {
 } from "./room-projection";
 import type { LiveQuestionRow, LiveRoomStore } from "./room-store";
 import { seesStageDisplayNext } from "../../../../assets/shared/live-stage-display";
+import { NO_LIVE_ROOM_SOURCES, type LiveRoomSources } from "../../../../assets/shared/schemas/live-room-sources";
 
 const EMPTY_QUEUE = { question: [], "lower-third": [], poll: [], change: null };
 
@@ -105,6 +106,7 @@ export class LiveRoomBroadcast {
       stageDisplayNextVotes: seesStageDisplayNext(viewer) ? this.nextVotes() : null,
       stageDisplaySettings: this.store.stageDisplaySettings(),
       screenSync: this.store.screenSync(),
+      sources: operator ? this.sources() : NO_LIVE_ROOM_SOURCES,
     });
   }
 
@@ -211,6 +213,26 @@ export class LiveRoomBroadcast {
       people.set(key, entry);
     }
     return [...people.values()].sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  /** How many read-only sources draw each output now; `leaving` is a socket that is closing. */
+  sources(leaving?: WebSocket): LiveRoomSources {
+    const sources = { ...NO_LIVE_ROOM_SOURCES };
+    for (const socket of this.ctx.getWebSockets("overlay")) {
+      if (socket === leaving || socket.readyState !== WebSocket.OPEN) continue;
+      const viewer = socket.deserializeAttachment() as LiveRoomParticipant;
+      if (viewer.role !== "overlay") continue;
+      sources[viewer.overlayOutput ?? "program"] += 1;
+    }
+    return sources;
+  }
+
+  async sourcesChanged(leaving?: WebSocket): Promise<void> {
+    const sources = this.sources(leaving);
+    await this.send(
+      (viewer) => (viewer.role === "operator" ? { type: "sources.changed", sources } : null),
+      (viewer) => viewer.role,
+    );
   }
 
   async operatorsChanged(leaving?: WebSocket): Promise<void> {

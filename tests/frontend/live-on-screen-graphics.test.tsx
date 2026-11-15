@@ -16,6 +16,7 @@ import {
   LiveTopQuestionsControls,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/live/LiveAudienceListControls";
 import type { LiveTargets } from "../../assets/ts/member-flows/portal/sections/events/detail/live/live-output-targets";
+import { stageClockState } from "../../assets/ts/ui/preview/studio-timers-fixtures";
 import { liveSnapshot } from "./helpers/live-room-socket";
 
 let host: HTMLElement | undefined;
@@ -159,5 +160,36 @@ describe("audience graphics on an output", () => {
     const read = liveOverlayLayoutElementsSchema.parse(saved);
     expect(read.topQuestions).toEqual(LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements.topQuestions);
     expect(read.chat).toMatchObject({ visible: true, shared: true });
+  });
+});
+
+describe("timers over a board", () => {
+  const questions = {
+    config: { count: 3 },
+    questions: [{ id: "q-1", text: "Which algorithms first?", authorName: null, votes: 4 }],
+  };
+  const board = () => host!.querySelector<HTMLElement>('[data-overlay-element="topQuestions"]')!;
+  const reserve = () =>
+    Number(
+      board()
+        .querySelector<HTMLElement>(".pk-live-overlay__surface")!
+        .style.getPropertyValue("--overlay-timer-reserve"),
+    );
+
+  async function draw(state: LiveRoomState) {
+    host ??= document.body.appendChild(document.createElement("div"));
+    const elements = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
+    await act(() => render(<LiveOverlayPresentation view="program" elements={elements} projection={state} />, host!));
+  }
+
+  it("keeps the timers' column clear on a full-frame board, and the whole board without them", async () => {
+    const shown = { ...stageClockState, stage: { ...stageClockState.stage, topQuestions: questions } };
+    await draw(shown);
+    expect(board().hasAttribute("data-logo-covered")).toBe(true);
+    // The timer's box starts at 1536 of the 1920 frame: the board keeps its last fifth clear.
+    expect(reserve()).toBeCloseTo(0.2, 2);
+    await draw({ ...shown, stage: { ...shown.stage, timerGraphics: [] } });
+    expect(board().hasAttribute("data-logo-covered")).toBe(false);
+    expect(reserve()).toBe(0);
   });
 });

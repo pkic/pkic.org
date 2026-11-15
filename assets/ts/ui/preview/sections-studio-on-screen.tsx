@@ -268,6 +268,7 @@ const LIVE_PANEL: StudioPanel = { id: "live-1", type: "monitor", x: 0, y: 0, w: 
 const MONITOR_SOURCES = {
   preview: ROOM,
   program: ROOM,
+  connected: true,
   slug: "pqc-conference-2026",
   roomId: SCREEN_FIXTURE.roomId,
   startAt: ROOM.session.startAt,

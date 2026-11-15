@@ -16,6 +16,7 @@ import { formFieldStatFromTallies } from "../../../assets/shared/form-field-stat
 import type { LiveSocketFactory } from "../../../assets/ts/live-session/useLiveRoom";
 import type { LiveRoomState } from "../../../assets/ts/live-session/live-room-state";
 import type { LiveTargets } from "../../../assets/ts/member-flows/portal/sections/events/detail/live/live-output-targets";
+import { NO_LIVE_ROOM_SOURCES } from "../../../assets/shared/schemas/live-room-sources";
 
 export const LIVE_POLL = "20000000-0000-4000-8000-000000000020";
 /** The poll's question, as the forms field contract carries it. */
@@ -158,6 +159,7 @@ export function liveSnapshot(overrides: Partial<Omit<LiveRoomSnapshot, "type">> 
     stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
     screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    sources: NO_LIVE_ROOM_SOURCES,
     ...overrides,
   };
 }

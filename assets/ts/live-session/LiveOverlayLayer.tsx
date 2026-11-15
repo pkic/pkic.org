@@ -17,14 +17,17 @@ export function LiveOverlayLayer({
   element,
   placement,
   dimmed = false,
-  logoCovered = false,
+  timerReserve = 0,
   children,
 }: {
   element: LiveOverlayElement;
   /** Drawn faintly, behind the element the layout editor has selected. */
   dimmed?: boolean;
-  /** A timer sits on the board's logo corner: the logo steps aside, as the timer carries the mark. */
-  logoCovered?: boolean;
+  /**
+   * The share of a board's width, from its end, that timers on its logo corner take: the logo steps aside, as
+   * the timer carries the mark, and the board keeps that column clear. Zero when no timer sits there.
+   */
+  timerReserve?: number;
   placement: LiveOverlayElementPlacement;
   children: ComponentChildren;
 }) {
@@ -66,15 +69,16 @@ export function LiveOverlayLayer({
       ["--overlay-dx", `${transform.dx}px`],
       ["--overlay-dy", `${transform.dy}px`],
       ["--overlay-scale", String(transform.scale)],
+      ["--overlay-timer-reserve", String(timerReserve)],
     ])
       node.style.setProperty(name, value);
-  }, [transform.dx, transform.dy, transform.scale]);
+  }, [transform.dx, transform.dy, transform.scale, timerReserve]);
   return (
     <div
       class="pk-live-overlay__layer"
       data-overlay-element={element}
       data-dimmed={dimmed ? "" : undefined}
-      data-logo-covered={logoCovered ? "" : undefined}
+      data-logo-covered={timerReserve > 0 ? "" : undefined}
     >
       <div ref={surface} class="pk-live-overlay__surface" data-placed={transform.identity ? undefined : ""}>
         {children}

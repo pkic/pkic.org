@@ -15,6 +15,7 @@ import {
 } from "../../../shared/schemas/live-session-room";
 import { defaultLiveTimerGraphic, type LiveTimerGraphic } from "../../../shared/schemas/live-session-timer";
 import { applyLiveRoomMessage, type LiveRoomState } from "../../live-session/live-room-state";
+import { NO_LIVE_ROOM_SOURCES } from "../../../shared/schemas/live-room-sources";
 
 /** The instant the specimens are drawn at. */
 export const TIMERS_FIXTURE_NOW = Date.parse("2026-11-12T10:00:00.000Z");
@@ -113,6 +114,7 @@ export function timersRoomState(
     stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
     screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    sources: NO_LIVE_ROOM_SOURCES,
     ...overrides,
   };
   return applyLiveRoomMessage(null, snapshot)!;

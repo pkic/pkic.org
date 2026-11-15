@@ -213,6 +213,7 @@ export function LiveSessionDesk({
   const sources = {
     preview,
     program: programActive ? state : otherProgram && onAir.status === "live" ? onAir.state : null,
+    connected: live,
     slug,
     roomId,
     startAt: state.session.startAt,

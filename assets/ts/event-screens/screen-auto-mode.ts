@@ -12,6 +12,7 @@ import { defaultLiveTimerGraphic } from "../../shared/schemas/live-session-timer
 import { LIVE_SESSION_TIMER_ID, sessionLiveTimer } from "../../shared/live-timer-policy";
 import { applyLiveRoomMessage, type LiveRoomState } from "../live-session/live-room-state";
 import type { ScreenCachedAgenda } from "./screen-cache";
+import { NO_LIVE_ROOM_SOURCES } from "../../shared/schemas/live-room-sources";
 
 /** Where the room is on its agenda at `now`: the session under way, else the next one, and the one after. */
 export function screenAgendaMoment(sessions: readonly ScreenAgendaSession[], now: number) {
@@ -104,6 +105,7 @@ export function screenAutoState(
     stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
     screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    sources: NO_LIVE_ROOM_SOURCES,
   };
   return applyLiveRoomMessage(null, snapshot);
 }

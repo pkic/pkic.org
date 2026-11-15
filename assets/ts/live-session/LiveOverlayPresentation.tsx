@@ -95,16 +95,23 @@ const BOARDS: ReadonlySet<LiveOverlayElement> = new Set([
   "checkIn",
 ]);
 
-/** Whether a timer sits on a board's logo corner: the right two fifths of its top fifth. */
-function coversLogo(board: LiveOverlayElementPlacement, timers: readonly LiveOverlayElementPlacement[]) {
+/**
+ * How much of a board's width, from its end, the timers on its logo corner
+ * (the right two fifths of its top fifth) take: the board keeps that column
+ * clear, so no line of it runs under a timer. Zero when none sits there.
+ */
+function timerReserve(board: LiveOverlayElementPlacement, timers: readonly LiveOverlayElementPlacement[]) {
   const corner = { x: board.x + board.w * 0.6, y: board.y, w: board.w * 0.4, h: board.h * 0.2 };
-  return timers.some(
+  const end = board.x + board.w;
+  const covering = timers.filter(
     (timer) =>
       timer.x < corner.x + corner.w &&
       timer.x + timer.w > corner.x &&
       timer.y < corner.y + corner.h &&
       timer.y + timer.h > corner.y,
   );
+  if (!covering.length || board.w <= 0) return 0;
+  return Math.min(0.4, Math.max(...covering.map((timer) => (end - timer.x) / board.w)));
 }
 
 const EMOJI = Object.fromEntries(LIVE_REACTIONS.map((reaction) => [reaction.id, reaction.emoji])) as Record<
@@ -374,7 +381,7 @@ export function LiveOverlayPresentation({
                 key={joined ? "panel" : element}
                 element={element}
                 dimmed={focus !== null && focus !== element && !(joined && focus === "question")}
-                logoCovered={BOARDS.has(element) && coversLogo(joined ? panel : placement, timerBoxes)}
+                timerReserve={BOARDS.has(element) ? timerReserve(joined ? panel : placement, timerBoxes) : 0}
                 placement={joined ? panel : placement}
               >
                 {content}

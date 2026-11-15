@@ -176,6 +176,17 @@
     gap: var(--pk-1);
     margin-inline-start: auto;
   }
+  /* How many sources show the output: plain words, amber only when nothing shows Program. */
+  .pk-studio-monitor__sources {
+    flex: none;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    white-space: nowrap;
+  }
+  .pk-studio-monitor__sources[data-tone="warn"] {
+    color: var(--pk-warn-ink);
+    font-weight: 600;
+  }
   /* Sync with Program: a small chip beside the icons, red like Program while on, quiet while off. */
   .pk-studio-monitor__sync.pk-btn {
     gap: var(--pk-1);

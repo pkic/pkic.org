@@ -43,6 +43,8 @@ export interface MonitorSources {
   preview: LiveRoomState;
   /** The session the physical room has on air, which may be another session; null when none is. */
   program: LiveRoomState | null;
+  /** Whether the studio reaches the room now; while it does not, the monitors hold their last picture. */
+  connected: boolean;
   slug: string;
   roomId: string;
   startAt: string;
@@ -259,12 +261,37 @@ function SyncToggle({ output, switcher }: { output: LiveSyncedScreen; switcher: 
   );
 }
 
+/**
+ * How many browser sources and room screens draw this output now, so an
+ * operator sees a feed that dropped. Program with none is the one to act on.
+ */
+function SourceCount({ output, sources }: { output: StudioOutput; sources: MonitorSources }) {
+  // Away from the room, the studio cannot know who is still connected, so it claims nothing.
+  if (output === "preview" || output === "livestream" || !sources.program || !sources.connected) return null;
+  const count = sources.program.sources[output];
+  const label = STUDIO_OUTPUT_DETAILS[output].label;
+  return (
+    <span
+      class="pk-studio-monitor__sources"
+      data-tone={count === 0 && output === "program" ? "warn" : undefined}
+      title={
+        count === 0
+          ? `Nothing shows ${label} now. Check the browser source in your production software, or the screen in the room.`
+          : `${count} ${count === 1 ? "browser source or screen shows" : "browser sources and screens show"} ${label} now.`
+      }
+    >
+      {count === 0 ? "Not connected" : `${count} connected`}
+    </span>
+  );
+}
+
 /** What an operator does with one monitor's output, as icons at the end of its header: clear it, and full screen. */
 function MonitorActions({ output, context }: { output: StudioOutput; context: MonitorContext }) {
   const { panel, switcher } = context;
   const details = STUDIO_OUTPUT_DETAILS[output];
   return (
     <span class="pk-studio-monitor__controls">
+      <SourceCount output={output} sources={context.sources} />
       {output === "projector" || output === "stage-display" ? <SyncToggle output={output} switcher={switcher} /> : null}
       {output === "livestream" ? (
         <LivestreamSoundToggle />

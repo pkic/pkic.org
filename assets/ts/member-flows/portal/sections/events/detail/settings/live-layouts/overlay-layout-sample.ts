@@ -18,6 +18,7 @@ import { DEFAULT_LIVE_SCHEDULE_CONFIG } from "../../../../../../../../shared/sch
 import { DEFAULT_LIVE_TICKER_CONTEXT } from "../../../../../../../../shared/schemas/live-session-ticker";
 import { defaultLiveTimerGraphic } from "../../../../../../../../shared/schemas/live-session-timer";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
+import { NO_LIVE_ROOM_SOURCES } from "../../../../../../../../shared/schemas/live-room-sources";
 
 /**
  * A room with every graphic on air, so the layout editor's canvas shows each
@@ -183,6 +184,7 @@ export function sampleOverlayRoom(now: number): LiveRoomState {
     stageDisplayNextVotes: null,
     stageDisplaySettings: DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS,
     screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    sources: NO_LIVE_ROOM_SOURCES,
     burst: null,
     refusal: null,
   };

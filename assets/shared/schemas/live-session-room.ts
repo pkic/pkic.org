@@ -82,6 +82,7 @@ import {
 import { attendancePointSelectionSchema } from "../attendance-points";
 import * as stageDisplaySettings from "./live-stage-display-settings";
 import * as screenSync from "./live-screen-sync";
+import * as roomSources from "./live-room-sources";
 import { LIVE_GRAPHIC_THEME_DEFAULTS, liveGraphicThemeSchema } from "../live-graphic-theme";
 import { DEFAULT_LIVE_LOWER_THIRD_MOTION } from "../live-lower-third";
 import {
@@ -412,6 +413,8 @@ export const liveRoomSnapshotSchema = z
     stageDisplaySettings: stageDisplaySettings.liveStageDisplaySettingsSnapshotSchema,
     /** Whether the projector and the stage display follow Program. */
     screenSync: screenSync.liveScreenSyncSnapshotSchema,
+    /** How many sources draw each output now; operators only, zeros for everyone else. */
+    sources: roomSources.liveRoomSourcesSnapshotSchema,
   })
   .strict();
 export type LiveRoomSnapshot = z.infer<typeof liveRoomSnapshotSchema>;
@@ -454,6 +457,8 @@ export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   stageDisplaySettings.liveStageDisplayNextChangedSchema(liveStageQuestionSchema),
   stageDisplaySettings.liveStageDisplaySettingsChangedSchema,
   screenSync.liveScreenSyncChangedSchema,
+  /** Operators only: a source of one of the room's outputs connected or dropped. */
+  roomSources.liveRoomSourcesChangedSchema,
   /** Operators only: Program was cleared, and this snapshot restores it. */
   z
     .object({

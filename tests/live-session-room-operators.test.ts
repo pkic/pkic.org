@@ -139,3 +139,23 @@ describe("live room operator presence", () => {
     await vi.waitFor(() => expect(olga.received.some((m) => m.type === "presence.changed")).toBe(false));
   });
 });
+
+describe("live room sources", () => {
+  beforeEach(() => f.setup());
+
+  it("tells operators how many sources show each output, and when one drops", async () => {
+    const olga = await f.connect({ person: "operator" });
+    expect((await olga.next("room.snapshot")).sources.program).toBe(0);
+    const program = await f.connectSource();
+    await olga.next("sources.changed", (m) => m.sources.program === 1);
+    const projector = await f.connectSource("projector");
+    const both = await olga.next("sources.changed", (m) => m.sources.projector === 1);
+    expect(both.sources).toMatchObject({ program: 1, projector: 1, "stage-display": 0 });
+    // A source sees no counts of its own.
+    expect(program.received.some((message) => message.type === "sources.changed")).toBe(false);
+    expect((await program.next("room.snapshot")).sources.program).toBe(0);
+
+    projector.socket.close(1000, "done");
+    await olga.next("sources.changed", (m) => m.sources.projector === 0 && m.sources.program === 1);
+  });
+});

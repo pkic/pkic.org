@@ -13,7 +13,7 @@ import {
 
 export type LivePresenceMessage = Extract<LiveRoomServerMessage, { type: "presence.changed" | "presence.left" }>;
 import { applyLiveRoomMessage, type LiveRoomState } from "./live-room-state";
-import { persistentRetryDelay, type LivePersistence } from "./live-socket-retry";
+import { persistentRetryDelay, retryWhenBack, watchLiveSocket, type LivePersistence } from "./live-socket-retry";
 
 /**
  * `connecting` before the first snapshot, `live` while the socket is open,
@@ -28,7 +28,6 @@ export type LiveRoomStatus = "connecting" | "live" | "offline";
 export type LiveSocketFactory = (url: string, protocols: string[]) => WebSocket;
 
 const browserSocket: LiveSocketFactory = (url, protocols) => new WebSocket(url, protocols);
-const KEEP_ALIVE_MS = 25_000;
 const RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
 
 export function liveRoomSocketUrl(
@@ -100,21 +99,28 @@ export function useLiveRoom({
     let attempt = 0;
     let admitted = false;
     let retry: ReturnType<typeof setTimeout> | undefined;
-    let keepAlive: ReturnType<typeof setInterval> | undefined;
+    let watch: ReturnType<typeof watchLiveSocket> | undefined;
 
     function open() {
       const token = access.current;
       const protocols = [LIVE_ROOM_PROTOCOL, ...(token ? [LIVE_OVERLAY_PROTOCOL_PREFIX + token] : [])];
       const current = factory.current(liveRoomSocketUrl(window.location, slug, occurrenceId, output), protocols);
       socket.current = current;
+      let mine: ReturnType<typeof watchLiveSocket> | undefined;
       current.addEventListener("open", () => {
         // A refused admission opens before it closes: a persistent feed only
         // starts over once the room actually answers with its snapshot.
         if (!keepsTrying) attempt = 0;
-        keepAlive = setInterval(() => current.send("ping"), KEEP_ALIVE_MS);
+        mine = watchLiveSocket(current, () => {
+          // Silent too long: the network changed or the computer slept. Drop it and start over.
+          closed(current, mine, { code: 1006, reason: "" });
+          current.close(4000, "No answer");
+        });
+        watch = mine;
       });
       current.addEventListener("message", (event) => {
         if (stopped || socket.current !== current) return;
+        mine?.heard();
         persistence.current?.onActivity?.();
         if (event.data === "pong") return;
         let parsed;
@@ -157,25 +163,35 @@ export function useLiveRoom({
         }
         setState((previous) => applyLiveRoomMessage(previous, message));
       });
-      current.addEventListener("close", (event) => {
-        clearInterval(keepAlive);
-        if (socket.current === current) socket.current = null;
-        if (stopped) return;
-        setStatus("offline");
-        const refused = liveRoomRefusalFromClose(event.code, event.reason);
-        if (refused) setAdmissionRefusal(refused);
-        if (keepsTrying) {
-          if (refused) persistence.current?.onRefusal?.(refused);
-          retry = setTimeout(open, persistentRetryDelay(attempt));
-          attempt += 1;
-          return;
-        }
-        if (refused) return;
-        // A room that was never reached is not retried forever.
-        if (!admitted && attempt >= RETRY_DELAYS_MS.length) return;
-        retry = setTimeout(open, RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)]);
+      current.addEventListener("close", (event) => closed(current, mine, event));
+    }
+
+    /** One socket's end, by its close or by the watch; the first of the two starts the next attempt. */
+    function closed(
+      current: WebSocket,
+      itsWatch: ReturnType<typeof watchLiveSocket> | undefined,
+      event: { code: number; reason: string },
+    ) {
+      itsWatch?.stop();
+      if (socket.current !== current) return;
+      socket.current = null;
+      if (stopped) return;
+      setStatus("offline");
+      const refused = liveRoomRefusalFromClose(event.code, event.reason);
+      if (refused) setAdmissionRefusal(refused);
+      if (keepsTrying) {
+        if (refused) persistence.current?.onRefusal?.(refused);
+        retry = setTimeout(open, persistentRetryDelay(attempt));
         attempt += 1;
-      });
+        return;
+      }
+      // A refusal is final, and a room that was never reached is not retried forever.
+      if (refused || (!admitted && attempt >= RETRY_DELAYS_MS.length)) {
+        retry = undefined;
+        return;
+      }
+      retry = setTimeout(open, RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)]);
+      attempt += 1;
     }
 
     setQuestionChangeResult(null);
@@ -184,10 +200,17 @@ export function useLiveRoom({
     setStatus("connecting");
     setAdmissionRefusal(null);
     open();
+    const stopWaiting = retryWhenBack(() => {
+      // Waiting out a backoff while the network was away: try now.
+      if (stopped || socket.current || retry === undefined) return;
+      clearTimeout(retry);
+      open();
+    });
     return () => {
       stopped = true;
+      stopWaiting();
       clearTimeout(retry);
-      clearInterval(keepAlive);
+      watch?.stop();
       socket.current?.close(1000, "Left the room");
       socket.current = null;
     };

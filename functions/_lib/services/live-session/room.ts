@@ -248,6 +248,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       await this.broadcast.operatorsChanged();
       this.presence.greet(server, admission.participant);
     }
+    if (admission.participant.role === "overlay") await this.broadcast.sourcesChanged();
     return new Response(null, {
       status: 101,
       webSocket: client,
@@ -410,7 +411,9 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   private async left(socket: WebSocket): Promise<void> {
     const viewer = socket.deserializeAttachment() as LiveRoomParticipant | null;
     // A socket the purge closed can report closing after the erase; telling the others must not recreate the room.
-    if (viewer?.role !== "operator" || !this.sql.holdsData()) return;
+    if (!this.sql.holdsData()) return;
+    if (viewer?.role === "overlay") return this.broadcast.sourcesChanged(socket);
+    if (viewer?.role !== "operator") return;
     this.presence.left(viewer);
     await this.broadcast.operatorsChanged(socket);
   }
