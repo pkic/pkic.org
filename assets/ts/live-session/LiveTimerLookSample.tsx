@@ -17,7 +17,7 @@ export function LiveTimerLookSample({ look, label }: { look: LiveTimerGraphic["p
     <span class="pk-live-timer-look">
       <span class="pk-live-timer-look__frame" data-look={look}>
         {look === "ring" ? (
-          <LiveTimerMark text="42" shownMs={42_000} spent={0.3} tone={undefined} running label={label} />
+          <LiveTimerMark text="42" shownMs={42_000} spent={0.55} tone={undefined} running label={label} />
         ) : (
           <LiveTimerPlate
             label={label}

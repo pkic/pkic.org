@@ -13,6 +13,14 @@ const CENTER = LIVE_EMBLEM.center.x;
 const OPEN_WIDTH = 112;
 /** The type size that fits the open middle: two digits large, a longer reading as large as it fits. */
 const typeSize = (text: string) => Math.min(76, Math.floor(OPEN_WIDTH / ([...text].length * 0.6)));
+/**
+ * The time sits on its baseline, half its digits' height below the center, so
+ * the digits' ink is centered whatever the font's box: a mono digit is 0.6 of
+ * the type size tall.
+ */
+const DIGIT_HALF_HEIGHT = 0.3;
+/** The tight letter spacing leaves its last gap trailing; the time moves back half of it. */
+const TRAILING_SPACE_HALF = 0.02;
 /** How far out from the center the glare rides on the seats, in the mark's units. */
 const GLARE_RADIUS = 136;
 
@@ -66,6 +74,7 @@ export function LiveTimerMark({
   const seats = `${id}-seats`;
   const glow = `${id}-glow`;
   const glare = `${id}-glare`;
+  const size = typeSize(text);
   return (
     <div
       class="pk-live-timer-mark"
@@ -107,7 +116,12 @@ export function LiveTimerMark({
         </g>
         <LiveEmblemRing />
         <circle class="pk-live-timer-mark__ripple" cx={CENTER} cy={CENTER} r={LIVE_EMBLEM.seatRadius} />
-        <text class="pk-live-timer-mark__time" x={CENTER} y={CENTER + 3} font-size={typeSize(text)}>
+        <text
+          class="pk-live-timer-mark__time"
+          x={CENTER - size * TRAILING_SPACE_HALF}
+          y={CENTER + size * DIGIT_HALF_HEIGHT}
+          font-size={size}
+        >
           {text}
         </text>
       </svg>
