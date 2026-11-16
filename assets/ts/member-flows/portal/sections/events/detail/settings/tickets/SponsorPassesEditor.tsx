@@ -104,7 +104,7 @@ export function SponsorPassesEditor({
           </Button>
         </PanelHeader>
         <PanelBody class="pk-stack">
-          <div class="pk-cluster pk-cluster--start">
+          <div class="pk-stack">
             <Field {...form.of("staffTicketTypeId")} label="Ticket for staff passes">
               {(control) => ticketSelect(control, "staffTicketTypeId", staffTicket, setStaffTicket)}
             </Field>

@@ -167,7 +167,8 @@ export function TicketCodesPanel({
             cell: (row) => `${formatNumber(row.usedCount)} of ${formatNumber(row.maxUses)}`,
           },
           {
-            header: "Actions",
+            // No header: the table names the actions column itself.
+            header: "",
             hideable: false,
             width: "fit",
             align: "end",
