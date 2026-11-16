@@ -1,3 +1,6 @@
+import { sendTicketPaymentReminders } from "../event-tickets/payment";
+import { processTicketRefunds } from "../event-tickets/refunds";
+import { sendUnfinishedRegistrationReminders } from "../registrations/unfinished";
 import { runScheduledEmailDelivery } from "../scheduled-email-delivery";
 import { processPendingPromotionRenders } from "../event-agenda/promotion-render-jobs";
 import { runOauthAuthorizationCompletions, earliestOauthCompletionDue } from "../oauth-authorizations/completion";
@@ -204,6 +207,23 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
     leaseSeconds: DEFAULT_LEASE_SECONDS,
     requiredPermissions: ["membership:approve"],
     run: async ({ env }) => ({ summary: await processMembershipFeeCheckouts(env.DB, env, resolveAppBaseUrl(env)) }),
+  },
+  {
+    key: "event_ticket_payments",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["events:write"],
+    run: async ({ env }) => ({
+      summary: {
+        reminders: await sendTicketPaymentReminders(env.DB, resolveAppBaseUrl(env)),
+        refunds: await processTicketRefunds(env.DB, env),
+      },
+    }),
+  },
+  {
+    key: "unfinished_registrations",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["events:write"],
+    run: async ({ env }) => ({ summary: await sendUnfinishedRegistrationReminders(env.DB, resolveAppBaseUrl(env)) }),
   },
   {
     key: "event_email_campaigns",

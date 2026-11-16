@@ -64,6 +64,8 @@ import {
   EventLiveOverlayPositionsPut,
 } from "./live-overlay-layouts";
 import { EventDaysGet, EventDaysPut } from "./days";
+import { registerTicketRoutes } from "./tickets";
+import { registerUnfinishedRegistrationRoutes } from "./unfinished-registrations";
 import { EventTeamRoleCandidatesList, EventTeamRosterList, EventTeamRoleCreate, EventTeamRolesList } from "./roles";
 import { EventTeamRoleDelete } from "./roles/[roleAssignmentId]";
 import { EventPromotersList } from "./promoters";
@@ -255,9 +257,12 @@ openapi.get("/sponsors/:sponsorId/leads/:leadId/captures", SponsorLeadCapturesGe
 openapi.post("/sponsors/:sponsorId/leads", EventSponsorLeadCreate);
 openapi.route("/email", emailRouter);
 openapi.route("/proposals", proposals_Router);
+// Before the registration router, whose `:registrationId` would take this path.
+registerUnfinishedRegistrationRoutes(openapi);
 openapi.route("/registrations", registrations_Router);
 openapi.get("/days", EventDaysGet);
 openapi.put("/days", EventDaysPut);
+registerTicketRoutes(openapi);
 openapi.post("/images/hero", EventHeroImagePost);
 openapi.get("/images/:file", EventHeroImageGet);
 openapi.patch("/settings", EventSettingsPatch);

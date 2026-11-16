@@ -11,6 +11,7 @@ export const NODE_UNIT_TEST_FILES = [
   "tests/admin-identity.test.ts",
   "tests/attendance-attribution-policy.test.ts",
   "tests/attendance-points-policy.test.ts",
+  "tests/event-ticket-policy.test.ts",
   "tests/badge-credential.test.ts",
   "tests/badge-generic-template.test.ts",
   "tests/badge-template-import.test.ts",

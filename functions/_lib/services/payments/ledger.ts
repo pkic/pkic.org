@@ -117,6 +117,19 @@ async function domainPayment(
   purpose: PaymentPurpose,
   object: StripeObject,
 ): Promise<DomainPaymentRow | null> {
+  if (purpose === "event") {
+    return first<DomainPaymentRow>(
+      db,
+      `SELECT 'registration_ticket' AS resource_type, ticket.id AS resource_id, ticket.amount,
+       lower(ticket.currency) AS currency, ticket.status, ticket.paid_at,
+       checkout.provider_session_id AS checkout_session_id, checkout.payment_intent_id
+       FROM registration_ticket_checkouts checkout JOIN registration_tickets ticket ON ticket.id = checkout.ticket_id
+       WHERE (?1 IS NOT NULL AND checkout.provider_session_id = ?1)
+          OR (?2 IS NOT NULL AND checkout.payment_intent_id = ?2)
+       LIMIT 1`,
+      [object.id?.startsWith("cs_") ? object.id : null, object.payment_intent ?? null],
+    );
+  }
   if (purpose === "donation" && object.id) {
     return first<DomainPaymentRow>(
       db,

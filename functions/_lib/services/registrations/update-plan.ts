@@ -12,6 +12,7 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
+import { prepareCancelRegistrationTicket } from "../event-tickets/registration-ticket";
 import {
   configuredAttendanceOptions,
   listEventDays,
@@ -148,6 +149,7 @@ export async function buildRegistrationUpdate(
         reasonCode: "registration_cancelled",
       }),
       prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
+      ...prepareCancelRegistrationTicket(db, registration.id, now),
     ];
     statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
     const audit = prepareRegistrationUpdateAudit(db, registration, cancelled, payload);
@@ -199,6 +201,7 @@ export async function buildRegistrationUpdate(
         reasonCode: "registration_cancelled",
       }),
       prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
+      ...prepareCancelRegistrationTicket(db, registration.id, now),
     ];
     statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
     statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));

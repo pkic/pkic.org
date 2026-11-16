@@ -33,6 +33,13 @@ import { nowIso, persistedUtcInstant } from "../../utils/time";
 import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
 import { findRegistrationGroup, prepareGroupEventRegistrationGuard } from "./authorization";
 import { eventTakesRegistrations } from "./email-proof";
+import {
+  isTicketCodeExhausted,
+  planRegistrationTicket,
+  ticketCodeExhaustedError,
+} from "../event-tickets/registration-ticket";
+import { HELD_UNTIL_PAID, prepareTicketPaymentEmail } from "../event-tickets/payment";
+import { formatCurrencyAmount } from "../../../../assets/shared/format-currency";
 
 /** The individual capacity only gates the public contract's work-email policy; the use case does not read it. */
 type RegistrationCreateInput = Omit<z.infer<typeof registrationCreateSchema>, "unaffiliatedAttestation">;
@@ -250,6 +257,18 @@ export async function submitEventRegistration(
     badgeImageUrl: `${metadata.appBaseUrl}${personalPromotionImagePath(referralCode)}`,
   };
 
+  // The ticket is issued with the registration. One that must be paid holds
+  // the confirmation until the payment arrives.
+  const ticket = await planRegistrationTicket(db, env, {
+    event,
+    registrationId: registration.id,
+    userId: user.id,
+    email: user.email,
+    identityId: registration.registration_identity_id ?? null,
+    organizationName: affiliation.organizationName,
+    dayAttendance: prepared.dayAttendance.map((day) => ({ dayDate: day.dayDate, attendanceType: day.attendanceType })),
+  });
+  const awaitingPayment = ticket?.status === "pending_payment";
   let queuedEmail: ReturnType<typeof prepareQueueEmailStatement>;
   if (registration.status === "pending_email_confirmation") {
     const confirmationUrl = await registrationConfirmationUrl(
@@ -292,7 +311,9 @@ export async function submitEventRegistration(
       messageType: "transactional",
       subject: `Registration confirmed for ${event.name}`,
       capabilityLinkValues: [queuedManageUrl],
-      sendAfterSeconds: env.ASSETS_BUCKET ? Number(env.EMAIL_BADGE_DELAY_SECONDS ?? 90) : 0,
+      ...(awaitingPayment
+        ? { sendAt: HELD_UNTIL_PAID }
+        : { sendAfterSeconds: env.ASSETS_BUCKET ? Number(env.EMAIL_BADGE_DELAY_SECONDS ?? 90) : 0 }),
       attachments: [
         buildBadgeAttachment({
           badgeCode: referralCode,
@@ -318,7 +339,45 @@ export async function submitEventRegistration(
   }
 
   const badgeRenderJob = prepareBadgeRenderJob(db, referralCode);
-  await commitRegistrationSubmission(db, prepared, [queuedEmail.statement, badgeRenderJob.statement]);
+  const ticketStatements = ticket
+    ? [
+        ...ticket.statements,
+        ...(awaitingPayment && registration.status !== "pending_email_confirmation"
+          ? [
+              db
+                .prepare("UPDATE registration_tickets SET held_email_id = ? WHERE registration_id = ?")
+                .bind(queuedEmail.id, registration.id),
+              prepareTicketPaymentEmail(
+                db,
+                metadata.appBaseUrl,
+                {
+                  event_id: event.id,
+                  event_slug: event.slug,
+                  event_name: event.name,
+                  ticket_name: ticket.ticketName,
+                  email: user.email,
+                },
+                {
+                  subject: `Pay for your ${event.name} ticket`,
+                  lead: `Thank you for registering for ${event.name}. Your ${ticket.ticketName} ticket costs ${formatCurrencyAmount(ticket.amount, ticket.currency)}.`,
+                  idempotencyKey: `ticket-payment:${registration.id}:${registration.updated_at}`,
+                  userId: user.id,
+                },
+              ),
+            ]
+          : []),
+      ]
+    : [];
+  try {
+    await commitRegistrationSubmission(db, prepared, [
+      queuedEmail.statement,
+      badgeRenderJob.statement,
+      ...ticketStatements,
+    ]);
+  } catch (error) {
+    if (isTicketCodeExhausted(error)) throw ticketCodeExhaustedError();
+    throw error;
+  }
   const organizationOutcome = affiliationContext
     ? (prepared.organizationOutcome ?? null)
     : metadata.mailboxVerified
@@ -345,7 +404,7 @@ export async function submitEventRegistration(
         userId: user.id,
         email: user.email,
         jobId: badgeRenderJob.id,
-      }).then(() => processOutboxByIdBackground(db, env, queuedEmail.id)),
+      }).then(() => (awaitingPayment ? undefined : processOutboxByIdBackground(db, env, queuedEmail.id))),
     ],
   };
 }

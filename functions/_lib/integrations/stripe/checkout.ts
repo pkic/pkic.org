@@ -10,18 +10,9 @@ export interface StripeCheckoutSessionCreated {
   client_secret?: string;
 }
 
-/**
- * Shared Stripe Checkout transport. Domain services remain responsible for
- * composing their own price, metadata, and redirect parameters.
- */
-export async function createStripeCheckoutSession(
-  secretKey: string,
-  params: URLSearchParams,
-  options: { idempotencyKey: string; fetcher?: typeof fetch; apiBase?: string },
-): Promise<StripeCheckoutSessionCreated> {
-  const endpoint = options.apiBase
-    ? new URL("/v1/checkout/sessions", options.apiBase)
-    : new URL(STRIPE_CHECKOUT_SESSIONS_URL);
+/** A Checkout endpoint at Stripe, or at a local stand-in that only a test key may reach. */
+function checkoutEndpoint(secretKey: string, path: string, apiBase?: string): URL {
+  const endpoint = new URL(path, apiBase ?? STRIPE_CHECKOUT_SESSIONS_URL);
   if (
     endpoint.origin !== "https://api.stripe.com" &&
     !(
@@ -31,6 +22,19 @@ export async function createStripeCheckoutSession(
     )
   )
     throw new AppError(500, "STRIPE_CONFIGURATION_INVALID", "Stripe checkout configuration is invalid");
+  return endpoint;
+}
+
+/**
+ * Shared Stripe Checkout transport. Domain services remain responsible for
+ * composing their own price, metadata, and redirect parameters.
+ */
+export async function createStripeCheckoutSession(
+  secretKey: string,
+  params: URLSearchParams,
+  options: { idempotencyKey: string; fetcher?: typeof fetch; apiBase?: string },
+): Promise<StripeCheckoutSessionCreated> {
+  const endpoint = checkoutEndpoint(secretKey, "/v1/checkout/sessions", options.apiBase);
   let response: Response;
   try {
     response = await (options.fetcher ?? fetch)(endpoint.toString(), {
@@ -80,4 +84,30 @@ export async function createStripeCheckoutSession(
     throw new AppError(502, "STRIPE_ERROR", "Stripe did not return a checkout session id", details);
   }
   return session;
+}
+
+/**
+ * Closes an open Checkout Session so it can no longer be paid. Best effort: a
+ * session that is already complete or expired is refused by Stripe, which is fine.
+ */
+export async function expireStripeCheckoutSession(
+  secretKey: string,
+  sessionId: string,
+  options: { fetcher?: typeof fetch; apiBase?: string } = {},
+): Promise<boolean> {
+  try {
+    const endpoint = checkoutEndpoint(
+      secretKey,
+      `/v1/checkout/sessions/${encodeURIComponent(sessionId)}/expire`,
+      options.apiBase,
+    );
+    const response = await (options.fetcher ?? fetch)(endpoint.toString(), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${secretKey}` },
+    });
+    await discardProviderResponseBody(response);
+    return response.ok;
+  } catch {
+    return false;
+  }
 }

@@ -18,7 +18,11 @@ import { PERSONAL_PROMOTION_RENDERER } from "../../assets/shared/personal-promot
 import sharp from "sharp";
 import { userCreateSchema } from "../../assets/shared/schemas/user-create";
 import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
+import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { eventTicketsConfigurationSchema } from "../../assets/shared/schemas/event-tickets";
+import { jsonResponse } from "./helpers/member-provisioning";
 import {
   speakerProfileUpdateResponseSchema,
   speakerSelfServiceReadResponseSchema,
@@ -1125,4 +1129,199 @@ test("a speaker reopens accepted terms and manages a presentation from its own p
   } finally {
     await context.close();
   }
+});
+
+test("a person who mixes ways of attending pays the highest event price and each priced day", async ({
+  page,
+}, info) => {
+  await signInToPortal(page, e2eAdminEmail("portal-event-management"));
+  const options = [
+    { value: "in_person", label: "In person", description: "At the venue" },
+    { value: "lounge", label: "Live stream lounge", description: "Watch together near the venue" },
+    { value: "virtual", label: "Virtual", description: "Live stream with Q&A" },
+  ];
+  const days = ["2027-09-10", "2027-09-11", "2027-09-12"];
+  const fixture = await createRegistrationEvent(
+    page,
+    "ticketed-registration",
+    days.map((date) => ({ date, startTime: "09:00", endTime: "17:00", attendanceOptions: options })),
+  );
+  const tickets = `/api/v1/events/${fixture.slug}/tickets`;
+  const configuration = async () =>
+    eventTicketsConfigurationSchema.parse(await (await page.request.get(tickets)).json());
+  await jsonResponse(page.request, "POST", `${tickets}/types`, {
+    expectedRevision: (await configuration()).revision,
+    key: "attendee",
+    name: "Attendee",
+    isDefault: true,
+  });
+  const configured = await configuration();
+  const ticketTypeId = configured.types[0]!.id;
+  await jsonResponse(page.request, "PUT", `${tickets}/prices`, {
+    expectedRevision: configured.revision,
+    periods: [{ id: "open", startsOn: null }],
+    prices: [
+      {
+        id: "venue",
+        ticketTypeId,
+        attendanceValue: "in_person",
+        dayDate: null,
+        charged: "once",
+        amounts: { open: 39500 },
+      },
+      {
+        id: "stream",
+        ticketTypeId,
+        attendanceValue: "virtual",
+        dayDate: null,
+        charged: "once",
+        amounts: { open: 5000 },
+      },
+      {
+        id: "lounge",
+        ticketTypeId,
+        attendanceValue: "lounge",
+        dayDate: null,
+        charged: "each_day",
+        amounts: { open: 5000 },
+      },
+      {
+        id: "lounge-last",
+        ticketTypeId,
+        attendanceValue: "lounge",
+        dayDate: days[2],
+        charged: "each_day",
+        amounts: { open: 7500 },
+      },
+    ],
+  });
+
+  const ticketHolder = `attendee@ticketed-${crypto.randomUUID()}.test`;
+  await approveMemberThroughReview(page, {
+    email: ticketHolder,
+    name: "Ticket Attendee",
+    organizationName: `Synthetic Ticket Holder ${crypto.randomUUID()}`,
+  });
+  await page.context().clearCookies();
+  await signInToPortal(page, ticketHolder);
+  await page.goto(`/portal/#/events/${fixture.slug}/register`);
+  const form = page.getByRole("region", { name: "Event registration", exact: true });
+  await expect(form).toBeVisible();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  const grid = form.getByRole("group", { name: "Attendance choices", exact: true });
+  // A price for the event sits on the way of attending; a price per day sits on each day.
+  const bands = grid.locator(".pk-attendance-matrix__price:not([aria-hidden])");
+  await expect(bands).toHaveText(["$395for the event", "per day", "$50for the event"]);
+  await expect(grid.locator(".pk-attendance-matrix__day-price")).toHaveText(["$50", "$50", "$75"]);
+  // Touching the form records the started registration, which the reminder's stop page answers.
+  const started = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === `/api/v1/events/${fixture.slug}/registrations/unfinished`,
+  );
+  await page.getByRole("radio", { name: "In person — Workshop day 1", exact: true }).check();
+  expect((await started).status()).toBe(200);
+  await page.goto(`/portal/#/events/${fixture.slug}/not-registering`);
+  const stopping = page.getByRole("region", { name: "Not registering", exact: true });
+  await expect(stopping.getByRole("heading", { name: /^Not registering for / })).toBeVisible();
+  await stopping.getByRole("radio", { name: "The price", exact: true }).check();
+  await stopping.getByLabel("Anything to add?").fill("Synthetic budget freeze.");
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`not-registering-${device}.png`), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await stopping.getByRole("button", { name: "Stop reminders", exact: true }).click();
+  await expect(stopping.getByRole("heading", { name: "We won’t remind you again", exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("not-registering-stopped.png"), fullPage: true });
+  // The organizer reads who stopped and why on the event's analytics.
+  await page.context().clearCookies();
+  await signInToPortal(page, e2eAdminEmail("portal-event-management"));
+  await page.goto(`${await eventWorkspacePath(page, fixture.slug)}/stats/unfinished-registrations`);
+  const reasons = page.getByRole("region", { name: "Why people did not register", exact: true });
+  await expect(reasons).toContainText("The price");
+  await expect(page.getByRole("region", { name: "What people wrote", exact: true })).toContainText(
+    "Synthetic budget freeze.",
+  );
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: info.outputPath(`unfinished-summary-${device}.png`), fullPage: true });
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.context().clearCookies();
+  await signInToPortal(page, ticketHolder);
+  // Saying no is not final: the person registers after all.
+  await page.goto(`/portal/#/events/${fixture.slug}/not-registering`);
+  await stopping.getByRole("link", { name: "Register after all", exact: true }).click();
+  await expect(form).toBeVisible();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("radio", { name: "In person — Workshop day 1", exact: true }).check();
+  await page.getByRole("radio", { name: "Virtual — Workshop day 2", exact: true }).check();
+  // A day's own price is part of the name of its choice.
+  await page.getByRole("radio", { name: "Live stream lounge — Workshop day 3 $75", exact: true }).check();
+  // The higher event price covers the other one; the lounge day is added.
+  await expect(bands).toHaveText(["$395for the event", "per day", "Included"]);
+  const order = form.locator(".pk-ticket-order__total");
+  await expect(order).toContainText("$470");
+  for (const [width, height, device] of [
+    [1280, 900, "desktop"],
+    [375, 812, "phone"],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(order).toContainText("$470");
+    await page.screenshot({ path: info.outputPath(`ticketed-attendance-${device}.png`), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("checkbox", { name: "I agree to the privacy policy", exact: true }).check();
+  await page.getByRole("checkbox", { name: "I agree to the code of conduct", exact: true }).check();
+
+  // The payment provider's page is outside this application; a synthetic page stands in for it.
+  let checkoutUrl = "";
+  await page.context().route("https://checkout.stripe.com/**", (route) => {
+    checkoutUrl = route.request().url();
+    return route.fulfill({ contentType: "text/html", body: "<h1>Synthetic checkout</h1>" });
+  });
+  await page.getByRole("button", { name: "Register", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Synthetic checkout", exact: true })).toBeVisible();
+  const captureBase = readFileSync(process.env.E2E_STRIPE_URL_FILE ?? "test-results/e2e-stripe-url", "utf8").trim();
+  const sessions = (await (await fetch(`${captureBase}/sessions`)).json()) as Array<Record<string, unknown>>;
+  const session = sessions.find((item) => item.url === checkoutUrl)!;
+  expect(session.amount_total).toBe(47000);
+
+  // Until the payment arrives the ticket page asks for it and shows no badge.
+  await page.goto(`/portal/#/events/${fixture.slug}/ticket`);
+  await expect(page.getByRole("heading", { name: /470.*to pay/ })).toBeVisible();
+  await expect(page.locator('iframe[title^="Your badge for "]')).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("ticket-awaiting-payment.png"), fullPage: true });
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const event = JSON.stringify({
+    id: `evt_${crypto.randomUUID()}`,
+    type: "checkout.session.completed",
+    created: timestamp,
+    data: { object: { ...session, payment_status: "paid" } },
+  });
+  const signature = createHmac("sha256", "whsec_e2e_membership").update(`${timestamp}.${event}`).digest("hex");
+  const paid = await page.request.post("/api/v1/webhooks/stripe", {
+    data: event,
+    headers: { "content-type": "application/json", "stripe-signature": `t=${timestamp},v1=${signature}` },
+  });
+  expect(paid.status(), await paid.text()).toBe(200);
+  await page.reload();
+  await expect(
+    page
+      .frameLocator('iframe[title^="Your badge for "]')
+      .getByRole("button", { name: "Enlarge check-in code", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({ path: info.outputPath("ticket-paid.png"), fullPage: true });
 });

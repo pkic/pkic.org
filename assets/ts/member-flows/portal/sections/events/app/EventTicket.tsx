@@ -1,5 +1,5 @@
 import { splitBadgePrintSvg } from "../../../../../../shared/badge-print-svg";
-import { createPortal } from "preact/compat";
+import { createPortal, lazy, Suspense } from "preact/compat";
 import { Dialog } from "../../../../../ui/Dialog";
 import { useDialogQueryState } from "../../../../../hooks/useDialogQueryState";
 /**
@@ -17,7 +17,8 @@ import { BadgeFace } from "../../../../../components/event-badges/BadgeFace";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../components/Spinner";
 import { useData } from "../../../../../hooks/useData";
-import { putJson } from "../../../../../shared/api-client";
+import { getJson, putJson } from "../../../../../shared/api-client";
+import { registrationTicketResponseSchema } from "../../../../../../shared/schemas/event-tickets";
 import { EmptyState } from "../../../../../ui/EmptyState";
 import { usePortalHashLocation } from "../../../hash-location";
 import { eventParticipantRecordPath } from "../event-participant-paths";
@@ -46,6 +47,38 @@ export function EventTicket({ event }: { event: ParticipantEventDetail }) {
         <p>Your badge and check-in code appear here once you do.</p>
         <div class="pk-cluster">{details}</div>
       </EventCard>
+    );
+  return <SettledTicket event={event} registrationId={standing.registrationId} details={details} />;
+}
+
+// Loaded only for a ticket that is not settled, so the installed event app does not carry it offline.
+const EventTicketPayment = lazy(async () => ({ default: (await import("./EventTicketPayment")).EventTicketPayment }));
+
+/** A ticket that is still to be paid, or was refunded, stands in for the badge. */
+function SettledTicket({
+  event,
+  registrationId,
+  details,
+}: {
+  event: ParticipantEventDetail;
+  registrationId: string;
+  details: ComponentChildren;
+}) {
+  const ticket = useData(
+    () =>
+      getJson(
+        `/api/v1/events/${encodeURIComponent(event.slug)}/registrations/${encodeURIComponent(registrationId)}/ticket`,
+        registrationTicketResponseSchema,
+      ),
+    [event.slug, registrationId],
+  );
+  if (ticket.loading) return <Spinner label="Loading your ticket…" />;
+  const held = ticket.data?.ticket;
+  if (held && held.status !== "paid" && held.status !== "free")
+    return (
+      <Suspense fallback={<Spinner label="Loading your ticket…" />}>
+        <EventTicketPayment slug={event.slug} registrationId={registrationId} ticket={held} details={details} />
+      </Suspense>
     );
   return <BadgeTicket event={event} details={details} />;
 }

@@ -1,5 +1,7 @@
 /** Page host for the canonical public/portal registration form. */
 import { EventRegistrationCreate } from "../../../../../components/events/EventRegistrationCreate";
+import { EventTicketPricing } from "../../../../../components/events/tickets/EventTicketPricing";
+import { continueToTicketPayment } from "../../../../../components/events/tickets/ticket-payment";
 import { Panel, PanelBody } from "../../../../../ui/Panel";
 import { ButtonLink } from "../../../../../ui/Button";
 import { usePortalHashLocation } from "../../../hash-location";
@@ -36,13 +38,16 @@ export function EventRegister({
   return (
     <Panel aria-label="Event registration">
       <PanelBody>
-        <EventRegistrationCreate
-          slug={event.slug}
-          onRegistered={async () => {
-            await onRegistered?.();
-            navigate(`/events/${encodeURIComponent(event.slug)}/ticket`);
-          }}
-        />
+        <EventTicketPricing slug={event.slug}>
+          <EventRegistrationCreate
+            slug={event.slug}
+            onRegistered={async (result) => {
+              if (await continueToTicketPayment(event.slug, result.registrationId)) return;
+              await onRegistered?.();
+              navigate(`/events/${encodeURIComponent(event.slug)}/ticket`);
+            }}
+          />
+        </EventTicketPricing>
       </PanelBody>
     </Panel>
   );

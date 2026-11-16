@@ -11,6 +11,7 @@ import { SeriesManagedNotice } from "./settings/SeriesManagedNotice";
 import { LazySponsorTiersTab } from "./settings/LazySponsorTiersTab";
 import { RawEvidenceRetentionPolicy } from "./settings/RawEvidenceRetentionPolicy";
 import { AttendanceSettings } from "./settings/AttendanceSettings";
+import { LazyTicketsTab } from "./settings/tickets/LazyTicketsTab";
 
 type SettingsTab =
   | "general"
@@ -22,6 +23,7 @@ type SettingsTab =
   | "retention"
   | "scheduling"
   | "sponsor-tiers"
+  | "tickets"
   | "team"
   | "live";
 
@@ -35,6 +37,7 @@ const SETTINGS_TABS: Array<{ key: SettingsTab; label: string; capability?: "mana
   { key: "retention", label: "Retention" },
   { key: "scheduling", label: "Scheduling" },
   { key: "sponsor-tiers", label: "Sponsor Tiers" },
+  { key: "tickets", label: "Tickets" },
   { key: "team", label: "Team", capability: "manage" },
 ];
 
@@ -60,9 +63,11 @@ export function Settings({
     <div class="pk-stack">
       <Tabs
         items={visibleTabs
-          .filter(({ key }) => !["scheduling", "sponsor-tiers"].includes(key))
+          .filter(({ key }) => !["scheduling", "sponsor-tiers", "tickets"].includes(key))
           .map((item) => (item.key === "session-types" ? { ...item, label: "Program" } : item))}
-        active={tab === "scheduling" ? "session-types" : tab === "sponsor-tiers" ? "registration" : tab}
+        active={
+          tab === "scheduling" ? "session-types" : tab === "sponsor-tiers" || tab === "tickets" ? "registration" : tab
+        }
         hrefFor={(key) =>
           key === "general" ? `/events/${event.slug}/settings` : `/events/${event.slug}/settings/${key}`
         }
@@ -78,11 +83,12 @@ export function Settings({
           hrefFor={(key) => `/events/${event.slug}/settings/${key}`}
         />
       )}
-      {(tab === "registration" || tab === "sponsor-tiers") && (
+      {(tab === "registration" || tab === "sponsor-tiers" || tab === "tickets") && (
         <Tabs
           label="Registration settings"
           items={[
             { key: "registration", label: "Policy" },
+            { key: "tickets", label: "Tickets" },
             { key: "sponsor-tiers", label: "Sponsor tiers" },
           ]}
           active={tab}
@@ -107,6 +113,9 @@ export function Settings({
       )}
       {tab === "sponsor-tiers" && (
         <LazySponsorTiersTab slug={event.slug} canWrite={event.capabilities.includes("write")} />
+      )}
+      {tab === "tickets" && (
+        <LazyTicketsTab slug={event.slug} canWrite={event.capabilities.includes("write")} detail={detailSegment} />
       )}
       {tab === "live" && <EventLiveSettings slug={event.slug} />}
       {tab === "team" && (

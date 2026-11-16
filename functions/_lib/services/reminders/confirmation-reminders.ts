@@ -15,6 +15,7 @@ import {
 } from "../reminders-support";
 import { batchQueueEmailsAndUpdateState } from "./shared";
 import type { DatabaseLike } from "../../types";
+import { prepareCancelRegistrationTicket } from "../event-tickets/registration-ticket";
 import {
   REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL,
   REGISTRATION_RECIPIENT_EMAIL_SQL,
@@ -95,6 +96,8 @@ export async function runConfirmationReminders(
       try {
         await db.batch([
           prepareRegistrationTransitionGuard(db, row),
+          // Before the registration's own update, which the audit entry after it counts.
+          ...prepareCancelRegistrationTicket(db, row.id, nowValue),
           db
             .prepare(
               `UPDATE registrations

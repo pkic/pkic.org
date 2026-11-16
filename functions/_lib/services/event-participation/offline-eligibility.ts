@@ -1,3 +1,4 @@
+import { registrationTicketSettledSql } from "./badge-attendees";
 import { eligibilityPageDigest } from "../../../../assets/shared/event-eligibility-digest";
 import { instantToCalendarDate } from "../../../../assets/shared/timezone";
 import { operationalAllocationCompatibleSql } from "./session-allocation";
@@ -85,7 +86,7 @@ export function prepareOfflineEligibility(db: DatabaseLike, event: EventReadSele
         target AS(SELECT ? AS occurrence_id,COALESCE(?,s.room_id) AS room_id,COALESCE(s.start_at,?) AS start_at
           FROM manifest_event event LEFT JOIN (${publishedSessionsSql}) s ON s.event_id=event.id AND s.id=?)
         SELECT b.id AS badgeId,b.user_id AS userId,b.credential_hash AS credentialHash,
-          b.revoked_at IS NOT NULL AS revoked,b.expires_at AS expiresAt,COALESCE(r.status='registered',0) AS eventRegistered,
+          b.revoked_at IS NOT NULL AS revoked,b.expires_at AS expiresAt,COALESCE(r.status='registered' AND ${registrationTicketSettledSql("r")},0) AS eventRegistered,
           r.id IS NOT NULL AS registered,
           ${registrationSessionDayOptionsSql("r", "target")} AS registration_days_json,
           ${operationalAllocationCompatibleSql("target.occurrence_id", "b.user_id", "'physical'", "target.room_id")} AS allocationCompatible,

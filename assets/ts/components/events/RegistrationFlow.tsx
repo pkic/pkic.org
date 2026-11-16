@@ -18,6 +18,7 @@ import {
 import type { FlowBoot } from "../../event-flows/boot";
 import { registrationEntry } from "./registration-entry";
 import { registrationInvitation } from "./registration-invitation";
+import { markRegistrationStarted } from "./registration-start";
 import { updateRegistrationReview } from "./registration-review";
 import { clearReferralSession } from "../../shared/query-context";
 import { forgetRegistrationEmailProof } from "../useRegistrationEmailProof";
@@ -258,6 +259,10 @@ export function RegistrationFlow(props: Props) {
           questions.handlers.onInput(event);
         }}
         onChange={(event) => {
+          // A signed-in person who changes anything has started; a guest has no account to remind.
+          // The identity is the form's own field: the contact step fills it once the person is known.
+          if (props.mode === "create" && readField(event.currentTarget, "identityId"))
+            markRegistrationStarted(props.context.apiBase, props.context.eventSlug);
           syncAttendance(event);
           contract.handlers.onChange(event);
           contactContract.handlers.onChange(event);

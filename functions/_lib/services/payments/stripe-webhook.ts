@@ -10,6 +10,7 @@ import { handleMembershipPaymentEvent } from "../membership/workflows/fee-events
 import { handleSponsorshipStripeEvent } from "../sponsorship/stripe-webhook";
 import { applySponsorshipPaymentAdjustment } from "../sponsorship/payment-adjustments";
 import { recordStripePaymentEvent } from "./ledger";
+import { handleEventTicketStripeEvent, isEventTicketStripeEvent } from "../event-tickets/payment";
 
 type StripeEvent = z.infer<typeof stripeEventEnvelopeSchema>;
 type PaymentPurpose = "donation" | "membership" | "sponsorship";
@@ -90,6 +91,8 @@ export async function dispatchStripePaymentEvent(
   appBaseUrl: string,
   waitUntil: (promise: Promise<unknown>) => void,
 ) {
+  // A ticket payment records its own ledger entry in the batch that settles the ticket.
+  if (await isEventTicketStripeEvent(db, event)) return handleEventTicketStripeEvent(db, event);
   const purpose = await paymentPurpose(db, event);
   if (!purpose) return { received: true, ignored: true };
   if (purpose === "donation") {

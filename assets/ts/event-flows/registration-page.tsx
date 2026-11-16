@@ -4,6 +4,8 @@ import { getJson } from "../shared/api-client";
 import { eventFlowContext, setStatus } from "./boot";
 import { RegistrationFlow } from "../components/events/RegistrationFlow";
 import { showRegistrationSuccess } from "./registration-success";
+import { EventTicketPricing } from "../components/events/tickets/EventTicketPricing";
+import { continueToTicketPayment } from "../components/events/tickets/ticket-payment";
 
 async function main() {
   const context = eventFlowContext(document.querySelector<HTMLElement>("[data-event-registration]"));
@@ -17,24 +19,28 @@ async function main() {
     );
     mount.textContent = "";
     render(
-      <RegistrationFlow
-        mode="create"
-        forms={forms}
-        context={context}
-        onRegistered={(result, body, form) => {
-          showRegistrationSuccess(
-            context.root,
-            form,
-            result,
-            body.firstName,
-            body.lastName,
-            body.email,
-            body.organization?.name ?? "",
-            forms.event.name,
-            context.eventSlug,
-          );
-        }}
-      />,
+      <EventTicketPricing slug={context.eventSlug}>
+        <RegistrationFlow
+          mode="create"
+          forms={forms}
+          context={context}
+          onRegistered={async (result, body, form) => {
+            // A ticket that must be paid goes straight to payment; the success page follows the payment.
+            if (await continueToTicketPayment(context.eventSlug, result.registrationId)) return;
+            showRegistrationSuccess(
+              context.root,
+              form,
+              result,
+              body.firstName,
+              body.lastName,
+              body.email,
+              body.organization?.name ?? "",
+              forms.event.name,
+              context.eventSlug,
+            );
+          }}
+        />
+      </EventTicketPricing>,
       mount,
     );
   } catch {
