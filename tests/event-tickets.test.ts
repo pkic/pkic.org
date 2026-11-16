@@ -592,7 +592,7 @@ describe("event tickets", () => {
   });
 
   it("applies refund totals in the provider's order and reads the total again after a failed refund", async () => {
-    const { event } = await seedTickets();
+    const { event, admin } = await seedTickets();
     const { registration, user } = await register(event, "refund-order@gmail.com");
     const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
     await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
@@ -653,6 +653,35 @@ describe("event tickets", () => {
       ),
     ).rejects.toMatchObject({ code: "TICKET_REFUND_PENDING" });
     expect(await reconcileTicketRefunds(env.DB, paymentEnv, 5, total(2000))).toEqual({ reconciled: 1, failed: 0 });
+    // Two runs overlap: the later one writes a partial total while the earlier one still waits for an answer
+    // that says everything went back. The earlier answer is not written, and neither is anything that follows
+    // from it: a refund still on its way stays open, so no second one can be asked for.
+    await requestTicketRefund(env.DB, admin, { ...input, reason: "The rest" });
+    const accepted = (async () =>
+      new Response(JSON.stringify({ id: "re_open", status: "pending" }), { status: 200 })) as unknown as typeof fetch;
+    expect(await processTicketRefunds(env.DB, paymentEnv, 5, accepted)).toEqual({ processed: 1, failed: 0 });
+    const soon = Math.floor(Date.now() / 1000) + 220;
+    await failed("evt_failed_overlap", soon, "re_overlap", 500);
+    const overlapped = (async () => {
+      expect(await reconcileTicketRefunds(env.DB, paymentEnv, 5, total(2000))).toEqual({ reconciled: 1, failed: 0 });
+      return new Response(JSON.stringify({ latest_charge: { amount_refunded: 19500, refunded: true } }), {
+        status: 200,
+      });
+    }) as unknown as typeof fetch;
+    expect(await reconcileTicketRefunds(env.DB, paymentEnv, 5, overlapped)).toEqual({ reconciled: 0, failed: 0 });
+    expect(await read()).toMatchObject({ status: "paid", refundedAmount: 2000, refundPending: true });
+    expect(
+      await env.DB.prepare(
+        "SELECT completed_at FROM registration_ticket_refunds WHERE provider_refund_id = 're_open'",
+      ).first(),
+    ).toEqual({ completed_at: null });
+    await expect(requestTicketRefund(env.DB, admin, { ...input, reason: "Again" })).rejects.toMatchObject({
+      code: "TICKET_REFUND_PENDING",
+    });
+    // That refund then fails too, and the provider's answer settles the ticket again.
+    await failed("evt_failed_open", soon + 10, "re_open", 17500);
+    expect(await reconcileTicketRefunds(env.DB, paymentEnv, 5, total(2000))).toEqual({ reconciled: 1, failed: 0 });
+    expect(await read()).toMatchObject({ status: "paid", refundedAmount: 2000, refundPending: false });
     // The provider's answer is delayed and a newer total arrives meanwhile: the stale answer is not written
     // over it, and the ticket is read again on the next run.
     const later = Math.floor(Date.now() / 1000) + 300;

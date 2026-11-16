@@ -211,6 +211,25 @@ it("does not let a registration go ahead before a ticket is chosen or with a cod
   await expect(pricing!.settle!()).rejects.toBeInstanceOf(PricingChoiceRequiredError);
 });
 
+it("stops the registration on a code that was typed but not applied when the contract refuses it", async () => {
+  await mount(null);
+  await act(() => host.querySelector<HTMLInputElement>('input[name="eventTicket"][value="pqcc_attendee"]')!.click());
+  await settle();
+  const sent = requests.length;
+  const code = host.querySelector<HTMLInputElement>('input[name="code"]')!;
+  await act(() => {
+    code.value = "X".repeat(80);
+    code.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  let refused: unknown;
+  await act(async () => {
+    refused = await pricing!.settle!().catch((error: unknown) => error);
+  });
+  expect(refused).toBeInstanceOf(PricingChoiceRequiredError);
+  expect(code.getAttribute("aria-invalid")).toBe("true");
+  expect(requests).toHaveLength(sent);
+});
+
 it("shows the decided ticket without a choice and asks for a reason before another ticket is sent", async () => {
   await mount({ ticketKey: "pqcc_vendor", source: "classifier", organizationName: "Example Cryptography Inc." });
   expect(host.querySelector('input[name="eventTicket"]')).toBeNull();

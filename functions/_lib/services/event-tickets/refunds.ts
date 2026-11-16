@@ -299,40 +299,38 @@ export async function reconcileTicketRefunds(
       });
       const now = nowIso();
       const full = total.refunded ? 1 : 0;
-      const results = await db.batch([
-        db
-          .prepare(
-            `UPDATE registration_tickets SET refunded_amount = CASE WHEN ? = 1 THEN amount ELSE MIN(amount, ?) END,
-               status = CASE WHEN ? = 1 AND status IN ('paid', 'refunded') THEN 'refunded'
-                             WHEN ? = 0 AND status = 'refunded' THEN 'paid' ELSE status END,
-               refunds_seen_at = CASE WHEN refunds_seen_at IS NULL OR refunds_seen_at < ? THEN ? ELSE refunds_seen_at END,
-               refund_reconcile_at = NULL, revision = revision + 1, updated_at = ?
-             WHERE id = ? AND payment_intent_id = ? AND revision = ?`,
-          )
-          .bind(
-            full,
-            total.amountRefunded,
-            full,
-            full,
-            askedAt,
-            askedAt,
-            now,
-            ticket.id,
-            ticket.payment_intent_id,
-            ticket.revision,
-          ),
-        // The provider says all of it went back: its refunds of this payment are done.
-        db
-          .prepare(
-            `UPDATE registration_ticket_refunds SET completed_at = COALESCE(completed_at, ?), last_error = NULL
-             WHERE ? = 1 AND payment_intent_id = ? AND submitted_at IS NOT NULL AND failed_at IS NULL
-               AND EXISTS (SELECT 1 FROM registration_tickets ticket
-                           WHERE ticket.id = ? AND ticket.id = registration_ticket_refunds.ticket_id
-                             AND ticket.revision = ? AND ticket.refund_reconcile_at IS NULL)`,
-          )
-          .bind(now, full, ticket.payment_intent_id, ticket.id, ticket.revision + 1),
-      ]);
-      if (results[0]?.meta?.changes) reconciled += 1;
+      const applied = await run(
+        db,
+        `UPDATE registration_tickets SET refunded_amount = CASE WHEN ? = 1 THEN amount ELSE MIN(amount, ?) END,
+           status = CASE WHEN ? = 1 AND status IN ('paid', 'refunded') THEN 'refunded'
+                         WHEN ? = 0 AND status = 'refunded' THEN 'paid' ELSE status END,
+           refunds_seen_at = CASE WHEN refunds_seen_at IS NULL OR refunds_seen_at < ? THEN ? ELSE refunds_seen_at END,
+           refund_reconcile_at = NULL, revision = revision + 1, updated_at = ?
+         WHERE id = ? AND payment_intent_id = ? AND revision = ?`,
+        [
+          full,
+          total.amountRefunded,
+          full,
+          full,
+          askedAt,
+          askedAt,
+          now,
+          ticket.id,
+          ticket.payment_intent_id,
+          ticket.revision,
+        ],
+      );
+      // Nothing follows an answer that was not written: another run or an event got there first.
+      if (!applied.changes) continue;
+      reconciled += 1;
+      // The provider says all of it went back: its refunds of this payment are done.
+      if (total.refunded)
+        await run(
+          db,
+          `UPDATE registration_ticket_refunds SET completed_at = COALESCE(completed_at, ?), last_error = NULL
+           WHERE ticket_id = ? AND payment_intent_id = ? AND submitted_at IS NOT NULL AND failed_at IS NULL`,
+          [now, ticket.id, ticket.payment_intent_id],
+        );
     } catch {
       failed += 1;
     }

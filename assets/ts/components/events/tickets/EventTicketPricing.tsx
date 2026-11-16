@@ -129,6 +129,8 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
   });
   const refuse = useRef(form.refuse);
   refuse.current = form.refuse;
+  const check = useRef(form.submit);
+  check.current = form.submit;
 
   // A dispute is only sent once it has a reason; until then the decided ticket is priced.
   const request = useMemo(() => {
@@ -177,6 +179,10 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
   const needsChoice = useRef(false);
   needsChoice.current = enabled && !request;
   const settle = useCallback(async () => {
+    // What is typed but not applied yet is checked too: a code or reason the contract refuses is marked beside
+    // its field, and the registration is not made as if it had not been entered.
+    const draft = check.current();
+    if (!draft.data) throw new PricingChoiceRequiredError(draft.formMessage ?? "Check the code you entered.");
     if (needsChoice.current) throw new PricingChoiceRequiredError("Choose a ticket, and check any code you entered.");
     if (latest.current) await save(latest.current);
   }, [save]);
