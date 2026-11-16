@@ -221,6 +221,8 @@ CREATE TABLE registration_ticket_refunds (
   -- Empty for a payment returned without an organizer asking: one that arrived for a ticket that no longer needed it.
   requested_by_user_id TEXT    REFERENCES users(id),
   provider_refund_id   TEXT    UNIQUE,
+  -- When the provider made the refund: a total it reported before then cannot include this refund.
+  provider_created_at  TEXT,
   attempts             INTEGER NOT NULL DEFAULT 0,
   next_attempt_at      TEXT    NOT NULL,
   lease_token          TEXT,

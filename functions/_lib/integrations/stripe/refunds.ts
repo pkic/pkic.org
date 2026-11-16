@@ -11,7 +11,7 @@ export async function createStripeRefund(
   secretKey: string,
   input: { paymentIntentId: string; amount: number; metadata: Record<string, string> },
   options: { idempotencyKey: string; fetcher?: typeof fetch; apiBase?: string },
-): Promise<{ id: string; status: string | null }> {
+): Promise<{ id: string; status: string | null; created: number | null }> {
   const endpoint = options.apiBase ? new URL("/v1/refunds", options.apiBase) : new URL(STRIPE_REFUNDS_URL);
   if (
     endpoint.origin !== "https://api.stripe.com" &&
@@ -48,8 +48,16 @@ export async function createStripeRefund(
       throw new AppError(502, STRIPE_REFUND_REFUSED, "The payment provider refused the refund");
     throw new AppError(502, "STRIPE_ERROR", "Failed to create the refund");
   }
-  const decoded = (await response.json().catch(() => null)) as { id?: unknown; status?: unknown } | null;
+  const decoded = (await response.json().catch(() => null)) as {
+    id?: unknown;
+    status?: unknown;
+    created?: unknown;
+  } | null;
   if (!decoded || typeof decoded.id !== "string" || !decoded.id)
     throw new AppError(502, "STRIPE_ERROR", "Stripe returned an invalid refund");
-  return { id: decoded.id, status: typeof decoded.status === "string" ? decoded.status : null };
+  return {
+    id: decoded.id,
+    status: typeof decoded.status === "string" ? decoded.status : null,
+    created: typeof decoded.created === "number" && Number.isInteger(decoded.created) ? decoded.created : null,
+  };
 }

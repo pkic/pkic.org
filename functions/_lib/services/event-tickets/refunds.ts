@@ -244,17 +244,19 @@ export function prepareRefundedTotal(
         input.paymentIntentId,
         input.at,
       ),
-    // Every refund of ours that the provider holds is part of the total just applied.
+    // A refund of ours is part of the total just applied only if the provider had made it by then:
+    // a total reported earlier, arriving late, says nothing about a refund made after it.
     db
       .prepare(
         `UPDATE registration_ticket_refunds SET counted = 1,
            completed_at = CASE WHEN ? = 1 THEN COALESCE(completed_at, ?) ELSE completed_at END
          WHERE payment_intent_id = ? AND submitted_at IS NOT NULL AND failed_at IS NULL
+           AND provider_created_at IS NOT NULL AND provider_created_at <= ?
            AND EXISTS (SELECT 1 FROM registration_tickets ticket
                        WHERE ticket.id = registration_ticket_refunds.ticket_id AND ticket.payment_intent_id = ?
                          AND ticket.refunds_seen_at = ?)`,
       )
-      .bind(input.full ? 1 : 0, now, input.paymentIntentId, input.paymentIntentId, input.at),
+      .bind(input.full ? 1 : 0, now, input.paymentIntentId, input.at, input.paymentIntentId, input.at),
   ];
 }
 
@@ -310,10 +312,17 @@ export async function processTicketRefunds(
       const at = nowIso();
       const submitted = db
         .prepare(
-          `UPDATE registration_ticket_refunds SET provider_refund_id = ?, submitted_at = ?, last_error = NULL,
-             lease_token = NULL, lease_expires_at = NULL WHERE id = ? AND lease_token = ?`,
+          `UPDATE registration_ticket_refunds SET provider_refund_id = ?, submitted_at = ?, provider_created_at = ?,
+             last_error = NULL, lease_token = NULL, lease_expires_at = NULL WHERE id = ? AND lease_token = ?`,
         )
-        .bind(created.id, at, refund.id, lease.token);
+        .bind(
+          created.id,
+          at,
+          // Without the provider's own time, ours stands in: later, so an earlier total never claims this refund.
+          created.created === null ? at : new Date(created.created * 1000).toISOString(),
+          refund.id,
+          lease.token,
+        );
       if (created.status && REFUND_FAILED_STATUSES.includes(created.status)) {
         await db.batch([
           submitted,

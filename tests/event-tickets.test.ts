@@ -306,6 +306,38 @@ describe("event tickets", () => {
       disputed: true,
       source: "disputed",
     });
+    // The person registers again between the organizer's read and the write: the review is refused whole,
+    // with no audit entry and no organizer decision left behind.
+    const replanned = {
+      prepare: (sql: string) => env.DB.prepare(sql),
+      batch: async (statements: D1PreparedStatement[]) => {
+        await env.DB.prepare("UPDATE registration_tickets SET revision = revision + 1 WHERE registration_id = ?")
+          .bind(registration.id)
+          .run();
+        return env.DB.batch(statements);
+      },
+    } as unknown as typeof env.DB;
+    for (const decision of ["keep", "move"] as const)
+      await expect(
+        reviewDisputedTicket(
+          replanned,
+          admin as UserBackedAuthAdmin,
+          event,
+          registration.id,
+          decision,
+          "https://example.test",
+        ),
+      ).rejects.toMatchObject({ code: "TICKET_NOT_DISPUTED" });
+    expect(
+      await env.DB.prepare(
+        `SELECT (SELECT COUNT(*) FROM audit_log WHERE action = 'registration_ticket_dispute_settled') AS audits,
+                (SELECT COUNT(*) FROM ticket_classifier_decisions WHERE source = 'organizer') AS decisions`,
+      ).first(),
+    ).toEqual({ audits: 0, decisions: 0 });
+    expect(await readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id })).toMatchObject({
+      disputed: true,
+      ticketKey: "pqcc_attendee",
+    });
     await reviewDisputedTicket(
       env.DB,
       admin as UserBackedAuthAdmin,
@@ -541,7 +573,7 @@ describe("event tickets", () => {
   });
 
   it("applies refund facts in the provider's order and takes back only what a failed refund had added", async () => {
-    const { event } = await seedTickets();
+    const { event, admin } = await seedTickets();
     const { registration, user } = await register(event, "refund-order@gmail.com");
     const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
     await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
@@ -576,6 +608,22 @@ describe("event tickets", () => {
     await failed("evt_failed_2", 1400, "re_counted", 1250, 3000);
     await failed("evt_failed_2_again", 1401, "re_counted", 1250, 3000);
     expect(await read()).toMatchObject({ status: "paid", refundedAmount: 2000 });
+
+    // A refund of ours made after a total was reported is not part of that total, also when the total arrives late.
+    await requestTicketRefund(env.DB, admin, { ...input, reason: "The rest" });
+    const pending = (async () =>
+      new Response(JSON.stringify({ id: "re_ours", status: "pending", created: 2000 }), {
+        status: 200,
+      })) as unknown as typeof fetch;
+    expect(await processTicketRefunds(env.DB, paymentEnv, 5, pending)).toEqual({ processed: 1, failed: 0 });
+    await charge("evt_total_before_ours", 1500, 2000);
+    expect(
+      await env.DB.prepare(
+        "SELECT amount, counted FROM registration_ticket_refunds WHERE provider_refund_id = 're_ours'",
+      ).first(),
+    ).toEqual({ amount: 17500, counted: 0 });
+    await failed("evt_failed_ours", 2100, "re_ours", 2000, 17500);
+    expect(await read()).toMatchObject({ status: "paid", refundedAmount: 2000, refundFailed: true });
   });
 
   it("returns a payment made on a page for an earlier price and leaves the ticket to be paid", async () => {
