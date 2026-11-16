@@ -213,13 +213,11 @@
   }
 
   /* Honor the setting rather than merely shortening durations: a vestibular
-     trigger is the movement itself, not its length. A broadcast source is
-     exempt: the setting belongs to the machine that renders it, not to the
-     viewers who watch the stream. */
+     trigger is the movement itself, not its length. */
   @media (prefers-reduced-motion: reduce) {
-    :root:not(:has([data-live-broadcast-source])) .pk *,
-    :root:not(:has([data-live-broadcast-source])) .pk *::before,
-    :root:not(:has([data-live-broadcast-source])) .pk *::after {
+    .pk *,
+    .pk *::before,
+    .pk *::after {
       animation-duration: var(--pk-dur-instant) !important;
       animation-iteration-count: 1 !important;
       transition-duration: var(--pk-dur-instant) !important;

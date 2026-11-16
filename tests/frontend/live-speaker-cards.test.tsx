@@ -150,7 +150,7 @@ it("shows a person's card with a large portrait on focus and on a tap of their p
   expect(host.querySelector('[role="dialog"]')).toBeNull();
 });
 
-it("shows Program on the row edge, a screen as a dot on the menu, and toggles Program and a screen on their own", async () => {
+it("shows Program on the row edge, a screen it was put on as a dot on the menu, and toggles Program and a screen on their own", async () => {
   const state = roomState();
   const credit = state.session.credits[0]!;
   state.stage = { ...state.stage, lowerThird: credit };
@@ -160,9 +160,9 @@ it("shows Program on the row edge, a screen as a dot on the menu, and toggles Pr
   const bands = host.querySelectorAll(".pk-live-person .pk-live-tally-bands > [data-tally]");
   expect([...bands].map((band) => band.getAttribute("data-tally"))).toEqual(["program"]);
   const menu = () => host!.querySelector<HTMLButtonElement>(`button[aria-label="${credit.name} actions"]`)!;
-  // The projector syncs with Program, so it shows the live lower third: a ring, not a dot.
-  expect(menu().querySelector('.pk-live-screen-dots > [data-tally="projector"][data-following]')).not.toBeNull();
-  expect(menu().getAttribute("title")).toBe("Room screens and more actions. On Projector because it is live.");
+  // The lower third captions the stream's camera, so a projector that syncs with Program does not copy it.
+  expect(menu().querySelector(".pk-live-screen-dots")).toBeNull();
+  expect(menu().getAttribute("title")).toBe("Room screens and more actions.");
   const program = host.querySelector<HTMLButtonElement>(`button[aria-label="Show ${credit.name} on air"]`)!;
   expect(program.getAttribute("aria-pressed")).toBe("true");
   program.click();

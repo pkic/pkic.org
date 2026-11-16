@@ -16,6 +16,8 @@ export const liveTokens = {
   "live-board-headline-type-compact": "52px",
   "live-board-body-type": "34px",
   "live-control-scrim": "rgba(0, 0, 0, 0.6)",
+  // What a tally tone is deepened toward, so white text on it stays legible in both themes.
+  "live-shade": "#000",
   // The timer on air: its label and digits on a plate, larger where it has no plate or sits on a board.
   "live-timer-label-type": "20px",
   "live-timer-type": "60px",

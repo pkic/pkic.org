@@ -73,7 +73,6 @@
     --pk-chrome-raised: #111111;
     --pk-on-solid-ink: #212529;
     --pk-danger-strong: color-mix(in oklab, var(--pk-danger) 62%, #000);
-    --pk-shade: #000;
     --pk-accent-on: var(--pk-on-solid);
     --pk-grad-tonal: linear-gradient(135deg, var(--pk-accent-deep), var(--pk-accent-lift));
     --pk-grad-duo: linear-gradient(135deg, var(--pk-accent-deep) 0%, var(--pk-accent) 45%, var(--pk-accent-2) 100%);

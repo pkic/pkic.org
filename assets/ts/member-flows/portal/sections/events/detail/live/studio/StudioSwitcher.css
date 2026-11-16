@@ -30,7 +30,7 @@
   }
   .pk-studio-transition__split > .pk-btn:hover:not(:disabled),
   .pk-studio-transition__split .pk-studio-transition__target:hover {
-    background: color-mix(in oklab, var(--tally-solid) 85%, var(--pk-shade));
+    background: color-mix(in oklab, var(--tally-solid) 85%, var(--pk-live-shade));
   }
   /* The Undo after a clear, above the panels at the foot of the window, out of the way of the header. */
   .pk-studio__toast {

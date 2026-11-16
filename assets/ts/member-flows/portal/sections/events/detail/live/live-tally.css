@@ -21,7 +21,7 @@
    */
   [data-tally] {
     --tally-line: solid;
-    --tally-solid: color-mix(in oklab, var(--tally) 72%, var(--pk-shade));
+    --tally-solid: color-mix(in oklab, var(--tally) 72%, var(--pk-live-shade));
   }
   [data-tally="preview"] {
     --tally: var(--live-tally-preview);

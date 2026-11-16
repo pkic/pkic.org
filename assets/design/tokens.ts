@@ -469,8 +469,6 @@ export const constants = {
   // button with it and writing in white gave 2.6:1. A destructive fill gets
   // the same darkening an accent fill does.
   "danger-strong": "color-mix(in oklab, var(--pk-danger) 62%, #000)",
-  // What a tone is deepened toward, so white text on it stays legible in both themes.
-  shade: "#000",
   "accent-on": "var(--pk-on-solid)",
   "grad-tonal": "linear-gradient(135deg, var(--pk-accent-deep), var(--pk-accent-lift))",
   "grad-duo": "linear-gradient(135deg, var(--pk-accent-deep) 0%, var(--pk-accent) 45%, var(--pk-accent-2) 100%)",
