@@ -355,7 +355,8 @@ export const registrationTicketSchema = z.object({
   ticketName: z.string(),
   source: ticketAssignmentSourceSchema,
   status: registrationTicketStatusSchema,
-  amount: amountSchema,
+  /** A total over the days attended, so it follows the quote's total, not one price. */
+  amount: totalAmountSchema,
   currency: stripeCurrencySchema,
   codeLabel: z.string().nullable(),
   paidAt: utcInstantSchema.nullable(),

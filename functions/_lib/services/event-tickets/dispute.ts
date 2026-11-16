@@ -28,6 +28,7 @@ interface DisputedTicketRow {
   id: string;
   ticket_key: string;
   status: string;
+  revision: number;
   dispute_reason: string | null;
   dispute_resolved_at: string | null;
   identity_id: string | null;
@@ -47,7 +48,7 @@ export async function reviewDisputedTicket(
 ): Promise<void> {
   const row = await first<DisputedTicketRow>(
     db,
-    `SELECT ticket.id, type.ticket_key, ticket.status, ticket.dispute_reason, ticket.dispute_resolved_at,
+    `SELECT ticket.id, type.ticket_key, ticket.status, ticket.revision, ticket.dispute_reason, ticket.dispute_resolved_at,
             user.email, user.id AS user_id, event.name AS event_name, event.slug AS event_slug,
             registration.registration_identity_id AS identity_id
      FROM registration_tickets ticket
@@ -74,10 +75,11 @@ export async function reviewDisputedTicket(
     preparePermissionsAuthorizationGuard(db, actor, [
       { permission: "events:write", context: { type: "event", id: event.id } },
     ]),
-    // Another organizer may have settled this dispute meanwhile; then nothing of this review is written.
+    // The ticket is settled only as it was reviewed: another organizer may have settled it, or the person
+    // may have registered again for another ticket; then nothing of this review is written.
     prepareStateGuard(db, {
-      sql: `SELECT 1 FROM registration_tickets WHERE id = ? AND dispute_resolved_at IS NULL${decision === "move" ? " AND status <> 'paid'" : ""}`,
-      bindings: [row.id],
+      sql: `SELECT 1 FROM registration_tickets WHERE id = ? AND revision = ? AND dispute_resolved_at IS NULL${decision === "move" ? " AND status <> 'paid'" : ""}`,
+      bindings: [row.id, row.revision],
     }),
     prepareAuditLog(db, "user", actor.id, "registration_ticket_dispute_settled", "registration", registrationId, {
       eventId: event.id,

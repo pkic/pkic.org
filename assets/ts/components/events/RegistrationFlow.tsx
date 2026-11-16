@@ -91,6 +91,8 @@ export function RegistrationFlow(props: Props) {
     lastName: initial?.user.last_name ?? "",
   });
   const [busy, setBusy] = useState(false);
+  // Set at once on submit: the busy state only reaches the form after the next render.
+  const submitting = useRef(false);
   const [error, setError] = useState("");
   const [attendance, setAttendance] = useState(initial?.dayAttendance ?? []);
   const pricing = useAttendancePricing();
@@ -291,19 +293,36 @@ export function RegistrationFlow(props: Props) {
         onSubmit={(event) => {
           event.preventDefault();
           void (async () => {
-            if (busy || !available || (props.mode === "create" && !invitation.current?.canSubmit())) return;
+            if (submitting.current || busy || !available) return;
+            if (props.mode === "create" && !invitation.current?.canSubmit()) return;
             setError("");
-            // The ticket, code or reason chosen a moment ago is kept before the registration is made with it.
-            if (pricing?.settle) await pricing.settle();
+            // The form is locked while the ticket step saves: nothing is submitted twice or changed underneath it.
+            if (pricing?.settle) {
+              submitting.current = true;
+              setBusy(true);
+              try {
+                // The ticket, code or reason chosen a moment ago is kept before the registration is made with it.
+                await pricing.settle();
+              } catch {
+                submitting.current = false;
+                setBusy(false);
+                return setError("Your ticket could not be saved. Check it and try again.");
+              }
+            }
+            const release = () => {
+              submitting.current = false;
+              setBusy(false);
+            };
             if (!updating) {
               const contact = contactContract.submit();
-              if (!contact.data) return setError(contact.formMessage ?? "");
-              if (organization.current.validate?.() === false) return;
+              if (!contact.data) return (release(), setError(contact.formMessage ?? ""));
+              if (organization.current.validate?.() === false) return release();
             }
             const answered = currentQuestions.current.submit();
             let checked = contract.submit();
-            if (!answered.data) return setError(answered.formMessage ?? "");
-            if (!checked.data) return setError(checked.formMessage ?? "");
+            if (!answered.data) return (release(), setError(answered.formMessage ?? ""));
+            if (!checked.data) return (release(), setError(checked.formMessage ?? ""));
+            submitting.current = true;
             setBusy(true);
             try {
               if (!updating && organization.current.prepare) {
@@ -333,10 +352,12 @@ export function RegistrationFlow(props: Props) {
                 setError(contract.refuse(cause));
               }
             } finally {
+              submitting.current = false;
               setBusy(false);
             }
           })().catch(() => {
             setError("Could not save changes. Please try again.");
+            submitting.current = false;
             setBusy(false);
           });
         }}

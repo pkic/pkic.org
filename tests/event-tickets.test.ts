@@ -24,7 +24,9 @@ import { quoteEventTicket, readEventTicketOffer } from "../functions/_lib/servic
 import {
   isTicketCodeExhausted,
   planRegistrationTicket,
+  assertRegistrationTicketRestorable,
   prepareCancelRegistrationTicket,
+  prepareRestoreRegistrationTicket,
   readRegistrationTicket,
 } from "../functions/_lib/services/event-tickets/registration-ticket";
 import {
@@ -536,6 +538,105 @@ describe("event tickets", () => {
     expect(calls.at(-1)).toContain("amount=19500");
     expect(await read()).toMatchObject({ status: "canceled", refundPending: false, refundFailed: false });
     expect(await processTicketRefunds(env.DB, paymentEnv, 5, provider)).toEqual({ processed: 0, failed: 0 });
+  });
+
+  it("applies refund facts in the provider's order and takes back only what a failed refund had added", async () => {
+    const { event } = await seedTickets();
+    const { registration, user } = await register(event, "refund-order@gmail.com");
+    const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+    await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+    const read = () => readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id });
+    await paidEvent((await read())!.id, "cs_test_ticket", 19500);
+    const charge = (id: string, created: number, amount: number, refunded = false) =>
+      handleEventTicketStripeEvent(env.DB, {
+        id,
+        type: "charge.refunded",
+        created,
+        data: { object: { id: "ch_synthetic", payment_intent: "pi_synthetic", refunded, amount_refunded: amount } },
+      });
+    const failed = (id: string, created: number, refund: string, refundCreated: number, amount: number) =>
+      handleEventTicketStripeEvent(env.DB, {
+        id,
+        type: "refund.failed",
+        created,
+        data: {
+          object: { id: refund, payment_intent: "pi_synthetic", amount, status: "failed", created: refundCreated },
+        },
+      });
+    // 2000 was returned at the provider. A second refund of 17500 fails before any total included it:
+    // the 2000 that did go back stays counted.
+    await charge("evt_total_1", 1000, 2000);
+    await failed("evt_failed_1", 1200, "re_never_counted", 1100, 17500);
+    expect(await read()).toMatchObject({ status: "paid", refundedAmount: 2000 });
+    // The total that did include it arrives late, after the failure: it is older than the failure and is left out.
+    await charge("evt_total_late", 1150, 19500, true);
+    expect(await read()).toMatchObject({ status: "paid", refundedAmount: 2000 });
+    // A refund the last applied total did include is taken off when it fails.
+    await charge("evt_total_2", 1300, 5000);
+    await failed("evt_failed_2", 1400, "re_counted", 1250, 3000);
+    await failed("evt_failed_2_again", 1401, "re_counted", 1250, 3000);
+    expect(await read()).toMatchObject({ status: "paid", refundedAmount: 2000 });
+  });
+
+  it("returns a payment made on a page for an earlier price and leaves the ticket to be paid", async () => {
+    const { event } = await seedTickets();
+    const { registration, user } = await register(event, "old-price@gmail.com");
+    const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+    await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+    const read = () => readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id });
+    const ticket = (await read())!;
+    await env.DB.prepare("UPDATE registration_tickets SET amount = 39500 WHERE id = ?").bind(ticket.id).run();
+    // The page asked for 19500 and that is what was paid, but the ticket costs 39500 by now.
+    expect(await paidEvent(ticket.id, "cs_test_ticket", 19500)).toMatchObject({ outcome: "returned" });
+    expect(await read()).toMatchObject({ status: "pending_payment", amount: 39500, refundPending: true });
+    expect(
+      await env.DB.prepare("SELECT amount, payment_intent_id FROM registration_ticket_refunds WHERE ticket_id = ?")
+        .bind(ticket.id)
+        .first(),
+    ).toEqual({ amount: 19500, payment_intent_id: "pi_synthetic" });
+  });
+
+  it("does not restore a code-backed ticket once its pass went to someone else", async () => {
+    const { event, admin, vendor } = await seedTickets();
+    const code = await createEventTicketCode(env.DB, admin, event, {
+      ticketTypeId: vendor.id,
+      label: "Example sponsor: staff",
+      discount: "amount",
+      amount: 0,
+      maxUses: 1,
+    });
+    const claim = async (email: string) => {
+      const user = await findOrCreateUser(env.DB, { email, firstName: "A", lastName: "B" });
+      await quoteEventTicket(
+        env.DB,
+        {},
+        event,
+        { userId: user.id, email },
+        {
+          dayAttendance: inPerson,
+          code: code.code,
+          save: true,
+        },
+      );
+      return register(event, email);
+    };
+    const first = await claim("first@sponsor-example.test");
+    const now = new Date().toISOString();
+    await env.DB.batch(prepareCancelRegistrationTicket(env.DB, first.registration.id, now));
+    await claim("second@sponsor-example.test");
+    await expect(assertRegistrationTicketRestorable(env.DB, first.registration.id)).rejects.toMatchObject({
+      code: "TICKET_CODE_USED_UP",
+    });
+    // The write itself refuses too, so a pass taken between the check and the write is not handed out twice.
+    await expect(
+      env.DB.batch(prepareRestoreRegistrationTicket(env.DB, first.registration.id, now)),
+    ).rejects.toBeTruthy();
+    expect(
+      await env.DB.prepare("SELECT used_count FROM event_ticket_codes WHERE id = ?").bind(code.id).first(),
+    ).toEqual({ used_count: 1 });
+    expect(
+      await readRegistrationTicket(env.DB, { eventId: event.id, registrationId: first.registration.id }),
+    ).toMatchObject({ status: "canceled" });
   });
 
   it("gives each active sponsor its two codes from its tier and only ever raises their limits", async () => {

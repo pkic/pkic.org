@@ -8,6 +8,7 @@ import { createScheduledRegistration } from "./helpers/scheduled-registration";
 import {
   ownUnfinishedRegistrationSchema,
   unfinishedRegistrationNoteListQuerySchema,
+  unfinishedRegistrationNoteListSchema,
   unfinishedRegistrationSummarySchema,
 } from "../assets/shared/schemas/unfinished-registrations";
 import { findOrCreateUser } from "../functions/_lib/services/users";
@@ -23,10 +24,11 @@ const HOUR = 3_600_000;
 const ago = (hours: number) => new Date(Date.now() - hours * HOUR).toISOString();
 
 let eventId: string;
+let admin: Awaited<ReturnType<typeof seedEventAndAdmin>>["admin"];
 
 beforeEach(async () => {
   await resetDb();
-  ({ eventId } = await seedEventAndAdmin(env.DB));
+  ({ eventId, admin } = await seedEventAndAdmin(env.DB));
   await env.DB.batch([
     // The event is always ahead of the test's clock.
     env.DB.prepare("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?").bind(
@@ -142,6 +144,17 @@ it("lets the person say they are not registering, which stops reminders and reac
     page: { total: 1 },
   });
   expect((await callApi(env, `${path}/notes`, authorized)).status).toBe(403);
+  // An organizer reads the notes through the mounted route, which also refuses a query outside its contract.
+  const organizerToken = await createMemberSession(env.DB, admin.id, `session-${crypto.randomUUID()}`);
+  const organizer = { headers: { cookie: `pkic_session=${organizerToken}` } };
+  const listed = await callApi(env, `${path}/notes?limit=10&sort=-stoppedAt`, organizer);
+  expect(listed.status).toBe(200);
+  expect(unfinishedRegistrationNoteListSchema.parse(await listed.json())).toMatchObject({
+    notes: [{ reasonCode: "price", note: "Our budget is frozen this year." }],
+    page: { limit: 10, total: 1, hasMore: false },
+  });
+  expect((await callApi(env, `${path}/notes?sort=unknown`, organizer)).status).toBe(400);
+  expect((await callApi(env, `${path}/notes?limit=101`, organizer)).status).toBe(400);
 
   // Saying no is not final: once they register after all, they count as registered, not as stopped.
   await createScheduledRegistration(env.DB, {

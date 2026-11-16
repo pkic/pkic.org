@@ -1,6 +1,6 @@
 import { userSessionRequestAuthorizationEvidence } from "../../auth/user-session-evidence";
 import { AppError } from "../../errors";
-import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { isAuthorizationGuardFailure, isStateGuardFailure } from "../../db/authorization-guard";
 import { isAuditChangeGuardFailure } from "../audit";
 import { prepareRegistrationIdentityChange, registrationIdentityChangeEvidence } from "./change-identity";
 import type { DatabaseLike, D1StatementResult, StatementLike } from "../../types";
@@ -79,6 +79,8 @@ async function executeRegistrationUpdate<T>(
     if (isDayWaitlistOfferUnavailable(error)) {
       throw dayWaitlistOfferUnavailableError();
     }
+    // Something the change depended on moved between the plan and the write, such as a ticket's code being used up.
+    if (isStateGuardFailure(error)) throw registrationChangedError();
     throw error;
   }
 }

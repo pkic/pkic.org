@@ -15,6 +15,7 @@ import {
   eventTicketQuoteSchema,
   type EventTicketOffer,
   type EventTicketQuote,
+  type EventTicketQuoteRequest,
 } from "../../../../shared/schemas/event-tickets";
 import { formatTicketAmount } from "../../../../shared/event-ticket-display";
 import { formatCalendarDate, formatZoneCity } from "../../../../shared/format-date";
@@ -93,14 +94,11 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
   const [selection, setSelection] = useState<Readonly<Record<string, string>>>({});
   const [quote, setQuote] = useState<EventTicketQuote | null>(null);
   const [quoteError, setQuoteError] = useState("");
-  const generation = useRef(0);
   // Saves reach the server one at a time and in order, so an older choice never lands after a newer one.
   const saves = useRef<Promise<void>>(Promise.resolve());
-  const queued = useRef<(() => void) | null>(null);
-  const settle = useCallback(async () => {
-    queued.current?.();
-    await saves.current;
-  }, []);
+  // The request for what is on screen now, known the moment it renders, and the last one the server kept.
+  const latest = useRef<{ key: string; request: EventTicketQuoteRequest } | null>(null);
+  const saved = useRef<string | null>(null);
 
   const selectable = useMemo(() => offer.data?.tickets.filter((ticket) => ticket.selectable) ?? [], [offer.data]);
   const assignedKey = offer.data?.assigned?.ticketKey ?? null;
@@ -133,12 +131,11 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
   const refuse = useRef(form.refuse);
   refuse.current = form.refuse;
 
-  useEffect(() => {
-    if (!enabled) return;
-    if (mustChoose) return setQuote(null);
-    // A dispute is only sent once it has a reason; until then the decided ticket is priced.
+  // A dispute is only sent once it has a reason; until then the decided ticket is priced.
+  const request = useMemo(() => {
+    if (!enabled || mustChoose) return null;
     const ticketKey = disputed && !reason.trim() ? undefined : (chosen ?? undefined);
-    const request = eventTicketQuoteRequestSchema.parse({
+    return eventTicketQuoteRequestSchema.parse({
       dayAttendance,
       ticketKey: code ? undefined : ticketKey,
       code: code || undefined,
@@ -146,34 +143,52 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
       identityId: identityId || undefined,
       save: true,
     });
-    const mine = (generation.current += 1);
-    const send = () => {
-      // Sent once: by the delay, or sooner when the registration is submitted.
-      if (queued.current !== send) return;
-      queued.current = null;
-      saves.current = saves.current.then(() =>
-        postJson(`${endpoint}/quote`, request, eventTicketQuoteSchema)
-          .then((result) => {
-            if (mine !== generation.current) return;
-            setQuote(result);
-            setQuoteError("");
-          })
-          .catch((error: unknown) => {
-            if (mine !== generation.current) return;
+  }, [enabled, dayAttendance, chosen, code, disputed, reason, mustChoose, identityId]);
+  latest.current = request ? { key: JSON.stringify(request), request } : null;
+
+  /** Keeps one choice on the server, after every save before it. Rejects when the server did not keep it. */
+  const save = useCallback(
+    (entry: { key: string; request: EventTicketQuoteRequest }) => {
+      const run = saves.current.then(async () => {
+        if (saved.current === entry.key) return;
+        try {
+          const result = await postJson(`${endpoint}/quote`, entry.request, eventTicketQuoteSchema);
+          saved.current = entry.key;
+          if (latest.current?.key !== entry.key) return;
+          setQuote(result);
+          setQuoteError("");
+        } catch (error) {
+          // What the server holds after a failure is not known for sure, so the next choice is always sent.
+          saved.current = null;
+          if (latest.current?.key === entry.key) {
             const message = refuse.current(error);
             // A refused code is dropped so the person keeps a price for the ticket they had.
-            if (code) setCode("");
+            if (entry.request.code) setCode("");
             else setQuoteError(message);
-          }),
-      );
-    };
-    queued.current = send;
-    const timer = setTimeout(send, 250);
-    return () => {
-      clearTimeout(timer);
-      if (queued.current === send) queued.current = null;
-    };
-  }, [enabled, endpoint, dayAttendance, chosen, code, disputed, reason, mustChoose, identityId]);
+          }
+          throw error;
+        }
+      });
+      saves.current = run.catch(() => undefined);
+      return run;
+    },
+    [endpoint],
+  );
+  // What the registration waits for: the choice on screen now is kept, or the registration does not go ahead.
+  const settle = useCallback(async () => {
+    if (latest.current) await save(latest.current);
+  }, [save]);
+
+  const requestKey = latest.current?.key ?? null;
+  useEffect(() => {
+    if (!enabled) return;
+    if (!requestKey) return setQuote(null);
+    const timer = setTimeout(() => {
+      const entry = latest.current;
+      if (entry?.key === requestKey) save(entry).catch(() => undefined);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [enabled, requestKey, save]);
 
   const onSelection = useCallback((selected: Readonly<Record<string, string>>) => setSelection(selected), []);
 

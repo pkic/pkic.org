@@ -119,13 +119,17 @@ export function prepareCompleteRefund(
   return [
     db
       .prepare(
-        `UPDATE registration_tickets SET status = 'refunded', refunded_amount = amount, revision = revision + 1, updated_at = ?
+        `UPDATE registration_tickets SET status = 'refunded', refunded_amount = amount, refunds_seen_at = ?,
+           revision = revision + 1, updated_at = ?
          WHERE status = 'paid' AND EXISTS (${pending})`,
       )
-      .bind(now, match.value),
+      .bind(now, now, match.value),
+    // The row counts toward its ticket only when it returned the payment that settled it.
     db
       .prepare(
         `UPDATE registration_ticket_refunds AS refund SET completed_at = ?, submitted_at = COALESCE(submitted_at, ?),
+           counted = EXISTS (SELECT 1 FROM registration_tickets ticket
+                             WHERE ticket.id = refund.ticket_id AND ticket.payment_intent_id = refund.payment_intent_id),
            last_error = NULL, lease_token = NULL, lease_expires_at = NULL
          WHERE refund.${match.column} = ? AND ${OPEN_REFUND_SQL}`,
       )
@@ -135,16 +139,30 @@ export function prepareCompleteRefund(
 
 /**
  * What a refund the provider failed or canceled does, once for each refund:
- * the amount counts as not returned again, a ticket it had refunded is paid
- * again, and the row is failed so an organizer can ask once more. A refund
- * issued at the provider has no row yet and gets one, which is what makes a
- * second delivery of the failure change nothing.
+ * what it had added to the ticket's refunded amount is taken off again, a
+ * ticket it had refunded is paid again, and the row is failed so an organizer
+ * can ask once more. Only an amount that was counted is taken off: a refund
+ * of ours that was counted, or one issued at the provider before the last
+ * total the provider reported. A refund issued at the provider has no row yet
+ * and gets one, which is what makes a second delivery of the failure change
+ * nothing. `at` is the provider's time of the failure, so an older total that
+ * arrives afterwards is not applied over it.
  */
 export function prepareFailRefund(
   db: DatabaseLike,
-  input: { ticketId: string; providerRefundId: string; paymentIntentId: string; amount: number; reason: string },
+  input: {
+    ticketId: string;
+    providerRefundId: string;
+    paymentIntentId: string;
+    amount: number;
+    reason: string;
+    /** When the provider made the refund, for one that has no row here. */
+    refundCreatedAt?: string | null;
+    at: string;
+  },
   now: string,
 ): StatementLike[] {
+  const known = "SELECT 1 FROM registration_ticket_refunds refund WHERE refund.provider_refund_id = ?";
   return [
     db
       .prepare(
@@ -152,10 +170,27 @@ export function prepareFailRefund(
            status = CASE WHEN status = 'refunded' THEN 'paid' ELSE status END,
            revision = revision + 1, updated_at = ?
          WHERE id = ? AND payment_intent_id = ?
-           AND NOT EXISTS (SELECT 1 FROM registration_ticket_refunds refund
-                           WHERE refund.provider_refund_id = ? AND refund.failed_at IS NOT NULL)`,
+           AND NOT EXISTS (${known} AND refund.failed_at IS NOT NULL)
+           AND (EXISTS (${known} AND refund.counted = 1)
+                OR (NOT EXISTS (${known}) AND ? IS NOT NULL AND refunds_seen_at IS NOT NULL AND ? <= refunds_seen_at))`,
       )
-      .bind(input.amount, now, input.ticketId, input.paymentIntentId, input.providerRefundId),
+      .bind(
+        input.amount,
+        now,
+        input.ticketId,
+        input.paymentIntentId,
+        input.providerRefundId,
+        input.providerRefundId,
+        input.providerRefundId,
+        input.refundCreatedAt ?? null,
+        input.refundCreatedAt ?? null,
+      ),
+    db
+      .prepare(
+        `UPDATE registration_tickets SET refunds_seen_at = ?
+         WHERE id = ? AND payment_intent_id = ? AND (refunds_seen_at IS NULL OR refunds_seen_at < ?)`,
+      )
+      .bind(input.at, input.ticketId, input.paymentIntentId, input.at),
     db
       .prepare(
         `INSERT INTO registration_ticket_refunds
@@ -164,7 +199,7 @@ export function prepareFailRefund(
          VALUES (?, ?, ?, ?, 'Refunded at the payment provider', ?, ?, ?, ?, ?, ?)
          ON CONFLICT(provider_refund_id) DO UPDATE SET
            failed_at = COALESCE(registration_ticket_refunds.failed_at, excluded.failed_at), completed_at = NULL,
-           last_error = excluded.last_error, lease_token = NULL, lease_expires_at = NULL`,
+           counted = 0, last_error = excluded.last_error, lease_token = NULL, lease_expires_at = NULL`,
       )
       .bind(
         uuid(),
@@ -178,6 +213,48 @@ export function prepareFailRefund(
         input.reason.slice(0, 200),
         now,
       ),
+  ];
+}
+
+/**
+ * Applies the provider's own total of what a payment has returned. The total
+ * is the truth as of `at`, so one older than a refund fact already applied is
+ * left out: events can arrive in any order.
+ */
+export function prepareRefundedTotal(
+  db: DatabaseLike,
+  input: { ticketId: string; paymentIntentId: string; refunded: number; full: boolean; at: string },
+  now: string,
+): StatementLike[] {
+  return [
+    db
+      .prepare(
+        `UPDATE registration_tickets SET refunded_amount = CASE WHEN ? = 1 THEN amount ELSE MIN(amount, ?) END,
+           status = CASE WHEN ? = 1 AND status = 'paid' THEN 'refunded' ELSE status END,
+           refunds_seen_at = ?, revision = revision + 1, updated_at = ?
+         WHERE id = ? AND payment_intent_id = ? AND (refunds_seen_at IS NULL OR refunds_seen_at <= ?)`,
+      )
+      .bind(
+        input.full ? 1 : 0,
+        input.refunded,
+        input.full ? 1 : 0,
+        input.at,
+        now,
+        input.ticketId,
+        input.paymentIntentId,
+        input.at,
+      ),
+    // Every refund of ours that the provider holds is part of the total just applied.
+    db
+      .prepare(
+        `UPDATE registration_ticket_refunds SET counted = 1,
+           completed_at = CASE WHEN ? = 1 THEN COALESCE(completed_at, ?) ELSE completed_at END
+         WHERE payment_intent_id = ? AND submitted_at IS NOT NULL AND failed_at IS NULL
+           AND EXISTS (SELECT 1 FROM registration_tickets ticket
+                       WHERE ticket.id = registration_ticket_refunds.ticket_id AND ticket.payment_intent_id = ?
+                         AND ticket.refunds_seen_at = ?)`,
+      )
+      .bind(input.full ? 1 : 0, now, input.paymentIntentId, input.paymentIntentId, input.at),
   ];
 }
 
@@ -246,8 +323,9 @@ export async function processTicketRefunds(
               ticketId: refund.ticket_id,
               providerRefundId: created.id,
               paymentIntentId: refund.payment_intent_id,
-              amount: 0,
+              amount: refund.amount,
               reason: `Refund ${created.status} at the payment provider`,
+              at,
             },
             at,
           ),

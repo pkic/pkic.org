@@ -16,7 +16,12 @@ import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareStripePaymentEvent } from "../payments/ledger";
-import { prepareCompleteRefund, prepareFailRefund, prepareReturnUnneededPayment } from "./refunds";
+import {
+  prepareCompleteRefund,
+  prepareFailRefund,
+  prepareRefundedTotal,
+  prepareReturnUnneededPayment,
+} from "./refunds";
 
 type StripeEvent = z.infer<typeof stripeEventEnvelopeSchema>;
 
@@ -103,16 +108,28 @@ export async function openTicketCheckout(
   // A session opened for another amount or ticket is closed, never offered again: paying it would not settle this ticket.
   if (attempt && attempt.expires_at > now && !checkoutMatchesTicket(attempt, ticket)) {
     // The old session is replaced only once the provider confirms it can no longer be paid.
+    // An attempt without a session may be one another request is creating right now. Asking for it again
+    // with its own key returns that same session, so it is known and closed before anything replaces it.
+    const sessionId =
+      attempt.provider_session_id ??
+      (
+        await createStripeCheckoutSession(env.STRIPE_SECRET_KEY, new URLSearchParams(attempt.request_params ?? ""), {
+          idempotencyKey: `registration-ticket:${attempt.id}`,
+          fetcher,
+          apiBase: env.STRIPE_API_BASE,
+        }).catch(() => null)
+      )?.id;
     if (
-      attempt.provider_session_id &&
-      !(await expireStripeCheckoutSession(env.STRIPE_SECRET_KEY, attempt.provider_session_id, {
-        fetcher,
-        apiBase: env.STRIPE_API_BASE,
-      }))
+      !sessionId ||
+      !(await expireStripeCheckoutSession(env.STRIPE_SECRET_KEY, sessionId, { fetcher, apiBase: env.STRIPE_API_BASE }))
     )
       throw new AppError(503, "PAYMENT_UNAVAILABLE", "Payment is not available right now. Try again later.");
     await db.batch([
-      db.prepare("UPDATE registration_ticket_checkouts SET expires_at = ? WHERE id = ?").bind(now, attempt.id),
+      db
+        .prepare(
+          "UPDATE registration_ticket_checkouts SET expires_at = ?, provider_session_id = COALESCE(provider_session_id, ?) WHERE id = ?",
+        )
+        .bind(now, sessionId, attempt.id),
     ]);
     attempt = null;
   }
@@ -238,6 +255,7 @@ interface StripeObjectFields {
   amount_refunded?: number | null;
   status?: string | null;
   failure_reason?: string | null;
+  created?: number | null;
   refunded?: boolean;
   currency?: string | null;
   payment_status?: string | null;
@@ -271,8 +289,15 @@ interface SettlementRow {
   status: string;
   payment_intent_id: string | null;
   held_email_id: string | null;
+  request_params: string | null;
   recorded: number;
 }
+
+/** A provider timestamp in seconds as a UTC instant; null when it is not one. */
+const providerInstant = (seconds: unknown): string | null =>
+  typeof seconds === "number" && Number.isInteger(seconds) && seconds >= 0
+    ? new Date(seconds * 1000).toISOString()
+    : null;
 
 /** Stripe's events about one refund, by whichever name the account's API version sends them. */
 const REFUND_EVENT_TYPES = ["refund.updated", "refund.failed", "charge.refund.updated"];
@@ -293,7 +318,7 @@ export async function handleEventTicketStripeEvent(
   const row = await first<SettlementRow>(
     db,
     `SELECT ticket.id AS ticket_id, checkout.id AS checkout_id, ticket.amount, ticket.currency, ticket.status,
-            ticket.payment_intent_id, ticket.held_email_id,
+            ticket.payment_intent_id, ticket.held_email_id, checkout.request_params,
             EXISTS (SELECT 1 FROM registration_ticket_payment_events seen WHERE seen.provider_event_id = ?3) AS recorded
      FROM registration_ticket_checkouts checkout JOIN registration_tickets ticket ON ticket.id = checkout.ticket_id
      WHERE (?1 IS NOT NULL AND checkout.provider_session_id = ?1)
@@ -304,6 +329,8 @@ export async function handleEventTicketStripeEvent(
   if (!row) return { received: true, outcome: "unknown_ticket" };
   if (row.recorded) return { received: true, outcome: "duplicate" };
   const now = nowIso();
+  // When the provider says this happened: refund facts are applied in that order, not in the order they arrive.
+  const eventAt = providerInstant((event as StripeEvent & { created?: unknown }).created) ?? now;
   const statements: StatementLike[] = [];
   let outcome = "ignored";
   const paidNow =
@@ -314,9 +341,16 @@ export async function handleEventTicketStripeEvent(
       object.metadata?.registrationTicketId === row.ticket_id &&
       object.amount_total === row.amount &&
       (object.currency ?? "").toLowerCase() === row.currency;
-    if (!matches) outcome = "rejected_mismatch";
-    else if (row.status !== "pending_payment") {
-      const settled = row.status === "paid" && object.payment_intent === row.payment_intent_id;
+    // A payment is ours when it is what its own payment page asked for, whatever the ticket costs by now.
+    const asked = new URLSearchParams(row.request_params ?? "");
+    const genuine =
+      object.metadata?.registrationTicketId === row.ticket_id &&
+      String(object.amount_total) === asked.get("line_items[0][price_data][unit_amount]") &&
+      (object.currency ?? "").toLowerCase() === asked.get("line_items[0][price_data][currency]");
+    if (!matches && !genuine) outcome = "rejected_mismatch";
+    else if (!matches || row.status !== "pending_payment") {
+      // Paid on a page for an earlier price, or for a ticket that no longer needs it: the money goes back.
+      const settled = matches && row.status === "paid" && object.payment_intent === row.payment_intent_id;
       outcome = settled ? "already_paid" : "returned";
       // Money that arrived for a ticket that no longer needs it keeps its payment reference and goes back.
       statements.push(
@@ -331,9 +365,10 @@ export async function handleEventTicketStripeEvent(
           prepareReturnUnneededPayment(db, {
             ticketId: row.ticket_id,
             paymentIntentId: object.payment_intent,
-            amount: row.amount,
-            reason:
-              row.status === "paid"
+            amount: object.amount_total ?? row.amount,
+            reason: !matches
+              ? "The payment was made on a page for an earlier price"
+              : row.status === "paid"
                 ? "A second payment arrived for a ticket that was already paid"
                 : "The payment arrived after the ticket no longer needed it",
             now,
@@ -387,24 +422,12 @@ export async function handleEventTicketStripeEvent(
       outcome = full ? "refunded" : "partially_refunded";
       // The provider's total is what was returned, whoever asked for it and wherever.
       statements.push(
-        db
-          .prepare(
-            `UPDATE registration_tickets SET refunded_amount = MAX(refunded_amount, MIN(amount, ?)),
-               status = CASE WHEN ? = 1 AND status = 'paid' THEN 'refunded' ELSE status END,
-               revision = revision + 1, updated_at = ?
-             WHERE id = ? AND payment_intent_id = ?`,
-          )
-          .bind(full ? row.amount : returned, full ? 1 : 0, now, row.ticket_id, object.payment_intent),
+        ...prepareRefundedTotal(
+          db,
+          { ticketId: row.ticket_id, paymentIntentId: object.payment_intent, refunded: returned, full, at: eventAt },
+          now,
+        ),
       );
-      if (full)
-        statements.push(
-          db
-            .prepare(
-              `UPDATE registration_ticket_refunds SET completed_at = ?, last_error = NULL
-               WHERE payment_intent_id = ? AND submitted_at IS NOT NULL AND completed_at IS NULL AND failed_at IS NULL`,
-            )
-            .bind(now, object.payment_intent),
-        );
     }
   } else if (REFUND_EVENT_TYPES.includes(event.type) && object.id && object.payment_intent) {
     if (object.status === "succeeded") {
@@ -421,6 +444,8 @@ export async function handleEventTicketStripeEvent(
             paymentIntentId: object.payment_intent,
             amount: Math.max(0, object.amount ?? 0),
             reason: `Refund ${object.status} at the payment provider${object.failure_reason ? `: ${object.failure_reason}` : ""}`,
+            refundCreatedAt: providerInstant(object.created),
+            at: eventAt,
           },
           now,
         ),
@@ -440,7 +465,9 @@ export async function handleEventTicketStripeEvent(
       db,
       "event",
       event,
-      ["rejected_mismatch", "partially_refunded", "other_payment_refunded"].includes(outcome) ? outcome : null,
+      ["rejected_mismatch", "partially_refunded", "other_payment_refunded", "returned"].includes(outcome)
+        ? outcome
+        : null,
     )),
   );
   try {

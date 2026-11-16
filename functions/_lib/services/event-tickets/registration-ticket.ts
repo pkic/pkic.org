@@ -328,10 +328,26 @@ export async function readRegistrationOwner(
   return row?.user_id ?? null;
 }
 
+/** A canceled ticket whose code can no longer give it a pass: every pass was claimed meanwhile, or the code was revoked. */
+const RESTORE_CODE_SPENT_SQL = `SELECT 1 FROM registration_tickets ticket JOIN event_ticket_codes code ON code.id = ticket.code_id
+  WHERE ticket.registration_id = ? AND ticket.status = 'canceled'
+    AND (code.used_count >= code.max_uses OR code.revoked_at IS NOT NULL)`;
+
+/** Refuses the restore of a registration whose ticket came from a code that has no pass left for it. */
+export async function assertRegistrationTicketRestorable(db: DatabaseLike, registrationId: string): Promise<void> {
+  if (await first(db, RESTORE_CODE_SPENT_SQL, [registrationId]))
+    throw new AppError(
+      409,
+      "TICKET_CODE_USED_UP",
+      "The code this ticket was issued with has no pass left. Ask the person to register again.",
+    );
+}
+
 /**
  * What restoring a canceled registration does to its ticket: it holds the same
  * ticket again at the price it had, free or still to be paid, and takes its
- * code's pass back while one is left. A ticket that was never canceled is untouched.
+ * code's pass back. Without a pass to take back nothing of the restore is
+ * written. A ticket that was never canceled is untouched.
  */
 export function prepareRestoreRegistrationTicket(
   db: DatabaseLike,
@@ -339,6 +355,11 @@ export function prepareRestoreRegistrationTicket(
   now: string,
 ): StatementLike[] {
   return [
+    // The pass may have gone to someone else since the check; then the ticket must not come back at the code's price.
+    prepareStateGuard(db, {
+      sql: `SELECT 1 WHERE NOT EXISTS (${RESTORE_CODE_SPENT_SQL})`,
+      bindings: [registrationId],
+    }),
     db
       .prepare(
         `UPDATE event_ticket_codes SET used_count = used_count + 1, updated_at = ?

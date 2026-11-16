@@ -178,6 +178,8 @@ CREATE TABLE registration_tickets (
   -- The payment that settled the ticket, and how much of it the provider has returned.
   payment_intent_id     TEXT,
   refunded_amount       INTEGER NOT NULL DEFAULT 0 CHECK (refunded_amount >= 0),
+  -- The provider's time of the newest refund fact applied; an older one that arrives later is not applied over it.
+  refunds_seen_at       TEXT,
   revision              INTEGER NOT NULL DEFAULT 0,
   created_at            TEXT    NOT NULL,
   updated_at            TEXT    NOT NULL
@@ -226,6 +228,8 @@ CREATE TABLE registration_ticket_refunds (
   submitted_at         TEXT,
   completed_at         TEXT,
   failed_at            TEXT,
+  -- Whether this refund's amount is part of its ticket's refunded amount, so a failure takes back only what was counted.
+  counted              INTEGER NOT NULL DEFAULT 0,
   last_error           TEXT,
   created_at           TEXT    NOT NULL
 );
