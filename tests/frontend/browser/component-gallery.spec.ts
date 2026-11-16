@@ -18,10 +18,23 @@ for (const fonts of ["site", "fallback"]) {
     await page.goto(`${gallery.resolvedUrls!.local[0]}?only=details`);
     const details = page.locator("section#details");
     await expect(details).toBeVisible();
-    await page.evaluate(() => document.fonts.ready);
 
     for (const width of [1440, 768, 375]) {
       await page.setViewportSize({ width, height: 900 });
+      await details.evaluate(async (section, loadSiteFonts) => {
+        if (loadSiteFonts) {
+          await Promise.all(
+            [...section.querySelectorAll("dt, dd")].map((element) => {
+              const style = getComputedStyle(element);
+              return document.fonts.load(
+                `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`,
+                element.textContent ?? "",
+              );
+            }),
+          );
+        }
+        await document.fonts.ready;
+      }, fonts === "site");
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
       const lists = details.locator("dl");
       await expect(lists).not.toHaveCount(0);
@@ -30,7 +43,7 @@ for (const fonts of ["site", "fallback"]) {
         expect(
           await list.evaluate((element) => {
             const bounds = element.getBoundingClientRect();
-            const container = element.parentElement!.getBoundingClientRect();
+            const container = element.closest(".pk-panel__body, td")!.getBoundingClientRect();
             return bounds.left >= container.left - 1 && bounds.right <= container.right + 1;
           }),
         ).toBe(true);
@@ -55,13 +68,19 @@ for (const fonts of ["site", "fallback"]) {
         }
       } else {
         for (const list of await lists.all()) {
-          expect(
-            await list.evaluate((element) => {
-              const term = element.querySelector("dt")!.getBoundingClientRect();
-              const value = element.querySelector("dd")!.getBoundingClientRect();
-              return value.top >= term.bottom && Math.abs(value.left - term.left) < 1;
-            }),
-          ).toBe(true);
+          const terms = list.locator("dt");
+          await expect(terms).not.toHaveCount(0);
+          for (const term of await terms.all()) {
+            expect(
+              await term.evaluate((element) => {
+                const value = element.nextElementSibling;
+                if (value?.tagName !== "DD") return false;
+                const termBounds = element.getBoundingClientRect();
+                const valueBounds = value.getBoundingClientRect();
+                return valueBounds.top >= termBounds.bottom && Math.abs(valueBounds.left - termBounds.left) < 1;
+              }),
+            ).toBe(true);
+          }
         }
       }
     }

@@ -65,7 +65,7 @@
     "format": "oxfmt \"functions/**/*.ts\" \"assets/ts/**/*.{ts,tsx}\" \"assets/shared/**/*.ts\" \"assets/design/**/*.ts\" \"tests/**/*.{ts,tsx}\"",
     "format:check": "oxfmt --check \"functions/**/*.ts\" \"assets/ts/**/*.{ts,tsx}\" \"assets/shared/**/*.ts\" \"assets/design/**/*.ts\" \"tests/**/*.{ts,tsx}\"",
     "check:static": "pnpm run typecheck && pnpm run lint && pnpm run lint:css && pnpm run lint:sql && pnpm run lint:architecture && pnpm run lint:api-contracts && pnpm run lint:duplication && pnpm run format:check && pnpm run check:max-lines && pnpm run check:filenames && pnpm run check:tokens && pnpm run check:design-isolation && pnpm run check:css-layers && pnpm run check:field-structure && pnpm run check:url-state && pnpm run check:form-contracts && pnpm run check:copy-terms && pnpm run check:e2e-selectors && pnpm run check:e2e-signin-budget && pnpm run check:flow-coverage && pnpm run check:bundles",
-    "check": "pnpm run check:static && pnpm run generate:public && pnpm run check:css-budget && pnpm run test",
+    "check": "pnpm run check:static && pnpm run generate:public && pnpm run check:css-budget && pnpm run test:gallery && pnpm run test",
     "migrate": "node scripts/apply-d1-migrations.mjs",
     "backup": "node scripts/backup-d1.mjs",
     "seed": "node scripts/seed.mjs",
