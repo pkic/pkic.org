@@ -101,6 +101,37 @@ describe("DescriptionList", () => {
     expect(compact.querySelector("dl")?.className).toContain("pk-datalist--compact");
   });
 
+  it("keeps repeated labels paired with their values after rows change", () => {
+    const container = mount(
+      <DescriptionList
+        items={[
+          { term: "Availability", value: "Listed on the organization page" },
+          { term: "Availability", value: "Not listed" },
+          { term: "Availability", value: "Only this person" },
+        ]}
+      />,
+    );
+    void act(() =>
+      render(
+        <DescriptionList
+          items={[
+            { term: "Availability", value: "Not listed" },
+            { term: "Availability", value: "Only this person" },
+          ]}
+        />,
+        container,
+      ),
+    );
+    expect(pairs(container)).toEqual([
+      ["Availability", "Not listed"],
+      ["Availability", "Only this person"],
+    ]);
+    void act(() =>
+      render(<DescriptionList items={[{ term: "Availability", value: "Signed-in members" }]} />, container),
+    );
+    expect(pairs(container)).toEqual([["Availability", "Signed-in members"]]);
+  });
+
   it("renders nothing but an empty list when there is nothing to show", () => {
     const container = mount(<DescriptionList items={[]} />);
     expect(container.querySelector("dl")?.children).toHaveLength(0);

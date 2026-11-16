@@ -23,7 +23,7 @@ import "./Content.css";
 import "./DescriptionList.css";
 
 export interface DescriptionListItem {
-  /** The label. Unique within one list — it is the row's key. */
+  /** The label. Labels may repeat within a list. */
   term: string;
   /** Anything renderable. Absent, empty or false renders as an em dash. */
   value?: ComponentChildren;
@@ -37,8 +37,7 @@ export interface DescriptionListProps {
    * decision inside the component instead of beside it.
    */
   density?: "default" | "compact";
-  /** Stack each value beneath its term when a narrow panel needs the full width. */
-  layout?: "default" | "status" | "stacked";
+  layout?: "default" | "status";
   /** Align text with values that include inline actions. */
   align?: "start" | "baseline";
 }
@@ -62,7 +61,6 @@ export function DescriptionList({
     "pk-datalist",
     density === "compact" ? "pk-datalist--compact" : null,
     layout === "status" ? "pk-datalist--status" : null,
-    layout === "stacked" ? "pk-datalist--stacked" : null,
     align === "baseline" ? "pk-datalist--baseline" : null,
   ]
     .filter(Boolean)
@@ -70,8 +68,8 @@ export function DescriptionList({
 
   return (
     <dl class={classes}>
-      {items.map((item) => (
-        <Fragment key={item.term}>
+      {items.map((item, index) => (
+        <Fragment key={`${index}:${item.term}`}>
           <dt>{item.term}</dt>
           <dd>{isAbsent(item.value) ? <span class="pk-datalist__empty">—</span> : item.value}</dd>
         </Fragment>

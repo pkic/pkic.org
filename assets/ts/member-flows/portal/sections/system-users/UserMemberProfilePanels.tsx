@@ -447,7 +447,7 @@ export function MemberPrivacyPanel({
     <Panel aria-label="Visibility">
       <PanelHeader title="Visibility" />
       <PanelBody>
-        <DescriptionList density="compact" layout="stacked" items={items} />
+        <DescriptionList density="compact" items={items} />
         <p class="pk-small pk-muted pk-user-footnote">
           Group rosters always show a member&rsquo;s name to that group, whatever is set here.
         </p>

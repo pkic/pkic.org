@@ -62,15 +62,8 @@
    */
   .pk-datalist {
     display: grid;
-    /*
-     * `minmax(0, …)` on both tracks rather than the bare `max-content 1fr` this
-     * started as. A grid track's automatic minimum is its content's minimum, so
-     * one unbreakable value — a URL, which is most of what these lists hold —
-     * made the value column wider than the list and pushed the terms off their
-     * own left edge. Floored at zero the track can be as narrow as the space
-     * allows, and the value wraps inside it instead.
-     */
-    grid-template-columns: var(--pk-datalist-term, minmax(0, max-content)) minmax(0, 1fr);
+    /* Keep long labels from consuming the value track, including unbroken names. */
+    grid-template-columns: var(--pk-datalist-term, fit-content(40%)) minmax(0, 1fr);
     gap: var(--pk-1) var(--pk-3);
     margin: 0;
   }
@@ -118,6 +111,8 @@
   }
 
   .pk-datalist > dt {
+    min-width: 0;
+    overflow-wrap: anywhere;
     color: var(--pk-ink-muted);
   }
 

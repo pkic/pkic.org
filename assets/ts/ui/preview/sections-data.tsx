@@ -143,6 +143,24 @@ export const dataSections: PreviewSection[] = [
     note: "Term and value pairs for a record: two densities, wrapping values, and an em dash where a value is missing.",
     render: () => (
       <div class="pk-preview__shelf--stack">
+        <div class="pk-preview__narrow">
+          <Panel>
+            <PanelHeader title="Visibility" />
+            <PanelBody>
+              <DescriptionList
+                density="compact"
+                items={[
+                  {
+                    term: "Synthetic Authority for Identity, Certificates, Customs and Port Security",
+                    value: "Listed on the organization page",
+                  },
+                  { term: "SyntheticOrganizationWithoutWordBreaks", value: "Not listed" },
+                  { term: "Availability", value: "Signed-in members" },
+                ]}
+              />
+            </PanelBody>
+          </Panel>
+        </div>
         <Panel>
           <PanelHeader title="Profile" />
           <PanelBody>
