@@ -138,6 +138,9 @@ jobs:
         with:
           publication-cache: "true"
 
+      - name: Check component gallery layouts
+        run: pnpm run test:gallery
+
       - name: Generate the public site
         timeout-minutes: 5
         run: pnpm run generate:public

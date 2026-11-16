@@ -34,6 +34,7 @@
     "test:frontend": "NODE_COMPILE_CACHE=node_modules/.cache/node-compile vitest run --config vitest.config.frontend.ts --configLoader runner",
     "test:tools": "NODE_COMPILE_CACHE=node_modules/.cache/node-compile vitest run --config vitest.config.tools.ts --configLoader runner",
     "test:migration:site": "PKIC_VALIDATE_SITE_MIGRATION=1 pnpm run test:worker tests/public-site-catalog.migration.ts",
+    "test:gallery": "playwright test --config playwright.gallery.config.ts",
     "test:e2e": "playwright test",
     "test:e2e:ci": "playwright test --config playwright.ci.config.ts",
     "test:e2e:parallel": "node scripts/e2e-parallel.mjs",
