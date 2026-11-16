@@ -14,8 +14,9 @@ import {
   badgeIssueRequestSchema,
   badgeIssueResponseSchema,
 } from "../../assets/shared/schemas/route-contracts-event-badges";
-import { confirmRegistration, ownDomainEmail, registerInBrowser } from "./helpers/registration";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
+import { ownDomainEmail, registerInBrowser } from "./helpers/registration";
+import { registerSignedIn } from "./helpers/registrant";
+import { capturedEmailCount, waitForCapturedEmail } from "./helpers/sendgrid";
 import { openScannerSessionDetails, queuedScanSchema } from "./helpers/scanner-recovery-storage";
 
 test("phone scanner guides staff through venue, search, offline entry and diagnostics", async ({
@@ -109,21 +110,17 @@ test("continuous local eligibility checks queue a burst while attempt uploads ar
   await waitForCapturedEmail(templateEmail, "registration is confirmed", { since: templateSince });
   const emails = Array.from({ length: 3 }, () => ownDomainEmail("fast-attendee"));
   for (const [index, email] of emails.entries()) {
-    const since = await capturedEmailCount();
-    const body = registrationCreateSchema.parse({
-      ...template.request,
-      email,
-      dayAttendance: template.request.dayAttendance?.map((day) => ({ ...day, attendanceType: "in_person" })),
-    });
-    const registered = await page.request.post("/api/v1/events/pqc-conference-amsterdam-nl/registrations", {
-      data: body,
-    });
-    expect(registered.status(), await registered.text()).toBe(200);
-    const confirmation = await waitForCapturedEmail(email, "Confirm your registration", { since });
-    await page.goto(extractEmailUrl(confirmation, "/register/confirm"));
     // Each address has its own domain, and a named organization belongs to the one domain that claimed it.
-    await confirmRegistration(page, `Fast Scanner Attendee Org ${index + 1} ${Date.now()}`);
-    await waitForCapturedEmail(email, "registration is confirmed", { since });
+    await registerSignedIn(
+      page,
+      "pqc-conference-amsterdam-nl",
+      registrationCreateSchema.parse({
+        ...template.request,
+        email,
+        dayAttendance: template.request.dayAttendance?.map((day) => ({ ...day, attendanceType: "in_person" })),
+      }),
+      { organization: `Fast Scanner Attendee Org ${index + 1} ${Date.now()}` },
+    );
   }
   await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-fast-scanner-burst"));
   const credentials: string[] = [];

@@ -1,6 +1,5 @@
 import { render, createRef, type ComponentChildren } from "preact";
 import type { RegistrationSubmissionResponse } from "../../shared/schemas/registration";
-import { Alert } from "../ui/Alert";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { PersonalAddressPrompt } from "../components/events/PersonalAddressPrompt";
 import {
@@ -10,10 +9,6 @@ import {
 import { renderSharePanel } from "../shared/widgets/share-panel";
 import { renderDonationCta } from "../shared/donation/cta";
 import { eventParticipantRecordPath } from "../member-flows/portal/sections/events/event-participant-paths";
-
-function formatSubmittedEmail(email: string): ComponentChildren {
-  return <span class="event-flow-address">{email || "the email address you entered"}</span>;
-}
 
 export function showRegistrationSuccess(
   root: HTMLElement,
@@ -39,25 +34,13 @@ export function showRegistrationSuccess(
   let icon: string;
   let title: string;
   let body: ComponentChildren;
-  let showShare = false;
-  // A signed-in registrant manages the registration in the portal; only a new identity gets a direct link.
-  const manageHref =
-    result.manageUrl ?? `/portal/#${eventParticipantRecordPath(eventSlug, "registration", result.registrationId)}`;
+  const showShare = !!result.shareUrl;
+  // Every registrant is signed in and manages the registration in the portal.
+  const manageHref = `/portal/#${eventParticipantRecordPath(eventSlug, "registration", result.registrationId)}`;
 
-  if (result.status === "pending_email_confirmation") {
-    // Only a submission without a verified address waits; the browser verifies first, so this is the exception.
-    icon = "";
-    title = "Check your email";
-    body = (
-      <Alert tone="info">
-        Open the link we sent to {formatSubmittedEmail(email)} to confirm your registration. Your place is held only
-        after you confirm.
-      </Alert>
-    );
-  } else if (hasPendingRegistrationDayWaitlist(result.dayWaitlist)) {
+  if (hasPendingRegistrationDayWaitlist(result.dayWaitlist)) {
     icon = "🗓️";
     title = "Your registration is in place";
-    showShare = !!result.shareUrl;
     body = (
       <>
         {/* The link is a sibling of the sentence rather than a block-level
@@ -76,7 +59,6 @@ export function showRegistrationSuccess(
   } else {
     icon = "🎉";
     title = `You're registered${firstName ? `, ${firstName}` : ""}!`;
-    showShare = !!result.shareUrl;
     body = (
       <>
         <p class="event-flow-success-body">
@@ -105,7 +87,6 @@ export function showRegistrationSuccess(
       shareUrl: result.shareUrl,
       eventName,
       firstName,
-      manageToken: result.manageToken,
       eventSlug,
       invitation: { status: result.status, startsAt: result.startsAt },
       waitlisted: hasPendingRegistrationDayWaitlist(result.dayWaitlist),

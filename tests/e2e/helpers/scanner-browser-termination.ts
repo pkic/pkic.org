@@ -4,16 +4,7 @@ import { expect, chromium, type BrowserContext, type Route, type Page } from "@p
 import { agendaRevisionSchema, agendaSnapshotSchema } from "../../../assets/shared/schemas/event-agenda";
 import { eventFormsResponseSchema } from "../../../assets/shared/schemas/forms";
 import {
-  registrationEmailProofVerifySchema,
-  registrationEmailProofVerifyResponseSchema,
-} from "../../../assets/shared/schemas/registration-email-proof";
-import {
   registrationCreateSchema,
-  registrationConfirmQuerySchema,
-  registrationConfirmSchema,
-  registrationConfirmInfoResponseSchema,
-  registrationConfirmResponseSchema,
-  registrationSubmissionResponseSchema,
   registrationManageReadResponseSchema,
 } from "../../../assets/shared/schemas/registration";
 import {
@@ -26,7 +17,7 @@ import { e2eAdminEmail } from "../../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./staff-auth";
 import { createPortalWaitlistEvent } from "./waitlist-event";
 import { clientIpForIdentity } from "./portal-auth";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
+import { registerSignedIn } from "./registrant";
 import {
   enrolledEventScanRequestSchema,
   eventScanResponseSchema,
@@ -73,9 +64,10 @@ export async function prepareScannerTermination(page: Page) {
       if (field.key in knownAnswers) customAnswers[field.key] = knownAnswers[field.key]!;
       else if (field.required) throw new Error(`Unsupported required fixture field: ${field.key}`);
     }
-    const since = await capturedEmailCount();
-    const registered = await attendeePage.request.post(`${api}/registrations`, {
-      data: registrationCreateSchema.parse({
+    const registered = await registerSignedIn(
+      attendeePage,
+      slug,
+      registrationCreateSchema.parse({
         email,
         firstName: "Synthetic",
         lastName: "Termination attendee",
@@ -86,59 +78,14 @@ export async function prepareScannerTermination(page: Page) {
         customAnswers,
         consents: placement.requiredTerms.map(({ termKey, version }) => ({ termKey, version })),
       }),
-    });
-    expect(registered.status()).toBe(200);
-    const registration = registrationSubmissionResponseSchema.parse(await registered.json());
-    if (!registration.manageToken) throw new Error("The fresh attendee needs its own management capability");
-    const mail = await waitForCapturedEmail(email, "Confirm your registration", { since });
-    const confirmationUrl = new URL(extractEmailUrl(mail, "/register/confirm"));
-    expect(confirmationUrl.searchParams.get("event")).toBe(slug);
-    const confirmation = registrationConfirmQuerySchema.parse({
-      id: confirmationUrl.searchParams.get("id"),
-      token: confirmationUrl.searchParams.get("token"),
-    });
-    expect(confirmation.id).toBe(registration.registrationId);
-    // This event was created after the static release. Redeem its actual mailbox
-    // capability at the same mounted endpoints the confirmation page uses.
-    const info = await attendeePage.request.get(`${api}/registrations/confirm-info`, { params: confirmation });
-    expect(info.status()).toBe(200);
-    const confirmationInfo = registrationConfirmInfoResponseSchema.parse(await info.json());
-    expect(confirmationInfo).toMatchObject({
-      email,
-      firstName: "Synthetic",
-      lastName: "Termination attendee",
-      expired: false,
-      recoverable: false,
-    });
-    if (!confirmationInfo.organizationProof) throw new Error("The work address needs its organization proof");
-    const proof = { token: confirmationInfo.organizationProof };
-    const offered = await attendeePage.request.post(`${api}/registrations/proof/verify`, {
-      data: registrationEmailProofVerifySchema.parse(proof),
-    });
-    expect(offered.status()).toBe(200);
-    const { affiliation } = registrationEmailProofVerifyResponseSchema.parse(await offered.json());
-    const organizationId = affiliation?.organization?.id ?? null;
-    const name = affiliation?.organization?.name ?? "Synthetic attribution";
-    const chosen = await attendeePage.request.post(`${api}/registrations/proof/verify`, {
-      data: registrationEmailProofVerifySchema.parse({
-        ...proof,
-        affiliation: { organizationId, ...(organizationId ? {} : { organizationName: name }), jobTitle: "Attendee" },
-      }),
-    });
-    expect(chosen.status()).toBe(200);
-    const selected = registrationEmailProofVerifyResponseSchema.parse(await chosen.json()).affiliation;
-    if (!selected?.contextToken) throw new Error("The organization selection needs its verified context");
-    const confirmed = await attendeePage.request.post(`${api}/registrations/confirm-email`, {
-      data: registrationConfirmSchema.parse({
-        ...confirmation,
-        organization: { name, organizationId, jobTitle: "Attendee", contextToken: selected.contextToken },
-      }),
-    });
-    expect(confirmed.status()).toBe(200);
-    const confirmedRegistration = registrationConfirmResponseSchema.parse(await confirmed.json());
-    expect(confirmedRegistration).toMatchObject({ stage: "confirmed", status: "registered" });
-    manageToken = confirmedRegistration.manageToken;
-    await waitForCapturedEmail(email, "registration is confirmed", { since });
+      {
+        firstName: "Synthetic",
+        lastName: "Termination attendee",
+        organization: "Synthetic attribution",
+        jobTitle: "Attendee",
+      },
+    );
+    manageToken = registered.manageToken;
   } finally {
     await guest.close();
   }

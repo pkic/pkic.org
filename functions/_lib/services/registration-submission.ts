@@ -1,8 +1,9 @@
-import { findUserEmailOwner } from "./user-emails";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
 import { prepareAuditLog } from "./audit";
+import { prepareEngagementStatement } from "./engagement";
+import { INVITE_COLUMNS } from "./invite-types";
 import { prepareConsentStatements } from "./consent";
 import { prepareAcceptInviteStatements, prepareRevokeDuplicateInvitesStatement, type InviteRecord } from "./invites";
 import { prepareReferralCodeStatement } from "./referrals";
@@ -20,13 +21,10 @@ import {
   type CustomAnswerValue,
 } from "./forms";
 import { isAuthorizationGuardFailure } from "../db/authorization-guard";
-import { normalizeEmail } from "../validation";
 import { prepareVerifiedRegistrationUserGuard, requireRegistrationUserProfile } from "./registrations/authorization";
 
 export interface PreparedRegistrationSubmission {
   user: UserRecord;
-  /** True only when this submission created a new, unprivileged identity. */
-  identityWasCreated: boolean;
   registration: RegistrationRecord;
   manageToken: string;
   confirmationToken: string | null;
@@ -62,31 +60,32 @@ export async function prepareRegistrationSubmission(
     ip: string | null;
     userAgent: string | null;
     signingSecret: string;
-    pendingConfirmationDeadlineHours: number;
-    confirmationTtlHours?: number;
     referralCodeLength: number;
     formRevisionGuard?: StatementLike | null;
     authorizationGuards?: readonly StatementLike[];
     termsSnapshotGuard?: StatementLike | null;
-    verifiedIdentity?: VerifiedRegistrationIdentityContext;
+    /** Every registration belongs to a signed-in account whose session proved the mailbox. */
+    verifiedIdentity: VerifiedRegistrationIdentityContext;
   },
 ): Promise<PreparedRegistrationSubmission> {
-  if (!payload.verifiedIdentity) {
-    const claim = await findUserEmailOwner(db, normalizeEmail(payload.user.email));
-    if (claim?.kind === "pending" || (claim?.kind === "secondary" && !claim.verified))
-      throw new AppError(
-        422,
-        "REGISTRATION_EMAIL_PROOF_REQUIRED",
-        "Confirm this email address in the portal before registering with it.",
-      );
-  }
   const preparedUser = await buildFindOrCreateUserStatement(db, payload.user);
-  if (payload.verifiedIdentity && preparedUser.user.id !== payload.verifiedIdentity.userId) {
+  if (preparedUser.user.id !== payload.verifiedIdentity.userId) {
     throw new AppError(403, "REGISTRATION_IDENTITY_MISMATCH", "Registration identity does not match the session");
   }
   // Registration uses the canonical account, not the submitted name fields.
   // Existing accounts must correct invalid saved names through an owned profile write.
   requireRegistrationUserProfile(preparedUser.user);
+  // The session proved the mailbox, so an invitation sent to it is accepted without its link.
+  const invite =
+    payload.invite ??
+    (await first<InviteRecord>(
+      db,
+      `SELECT ${INVITE_COLUMNS} FROM invites
+       WHERE event_id = ? AND invitee_email = ? AND invite_type = 'attendee' AND status = 'sent'
+         AND (expires_at IS NULL OR expires_at > ?)
+       ORDER BY created_at ASC LIMIT 1`,
+      [payload.eventId, preparedUser.user.normalized_email, new Date().toISOString()],
+    ));
   const builtRegistration = await buildCreateRegistration(db, {
     event: { id: payload.eventId },
     userId: preparedUser.user.id,
@@ -95,12 +94,9 @@ export async function prepareRegistrationSubmission(
     sourceRef: payload.sourceRef,
     customAnswersJson: payload.customAnswersJson,
     formPlacementId: payload.formPlacementId,
-    inviteId: payload.invite?.id ?? null,
+    inviteId: invite?.id ?? null,
     referredByCode: payload.referredByCode,
-    pendingConfirmationDeadlineHours: payload.pendingConfirmationDeadlineHours,
-    confirmationTtlHours: payload.confirmationTtlHours,
     signingSecret: payload.signingSecret,
-    unverifiedEmailCorrectionAllowed: preparedUser.created,
     verifiedIdentity: payload.verifiedIdentity,
   });
   const existingReferral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?"), [
@@ -135,7 +131,7 @@ export async function prepareRegistrationSubmission(
   if (payload.termsSnapshotGuard) statements.push(payload.termsSnapshotGuard);
   if (payload.formRevisionGuard) statements.push(payload.formRevisionGuard);
   statements.push(...preparedUser.statements);
-  if (!preparedUser.created) statements.push(prepareVerifiedRegistrationUserGuard(db, preparedUser.user));
+  statements.push(prepareVerifiedRegistrationUserGuard(db, preparedUser.user));
   statements.push(
     ...builtRegistration.statements,
     ...(formSubmission?.statements ?? []),
@@ -150,17 +146,31 @@ export async function prepareRegistrationSubmission(
       secret: payload.signingSecret,
     })),
   );
-  if (payload.invite) {
+  if (invite) {
     statements.push(
-      ...prepareAcceptInviteStatements(db, payload.invite),
+      ...prepareAcceptInviteStatements(db, invite),
       prepareRevokeDuplicateInvitesStatement(db, {
         eventId: payload.eventId,
         inviteeEmail: preparedUser.user.email,
-        keepInviteId: payload.invite.id,
+        keepInviteId: invite.id,
       }),
     );
   }
   if (preparedReferral) statements.push(preparedReferral.statement);
+  if (builtRegistration.registration.status === "registered")
+    statements.push(
+      prepareEngagementStatement(db, {
+        userId: preparedUser.user.id,
+        eventId: payload.eventId,
+        subjectType: "registration",
+        subjectRef: builtRegistration.registration.id,
+        actionType: "registration_confirmed",
+        points: 5,
+        sourceType: "registration",
+        sourceRef: builtRegistration.registration.id,
+        idempotencyKey: `registration_confirmed:registration:${builtRegistration.registration.id}`,
+      }),
+    );
   statements.push(
     prepareAuditLog(
       db,
@@ -172,12 +182,12 @@ export async function prepareRegistrationSubmission(
       {
         eventId: payload.eventId,
         status: builtRegistration.registration.status,
-        registrationGroupId: payload.verifiedIdentity?.registrationGroupId ?? null,
-        registrationIdentityId: payload.verifiedIdentity?.selectedIdentity?.id ?? null,
+        registrationGroupId: payload.verifiedIdentity.registrationGroupId ?? null,
+        registrationIdentityId: payload.verifiedIdentity.selectedIdentity?.id ?? null,
       },
       undefined,
       null,
-      payload.verifiedIdentity?.registrationGroupId
+      payload.verifiedIdentity.registrationGroupId
         ? { type: "group", id: payload.verifiedIdentity.registrationGroupId }
         : null,
     ),
@@ -185,7 +195,6 @@ export async function prepareRegistrationSubmission(
 
   return {
     user: preparedUser.user,
-    identityWasCreated: preparedUser.created,
     registration: builtRegistration.registration,
     manageToken: builtRegistration.manageToken,
     confirmationToken: builtRegistration.confirmationToken,

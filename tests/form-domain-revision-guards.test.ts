@@ -1,5 +1,6 @@
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { signInProposer } from "./helpers/proposal-proof";
+import { signInRegistrant } from "./helpers/auth";
 import { withIndependentCapacity } from "./helpers/independent-capacity";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -66,6 +67,10 @@ async function prepareRegistration(eventId: string, answer: string) {
   )
     .bind(crypto.randomUUID(), eventId, new Date().toISOString(), new Date().toISOString())
     .run();
+  const { userId } = await signInRegistrant(env.DB, "form-attendee@example.test", {
+    firstName: "Form",
+    lastName: "Attendee",
+  });
   return prepareValidatedAttendeeRegistration(
     env.DB as unknown as DatabaseLike,
     {
@@ -86,9 +91,8 @@ async function prepareRegistration(eventId: string, answer: string) {
       ip: null,
       userAgent: null,
       signingSecret: SIGNING_SECRET,
-      pendingConfirmationDeadlineHours: 72,
-      confirmationTtlHours: 24,
       referralCodeLength: 8,
+      verifiedIdentity: { userId },
     },
   );
 }
@@ -157,7 +161,7 @@ describe("form revision guards on registration and proposal commands", () => {
       code: "FORM_CHANGED",
     });
     expect(await queryAll(env.DB, "SELECT id FROM registrations WHERE id = ?", [prepared.registration.id])).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT id FROM users WHERE email = 'form-attendee@example.test'")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM consent_acceptances")).toEqual([]);
   });
 
   it("rolls back a new proposal when its validated form changes before commit", async () => {

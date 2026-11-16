@@ -46,8 +46,6 @@ export interface CreateRegistrationPayload {
   pendingConfirmationDeadlineHours?: number;
   confirmationTtlHours?: number;
   signingSecret?: string;
-  /** True only when this registration transaction creates the user identity. */
-  unverifiedEmailCorrectionAllowed?: boolean;
   verifiedIdentity?: VerifiedRegistrationIdentityContext;
 }
 
@@ -176,10 +174,7 @@ export async function buildCreateRegistration(
     manage_link_secret: manageLinkSecret,
     cancellation_reason_code: null,
     transition_revision: existing?.transition_revision ?? 0,
-    created_identity_user_id:
-      !existing && status === "pending_email_confirmation" && payload.unverifiedEmailCorrectionAllowed
-        ? payload.userId
-        : null,
+    created_identity_user_id: null,
     confirmed_at: status === "registered" ? now : null,
     cancelled_at: null,
     created_at: existing?.created_at ?? now,

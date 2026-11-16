@@ -8,45 +8,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { seedMemberApplication } from "./helpers/member-applications";
-import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { callApi } from "./helpers/app";
 import { buildRegistrationManageView } from "../functions/_lib/services/registrations/manage-view";
 import type { RegistrationRecord } from "../functions/_lib/services/registrations/types";
 import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
+import { createPendingRegistration } from "./helpers/registration-confirmation";
 import {
   registrationConfirmInfoResponseSchema,
   registrationConfirmResponseSchema,
   registrationConfirmSchema,
 } from "../assets/shared/schemas/registration";
 
-const consents = [
-  { termKey: "privacy-policy", version: "v1" },
-  { termKey: "code-of-conduct", version: "v1" },
-];
-
-async function register(email: string, unaffiliatedAttestation = false): Promise<string> {
-  const response = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      firstName: "New",
-      lastName: "Attendee",
-      email,
-      unaffiliatedAttestation,
-      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
-      sourceType: "direct",
-      consents,
-    }),
-  });
-  expect(response.status, await response.clone().text()).toBe(200);
-  const [mail] = await queryAll<{ payload_json: string }>(
-    env.DB,
-    "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = ?",
-    [email],
-  );
-  const payload = await deliveredEmailPayload<{ confirmationUrl: string }>(env.DB, env, mail.payload_json);
-  return new URL(payload.confirmationUrl).searchParams.get("token")!;
+/** A registration awaiting its mailbox proof; returns the confirmation capability its email carries. */
+async function register(email: string): Promise<string> {
+  const pending = await createPendingRegistration(env.DB, { email, firstName: "New", lastName: "Attendee" });
+  return pending.confirmationToken;
 }
 
 async function info(token: string) {
@@ -123,7 +101,7 @@ describe("organization named on registration confirmation", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("preserves the confirmation link and email intent when the stored event start is unsupported", async () => {
-    const token = await register("unaffiliated-attendee@gmail.com", true);
+    const token = await register("unaffiliated-attendee@gmail.com");
     const state = () =>
       queryAll(env.DB, "SELECT status,confirmed_at,confirmation_link_secret,manage_link_secret FROM registrations");
     const emails = () => queryAll(env.DB, "SELECT id FROM email_outbox ORDER BY id");
@@ -270,7 +248,7 @@ describe("organization named on registration confirmation", () => {
   });
 
   it("does not ask a consumer address for an organization", async () => {
-    const personal = await register("person@gmail.com", true);
+    const personal = await register("person@gmail.com");
     expect(await info(personal)).toMatchObject({ asksOrganization: false });
     expect((await info(personal)).organizationProof).toBeUndefined();
   });

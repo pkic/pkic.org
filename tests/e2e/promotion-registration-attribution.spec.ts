@@ -299,7 +299,7 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
 
     // The existing registration policy refuses repeat intent without creating another conversion.
     const retry = await visitor.request.post(`${eventApi}/registrations`, {
-      data: registrationCreateSchema.parse(submitted.request),
+      data: registrationCreateSchema.parse({ ...submitted.request, identityId: submitted.identityId }),
     });
     expect(retry.status(), await retry.text()).toBe(409);
     expect(apiErrorPayloadSchema.parse(await retry.json()).error.code).toBe("REGISTRATION_EXISTS");

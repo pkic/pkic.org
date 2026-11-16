@@ -244,7 +244,6 @@ test("one recurring meeting and conference retain the same actors through organi
     const physical = await attendee.request.patch(managePath, {
       data: registrationManageSchema.parse({
         action: "update",
-        attendanceType: "in_person",
         dayAttendance: beforeRegistration.dayAttendance.map((day) => ({
           dayDate: day.dayDate,
           attendanceType: "in_person",

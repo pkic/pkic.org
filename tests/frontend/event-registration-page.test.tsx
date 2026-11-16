@@ -97,8 +97,6 @@ function installApi(scheduled = true, person: SavedNames | null = null): Capture
             registrationId: "30000000-0000-4000-8000-000000000001",
             status: "registered",
             startsAt: "2026-12-01T08:00:00.000Z",
-            manageToken: null,
-            manageUrl: null,
             shareUrl: null,
             dayAttendance: [],
             dayWaitlist: [],

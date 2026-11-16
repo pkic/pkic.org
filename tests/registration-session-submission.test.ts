@@ -3,10 +3,9 @@ import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { callApi } from "./helpers/app";
-import { insertOrganization, insertUser } from "./helpers/membership";
+import { insertOrganization } from "./helpers/membership";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
-import { createMemberSession } from "./helpers/auth";
-import { prepareAccountIdentityStatement } from "../functions/_lib/services/users";
+import { signInRegistrant } from "./helpers/auth";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { registrationCreateSchema, registrationSubmissionResponseSchema } from "../assets/shared/schemas/registration";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
@@ -43,17 +42,6 @@ function submit(body: unknown, session?: string, environment = env) {
   });
 }
 
-/** A person with an account identity and a session, as the sign-in card leaves them. */
-async function signedIn(email: string, names: { firstName: string | null; lastName: string | null }) {
-  const userId = await insertUser(env.DB, email);
-  await env.DB.prepare("UPDATE users SET first_name=?,last_name=? WHERE id=?")
-    .bind(names.firstName, names.lastName, userId)
-    .run();
-  await prepareAccountIdentityStatement(env.DB, userId, new Date().toISOString()).run();
-  const session = await createMemberSession(env.DB, userId, `registration-session-${++sequence}`);
-  return { userId, session };
-}
-
 describe("registration continues with the signed-in session", () => {
   beforeEach(async () => {
     await resetDb();
@@ -65,11 +53,47 @@ describe("registration continues with the signed-in session", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("registers a signed-in person with their own address at once", async () => {
-    const { session } = await signedIn("signed.in@gmail.com", { firstName: "Casey", lastName: "Fixture" });
+    const { session } = await signInRegistrant(env.DB, "signed.in@gmail.com", {
+      firstName: "Casey",
+      lastName: "Fixture",
+    });
     const response = await submit(registration("signed.in@gmail.com", { unaffiliatedAttestation: true }), session);
     expect(response.status, await response.clone().text()).toBe(200);
     expect(registrationSubmissionResponseSchema.parse(await response.json()).status).toBe("registered");
   });
+
+  it.each([
+    ["accepts", null, { status: "accepted" }, true],
+    ["leaves an expired", "2020-01-01T00:00:00.000Z", { status: "sent" }, false],
+  ] as const)(
+    "%s invitation sent to the signed-in address and records the confirmed registration",
+    async (_case, expiresAt, invite, linked) => {
+      const email = "invited.attendee@gmail.com";
+      const { userId, session } = await signInRegistrant(env.DB, email, { firstName: "Casey", lastName: "Fixture" });
+      const inviteId = crypto.randomUUID();
+      await env.DB.prepare(
+        `INSERT INTO invites (id, event_id, invitee_email, invite_type, link_secret, status, source_type, expires_at, created_at)
+         SELECT ?, id, ?, 'attendee', ?, 'sent', 'direct', ?, '2026-01-01T00:00:00.000Z' FROM events WHERE slug='pqc-2026'`,
+      )
+        .bind(inviteId, email, `sent-${inviteId}`, expiresAt)
+        .run();
+      const response = await submit(registration(email, { unaffiliatedAttestation: true }), session);
+      expect(response.status, await response.clone().text()).toBe(200);
+      const { registrationId } = registrationSubmissionResponseSchema.parse(await response.json());
+      expect(await queryAll(env.DB, "SELECT invite_id FROM registrations WHERE id=?", registrationId)).toEqual([
+        { invite_id: linked ? inviteId : null },
+      ]);
+      expect(await queryAll(env.DB, "SELECT status FROM invites WHERE id=?", inviteId)).toEqual([invite]);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT action_type FROM engagement_events WHERE user_id=? AND subject_ref=? ORDER BY action_type",
+          userId,
+          registrationId,
+        ),
+      ).toEqual([{ action_type: "registration_confirmed" }, { action_type: "registration_created" }]);
+    },
+  );
 
   it.each([
     [null, "Fixture"],
@@ -79,7 +103,7 @@ describe("registration continues with the signed-in session", () => {
     ["Casey", "casey@example.test"],
   ])("requires the signed-in owner to correct saved names (%s, %s)", async (firstName, lastName) => {
     const email = `name-correction-${++sequence}@gmail.com`;
-    const { userId, session } = await signedIn(email, { firstName, lastName });
+    const { userId, session } = await signInRegistrant(env.DB, email, { firstName, lastName });
     const body = registration(email, { unaffiliatedAttestation: true });
     const refused = await submit(body, session);
     expect(refused.status, await refused.clone().text()).toBe(422);
@@ -99,7 +123,7 @@ describe("registration continues with the signed-in session", () => {
 
   it("rolls back registration when the saved name changes after validation", async () => {
     const email = "name-race@gmail.com";
-    const { userId, session } = await signedIn(email, { firstName: "Casey", lastName: "Fixture" });
+    const { userId, session } = await signInRegistrant(env.DB, email, { firstName: "Casey", lastName: "Fixture" });
     const raced = mutateBeforeMatchingQuery(
       env.DB,
       (sql) => sql.includes("INSERT INTO authorization_guards") && sql.includes("first_name IS ?"),
@@ -119,7 +143,7 @@ describe("registration continues with the signed-in session", () => {
 
   it("requires a signed-in registrant using a work address to choose an organization identity", async () => {
     const email = "signed-in@new-org.example";
-    const { userId, session } = await signedIn(email, { firstName: "Casey", lastName: "Fixture" });
+    const { userId, session } = await signInRegistrant(env.DB, email, { firstName: "Casey", lastName: "Fixture" });
     const send = (identityId?: string) => submit(registration(email, identityId ? { identityId } : {}), session);
     const refused = await send();
     expect(refused.status).toBe(422);
@@ -137,7 +161,7 @@ describe("registration continues with the signed-in session", () => {
   });
 
   it("refuses an identity chosen by a session that does not own the submitted address", async () => {
-    const { session } = await signedIn("owner@gmail.com", { firstName: "Casey", lastName: "Fixture" });
+    const { session } = await signInRegistrant(env.DB, "owner@gmail.com", { firstName: "Casey", lastName: "Fixture" });
     const response = await submit(
       registration("someone.else@gmail.com", { unaffiliatedAttestation: true, identityId: crypto.randomUUID() }),
       session,
@@ -147,10 +171,14 @@ describe("registration continues with the signed-in session", () => {
     expect(await queryAll(env.DB, "SELECT id FROM registrations")).toEqual([]);
   });
 
-  it("waits for email confirmation when a registration arrives without a session", async () => {
-    const response = await submit(registration("casey@new-org.example"));
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(registrationSubmissionResponseSchema.parse(await response.json()).status).toBe("pending_email_confirmation");
+  it("refuses a registration without a session and stores nothing", async () => {
+    const response = await submit(registration("casey@gmail.com", { unaffiliatedAttestation: true }));
+    expect(response.status, await response.clone().text()).toBe(401);
+    expect(await response.json()).toMatchObject({ error: { code: "AUTH_REQUIRED" } });
+    expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email='casey@gmail.com'")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM registrations")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM consent_acceptances")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key LIKE 'registration_%'")).toEqual([]);
   });
 
   it("no longer accepts a mailbox proof in place of a session", async () => {
@@ -170,7 +198,11 @@ describe("registration continues with the signed-in session", () => {
 
   it("refuses registration before event days are scheduled", async () => {
     await env.DB.prepare("DELETE FROM event_days WHERE id='session-day'").run();
-    const response = await submit(registration("unscheduled@new-org.example"));
+    const { session } = await signInRegistrant(env.DB, "unscheduled@gmail.com", {
+      firstName: "Casey",
+      lastName: "Fixture",
+    });
+    const response = await submit(registration("unscheduled@gmail.com", { unaffiliatedAttestation: true }), session);
     expect(response.status, await response.clone().text()).toBe(409);
     expect(await response.json()).toMatchObject({ error: { code: "EVENT_DAYS_NOT_SCHEDULED" } });
     expect(await queryAll(env.DB, "SELECT id FROM registrations")).toEqual([]);

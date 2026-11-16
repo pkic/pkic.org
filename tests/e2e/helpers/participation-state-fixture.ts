@@ -18,22 +18,10 @@ import {
   agendaRevisionSchema,
   agendaSnapshotSchema,
 } from "../../../assets/shared/schemas/event-agenda";
-import {
-  registrationConfirmInfoResponseSchema,
-  registrationConfirmQuerySchema,
-  registrationConfirmResponseSchema,
-  registrationConfirmSchema,
-  registrationCreateSchema,
-  registrationSubmissionResponseSchema,
-} from "../../../assets/shared/schemas/registration";
-import {
-  registrationEmailProofVerifySchema,
-  registrationEmailProofVerifyResponseSchema,
-} from "../../../assets/shared/schemas/registration-email-proof";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
+import { registrationCreateSchema } from "../../../assets/shared/schemas/registration";
 import { clientIpForIdentity } from "./portal-auth";
+import { registerSignedIn } from "./registrant";
 import { publishE2eSite } from "./site-publication";
-import { confirmRegistration } from "./registration";
 
 /** The single day a fixture event runs, as UTC wall-clock times. */
 interface FixtureEventDay {
@@ -170,19 +158,15 @@ export async function prepareParticipationStates(staff: Page) {
 }
 
 /**
- * Real mailbox confirmation, with day/terms taken from this event's canonical placement. An event
- * created after the static release has no confirmation page yet, so `staticRelease: false` redeems
- * the same mailbox capability at the endpoint that page uses.
+ * Registers the person behind `email` on `page` (signing that browser in as them first) with
+ * day/terms taken from this event's canonical placement. A work address registers as an
+ * organization identity: pass `identityId` for one already held, or one is added from the address.
  */
 export async function registerStateAttendee(
   page: Page,
   fixture: Awaited<ReturnType<typeof createRegistrationEvent>>,
   email: string,
-  {
-    staticRelease = true,
-    organization,
-    identityId,
-  }: { staticRelease?: boolean; organization?: string; identityId?: string } = {},
+  { identityId }: { identityId?: string } = {},
 ) {
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
   const placementResponse = await page.request.get(
@@ -200,62 +184,17 @@ export async function registerStateAttendee(
     if (field.key in knownAnswers) answers[field.key] = knownAnswers[field.key]!;
     else if (field.required) throw new Error(`Unsupported required fixture field: ${field.key}`);
   }
-  const since = await capturedEmailCount();
-  const submitted = await page.request.post(`/api/v1/events/${fixture.slug}/registrations`, {
-    data: registrationCreateSchema.parse({
+  return registerSignedIn(
+    page,
+    fixture.slug,
+    registrationCreateSchema.parse({
       email,
-      identityId,
       firstName: "Synthetic",
       lastName: "Attendee",
       dayAttendance: placement.eventDays.map((day) => ({ dayDate: day.dayDate, attendanceType: "in_person" })),
       customAnswers: answers,
       consents: placement.requiredTerms.map(({ termKey, version }) => ({ termKey, version })),
     }),
-  });
-  expect(submitted.status()).toBe(200);
-  const submission = registrationSubmissionResponseSchema.parse(await submitted.json());
-  // A registrant already signed in with this verified address is confirmed at once: the mailbox is proven.
-  if (submission.status !== "pending_email_confirmation") {
-    // Its confirmation mail is queued behind the badge delay; nothing here waits on it.
-    expect(submission.status).toBe("registered");
-    return;
-  }
-  const confirmation = await waitForCapturedEmail(email, "Confirm your registration", { since });
-  const confirmationUrl = extractEmailUrl(confirmation, "/register/confirm");
-  if (staticRelease) {
-    await page.goto(confirmationUrl);
-    await confirmRegistration(page, organization);
-  } else {
-    const query = new URL(confirmationUrl).searchParams;
-    const capability = registrationConfirmQuerySchema.parse({ id: query.get("id"), token: query.get("token") });
-    const body = registrationConfirmSchema.parse(capability);
-    if (organization) {
-      const api = `/api/v1/events/${fixture.slug}/registrations`;
-      const info = await page.request.get(`${api}/confirm-info`, { params: capability });
-      expect(info.status()).toBe(200);
-      const { organizationProof } = registrationConfirmInfoResponseSchema.parse(await info.json());
-      if (!organizationProof) throw new Error("The synthetic work address needs its organization proof");
-      const chosen = await page.request.post(`${api}/proof/verify`, {
-        data: registrationEmailProofVerifySchema.parse({
-          token: organizationProof,
-          affiliation: { organizationId: null, organizationName: organization, jobTitle: "Attendee" },
-        }),
-      });
-      expect(chosen.status(), await chosen.text()).toBe(200);
-      const selected = registrationEmailProofVerifyResponseSchema.parse(await chosen.json()).affiliation;
-      if (!selected?.contextToken) throw new Error("The organization selection needs its verified context");
-      body.organization = {
-        name: organization,
-        organizationId: null,
-        jobTitle: "Attendee",
-        contextToken: selected.contextToken,
-      };
-    }
-    const confirmed = await page.request.post(`/api/v1/events/${fixture.slug}/registrations/confirm-email`, {
-      data: registrationConfirmSchema.parse(body),
-    });
-    expect(confirmed.status(), await confirmed.text()).toBe(200);
-    expect(registrationConfirmResponseSchema.parse(await confirmed.json())).toMatchObject({ stage: "confirmed" });
-  }
-  await waitForCapturedEmail(email, "registration is confirmed", { since });
+    { identityId },
+  );
 }

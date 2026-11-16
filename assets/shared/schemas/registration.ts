@@ -290,10 +290,9 @@ export const registrationConfirmOrganizationSchema = z
 export type RegistrationConfirmOrganization = z.infer<typeof registrationConfirmOrganizationSchema>;
 
 /**
- * A registration names its address and how the person reached the form. A
- * signed-in person registers with their session and is registered at once;
- * a submission without a session for the address waits for email
- * confirmation.
+ * A registration names its address and how the person reached the form. Every
+ * registrant is signed in; the session proves the mailbox, so the registration
+ * is confirmed at once.
  */
 export const registrationCreateSchema = attendeeRegistrationFieldsSchema
   .extend(registrationEntrySchema.shape)
@@ -356,12 +355,10 @@ export const registrationConfirmInfoResponseSchema = z.object({
 });
 export type RegistrationConfirmInfoResponse = z.infer<typeof registrationConfirmInfoResponseSchema>;
 
+// A signed-in registration is confirmed at once; its manage link travels only by email.
 export const registrationSubmissionResponseSchema = registrationCompletionResponseBaseSchema.extend({
   registrationId: databaseIdSchema,
-  // Existing identities receive these capabilities only through their email.
-  // A newly created identity may still receive the immediate correction link.
-  manageUrl: httpCapabilityUrlSchema.nullable(),
-  manageToken: tokenSchema.nullable(),
+  status: z.literal("registered"),
 });
 export type RegistrationSubmissionResponse = z.infer<typeof registrationSubmissionResponseSchema>;
 
@@ -512,5 +509,3 @@ export const inviteDeclineSchema = z
       });
     }
   });
-
-export const inviteAcceptAttendeeSchema = attendeeRegistrationFieldsSchema.strict();

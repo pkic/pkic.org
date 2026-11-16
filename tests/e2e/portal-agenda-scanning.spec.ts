@@ -9,8 +9,8 @@ import { archivedScanSchema } from "../../assets/shared/schemas/event-scan-recov
 import { expect, test, type Page, type Response, type TestInfo } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
-import { confirmRegistration, ownDomainEmail, registerInBrowser } from "./helpers/registration";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
+import { ownDomainEmail, registerInBrowser } from "./helpers/registration";
+import { registerSignedIn } from "./helpers/registrant";
 import {
   eventScanRequestSchema,
   eventScanResponseSchema,
@@ -385,19 +385,16 @@ test("organizer reloads two independent QR credentials, replaces only one and re
     organization: `Badge Template Org ${Date.now()}`,
   });
   const email = ownDomainEmail("scanner");
-  const since = await capturedEmailCount();
-  const registration = await page.request.post(`/api/v1/events/${slug}/registrations`, {
-    data: registrationCreateSchema.parse({
+  await registerSignedIn(
+    page,
+    slug,
+    registrationCreateSchema.parse({
       ...template.request,
       email,
       dayAttendance: template.request.dayAttendance?.map((day) => ({ ...day, attendanceType: "in_person" })),
     }),
-  });
-  expect(registration.status(), await registration.text()).toBe(200);
-  const confirmation = await waitForCapturedEmail(email, "Confirm your registration", { since });
-  await page.goto(extractEmailUrl(confirmation, "/register/confirm"));
-  await confirmRegistration(page, `Scanner Credential Org ${Date.now()}`);
-  await waitForCapturedEmail(email, "registration is confirmed", { since });
+    { organization: `Scanner Credential Org ${Date.now()}` },
+  );
   await signInAsE2eStaff(page, e2eAdminEmail("default"));
   // Reuse earlier scenarios' approved capture context without publishing their current draft.
   const draftResponse = await page.request.get(`/api/v1/events/${slug}/agenda`);

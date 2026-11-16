@@ -5,7 +5,6 @@ import { expect, type Page, type BrowserContext, type Route } from "@playwright/
 import { agendaRevisionSchema, agendaSnapshotSchema } from "../../../assets/shared/schemas/event-agenda";
 import {
   registrationCreateSchema,
-  registrationSubmissionResponseSchema,
   registrationManageReadResponseSchema,
 } from "../../../assets/shared/schemas/registration";
 import {
@@ -19,8 +18,8 @@ import {
   eventScanResponseSchema,
 } from "../../../assets/shared/schemas/event-participation-scanning";
 import { userAuthSessionResponseSchema } from "../../../assets/shared/schemas/user-auth";
-import { confirmRegistration, ownDomainEmail, registerInBrowser } from "./registration";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
+import { ownDomainEmail, registerInBrowser } from "./registration";
+import { registerSignedIn } from "./registrant";
 import { signInAsE2eStaff } from "./staff-auth";
 import { e2eAdminEmail } from "../../helpers/e2e-admin";
 import { scannerStorage, openScannerDiagnostics, closeScannerDiagnostics } from "./scanner-recovery-storage";
@@ -39,21 +38,16 @@ export async function prepareScannerMeasurement(page: Page) {
   });
   const email = ownDomainEmail("measurement-physical");
   const malformed = `not-a-credential-${randomUUID()}`;
-  const since = await capturedEmailCount();
-  const registered = await page.request.post(`${measurementApi}/registrations`, {
-    data: registrationCreateSchema.parse({
+  const { manageToken } = await registerSignedIn(
+    page,
+    measurementSlug,
+    registrationCreateSchema.parse({
       ...template.request,
       email,
       dayAttendance: template.request.dayAttendance?.map((day) => ({ ...day, attendanceType: "in_person" })),
     }),
-  });
-  expect(registered.status()).toBe(200);
-  const registration = registrationSubmissionResponseSchema.parse(await registered.json());
-  if (!registration.manageToken) throw new Error("Fresh attendee must receive its registration management capability");
-  const mail = await waitForCapturedEmail(email, "Confirm your registration", { since });
-  await page.goto(extractEmailUrl(mail, "/register/confirm"));
-  await confirmRegistration(page, `Scanner Measurement Org ${randomUUID()}`);
-  await waitForCapturedEmail(email, "registration is confirmed", { since });
+    { organization: `Scanner Measurement Org ${randomUUID()}` },
+  );
   const operatorEmail = e2eAdminEmail("scanner-measurement-operator");
   await signInAsE2eStaff(page, operatorEmail);
   const session = userAuthSessionResponseSchema.parse(await (await page.request.get("/api/v1/auth/session")).json());
@@ -88,7 +82,7 @@ export async function prepareScannerMeasurement(page: Page) {
   const [eligible, revoked] = badges;
   if (!eligible || !revoked) throw new Error("Measurement needs independent active and revoked credentials");
   expect((await page.request.delete(`${measurementApi}/badges/${revoked.id}`)).status()).toBe(200);
-  const managePath = `/api/v1/registrations/access/${encodeURIComponent(registration.manageToken)}`;
+  const managePath = `/api/v1/registrations/access/${encodeURIComponent(manageToken)}`;
   const manageResponse = await page.request.get(managePath);
   expect(manageResponse.status()).toBe(200);
   expect(manageResponse.headers()["content-type"]).toContain("application/json");

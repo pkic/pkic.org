@@ -10,7 +10,6 @@ import type {
 import { AppError } from "../../errors";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { buildBadgeAttachment } from "../../email/attachments";
-import { checkEmailDomainMx } from "../../email/mx-check";
 import { prepareQueueEmailStatement, processOutboxByIdBackground } from "../../email/outbox";
 import { generateSignedRsvpAddress } from "../../email/rsvp";
 import { buildRegistrationIcs, calendarConfirmedDays } from "../../utils/calendar";
@@ -18,12 +17,12 @@ import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../.
 import { buildAcceptedTermsText, buildCustomAnswerRows } from "../../utils/registration-email";
 import { prepareValidatedAttendeeRegistration } from "../attendee-registration";
 import { buildEventEmailVariables, getEventBySlug, recordHugoEventBasePath } from "../events";
-import { myAgendaPageUrl, registrationManagePageUrl } from "../frontend-links";
+import { myAgendaPageUrl } from "../frontend-links";
 import { findInviteByToken, type InviteRecord } from "../invites";
 import { prepareBadgeRenderJob } from "../badge-render-job-statements";
 import { seedGravatarAndProcessBadgeRenderJob } from "../registration-badge-regeneration";
 import { commitRegistrationSubmission } from "../registration-submission";
-import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
+import { registrationManageCapability } from "./capability-urls";
 import { readRegistrationAffiliation } from "./selected-identity";
 import type { VerifiedRegistrationIdentityContext } from "./types";
 import { persistedUtcInstant } from "../../utils/time";
@@ -32,13 +31,6 @@ import { eventTakesRegistrations } from "./email-proof";
 
 /** The individual capacity only gates the public contract's work-email policy; the use case does not read it. */
 type RegistrationCreateInput = Omit<z.infer<typeof registrationCreateSchema>, "unaffiliatedAttestation">;
-
-export interface PublicRegistrationSubmissionConfig {
-  maxPendingConfirmationReminders: number;
-  pendingConfirmationReminderIntervalDays: number;
-  confirmationLinkTtlHours: number;
-  referralCodeLength: number;
-}
 
 export interface PublicRegistrationSubmissionResult {
   response: RegistrationSubmissionResponse;
@@ -52,8 +44,9 @@ export interface EventRegistrationSubmissionMetadata {
   userAgent: string | null;
   appBaseUrl: string;
   signingSecret: string;
-  config: PublicRegistrationSubmissionConfig;
-  verifiedIdentity?: VerifiedRegistrationIdentityContext;
+  referralCodeLength: number;
+  /** Every registration belongs to a signed-in account; its session proved the mailbox. */
+  verifiedIdentity: VerifiedRegistrationIdentityContext;
   authorizationGuards?: readonly StatementLike[];
 }
 
@@ -103,12 +96,7 @@ export async function submitEventRegistration(
   }
   let verifiedIdentity = metadata.verifiedIdentity;
   const authorizationGuards = [...(metadata.authorizationGuards ?? [])];
-  if (
-    verifiedIdentity &&
-    !verifiedIdentity.registrationGroupId &&
-    !invite &&
-    !registrationAllowsPublicAccess(event.registration_mode)
-  ) {
+  if (!verifiedIdentity.registrationGroupId && !invite && !registrationAllowsPublicAccess(event.registration_mode)) {
     const registrationGroupId = await findRegistrationGroup(db, {
       eventId: event.id,
       userId: verifiedIdentity.userId,
@@ -126,19 +114,8 @@ export async function submitEventRegistration(
   }
   requireRegistrationPolicy(event.registration_mode, {
     invited: Boolean(invite),
-    authorizedByGroup: Boolean(verifiedIdentity?.registrationGroupId),
+    authorizedByGroup: Boolean(verifiedIdentity.registrationGroupId),
   });
-
-  if (!metadata.verifiedIdentity) {
-    const mxResult = await checkEmailDomainMx(body.email);
-    if (!mxResult.hasMxRecords) {
-      throw new AppError(
-        422,
-        "EMAIL_DOMAIN_INVALID",
-        "The email domain does not appear to accept mail. Please check the address and try again.",
-      );
-    }
-  }
 
   const { prepared, requiredTerms, formResponse } = await prepareValidatedAttendeeRegistration(db, body, {
     sourceType: invite ? "invite" : body.sourceType,
@@ -147,27 +124,20 @@ export async function submitEventRegistration(
     invite,
     ip: metadata.clientIp,
     userAgent: metadata.userAgent,
-    pendingConfirmationDeadlineHours:
-      (metadata.config.maxPendingConfirmationReminders + 1) *
-      metadata.config.pendingConfirmationReminderIntervalDays *
-      24,
     signingSecret: metadata.signingSecret,
-    confirmationTtlHours: metadata.config.confirmationLinkTtlHours,
-    referralCodeLength: metadata.config.referralCodeLength,
+    referralCodeLength: metadata.referralCodeLength,
     authorizationGuards,
     event: { id: event.id, source_mode: event.source_mode },
     verifiedIdentity,
   });
   const { user, referralCode } = prepared;
   const registration = prepared.registration;
+  // The session proved the mailbox, so the registration is confirmed at once.
+  if (registration.status !== "registered") {
+    throw new AppError(500, "REGISTRATION_NOT_CONFIRMED", "A signed-in registration must be confirmed at once");
+  }
+  // The manage capability travels only through the durable email outbox; the portal serves the signed-in person.
   const { manageUrl: queuedManageUrl } = await registrationManageCapability(metadata.appBaseUrl, event, registration);
-  const manageUrl = registrationManagePageUrl(metadata.appBaseUrl, event, prepared.manageToken);
-  // Email equality discovers an existing identity; it does not prove that the
-  // anonymous submitter owns it. Existing identities receive their management
-  // capability only through the durable email outbox. A newly created,
-  // unprivileged identity may keep the immediate correction link so a typo can
-  // still be fixed before confirmation.
-  const exposeManageCapability = prepared.identityWasCreated;
   const shareUrl = `${metadata.appBaseUrl}${personalPromotionSharePath(referralCode)}`;
   const dayWaitlist = prepared.plannedDayWaitlist;
   const attendanceData = buildAttendanceEmailData(prepared.dayAttendance, dayWaitlist);
@@ -201,72 +171,51 @@ export async function submitEventRegistration(
     badgeImageUrl: `${metadata.appBaseUrl}${personalPromotionImagePath(referralCode)}`,
   };
 
-  let queuedEmail: ReturnType<typeof prepareQueueEmailStatement>;
-  if (registration.status === "pending_email_confirmation") {
-    const confirmationUrl = await registrationConfirmationUrl(
-      metadata.appBaseUrl,
-      event,
-      registration,
-      metadata.config.confirmationLinkTtlHours,
-    );
-    queuedEmail = prepareQueueEmailStatement(db, {
+  const rsvpEmail = env.INTERNAL_SIGNING_SECRET
+    ? await generateSignedRsvpAddress(registration.id, env.INTERNAL_SIGNING_SECRET, env.RSVP_EMAIL)
+    : undefined;
+  const calendar = await buildRegistrationIcs(
+    event,
+    registration.id,
+    queuedManageUrl,
+    calendarConfirmedDays(prepared.dayAttendance, dayWaitlist),
+    metadata.appBaseUrl,
+    rsvpEmail,
+    user.email,
+    env.INTERNAL_SIGNING_SECRET,
+  );
+  const queuedEmail = prepareQueueEmailStatement(db, {
+    eventId: event.id,
+    baseUrl: metadata.appBaseUrl,
+    templateKey: "registration_confirmed",
+    recipientEmail: user.email,
+    recipientUserId: user.id,
+    messageType: "transactional",
+    subject: `Registration confirmed for ${event.name}`,
+    capabilityLinkValues: [queuedManageUrl],
+    sendAfterSeconds: env.ASSETS_BUCKET ? Number(env.EMAIL_BADGE_DELAY_SECONDS ?? 90) : 0,
+    attachments: [
+      buildBadgeAttachment({
+        badgeCode: referralCode,
+        badgeType: "attendee",
+        firstName: user.first_name ?? "",
+        lastName: user.last_name ?? "",
+      }),
+    ],
+    data: {
+      ...commonData,
+      hasCalendarInvite: calendar.files.length > 0,
+      myAgendaUrl: myAgendaPageUrl(metadata.appBaseUrl, event),
+    },
+    bounceAddress: rsvpEmail,
+    calendar: {
+      registrationId: registration.id,
       eventId: event.id,
-      baseUrl: metadata.appBaseUrl,
-      templateKey: "registration_confirm_email",
-      recipientEmail: user.email,
-      recipientUserId: user.id,
-      messageType: "transactional",
-      subject: `Confirm your registration for ${event.name}`,
-      capabilityLinkValues: [confirmationUrl, queuedManageUrl],
-      data: { ...commonData, confirmationUrl },
-    });
-  } else {
-    const rsvpEmail = env.INTERNAL_SIGNING_SECRET
-      ? await generateSignedRsvpAddress(registration.id, env.INTERNAL_SIGNING_SECRET, env.RSVP_EMAIL)
-      : undefined;
-    const calendar = await buildRegistrationIcs(
-      event,
-      registration.id,
-      queuedManageUrl,
-      calendarConfirmedDays(prepared.dayAttendance, dayWaitlist),
-      metadata.appBaseUrl,
-      rsvpEmail,
-      user.email,
-      env.INTERNAL_SIGNING_SECRET,
-    );
-    queuedEmail = prepareQueueEmailStatement(db, {
-      eventId: event.id,
-      baseUrl: metadata.appBaseUrl,
-      templateKey: "registration_confirmed",
-      recipientEmail: user.email,
-      recipientUserId: user.id,
-      messageType: "transactional",
-      subject: `Registration confirmed for ${event.name}`,
-      capabilityLinkValues: [queuedManageUrl],
-      sendAfterSeconds: env.ASSETS_BUCKET ? Number(env.EMAIL_BADGE_DELAY_SECONDS ?? 90) : 0,
-      attachments: [
-        buildBadgeAttachment({
-          badgeCode: referralCode,
-          badgeType: "attendee",
-          firstName: user.first_name ?? "",
-          lastName: user.last_name ?? "",
-        }),
-      ],
-      data: {
-        ...commonData,
-        hasCalendarInvite: calendar.files.length > 0,
-        myAgendaUrl: myAgendaPageUrl(metadata.appBaseUrl, event),
-      },
-      bounceAddress: rsvpEmail,
-      calendar: {
-        registrationId: registration.id,
-        eventId: event.id,
-        icsUid: calendar.uid,
-        icsFiles: calendar.files,
-        inlineContent: calendar.inlineContent,
-      },
-    });
-  }
+      icsUid: calendar.uid,
+      icsFiles: calendar.files,
+      inlineContent: calendar.inlineContent,
+    },
+  });
 
   const badgeRenderJob = prepareBadgeRenderJob(db, referralCode);
   await commitRegistrationSubmission(db, prepared, [queuedEmail.statement, badgeRenderJob.statement]);
@@ -276,8 +225,6 @@ export async function submitEventRegistration(
       registrationId: registration.id,
       status: registration.status,
       startsAt,
-      manageToken: exposeManageCapability ? prepared.manageToken : null,
-      manageUrl: exposeManageCapability ? manageUrl : null,
       shareUrl,
       dayAttendance: prepared.dayAttendance,
       dayWaitlist,

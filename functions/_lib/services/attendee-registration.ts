@@ -24,10 +24,8 @@ export async function prepareValidatedAttendeeRegistration(
     ip: string | null;
     userAgent: string | null;
     signingSecret: string;
-    pendingConfirmationDeadlineHours: number;
-    confirmationTtlHours: number;
     referralCodeLength: number;
-    verifiedIdentity?: VerifiedRegistrationIdentityContext;
+    verifiedIdentity: VerifiedRegistrationIdentityContext;
     authorizationGuards?: readonly StatementLike[];
     /** Every registration flow supplies the loaded event so portal isolation cannot be skipped. */
     event: Pick<EventFormResolutionEvent, "id"> & { source_mode: string | null | undefined };
@@ -68,9 +66,7 @@ export async function prepareValidatedAttendeeRegistration(
     consents: input.consents,
     ip: options.ip,
     userAgent: options.userAgent,
-    pendingConfirmationDeadlineHours: options.pendingConfirmationDeadlineHours,
     signingSecret: options.signingSecret,
-    confirmationTtlHours: options.confirmationTtlHours,
     referralCodeLength: options.referralCodeLength,
     authorizationGuards: options.authorizationGuards,
     termsSnapshotGuard: prepareActiveTermsSnapshotGuard(db, event.id, requiredTerms),

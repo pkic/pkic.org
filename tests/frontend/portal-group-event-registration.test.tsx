@@ -155,8 +155,6 @@ describe("portal group event registration", () => {
             dayAttendance: [],
             dayWaitlist: [],
             shareUrl: null,
-            manageUrl: null,
-            manageToken: null,
           });
         }
         return json(config());
@@ -217,8 +215,6 @@ describe("portal group event registration", () => {
               dayAttendance: [],
               dayWaitlist: [],
               shareUrl: null,
-              manageUrl: null,
-              manageToken: null,
             })
           : json(
               config({

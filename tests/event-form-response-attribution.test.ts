@@ -18,7 +18,7 @@ import { getRegistrationDetail } from "../functions/_lib/services/registrations/
 import { getCustomAnswerRows } from "../functions/_lib/utils/registration-email";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { callApi } from "./helpers/app";
-import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
+import { signInRegistrant } from "./helpers/auth";
 import { resetDb } from "./helpers/reset-db";
 import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 
@@ -201,14 +201,17 @@ describe("historical event form response attribution", () => {
           .bind("10000000-0000-4000-8000-000000000009")
           .run();
       }
-      stubSuccessfulMxLookup();
+      const { headers, identityId } = await signInRegistrant(env.DB, "submitted@example.test", {
+        organization: "Submitted Organization",
+      });
       const response = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...headers },
         body: JSON.stringify({
           firstName: "Submitted",
           lastName: "Attendee",
           email: "submitted@example.test",
+          identityId,
           dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
           sourceType: "direct",
           customAnswers: { current_answer: "new answer" },
@@ -218,10 +221,10 @@ describe("historical event form response attribution", () => {
           ],
         }),
       });
-      expect(response.status).toBe(200);
+      expect(response.status, await response.clone().text()).toBe(200);
       const [email] = await queryAll<{ payload_json: string }>(
         env.DB,
-        "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
+        "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirmed' ORDER BY created_at DESC LIMIT 1",
       );
       const payload = await deliveredEmailPayload<{ customAnswerRows: unknown[] }>(env.DB, env, email.payload_json);
       expect(payload.customAnswerRows).toEqual([{ label: "Current question", displayValue: "new answer" }]);

@@ -661,17 +661,18 @@ describe("explicit event identity selection", () => {
     const response = await register(
       registrationCreateSchema.parse({
         ...f.body,
-        identityId: undefined,
         consents: [...f.body.consents, { termKey: "sponsor-data-sharing", version: "v1" }],
       }),
+      f.token,
     );
     expect(response.status, await response.clone().text()).toBe(200);
     const result = registrationSubmissionResponseSchema.parse(await response.json());
-    expect(result.status).toBe("pending_email_confirmation");
-    expect((await getRegistrationById(env.DB, result.registrationId)).registration_identity_id).toBeNull();
-    expect(await emailAttribution(f.userId, "registration_confirm_email")).toEqual([
-      { organizationName: "Primary organization", jobTitle: "Primary role" },
-    ]);
+    expect(result.status).toBe("registered");
+    // Every new registration names its identity; a legacy record can lack one, and its read model shows the
+    // person's current affiliation.
+    await env.DB.prepare("UPDATE registrations SET registration_identity_id = NULL WHERE id = ?")
+      .bind(result.registrationId)
+      .run();
     await env.DB.prepare("UPDATE identities SET job_title = 'Later primary role' WHERE id = ?")
       .bind(primaryIdentityId)
       .run();
@@ -679,22 +680,6 @@ describe("explicit event identity selection", () => {
       organization_name: "Primary organization",
       job_title: "Later primary role",
     });
-    const confirmationToken = await issueDatabaseCapability({
-      db: env.DB,
-      signingSecret: env.INTERNAL_SIGNING_SECRET!,
-      purpose: "registration_confirm",
-      resourceId: result.registrationId,
-    });
-    const confirmed = await callApi(registrationEnvironment, "/api/v1/events/pqc-2026/registrations/confirm-email", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: result.registrationId, token: confirmationToken }),
-    });
-    expect(confirmed.status, await confirmed.clone().text()).toBe(422);
-    // A legacy confirmed record can lack a recorded identity; its read model remains covered below.
-    await env.DB.prepare("UPDATE registrations SET status='registered',confirmed_at=? WHERE id=?")
-      .bind(nowIso(), result.registrationId)
-      .run();
     const exported = await buildRegistrationCsv(
       env.DB,
       { id: event.id, source_mode: event.source_mode! },
@@ -824,8 +809,6 @@ describe("explicit event identity selection", () => {
       ip: null,
       userAgent: null,
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
-      pendingConfirmationDeadlineHours: 24,
-      confirmationTtlHours: 24,
       referralCodeLength: 8,
       verifiedIdentity: { userId: f.userId, selectedIdentity },
       authorizationGuards: [prepareSelectedRegistrationIdentityGuard(env.DB, selectedIdentity)],

@@ -1,6 +1,6 @@
 import { expect, request, type APIRequestContext, type Page } from "@playwright/test";
 import { EMAIL_FIRST_COPY, type EmailFirstFlow } from "../../../assets/shared/email-first-copy";
-import { userSignUpRequestSchema } from "../../../assets/shared/schemas/user-auth";
+import { userAuthVerifySchema, userSignUpRequestSchema } from "../../../assets/shared/schemas/user-auth";
 import { clientIpForIdentity } from "./portal-auth";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
 
@@ -115,24 +115,38 @@ export async function signedInRequest(
     extraHTTPHeaders: { "cf-connecting-ip": clientIpForIdentity(email) },
   });
   try {
-    const since = await capturedEmailCount();
-    const start = () =>
-      context.post("/api/v1/auth/sign-up", {
-        data: userSignUpRequestSchema.parse({ email, unaffiliatedAttestation: options.individual ?? false }),
-      });
-    let started = await start();
-    // The local D1 binding occasionally drops its connection under load; the refused start sent no mail, so asking once more is safe.
-    if (started.status() === 500 && (await started.text()).includes("Network connection lost")) started = await start();
-    expect(started.status(), await started.text()).toBe(200);
-    const message = await waitForCapturedEmail(email, SIGN_IN_LINK_SUBJECT, { since });
-    const link = new URL(extractEmailUrl(message, "/portal/#/verify"));
-    const token = new URLSearchParams(link.hash.slice(link.hash.indexOf("?") + 1)).get("token");
-    expect(token, "the emailed link must carry a sign-in token").toBeTruthy();
-    const signedIn = await context.post("/api/v1/auth/verify-link", { data: { token } });
-    expect(signedIn.status(), await signedIn.text()).toBe(200);
+    await signInRequestContext(context, email, options);
     return context;
   } catch (error) {
     await context.dispose();
     throw error;
   }
+}
+
+/**
+ * Starts an account for `email` (or a sign-in for an address that already has
+ * one) and redeems the emailed link on `context`, so the session cookie lands
+ * in whatever cookie store `context` shares: a page's own request context
+ * signs that browser in.
+ */
+export async function signInRequestContext(
+  context: APIRequestContext,
+  email: string,
+  options: { individual?: boolean } = {},
+): Promise<void> {
+  const since = await capturedEmailCount();
+  const start = () =>
+    context.post("/api/v1/auth/sign-up", {
+      data: userSignUpRequestSchema.parse({ email, unaffiliatedAttestation: options.individual ?? false }),
+    });
+  let started = await start();
+  // The local D1 binding occasionally drops its connection under load; the refused start sent no mail, so asking once more is safe.
+  if (started.status() === 500 && (await started.text()).includes("Network connection lost")) started = await start();
+  expect(started.status(), await started.text()).toBe(200);
+  const message = await waitForCapturedEmail(email, SIGN_IN_LINK_SUBJECT, { since });
+  const link = new URL(extractEmailUrl(message, "/portal/#/verify"));
+  const token = new URLSearchParams(link.hash.slice(link.hash.indexOf("?") + 1)).get("token");
+  expect(token, "the emailed link must carry a sign-in token").toBeTruthy();
+  const signedIn = await context.post("/api/v1/auth/verify-link", { data: userAuthVerifySchema.parse({ token }) });
+  expect(signedIn.status(), await signedIn.text()).toBe(200);
 }

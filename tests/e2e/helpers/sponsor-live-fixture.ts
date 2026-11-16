@@ -6,13 +6,13 @@ import { captureDeviceConsole } from "./device-console";
 import { endEventSponsor } from "./event-sponsor";
 import { signInAsE2eStaff } from "./staff-auth";
 import { createMember } from "./member-provisioning";
-import { confirmRegistration, ownDomainEmail, registerInBrowser } from "./registration";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
+import { ownDomainEmail, registerInBrowser } from "./registration";
+import { registerSignedIn } from "./registrant";
+import { capturedEmailCount, waitForCapturedEmail } from "./sendgrid";
 import { eventDetailResponseSchema } from "../../../assets/shared/schemas/event-management";
 import { eventTermsResponseSchema } from "../../../assets/shared/schemas/forms";
 import {
   registrationCreateSchema,
-  registrationSubmissionResponseSchema,
   registrationManageSchema,
   registrationManageUpdateResponseSchema,
 } from "../../../assets/shared/schemas/registration";
@@ -50,19 +50,6 @@ import {
 export const sponsorEventSlug = "pqc-conference-amsterdam-nl";
 const eventApi = `/api/v1/events/${sponsorEventSlug}`;
 
-/** Each address is on its own domain, so confirming asks for its organization and links it. */
-async function confirmEmailedRegistration(page: Page, email: string, since: number, organization: string) {
-  const mail = await waitForCapturedEmail(email, "Confirm your registration", { since });
-  await page.goto(extractEmailUrl(mail, "/register/confirm"));
-  await confirmRegistration(page, organization, "Security engineer");
-  // Confirming proves the mailbox and issues a fresh management link; the one from submission no longer works.
-  const confirmed = await waitForCapturedEmail(email, "registration is confirmed", { since });
-  const manageUrl = extractEmailUrl(confirmed, "/register/manage/");
-  const manageToken = new URL(manageUrl).searchParams.get("token");
-  if (!manageToken) throw new Error("The confirmation email must carry the registration management link");
-  return { manageUrl, manageToken };
-}
-
 async function issueBadge(staff: Page, email: string) {
   const response = await staff.request.get(
     `${eventApi}/badges/attendees?q=${encodeURIComponent(email)}&sort=email&limit=10&offset=0`,
@@ -99,9 +86,11 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
   const firstName = `Contact-${stamp.slice(0, 8)}`;
   const lastName = "SponsorFixture";
   const organization = `Lead organization ${stamp}`;
-  const since = await capturedEmailCount();
-  const registration = await attendee.request.post(`${eventApi}/registrations`, {
-    data: registrationCreateSchema.parse({
+  // The organization the lead is captured with is the one the registrant's identity names.
+  const confirmedManage = await registerSignedIn(
+    attendee,
+    sponsorEventSlug,
+    registrationCreateSchema.parse({
       ...template.request,
       email,
       firstName,
@@ -110,13 +99,8 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
         .filter((term) => term.required || term.termKey === "sponsor-data-sharing")
         .map(({ termKey, version }) => ({ termKey, version })),
     }),
-  });
-  expect(registration.status()).toBe(200);
-  const registered = registrationSubmissionResponseSchema.parse(await registration.json());
-  if (!registered.manageUrl || !registered.manageToken)
-    throw new Error("Fresh attendee must have a registration management capability");
-  // The organization the lead is captured with is the one their confirmed address names.
-  const confirmedManage = await confirmEmailedRegistration(attendee, email, since, organization);
+    { firstName, lastName, organization, jobTitle: "Security engineer" },
+  );
 
   await signInAsE2eStaff(staff, e2eAdminEmail("sponsor-live-fixture-operator"));
   const eventResponse = await staff.request.get(eventApi);

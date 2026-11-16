@@ -124,8 +124,6 @@ it("uses the session address, validates event questions, and submits the shared 
           status: "registered",
           startsAt: "2026-12-01T08:00:00.000Z",
           shareUrl: null,
-          manageUrl: null,
-          manageToken: null,
           dayAttendance: [],
           dayWaitlist: [],
         };

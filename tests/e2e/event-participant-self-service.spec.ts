@@ -898,7 +898,7 @@ test("attendees invite colleagues and confirm a seat release from one day picker
   });
   expect(represented.status(), await represented.text()).toBe(201);
   const identityId = identityMutationResponseSchema.parse(await represented.json()).identityId;
-  await registerStateAttendee(page, fixture, sharingEmail, { staticRelease: false, identityId });
+  await registerStateAttendee(page, fixture, sharingEmail, { identityId });
   const response = await page.request.get(`/api/v1/events/${fixture.slug}`);
   const detail = eventDetailResponseSchema.parse(await response.json()).event;
   const registrationId = detail.participation!.registrationId!;

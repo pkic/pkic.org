@@ -1,6 +1,5 @@
 import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
 import { speakerParticipationPatchSchema } from "../assets/shared/schemas/proposal-management";
-import { confirmWorkRegistration } from "./helpers/registration-confirmation";
 import { validateEmailDeliveryGuard } from "../functions/_lib/email/delivery-guard";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { addRepresentative, seedOrganizationAggregate, insertOrganization } from "./helpers/membership";
@@ -62,7 +61,7 @@ import { prepareRotateUserProposalSpeakerManageSecrets } from "../functions/_lib
 import { setSpeakerPresentationReminderPreference } from "../functions/_lib/services/speaker-presentation-reminder-preferences";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 import { presentationUploadRequest } from "../assets/shared/presentation-upload";
-import { createMemberSession } from "./helpers/auth";
+import { createMemberSession, signInRegistrant } from "./helpers/auth";
 import { seedSessionAttendanceDays } from "./helpers/session-attendance-days";
 
 function mountedSpeakerRoute(c: any): Promise<Response> {
@@ -2870,20 +2869,26 @@ describe("speaker nomination by attendees", () => {
     vi.unstubAllGlobals();
   });
 
-  async function registerAndConfirmAttendee(): Promise<string> {
+  async function registerSignedInAttendee(): Promise<string> {
     const { eventId } = await setupWorkflow();
     await seedSessionAttendanceDays(env.DB, eventId, ["2026-12-01"]);
+    const attendee = await signInRegistrant(env.DB, "nominator@pkic.org", {
+      firstName: "Attendee",
+      lastName: "Nominator",
+      organization: "Nominator Organization",
+    });
 
     const regResponse = await mountedSpeakerRoute(
       createContext(
         env,
         new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...attendee.headers },
           body: JSON.stringify({
             firstName: "Attendee",
             lastName: "Nominator",
             email: "nominator@pkic.org",
+            identityId: attendee.identityId,
             dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
             sourceType: "direct",
             consents: [
@@ -2896,20 +2901,17 @@ describe("speaker nomination by attendees", () => {
       ),
     );
     expect(regResponse.status, await regResponse.clone().text()).toBe(200);
-    await regResponse.json();
+    expect(((await regResponse.json()) as { status: string }).status).toBe("registered");
 
+    // The manage link arrives with the registration confirmation email.
     const outbox = await queryAll<{ payload_json: string }>(
       env.DB,
-      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirmed' ORDER BY created_at DESC LIMIT 1",
     );
-    const emailPayload = await deliveredEmailPayload<{ confirmationUrl: string }>(env.DB, env, outbox[0].payload_json);
-    const confirmUrl = new URL(emailPayload.confirmationUrl);
-    const confirmToken = confirmUrl.searchParams.get("token") as string;
-
-    const confirmResponse = await confirmWorkRegistration(env, confirmToken);
-    expect(confirmResponse.status, await confirmResponse.clone().text()).toBe(200);
-    const confirmPayload = (await confirmResponse.json()) as { manageToken: string };
-    return confirmPayload.manageToken;
+    const emailPayload = await deliveredEmailPayload<{ manageUrl: string }>(env.DB, env, outbox[0].payload_json);
+    const manageToken = new URL(emailPayload.manageUrl).searchParams.get("token");
+    if (!manageToken) throw new Error("The confirmation email must carry the manage link");
+    return manageToken;
   }
 
   async function registerAndConfirmAttendeeDirect(): Promise<string> {
@@ -2959,7 +2961,7 @@ describe("speaker nomination by attendees", () => {
   }
 
   it("allows a registered attendee to nominate a speaker", async () => {
-    const manageToken = await registerAndConfirmAttendee();
+    const manageToken = await registerSignedInAttendee();
     const response = await postSpeakerNomination(manageToken, "nominee@example.test");
 
     expect(response.status).toBe(200);

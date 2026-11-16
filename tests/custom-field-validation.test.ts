@@ -6,6 +6,8 @@ import { env } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { callApi } from "./helpers/app";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
+import { signInRegistrant } from "./helpers/auth";
+import { issueRegistrationManageToken } from "./helpers/registration-confirmation";
 
 const TEST_DAY = "2026-12-01";
 
@@ -120,14 +122,16 @@ describe("custom field validation", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     await seedEventDay(eventId);
     await seedRegistrationForm(env.DB, eventId);
+    const { headers, identityId } = await signInRegistrant(env.DB, "alex@pkic.org", { organization: "PKI Consortium" });
 
     const response = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify({
         firstName: "Alex",
         lastName: "Tester",
         email: "alex@pkic.org",
+        identityId,
         dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "virtual" }],
         consents: [
           { termKey: "privacy-policy", version: "v1" },
@@ -141,7 +145,7 @@ describe("custom field validation", () => {
         },
       }),
     });
-    expect(response.status).toBe(400);
+    expect(response.status, await response.clone().text()).toBe(400);
     await expect(response.json()).resolves.toMatchObject({
       error: {
         code: "VALIDATION_ERROR",
@@ -160,14 +164,18 @@ describe("custom field validation", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     await seedEventDay(eventId);
     await seedRegistrationForm(env.DB, eventId);
+    const { headers, identityId } = await signInRegistrant(env.DB, "jamie@pkic.org", {
+      organization: "PKI Consortium",
+    });
 
     const response = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify({
         firstName: "Jamie",
         lastName: "Valid",
         email: "jamie@pkic.org",
+        identityId,
         dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "in_person" }],
         consents: [
           { termKey: "privacy-policy", version: "v1" },
@@ -205,14 +213,18 @@ describe("custom field validation", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     await seedEventDay(eventId);
     await seedRegistrationForm(env.DB, eventId);
+    const { headers, identityId } = await signInRegistrant(env.DB, "morgan@pkic.org", {
+      organization: "PKI Consortium",
+    });
 
     const createResponse = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify({
         firstName: "Morgan",
         lastName: "Updater",
         email: "morgan@pkic.org",
+        identityId,
         dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "in_person" }],
         consents: [
           { termKey: "privacy-policy", version: "v1" },
@@ -226,9 +238,10 @@ describe("custom field validation", () => {
     });
 
     expect(createResponse.status).toBe(200);
-    const created = (await createResponse.json()) as { registrationId: string; manageToken: string };
+    const created = (await createResponse.json()) as { registrationId: string };
+    const manageToken = await issueRegistrationManageToken(env.DB, created.registrationId);
 
-    const updateResponse = await callApi(env, `/api/v1/registrations/access/${created.manageToken}`, {
+    const updateResponse = await callApi(env, `/api/v1/registrations/access/${manageToken}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -261,7 +274,7 @@ describe("custom field validation", () => {
       )
     )[0];
     const details = JSON.parse(auditRow.details_json) as Record<string, { from: unknown; to: unknown }>;
-    expect(details.status).toEqual({ from: "pending_email_confirmation", to: "pending_email_confirmation" });
+    expect(details.status).toEqual({ from: "registered", to: "registered" });
     expect(details.attendanceType).toBeUndefined();
     expect(details.customAnswers).toEqual({
       from: {
