@@ -161,6 +161,42 @@ export const dataSections: PreviewSection[] = [
             </PanelBody>
           </Panel>
         </div>
+        <div class="pk-preview__narrow">
+          <Panel>
+            <PanelHeader title="Intrinsic width" />
+            <PanelBody>
+              <div class="pk-preview__intrinsic">
+                <DescriptionList
+                  items={[
+                    { term: "Responsibilities", value: "Member" },
+                    { term: "Organization", value: "Synthetic authority" },
+                  ]}
+                />
+              </div>
+            </PanelBody>
+          </Panel>
+        </div>
+        <DataTable
+          caption="Audit details"
+          columns={[
+            { id: "action", header: "Action", cell: () => "Profile updated", width: "fit" },
+            {
+              id: "details",
+              header: "Details",
+              cell: () => (
+                <DescriptionList
+                  density="compact"
+                  items={[
+                    { term: "Responsibilities", value: "Member" },
+                    { term: "Organization", value: "Synthetic authority" },
+                  ]}
+                />
+              ),
+            },
+          ]}
+          rows={[{ id: "example" }]}
+          rowKey={(row) => row.id}
+        />
         <Panel>
           <PanelHeader title="Profile" />
           <PanelBody>

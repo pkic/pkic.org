@@ -23,7 +23,9 @@ import "./Content.css";
 import "./DescriptionList.css";
 
 export interface DescriptionListItem {
-  /** The label. Labels may repeat within a list. */
+  /** Stable row identity. Required when labels repeat; defaults to the term. */
+  key?: string;
+  /** The label. */
   term: string;
   /** Anything renderable. Absent, empty or false renders as an em dash. */
   value?: ComponentChildren;
@@ -68,8 +70,8 @@ export function DescriptionList({
 
   return (
     <dl class={classes}>
-      {items.map((item, index) => (
-        <Fragment key={`${index}:${item.term}`}>
+      {items.map((item) => (
+        <Fragment key={item.key ?? item.term}>
           <dt>{item.term}</dt>
           <dd>{isAbsent(item.value) ? <span class="pk-datalist__empty">—</span> : item.value}</dd>
         </Fragment>

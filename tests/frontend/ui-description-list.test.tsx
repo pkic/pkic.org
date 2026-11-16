@@ -105,8 +105,8 @@ describe("DescriptionList", () => {
     const container = mount(
       <DescriptionList
         items={[
-          { term: "Availability", value: "Listed on the organization page" },
-          { term: "Availability", value: "Not listed" },
+          { key: "identity:1", term: "Availability", value: "Listed on the organization page" },
+          { key: "identity:2", term: "Availability", value: "Not listed" },
           { term: "Availability", value: "Only this person" },
         ]}
       />,
@@ -115,7 +115,7 @@ describe("DescriptionList", () => {
       render(
         <DescriptionList
           items={[
-            { term: "Availability", value: "Not listed" },
+            { key: "identity:2", term: "Availability", value: "Not listed" },
             { term: "Availability", value: "Only this person" },
           ]}
         />,
@@ -130,6 +130,41 @@ describe("DescriptionList", () => {
       render(<DescriptionList items={[{ term: "Availability", value: "Signed-in members" }]} />, container),
     );
     expect(pairs(container)).toEqual([["Availability", "Signed-in members"]]);
+  });
+
+  it("preserves a focused action when a conditional row is inserted and removed above it", () => {
+    const email = { term: "Email", value: <button type="button">Change email</button> };
+    const container = mount(<DescriptionList items={[email]} />);
+    const value = container.querySelector("dd");
+    const button = container.querySelector("button");
+    button?.focus();
+
+    for (const items of [[{ term: "Name", value: "Example Participant" }, email], [email]]) {
+      void act(() => render(<DescriptionList items={items} />, container));
+      expect(container.querySelector("button")).toBe(button);
+      expect(button?.parentElement).toBe(value);
+      expect(document.activeElement).toBe(button);
+    }
+  });
+
+  it("preserves explicitly keyed rows through reorder, relabeling, and removal of duplicate terms", () => {
+    const first = { key: "identity:1", term: "Availability", value: "Not listed" };
+    const second = { key: "identity:2", term: "Availability", value: <button type="button">Change visibility</button> };
+    const availability = { term: "Availability", value: "Only this person" };
+    const container = mount(<DescriptionList items={[first, second, availability]} />);
+    const value = container.querySelectorAll("dd")[1];
+    const button = container.querySelector("button");
+    button?.focus();
+
+    for (const items of [
+      [second, first, availability],
+      [{ ...second, term: "Renamed organization" }, availability],
+    ]) {
+      void act(() => render(<DescriptionList items={items} />, container));
+      expect(container.querySelector("dd")).toBe(value);
+      expect(container.querySelector("button")).toBe(button);
+      expect(document.activeElement).toBe(button);
+    }
   });
 
   it("renders nothing but an empty list when there is nothing to show", () => {
