@@ -634,6 +634,29 @@ describe("event tickets", () => {
     await failed("evt_failed_full_again", Math.floor(Date.now() / 1000) + 121, "re_rest", 17500);
     expect(await reconcileTicketRefunds(env.DB, paymentEnv, 5, total(2000))).toEqual({ reconciled: 1, failed: 0 });
     expect(await read()).toMatchObject({ status: "paid", refundedAmount: 2000, refundPending: false });
+
+    // The provider's answer is delayed and a newer total arrives meanwhile: the stale answer is not written
+    // over it, and the ticket is read again on the next run.
+    const later = Math.floor(Date.now() / 1000) + 300;
+    await failed("evt_failed_again", later, "re_other", 500);
+    const delayed = (async () => {
+      await charge("evt_total_during_read", later + 10, 3000);
+      return new Response(JSON.stringify({ latest_charge: { amount_refunded: 2000, refunded: false } }), {
+        status: 200,
+      });
+    }) as unknown as typeof fetch;
+    expect(await reconcileTicketRefunds(env.DB, paymentEnv, 5, delayed)).toEqual({ reconciled: 0, failed: 0 });
+    expect(await read()).toMatchObject({ refundedAmount: 3000, refundPending: true });
+    expect(await reconcileTicketRefunds(env.DB, paymentEnv, 5, total(3000))).toEqual({ reconciled: 1, failed: 0 });
+    expect(await read()).toMatchObject({ status: "paid", refundedAmount: 3000, refundPending: false });
+    // The other order: a total from after the answer was asked for arrives once the answer is written, and applies.
+    await charge("evt_total_after_read", later + 20, 4000);
+    expect(await read()).toMatchObject({ refundedAmount: 4000, refundPending: false });
+    // Two totals from the same second cannot be put in order: the second is not applied and the provider is asked.
+    await charge("evt_total_same_second", later + 20, 6000);
+    expect(await read()).toMatchObject({ refundedAmount: 4000, refundPending: true });
+    expect(await reconcileTicketRefunds(env.DB, paymentEnv, 5, total(6000))).toEqual({ reconciled: 1, failed: 0 });
+    expect(await read()).toMatchObject({ status: "paid", refundedAmount: 6000, refundPending: false });
   });
 
   it("returns a payment made on a page for an earlier price and leaves the ticket to be paid", async () => {

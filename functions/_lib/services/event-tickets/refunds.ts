@@ -197,8 +197,12 @@ export function prepareFailRefund(
 
 /**
  * Applies the provider's own total of what a payment has returned. The total
- * is the truth as of `at`, so one older than a refund fact already applied is
- * left out: events can arrive in any order.
+ * is the truth as of `at`, a whole second at the provider, and events arrive
+ * in any order:
+ * - one older than the newest refund fact applied is left out;
+ * - one newer is applied;
+ * - one from the same second cannot be placed before or after that fact, so
+ *   it is not applied and the provider is asked instead.
  */
 export function prepareRefundedTotal(
   db: DatabaseLike,
@@ -207,15 +211,24 @@ export function prepareRefundedTotal(
 ): StatementLike[] {
   const full = input.full ? 1 : 0;
   return [
+    // Runs first: applying the total below moves the ticket to this very second.
+    db
+      .prepare(
+        `UPDATE registration_tickets SET refund_reconcile_at = COALESCE(refund_reconcile_at, ?),
+           revision = revision + 1, updated_at = ?
+         WHERE id = ? AND payment_intent_id = ? AND refunds_seen_at = ?`,
+      )
+      .bind(now, now, input.ticketId, input.paymentIntentId, input.at),
     db
       .prepare(
         `UPDATE registration_tickets SET refunded_amount = CASE WHEN ? = 1 THEN amount ELSE MIN(amount, ?) END,
            status = CASE WHEN ? = 1 AND status = 'paid' THEN 'refunded' ELSE status END,
            refunds_seen_at = ?, revision = revision + 1, updated_at = ?
-         WHERE id = ? AND payment_intent_id = ? AND (refunds_seen_at IS NULL OR refunds_seen_at <= ?)`,
+         WHERE id = ? AND payment_intent_id = ? AND (refunds_seen_at IS NULL OR refunds_seen_at < ?)`,
       )
       .bind(full, input.refunded, full, input.at, now, input.ticketId, input.paymentIntentId, input.at),
     // All of the payment went back, so every refund of it that the provider holds is done.
+    // Not while the provider is still to be asked: then the total above was not taken on trust.
     db
       .prepare(
         `UPDATE registration_ticket_refunds SET completed_at = COALESCE(completed_at, ?), last_error = NULL
@@ -223,7 +236,8 @@ export function prepareRefundedTotal(
            AND EXISTS (SELECT 1 FROM registration_tickets ticket
                        WHERE ticket.id = registration_ticket_refunds.ticket_id AND ticket.id = ?
                          AND ticket.payment_intent_id = registration_ticket_refunds.payment_intent_id
-                         AND ticket.refunds_seen_at = ?)`,
+                         AND ticket.refunds_seen_at = ? AND ticket.status = 'refunded'
+                         AND ticket.refund_reconcile_at IS NULL)`,
       )
       .bind(now, full, input.paymentIntentId, input.ticketId, input.at),
   ];
@@ -232,8 +246,14 @@ export function prepareRefundedTotal(
 /**
  * Reads again from the provider what each marked ticket's payment has
  * returned, and makes the ticket say that: the amount, and paid or refunded.
- * A ticket is marked when one of its refunds failed. One the provider could
- * not answer for stays marked for the next run.
+ * A ticket is marked when one of its refunds failed, or when a reported total
+ * could not be placed in order.
+ *
+ * The answer is written only to the ticket as it was before the provider was
+ * asked: an event that changed it meanwhile may be newer than the answer, so
+ * the ticket stays marked and is read again on the next run. The answer
+ * counts as known from the second the question was asked, never later, so an
+ * event from after that is still applied when it arrives.
  */
 export async function reconcileTicketRefunds(
   db: DatabaseLike,
@@ -242,9 +262,9 @@ export async function reconcileTicketRefunds(
   fetcher?: typeof fetch,
 ): Promise<{ reconciled: number; failed: number }> {
   if (!env.STRIPE_SECRET_KEY) return { reconciled: 0, failed: 0 };
-  const due = await all<{ id: string; payment_intent_id: string; refund_reconcile_at: string }>(
+  const due = await all<{ id: string; payment_intent_id: string; revision: number }>(
     db,
-    `SELECT id, payment_intent_id, refund_reconcile_at FROM registration_tickets
+    `SELECT id, payment_intent_id, revision FROM registration_tickets
      WHERE refund_reconcile_at IS NOT NULL AND payment_intent_id IS NOT NULL
      ORDER BY refund_reconcile_at, id LIMIT ?`,
     [limit],
@@ -252,33 +272,49 @@ export async function reconcileTicketRefunds(
   let reconciled = 0;
   let failed = 0;
   for (const ticket of due) {
+    // The provider's times are whole seconds; so is this one, to compare like with like.
+    const askedAt = new Date(Math.floor(Date.now() / 1000) * 1000).toISOString();
     try {
       const total = await readStripeRefundedTotal(env.STRIPE_SECRET_KEY, ticket.payment_intent_id, {
         fetcher,
         apiBase: env.STRIPE_API_BASE,
       });
       const now = nowIso();
-      // Only the mark that was read is cleared: a refund that failed meanwhile asks for another reading.
-      await run(
-        db,
-        `UPDATE registration_tickets SET refunded_amount = CASE WHEN ? = 1 THEN amount ELSE MIN(amount, ?) END,
-           status = CASE WHEN ? = 1 AND status IN ('paid', 'refunded') THEN 'refunded'
-                         WHEN ? = 0 AND status = 'refunded' THEN 'paid' ELSE status END,
-           refunds_seen_at = ?, refund_reconcile_at = NULL, revision = revision + 1, updated_at = ?
-         WHERE id = ? AND payment_intent_id = ? AND refund_reconcile_at = ?`,
-        [
-          total.refunded ? 1 : 0,
-          total.amountRefunded,
-          total.refunded ? 1 : 0,
-          total.refunded ? 1 : 0,
-          now,
-          now,
-          ticket.id,
-          ticket.payment_intent_id,
-          ticket.refund_reconcile_at,
-        ],
-      );
-      reconciled += 1;
+      const full = total.refunded ? 1 : 0;
+      const results = await db.batch([
+        db
+          .prepare(
+            `UPDATE registration_tickets SET refunded_amount = CASE WHEN ? = 1 THEN amount ELSE MIN(amount, ?) END,
+               status = CASE WHEN ? = 1 AND status IN ('paid', 'refunded') THEN 'refunded'
+                             WHEN ? = 0 AND status = 'refunded' THEN 'paid' ELSE status END,
+               refunds_seen_at = CASE WHEN refunds_seen_at IS NULL OR refunds_seen_at < ? THEN ? ELSE refunds_seen_at END,
+               refund_reconcile_at = NULL, revision = revision + 1, updated_at = ?
+             WHERE id = ? AND payment_intent_id = ? AND revision = ?`,
+          )
+          .bind(
+            full,
+            total.amountRefunded,
+            full,
+            full,
+            askedAt,
+            askedAt,
+            now,
+            ticket.id,
+            ticket.payment_intent_id,
+            ticket.revision,
+          ),
+        // The provider says all of it went back: its refunds of this payment are done.
+        db
+          .prepare(
+            `UPDATE registration_ticket_refunds SET completed_at = COALESCE(completed_at, ?), last_error = NULL
+             WHERE ? = 1 AND payment_intent_id = ? AND submitted_at IS NOT NULL AND failed_at IS NULL
+               AND EXISTS (SELECT 1 FROM registration_tickets ticket
+                           WHERE ticket.id = ? AND ticket.id = registration_ticket_refunds.ticket_id
+                             AND ticket.revision = ? AND ticket.refund_reconcile_at IS NULL)`,
+          )
+          .bind(now, full, ticket.payment_intent_id, ticket.id, ticket.revision + 1),
+      ]);
+      if (results[0]?.meta?.changes) reconciled += 1;
     } catch {
       failed += 1;
     }
