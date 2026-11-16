@@ -60,6 +60,11 @@ async function linkedOrganization(email: string) {
   return { organizationId, identityId: linked!.identityId, ...person };
 }
 
+/** An automatic link starts unlisted; a primary or secondary contact or staff lists it on the member profile. */
+async function listOnOrganizationProfile(identityId: string) {
+  await env.DB.prepare("UPDATE identities SET show_on_organization_profile=1 WHERE id=?").bind(identityId).run();
+}
+
 function call(token: string, path: string, body?: unknown): Promise<Response> {
   return callApi(env, `/api/v1/users/current/identities/offer${path}`, {
     method: body === undefined ? "GET" : "POST",
@@ -189,6 +194,7 @@ describe("telling a person about an automatic organization link", () => {
   it.each(["keep", "decline"])("publishes a public linked identity on %s", async (action) => {
     const f = await linkedOrganization("public@open-claimed.example");
     await seedOrganizationAggregate(env.DB, f.organizationId);
+    await listOnOrganizationProfile(f.identityId);
     const attempt = () =>
       action === "keep"
         ? call(f.token, "/confirmations", { organizationId: f.organizationId, jobTitle: "Public engineer" })
@@ -240,6 +246,7 @@ describe("telling a person about an automatic organization link", () => {
     async (action) => {
       const f = await linkedOrganization("atomic@open-claimed.example");
       await seedOrganizationAggregate(env.DB, f.organizationId);
+      await listOnOrganizationProfile(f.identityId);
       const before = await queryAll(env.DB, "SELECT job_title,ended_at,updated_at FROM identities WHERE id=?", [
         f.identityId,
       ]);

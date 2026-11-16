@@ -462,6 +462,8 @@ async function buildProvisionOrganizationTiedMemberships(
         biography: rep.biography ?? null,
         linksJson: rep.links ? serializeLinks(rep.links) : null,
         source: input.identitySource,
+        // Staff provisioning or an approved application names these representatives.
+        showOnOrganizationProfile: true,
         startImmediately: input.activateIdentities,
         now,
       }));

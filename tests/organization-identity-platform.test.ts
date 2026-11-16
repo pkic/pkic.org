@@ -193,7 +193,7 @@ describe("acting identity domain evidence", () => {
     ]);
   });
 
-  it("publishes the legacy verified-domain join's new public identity", async () => {
+  it("publishes the legacy verified-domain join's person but keeps the new identity off the member profile", async () => {
     const f = await secondaryWorkFixture();
     const { statements } = await prepareExplicitVerifiedDomainIdentity(env.DB, {
       userId: f.userId,
@@ -207,10 +207,12 @@ describe("acting identity domain evidence", () => {
       .first("id");
     expect(
       await queryAll(env.DB, "SELECT resource_id,reason_code FROM site_publication_requests ORDER BY sequence"),
-    ).toEqual([
-      { resource_id: identityId, reason_code: "identity_profile_changed" },
-      { resource_id: f.userId, reason_code: "user_profile_changed" },
-    ]);
+    ).toEqual([{ resource_id: f.userId, reason_code: "user_profile_changed" }]);
+    expect(
+      await env.DB.prepare("SELECT show_on_organization_profile FROM identities WHERE id=?")
+        .bind(identityId)
+        .first("show_on_organization_profile"),
+    ).toBe(0);
   });
 
   it.each([

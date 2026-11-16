@@ -146,7 +146,9 @@ export async function buildCreateIdentityStatement(
     transferFromIdentityId: predecessorIdentityId,
   };
   await requireIdentityEmailAssignable(db, { ...ownership, identityId: null }, observed?.emailOwner);
-  const showOnOrganizationProfile = input.organizationId !== null && input.showOnOrganizationProfile !== false ? 1 : 0;
+  // A person joining on their own is not listed: PKI Consortium staff or the
+  // organization's primary or secondary contact decide who the organization's page shows.
+  const showOnOrganizationProfile = input.organizationId !== null && input.showOnOrganizationProfile === true ? 1 : 0;
   const values = [
     identityId,
     input.userId,
