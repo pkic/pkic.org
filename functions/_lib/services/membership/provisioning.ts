@@ -9,7 +9,8 @@ import {
  * Application approval, staff provisioning, and imports use the same prepared
  * atomic command: organization, membership, identity, contact roles, and group
  * relationships commit together. Existing approved organization affiliations
- * are reused unchanged; membership is projected through their canonical link.
+ * retain their canonical profiles and are explicitly listed; membership is
+ * projected through their canonical link.
  *
  * All build decisions use pre-batch reads. Guarded identity reuse, unique
  * constraints, and the caller's approval/permission evidence reject stale
@@ -468,8 +469,16 @@ async function buildProvisionOrganizationTiedMemberships(
         now,
       }));
     const identityId = prepared.identityId;
-    if (!existingAffiliation && input.activateIdentities) publicIdentityIds.push(identityId);
     statements.push(prepared.statement);
+    if (existingAffiliation && !existingAffiliation.showOnOrganizationProfile) {
+      // The reuse guard must check the observed profile before visibility changes.
+      statements.push(
+        db
+          .prepare("UPDATE identities SET show_on_organization_profile=1,updated_at=? WHERE id=?")
+          .bind(now, identityId),
+      );
+    }
+    if (input.activateIdentities && !existingAffiliation?.showOnOrganizationProfile) publicIdentityIds.push(identityId);
 
     if (input.activateIdentities) {
       for (const group of groups) {
