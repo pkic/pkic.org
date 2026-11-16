@@ -297,7 +297,7 @@ describe("canonical organization affiliations", () => {
         prepared.identityId,
       ]),
     ).toEqual(beforeIdentity);
-    expect((await getPublicMemberById(env.DB, prepared.organizationId))?.identities).toHaveLength(1);
+    expect((await getPublicMemberById(env.DB, prepared.organizationId))?.identities).toEqual([]);
     expect(
       await queryAll(
         env.DB,
@@ -312,41 +312,79 @@ describe("canonical organization affiliations", () => {
   });
 
   it.each(["staff", "membership_approval"] as const)(
-    "lists and publishes an unlisted verified-email affiliation reused by %s provisioning",
+    "preserves default-hidden and owner-hidden affiliations reused by %s provisioning",
     async (identitySource) => {
       const person = await verifiedPerson();
       const organizationId = await insertOrganization(env.DB, "Reused representative organization");
       await claimDomain(organizationId);
       const affiliation = await prepare(person, { organizationId });
       await env.DB.batch(affiliation.statements);
-      const memberId = await seedOrganizationAggregate(env.DB, organizationId);
-      expect((await getPublicMemberById(env.DB, organizationId))?.identities).toEqual([]);
-      const provision = await buildProvisionOrganizationMembership(env.DB, {
-        organizationId,
-        organizationName: "Reused representative organization",
-        membershipCategory: "A",
-        identities: [{ name: "Approved representative", email: person.email }],
-        identitySource,
-        activateIdentities: true,
-        rejectExistingMembership: false,
-        workingGroupSlugs: [],
-      });
-      // Failure of the publication insert must roll back visibility and contact roles too.
-      await env.DB.prepare(`CREATE TRIGGER fail_reuse_publication BEFORE INSERT ON site_publication_requests
-        WHEN NEW.resource_type='membership' BEGIN SELECT RAISE(ABORT,'forced reuse publication failure'); END`).run();
-      try {
-        await expect(env.DB.batch(provision.statements)).rejects.toThrow("forced reuse publication failure");
+      await seedOrganizationAggregate(env.DB, organizationId, "A");
+      for (const deliberatelyHidden of [false, true]) {
+        if (deliberatelyHidden) {
+          await env.DB.prepare("UPDATE identities SET show_on_organization_profile=1,job_title='Researcher' WHERE id=?")
+            .bind(affiliation.identityId)
+            .run();
+          const token = await createAdminSession(
+            env.DB,
+            person.userId,
+            crypto.randomUUID(),
+            undefined,
+            affiliation.identityId,
+          );
+          const hidden = await callApi(env, "/api/v1/users/current", {
+            method: "PATCH",
+            headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+            body: JSON.stringify({ showOnOrgProfile: false }),
+          });
+          expect(hidden.status, await hidden.clone().text()).toBe(200);
+        }
+        const before = await queryAll(
+          env.DB,
+          "SELECT show_on_organization_profile,updated_at FROM identities WHERE id=?",
+          [affiliation.identityId],
+        );
+        const audit = await queryAll(
+          env.DB,
+          "SELECT id FROM audit_log WHERE entity_id=? AND action='identity_profile_updated'",
+          [affiliation.identityId],
+        );
+        // Automatic group enrollment may publish the person independently of the preserved roster visibility.
+        const publications = await queryAll(
+          env.DB,
+          "SELECT id FROM site_publication_requests WHERE resource_type IN ('membership','identity_profile')",
+        );
+        const provision = await buildProvisionOrganizationMembership(env.DB, {
+          organizationId,
+          organizationName: "Reused representative organization",
+          membershipCategory: "A",
+          identities: [{ name: "Approved representative", email: person.email }],
+          identitySource,
+          activateIdentities: true,
+          rejectExistingMembership: false,
+          workingGroupSlugs: [],
+        });
+        await env.DB.batch(provision.statements);
+        expect(provision.buildResult().identities[0].identityId).toBe(affiliation.identityId);
         expect((await getPublicMemberById(env.DB, organizationId))?.identities).toEqual([]);
-        expect(await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id=?", person.userId)).toEqual([]);
-      } finally {
-        await env.DB.prepare("DROP TRIGGER fail_reuse_publication").run();
+        expect(
+          await queryAll(env.DB, "SELECT show_on_organization_profile,updated_at FROM identities WHERE id=?", [
+            affiliation.identityId,
+          ]),
+        ).toEqual(before);
+        expect(
+          await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id=? AND action='identity_profile_updated'", [
+            affiliation.identityId,
+          ]),
+        ).toEqual(audit);
+        expect(
+          await queryAll(
+            env.DB,
+            "SELECT id FROM site_publication_requests WHERE resource_type IN ('membership','identity_profile')",
+          ),
+        ).toEqual(publications);
+        if (deliberatelyHidden) expect(audit).toHaveLength(1);
       }
-      await env.DB.batch(provision.statements);
-      expect(provision.buildResult().identities[0].identityId).toBe(affiliation.identityId);
-      expect((await getPublicMemberById(env.DB, organizationId))?.identities).toHaveLength(1);
-      expect(
-        await queryAll(env.DB, "SELECT resource_id FROM site_publication_requests WHERE resource_type='membership'"),
-      ).toEqual([{ resource_id: memberId }]);
     },
   );
 

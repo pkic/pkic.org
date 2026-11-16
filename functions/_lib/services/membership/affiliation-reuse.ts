@@ -14,7 +14,6 @@ export async function prepareExistingOrganizationAffiliation(
 ): Promise<{
   identityId: string;
   createdAt: string;
-  showOnOrganizationProfile: boolean;
   statement: StatementLike;
 } | null> {
   const identity = await first<{
@@ -43,7 +42,6 @@ export async function prepareExistingOrganizationAffiliation(
   return {
     identityId: identity.id,
     createdAt: persistedUtcInstant(identity.created_at),
-    showOnOrganizationProfile: identity.show_on_organization_profile === 1,
     statement: prepareAuthorizationGuard(db, {
       sql: `SELECT 1 FROM identities identity JOIN users person ON person.id=identity.user_id AND person.active=1
              WHERE identity.id=? AND identity.user_id=? AND identity.organization_id=?

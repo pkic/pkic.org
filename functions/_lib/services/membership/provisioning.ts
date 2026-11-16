@@ -470,15 +470,8 @@ async function buildProvisionOrganizationTiedMemberships(
       }));
     const identityId = prepared.identityId;
     statements.push(prepared.statement);
-    if (existingAffiliation && !existingAffiliation.showOnOrganizationProfile) {
-      // The reuse guard must check the observed profile before visibility changes.
-      statements.push(
-        db
-          .prepare("UPDATE identities SET show_on_organization_profile=1,updated_at=? WHERE id=?")
-          .bind(now, identityId),
-      );
-    }
-    if (input.activateIdentities && !existingAffiliation?.showOnOrganizationProfile) publicIdentityIds.push(identityId);
+    // Reuse preserves the person's existing profile, including a deliberate choice to hide.
+    if (input.activateIdentities && !existingAffiliation) publicIdentityIds.push(identityId);
 
     if (input.activateIdentities) {
       for (const group of groups) {

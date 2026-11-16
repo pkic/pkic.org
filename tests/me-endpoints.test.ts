@@ -166,6 +166,40 @@ describe("Current-user and application self-service", () => {
     expect(rows[0].show_on_organization_profile).toBe(0);
   });
 
+  it.each(["verified_domain", "verified_email"] as const)(
+    "refuses self-listing for a %s affiliation without changing the profile, audit, or publication",
+    async (source) => {
+      const userId = await insertActiveMember("self-listing@example.test", "F");
+      const token = await createMemberSession(env.DB, userId, "self-listing-token");
+      await env.DB.prepare("UPDATE identities SET source=?,job_title='Researcher' WHERE user_id=?")
+        .bind(source, userId)
+        .run();
+      // A previously listed self-joiner can still hide themselves.
+      const hidden = await call(token, "/api/v1/users/current", {
+        method: "PATCH",
+        body: JSON.stringify({ showOnOrgProfile: false }),
+      });
+      expect(hidden.status, await hidden.clone().text()).toBe(200);
+      const before = await queryAll(env.DB, "SELECT biography,updated_at FROM identities WHERE user_id=?", userId);
+      const audit = await queryAll(env.DB, "SELECT id FROM audit_log");
+      const publications = await queryAll(env.DB, "SELECT id FROM site_publication_requests");
+      const listed = await call(token, "/api/v1/users/current", {
+        method: "PATCH",
+        body: JSON.stringify({ showOnOrgProfile: true, biography: "Must not be saved" }),
+      });
+      expect(listed.status).toBe(403);
+      expect(await listed.json()).toMatchObject({ error: { code: "ORGANIZATION_LISTING_REQUIRES_APPROVAL" } });
+      expect(await queryAll(env.DB, "SELECT biography,updated_at FROM identities WHERE user_id=?", userId)).toEqual(
+        before,
+      );
+      expect(
+        await queryAll(env.DB, "SELECT show_on_organization_profile FROM identities WHERE user_id=?", userId),
+      ).toEqual([{ show_on_organization_profile: 0 }]);
+      expect(await queryAll(env.DB, "SELECT id FROM audit_log")).toEqual(audit);
+      expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toEqual(publications);
+    },
+  );
+
   it("queues public name changes through the owner's form, but not unchanged or preferred-only saves", async () => {
     const userId = await insertActiveMember("name-publication@example.test", "H6");
     const token = await createMemberSession(env.DB, userId, "name-publication-token");
