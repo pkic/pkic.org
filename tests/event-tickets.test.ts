@@ -511,8 +511,34 @@ describe("event tickets", () => {
     const answer = (status: number, body: unknown) =>
       (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
 
+    // One of the ticket's refunds fails between the organizer's read and the write: the request is refused whole,
+    // with no refund and no audit entry, and goes through once the ticket is settled again.
+    const ticketId = (await read())!.id;
+    const raced = {
+      prepare: (sql: string) => env.DB.prepare(sql),
+      batch: async (statements: D1PreparedStatement[]) => {
+        await env.DB.prepare("UPDATE registration_tickets SET refund_reconcile_at = ? WHERE id = ?")
+          .bind(new Date().toISOString(), ticketId)
+          .run();
+        return env.DB.batch(statements);
+      },
+    } as unknown as typeof env.DB;
+    await expect(requestTicketRefund(raced, admin, { ...input, reason: "Visa refused" })).rejects.toMatchObject({
+      code: "TICKET_REFUND_PENDING",
+    });
+    const written = () =>
+      env.DB.prepare(
+        `SELECT (SELECT COUNT(*) FROM registration_ticket_refunds) AS refunds,
+                (SELECT COUNT(*) FROM audit_log WHERE action = 'registration_ticket_refund_requested') AS audits`,
+      ).first();
+    expect(await written()).toEqual({ refunds: 0, audits: 0 });
+    await env.DB.prepare("UPDATE registration_tickets SET refund_reconcile_at = NULL WHERE id = ?")
+      .bind(ticketId)
+      .run();
+
     // The provider confirms the refund at once, then fails it: the ticket is paid again and can be refunded again.
     await requestTicketRefund(env.DB, admin, { ...input, reason: "Visa refused" });
+    expect(await written()).toEqual({ refunds: 1, audits: 1 });
     await processTicketRefunds(env.DB, paymentEnv, 5, answer(200, { id: "re_first", status: "succeeded" }));
     expect(await read()).toMatchObject({ status: "refunded", refundedAmount: 19500, refundPending: false });
     const failure = {
