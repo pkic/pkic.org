@@ -8,7 +8,7 @@
  * there is stated rather than skipped.
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
@@ -137,7 +137,8 @@ describe("DescriptionList", () => {
     const container = mount(<DescriptionList items={[email]} />);
     const value = container.querySelector("dd");
     const button = container.querySelector("button");
-    button?.focus();
+    expect(button).not.toBeNull();
+    button!.focus();
 
     for (const items of [[{ term: "Name", value: "Example Participant" }, email], [email]]) {
       void act(() => render(<DescriptionList items={items} />, container));
@@ -154,7 +155,8 @@ describe("DescriptionList", () => {
     const container = mount(<DescriptionList items={[first, second, availability]} />);
     const value = container.querySelectorAll("dd")[1];
     const button = container.querySelector("button");
-    button?.focus();
+    expect(button).not.toBeNull();
+    button!.focus();
 
     for (const items of [
       [second, first, availability],
@@ -164,6 +166,31 @@ describe("DescriptionList", () => {
       expect(container.querySelector("dd")).toBe(value);
       expect(container.querySelector("button")).toBe(button);
       expect(document.activeElement).toBe(button);
+    }
+  });
+
+  it("warns about duplicate effective keys only during development", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      vi.stubEnv("DEV", true);
+      mount(<DescriptionList items={[{ term: "Comments" }, { key: "Comments", term: "Other label" }]} />);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('duplicate row key "Comments"'));
+      warn.mockClear();
+      mount(
+        <DescriptionList
+          items={[
+            { key: "one", term: "Comments" },
+            { key: "two", term: "Comments" },
+          ]}
+        />,
+      );
+      expect(warn).not.toHaveBeenCalled();
+      vi.stubEnv("DEV", false);
+      mount(<DescriptionList items={[{ term: "Comments" }, { term: "Comments" }]} />);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+      warn.mockRestore();
     }
   });
 

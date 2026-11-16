@@ -62,10 +62,10 @@
    */
   .pk-datalist {
     display: grid;
-    /* A length cap also works during intrinsic sizing, where a percentage
-       resolves too late and wraps labels inside an unnecessarily wide list.
+    /* The length floor protects intrinsic layouts from a percentage-only cap;
+       the term column grows with available width up to a readable 20rem.
        The zero value minimum keeps an unbreakable URL from widening the grid. */
-    grid-template-columns: var(--pk-datalist-term, fit-content(12rem)) minmax(0, 1fr);
+    grid-template-columns: var(--pk-datalist-term, fit-content(clamp(12rem, 40%, 20rem))) minmax(0, 1fr);
     gap: var(--pk-1) var(--pk-3);
     margin: 0;
   }

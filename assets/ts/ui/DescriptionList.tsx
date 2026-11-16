@@ -68,6 +68,17 @@ export function DescriptionList({
     .filter(Boolean)
     .join(" ");
 
+  if (import.meta.env.DEV) {
+    const keys = new Set<string>();
+    for (const item of items) {
+      const key = item.key ?? item.term;
+      if (keys.has(key)) {
+        console.warn(`DescriptionList: duplicate row key "${key}". Supply a unique, stable key for each item.`);
+      }
+      keys.add(key);
+    }
+  }
+
   return (
     <dl class={classes}>
       {items.map((item) => (

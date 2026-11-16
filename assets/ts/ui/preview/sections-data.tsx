@@ -203,6 +203,7 @@ export const dataSections: PreviewSection[] = [
             <DescriptionList
               items={[
                 { term: "Legal name", value: "SecureCA Inc" },
+                { term: "Certificate practice statement", value: "Published" },
                 { term: "Membership", value: "Full member since 2021" },
                 {
                   term: "Certification practice statement",
