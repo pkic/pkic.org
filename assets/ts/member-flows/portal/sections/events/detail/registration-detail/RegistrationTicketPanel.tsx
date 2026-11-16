@@ -131,7 +131,7 @@ export function RegistrationTicketPanel({
               { id: "move", label: "Move to the decided ticket", onSelect: () => void review("move") },
             ]
           : []),
-        ...(ticket.status === "paid" && !ticket.refundPending
+        ...(ticket.status === "paid" && !ticket.refundPending && ticket.paidAmount > ticket.refundedAmount
           ? [{ id: "refund", label: "Refund ticket", onSelect: () => setRefunding(true) }]
           : []),
       ]
@@ -163,6 +163,10 @@ export function RegistrationTicketPanel({
             { term: "Payment", value: status(ticket) },
             { term: "Given", value: SOURCE_LABELS[ticket.source] },
             ...(ticket.codeLabel ? [{ term: "Code", value: ticket.codeLabel }] : []),
+            // After a move to days that cost less, what was paid is more than the price.
+            ...(ticket.paidAmount !== ticket.amount && ticket.paidAmount > 0
+              ? [{ term: "Paid", value: formatTicketMoney(ticket.paidAmount, ticket.currency) }]
+              : []),
             ...(ticket.paymentReference ? [{ term: "Payment reference", value: ticket.paymentReference }] : []),
             ...(ticket.refundedAmount > 0
               ? [{ term: "Refunded", value: formatTicketMoney(ticket.refundedAmount, ticket.currency) }]
@@ -173,7 +177,7 @@ export function RegistrationTicketPanel({
       <Dialog
         open={refunding}
         title="Refund ticket"
-        description={`${formatTicketMoney(ticket.amount - ticket.refundedAmount, ticket.currency)} goes back to the person's payment method. Their in-person place ends when the refund is confirmed.`}
+        description={`${formatTicketMoney(ticket.paidAmount - ticket.refundedAmount, ticket.currency)} goes back to the person's payment method. Their in-person place ends when the refund is confirmed.`}
         confirmLabel="Refund ticket"
         confirmDisabled={saving}
         destructive

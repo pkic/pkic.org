@@ -15,6 +15,7 @@ import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { priceTicket, readTicketPerson, resolveTicket } from "./assignment";
+import { refundDeadlineSql } from "./refund-policy";
 import { OPEN_REFUND_SQL } from "./refunds";
 import { prepareRepriceTicketForDays } from "./reprice";
 import { eventSellsTickets, readEventTicketSnapshot } from "./snapshot";
@@ -195,7 +196,7 @@ export async function planRegistrationTicket(
            status = excluded.status, dispute_reason = excluded.dispute_reason, dispute_resolved_at = NULL,
            held_email_id = excluded.held_email_id, reminders_sent = 0,
            next_reminder_at = excluded.next_reminder_at, reminders_end_at = excluded.reminders_end_at,
-           paid_at = NULL, payment_intent_id = NULL, refunded_amount = 0, refunds_seen_at = NULL,
+           paid_at = NULL, payment_intent_id = NULL, paid_amount = 0, refunded_amount = 0, refunds_seen_at = NULL,
            refund_reconcile_at = NULL,
            revision = registration_tickets.revision + 1, updated_at = excluded.updated_at
          WHERE registration_tickets.status NOT IN ('paid') AND registration_tickets.refund_reconcile_at IS NULL`,
@@ -285,16 +286,18 @@ interface TicketReadRow {
   dispute_reason: string | null;
   dispute_resolved_at: string | null;
   refunded_amount: number;
+  paid_amount: number;
   refund_pending: number;
   refund_failed: number;
   payment_reference: string | null;
+  refund_deadline: string | null;
 }
 
 export const REGISTRATION_TICKET_READ_SQL = `
   SELECT ticket.id, type.ticket_key, type.name AS ticket_name, ticket.assignment_source, ticket.status,
          ticket.amount, ticket.currency, code.label AS code_label, ticket.paid_at, ticket.dispute_reason,
          ticket.dispute_resolved_at,
-         ticket.refunded_amount,
+         ticket.refunded_amount, ticket.paid_amount,
          (ticket.refund_reconcile_at IS NOT NULL
           OR EXISTS (SELECT 1 FROM registration_ticket_refunds refund
                      WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL})) AS refund_pending,
@@ -303,9 +306,12 @@ export const REGISTRATION_TICKET_READ_SQL = `
            AS refund_failed,
          (SELECT checkout.payment_intent_id FROM registration_ticket_checkouts checkout
           WHERE checkout.ticket_id = ticket.id AND checkout.payment_intent_id IS NOT NULL
-          ORDER BY checkout.created_at DESC LIMIT 1) AS payment_reference
+          ORDER BY checkout.created_at DESC LIMIT 1) AS payment_reference,
+         ${refundDeadlineSql("settings", "event")} AS refund_deadline
   FROM registration_tickets ticket
   JOIN event_ticket_types type ON type.id = ticket.ticket_type_id
+  JOIN events event ON event.id = ticket.event_id
+  LEFT JOIN event_ticket_settings settings ON settings.event_id = ticket.event_id
   LEFT JOIN event_ticket_codes code ON code.id = ticket.code_id`;
 
 export function decodeRegistrationTicket(row: TicketReadRow | null): RegistrationTicket | null {
@@ -325,7 +331,9 @@ export function decodeRegistrationTicket(row: TicketReadRow | null): Registratio
     refundPending: row.refund_pending === 1,
     refundFailed: row.refund_failed === 1,
     refundedAmount: row.refunded_amount,
+    paidAmount: row.paid_amount,
     paymentReference: row.payment_reference,
+    refundableUntil: row.refund_deadline,
   };
 }
 
@@ -396,7 +404,7 @@ export function prepareRestoreRegistrationTicket(
     db
       .prepare(
         `UPDATE registration_tickets SET status = CASE WHEN amount = 0 THEN 'free' ELSE 'pending_payment' END,
-           reminders_sent = 0, payment_intent_id = NULL, refunded_amount = 0, refunds_seen_at = NULL,
+           reminders_sent = 0, payment_intent_id = NULL, paid_amount = 0, refunded_amount = 0, refunds_seen_at = NULL,
            refund_reconcile_at = NULL, revision = revision + 1, updated_at = ?
          WHERE registration_id = ? AND status = 'canceled'`,
       )

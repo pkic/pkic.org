@@ -31,6 +31,7 @@ export function TicketStepTextsPanel({
       reminderIntervalDays: saved.reminderIntervalDays,
       reminderPeriodDays: saved.reminderPeriodDays,
       sendInvoice: saved.sendInvoice,
+      refundDaysBeforeEvent: saved.refundDaysBeforeEvent,
       ticketIntro,
       attendanceIntro,
     },

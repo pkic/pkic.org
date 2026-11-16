@@ -18,6 +18,7 @@ import { createStripeRefund, readStripeRefundedTotal, STRIPE_REFUND_REFUSED } fr
 import { createDurableJobLease } from "../../jobs/lease";
 import type { DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { uuid } from "../../utils/ids";
+import { statusAfterRefundSql } from "./refund-policy";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 
@@ -36,7 +37,7 @@ export async function requestTicketRefund(
 ): Promise<void> {
   const ticket = await first<{ id: string; amount: number; refunded_amount: number; status: string; open: number }>(
     db,
-    `SELECT ticket.id, ticket.amount, ticket.refunded_amount, ticket.status,
+    `SELECT ticket.id, ticket.paid_amount AS amount, ticket.refunded_amount, ticket.status,
             (ticket.refund_reconcile_at IS NOT NULL
              OR EXISTS (SELECT 1 FROM registration_ticket_refunds refund
                         WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL})) AS open
@@ -56,7 +57,7 @@ export async function requestTicketRefund(
     // or one of its refunds may have failed, since it was read.
     prepareStateGuard(db, {
       sql: `SELECT 1 FROM registration_tickets ticket
-            WHERE ticket.id = ? AND ticket.status = 'paid' AND ticket.amount > ticket.refunded_amount
+            WHERE ticket.id = ? AND ticket.status = 'paid' AND ticket.paid_amount > ticket.refunded_amount
               AND ticket.refund_reconcile_at IS NULL
               AND NOT EXISTS (SELECT 1 FROM registration_ticket_refunds refund
                               WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL})`,
@@ -67,8 +68,8 @@ export async function requestTicketRefund(
       .prepare(
         `INSERT INTO registration_ticket_refunds
            (id, ticket_id, payment_intent_id, amount, reason, requested_by_user_id, next_attempt_at, created_at)
-         SELECT ?, id, payment_intent_id, amount - refunded_amount, ?, ?, ?, ?
-         FROM registration_tickets WHERE id = ? AND status = 'paid' AND amount > refunded_amount
+         SELECT ?, id, payment_intent_id, paid_amount - refunded_amount, ?, ?, ?, ?
+         FROM registration_tickets WHERE id = ? AND status = 'paid' AND paid_amount > refunded_amount
            AND refund_reconcile_at IS NULL
            AND NOT EXISTS (SELECT 1 FROM registration_ticket_refunds refund
                            WHERE refund.ticket_id = registration_tickets.id AND ${OPEN_REFUND_SQL})`,
@@ -138,11 +139,21 @@ export function prepareCompleteRefund(
                      AND refund.ticket_id = registration_tickets.id
                      AND refund.payment_intent_id = registration_tickets.payment_intent_id`;
   return [
+    // A refund of part of what is left, such as the difference after a move to cheaper days, leaves the ticket
+    // paid. What the payment has returned in all is then read from the provider, not added up here.
     db
       .prepare(
-        `UPDATE registration_tickets SET status = 'refunded', refunded_amount = amount, refunds_seen_at = ?,
+        `UPDATE registration_tickets SET refund_reconcile_at = COALESCE(refund_reconcile_at, ?),
            revision = revision + 1, updated_at = ?
-         WHERE status = 'paid' AND EXISTS (${pending})`,
+         WHERE status = 'paid' AND EXISTS (${pending} AND refund.amount < registration_tickets.paid_amount - registration_tickets.refunded_amount)`,
+      )
+      .bind(now, now, match.value),
+    db
+      .prepare(
+        `UPDATE registration_tickets SET status = ${statusAfterRefundSql("paid_amount")}, refunded_amount = paid_amount,
+           refunds_seen_at = ?, revision = revision + 1, updated_at = ?
+         WHERE status = 'paid' AND refund_reconcile_at IS NULL
+           AND EXISTS (${pending} AND refund.amount >= registration_tickets.paid_amount - registration_tickets.refunded_amount)`,
       )
       .bind(now, now, match.value),
     db
@@ -228,6 +239,7 @@ export function prepareRefundedTotal(
   now: string,
 ): StatementLike[] {
   const full = input.full ? 1 : 0;
+  const returnedSql = "CASE WHEN ? = 1 THEN paid_amount ELSE MIN(paid_amount, ?) END";
   return [
     // Runs first: applying the total below moves the ticket to this very second.
     db
@@ -239,12 +251,12 @@ export function prepareRefundedTotal(
       .bind(now, now, input.ticketId, input.paymentIntentId, input.at),
     db
       .prepare(
-        `UPDATE registration_tickets SET refunded_amount = CASE WHEN ? = 1 THEN amount ELSE MIN(amount, ?) END,
-           status = CASE WHEN ? = 1 AND status = 'paid' THEN 'refunded' ELSE status END,
+        `UPDATE registration_tickets SET refunded_amount = ${returnedSql},
+           status = CASE WHEN status = 'paid' THEN ${statusAfterRefundSql(returnedSql)} ELSE status END,
            refunds_seen_at = ?, revision = revision + 1, updated_at = ?
          WHERE id = ? AND payment_intent_id = ? AND (refunds_seen_at IS NULL OR refunds_seen_at < ?)`,
       )
-      .bind(full, input.refunded, full, input.at, now, input.ticketId, input.paymentIntentId, input.at),
+      .bind(full, input.refunded, full, input.refunded, input.at, now, input.ticketId, input.paymentIntentId, input.at),
     // All of the payment went back, so every refund of it that the provider holds is done.
     // Not while the provider is still to be asked: then the total above was not taken on trust.
     db
@@ -287,6 +299,7 @@ export async function reconcileTicketRefunds(
      ORDER BY refund_reconcile_at, id LIMIT ?`,
     [limit],
   );
+  const returnedSql = "CASE WHEN ? = 1 THEN paid_amount ELSE MIN(paid_amount, ?) END";
   let reconciled = 0;
   let failed = 0;
   for (const ticket of due) {
@@ -309,9 +322,8 @@ export async function reconcileTicketRefunds(
           }),
           db
             .prepare(
-              `UPDATE registration_tickets SET refunded_amount = CASE WHEN ? = 1 THEN amount ELSE MIN(amount, ?) END,
-                 status = CASE WHEN ? = 1 AND status IN ('paid', 'refunded') THEN 'refunded'
-                               WHEN ? = 0 AND status = 'refunded' THEN 'paid' ELSE status END,
+              `UPDATE registration_tickets SET refunded_amount = ${returnedSql},
+                 status = ${statusAfterRefundSql(returnedSql)},
                  refunds_seen_at = CASE WHEN refunds_seen_at IS NULL OR refunds_seen_at < ? THEN ? ELSE refunds_seen_at END,
                  refund_reconcile_at = NULL, revision = revision + 1, updated_at = ?
                WHERE id = ? AND payment_intent_id = ? AND revision = ?`,
@@ -320,7 +332,7 @@ export async function reconcileTicketRefunds(
               full,
               total.amountRefunded,
               full,
-              full,
+              total.amountRefunded,
               askedAt,
               askedAt,
               now,

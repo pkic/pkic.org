@@ -129,6 +129,17 @@ export const eventTicketSettingsSchema = z.object({
   reminderPeriodDays: z.number().int().min(0, "Enter 0 or more.").max(365, "Enter 365 or less."),
   /** The payment provider issues an invoice for each paid ticket, besides its receipt. */
   sendInvoice: z.boolean().default(true),
+  /**
+   * The refund policy. Null: no refunds. A number: a person who cancels or moves to days that cost less
+   * gets the money back until that many days before the event starts.
+   */
+  refundDaysBeforeEvent: z
+    .number()
+    .int("Enter a whole number of days.")
+    .min(0, "Enter 0 or more.")
+    .max(365, "Enter 365 or less.")
+    .nullable()
+    .default(null),
 });
 const stepTextSchema = z.string().trim().max(400, "Use 400 characters or fewer.");
 /** What registrants read above the tickets and above the days; empty shows nothing. */
@@ -279,6 +290,8 @@ export const eventTicketOfferSchema = z.object({
   nextPeriodStartsOn: calendarDateSchema.nullable(),
   /** A paid ticket is followed by an invoice from the payment provider. */
   sendInvoice: z.boolean().default(false),
+  /** Until when a paid ticket is refunded on cancellation or a move to cheaper days; null when it never is. */
+  refundableUntil: utcInstantSchema.nullable().default(null),
   ticketIntro: z.string().default(""),
   attendanceIntro: z.string().default(""),
   /** The person registers with a personal mailbox, so a ticket that is free only for work addresses costs them money. */
@@ -369,7 +382,11 @@ export const registrationTicketSchema = z.object({
   refundFailed: z.boolean(),
   /** The payment provider's reference for the payment, once paid. */
   paymentReference: z.string().nullable(),
+  /** Until when this ticket is refunded on cancellation or a move to cheaper days; null when it never is. */
+  refundableUntil: utcInstantSchema.nullable().default(null),
   refundedAmount: totalAmountSchema,
+  /** What was paid for the ticket; more than `amount` after a move to days that cost less. */
+  paidAmount: totalAmountSchema.default(0),
 });
 export type RegistrationTicket = z.infer<typeof registrationTicketSchema>;
 

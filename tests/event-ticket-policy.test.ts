@@ -9,7 +9,12 @@ import {
   type TicketPriceRule,
 } from "../assets/shared/event-tickets";
 import { eventTicketPricesReplaceSchema } from "../assets/shared/schemas/event-tickets";
-import { formatTicketAmount, parseTicketAmount, ticketPeriodLabels } from "../assets/shared/event-ticket-display";
+import {
+  formatTicketAmount,
+  parseTicketAmount,
+  ticketPeriodLabels,
+  ticketRefundNote,
+} from "../assets/shared/event-ticket-display";
 
 const periods = [
   { id: "open", startsOn: null },
@@ -176,5 +181,18 @@ describe("ticket price contract and display", () => {
     expect(formatTicketAmount(0, "usd")).toBe("Free");
     expect(ticketPeriodLabels(periods)[0]).toMatchObject({ label: "Opening price" });
     expect(ticketPeriodLabels(periods)[2].until).toBeNull();
+  });
+});
+
+describe("the refund policy as a registrant reads it", () => {
+  const now = Date.parse("2027-01-10T12:00:00.000Z");
+  it("says there are no refunds, that the period has ended, or until when", () => {
+    expect(ticketRefundNote(null, "Europe/Amsterdam", now)).toBe("Tickets for this event are not refunded.");
+    expect(ticketRefundNote("2027-01-01T08:00:00.000Z", "Europe/Amsterdam", now)).toBe(
+      "The refund period for this event has ended.",
+    );
+    expect(ticketRefundNote("2027-02-01T08:00:00.000Z", "Europe/Amsterdam", now)).toMatch(
+      /^You get your money back if you cancel before .+, and the difference if you move to days that cost less\.$/,
+    );
   });
 });

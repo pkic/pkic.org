@@ -448,6 +448,7 @@ describe("event tickets", () => {
         reminderIntervalDays: configuration.settings.reminderIntervalDays,
         reminderPeriodDays: configuration.settings.reminderPeriodDays,
         sendInvoice: configuration.settings.sendInvoice,
+        refundDaysBeforeEvent: null,
       }),
     ).rejects.toMatchObject({ code: "TICKET_CURRENCY_FIXED" });
   });
@@ -871,9 +872,15 @@ describe("event tickets", () => {
     const input = { eventId: event.id, registrationId: person.registration.id, userId: person.user.id };
     await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
     await paidEvent((await person.read())!.id, "cs_test_ticket", 19500);
+    // The event gives no refunds: moving to days that cost nothing returns nothing, and the ticket still
+    // stands for what was paid, so the person can move back without paying again.
     await person.change({ action: "update", dayAttendance: virtual });
-    expect(await person.read()).toMatchObject({ status: "paid", amount: 19500 });
-    await env.DB.prepare("UPDATE registration_tickets SET amount = 100 WHERE registration_id = ?")
+    expect(await person.read()).toMatchObject({ status: "paid", amount: 0, paidAmount: 19500, refundPending: false });
+    expect(await person.eligible()).toBe(1);
+    await person.change({ action: "update", dayAttendance: inPerson });
+    expect(await person.read()).toMatchObject({ status: "paid", amount: 19500, paidAmount: 19500 });
+    // Days that cost more than the payment covers are refused to the person, not to an organizer.
+    await env.DB.prepare("UPDATE registration_tickets SET amount = 100, paid_amount = 100 WHERE registration_id = ?")
       .bind(person.registration.id)
       .run();
     await expect(person.change({ action: "update", dayAttendance: inPerson })).rejects.toMatchObject({
@@ -889,6 +896,125 @@ describe("event tickets", () => {
     await other.change({ action: "update", dayAttendance: inPerson });
     expect(await other.read()).toMatchObject({ status: "pending_payment", amount: 19500 });
     expect(await other.eligible()).toBe(0);
+  });
+
+  it("refunds by the event's policy: the difference for cheaper days and the ticket on cancellation, within its period", async () => {
+    const { event, admin } = await seedTickets();
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO event_days (id, event_id, day_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+    )
+      .bind(crypto.randomUUID(), event.id, DAY, now, now)
+      .run();
+    const startsIn = (days: number) =>
+      env.DB.prepare("UPDATE events SET starts_at = ? WHERE id = ?")
+        .bind(new Date(Date.now() + days * 86_400_000).toISOString(), event.id)
+        .run();
+    const policy = async (refundDaysBeforeEvent: number | null) => {
+      const configuration = await readEventTicketsConfiguration(env.DB, event);
+      await updateEventTicketSettings(env.DB, admin, event, {
+        expectedRevision: configuration.revision,
+        currency: configuration.settings.currency,
+        reminderIntervalDays: configuration.settings.reminderIntervalDays,
+        reminderPeriodDays: configuration.settings.reminderPeriodDays,
+        sendInvoice: configuration.settings.sendInvoice,
+        refundDaysBeforeEvent,
+      });
+    };
+    const virtual = [{ dayDate: DAY, attendanceType: "virtual" }];
+    let session = 0;
+    const paid = async (email: string) => {
+      const { registration, user } = await register(event, email);
+      const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+      const sessionId = `cs_test_policy_${(session += 1)}`;
+      const checkout = (async () =>
+        new Response(JSON.stringify({ id: sessionId, url: `https://checkout.stripe.com/c/pay/${sessionId}` }), {
+          status: 200,
+        })) as unknown as typeof fetch;
+      await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, checkout);
+      const read = () => readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id });
+      const intent = `pi_policy_${session}`;
+      await handleEventTicketStripeEvent(env.DB, {
+        id: `evt_policy_paid_${session}`,
+        type: "checkout.session.completed",
+        data: {
+          object: {
+            id: sessionId,
+            payment_intent: intent,
+            amount_total: 19500,
+            currency: "usd",
+            payment_status: "paid",
+            metadata: { pkic_payment_type: "event", registrationTicketId: (await read())!.id },
+          },
+        },
+      });
+      const change = async (payload: Parameters<typeof buildRegistrationUpdate>[2]): Promise<void> => {
+        const record = await getRegistrationByIdForEvent(env.DB, event.id, registration.id);
+        await env.DB.batch((await buildRegistrationUpdate(env.DB, record, payload)).statements);
+      };
+      const refunds = () =>
+        env.DB.prepare(
+          "SELECT amount, reason, payment_intent_id FROM registration_ticket_refunds WHERE ticket_id = (SELECT id FROM registration_tickets WHERE registration_id = ?)",
+        )
+          .bind(registration.id)
+          .all<{ amount: number; reason: string; payment_intent_id: string }>();
+      return { read, change, refunds, intent };
+    };
+    const provider = (body: unknown) =>
+      (async () => new Response(JSON.stringify(body), { status: 200 })) as unknown as typeof fetch;
+
+    // Refunds until 7 days before the event, which starts in 30 days.
+    await startsIn(30);
+    await policy(7);
+    const mover = await paid("mover@gmail.com");
+    expect((await mover.read())!.refundableUntil).not.toBeNull();
+    await mover.change({ action: "update", dayAttendance: virtual });
+    expect((await mover.refunds()).results).toEqual([
+      { amount: 19500, reason: "Changed to days that cost less", payment_intent_id: mover.intent },
+    ]);
+    // The ticket costs nothing now and still stands; the money goes back and the person keeps their place.
+    expect(await mover.read()).toMatchObject({ status: "paid", amount: 0, paidAmount: 19500, refundPending: true });
+    await processTicketRefunds(env.DB, paymentEnv, 5, provider({ id: "re_difference", status: "succeeded" }));
+    expect(await mover.read()).toMatchObject({
+      status: "paid",
+      amount: 0,
+      refundedAmount: 19500,
+      refundPending: false,
+    });
+    // The provider reporting that all of the payment went back does not take the place away either.
+    await handleEventTicketStripeEvent(env.DB, {
+      id: "evt_policy_refunded",
+      type: "charge.refunded",
+      created: Math.floor(Date.now() / 1000) + 60,
+      data: { object: { id: "ch_policy", payment_intent: mover.intent, refunded: true, amount_refunded: 19500 } },
+    });
+    expect(await mover.read()).toMatchObject({ status: "paid", amount: 0, refundedAmount: 19500 });
+
+    // Canceling within the period returns the ticket.
+    const leaver = await paid("leaver@gmail.com");
+    await leaver.change({ action: "cancel" });
+    expect((await leaver.refunds()).results).toMatchObject([
+      { amount: 19500, reason: "Canceled within the refund period" },
+    ]);
+    await processTicketRefunds(env.DB, paymentEnv, 5, provider({ id: "re_cancel", status: "succeeded" }));
+    expect(await leaver.read()).toMatchObject({ status: "refunded", refundedAmount: 19500 });
+
+    // After the period nothing goes back, for cheaper days or for a cancellation.
+    await startsIn(3);
+    const late = await paid("late@gmail.com");
+    expect(await late.read()).toMatchObject({ status: "paid" });
+    await late.change({ action: "update", dayAttendance: virtual });
+    await late.change({ action: "cancel" });
+    expect((await late.refunds()).results).toEqual([]);
+    expect(await late.read()).toMatchObject({ status: "paid", paidAmount: 19500, refundedAmount: 0 });
+
+    // With no policy nothing goes back either, however far away the event is.
+    await startsIn(30);
+    await policy(null);
+    const none = await paid("none@gmail.com");
+    expect((await none.read())!.refundableUntil).toBeNull();
+    await none.change({ action: "cancel" });
+    expect((await none.refunds()).results).toEqual([]);
   });
 
   it("gives each active sponsor its two codes from its tier and only ever raises their limits", async () => {

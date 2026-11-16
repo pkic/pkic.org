@@ -28,6 +28,8 @@ export function TicketPaymentPanel({
   const [interval, setInterval] = useState(String(saved.reminderIntervalDays));
   const [period, setPeriod] = useState(String(saved.reminderPeriodDays));
   const [sendInvoice, setSendInvoice] = useState(saved.sendInvoice);
+  const refundDaysOf = () => (saved.refundDaysBeforeEvent === null ? "" : String(saved.refundDaysBeforeEvent));
+  const [refundDays, setRefundDays] = useState(refundDaysOf);
   const { form, editing, saving, error, save, edit, cancel } = useTicketSettingsForm(
     slug,
     configuration.revision,
@@ -36,6 +38,7 @@ export function TicketPaymentPanel({
       reminderIntervalDays: interval.trim() === "" ? undefined : Number(interval),
       reminderPeriodDays: period.trim() === "" ? undefined : Number(period),
       sendInvoice,
+      refundDaysBeforeEvent: refundDays.trim() === "" ? null : Number(refundDays),
     },
     onSaved,
     () => {
@@ -43,6 +46,7 @@ export function TicketPaymentPanel({
       setInterval(String(saved.reminderIntervalDays));
       setPeriod(String(saved.reminderPeriodDays));
       setSendInvoice(saved.sendInvoice);
+      setRefundDays(refundDaysOf());
     },
   );
   return (
@@ -114,6 +118,22 @@ export function TicketPaymentPanel({
                   />
                 )}
               </Field>
+              <Field
+                {...form.of("refundDaysBeforeEvent")}
+                label="Refunds until (days before the event)"
+                help="Until then, a person who cancels gets their money back, and one who moves to days that cost less gets the difference. Leave empty for no refunds. You can always refund a ticket yourself."
+              >
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    name="refundDaysBeforeEvent"
+                    type="number"
+                    inputMode="numeric"
+                    value={refundDays}
+                    onInput={(inputEvent) => setRefundDays(inputEvent.currentTarget.value)}
+                  />
+                )}
+              </Field>
               <Checkbox
                 name="sendInvoice"
                 checked={sendInvoice}
@@ -134,6 +154,15 @@ export function TicketPaymentPanel({
                       : `Every ${days(saved.reminderIntervalDays)}, for ${days(saved.reminderPeriodDays)}`,
                 },
                 { term: "Invoices", value: saved.sendInvoice ? "Sent for each paid ticket" : "Receipt only" },
+                {
+                  term: "Refunds",
+                  value:
+                    saved.refundDaysBeforeEvent === null
+                      ? "None"
+                      : saved.refundDaysBeforeEvent === 0
+                        ? "Until the event starts"
+                        : `Until ${days(saved.refundDaysBeforeEvent)} before the event`,
+                },
                 {
                   term: "Unpaid tickets",
                   value: "Stay open until the person or an organizer cancels the registration",

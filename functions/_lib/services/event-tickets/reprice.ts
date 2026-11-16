@@ -12,12 +12,18 @@ import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { priceTicket, readTicketPerson, type TicketCodeRow } from "./assignment";
+import { prepareRefundDifference, refundDeadlineSql } from "./refund-policy";
+import { OPEN_REFUND_SQL } from "./refunds";
 import { readEventTicketSnapshot } from "./snapshot";
 
 interface HeldRow {
   id: string;
   status: string;
   amount: number;
+  paid_amount: number;
+  refunded_amount: number;
+  refund_unsettled: number;
+  refund_deadline: string | null;
   currency: string;
   ticket_type_id: string;
   code_id: string | null;
@@ -44,11 +50,17 @@ export async function prepareRepriceTicketForDays(
 ): Promise<StatementLike[]> {
   const held = await first<HeldRow>(
     db,
-    `SELECT ticket.id, ticket.status, ticket.amount, ticket.currency, ticket.ticket_type_id, ticket.code_id,
-            event.timezone, user.email, registration.registration_identity_id AS identity_id
+    `SELECT ticket.id, ticket.status, ticket.amount, ticket.paid_amount, ticket.refunded_amount, ticket.currency,
+            ticket.ticket_type_id,
+            ticket.code_id, event.timezone, user.email, registration.registration_identity_id AS identity_id,
+            (ticket.refund_reconcile_at IS NOT NULL
+             OR EXISTS (SELECT 1 FROM registration_ticket_refunds refund
+                        WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL})) AS refund_unsettled,
+            ${refundDeadlineSql("settings", "event")} AS refund_deadline
      FROM registration_tickets ticket
      JOIN registrations registration ON registration.id = ticket.registration_id
      JOIN events event ON event.id = ticket.event_id
+     LEFT JOIN event_ticket_settings settings ON settings.event_id = ticket.event_id
      JOIN users user ON user.id = registration.user_id
      WHERE ticket.registration_id = ? AND ticket.event_id = ?`,
     [input.registrationId, input.eventId],
@@ -76,13 +88,49 @@ export async function prepareRepriceTicketForDays(
   });
   const total = priceTicket(snapshot, { type, code }, person, input.dayAttendance).total;
   if (held.status === "paid") {
-    // What was paid covers these days, or an organizer decides: the ticket stands as it is.
-    if (total <= held.amount || input.byOrganizer) return [];
-    throw new AppError(
-      409,
-      "TICKET_CHANGE_COSTS_MORE",
-      `These days cost ${formatCurrencyAmount(total, held.currency)} and your ticket was paid at ${formatCurrencyAmount(held.amount, held.currency)}. Ask the organizers to change your registration.`,
-    );
+    // What is left of the payment, and what the ticket stands for: its price now, or more if more is left.
+    const net = held.paid_amount - held.refunded_amount;
+    const covered = Math.max(held.amount, net);
+    if (total > covered) {
+      // An organizer may give days the ticket did not pay for; the person may not take them.
+      if (input.byOrganizer) return [];
+      throw new AppError(
+        409,
+        "TICKET_CHANGE_COSTS_MORE",
+        `These days cost ${formatCurrencyAmount(total, held.currency)} and your ticket covers ${formatCurrencyAmount(covered, held.currency)}. Ask the organizers to change your registration.`,
+      );
+    }
+    // Days that cost less return the difference while the event's refund period runs, and nothing after it.
+    const refund = total < net && held.refund_deadline !== null && held.refund_deadline >= input.now;
+    if (total === held.amount && !refund) return [];
+    if (refund && held.refund_unsettled)
+      throw new AppError(
+        409,
+        "TICKET_REFUND_PENDING",
+        "A refund for this ticket is still being processed. Try again in a few minutes.",
+      );
+    return [
+      // The ticket is changed only as it was priced here; otherwise nothing of the change is written.
+      prepareStateGuard(db, {
+        sql: `SELECT 1 FROM registration_tickets ticket
+              WHERE ticket.id = ? AND ticket.status = 'paid' AND ticket.amount = ?
+                AND ticket.paid_amount - ticket.refunded_amount = ?${
+                  refund
+                    ? ` AND ticket.refund_reconcile_at IS NULL
+                AND NOT EXISTS (SELECT 1 FROM registration_ticket_refunds refund
+                                WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL})`
+                    : ""
+                }`,
+        bindings: [held.id, held.amount, net],
+      }),
+      // The ticket costs what its days cost now. It stays paid: nothing more is owed for it.
+      db
+        .prepare(
+          "UPDATE registration_tickets SET amount = ?, revision = revision + 1, updated_at = ? WHERE id = ? AND status = 'paid'",
+        )
+        .bind(total, input.now, held.id),
+      ...(refund ? [prepareRefundDifference(db, { ticketId: held.id, net, total, now: input.now })] : []),
+    ];
   }
   const status = total > 0 ? "pending_payment" : "free";
   const restored = held.amount > 0 ? "pending_payment" : "free";

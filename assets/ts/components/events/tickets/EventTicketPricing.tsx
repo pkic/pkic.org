@@ -17,7 +17,7 @@ import {
   type EventTicketQuote,
   type EventTicketQuoteRequest,
 } from "../../../../shared/schemas/event-tickets";
-import { formatTicketAmount } from "../../../../shared/event-ticket-display";
+import { formatTicketAmount, ticketRefundNote } from "../../../../shared/event-ticket-display";
 import { formatCalendarDate, formatZoneCity } from "../../../../shared/format-date";
 import { dayBefore } from "../../../../shared/event-ticket-display";
 import { useContractForm } from "../../../hooks/useContractForm";
@@ -369,7 +369,8 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
           {quote && quote.total > 0 && (
             <p class="pk-small pk-muted">
               You pay on the next page after you register. Your place is confirmed once the payment arrives.
-              {data.sendInvoice && " You get an invoice by email after payment."}
+              {data.sendInvoice && " You get an invoice by email after payment."}{" "}
+              {ticketRefundNote(data.refundableUntil, data.timeZone)}
             </p>
           )}
           {quoteError && <Alert tone="danger">{quoteError}</Alert>}

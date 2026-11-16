@@ -8,6 +8,7 @@ import type {
   EventTicketQuote,
   EventTicketQuoteRequest,
 } from "../../../../assets/shared/schemas/event-tickets";
+import { readRefundDeadline } from "./refund-policy";
 import { workEmailDomain } from "../../email-domains/classification";
 import { AppError } from "../../errors";
 import type { DatabaseLike, Env } from "../../types";
@@ -47,6 +48,7 @@ export function guestTicketOffer(event: EventRef): EventTicketOffer {
     currentPeriodStartsOn: null,
     nextPeriodStartsOn: null,
     sendInvoice: false,
+    refundableUntil: null,
     ticketIntro: "",
     attendanceIntro: "",
     personalEmail: false,
@@ -107,6 +109,7 @@ export async function readEventTicketOffer(
     currentPeriodStartsOn: snapshot.current?.startsOn ?? null,
     nextPeriodStartsOn: snapshot.next?.startsOn ?? null,
     sendInvoice: snapshot.settings!.send_invoice === 1,
+    refundableUntil: await readRefundDeadline(db, event.id),
     ticketIntro: snapshot.settings!.ticket_intro ?? "",
     attendanceIntro: snapshot.settings!.attendance_intro ?? "",
     personalEmail: !workEmailDomain(person.email),

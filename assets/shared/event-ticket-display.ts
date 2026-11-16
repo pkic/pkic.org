@@ -4,7 +4,7 @@
  * the currency's smallest unit.
  */
 import { currencyInfo, toSmallestUnit } from "./constants/currencies";
-import { formatCalendarDate, formatDayAndMonth } from "./format-date";
+import { formatCalendarDate, formatDateTime, formatDateTimeInZone, formatDayAndMonth } from "./format-date";
 import { formatCurrencyAmount } from "./format-currency";
 
 /** A sum of money, where zero is a figure and not a price. Whole amounts drop their empty cents. */
@@ -50,4 +50,16 @@ export function ticketPeriodLabels(periods: ReadonlyArray<{ startsOn: string | n
       until: next ? `until ${formatCalendarDate(dayBefore(next))}` : null,
     };
   });
+}
+
+/**
+ * The event's refund policy as a registrant reads it, for a ticket that costs
+ * money. The deadline is given on the event's clock when its zone is known,
+ * otherwise on the reader's own.
+ */
+export function ticketRefundNote(refundableUntil: string | null, timeZone?: string, now = Date.now()): string {
+  if (!refundableUntil) return "Tickets for this event are not refunded.";
+  if (Date.parse(refundableUntil) < now) return "The refund period for this event has ended.";
+  const until = timeZone ? formatDateTimeInZone(refundableUntil, timeZone) : formatDateTime(refundableUntil);
+  return `You get your money back if you cancel before ${until}, and the difference if you move to days that cost less.`;
 }

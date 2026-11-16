@@ -91,7 +91,7 @@ export async function readEventTicketsConfiguration(
                 COUNT(*) AS registered,
                 SUM(ticket.status = 'paid') AS paid,
                 SUM(ticket.status = 'pending_payment') AS awaiting,
-                SUM(CASE WHEN ticket.status = 'paid' THEN ticket.amount ELSE 0 END) AS paid_amount,
+                SUM(CASE WHEN ticket.status = 'paid' THEN ticket.paid_amount - ticket.refunded_amount ELSE 0 END) AS paid_amount,
                 SUM(CASE WHEN ticket.status = 'pending_payment' THEN ticket.amount ELSE 0 END) AS awaiting_amount,
                 SUM(ticket.status = 'free') AS free
          FROM registration_tickets ticket JOIN registrations registration ON registration.id = ticket.registration_id
@@ -133,6 +133,7 @@ export async function readEventTicketsConfiguration(
       reminderIntervalDays: snapshot.settings?.reminder_interval_days ?? DEFAULT_PAYMENT_REMINDER_INTERVAL_DAYS,
       reminderPeriodDays: snapshot.settings?.reminder_period_days ?? DEFAULT_PAYMENT_REMINDER_PERIOD_DAYS,
       sendInvoice: (snapshot.settings?.send_invoice ?? 1) === 1,
+      refundDaysBeforeEvent: snapshot.settings?.refund_days_before_event ?? null,
       ticketIntro: snapshot.settings?.ticket_intro ?? "",
       attendanceIntro: snapshot.settings?.attendance_intro ?? "",
     },
@@ -382,7 +383,7 @@ export async function updateEventTicketSettings(
     db
       .prepare(
         `UPDATE event_ticket_settings SET currency = ?, reminder_interval_days = ?, reminder_period_days = ?, send_invoice = ?,
-           ticket_intro = COALESCE(?, ticket_intro), attendance_intro = COALESCE(?, attendance_intro)
+           refund_days_before_event = ?, ticket_intro = COALESCE(?, ticket_intro), attendance_intro = COALESCE(?, attendance_intro)
          WHERE event_id = ?`,
       )
       .bind(
@@ -390,6 +391,7 @@ export async function updateEventTicketSettings(
         input.reminderIntervalDays,
         input.reminderPeriodDays,
         input.sendInvoice ? 1 : 0,
+        input.refundDaysBeforeEvent,
         input.ticketIntro ?? null,
         input.attendanceIntro ?? null,
         event.id,
@@ -398,6 +400,7 @@ export async function updateEventTicketSettings(
       currency: input.currency,
       reminderIntervalDays: input.reminderIntervalDays,
       reminderPeriodDays: input.reminderPeriodDays,
+      refundDaysBeforeEvent: input.refundDaysBeforeEvent,
     }),
   ]);
   return { revision: input.expectedRevision + 1 };

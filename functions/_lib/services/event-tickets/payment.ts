@@ -287,6 +287,7 @@ interface SettlementRow {
   currency: string;
   status: string;
   payment_intent_id: string | null;
+  paid_amount: number;
   held_email_id: string | null;
   request_params: string | null;
   recorded: number;
@@ -317,7 +318,7 @@ export async function handleEventTicketStripeEvent(
   const row = await first<SettlementRow>(
     db,
     `SELECT ticket.id AS ticket_id, checkout.id AS checkout_id, ticket.amount, ticket.currency, ticket.status,
-            ticket.payment_intent_id, ticket.held_email_id, checkout.request_params,
+            ticket.payment_intent_id, ticket.paid_amount, ticket.held_email_id, checkout.request_params,
             EXISTS (SELECT 1 FROM registration_ticket_payment_events seen WHERE seen.provider_event_id = ?3) AS recorded
      FROM registration_ticket_checkouts checkout JOIN registration_tickets ticket ON ticket.id = checkout.ticket_id
      WHERE (?1 IS NOT NULL AND checkout.provider_session_id = ?1)
@@ -383,7 +384,8 @@ export async function handleEventTicketStripeEvent(
         }),
         db
           .prepare(
-            `UPDATE registration_tickets SET status = 'paid', paid_at = ?, payment_intent_id = ?, refunded_amount = 0,
+            `UPDATE registration_tickets SET status = 'paid', paid_at = ?, payment_intent_id = ?, paid_amount = amount,
+               refunded_amount = 0,
                refunds_seen_at = NULL, refund_reconcile_at = NULL,
                next_reminder_at = NULL, revision = revision + 1, updated_at = ?
              WHERE id = ? AND status = 'pending_payment'`,
@@ -418,7 +420,7 @@ export async function handleEventTicketStripeEvent(
             .bind(now, object.payment_intent),
         );
     } else {
-      const full = object.refunded === true || returned >= row.amount;
+      const full = object.refunded === true || returned >= row.paid_amount;
       outcome = full ? "refunded" : "partially_refunded";
       // The provider's total is what was returned, whoever asked for it and wherever.
       statements.push(

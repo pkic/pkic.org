@@ -8,7 +8,7 @@ import {
   registrationTicketCheckoutResponseSchema,
   type RegistrationTicket,
 } from "../../../../../../shared/schemas/event-tickets";
-import { formatTicketMoney } from "../../../../../../shared/event-ticket-display";
+import { formatTicketMoney, ticketRefundNote } from "../../../../../../shared/event-ticket-display";
 import { postJson } from "../../../../../shared/api-client";
 import { Alert } from "../../../../../ui/Alert";
 import { Button } from "../../../../../ui/Button";
@@ -62,6 +62,7 @@ export function EventTicketPayment({
         Your registration is saved. Your badge and check-in code appear here once the payment arrives, and we email your
         confirmation then.
       </p>
+      <p class="pk-small pk-muted">{ticketRefundNote(ticket.refundableUntil)}</p>
       {error && <Alert tone="danger">{error}</Alert>}
       <div class="pk-cluster">
         <Button variant="primary" loading={opening} disabled={opening} onClick={() => void pay()}>

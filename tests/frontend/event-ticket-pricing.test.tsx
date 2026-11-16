@@ -183,6 +183,8 @@ it("lets the person choose a ticket when none is decided and prices the days the
     dayAttendance: [{ dayDate: "2027-11-16", attendanceType: "in_person" }],
   });
   expect(host.querySelector(".pk-ticket-order__total")?.textContent).toContain("$395");
+  // A ticket that costs money says the event's refund policy before the person registers.
+  expect(host.textContent).toContain("Tickets for this event are not refunded.");
   // The registration sends the shown choice once more before it is made: another tab may have replaced it.
   const sent = requests.length;
   await act(() => pricing!.settle!());

@@ -12,6 +12,8 @@ CREATE TABLE event_ticket_settings (
   reminder_period_days   INTEGER NOT NULL CHECK (reminder_period_days >= 0),
   -- Whether the payment provider issues an invoice for each paid ticket, besides its receipt.
   send_invoice           INTEGER NOT NULL DEFAULT 1 CHECK (send_invoice IN (0, 1)),
+  -- The refund policy: empty for no refunds, otherwise refunds until this many days before the event starts.
+  refund_days_before_event INTEGER CHECK (refund_days_before_event IS NULL OR refund_days_before_event >= 0),
   -- Optional text shown to registrants above the tickets and above the days.
   ticket_intro           TEXT,
   attendance_intro       TEXT,
@@ -175,8 +177,10 @@ CREATE TABLE registration_tickets (
   next_reminder_at      TEXT,
   reminders_end_at      TEXT,
   paid_at               TEXT,
-  -- The payment that settled the ticket, and how much of it the provider has returned.
+  -- The payment that settled the ticket: what it was for, and how much of it the provider has returned.
+  -- `amount` is what the ticket costs for its days now; after a move to cheaper days it is less than was paid.
   payment_intent_id     TEXT,
+  paid_amount           INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
   refunded_amount       INTEGER NOT NULL DEFAULT 0 CHECK (refunded_amount >= 0),
   -- The provider's time of the newest refund fact applied; an older one that arrives later is not applied over it.
   refunds_seen_at       TEXT,
