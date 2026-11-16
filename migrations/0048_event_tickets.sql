@@ -180,6 +180,8 @@ CREATE TABLE registration_tickets (
   refunded_amount       INTEGER NOT NULL DEFAULT 0 CHECK (refunded_amount >= 0),
   -- The provider's time of the newest refund fact applied; an older one that arrives later is not applied over it.
   refunds_seen_at       TEXT,
+  -- Set when a refund failed: what was returned is then read again from the provider, not worked out here.
+  refund_reconcile_at   TEXT,
   revision              INTEGER NOT NULL DEFAULT 0,
   created_at            TEXT    NOT NULL,
   updated_at            TEXT    NOT NULL
@@ -187,6 +189,8 @@ CREATE TABLE registration_tickets (
 CREATE INDEX idx_registration_tickets_event_status ON registration_tickets(event_id, status, created_at, id);
 CREATE INDEX idx_registration_tickets_reminders ON registration_tickets(next_reminder_at)
   WHERE status = 'pending_payment' AND next_reminder_at IS NOT NULL;
+CREATE INDEX idx_registration_tickets_refund_reconcile ON registration_tickets(refund_reconcile_at)
+  WHERE refund_reconcile_at IS NOT NULL;
 
 -- One row per Checkout Session requested for a ticket; its id is the provider idempotency key.
 CREATE TABLE registration_ticket_checkouts (
@@ -221,8 +225,6 @@ CREATE TABLE registration_ticket_refunds (
   -- Empty for a payment returned without an organizer asking: one that arrived for a ticket that no longer needed it.
   requested_by_user_id TEXT    REFERENCES users(id),
   provider_refund_id   TEXT    UNIQUE,
-  -- When the provider made the refund: a total it reported before then cannot include this refund.
-  provider_created_at  TEXT,
   attempts             INTEGER NOT NULL DEFAULT 0,
   next_attempt_at      TEXT    NOT NULL,
   lease_token          TEXT,
@@ -230,8 +232,6 @@ CREATE TABLE registration_ticket_refunds (
   submitted_at         TEXT,
   completed_at         TEXT,
   failed_at            TEXT,
-  -- Whether this refund's amount is part of its ticket's refunded amount, so a failure takes back only what was counted.
-  counted              INTEGER NOT NULL DEFAULT 0,
   last_error           TEXT,
   created_at           TEXT    NOT NULL
 );

@@ -1,7 +1,22 @@
 import { AppError } from "../../errors";
 import { logError } from "../../logging";
 
-const STRIPE_REFUNDS_URL = "https://api.stripe.com/v1/refunds";
+const STRIPE_API_ORIGIN = "https://api.stripe.com";
+
+/** Stripe itself, or a local stand-in when a test key is used. */
+function refundEndpoint(secretKey: string, path: string, apiBase?: string): URL {
+  const endpoint = new URL(path, apiBase ?? STRIPE_API_ORIGIN);
+  if (
+    endpoint.origin !== STRIPE_API_ORIGIN &&
+    !(
+      secretKey.startsWith("sk_test_") &&
+      endpoint.protocol === "http:" &&
+      ["localhost", "127.0.0.1"].includes(endpoint.hostname)
+    )
+  )
+    throw new AppError(500, "STRIPE_CONFIGURATION_INVALID", "Stripe refund configuration is invalid");
+  return endpoint;
+}
 
 /** Raised when Stripe refuses a refund as asked: sending the same request again gives the same answer. */
 export const STRIPE_REFUND_REFUSED = "STRIPE_REFUND_REFUSED";
@@ -11,17 +26,8 @@ export async function createStripeRefund(
   secretKey: string,
   input: { paymentIntentId: string; amount: number; metadata: Record<string, string> },
   options: { idempotencyKey: string; fetcher?: typeof fetch; apiBase?: string },
-): Promise<{ id: string; status: string | null; created: number | null }> {
-  const endpoint = options.apiBase ? new URL("/v1/refunds", options.apiBase) : new URL(STRIPE_REFUNDS_URL);
-  if (
-    endpoint.origin !== "https://api.stripe.com" &&
-    !(
-      secretKey.startsWith("sk_test_") &&
-      endpoint.protocol === "http:" &&
-      ["localhost", "127.0.0.1"].includes(endpoint.hostname)
-    )
-  )
-    throw new AppError(500, "STRIPE_CONFIGURATION_INVALID", "Stripe refund configuration is invalid");
+): Promise<{ id: string; status: string | null }> {
+  const endpoint = refundEndpoint(secretKey, "/v1/refunds", options.apiBase);
   const params = new URLSearchParams({ payment_intent: input.paymentIntentId, amount: String(input.amount) });
   for (const [key, value] of Object.entries(input.metadata)) params.set(`metadata[${key}]`, value);
   let response: Response;
@@ -55,9 +61,45 @@ export async function createStripeRefund(
   } | null;
   if (!decoded || typeof decoded.id !== "string" || !decoded.id)
     throw new AppError(502, "STRIPE_ERROR", "Stripe returned an invalid refund");
-  return {
-    id: decoded.id,
-    status: typeof decoded.status === "string" ? decoded.status : null,
-    created: typeof decoded.created === "number" && Number.isInteger(decoded.created) ? decoded.created : null,
-  };
+  return { id: decoded.id, status: typeof decoded.status === "string" ? decoded.status : null };
+}
+
+/**
+ * What Stripe holds right now for a payment: how much of it has been returned,
+ * and whether all of it has. Read when our own record cannot be trusted, such
+ * as after a refund failed.
+ */
+export async function readStripeRefundedTotal(
+  secretKey: string,
+  paymentIntentId: string,
+  options: { fetcher?: typeof fetch; apiBase?: string } = {},
+): Promise<{ amountRefunded: number; refunded: boolean }> {
+  const endpoint = refundEndpoint(
+    secretKey,
+    `/v1/payment_intents/${encodeURIComponent(paymentIntentId)}`,
+    options.apiBase,
+  );
+  endpoint.searchParams.set("expand[]", "latest_charge");
+  let response: Response;
+  try {
+    response = await (options.fetcher ?? fetch)(endpoint.toString(), {
+      method: "GET",
+      headers: { Authorization: `Bearer ${secretKey}` },
+    });
+  } catch {
+    logError("STRIPE_REFUND_TOTAL_READ_FAILED", { status: null });
+    throw new AppError(502, "STRIPE_ERROR", "Failed to read the payment");
+  }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    logError("STRIPE_REFUND_TOTAL_READ_FAILED", { status: response.status });
+    throw new AppError(502, "STRIPE_ERROR", "Failed to read the payment");
+  }
+  const decoded = (await response.json().catch(() => null)) as {
+    latest_charge?: { amount_refunded?: unknown; refunded?: unknown } | null;
+  } | null;
+  const charge = decoded?.latest_charge;
+  if (!charge || typeof charge !== "object" || typeof charge.amount_refunded !== "number" || charge.amount_refunded < 0)
+    throw new AppError(502, "STRIPE_ERROR", "Stripe returned an invalid payment");
+  return { amountRefunded: charge.amount_refunded, refunded: charge.refunded === true };
 }

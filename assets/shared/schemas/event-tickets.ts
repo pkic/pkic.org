@@ -363,7 +363,7 @@ export const registrationTicketSchema = z.object({
   disputed: z.boolean(),
   /** Why the person holds another ticket than the one decided for their organization, while that is open. */
   disputeReason: z.string().nullable(),
-  /** A refund that the payment provider has neither confirmed nor refused yet. */
+  /** A refund that the payment provider has neither confirmed nor refused yet, or whose failure is still being checked. */
   refundPending: z.boolean(),
   /** The latest refund for this ticket did not go through. */
   refundFailed: z.boolean(),

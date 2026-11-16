@@ -255,7 +255,6 @@ interface StripeObjectFields {
   amount_refunded?: number | null;
   status?: string | null;
   failure_reason?: string | null;
-  created?: number | null;
   refunded?: boolean;
   currency?: string | null;
   payment_status?: string | null;
@@ -385,6 +384,7 @@ export async function handleEventTicketStripeEvent(
         db
           .prepare(
             `UPDATE registration_tickets SET status = 'paid', paid_at = ?, payment_intent_id = ?, refunded_amount = 0,
+               refunds_seen_at = NULL, refund_reconcile_at = NULL,
                next_reminder_at = NULL, revision = revision + 1, updated_at = ?
              WHERE id = ? AND status = 'pending_payment'`,
           )
@@ -444,7 +444,6 @@ export async function handleEventTicketStripeEvent(
             paymentIntentId: object.payment_intent,
             amount: Math.max(0, object.amount ?? 0),
             reason: `Refund ${object.status} at the payment provider${object.failure_reason ? `: ${object.failure_reason}` : ""}`,
-            refundCreatedAt: providerInstant(object.created),
             at: eventAt,
           },
           now,

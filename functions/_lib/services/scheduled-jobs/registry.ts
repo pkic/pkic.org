@@ -1,5 +1,5 @@
 import { sendTicketPaymentReminders } from "../event-tickets/payment";
-import { closeUnpayableTicketCheckouts, processTicketRefunds } from "../event-tickets/refunds";
+import { closeUnpayableTicketCheckouts, processTicketRefunds, reconcileTicketRefunds } from "../event-tickets/refunds";
 import { sendUnfinishedRegistrationReminders } from "../registrations/unfinished";
 import { runScheduledEmailDelivery } from "../scheduled-email-delivery";
 import { processPendingPromotionRenders } from "../event-agenda/promotion-render-jobs";
@@ -216,6 +216,7 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
       summary: {
         reminders: await sendTicketPaymentReminders(env.DB, resolveAppBaseUrl(env)),
         refunds: await processTicketRefunds(env.DB, env),
+        refundTotals: await reconcileTicketRefunds(env.DB, env),
         checkouts: await closeUnpayableTicketCheckouts(env.DB, env),
       },
     }),

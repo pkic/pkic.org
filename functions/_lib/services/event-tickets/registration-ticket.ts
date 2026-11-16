@@ -171,7 +171,8 @@ export async function planRegistrationTicket(
            status = excluded.status, dispute_reason = excluded.dispute_reason, dispute_resolved_at = NULL,
            held_email_id = excluded.held_email_id, reminders_sent = 0,
            next_reminder_at = excluded.next_reminder_at, reminders_end_at = excluded.reminders_end_at,
-           paid_at = NULL, payment_intent_id = NULL, refunded_amount = 0,
+           paid_at = NULL, payment_intent_id = NULL, refunded_amount = 0, refunds_seen_at = NULL,
+           refund_reconcile_at = NULL,
            revision = registration_tickets.revision + 1, updated_at = excluded.updated_at
          WHERE registration_tickets.status NOT IN ('paid')`,
       )
@@ -270,8 +271,9 @@ export const REGISTRATION_TICKET_READ_SQL = `
          ticket.amount, ticket.currency, code.label AS code_label, ticket.paid_at, ticket.dispute_reason,
          ticket.dispute_resolved_at,
          ticket.refunded_amount,
-         EXISTS (SELECT 1 FROM registration_ticket_refunds refund
-                 WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL}) AS refund_pending,
+         (ticket.refund_reconcile_at IS NOT NULL
+          OR EXISTS (SELECT 1 FROM registration_ticket_refunds refund
+                     WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL})) AS refund_pending,
          COALESCE((SELECT refund.failed_at IS NOT NULL FROM registration_ticket_refunds refund
                    WHERE refund.ticket_id = ticket.id ORDER BY refund.created_at DESC, refund.id DESC LIMIT 1), 0)
            AS refund_failed,
@@ -370,7 +372,8 @@ export function prepareRestoreRegistrationTicket(
     db
       .prepare(
         `UPDATE registration_tickets SET status = CASE WHEN amount = 0 THEN 'free' ELSE 'pending_payment' END,
-           reminders_sent = 0, payment_intent_id = NULL, refunded_amount = 0, revision = revision + 1, updated_at = ?
+           reminders_sent = 0, payment_intent_id = NULL, refunded_amount = 0, refunds_seen_at = NULL,
+           refund_reconcile_at = NULL, revision = revision + 1, updated_at = ?
          WHERE registration_id = ? AND status = 'canceled'`,
       )
       .bind(now, registrationId),

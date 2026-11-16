@@ -13,7 +13,7 @@ import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { all, first, run } from "../../db/queries";
 import { AppError } from "../../errors";
 import { expireStripeCheckoutSession } from "../../integrations/stripe/checkout";
-import { createStripeRefund, STRIPE_REFUND_REFUSED } from "../../integrations/stripe/refunds";
+import { createStripeRefund, readStripeRefundedTotal, STRIPE_REFUND_REFUSED } from "../../integrations/stripe/refunds";
 import { createDurableJobLease } from "../../jobs/lease";
 import type { DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { uuid } from "../../utils/ids";
@@ -36,15 +36,17 @@ export async function requestTicketRefund(
   const ticket = await first<{ id: string; amount: number; refunded_amount: number; status: string; open: number }>(
     db,
     `SELECT ticket.id, ticket.amount, ticket.refunded_amount, ticket.status,
-            EXISTS (SELECT 1 FROM registration_ticket_refunds refund
-                    WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL}) AS open
+            (ticket.refund_reconcile_at IS NOT NULL
+             OR EXISTS (SELECT 1 FROM registration_ticket_refunds refund
+                        WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL})) AS open
      FROM registration_tickets ticket WHERE ticket.event_id = ? AND ticket.registration_id = ?`,
     [input.eventId, input.registrationId],
   );
   if (!ticket) throw new AppError(404, "TICKET_NOT_FOUND", "This registration has no ticket.");
+  // Asked first: while a refund is open or being checked, the ticket's own state is not final.
+  if (ticket.open) throw new AppError(409, "TICKET_REFUND_PENDING", "A refund for this ticket is already on its way.");
   if (ticket.status !== "paid" || ticket.refunded_amount >= ticket.amount)
     throw new AppError(409, "TICKET_NOT_REFUNDABLE", "Only a paid ticket can be refunded.");
-  if (ticket.open) throw new AppError(409, "TICKET_REFUND_PENDING", "A refund for this ticket is already on its way.");
   const now = nowIso();
   const context = { type: "event", id: input.eventId };
   await db.batch([
@@ -56,6 +58,7 @@ export async function requestTicketRefund(
            (id, ticket_id, payment_intent_id, amount, reason, requested_by_user_id, next_attempt_at, created_at)
          SELECT ?, id, payment_intent_id, amount - refunded_amount, ?, ?, ?, ?
          FROM registration_tickets WHERE id = ? AND status = 'paid' AND amount > refunded_amount
+           AND refund_reconcile_at IS NULL
            AND NOT EXISTS (SELECT 1 FROM registration_ticket_refunds refund
                            WHERE refund.ticket_id = registration_tickets.id AND ${OPEN_REFUND_SQL})`,
       )
@@ -124,12 +127,9 @@ export function prepareCompleteRefund(
          WHERE status = 'paid' AND EXISTS (${pending})`,
       )
       .bind(now, now, match.value),
-    // The row counts toward its ticket only when it returned the payment that settled it.
     db
       .prepare(
         `UPDATE registration_ticket_refunds AS refund SET completed_at = ?, submitted_at = COALESCE(submitted_at, ?),
-           counted = EXISTS (SELECT 1 FROM registration_tickets ticket
-                             WHERE ticket.id = refund.ticket_id AND ticket.payment_intent_id = refund.payment_intent_id),
            last_error = NULL, lease_token = NULL, lease_expires_at = NULL
          WHERE refund.${match.column} = ? AND ${OPEN_REFUND_SQL}`,
       )
@@ -139,14 +139,13 @@ export function prepareCompleteRefund(
 
 /**
  * What a refund the provider failed or canceled does, once for each refund:
- * what it had added to the ticket's refunded amount is taken off again, a
- * ticket it had refunded is paid again, and the row is failed so an organizer
- * can ask once more. Only an amount that was counted is taken off: a refund
- * of ours that was counted, or one issued at the provider no later than the
- * last total it reported, when that total is large enough to hold it. A refund issued at the provider has no row yet
- * and gets one, which is what makes a second delivery of the failure change
- * nothing. `at` is the provider's time of the failure, so an older total that
- * arrives afterwards is not applied over it.
+ * the row is failed so an organizer can ask once more, and the ticket is
+ * marked to have its returned amount read again from the provider. Nothing is
+ * worked out here: which refunds a reported total held cannot be told from
+ * amounts and whole-second times, and the provider knows. A refund issued at
+ * the provider has no row yet and gets one, which is what makes a second
+ * delivery of the failure change nothing. `at` is the provider's time of the
+ * failure, so an older total that arrives afterwards is not applied over it.
  */
 export function prepareFailRefund(
   db: DatabaseLike,
@@ -156,43 +155,21 @@ export function prepareFailRefund(
     paymentIntentId: string;
     amount: number;
     reason: string;
-    /** When the provider made the refund, for one that has no row here. */
-    refundCreatedAt?: string | null;
     at: string;
   },
   now: string,
 ): StatementLike[] {
-  const known = "SELECT 1 FROM registration_ticket_refunds refund WHERE refund.provider_refund_id = ?";
   return [
     db
       .prepare(
-        `UPDATE registration_tickets SET refunded_amount = MAX(0, refunded_amount - ?),
-           status = CASE WHEN status = 'refunded' THEN 'paid' ELSE status END,
+        `UPDATE registration_tickets SET refund_reconcile_at = ?,
+           refunds_seen_at = CASE WHEN refunds_seen_at IS NULL OR refunds_seen_at < ? THEN ? ELSE refunds_seen_at END,
            revision = revision + 1, updated_at = ?
          WHERE id = ? AND payment_intent_id = ?
-           AND NOT EXISTS (${known} AND refund.failed_at IS NOT NULL)
-           AND (EXISTS (${known} AND refund.counted = 1)
-                OR (NOT EXISTS (${known}) AND ? IS NOT NULL AND refunds_seen_at IS NOT NULL AND ? <= refunds_seen_at
-                    AND refunded_amount >= ?))`,
+           AND NOT EXISTS (SELECT 1 FROM registration_ticket_refunds refund
+                           WHERE refund.provider_refund_id = ? AND refund.failed_at IS NOT NULL)`,
       )
-      .bind(
-        input.amount,
-        now,
-        input.ticketId,
-        input.paymentIntentId,
-        input.providerRefundId,
-        input.providerRefundId,
-        input.providerRefundId,
-        input.refundCreatedAt ?? null,
-        input.refundCreatedAt ?? null,
-        input.amount,
-      ),
-    db
-      .prepare(
-        `UPDATE registration_tickets SET refunds_seen_at = ?
-         WHERE id = ? AND payment_intent_id = ? AND (refunds_seen_at IS NULL OR refunds_seen_at < ?)`,
-      )
-      .bind(input.at, input.ticketId, input.paymentIntentId, input.at),
+      .bind(now, input.at, input.at, now, input.ticketId, input.paymentIntentId, input.providerRefundId),
     db
       .prepare(
         `INSERT INTO registration_ticket_refunds
@@ -201,7 +178,7 @@ export function prepareFailRefund(
          VALUES (?, ?, ?, ?, 'Refunded at the payment provider', ?, ?, ?, ?, ?, ?)
          ON CONFLICT(provider_refund_id) DO UPDATE SET
            failed_at = COALESCE(registration_ticket_refunds.failed_at, excluded.failed_at), completed_at = NULL,
-           counted = 0, last_error = excluded.last_error, lease_token = NULL, lease_expires_at = NULL`,
+           last_error = excluded.last_error, lease_token = NULL, lease_expires_at = NULL`,
       )
       .bind(
         uuid(),
@@ -222,12 +199,6 @@ export function prepareFailRefund(
  * Applies the provider's own total of what a payment has returned. The total
  * is the truth as of `at`, so one older than a refund fact already applied is
  * left out: events can arrive in any order.
- *
- * A refund of ours is part of the total only on evidence: the provider had
- * made it by then, and the total grew by at least its amount over what was
- * already accounted for. Time alone does not tell, because the provider's
- * times are whole seconds and a total can be reported in the same second,
- * just before the refund.
  */
 export function prepareRefundedTotal(
   db: DatabaseLike,
@@ -236,21 +207,6 @@ export function prepareRefundedTotal(
 ): StatementLike[] {
   const full = input.full ? 1 : 0;
   return [
-    // Judged against the ticket as it is before the total is applied to it.
-    db
-      .prepare(
-        `UPDATE registration_ticket_refunds SET counted = 1,
-           completed_at = CASE WHEN ? = 1 THEN COALESCE(completed_at, ?) ELSE completed_at END
-         WHERE payment_intent_id = ? AND submitted_at IS NOT NULL AND failed_at IS NULL AND counted = 0
-           AND provider_created_at IS NOT NULL AND provider_created_at <= ?
-           AND EXISTS (SELECT 1 FROM registration_tickets ticket
-                       WHERE ticket.id = registration_ticket_refunds.ticket_id AND ticket.id = ?
-                         AND ticket.payment_intent_id = registration_ticket_refunds.payment_intent_id
-                         AND (ticket.refunds_seen_at IS NULL OR ticket.refunds_seen_at <= ?)
-                         AND (CASE WHEN ? = 1 THEN ticket.amount ELSE MIN(ticket.amount, ?) END)
-                             - ticket.refunded_amount >= registration_ticket_refunds.amount)`,
-      )
-      .bind(full, now, input.paymentIntentId, input.at, input.ticketId, input.at, full, input.refunded),
     db
       .prepare(
         `UPDATE registration_tickets SET refunded_amount = CASE WHEN ? = 1 THEN amount ELSE MIN(amount, ?) END,
@@ -259,7 +215,75 @@ export function prepareRefundedTotal(
          WHERE id = ? AND payment_intent_id = ? AND (refunds_seen_at IS NULL OR refunds_seen_at <= ?)`,
       )
       .bind(full, input.refunded, full, input.at, now, input.ticketId, input.paymentIntentId, input.at),
+    // All of the payment went back, so every refund of it that the provider holds is done.
+    db
+      .prepare(
+        `UPDATE registration_ticket_refunds SET completed_at = COALESCE(completed_at, ?), last_error = NULL
+         WHERE ? = 1 AND payment_intent_id = ? AND submitted_at IS NOT NULL AND failed_at IS NULL
+           AND EXISTS (SELECT 1 FROM registration_tickets ticket
+                       WHERE ticket.id = registration_ticket_refunds.ticket_id AND ticket.id = ?
+                         AND ticket.payment_intent_id = registration_ticket_refunds.payment_intent_id
+                         AND ticket.refunds_seen_at = ?)`,
+      )
+      .bind(now, full, input.paymentIntentId, input.ticketId, input.at),
   ];
+}
+
+/**
+ * Reads again from the provider what each marked ticket's payment has
+ * returned, and makes the ticket say that: the amount, and paid or refunded.
+ * A ticket is marked when one of its refunds failed. One the provider could
+ * not answer for stays marked for the next run.
+ */
+export async function reconcileTicketRefunds(
+  db: DatabaseLike,
+  env: Pick<Env, "STRIPE_SECRET_KEY" | "STRIPE_API_BASE">,
+  limit = 5,
+  fetcher?: typeof fetch,
+): Promise<{ reconciled: number; failed: number }> {
+  if (!env.STRIPE_SECRET_KEY) return { reconciled: 0, failed: 0 };
+  const due = await all<{ id: string; payment_intent_id: string; refund_reconcile_at: string }>(
+    db,
+    `SELECT id, payment_intent_id, refund_reconcile_at FROM registration_tickets
+     WHERE refund_reconcile_at IS NOT NULL AND payment_intent_id IS NOT NULL
+     ORDER BY refund_reconcile_at, id LIMIT ?`,
+    [limit],
+  );
+  let reconciled = 0;
+  let failed = 0;
+  for (const ticket of due) {
+    try {
+      const total = await readStripeRefundedTotal(env.STRIPE_SECRET_KEY, ticket.payment_intent_id, {
+        fetcher,
+        apiBase: env.STRIPE_API_BASE,
+      });
+      const now = nowIso();
+      // Only the mark that was read is cleared: a refund that failed meanwhile asks for another reading.
+      await run(
+        db,
+        `UPDATE registration_tickets SET refunded_amount = CASE WHEN ? = 1 THEN amount ELSE MIN(amount, ?) END,
+           status = CASE WHEN ? = 1 AND status IN ('paid', 'refunded') THEN 'refunded'
+                         WHEN ? = 0 AND status = 'refunded' THEN 'paid' ELSE status END,
+           refunds_seen_at = ?, refund_reconcile_at = NULL, revision = revision + 1, updated_at = ?
+         WHERE id = ? AND payment_intent_id = ? AND refund_reconcile_at = ?`,
+        [
+          total.refunded ? 1 : 0,
+          total.amountRefunded,
+          total.refunded ? 1 : 0,
+          total.refunded ? 1 : 0,
+          now,
+          now,
+          ticket.id,
+          ticket.payment_intent_id,
+          ticket.refund_reconcile_at,
+        ],
+      );
+      reconciled += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+  return { reconciled, failed };
 }
 
 interface DueRefundRow {
@@ -314,17 +338,10 @@ export async function processTicketRefunds(
       const at = nowIso();
       const submitted = db
         .prepare(
-          `UPDATE registration_ticket_refunds SET provider_refund_id = ?, submitted_at = ?, provider_created_at = ?,
-             last_error = NULL, lease_token = NULL, lease_expires_at = NULL WHERE id = ? AND lease_token = ?`,
+          `UPDATE registration_ticket_refunds SET provider_refund_id = ?, submitted_at = ?, last_error = NULL,
+             lease_token = NULL, lease_expires_at = NULL WHERE id = ? AND lease_token = ?`,
         )
-        .bind(
-          created.id,
-          at,
-          // Without the provider's own time, ours stands in: later, so an earlier total never claims this refund.
-          created.created === null ? at : new Date(created.created * 1000).toISOString(),
-          refund.id,
-          lease.token,
-        );
+        .bind(created.id, at, refund.id, lease.token);
       if (created.status && REFUND_FAILED_STATUSES.includes(created.status)) {
         await db.batch([
           submitted,
