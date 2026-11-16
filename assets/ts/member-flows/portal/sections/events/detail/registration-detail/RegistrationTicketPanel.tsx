@@ -148,6 +148,13 @@ export function RegistrationTicketPanel({
             {ticket.disputeReason}
           </Alert>
         )}
+        {ticket.refundFailed && !ticket.refundPending && (
+          <Alert tone="danger" title="The refund did not go through">
+            {ticket.status === "paid"
+              ? "Nothing was returned. Refund the ticket again, or return the payment at the payment provider."
+              : "Return the payment at the payment provider, using the payment reference below."}
+          </Alert>
+        )}
         <DescriptionList
           density="compact"
           items={[
@@ -166,7 +173,7 @@ export function RegistrationTicketPanel({
       <Dialog
         open={refunding}
         title="Refund ticket"
-        description={`${formatTicketMoney(ticket.amount, ticket.currency)} goes back to the person's payment method. Their in-person place ends when the refund is confirmed.`}
+        description={`${formatTicketMoney(ticket.amount - ticket.refundedAmount, ticket.currency)} goes back to the person's payment method. Their in-person place ends when the refund is confirmed.`}
         confirmLabel="Refund ticket"
         confirmDisabled={saving}
         destructive

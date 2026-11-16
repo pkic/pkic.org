@@ -2,6 +2,7 @@
  * Layouts for unfinished registrations: the page where a person says they are
  * not registering, and the organizer's summary of why. Static until approved.
  */
+import type { CollectionLoader } from "../../hooks/useServerCollection";
 import type { PreviewSection } from "./PreviewShell";
 import {
   UNFINISHED_REGISTRATION_REASONS,
@@ -52,6 +53,21 @@ function NotRegistering() {
 }
 
 /** On the event's analytics: how many stopped, and what they said. */
+const NOTES = [
+  {
+    reasonCode: "price",
+    note: "Our budget is frozen until the new fiscal year.",
+    stoppedAt: "2027-03-02T10:00:00.000Z",
+  },
+  {
+    reasonCode: "approval_pending",
+    note: "Waiting for a travel approval that takes weeks.",
+    stoppedAt: "2027-02-27T10:00:00.000Z",
+  },
+];
+const loadNotes: CollectionLoader = async (_url, _signal, schema) =>
+  schema.parse({ notes: NOTES, page: { limit: 25, offset: 0, total: NOTES.length, hasMore: false } });
+
 function UnfinishedSummary() {
   return (
     <UnfinishedRegistrationsSummary
@@ -67,19 +83,10 @@ function UnfinishedSummary() {
           { reasonCode: "travel_not_possible", count: 6 },
           { reasonCode: null, count: 5 },
         ],
-        notes: [
-          {
-            reasonCode: "price",
-            note: "Our budget is frozen until the new fiscal year.",
-            stoppedAt: "2027-03-02T10:00:00.000Z",
-          },
-          {
-            reasonCode: "approval_pending",
-            note: "Waiting for a travel approval that takes weeks.",
-            stoppedAt: "2027-02-27T10:00:00.000Z",
-          },
-        ],
+        wroteNote: 2,
       }}
+      notesEndpoint="/gallery/unfinished/notes"
+      loadNotes={loadNotes}
     />
   );
 }

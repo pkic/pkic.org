@@ -65,7 +65,15 @@ async function mount(assigned: Parameters<typeof offer>[0], identityId = "") {
         if (!String(url).includes(PERSONAL_IDENTITY)) return Response.json(offered);
         // A personal address: the ticket that is free for work addresses states what it costs here.
         const tickets = offered.tickets.map((entry) =>
-          entry.key === "pqcc_attendee" ? { ...entry, personalEmailAmount: 19500 } : entry,
+          entry.key === "pqcc_attendee"
+            ? {
+                ...entry,
+                personalEmailAmount: 19500,
+                prices: entry.prices.map((price) =>
+                  price.amount === 0 && price.nextAmount ? { ...price, personalEmailAmount: price.nextAmount } : price,
+                ),
+              }
+            : entry,
         );
         return Response.json({ ...offered, personalEmail: true, tickets });
       }
@@ -262,8 +270,22 @@ it("counts a price set for one day in the range and on its row", async () => {
       {
         ...offered.tickets[1],
         prices: [
-          { attendanceValue: "in_person", dayDate: "2027-11-16", charged: "each_day", amount: 10000, nextAmount: null },
-          { attendanceValue: "in_person", dayDate: null, charged: "each_day", amount: 15000, nextAmount: null },
+          {
+            attendanceValue: "in_person",
+            dayDate: "2027-11-16",
+            charged: "each_day",
+            amount: 10000,
+            nextAmount: null,
+            personalEmailAmount: null,
+          },
+          {
+            attendanceValue: "in_person",
+            dayDate: null,
+            charged: "each_day",
+            amount: 15000,
+            nextAmount: null,
+            personalEmailAmount: null,
+          },
         ],
       },
     ],

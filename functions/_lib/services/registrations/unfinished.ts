@@ -4,11 +4,18 @@
  * will not, and summarized for the organizers with the reasons people gave.
  */
 import { nextUnfinishedRegistrationReminderAt } from "../../../../assets/shared/unfinished-registrations";
-import type {
-  OwnUnfinishedRegistration,
-  UnfinishedRegistrationStop,
-  UnfinishedRegistrationSummary,
+import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
+import {
+  unfinishedRegistrationNoteListSchema,
+  type OwnUnfinishedRegistration,
+  type UnfinishedRegistrationNote,
+  type UnfinishedRegistrationNoteListQuery,
+  type UnfinishedRegistrationStop,
+  type UnfinishedRegistrationSummary,
 } from "../../../../assets/shared/schemas/unfinished-registrations";
+import { queryPage } from "../../db/pagination";
+import { buildD1TextSearchFilter } from "../../db/search";
+import { resolveMappedOrderBy } from "../../db/sort";
 import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
 import { all, first } from "../../db/queries";
 import { DIRECT_EMAIL_TEMPLATE_KEY, directEmailBodyPayload } from "../../email/direct-body";
@@ -196,26 +203,32 @@ export async function stopUnfinishedRegistration(
     throw new AppError(404, "UNFINISHED_REGISTRATION_NOT_FOUND", "There is no unfinished registration to stop.");
 }
 
-const NOTE_LIMIT = 20;
+/** A person who said no and registered after all counts as registered, not as stopped. */
+const STOPPED_WITH_NOTE = `unfinished.stopped_at IS NOT NULL AND unfinished.stop_note IS NOT NULL AND NOT ${HAS_REGISTRATION}`;
 
-/**
- * How many people started, finished or stopped, and the reasons and latest notes of those who
- * stopped. A person who said no and registered after all counts as registered, not as stopped.
- */
+/** How many people started, finished or stopped, and the reasons of those who stopped. */
 export async function readUnfinishedRegistrationSummary(
   db: DatabaseLike,
   event: Pick<EventRecord, "id">,
 ): Promise<UnfinishedRegistrationSummary> {
   type Reason = UnfinishedRegistrationSummary["reasons"][number]["reasonCode"];
-  const [totals, reasons, notes] = await Promise.all([
-    first<{ started: number; registered: number; reminded: number; stopped: number; gave_reason: number }>(
+  const [totals, reasons] = await Promise.all([
+    first<{
+      started: number;
+      registered: number;
+      reminded: number;
+      stopped: number;
+      gave_reason: number;
+      wrote_note: number;
+    }>(
       db,
       `SELECT COUNT(*) AS started,
               COALESCE(SUM(${HAS_REGISTRATION}), 0) AS registered,
               COALESCE(SUM(unfinished.reminders_sent > 0), 0) AS reminded,
               COALESCE(SUM(unfinished.stopped_at IS NOT NULL AND NOT ${HAS_REGISTRATION}), 0) AS stopped,
               COALESCE(SUM(unfinished.stopped_at IS NOT NULL AND unfinished.stop_reason IS NOT NULL
-                           AND NOT ${HAS_REGISTRATION}), 0) AS gave_reason
+                           AND NOT ${HAS_REGISTRATION}), 0) AS gave_reason,
+              COALESCE(SUM(${STOPPED_WITH_NOTE}), 0) AS wrote_note
        FROM unfinished_registrations unfinished WHERE unfinished.event_id = ?`,
       [event.id],
     ),
@@ -226,15 +239,6 @@ export async function readUnfinishedRegistrationSummary(
        GROUP BY unfinished.stop_reason ORDER BY count DESC, unfinished.stop_reason`,
       [event.id],
     ),
-    all<{ reason: Reason; note: string; stopped_at: string }>(
-      db,
-      `SELECT unfinished.stop_reason AS reason, unfinished.stop_note AS note, unfinished.stopped_at
-       FROM unfinished_registrations unfinished
-       WHERE unfinished.event_id = ? AND unfinished.stopped_at IS NOT NULL AND unfinished.stop_note IS NOT NULL
-         AND NOT ${HAS_REGISTRATION}
-       ORDER BY unfinished.stopped_at DESC LIMIT ?`,
-      [event.id, NOTE_LIMIT],
-    ),
   ]);
   return {
     started: totals?.started ?? 0,
@@ -243,6 +247,36 @@ export async function readUnfinishedRegistrationSummary(
     stopped: totals?.stopped ?? 0,
     gaveReason: totals?.gave_reason ?? 0,
     reasons: reasons.map((row) => ({ reasonCode: row.reason, count: row.count })),
-    notes: notes.map((row) => ({ reasonCode: row.reason, note: row.note, stoppedAt: row.stopped_at })),
+    wroteNote: totals?.wrote_note ?? 0,
   };
+}
+
+/** What people wrote when they said they will not register, as a searched and paged collection. */
+export async function listUnfinishedRegistrationNotes(
+  db: DatabaseLike,
+  event: Pick<EventRecord, "id">,
+  query: UnfinishedRegistrationNoteListQuery,
+) {
+  const search = query.q ? buildD1TextSearchFilter(query.q, ["unfinished.stop_note"]) : null;
+  const { rows, total } = await queryPage<UnfinishedRegistrationNote>(db, {
+    source: {
+      selectSql:
+        "SELECT unfinished.stop_reason AS reasonCode, unfinished.stop_note AS note, unfinished.stopped_at AS stoppedAt",
+      fromSql: `FROM unfinished_registrations unfinished
+                WHERE unfinished.event_id = ? AND ${STOPPED_WITH_NOTE}${search ? ` AND ${search.sql}` : ""}`,
+      bindings: [event.id, ...(search?.bindings ?? [])],
+    },
+    orderBy: resolveMappedOrderBy(
+      query.sort,
+      { stoppedAt: "unfinished.stopped_at" },
+      "unfinished.stopped_at DESC",
+      "unfinished.user_id ASC",
+    ),
+    limit: query.limit,
+    offset: query.offset,
+  });
+  return unfinishedRegistrationNoteListSchema.parse({
+    notes: rows,
+    page: buildPageInfo(query.limit, query.offset, total, rows.length),
+  });
 }

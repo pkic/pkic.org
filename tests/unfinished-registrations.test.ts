@@ -7,10 +7,12 @@ import { seedEventAndAdmin } from "./helpers/context";
 import { createScheduledRegistration } from "./helpers/scheduled-registration";
 import {
   ownUnfinishedRegistrationSchema,
+  unfinishedRegistrationNoteListQuerySchema,
   unfinishedRegistrationSummarySchema,
 } from "../assets/shared/schemas/unfinished-registrations";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 import {
+  listUnfinishedRegistrationNotes,
   prepareRegistrationStart,
   readUnfinishedRegistrationSummary,
   sendUnfinishedRegistrationReminders,
@@ -129,7 +131,17 @@ it("lets the person say they are not registering, which stops reminders and reac
     await readUnfinishedRegistrationSummary(env.DB, { id: eventId }),
   );
   expect(summary).toMatchObject({ started: 1, reminded: 0, stopped: 1, reasons: [{ reasonCode: "price", count: 1 }] });
-  expect(summary.notes[0].note).toBe("Our budget is frozen this year.");
+  expect(summary.wroteNote).toBe(1);
+  const notes = await listUnfinishedRegistrationNotes(
+    env.DB,
+    { id: eventId },
+    unfinishedRegistrationNoteListQuerySchema.parse({ q: "budget" }),
+  );
+  expect(notes).toMatchObject({
+    notes: [{ reasonCode: "price", note: "Our budget is frozen this year." }],
+    page: { total: 1 },
+  });
+  expect((await callApi(env, `${path}/notes`, authorized)).status).toBe(403);
 
   // Saying no is not final: once they register after all, they count as registered, not as stopped.
   await createScheduledRegistration(env.DB, {
@@ -143,6 +155,6 @@ it("lets the person say they are not registering, which stops reminders and reac
     registered: 1,
     stopped: 0,
     reasons: [],
-    notes: [],
+    wroteNote: 0,
   });
 });

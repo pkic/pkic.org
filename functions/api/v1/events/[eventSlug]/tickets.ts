@@ -1,5 +1,6 @@
 import {
   eventTicketCodeCreateRouteSchema,
+  eventTicketCodesGetRouteSchema,
   eventTicketCodeUpdateRouteSchema,
   eventTicketOfferRouteSchema,
   eventTicketPricesPutRouteSchema,
@@ -38,6 +39,7 @@ import {
 } from "../../../../_lib/services/event-tickets/offer";
 import { openTicketCheckout } from "../../../../_lib/services/event-tickets/payment";
 import { issueSponsorPassCodes, saveSponsorPasses } from "../../../../_lib/services/event-tickets/sponsor-passes";
+import { listEventTicketCodes } from "../../../../_lib/services/event-tickets/code-list";
 import { requestTicketRefund } from "../../../../_lib/services/event-tickets/refunds";
 import {
   readRegistrationOwner,
@@ -70,6 +72,11 @@ const EventTicketPricesPut = openApiRoute(eventTicketPricesPutRouteSchema, async
 const EventTicketSettingsPut = openApiRoute(eventTicketSettingsPutRouteSchema, async (c: AdminContext, data) => {
   const { actor, db, event } = await requireEventPermission(c, data.params.eventSlug, "events:write");
   return json({ success: true, ...(await updateEventTicketSettings(db, actor, event, data.body)) });
+});
+
+const EventTicketCodesGet = openApiRoute(eventTicketCodesGetRouteSchema, async (c: AdminContext, data) => {
+  const { db, event } = await requireEventPermission(c, data.params.eventSlug, "events:read");
+  return json(await listEventTicketCodes(db, event.id, data.query));
 });
 
 const EventTicketCodePost = openApiRoute(eventTicketCodeCreateRouteSchema, async (c: AdminContext, data) => {
@@ -192,6 +199,7 @@ export function registerTicketRoutes(openapi: TicketRouter): void {
   openapi.put("/tickets/settings", EventTicketSettingsPut);
   openapi.post("/tickets/types", EventTicketTypePost);
   openapi.put("/tickets/types/:ticketTypeId", EventTicketTypePut);
+  openapi.get("/tickets/codes", EventTicketCodesGet);
   openapi.post("/tickets/codes", EventTicketCodePost);
   openapi.put("/tickets/sponsors/passes", EventTicketSponsorPassesPut);
   openapi.post("/tickets/sponsors/codes", EventTicketSponsorCodesPost);

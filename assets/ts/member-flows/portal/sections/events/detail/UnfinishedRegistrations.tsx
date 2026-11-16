@@ -2,6 +2,7 @@
 import { formatDate } from "../../../../../../shared/format-date";
 import { formatNumber } from "../../../../../../shared/format-number";
 import {
+  unfinishedRegistrationNoteListSchema,
   unfinishedRegistrationSummarySchema,
   type UnfinishedRegistrationSummary,
 } from "../../../../../../shared/schemas/unfinished-registrations";
@@ -9,7 +10,9 @@ import {
   UNFINISHED_REGISTRATION_REASON_LABELS,
   type UnfinishedRegistrationReason,
 } from "../../../../../../shared/unfinished-registrations";
+import { ApiDataTable } from "../../../../../components/ApiDataTable";
 import { useData } from "../../../../../hooks/useData";
+import type { CollectionLoader } from "../../../../../hooks/useServerCollection";
 import { getJson } from "../../../../../shared/api-client";
 import { Alert } from "../../../../../ui/Alert";
 import { DataTable } from "../../../../../ui/DataTable";
@@ -32,10 +35,24 @@ export function UnfinishedRegistrations({ slug }: { slug: string }) {
   );
   if (loading) return <Spinner label="Loading unfinished registrations…" />;
   if (!data) return <Alert tone="danger">{error}</Alert>;
-  return <UnfinishedRegistrationsSummary summary={data} />;
+  return (
+    <UnfinishedRegistrationsSummary
+      summary={data}
+      notesEndpoint={`/api/v1/events/${encodeURIComponent(slug)}/registrations/unfinished/notes`}
+    />
+  );
 }
 
-export function UnfinishedRegistrationsSummary({ summary }: { summary: UnfinishedRegistrationSummary }) {
+export function UnfinishedRegistrationsSummary({
+  summary,
+  notesEndpoint,
+  loadNotes,
+}: {
+  summary: UnfinishedRegistrationSummary;
+  notesEndpoint: string;
+  /** Replaces the request for the notes, where there is no server to ask. */
+  loadNotes?: CollectionLoader;
+}) {
   if (summary.started === 0)
     return (
       <EmptyState
@@ -81,21 +98,32 @@ export function UnfinishedRegistrationsSummary({ summary }: { summary: Unfinishe
           </PanelBody>
         </Panel>
       )}
-      {summary.notes.length > 0 && (
+      {summary.wroteNote > 0 && (
         <Panel aria-label="What people wrote">
           <PanelHeader title="What people wrote" />
-          <PanelBody flush>
-            <DataTable
-              caption="Notes"
-              rows={summary.notes}
-              rowKey={(row) => `${row.stoppedAt}:${row.note}`}
-              columns={[
-                { id: "note", header: "Note", cell: (row) => row.note },
-                { id: "reason", header: "Reason", cell: (row) => reasonLabel(row.reasonCode) },
-                { id: "when", header: "Date", width: "fit", cell: (row) => formatDate(row.stoppedAt) },
-              ]}
-            />
-          </PanelBody>
+          <ApiDataTable
+            urlState="not-registering-notes"
+            endpoint={notesEndpoint}
+            responseSchema={unfinishedRegistrationNoteListSchema}
+            resolve={(value) => value.notes}
+            resolvePage={(value) => value.page}
+            load={loadNotes}
+            caption="Notes"
+            paginate
+            searchPlaceholder="Search notes…"
+            initialSort="-stoppedAt"
+            rowKey={(row) => `${row.stoppedAt}:${row.note}`}
+            empty="No notes match."
+            columns={[
+              { header: "Note", cell: (row) => row.note, hideable: false },
+              { header: "Reason", cell: (row) => reasonLabel(row.reasonCode) },
+              {
+                header: "Date",
+                cell: (row) => formatDate(row.stoppedAt),
+                sort: { asc: "stoppedAt", desc: "-stoppedAt" },
+              },
+            ]}
+          />
         </Panel>
       )}
     </div>

@@ -55,24 +55,28 @@ export function guestTicketOffer(event: EventRef): EventTicketOffer {
 }
 
 /**
- * What a ticket that is free only for work addresses costs a personal mailbox:
- * its first paid price. Null when the ticket has no such rule or is not free now.
+ * What each price of a ticket that is free only for work addresses costs a
+ * personal mailbox: the amount in the first later period in which that price
+ * is paid. A price that costs money now, or never does, has no such amount.
  */
-function personalEmailAmount(snapshot: EventTicketSnapshot, type: TicketTypeRow): number | null {
-  if (type.free_requires_work_email !== 1) return null;
+function personalEmailAmounts(snapshot: EventTicketSnapshot, type: TicketTypeRow): Map<string, number> {
+  const amounts = new Map<string, number>();
+  if (type.free_requires_work_email !== 1) return amounts;
   const currentId = snapshot.current?.id ?? null;
   const later = snapshot.periods
     .filter((period) => period.startsOn !== null && period.startsOn > (snapshot.current?.startsOn ?? ""))
     .sort((a, b) => (a.startsOn ?? "").localeCompare(b.startsOn ?? ""));
-  let amount: number | null = null;
   for (const price of snapshot.prices) {
-    if (price.ticketTypeId !== type.id || price.dayDate !== null) continue;
+    if (price.ticketTypeId !== type.id) continue;
     if ((currentId && price.amounts[currentId]) || 0) continue;
     const paid = later.map((period) => price.amounts[period.id] ?? 0).find((value) => value > 0);
-    if (paid !== undefined && (amount === null || paid > amount)) amount = paid;
+    if (paid !== undefined) amounts.set(priceRowKey(price), paid);
   }
-  return amount;
+  return amounts;
 }
+
+const priceRowKey = (price: { attendanceValue: string; dayDate: string | null }) =>
+  `${price.attendanceValue}:${price.dayDate ?? ""}`;
 
 export async function readEventTicketOffer(
   db: DatabaseLike,
@@ -106,22 +110,26 @@ export async function readEventTicketOffer(
     ticketIntro: snapshot.settings!.ticket_intro ?? "",
     attendanceIntro: snapshot.settings!.attendance_intro ?? "",
     personalEmail: !workEmailDomain(person.email),
-    tickets: active.map((type) => ({
-      key: type.ticket_key,
-      name: type.name,
-      descriptionMarkdown: type.description_markdown,
-      personalEmailAmount: personalEmailAmount(snapshot, type),
-      selectable: selectable.some((candidate) => candidate.id === type.id),
-      prices: snapshot.prices
-        .filter((price) => price.ticketTypeId === type.id)
-        .map((price) => ({
-          attendanceValue: price.attendanceValue,
-          dayDate: price.dayDate,
-          charged: price.charged,
-          amount: (currentId && price.amounts[currentId]) || 0,
-          nextAmount: nextId ? (price.amounts[nextId] ?? 0) : null,
-        })),
-    })),
+    tickets: active.map((type) => {
+      const personal = personalEmailAmounts(snapshot, type);
+      return {
+        key: type.ticket_key,
+        name: type.name,
+        descriptionMarkdown: type.description_markdown,
+        personalEmailAmount: personal.size > 0 ? Math.max(...personal.values()) : null,
+        selectable: selectable.some((candidate) => candidate.id === type.id),
+        prices: snapshot.prices
+          .filter((price) => price.ticketTypeId === type.id)
+          .map((price) => ({
+            attendanceValue: price.attendanceValue,
+            dayDate: price.dayDate,
+            charged: price.charged,
+            amount: (currentId && price.amounts[currentId]) || 0,
+            nextAmount: nextId ? (price.amounts[nextId] ?? 0) : null,
+            personalEmailAmount: personal.get(priceRowKey(price)) ?? null,
+          })),
+      };
+    }),
   };
 }
 

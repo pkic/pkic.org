@@ -3,6 +3,7 @@
  * ticket, the codes that change that, and how payment is chased. Editing
  * prices or one ticket opens its own page under this tab.
  */
+import { useRef } from "preact/hooks";
 import { getJson } from "../../../../../../../shared/api-client";
 import {
   eventTicketsConfigurationSchema,
@@ -11,6 +12,7 @@ import {
 import { formatTicketAmount, formatTicketMoney } from "../../../../../../../../shared/event-ticket-display";
 import { formatCalendarDate } from "../../../../../../../../shared/format-date";
 import { formatNumber } from "../../../../../../../../shared/format-number";
+import type { ApiTableActions } from "../../../../../../../components/ApiDataTable";
 import { ErrorAlert } from "../../../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../../../components/Spinner";
 import { TicketPriceTable } from "../../../../../../../components/events/tickets/TicketPriceTable";
@@ -23,6 +25,7 @@ import { Panel, PanelBody, PanelHeader } from "../../../../../../../ui/Panel";
 import { StatCard } from "../../../../../../../ui/StatCard";
 import { formatZoneCity } from "../../../../../../../../shared/format-date";
 import { usePortalHashLocation } from "../../../../../hash-location";
+import { SponsorPassesEditor } from "./SponsorPassesEditor";
 import { SponsorPassesPanel } from "./SponsorPassesPanel";
 import { TicketCodesPanel } from "./TicketCodesPanel";
 import { TicketPaymentPanel } from "./TicketPaymentPanel";
@@ -31,6 +34,9 @@ import { TicketStepTextsPanel } from "./TicketStepTextsPanel";
 import { TicketTypeEditor } from "./TicketTypeEditor";
 import { sortedPeriods, ticketPriceGrid } from "./ticket-price-grid";
 import { ticketsEndpoint } from "./tickets-endpoint";
+
+/** The segment below the tab where sponsor passes are edited. */
+const SPONSOR_PASSES_SEGMENT = "sponsor-passes";
 
 type TicketType = EventTicketsConfiguration["types"][number];
 
@@ -51,10 +57,11 @@ export function TicketsTab({
   canWrite: boolean;
   /** The tab's own route, when it is not the event's own settings: a group's event workspace. */
   basePath?: string;
-  /** The segment below the tab: `prices`, `new`, or a ticket's id. */
+  /** The segment below the tab: `prices`, `sponsor-passes`, `new`, or a ticket's id. */
   detail?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
+  const codes = useRef<ApiTableActions | null>(null);
   const base = basePath ?? `/events/${slug}/settings/tickets`;
   const { data, loading, error, reload } = useData(
     () => getJson(ticketsEndpoint(slug), eventTicketsConfigurationSchema),
@@ -68,6 +75,8 @@ export function TicketsTab({
   };
   if (canWrite && detail === "prices")
     return <TicketPricesEditor slug={slug} configuration={data} onSaved={done} onCancel={() => navigate(base)} />;
+  if (canWrite && detail === SPONSOR_PASSES_SEGMENT)
+    return <SponsorPassesEditor slug={slug} configuration={data} onSaved={done} onCancel={() => navigate(base)} />;
   if (canWrite && detail) {
     const type = data.types.find((candidate) => candidate.id === detail);
     if (detail === "new" || type)
@@ -200,8 +209,17 @@ export function TicketsTab({
           />
         </PanelBody>
       </Panel>
-      <SponsorPassesPanel slug={slug} configuration={data} canWrite={canWrite} onChanged={reload} />
-      <TicketCodesPanel slug={slug} configuration={data} canWrite={canWrite} onChanged={reload} />
+      <SponsorPassesPanel
+        slug={slug}
+        configuration={data}
+        canWrite={canWrite}
+        editHref={usePortalHashLocation.hrefs(`${base}/${SPONSOR_PASSES_SEGMENT}`)}
+        onChanged={async () => {
+          await reload();
+          await codes.current?.reload();
+        }}
+      />
+      <TicketCodesPanel slug={slug} configuration={data} canWrite={canWrite} table={codes} />
       <TicketStepTextsPanel slug={slug} configuration={data} canWrite={canWrite} onSaved={reload} />
       <TicketPaymentPanel slug={slug} configuration={data} canWrite={canWrite} onSaved={reload} />
     </div>

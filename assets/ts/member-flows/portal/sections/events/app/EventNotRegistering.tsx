@@ -34,7 +34,6 @@ export function EventNotRegistering({ slug }: { slug: string }) {
   const [stopped, setStopped] = useState(false);
   const [error, setError] = useState("");
   const form = useContractForm(unfinishedRegistrationStopSchema, { reasonCode, reasonNote: reasonNote || undefined });
-  const eventHref = usePortalHashLocation.hrefs(`/events/${encodeURIComponent(slug)}`);
   const registerHref = usePortalHashLocation.hrefs(`/events/${encodeURIComponent(slug)}/register`);
 
   if (own.loading) return <Spinner label="Loading…" />;
@@ -69,9 +68,6 @@ export function EventNotRegistering({ slug }: { slug: string }) {
           </p>
           <div class="pk-cluster">
             <ButtonLink href={registerHref}>Register after all</ButtonLink>
-            <ButtonLink variant="link" href={eventHref}>
-              Back to the event
-            </ButtonLink>
           </div>
         </PanelBody>
       </Panel>
@@ -88,9 +84,6 @@ export function EventNotRegistering({ slug }: { slug: string }) {
               ? "You finished registering, so there are no reminders to stop."
               : `You have no unfinished registration for ${eventName}, so we are not sending you reminders.`}
           </p>
-          <div class="pk-cluster">
-            <ButtonLink href={eventHref}>Back to the event</ButtonLink>
-          </div>
         </PanelBody>
       </Panel>
     );

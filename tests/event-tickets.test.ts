@@ -5,6 +5,7 @@ import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
 import { hmacSha256Hex } from "../functions/_lib/utils/crypto";
 import {
+  eventTicketCodeListQuerySchema,
   registrationTicketCheckoutResponseSchema,
   registrationTicketResponseSchema,
 } from "../assets/shared/schemas/event-tickets";
@@ -32,7 +33,12 @@ import {
   prepareHoldConfirmationForPayment,
   sendTicketPaymentReminders,
 } from "../functions/_lib/services/event-tickets/payment";
-import { processTicketRefunds, requestTicketRefund } from "../functions/_lib/services/event-tickets/refunds";
+import {
+  closeUnpayableTicketCheckouts,
+  processTicketRefunds,
+  requestTicketRefund,
+} from "../functions/_lib/services/event-tickets/refunds";
+import { listEventTicketCodes } from "../functions/_lib/services/event-tickets/code-list";
 import { reviewDisputedTicket } from "../functions/_lib/services/event-tickets/dispute";
 import { issueSponsorPassCodes, saveSponsorPasses } from "../functions/_lib/services/event-tickets/sponsor-passes";
 import { badgeAttendeeEligibilitySql } from "../functions/_lib/services/event-participation/badge-attendees";
@@ -173,6 +179,10 @@ describe("event tickets", () => {
       ["pqcc_attendee", 19500],
       ["pqcc_vendor", null],
     ]);
+    // Each price says it too, so the ticket and the day rows show what this address is charged.
+    expect(offered.tickets[0].prices.filter((price) => price.personalEmailAmount !== null)).toMatchObject([
+      { amount: 0, personalEmailAmount: 19500 },
+    ]);
   });
 
   it("prices the ticket for the identity registered as: a work address on a personal account is free", async () => {
@@ -197,11 +207,39 @@ describe("event tickets", () => {
       quoteEventTicket(env.DB, {}, event, who, { dayAttendance: inPerson, identityId, save: false });
     expect(await quote("identity-1")).toMatchObject({ total: 0, personalEmailPrice: false });
     expect((await readEventTicketOffer(env.DB, {}, event, who, "identity-1")).personalEmail).toBe(false);
-    // Someone else's identity is not theirs to register as: the account's own address prices the ticket.
+    // An identity that does not exist, and one that belongs to somebody else, are not theirs to register as:
+    // the account's own address prices the ticket.
     expect(await quote("00000000-0000-4000-8000-00000000dead")).toMatchObject({
       total: 19500,
       personalEmailPrice: true,
     });
+    const other = await findOrCreateUser(env.DB, { email: "other@gmail.com", firstName: "C", lastName: "D" });
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, verification_method, created_at)
+         VALUES ('mail-2', ?, 'other@example-works.test', 'other@example-works.test', ?, 'registration_confirmation', ?)`,
+      ).bind(other.id, now, now),
+      env.DB.prepare(
+        `INSERT INTO identities (id, user_id, organization_id, email_id, job_title, source, invited_at, started_at, created_at, updated_at)
+         VALUES ('identity-2', ?, 'org-1', 'mail-2', 'Engineer', 'verified_domain', ?, ?, ?, ?)`,
+      ).bind(other.id, now, now, now, now),
+    ]);
+    expect(await quote("identity-2")).toMatchObject({ total: 19500, personalEmailPrice: true });
+    expect((await readEventTicketOffer(env.DB, {}, event, who, "identity-2")).personalEmail).toBe(true);
+    // The identity is free for the person it belongs to.
+    expect(
+      await quoteEventTicket(
+        env.DB,
+        {},
+        event,
+        { userId: other.id, email: other.email },
+        {
+          dayAttendance: inPerson,
+          identityId: "identity-2",
+          save: false,
+        },
+      ),
+    ).toMatchObject({ total: 0, personalEmailPrice: false });
   });
 
   it("decides the ticket once per organization and reuses the stored decision", async () => {
@@ -407,11 +445,12 @@ describe("event tickets", () => {
     let sent: string | null = null;
     const refunds = (async (_url: string, init: RequestInit) => {
       sent = String(init.body);
-      return new Response(JSON.stringify({ id: "re_synthetic" }), { status: 200 });
+      return new Response(JSON.stringify({ id: "re_synthetic", status: "pending" }), { status: 200 });
     }) as unknown as typeof fetch;
     expect(await processTicketRefunds(env.DB, paymentEnv, 5, refunds)).toEqual({ processed: 1, failed: 0 });
     expect(sent).toContain("payment_intent=pi_synthetic");
-    expect(sent).toContain("amount=19500");
+    // Only what the provider has not returned yet is asked back.
+    expect(sent).toContain("amount=17500");
     // The refund is at Stripe but its event has not arrived: the ticket still reads paid and is not refunded twice.
     await expect(requestTicketRefund(env.DB, admin, { ...input, reason: "Again" })).rejects.toMatchObject({
       code: "TICKET_REFUND_PENDING",
@@ -425,6 +464,78 @@ describe("event tickets", () => {
       status: "refunded",
       refundedAmount: 19500,
     });
+  });
+
+  it("lets an organizer refund again after the provider fails or refuses a refund", async () => {
+    const { event, admin } = await seedTickets();
+    const { registration, user } = await register(event, "refund-failed@gmail.com");
+    const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+    await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+    const read = () => readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id });
+    await paidEvent((await read())!.id, "cs_test_ticket", 19500);
+    const answer = (status: number, body: unknown) =>
+      (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
+
+    // The provider confirms the refund at once, then fails it: the ticket is paid again and can be refunded again.
+    await requestTicketRefund(env.DB, admin, { ...input, reason: "Visa refused" });
+    await processTicketRefunds(env.DB, paymentEnv, 5, answer(200, { id: "re_first", status: "succeeded" }));
+    expect(await read()).toMatchObject({ status: "refunded", refundedAmount: 19500, refundPending: false });
+    const failure = {
+      type: "refund.failed",
+      data: {
+        object: { id: "re_first", payment_intent: "pi_synthetic", amount: 19500, status: "failed" },
+      },
+    };
+    expect(await handleEventTicketStripeEvent(env.DB, { id: "evt_refund_failed", ...failure })).toMatchObject({
+      outcome: "refund_failed",
+    });
+    // The same failure under another event changes nothing more.
+    await handleEventTicketStripeEvent(env.DB, { id: "evt_refund_failed_again", ...failure, type: "refund.updated" });
+    expect(await read()).toMatchObject({ status: "paid", refundedAmount: 0, refundPending: false, refundFailed: true });
+
+    // A refund the provider refuses outright is failed without further tries.
+    await requestTicketRefund(env.DB, admin, { ...input, reason: "Second try" });
+    expect(await processTicketRefunds(env.DB, paymentEnv, 5, answer(400, {}))).toEqual({ processed: 0, failed: 1 });
+    expect(await read()).toMatchObject({ status: "paid", refundPending: false, refundFailed: true });
+
+    await requestTicketRefund(env.DB, admin, { ...input, reason: "Third try" });
+    await processTicketRefunds(env.DB, paymentEnv, 5, answer(200, { id: "re_third", status: "pending" }));
+    expect(await read()).toMatchObject({ status: "paid", refundPending: true, refundFailed: false });
+    await handleEventTicketStripeEvent(env.DB, {
+      id: "evt_refund_confirmed",
+      type: "refund.updated",
+      data: { object: { id: "re_third", payment_intent: "pi_synthetic", amount: 19500, status: "succeeded" } },
+    });
+    expect(await read()).toMatchObject({ status: "refunded", refundedAmount: 19500, refundPending: false });
+  });
+
+  it("returns a payment that arrives after the ticket was canceled and closes its payment page", async () => {
+    const { event } = await seedTickets();
+    const { registration, user } = await register(event, "late-payment@gmail.com");
+    const input = { eventId: event.id, registrationId: registration.id, userId: user.id };
+    await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+    const read = () => readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id });
+    const ticket = (await read())!;
+    await env.DB.prepare("UPDATE registration_tickets SET status = 'canceled' WHERE id = ?").bind(ticket.id).run();
+
+    // The payment page of a canceled ticket is closed at the provider by the job.
+    const calls: string[] = [];
+    const provider = (async (url: string, init: RequestInit) => {
+      calls.push(`${url} ${String(init.body ?? "")}`);
+      return new Response(JSON.stringify({ id: "re_late", status: "succeeded" }), { status: 200 });
+    }) as unknown as typeof fetch;
+    expect(await closeUnpayableTicketCheckouts(env.DB, paymentEnv, 10, provider)).toEqual({ closed: 1 });
+    expect(calls[0]).toContain("/v1/checkout/sessions/cs_test_ticket/expire");
+    expect(await closeUnpayableTicketCheckouts(env.DB, paymentEnv, 10, provider)).toEqual({ closed: 0 });
+
+    // A payment that still got through is returned by itself, once, and the ticket stays canceled.
+    expect(await paidEvent(ticket.id, "cs_test_ticket", 19500)).toMatchObject({ outcome: "returned" });
+    expect(await read()).toMatchObject({ status: "canceled", refundPending: true, paymentReference: "pi_synthetic" });
+    expect(await processTicketRefunds(env.DB, paymentEnv, 5, provider)).toEqual({ processed: 1, failed: 0 });
+    expect(calls.at(-1)).toContain("payment_intent=pi_synthetic");
+    expect(calls.at(-1)).toContain("amount=19500");
+    expect(await read()).toMatchObject({ status: "canceled", refundPending: false, refundFailed: false });
+    expect(await processTicketRefunds(env.DB, paymentEnv, 5, provider)).toEqual({ processed: 0, failed: 0 });
   });
 
   it("gives each active sponsor its two codes from its tier and only ever raises their limits", async () => {
@@ -456,7 +567,13 @@ describe("event tickets", () => {
     await save(2, 4);
     expect(await issueSponsorPassCodes(env.DB, admin, event)).toEqual({ created: 0, raised: 0 });
     const configuration = await readEventTicketsConfiguration(env.DB, event);
-    expect(configuration.codes.map((code) => [code.label, code.maxUses, code.amount]).sort()).toEqual([
+    const listed = await listEventTicketCodes(env.DB, event.id, eventTicketCodeListQuerySchema.parse({}));
+    expect(listed.page.total).toBe(2);
+    expect(
+      (await listEventTicketCodes(env.DB, event.id, eventTicketCodeListQuerySchema.parse({ q: "customers", limit: 1 })))
+        .codes,
+    ).toMatchObject([{ label: "Example Sponsor: customers" }]);
+    expect(listed.codes.map((code) => [code.label, code.maxUses, code.amount]).sort()).toEqual([
       ["Example Sponsor: customers", 12, 0],
       ["Example Sponsor: staff", 4, 0],
     ]);
@@ -503,6 +620,14 @@ describe("event tickets", () => {
     try {
       // Someone else cannot open payment for this registration, and a guest is refused.
       expect((await callApi(routeEnv, `${path}/checkout`, { method: "POST" })).status).toBe(401);
+      const stranger = await findOrCreateUser(env.DB, { email: "stranger@gmail.com", firstName: "E", lastName: "F" });
+      const strangerToken = await createMemberSession(env.DB, stranger.id, `session-${crypto.randomUUID()}`);
+      const foreign = { headers: { authorization: `Bearer ${strangerToken}`, "content-type": "application/json" } };
+      expect((await callApi(routeEnv, `${path}/checkout`, { method: "POST", body: "{}", ...foreign })).status).toBe(
+        404,
+      );
+      expect((await callApi(routeEnv, path, foreign)).status).toBe(403);
+      expect(stripeRequest).toBeNull();
       const opened = await callApi(routeEnv, `${path}/checkout`, { method: "POST", body: "{}", ...authorized });
       expect(opened.status).toBe(200);
       expect(registrationTicketCheckoutResponseSchema.parse(await opened.json()).checkoutUrl).toContain(

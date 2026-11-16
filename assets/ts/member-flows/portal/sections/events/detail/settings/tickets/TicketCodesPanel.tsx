@@ -2,30 +2,31 @@
  * Codes: a code gives its holder one ticket at a set price for a limited
  * number of uses. Creating one is a quick action, so it is a dialog.
  */
-import { useState } from "preact/hooks";
+import { useState, type MutableRef } from "preact/hooks";
 import { patchJson, postJson } from "../../../../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../../../../shared/schemas/api-common";
 import {
   eventTicketCodeCreateResponseSchema,
   eventTicketCodeCreateSchema,
+  eventTicketCodeListSchema,
   type EventTicketCode,
   type EventTicketsConfiguration,
 } from "../../../../../../../../shared/schemas/event-tickets";
 import { formatTicketAmount, parseTicketAmount } from "../../../../../../../../shared/event-ticket-display";
 import { formatNumber } from "../../../../../../../../shared/format-number";
+import { ApiDataTable, type ApiTableActions } from "../../../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../../../components/ConfirmDialog";
 import { useContractForm } from "../../../../../../../hooks/useContractForm";
+import type { CollectionLoader } from "../../../../../../../hooks/useServerCollection";
 import { copyText } from "../../../../../../../shared/clipboard";
 import { toast } from "../../../../../ui";
 import { Alert } from "../../../../../../../ui/Alert";
 import { Badge } from "../../../../../../../ui/Badge";
-import { Button } from "../../../../../../../ui/Button";
 import { Radio } from "../../../../../../../ui/Checkbox";
-import { DataTable } from "../../../../../../../ui/DataTable";
 import { Dialog } from "../../../../../../../ui/Dialog";
 import { EmptyState } from "../../../../../../../ui/EmptyState";
 import { Field } from "../../../../../../../ui/Field";
-import { Panel, PanelBody, PanelHeader } from "../../../../../../../ui/Panel";
+import { Panel, PanelHeader } from "../../../../../../../ui/Panel";
 import { RowActions } from "../../../../../../../ui/RowActions";
 import { Select, TextInput } from "../../../../../../../ui/TextControl";
 import { ticketsEndpoint } from "./tickets-endpoint";
@@ -43,12 +44,16 @@ export function TicketCodesPanel({
   slug,
   configuration,
   canWrite,
-  onChanged,
+  table,
+  loadCodes,
 }: {
   slug: string;
   configuration: EventTicketsConfiguration;
   canWrite: boolean;
-  onChanged: () => Promise<void>;
+  /** Lets the tab reload the list when codes are made elsewhere on it, such as sponsor passes. */
+  table: MutableRef<ApiTableActions | null>;
+  /** Replaces the request for the codes, where there is no server to ask. */
+  loadCodes?: CollectionLoader;
 }) {
   const { currency } = configuration.settings;
   const tickets = configuration.types.filter((type) => type.active);
@@ -92,7 +97,7 @@ export function TicketCodesPanel({
         checked.data,
         eventTicketCodeCreateResponseSchema,
       );
-      await onChanged();
+      await table.current?.reload();
       close();
       await copyText(displayTicketCode(created.code.code), {
         copied: "Code created and copied.",
@@ -108,7 +113,7 @@ export function TicketCodesPanel({
   async function change(code: EventTicketCode, body: { addUses?: number; revoked?: boolean }, done: string) {
     try {
       await patchJson(`${ticketsEndpoint(slug)}/codes/${encodeURIComponent(code.id)}`, body, successResponseSchema);
-      await onChanged();
+      await table.current?.reload();
       notify(done, "success");
     } catch (cause) {
       notify(cause instanceof Error ? cause.message : "The code could not be changed. Try again.", "error");
@@ -117,101 +122,104 @@ export function TicketCodesPanel({
   const ticketName = (id: string) => configuration.types.find((type) => type.id === id)?.name ?? "";
   return (
     <Panel aria-label="Codes">
-      <PanelHeader title="Codes">
-        {canWrite && tickets.length > 0 && (
-          <Button type="button" variant="primary" onClick={() => setOpen(true)}>
-            Create code
-          </Button>
-        )}
-      </PanelHeader>
-      <PanelBody flush={configuration.codes.length > 0}>
-        {configuration.codes.length === 0 ? (
+      <PanelHeader title="Codes" />
+      <ApiDataTable
+        urlState="ticket-codes"
+        endpoint={`${ticketsEndpoint(slug)}/codes`}
+        responseSchema={eventTicketCodeListSchema}
+        resolve={(value) => value.codes}
+        resolvePage={(value) => value.page}
+        load={loadCodes}
+        actionsRef={table}
+        caption="Codes"
+        paginate
+        searchPlaceholder="Search codes…"
+        initialSort="-created"
+        createAction={
+          canWrite && tickets.length > 0 ? { label: "Create code", onSelect: () => setOpen(true) } : undefined
+        }
+        rowKey={(row) => row.id}
+        empty={
           <EmptyState
-            title="No codes yet"
+            title="No codes to show"
             body="A code gives its holder one ticket at a set price: sponsor passes, partner discounts, or a free place on request."
           />
-        ) : (
-          <DataTable<EventTicketCode>
-            caption="Codes"
-            rows={configuration.codes}
-            rowKey={(row) => row.id}
-            columns={[
-              {
-                id: "label",
-                header: "Code for",
-                cell: (row) => (
-                  <>
-                    <strong>{row.label}</strong>
-                    <div class="pk-small pk-muted">{displayTicketCode(row.code)}</div>
-                  </>
-                ),
-              },
-              { id: "ticket", header: "Ticket", width: "fit", cell: (row) => ticketName(row.ticketTypeId) },
-              { id: "price", header: "Price", width: "fit", align: "end", cell: (row) => codePrice(row, currency) },
-              {
-                id: "used",
-                header: "Used",
-                width: "fit",
-                align: "end",
-                cell: (row) => `${formatNumber(row.usedCount)} of ${formatNumber(row.maxUses)}`,
-              },
-              {
-                id: "actions",
-                header: "Actions",
-                headerHidden: true,
-                width: "fit",
-                align: "end",
-                cell: (row) => (
-                  <RowActions
-                    subject={row.label}
-                    status={row.revokedAt ? <Badge tone="danger">Revoked</Badge> : undefined}
-                    actions={[
-                      {
-                        id: "copy",
-                        label: "Copy code",
-                        onSelect: () =>
-                          void copyText(displayTicketCode(row.code), {
-                            copied: "Code copied.",
-                            failed: "The code could not be copied. Select it in the list.",
-                            notify,
-                          }),
-                      },
-                      ...(canWrite
-                        ? [
-                            {
-                              id: "more",
-                              label: "Add 10 uses",
-                              onSelect: () => void change(row, { addUses: 10 }, "10 uses added."),
+        }
+        columns={[
+          {
+            header: "Code for",
+            hideable: false,
+            sort: { asc: "label", desc: "-label" },
+            cell: (row) => (
+              <>
+                <strong>{row.label}</strong>
+                <div class="pk-small pk-muted">{displayTicketCode(row.code)}</div>
+              </>
+            ),
+          },
+          { header: "Ticket", width: "fit", cell: (row) => ticketName(row.ticketTypeId) },
+          { header: "Price", width: "fit", align: "end", cell: (row) => codePrice(row, currency) },
+          {
+            header: "Used",
+            width: "fit",
+            align: "end",
+            sort: { asc: "used", desc: "-used" },
+            cell: (row) => `${formatNumber(row.usedCount)} of ${formatNumber(row.maxUses)}`,
+          },
+          {
+            header: "Actions",
+            hideable: false,
+            width: "fit",
+            align: "end",
+            cell: (row) => (
+              <RowActions
+                subject={row.label}
+                status={row.revokedAt ? <Badge tone="danger">Revoked</Badge> : undefined}
+                actions={[
+                  {
+                    id: "copy",
+                    label: "Copy code",
+                    onSelect: () =>
+                      void copyText(displayTicketCode(row.code), {
+                        copied: "Code copied.",
+                        failed: "The code could not be copied. Select it in the list.",
+                        notify,
+                      }),
+                  },
+                  ...(canWrite
+                    ? [
+                        {
+                          id: "more",
+                          label: "Add 10 uses",
+                          onSelect: () => void change(row, { addUses: 10 }, "10 uses added."),
+                        },
+                        row.revokedAt
+                          ? {
+                              id: "restore",
+                              label: "Restore code",
+                              onSelect: () => void change(row, { revoked: false }, "Code restored."),
+                            }
+                          : {
+                              id: "revoke",
+                              label: "Revoke code",
+                              onSelect: () =>
+                                void confirmAction({
+                                  title: `Revoke the code for ${row.label}?`,
+                                  body: "Nobody can register with it anymore. Tickets already issued with it stay valid.",
+                                  confirmLabel: "Revoke code",
+                                  tone: "danger",
+                                }).then((confirmed) =>
+                                  confirmed ? change(row, { revoked: true }, "Code revoked.") : undefined,
+                                ),
                             },
-                            row.revokedAt
-                              ? {
-                                  id: "restore",
-                                  label: "Restore code",
-                                  onSelect: () => void change(row, { revoked: false }, "Code restored."),
-                                }
-                              : {
-                                  id: "revoke",
-                                  label: "Revoke code",
-                                  onSelect: () =>
-                                    void confirmAction({
-                                      title: `Revoke the code for ${row.label}?`,
-                                      body: "Nobody can register with it anymore. Tickets already issued with it stay valid.",
-                                      confirmLabel: "Revoke code",
-                                      tone: "danger",
-                                    }).then((confirmed) =>
-                                      confirmed ? change(row, { revoked: true }, "Code revoked.") : undefined,
-                                    ),
-                                },
-                          ]
-                        : []),
-                    ]}
-                  />
-                ),
-              },
-            ]}
-          />
-        )}
-      </PanelBody>
+                      ]
+                    : []),
+                ]}
+              />
+            ),
+          },
+        ]}
+      />
       <Dialog
         open={open}
         title="Create code"

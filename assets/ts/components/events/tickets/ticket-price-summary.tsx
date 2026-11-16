@@ -25,8 +25,8 @@ interface PriceNow {
 function pricesNow(offer: EventTicketOffer, ticket: OfferedTicket): PriceNow[] {
   const personalPrice = offer.personalEmail && ticket.personalEmailAmount !== null;
   return ticket.prices.map((price) => {
-    const personal = personalPrice && price.amount === 0 && (price.nextAmount ?? 0) > 0;
-    const amount = personal ? price.nextAmount! : price.amount;
+    const personal = personalPrice && price.amount === 0 && (price.personalEmailAmount ?? 0) > 0;
+    const amount = personal ? price.personalEmailAmount! : price.amount;
     const changes = !personal && price.nextAmount !== null && price.nextAmount !== amount;
     return {
       attendanceValue: price.attendanceValue,

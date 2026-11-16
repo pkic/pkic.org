@@ -12,6 +12,7 @@ import {
   utcInstantSchema,
 } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { stripeCurrencySchema } from "./stripe";
 import { REGISTRATION_TICKET_STATUSES, TICKET_ASSIGNMENT_SOURCES, TICKET_PRICE_CHARGED } from "../event-tickets";
 
@@ -151,6 +152,13 @@ export const eventTicketCodeSchema = z.object({
 });
 export type EventTicketCode = z.infer<typeof eventTicketCodeSchema>;
 
+/** Codes are a collection of their own: an event can hold more than one screen of them. */
+export const eventTicketCodeListQuerySchema = listQuerySchema(["label", "used", "created"] as const, {
+  maxLimit: 100,
+});
+export type EventTicketCodeListQuery = z.infer<typeof eventTicketCodeListQuerySchema>;
+export const eventTicketCodeListSchema = paginatedResponseSchema("codes", eventTicketCodeSchema);
+
 export const eventTicketCodeCreateSchema = z
   .object({
     ticketTypeId: databaseIdSchema,
@@ -231,7 +239,6 @@ export const eventTicketsConfigurationSchema = z.object({
   types: z.array(eventTicketTypeSchema),
   periods: z.array(eventTicketPricePeriodSchema),
   prices: z.array(eventTicketPriceSchema),
-  codes: z.array(eventTicketCodeSchema),
   sponsorPasses: eventTicketSponsorPassesSchema,
   attendanceOptions: z.array(z.object({ value: z.string(), label: z.string(), icon: z.string().nullable() })),
   days: z.array(z.object({ dayDate: calendarDateSchema, label: z.string().nullable() })),
@@ -292,6 +299,8 @@ export const eventTicketOfferSchema = z.object({
           charged: ticketPriceChargedSchema,
           amount: amountSchema,
           nextAmount: amountSchema.nullable(),
+          /** What this price costs a personal address while it is free for a work address. */
+          personalEmailAmount: amountSchema.nullable().default(null),
         }),
       ),
     }),
@@ -353,8 +362,10 @@ export const registrationTicketSchema = z.object({
   disputed: z.boolean(),
   /** Why the person holds another ticket than the one decided for their organization, while that is open. */
   disputeReason: z.string().nullable(),
-  /** A refund an organizer asked for that the payment provider has not confirmed yet. */
+  /** A refund that the payment provider has neither confirmed nor refused yet. */
   refundPending: z.boolean(),
+  /** The latest refund for this ticket did not go through. */
+  refundFailed: z.boolean(),
   /** The payment provider's reference for the payment, once paid. */
   paymentReference: z.string().nullable(),
   refundedAmount: totalAmountSchema,
@@ -385,9 +396,19 @@ const refusals = {
   "409": jsonErrorResponse("The tickets changed; reload before saving."),
 };
 
+export const eventTicketCodesGetRouteSchema = {
+  tags: ["Events"],
+  summary: "List an event's ticket codes",
+  request: { params: eventSlugParamsSchema, query: eventTicketCodeListQuerySchema },
+  responses: {
+    "200": { description: "A page of codes.", content: json(eventTicketCodeListSchema) },
+    ...refusals,
+  },
+  ...reader,
+};
 export const eventTicketsGetRouteSchema = {
   tags: ["Events"],
-  summary: "Get an event's tickets, prices and codes",
+  summary: "Get an event's tickets and prices",
   request: { params: eventSlugParamsSchema },
   responses: {
     "200": { description: "Ticket configuration.", content: json(eventTicketsConfigurationSchema) },

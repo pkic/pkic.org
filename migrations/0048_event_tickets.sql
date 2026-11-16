@@ -175,6 +175,9 @@ CREATE TABLE registration_tickets (
   next_reminder_at      TEXT,
   reminders_end_at      TEXT,
   paid_at               TEXT,
+  -- The payment that settled the ticket, and how much of it the provider has returned.
+  payment_intent_id     TEXT,
+  refunded_amount       INTEGER NOT NULL DEFAULT 0 CHECK (refunded_amount >= 0),
   revision              INTEGER NOT NULL DEFAULT 0,
   created_at            TEXT    NOT NULL,
   updated_at            TEXT    NOT NULL
@@ -204,23 +207,31 @@ CREATE TABLE registration_ticket_payment_events (
   created_at        TEXT NOT NULL
 );
 
--- Durable refund requests; the row id is the provider idempotency key and the job is the only retry owner.
+-- Durable refunds, one per payment being returned; the row id is the provider idempotency key and the job is the
+-- only retry owner. Sent to the provider (submitted), confirmed by it (completed) and refused (failed) are apart:
+-- a refund the provider accepted can still fail later, and a failed one can be asked for again.
 CREATE TABLE registration_ticket_refunds (
   id                   TEXT    NOT NULL PRIMARY KEY,
   ticket_id            TEXT    NOT NULL REFERENCES registration_tickets(id) ON DELETE CASCADE,
+  payment_intent_id    TEXT,
   amount               INTEGER NOT NULL CHECK (amount > 0),
   reason               TEXT    NOT NULL,
+  -- Empty for a payment returned without an organizer asking: one that arrived for a ticket that no longer needed it.
   requested_by_user_id TEXT    REFERENCES users(id),
   provider_refund_id   TEXT    UNIQUE,
   attempts             INTEGER NOT NULL DEFAULT 0,
   next_attempt_at      TEXT    NOT NULL,
   lease_token          TEXT,
   lease_expires_at     TEXT,
+  submitted_at         TEXT,
   completed_at         TEXT,
+  failed_at            TEXT,
   last_error           TEXT,
   created_at           TEXT    NOT NULL
 );
-CREATE INDEX idx_registration_ticket_refunds_due ON registration_ticket_refunds(next_attempt_at) WHERE completed_at IS NULL;
+CREATE INDEX idx_registration_ticket_refunds_due ON registration_ticket_refunds(next_attempt_at)
+  WHERE submitted_at IS NULL AND failed_at IS NULL;
+CREATE INDEX idx_registration_ticket_refunds_ticket ON registration_ticket_refunds(ticket_id, created_at, id);
 
 INSERT INTO scheduled_jobs (job_key, interval_seconds, next_run_at) VALUES
   ('event_ticket_payments', 300, strftime('%Y-%m-%dT%H:%M:%fZ','now')),

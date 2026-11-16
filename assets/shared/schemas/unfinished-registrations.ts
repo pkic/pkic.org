@@ -1,6 +1,7 @@
 /** Transport contracts for unfinished registrations: the person's own, and the organizer's summary. */
 import { z } from "zod";
 import { eventSlugParamsSchema, jsonErrorResponse, successResponseSchema, utcInstantSchema } from "./api-common";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { UNFINISHED_REGISTRATION_REASONS } from "../unfinished-registrations";
 
 export const unfinishedRegistrationReasonSchema = z.enum(UNFINISHED_REGISTRATION_REASONS);
@@ -29,16 +30,21 @@ export const unfinishedRegistrationSummarySchema = z.object({
   /** Of those who stopped, how many picked a reason. */
   gaveReason: z.number().int(),
   reasons: z.array(z.object({ reasonCode: unfinishedRegistrationReasonSchema.nullable(), count: z.number().int() })),
-  /** The most recent notes people left. */
-  notes: z.array(
-    z.object({
-      reasonCode: unfinishedRegistrationReasonSchema.nullable(),
-      note: z.string(),
-      stoppedAt: utcInstantSchema,
-    }),
-  ),
+  /** How many of those who stopped wrote a note; the notes themselves are their own collection. */
+  wroteNote: z.number().int(),
 });
 export type UnfinishedRegistrationSummary = z.infer<typeof unfinishedRegistrationSummarySchema>;
+
+/** What people wrote when they said they will not register, newest first unless asked otherwise. */
+export const unfinishedRegistrationNoteListQuerySchema = listQuerySchema(["stoppedAt"] as const, { maxLimit: 100 });
+export type UnfinishedRegistrationNoteListQuery = z.infer<typeof unfinishedRegistrationNoteListQuerySchema>;
+export const unfinishedRegistrationNoteSchema = z.object({
+  reasonCode: unfinishedRegistrationReasonSchema.nullable(),
+  note: z.string(),
+  stoppedAt: utcInstantSchema,
+});
+export type UnfinishedRegistrationNote = z.infer<typeof unfinishedRegistrationNoteSchema>;
+export const unfinishedRegistrationNoteListSchema = paginatedResponseSchema("notes", unfinishedRegistrationNoteSchema);
 
 const json = <Schema extends z.ZodType>(schema: Schema) => ({ "application/json": { schema } });
 const refusals = {
@@ -71,6 +77,16 @@ export const ownUnfinishedRegistrationStopRouteSchema = {
   },
   responses: { "200": { description: "Recorded; reminders stop.", content: json(successResponseSchema) }, ...refusals },
   "x-pkic-auth": { required: true },
+};
+export const unfinishedRegistrationNotesRouteSchema = {
+  tags: ["Events"],
+  summary: "List what people wrote when they said they will not register",
+  request: { params: eventSlugParamsSchema, query: unfinishedRegistrationNoteListQuerySchema },
+  responses: {
+    "200": { description: "A page of notes.", content: json(unfinishedRegistrationNoteListSchema) },
+    ...refusals,
+  },
+  "x-pkic-auth": { required: true, scopes: ["events:read"] },
 };
 export const unfinishedRegistrationSummaryRouteSchema = {
   tags: ["Events"],

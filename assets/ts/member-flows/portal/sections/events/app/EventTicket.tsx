@@ -19,6 +19,7 @@ import { Spinner } from "../../../../../components/Spinner";
 import { useData } from "../../../../../hooks/useData";
 import { getJson, putJson } from "../../../../../shared/api-client";
 import { registrationTicketResponseSchema } from "../../../../../../shared/schemas/event-tickets";
+import { Button } from "../../../../../ui/Button";
 import { EmptyState } from "../../../../../ui/EmptyState";
 import { usePortalHashLocation } from "../../../hash-location";
 import { eventParticipantRecordPath } from "../event-participant-paths";
@@ -80,10 +81,21 @@ function SettledTicket({
         <EventTicketPayment slug={event.slug} registrationId={registrationId} ticket={held} details={details} />
       </Suspense>
     );
-  return <BadgeTicket event={event} details={details} />;
+  // A ticket that could not be read still shows the badge the device holds; if that fails too, both are tried again.
+  const unread = Boolean(ticket.error) && !ticket.data;
+  return <BadgeTicket event={event} details={details} retryTicket={unread ? ticket.reload : undefined} />;
 }
 
-function BadgeTicket({ event, details }: { event: ParticipantEventDetail; details: ComponentChildren }) {
+function BadgeTicket({
+  event,
+  details,
+  retryTicket,
+}: {
+  event: ParticipantEventDetail;
+  details: ComponentChildren;
+  /** Set when the ticket itself could not be read, so a failed badge is not mistaken for a missing one. */
+  retryTicket?: () => unknown;
+}) {
   const [enlarged, showCode, closeCode] = useDialogQueryState("ticket-code");
   const ticket = useData(async () => {
     const current = await putJson(
@@ -111,6 +123,20 @@ function BadgeTicket({ event, details }: { event: ParticipantEventDetail; detail
           title={`Your badge for ${event.name}`}
           onQrClick={showCode}
         />
+      ) : retryTicket ? (
+        <div class="pk-stack">
+          <ErrorAlert error="Your ticket could not be loaded. Check your connection and try again." />
+          <div class="pk-cluster">
+            <Button
+              onClick={() => {
+                void retryTicket();
+                void ticket.reload();
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        </div>
       ) : (
         <ErrorAlert error={ticket.error ?? "Your badge is unavailable."} />
       )}

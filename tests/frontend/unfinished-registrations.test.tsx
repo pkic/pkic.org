@@ -97,8 +97,15 @@ it("summarizes who stopped and why for the organizer", async () => {
             { reasonCode: "price", count: 14 },
             { reasonCode: null, count: 20 },
           ],
-          notes: [{ reasonCode: "price", note: "Budget is frozen.", stoppedAt: "2027-03-02T10:00:00.000Z" }],
+          wroteNote: 1,
         }}
+        notesEndpoint="/notes"
+        loadNotes={async (_url, _signal, schema) =>
+          schema.parse({
+            notes: [{ reasonCode: "price", note: "Budget is frozen.", stoppedAt: "2027-03-02T10:00:00.000Z" }],
+            page: { limit: 25, offset: 0, total: 1, hasMore: false },
+          })
+        }
       />,
       host,
     ),
@@ -107,5 +114,5 @@ it("summarizes who stopped and why for the organizer", async () => {
   expect(host.textContent).toContain("75% of those who started");
   expect(host.textContent).toContain("14 gave a reason");
   expect(host.textContent).toContain("No reason given");
-  expect(host.textContent).toContain("Budget is frozen.");
+  await vi.waitFor(() => expect(host.textContent).toContain("Budget is frozen."));
 });

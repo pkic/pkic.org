@@ -75,7 +75,8 @@ function eventCreated(event: StripeEvent): number | null {
 function financialStatus(event: StripeEvent, object: StripeObject, domainOutcome: string | null): PaymentStatus | null {
   if (domainOutcome === "rejected_mismatch") return "requires_review";
   // Part of the payment was returned: the entry stays as paid, and only a full refund marks it refunded.
-  if (domainOutcome === "partially_refunded") return null;
+  // A refund of another payment than the one the entry records leaves it too.
+  if (domainOutcome === "partially_refunded" || domainOutcome === "other_payment_refunded") return null;
   switch (event.type) {
     case "checkout.session.completed":
       return object.payment_status === "paid" ? "paid" : "processing";

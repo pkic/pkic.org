@@ -51,7 +51,7 @@ interface TypeCountRow {
   free: number;
 }
 
-interface CodeRow {
+export interface CodeRow {
   id: string;
   ticket_type_id: string;
   label: string;
@@ -63,9 +63,9 @@ interface CodeRow {
   revoked_at: string | null;
 }
 
-const CODE_COLUMNS = "id, ticket_type_id, label, code, amount, percent_off, max_uses, used_count, revoked_at";
+export const CODE_COLUMNS = "id, ticket_type_id, label, code, amount, percent_off, max_uses, used_count, revoked_at";
 
-function decodeCode(row: CodeRow): EventTicketCode {
+export function decodeCode(row: CodeRow): EventTicketCode {
   return {
     id: row.id,
     ticketTypeId: row.ticket_type_id,
@@ -100,13 +100,10 @@ export async function readEventTicketsConfiguration(
          GROUP BY ticket.ticket_type_id`,
       )
       .bind(event.id),
-    db
-      .prepare(`SELECT ${CODE_COLUMNS} FROM event_ticket_codes WHERE event_id = ? ORDER BY created_at, id LIMIT 500`)
-      .bind(event.id),
     prepareEventDays(db, event.id),
   ]);
   const snapshot = decodeEventTicketSnapshot(results.slice(0, EVENT_TICKET_SNAPSHOT_STATEMENTS), event.timezone);
-  const [countsResult, codesResult, daysResult] = results.slice(EVENT_TICKET_SNAPSHOT_STATEMENTS);
+  const [countsResult, daysResult] = results.slice(EVENT_TICKET_SNAPSHOT_STATEMENTS);
   const counts = new Map(batchRows<TypeCountRow>(countsResult).map((row) => [row.ticket_type_id, row]));
   const days = batchRows<EventDayRecord>(daysResult);
   const digest = await ticketCriteriaDigest(classifierOptions(snapshot.types));
@@ -158,7 +155,6 @@ export async function readEventTicketsConfiguration(
     })),
     periods: snapshot.periods,
     prices: snapshot.prices,
-    codes: batchRows<CodeRow>(codesResult).map(decodeCode),
     sponsorPasses: {
       staffTicketTypeId: sponsorSettings?.staff ?? null,
       customerTicketTypeId: sponsorSettings?.customers ?? null,

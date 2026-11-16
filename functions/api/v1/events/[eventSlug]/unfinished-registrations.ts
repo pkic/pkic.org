@@ -1,6 +1,7 @@
 import {
   ownUnfinishedRegistrationGetRouteSchema,
   ownUnfinishedRegistrationStopRouteSchema,
+  unfinishedRegistrationNotesRouteSchema,
   unfinishedRegistrationStartRouteSchema,
   unfinishedRegistrationSummaryRouteSchema,
 } from "../../../../../assets/shared/schemas/unfinished-registrations";
@@ -10,6 +11,7 @@ import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { getEventBySlug } from "../../../../_lib/services/events";
 import {
+  listUnfinishedRegistrationNotes,
   readOwnUnfinishedRegistration,
   readUnfinishedRegistrationSummary,
   startUnfinishedRegistration,
@@ -22,6 +24,14 @@ const UnfinishedRegistrationSummaryGet = openApiRoute(
   async (c: AdminContext, data) => {
     const { db, event } = await requireEventPermission(c, data.params.eventSlug, "events:read");
     return json(await readUnfinishedRegistrationSummary(db, event));
+  },
+);
+
+const UnfinishedRegistrationNotesGet = openApiRoute(
+  unfinishedRegistrationNotesRouteSchema,
+  async (c: AdminContext, data) => {
+    const { db, event } = await requireEventPermission(c, data.params.eventSlug, "events:read");
+    return json(await listUnfinishedRegistrationNotes(db, event, data.query));
   },
 );
 
@@ -63,6 +73,7 @@ type UnfinishedRegistrationRouter = Pick<typeof import("./router").openapi, "get
 export function registerUnfinishedRegistrationRoutes(openapi: UnfinishedRegistrationRouter): void {
   openapi.post("/registrations/unfinished", UnfinishedRegistrationStartPost);
   openapi.get("/registrations/unfinished/summary", UnfinishedRegistrationSummaryGet);
+  openapi.get("/registrations/unfinished/notes", UnfinishedRegistrationNotesGet);
   openapi.get("/registrations/unfinished/current", OwnUnfinishedRegistrationGet);
   openapi.post("/registrations/unfinished/current/stop", OwnUnfinishedRegistrationStopPost);
 }
