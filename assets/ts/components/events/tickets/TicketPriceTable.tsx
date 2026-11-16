@@ -10,7 +10,10 @@
 import type { ComponentChildren } from "preact";
 import { Button } from "../../../ui/Button";
 import { Select, TextInput } from "../../../ui/TextControl";
+import { TICKET_PRICE_CHARGED, type TicketPriceCharged } from "../../../../shared/event-tickets";
 import "./TicketPriceTable.css";
+
+const CHARGED_LABELS: Record<TicketPriceCharged, string> = { once: "Once", each_day: "Each day" };
 
 export interface TicketPricePeriodColumn {
   id: string;
@@ -135,14 +138,13 @@ export function TicketPriceTable({
                     <Select
                       name={editor.chargedName(row.id)}
                       aria-label={`${group.ticket}, ${row.attendance}, ${row.covers}: charged`}
-                      onChange={(event) => editor.onCharged(row.id, event.currentTarget.value as "once" | "each_day")}
+                      onChange={(event) => editor.onCharged(row.id, event.currentTarget.value as TicketPriceCharged)}
                     >
-                      <option value="once" selected={row.charged === "once"}>
-                        Once
-                      </option>
-                      <option value="each_day" selected={row.charged === "each_day"}>
-                        Each day
-                      </option>
+                      {TICKET_PRICE_CHARGED.map((charged) => (
+                        <option key={charged} value={charged} selected={row.charged === charged}>
+                          {CHARGED_LABELS[charged]}
+                        </option>
+                      ))}
                     </Select>
                   ) : (
                     CHARGED[row.charged]

@@ -391,7 +391,11 @@ describe("event home", () => {
     expect(document).toContain(encodeURIComponent("ABCD-EFGH-JKLM-NPQR"));
     expect(document).toContain('aria-label="Synthetic Sponsor"');
     expect(host.textContent).not.toContain("Check-in code on your printed badge");
-    expect(requests).toEqual(["/api/v1/events/summit/badges/current"]);
+    // The ticket's own state is read first, so an unsettled ticket never shows a badge; then the badge.
+    expect(requests).toEqual([
+      "/api/v1/events/summit/registrations/a0000000-0000-4000-8000-000000000002/ticket",
+      "/api/v1/events/summit/badges/current",
+    ]);
   });
 
   it("keeps sharing and promotion materials out of Ticket", async () => {
@@ -402,7 +406,10 @@ describe("event home", () => {
     expect(host.querySelector("[data-og-badge-img]")).toBeNull();
     expect(host.textContent).not.toContain("Invite a colleague");
     expect(host.textContent).not.toContain("Prepare downloads");
-    expect(requests).toEqual(["/api/v1/events/summit/badges/current"]);
+    expect(requests).toEqual([
+      "/api/v1/events/summit/registrations/a0000000-0000-4000-8000-000000000002/ticket",
+      "/api/v1/events/summit/badges/current",
+    ]);
   });
 
   describe("an attendee waiting for an in-person seat", () => {

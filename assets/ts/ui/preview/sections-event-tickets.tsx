@@ -10,6 +10,7 @@ import {
   type TicketPriceGroupView as TicketPriceGroup,
   type TicketPricePeriodColumn as TicketPricePeriod,
 } from "../../components/events/tickets/TicketPriceTable";
+import { formatZoneCity } from "../../../shared/format-date";
 import { eventDayReadModelSchema } from "../../../shared/schemas/event-read-models";
 import { Button } from "../Button";
 import { DataTable } from "../DataTable";
@@ -22,16 +23,18 @@ import { Panel, PanelBody, PanelHeader } from "../Panel";
 import { StatCard } from "../StatCard";
 import { TextInput } from "../TextControl";
 
+/** This sample event's own ways of attending; an event defines them, no shared vocabulary does. */
+const WAYS_TO_ATTEND = {
+  in_person: { label: "In person", description: "At the venue" },
+  virtual: { label: "Virtual", description: "Live stream with Q&A" },
+};
 const DAYS = ["2027-11-16", "2027-11-17", "2027-11-18"].map((dayDate, index) =>
   eventDayReadModelSchema.parse({
     dayDate,
     label: `Day ${index + 1}`,
     inPersonCapacity: null,
     sortOrder: index,
-    attendanceOptions: [
-      { value: "in_person", label: "In person", description: "At the venue" },
-      { value: "virtual", label: "Virtual", description: "Live stream with Q&A" },
-    ],
+    attendanceOptions: Object.entries(WAYS_TO_ATTEND).map(([value, way]) => ({ value, ...way })),
   }),
 );
 const ALL_IN_PERSON = Object.fromEntries(DAYS.map((day) => [day.dayDate, "in_person"]));
@@ -103,7 +106,7 @@ function AttendanceWithTicketChoice() {
         <TicketChoice
           legend="Choose your ticket"
           intro="Choose based on your organization, not your job title."
-          footnote="Prices hold until 11:59 pm Amsterdam time on Mar 19, 2027."
+          footnote={`Prices hold until 11:59 pm ${formatZoneCity("Europe/Amsterdam")} time on Mar 19, 2027.`}
         >
           <TicketCard
             name="ticket"
