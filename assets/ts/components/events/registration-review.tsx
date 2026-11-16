@@ -16,11 +16,15 @@ function readAttendanceReview(form: HTMLFormElement): DescriptionListItem[] {
   const days = readDayAttendanceChoices(form);
   if (days.length === 0) {
     return [
-      { key: "attendance", term: "Event attendance", value: attendanceTypeLabel(readField(form, "attendanceType")) },
+      {
+        key: "attendance:event",
+        term: "Event attendance",
+        value: attendanceTypeLabel(readField(form, "attendanceType")),
+      },
     ];
   }
   return days.map((day) => ({
-    key: day.dayDate,
+    key: `day:${day.dayDate}`,
     term: day.dayLabel,
     value: day.waitlisted ? `${day.optionLabel} (${ATTENDANCE_WAITLIST_COPY.badge.toLowerCase()})` : day.optionLabel,
   }));
@@ -97,7 +101,7 @@ function RegistrationReview({
           title="Profile details"
           step={3}
           items={customFields.map((field) => ({
-            key: field.key,
+            key: `answer:${field.key}`,
             term: field.label,
             value: resolveCustomFieldValue(field, customAnswers),
           }))}

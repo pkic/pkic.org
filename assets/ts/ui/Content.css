@@ -62,10 +62,10 @@
    */
   .pk-datalist {
     display: grid;
-    /* The length floor protects intrinsic layouts from a percentage-only cap;
-       the term column grows with available width up to a readable 20rem.
+    /* A length cap sizes terms consistently in both fixed and intrinsic layouts;
+       percentage caps can wrap terms only after their container has been sized.
        The zero value minimum keeps an unbreakable URL from widening the grid. */
-    grid-template-columns: var(--pk-datalist-term, fit-content(clamp(12rem, 40%, 20rem))) minmax(0, 1fr);
+    grid-template-columns: var(--pk-datalist-term, fit-content(14rem)) minmax(0, 1fr);
     gap: var(--pk-1) var(--pk-3);
     margin: 0;
   }
@@ -129,7 +129,7 @@
 
   /*
    * On a phone there is no width to share. Two columns leave a term like
-   * "Certificate practice statement" holding most of the line and its value
+   * "Certification practice statement" holding most of the line and its value
    * broken across four, so the pairs stack and each term sits above its value.
    */
   @media (max-width: 30rem) {

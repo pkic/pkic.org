@@ -169,6 +169,7 @@ export const dataSections: PreviewSection[] = [
                 <DescriptionList
                   items={[
                     { term: "Responsibilities", value: "Member" },
+                    { term: "Certification practice statement link", value: "Published" },
                     { term: "Organization", value: "Synthetic authority" },
                   ]}
                 />
@@ -188,6 +189,7 @@ export const dataSections: PreviewSection[] = [
                   density="compact"
                   items={[
                     { term: "Responsibilities", value: "Member" },
+                    { term: "Certification practice statement link", value: "Published" },
                     { term: "Organization", value: "Synthetic authority" },
                   ]}
                 />
@@ -203,7 +205,6 @@ export const dataSections: PreviewSection[] = [
             <DescriptionList
               items={[
                 { term: "Legal name", value: "SecureCA Inc" },
-                { term: "Certificate practice statement", value: "Published" },
                 { term: "Membership", value: "Full member since 2021" },
                 {
                   term: "Certification practice statement",
