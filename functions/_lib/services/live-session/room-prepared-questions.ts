@@ -126,6 +126,8 @@ export class LiveRoomPreparedQuestions {
     const now = Date.now();
     for (const row of this.prepared.list()) this.prepared.reschedule(row.id, this.draw(window, now));
     this.store.recordStaffAction(operator.userId, "live_session.question.prepared.window", { ...window }, at);
+    // A window already over draws every question for now: they go out at once, as no alarm lies ahead for them.
+    await this.releaseDue(session);
     const next = this.nextReleaseAt();
     if (next !== null) await this.hooks.releaseDue(next);
     return { messages: [this.changedMessage(session)] };
@@ -139,7 +141,10 @@ export class LiveRoomPreparedQuestions {
   async releaseDue(session: LiveRoomSession): Promise<void> {
     const at = nowIso();
     let released = false;
-    for (const row of this.prepared.due(at)) {
+    for (const { id } of this.prepared.due(at)) {
+      // Each release waits on the room's broadcast, so an operator may delete or release the next one meanwhile.
+      const row = this.prepared.get(id);
+      if (!row) continue;
       if (!(await this.release(row, at))) break;
       released = true;
     }

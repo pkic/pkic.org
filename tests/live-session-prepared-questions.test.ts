@@ -193,6 +193,19 @@ describe("prepared questions", () => {
     expect(await operator.next("room.refused")).toMatchObject({ code: "LIVE_ROOM_INVALID_MESSAGE" });
   });
 
+  it("releases every waiting question with the window move itself when the window is already over", async () => {
+    const operator = await f.connect({ person: "operator" });
+    await prepare(operator, "Should have gone out already");
+    const after = operator.received.length;
+    operator.send({
+      type: "question.prepared.window",
+      from: new Date(Date.now() - 10 * 60_000).toISOString(),
+      until: new Date(Date.now() - 5 * 60_000).toISOString(),
+    });
+    // No alarm lies ahead for a question drawn into the past, so the move releases it rather than leaving it waiting.
+    expect((await operator.next("question.prepared.changed", undefined, { after })).preparedQuestions).toEqual([]);
+  });
+
   it("edits a waiting question against its revision and deletes it", async () => {
     const operator = await f.connect({ person: "operator" });
     const prepared = await prepare(operator, "A first wording");
