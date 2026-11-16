@@ -236,6 +236,40 @@ describe("signed-in membership join", () => {
     ).toEqual([{ applicant_user_id: userId, applicant_email: alias }]);
   });
 
+  it.each([
+    { saved: null, expected: { first_name: "Ada", last_name: "Lovelace" } },
+    { saved: "Augusta", expected: { first_name: "Augusta", last_name: "Lovelace" } },
+  ])("fills only the names the signed-in account lacks (saved first name $saved)", async ({ saved, expected }) => {
+    const testEnv = makeEnv();
+    const { userId } = await signInJoinApplicant(testEnv, "named-applicant@unclaimed.example");
+    // Starting an account asks no names, so the join form's are the first the account hears of.
+    await testEnv.DB.prepare("UPDATE users SET first_name=?, last_name=NULL WHERE id=?").bind(saved, userId).run();
+    const verification = await resolveMembershipPath(testEnv, userId, "named-applicant@unclaimed.example");
+    if (verification.status !== "application_ready") throw new Error("Expected application capability");
+
+    const response = await postJson(testEnv, "/api/v1/members/applications", {
+      applicantEmail: verification.applicantEmail,
+      applicantName: "Ada Lovelace",
+      membershipCategory: "F",
+      organizationName: "Named Applicant Organization",
+      joinToken: verification.joinToken,
+      answers: {
+        reason: "Apply with a name the account does not hold yet.",
+        ...requiredMembershipApplicationAnswers,
+        ...membershipApplicationDescriptionAnswers("F"),
+      },
+    });
+
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(
+      await queryAll<{ first_name: string | null; last_name: string | null }>(
+        testEnv.DB,
+        "SELECT first_name, last_name FROM users WHERE id=?",
+        [userId],
+      ),
+    ).toEqual([expected]);
+  });
+
   it("finds an applicant's open application through another verified address on the same account", async () => {
     const testEnv = makeEnv();
     const { userId } = await signInJoinApplicant(testEnv, "jane@acmegrp.example.com");

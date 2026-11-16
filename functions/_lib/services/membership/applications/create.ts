@@ -131,18 +131,43 @@ async function refuseConflictingApplication(
  * mailbox, so an address nobody holds yet gets its account now rather than at approval; an address that
  * already belongs to a person keeps its existing path.
  */
-async function prepareApplicantAccount(
-  db: DatabaseLike,
-  input: Pick<CreateMemberApplicationInput, "applicantEmail" | "applicantName" | "applicantUserId">,
-) {
-  if (input.applicantUserId || (await findUserByEmail(db, input.applicantEmail))) return null;
-  const { firstName, lastName } = splitPersonName(input.applicantName);
+/** The applicant's typed name, split for the account; null when the account rules refuse a part. */
+function accountNamesFromApplicant(applicantName: string) {
+  const { firstName, lastName } = splitPersonName(applicantName);
   // An application accepts any name up to its length; one the account rules refuse waits for approval, as before.
   if (
     (firstName !== null && !firstNameSchema.safeParse(firstName).success) ||
     (lastName !== null && !lastNameSchema.safeParse(lastName).success)
   )
     return null;
+  return { firstName, lastName };
+}
+
+/**
+ * A signed-in applicant's account can still lack the names the join form asked for, since starting an account
+ * asks none. The application fills only what is absent; names the person already saved stay theirs.
+ */
+function prepareApplicantAccountNames(db: DatabaseLike, userId: string, applicantName: string, at: string) {
+  const names = accountNamesFromApplicant(applicantName);
+  if (!names) return [];
+  return [
+    db
+      .prepare(
+        `UPDATE users SET first_name = COALESCE(first_name, ?), last_name = COALESCE(last_name, ?), updated_at = ?
+          WHERE id = ? AND (first_name IS NULL OR last_name IS NULL)`,
+      )
+      .bind(names.firstName, names.lastName, at, userId),
+  ];
+}
+
+async function prepareApplicantAccount(
+  db: DatabaseLike,
+  input: Pick<CreateMemberApplicationInput, "applicantEmail" | "applicantName" | "applicantUserId">,
+) {
+  if (input.applicantUserId || (await findUserByEmail(db, input.applicantEmail))) return null;
+  const names = accountNamesFromApplicant(input.applicantName);
+  if (!names) return null;
+  const { firstName, lastName } = names;
   const account = await buildFindOrCreateUserStatement(
     db,
     {
@@ -354,6 +379,7 @@ export async function createMemberApplication(
                      )`,
             bindings: [input.applicantUserId, input.applicantEmail, input.applicantEmail],
           }),
+          ...prepareApplicantAccountNames(db, input.applicantUserId, input.applicantName, now),
         ]
       : []),
     ...(input.applicantIdentityId && input.applicantUserId
