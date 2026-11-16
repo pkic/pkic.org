@@ -299,38 +299,49 @@ export async function reconcileTicketRefunds(
       });
       const now = nowIso();
       const full = total.refunded ? 1 : 0;
-      const applied = await run(
-        db,
-        `UPDATE registration_tickets SET refunded_amount = CASE WHEN ? = 1 THEN amount ELSE MIN(amount, ?) END,
-           status = CASE WHEN ? = 1 AND status IN ('paid', 'refunded') THEN 'refunded'
-                         WHEN ? = 0 AND status = 'refunded' THEN 'paid' ELSE status END,
-           refunds_seen_at = CASE WHEN refunds_seen_at IS NULL OR refunds_seen_at < ? THEN ? ELSE refunds_seen_at END,
-           refund_reconcile_at = NULL, revision = revision + 1, updated_at = ?
-         WHERE id = ? AND payment_intent_id = ? AND revision = ?`,
-        [
-          full,
-          total.amountRefunded,
-          full,
-          full,
-          askedAt,
-          askedAt,
-          now,
-          ticket.id,
-          ticket.payment_intent_id,
-          ticket.revision,
-        ],
-      );
-      // Nothing follows an answer that was not written: another run or an event got there first.
-      if (!applied.changes) continue;
-      reconciled += 1;
-      // The provider says all of it went back: its refunds of this payment are done.
-      if (total.refunded)
-        await run(
-          db,
-          `UPDATE registration_ticket_refunds SET completed_at = COALESCE(completed_at, ?), last_error = NULL
-           WHERE ticket_id = ? AND payment_intent_id = ? AND submitted_at IS NOT NULL AND failed_at IS NULL`,
-          [now, ticket.id, ticket.payment_intent_id],
-        );
+      // One batch: the ticket as it was before the provider was asked, or nothing. A write that fails part way
+      // leaves the ticket marked, so the next run reads again.
+      try {
+        await db.batch([
+          prepareStateGuard(db, {
+            sql: "SELECT 1 FROM registration_tickets WHERE id = ? AND payment_intent_id = ? AND revision = ?",
+            bindings: [ticket.id, ticket.payment_intent_id, ticket.revision],
+          }),
+          db
+            .prepare(
+              `UPDATE registration_tickets SET refunded_amount = CASE WHEN ? = 1 THEN amount ELSE MIN(amount, ?) END,
+                 status = CASE WHEN ? = 1 AND status IN ('paid', 'refunded') THEN 'refunded'
+                               WHEN ? = 0 AND status = 'refunded' THEN 'paid' ELSE status END,
+                 refunds_seen_at = CASE WHEN refunds_seen_at IS NULL OR refunds_seen_at < ? THEN ? ELSE refunds_seen_at END,
+                 refund_reconcile_at = NULL, revision = revision + 1, updated_at = ?
+               WHERE id = ? AND payment_intent_id = ? AND revision = ?`,
+            )
+            .bind(
+              full,
+              total.amountRefunded,
+              full,
+              full,
+              askedAt,
+              askedAt,
+              now,
+              ticket.id,
+              ticket.payment_intent_id,
+              ticket.revision,
+            ),
+          // The provider says all of it went back: its refunds of this payment are done.
+          db
+            .prepare(
+              `UPDATE registration_ticket_refunds SET completed_at = COALESCE(completed_at, ?), last_error = NULL
+               WHERE ? = 1 AND ticket_id = ? AND payment_intent_id = ? AND submitted_at IS NOT NULL
+                 AND failed_at IS NULL`,
+            )
+            .bind(now, full, ticket.id, ticket.payment_intent_id),
+        ]);
+        reconciled += 1;
+      } catch (error) {
+        // Another run or an event got there first: nothing of this answer was written.
+        if (!isStateGuardFailure(error)) throw error;
+      }
     } catch {
       failed += 1;
     }

@@ -566,6 +566,14 @@ describe("event tickets", () => {
         });
       }) as unknown as typeof fetch;
     expect(await reconcileTicketRefunds(env.DB, paymentEnv, 5, answer(500, {}))).toEqual({ reconciled: 0, failed: 1 });
+    // A write that fails part way writes nothing: the ticket stays marked and is read again on the next run.
+    const breaking = {
+      prepare: (sql: string) => env.DB.prepare(sql),
+      batch: (statements: D1PreparedStatement[]) =>
+        env.DB.batch([...statements, env.DB.prepare("INSERT INTO registration_ticket_refunds (id) VALUES (NULL)")]),
+    } as unknown as typeof env.DB;
+    expect(await reconcileTicketRefunds(breaking, paymentEnv, 5, total(0))).toEqual({ reconciled: 0, failed: 1 });
+    expect(await read()).toMatchObject({ status: "refunded", refundedAmount: 19500, refundPending: true });
     expect(await read()).toMatchObject({ status: "refunded", refundPending: true });
     expect(await reconcileTicketRefunds(env.DB, paymentEnv, 5, total(0))).toEqual({ reconciled: 1, failed: 0 });
     expect(asked[0]).toContain("/v1/payment_intents/pi_synthetic?expand%5B%5D=latest_charge");
