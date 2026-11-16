@@ -29,7 +29,7 @@ import { Field } from "../../../ui/Field";
 import { InputGroup } from "../../../ui/InputGroup";
 import { IconClock } from "../../../ui/MediaIcons";
 import { TextInput, Textarea } from "../../../ui/TextControl";
-import { AttendancePricingContext, type AttendancePricing } from "../../attendance-pricing";
+import { AttendancePricingContext, PricingChoiceRequiredError, type AttendancePricing } from "../../attendance-pricing";
 import { TicketCard, TicketChoice } from "./TicketCard";
 import { attendanceOptionPrices, ticketStubPrice, type OfferedTicket } from "./ticket-price-summary";
 
@@ -96,9 +96,8 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
   const [quoteError, setQuoteError] = useState("");
   // Saves reach the server one at a time and in order, so an older choice never lands after a newer one.
   const saves = useRef<Promise<void>>(Promise.resolve());
-  // The request for what is on screen now, known the moment it renders, and the last one the server kept.
+  // The request for what is on screen now, known the moment it renders.
   const latest = useRef<{ key: string; request: EventTicketQuoteRequest } | null>(null);
-  const saved = useRef<string | null>(null);
 
   const selectable = useMemo(() => offer.data?.tickets.filter((ticket) => ticket.selectable) ?? [], [offer.data]);
   const assignedKey = offer.data?.assigned?.ticketKey ?? null;
@@ -135,7 +134,8 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
   const request = useMemo(() => {
     if (!enabled || mustChoose) return null;
     const ticketKey = disputed && !reason.trim() ? undefined : (chosen ?? undefined);
-    return eventTicketQuoteRequestSchema.parse({
+    // A value the contract refuses, such as a code that is too long, is shown beside its field; it is not a request.
+    const parsed = eventTicketQuoteRequestSchema.safeParse({
       dayAttendance,
       ticketKey: code ? undefined : ticketKey,
       code: code || undefined,
@@ -143,6 +143,7 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
       identityId: identityId || undefined,
       save: true,
     });
+    return parsed.success ? parsed.data : null;
   }, [enabled, dayAttendance, chosen, code, disputed, reason, mustChoose, identityId]);
   latest.current = request ? { key: JSON.stringify(request), request } : null;
 
@@ -150,16 +151,12 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
   const save = useCallback(
     (entry: { key: string; request: EventTicketQuoteRequest }) => {
       const run = saves.current.then(async () => {
-        if (saved.current === entry.key) return;
         try {
           const result = await postJson(`${endpoint}/quote`, entry.request, eventTicketQuoteSchema);
-          saved.current = entry.key;
           if (latest.current?.key !== entry.key) return;
           setQuote(result);
           setQuoteError("");
         } catch (error) {
-          // What the server holds after a failure is not known for sure, so the next choice is always sent.
-          saved.current = null;
           if (latest.current?.key === entry.key) {
             const message = refuse.current(error);
             // A refused code is dropped so the person keeps a price for the ticket they had.
@@ -175,7 +172,12 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
     [endpoint],
   );
   // What the registration waits for: the choice on screen now is kept, or the registration does not go ahead.
+  // The choice is sent again even when this page already saved it: the server keeps one choice for a person and
+  // event, so another tab may have replaced it. With no choice to keep, or one the contract refuses, it rejects.
+  const needsChoice = useRef(false);
+  needsChoice.current = enabled && !request;
   const settle = useCallback(async () => {
+    if (needsChoice.current) throw new PricingChoiceRequiredError("Choose a ticket, and check any code you entered.");
     if (latest.current) await save(latest.current);
   }, [save]);
 

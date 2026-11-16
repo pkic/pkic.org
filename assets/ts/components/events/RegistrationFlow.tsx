@@ -38,7 +38,7 @@ import { Field } from "../../ui/Field";
 import { TextInput } from "../../ui/TextControl";
 import { ConsentList } from "../ConsentCard";
 import { DayAttendancePicker } from "../DayAttendancePicker";
-import { useAttendancePricing } from "../attendance-pricing";
+import { PricingChoiceRequiredError, useAttendancePricing } from "../attendance-pricing";
 import { RegistrationContactStep } from "../RegistrationContactStep";
 import type { ConfirmOrganizationController } from "../RegistrationConfirmOrganization";
 import { RegistrationEmailAddress } from "./RegistrationEmailAddress";
@@ -303,10 +303,14 @@ export function RegistrationFlow(props: Props) {
               try {
                 // The ticket, code or reason chosen a moment ago is kept before the registration is made with it.
                 await pricing.settle();
-              } catch {
+              } catch (cause) {
                 submitting.current = false;
                 setBusy(false);
-                return setError("Your ticket could not be saved. Check it and try again.");
+                return setError(
+                  cause instanceof PricingChoiceRequiredError
+                    ? cause.message
+                    : "Your ticket could not be saved. Check it and try again.",
+                );
               }
             }
             const release = () => {

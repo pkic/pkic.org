@@ -29,8 +29,19 @@ export interface AttendancePricing {
   /** What the prices are for, above them: "Vendor ticket". */
   priceHeading?: string;
   onSelection?: (selected: Readonly<Record<string, string>>) => void;
-  /** Resolves once the latest choice is kept on the server, so a registration is made with what is shown. */
+  /**
+   * Resolves once the latest choice is kept on the server, so a registration is made with what is shown.
+   * Rejects when it was not kept, and with `PricingChoiceRequiredError` when there is no choice to keep yet.
+   */
   settle?: () => Promise<void>;
+}
+
+/** The person still has to choose before the registration can be made. Its message is what they are told. */
+export class PricingChoiceRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PricingChoiceRequiredError";
+  }
 }
 
 export const AttendancePricingContext = createContext<AttendancePricing | null>(null);

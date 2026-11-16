@@ -635,6 +635,24 @@ describe("event tickets", () => {
     expect(await reconcileTicketRefunds(env.DB, paymentEnv, 5, total(2000))).toEqual({ reconciled: 1, failed: 0 });
     expect(await read()).toMatchObject({ status: "paid", refundedAmount: 2000, refundPending: false });
 
+    // While the provider is still to be asked, the ticket is not replaced by registering again.
+    await failed("evt_failed_replan", Math.floor(Date.now() / 1000) + 200, "re_replan", 500);
+    await expect(
+      planRegistrationTicket(
+        env.DB,
+        {},
+        {
+          event,
+          registrationId: registration.id,
+          userId: user.id,
+          email: user.email,
+          identityId: null,
+          organizationName: "Example Organization",
+          dayAttendance: inPerson,
+        },
+      ),
+    ).rejects.toMatchObject({ code: "TICKET_REFUND_PENDING" });
+    expect(await reconcileTicketRefunds(env.DB, paymentEnv, 5, total(2000))).toEqual({ reconciled: 1, failed: 0 });
     // The provider's answer is delayed and a newer total arrives meanwhile: the stale answer is not written
     // over it, and the ticket is read again on the next run.
     const later = Math.floor(Date.now() / 1000) + 300;

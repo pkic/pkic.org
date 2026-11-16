@@ -9,7 +9,19 @@ import {
   eventTicketQuoteSchema,
 } from "../../assets/shared/schemas/event-tickets";
 import { DayAttendancePicker } from "../../assets/ts/components/DayAttendancePicker";
+import {
+  PricingChoiceRequiredError,
+  useAttendancePricing,
+  type AttendancePricing,
+} from "../../assets/ts/components/attendance-pricing";
 import { EventTicketPricing } from "../../assets/ts/components/events/tickets/EventTicketPricing";
+
+/** What the registration form reads from the ticket step, as it stands after the last render. */
+let pricing: AttendancePricing | null = null;
+function Probe() {
+  pricing = useAttendancePricing();
+  return null;
+}
 
 const days = [
   eventDayReadModelSchema.parse({
@@ -126,6 +138,7 @@ async function mount(assigned: Parameters<typeof offer>[0], identityId = "") {
         <form>
           <input type="hidden" name="identityId" value={identityId} />
           <DayAttendancePicker days={days} />
+          <Probe />
         </form>
       </EventTicketPricing>,
       host,
@@ -170,6 +183,32 @@ it("lets the person choose a ticket when none is decided and prices the days the
     dayAttendance: [{ dayDate: "2027-11-16", attendanceType: "in_person" }],
   });
   expect(host.querySelector(".pk-ticket-order__total")?.textContent).toContain("$395");
+  // The registration sends the shown choice once more before it is made: another tab may have replaced it.
+  const sent = requests.length;
+  await act(() => pricing!.settle!());
+  expect(requests).toHaveLength(sent + 1);
+  expect(requests.at(-1)).toMatchObject({ ticketKey: "pqcc_vendor", save: true });
+});
+
+it("does not let a registration go ahead before a ticket is chosen or with a code the contract refuses", async () => {
+  await mount(null);
+  await expect(pricing!.settle!()).rejects.toBeInstanceOf(PricingChoiceRequiredError);
+  expect(requests).toHaveLength(0);
+  await act(() => host.querySelector<HTMLInputElement>('input[name="eventTicket"][value="pqcc_attendee"]')!.click());
+  await settle();
+  await act(() => pricing!.settle!());
+  // A code longer than the contract allows is not a request: it neither breaks the page nor reaches the server.
+  const sent = requests.length;
+  const code = host.querySelector<HTMLInputElement>('input[name="code"]')!;
+  await act(() => {
+    code.value = "X".repeat(80);
+    code.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(() => [...host.querySelectorAll("button")].find((button) => button.textContent === "Apply code")!.click());
+  await settle();
+  expect(host.querySelector('input[name="eventTicket"]')).not.toBeNull();
+  expect(requests).toHaveLength(sent);
+  await expect(pricing!.settle!()).rejects.toBeInstanceOf(PricingChoiceRequiredError);
 });
 
 it("shows the decided ticket without a choice and asks for a reason before another ticket is sent", async () => {

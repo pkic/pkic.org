@@ -41,6 +41,7 @@ interface HeldTicketRow extends SelectionRow {
   ticket_name: string;
   amount: number;
   currency: string;
+  refund_unsettled: number;
 }
 
 /**
@@ -77,7 +78,8 @@ export async function planRegistrationTicket(
   const held = await first<HeldTicketRow>(
     db,
     `SELECT ticket.id, ticket.status, ticket.assignment_source, ticket.code_id, ticket.dispute_reason,
-            ticket.amount, ticket.currency, type.ticket_key, type.name AS ticket_name
+            ticket.amount, ticket.currency, type.ticket_key, type.name AS ticket_name,
+            ticket.refund_reconcile_at IS NOT NULL AS refund_unsettled
      FROM registration_tickets ticket JOIN event_ticket_types type ON type.id = ticket.ticket_type_id
      WHERE ticket.registration_id = ? AND ticket.status <> 'canceled'`,
     [input.registrationId],
@@ -85,6 +87,14 @@ export async function planRegistrationTicket(
   const clearSelection = db
     .prepare("DELETE FROM event_ticket_selections WHERE event_id = ? AND user_id = ?")
     .bind(input.event.id, input.userId);
+  // While what its payment returned is still being read from the provider, the ticket keeps its payment:
+  // replacing it now would cut the ticket loose from that payment before the answer is in.
+  if (held?.refund_unsettled)
+    throw new AppError(
+      409,
+      "TICKET_REFUND_PENDING",
+      "A refund for this ticket is still being checked. Try again in a few minutes.",
+    );
   // A paid ticket is settled: it is neither priced again nor replaced.
   if (held?.status === "paid")
     return {
@@ -129,11 +139,13 @@ export async function planRegistrationTicket(
     status === "pending_payment",
   );
   const statements: StatementLike[] = [
-    // A payment that settles while this plan is made keeps the ticket as paid for: then none of the plan
+    // A payment that settles while this plan is made keeps the ticket as paid for, and a refund that fails
+    // meanwhile keeps it for the reading that follows: then none of the plan
     // is written, neither its code uses nor a confirmation held for a payment that already arrived.
     prepareStateGuard(db, {
       sql: `SELECT 1 WHERE NOT EXISTS
-              (SELECT 1 FROM registration_tickets WHERE registration_id = ? AND status = 'paid')`,
+              (SELECT 1 FROM registration_tickets
+               WHERE registration_id = ? AND (status = 'paid' OR refund_reconcile_at IS NOT NULL))`,
       bindings: [input.registrationId],
     }),
   ];
@@ -174,7 +186,7 @@ export async function planRegistrationTicket(
            paid_at = NULL, payment_intent_id = NULL, refunded_amount = 0, refunds_seen_at = NULL,
            refund_reconcile_at = NULL,
            revision = registration_tickets.revision + 1, updated_at = excluded.updated_at
-         WHERE registration_tickets.status NOT IN ('paid')`,
+         WHERE registration_tickets.status NOT IN ('paid') AND registration_tickets.refund_reconcile_at IS NULL`,
       )
       .bind(
         id,

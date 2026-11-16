@@ -10,6 +10,7 @@
  * a failed one frees the ticket for another request.
  */
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
+import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
 import { all, first, run } from "../../db/queries";
 import { AppError } from "../../errors";
 import { expireStripeCheckoutSession } from "../../integrations/stripe/checkout";
@@ -49,8 +50,18 @@ export async function requestTicketRefund(
     throw new AppError(409, "TICKET_NOT_REFUNDABLE", "Only a paid ticket can be refunded.");
   const now = nowIso();
   const context = { type: "event", id: input.eventId };
-  await db.batch([
+  const statements = [
     preparePermissionsAuthorizationGuard(db, actor, [{ permission: "events:write", context }]),
+    // The refund and its audit entry are written together or not at all: the ticket may have been refunded,
+    // or one of its refunds may have failed, since it was read.
+    prepareStateGuard(db, {
+      sql: `SELECT 1 FROM registration_tickets ticket
+            WHERE ticket.id = ? AND ticket.status = 'paid' AND ticket.amount > ticket.refunded_amount
+              AND ticket.refund_reconcile_at IS NULL
+              AND NOT EXISTS (SELECT 1 FROM registration_ticket_refunds refund
+                              WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL})`,
+      bindings: [ticket.id],
+    }),
     // What is asked back is what the provider has not returned yet: part of the payment may already be refunded there.
     db
       .prepare(
@@ -75,7 +86,14 @@ export async function requestTicketRefund(
         amount: ticket.amount - ticket.refunded_amount,
       },
     ),
-  ]);
+  ];
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isStateGuardFailure(error))
+      throw new AppError(409, "TICKET_REFUND_PENDING", "This ticket changed. Reload it before refunding.");
+    throw error;
+  }
 }
 
 /**
