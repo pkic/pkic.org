@@ -15,6 +15,7 @@ import {
   promotionCardPages,
   promotionMeasuredLines,
 } from "../../functions/_lib/services/event-agenda/promotion-render";
+import { CAROUSEL_PAGE_GAP } from "../../functions/_lib/services/event-agenda/promotion-scene";
 import { agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
 import { sessionHistoryMetadataSchema } from "../../assets/shared/schemas/event-session-history";
 import {
@@ -389,7 +390,7 @@ describe("promotion exports", () => {
         expect(credits).toContain(person.affiliation);
       }
       const coverPortrait = pages[0]!.pictures.find((picture) => picture.alt === primary.displayName)!;
-      expect(coverPortrait.x - pages[0]!.width).toBe(featured.pictures[0]!.x);
+      expect(coverPortrait.x - pages[0]!.width - CAROUSEL_PAGE_GAP).toBe(featured.pictures[0]!.x);
     }
   });
   it("keeps the sponsor board and registration action in connected portrait PDF pages", async () => {
@@ -677,13 +678,13 @@ describe("promotion exports", () => {
     expect(pages).toHaveLength(2);
     expect(pages.every((page) => !page.qr)).toBe(true);
     expect(renderPromotionSvg(sample, "portrait")).not.toContain('<g fill="#0b0d0c">');
-    expect(pages[0]!.sponsorBoard).toMatchObject({ x: 990, width: 1170 });
+    expect(pages[0]!.sponsorBoard).toMatchObject({ x: 990 + CAROUSEL_PAGE_GAP, width: 1170 });
     expect(pages[1]!.sponsorBoard).toMatchObject({ x: -90, width: 1170 });
     const bold = buildPromotionPages(
       { ...sample, composition: { ...sample.composition, overlap: "bold" } },
       "carousel",
     );
-    expect(bold[0]!.sponsorBoard?.x).toBe(860);
+    expect(bold[0]!.sponsorBoard?.x).toBe(860 + CAROUSEL_PAGE_GAP);
     expect(bold[1]!.sponsorBoard?.x).toBe(-220);
     expect(pages[0]!.texts.map((item) => item.text).join(" ")).toContain(data.occurrence.description);
     expect(pages[1]!.pictures.map((item) => item.alt)).toEqual(["Synthetic supporter"]);

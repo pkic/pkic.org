@@ -125,6 +125,12 @@ export const promotionDimensions = {
   carousel: [1080, 1350],
 } as const;
 export type PromotionFormat = keyof typeof promotionDimensions;
+/**
+ * LinkedIn shows carousel pages with a gap of about this much of a 1080-wide
+ * page between them. Artwork that crosses a page edge skips the gap, so its
+ * pieces line up there instead of only when pages touch.
+ */
+export const CAROUSEL_PAGE_GAP = 26;
 export function promotionPeople(data: PromotionRenderData) {
   return (
     data.people ??
@@ -394,7 +400,7 @@ export function buildPromotionPages(
         if (featured) {
           const previous = pages[featured.previous];
           if (previous && composition.panels[0] === "cover")
-            previous.pictures.push({ ...featured.picture, x: width + featured.picture.x });
+            previous.pictures.push({ ...featured.picture, x: width + CAROUSEL_PAGE_GAP * scale + featured.picture.x });
           const remaining = people.filter((person) => person.userId !== featured.primary.userId);
           panelPeople = remaining;
           if (
@@ -564,13 +570,14 @@ export function buildPromotionPages(
     };
     page.sponsorBoard = { ...board, x: -overlap };
     const previous = pages[page.index - 1];
-    if (overlap && previous && !previous.light) previous.sponsorBoard = { ...board, x: width - overlap };
+    if (overlap && previous && !previous.light)
+      previous.sponsorBoard = { ...board, x: width + CAROUSEL_PAGE_GAP * scale - overlap };
   }
   // Artwork occupies one panorama coordinate system, clipped by each exported page.
   const featuredIndex = pages.findIndex((page) => page.title === "Featured speaker");
   if (featuredIndex >= 0 && featuredIndex + 1 < pages.length) {
     pages[featuredIndex]!.markX = 860 * scale;
-    pages[featuredIndex + 1]!.markX = -220 * scale;
+    pages[featuredIndex + 1]!.markX = 860 * scale - width - CAROUSEL_PAGE_GAP * scale;
   }
 
   return pages;
