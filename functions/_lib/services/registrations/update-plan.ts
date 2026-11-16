@@ -12,7 +12,10 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
-import { prepareCancelRegistrationTicket } from "../event-tickets/registration-ticket";
+import {
+  prepareCancelRegistrationTicket,
+  prepareRestoreRegistrationTicket,
+} from "../event-tickets/registration-ticket";
 import {
   configuredAttendanceOptions,
   listEventDays,
@@ -383,6 +386,8 @@ export async function buildRegistrationUpdate(
     statements.push(...prepareUserProfileStatements(db, updated.user_id, payload.profilePatch));
   }
   const notificationChanged = scalarChanged || dayAttendanceChanged || waitlistChanged || profileChanged;
+  // A restored registration holds its ticket again; without it the person could not be admitted.
+  if (isCancelled) statements.push(...prepareRestoreRegistrationTicket(db, registration.id, now));
   statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
   const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
   if (audit && notificationChanged) statements.push(audit);

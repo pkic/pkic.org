@@ -56,8 +56,10 @@ export function SponsorPassesPanel({
   const [customerTicket, setCustomerTicket] = useState(saved.customerTicketTypeId ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // The revision the draft was copied from: a save of an older draft is refused instead of overwriting newer counts.
+  const [draftRevision, setDraftRevision] = useState(configuration.revision);
   const form = useContractForm(eventTicketSponsorPassesUpdateSchema, {
-    expectedRevision: configuration.revision,
+    expectedRevision: draftRevision,
     staffTicketTypeId: staffTicket || null,
     customerTicketTypeId: customerTicket || null,
     tiers: tiers.map((tier) => ({
@@ -67,6 +69,7 @@ export function SponsorPassesPanel({
     })),
   });
   function reset() {
+    setDraftRevision(configuration.revision);
     setTiers(draftOf());
     setStaffTicket(saved.staffTicketTypeId ?? "");
     setCustomerTicket(saved.customerTicketTypeId ?? "");

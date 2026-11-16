@@ -36,7 +36,6 @@ export function UnfinishedRegistrations({ slug }: { slug: string }) {
 }
 
 export function UnfinishedRegistrationsSummary({ summary }: { summary: UnfinishedRegistrationSummary }) {
-  const gaveReason = summary.reasons.filter((row) => row.reasonCode !== null).reduce((sum, row) => sum + row.count, 0);
   if (summary.started === 0)
     return (
       <EmptyState
@@ -57,7 +56,7 @@ export function UnfinishedRegistrationsSummary({ summary }: { summary: Unfinishe
         <StatCard
           label="Not registering"
           value={formatNumber(summary.stopped)}
-          note={summary.stopped > 0 ? `${formatNumber(gaveReason)} gave a reason` : undefined}
+          note={summary.stopped > 0 ? `${formatNumber(summary.gaveReason)} gave a reason` : undefined}
         />
       </div>
       {summary.reasons.length > 0 && (

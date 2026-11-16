@@ -194,7 +194,7 @@ export async function decideOrganizationTicket(
   if (!key.organizationName && !key.emailDomain) return null;
   const digest = await ticketCriteriaDigest(options);
   const stored = await readStoredTicketDecision(db, digest, subject);
-  if (stored && options.some((option) => option.key === stored.ticketKey)) return stored;
+  if (stored && storedDecisionHolds(options, stored)) return stored;
   const asked = await askTicketClassifier(env, options, subject);
   if (!asked) return null;
   const decided = decideClassifiedTicket(options, asked.probabilities);
@@ -209,5 +209,19 @@ export async function decideOrganizationTicket(
       model: asked.model,
     }),
   ]);
-  return { ticketKey: decided.key, source: "classifier", confidence: decided.confidence };
+  // An organizer may have decided while the answer was pending; their decision survived the write and is the one that counts.
+  return (
+    (await readStoredTicketDecision(db, digest, subject)) ?? {
+      ticketKey: decided.key,
+      source: "classifier",
+      confidence: decided.confidence,
+    }
+  );
+}
+
+/** A stored answer still decides when its ticket exists and, for the classifier's own answers, is certain enough today. */
+function storedDecisionHolds(options: readonly TicketClassifierOption[], stored: StoredTicketDecision): boolean {
+  if (!options.some((option) => option.key === stored.ticketKey)) return false;
+  if (stored.source !== "classifier") return true;
+  return decideClassifiedTicket(options, { [stored.ticketKey]: stored.confidence ?? 0 }) !== null;
 }

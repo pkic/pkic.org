@@ -113,12 +113,13 @@ async function mount(assigned: Parameters<typeof offer>[0], identityId = "") {
   document.body.append(host);
   await act(() =>
     render(
-      <form>
-        <input type="hidden" name="identityId" value={identityId} />
-        <EventTicketPricing slug="synthetic">
+      // As in the registration flow: the pricing hosts the form, and reads the identity from inside it.
+      <EventTicketPricing slug="synthetic">
+        <form>
+          <input type="hidden" name="identityId" value={identityId} />
           <DayAttendancePicker days={days} />
-        </EventTicketPricing>
-      </form>,
+        </form>
+      </EventTicketPricing>,
       host,
     ),
   );

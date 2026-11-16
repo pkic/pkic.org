@@ -101,11 +101,15 @@ export async function openTicketCheckout(
   );
   // A session opened for another amount or ticket is closed, never offered again: paying it would not settle this ticket.
   if (attempt && attempt.expires_at > now && !checkoutMatchesTicket(attempt, ticket)) {
-    if (attempt.provider_session_id)
-      await expireStripeCheckoutSession(env.STRIPE_SECRET_KEY, attempt.provider_session_id, {
+    // The old session is replaced only once the provider confirms it can no longer be paid.
+    if (
+      attempt.provider_session_id &&
+      !(await expireStripeCheckoutSession(env.STRIPE_SECRET_KEY, attempt.provider_session_id, {
         fetcher,
         apiBase: env.STRIPE_API_BASE,
-      });
+      }))
+    )
+      throw new AppError(503, "PAYMENT_UNAVAILABLE", "Payment is not available right now. Try again later.");
     await db.batch([
       db.prepare("UPDATE registration_ticket_checkouts SET expires_at = ? WHERE id = ?").bind(now, attempt.id),
     ]);
@@ -173,10 +177,23 @@ export async function openTicketCheckout(
       db
         .prepare(
           `INSERT INTO registration_ticket_checkouts (id, ticket_id, request_params, created_at, expires_at)
-           SELECT ?, id, ?, ?, ? FROM registration_tickets WHERE id = ? AND status = 'pending_payment'`,
+           SELECT ?, id, ?, ?, ? FROM registration_tickets WHERE id = ? AND status = 'pending_payment'
+             AND NOT EXISTS (SELECT 1 FROM registration_ticket_checkouts open
+                             WHERE open.ticket_id = registration_tickets.id AND open.expires_at > ?)`,
         )
-        .bind(attempt.id, attempt.request_params, now, expiresAt, ticket.id),
+        .bind(attempt.id, attempt.request_params, now, expiresAt, ticket.id, now),
     ]);
+    // A request that opened its attempt at the same moment won: both continue with that one attempt,
+    // so the provider sees one idempotency key and returns one session.
+    const open = await first<CheckoutRow>(
+      db,
+      `SELECT id, request_params, provider_session_id, checkout_url, expires_at
+       FROM registration_ticket_checkouts WHERE ticket_id = ? AND expires_at > ? ORDER BY created_at DESC, id DESC LIMIT 1`,
+      [ticket.id, now],
+    );
+    if (!open) throw new AppError(409, "TICKET_NOT_PAYABLE", "This ticket has nothing left to pay.");
+    if (open.checkout_url) return { checkoutUrl: open.checkout_url };
+    attempt = open;
   }
   const session = await createStripeCheckoutSession(
     env.STRIPE_SECRET_KEY,
@@ -260,6 +277,7 @@ interface SettlementRow {
 export async function handleEventTicketStripeEvent(
   db: DatabaseLike,
   event: StripeEvent,
+  retried = false,
 ): Promise<{ received: true; outcome: string }> {
   if (!event.id) return { received: true, outcome: "ignored" };
   const object = objectFields(event);
@@ -289,10 +307,24 @@ export async function handleEventTicketStripeEvent(
       object.amount_total === row.amount &&
       (object.currency ?? "").toLowerCase() === row.currency;
     if (!matches) outcome = "rejected_mismatch";
-    else if (row.status !== "pending_payment") outcome = row.status === "paid" ? "already_paid" : "handling_required";
-    else {
+    else if (row.status !== "pending_payment") {
+      outcome = row.status === "paid" ? "already_paid" : "handling_required";
+      // Money that arrived for a ticket that can no longer be paid keeps its payment reference, so it can be returned.
+      statements.push(
+        db
+          .prepare(
+            "UPDATE registration_ticket_checkouts SET payment_intent_id = ? WHERE id = ? AND payment_intent_id IS NULL",
+          )
+          .bind(object.payment_intent ?? null, row.checkout_id),
+      );
+    } else {
       outcome = "paid";
       statements.push(
+        // The ticket is settled only as it was read: a price or status changed meanwhile is judged again.
+        prepareStateGuard(db, {
+          sql: "SELECT 1 FROM registration_tickets WHERE id = ? AND status = 'pending_payment' AND amount = ? AND currency = ?",
+          bindings: [row.ticket_id, row.amount, row.currency],
+        }),
         db
           .prepare(
             `UPDATE registration_tickets SET status = 'paid', paid_at = ?, next_reminder_at = NULL,
@@ -335,7 +367,12 @@ export async function handleEventTicketStripeEvent(
          VALUES (?, ?, ?, ?, ?)`,
       )
       .bind(event.id, row.ticket_id, event.type, outcome, now),
-    ...(await prepareStripePaymentEvent(db, "event", event, outcome === "rejected_mismatch" ? outcome : null)),
+    ...(await prepareStripePaymentEvent(
+      db,
+      "event",
+      event,
+      outcome === "rejected_mismatch" || outcome === "partially_refunded" ? outcome : null,
+    )),
   );
   try {
     await db.batch(statements);
@@ -343,6 +380,8 @@ export async function handleEventTicketStripeEvent(
     // A concurrent delivery of the same event won the primary key.
     if (error instanceof Error && /UNIQUE constraint failed: registration_ticket_payment_events/.test(error.message))
       return { received: true, outcome: "duplicate" };
+    // The ticket changed between the read and the batch: nothing was written, so the event is judged once more.
+    if (isStateGuardFailure(error) && !retried) return handleEventTicketStripeEvent(db, event, true);
     throw error;
   }
   return { received: true, outcome };
@@ -444,8 +483,11 @@ export async function prepareHoldConfirmationForPayment(
   const now = nowIso();
   return [
     db
-      .prepare("UPDATE email_outbox SET send_after = ?, updated_at = ? WHERE id = ? AND status = 'queued'")
-      .bind(HELD_UNTIL_PAID, now, input.outboxId),
+      .prepare(
+        `UPDATE email_outbox SET send_after = ?, updated_at = ? WHERE id = ? AND status = 'queued'
+           AND EXISTS (SELECT 1 FROM registration_tickets WHERE id = ? AND status = 'pending_payment')`,
+      )
+      .bind(HELD_UNTIL_PAID, now, input.outboxId, ticket.id),
     db
       .prepare("UPDATE registration_tickets SET held_email_id = ? WHERE id = ? AND status = 'pending_payment'")
       .bind(input.outboxId, ticket.id),

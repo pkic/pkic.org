@@ -38,6 +38,7 @@ import { Field } from "../../ui/Field";
 import { TextInput } from "../../ui/TextControl";
 import { ConsentList } from "../ConsentCard";
 import { DayAttendancePicker } from "../DayAttendancePicker";
+import { useAttendancePricing } from "../attendance-pricing";
 import { RegistrationContactStep } from "../RegistrationContactStep";
 import type { ConfirmOrganizationController } from "../RegistrationConfirmOrganization";
 import { RegistrationEmailAddress } from "./RegistrationEmailAddress";
@@ -92,6 +93,7 @@ export function RegistrationFlow(props: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [attendance, setAttendance] = useState(initial?.dayAttendance ?? []);
+  const pricing = useAttendancePricing();
   const savedIdentityId = useRef(initial?.identityId ?? null);
   const [identityId, setIdentityId] = useState(savedIdentityId.current);
   const fields = useMemo(
@@ -291,6 +293,8 @@ export function RegistrationFlow(props: Props) {
           void (async () => {
             if (busy || !available || (props.mode === "create" && !invitation.current?.canSubmit())) return;
             setError("");
+            // The ticket, code or reason chosen a moment ago is kept before the registration is made with it.
+            if (pricing?.settle) await pricing.settle();
             if (!updating) {
               const contact = contactContract.submit();
               if (!contact.data) return setError(contact.formMessage ?? "");

@@ -127,7 +127,15 @@ export async function planRegistrationTicket(
     now,
     status === "pending_payment",
   );
-  const statements: StatementLike[] = [];
+  const statements: StatementLike[] = [
+    // A payment that settles while this plan is made keeps the ticket as paid for: then none of the plan
+    // is written, neither its code uses nor a confirmation held for a payment that already arrived.
+    prepareStateGuard(db, {
+      sql: `SELECT 1 WHERE NOT EXISTS
+              (SELECT 1 FROM registration_tickets WHERE registration_id = ? AND status = 'paid')`,
+      bindings: [input.registrationId],
+    }),
+  ];
   // A code the registration held and no longer uses gives its pass back.
   if (held?.code_id && held.code_id !== resolved.code?.id)
     statements.push(
@@ -312,4 +320,32 @@ export async function readRegistrationOwner(
     input.eventId,
   ]);
   return row?.user_id ?? null;
+}
+
+/**
+ * What restoring a canceled registration does to its ticket: it holds the same
+ * ticket again at the price it had, free or still to be paid, and takes its
+ * code's pass back while one is left. A ticket that was never canceled is untouched.
+ */
+export function prepareRestoreRegistrationTicket(
+  db: DatabaseLike,
+  registrationId: string,
+  now: string,
+): StatementLike[] {
+  return [
+    db
+      .prepare(
+        `UPDATE event_ticket_codes SET used_count = used_count + 1, updated_at = ?
+         WHERE used_count < max_uses AND revoked_at IS NULL
+           AND id = (SELECT code_id FROM registration_tickets WHERE registration_id = ? AND status = 'canceled')`,
+      )
+      .bind(now, registrationId),
+    db
+      .prepare(
+        `UPDATE registration_tickets SET status = CASE WHEN amount = 0 THEN 'free' ELSE 'pending_payment' END,
+           reminders_sent = 0, revision = revision + 1, updated_at = ?
+         WHERE registration_id = ? AND status = 'canceled'`,
+      )
+      .bind(now, registrationId),
+  ];
 }

@@ -60,6 +60,7 @@ function UnfinishedSummary() {
         registered: 164,
         reminded: 48,
         stopped: 34,
+        gaveReason: 29,
         reasons: [
           { reasonCode: "price", count: 14 },
           { reasonCode: "approval_pending", count: 9 },

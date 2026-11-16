@@ -30,8 +30,8 @@ export function TicketPaymentPanel({
   const [sendInvoice, setSendInvoice] = useState(saved.sendInvoice);
   const { form, editing, saving, error, save, edit, cancel } = useTicketSettingsForm(
     slug,
+    configuration.revision,
     {
-      expectedRevision: configuration.revision,
       currency: currency.trim().toLowerCase(),
       reminderIntervalDays: interval.trim() === "" ? undefined : Number(interval),
       reminderPeriodDays: period.trim() === "" ? undefined : Number(period),
@@ -66,7 +66,7 @@ export function TicketPaymentPanel({
               <Field
                 {...form.of("currency")}
                 label="Currency"
-                help="The three-letter code, such as USD. Tickets already issued keep their currency."
+                help="The three-letter code, such as USD. It can no longer change once someone holds a ticket that costs something."
                 required
               >
                 {(control) => (

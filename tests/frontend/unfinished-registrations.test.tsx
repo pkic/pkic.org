@@ -92,6 +92,7 @@ it("summarizes who stopped and why for the organizer", async () => {
           registered: 900,
           reminded: 48,
           stopped: 34,
+          gaveReason: 14,
           reasons: [
             { reasonCode: "price", count: 14 },
             { reasonCode: null, count: 20 },

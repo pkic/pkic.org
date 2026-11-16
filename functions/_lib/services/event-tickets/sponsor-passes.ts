@@ -7,6 +7,7 @@
  */
 import type { EventTicketSponsorPassesUpdate } from "../../../../assets/shared/schemas/event-tickets";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
+import { prepareStateGuard } from "../../db/authorization-guard";
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
@@ -24,6 +25,19 @@ export async function saveSponsorPasses(
   const now = nowIso();
   const statements: StatementLike[] = [
     ...prepareConfigurationChange(db, actor, event.id, input.expectedRevision, now),
+    // A ticket of another event, or one removed meanwhile, is refused instead of silently saved as none.
+    prepareStateGuard(db, {
+      sql: `SELECT 1 WHERE (? IS NULL OR EXISTS (SELECT 1 FROM event_ticket_types WHERE id = ? AND event_id = ?))
+              AND (? IS NULL OR EXISTS (SELECT 1 FROM event_ticket_types WHERE id = ? AND event_id = ?))`,
+      bindings: [
+        input.staffTicketTypeId,
+        input.staffTicketTypeId,
+        event.id,
+        input.customerTicketTypeId,
+        input.customerTicketTypeId,
+        event.id,
+      ],
+    }),
     db
       .prepare(
         `UPDATE event_ticket_settings SET
@@ -120,7 +134,8 @@ export async function issueSponsorPassCodes(
                  (id, event_id, ticket_type_id, label, code, amount, max_uses, sponsorship_id, pass_kind,
                   created_by_user_id, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(sponsorship_id, pass_kind) WHERE sponsorship_id IS NOT NULL DO NOTHING`,
+               ON CONFLICT(sponsorship_id, pass_kind) WHERE sponsorship_id IS NOT NULL
+                 DO UPDATE SET max_uses = MAX(max_uses, excluded.max_uses), updated_at = excluded.updated_at`,
             )
             .bind(
               uuid(),

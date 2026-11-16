@@ -5,6 +5,7 @@
  * decided ticket at today's price.
  */
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
+import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
 import { all, first } from "../../db/queries";
 import { workEmailDomain } from "../../email-domains/classification";
 import { AppError } from "../../errors";
@@ -73,6 +74,11 @@ export async function reviewDisputedTicket(
     preparePermissionsAuthorizationGuard(db, actor, [
       { permission: "events:write", context: { type: "event", id: event.id } },
     ]),
+    // Another organizer may have settled this dispute meanwhile; then nothing of this review is written.
+    prepareStateGuard(db, {
+      sql: `SELECT 1 FROM registration_tickets WHERE id = ? AND dispute_resolved_at IS NULL${decision === "move" ? " AND status <> 'paid'" : ""}`,
+      bindings: [row.id],
+    }),
     prepareAuditLog(db, "user", actor.id, "registration_ticket_dispute_settled", "registration", registrationId, {
       eventId: event.id,
       decision,
@@ -95,7 +101,7 @@ export async function reviewDisputedTicket(
         decidedByUserId: actor.id,
       }),
     );
-    await db.batch(statements);
+    await settle(db, statements);
     return;
   }
   const decided = await readStoredTicketDecision(db, digest, subject);
@@ -135,12 +141,22 @@ export async function reviewDisputedTicket(
   statements.push(
     db
       .prepare(
-        `UPDATE registration_tickets SET ticket_type_id = ?, assignment_source = 'organizer', code_id = NULL, amount = ?,
+        `UPDATE registration_tickets SET ticket_type_id = ?, assignment_source = 'organizer', code_id = NULL, amount = ?, currency = ?,
            status = ?, dispute_resolved_at = ?, reminders_sent = 0, next_reminder_at = ?, reminders_end_at = ?,
            revision = revision + 1, updated_at = ?
          WHERE id = ? AND dispute_resolved_at IS NULL AND status <> 'paid'`,
       )
-      .bind(type.id, priced.total, status, now, reminders.nextReminderAt, reminders.remindersEndAt, now, row.id),
+      .bind(
+        type.id,
+        priced.total,
+        settings.currency,
+        status,
+        now,
+        reminders.nextReminderAt,
+        reminders.remindersEndAt,
+        now,
+        row.id,
+      ),
   );
   if (status === "pending_payment")
     statements.push(
@@ -162,5 +178,14 @@ export async function reviewDisputedTicket(
         },
       ),
     );
-  await db.batch(statements);
+  await settle(db, statements);
+}
+
+async function settle(db: DatabaseLike, statements: StatementLike[]): Promise<void> {
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isStateGuardFailure(error)) throw new AppError(409, "TICKET_NOT_DISPUTED", "This ticket has no open dispute.");
+    throw error;
+  }
 }

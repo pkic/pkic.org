@@ -58,21 +58,22 @@ function personalEmailNote(offer: EventTicketOffer, ticket: OfferedTicket): Comp
 export function EventTicketPricing({ slug, children }: { slug: string; children: ComponentChildren }) {
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/tickets`;
   // The identity chosen on the flow's first step decides the ticket and whether a work address is used.
-  const marker = useRef<HTMLSpanElement>(null);
+  // The registration form renders inside this host, so its identity field is read from here.
+  const host = useRef<HTMLDivElement>(null);
   const [identityId, setIdentityId] = useState("");
   useEffect(() => {
-    const form = marker.current?.closest("form");
-    if (!form) return;
+    const element = host.current;
+    if (!element) return;
     const read = () => {
-      const field = form.elements.namedItem("identityId");
+      const field = element.querySelector('[name="identityId"]');
       setIdentityId(field instanceof HTMLInputElement || field instanceof HTMLSelectElement ? field.value : "");
     };
     read();
-    form.addEventListener("change", read);
-    form.addEventListener("click", read);
+    element.addEventListener("change", read);
+    element.addEventListener("click", read);
     return () => {
-      form.removeEventListener("change", read);
-      form.removeEventListener("click", read);
+      element.removeEventListener("change", read);
+      element.removeEventListener("click", read);
     };
   }, []);
   const offer = useData(
@@ -93,6 +94,13 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
   const [quote, setQuote] = useState<EventTicketQuote | null>(null);
   const [quoteError, setQuoteError] = useState("");
   const generation = useRef(0);
+  // Saves reach the server one at a time and in order, so an older choice never lands after a newer one.
+  const saves = useRef<Promise<void>>(Promise.resolve());
+  const queued = useRef<(() => void) | null>(null);
+  const settle = useCallback(async () => {
+    queued.current?.();
+    await saves.current;
+  }, []);
 
   const selectable = useMemo(() => offer.data?.tickets.filter((ticket) => ticket.selectable) ?? [], [offer.data]);
   const assignedKey = offer.data?.assigned?.ticketKey ?? null;
@@ -100,7 +108,12 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
   const mustChoose = !assignedKey && selectable.length > 1 && !chosen && !code;
   const activeKey = mustChoose
     ? null
-    : (quote?.ticketKey ?? chosen ?? assignedKey ?? (selectable.length === 1 ? selectable[0].key : null));
+    : // A code decides its own ticket; otherwise the ticket the person picked is the one shown as chosen.
+      ((code ? quote?.ticketKey : null) ??
+      chosen ??
+      quote?.ticketKey ??
+      assignedKey ??
+      (selectable.length === 1 ? selectable[0].key : null));
   const activeTicket = offer.data?.tickets.find((ticket) => ticket.key === activeKey);
   const disputed = Boolean(assignedKey && chosen && chosen !== assignedKey);
   const dayAttendance = useMemo(
@@ -134,22 +147,32 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
       save: true,
     });
     const mine = (generation.current += 1);
-    const timer = setTimeout(() => {
-      postJson(`${endpoint}/quote`, request, eventTicketQuoteSchema)
-        .then((result) => {
-          if (mine !== generation.current) return;
-          setQuote(result);
-          setQuoteError("");
-        })
-        .catch((error: unknown) => {
-          if (mine !== generation.current) return;
-          const message = refuse.current(error);
-          // A refused code is dropped so the person keeps a price for the ticket they had.
-          if (code) setCode("");
-          else setQuoteError(message);
-        });
-    }, 250);
-    return () => clearTimeout(timer);
+    const send = () => {
+      // Sent once: by the delay, or sooner when the registration is submitted.
+      if (queued.current !== send) return;
+      queued.current = null;
+      saves.current = saves.current.then(() =>
+        postJson(`${endpoint}/quote`, request, eventTicketQuoteSchema)
+          .then((result) => {
+            if (mine !== generation.current) return;
+            setQuote(result);
+            setQuoteError("");
+          })
+          .catch((error: unknown) => {
+            if (mine !== generation.current) return;
+            const message = refuse.current(error);
+            // A refused code is dropped so the person keeps a price for the ticket they had.
+            if (code) setCode("");
+            else setQuoteError(message);
+          }),
+      );
+    };
+    queued.current = send;
+    const timer = setTimeout(send, 250);
+    return () => {
+      clearTimeout(timer);
+      if (queued.current === send) queued.current = null;
+    };
   }, [enabled, endpoint, dayAttendance, chosen, code, disputed, reason, mustChoose, identityId]);
 
   const onSelection = useCallback((selected: Readonly<Record<string, string>>) => setSelection(selected), []);
@@ -384,13 +407,13 @@ export function EventTicketPricing({ slug, children }: { slug: string; children:
       },
       priceHeading: activeTicket ? `${activeTicket.name} ticket` : "Price",
       onSelection,
+      settle,
     };
   })();
 
   return (
     <AttendancePricingContext.Provider value={pricing}>
-      {children}
-      <span ref={marker} hidden />
+      <div ref={host}>{children}</div>
     </AttendancePricingContext.Provider>
   );
 }

@@ -64,7 +64,7 @@ type DueRow = Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_j
   email: string;
   started_at: string;
   reminders_sent: number;
-  /** The person registered, or registration is over. */
+  /** The person registered, the event no longer takes registrations, or it is over. */
   settled: number;
 };
 
@@ -81,7 +81,8 @@ export async function sendUnfinishedRegistrationReminders(
             event.name AS event_name, event.slug, event.base_path, event.starts_at, event.settings_json,
             event.source_mode, person.email,
             (${HAS_REGISTRATION}
-              OR datetime(event.starts_at) <= datetime(?)
+              OR event.registration_mode IN ('no_registration', 'automatic')
+              OR datetime(COALESCE(event.ends_at, event.starts_at)) <= datetime(?)
               OR datetime(CASE WHEN json_valid(event.settings_json)
                    THEN COALESCE(json_extract(event.settings_json, '$.registration.closesAt'),
                                  json_extract(event.settings_json, '$.registrationClosesAt')) END) <= datetime(?)
@@ -173,15 +174,25 @@ export async function stopUnfinishedRegistration(
   userId: string,
   input: UnfinishedRegistrationStop,
 ): Promise<void> {
-  const result = await db
-    .prepare(
-      `UPDATE unfinished_registrations
-       SET stopped_at = ?, stop_reason = ?, stop_note = ?, next_reminder_at = NULL
-       WHERE event_id = ? AND user_id = ?`,
-    )
-    .bind(nowIso(), input.reasonCode ?? null, input.reasonNote || null, event.id, userId)
-    .run();
-  if (!result.meta?.changes)
+  const now = nowIso();
+  // A reminder queued a moment ago and not sent yet is withdrawn with the answer.
+  const reminderKeys = `unfinished-registration:${event.id}:${userId}:`;
+  const [result] = await db.batch([
+    db
+      .prepare(
+        `UPDATE unfinished_registrations
+         SET stopped_at = ?, stop_reason = ?, stop_note = ?, next_reminder_at = NULL
+         WHERE event_id = ? AND user_id = ?`,
+      )
+      .bind(now, input.reasonCode ?? null, input.reasonNote || null, event.id, userId),
+    db
+      .prepare(
+        `UPDATE email_outbox SET status = 'cancelled', updated_at = ?
+         WHERE status = 'queued' AND idempotency_key >= ? AND idempotency_key < ?`,
+      )
+      .bind(now, reminderKeys, `${reminderKeys.slice(0, -1)};`),
+  ]);
+  if (!result?.meta?.changes)
     throw new AppError(404, "UNFINISHED_REGISTRATION_NOT_FOUND", "There is no unfinished registration to stop.");
 }
 
@@ -197,12 +208,14 @@ export async function readUnfinishedRegistrationSummary(
 ): Promise<UnfinishedRegistrationSummary> {
   type Reason = UnfinishedRegistrationSummary["reasons"][number]["reasonCode"];
   const [totals, reasons, notes] = await Promise.all([
-    first<{ started: number; registered: number; reminded: number; stopped: number }>(
+    first<{ started: number; registered: number; reminded: number; stopped: number; gave_reason: number }>(
       db,
       `SELECT COUNT(*) AS started,
               COALESCE(SUM(${HAS_REGISTRATION}), 0) AS registered,
               COALESCE(SUM(unfinished.reminders_sent > 0), 0) AS reminded,
-              COALESCE(SUM(unfinished.stopped_at IS NOT NULL AND NOT ${HAS_REGISTRATION}), 0) AS stopped
+              COALESCE(SUM(unfinished.stopped_at IS NOT NULL AND NOT ${HAS_REGISTRATION}), 0) AS stopped,
+              COALESCE(SUM(unfinished.stopped_at IS NOT NULL AND unfinished.stop_reason IS NOT NULL
+                           AND NOT ${HAS_REGISTRATION}), 0) AS gave_reason
        FROM unfinished_registrations unfinished WHERE unfinished.event_id = ?`,
       [event.id],
     ),
@@ -228,6 +241,7 @@ export async function readUnfinishedRegistrationSummary(
     registered: totals?.registered ?? 0,
     reminded: totals?.reminded ?? 0,
     stopped: totals?.stopped ?? 0,
+    gaveReason: totals?.gave_reason ?? 0,
     reasons: reasons.map((row) => ({ reasonCode: row.reason, count: row.count })),
     notes: notes.map((row) => ({ reasonCode: row.reason, note: row.note, stoppedAt: row.stopped_at })),
   };

@@ -105,7 +105,7 @@ export function TicketCodesPanel({
       setSaving(false);
     }
   }
-  async function change(code: EventTicketCode, body: { maxUses?: number; revoked?: boolean }, done: string) {
+  async function change(code: EventTicketCode, body: { addUses?: number; revoked?: boolean }, done: string) {
     try {
       await patchJson(`${ticketsEndpoint(slug)}/codes/${encodeURIComponent(code.id)}`, body, successResponseSchema);
       await onChanged();
@@ -181,7 +181,7 @@ export function TicketCodesPanel({
                             {
                               id: "more",
                               label: "Add 10 uses",
-                              onSelect: () => void change(row, { maxUses: row.maxUses + 10 }, "10 uses added."),
+                              onSelect: () => void change(row, { addUses: 10 }, "10 uses added."),
                             },
                             row.revokedAt
                               ? {

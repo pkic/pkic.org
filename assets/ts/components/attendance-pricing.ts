@@ -29,6 +29,8 @@ export interface AttendancePricing {
   /** What the prices are for, above them: "Vendor ticket". */
   priceHeading?: string;
   onSelection?: (selected: Readonly<Record<string, string>>) => void;
+  /** Resolves once the latest choice is kept on the server, so a registration is made with what is shown. */
+  settle?: () => Promise<void>;
 }
 
 export const AttendancePricingContext = createContext<AttendancePricing | null>(null);

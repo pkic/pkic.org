@@ -15,8 +15,18 @@ import { databaseIdSchema } from "./identifiers";
 import { stripeCurrencySchema } from "./stripe";
 import { REGISTRATION_TICKET_STATUSES, TICKET_ASSIGNMENT_SOURCES, TICKET_PRICE_CHARGED } from "../event-tickets";
 
-const calendarDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a date.");
+const calendarDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a date.")
+  // The pattern alone accepts February 30; a real date survives the round trip unchanged.
+  .refine((value) => {
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }, "Enter a date.");
+/** One price, as an organizer enters it. */
 const amountSchema = z.number().int("Enter a whole amount.").min(0, "Enter 0 or more.").max(100_000_00);
+/** What prices add up to over the days of an event: a line, a total, or what a ticket costs. */
+const totalAmountSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const revisionSchema = z.number().int().min(0);
 
 export const ticketKeySchema = z
@@ -164,6 +174,8 @@ export type EventTicketCodeCreate = z.infer<typeof eventTicketCodeCreateSchema>;
 
 export const eventTicketCodeUpdateSchema = z.object({
   maxUses: z.number().int().min(1, "Enter 1 or more.").max(10_000, "Enter 10,000 or less.").optional(),
+  /** Raises the limit by this many, whatever it is by now; two organizers adding uses both count. */
+  addUses: z.number().int().min(1).max(1_000).optional(),
   revoked: z.boolean().optional(),
 });
 export const eventTicketCodeParamsSchema = eventSlugParamsSchema.extend({ codeId: databaseIdSchema });
@@ -310,16 +322,16 @@ export const eventTicketQuoteSchema = z.object({
       attendanceValue: z.string(),
       dayDates: z.array(calendarDateSchema),
       charged: ticketPriceChargedSchema,
-      amount: amountSchema,
+      amount: totalAmountSchema,
       /** A price for the event that a higher one the person also chose covers. */
       included: z.boolean(),
     }),
   ),
-  subtotal: amountSchema,
-  total: amountSchema,
+  subtotal: totalAmountSchema,
+  total: totalAmountSchema,
   codeLabel: z.string().nullable(),
   /** The total the same choices cost from the next price change, when it differs. */
-  nextTotal: amountSchema.nullable(),
+  nextTotal: totalAmountSchema.nullable(),
   nextPeriodStartsOn: calendarDateSchema.nullable(),
   /** A free ticket that needs a work email address is priced for this personal address. */
   personalEmailPrice: z.boolean(),
@@ -345,7 +357,7 @@ export const registrationTicketSchema = z.object({
   refundPending: z.boolean(),
   /** The payment provider's reference for the payment, once paid. */
   paymentReference: z.string().nullable(),
-  refundedAmount: amountSchema,
+  refundedAmount: totalAmountSchema,
 });
 export type RegistrationTicket = z.infer<typeof registrationTicketSchema>;
 

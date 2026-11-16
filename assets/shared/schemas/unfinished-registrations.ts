@@ -26,6 +26,8 @@ export const unfinishedRegistrationSummarySchema = z.object({
   registered: z.number().int(),
   reminded: z.number().int(),
   stopped: z.number().int(),
+  /** Of those who stopped, how many picked a reason. */
+  gaveReason: z.number().int(),
   reasons: z.array(z.object({ reasonCode: unfinishedRegistrationReasonSchema.nullable(), count: z.number().int() })),
   /** The most recent notes people left. */
   notes: z.array(

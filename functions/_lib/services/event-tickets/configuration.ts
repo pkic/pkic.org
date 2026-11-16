@@ -361,8 +361,28 @@ export async function updateEventTicketSettings(
   input: EventTicketSettingsUpdate,
 ): Promise<{ revision: number }> {
   const now = nowIso();
+  const fixed = await first<{ currency: string }>(
+    db,
+    `SELECT settings.currency FROM event_ticket_settings settings WHERE settings.event_id = ?1
+       AND EXISTS (SELECT 1 FROM registration_tickets ticket
+                   WHERE ticket.event_id = ?1 AND ticket.status IN ('pending_payment', 'paid', 'refunded'))`,
+    [event.id],
+  );
+  if (fixed && fixed.currency !== input.currency) {
+    const message = `People already hold tickets priced in ${fixed.currency.toUpperCase()}. The currency can no longer change.`;
+    throw new AppError(422, "TICKET_CURRENCY_FIXED", message, { fieldErrors: { currency: [message] } });
+  }
   await commitConfigurationChange(db, [
     ...prepareConfigurationChange(db, actor, event.id, input.expectedRevision, now),
+    // Tickets keep the currency they were issued in, so the event's currency is fixed once one costs something.
+    prepareStateGuard(db, {
+      sql: `SELECT 1 FROM event_ticket_settings settings WHERE settings.event_id = ?
+              AND (settings.currency = ? OR NOT EXISTS (
+                SELECT 1 FROM registration_tickets ticket
+                WHERE ticket.event_id = settings.event_id
+                  AND ticket.status IN ('pending_payment', 'paid', 'refunded')))`,
+      bindings: [event.id, input.currency],
+    }),
     db
       .prepare(
         `UPDATE event_ticket_settings SET currency = ?, reminder_interval_days = ?, reminder_period_days = ?, send_invoice = ?,
@@ -447,7 +467,7 @@ export async function updateEventTicketCode(
   actor: UserBackedAuthAdmin,
   event: EventRef,
   codeId: string,
-  input: { maxUses?: number; revoked?: boolean },
+  input: { maxUses?: number; addUses?: number; revoked?: boolean },
 ): Promise<void> {
   const existing = await first<{ used_count: number }>(
     db,
@@ -465,28 +485,44 @@ export async function updateEventTicketCode(
       },
     );
   const now = nowIso();
-  await db.batch([
-    preparePermissionsAuthorizationGuard(db, actor, [
-      { permission: "events:write", context: { type: "event", id: event.id } },
-    ]),
-    db
-      .prepare(
-        `UPDATE event_ticket_codes SET
-           max_uses = COALESCE(?, max_uses),
+  await db
+    .batch([
+      preparePermissionsAuthorizationGuard(db, actor, [
+        { permission: "events:write", context: { type: "event", id: event.id } },
+      ]),
+      // A registration that used the code meanwhile can put the new limit below its uses; then nothing is written.
+      prepareStateGuard(db, {
+        sql: "SELECT 1 FROM event_ticket_codes WHERE id = ? AND event_id = ? AND used_count <= COALESCE(?, max_uses)",
+        bindings: [codeId, event.id, input.maxUses ?? null],
+      }),
+      db
+        .prepare(
+          `UPDATE event_ticket_codes SET
+           max_uses = MIN(COALESCE(?, max_uses) + ?, 10000),
            revoked_at = CASE WHEN ? IS NULL THEN revoked_at WHEN ? = 1 THEN COALESCE(revoked_at, ?) ELSE NULL END,
            updated_at = ?
          WHERE id = ? AND event_id = ? AND used_count <= COALESCE(?, max_uses)`,
-      )
-      .bind(
-        input.maxUses ?? null,
-        input.revoked === undefined ? null : 1,
-        input.revoked ? 1 : 0,
-        now,
-        now,
-        codeId,
-        event.id,
-        input.maxUses ?? null,
-      ),
-    prepareAuditLog(db, "user", actor.id, "event_ticket_code_changed", "event", event.id, { codeId, ...input }),
-  ]);
+        )
+        .bind(
+          input.maxUses ?? null,
+          input.addUses ?? 0,
+          input.revoked === undefined ? null : 1,
+          input.revoked ? 1 : 0,
+          now,
+          now,
+          codeId,
+          event.id,
+          input.maxUses ?? null,
+        ),
+      prepareAuditLog(db, "user", actor.id, "event_ticket_code_changed", "event", event.id, { codeId, ...input }),
+    ])
+    .catch((error: unknown) => {
+      if (isStateGuardFailure(error))
+        throw new AppError(
+          409,
+          "EVENT_TICKETS_CHANGED",
+          "This code was used while you were editing. Reload and try again.",
+        );
+      throw error;
+    });
 }

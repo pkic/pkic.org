@@ -91,7 +91,8 @@ export function TicketPricesEditor({
         attendance: attendanceLabel(configuration, price.attendanceValue),
         covers: coversLabel(configuration, price.dayDate),
         charged: price.charged,
-        prices: periods.map((period) => price.amounts[period.id] ?? ""),
+        // In the order the columns are shown, which is by date and not the order they were added in.
+        prices: grid.periods.map((period) => price.amounts[period.id] ?? ""),
       })),
   }));
   /** The rows a ticket does not have yet: each way of attending, for all days and for each single day. */

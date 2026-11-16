@@ -17,6 +17,7 @@ import {
   replaceEventTicketPrices,
   saveEventTicketType,
   updateEventTicketCode,
+  updateEventTicketSettings,
 } from "../functions/_lib/services/event-tickets/configuration";
 import { quoteEventTicket, readEventTicketOffer } from "../functions/_lib/services/event-tickets/offer";
 import {
@@ -317,11 +318,17 @@ describe("event tickets", () => {
       ),
     ).rejects.toMatchObject({ code: "TICKET_CODE_USED_UP" });
     await expect(updateEventTicketCode(env.DB, admin, event, code.id, { maxUses: 0 })).rejects.toBeTruthy();
+    // Adding uses raises whatever the limit is by now, so two organizers adding ten both count.
+    await updateEventTicketCode(env.DB, admin, event, code.id, { addUses: 10 });
+    await updateEventTicketCode(env.DB, admin, event, code.id, { addUses: 10 });
+    expect(await env.DB.prepare("SELECT max_uses FROM event_ticket_codes WHERE id = ?").bind(code.id).first()).toEqual({
+      max_uses: 21,
+    });
     expect(isTicketCodeExhausted(new Error("CHECK constraint failed: used_count <= max_uses"))).toBe(true);
   });
 
   it("marks a ticket paid only for a matching payment, once, and releases the held confirmation", async () => {
-    const { event } = await seedTickets();
+    const { event, admin } = await seedTickets();
     const { registration, user } = await register(event, "buyer@gmail.com");
     const now = new Date().toISOString();
     await env.DB.prepare(
@@ -357,6 +364,17 @@ describe("event tickets", () => {
       "SELECT status, amount FROM payment_ledger_entries WHERE purpose = 'event'",
     ).first<{ status: string; amount: number }>();
     expect(ledger).toMatchObject({ status: "paid", amount: 19500 });
+    // A ticket was paid in the event's currency, so the currency can no longer change.
+    const configuration = await readEventTicketsConfiguration(env.DB, event);
+    await expect(
+      updateEventTicketSettings(env.DB, admin, event, {
+        expectedRevision: configuration.revision,
+        currency: "eur",
+        reminderIntervalDays: configuration.settings.reminderIntervalDays,
+        reminderPeriodDays: configuration.settings.reminderPeriodDays,
+        sendInvoice: configuration.settings.sendInvoice,
+      }),
+    ).rejects.toMatchObject({ code: "TICKET_CURRENCY_FIXED" });
   });
 
   it("refunds a paid ticket through the refund job and the provider's refund event", async () => {
@@ -369,6 +387,19 @@ describe("event tickets", () => {
     await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
     const ticket = (await readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id }))!;
     await paidEvent(ticket.id, "cs_test_ticket", 19500);
+    // Part of the payment returned in the provider's dashboard leaves the ticket and its ledger entry paid.
+    expect(
+      await handleEventTicketStripeEvent(env.DB, {
+        id: "evt_partial_refund",
+        type: "charge.refunded",
+        data: {
+          object: { id: "ch_synthetic", payment_intent: "pi_synthetic", refunded: false, amount_refunded: 2000 },
+        },
+      }),
+    ).toMatchObject({ outcome: "partially_refunded" });
+    expect(await env.DB.prepare("SELECT status FROM payment_ledger_entries WHERE purpose = 'event'").first()).toEqual({
+      status: "paid",
+    });
     await requestTicketRefund(env.DB, admin, { ...input, reason: "Visa refused" });
     await expect(requestTicketRefund(env.DB, admin, { ...input, reason: "Again" })).rejects.toMatchObject({
       code: "TICKET_REFUND_PENDING",

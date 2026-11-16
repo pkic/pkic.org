@@ -11,7 +11,9 @@ import { ticketsEndpoint } from "./tickets-endpoint";
 
 export function useTicketSettingsForm(
   slug: string,
-  body: Parameters<typeof useContractForm<typeof eventTicketSettingsUpdateSchema>>[1],
+  /** The revision of the saved settings; the draft keeps the one it was copied from. */
+  revision: number,
+  fields: Omit<Parameters<typeof useContractForm<typeof eventTicketSettingsUpdateSchema>>[1], "expectedRevision">,
   onSaved: () => Promise<void>,
   /** Puts the panel's own fields back to the saved values. */
   resetFields: () => void,
@@ -19,8 +21,11 @@ export function useTicketSettingsForm(
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const form = useContractForm(eventTicketSettingsUpdateSchema, body);
+  // A save of a draft copied before someone else's change is refused instead of overwriting that change.
+  const [draftRevision, setDraftRevision] = useState(revision);
+  const form = useContractForm(eventTicketSettingsUpdateSchema, { ...fields, expectedRevision: draftRevision });
   function reset() {
+    setDraftRevision(revision);
     resetFields();
     form.reset();
     setError("");

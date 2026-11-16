@@ -345,7 +345,9 @@ export async function submitEventRegistration(
         ...(awaitingPayment && registration.status !== "pending_email_confirmation"
           ? [
               db
-                .prepare("UPDATE registration_tickets SET held_email_id = ? WHERE registration_id = ?")
+                .prepare(
+                  "UPDATE registration_tickets SET held_email_id = ? WHERE registration_id = ? AND status = 'pending_payment'",
+                )
                 .bind(queuedEmail.id, registration.id),
               prepareTicketPaymentEmail(
                 db,

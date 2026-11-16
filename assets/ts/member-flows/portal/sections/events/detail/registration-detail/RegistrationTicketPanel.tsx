@@ -18,6 +18,7 @@ import { useData } from "../../../../../../hooks/useData";
 import { getJson, postJson } from "../../../../../../shared/api-client";
 import { Alert } from "../../../../../../ui/Alert";
 import { Badge } from "../../../../../../ui/Badge";
+import { Button } from "../../../../../../ui/Button";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { Dialog } from "../../../../../../ui/Dialog";
 import { Field } from "../../../../../../ui/Field";
@@ -62,6 +63,19 @@ export function RegistrationTicketPanel({
   const [error, setError] = useState("");
   const form = useContractForm(registrationTicketRefundSchema, { reason });
   const ticket = loaded.data?.ticket;
+  // A failed read is said, with a way to try again; it is not the same as an event without tickets.
+  if (!loaded.loading && loaded.error && !loaded.data)
+    return (
+      <Panel aria-label="Ticket">
+        <PanelHeader title="Ticket" />
+        <PanelBody class="pk-stack">
+          <Alert tone="danger">{loaded.error}</Alert>
+          <div class="pk-cluster">
+            <Button onClick={() => void loaded.reload()}>Try again</Button>
+          </div>
+        </PanelBody>
+      </Panel>
+    );
   // An event without tickets has nothing to show here.
   if (!ticket) return null;
   async function changed(message: string) {
