@@ -262,17 +262,37 @@
     inline-size: 65%;
     inset-block-end: 64px;
   }
+  /*
+   * The emblem rolls in from well left of the drawing; only the frame clips it,
+   * so it enters from the frame's edge rather than appearing out of its box.
+   */
   .pk-live-overlay__lower-third-bars {
     display: block;
     inline-size: 100%;
     block-size: auto;
+    overflow: visible;
   }
   .pk-live-overlay__name-background {
     fill: var(--pk-pqc-paper);
   }
-  .pk-live-overlay__title-background {
-    fill: var(--pk-pqc-paper);
-    opacity: 0.8;
+  /*
+   * The title bar is the conference field, as on the event app's hero: the
+   * field gradient under its soft light, with the fine dot grid fading in
+   * toward the right. Its units are the drawing's, half a pixel each on a
+   * 1080p frame, so the grid's pitch is doubled to the kit's 14px.
+   */
+  .pk-live-overlay__title-field {
+    position: relative;
+    inline-size: 100%;
+    block-size: 100%;
+    background: var(--pk-pqc-light), var(--pk-pqc-field);
+  }
+  .pk-live-overlay__title-field::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 0 40%;
+    background: var(--pk-pqc-dots-fine) 0 0 / 28px 28px repeat;
+    mask-image: linear-gradient(90deg, transparent, black 60%);
   }
   /*
    * Name and role are SVG text scaled down with the whole frame; without
@@ -294,7 +314,7 @@
     font-family: var(--pk-font);
   }
   /*
-   * The title line sits in the grey bar at the brand drawing's place (x 625,
+   * The title line sits in the title bar at the brand drawing's place (x 625,
    * y 250, 1800 x 150 of the 2500 x 417 drawing): set off to the right of the
    * name like its bar, left-aligned, its type at the drawing's scale.
    */
@@ -309,7 +329,7 @@
     block-size: calc(150 / 417 * 100%);
     text-align: start;
     overflow: hidden;
-    color: var(--pk-pqc-ink-muted);
+    color: var(--pk-pqc-on-field);
     font-size: calc(var(--pk-text-xl) * 3 * 1248 / 2500);
     font-weight: 500;
     line-height: 1.25;
@@ -354,13 +374,14 @@
     font-family: var(--pk-font-mono);
     font-weight: 700;
   }
-  .pk-live-overlay__countdown-green {
+  /* The conference stripe's stops, for SVG gradients: the countdown ring and the lower third's underline. */
+  .pk-live-overlay__stripe-green {
     stop-color: var(--pk-pqc-green);
   }
-  .pk-live-overlay__countdown-blue {
+  .pk-live-overlay__stripe-blue {
     stop-color: var(--pk-pqc-blue);
   }
-  .pk-live-overlay__countdown-orange {
+  .pk-live-overlay__stripe-orange {
     stop-color: var(--pk-pqc-orange);
   }
   .pk-live-overlay__countdown-ring {

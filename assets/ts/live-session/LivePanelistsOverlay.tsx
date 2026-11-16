@@ -1,7 +1,7 @@
 import type { LivePanelists, LiveRoomSession } from "../../shared/schemas/live-session-room";
 import { SectionHeading } from "../ui/SectionHeading";
 import { Avatar } from "../ui/Avatar";
-import { liveCreditAffiliation } from "../../shared/live-room-credits";
+import { LiveCreditTitles } from "./LiveCreditTitles";
 import "../../design/tokens.agenda.generated.css";
 import "./LivePanelistsOverlay.css";
 
@@ -28,7 +28,9 @@ export function LivePanelistsOverlay({
             </div>
             <div class="pk-live-panelists__info">
               <div class="pk-live-panelists__name">{credit.name}</div>
-              <div class="pk-live-panelists__title">{liveCreditAffiliation(credit)}</div>
+              <div class="pk-live-panelists__title">
+                <LiveCreditTitles credit={credit} />
+              </div>
             </div>
           </div>
         ))}

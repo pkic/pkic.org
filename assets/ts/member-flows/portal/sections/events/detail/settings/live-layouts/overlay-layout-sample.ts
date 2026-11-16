@@ -38,13 +38,21 @@ const POLL_FIELD = livePollFieldSchema.parse({
   validation: { uiWidget: "radios" },
 });
 
-function credit(key: string, name: string, title: string, organization: string | null, moderator = false) {
+function credit(
+  key: string,
+  name: string,
+  title: string,
+  organization: string | null,
+  moderator = false,
+  additionalIdentities: { title: string; organization: string }[] = [],
+) {
   return {
     key,
     name,
     moderator,
     photoUrl: null,
     identity: { title, organization },
+    additionalIdentities,
     roleLabel: moderator ? LIVE_MODERATOR_ROLE_LABEL : null,
   };
 }
@@ -53,7 +61,10 @@ function credit(key: string, name: string, title: string, organization: string |
 export function sampleOverlayRoom(now: number): LiveRoomState {
   const at = (minutes: number) => new Date(now + minutes * 60_000).toISOString();
   const credits = [
-    credit("sample:speaker", "Sam Speaker", "Principal architect", "Example Trust"),
+    // Sam speaks for two identities, so the lower third shows each in turn.
+    credit("sample:speaker", "Sam Speaker", "Principal architect", "Example Trust", false, [
+      { title: "Co-chair", organization: "Example Working Group" },
+    ]),
     credit("sample:panelist", "Pat Panelist", "Head of PKI", "Example Bank"),
     credit("sample:moderator", "Morgan Moderator", "Program chair", null, true),
   ];
