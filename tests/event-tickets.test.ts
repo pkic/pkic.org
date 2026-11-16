@@ -44,6 +44,8 @@ import {
 import { listEventTicketCodes } from "../functions/_lib/services/event-tickets/code-list";
 import { reviewDisputedTicket } from "../functions/_lib/services/event-tickets/dispute";
 import { issueSponsorPassCodes, saveSponsorPasses } from "../functions/_lib/services/event-tickets/sponsor-passes";
+import { getRegistrationByIdForEvent } from "../functions/_lib/services/registrations/queries";
+import { buildRegistrationUpdate } from "../functions/_lib/services/registrations/update-plan";
 import { badgeAttendeeEligibilitySql } from "../functions/_lib/services/event-participation/badge-attendees";
 import type { Env, UserBackedAuthAdmin } from "../functions/_lib/types";
 
@@ -799,6 +801,94 @@ describe("event tickets", () => {
     expect(
       await readRegistrationTicket(env.DB, { eventId: event.id, registrationId: first.registration.id }),
     ).toMatchObject({ status: "canceled" });
+  });
+
+  it("prices the ticket again when the days change, so a free start does not become a paid place", async () => {
+    const { event } = await seedTickets();
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO event_days (id, event_id, day_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+    )
+      .bind(crypto.randomUUID(), event.id, DAY, now, now)
+      .run();
+    const virtual = [{ dayDate: DAY, attendanceType: "virtual" }];
+    const start = async (email: string) => {
+      const user = await findOrCreateUser(env.DB, { email, firstName: "Synthetic", lastName: "Person" });
+      const { registration } = await createScheduledRegistration(env.DB, {
+        event: { id: event.id },
+        userId: user.id,
+        sourceType: "direct",
+        mailboxVerified: true,
+        dayAttendance: virtual,
+      });
+      const ticket = await planRegistrationTicket(
+        env.DB,
+        {},
+        {
+          event,
+          registrationId: registration.id,
+          userId: user.id,
+          email,
+          identityId: null,
+          organizationName: "Example Organization",
+          dayAttendance: virtual,
+        },
+      );
+      await env.DB.batch(ticket!.statements);
+      const read = () => readRegistrationTicket(env.DB, { eventId: event.id, registrationId: registration.id });
+      const eligible = async () =>
+        (await env.DB.prepare(
+          `SELECT COUNT(*) AS total FROM registrations r JOIN users u ON u.id = r.user_id
+           WHERE r.id = ? AND ${badgeAttendeeEligibilitySql("r", "u")}`,
+        )
+          .bind(registration.id)
+          .first<{ total: number }>())!.total;
+      const change = async (
+        payload: Parameters<typeof buildRegistrationUpdate>[2],
+        changedBy?: string,
+      ): Promise<void> => {
+        const record = await getRegistrationByIdForEvent(env.DB, event.id, registration.id);
+        const built = await buildRegistrationUpdate(env.DB, record, payload, changedBy);
+        await env.DB.batch(built.statements);
+      };
+      return { user, registration, read, eligible, change };
+    };
+
+    // Attending online costs nothing; moving to the venue afterwards is priced, and admits nobody until paid.
+    const person = await start("days@gmail.com");
+    expect(await person.read()).toMatchObject({ status: "free", amount: 0 });
+    expect(await person.eligible()).toBe(1);
+    await person.change({ action: "update", dayAttendance: inPerson });
+    expect(await person.read()).toMatchObject({ status: "pending_payment", amount: 19500 });
+    expect(await person.eligible()).toBe(0);
+    // Back to what costs nothing, the ticket is free again.
+    await person.change({ action: "update", dayAttendance: virtual });
+    expect(await person.read()).toMatchObject({ status: "free", amount: 0 });
+    expect(await person.eligible()).toBe(1);
+
+    // A paid ticket covers what was paid for. Days that cost more are refused to the person, not to an organizer.
+    await person.change({ action: "update", dayAttendance: inPerson });
+    const input = { eventId: event.id, registrationId: person.registration.id, userId: person.user.id };
+    await openTicketCheckout(env.DB, paymentEnv, "https://example.test", input, stripe);
+    await paidEvent((await person.read())!.id, "cs_test_ticket", 19500);
+    await person.change({ action: "update", dayAttendance: virtual });
+    expect(await person.read()).toMatchObject({ status: "paid", amount: 19500 });
+    await env.DB.prepare("UPDATE registration_tickets SET amount = 100 WHERE registration_id = ?")
+      .bind(person.registration.id)
+      .run();
+    await expect(person.change({ action: "update", dayAttendance: inPerson })).rejects.toMatchObject({
+      code: "TICKET_CHANGE_COSTS_MORE",
+    });
+    await person.change({ action: "update", dayAttendance: inPerson }, "admin");
+    expect(await person.read()).toMatchObject({ status: "paid", amount: 100 });
+
+    // Canceling and restoring with other days does not keep the old price either.
+    const other = await start("restore-days@gmail.com");
+    await other.change({ action: "cancel" });
+    expect(await other.read()).toMatchObject({ status: "canceled" });
+    await other.change({ action: "update", dayAttendance: inPerson });
+    expect(await other.read()).toMatchObject({ status: "pending_payment", amount: 19500 });
+    expect(await other.eligible()).toBe(0);
   });
 
   it("gives each active sponsor its two codes from its tier and only ever raises their limits", async () => {

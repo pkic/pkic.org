@@ -16,6 +16,7 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { priceTicket, readTicketPerson, resolveTicket } from "./assignment";
 import { OPEN_REFUND_SQL } from "./refunds";
+import { prepareRepriceTicketForDays } from "./reprice";
 import { eventSellsTickets, readEventTicketSnapshot } from "./snapshot";
 
 export interface IssuedRegistrationTicket {
@@ -95,8 +96,18 @@ export async function planRegistrationTicket(
       "TICKET_REFUND_PENDING",
       "A refund for this ticket is still being checked. Try again in a few minutes.",
     );
-  // A paid ticket is settled: it is neither priced again nor replaced.
-  if (held?.status === "paid")
+  // A paid ticket is settled: it is neither priced again nor replaced. It covers what was paid for, so
+  // registering again for days that cost more is refused.
+  if (held?.status === "paid") {
+    await prepareRepriceTicketForDays(db, {
+      eventId: input.event.id,
+      registrationId: input.registrationId,
+      userId: input.userId,
+      dayAttendance: input.dayAttendance,
+      restoring: false,
+      byOrganizer: false,
+      now: nowIso(),
+    });
     return {
       id: held.id,
       ticketName: held.ticket_name,
@@ -105,6 +116,7 @@ export async function planRegistrationTicket(
       status: "paid",
       statements: [clearSelection],
     };
+  }
   const kept: SelectionRow | null =
     selection ??
     (held

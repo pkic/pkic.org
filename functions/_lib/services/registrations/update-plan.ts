@@ -12,6 +12,7 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
+import { prepareRepriceTicketForDays } from "../event-tickets/reprice";
 import {
   assertRegistrationTicketRestorable,
   prepareCancelRegistrationTicket,
@@ -392,6 +393,19 @@ export async function buildRegistrationUpdate(
     await assertRegistrationTicketRestorable(db, registration.id);
     statements.push(...prepareRestoreRegistrationTicket(db, registration.id, now));
   }
+  // The ticket was priced for the days it was issued for: other days are priced again in this write.
+  if (payload.dayAttendance)
+    statements.push(
+      ...(await prepareRepriceTicketForDays(db, {
+        eventId: registration.event_id,
+        registrationId: registration.id,
+        userId: registration.user_id,
+        dayAttendance: payload.dayAttendance,
+        restoring: isCancelled,
+        byOrganizer: changedBy !== "self",
+        now,
+      })),
+    );
   statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
   const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
   if (audit && notificationChanged) statements.push(audit);
