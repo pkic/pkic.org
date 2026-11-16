@@ -1,4 +1,5 @@
 import { DEFAULT_LIVE_CHECK_IN_TEXT } from "../assets/shared/schemas/live-session-graphic-settings";
+import { LIVE_GRAPHIC_THEME_DEFAULTS } from "../assets/shared/live-graphic-theme";
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -186,7 +187,7 @@ describe("live room auxiliary outputs", () => {
     expect(projector.composition.checkIn?.path).toMatch(/^\/portal\/#\/events\/[^/]+\/check-in\/pkc1_/);
     operator.send({ type: "stage.set", ...EMPTY_COMPOSITION, checkIn });
     const stage = await operator.next("stage.changed", (m) => m.stage.checkIn !== null);
-    expect(stage.stage.checkIn?.theme).toBe("black-on-white");
+    expect(stage.stage.checkIn?.theme).toBe(LIVE_GRAPHIC_THEME_DEFAULTS.checkIn);
     expect(stage.stage.checkIn?.text).toEqual(DEFAULT_LIVE_CHECK_IN_TEXT);
     // Every output shows the session's own fixed code.
     expect(stage.stage.checkIn!.path).toBe(projector.composition.checkIn!.path);

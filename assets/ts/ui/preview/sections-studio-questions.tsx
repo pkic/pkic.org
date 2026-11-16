@@ -148,7 +148,7 @@ function QuestionsPanelSpecimen({ targets = TARGETS }: { targets?: typeof TARGET
 function TourSpecimen() {
   const scope = useRef<HTMLDivElement>(null);
   return (
-    <div ref={scope} style={{ paddingBlockStart: "14rem" }}>
+    <div ref={scope} class="pk-preview__tour-room">
       <QuestionsPanelSpecimen targets={SCREENS_TARGETS} />
       <StudioTour scope={scope} onClose={noCommand} />
     </div>
@@ -199,11 +199,7 @@ export const studioQuestionSections: PreviewSection[] = [
     title: "Studio: the row menu while the stage display follows Program",
     note: "Each screen says under its name what a click does. Stage display is not checked, since no one put the question there; it shows it because it is live, and a click keeps it there after it goes off air.",
     render: () => (
-      <div
-        data-density="compact"
-        data-gallery-open
-        style={{ display: "flex", justifyContent: "end", minBlockSize: "18rem" }}
-      >
+      <div data-density="compact" data-gallery-open class="pk-preview__open-menu">
         <LiveRowMenu
           targets={SCREENS_TARGETS}
           layer={{ kind: "question", id: ON_AIR }}

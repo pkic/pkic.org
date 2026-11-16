@@ -9,9 +9,7 @@
     display: block;
     block-size: 100%;
     overflow: hidden;
-    background:
-      radial-gradient(ellipse 60% 120% at 30% 110%, rgb(107 97 87) 0%, rgb(61 58 55) 45%, transparent 75%),
-      linear-gradient(180deg, rgb(141 154 164) 0%, rgb(88 99 107) 45%, rgb(44 50 56) 100%);
+    background: var(--pk-live-sample-shot);
   }
   .pk-live-timer-look__frame {
     position: absolute;
