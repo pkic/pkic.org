@@ -616,7 +616,9 @@ describe("event tickets", () => {
         status: 200,
       })) as unknown as typeof fetch;
     expect(await processTicketRefunds(env.DB, paymentEnv, 5, pending)).toEqual({ processed: 1, failed: 0 });
-    await charge("evt_total_before_ours", 1500, 2000);
+    // Reported in the same second as our refund, just before it: the time alone cannot tell them apart,
+    // but a total that did not grow by the refund's amount does not hold it.
+    await charge("evt_total_before_ours", 2000, 2000);
     expect(
       await env.DB.prepare(
         "SELECT amount, counted FROM registration_ticket_refunds WHERE provider_refund_id = 're_ours'",
@@ -624,6 +626,17 @@ describe("event tickets", () => {
     ).toEqual({ amount: 17500, counted: 0 });
     await failed("evt_failed_ours", 2100, "re_ours", 2000, 17500);
     expect(await read()).toMatchObject({ status: "paid", refundedAmount: 2000, refundFailed: true });
+    // A total that grew by the refund's amount does hold it, and its failure takes exactly that off again.
+    await requestTicketRefund(env.DB, admin, { ...input, reason: "The rest, again" });
+    const again = (async () =>
+      new Response(JSON.stringify({ id: "re_ours_2", status: "pending", created: 3000 }), {
+        status: 200,
+      })) as unknown as typeof fetch;
+    await processTicketRefunds(env.DB, paymentEnv, 5, again);
+    await charge("evt_total_with_ours", 3000, 19500, true);
+    expect(await read()).toMatchObject({ status: "refunded", refundedAmount: 19500 });
+    await failed("evt_failed_ours_2", 3100, "re_ours_2", 3000, 17500);
+    expect(await read()).toMatchObject({ status: "paid", refundedAmount: 2000 });
   });
 
   it("returns a payment made on a page for an earlier price and leaves the ticket to be paid", async () => {

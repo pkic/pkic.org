@@ -142,8 +142,8 @@ export function prepareCompleteRefund(
  * what it had added to the ticket's refunded amount is taken off again, a
  * ticket it had refunded is paid again, and the row is failed so an organizer
  * can ask once more. Only an amount that was counted is taken off: a refund
- * of ours that was counted, or one issued at the provider before the last
- * total the provider reported. A refund issued at the provider has no row yet
+ * of ours that was counted, or one issued at the provider no later than the
+ * last total it reported, when that total is large enough to hold it. A refund issued at the provider has no row yet
  * and gets one, which is what makes a second delivery of the failure change
  * nothing. `at` is the provider's time of the failure, so an older total that
  * arrives afterwards is not applied over it.
@@ -172,7 +172,8 @@ export function prepareFailRefund(
          WHERE id = ? AND payment_intent_id = ?
            AND NOT EXISTS (${known} AND refund.failed_at IS NOT NULL)
            AND (EXISTS (${known} AND refund.counted = 1)
-                OR (NOT EXISTS (${known}) AND ? IS NOT NULL AND refunds_seen_at IS NOT NULL AND ? <= refunds_seen_at))`,
+                OR (NOT EXISTS (${known}) AND ? IS NOT NULL AND refunds_seen_at IS NOT NULL AND ? <= refunds_seen_at
+                    AND refunded_amount >= ?))`,
       )
       .bind(
         input.amount,
@@ -184,6 +185,7 @@ export function prepareFailRefund(
         input.providerRefundId,
         input.refundCreatedAt ?? null,
         input.refundCreatedAt ?? null,
+        input.amount,
       ),
     db
       .prepare(
@@ -220,13 +222,35 @@ export function prepareFailRefund(
  * Applies the provider's own total of what a payment has returned. The total
  * is the truth as of `at`, so one older than a refund fact already applied is
  * left out: events can arrive in any order.
+ *
+ * A refund of ours is part of the total only on evidence: the provider had
+ * made it by then, and the total grew by at least its amount over what was
+ * already accounted for. Time alone does not tell, because the provider's
+ * times are whole seconds and a total can be reported in the same second,
+ * just before the refund.
  */
 export function prepareRefundedTotal(
   db: DatabaseLike,
   input: { ticketId: string; paymentIntentId: string; refunded: number; full: boolean; at: string },
   now: string,
 ): StatementLike[] {
+  const full = input.full ? 1 : 0;
   return [
+    // Judged against the ticket as it is before the total is applied to it.
+    db
+      .prepare(
+        `UPDATE registration_ticket_refunds SET counted = 1,
+           completed_at = CASE WHEN ? = 1 THEN COALESCE(completed_at, ?) ELSE completed_at END
+         WHERE payment_intent_id = ? AND submitted_at IS NOT NULL AND failed_at IS NULL AND counted = 0
+           AND provider_created_at IS NOT NULL AND provider_created_at <= ?
+           AND EXISTS (SELECT 1 FROM registration_tickets ticket
+                       WHERE ticket.id = registration_ticket_refunds.ticket_id AND ticket.id = ?
+                         AND ticket.payment_intent_id = registration_ticket_refunds.payment_intent_id
+                         AND (ticket.refunds_seen_at IS NULL OR ticket.refunds_seen_at <= ?)
+                         AND (CASE WHEN ? = 1 THEN ticket.amount ELSE MIN(ticket.amount, ?) END)
+                             - ticket.refunded_amount >= registration_ticket_refunds.amount)`,
+      )
+      .bind(full, now, input.paymentIntentId, input.at, input.ticketId, input.at, full, input.refunded),
     db
       .prepare(
         `UPDATE registration_tickets SET refunded_amount = CASE WHEN ? = 1 THEN amount ELSE MIN(amount, ?) END,
@@ -234,29 +258,7 @@ export function prepareRefundedTotal(
            refunds_seen_at = ?, revision = revision + 1, updated_at = ?
          WHERE id = ? AND payment_intent_id = ? AND (refunds_seen_at IS NULL OR refunds_seen_at <= ?)`,
       )
-      .bind(
-        input.full ? 1 : 0,
-        input.refunded,
-        input.full ? 1 : 0,
-        input.at,
-        now,
-        input.ticketId,
-        input.paymentIntentId,
-        input.at,
-      ),
-    // A refund of ours is part of the total just applied only if the provider had made it by then:
-    // a total reported earlier, arriving late, says nothing about a refund made after it.
-    db
-      .prepare(
-        `UPDATE registration_ticket_refunds SET counted = 1,
-           completed_at = CASE WHEN ? = 1 THEN COALESCE(completed_at, ?) ELSE completed_at END
-         WHERE payment_intent_id = ? AND submitted_at IS NOT NULL AND failed_at IS NULL
-           AND provider_created_at IS NOT NULL AND provider_created_at <= ?
-           AND EXISTS (SELECT 1 FROM registration_tickets ticket
-                       WHERE ticket.id = registration_ticket_refunds.ticket_id AND ticket.payment_intent_id = ?
-                         AND ticket.refunds_seen_at = ?)`,
-      )
-      .bind(input.full ? 1 : 0, now, input.paymentIntentId, input.at, input.paymentIntentId, input.at),
+      .bind(full, input.refunded, full, input.at, now, input.ticketId, input.paymentIntentId, input.at),
   ];
 }
 
