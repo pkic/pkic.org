@@ -21,18 +21,11 @@ import { patternSections } from "./sections-patterns";
 import { agendaPickerSections } from "./sections-agenda-picker";
 import { eventParticipationSections } from "./sections-event-participation";
 import { speakerProfileReviewSections } from "./sections-speaker-profile-review";
-import { eventScreenSections } from "./sections-event-screens";
-import { eventScreenStaffSections } from "./sections-event-screens-staff";
-import { eventScreenMonitorSections } from "./sections-event-screens-monitor";
-import { studioOnScreenSections } from "./sections-studio-on-screen";
-import { studioQuestionSections } from "./sections-studio-questions";
-import { studioTimerSections } from "./sections-studio-timers";
-import { eventScreenBrowserSections } from "./sections-event-screens-browser";
-import { stageDisplaySections } from "./sections-stage-display";
 
-function main(): void {
+async function main(): Promise<void> {
   const mount = document.getElementById("pk-preview");
   if (!mount) return;
+  const { liveProductionSections } = await import("./sections-live-production");
   const sections = [
     ...basicSections,
     ...dataSections,
@@ -47,14 +40,7 @@ function main(): void {
     badgeLabelDeskSection,
     scannerPresentationSection,
     scannerDestinationsSection,
-    ...eventScreenSections,
-    ...eventScreenStaffSections,
-    ...eventScreenMonitorSections,
-    ...studioOnScreenSections,
-    ...studioQuestionSections,
-    ...studioTimerSections,
-    ...eventScreenBrowserSections,
-    ...stageDisplaySections,
+    ...liveProductionSections,
   ];
   // `?only=<id>` renders one section alone, for a tight screenshot of one control.
   const only = new URLSearchParams(window.location.search).get("only");
@@ -62,4 +48,4 @@ function main(): void {
   render(<PreviewShell sections={shown} />, mount);
 }
 
-main();
+void main();

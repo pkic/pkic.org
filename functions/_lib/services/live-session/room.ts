@@ -2,7 +2,7 @@ import { AppError } from "../../errors";
 import { LiveRoomEngagement } from "./room-engagement";
 import { LiveRoomAnswers } from "./room-answers";
 import { LiveRoomAnswerStore } from "./room-answer-store";
-import { advanceLiveStage } from "./room-stage-next";
+import { operateLiveDesk, type LiveDesk } from "./room-desk";
 import { LiveRoomGraphics } from "./room-graphics";
 import { LiveRoomGraphicBasis } from "./room-graphic-basis";
 import { LiveRoomOnScreenLists } from "./room-on-screen-lists";
@@ -39,7 +39,7 @@ import { liveRoomRefusalCloseCode } from "../../../../assets/shared/schemas/live
 import { nowIso } from "../../utils/time";
 import { LIVE_ROOM_ADMISSION_HEADER, liveRoomAdmissionSchema, type LiveRoomParticipant } from "./room-admission";
 import { LiveRoomBroadcast } from "./room-broadcast";
-import { LiveRoomControls, type LiveControlOutcome, type LiveDeskCommand, type LiveRefusal } from "./room-controls";
+import { LiveRoomControls, type LiveControlOutcome, type LiveRefusal } from "./room-controls";
 import { LiveRoomTimers } from "./room-timers";
 import { LivePollStore } from "./room-poll-store";
 import { LivePreparedQuestionStore } from "./room-prepared-question-store";
@@ -56,7 +56,6 @@ import { LiveRoomAddedCredits } from "./room-added-credits";
 import { refreshLiveCreditCopies } from "./room-credit-refresh";
 
 type Handled = LiveRefusal | void;
-type Actor = { userId: string; name: string };
 const REFUSALS = {
   closed: { code: "LIVE_ROOM_CLOSED", message: "Questions and reactions open shortly before the session starts." },
   readOnly: { code: "LIVE_ROOM_READ_ONLY", message: "This connection can only watch the room." },
@@ -95,6 +94,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   private readonly outputs: LiveRoomOutputs;
   private readonly presence: LiveRoomPresence;
   private readonly addedCredits: LiveRoomAddedCredits;
+  private readonly desk: LiveDesk;
   private readonly engagement: LiveRoomEngagement;
   private readonly onScreenLists: LiveRoomOnScreenLists;
 
@@ -194,6 +194,17 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     this.presence = new LiveRoomPresence(ctx, (sockets) => this.access.eligible(sockets));
     this.addedCredits = new LiveRoomAddedCredits(this.sessionEnv.DB, this.store);
     this.engagement = new LiveRoomEngagement(ctx, this.store, this.polls, this.broadcast, () => this.scheduleCopy());
+    this.desk = {
+      questions: this.questions,
+      preparedQuestions: this.preparedQuestions,
+      polls: this.polls,
+      controls: this.controls,
+      graphics: this.graphics,
+      outputs: this.outputs,
+      addedCredits: this.addedCredits,
+      timers: this.timers,
+      broadcast: this.broadcast,
+    };
     // Keep-alive pings are answered without waking the room.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
@@ -515,87 +526,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
         return;
     }
     if (!operator) return REFUSALS.operatorOnly;
-    return this.apply(await this.operate(actor, session, message));
-  }
-
-  /** The control desk's actions, each one a single synchronous change of the room's storage. */
-  private async operate(actor: Actor, session: LiveRoomSession, message: LiveDeskCommand): Promise<LiveControlOutcome> {
-    const at = nowIso();
-    switch (message.type) {
-      case "question.rewrite":
-        return this.questions.rewrite(actor, message.questionId, message.text, at);
-      case "poll.save":
-        return this.polls.save(actor, message.pollId, message.draft, at, message.discardRemovedAnswers ?? false);
-      case "poll.delete":
-        return this.polls.remove(actor, message.pollId, at);
-      case "poll.status":
-        return this.polls.setStatus(actor, message.pollId, message.status, at);
-      case "question.prepare":
-        return this.preparedQuestions.prepare(actor, session, message, at);
-      case "question.prepared.delete":
-        return this.preparedQuestions.remove(actor, session, message.preparedId, at);
-      case "question.prepared.release":
-        return this.preparedQuestions.releaseNow(actor, session, message.preparedId, at);
-      case "question.prepared.window":
-        return this.preparedQuestions.setWindow(actor, session, { from: message.from, until: message.until }, at);
-      case "stage.question":
-        return this.controls.putQuestionOnStage(actor, message.questionId, at);
-      case "stage.lowerThird":
-        return this.controls.showLowerThird(actor, session, message.creditKey, at, message.motion);
-      case "stage.panelists":
-        return this.controls.setPanelists(actor, message.panelists, at);
-      case "stage.schedule":
-        return this.graphics.setSchedule(actor, message.schedule, at);
-      case "stage.ticker":
-        return this.graphics.setTicker(actor, message.ticker, at);
-      case "stage.set":
-        return this.graphics.setStage(actor, session, message, at);
-      case "aux.set":
-        return this.graphics.setAux(actor, session, message, at);
-      case "preview.set":
-        return this.graphics.setPreview(actor, session, message, at);
-      case "preview.take":
-        return this.graphics.takePreview(actor, session, at);
-      case "speaker.message":
-      case "stage.display.settings":
-        return this.outputs.setStageDisplay(actor, message, at);
-      case "screen.sync":
-        return this.outputs.setScreenSync(actor, message.output, message.sync, at);
-      case "program.clear":
-        return this.controls.clearProgram(actor, at);
-      case "program.restore":
-        return this.controls.restoreProgram(actor, message.snapshotId, at);
-      case "credit.add":
-        return this.addedCredits.add(actor, message.person, at);
-      case "credit.remove":
-        return this.addedCredits.remove(actor, message.creditKey, at);
-      case "stage.poll":
-        return this.controls.showPoll(actor, message.pollId, at);
-      case "stage.next":
-        return advanceLiveStage(this.controls, this.polls, this.broadcast, actor, session, message.view, at);
-      case "queue.add":
-        return this.controls.enqueue(actor, session, message.view, message.itemId, at);
-      case "queue.remove":
-        return this.controls.dequeue(actor, message.view, message.itemId, at);
-      case "queue.move":
-        return this.controls.move(actor, message.view, message.itemId, message.direction, at);
-      case "overlay.mode":
-        return this.controls.overlayMode(actor, message.mode, at);
-      case "timer.add":
-        return this.timers.add(actor, session, message.timer, Date.now(), at);
-      case "timer.remove":
-        return this.timers.remove(actor, session, message.timerId, at);
-      case "timer.adjust":
-        return this.timers.adjust(actor, session, message.timerId, message.deltaSeconds, Date.now(), at);
-      case "stage.timer":
-        return this.controls.setTimer(actor, session, message.timer, message.visible, at);
-      case "timer.control":
-        return this.timers.control(actor, session, message.timerId, message.action, Date.now(), at);
-      case "timer.configure":
-        return this.timers.configure(actor, session, message.timerId, message.settings, Date.now(), at);
-      case "timer.edit":
-        return this.timers.edit(actor, session, message.timerId, message.edit, Date.now(), at);
-    }
+    return this.apply(await operateLiveDesk(this.desk, actor, session, message));
   }
 
   private async apply(outcome: LiveControlOutcome): Promise<Handled> {

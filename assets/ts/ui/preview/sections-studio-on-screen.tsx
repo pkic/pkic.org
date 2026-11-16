@@ -8,26 +8,11 @@
 import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { PreviewSection } from "./PreviewShell";
-import {
-  EMPTY_LIVE_AUX_COMPOSITION,
-  EMPTY_LIVE_OUTPUTS,
-  type LiveStage,
-} from "../../../shared/schemas/live-session-room";
+import type { LiveStage } from "../../../shared/schemas/live-session-room";
 import { DEFAULT_LIVE_SCREEN_SYNC } from "../../../shared/schemas/live-screen-sync";
-import {
-  LIVE_OVERLAY_DEFAULT_POSITIONS,
-  LIVE_OVERLAY_PRESET_LAYOUTS,
-} from "../../../shared/live-overlay-layout-presets";
-import {
-  LIVE_OVERLAY_ELEMENTS,
-  liveOverlayPixelBox,
-  type LiveOverlayLayout,
-  type LiveOverlayLayoutElements,
-} from "../../../shared/schemas/live-overlay-layout";
+import { LIVE_OVERLAY_DEFAULT_POSITIONS } from "../../../shared/live-overlay-layout-presets";
 import { OverlayLayoutEditor } from "../../member-flows/portal/sections/events/detail/settings/live-layouts/OverlayLayoutEditor";
-import { ScreenView } from "../../event-screens/ScreenApp";
 import { LiveReactionBar } from "../../live-session/LiveReactionBar";
-import { LiveOverlayPresentation } from "../../live-session/LiveOverlayPresentation";
 import type { LiveRoomState } from "../../live-session/live-room-state";
 import { OutputTargetControl } from "../../member-flows/portal/sections/events/detail/live/OutputTargetControl";
 import { TransitionControl } from "../../member-flows/portal/sections/events/detail/live/studio/StudioSwitcher";
@@ -36,11 +21,10 @@ import { GraphicsPanel } from "../../member-flows/portal/sections/events/detail/
 import { monitorPanelView } from "../../member-flows/portal/sections/events/detail/live/studio/MonitorPanel";
 import { StudioPanelFrame } from "../../member-flows/portal/sections/events/detail/live/studio/StudioPanelFrame";
 import type { StudioPanel } from "../../member-flows/portal/sections/events/detail/live/studio/studio-layout";
-import { sampleOverlayRoom } from "../../member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-sample";
 import "../../member-flows/portal/sections/events/detail/live/studio/StudioGrid.css";
 import "../../member-flows/portal/sections/events/detail/settings/live-layouts/OverlayLayouts.css";
 import { SCREEN_FIXTURE, SCREEN_FIXTURE_NOW } from "./event-screens-fixtures";
-import "./event-screens-preview.css";
+import { LivestreamOverlay, presetWith, ProjectorScreen, QA_LAYOUT, ROOM, roomWith } from "./studio-on-screen-fixtures";
 
 const noCommand = () => undefined;
 const noHandlers = {
@@ -51,7 +35,6 @@ const noHandlers = {
   onLostPointerCapture: noCommand,
 };
 
-const ROOM = sampleOverlayRoom(SCREEN_FIXTURE_NOW);
 const LISTS: Pick<LiveStage, "topQuestions" | "chatFeed"> = {
   topQuestions: {
     config: { count: 3 },
@@ -103,12 +86,6 @@ const LISTS: Pick<LiveStage, "topQuestions" | "chatFeed"> = {
   },
 };
 
-/**
- * An organizer's layout for the room's projector during Q&A: top questions
- * large on the left, reactions up the right, every other element hidden. It
- * is sized in the event's layout settings like any other card.
- */
-const FULL_FRAME = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
 /** A busy chat: short greetings between messages longer than the board's three lines. */
 const CHAT_MIXED: LiveStage["chatFeed"] = {
   config: { count: 6, delaySeconds: 10 },
@@ -138,27 +115,6 @@ const CHAT_MIXED: LiveStage["chatFeed"] = {
   ],
 };
 
-const QA_ELEMENTS = Object.fromEntries(
-  LIVE_OVERLAY_ELEMENTS.map((element) => [
-    element,
-    { ...FULL_FRAME[element], visible: element === "topQuestions" || element === "reactions" },
-  ]),
-) as LiveOverlayLayoutElements;
-QA_ELEMENTS.topQuestions = {
-  visible: true,
-  shared: false,
-  ...liveOverlayPixelBox(0, 0, 1920, 1080, { horizontal: "center", vertical: "middle" }),
-};
-const QA_LAYOUT: LiveOverlayLayout = {
-  slug: "projector-qa",
-  name: "Projector Q&A",
-  preset: "full-frame",
-  builtIn: false,
-  saved: true,
-  elements: QA_ELEMENTS,
-  updatedAt: "2026-11-30T09:00:00.000Z",
-};
-
 const QUESTIONS_FIVE = [
   ...LISTS.topQuestions!.questions,
   {
@@ -175,45 +131,6 @@ const QUESTIONS_FIVE = [
   },
 ];
 
-/** The room with only the audience graphics on: on the projector's own composition, and on Program. */
-function roomWith(projector: Partial<LiveStage>, program: Partial<LiveStage> = {}): LiveRoomState {
-  return {
-    ...ROOM,
-    overlayLayouts: [{ slug: QA_LAYOUT.slug, name: QA_LAYOUT.name, elements: QA_LAYOUT.elements }],
-    stage: { ...EMPTY_LIVE_AUX_COMPOSITION, ...program },
-    outputs: { ...EMPTY_LIVE_OUTPUTS, projector: { ...EMPTY_LIVE_AUX_COMPOSITION, ...projector } },
-  };
-}
-
-/** A projector screen at the venue, drawn through the screen's own display code. */
-function ProjectorScreen({ state, layout = null }: { state: LiveRoomState; layout?: string | null }) {
-  return (
-    <div class="pk-preview__screen">
-      <ScreenView
-        screenId={SCREEN_FIXTURE.screenId}
-        now={SCREEN_FIXTURE_NOW}
-        display={{
-          kind: "output",
-          output: "projector",
-          layout,
-          roomId: SCREEN_FIXTURE.roomId,
-          state,
-          marker: null,
-        }}
-      />
-    </div>
-  );
-}
-
-/** The livestream overlay over a stand-in for the camera, as the production software composes it. */
-function LivestreamOverlay({ state, elements }: { state: LiveRoomState; elements?: LiveOverlayLayoutElements }) {
-  return (
-    <div class="pk-preview__screen pk-preview__camera">
-      <LiveOverlayPresentation view="program" projection={state} elements={elements} broadcast />
-    </div>
-  );
-}
-
 /** Viewers reacting all the time, so a still picture catches reactions on their way up. */
 function Reacting({ state, children }: { state: LiveRoomState; children: (state: LiveRoomState) => JSX.Element }) {
   const [sequence, setSequence] = useState(1);
@@ -228,41 +145,6 @@ function Reacting({ state, children }: { state: LiveRoomState; children: (state:
   ][sequence % 3]!;
   return children({ ...state, burst: { sequence, counts } });
 }
-
-/** A layout preset with only the named elements on. */
-function presetWith(
-  preset: keyof typeof LIVE_OVERLAY_PRESET_LAYOUTS,
-  shown: readonly (typeof LIVE_OVERLAY_ELEMENTS)[number][],
-): LiveOverlayLayoutElements {
-  const elements = LIVE_OVERLAY_PRESET_LAYOUTS[preset].elements;
-  return Object.fromEntries(
-    LIVE_OVERLAY_ELEMENTS.map((element) => [element, { ...elements[element], visible: shown.includes(element) }]),
-  ) as LiveOverlayLayoutElements;
-}
-
-/** The sample session with these speakers, the moderator last as the room lists them. */
-function sessionWith(count: number): LiveRoomState {
-  const [first, second, moderator] = ROOM.session.credits;
-  const extra = ["Avery Placeholder", "Jordan Sample", "Riley Example"].map((name, index) => ({
-    ...second!,
-    key: `sample:extra-${index}`,
-    name,
-    identity: { title: ["CISO", "Cryptography lead", "Standards editor"][index]!, organization: "Example Corp" },
-  }));
-  const speakers = [first!, second!, ...extra].slice(0, count - 1);
-  return {
-    ...ROOM,
-    session: { ...ROOM.session, credits: count === 2 ? [first!, second!] : [...speakers, moderator!] },
-  };
-}
-
-const NAMED_QUESTION = {
-  ...ROOM.stage.question!,
-  text: "Is hybrid signing worth the extra certificate size on constrained devices?",
-  authorName: "Bea Attendee",
-  addressedTo: "sample:panelist",
-};
-const ON_POLL: Partial<LiveStage> = { poll: ROOM.stage.poll };
 
 const LIVE_PANEL: StudioPanel = { id: "live-1", type: "monitor", x: 0, y: 0, w: 6, h: 9, outputs: ["livestream"] };
 const MONITOR_SOURCES = {
@@ -498,101 +380,6 @@ export const studioOnScreenSections: PreviewSection[] = [
     ),
   },
   {
-    id: "onscreen-lower-third-identities",
-    title: "Lower third for a speaker with two identities",
-    note: "The title line rolls up to each identity in turn; the conference stripe underlines the name bar.",
-    render: () => <LivestreamOverlay state={roomWith({}, { lowerThird: ROOM.session.credits[0]! })} />,
-  },
-  {
-    id: "onscreen-lower-third-name-only",
-    title: "Lower third for a speaker with no title",
-    note: "With no title or organization, the name bar shows alone; no empty field sits under it.",
-    render: () => (
-      <LivestreamOverlay
-        state={roomWith(
-          {},
-          {
-            lowerThird: {
-              ...ROOM.session.credits[0]!,
-              identity: { title: null, organization: null },
-              additionalIdentities: [],
-            },
-          },
-        )}
-      />
-    ),
-  },
-  {
-    id: "onscreen-panelists-identities",
-    title: "Panelists with a speaker's two identities",
-    note: "A panelist with more than one identity rolls through them, as the lower third does.",
-    render: () => <LivestreamOverlay state={roomWith({}, { panelists: { layout: "panel" } })} />,
-  },
-  {
-    id: "onscreen-panelists-two",
-    title: "Two speakers on the board",
-    note: "Two people sit large side by side; the same board fills the projector and the stream.",
-    render: () => (
-      <LivestreamOverlay
-        state={{ ...sessionWith(2), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
-        elements={presetWith("full-frame", ["panelists"])}
-      />
-    ),
-  },
-  {
-    id: "onscreen-panelists-six",
-    title: "A full panel of six, moderator set apart",
-    note: "Five speakers and the moderator in one row; the moderator sits last, after a rule.",
-    render: () => (
-      <LivestreamOverlay
-        state={{ ...sessionWith(6), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
-        elements={presetWith("full-frame", ["panelists"])}
-      />
-    ),
-  },
-  {
-    id: "onscreen-panelists-side-by-side",
-    title: "Panelists beside the camera",
-    note: "In the Graphics on the left column the board turns tall and lists the people one under the other.",
-    render: () => (
-      <LivestreamOverlay
-        state={{ ...sessionWith(6), stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" } } }}
-        elements={presetWith("side-by-side", ["panelists", "lowerThird"])}
-      />
-    ),
-  },
-  {
-    id: "onscreen-question-poll-board",
-    title: "Question on the board",
-    note: "In Full frame a board covers the whole frame; one board shows at a time.",
-    render: () => (
-      <LivestreamOverlay
-        state={roomWith({}, { question: NAMED_QUESTION })}
-        elements={presetWith("full-frame", ["question"])}
-      />
-    ),
-  },
-  {
-    id: "onscreen-poll-side-by-side",
-    title: "Poll beside the camera",
-    note: "The same poll board, scaled into the Graphics on the left column.",
-    render: () => <LivestreamOverlay state={roomWith({}, ON_POLL)} elements={presetWith("side-by-side", ["poll"])} />,
-  },
-  {
-    id: "onscreen-panel-question",
-    title: "A question over the panel",
-    note: "The Panel layout: the question in the upper half, the panelists in the lower half, edge to edge.",
-    render: () => (
-      <LivestreamOverlay
-        state={{
-          ...sessionWith(4),
-          stage: { ...EMPTY_LIVE_AUX_COMPOSITION, panelists: { layout: "panel" }, question: NAMED_QUESTION },
-        }}
-        elements={presetWith("panel", ["panelists", "question"])}
-      />
-    ),
-  },
-  {
     id: "studio-speakers-identities",
     title: "Speakers in the studio, one with two identities",
     note: "The row stays still: it shows the first identity and counts the rest.",
@@ -605,7 +392,7 @@ export const studioOnScreenSections: PreviewSection[] = [
     title: "Speakers in a studio panel, one added for this session",
     note: "One row per person like every studio list: PVW, PGM and the menu at the end, which holds the screens and Remove for someone added.",
     render: () => (
-      <div style={{ maxInlineSize: "42rem" }}>
+      <div class="pk-preview__studio-panel">
         <LiveSpeakerCards
           targets={{
             state: {
