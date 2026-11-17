@@ -176,6 +176,33 @@ describe("account sign-up", () => {
     );
   });
 
+  it("names the registration the link is for, alike for a new address and one that already signs in", async () => {
+    await seedEventAndAdmin(env.DB);
+    await env.DB.prepare("UPDATE events SET visibility = 'public' WHERE slug = 'pqc-2026'").run();
+    const returnPath = "/events/pqc-2026/register";
+    for (const email of ["ada@organization.example", "admin@pkic.org"]) {
+      expect((await call("/api/v1/auth/sign-up", { email, returnPath })).status, email).toBe(200);
+      const [outbox] = await queryAll<{ template_key: string; payload_json: string }>(
+        env.DB,
+        "SELECT template_key, payload_json FROM email_outbox ORDER BY rowid DESC LIMIT 1",
+      );
+      expect(outbox!.template_key, email).toBe("user_sign_up_link");
+      expect(JSON.parse(outbox!.payload_json), email).toMatchObject({
+        registration: true,
+        eventName: "PQC Conference 2026",
+      });
+    }
+  });
+
+  it("keeps an event that is not public out of the link's email", async () => {
+    await seedEventAndAdmin(env.DB);
+    const returnPath = "/events/pqc-2026/register";
+    expect((await call("/api/v1/auth/sign-up", { email: "ada@organization.example", returnPath })).status).toBe(200);
+    const payload = JSON.parse(await storedPayload());
+    expect(payload.eventName).toBeUndefined();
+    expect(payload.registration).toBeUndefined();
+  });
+
   it("holds the address to the shared work-email rule", async () => {
     expect((await call("/api/v1/auth/sign-up", { email: "ada@gmail.com" })).status).toBe(400);
     expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);

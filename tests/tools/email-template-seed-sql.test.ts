@@ -69,6 +69,7 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "sponsorship-new-inquiry",
   "user_email_verification",
   "user_magic_link",
+  "user_sign_up_link",
   "wg-chair-membership-digest",
 ] as const;
 

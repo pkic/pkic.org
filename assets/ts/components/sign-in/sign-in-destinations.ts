@@ -10,24 +10,14 @@
  * card, and its portal route, for an event without a public page. Both return
  * paths name the same flow.
  */
-import { parseEventFlowPath, type EventFlowKind } from "../../../shared/event-flow-paths";
-import { MEMBERSHIP_JOIN_PATH } from "../../../shared/membership-join-path";
+import { signInEventSlug, signInPurpose } from "../../../shared/sign-in-purpose";
 import type { SignInDestination } from "./sign-in-destination";
 
 const RETURNING_OR_NEW = "Been here before? Sign in. New here? Start with your email below.";
 
-/** The event a return path's public flow page or portal route belongs to, for the given flow. */
-function eventSlugFor(returnPath: string, flow: EventFlowKind, portalSuffix: string): string | null {
-  const path = returnPath.split("?", 1)[0] ?? "";
-  const page = parseEventFlowPath(path);
-  if (page) return page.flow === flow ? page.eventSlug : null;
-  const portal = new RegExp(`^/events/([^/?]+)/${portalSuffix}/?$`).exec(path);
-  return portal?.[1] ? decodeURIComponent(portal[1]) : null;
-}
-
 const SIGN_IN_DESTINATIONS: readonly SignInDestination[] = [
   {
-    matches: (returnPath) => eventSlugFor(returnPath, "registration", "register") !== null,
+    matches: (returnPath) => signInPurpose(returnPath)?.flow === "registration",
     title: "Register for this event",
     lede: RETURNING_OR_NEW,
     startHint: "Start with your email. We confirm it is yours and take you straight to registration.",
@@ -35,13 +25,13 @@ const SIGN_IN_DESTINATIONS: readonly SignInDestination[] = [
     emailFlow: "registration",
     load: async (returnPath) => {
       const registration = await import("../events/registration-sign-in");
-      const slug = eventSlugFor(returnPath, "registration", "register");
+      const slug = signInEventSlug(returnPath, "registration");
       const name = slug ? await registration.registrationEventName(slug) : null;
       return { Progress: registration.RegistrationProgress, title: name ? `Register for ${name}` : undefined };
     },
   },
   {
-    matches: (returnPath) => eventSlugFor(returnPath, "proposal", "propose") !== null,
+    matches: (returnPath) => signInPurpose(returnPath)?.flow === "proposal",
     title: "Submit a proposal",
     lede: RETURNING_OR_NEW,
     startHint: "Start with your email. We confirm it is yours and take you straight to your proposal.",
@@ -49,7 +39,7 @@ const SIGN_IN_DESTINATIONS: readonly SignInDestination[] = [
     emailFlow: "proposal",
   },
   {
-    matches: (returnPath) => returnPath.split("?", 1)[0] === MEMBERSHIP_JOIN_PATH,
+    matches: (returnPath) => signInPurpose(returnPath)?.flow === "join",
     title: "Join the PKI Consortium",
     lede: RETURNING_OR_NEW,
     startHint: "Start with your email. We confirm it is yours and take you straight to your membership application.",

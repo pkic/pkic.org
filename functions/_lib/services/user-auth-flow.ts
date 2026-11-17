@@ -6,6 +6,8 @@ import { findUserEmailOwner } from "./user-emails";
 import { prepareQueueEmailStatement } from "../email/outbox-queue";
 import type { DatabaseLike } from "../types";
 import { prepareAuditLog } from "./audit";
+import { first } from "../db/queries";
+import { signInPurpose } from "../../../assets/shared/sign-in-purpose";
 
 /**
  * The verify route a sign-in link opens. A return path rides along as `next`
@@ -25,6 +27,34 @@ export function capabilityLinkUrl(baseUrl: string, token: string): string {
   return url.toString();
 }
 
+/** Which message carries a link: the plain sign-in one, or the one that starts an account for a purpose. */
+interface LinkMessage {
+  templateKey: "user_magic_link" | "user_sign_up_link";
+  subject: string;
+  data: Record<string, unknown>;
+}
+
+const SIGN_IN_MESSAGE: LinkMessage = {
+  templateKey: "user_magic_link",
+  subject: "Your PKI Consortium sign-in link",
+  data: {},
+};
+
+/**
+ * The message that starts an account names what the person came for, read from where the link returns them.
+ * An event is named only when it is public, so the email repeats nothing a stranger could not read anyway.
+ */
+async function signUpMessage(db: DatabaseLike, returnPath: string | undefined): Promise<LinkMessage> {
+  const purpose = signInPurpose(returnPath);
+  const message = { templateKey: "user_sign_up_link" as const, subject: "Confirm your email" };
+  if (!purpose) return { ...message, data: {} };
+  if (purpose.flow === "join") return { ...message, data: { join: true } };
+  const event = await first<{ name: string }>(db, "SELECT name FROM events WHERE slug = ? AND visibility = 'public'", [
+    purpose.eventSlug,
+  ]);
+  return { ...message, data: event ? { [purpose.flow]: true, eventName: event.name } : {} };
+}
+
 export async function requestUserSignInLink(
   db: DatabaseLike,
   payload: {
@@ -35,18 +65,20 @@ export async function requestUserSignInLink(
     magicLinkBaseUrl: string;
     signingSecret: string;
   },
+  message: LinkMessage = SIGN_IN_MESSAGE,
 ): Promise<{ outboxId: string | null; identityFound: boolean }> {
   const magic = await queueUserSignInCapability({ db, ...payload });
   if (!magic) return { outboxId: null, identityFound: false };
 
   const email = prepareQueueEmailStatement(db, {
-    templateKey: "user_magic_link",
+    templateKey: message.templateKey,
     recipientEmail: magic.recipientEmail,
     recipientUserId: magic.identity.id,
     eventId: null,
     messageType: "transactional",
-    subject: "Your PKI Consortium sign-in link",
+    subject: message.subject,
     data: {
+      ...message.data,
       email: magic.recipientEmail,
       magicLinkUrl: capabilityLinkUrl(payload.magicLinkBaseUrl, magic.queuedToken),
       expiresInMinutes: payload.ttlMinutes,
@@ -78,9 +110,10 @@ export async function requestUserSignInLink(
  */
 export async function requestUserSignUpLink(
   db: DatabaseLike,
-  payload: Parameters<typeof requestUserSignInLink>[1],
+  payload: Parameters<typeof requestUserSignInLink>[1] & { returnPath?: string },
 ): Promise<{ outboxId: string | null }> {
-  const signIn = await requestUserSignInLink(db, payload);
+  const message = await signUpMessage(db, payload.returnPath);
+  const signIn = await requestUserSignInLink(db, payload, message);
   if (signIn.identityFound) return { outboxId: signIn.outboxId };
 
   const recipientEmail = normalizeEmail(payload.email);
@@ -99,13 +132,14 @@ export async function requestUserSignUpLink(
     userAgentHash: payload.userAgentHash,
   });
   const email = prepareQueueEmailStatement(db, {
-    templateKey: "user_magic_link",
+    templateKey: message.templateKey,
     recipientEmail,
     recipientUserId: null,
     eventId: null,
     messageType: "transactional",
-    subject: "Your PKI Consortium sign-in link",
+    subject: message.subject,
     data: {
+      ...message.data,
       email: recipientEmail,
       magicLinkUrl: capabilityLinkUrl(payload.magicLinkBaseUrl, capability.queuedToken),
       expiresInMinutes: payload.ttlMinutes,

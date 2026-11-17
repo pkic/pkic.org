@@ -31,6 +31,17 @@ Speaker participation does not accept the proposal or guarantee inclusion in the
     messageType: "transactional",
   },
   {
+    // Starting an account from a flow. An address that already has an account gets this same message, so it
+    // never says which addresses have one; the link signs that account in instead.
+    key: "user_sign_up_link",
+    subjectTemplate:
+      "{{#if registration}}Confirm your email to register for {{eventName}}{{else}}{{#if proposal}}Confirm your email to submit a proposal for {{eventName}}{{else}}{{#if join}}Confirm your email to join the PKI Consortium{{else}}Confirm your email for the PKI Consortium{{/if}}{{/if}}{{/if}}",
+    content:
+      'Confirm that **{{email}}** is yours to {{#if registration}}register for **{{eventName}}**{{else}}{{#if proposal}}submit a proposal for **{{eventName}}**{{else}}{{#if join}}join the **PKI Consortium**{{else}}continue to the **PKI Consortium portal**{{/if}}{{/if}}{{/if}}.\n\n<div class="cta-navy"><a href="{{magicLinkUrl}}">Confirm my email &rarr;</a></div>\n\nThe link creates your PKI Consortium account, or signs you in if you already have one, and takes you straight back to {{#if registration}}your registration{{else}}{{#if proposal}}your proposal{{else}}{{#if join}}your membership application{{else}}the portal{{/if}}{{/if}}{{/if}}.\n\n<div class="notice notice-warning">&#9888;&#65039; <strong>Security notice</strong><br>&bull; This link is valid for <strong>{{expiresInMinutes}} minutes</strong> only.<br>&bull; It can only be used <strong>once</strong> and is tied to <code>{{email}}</code>.<br>&bull; If you did not request this link, ignore this email.</div>',
+    contentType: "markdown",
+    messageType: "transactional",
+  },
+  {
     key: "user_email_verification",
     subjectTemplate: "Verify your email address",
     content:

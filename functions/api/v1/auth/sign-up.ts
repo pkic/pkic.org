@@ -17,6 +17,7 @@ export const UserAuthSignUp = openApiRoute(userSignUpRouteSchema, async (c: Admi
     ttlMinutes: http.magicLinkTtlMinutes,
     signingSecret: http.secret,
     magicLinkBaseUrl: portalVerifyLinkBase(http.appBaseUrl, data.body.returnPath),
+    returnPath: data.body.returnPath,
   });
   if (result.outboxId) c.executionCtx.waitUntil(processOutboxByIdBackground(http.db, c.env, result.outboxId));
   return json({ success: true });
