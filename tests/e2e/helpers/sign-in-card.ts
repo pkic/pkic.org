@@ -4,7 +4,9 @@ import { userAuthVerifySchema, userSignUpRequestSchema } from "../../../assets/s
 import { clientIpForIdentity } from "./portal-auth";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
 
+/** A returning person gets a sign-in link; starting an account sends the email that confirms the address. */
 const SIGN_IN_LINK_SUBJECT = "sign-in link";
+const SIGN_UP_LINK_SUBJECT = "Confirm your email";
 
 function requestTo(page: Page, path: string) {
   return page.waitForResponse(
@@ -70,7 +72,9 @@ export async function signInThroughCard(
     });
     await expect(card.getByText(copy.sent(email), { exact: true })).toBeVisible();
   }
-  const message = await waitForCapturedEmail(email, SIGN_IN_LINK_SUBJECT, { since });
+  const message = await waitForCapturedEmail(email, options.returning ? SIGN_IN_LINK_SUBJECT : SIGN_UP_LINK_SUBJECT, {
+    since,
+  });
   // The link opens as a fresh document, the way a mail client opens it.
   await page.goto("about:blank");
   const verified = requestTo(page, "/api/v1/auth/verify-link");
@@ -143,7 +147,7 @@ export async function signInRequestContext(
   // The local D1 binding occasionally drops its connection under load; the refused start sent no mail, so asking once more is safe.
   if (started.status() === 500 && (await started.text()).includes("Network connection lost")) started = await start();
   expect(started.status(), await started.text()).toBe(200);
-  const message = await waitForCapturedEmail(email, SIGN_IN_LINK_SUBJECT, { since });
+  const message = await waitForCapturedEmail(email, SIGN_UP_LINK_SUBJECT, { since });
   const link = new URL(extractEmailUrl(message, "/portal/#/verify"));
   const token = new URLSearchParams(link.hash.slice(link.hash.indexOf("?") + 1)).get("token");
   expect(token, "the emailed link must carry a sign-in token").toBeTruthy();
