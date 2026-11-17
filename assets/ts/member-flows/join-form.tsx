@@ -57,7 +57,8 @@ import { installJoinApplicationValidation } from "./join-application-validation"
 
 const API_BASE = "/api/v1";
 
-type JoinApplicationContext = Extract<z.infer<typeof memberJoinVerifyResponseSchema>, { status: "application_ready" }>;
+type MemberJoinVerifyResponse = z.infer<typeof memberJoinVerifyResponseSchema>;
+type JoinApplicationContext = Extract<MemberJoinVerifyResponse, { status: "application_ready" }>;
 type MembershipCategory = MemberApplicationFormResponse["categories"][number];
 type JoinApplicantKind = JoinApplicationContext["applicantKind"];
 type MembershipApplicationField = NonNullable<MemberApplicationFormResponse["form"]>["fields"][number];
@@ -109,6 +110,9 @@ async function main(): Promise<void> {
   const organizationInProgressSection = root.querySelector<HTMLElement>(
     "[data-join-organization-application-in-progress]",
   );
+  const representationInProgressSection = root.querySelector<HTMLElement>(
+    "[data-join-representation-application-in-progress]",
+  );
   const categoryContainer = root.querySelector<HTMLElement>("[data-membership-categories]");
   const customFieldsContainer = root.querySelector<HTMLElement>("[data-custom-fields]");
   const signedInSection = root.querySelector<HTMLElement>("[data-join-signed-in]");
@@ -122,7 +126,8 @@ async function main(): Promise<void> {
     !supportSection ||
     !existingMemberSection ||
     !inProgressSection ||
-    !organizationInProgressSection
+    !organizationInProgressSection ||
+    !representationInProgressSection
   )
     return;
 
@@ -156,6 +161,7 @@ async function main(): Promise<void> {
       existingMemberSection,
       inProgressSection,
       organizationInProgressSection,
+      representationInProgressSection,
       supportSection,
       organizationChoiceSection,
       applicationForm,
@@ -316,6 +322,54 @@ async function main(): Promise<void> {
     });
   });
 
+  /** Shows why no application is needed, or who can help, for a path the server has already decided. */
+  const showDecidedPath = (result: MemberJoinVerifyResponse, organizationName?: string | null) => {
+    forgetJoinDraft();
+    if (result.status === "already_member") {
+      showSection(existingMemberSection);
+    } else if (result.status === "organization_access_ready") {
+      showSection(accessSection);
+    } else if (result.status === "application_in_progress") {
+      const statusLink = inProgressSection.querySelector<HTMLAnchorElement>("[data-join-status-link]");
+      if (statusLink) statusLink.href = result.statusPath;
+      showSection(inProgressSection);
+    } else if (result.status === "organization_application_in_progress") {
+      showSection(organizationInProgressSection);
+    } else if (result.status === "representation_application_in_progress") {
+      const name = representationInProgressSection.querySelector<HTMLElement>("[data-join-organization-name]");
+      if (name) name.textContent = organizationName ?? "your organization";
+      showSection(representationInProgressSection);
+    } else {
+      showSection(supportSection);
+    }
+  };
+
+  /** Offers the form for an organization identity only when its application can be sent. */
+  const resolveRepresentationPath = async (identity: SessionActingIdentity, turn: number): Promise<void> => {
+    try {
+      const result = await postJson(
+        `${API_BASE}/members/join/verify`,
+        memberJoinVerifySchema.parse({ identityId: identity.id }),
+        memberJoinVerifyResponseSchema,
+      );
+      if (turn !== chosen) return;
+      if (result.status !== "representation_application_ready")
+        return showDecidedPath(result, identity.organizationName);
+      signedInIdentity = identity;
+      await openApplication(identity, "organization", turn);
+    } catch (error) {
+      if (turn !== chosen) return;
+      showSection(null);
+      setStatus(
+        statusEl,
+        error instanceof ApiClientError && error.status === 401
+          ? "Your session has ended. Refresh the page to sign in again."
+          : "We could not load your membership options right now. Refresh to try again.",
+        true,
+      );
+    }
+  };
+
   /**
    * Asks the server which membership path the signed-in person is on. `selection` is what they chose on
    * the way (an organization, a new one, or continuing as an individual); the path itself is `pathChoice`.
@@ -364,20 +418,7 @@ async function main(): Promise<void> {
         await openApplication(identity, result.applicantKind, turn, recoveryMessage);
         return;
       }
-      forgetJoinDraft();
-      if (result.status === "already_member") {
-        showSection(existingMemberSection);
-      } else if (result.status === "organization_access_ready") {
-        showSection(accessSection);
-      } else if (result.status === "application_in_progress") {
-        const statusLink = inProgressSection.querySelector<HTMLAnchorElement>("[data-join-status-link]");
-        if (statusLink) statusLink.href = result.statusPath;
-        showSection(inProgressSection);
-      } else if (result.status === "organization_application_in_progress") {
-        showSection(organizationInProgressSection);
-      } else {
-        showSection(supportSection);
-      }
+      showDecidedPath(result);
     } catch (error) {
       if (turn !== chosen) return;
       if (
@@ -414,9 +455,8 @@ async function main(): Promise<void> {
     showSection(null);
     if (refusal) return;
     if (identity.organizationId) {
-      signedInIdentity = identity;
       if (applicant) rememberJoinApplicant(applicant.userId);
-      void openApplication(identity, "organization", chosen);
+      void resolveRepresentationPath(identity, chosen);
       return;
     }
     if (!path || !applicant) return;

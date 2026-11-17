@@ -17,6 +17,8 @@ export const memberJoinVerifySchema = z.object({
   unaffiliatedAttestation: z.boolean().default(false),
   organizationId: databaseIdSchema.optional(),
   continueAsIndividual: z.boolean().optional(),
+  /** An organization identity of the signed-in person, who applies as it rather than through their address. */
+  identityId: databaseIdSchema.optional(),
 });
 export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
   z.object({
@@ -46,6 +48,10 @@ export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("application_in_progress"), statusPath: sameOriginPathSchema }),
   /** Someone else's open application already holds the organization domain the address links through. */
   z.object({ status: z.literal("organization_application_in_progress") }),
+  /** Nothing stands in the way of applying as the chosen organization identity. */
+  z.object({ status: z.literal("representation_application_ready") }),
+  /** Someone else's open application is for the chosen identity's organization; its approval admits this representative too. */
+  z.object({ status: z.literal("representation_application_in_progress") }),
 ]);
 
 export const memberJoinVerifyRouteSchema = {
@@ -53,7 +59,7 @@ export const memberJoinVerifyRouteSchema = {
   tags: ["Members"],
   summary: "Resolve a signed-in person's membership path",
   description:
-    "Decides from the signed-in account's proved address whether the person represents an existing member organization, chooses an organization, or continues with a short-lived application capability.",
+    "Decides from the signed-in account's proved address, or from an organization identity it holds, whether the person represents an existing member organization, chooses an organization, may apply as that identity, or continues with a short-lived application capability.",
   request: { body: { content: { "application/json": { schema: memberJoinVerifySchema } }, required: true } },
   responses: {
     ...ok("Membership path decision.", memberJoinVerifyResponseSchema),

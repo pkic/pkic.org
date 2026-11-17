@@ -99,6 +99,18 @@ export function JoinFlow({ documents }: { documents: MembershipDocument[] }) {
           Email the secretariat
         </ButtonLink>
       </section>
+      <section data-join-representation-application-in-progress hidden tabIndex={-1}>
+        <h2>
+          An application for <span data-join-organization-name>your organization</span> is already in progress
+        </h2>
+        <p>
+          You do not need to apply. Once the application is approved, you are admitted automatically as one of the
+          organization&rsquo;s representatives. If you think this is a mistake, contact the secretariat.
+        </p>
+        <ButtonLink href={CONSORTIUM_CONTACT_HREF} external={false}>
+          Email the secretariat
+        </ButtonLink>
+      </section>
       <section data-join-support-required hidden tabIndex={-1}>
         <h2>We need to review this request</h2>
         <p>

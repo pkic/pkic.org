@@ -16,6 +16,8 @@ import { openApiRoute } from "../../../../_lib/openapi/route";
 import { enforceRateLimit } from "../../../../_lib/rate-limit";
 import { getClientIp, requireInternalSecret } from "../../../../_lib/request";
 import { verifyMemberJoin } from "../../../../_lib/services/membership/join/verify";
+import { resolveRepresentationJoinPath } from "../../../../_lib/services/membership/join/representation-path";
+import { AppError } from "../../../../_lib/errors";
 import { normalizeEmail } from "../../../../_lib/validation";
 
 const RATE_LIMIT_NAMESPACE = "membership-join-verify:ip";
@@ -29,6 +31,25 @@ export const MembersJoinVerifyPost = openApiRoute(memberJoinVerifyRouteSchema, a
     key: getClientIp(c.req.raw),
   });
   const email = normalizeEmail(session.identity.email);
+  const { identityId } = data.body;
+  if (identityId) {
+    // Only a representation the session holds now; the address rules were met when it was added.
+    const representation = session.actingIdentities.find((identity) => identity.id === identityId);
+    if (
+      !representation?.organizationId ||
+      data.body.unaffiliatedAttestation ||
+      data.body.organizationId ||
+      data.body.continueAsIndividual
+    )
+      throw new AppError(422, "MEMBERSHIP_CATEGORY_TYPE_MISMATCH", "Choose a representation you hold to apply as.");
+    const result = await resolveRepresentationJoinPath(db, {
+      userId: session.identity.id,
+      email,
+      organizationId: representation.organizationId,
+      signingSecret: requireInternalSecret(c.env),
+    });
+    return jsonPrivate(memberJoinVerifyResponseSchema.parse(result));
+  }
   // The same work-email rule the sign-in card applies: a personal mailbox joins only as an individual.
   refuseIneligibleWorkEmail({ email, unaffiliatedAttestation: data.body.unaffiliatedAttestation });
   const result = await verifyMemberJoin(db, {

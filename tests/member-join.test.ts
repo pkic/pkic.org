@@ -21,6 +21,7 @@ import { verifyApplicationManageToken } from "../functions/_lib/services/members
 import { prepareIndividualIdentityStatement } from "../functions/_lib/services/users";
 import { nowIso } from "../functions/_lib/utils/time";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 
 function makeEnv() {
   return {
@@ -560,6 +561,76 @@ describe("signed-in membership join", () => {
       await (await joinPath(testEnv, await signInJoinApplicant(testEnv, "jane@acmegrp.example.com"))).json(),
     );
     expect(again).toMatchObject({ status: "organization_selection_required" });
+  });
+
+  it("offers the form to an organization identity only while no application for it is open", async () => {
+    const testEnv = makeEnv();
+    const organizationId = await insertOrganization(testEnv.DB, "Pending Org");
+    const applicant = await signInJoinApplicant(testEnv, "rep@gmail.com");
+    const { identityId, statement } = await buildCreateIdentityStatement(testEnv.DB, {
+      userId: applicant.userId,
+      organizationId,
+      source: "staff",
+      jobTitle: "Architect",
+      startImmediately: true,
+    });
+    await testEnv.DB.batch([statement]);
+    const pathFor = async (choice: Record<string, unknown>) => {
+      const response = await joinPath(testEnv, applicant, choice);
+      return { status: response.status, body: await response.json() };
+    };
+
+    // A personal session address does not stand in the way of applying as a representation.
+    await expect(pathFor({ identityId })).resolves.toEqual({
+      status: 200,
+      body: { status: "representation_application_ready" },
+    });
+
+    // A colleague's open application for the organization needs no second one.
+    const colleagueApplication = await seedMemberApplication({
+      applicantEmail: "colleague@pending.example",
+      organizationName: "Pending Org",
+      stage: "processing",
+    });
+    await testEnv.DB.prepare("UPDATE member_applications SET organization_id=? WHERE id=?")
+      .bind(organizationId, colleagueApplication)
+      .run();
+    await expect(pathFor({ identityId })).resolves.toEqual({
+      status: 200,
+      body: { status: "representation_application_in_progress" },
+    });
+
+    // The person's own open application is followed through its status link instead.
+    await testEnv.DB.prepare("UPDATE member_applications SET stage='withdrawn' WHERE id=?")
+      .bind(colleagueApplication)
+      .run();
+    const ownApplication = await seedMemberApplication({
+      applicantEmail: "rep@gmail.com",
+      applicantUserId: applicant.userId,
+      organizationName: "Pending Org",
+      stage: "submitted",
+    });
+    const own = memberJoinVerifyResponseSchema.parse((await pathFor({ identityId })).body);
+    if (own.status !== "application_in_progress") throw new Error(`Unexpected ${own.status}`);
+    expect(new URL(own.statusPath, "https://app.test").searchParams.get("id")).toBe(ownApplication);
+
+    await testEnv.DB.prepare("UPDATE member_applications SET stage='withdrawn' WHERE id=?").bind(ownApplication).run();
+    await seedOrganizationAggregate(testEnv.DB, organizationId, "A");
+    await expect(pathFor({ identityId })).resolves.toEqual({ status: 200, body: { status: "already_member" } });
+
+    // Only a representation the session holds, applied for as itself.
+    const [personal] = await queryAll<{ id: string }>(
+      testEnv.DB,
+      "SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL",
+      [applicant.userId],
+    );
+    for (const choice of [
+      { identityId: personal!.id },
+      { identityId: crypto.randomUUID() },
+      { identityId, organizationId },
+      { identityId, unaffiliatedAttestation: true },
+    ])
+      expect((await pathFor(choice)).status).toBe(422);
   });
 
   it("lets an individual apply at a domain held by another applicant's open organization application", async () => {

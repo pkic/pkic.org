@@ -6,7 +6,7 @@
 import { EMAIL_FIRST_ADVISORY_COPY, EMAIL_FIRST_COPY, WORK_EMAIL_STEER } from "../../assets/shared/email-first-copy";
 import { startJoinInBrowser } from "./helpers/member-join";
 import { addMissingName, addRepresentationBio } from "./helpers/person-details";
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 
 test("starts from the sign-in card and steers a personal address to the explicit individual path", async ({ page }) => {
@@ -42,6 +42,7 @@ test("starts from the sign-in card and steers a personal address to the explicit
 });
 
 test("signs in with an organization email before submitting the D1-backed membership form", async ({
+  browser,
   page,
 }, testInfo) => {
   const unique = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -175,6 +176,45 @@ test("signs in with an organization email before submitting the D1-backed member
   const confirmation = await waitForCapturedEmail(email, "membership application", { since: sinceConfirmation });
   expect(extractEmailUrl(confirmation, "/application-status/")).toContain("token=");
   expect(await page.evaluate(() => sessionStorage.getItem("pkic.join.verifiedApplication"))).toBeNull();
+
+  const showsNoticeInstead = async (on: Page, heading: string, name: string) => {
+    const notice = on.getByRole("heading", { name: heading, exact: true });
+    await expect(notice).toBeVisible();
+    await expect(on.locator("[data-join-application-form]")).toBeHidden();
+    for (const width of [1280, 375]) {
+      await on.setViewportSize({ width, height: 900 });
+      await notice.scrollIntoViewIfNeeded();
+      expect(await on.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await on.screenshot({ path: testInfo.outputPath(`${name}-${width}.png`) });
+    }
+  };
+  // Returning, the representation leads to the application already made, not to the form again.
+  await page.goto("/join/");
+  await showsNoticeInstead(page, "Your application is already in progress", "application-in-progress");
+  await page.getByRole("link", { name: "Check application status", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Application status", exact: true })).toBeVisible();
+
+  // A colleague who represents the same organization waits for that application; its approval admits them too.
+  const colleagueContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
+  try {
+    const colleague = await colleagueContext.newPage();
+    await startJoinInBrowser(colleague, `colleague@${email.split("@")[1]}`, {
+      organization: { name: organizationName },
+    });
+    await showsNoticeInstead(
+      colleague,
+      `An application for ${organizationName} is already in progress`,
+      "representation-application-in-progress",
+    );
+    await expect(colleague.getByText(/you are admitted automatically as one of the organization/)).toBeVisible();
+    await expect(colleague.getByRole("link", { name: "Check application status", exact: true })).toHaveCount(0);
+    await expect(colleague.getByRole("link", { name: "Email the secretariat", exact: true })).toHaveAttribute(
+      "href",
+      "mailto:contact@pkic.org",
+    );
+  } finally {
+    await colleagueContext.close();
+  }
 });
 
 test("keeps the individual path an explicit policy exception for an institutional email", async ({ page }) => {
