@@ -18,7 +18,6 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { isStateGuardFailure, prepareStateGuard } from "../../db/authorization-guard";
 import { all, first } from "../../db/queries";
-import { DIRECT_EMAIL_TEMPLATE_KEY, directEmailBodyPayload } from "../../email/direct-body";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -138,16 +137,13 @@ export async function sendUnfinishedRegistrationReminders(
         prepareQueueEmailStatement(db, {
           eventId: row.event_id,
           baseUrl: appBaseUrl,
-          templateKey: DIRECT_EMAIL_TEMPLATE_KEY,
+          templateKey: "registration_unfinished_reminder",
           recipientEmail: row.email,
           recipientUserId: row.user_id,
           messageType: "transactional",
-          subject: `Finish your registration for ${row.event_name}`,
           outboxId: uuid(),
           idempotencyKey: `unfinished-registration:${row.event_id}:${row.user_id}:${row.reminders_sent + 1}`,
-          data: directEmailBodyPayload(
-            `You started registering for ${row.event_name} and have not finished yet.\n\n[Finish your registration](${registerUrl})\n\nNot coming? [Tell us you're not registering](${stopUrl}) and we will stop reminding you.`,
-          ),
+          data: { eventName: row.event_name, registerUrl, notRegisteringUrl: stopUrl },
         }).statement,
       ]);
       reminded += 1;

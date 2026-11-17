@@ -1328,6 +1328,16 @@ describe("event tickets", () => {
         outboxId: "held-2",
       }),
     );
+    // The request to pay is a stored template with the ticket's facts as its variables.
+    const request = await env.DB.prepare(
+      "SELECT template_key, payload_json FROM email_outbox WHERE template_key = 'ticket_payment_request'",
+    ).first<{ template_key: string; payload_json: string }>();
+    expect(JSON.parse(request!.payload_json)).toMatchObject({
+      ticketName: "Vendor",
+      ticketPrice: "$395.00",
+      paymentUrl: "https://example.test/portal/#/events/pqc-2026/ticket",
+      refundPolicy: "Tickets for this event are not refunded.",
+    });
     await reviewDisputedTicket(
       env.DB,
       admin as UserBackedAuthAdmin,

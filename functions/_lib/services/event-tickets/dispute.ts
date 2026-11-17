@@ -12,7 +12,6 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
-import { formatCurrencyAmount } from "../../../../assets/shared/format-currency";
 import { ticketReminderSchedule } from "../../../../assets/shared/event-tickets";
 import { priceTicket, readTicketPerson } from "./assignment";
 import {
@@ -22,6 +21,7 @@ import {
   ticketCriteriaDigest,
 } from "./classifier";
 import { prepareTicketPaymentEmail } from "./payment-emails";
+import { readRefundPolicy } from "./refund-policy";
 import { readEventTicketSnapshot } from "./snapshot";
 
 interface DisputedTicketRow {
@@ -160,7 +160,8 @@ export async function reviewDisputedTicket(
         row.id,
       ),
   );
-  if (status === "pending_payment")
+  if (status === "pending_payment") {
+    const policy = await readRefundPolicy(db, event.id);
     statements.push(
       prepareTicketPaymentEmail(
         db,
@@ -171,15 +172,20 @@ export async function reviewDisputedTicket(
           event_name: row.event_name,
           ticket_name: type.name,
           email: row.email,
+          amount: priced.total,
+          currency: settings.currency,
+          timezone: event.timezone,
+          refund_deadline: policy.refundableUntil,
+          refund_fee: policy.refundFee,
         },
         {
-          subject: `Your ${row.event_name} ticket changed`,
-          lead: `The organizers reviewed your registration for ${row.event_name} and moved it to the ${type.name} ticket, which costs ${formatCurrencyAmount(priced.total, settings.currency)}.`,
+          templateKey: "ticket_changed_payment_request",
           idempotencyKey: `ticket-moved:${row.id}:${now}`,
           userId: row.user_id,
         },
       ),
     );
+  }
   await settle(db, statements);
 }
 

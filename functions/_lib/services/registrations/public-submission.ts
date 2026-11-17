@@ -40,7 +40,7 @@ import {
 } from "../event-tickets/registration-ticket";
 import { HELD_UNTIL_PAID } from "../event-tickets/payment";
 import { prepareTicketPaymentEmail } from "../event-tickets/payment-emails";
-import { formatCurrencyAmount } from "../../../../assets/shared/format-currency";
+import { readRefundPolicy } from "../event-tickets/refund-policy";
 
 /** The individual capacity only gates the public contract's work-email policy; the use case does not read it. */
 type RegistrationCreateInput = Omit<z.infer<typeof registrationCreateSchema>, "unaffiliatedAttestation">;
@@ -340,6 +340,8 @@ export async function submitEventRegistration(
   }
 
   const badgeRenderJob = prepareBadgeRenderJob(db, referralCode);
+  // The payment request states the refund terms a payment made now falls under.
+  const refundPolicy = awaitingPayment ? await readRefundPolicy(db, event.id) : { refundableUntil: null, refundFee: 0 };
   const ticketStatements = ticket
     ? [
         ...ticket.statements,
@@ -359,10 +361,14 @@ export async function submitEventRegistration(
                   event_name: event.name,
                   ticket_name: ticket.ticketName,
                   email: user.email,
+                  amount: ticket.amount,
+                  currency: ticket.currency,
+                  timezone: event.timezone,
+                  refund_deadline: refundPolicy.refundableUntil,
+                  refund_fee: refundPolicy.refundFee,
                 },
                 {
-                  subject: `Pay for your ${event.name} ticket`,
-                  lead: `Thank you for registering for ${event.name}. Your ${ticket.ticketName} ticket costs ${formatCurrencyAmount(ticket.amount, ticket.currency)}.`,
+                  templateKey: "ticket_payment_request",
                   idempotencyKey: `ticket-payment:${registration.id}:${registration.updated_at}`,
                   userId: user.id,
                 },

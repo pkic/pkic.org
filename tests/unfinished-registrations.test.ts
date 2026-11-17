@@ -47,8 +47,8 @@ async function start(email: string, hoursAgo: number) {
 
 const reminders = () =>
   env.DB.prepare(
-    "SELECT recipient_email, payload_json FROM email_outbox WHERE idempotency_key LIKE 'unfinished-registration:%' ORDER BY created_at",
-  ).all<{ recipient_email: string; payload_json: string }>();
+    "SELECT recipient_email, template_key, payload_json FROM email_outbox WHERE idempotency_key LIKE 'unfinished-registration:%' ORDER BY created_at",
+  ).all<{ recipient_email: string; template_key: string; payload_json: string }>();
 
 it("reminds after a day and after three days, then no more", async () => {
   await start("early@example.test", 2);
@@ -57,6 +57,12 @@ it("reminds after a day and after three days, then no more", async () => {
   const sent = (await reminders()).results;
   expect(sent.map((row) => row.recipient_email)).toEqual(["due@example.test"]);
   expect(sent[0].payload_json).toContain("/not-registering");
+  // The reminder is a stored template, so organizers can change its wording.
+  expect(sent[0].template_key).toBe("registration_unfinished_reminder");
+  expect(JSON.parse(sent[0].payload_json)).toMatchObject({
+    eventName: expect.any(String),
+    registerUrl: expect.any(String),
+  });
   // The same run again sends nothing: the second reminder is due three days after the start.
   expect(await sendUnfinishedRegistrationReminders(env.DB, BASE)).toEqual({ reminded: 0, cleared: 0 });
 
