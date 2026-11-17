@@ -452,7 +452,11 @@ async function buildProvisionOrganizationTiedMemberships(
     statements.push(...userStatements);
 
     const existingAffiliation = input.activateIdentities
-      ? await prepareExistingOrganizationAffiliation(db, user, organizationId, rep.email)
+      ? await prepareExistingOrganizationAffiliation(db, user, organizationId, rep.email, {
+          at: now,
+          actorUserId: input.grantedByUserId ?? null,
+          jobTitle: rep.jobTitle,
+        })
       : null;
     const prepared =
       existingAffiliation ??
@@ -470,7 +474,8 @@ async function buildProvisionOrganizationTiedMemberships(
       }));
     const identityId = prepared.identityId;
     statements.push(prepared.statement);
-    // Reuse preserves the person's existing profile, including a deliberate choice to hide.
+    if (existingAffiliation) statements.push(...existingAffiliation.profileStatements);
+    // Only newly inserted identities need the membership creation publication below.
     if (input.activateIdentities && !existingAffiliation) publicIdentityIds.push(identityId);
 
     if (input.activateIdentities) {

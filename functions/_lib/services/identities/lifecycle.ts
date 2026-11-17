@@ -42,6 +42,7 @@ interface IdentityStateRow {
   biography: string | null;
   links_json: string | null;
   show_on_organization_profile: number;
+  organization_profile_listing_approved: number | null;
   started_at: string | null;
   ended_at: string | null;
   blocked_at: string | null;
@@ -77,7 +78,7 @@ async function requireOrganizationIdentity(
     db,
     `SELECT identity.id, capacity.member_id, identity.user_id, identity.organization_id,
             identity.email_id, identity.job_title, identity.biography, identity.links_json,
-            identity.show_on_organization_profile, identity.started_at, identity.ended_at,
+            identity.show_on_organization_profile, identity.organization_profile_listing_approved, identity.started_at, identity.ended_at,
             identity.blocked_at, identity.updated_at
        FROM identities identity
        LEFT JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
@@ -281,6 +282,10 @@ export async function transitionOrganizationIdentity(
       linksJson: identity.links_json,
       source: "staff",
       showOnOrganizationProfile: identity.show_on_organization_profile === 1,
+      organizationProfileListingApproved:
+        identity.organization_profile_listing_approved === null
+          ? null
+          : identity.organization_profile_listing_approved === 1,
       startImmediately: true,
       predecessorIdentityId: identity.id,
       now: at,

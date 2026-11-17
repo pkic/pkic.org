@@ -297,7 +297,7 @@ describe("canonical organization affiliations", () => {
         prepared.identityId,
       ]),
     ).toEqual(beforeIdentity);
-    expect((await getPublicMemberById(env.DB, prepared.organizationId))?.identities).toEqual([]);
+    expect((await getPublicMemberById(env.DB, prepared.organizationId))?.identities).toHaveLength(1);
     expect(
       await queryAll(
         env.DB,
@@ -311,109 +311,204 @@ describe("canonical organization affiliations", () => {
     ).toEqual([{ stage: "approved", applicant_user_id: person.userId }]);
   });
 
-  it.each(["staff", "membership_approval"] as const)(
-    "preserves default-hidden and owner-hidden affiliations reused by %s provisioning",
-    async (identitySource) => {
+  it.each(
+    (["staff", "membership_approval"] as const).flatMap((identitySource) =>
+      (["default", "owner_hidden", "contact_hidden", "approved_owner_hidden"] as const).map((decision) => ({
+        identitySource,
+        decision,
+      })),
+    ),
+  )("$identitySource provisioning respects $decision listing decisions", async ({ identitySource, decision }) => {
+    const person = await verifiedPerson();
+    const organizationId = await insertOrganization(env.DB, "Reused representative organization");
+    await claimDomain(organizationId);
+    const affiliation = await prepare(person, { organizationId });
+    await env.DB.batch(affiliation.statements);
+    await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const owner = await createAdminSession(
+      env.DB,
+      person.userId,
+      crypto.randomUUID(),
+      undefined,
+      affiliation.identityId,
+    );
+    const staff = await staffToken();
+    const staffId = await env.DB.prepare(`SELECT id FROM (${ADMINISTRATOR_FIXTURE_USER_SQL})`).first<string>("id");
+    const edit = async (token: string, path: string, body: unknown) => {
+      const response = await callApi(env, path, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      expect(response.status, await response.clone().text()).toBe(200);
+    };
+    const organizationPath = `/api/v1/organizations/${organizationId}/identities/${affiliation.identityId}`;
+    if (decision === "approved_owner_hidden")
+      await edit(staff, organizationPath, { profile: { jobTitle: "Researcher", showOnOrganizationProfile: true } });
+    if (decision === "contact_hidden")
+      await edit(staff, organizationPath, { profile: { jobTitle: "Researcher", showOnOrganizationProfile: false } });
+    if (decision === "owner_hidden" || decision === "approved_owner_hidden")
+      await edit(owner, "/api/v1/users/current", { jobTitle: "Researcher", showOnOrgProfile: false });
+    if (decision === "contact_hidden") {
+      const refused = await callApi(env, "/api/v1/users/current", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${owner}`, "content-type": "application/json" },
+        body: JSON.stringify({ showOnOrgProfile: true }),
+      });
+      expect(refused.status).toBe(403);
+    }
+    const before = await queryAll(
+      env.DB,
+      "SELECT show_on_organization_profile,organization_profile_listing_approved,updated_at FROM identities WHERE id=?",
+      [affiliation.identityId],
+    );
+    const audits = await queryAll(
+      env.DB,
+      "SELECT id FROM audit_log WHERE entity_id=? AND action='identity_profile_updated'",
+      [affiliation.identityId],
+    );
+    const publications = await queryAll(
+      env.DB,
+      "SELECT id FROM site_publication_requests WHERE resource_type='identity_profile'",
+    );
+    const provision = await buildProvisionOrganizationMembership(env.DB, {
+      organizationId,
+      organizationName: "Reused representative organization",
+      membershipCategory: "A",
+      identities: [{ name: "Approved representative", email: person.email, jobTitle: "Engineer" }],
+      identitySource,
+      grantedByUserId: staffId,
+      activateIdentities: true,
+      rejectExistingMembership: false,
+      workingGroupSlugs: [],
+    });
+    await env.DB.batch(provision.statements);
+    expect(provision.buildResult().identities[0].identityId).toBe(affiliation.identityId);
+    expect((await getPublicMemberById(env.DB, organizationId))?.identities).toHaveLength(
+      decision === "default" ? 1 : 0,
+    );
+    if (decision === "default") {
+      expect(
+        await queryAll(env.DB, "SELECT organization_profile_listing_approved FROM identities WHERE id=?", [
+          affiliation.identityId,
+        ]),
+      ).toEqual([{ organization_profile_listing_approved: 1 }]);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT actor_id,details_json FROM audit_log WHERE entity_id=? AND action='identity_profile_updated'",
+          [affiliation.identityId],
+        ),
+      ).toEqual([{ actor_id: staffId, details_json: expect.any(String) }]);
+      const [audit] = await queryAll<{ details_json: string }>(
+        env.DB,
+        "SELECT details_json FROM audit_log WHERE entity_id=? AND action='identity_profile_updated'",
+        [affiliation.identityId],
+      );
+      expect(JSON.parse(audit.details_json)).toMatchObject({
+        showOnOrganizationProfile: { from: false, to: true },
+        organizationProfileListingApproved: { from: null, to: true },
+      });
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT resource_id FROM site_publication_requests WHERE resource_type='identity_profile'",
+        ),
+      ).toEqual([{ resource_id: affiliation.identityId }]);
+    } else {
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT show_on_organization_profile,organization_profile_listing_approved,updated_at FROM identities WHERE id=?",
+          [affiliation.identityId],
+        ),
+      ).toEqual(before);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id=? AND action='identity_profile_updated'", [
+          affiliation.identityId,
+        ]),
+      ).toEqual(audits);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM site_publication_requests WHERE resource_type='identity_profile'"),
+      ).toEqual(publications);
+    }
+  });
+
+  it.each(["audit_log", "site_publication_requests"] as const)(
+    "rolls back reused listing approval when %s fails and permits retry",
+    async (table) => {
       const person = await verifiedPerson();
-      const organizationId = await insertOrganization(env.DB, "Reused representative organization");
-      await claimDomain(organizationId);
-      const affiliation = await prepare(person, { organizationId });
+      const affiliation = await prepare(person, { organizationName: "Atomic approval organization" });
       await env.DB.batch(affiliation.statements);
-      await seedOrganizationAggregate(env.DB, organizationId, "A");
-      for (const deliberatelyHidden of [false, true]) {
-        if (deliberatelyHidden) {
-          await env.DB.prepare("UPDATE identities SET show_on_organization_profile=1,job_title='Researcher' WHERE id=?")
-            .bind(affiliation.identityId)
-            .run();
-          const token = await createAdminSession(
-            env.DB,
-            person.userId,
-            crypto.randomUUID(),
-            undefined,
-            affiliation.identityId,
-          );
-          const hidden = await callApi(env, "/api/v1/users/current", {
-            method: "PATCH",
-            headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-            body: JSON.stringify({ showOnOrgProfile: false }),
-          });
-          expect(hidden.status, await hidden.clone().text()).toBe(200);
-        }
-        const before = await queryAll(
-          env.DB,
-          "SELECT show_on_organization_profile,updated_at FROM identities WHERE id=?",
-          [affiliation.identityId],
-        );
-        const audit = await queryAll(
-          env.DB,
-          "SELECT id FROM audit_log WHERE entity_id=? AND action='identity_profile_updated'",
-          [affiliation.identityId],
-        );
-        // Automatic group enrollment may publish the person independently of the preserved roster visibility.
-        const publications = await queryAll(
-          env.DB,
-          "SELECT id FROM site_publication_requests WHERE resource_type IN ('membership','identity_profile')",
-        );
-        const provision = await buildProvisionOrganizationMembership(env.DB, {
-          organizationId,
-          organizationName: "Reused representative organization",
-          membershipCategory: "A",
-          identities: [{ name: "Approved representative", email: person.email }],
-          identitySource,
-          activateIdentities: true,
-          rejectExistingMembership: false,
-          workingGroupSlugs: [],
-        });
-        await env.DB.batch(provision.statements);
-        expect(provision.buildResult().identities[0].identityId).toBe(affiliation.identityId);
-        expect((await getPublicMemberById(env.DB, organizationId))?.identities).toEqual([]);
-        expect(
-          await queryAll(env.DB, "SELECT show_on_organization_profile,updated_at FROM identities WHERE id=?", [
-            affiliation.identityId,
-          ]),
-        ).toEqual(before);
-        expect(
-          await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id=? AND action='identity_profile_updated'", [
-            affiliation.identityId,
-          ]),
-        ).toEqual(audit);
+      const provision = await buildProvisionOrganizationMembership(env.DB, {
+        organizationId: affiliation.organizationId,
+        organizationName: "Atomic approval organization",
+        membershipCategory: "A",
+        identitySource: "staff",
+        activateIdentities: true,
+        identities: [{ name: "Approved person", email: person.email, jobTitle: "Engineer" }],
+        workingGroupSlugs: [],
+      });
+      await env.DB.prepare(`CREATE TRIGGER fail_listing_approval BEFORE INSERT ON ${table}
+      WHEN NEW.${table === "audit_log" ? "action='identity_profile_updated'" : "resource_type='identity_profile'"}
+      BEGIN SELECT RAISE(ABORT,'forced listing approval failure'); END`).run();
+      try {
+        await expect(env.DB.batch(provision.statements)).rejects.toThrow("forced listing approval failure");
         expect(
           await queryAll(
             env.DB,
-            "SELECT id FROM site_publication_requests WHERE resource_type IN ('membership','identity_profile')",
+            "SELECT show_on_organization_profile,organization_profile_listing_approved FROM identities WHERE id=?",
+            [affiliation.identityId],
           ),
-        ).toEqual(publications);
-        if (deliberatelyHidden) expect(audit).toHaveLength(1);
+        ).toEqual([{ show_on_organization_profile: 0, organization_profile_listing_approved: null }]);
+        expect(
+          await queryAll(env.DB, "SELECT id FROM members WHERE organization_id=?", [affiliation.organizationId]),
+        ).toEqual([]);
+        expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='identity_profile_updated'")).toEqual([]);
+        expect(
+          await queryAll(env.DB, "SELECT id FROM site_publication_requests WHERE resource_type='identity_profile'"),
+        ).toEqual([]);
+      } finally {
+        await env.DB.prepare("DROP TRIGGER fail_listing_approval").run();
       }
+      await env.DB.batch(provision.statements);
+      expect((await getPublicMemberById(env.DB, affiliation.organizationId))?.identities).toHaveLength(1);
     },
   );
 
-  it("rolls back membership provisioning when a reused canonical affiliation profile changes before commit", async () => {
-    const person = await verifiedPerson();
-    const affiliation = await prepare(person, { organizationName: "Reviewed Existing Affiliation" });
-    await env.DB.batch(affiliation.statements);
-    const provision = await buildProvisionOrganizationMembership(env.DB, {
-      organizationName: "Reviewed Existing Affiliation",
-      membershipCategory: "A",
-      identities: [{ name: "Submitted name", email: person.email }],
-      identitySource: "membership_approval",
-      activateIdentities: true,
-      workingGroupSlugs: [],
-    });
-    const racedDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE identities SET job_title='Concurrent approved update' WHERE id=?")
-        .bind(affiliation.identityId)
-        .run(),
-    );
-    await expect(racedDb.batch(provision.statements)).rejects.toThrow();
-    expect(
-      await queryAll(env.DB, "SELECT id FROM members WHERE organization_id=?", [affiliation.organizationId]),
-    ).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id=?", [person.userId])).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT job_title FROM identities WHERE id=?", [affiliation.identityId])).toEqual([
-      { job_title: "Concurrent approved update" },
-    ]);
-  });
+  it.each(["profile", "listing_approval"] as const)(
+    "rolls back membership provisioning when a reused affiliation %s changes before commit",
+    async (change) => {
+      const person = await verifiedPerson();
+      const affiliation = await prepare(person, { organizationName: "Reviewed Existing Affiliation" });
+      await env.DB.batch(affiliation.statements);
+      const provision = await buildProvisionOrganizationMembership(env.DB, {
+        organizationName: "Reviewed Existing Affiliation",
+        membershipCategory: "A",
+        identities: [{ name: "Submitted name", email: person.email, jobTitle: "Engineer" }],
+        identitySource: "membership_approval",
+        activateIdentities: true,
+        workingGroupSlugs: [],
+      });
+      const racedDb = mutateBeforeNextBatch(env.DB, () =>
+        env.DB.prepare(
+          change === "profile"
+            ? "UPDATE identities SET job_title='Concurrent approved update' WHERE id=?"
+            : "UPDATE identities SET organization_profile_listing_approved=0 WHERE id=?",
+        )
+          .bind(affiliation.identityId)
+          .run(),
+      );
+      await expect(racedDb.batch(provision.statements)).rejects.toThrow();
+      expect(
+        await queryAll(env.DB, "SELECT id FROM members WHERE organization_id=?", [affiliation.organizationId]),
+      ).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id=?", [person.userId])).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT job_title FROM identities WHERE id=?", [affiliation.identityId])).toEqual([
+        { job_title: change === "profile" ? "Concurrent approved update" : null },
+      ]);
+    },
+  );
 
   it("reuses an approved owned identity's canonical profile and selected email without rewriting them", async () => {
     const person = await verifiedPerson();

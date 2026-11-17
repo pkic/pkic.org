@@ -4,8 +4,7 @@
  * Both the current-user profile and the per-identity edit write through
  * `updateOwnIdentityProfile`, so there is one rule, one audit and one batch.
  */
-import { identityOwnerCanList, type identitySourceSchema } from "../../../../assets/shared/schemas/identity";
-import type { z } from "zod";
+import { identityOwnerCanList } from "../../../../assets/shared/schemas/identity";
 import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
@@ -33,7 +32,6 @@ export interface OwnIdentityProfileUpdateInput {
 }
 
 interface EditableIdentityRow extends EditableIdentityProfile {
-  source: z.infer<typeof identitySourceSchema>;
   first_name: string | null;
   last_name: string | null;
   preferred_name: string | null;
@@ -103,7 +101,7 @@ export async function updateOwnIdentityProfile(
   const current = await first<EditableIdentityRow>(
     db,
     `SELECT identity.id, identity.user_id, identity.organization_id, identity.email_id, identity.job_title, identity.biography,
-            identity.links_json, identity.source, identity.show_on_organization_profile, identity.updated_at,
+            identity.links_json, identity.show_on_organization_profile, identity.organization_profile_listing_approved, identity.updated_at,
             title.job_title AS individual_job_title, u.first_name, u.last_name, u.preferred_name
        FROM identities identity
        JOIN users u ON u.id = identity.user_id
@@ -122,7 +120,11 @@ export async function updateOwnIdentityProfile(
   if (
     input.showOnOrgProfile === true &&
     current.show_on_organization_profile === 0 &&
-    !identityOwnerCanList(current.source)
+    !identityOwnerCanList(
+      current.organization_profile_listing_approved === null
+        ? null
+        : current.organization_profile_listing_approved === 1,
+    )
   ) {
     const message = "Ask PKI Consortium staff or an organization contact to list you on the organization profile.";
     throw new AppError(403, "ORGANIZATION_LISTING_REQUIRES_APPROVAL", message, {
@@ -143,6 +145,7 @@ export async function updateOwnIdentityProfile(
       showOnOrganizationProfile: input.showOnOrgProfile,
     },
     now,
+    "owner",
   );
   const names = nameChanges(current, input);
 

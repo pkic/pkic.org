@@ -138,7 +138,7 @@ export async function keepLinkedOrganization(
     }
   >(
     db,
-    `SELECT id, updated_at, organization_id, job_title, email_id, biography, links_json, show_on_organization_profile FROM identities
+    `SELECT id, updated_at, organization_id, job_title, email_id, biography, links_json, show_on_organization_profile, organization_profile_listing_approved FROM identities
       WHERE user_id = ? AND organization_id = ? AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
       ORDER BY started_at, id LIMIT 1`,
     [input.userId, input.organizationId],

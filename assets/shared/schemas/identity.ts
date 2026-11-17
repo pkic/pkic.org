@@ -27,9 +27,11 @@ export const IDENTITY_SOURCES = [
 ] as const;
 export const identitySourceSchema = z.enum(IDENTITY_SOURCES);
 
-/** Self-service proof establishes an affiliation, not authority to join the public roster. */
-export function identityOwnerCanList(source: z.infer<typeof identitySourceSchema>): boolean {
-  return source !== "verified_domain" && source !== "verified_email";
+export type IdentitySource = z.infer<typeof identitySourceSchema>;
+
+/** Listing authority is granted explicitly, independently of the identity's source. */
+export function identityOwnerCanList(approved: boolean | null): boolean {
+  return approved === true;
 }
 
 export const IDENTITY_STATES = ["pending", "active", "ended", "blocked"] as const;

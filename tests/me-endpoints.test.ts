@@ -5,6 +5,7 @@
  * visibility, headshot upload/removal, application history, votes history,
  * and authentication.
  */
+import { IDENTITY_SOURCES } from "../assets/shared/schemas/identity";
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { callApi } from "./helpers/app";
@@ -166,15 +167,17 @@ describe("Current-user and application self-service", () => {
     expect(rows[0].show_on_organization_profile).toBe(0);
   });
 
-  it.each(["verified_domain", "verified_email"] as const)(
+  it.each(IDENTITY_SOURCES)(
     "refuses self-listing for a %s affiliation without changing the profile, audit, or publication",
     async (source) => {
       const userId = await insertActiveMember("self-listing@example.test", "F");
       const token = await createMemberSession(env.DB, userId, "self-listing-token");
-      await env.DB.prepare("UPDATE identities SET source=?,job_title='Researcher' WHERE user_id=?")
+      await env.DB.prepare(
+        "UPDATE identities SET source=?,job_title='Researcher',show_on_organization_profile=0,organization_profile_listing_approved=0 WHERE user_id=?",
+      )
         .bind(source, userId)
         .run();
-      // A previously listed self-joiner can still hide themselves.
+      // An owner can retain a contact's hidden decision, but cannot undo it.
       const hidden = await call(token, "/api/v1/users/current", {
         method: "PATCH",
         body: JSON.stringify({ showOnOrgProfile: false }),
@@ -197,6 +200,33 @@ describe("Current-user and application self-service", () => {
       ).toEqual([{ show_on_organization_profile: 0 }]);
       expect(await queryAll(env.DB, "SELECT id FROM audit_log")).toEqual(audit);
       expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toEqual(publications);
+    },
+  );
+
+  it.each(["verified_domain", "verified_email"] as const)(
+    "retains listing approval while a %s owner hides and restores their profile",
+    async (source) => {
+      const userId = await insertActiveMember("approved-owner@example.test", "F");
+      const token = await createMemberSession(env.DB, userId, "approved-owner-token");
+      await env.DB.prepare("UPDATE identities SET source=?,job_title='Researcher' WHERE user_id=?")
+        .bind(source, userId)
+        .run();
+      for (const showOnOrgProfile of [false, true]) {
+        const response = await call(token, "/api/v1/users/current", {
+          method: "PATCH",
+          body: JSON.stringify({ showOnOrgProfile }),
+        });
+        expect(response.status, await response.clone().text()).toBe(200);
+        expect(
+          await queryAll(
+            env.DB,
+            "SELECT show_on_organization_profile,organization_profile_listing_approved FROM identities WHERE user_id=?",
+            userId,
+          ),
+        ).toEqual([
+          { show_on_organization_profile: showOnOrgProfile ? 1 : 0, organization_profile_listing_approved: 1 },
+        ]);
+      }
     },
   );
 
@@ -312,6 +342,38 @@ describe("Current-user and application self-service", () => {
     ).toBe("Concurrent winner");
     expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(0);
     expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='identity_profile_updated'")).toHaveLength(0);
+  });
+
+  it("rolls back an owner's restoration if listing approval is revoked after the read", async () => {
+    const userId = await insertActiveMember("approval-race@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "approval-race-token");
+    await env.DB.prepare("UPDATE identities SET job_title='Researcher',show_on_organization_profile=0 WHERE user_id=?")
+      .bind(userId)
+      .run();
+    const member = await requireMemberFromRequest(env.DB, requestWithAuth(token, "/api/v1/users/current"), env);
+    const racedDb = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.startsWith("UPDATE identities"),
+      () =>
+        env.DB.prepare("UPDATE identities SET organization_profile_listing_approved=0 WHERE user_id=?")
+          .bind(userId)
+          .run(),
+    );
+    await expect(
+      updateMyProfile(guardMemberSessionMutationDatabase(racedDb, member), member, {
+        showOnOrgProfile: true,
+        biography: "Must roll back",
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT show_on_organization_profile,organization_profile_listing_approved,biography FROM identities WHERE user_id=?",
+        userId,
+      ),
+    ).toEqual([{ show_on_organization_profile: 0, organization_profile_listing_approved: 0, biography: null }]);
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='identity_profile_updated'")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toEqual([]);
   });
 
   it("rolls back profile changes when the exact user session is revoked before the D1 batch", async () => {
