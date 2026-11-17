@@ -2,7 +2,6 @@
   width: 100%;
 }
 
-.join-application-identity-grid,
 .join-application-fields {
   display: grid;
   grid-template-columns: 1fr;
@@ -23,12 +22,6 @@
 .membership-legal-agreements > :first-child,
 .membership-legal-authority {
   grid-column: 1 / -1;
-}
-
-@media (min-width: 48rem) {
-  .join-application-identity-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 .membership-legal-card {

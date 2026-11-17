@@ -3,6 +3,7 @@ import { DISPOSABLE_EMAIL_REFUSED, WORK_EMAIL_STEER } from "../assets/shared/ema
 import { env } from "cloudflare:workers";
 import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
 import { memberJoinVerifyResponseSchema } from "../assets/shared/schemas/member-join";
+import { identityAffiliationPreviewResponseSchema } from "../assets/shared/schemas/identity-affiliation";
 import { memberApplicationCreateResponseSchema } from "../assets/shared/schemas/member-applications";
 import { callApi } from "./helpers/app";
 import { createTestRateLimiter, queryAll } from "./helpers/context";
@@ -69,10 +70,8 @@ describe("signed-in membership join", () => {
 
   it("requires a signed-in person", async () => {
     const testEnv = makeEnv();
-    for (const path of ["/api/v1/members/join/verify", "/api/v1/members/join/affiliations"]) {
-      const response = await postJson(testEnv, path, {});
-      expect(response.status, path).toBe(401);
-    }
+    const response = await postJson(testEnv, "/api/v1/members/join/verify", {});
+    expect(response.status).toBe(401);
   });
 
   it("steers a personal address to a work address unless the individual capacity is attested", async () => {
@@ -105,20 +104,16 @@ describe("signed-in membership join", () => {
     expect(JSON.stringify(await disposable.json())).toContain(DISPOSABLE_EMAIL_REFUSED);
   });
 
-  it("issues an application capability for the signed-in account's own address, and starts no session", async () => {
+  it("has an organization added as an identity before applying, and starts no session", async () => {
     const testEnv = makeEnv();
     const applicant = await signInJoinApplicant(testEnv, "applicant@unclaimed.example");
     const response = await verifyJoin(testEnv, applicant);
 
     expect(response.status).toBe(200);
     const body = memberJoinVerifyResponseSchema.parse(await response.json());
-    expect(body).toMatchObject({
-      status: "application_ready",
-      applicantEmail: "applicant@unclaimed.example",
-      applicantKind: "organization",
-    });
-    if (body.status !== "application_ready") throw new Error("Expected application capability");
-    expect(body.joinToken).toMatch(/^pkc1_/);
+    // No continuation is issued for an organization: the person adds the identity that represents it.
+    expect(body).toMatchObject({ status: "organization_selection_required", organizations: [] });
+    expect(body).not.toHaveProperty("joinToken");
     expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toHaveLength(1);
   });
 
@@ -461,33 +456,7 @@ describe("signed-in membership join", () => {
     expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(0);
   });
 
-  it("finds the open application of a parent organization chosen from a subdomain address", async () => {
-    const testEnv = makeEnv();
-    const parent = await insertOrganization(testEnv.DB, "Parent Join Org");
-    const department = await insertOrganization(testEnv.DB, "Department Join Org");
-    const applicationId = await seedMemberApplication({
-      applicantEmail: "lead@parent-join.example",
-      organizationDomain: "parent-join.example",
-      stage: "processing",
-    });
-    await testEnv.DB.batch([
-      testEnv.DB.prepare(
-        "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
-      ).bind(crypto.randomUUID(), "parent-join.example", parent, nowIso(), nowIso()),
-      // The address's most specific claim belongs to another organization.
-      testEnv.DB.prepare(
-        "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES (?,?,?,?,?)",
-      ).bind(crypto.randomUUID(), "dept.parent-join.example", department, nowIso(), nowIso()),
-      testEnv.DB.prepare("UPDATE member_applications SET organization_id=? WHERE id=?").bind(parent, applicationId),
-    ]);
-    const applicant = await signInJoinApplicant(testEnv, "person@dept.parent-join.example");
-    const response = await joinPath(testEnv, applicant, { domain: "parent-join.example", organizationId: parent });
-    expect(memberJoinVerifyResponseSchema.parse(await response.json())).toEqual({
-      status: "organization_application_in_progress",
-    });
-  });
-
-  it("joins a parent member organization from a subdomain claimed by another organization", async () => {
+  it("adds a parent member organization from a subdomain claimed by another organization", async () => {
     const testEnv = makeEnv();
     const parent = await insertOrganization(testEnv.DB, "Parent Member Org");
     await seedOrganizationAggregate(testEnv.DB, parent, "A");
@@ -502,17 +471,40 @@ describe("signed-in membership join", () => {
       ).bind(crypto.randomUUID(), "dept.parent-member.example", department, nowIso(), nowIso()),
     ]);
     const applicant = await signInJoinApplicant(testEnv, "person@dept.parent-member.example");
-    const response = await joinPath(testEnv, applicant, { domain: "parent-member.example", organizationId: parent });
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(memberJoinVerifyResponseSchema.parse(await response.json())).toEqual({
-      status: "organization_access_ready",
+    // The parent domain is chosen while adding the identity; the join itself never picks a domain.
+    const preview = (body: object) =>
+      callApi(testEnv, "/api/v1/users/current/identities/preview", {
+        method: "POST",
+        headers: { "content-type": "application/json", cookie: applicant.cookie },
+        body: JSON.stringify({ email: "person@dept.parent-member.example", emailId: null, ...body }),
+      });
+    const resolved = await preview({ phase: "resolve", domain: "parent-member.example" });
+    expect(resolved.status, await resolved.clone().text()).toBe(200);
+    const prepared = identityAffiliationPreviewResponseSchema.parse(
+      await (
+        await preview({
+          phase: "prepare",
+          domain: "parent-member.example",
+          organizationId: parent,
+          jobTitle: "Engineer",
+        })
+      ).json(),
+    );
+    const created = await callApi(testEnv, "/api/v1/users/current/identities", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: applicant.cookie },
+      body: JSON.stringify({ contextToken: prepared.contextToken }),
     });
+    expect(created.status, await created.clone().text()).toBe(201);
     expect(
       await queryAll(
         testEnv.DB,
         "SELECT organization_id FROM identities WHERE organization_id IS NOT NULL AND ended_at IS NULL",
       ),
     ).toEqual([{ organization_id: parent }]);
+    expect(memberJoinVerifyResponseSchema.parse(await (await joinPath(testEnv, applicant)).json())).toEqual({
+      status: "already_member",
+    });
   });
 
   it("tells an applicant about their open application before the form, with a working status link", async () => {
@@ -556,7 +548,7 @@ describe("signed-in membership join", () => {
     // A colleague choosing the same organization learns that it already has an open application.
     const colleague = await signInJoinApplicant(testEnv, "omar@acmegrp.example.com");
     const sameOrganization = memberJoinVerifyResponseSchema.parse(
-      await (await joinPath(testEnv, colleague, { domain: "acmegrp.example.com", organizationId })).json(),
+      await (await joinPath(testEnv, colleague, { organizationId })).json(),
     );
     expect(sameOrganization).toEqual({ status: "organization_application_in_progress" });
 
@@ -565,9 +557,9 @@ describe("signed-in membership join", () => {
       .bind(applicationId)
       .run();
     const again = memberJoinVerifyResponseSchema.parse(
-      await (await verifyJoin(testEnv, await signInJoinApplicant(testEnv, "jane@acmegrp.example.com"))).json(),
+      await (await joinPath(testEnv, await signInJoinApplicant(testEnv, "jane@acmegrp.example.com"))).json(),
     );
-    expect(again).toMatchObject({ status: "application_ready", organizationName: "Example Org" });
+    expect(again).toMatchObject({ status: "organization_selection_required" });
   });
 
   it("lets an individual apply at a domain held by another applicant's open organization application", async () => {
@@ -634,15 +626,14 @@ describe("signed-in membership join", () => {
 
   it("does not let a verified capability authorize a different mailbox or category kind", async () => {
     const testEnv = makeEnv();
-    const applicant = await signInJoinApplicant(testEnv, "employee@organization.example");
+    const applicant = await signInJoinApplicant(testEnv, "independent@organization.example", true);
     const verification = memberJoinVerifyResponseSchema.parse(await (await verifyJoin(testEnv, applicant)).json());
     if (verification.status !== "application_ready") throw new Error("Expected application capability");
 
     const wrongEmail = await postJson(testEnv, "/api/v1/members/applications", {
       applicantEmail: "attacker@organization.example",
       applicantName: "Wrong Address",
-      membershipCategory: "A",
-      organizationName: "Organization",
+      membershipCategory: "H6",
       joinToken: verification.joinToken,
       answers: { reason: "Attempted capability substitution.", ...requiredMembershipApplicationAnswers },
     });
@@ -651,11 +642,14 @@ describe("signed-in membership join", () => {
     const wrongKind = await postJson(testEnv, "/api/v1/members/applications", {
       applicantEmail: verification.applicantEmail,
       applicantName: "Wrong Kind",
-      membershipCategory: "H6",
+      membershipCategory: "A",
+      organizationName: "Organization",
       joinToken: verification.joinToken,
       answers: { reason: "Attempted category substitution.", ...requiredMembershipApplicationAnswers },
     });
-    expect(wrongKind.status).toBe(422);
+    // An organization category is applied for only as the organization's identity.
+    expect(wrongKind.status).toBe(409);
+    await expect(wrongKind.json()).resolves.toMatchObject({ error: { code: "ORGANIZATION_IDENTITY_REQUIRED" } });
     expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(0);
   });
 });

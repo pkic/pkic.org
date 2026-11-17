@@ -20,13 +20,14 @@ export async function addMissingName(
   await expect(scope.getByText("Add your name", { exact: true })).toHaveCount(0);
 }
 
-/** An individual application takes its bio from the representation; this adds one through its editor. */
+/** An application takes its bio from the representation; this adds one through its editor. */
 export async function addRepresentationBio(page: Page, scope: Locator, bio: string): Promise<void> {
   await scope.getByRole("button", { name: "Change representation", exact: true }).click();
   const picker = page.getByRole("dialog", { name: "Change representation", exact: true });
   await picker.getByRole("button", { name: "Edit representation", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Edit representation", exact: true });
-  await editor.getByLabel("About you", { exact: false }).fill(bio);
+  // A personal identity's bio is "About you"; an organization identity's is "Your bio at <organization>".
+  await editor.getByLabel(/^(About you|Your bio at )/).fill(bio);
   await editor.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(editor).not.toBeVisible();
   await picker.getByRole("button", { name: "Use representation", exact: true }).click();

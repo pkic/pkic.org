@@ -1,9 +1,4 @@
 import { addMissingName, addRepresentationBio } from "./helpers/person-details";
-import {
-  organizationCreateSchema,
-  organizationCreateResponseSchema,
-} from "../../assets/shared/schemas/organization-management";
-import { organizationDomainClaimCreateSchema } from "../../assets/shared/schemas/organization-domains";
 import { completeSyntheticMembershipReview, createMember } from "./helpers/member-provisioning";
 /**
  * Membership joining across category kinds and domain outcomes.
@@ -23,16 +18,19 @@ import { expect, test, type Page } from "@playwright/test";
 import { WORK_EMAIL_STEER } from "../../assets/shared/email-first-copy";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
-import { startJoinInBrowser, verifyMembershipJoinEmail } from "./helpers/member-join";
+import { startJoinInBrowser } from "./helpers/member-join";
 import { ensureAppOrigin, submitMembershipApplication, uniqueSuffix } from "./helpers/membership";
 
 /** Reaches the rendered application form the way an applicant does. */
 async function openVerifiedApplicationForm(
   page: Page,
   email: string,
-  options: { unaffiliated?: boolean } = {},
+  options: { unaffiliated?: boolean; organizationName?: string } = {},
 ): Promise<void> {
-  await startJoinInBrowser(page, email, { individual: options.unaffiliated });
+  await startJoinInBrowser(page, email, {
+    individual: options.unaffiliated,
+    ...(options.organizationName ? { organization: { name: options.organizationName } } : {}),
+  });
   await expect(page.locator("[data-join-signed-in]")).toContainText(email);
   await expect(page.locator('[data-membership-categories] input[name="membershipCategory"]').first()).toBeVisible();
 }
@@ -40,8 +38,9 @@ async function openVerifiedApplicationForm(
 test("an organization applicant is offered only organization-tied categories", async ({ page }) => {
   const suffix = uniqueSuffix();
   const email = `org-categories-${suffix}@org-categories-${suffix}.test`;
+  const organizationName = `Category Organization ${suffix}`;
 
-  await openVerifiedApplicationForm(page, email);
+  await openVerifiedApplicationForm(page, email, { organizationName });
 
   const offered = await page
     .locator('[data-membership-categories] input[name="membershipCategory"]')
@@ -53,7 +52,9 @@ test("an organization applicant is offered only organization-tied categories", a
   expect(offered).not.toContain("H5");
   expect(offered).not.toContain("H6");
   expect(offered).not.toContain("H7");
-  await expect(page.getByLabel("Organization name")).toBeVisible();
+  // The application is made as the organization added at account setup, never a typed name.
+  await expect(page.locator("[data-join-signed-in]")).toContainText(organizationName);
+  await expect(page.getByLabel("Organization name")).toHaveCount(0);
 });
 
 test("an individual applicant is offered only the org-less categories", async ({ page }) => {
@@ -75,7 +76,11 @@ test("an organization applicant submits in a category other than the default", a
   const suffix = uniqueSuffix();
   const email = `category-a-${suffix}@category-a-${suffix}.test`;
 
-  await openVerifiedApplicationForm(page, email);
+  await openVerifiedApplicationForm(page, email, { organizationName: `Category Organization ${suffix}` });
+  // The name and bio come from the person and the identity that represents the organization.
+  const applicant = page.locator("[data-join-signed-in]");
+  await addMissingName(page, applicant, { firstName: "Alex", lastName: "Applicant" });
+  await addRepresentationBio(page, applicant, "I work on PKI interoperability.");
 
   // Everything that provisions a fixture uses F. Submitting a different
   // organization category proves the choice is carried through rather than
@@ -95,21 +100,16 @@ test("an organization applicant submits in a category other than the default", a
   for (const document of await page.locator(".membership-legal-card").all()) {
     expect((await document.boundingBox())!.width).toBeGreaterThan(formWidth * 0.9);
   }
-  await applicationForm.getByLabel("First name").fill("Alex");
-  await applicationForm.getByLabel("Last name").fill("Applicant");
-  await page.getByLabel("Organization name").fill(`Category ${chosen} Organization ${suffix}`);
   for (const agreement of await page.locator('[data-join-application-form] input[type="checkbox"][required]').all()) {
     await agreement.check();
   }
 
-  await page.locator('[name="custom.job_title"]').fill("Membership contact");
-  await page.getByLabel("About yourself", { exact: false }).fill("   ");
+  // The job title and bio come from the representation; only what the organization does is asked here.
+  await expect(page.locator('[name="custom.job_title"]')).toHaveCount(0);
   await page.getByLabel("About your organization", { exact: false }).fill("   ");
   await page.getByRole("button", { name: "Submit membership application" }).click();
-  await expect(page.locator("#custom-about_yourself-error")).toContainText("required");
   await expect(page.locator("#custom-about_organization-error")).toContainText("required");
   await expect(reason).toHaveValue("We want to contribute to the PKI community.");
-  await page.getByLabel("About yourself", { exact: false }).fill("I work on PKI interoperability.");
   await page.getByLabel("About your organization", { exact: false }).fill("We build PKI services.");
   const submission = page.waitForResponse(
     (response) => response.url().endsWith("/api/v1/members/applications") && response.request().method() === "POST",
@@ -119,23 +119,10 @@ test("an organization applicant submits in a category other than the default", a
   await expect(page.getByRole("heading", { name: /Thanks, Alex Applicant!/ })).toBeVisible();
 });
 
-test("an individual can submit on a claimed nonmember domain without an organization chooser", async ({
-  page,
-}, testInfo) => {
-  const suffix = uniqueSuffix();
-  const domain = `university-${suffix}.test`;
-  await signInToPortal(page, e2eAdminEmail("individual-claimed-domain"));
-  const created = await page.request.post("/api/v1/organizations", {
-    data: organizationCreateSchema.parse({ name: `Nonmember University ${suffix}` }),
-  });
-  expect(created.status(), await created.text()).toBe(201);
-  const { organization } = organizationCreateResponseSchema.parse(await created.json());
-  const claimed = await page.request.post(`/api/v1/organizations/${organization.id}/domains`, {
-    data: organizationDomainClaimCreateSchema.parse({ domain, reason: "Synthetic university domain" }),
-  });
-  expect(claimed.status(), await claimed.text()).toBe(201);
-  await page.context().clearCookies();
-  await openVerifiedApplicationForm(page, `individual-description-${suffix}@${domain}`, {
+test("an individual applies from a personal address without an organization chooser", async ({ page }, testInfo) => {
+  // An address on a domain an organization has claimed represents that
+  // organization, so an individual applies from a personal mailbox.
+  await openVerifiedApplicationForm(page, `individual-description-${uniqueSuffix()}@gmail.com`, {
     unaffiliated: true,
   });
   await expect(page.getByRole("heading", { name: "Choose your organization" })).toHaveCount(0);
@@ -145,7 +132,7 @@ test("an individual can submit on a claimed nonmember domain without an organiza
   await page.getByLabel(/H6 —/).check();
   for (const width of [1280, 375]) {
     await page.setViewportSize({ width, height: 900 });
-    await page.screenshot({ path: testInfo.outputPath(`individual-claimed-domain-${width}.png`) });
+    await page.screenshot({ path: testInfo.outputPath(`individual-personal-address-${width}.png`) });
   }
   await page.locator('[name="custom.reason"]').fill("I contribute to PKI interoperability.");
   for (const agreement of await page.locator('[data-join-application-form] input[type="checkbox"][required]').all())
@@ -237,15 +224,15 @@ test("a verified claimed domain continues into organization access without a sec
    * no second application exists for a company the consortium already has.
    */
   await page.context().clearCookies();
-  await ensureAppOrigin(page);
-  // They name the organization their domain is claimed by, and represent it at once.
-  const join = await verifyMembershipJoinEmail(page, colleagueEmail, {
-    organizationName: `Claimed Domain Organization ${suffix}`,
-  });
-  expect(join.status).toBe("organization_access_ready");
-  // The membership they were admitted under is the founder's organization:
-  // signing in, they continue as its representative.
-  await signInToPortal(page, colleagueEmail, { continueAs: `Claimed Domain Organization ${suffix}` });
+  // Their domain is claimed, so account setup asks which organization they
+  // represent; naming the member organization admits them under it at once,
+  // and the join page shows its membership instead of a new application.
+  await startJoinInBrowser(page, colleagueEmail, { organization: { name: `Claimed Domain Organization ${suffix}` } });
+  await expect(
+    page
+      .locator("[data-join-refusal]")
+      .getByRole("heading", { name: `Claimed Domain Organization ${suffix} is already a member` }),
+  ).toBeVisible();
 
   /*
    * And it is a real session, not a claim about one: the portal opens, and

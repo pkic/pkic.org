@@ -63,7 +63,7 @@ async function signIn(email: string) {
   const verified = await callApi(apiEnv(), "/api/v1/auth/verify-link", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token }),
+    body: JSON.stringify({ token, organization: { personal: true } }),
   });
   expect(verified.status, await verified.clone().text()).toBe(200);
   return (verified.headers.get("set-cookie") ?? "").split(";", 1)[0];

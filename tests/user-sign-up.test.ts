@@ -75,7 +75,7 @@ describe("account sign-up", () => {
     expect(stored).toContain("pkcq1_");
     expect(JSON.parse(stored).__authorizedCapabilityMarkers).toHaveLength(1);
 
-    const verified = await call("/api/v1/auth/verify-link", { token });
+    const verified = await call("/api/v1/auth/verify-link", { token, organization: { personal: true } });
     expect(verified.status).toBe(200);
     const session = userAuthSessionResponseSchema.parse(await verified.json());
     expect(session.identity.email).toBe("ada@organization.example");
@@ -92,7 +92,7 @@ describe("account sign-up", () => {
       await queryAll(env.DB, "SELECT id FROM identities WHERE user_id = ? AND organization_id IS NULL", [user.id]),
     ).toHaveLength(1);
 
-    expect((await call("/api/v1/auth/verify-link", { token })).status).toBe(409);
+    expect((await call("/api/v1/auth/verify-link", { token, organization: { personal: true } })).status).toBe(409);
   });
 
   it("refuses a return path that carries an invitation token, so no token reaches the outbox", async () => {
@@ -113,7 +113,10 @@ describe("account sign-up", () => {
       .bind(crypto.randomUUID(), other, email, email, new Date().toISOString())
       .run();
     expect((await call("/api/v1/auth/sign-up", { email })).status).toBe(200);
-    const verified = await call("/api/v1/auth/verify-link", { token: linkToken((await lastLink())!) });
+    const verified = await call("/api/v1/auth/verify-link", {
+      token: linkToken((await lastLink())!),
+      organization: { personal: true },
+    });
     expect(verified.status, await verified.clone().text()).toBe(200);
 
     const [owner] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email=?", [email]);
@@ -135,7 +138,10 @@ describe("account sign-up", () => {
     ]);
     await createMemberSession(env.DB, userId, "untrusted-old-session");
     expect((await call("/api/v1/auth/sign-up", { email })).status).toBe(200);
-    const verified = await call("/api/v1/auth/verify-link", { token: linkToken((await lastLink())!) });
+    const verified = await call("/api/v1/auth/verify-link", {
+      token: linkToken((await lastLink())!),
+      organization: { personal: true },
+    });
     expect(verified.status, await verified.clone().text()).toBe(200);
 
     expect(
@@ -161,7 +167,7 @@ describe("account sign-up", () => {
       .bind(crypto.randomUUID(), other, email, email, at, at)
       .run();
 
-    expect((await call("/api/v1/auth/verify-link", { token })).status).toBe(404);
+    expect((await call("/api/v1/auth/verify-link", { token, organization: { personal: true } })).status).toBe(404);
     expect(await queryAll(env.DB, "SELECT id FROM sessions")).toHaveLength(0);
     expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email=?", [email])).toEqual([]);
   });

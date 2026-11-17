@@ -1,12 +1,21 @@
 import { completeSyntheticMembershipReview } from "./member-provisioning";
 import { expect, type Page } from "@playwright/test";
 import { verifyMembershipJoinEmail } from "./member-join";
+import { signedInRequest } from "./sign-in-card";
+import { userAuthSessionResponseSchema } from "../../../assets/shared/schemas/user-auth";
+import { myProfileUpdateSchema } from "../../../assets/shared/schemas/me";
+import { identityProfileUpdateSchema } from "../../../assets/shared/schemas/own-identity-profile";
+import {
+  memberApplicationCreateAsIdentitySchema,
+  memberApplicationCreateResponseSchema,
+} from "../../../assets/shared/schemas/member-applications";
 
 /**
  * Public membership-application provisioning for browser journeys.
  *
- * Every application is created the way an applicant creates one: through the
- * mailbox-verified join capability. Nothing here shortcuts the verification
+ * Every application is created the way an applicant creates one: an
+ * individual through the mailbox-verified join capability, an organization as
+ * the identity that represents it. Nothing here shortcuts the verification
  * boundary, so a test can never assert on state a real applicant could not
  * have produced. Stage movement is deliberately NOT included — the journeys
  * that care about stages drive them through the portal UI.
@@ -43,6 +52,8 @@ export async function submitMembershipApplication(
   },
 ): Promise<SubmittedApplication> {
   await ensureAppOrigin(page);
+  if (options.organizationName && !options.unaffiliatedAttestation)
+    return submitOrganizationApplication(page, { ...options, organizationName: options.organizationName });
   const join = await verifyMembershipJoinEmail(page, options.email, {
     unaffiliatedAttestation: options.unaffiliatedAttestation ?? false,
   });
@@ -92,6 +103,53 @@ export async function submitMembershipApplication(
     ...(options.organizationName ? { organizationName: options.organizationName } : {}),
     category: options.category,
   };
+}
+
+/**
+ * An organization applies as the identity that represents it: the applicant
+ * adds the organization at account setup's organization step, completes the
+ * name and bio the application takes from that identity, and applies as it.
+ */
+async function submitOrganizationApplication(
+  page: Page,
+  options: { email: string; name: string; category: string; organizationName: string },
+): Promise<SubmittedApplication> {
+  const applicant = await signedInRequest(new URL(page.url()).origin, options.email, {
+    organization: { name: options.organizationName, jobTitle: "Membership contact" },
+  });
+  try {
+    const session = userAuthSessionResponseSchema.parse(await (await applicant.get("/api/v1/auth/session")).json());
+    const identity = session.actingIdentities.find((item) => item.organizationName === options.organizationName);
+    if (!identity) throw new Error(`${options.email} does not represent ${options.organizationName}`);
+    const [firstName, ...rest] = options.name.split(" ");
+    const named = await applicant.patch("/api/v1/users/current", {
+      data: myProfileUpdateSchema.parse({ firstName, lastName: rest.join(" ") || "Applicant" }),
+    });
+    expect(named.status(), await named.text()).toBe(200);
+    const described = await applicant.patch(`/api/v1/users/current/identities/${identity.id}/profile`, {
+      data: identityProfileUpdateSchema.parse({ biography: "I work on PKI interoperability." }),
+    });
+    expect(described.status(), await described.text()).toBe(200);
+    const created = await applicant.post("/api/v1/members/applications", {
+      data: memberApplicationCreateAsIdentitySchema.parse({
+        identityId: identity.id,
+        membershipCategory: options.category,
+        answers: {
+          reason: "This browser journey exercises the membership review workflow.",
+          about_organization: "We build PKI services.",
+          agrees_bylaws: true,
+          agrees_code_of_conduct: true,
+          agrees_ipr_policy: true,
+          warranted_authority: true,
+        },
+      }),
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const body = memberApplicationCreateResponseSchema.parse(await created.json());
+    return { applicationId: body.applicationId, ...options };
+  } finally {
+    await applicant.dispose();
+  }
 }
 
 /**

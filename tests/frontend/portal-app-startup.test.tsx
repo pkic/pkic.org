@@ -246,6 +246,53 @@ it("retains canonical session recording and the reviewed return route after succ
   ]);
 });
 
+it("holds a work address at the organization step until it is answered, then opens the return route", async () => {
+  window.location.hash = "#/verify?token=synthetic-work-link&next=%2Fgroups%2Fsynthetic";
+  const session = portalSessionFixture({ pendingIdentityCount: 1 });
+  const verifications: unknown[] = [];
+  fetchMock.mockImplementation(async (input, init) => {
+    const path = String(input);
+    if (path === "/api/v1/auth/verify-link") {
+      const body = userAuthVerifySchema.parse(JSON.parse(String(init?.body)));
+      verifications.push(body);
+      if (!body.organization)
+        return Response.json({
+          success: true,
+          organizationRequired: {
+            personalAllowed: true,
+            affiliation: {
+              email: "ada@own-domain.test",
+              domain: "own-domain.test",
+              domains: [],
+              organization: null,
+              organizations: [],
+            },
+          },
+        });
+    }
+    return Response.json(path === "/api/v1/users/current" ? portalProfileFixture(session) : session);
+  });
+  await mount();
+  const step = await vi.waitFor(() => {
+    const region = host.querySelector<HTMLElement>('[aria-label="Add your organization"]');
+    expect(region).not.toBeNull();
+    return region!;
+  });
+  expect(step.textContent).toContain("@own-domain.test");
+  expect(portalSession.value).toBeNull();
+  expect(host.textContent).not.toContain("Authenticated portal content");
+  await act(async () => {
+    [...step.querySelectorAll("button")].find((button) => button.textContent === "Use it as a personal email")!.click();
+  });
+  await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
+  expect(verifications).toEqual([
+    { token: "synthetic-work-link" },
+    { token: "synthetic-work-link", organization: { personal: true } },
+  ]);
+  expect(portalSession.value?.sessionId).toBe(session.sessionId);
+  expect(window.location.hash).toBe("#/groups/synthetic");
+});
+
 it("keeps the passkey offer on screen while the session a link just signed in is refreshed", async () => {
   mocks.supportsPasskeys.mockReturnValue(true);
   window.location.hash = "#/verify?token=synthetic-valid-link";

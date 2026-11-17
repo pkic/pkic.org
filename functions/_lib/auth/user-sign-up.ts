@@ -26,6 +26,11 @@ import { findActingIdentitiesForUser } from "./session-acting-identities";
 import { resolveSessionActingIdentityId } from "../../../assets/shared/session-acting-identity";
 import { recordAuditActingIdentity } from "../services/audit-actor";
 import { prepareUserSession } from "./user-session";
+import type { AccountOrganizationRequired } from "../../../assets/shared/schemas/account-organization";
+import {
+  accountOrganizationStepStatements,
+  type AccountOrganizationStepInput,
+} from "../services/identities/account-organization";
 
 /**
  * Opening a sign-up link proves the mailbox, so the account is created here
@@ -41,8 +46,9 @@ export async function redeemUserSignUpCapability(
     sessionTtlHours: number;
     ipHash?: string | null;
     userAgentHash?: string | null;
+    organization?: AccountOrganizationStepInput;
   },
-): Promise<{ session: UserSessionResult; token: string }> {
+): Promise<{ session: UserSessionResult; token: string } | { required: AccountOrganizationRequired }> {
   const capability = await verifyEmailAuthCapabilityToken({
     signingSecret: payload.signingSecret,
     purpose: "user_sign_up",
@@ -66,8 +72,21 @@ export async function redeemUserSignUpCapability(
       ? new AppError(409, "MAGIC_LINK_USED", SIGN_IN_LINK_REFUSALS.used)
       : new AppError(404, "MAGIC_LINK_INVALID", SIGN_IN_LINK_REFUSALS.invalid);
   }
-  const prepared = await prepareUserSession(db, userId, payload.sessionTtlHours);
   const verifiedAt = nowIso();
+  // The first step already answered "personal"; a claimed domain still asks for the organization.
+  const organizationStep = await accountOrganizationStepStatements(db, {
+    signingSecret: payload.signingSecret,
+    subject: { userId: null },
+    newUserId: userId,
+    email,
+    verifiedAt,
+    input:
+      capability.signUpPersonal && !payload.organization?.answer
+        ? { ...payload.organization, answer: { personal: true } }
+        : payload.organization,
+  });
+  if ("required" in organizationStep) return organizationStep;
+  const prepared = await prepareUserSession(db, userId, payload.sessionTtlHours);
   await commitEmailAuthRedemption(db, {
     purpose: "user_sign_up",
     capabilityId: capability.capabilityId,
@@ -82,6 +101,7 @@ export async function redeemUserSignUpCapability(
     statements: [
       ...preparedUser.statements,
       ...prepareVerifyOwnedEmailStatements(db, { userId, normalizedEmail: email, method: "magic_link", verifiedAt }),
+      ...organizationStep.statements,
       ...prepared.statements,
     ],
   });
@@ -94,16 +114,22 @@ export async function redeemUserSignUpCapability(
     hasEventParticipation(db, userId),
     findActingIdentitiesForUser(db, userId),
   ]);
-  recordAuditActingIdentity(userId, resolveSessionActingIdentityId(actingIdentities, null));
-  const session = await createEstablishedUserSessionResult(db, prepared, {
-    identity: { id: userId, email: preparedUser.user.email },
-    staff,
-    memberships,
-    sponsors,
-    pendingIdentityCount,
-    eventParticipation,
-    actingIdentities,
-  });
+  const selectedIdentityId = organizationStep.identityId ?? null;
+  recordAuditActingIdentity(userId, resolveSessionActingIdentityId(actingIdentities, selectedIdentityId));
+  const session = await createEstablishedUserSessionResult(
+    db,
+    prepared,
+    {
+      identity: { id: userId, email: preparedUser.user.email },
+      staff,
+      memberships,
+      sponsors,
+      pendingIdentityCount,
+      eventParticipation,
+      actingIdentities,
+    },
+    selectedIdentityId,
+  );
   const token = await signUserSessionToken(payload.signingSecret, {
     sub: userId,
     sid: prepared.sessionId,

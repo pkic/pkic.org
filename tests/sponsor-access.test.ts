@@ -162,7 +162,10 @@ describe("sponsor capacity in the canonical portal session", () => {
     await seedConsentingRegistration(eventId, "no@attendee.test", "privacy-policy");
 
     const verified = await call(
-      jsonRequest("/api/v1/auth/verify-link", { token: await signUpToken("leader@sponsor.test") }),
+      jsonRequest("/api/v1/auth/verify-link", {
+        token: await signUpToken("leader@sponsor.test"),
+        organization: { personal: true },
+      }),
     );
     expect(verified.status).toBe(200);
     const body = (await verified.json()) as {
@@ -393,7 +396,10 @@ describe("sponsor capacity in the canonical portal session", () => {
   it("logs out through canonical auth and revokes the one user session", async () => {
     await createActiveEventSponsor("Leader", "logout@sponsor.test");
     const verified = await call(
-      jsonRequest("/api/v1/auth/verify-link", { token: await signUpToken("logout@sponsor.test") }),
+      jsonRequest("/api/v1/auth/verify-link", {
+        token: await signUpToken("logout@sponsor.test"),
+        organization: { personal: true },
+      }),
     );
     const token = sessionTokenFrom(verified);
     const logout = await call(

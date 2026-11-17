@@ -516,9 +516,11 @@ describe("secondary user emails", () => {
     );
     const redeemed = await redeemUserSignInCapability(env.DB, {
       token: delivered.magicLinkUrl,
+      organization: { answer: { personal: true } },
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
       sessionTtlHours: 8,
     });
+    if (!("session" in redeemed)) throw new Error("The organization step was asked again");
 
     expect(redeemed.session.identity).toMatchObject({ id: userId, email: "canonical-login@example.test" });
     expect(redeemed.session.staff?.id).toBe(userId);
@@ -574,6 +576,7 @@ describe("secondary user emails", () => {
     await expect(
       redeemUserSignInCapability(env.DB, {
         token: delivered.magicLinkUrl,
+        organization: { answer: { personal: true } },
         signingSecret: env.INTERNAL_SIGNING_SECRET!,
         sessionTtlHours: 8,
       }),
@@ -618,6 +621,7 @@ describe("secondary user emails", () => {
     const gate = gateNextBatch(env.DB);
     const redemption = redeemUserSignInCapability(gate.db, {
       token: delivered.magicLinkUrl,
+      organization: { answer: { personal: true } },
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
       sessionTtlHours: 8,
     });
@@ -673,6 +677,7 @@ describe("secondary user emails", () => {
     await expect(
       redeemUserSignInCapability(env.DB, {
         token,
+        organization: { answer: { personal: true } },
         signingSecret: env.INTERNAL_SIGNING_SECRET!,
         sessionTtlHours: 8,
       }),

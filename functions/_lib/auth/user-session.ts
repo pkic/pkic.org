@@ -48,6 +48,11 @@ import { getUserSessionToken, signUserSessionToken, type UserSessionTokenClaims 
 import { createEstablishedUserSessionResult, type UserSessionResult } from "./user-session-result";
 
 import { prepareUserSessionRequest } from "./user-session-request";
+import type { AccountOrganizationRequired } from "../../../assets/shared/schemas/account-organization";
+import {
+  accountOrganizationStepStatements,
+  type AccountOrganizationStepInput,
+} from "../services/identities/account-organization";
 import { USER_SESSIONS, resolveUserSessionClaims } from "./user-session-claims";
 export { findActiveIdentity, resolveUserSessionClaims } from "./user-session-claims";
 
@@ -326,8 +331,9 @@ export async function redeemUserSignInCapability(
     sessionTtlHours: number;
     ipHash?: string | null;
     userAgentHash?: string | null;
+    organization?: AccountOrganizationStepInput;
   },
-): Promise<{ session: UserSessionResult; token: string }> {
+): Promise<{ session: UserSessionResult; token: string } | { required: AccountOrganizationRequired }> {
   const capability = await verifyEmailAuthCapabilityToken({
     signingSecret: payload.signingSecret,
     purpose: "user_sign_in",
@@ -363,8 +369,16 @@ export async function redeemUserSignInCapability(
     capability,
     currentEmail: signInIdentity.sign_in_email,
   });
-  const prepared = await prepareUserSession(db, identity.id, payload.sessionTtlHours);
   const verifiedAt = nowIso();
+  const organizationStep = await accountOrganizationStepStatements(db, {
+    signingSecret: payload.signingSecret,
+    subject: { userId: identity.id },
+    email: signInIdentity.normalized_sign_in_email,
+    verifiedAt,
+    input: payload.organization,
+  });
+  if ("required" in organizationStep) return organizationStep;
+  const prepared = await prepareUserSession(db, identity.id, payload.sessionTtlHours);
   const authorizationEvidence = signInCapacityAuthorizationEvidence(
     {
       identity,
@@ -418,6 +432,7 @@ export async function redeemUserSignInCapability(
             }),
           ]
         : []),
+      ...organizationStep.statements,
       ...prepared.statements,
       ...(signInIdentity.sign_in_email_id
         ? [
@@ -435,15 +450,28 @@ export async function redeemUserSignInCapability(
         : []),
     ],
   });
-  const session = await createEstablishedUserSessionResult(db, prepared, {
-    identity,
-    staff,
-    memberships,
-    sponsors,
-    pendingIdentityCount,
-    eventParticipation,
-    actingIdentities,
-  });
+  // An organization added at account setup is read back, with any membership it brings, and acted as.
+  const added = organizationStep.identityId;
+  const [currentMemberships, currentActingIdentities] = added
+    ? await Promise.all([
+        resolveEligibleMembershipRows(db, capability.subjectId),
+        findActingIdentitiesForUser(db, capability.subjectId),
+      ])
+    : [memberships, actingIdentities];
+  const session = await createEstablishedUserSessionResult(
+    db,
+    prepared,
+    {
+      identity,
+      staff,
+      memberships: currentMemberships,
+      sponsors,
+      pendingIdentityCount,
+      eventParticipation,
+      actingIdentities: currentActingIdentities,
+    },
+    added ?? null,
+  );
   const token = await signUserSessionToken(payload.signingSecret, {
     sub: identity.id,
     sid: prepared.sessionId,

@@ -28,6 +28,9 @@ const identityLabel = (identity: SessionActingIdentity) =>
  * identity, never from a typed answer — with a way to choose another one they
  * already hold; without one, the registration shows their current affiliation.
  */
+/** The "Change representation" dialog, which a page may open to have the person add or choose a representation. */
+export const CHANGE_REPRESENTATION_DIALOG = "representation";
+
 export function RegistrationIdentityField({
   preferred,
   available = preferred ? [preferred] : [],
@@ -53,7 +56,7 @@ export function RegistrationIdentityField({
   const [editing, showEditing, closeEditing] = useDialogQueryState("identity-profile");
   const [refreshError, setRefreshError] = useState("");
   const [adding, showAdding, closeAdding] = useDialogQueryState("identity");
-  const [choosing, showChoosing, closeChoosing] = useDialogQueryState("representation");
+  const [choosing, showChoosing, closeChoosing] = useDialogQueryState(CHANGE_REPRESENTATION_DIALOG);
   const [draft, setDraft] = useState<SessionActingIdentity | null>(selected);
   const closeWithError = (close: () => Promise<void>) => {
     void close().catch((cause: unknown) => {

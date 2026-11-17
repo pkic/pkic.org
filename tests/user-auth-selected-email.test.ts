@@ -69,7 +69,7 @@ async function verifyLink(token: string) {
   return callApi(environment, "/api/v1/auth/verify-link", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(userAuthVerifySchema.parse({ token })),
+    body: JSON.stringify(userAuthVerifySchema.parse({ token, organization: { personal: true } })),
   });
 }
 

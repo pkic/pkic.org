@@ -12,21 +12,18 @@ import {
   rememberJoinApplicant,
   rememberJoinChoice,
   rememberedJoinChoice,
-  restoreJoinAnswers,
-  saveJoinAnswers,
   type JoinChoice,
 } from "./join-draft";
 import { ApiClientError, getJson, postJson } from "../shared/api-client";
 import { readCustomFieldValues } from "../shared/widgets/custom-fields";
 import { render } from "preact";
 import { withLoadingButton, focusSubmitError } from "../shared/form/submit";
-import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
+import { setStatus, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { replaceFormWithSuccess } from "../shared/form/success-panel";
 import { focusFirstInvalidField, normalizeValidation, refusalSentence } from "../shared/form/validation-map";
 import { membershipApplicationFields } from "../../shared/schemas/membership-application-form";
 import {
-  applyCategoryUI,
   configureMembershipLegalFields,
   filterCategoriesForApplicantKind,
   renderMembershipCategories,
@@ -34,22 +31,17 @@ import {
 } from "./join-application-fields";
 import type { SessionActingIdentity } from "../../shared/session-acting-identity";
 import { JoinOrganizationChoice } from "./join-organization-choice";
+import { JoinOrganizationIdentity } from "./join-organization-identity";
 import { JoinSignedInApplicant, joinRefusalFor, readSignedInApplicant } from "./join-signed-in";
 import type { JoinPath, JoinRefusal, SignedInApplicant } from "./join-signed-in";
 import {
   memberApplicationCreateAsIdentitySchemaForCategory,
   memberApplicationCreateResponseSchema,
-  memberApplicationCreateSchemaForCategory,
   memberApplicationFormResponseSchema,
   type MemberApplicationFormResponse,
 } from "../../shared/schemas/member-applications";
 import { z } from "zod";
-import {
-  memberJoinAffiliationPreviewSchema,
-  memberJoinVerifyResponseSchema,
-  memberJoinVerifySchema,
-} from "../../shared/schemas/member-join";
-import { identityAffiliationPreviewResponseSchema } from "../../shared/schemas/identity-affiliation";
+import { memberJoinVerifyResponseSchema, memberJoinVerifySchema } from "../../shared/schemas/member-join";
 import { ButtonLink } from "../ui/Button";
 import { MEMBERSHIP_JOIN_PATH } from "../../shared/membership-join-path";
 // This module writes design-system class names into markup it builds itself,
@@ -69,43 +61,6 @@ type JoinApplicantKind = JoinApplicationContext["applicantKind"];
 type MembershipApplicationField = NonNullable<MemberApplicationFormResponse["form"]>["fields"][number];
 
 // ── Pure/testable helpers ──────────────────────────────────────────────────
-
-export interface ApplicationPayloadInput {
-  applicantEmail: string;
-  applicantName: string;
-  membershipCategory: string;
-  organizationName?: string;
-  joinToken: string;
-  answers: Record<string, unknown>;
-}
-
-/** Assembles the full submission payload from the static form fields + generic custom-field answers. */
-export function buildApplicationPayload(
-  form: HTMLFormElement,
-  categoryCode: string,
-  context: JoinApplicationContext,
-): ApplicationPayloadInput {
-  const firstName = readField(form, "firstName");
-  const lastName = readField(form, "lastName");
-  const organizationName = readField(form, "organizationName");
-
-  return {
-    applicantEmail: context.applicantEmail,
-    applicantName: [firstName, lastName].filter(Boolean).join(" "),
-    membershipCategory: categoryCode,
-    organizationName: context.applicantKind === "individual" ? undefined : organizationName || undefined,
-    joinToken: context.joinToken,
-    answers: readCustomFieldValues(form),
-  };
-}
-
-/** The form asks for both names; the request carries them as the one applicant name. */
-export const applicantNamePartsSchema = z
-  .object({ firstName: z.string().trim().min(1, "First name is required"), lastName: z.string().trim() })
-  .superRefine((parts, context) => {
-    if (!parts.lastName)
-      context.addIssue({ code: "custom", path: ["applicantName"], message: "Last name is required" });
-  });
 
 function readSelectedCategory(form: HTMLFormElement): string {
   return form.querySelector<HTMLInputElement>('input[name="membershipCategory"]:checked')?.value ?? "";
@@ -155,7 +110,6 @@ async function main(): Promise<void> {
   const categoryContainer = root.querySelector<HTMLElement>("[data-membership-categories]");
   const customFieldsContainer = root.querySelector<HTMLElement>("[data-custom-fields]");
   const signedInSection = root.querySelector<HTMLElement>("[data-join-signed-in]");
-  const typedIdentity = root.querySelector<HTMLElement>("[data-join-typed-identity]");
   if (
     !statusEl ||
     !startSection ||
@@ -171,9 +125,7 @@ async function main(): Promise<void> {
     return;
 
   let legalValidation: ReturnType<typeof installMembershipLegalValidation> | undefined;
-  /** The continuation of an application for an organization the person does not represent yet. */
-  let applicationContext: JoinApplicationContext | null = null;
-  /** The identity the person applies as; null while they apply through a continuation. */
+  /** The identity the person applies as, once the server has authorized their path. */
   let signedInIdentity: SessionActingIdentity | null = null;
   let applicant: SignedInApplicant | null = null;
   /** The identity whose membership path the server resolves, and the path chosen for it. */
@@ -188,6 +140,7 @@ async function main(): Promise<void> {
   const organizationChoiceSection = document.createElement("section");
   organizationChoiceSection.hidden = true;
   organizationChoiceSection.tabIndex = -1;
+  organizationChoiceSection.dataset.joinOrganizationChoice = "";
   root.append(organizationChoiceSection);
 
   const getApplicationDefinition = () => {
@@ -229,11 +182,8 @@ async function main(): Promise<void> {
       if (customFieldsContainer)
         renderMembershipApplicationQuestions(
           customFieldsContainer,
-          membershipApplicationFields(applicationFields, categories[0], { fromIdentity: Boolean(signedInIdentity) }),
+          membershipApplicationFields(applicationFields, categories[0], { fromIdentity: true }),
         );
-      // The identity supplies the name and organization; a continuation asks for them.
-      if (typedIdentity) typedIdentity.hidden = Boolean(signedInIdentity);
-      applyCategoryUI(applicationForm, categories[0]);
       showSection(applicationForm);
       const firstControl = applicationForm.querySelector<HTMLElement>('input[name="membershipCategory"]');
       firstControl?.focus();
@@ -248,7 +198,7 @@ async function main(): Promise<void> {
     if (!customFieldsContainer) return;
     const eligibleAnswers = { ...answers };
     const fields = membershipApplicationFields(applicationFields, category, {
-      fromIdentity: Boolean(signedInIdentity),
+      fromIdentity: true,
     });
     for (const field of fields) {
       if (field.optionSource !== "active_working_groups") continue;
@@ -260,50 +210,28 @@ async function main(): Promise<void> {
     renderMembershipApplicationQuestions(customFieldsContainer, fields, eligibleAnswers);
   };
 
-  let restoringAnswers = false;
-  // Unsent answers are kept for this tab while the path is verified, so a reload does not lose them.
-  for (const type of ["input", "change"])
-    applicationForm.addEventListener(type, () => {
-      if (applicationContext && !restoringAnswers) saveJoinAnswers(applicationForm);
-    });
   const applicationValidation = installJoinApplicationValidation(
     applicationForm,
     () => {
       const configuredCategory = categories.find((entry) => entry.code === readSelectedCategory(applicationForm));
-      if (!configuredCategory) return null;
-      return signedInIdentity
+      return configuredCategory
         ? memberApplicationCreateAsIdentitySchemaForCategory(configuredCategory, applicationFormFields)
-        : z.intersection(
-            memberApplicationCreateSchemaForCategory(configuredCategory, applicationFormFields),
-            applicantNamePartsSchema,
-          );
+        : null;
     },
-    () => {
-      const category = readSelectedCategory(applicationForm);
-      if (signedInIdentity)
-        return {
-          identityId: signedInIdentity.id,
-          membershipCategory: category,
-          answers: readCustomFieldValues(applicationForm),
-        };
-      return applicationContext
+    () =>
+      signedInIdentity
         ? {
-            ...buildApplicationPayload(applicationForm, category, applicationContext),
-            firstName: readField(applicationForm, "firstName"),
-            lastName: readField(applicationForm, "lastName"),
+            identityId: signedInIdentity.id,
+            membershipCategory: readSelectedCategory(applicationForm),
+            answers: readCustomFieldValues(applicationForm),
           }
-        : {};
-    },
+        : {},
   );
   applicationForm.addEventListener("change", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement) || target.name !== "membershipCategory") return;
     const selected = categories.find((category) => category.code === target.value);
     if (selected) renderQuestionsFor(selected, readCustomFieldValues(applicationForm));
-    applyCategoryUI(
-      applicationForm,
-      categories.find((category) => category.code === target.value),
-    );
   });
 
   applicationForm.addEventListener("submit", (event) => {
@@ -317,9 +245,8 @@ async function main(): Promise<void> {
         return;
       }
       const category = readSelectedCategory(applicationForm);
-      const context = applicationContext;
       const identity = signedInIdentity;
-      if (!category || (!context && !identity)) {
+      if (!category || !identity) {
         setStatus(statusEl, "Your membership path has expired. Refresh the page to continue.", true);
         return;
       }
@@ -327,40 +254,22 @@ async function main(): Promise<void> {
         try {
           const configuredCategory = categories.find((entry) => entry.code === category);
           if (!configuredCategory) throw new Error("Choose an available membership category");
-          const formFields = applicationFormFields;
-          let payload: object;
-          let applicantName = applicant?.name ?? "";
-          if (identity) {
-            payload = memberApplicationCreateAsIdentitySchemaForCategory(configuredCategory, formFields).parse({
-              identityId: identity.id,
-              membershipCategory: category,
-              answers: readCustomFieldValues(applicationForm),
-            });
-          } else if (context) {
-            const typed = memberApplicationCreateSchemaForCategory(configuredCategory, formFields).parse(
-              buildApplicationPayload(applicationForm, category, context),
-            );
-            payload = typed;
-            applicantName = typed.applicantName;
-          } else return;
+          const payload = memberApplicationCreateAsIdentitySchemaForCategory(
+            configuredCategory,
+            applicationFormFields,
+          ).parse({
+            identityId: identity.id,
+            membershipCategory: category,
+            answers: readCustomFieldValues(applicationForm),
+          });
           const result = await postJson(
             `${API_BASE}/members/applications`,
             payload,
             memberApplicationCreateResponseSchema,
           );
           forgetJoinDraft();
-          showSuccessPanel(root, applicationForm, result.applicationId, result.manageToken, applicantName);
+          showSuccessPanel(root, applicationForm, result.applicationId, result.manageToken, applicant?.name ?? "");
         } catch (error) {
-          if (
-            !identity &&
-            error instanceof ApiClientError &&
-            ["ORGANIZATION_AFFILIATION_CHANGED", "ORGANIZATION_NAME_IN_USE"].includes(error.code)
-          ) {
-            saveJoinAnswers(applicationForm);
-            applicationContext = null;
-            await resolvePath({}, error.message);
-            return;
-          }
           applicationValidation.refuse(error);
           legalValidation?.refuse(error);
           setStatus(statusEl, normalizeValidation(error).globalMessage, true);
@@ -399,21 +308,17 @@ async function main(): Promise<void> {
       if (result.status === "organization_selection_required") {
         rememberJoinChoice({ unaffiliatedAttestation: choice.unaffiliatedAttestation });
         render(
-          <JoinOrganizationChoice
-            domain={result.domain}
-            affiliation={result.affiliation}
-            organizations={result.organizations}
-            onChoose={(organizationId) => again({ organizationId })}
-            onIndividual={result.canApplyAsIndividual ? () => again({ continueAsIndividual: true }) : undefined}
-            onAdd={(organizationName, domain) => again({ organizationName, domain })}
-            onResolve={(domain) =>
-              postJson(
-                `${API_BASE}/members/join/affiliations`,
-                memberJoinAffiliationPreviewSchema.parse({ domain }),
-                identityAffiliationPreviewResponseSchema,
-              )
-            }
-          />,
+          choice.unaffiliatedAttestation ? (
+            <JoinOrganizationChoice
+              domain={result.domain}
+              organizations={result.organizations}
+              onChoose={(organizationId) => again({ organizationId })}
+              onIndividual={() => again({ continueAsIndividual: true })}
+            />
+          ) : (
+            // An organization applies as the identity that represents it; adding one is account management.
+            <JoinOrganizationIdentity />
+          ),
           organizationChoiceSection,
         );
         showSection(organizationChoiceSection);
@@ -422,36 +327,10 @@ async function main(): Promise<void> {
       }
       if (result.status === "application_ready") {
         rememberJoinChoice(choice);
-        // An individual applies as the identity they already hold; an organization they do not represent
-        // yet is applied for through the continuation, with its name and theirs asked on the form.
-        if (result.applicantKind === "individual") signedInIdentity = identity;
-        else applicationContext = result;
-        // A failed load leaves the kept answers alone for the next reload.
+        // Only an individual is given a continuation: they apply as the identity they already hold.
+        signedInIdentity = identity;
         if (!(await loadApplication(result.applicantKind)) || turn !== chosen) return;
-        if (result.applicantKind === "individual") return;
-        // The kept draft stands until the next edit: stateful widgets take restored values after this render.
-        restoringAnswers = true;
-        const restored = restoreJoinAnswers(applicationForm, (answers) => {
-          const selected = categories.find((category) => category.code === readSelectedCategory(applicationForm));
-          renderQuestionsFor(selected ?? categories[0], answers);
-        });
-        restoringAnswers = false;
-        for (const [name, value] of [
-          ["firstName", person.firstName],
-          ["lastName", person.lastName],
-        ] as const) {
-          const control = applicationForm.querySelector<HTMLInputElement>(`[name="${name}"]`);
-          if (control && !control.value) control.value = value;
-        }
-        const organizationName = applicationForm.querySelector<HTMLInputElement>('[name="organizationName"]');
-        if (organizationName) {
-          organizationName.readOnly = Boolean(result.organizationName);
-          if (result.organizationName) organizationName.value = result.organizationName;
-        }
         if (recoveryMessage) setStatus(statusEl, recoveryMessage, true);
-        else if (restored) {
-          setStatus(statusEl, "We restored the answers you entered earlier. Agreements need accepting again.");
-        }
         return;
       }
       forgetJoinDraft();
@@ -472,9 +351,7 @@ async function main(): Promise<void> {
       if (turn !== chosen) return;
       if (
         error instanceof ApiClientError &&
-        ["ORGANIZATION_AFFILIATION_CHANGED", "IDENTITY_DOMAIN_MISMATCH", "ORGANIZATION_NAME_IN_USE"].includes(
-          error.code ?? "",
-        )
+        ["ORGANIZATION_AFFILIATION_CHANGED", "IDENTITY_DOMAIN_MISMATCH"].includes(error.code ?? "")
       ) {
         // A selection the server no longer accepts returns to the choice it was made from, once.
         if (Object.keys(selection).length > 0 && !recoveryMessage) return resolvePath({}, error.message);
@@ -499,7 +376,6 @@ async function main(): Promise<void> {
   const applyAs = (identity: SessionActingIdentity, refusal: JoinRefusal | null, path: JoinPath | null) => {
     chosen += 1;
     signedInIdentity = null;
-    applicationContext = null;
     pathIdentity = null;
     // An earlier notice no longer applies; an empty one must not stay on screen as a bare strip.
     statusEl.textContent = "";

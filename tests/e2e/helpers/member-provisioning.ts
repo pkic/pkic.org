@@ -8,7 +8,7 @@ import { membershipWorkflowReviewResponseSchema } from "../../../assets/shared/s
  * one here rather than seeding the database behind the application's back.
  */
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
-import { verifyMembershipJoinEmail } from "./member-join";
+import { submitMembershipApplication } from "./membership";
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -52,33 +52,16 @@ export async function createMember(
 ): Promise<{ email: string; userId: string; memberId: string; identityId: string }> {
   const identity = crypto.randomUUID();
   const email = `e2e-persona-${identity}@persona-${identity}.test`;
-  if (!page.url().startsWith("http")) await page.goto("/");
-  const verified = await verifyMembershipJoinEmail(page, email, {
-    unaffiliatedAttestation: options.individual ?? false,
-  });
-  if (verified.status !== "application_ready") throw new Error(`Expected an application, received ${verified.status}`);
-
-  const application = await jsonResponse(page.request, "POST", "/api/v1/members/applications", {
-    applicantEmail: email,
-    applicantName: "E2E Persona Member",
-    membershipCategory: options.individual ? "H5" : "A",
+  // An organization applies as the identity that represents it, the way an applicant does.
+  const application = await submitMembershipApplication(page, {
+    email,
+    name: "E2E Persona Member",
+    category: options.individual ? "H5" : "A",
     ...(options.individual
-      ? {}
+      ? { unaffiliatedAttestation: true }
       : { organizationName: options.organizationName ?? `Persona Test Organization ${identity}` }),
-    joinToken: verified.joinToken,
-    answers: {
-      reason: "Real Worker/D1 portal persona coverage",
-      about_yourself: "I work on PKI interoperability.",
-      // An organization's applicant says what they do there.
-      ...(options.individual ? {} : { job_title: "Membership contact", about_organization: "We build PKI services." }),
-      agrees_bylaws: true,
-      agrees_code_of_conduct: true,
-      agrees_ipr_policy: true,
-      warranted_authority: true,
-    },
   });
-  expect(stringProperty(application, "stage")).toBe("submitted");
-  const approved = await completeSyntheticMembershipReview(page.request, stringProperty(application, "applicationId"));
+  const approved = await completeSyntheticMembershipReview(page.request, application.applicationId);
   const userId = stringProperty(approved, "userId");
   const userDetail = recordProperty(await jsonResponse(page.request, "GET", `/api/v1/users/${userId}`), "user");
   // The account keeps the individual identity it started with; the membership is on the identity that holds it.

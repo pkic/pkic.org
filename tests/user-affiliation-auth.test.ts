@@ -73,7 +73,10 @@ async function requestSignInToken(email = "affiliated@example.test") {
 
 async function signIn(email = "affiliated@example.test") {
   const token = await requestSignInToken(email);
-  const verified = await call("/api/v1/auth/verify-link", { method: "POST", body: JSON.stringify({ token }) });
+  const verified = await call("/api/v1/auth/verify-link", {
+    method: "POST",
+    body: JSON.stringify({ token, organization: { personal: true } }),
+  });
   expect(verified.status).toBe(200);
   return {
     session: userAuthSessionResponseSchema.parse(await verified.json()),
@@ -198,6 +201,7 @@ describe("affiliation-only account access", () => {
       await expect(
         redeemUserSignInCapability(raced, {
           token,
+          organization: { answer: { personal: true } },
           signingSecret: SIGNING_SECRET,
           sessionTtlHours: 24,
         }),

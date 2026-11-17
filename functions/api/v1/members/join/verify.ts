@@ -36,8 +36,6 @@ export const MembersJoinVerifyPost = openApiRoute(memberJoinVerifyRouteSchema, a
     email,
     applicantKind: data.body.unaffiliatedAttestation ? "individual" : "organization",
     organizationId: data.body.organizationId,
-    organizationName: data.body.organizationName,
-    domain: data.body.domain,
     continueAsIndividual: data.body.continueAsIndividual,
     signingSecret: requireInternalSecret(c.env),
     applicationTtlSeconds: 15 * 60,

@@ -18,28 +18,19 @@ import {
 } from "./open-application";
 
 /** One observation of a proved address for the join decision and read-only previews. */
-export function prepareJoinAffiliationRead(
-  db: DatabaseLike,
-  email: string,
-  selection?: { domain?: string; organizationName?: string },
-) {
+function prepareJoinAffiliationRead(db: DatabaseLike, email: string) {
   return workEmailDomain(email)
     ? prepareVerifiedAffiliationRead(
         db,
         provedMailboxUserIdSelection(email),
-        { email, emailId: null, domain: selection?.domain, organizationName: selection?.organizationName },
+        { email, emailId: null },
         { verifiedAt: nowIso() },
       )
     : null;
 }
 
 /** Request-owned observations for the existing join planners. Mutation guards remain authoritative. */
-export async function readJoinVerification(
-  db: DatabaseLike,
-  email: string,
-  organizationId?: string,
-  selection?: { domain?: string; organizationName?: string },
-) {
+export async function readJoinVerification(db: DatabaseLike, email: string, organizationId?: string) {
   const owner = provedMailboxUserIdSelection(email);
   const claim = organizationDomainClaimForEmailSelection(email);
   // A chosen organization may claim any of the address's domains, such as the parent the person selected;
@@ -56,7 +47,7 @@ export async function readJoinVerification(
     bindings: organizationId ? [organizationId, JSON.stringify(organizationDomainCandidates(email))] : claim.bindings,
   };
   const creation = identityCreationSelections(owner, organization);
-  const affiliation = prepareJoinAffiliationRead(db, email, selection);
+  const affiliation = prepareJoinAffiliationRead(db, email);
   const reads: SqlSelection[] = [
     emailOwnershipSelection(email),
     provedMailboxUserSelection(email),

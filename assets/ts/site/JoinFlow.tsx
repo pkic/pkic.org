@@ -1,6 +1,5 @@
 import { CONSORTIUM_CONTACT_HREF } from "../../shared/consortium-contact";
 import { Field } from "../ui/Field";
-import { TextInput } from "../ui/TextControl";
 import { Checkbox } from "../ui/Checkbox";
 import { Button, ButtonLink } from "../ui/Button";
 import { FieldStatus } from "../ui/FieldStatus";
@@ -123,26 +122,6 @@ export function JoinFlow({ documents }: { documents: MembershipDocument[] }) {
         >
           {() => <div data-membership-categories />}
         </Field>
-        <div class="pk-stack" data-join-typed-identity>
-          <div class="join-application-identity-grid">
-            <Field id="firstName" label="First name" errorSlot="firstName">
-              {(control) => <TextInput {...control} name="firstName" autoComplete="given-name" required />}
-            </Field>
-            <Field id="lastName" label="Last name" errorSlot="applicantName">
-              {(control) => <TextInput {...control} name="lastName" autoComplete="family-name" required />}
-            </Field>
-          </div>
-          <div data-organization-name-field>
-            <Field
-              id="organizationName"
-              label="Organization name"
-              errorSlot="organizationName"
-              help="Use the legal or commonly recognized name of the organization you represent."
-            >
-              {(control) => <TextInput {...control} name="organizationName" autoComplete="organization" />}
-            </Field>
-          </div>
-        </div>
         <div class="join-application-fields" data-custom-fields>
           <p class="pk-muted pk-small">Loading additional questions…</p>
         </div>

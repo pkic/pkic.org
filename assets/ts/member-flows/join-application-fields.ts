@@ -9,18 +9,6 @@ type MembershipApplicationField = NonNullable<MemberApplicationFormResponse["for
 import "../ui/Content.css";
 import "../ui/Field.css";
 
-/** The category catalog is server-provided; this only mirrors its selected presentation state. */
-export function applyCategoryUI(form: HTMLFormElement, category: MembershipCategory | undefined): void {
-  const orgField = form.querySelector<HTMLInputElement>("#organizationName");
-  const orgFieldContainer = form.querySelector<HTMLElement>("[data-organization-name-field]");
-  if (!orgField || !orgFieldContainer) return;
-  const individual = category?.isIndividual ?? false;
-  orgField.required = !individual;
-  orgField.disabled = individual;
-  orgFieldContainer.hidden = individual;
-  if (individual) orgField.value = "";
-}
-
 export function filterCategoriesForApplicantKind(
   categories: MembershipCategory[],
   applicantKind: JoinApplicantKind,

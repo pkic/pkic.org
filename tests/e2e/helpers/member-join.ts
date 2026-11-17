@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { memberJoinVerifyResponseSchema, memberJoinVerifySchema } from "../../../assets/shared/schemas/member-join";
+import type { AccountOrganizationChoice } from "./account-organization";
 import { signedInRequest, signInThroughCard } from "./sign-in-card";
 
 /**
@@ -39,15 +40,22 @@ export async function verifyMembershipJoinEmail(
  * Opens the join page as a signed-out visitor, signs them in through its
  * sign-in card (starting an account for a new address), and answers "How are
  * you joining?". Leaves the page on whatever the server decides for that path.
+ *
+ * With `organization`, the person names the organization they represent at
+ * account setup, so the page applies as that identity and asks nothing more.
  */
 export async function startJoinInBrowser(
   page: Page,
   email: string,
-  options: { individual?: boolean } = {},
+  options: { individual?: boolean } & AccountOrganizationChoice = {},
 ): Promise<void> {
   await page.goto("/join/");
-  await signInThroughCard(page, email, { emailFlow: "join", individual: options.individual });
-  await chooseJoinPath(page, options.individual ? "individual" : "organization");
+  await signInThroughCard(page, email, {
+    emailFlow: "join",
+    individual: options.individual,
+    organization: options.organization,
+  });
+  if (!options.organization) await chooseJoinPath(page, options.individual ? "individual" : "organization");
 }
 
 /** Answers "How are you joining?" for a signed-in person who represents no organization yet. */

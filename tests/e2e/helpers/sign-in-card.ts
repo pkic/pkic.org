@@ -1,6 +1,11 @@
 import { expect, request, type APIRequestContext, type Page } from "@playwright/test";
 import { EMAIL_FIRST_COPY, type EmailFirstFlow } from "../../../assets/shared/email-first-copy";
-import { userAuthVerifySchema, userSignUpRequestSchema } from "../../../assets/shared/schemas/user-auth";
+import { userSignUpRequestSchema } from "../../../assets/shared/schemas/user-auth";
+import {
+  answerAccountOrganizationStep,
+  redeemSignInLink,
+  type AccountOrganizationChoice,
+} from "./account-organization";
 import { clientIpForIdentity } from "./portal-auth";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
 
@@ -37,7 +42,7 @@ const START_LABELS: Record<EmailFirstFlow, string> = {
 export async function signInThroughCard(
   page: Page,
   email: string,
-  options: { individual?: boolean; emailFlow?: EmailFirstFlow; returning?: boolean } = {},
+  options: { individual?: boolean; emailFlow?: EmailFirstFlow; returning?: boolean } & AccountOrganizationChoice = {},
 ): Promise<void> {
   // Independent people arrive from independent clients; see `signInToPortal`.
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
@@ -79,8 +84,10 @@ export async function signInThroughCard(
   await page.goto("about:blank");
   const verified = requestTo(page, "/api/v1/auth/verify-link");
   await page.goto(extractEmailUrl(message, "/portal/#/verify"));
+  // A work address without an organization names it, or uses the address as a personal one, first.
+  const established = await answerAccountOrganizationStep(page, await verified, options);
   // The page leaves for the form as soon as the session exists, so only the status is read.
-  expect((await verified).status(), "the emailed link must sign the person in").toBe(200);
+  expect(established.status(), "the emailed link must sign the person in").toBe(200);
   // The portal may offer a passkey before it returns the person to the page they came from.
   const passkeyOffer = page.getByRole("region", { name: "You're signed in", exact: true });
   const returned = () => {
@@ -112,7 +119,7 @@ export async function signInThroughCard(
 export async function signedInRequest(
   origin: string,
   email: string,
-  options: { individual?: boolean } = {},
+  options: { individual?: boolean } & AccountOrganizationChoice = {},
 ): Promise<APIRequestContext> {
   const context = await request.newContext({
     baseURL: origin,
@@ -136,7 +143,7 @@ export async function signedInRequest(
 export async function signInRequestContext(
   context: APIRequestContext,
   email: string,
-  options: { individual?: boolean } = {},
+  options: { individual?: boolean } & AccountOrganizationChoice = {},
 ): Promise<void> {
   const since = await capturedEmailCount();
   const start = () =>
@@ -151,6 +158,5 @@ export async function signInRequestContext(
   const link = new URL(extractEmailUrl(message, "/portal/#/verify"));
   const token = new URLSearchParams(link.hash.slice(link.hash.indexOf("?") + 1)).get("token");
   expect(token, "the emailed link must carry a sign-in token").toBeTruthy();
-  const signedIn = await context.post("/api/v1/auth/verify-link", { data: userAuthVerifySchema.parse({ token }) });
-  expect(signedIn.status(), await signedIn.text()).toBe(200);
+  await redeemSignInLink(context, token!, options);
 }

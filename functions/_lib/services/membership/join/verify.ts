@@ -24,22 +24,19 @@ import {
   prepareStateGuard,
 } from "../../../db/authorization-guard";
 import { resolveDomainOrganization } from "../../../../../assets/shared/organization-domain";
-import { verifiedAffiliationPreview } from "../../identities/verified-affiliation-preview";
 import { observedDomainClaimsEvidence } from "../../identities/affiliation-evidence";
-import { normalizeOrgName, ORGANIZATION_NAME_IN_USE_MESSAGE } from "../../../../../assets/shared/organization-name";
 
+/** Only an individual applies through a continuation; an organization applies as the identity that represents it. */
 async function issueApplicationContinuation(
   signingSecret: string,
   payload: MemberJoinCapabilityPayload,
   ttlSeconds: number,
   applicantUserId: string,
-  organizationName?: string,
 ): Promise<MemberJoinVerifyResponse> {
   return {
     status: "application_ready",
     applicantEmail: payload.email,
     applicantKind: payload.applicantKind,
-    ...(organizationName ? { organizationName } : {}),
     joinToken: await issueMemberJoinApplicationToken(signingSecret, { ...payload, applicantUserId }, ttlSeconds),
   };
 }
@@ -56,20 +53,13 @@ export async function verifyMemberJoin(
     email: string;
     applicantKind: MemberJoinApplicantKind;
     organizationId?: string;
-    organizationName?: string;
-    domain?: string;
     continueAsIndividual?: boolean;
     signingSecret: string;
     applicationTtlSeconds: number;
   },
 ): Promise<MemberJoinVerifyResponse | { status: "organization_identity_ready"; identityId: string }> {
   const capability = newMemberJoinCapabilityPayload(input.email, input.applicantKind);
-  if (input.organizationId && input.organizationName)
-    throw new AppError(422, "IDENTITY_ORGANIZATION_RESOLVED", "Choose an organization or add one.");
-  const observed = await readJoinVerification(db, capability.email, input.organizationId, {
-    domain: input.domain,
-    organizationName: input.organizationName,
-  });
+  const observed = await readJoinVerification(db, capability.email, input.organizationId);
   // The session's address continues only while this account is the one that proved it.
   if (provedMailboxUserId(observed.ownership) !== input.userId) return { status: "support_required" };
   if (observed.existingMembership) return { status: "already_member" };
@@ -79,7 +69,7 @@ export async function verifyMemberJoin(
   }
   const provedUserId = input.userId;
   if (input.continueAsIndividual) {
-    if (capability.applicantKind !== "individual" || input.organizationId || input.organizationName || input.domain)
+    if (capability.applicantKind !== "individual" || input.organizationId)
       throw new AppError(422, "MEMBERSHIP_CATEGORY_TYPE_MISMATCH", "Choose an individual application path.");
     if (observed.state?.individual_conflict) return { status: "support_required" };
     return issueApplicationContinuation(input.signingSecret, capability, input.applicationTtlSeconds, provedUserId);
@@ -96,40 +86,15 @@ export async function verifyMemberJoin(
         );
       })
     : [];
-  if (input.organizationName) {
-    if (!input.domain || !observed.affiliation || capability.applicantKind !== "organization")
-      throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Confirm the organization and email domain again.");
-    if (
-      observed.affiliation.basis.organizations.some(
-        (organization) => organization.normalized_name === normalizeOrgName(input.organizationName!),
-      )
-    )
-      throw new AppError(409, "ORGANIZATION_NAME_IN_USE", ORGANIZATION_NAME_IN_USE_MESSAGE);
-    return issueApplicationContinuation(
-      input.signingSecret,
-      capability,
-      input.applicationTtlSeconds,
-      provedUserId,
-      input.organizationName,
-    );
-  }
   if (input.organizationId && !organizations.some((organization) => organization.id === input.organizationId))
     throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Choose an organization from the updated list.");
-  const affiliationPreview = observed.affiliation
-    ? verifiedAffiliationPreview(observed.affiliation.basis, observed.affiliation.address)
-    : null;
-  if (
-    facts &&
-    affiliationPreview &&
-    !input.organizationId &&
-    (organizations.length > 0 ||
-      (capability.applicantKind === "organization" && input.domain) ||
-      (capability.applicantKind === "organization" && affiliationPreview.domains.length > 1))
-  ) {
+  // One open application per organization domain: a second applicant waits for it rather than adding the organization again.
+  if (capability.applicantKind === "organization" && !input.organizationId && observed.openApplication.organizationOpen)
+    return { status: "organization_application_in_progress" };
+  if (facts && !input.organizationId && (organizations.length > 0 || capability.applicantKind === "organization")) {
     return {
       status: "organization_selection_required",
       domain: observed.affiliation!.basis.domain,
-      affiliation: affiliationPreview,
       organizations: organizations.map(({ id, name }) => ({ id, name })),
       canApplyAsIndividual: capability.applicantKind === "individual",
     };
@@ -152,18 +117,8 @@ export async function verifyMemberJoin(
     if (observed.openApplication.organizationOpen && capability.applicantKind === "organization") {
       return { status: "organization_application_in_progress" };
     }
-    if (input.organizationId) {
-      const selected = organizations.find((organization) => organization.id === input.organizationId);
-      if (!selected || capability.applicantKind !== "organization" || !observed.affiliation)
-        return { status: "support_required" };
-      return issueApplicationContinuation(
-        input.signingSecret,
-        capability,
-        input.applicationTtlSeconds,
-        provedUserId,
-        selected.name,
-      );
-    }
+    // An organization that is not a member yet is applied for as the identity that represents it, added first.
+    if (input.organizationId || capability.applicantKind === "organization") return { status: "support_required" };
     if (capability.applicantKind === "individual" && observed.state?.individual_conflict) {
       return { status: "support_required" };
     }

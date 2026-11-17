@@ -277,7 +277,7 @@ describe("signed-in membership application", () => {
     expect(document.querySelector<HTMLElement>("[data-join-sign-in]")?.hidden).toBe(true);
     expect(document.querySelector<HTMLElement>("[data-join-signed-in]")?.textContent).toContain("Example Corp");
     expect(document.querySelector('input[name="joinPath"]')).toBeNull();
-    expect(form.querySelector<HTMLElement>("[data-join-typed-identity]")?.hidden).toBe(true);
+    expect(form.querySelector('[name="organizationName"]')).toBeNull();
     const categories = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="membershipCategory"]'));
     expect(categories.map((input) => input.value)).toEqual(["A"]);
     expect(form.querySelector('[name="custom.about_yourself"]')).toBeNull();
@@ -292,13 +292,6 @@ describe("signed-in membership application", () => {
         status: "organization_selection_required",
         domain: "example-corp.test",
         organizations: [{ id: ORGANIZATION_ID, name: "Example Corp" }],
-        affiliation: {
-          email: "ada@example-corp.test",
-          domain: "example-corp.test",
-          domains: [],
-          organization: null,
-          organizations: [],
-        },
       },
       individual: {
         status: "application_ready",
@@ -318,11 +311,10 @@ describe("signed-in membership application", () => {
     expect(form.hidden).toBe(true);
     expect(requests).toEqual([]);
 
+    // An organization is applied for as the identity that represents it, so the person adds that identity first.
     await choosePath("organization");
-    await vi.waitFor(() => expect(document.querySelector("select")).not.toBeNull());
-    expect(document.querySelector("select")?.closest("form")?.querySelector("h2")?.textContent).toBe(
-      "Choose your organization",
-    );
+    const choice = document.querySelector<HTMLElement>("[data-join-organization-choice]")!;
+    await vi.waitFor(() => expect(choice.querySelector("h2")?.textContent).toBe("Add your organization"));
     expect(requests).toEqual([{ path: "/api/v1/members/join/verify", body: { unaffiliatedAttestation: false } }]);
     expect(form.hidden).toBe(true);
 
@@ -330,35 +322,41 @@ describe("signed-in membership application", () => {
     await choosePath("individual");
     await vi.waitFor(() => expect(form.hidden).toBe(false));
     expect(requests[1]).toEqual({ path: "/api/v1/members/join/verify", body: { unaffiliatedAttestation: true } });
-    expect(form.querySelector<HTMLElement>("[data-join-typed-identity]")?.hidden).toBe(true);
+    expect(form.querySelector('[name="firstName"]')).toBeNull();
     const categories = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="membershipCategory"]'));
     expect(categories.map((input) => input.value)).toEqual(["H6"]);
   });
 
-  it("asks for the organization and the applicant's name when applying for one they do not represent yet", async () => {
-    openJoinPage([personal], ({ path }) =>
-      path === "/api/v1/members/applications/form"
-        ? Response.json(definition)
-        : Response.json({
-            status: "application_ready",
-            applicantEmail: "ada@example-corp.test",
-            applicantKind: "organization",
-            organizationName: "Example Corp",
-            joinToken: "a".repeat(32),
-          }),
-    );
+  it("sends the person to their representation to add the organization, never a form of its own", async () => {
+    const requests = openJoinPage([personal], ({ path }) => {
+      if (path === "/api/v1/members/applications/form") return Response.json(definition);
+      if (path === "/api/v1/members/join/verify")
+        return Response.json({
+          status: "organization_selection_required",
+          domain: "example-corp.test",
+          organizations: [],
+          canApplyAsIndividual: false,
+        });
+      return new Response(null, { status: 404 });
+    });
     await import("../../assets/ts/member-flows/join-form");
     await vi.waitFor(() => expect(document.querySelector('input[name="joinPath"]')).not.toBeNull());
     await choosePath("organization");
-    const form = document.querySelector<HTMLFormElement>("[data-join-application-form]")!;
-    await vi.waitFor(() => expect(form.hidden).toBe(false));
-    expect(form.querySelector<HTMLElement>("[data-join-typed-identity]")?.hidden).toBe(false);
-    // Their account already knows their name, and the server fixed the organization they chose.
-    expect(form.querySelector<HTMLInputElement>('[name="firstName"]')?.value).toBe("Ada");
-    expect(form.querySelector<HTMLInputElement>('[name="lastName"]')?.value).toBe("Lovelace");
-    const organization = form.querySelector<HTMLInputElement>('[name="organizationName"]')!;
-    expect(organization.value).toBe("Example Corp");
-    expect(organization.readOnly).toBe(true);
+    const choice = document.querySelector<HTMLElement>("[data-join-organization-choice]")!;
+    await vi.waitFor(() => expect(choice.querySelector("h2")?.textContent).toBe("Add your organization"));
+    // Adding a representation is account management: the shared representation dialog does it.
+    expect(choice.querySelector("input, select, textarea")).toBeNull();
+    await act(async () => buttonNamed(choice, "Add your organization").click());
+    await vi.waitFor(() =>
+      expect(Array.from(document.querySelectorAll("dialog[open] h2"), (title) => title.textContent)).toContain(
+        "Change representation",
+      ),
+    );
+    // Nothing is created by the join page itself; only the shared dialog adds a representation.
+    expect(requests.filter(({ body }) => body !== undefined).map(({ path }) => path)).toEqual([
+      "/api/v1/members/join/verify",
+    ]);
+    expect(document.querySelector<HTMLFormElement>("[data-join-application-form]")?.hidden).toBe(true);
   });
 
   it("says to use a work address when a personal mailbox asks to join for an organization", async () => {

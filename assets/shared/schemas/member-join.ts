@@ -1,10 +1,9 @@
 import { z } from "zod";
-import { normalizedEmailSchema, organizationNameSchema } from "./api-common";
+import { normalizedEmailSchema } from "./api-common";
 import { sameOriginPathSchema } from "./urls";
 import { authErrors, ok, requiresSession } from "./route-contract";
 import { databaseIdSchema } from "./identifiers";
 import { emailDomainNameSchema } from "./email-domains";
-import { identityAffiliationPreviewResponseSchema } from "./identity-affiliation";
 
 export const memberJoinApplicantKindSchema = z.enum(["organization", "individual"]);
 export type MemberJoinApplicantKind = z.infer<typeof memberJoinApplicantKindSchema>;
@@ -17,8 +16,6 @@ export type MemberJoinApplicantKind = z.infer<typeof memberJoinApplicantKindSche
 export const memberJoinVerifySchema = z.object({
   unaffiliatedAttestation: z.boolean().default(false),
   organizationId: databaseIdSchema.optional(),
-  organizationName: organizationNameSchema.optional(),
-  domain: emailDomainNameSchema.optional(),
   continueAsIndividual: z.boolean().optional(),
 });
 export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
@@ -26,7 +23,6 @@ export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
     status: z.literal("application_ready"),
     applicantEmail: normalizedEmailSchema,
     applicantKind: memberJoinApplicantKindSchema,
-    organizationName: organizationNameSchema.optional(),
     joinToken: z.string().min(32).max(1024),
   }),
   /** The person now represents an active member organization; their session acts as that representation. */
@@ -35,7 +31,6 @@ export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("organization_selection_required"),
     domain: emailDomainNameSchema,
-    affiliation: identityAffiliationPreviewResponseSchema,
     canApplyAsIndividual: z.boolean().default(false),
     organizations: z
       .array(
@@ -68,19 +63,5 @@ export const memberJoinVerifyRouteSchema = {
       unprocessable: "The choice does not fit this membership path.",
       tooManyRequests: "Too many requests.",
     }),
-  },
-};
-
-export const memberJoinAffiliationPreviewSchema = memberJoinVerifySchema.pick({ domain: true });
-export const memberJoinAffiliationPreviewRouteSchema = {
-  ...requiresSession(),
-  tags: ["Members"],
-  summary: "Preview organizations for a signed-in person's address",
-  request: {
-    body: { content: { "application/json": { schema: memberJoinAffiliationPreviewSchema } }, required: true },
-  },
-  responses: {
-    ...ok("Read-only affiliation preview.", identityAffiliationPreviewResponseSchema),
-    ...authErrors({ unprocessable: "The account's address is not a work address." }),
   },
 };

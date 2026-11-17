@@ -156,7 +156,7 @@ describe("full workflow", () => {
         new Request("https://app.test/api/v1/auth/verify-link", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token: magicToken } as VerifyUserPayload),
+          body: JSON.stringify({ token: magicToken, organization: { personal: true } } as VerifyUserPayload),
         }),
       );
       expect(verifyResponse.status).toBe(200);

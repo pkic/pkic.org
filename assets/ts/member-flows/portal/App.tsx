@@ -35,7 +35,13 @@ import { Alert } from "../../ui/Alert";
 import { ConfirmDialogHost } from "../../components/ConfirmDialog";
 import { VerifyingOverlay } from "../../components/VerifyingOverlay";
 import { myProfileSchema } from "../../../shared/schemas/me";
-import { userAuthEstablishedResponseSchema, userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
+import {
+  userAuthSessionResponseSchema,
+  userAuthVerifyResponseSchema,
+  type userAuthEstablishedResponseSchema,
+} from "../../../shared/schemas/user-auth";
+import type { AccountOrganizationRequired } from "../../../shared/schemas/account-organization";
+import type { z } from "zod";
 import {
   recordCanonicalSession,
   readActiveUserSession,
@@ -57,6 +63,7 @@ import { useSessionActivity } from "./use-session-activity";
 import { applyRememberedActingIdentity } from "./acting-identity";
 import { ActingIdentitySwitcher } from "./shell/ActingIdentitySwitcher";
 import { PasskeyOffer, passkeyOfferDue } from "./shell/PasskeyOffer";
+import { AccountOrganizationStep } from "./shell/AccountOrganizationStep";
 import { SignedInHeaderMenu } from "./shell/SignedInHeaderMenu";
 import { sessionActingIdentityChoiceRequired } from "../../../shared/session-acting-identity";
 const PortalShell = lazy(() => import("./shell/PortalShell").then((module) => ({ default: module.PortalShell })));
@@ -66,14 +73,45 @@ const OfflineScannerBootstrap = lazy(() =>
 );
 const prepareOfflineScannerCode = (signal: AbortSignal) => prepareScannerDecoder(signal, loadOfflineScannerBootstrap);
 
-async function verifyMagicLink(token: string, isCurrent: () => boolean): Promise<PortalSession | null> {
-  const session = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
-  if (!isCurrent()) return null;
+type OrganizationStep = AccountOrganizationRequired["organizationRequired"];
+
+async function establishLinkSession(
+  session: z.infer<typeof userAuthEstablishedResponseSchema>,
+  isCurrent: () => boolean,
+): Promise<PortalSession | null> {
   if (!(await recordCanonicalSession({ sessionId: session.sessionId, operatorUserId: session.identity.id })))
     throw new Error("This session was signed out on this device.");
   if (!isCurrent()) return null;
   savePortalSession(session);
   return session;
+}
+
+/** The session a link opens, or account setup's organization step when that comes first. */
+async function verifyMagicLink(
+  token: string,
+  isCurrent: () => boolean,
+): Promise<PortalSession | { organizationStep: OrganizationStep } | null> {
+  const result = await postJson("/api/v1/auth/verify-link", { token }, userAuthVerifyResponseSchema);
+  if (!isCurrent()) return null;
+  if ("organizationRequired" in result) return { organizationStep: result.organizationRequired };
+  return establishLinkSession(result, isCurrent);
+}
+
+/** Leaves the verify route for where the link returns the person; false once the page itself navigates. */
+function leaveVerifyRoute(session: PortalSession): boolean {
+  // Session establishment may have restored a recorded return path; only
+  // replace the hash when it still carries the verify token. The link itself
+  // may name where to land — the route the sign-in began on — and that wins
+  // over the session's default page.
+  if (portalHashPath(window.location.hash) !== "/verify") return true;
+  const next = portalMagicLinkReturnPath(window.location.hash);
+  const eventFlow = eventFlowReturnPath(next);
+  if (eventFlow) {
+    window.location.replace(eventFlow);
+    return false;
+  }
+  history.replaceState({}, "", `/portal/#${next ?? portalDefaultPath(session)}`);
+  return true;
 }
 
 export function App() {
@@ -91,6 +129,7 @@ export function App() {
   const [verifying, setVerifying] = useState(() => Boolean(portalMagicLinkToken(window.location.hash)));
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [organizationStep, setOrganizationStep] = useState<{ token: string; step: OrganizationStep } | null>(null);
 
   async function loadPortalSession(
     isCurrent: () => boolean = () => true,
@@ -175,23 +214,16 @@ export function App() {
         try {
           const session = await verifyMagicLink(userToken, () => !cancelled);
           if (!session || cancelled) return;
+          if ("organizationStep" in session) {
+            setOrganizationStep({ token: userToken, step: session.organizationStep });
+            setVerifying(false);
+            return;
+          }
           // Recorded before the redirect below rewrites the hash: after that
           // there is nothing left on the page saying this session began with a
           // link rather than with a passkey.
           signedInWithLink.value = true;
-          // Session establishment may have restored a recorded return path;
-          // only replace the hash when it still carries the verify token. The
-          // link itself may name where to land — the route the sign-in began
-          // on — and that wins over the session's default page.
-          if (portalHashPath(window.location.hash) === "/verify") {
-            const next = portalMagicLinkReturnPath(window.location.hash);
-            const eventFlow = eventFlowReturnPath(next);
-            if (eventFlow) {
-              window.location.replace(eventFlow);
-              return;
-            }
-            history.replaceState({}, "", `/portal/#${next ?? portalDefaultPath(session)}`);
-          }
+          if (!leaveVerifyRoute(session)) return;
           // Token removal owns the canonical session refresh in the next effect.
           setVerifying(false);
           return;
@@ -300,6 +332,21 @@ export function App() {
   if (isEmailVerification) {
     return <EmailVerificationConfirmation />;
   }
+
+  if (organizationStep && !isAuthed.value)
+    return (
+      <AccountOrganizationStep
+        token={organizationStep.token}
+        step={organizationStep.step}
+        onSignedIn={async (established) => {
+          const session = await establishLinkSession(established, () => true);
+          if (!session) return;
+          signedInWithLink.value = true;
+          setOrganizationStep(null);
+          leaveVerifyRoute(session);
+        }}
+      />
+    );
 
   if (verifying || authStatus.value === "loading") {
     return (

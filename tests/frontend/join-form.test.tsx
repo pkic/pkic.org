@@ -8,14 +8,13 @@ import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { installLiveValidation, validateBeforeSubmit } from "../../assets/ts/shared/form/validation";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  applyCategoryUI,
   configureMembershipLegalFields,
   filterCategoriesForApplicantKind,
   membershipCategoryFeeText,
   renderMembershipCategories,
   renderMembershipApplicationQuestions,
 } from "../../assets/ts/member-flows/join-application-fields";
-import { buildApplicationPayload, applicantNamePartsSchema } from "../../assets/ts/member-flows/join-form";
+import { readCustomFieldValues } from "../../assets/ts/shared/widgets/custom-fields";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { vi } from "vitest";
@@ -25,19 +24,6 @@ import type { MemberApplicationFormResponse } from "../../assets/shared/schemas/
 
 type Category = MemberApplicationFormResponse["categories"][number];
 type FormField = NonNullable<MemberApplicationFormResponse["form"]>["fields"][number];
-
-const organizationContext = {
-  status: "application_ready" as const,
-  applicantEmail: "ada@example-corp.test",
-  applicantKind: "organization" as const,
-  joinToken: "a".repeat(32),
-};
-
-const individualContext = {
-  ...organizationContext,
-  applicantEmail: "ada@example.test",
-  applicantKind: "individual" as const,
-};
 
 const categories: Category[] = [
   {
@@ -94,14 +80,9 @@ function formField(key: string, fieldType: FormField["fieldType"] = "boolean"): 
   };
 }
 
-function buildForm(overrides: Partial<Record<string, string>> = {}): HTMLFormElement {
+function buildForm(): HTMLFormElement {
   const form = document.createElement("form");
   form.innerHTML = `
-    <input name="firstName" value="${overrides.firstName ?? "Ada"}" />
-    <input name="lastName" value="${overrides.lastName ?? "Lovelace"}" />
-    <div data-organization-name-field>
-      <input id="organizationName" name="organizationName" value="${overrides.organizationName ?? "Example Corp"}" />
-    </div>
     <input name="custom.reason" value="Because PKI." />
     <input name="custom.warranted_authority" type="checkbox" checked />
   `;
@@ -114,109 +95,51 @@ describe("join-form helpers", () => {
     document.body.innerHTML = "";
   });
 
-  it.each([false, true])(
-    "requires an explicit organization choice before joining (individual option: %s)",
-    async (individual) => {
-      const host = document.createElement("div");
-      document.body.append(host);
-      const choose = vi.fn(async (_id: string) => {});
-      const continueIndividually = vi.fn(async () => {});
-      const first = "00000000-0000-4000-8000-000000000001";
-      await act(async () =>
-        render(
-          <JoinOrganizationChoice
-            domain="shared.example"
-            affiliation={{
-              email: "person@shared.example",
-              domain: "shared.example",
-              domains: [{ domain: "shared.example", canLink: false, organizationName: null }],
-              organization: null,
-              organizations: [],
-            }}
-            organizations={[
-              { id: first, name: "First" },
-              { id: "00000000-0000-4000-8000-000000000002", name: "Second" },
-            ]}
-            onChoose={choose}
-            onIndividual={individual ? continueIndividually : undefined}
-            onResolve={async () => ({
-              email: "person@shared.example",
-              domain: "shared.example",
-              domains: [],
-              organization: null,
-              organizations: [],
-            })}
-            onAdd={vi.fn(async () => {})}
-          />,
-          host,
-        ),
-      );
-      const form = host.querySelector("form")!;
-      expect(form.textContent).toContain("@shared.example");
-      const select = host.querySelector("select")!;
-      if (individual) {
-        const describedBy = select.getAttribute("aria-describedby")!;
-        expect(describedBy).toBeTruthy();
-        expect(document.getElementById(describedBy)?.textContent).toContain("only if you want to join it");
-      }
-      await act(async () => {
-        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-      });
-      expect(choose).not.toHaveBeenCalled();
-      if (individual) {
-        const button = [...host.querySelectorAll("button")].find(
-          (button) => button.textContent === "Continue as an individual",
-        )!;
-        await act(async () => button.click());
-        expect(continueIndividually).toHaveBeenCalledOnce();
-      }
-      await act(async () => {
-        select.value = first;
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      });
-      await act(async () => {
-        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-      });
-      expect(choose).toHaveBeenCalledWith(first);
-      if (individual) {
-        expect(select.getAttribute("aria-required")).not.toBe("true");
-      }
-      await act(async () => render(null, host));
-    },
-  );
-
-  it("builds the application payload for an organization category", () => {
-    const form = buildForm();
-    const payload = buildApplicationPayload(form, "A", organizationContext);
-    expect(payload.applicantName).toBe("Ada Lovelace");
-    expect(payload.applicantEmail).toBe("ada@example-corp.test");
-    expect(payload.membershipCategory).toBe("A");
-    expect(payload.organizationName).toBe("Example Corp");
-    expect(payload.joinToken).toBe("a".repeat(32));
-    expect(payload.answers.reason).toBe("Because PKI.");
-    expect(payload.answers.warranted_authority).toBe(true);
-  });
-
-  it("omits organizationName for individual categories", () => {
-    const form = buildForm({ organizationName: "" });
-    const payload = buildApplicationPayload(form, "H6", individualContext);
-    expect(payload.organizationName).toBeUndefined();
-  });
-
-  it("toggles the organization field from server-provided category metadata", () => {
-    const form = buildForm();
-    const container = form.querySelector<HTMLElement>("[data-organization-name-field]")!;
-    applyCategoryUI(form, categories[1]);
-    const orgField = form.querySelector<HTMLInputElement>("#organizationName");
-    expect(orgField?.required).toBe(false);
-    expect(orgField?.disabled).toBe(true);
-    expect(orgField?.value).toBe("");
-    expect(container.hidden).toBe(true);
-
-    applyCategoryUI(form, categories[0]);
-    expect(orgField?.required).toBe(true);
-    expect(orgField?.disabled).toBe(false);
-    expect(container.hidden).toBe(false);
+  it("lets an individual join a member organization only by choosing it", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const choose = vi.fn(async (_id: string) => {});
+    const continueIndividually = vi.fn(async () => {});
+    const first = "00000000-0000-4000-8000-000000000001";
+    await act(async () =>
+      render(
+        <JoinOrganizationChoice
+          domain="shared.example"
+          organizations={[
+            { id: first, name: "First" },
+            { id: "00000000-0000-4000-8000-000000000002", name: "Second" },
+          ]}
+          onChoose={choose}
+          onIndividual={continueIndividually}
+        />,
+        host,
+      ),
+    );
+    const form = host.querySelector("form")!;
+    expect(form.textContent).toContain("@shared.example");
+    const select = host.querySelector("select")!;
+    const describedBy = select.getAttribute("aria-describedby")!;
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy)?.textContent).toContain("only if you want to join it");
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(choose).not.toHaveBeenCalled();
+    const button = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "Continue as an individual",
+    )!;
+    await act(async () => button.click());
+    expect(continueIndividually).toHaveBeenCalledOnce();
+    await act(async () => {
+      select.value = first;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(choose).toHaveBeenCalledWith(first);
+    expect(select.getAttribute("aria-required")).not.toBe("true");
+    await act(async () => render(null, host));
   });
 
   it("filters and renders only the server-authorized category catalog", () => {
@@ -259,8 +182,6 @@ describe("join-form helpers", () => {
     // Verification shows the application form before the applicant can submit it.
     form.hidden = false;
     renderMembershipCategories(form.querySelector<HTMLElement>("[data-membership-categories]")!, categories);
-    form.querySelector<HTMLInputElement>('input[name="firstName"]')!.value = "Ada";
-    form.querySelector<HTMLInputElement>('input[name="lastName"]')!.value = "Lovelace";
 
     expect(validateBeforeSubmit(form, document.createElement("p"))).toBe(false);
 
@@ -286,13 +207,13 @@ describe("join-form helpers", () => {
       },
     ];
     renderMembershipApplicationQuestions(container, fields);
-    expect(buildApplicationPayload(form, "A", organizationContext).answers.contribution_type).toBe("active");
+    expect(readCustomFieldValues(form).contribution_type).toBe("active");
 
     const select = container.querySelector<HTMLSelectElement>("select")!;
     select.value = "observer";
-    const answers = buildApplicationPayload(form, "A", organizationContext).answers;
+    const answers = readCustomFieldValues(form);
     renderMembershipApplicationQuestions(container, fields, answers);
-    expect(buildApplicationPayload(form, "A", organizationContext).answers.contribution_type).toBe("observer");
+    expect(readCustomFieldValues(form).contribution_type).toBe("observer");
   });
 
   it("does not invent a participation answer when active is not offered", () => {
@@ -305,7 +226,7 @@ describe("join-form helpers", () => {
         options: [{ value: "observer", label: "Observer", active: true }],
       },
     ]);
-    expect(buildApplicationPayload(form, "A", organizationContext).answers.contribution_type).not.toBe("active");
+    expect(readCustomFieldValues(form).contribution_type).not.toBe("active");
   });
 
   it("binds configured agreement fields to canonical document controls without generic duplicates", () => {
@@ -500,20 +421,5 @@ describe("join-form helpers", () => {
     expect(form.querySelector("label")?.textContent).toBe(
       "I confirm that I am submitting this application for myself and agree to be bound by these terms",
     );
-  });
-});
-
-describe("applicant name parts", () => {
-  it("requires both the first and the last name", () => {
-    expect(applicantNamePartsSchema.safeParse({ firstName: "Ada", lastName: "Lovelace" }).success).toBe(true);
-    const missing = applicantNamePartsSchema.safeParse({ firstName: " ", lastName: "" });
-    expect(missing.error?.issues.map((issue) => [issue.path[0], issue.message])).toEqual([
-      ["firstName", "First name is required"],
-      ["applicantName", "Last name is required"],
-    ]);
-    const last = applicantNamePartsSchema.safeParse({ firstName: "Ada", lastName: " " });
-    expect(last.error?.issues.map((issue) => [issue.path[0], issue.message])).toEqual([
-      ["applicantName", "Last name is required"],
-    ]);
   });
 });

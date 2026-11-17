@@ -18,6 +18,7 @@ export const UserAuthSignUp = openApiRoute(userSignUpRouteSchema, async (c: Admi
     signingSecret: http.secret,
     magicLinkBaseUrl: portalVerifyLinkBase(http.appBaseUrl, data.body.returnPath),
     returnPath: data.body.returnPath,
+    personal: data.body.unaffiliatedAttestation,
   });
   if (result.outboxId) c.executionCtx.waitUntil(processOutboxByIdBackground(http.db, c.env, result.outboxId));
   return json({ success: true });

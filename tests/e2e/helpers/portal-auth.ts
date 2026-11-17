@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { answerAccountOrganizationStep, type AccountOrganizationChoice } from "./account-organization";
 import { expect, type Page } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
 import { userAuthSessionResponseSchema } from "../../../assets/shared/schemas/user-auth";
@@ -79,7 +80,11 @@ export async function openMyOrganization(page: Page, organizationName: string): 
 }
 
 /** Establishes a real portal session through the same mailbox capability used by users. */
-export async function signInToPortal(page: Page, email: string, options: { continueAs?: string } = {}): Promise<void> {
+export async function signInToPortal(
+  page: Page,
+  email: string,
+  options: { continueAs?: string } & AccountOrganizationChoice = {},
+): Promise<void> {
   // Model independent users arriving from independent clients. The complete
   // serial suite otherwise funnels every sign-in through Wrangler's one local
   // address and exhausts the production-equivalent per-IP limiter.
@@ -119,7 +124,11 @@ export async function signInToPortal(page: Page, email: string, options: { conti
       new URL(response.url()).pathname === "/api/v1/auth/verify-link" && response.request().method() === "POST",
   );
   await page.goto(extractEmailUrl(emailMessage, "/portal/"));
-  const session = userAuthSessionResponseSchema.parse(await (await verified).json());
+  const established = await answerAccountOrganizationStep(page, await verified, options);
+  // The portal may already have moved on from the response; the session it set answers the same.
+  const session = userAuthSessionResponseSchema.parse(
+    await established.json().catch(async () => (await page.request.get("/api/v1/auth/session")).json()),
+  );
   // The login heading remains visible while the hash verifier redeems the
   // capability, so waiting for that text would return before a session exists.
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toHaveCount(0, { timeout: 15_000 });

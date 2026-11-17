@@ -1,4 +1,5 @@
 // Prepare the real HTTP graph before timed journeys, as the shared API test helper does.
+import { recordPersonalAddressAnswer } from "./helpers/account-organization";
 import "../functions/http-router";
 import { grantAdministrator } from "./helpers/administrator";
 /**
@@ -68,6 +69,7 @@ async function insertStaffUser(email: string): Promise<string> {
     .bind(id, email, email)
     .run();
   await grantAdministrator(env.DB, id);
+  await recordPersonalAddressAnswer(env.DB, id);
   return id;
 }
 
@@ -91,6 +93,7 @@ async function insertActiveMemberUser(email: string): Promise<string> {
     identity.statement,
     ...statements,
   ]);
+  await recordPersonalAddressAnswer(env.DB, userId);
   return userId;
 }
 

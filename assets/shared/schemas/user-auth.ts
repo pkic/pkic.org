@@ -14,6 +14,11 @@ import { sponsorCapacitySchema } from "./sponsor-access";
 import { sessionActingIdentitySchema } from "../session-acting-identity";
 import { publicStaffCapacitySchema } from "./staff-capacity";
 import { screensWorkEmailDomain, workEmailStepSchema } from "./work-email";
+import {
+  accountOrganizationAffiliationRequestSchema,
+  accountOrganizationAnswerSchema,
+  accountOrganizationRequiredSchema,
+} from "./account-organization";
 
 /**
  * A portal route a sign-in link may return to once the session exists: a path
@@ -38,7 +43,11 @@ const signInReturnPathSchema = portalReturnPathSchema.refine(
 export const userAuthRequestSchema = emailRecoveryRequestSchema.extend({
   returnPath: signInReturnPathSchema.optional(),
 });
-export const userAuthVerifySchema = magicLinkVerifySchema;
+/** Opening a sign-in link; a work address with no organization answers account setup's organization step here. */
+export const userAuthVerifySchema = magicLinkVerifySchema.extend({
+  affiliation: accountOrganizationAffiliationRequestSchema.optional(),
+  organization: accountOrganizationAnswerSchema.optional(),
+});
 /** Starting an account: the shared work-email step, and where the link returns the person. */
 export const userSignUpRequestSchema = workEmailStepSchema.extend({
   returnPath: signInReturnPathSchema.optional(),
@@ -70,6 +79,11 @@ const userCapacityFields = {
 
 export const userAuthSessionResponseSchema = successResponseSchema.extend(userCapacityFields);
 export const userAuthEstablishedResponseSchema = userAuthSessionResponseSchema;
+/** A session, or the organization step that comes first; the step's answer is sent with the same link. */
+export const userAuthVerifyResponseSchema = z.union([
+  userAuthEstablishedResponseSchema,
+  accountOrganizationRequiredSchema,
+]);
 
 export const userAuthLogoutRequestSchema = z
   .object({
@@ -134,8 +148,9 @@ export const userAuthVerifyRouteSchema = {
   },
   responses: {
     "200": {
-      description: "A single user session with all currently eligible capacities.",
-      content: { "application/json": { schema: userAuthEstablishedResponseSchema } },
+      description:
+        "A single user session with all currently eligible capacities, or the organization step a work address answers first.",
+      content: { "application/json": { schema: userAuthVerifyResponseSchema } },
     },
   },
 };

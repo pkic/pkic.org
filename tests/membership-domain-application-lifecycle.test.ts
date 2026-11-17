@@ -83,18 +83,11 @@ describe("membership join on claimed and derived domains", () => {
     },
   );
 
-  it("previews a subdomain for the signed-in account's address without changing anything", async () => {
+  it("offers a subdomain's member organization to an individual without changing anything", async () => {
     const member = await insertOrganization(env.DB, "Preview Member");
     await seedOrganizationAggregate(env.DB, member);
     await claim(member);
     const person = await applicant("individual", `applicant@eu.${domain}`);
-    const preview = await callApi(testEnv, "/api/v1/members/join/affiliations", {
-      method: "POST",
-      headers: { "content-type": "application/json", cookie: person.cookie },
-      body: JSON.stringify({ domain: `eu.${domain}` }),
-    });
-    expect(preview.status, await preview.clone().text()).toBe(200);
-    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE organization_id IS NOT NULL")).toEqual([]);
     const chooser = await joinPath(testEnv, person);
     expect(await chooser.json()).toMatchObject({
       status: "organization_selection_required",

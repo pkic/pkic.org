@@ -110,7 +110,7 @@ export async function requestUserSignInLink(
  */
 export async function requestUserSignUpLink(
   db: DatabaseLike,
-  payload: Parameters<typeof requestUserSignInLink>[1] & { returnPath?: string },
+  payload: Parameters<typeof requestUserSignInLink>[1] & { returnPath?: string; personal?: boolean },
 ): Promise<{ outboxId: string | null }> {
   const message = await signUpMessage(db, payload.returnPath);
   const signIn = await requestUserSignInLink(db, payload, message);
@@ -127,6 +127,7 @@ export async function requestUserSignUpLink(
     subjectId: "sign_up",
     email: recipientEmail,
     signUpEmail: recipientEmail,
+    signUpPersonal: payload.personal,
     ttlSeconds: payload.ttlMinutes * 60,
     ipHash: payload.ipHash,
     userAgentHash: payload.userAgentHash,
