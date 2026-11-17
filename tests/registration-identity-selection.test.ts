@@ -102,6 +102,21 @@ describe("registration representation changes", () => {
       ),
     ).toHaveLength(1);
   });
+  it("keeps a registration on a work address with an organization, refusing a change to a personal identity", async () => {
+    const f = await setupChange();
+    const email = `identity-${crypto.randomUUID()}@organization.example`;
+    await env.DB.prepare(
+      "UPDATE users SET email=?, normalized_email=?, email_verified_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+    )
+      .bind(email, email, f.userId)
+      .run();
+    const response = await change(f);
+    expect(response.status, await response.clone().text()).toBe(422);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+      "REGISTRATION_REPRESENTATION_REQUIRED",
+    );
+    expect((await getRegistrationById(env.DB, f.registrationId)).registration_identity_id).toBe(f.identityId);
+  });
   it.each(["participant", "manage link"])(
     "does not record identity effects for an unchanged selection through %s",
     async (access) => {
