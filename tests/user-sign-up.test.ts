@@ -8,7 +8,7 @@ import { parseCapabilityToken } from "../functions/_lib/auth/capability-token";
 import { userAuthSessionResponseSchema } from "../assets/shared/schemas/user-auth";
 import { prepareAccountIdentityStatement } from "../functions/_lib/services/users";
 import { createMemberSession } from "./helpers/auth";
-import { insertUser } from "./helpers/membership";
+import { insertOrganization, insertUser } from "./helpers/membership";
 
 /** Background work a request starts (outbox delivery); awaited so it never runs into the next test. */
 const background: Promise<unknown>[] = [];
@@ -91,6 +91,12 @@ describe("account sign-up", () => {
     expect(
       await queryAll(env.DB, "SELECT id FROM identities WHERE user_id = ? AND organization_id IS NULL", [user.id]),
     ).toHaveLength(1);
+    // The session lives only while the address it was made through still signs in.
+    expect(
+      await queryAll(env.DB, "SELECT normalized_email FROM session_email_authentication WHERE session_id = ?", [
+        session.sessionId,
+      ]),
+    ).toEqual([{ normalized_email: "ada@organization.example" }]);
 
     expect((await call("/api/v1/auth/verify-link", { token, organization: { personal: true } })).status).toBe(409);
   });
@@ -223,16 +229,36 @@ describe("account sign-up", () => {
     const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [
       "admin@pkic.org",
     ]);
-    // A verified secondary address with no sign-in permission.
-    await env.DB.prepare(
-      `INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, verification_method, created_at)
-       VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'magic_link', strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
-    )
-      .bind(crypto.randomUUID(), admin.id, "second@organization.example", "second@organization.example")
-      .run();
+    // A verified address that stopped signing in when the representation it belongs to ended.
+    const organizationId = await insertOrganization(env.DB, "Organization");
+    const identityId = crypto.randomUUID();
+    const at = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO identities (id, user_id, organization_id, source, verified_email_domain, invited_at, started_at,
+           ended_at, created_at, updated_at)
+         VALUES (?, ?, ?, 'verified_email', 'organization.example', ?, ?, ?, ?, ?)`,
+      ).bind(identityId, admin.id, organizationId, at, at, at, at, at),
+      env.DB.prepare(
+        `INSERT INTO user_emails (id, user_id, identity_id, email, normalized_email, verified_at, verification_method,
+           created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'magic_link', ?)`,
+      ).bind(
+        crypto.randomUUID(),
+        admin.id,
+        identityId,
+        "second@organization.example",
+        "second@organization.example",
+        at,
+        at,
+      ),
+    ]);
 
     expect((await call("/api/v1/auth/sign-up", { email: "second@organization.example" })).status).toBe(200);
-    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+    // Its mailbox learns how to sign in instead; no link, account, or session.
+    expect(await queryAll(env.DB, "SELECT template_key FROM email_outbox")).toEqual([
+      { template_key: "user_sign_in_unavailable" },
+    ]);
     expect(await queryAll(env.DB, "SELECT id FROM sessions")).toHaveLength(0);
   });
 });

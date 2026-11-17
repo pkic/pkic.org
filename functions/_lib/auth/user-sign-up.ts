@@ -25,7 +25,7 @@ import { createEstablishedUserSessionResult, type UserSessionResult } from "./us
 import { findActingIdentitiesForUser } from "./session-acting-identities";
 import { resolveSessionActingIdentityId } from "../../../assets/shared/session-acting-identity";
 import { recordAuditActingIdentity } from "../services/audit-actor";
-import { prepareUserSession } from "./user-session";
+import { prepareSessionEmailAuthenticationStatement, prepareUserSession } from "./user-session";
 import type { AccountOrganizationRequired } from "../../../assets/shared/schemas/account-organization";
 import {
   accountOrganizationStepStatements,
@@ -63,7 +63,7 @@ export async function redeemUserSignUpCapability(
   const preparedUser = await buildFindOrCreateUserStatement(db, { email, mailboxVerified: true });
   const userId = preparedUser.user.id;
   // A sign-up link only ever starts a new account. An address an account has already proved signs in
-  // under that account's own rules (it may have turned sign-in off for this address), never through here.
+  // under that account's own rules, never through here.
   if (!preparedUser.created) {
     const used = await first(db, "SELECT 1 AS used FROM audit_log WHERE idempotency_key = ?", [
       emailAuthRedemptionKey("user_sign_up", capability.capabilityId),
@@ -103,6 +103,12 @@ export async function redeemUserSignUpCapability(
       ...prepareVerifyOwnedEmailStatements(db, { userId, normalizedEmail: email, method: "magic_link", verifiedAt }),
       ...organizationStep.statements,
       ...prepared.statements,
+      prepareSessionEmailAuthenticationStatement(db, {
+        sessionId: prepared.sessionId,
+        emailId: null,
+        normalizedEmail: email,
+        at: verifiedAt,
+      }),
     ],
   });
 

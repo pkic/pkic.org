@@ -58,6 +58,18 @@ import {
   type AccountOrganizationStepInput,
 } from "../services/identities/account-organization";
 import { USER_SESSIONS, resolveUserSessionClaims } from "./user-session-claims";
+
+/** Marks a session as made through an address: it lives only while that address still signs in. */
+export function prepareSessionEmailAuthenticationStatement(
+  db: DatabaseLike,
+  input: { sessionId: string; emailId: string | null; normalizedEmail: string; at: string },
+): StatementLike {
+  return db
+    .prepare(`INSERT INTO session_email_authentication
+      (session_id, email_id, permission_revision, normalized_email, created_at) VALUES (?, ?, 'none', ?, ?)`)
+    .bind(input.sessionId, input.emailId, input.normalizedEmail, input.at);
+}
+
 export { findActiveIdentity, resolveUserSessionClaims } from "./user-session-claims";
 
 export interface PreparedUserSession {
@@ -439,11 +451,12 @@ export async function redeemUserSignInCapability(
         : []),
       ...organizationStep.statements,
       ...prepared.statements,
-      // The session lives only while the address it was made through still signs in.
-      db
-        .prepare(`INSERT INTO session_email_authentication
-        (session_id, email_id, permission_revision, normalized_email, created_at) VALUES (?, ?, 'none', ?, ?)`)
-        .bind(prepared.sessionId, signInIdentity.sign_in_email_id, signInIdentity.normalized_sign_in_email, verifiedAt),
+      prepareSessionEmailAuthenticationStatement(db, {
+        sessionId: prepared.sessionId,
+        emailId: signInIdentity.sign_in_email_id,
+        normalizedEmail: signInIdentity.normalized_sign_in_email,
+        at: verifiedAt,
+      }),
       ...(signInIdentity.sign_in_email_id
         ? prepareFirstAddressSignInStatements(db, {
             userId: identity.id,
