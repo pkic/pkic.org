@@ -38,12 +38,7 @@ export function signInMethodRemainsEvidence(userId: string, change: SignInMethod
       OR EXISTS (SELECT 1 FROM user_emails sign_in_address
         WHERE sign_in_address.user_id = person.id AND sign_in_address.id IS NOT pending.email_id
           AND ${addedEmailSignInAllowedSql("sign_in_address", "pending.identity_id")}))`,
-    bindings: [
-      change.revokedPasskeyId ?? null,
-      change.removedEmailId ?? null,
-      change.endedIdentityId ?? null,
-      userId,
-    ],
+    bindings: [change.revokedPasskeyId ?? null, change.removedEmailId ?? null, change.endedIdentityId ?? null, userId],
   };
 }
 
