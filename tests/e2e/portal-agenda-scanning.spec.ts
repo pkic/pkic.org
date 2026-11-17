@@ -233,7 +233,9 @@ async function scanAttendance(page: Page, credential: string, publishedRevision:
   });
   const receipt = eventScanResponseSchema.parse(await response.json());
   expect(receipt.operationId).toBe(request.operationId);
-  await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("status", { name: "Scanner status", exact: true }).getByText("All scans synced", { exact: true }),
+  ).toBeVisible();
   await expect(page.locator(".pk-event-scanner")).not.toContainText(/upload pending/i);
   return receipt;
 }
@@ -303,7 +305,9 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   await openScannerManualEntry(page);
   await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
   await page.getByRole("button", { name: "Record attendance", exact: true }).click();
-  await expect(page.getByText("1 scans awaiting upload", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("status", { name: "Scanner status", exact: true }).getByText(/^1 awaiting upload(?: · syncing…)?$/),
+  ).toBeVisible();
   await expect(page.getByText("Unknown badge", { exact: true })).toBeVisible();
   const records = await queuedRecords(page);
   expect(records).toHaveLength(1);
@@ -321,7 +325,9 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   await context.setOffline(false);
   await page.getByRole("button", { name: "Sync now", exact: true }).click();
   await expect(page.getByText("Unknown badge", { exact: true })).toBeVisible();
-  await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("status", { name: "Scanner status", exact: true }).getByText("All scans synced", { exact: true }),
+  ).toBeVisible();
   expect(await queuedRecords(page)).toHaveLength(0);
   const retained = await page.evaluate(async (storageVersion) => {
     const opening = indexedDB.open("pkic-scanner-outbox", storageVersion);
@@ -361,7 +367,9 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   });
   expect(await replayResponse.json()).toMatchObject({ operationId: record.scan.operationId, outcome: "unknown" });
   await closeScannerDiagnostics(page);
-  await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("status", { name: "Scanner status", exact: true }).getByText("All scans synced", { exact: true }),
+  ).toBeVisible();
 
   expect(
     await page.evaluate(async () => {

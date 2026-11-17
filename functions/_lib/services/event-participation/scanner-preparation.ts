@@ -16,14 +16,14 @@ import type { z } from "zod";
 export async function readEnrolledOfflineEligibilityRequest(
   db: DatabaseLike,
   request: Request,
-  env: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
+  env: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET" | "BADGE_PRINT_ENCRYPTION_KEYS">,
   eventSlug: string,
   query: z.infer<typeof enrolledOfflineEligibilityQuerySchema>,
 ) {
   const context = await prepareEventAdminContext(db, request, env, eventSlug);
   const fallback = context ? null : await readEventAdminContext(db, request, env, eventSlug);
   const scope = eventReadIdSql({ slug: eventSlug });
-  const read = prepareOfflineEligibility(db, { slug: eventSlug }, query);
+  const read = prepareOfflineEligibility(db, { slug: eventSlug }, query, env);
   const epoch = db
     .prepare(`SELECT session.operator_user_id,session.closed_at,session.high_water_sequence,
       ${scannerCaptureOpenForEventSql("session.event_id")} AS capture_open FROM event_scanner_device_sessions session
