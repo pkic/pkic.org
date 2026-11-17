@@ -10,6 +10,7 @@ import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { workEmailDomain } from "../../email-domains/classification";
+import { WORK_EMAIL_REPRESENTATION_REQUIRED } from "../../../../assets/shared/schemas/registration";
 
 /** A verified organization address needs an organization representation before registering. */
 export function requireRegistrationWorkRepresentation(input: {
@@ -18,11 +19,7 @@ export function requireRegistrationWorkRepresentation(input: {
   organizationId?: string | null;
 }) {
   if (input.verified && workEmailDomain(input.email) && !input.organizationId)
-    throw new AppError(
-      422,
-      "REGISTRATION_REPRESENTATION_REQUIRED",
-      "Choose your organization representation for this work email before registering.",
-    );
+    throw new AppError(422, "REGISTRATION_REPRESENTATION_REQUIRED", WORK_EMAIL_REPRESENTATION_REQUIRED);
 }
 
 interface SelectedIdentityRow {

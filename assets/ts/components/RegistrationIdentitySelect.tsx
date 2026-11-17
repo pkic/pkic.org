@@ -37,8 +37,11 @@ export function RegistrationIdentityField({
   onUpdated,
   personalAdvisory = true,
   organizationOnly = false,
+  representationEmail,
 }: {
   organizationOnly?: boolean;
+  /** The proved address a new organization identity is added under, without asking for it again. */
+  representationEmail?: string;
   /** The registration waiting-list advisory on a personal identity; off where no waiting list applies. */
   personalAdvisory?: boolean;
   preferred?: SessionActingIdentity | null;
@@ -61,6 +64,7 @@ export function RegistrationIdentityField({
     });
   };
   const canChange = identities.some((identity) => identity.id !== selected?.id);
+  const hasOrganization = identities.some((identity) => identity.organizationId);
   async function refreshIdentity(identityId: string) {
     const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
     const identity = session.actingIdentities.find((item) => item.id === identityId);
@@ -83,7 +87,13 @@ export function RegistrationIdentityField({
       <>
         {refreshError && <Alert tone="danger">{refreshError}</Alert>}
         <span class="pk-cluster pk-cluster--nowrap">
-          <span>{selected ? identityLabel(selected) : "Participating as an individual"}</span>
+          <span>
+            {selected
+              ? identityLabel(selected)
+              : organizationOnly
+                ? "No organization chosen"
+                : "Participating as an individual"}
+          </span>
           {personalAdvisory && selected?.organizationId == null && (
             <span
               class="pk-representation-warning"
@@ -95,20 +105,35 @@ export function RegistrationIdentityField({
               <StateIcon state="advisory" />
             </span>
           )}
-          {(userId || canChange) && (
+          {organizationOnly && !selected && userId ? (
+            // With no organization identity yet there is nothing to choose, so the person adds one at once.
             <Button
               type="button"
-              variant="ghost"
-              icon
-              aria-label="Change representation"
-              title="Change representation"
+              variant="secondary"
               onClick={() => {
-                setDraft(selected);
+                if (!hasOrganization) return showAdding();
+                setDraft(null);
                 showChoosing();
               }}
             >
-              <IconPencil />
+              {hasOrganization ? "Choose organization" : "Add your organization"}
             </Button>
+          ) : (
+            (userId || canChange) && (
+              <Button
+                type="button"
+                variant="ghost"
+                icon
+                aria-label="Change representation"
+                title="Change representation"
+                onClick={() => {
+                  setDraft(selected);
+                  showChoosing();
+                }}
+              >
+                <IconPencil />
+              </Button>
+            )
           )}
         </span>
         {hidden}
@@ -133,6 +158,7 @@ export function RegistrationIdentityField({
                 available={identities}
                 userId={userId}
                 organizationOnly={organizationOnly}
+                representationEmail={representationEmail}
                 onSelect={setDraft}
                 onUpdated={(identity) => {
                   setIdentities((current) => current.map((item) => (item.id === identity.id ? identity : item)));
@@ -146,6 +172,16 @@ export function RegistrationIdentityField({
             </Dialog>,
             document.body,
           )}
+        {userId && organizationOnly && (
+          <IdentityCreateDialog
+            open={adding && !choosing}
+            verifiedEmail={representationEmail}
+            onClose={() => closeWithError(closeAdding)}
+            onCreated={async (identityId) => {
+              await refreshIdentity(identityId);
+            }}
+          />
+        )}
       </>
     );
   return (
@@ -211,6 +247,7 @@ export function RegistrationIdentityField({
       {userId && (
         <IdentityCreateDialog
           open={adding}
+          verifiedEmail={representationEmail}
           onClose={() => closeWithError(closeAdding)}
           onCreated={async (identityId) => {
             await refreshIdentity(identityId);

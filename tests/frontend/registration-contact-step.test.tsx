@@ -119,6 +119,9 @@ function installResponses(organizationName: string | null | undefined, signedIn 
         // The server's lists; the browser only ever sees this answer.
         const domain = decodeURIComponent(url.pathname.slice("/api/v1/email/domains/".length));
         body = emailDomainResponseSchema.parse({ domain, kind: domain === "ziggo.nl" ? "free" : "work" });
+      } else if (url.pathname === "/api/v1/users/current/emails") {
+        // No other address yet: the add form asks for the registration address as usual.
+        body = { emails: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } };
       } else if (url.pathname === "/api/v1/users/current/identities") {
         const identities = organizationName === undefined ? [] : [identity(organizationName)];
         body = identitiesListResponseSchema.parse({
@@ -250,6 +253,25 @@ describe("registration contact step", () => {
     expect(value(form, "identityId")).toBe(IDENTITY_ID);
     expect(form.querySelector('[role="combobox"]')).toBeNull();
     expect(form.querySelector('button[aria-label="Change representation"]')).not.toBeNull();
+  });
+
+  it("keeps a work address from registering as the personal identity a new account starts with", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    const requests = installResponses(null);
+    const form = await mount(contactStep());
+    // Nothing is chosen for it, and the registration contract reads that the organization is still missing.
+    expect(value(form, "identityId")).toBe("");
+    expect(value(form, "organizationRepresentationMissing")).toBe("true");
+    expect(form.textContent).toContain("No organization chosen");
+    expect(form.textContent).not.toContain("Personal");
+
+    // With no organization identity to choose from, the step adds one at once.
+    await act(async () => buttonNamed(form, "Add your organization")!.click());
+    await settle();
+    const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
+    expect(dialog.querySelector("h2, h3")?.textContent).toBe("Add identity");
+    expect(form.contains(dialog)).toBe(false);
+    expect(requests.some((request) => request.path === "/api/v1/users/current/emails")).toBe(true);
   });
 
   it("corrects a saved name through the shared editor on the signed-in person's own profile", async () => {

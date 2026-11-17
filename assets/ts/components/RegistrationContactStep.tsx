@@ -201,14 +201,17 @@ export function RegistrationContactStep({
 
   if (stage.kind === "known") {
     const { person, step, workEmail } = stage;
+    // A new account holds only its personal identity, which a work address never registers as.
+    const representationMissing = workEmail && !person.identity?.organizationId;
     return (
       <div class="pk-stack">
-        {workEmail && !person.identity?.organizationId && (
+        {representationMissing && (
           <Alert tone="info">
             This email address uses an organization domain. Choose or add the organization you represent for this
             registration.
           </Alert>
         )}
+        <input type="hidden" name="organizationRepresentationMissing" value={String(representationMissing)} />
         <AddressFields step={step} />
         <Details
           email={step.email}
@@ -226,9 +229,10 @@ export function RegistrationContactStep({
           }}
           representation={
             <RegistrationIdentityField
-              preferred={person.identity}
+              preferred={representationMissing ? null : person.identity}
               available={person.identities}
               organizationOnly={workEmail}
+              representationEmail={workEmail ? step.email : undefined}
               userId={person.userId}
               onSelect={(identity) => {
                 setStage({

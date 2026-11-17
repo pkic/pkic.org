@@ -262,6 +262,23 @@ export function withRequiredDayAttendanceChoices<Schema extends z.ZodType>(
   });
 }
 
+/** Why a work address cannot register as a personal identity; the server refuses with the same words. */
+export const WORK_EMAIL_REPRESENTATION_REQUIRED =
+  "Choose or add the organization you represent for this work email before registering.";
+
+/**
+ * A work address registers for its organization. Whether one is still missing is only known once the
+ * address's domain and the chosen identity are, so the form tells the contract through `missing`.
+ */
+export function withRequiredOrganizationRepresentation<Schema extends z.ZodType>(
+  schema: Schema,
+  missing: () => boolean,
+) {
+  return schema.superRefine((_value, context) => {
+    if (missing()) context.addIssue({ code: "custom", path: [], message: WORK_EMAIL_REPRESENTATION_REQUIRED });
+  });
+}
+
 export const registrationAttendanceFieldsSchema = attendeeRegistrationFieldsSchema.pick({ dayAttendance: true });
 
 /** Authenticated registration payload; identity and profile fields come from the verified session user. */

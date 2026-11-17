@@ -30,7 +30,10 @@ export function SelfIdentityCreateForm({
   onCreated,
   onBusy,
   onActionLabel,
+  verifiedEmail,
 }: {
+  /** An address this account already proved: the form starts at its organization instead of asking for it. */
+  verifiedEmail?: string;
   onCreated: (result: z.infer<typeof identityMutationResponseSchema>) => void | Promise<void>;
   onBusy?: (busy: boolean) => void;
   onActionLabel?: (label: string) => void;
@@ -89,6 +92,30 @@ export function SelfIdentityCreateForm({
       await onCreated(identity);
     } else setStage("details");
   }
+  // The address the form opened with is resolved once, through the resolver of the latest render.
+  const resolveLatest = useRef(resolve);
+  resolveLatest.current = resolve;
+  useEffect(() => {
+    if (!verifiedEmail) return;
+    let current = true;
+    setBusy(true);
+    void (async () => {
+      try {
+        const known = (await getJson(OWN_EMAILS_ENDPOINT, ownEmailAddressesListResponseSchema)).emails.find(
+          (item) => item.verifiedAt && item.email.toLowerCase() === verifiedEmail.toLowerCase(),
+        );
+        // An address that is not proved here after all is asked for as usual.
+        if (known && current) await resolveLatest.current(known);
+      } catch {
+        // Unreadable now, the address is asked for as usual.
+      } finally {
+        if (current) setBusy(false);
+      }
+    })();
+    return () => {
+      current = false;
+    };
+  }, [verifiedEmail]);
   if (stage === "email")
     return (
       <EmailAddressCreateForm

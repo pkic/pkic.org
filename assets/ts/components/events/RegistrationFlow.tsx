@@ -8,6 +8,7 @@ import {
   registrationCreateSchema,
   registrationCreateForTermsSchema,
   registrationContactFieldsSchema,
+  withRequiredOrganizationRepresentation,
   registrationAttendanceFieldsSchema,
   withRequiredDayAttendanceChoices,
   registrationManageSchema,
@@ -131,19 +132,30 @@ export function RegistrationFlow(props: Props) {
     };
   };
   const choices = useCallback(() => (element.current ? readDayAttendanceChoices(element.current) : []), [element]);
+  // The "You" step says when a work address still has no organization chosen.
+  const representationMissing = useCallback(
+    () => (element.current ? readField(element.current, "organizationRepresentationMissing") === "true" : false),
+    [element],
+  );
   const request = useMemo(
     () =>
-      withRequiredDayAttendanceChoices(
-        updating ? registrationManageSchema : registrationCreateForTermsSchema(forms.requiredTerms),
-        choices,
+      withRequiredOrganizationRepresentation(
+        withRequiredDayAttendanceChoices(
+          updating ? registrationManageSchema : registrationCreateForTermsSchema(forms.requiredTerms),
+          choices,
+        ),
+        representationMissing,
       ),
-    [updating, forms.requiredTerms, choices],
+    [updating, forms.requiredTerms, choices, representationMissing],
   );
   const contract = useContractForm(request, readBody, {
     fieldOf: (name, control) =>
       name === "consents" ? `consents.${control.closest<HTMLElement>("[data-term-key]")?.dataset.termKey ?? ""}` : name,
   });
-  const contactContract = useContractForm(registrationContactFieldsSchema, readBody);
+  const contactContract = useContractForm(
+    withRequiredOrganizationRepresentation(registrationContactFieldsSchema, representationMissing),
+    readBody,
+  );
   const attendanceContract = useContractForm(
     withRequiredDayAttendanceChoices(registrationAttendanceFieldsSchema, choices),
     readBody,
