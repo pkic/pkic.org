@@ -5,17 +5,16 @@
  */
 import type { z } from "zod";
 import type { stripeEventEnvelopeSchema } from "../../../../assets/shared/schemas/stripe";
-import { formatCurrencyAmount } from "../../../../assets/shared/format-currency";
-import { all, first } from "../../db/queries";
-import { DIRECT_EMAIL_TEMPLATE_KEY, directEmailBodyPayload } from "../../email/direct-body";
-import { prepareQueueEmailStatement } from "../../email/outbox";
+import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import { prepareStateGuard, isStateGuardFailure } from "../../db/authorization-guard";
 import { createStripeCheckoutSession, expireStripeCheckoutSession } from "../../integrations/stripe/checkout";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
+import { ticketRefundNote } from "../../../../assets/shared/event-ticket-display";
 import { prepareStripePaymentEvent } from "../payments/ledger";
+import { readRefundPolicy } from "./refund-policy";
 import {
   prepareCompleteRefund,
   prepareFailRefund,
@@ -26,12 +25,11 @@ import {
 type StripeEvent = z.infer<typeof stripeEventEnvelopeSchema>;
 
 const CHECKOUT_LIFETIME_MS = 23 * 3600_000;
-const DAY_MS = 86_400_000;
 
 /** A confirmation held for payment sits in the outbox with this delivery time until the ticket is paid. */
 export const HELD_UNTIL_PAID = "9999-12-31T00:00:00.000Z";
 
-interface PayableTicketRow {
+export interface PayableTicketRow {
   send_invoice: number;
   id: string;
   registration_id: string;
@@ -44,6 +42,7 @@ interface PayableTicketRow {
   event_slug: string;
   email: string;
   registration_status: string;
+  timezone: string;
 }
 
 interface CheckoutRow {
@@ -55,10 +54,10 @@ interface CheckoutRow {
 }
 
 /** A ticket with what a payment page or a payment email needs; `columns` adds to the selection. */
-const payableTicketSql = (columns = "") => `
+export const payableTicketSql = (columns = "") => `
   SELECT ticket.id, ticket.registration_id, ticket.amount, ticket.currency, ticket.status,
          type.name AS ticket_name, event.id AS event_id, event.name AS event_name, event.slug AS event_slug,
-         user.email, settings.send_invoice, registration.status AS registration_status${columns}
+         user.email, settings.send_invoice, registration.status AS registration_status, event.timezone${columns}
   FROM registration_tickets ticket
   JOIN event_ticket_settings settings ON settings.event_id = ticket.event_id
   JOIN event_ticket_types type ON type.id = ticket.ticket_type_id
@@ -161,6 +160,13 @@ export async function openTicketCheckout(
       "custom_fields[0][type]": "text",
       "custom_fields[0][optional]": "true",
     });
+    // The refund terms are part of what is paid for: the page says them beside its pay button, and the
+    // ticket is held to these terms whatever the event's policy becomes later.
+    const policy = await readRefundPolicy(db, ticket.event_id);
+    params.set(
+      "custom_text[submit][message]",
+      ticketRefundNote({ ...policy, currency: ticket.currency }, ticket.timezone, Date.parse(now)),
+    );
     if (ticket.send_invoice === 1) {
       params.set("invoice_creation[enabled]", "true");
       // An invoice needs who it is for: a buyer paying for an organization gives its name and tax ID.
@@ -194,12 +200,22 @@ export async function openTicketCheckout(
     await db.batch([
       db
         .prepare(
-          `INSERT INTO registration_ticket_checkouts (id, ticket_id, request_params, created_at, expires_at)
-           SELECT ?, id, ?, ?, ? FROM registration_tickets WHERE id = ? AND status = 'pending_payment'
+          `INSERT INTO registration_ticket_checkouts
+             (id, ticket_id, request_params, refund_until, refund_fee, created_at, expires_at)
+           SELECT ?, id, ?, ?, ?, ?, ? FROM registration_tickets WHERE id = ? AND status = 'pending_payment'
              AND NOT EXISTS (SELECT 1 FROM registration_ticket_checkouts open
                              WHERE open.ticket_id = registration_tickets.id AND open.expires_at > ?)`,
         )
-        .bind(attempt.id, attempt.request_params, now, expiresAt, ticket.id, now),
+        .bind(
+          attempt.id,
+          attempt.request_params,
+          policy.refundableUntil,
+          policy.refundFee,
+          now,
+          expiresAt,
+          ticket.id,
+          now,
+        ),
     ]);
     // A request that opened its attempt at the same moment won: both continue with that one attempt,
     // so the provider sees one idempotency key and returns one session.
@@ -386,11 +402,13 @@ export async function handleEventTicketStripeEvent(
           .prepare(
             `UPDATE registration_tickets SET status = 'paid', paid_at = ?, payment_intent_id = ?, paid_amount = amount,
                kept_fee = 0, refunded_amount = 0,
+               refund_until = (SELECT refund_until FROM registration_ticket_checkouts WHERE id = ?),
+               refund_fee = COALESCE((SELECT refund_fee FROM registration_ticket_checkouts WHERE id = ?), 0),
                refunds_seen_at = NULL, refund_reconcile_at = NULL,
                next_reminder_at = NULL, revision = revision + 1, updated_at = ?
              WHERE id = ? AND status = 'pending_payment'`,
           )
-          .bind(now, object.payment_intent ?? null, now, row.ticket_id),
+          .bind(now, object.payment_intent ?? null, row.checkout_id, row.checkout_id, now, row.ticket_id),
         db
           .prepare(
             "UPDATE registration_ticket_checkouts SET payment_intent_id = ? WHERE id = ? AND payment_intent_id IS NULL",
@@ -482,117 +500,4 @@ export async function handleEventTicketStripeEvent(
     throw error;
   }
   return { received: true, outcome };
-}
-
-interface ReminderRow extends PayableTicketRow {
-  reminders_sent: number;
-  reminders_end_at: string | null;
-  reminder_interval_days: number;
-}
-
-/** Reminds people with an unpaid ticket, at the event's interval, until its reminder period ends. Nothing is canceled. */
-export async function sendTicketPaymentReminders(
-  db: DatabaseLike,
-  appBaseUrl: string,
-  limit = 50,
-): Promise<{ reminded: number }> {
-  const now = nowIso();
-  const due = await all<ReminderRow>(
-    db,
-    `${payableTicketSql(", ticket.reminders_sent, ticket.reminders_end_at, settings.reminder_interval_days")}
-     WHERE ticket.status = 'pending_payment' AND ticket.next_reminder_at IS NOT NULL AND ticket.next_reminder_at <= ?
-       AND registration.status NOT IN ('cancelled', 'pending_email_confirmation')
-     ORDER BY ticket.next_reminder_at, ticket.id LIMIT ?`,
-    [now, limit],
-  );
-  let reminded = 0;
-  for (const ticket of due) {
-    const next = new Date(Date.parse(now) + ticket.reminder_interval_days * DAY_MS).toISOString();
-    const nextReminder = ticket.reminders_end_at && next <= ticket.reminders_end_at ? next : null;
-    const price = formatCurrencyAmount(ticket.amount, ticket.currency);
-    try {
-      await db.batch([
-        // The reminder goes out only if the ticket is still unpaid and nobody else sent this one.
-        prepareStateGuard(db, {
-          sql: "SELECT 1 FROM registration_tickets WHERE id = ? AND status = 'pending_payment' AND reminders_sent = ?",
-          bindings: [ticket.id, ticket.reminders_sent],
-        }),
-        db
-          .prepare(
-            `UPDATE registration_tickets SET reminders_sent = reminders_sent + 1, next_reminder_at = ?, updated_at = ?
-             WHERE id = ? AND status = 'pending_payment' AND reminders_sent = ?`,
-          )
-          .bind(nextReminder, now, ticket.id, ticket.reminders_sent),
-        prepareTicketPaymentEmail(db, appBaseUrl, ticket, {
-          subject: `Reminder: pay for your ${ticket.event_name} ticket`,
-          lead: `Your ${ticket.ticket_name} ticket for ${ticket.event_name} is still waiting for payment of ${price}.`,
-          idempotencyKey: `ticket-reminder:${ticket.id}:${ticket.reminders_sent + 1}`,
-        }),
-      ]);
-      reminded += 1;
-    } catch (error) {
-      if (!isStateGuardFailure(error)) throw error;
-    }
-  }
-  return { reminded };
-}
-
-/** The email that asks for payment: sent with the registration, and again as a reminder. */
-export function prepareTicketPaymentEmail(
-  db: DatabaseLike,
-  appBaseUrl: string,
-  ticket: Pick<PayableTicketRow, "event_id" | "event_slug" | "event_name" | "ticket_name" | "email">,
-  message: { subject: string; lead: string; idempotencyKey: string; userId?: string | null },
-): StatementLike {
-  const url = ticketPageUrl(appBaseUrl, ticket.event_slug);
-  return prepareQueueEmailStatement(db, {
-    eventId: ticket.event_id,
-    baseUrl: appBaseUrl,
-    templateKey: DIRECT_EMAIL_TEMPLATE_KEY,
-    recipientEmail: ticket.email,
-    recipientUserId: message.userId ?? undefined,
-    messageType: "transactional",
-    subject: message.subject,
-    outboxId: uuid(),
-    idempotencyKey: message.idempotencyKey,
-    data: directEmailBodyPayload(
-      `${message.lead}\n\n[Pay for your ticket](${url})\n\nYour registration is confirmed once the payment arrives. To cancel instead, open your registration in the portal.`,
-    ),
-  }).statement;
-}
-
-/**
- * Holds a registration's confirmation email until its ticket is paid and asks
- * for the payment instead. Returns nothing when the ticket has nothing to pay.
- * The statements run after the one that queues the confirmation, in its batch.
- */
-export async function prepareHoldConfirmationForPayment(
-  db: DatabaseLike,
-  appBaseUrl: string,
-  input: { registrationId: string; outboxId: string; userId?: string | null },
-): Promise<StatementLike[]> {
-  const ticket = await first<PayableTicketRow>(
-    db,
-    `${payableTicketSql()} WHERE ticket.registration_id = ? AND ticket.status = 'pending_payment'`,
-    [input.registrationId],
-  );
-  if (!ticket) return [];
-  const now = nowIso();
-  return [
-    db
-      .prepare(
-        `UPDATE email_outbox SET send_after = ?, updated_at = ? WHERE id = ? AND status = 'queued'
-           AND EXISTS (SELECT 1 FROM registration_tickets WHERE id = ? AND status = 'pending_payment')`,
-      )
-      .bind(HELD_UNTIL_PAID, now, input.outboxId, ticket.id),
-    db
-      .prepare("UPDATE registration_tickets SET held_email_id = ? WHERE id = ? AND status = 'pending_payment'")
-      .bind(input.outboxId, ticket.id),
-    prepareTicketPaymentEmail(db, appBaseUrl, ticket, {
-      subject: `Pay for your ${ticket.event_name} ticket`,
-      lead: `Thank you for registering for ${ticket.event_name}. Your ${ticket.ticket_name} ticket costs ${formatCurrencyAmount(ticket.amount, ticket.currency)}.`,
-      idempotencyKey: `ticket-payment:${ticket.id}:confirmed`,
-      userId: input.userId,
-    }),
-  ];
 }

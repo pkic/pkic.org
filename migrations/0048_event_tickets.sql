@@ -185,6 +185,10 @@ CREATE TABLE registration_tickets (
   paid_amount           INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
   -- Fees kept from this ticket's refunds: that much of the payment stays here and stands for nothing.
   kept_fee              INTEGER NOT NULL DEFAULT 0 CHECK (kept_fee >= 0),
+  -- The refund terms the ticket was paid under, as its payment page stated them: until when, and the fee kept.
+  -- A later change of the event's policy does not change them.
+  refund_until          TEXT,
+  refund_fee            INTEGER NOT NULL DEFAULT 0 CHECK (refund_fee >= 0),
   refunded_amount       INTEGER NOT NULL DEFAULT 0 CHECK (refunded_amount >= 0),
   -- The provider's time of the newest refund fact applied; an older one that arrives later is not applied over it.
   refunds_seen_at       TEXT,
@@ -208,6 +212,9 @@ CREATE TABLE registration_ticket_checkouts (
   provider_session_id TEXT UNIQUE,
   checkout_url        TEXT,
   payment_intent_id   TEXT UNIQUE,
+  -- The refund terms this payment page states; the ticket it settles is held to them.
+  refund_until        TEXT,
+  refund_fee          INTEGER NOT NULL DEFAULT 0 CHECK (refund_fee >= 0),
   created_at          TEXT NOT NULL,
   expires_at          TEXT NOT NULL
 );

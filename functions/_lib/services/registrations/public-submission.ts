@@ -38,7 +38,8 @@ import {
   planRegistrationTicket,
   ticketCodeExhaustedError,
 } from "../event-tickets/registration-ticket";
-import { HELD_UNTIL_PAID, prepareTicketPaymentEmail } from "../event-tickets/payment";
+import { HELD_UNTIL_PAID } from "../event-tickets/payment";
+import { prepareTicketPaymentEmail } from "../event-tickets/payment-emails";
 import { formatCurrencyAmount } from "../../../../assets/shared/format-currency";
 
 /** The individual capacity only gates the public contract's work-email policy; the use case does not read it. */

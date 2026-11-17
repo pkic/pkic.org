@@ -15,7 +15,7 @@ import type { RegistrationConfirmOrganization } from "../../../../assets/shared/
 import { linkConfirmedRegistrationOrganization } from "./confirmation-organization";
 import { workEmailDomain } from "../../email-domains/classification";
 import { outboxIdForOperation } from "../../email/outbox-queue";
-import { prepareHoldConfirmationForPayment } from "../event-tickets/payment";
+import { prepareHoldConfirmationForPayment } from "../event-tickets/payment-emails";
 
 export interface ConfirmRegistrationWorkflowPayload {
   event: EventRecord;

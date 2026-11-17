@@ -12,7 +12,7 @@ import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { priceTicket, readTicketPerson, type TicketCodeRow } from "./assignment";
-import { prepareRefundDifference, refundDeadlineSql } from "./refund-policy";
+import { prepareRefundDifference } from "./refund-policy";
 import { OPEN_REFUND_SQL } from "./refunds";
 import { readEventTicketSnapshot } from "./snapshot";
 
@@ -23,7 +23,7 @@ interface HeldRow {
   paid_amount: number;
   refunded_amount: number;
   kept_fee: number;
-  refund_fee: number | null;
+  refund_fee: number;
   refund_unsettled: number;
   refund_deadline: string | null;
   currency: string;
@@ -53,17 +53,16 @@ export async function prepareRepriceTicketForDays(
   const held = await first<HeldRow>(
     db,
     `SELECT ticket.id, ticket.status, ticket.amount, ticket.paid_amount, ticket.refunded_amount, ticket.kept_fee,
-            settings.refund_fee, ticket.currency,
+            ticket.refund_fee, ticket.currency,
             ticket.ticket_type_id,
             ticket.code_id, event.timezone, user.email, registration.registration_identity_id AS identity_id,
             (ticket.refund_reconcile_at IS NOT NULL
              OR EXISTS (SELECT 1 FROM registration_ticket_refunds refund
                         WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL})) AS refund_unsettled,
-            ${refundDeadlineSql("settings", "event")} AS refund_deadline
+            ticket.refund_until AS refund_deadline
      FROM registration_tickets ticket
      JOIN registrations registration ON registration.id = ticket.registration_id
      JOIN events event ON event.id = ticket.event_id
-     LEFT JOIN event_ticket_settings settings ON settings.event_id = ticket.event_id
      JOIN users user ON user.id = registration.user_id
      WHERE ticket.registration_id = ? AND ticket.event_id = ?`,
     [input.registrationId, input.eventId],
@@ -112,9 +111,9 @@ export async function prepareRepriceTicketForDays(
         `These days cost ${formatCurrencyAmount(total, held.currency)} and your ticket covers ${formatCurrencyAmount(covered, held.currency)}. Ask the organizers to change your registration.`,
       );
     }
-    // Days that cost less return the difference, less the event's fee, while its refund period runs.
+    // Days that cost less return the difference, less the fee, while the refund period the ticket was paid under runs.
     // After the period, or when the fee is all there is, nothing goes back.
-    const fee = held.refund_fee ?? 0;
+    const fee = held.refund_fee;
     const within = held.refund_deadline !== null && held.refund_deadline >= input.now;
     const refund = within ? net - total - fee : 0;
     if (total === held.amount && refund <= 0) return [];

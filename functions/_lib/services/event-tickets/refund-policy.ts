@@ -1,6 +1,8 @@
 /**
  * The event's refund policy, set by its organizers: no refunds, or refunds
- * until a number of days before the event starts. Within that period a person
+ * until a number of days before the event starts, with or without a fee
+ * kept. A ticket is held to the policy its payment page stated, so a later
+ * change applies to tickets paid after it. Within that period a person
  * who cancels gets a paid ticket back, and one who moves to days that cost
  * less gets the difference. After it, and with no policy, nothing is returned
  * unless an organizer refunds the ticket themselves.
@@ -43,39 +45,34 @@ const REFUNDABLE_TICKET_SQL = `ticket.status = 'paid' AND ticket.paid_amount > t
   AND NOT EXISTS (SELECT 1 FROM registration_ticket_refunds refund
                   WHERE refund.ticket_id = ticket.id AND refund.completed_at IS NULL AND refund.failed_at IS NULL)`;
 
-/** Within the event's refund period, with something left to return once the fee is kept. */
+/** Within the refund period the ticket was paid under, with something left to return once its fee is kept. */
 const CANCELLATION_REFUND_SQL = `ticket.registration_id = ? AND ${REFUNDABLE_TICKET_SQL}
-  AND ${refundDeadlineSql("settings", "event")} >= ?
-  AND ticket.paid_amount - ticket.refunded_amount - ticket.kept_fee > settings.refund_fee`;
+  AND ticket.refund_until >= ?
+  AND ticket.paid_amount - ticket.refunded_amount - ticket.kept_fee > ticket.refund_fee`;
 
 /**
- * Returns what a person paid, less the event's fee, when they cancel within
- * the refund period. The statements write nothing outside the period, for an
- * unpaid ticket, while another refund is under way, or when the fee is all
- * that is left, so they can sit in any cancellation.
+ * Returns what a person paid, less the fee, when they cancel within the
+ * refund period their ticket was paid under. The statements write nothing
+ * outside the period, for an unpaid ticket, while another refund is under
+ * way, or when the fee is all that is left, so they can sit in any cancellation.
  */
 export function prepareRefundOnCancellation(db: DatabaseLike, registrationId: string, now: string): StatementLike[] {
-  const source = `FROM registration_tickets ticket
-       JOIN event_ticket_settings settings ON settings.event_id = ticket.event_id
-       JOIN events event ON event.id = ticket.event_id
-       WHERE ${CANCELLATION_REFUND_SQL}`;
   return [
     db
       .prepare(
         `INSERT INTO registration_ticket_refunds
            (id, ticket_id, payment_intent_id, amount, reason, next_attempt_at, created_at)
          SELECT ?, ticket.id, ticket.payment_intent_id,
-                ticket.paid_amount - ticket.refunded_amount - ticket.kept_fee - settings.refund_fee,
-                'Canceled within the refund period', ?, ? ${source}`,
+                ticket.paid_amount - ticket.refunded_amount - ticket.kept_fee - ticket.refund_fee,
+                'Canceled within the refund period', ?, ?
+         FROM registration_tickets ticket WHERE ${CANCELLATION_REFUND_SQL}`,
       )
       .bind(uuid(), now, now, registrationId, now),
     // The fee stays with the ticket: once the rest has gone back, the ticket counts as refunded.
     // Written only when the refund above was: by then it is the ticket's one open refund, made in this write.
     db
       .prepare(
-        `UPDATE registration_tickets SET kept_fee = kept_fee + (SELECT refund_fee FROM event_ticket_settings
-                                                                 WHERE event_id = registration_tickets.event_id),
-           revision = revision + 1, updated_at = ?
+        `UPDATE registration_tickets SET kept_fee = kept_fee + refund_fee, revision = revision + 1, updated_at = ?
          WHERE registration_id = ? AND status = 'paid'
            AND EXISTS (SELECT 1 FROM registration_ticket_refunds refund
                        WHERE refund.ticket_id = registration_tickets.id AND refund.created_at = ?

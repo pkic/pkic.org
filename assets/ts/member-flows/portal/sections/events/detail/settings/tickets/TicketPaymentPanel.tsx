@@ -177,6 +177,10 @@ export function TicketPaymentPanel({
                     onChange={() => setRefundPolicy("fee")}
                   />
                 </div>
+                <p class="pk-small pk-muted">
+                  A change applies to tickets paid after it. A ticket that is already paid keeps the policy it was paid
+                  under.
+                </p>
               </fieldset>
               {refundPolicy !== "none" && (
                 <Field

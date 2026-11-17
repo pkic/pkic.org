@@ -21,7 +21,7 @@ import {
   readStoredTicketDecision,
   ticketCriteriaDigest,
 } from "./classifier";
-import { prepareTicketPaymentEmail } from "./payment";
+import { prepareTicketPaymentEmail } from "./payment-emails";
 import { readEventTicketSnapshot } from "./snapshot";
 
 interface DisputedTicketRow {

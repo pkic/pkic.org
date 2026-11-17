@@ -199,7 +199,7 @@ export async function planRegistrationTicket(
            held_email_id = excluded.held_email_id, reminders_sent = 0,
            next_reminder_at = excluded.next_reminder_at, reminders_end_at = excluded.reminders_end_at,
            paid_at = NULL, payment_intent_id = NULL, paid_amount = 0, kept_fee = 0, refunded_amount = 0,
-           refunds_seen_at = NULL,
+           refund_until = NULL, refund_fee = 0, refunds_seen_at = NULL,
            refund_reconcile_at = NULL,
            revision = registration_tickets.revision + 1, updated_at = excluded.updated_at
          WHERE registration_tickets.status NOT IN ('paid') AND registration_tickets.refund_reconcile_at IS NULL`,
@@ -311,7 +311,10 @@ export const REGISTRATION_TICKET_READ_SQL = `
          (SELECT checkout.payment_intent_id FROM registration_ticket_checkouts checkout
           WHERE checkout.ticket_id = ticket.id AND checkout.payment_intent_id IS NOT NULL
           ORDER BY checkout.created_at DESC LIMIT 1) AS payment_reference,
-         ${refundDeadlineSql("settings", "event")} AS refund_deadline, COALESCE(settings.refund_fee, 0) AS refund_fee
+         CASE WHEN ticket.paid_at IS NOT NULL THEN ticket.refund_until
+              ELSE ${refundDeadlineSql("settings", "event")} END AS refund_deadline,
+         CASE WHEN ticket.paid_at IS NOT NULL THEN ticket.refund_fee ELSE COALESCE(settings.refund_fee, 0) END
+           AS refund_fee
   FROM registration_tickets ticket
   JOIN event_ticket_types type ON type.id = ticket.ticket_type_id
   JOIN events event ON event.id = ticket.event_id
@@ -429,8 +432,8 @@ export function prepareRestoreRegistrationTicket(
     db
       .prepare(
         `UPDATE registration_tickets SET status = CASE WHEN amount = 0 THEN 'free' ELSE 'pending_payment' END,
-           reminders_sent = 0, payment_intent_id = NULL, paid_amount = 0, kept_fee = 0, refunded_amount = 0,
-           refunds_seen_at = NULL,
+           reminders_sent = 0, paid_at = NULL, payment_intent_id = NULL, paid_amount = 0, kept_fee = 0, refunded_amount = 0,
+           refund_until = NULL, refund_fee = 0, refunds_seen_at = NULL,
            refund_reconcile_at = NULL, revision = revision + 1, updated_at = ?
          WHERE registration_id = ? AND status IN ('canceled', 'refunded') AND refund_reconcile_at IS NULL`,
       )

@@ -1,4 +1,4 @@
-import { sendTicketPaymentReminders } from "../event-tickets/payment";
+import { sendTicketPaymentReminders } from "../event-tickets/payment-emails";
 import { closeUnpayableTicketCheckouts, processTicketRefunds, reconcileTicketRefunds } from "../event-tickets/refunds";
 import { sendUnfinishedRegistrationReminders } from "../registrations/unfinished";
 import { runScheduledEmailDelivery } from "../scheduled-email-delivery";

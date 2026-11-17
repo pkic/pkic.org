@@ -30,12 +30,11 @@ import {
   prepareRestoreRegistrationTicket,
   readRegistrationTicket,
 } from "../functions/_lib/services/event-tickets/registration-ticket";
+import { handleEventTicketStripeEvent, openTicketCheckout } from "../functions/_lib/services/event-tickets/payment";
 import {
-  handleEventTicketStripeEvent,
-  openTicketCheckout,
   prepareHoldConfirmationForPayment,
   sendTicketPaymentReminders,
-} from "../functions/_lib/services/event-tickets/payment";
+} from "../functions/_lib/services/event-tickets/payment-emails";
 import {
   closeUnpayableTicketCheckouts,
   processTicketRefunds,
@@ -1061,6 +1060,21 @@ describe("event tickets", () => {
       }).success,
     ).toBe(false);
 
+    // A ticket keeps the terms it was paid under: taking the policy away later does not take its refund away,
+    // and a policy added later does not give one to a ticket paid without it.
+    await policy(7);
+    const kept = await paid("kept-terms@gmail.com");
+    await policy(null);
+    expect(await kept.read()).toMatchObject({ refundFee: 0 });
+    expect((await kept.read())!.refundableUntil).not.toBeNull();
+    await kept.change({ action: "cancel" });
+    expect((await kept.refunds()).results).toMatchObject([{ amount: 19500 }]);
+    const without = await paid("without-terms@gmail.com");
+    await policy(7, 1000);
+    expect((await without.read())!.refundableUntil).toBeNull();
+    await without.change({ action: "cancel" });
+    expect((await without.refunds()).results).toEqual([]);
+
     // With no policy nothing goes back either, however far away the event is.
     await startsIn(30);
     await policy(null);
@@ -1169,6 +1183,8 @@ describe("event tickets", () => {
       vi.unstubAllGlobals();
     }
     expect(stripeRequest!.get("line_items[0][price_data][unit_amount]")).toBe("19500");
+    // The payment page states the refund terms the ticket is paid under.
+    expect(stripeRequest!.get("custom_text[submit][message]")).toBe("Tickets for this event are not refunded.");
     expect(stripeRequest!.get("metadata[pkic_payment_type]")).toBe("event");
     // Stripe carries our registration as its reference, and the buyer may add their own.
     expect(stripeRequest!.get("client_reference_id")).toBe(registration.id);
