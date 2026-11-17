@@ -3,19 +3,23 @@
 -- Additive only. A registration keeps its lifecycle; its ticket carries the
 -- price and the payment state. Statuses and sources are an evolvable product
 -- vocabulary validated by the shared domain module, not by CHECK constraints.
+-- Formats and ranges (dates, amounts, currencies, flags) are validated by the
+-- shared Zod contracts as well: a CHECK can only be changed by rebuilding its
+-- table. The one constraint kept is a code's uses never exceeding its limit,
+-- which is what refuses a pass claimed twice at the same moment.
 
 -- One row per event that sells tickets: its currency and how unpaid tickets are chased.
 CREATE TABLE event_ticket_settings (
   event_id               TEXT    NOT NULL PRIMARY KEY REFERENCES events(id),
-  currency               TEXT    NOT NULL CHECK (length(currency) = 3 AND currency = lower(currency)),
-  reminder_interval_days INTEGER NOT NULL CHECK (reminder_interval_days > 0),
-  reminder_period_days   INTEGER NOT NULL CHECK (reminder_period_days >= 0),
+  currency               TEXT    NOT NULL,
+  reminder_interval_days INTEGER NOT NULL,
+  reminder_period_days   INTEGER NOT NULL,
   -- Whether the payment provider issues an invoice for each paid ticket, besides its receipt.
-  send_invoice           INTEGER NOT NULL DEFAULT 1 CHECK (send_invoice IN (0, 1)),
+  send_invoice           INTEGER NOT NULL DEFAULT 1,
   -- The refund policy: empty for no refunds, otherwise refunds until this many days before the event starts.
-  refund_days_before_event INTEGER CHECK (refund_days_before_event IS NULL OR refund_days_before_event >= 0),
+  refund_days_before_event INTEGER,
   -- An administration fee kept from each refund the policy gives; an organizer's own refund returns everything.
-  refund_fee             INTEGER NOT NULL DEFAULT 0 CHECK (refund_fee >= 0),
+  refund_fee             INTEGER NOT NULL DEFAULT 0,
   -- Optional text shown to registrants above the tickets and above the days.
   ticket_intro           TEXT,
   attendance_intro       TEXT,
@@ -36,12 +40,12 @@ CREATE TABLE event_ticket_types (
   description_markdown     TEXT    NOT NULL DEFAULT '',
   -- Who qualifies, as the classifier is asked. NULL keeps the ticket out of automatic assignment.
   classifier_description   TEXT,
-  classifier_threshold     REAL    NOT NULL DEFAULT 0.85 CHECK (classifier_threshold > 0 AND classifier_threshold <= 1),
+  classifier_threshold     REAL    NOT NULL DEFAULT 0.85,
   -- The ticket given when nothing else decides. At most one per event.
-  is_default               INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
-  free_requires_work_email INTEGER NOT NULL DEFAULT 0 CHECK (free_requires_work_email IN (0, 1)),
+  is_default               INTEGER NOT NULL DEFAULT 0,
+  free_requires_work_email INTEGER NOT NULL DEFAULT 0,
   sort_order               INTEGER NOT NULL DEFAULT 0,
-  active                   INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+  active                   INTEGER NOT NULL DEFAULT 1,
   created_at               TEXT    NOT NULL,
   updated_at               TEXT    NOT NULL,
   UNIQUE (event_id, ticket_key)
@@ -53,7 +57,7 @@ CREATE TABLE event_ticket_price_periods (
   id        TEXT NOT NULL PRIMARY KEY,
   event_id  TEXT NOT NULL REFERENCES events(id),
   -- Calendar date in the event's zone; the change starts at that day's midnight.
-  starts_on TEXT CHECK (starts_on IS NULL OR starts_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')
+  starts_on TEXT
 );
 CREATE UNIQUE INDEX uq_event_ticket_price_periods ON event_ticket_price_periods(event_id, IFNULL(starts_on, ''));
 
@@ -62,7 +66,7 @@ CREATE TABLE event_ticket_prices (
   id               TEXT NOT NULL PRIMARY KEY,
   ticket_type_id   TEXT NOT NULL REFERENCES event_ticket_types(id) ON DELETE CASCADE,
   attendance_value TEXT NOT NULL,
-  day_date         TEXT CHECK (day_date IS NULL OR day_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  day_date         TEXT,
   charged          TEXT NOT NULL DEFAULT 'once'
 );
 CREATE UNIQUE INDEX uq_event_ticket_prices ON event_ticket_prices(ticket_type_id, attendance_value, IFNULL(day_date, ''));
@@ -70,7 +74,7 @@ CREATE UNIQUE INDEX uq_event_ticket_prices ON event_ticket_prices(ticket_type_id
 CREATE TABLE event_ticket_price_amounts (
   price_id  TEXT    NOT NULL REFERENCES event_ticket_prices(id) ON DELETE CASCADE,
   period_id TEXT    NOT NULL REFERENCES event_ticket_price_periods(id) ON DELETE CASCADE,
-  amount    INTEGER NOT NULL CHECK (amount >= 0),
+  amount    INTEGER NOT NULL,
   PRIMARY KEY (price_id, period_id)
 );
 
@@ -82,10 +86,10 @@ CREATE TABLE event_ticket_codes (
   label          TEXT    NOT NULL,
   -- Uppercase, without separators. A code is a shared pass, not a credential.
   code           TEXT    NOT NULL,
-  amount         INTEGER CHECK (amount IS NULL OR amount >= 0),
-  percent_off    INTEGER CHECK (percent_off IS NULL OR (percent_off BETWEEN 1 AND 100)),
-  max_uses       INTEGER NOT NULL CHECK (max_uses > 0),
-  used_count     INTEGER NOT NULL DEFAULT 0 CHECK (used_count >= 0),
+  amount         INTEGER,
+  percent_off    INTEGER,
+  max_uses       INTEGER NOT NULL,
+  used_count     INTEGER NOT NULL DEFAULT 0,
   revoked_at     TEXT,
   -- Set on a sponsor's pass code: the sponsorship it belongs to and whether it is for staff or customers.
   sponsorship_id TEXT REFERENCES sponsorships(id),
@@ -93,7 +97,6 @@ CREATE TABLE event_ticket_codes (
   created_by_user_id TEXT REFERENCES users(id),
   created_at     TEXT    NOT NULL,
   updated_at     TEXT    NOT NULL,
-  CHECK ((amount IS NULL) <> (percent_off IS NULL)),
   CHECK (used_count <= max_uses),
   UNIQUE (event_id, code)
 );
@@ -102,8 +105,8 @@ CREATE TABLE event_ticket_codes (
 CREATE TABLE event_ticket_sponsor_passes (
   event_id        TEXT    NOT NULL REFERENCES events(id),
   tier_name       TEXT    NOT NULL,
-  staff_passes    INTEGER NOT NULL DEFAULT 0 CHECK (staff_passes >= 0),
-  customer_passes INTEGER NOT NULL DEFAULT 0 CHECK (customer_passes >= 0),
+  staff_passes    INTEGER NOT NULL DEFAULT 0,
+  customer_passes INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (event_id, tier_name)
 );
 
@@ -167,8 +170,8 @@ CREATE TABLE registration_tickets (
   ticket_type_id        TEXT    NOT NULL REFERENCES event_ticket_types(id),
   assignment_source     TEXT    NOT NULL,
   code_id               TEXT    REFERENCES event_ticket_codes(id),
-  amount                INTEGER NOT NULL CHECK (amount >= 0),
-  currency              TEXT    NOT NULL CHECK (length(currency) = 3 AND currency = lower(currency)),
+  amount                INTEGER NOT NULL,
+  currency              TEXT    NOT NULL,
   status                TEXT    NOT NULL,
   -- Set when the person chose another ticket than the one decided for their organization.
   dispute_reason        TEXT,
@@ -182,14 +185,14 @@ CREATE TABLE registration_tickets (
   -- The payment that settled the ticket: what it was for, and how much of it the provider has returned.
   -- `amount` is what the ticket costs for its days now; after a move to cheaper days it is less than was paid.
   payment_intent_id     TEXT,
-  paid_amount           INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
+  paid_amount           INTEGER NOT NULL DEFAULT 0,
   -- Fees kept from this ticket's refunds: that much of the payment stays here and stands for nothing.
-  kept_fee              INTEGER NOT NULL DEFAULT 0 CHECK (kept_fee >= 0),
+  kept_fee              INTEGER NOT NULL DEFAULT 0,
   -- The refund terms the ticket was paid under, as its payment page stated them: until when, and the fee kept.
   -- A later change of the event's policy does not change them.
   refund_until          TEXT,
-  refund_fee            INTEGER NOT NULL DEFAULT 0 CHECK (refund_fee >= 0),
-  refunded_amount       INTEGER NOT NULL DEFAULT 0 CHECK (refunded_amount >= 0),
+  refund_fee            INTEGER NOT NULL DEFAULT 0,
+  refunded_amount       INTEGER NOT NULL DEFAULT 0,
   -- The provider's time of the newest refund fact applied; an older one that arrives later is not applied over it.
   refunds_seen_at       TEXT,
   -- Set when a refund failed: what was returned is then read again from the provider, not worked out here.
@@ -214,7 +217,7 @@ CREATE TABLE registration_ticket_checkouts (
   payment_intent_id   TEXT UNIQUE,
   -- The refund terms this payment page states; the ticket it settles is held to them.
   refund_until        TEXT,
-  refund_fee          INTEGER NOT NULL DEFAULT 0 CHECK (refund_fee >= 0),
+  refund_fee          INTEGER NOT NULL DEFAULT 0,
   created_at          TEXT NOT NULL,
   expires_at          TEXT NOT NULL
 );
@@ -235,7 +238,7 @@ CREATE TABLE registration_ticket_refunds (
   id                   TEXT    NOT NULL PRIMARY KEY,
   ticket_id            TEXT    NOT NULL REFERENCES registration_tickets(id) ON DELETE CASCADE,
   payment_intent_id    TEXT,
-  amount               INTEGER NOT NULL CHECK (amount > 0),
+  amount               INTEGER NOT NULL,
   reason               TEXT    NOT NULL,
   -- Empty for a payment returned without an organizer asking: one that arrived for a ticket that no longer needed it.
   requested_by_user_id TEXT    REFERENCES users(id),
