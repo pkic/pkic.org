@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import { liveModerationReasonLabel, type LiveModerationReason } from "../../shared/live-moderation-policy";
+import type { LiveModerationReason } from "../../shared/live-moderation-policy";
 import { liveQuestionTransitions, type LiveQuestionStatus, type LiveRoomRole } from "../../shared/live-session-policy";
 import { formatNumber } from "../../shared/format-number";
 import type { LiveQuestion } from "../../shared/schemas/live-session-room";
@@ -10,7 +10,7 @@ import { Avatar } from "../ui/Avatar";
 import { LiveAuthorName } from "./LiveAuthor";
 import { LiveModerationDialogHost } from "./LiveModerationDialog";
 import { liveRemoveMenuItem } from "./live-moderation-menu";
-import { LiveRemovedNote } from "./LiveRemovedNote";
+import { LiveRemovedPost, liveRemovalNote } from "./LiveRemovedPost";
 import "./SessionQuestions.css";
 
 const STATUS: Record<LiveQuestionStatus, { label: string; tone: BadgeTone }> = {
@@ -119,7 +119,7 @@ export function LiveQuestionList({
       <LiveModerationDialogHost />
       <ol class="pk-live-questions__list">
         {questions.map((question) => (
-          <li key={question.id} class="pk-live-question">
+          <li key={question.id} class="pk-live-question" data-removed={question.removal ? "" : undefined}>
             {!votesInline ? (
               <button
                 type="button"
@@ -135,15 +135,13 @@ export function LiveQuestionList({
             ) : null}
 
             <div class="pk-live-question__body">
-              <p
-                class={
-                  [compact ? "pk-live-question__excerpt" : null, question.removal ? "pk-live-removed-words" : null]
-                    .filter(Boolean)
-                    .join(" ") || undefined
-                }
-              >
-                {question.text}
-              </p>
+              {question.removal ? (
+                <LiveRemovedPost note={liveRemovalNote(question.removal)}>
+                  <p class={compact ? "pk-live-question__excerpt" : undefined}>{question.text}</p>
+                </LiveRemovedPost>
+              ) : (
+                <p class={compact ? "pk-live-question__excerpt" : undefined}>{question.text}</p>
+              )}
               {!compact && question.originalText !== null ? (
                 <p class="pk-live-question__original">
                   Asked as “{question.originalText}”
@@ -169,14 +167,7 @@ export function LiveQuestionList({
                   <Badge tone={STATUS[question.status].tone}>{STATUS[question.status].label}</Badge>
                 ) : null}
                 {question.moderated && !compact ? <span>by {question.moderated.operatorName}</span> : null}
-                {question.removal && !question.mine ? (
-                  <span>
-                    Removed by {question.removal.byName ?? "a moderator"}:{" "}
-                    {liveModerationReasonLabel(question.removal.reason)}
-                  </span>
-                ) : null}
               </div>
-              {question.removal && question.mine ? <LiveRemovedNote removal={question.removal} /> : null}
               {actions ? <div class="pk-live-question__actions">{actions(question)}</div> : null}
               {thread?.(question)}
             </div>

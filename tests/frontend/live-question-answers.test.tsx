@@ -125,7 +125,9 @@ describe("answer threads", () => {
       answer({ mine: true, removal: { reason: "spam", at: "2026-10-16T12:01:00.000Z", byName: null } }),
     ]);
     expect(host.textContent).toContain("Removed by a moderator: Spam.");
-    expect(host.querySelector(".pk-live-answers__text")?.classList.contains("pk-live-removed-words")).toBe(true);
+    const removed = host.querySelector<HTMLDetailsElement>("details.pk-live-removed")!;
+    expect(removed.open).toBe(false);
+    expect(removed.querySelector(".pk-live-answers__text")?.textContent).toBe("Automate renewal first.");
   });
 
   it("replaces every post box with the warning while a person is blocked, and keeps the thread readable", () => {

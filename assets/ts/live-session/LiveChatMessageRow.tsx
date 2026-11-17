@@ -19,10 +19,10 @@ import { Markdown } from "../ui/Markdown";
 import { StrokeIcon } from "../ui/MediaIcons";
 import { Menu, type MenuItem } from "../ui/Menu";
 import { ReactionPicker } from "./ReactionPicker";
-import { LIVE_MODERATION_REASONS, liveModerationReasonLabel } from "../../shared/live-moderation-policy";
+import { LIVE_MODERATION_REASONS } from "../../shared/live-moderation-policy";
 import { liveParticipationBlockLabel } from "../../shared/schemas/live-session-moderation";
 import { liveDoneMenuItem, liveParticipationMenuItems, liveRemoveMenuItem } from "./live-moderation-menu";
-import { LiveRemovedNote } from "./LiveRemovedNote";
+import { LiveRemovedPost, liveRemovalNote } from "./LiveRemovedPost";
 
 type Viewer = LiveRoomSnapshot["viewer"];
 type Send = (message: LiveRoomClientMessage) => boolean;
@@ -141,17 +141,18 @@ function ReactIcon() {
 }
 
 /** Moderators only: what the room knows about the message, in words. */
+/** What replaces a removed or hidden message's words for the people who still see it. */
+function removedNote(message: LiveChatMessage): string | null {
+  if (message.removal) return liveRemovalNote(message.removal);
+  if (message.moderation?.hidden) return `Hidden by ${message.moderation.hidden.operatorName}.`;
+  return null;
+}
+
 function ModerationNote({ message }: { message: LiveChatMessage }) {
   const moderation = message.moderation;
   if (!moderation) return null;
   const notes: Array<{ text: string; tone: "warn" | "muted" }> = [];
   if (moderation.held) notes.push({ text: "Held after reports", tone: "warn" });
-  else if (message.removal)
-    notes.push({
-      text: `Removed by ${message.removal.byName ?? "a moderator"}: ${liveModerationReasonLabel(message.removal.reason)}`,
-      tone: "muted",
-    });
-  else if (moderation.hidden) notes.push({ text: `Hidden by ${moderation.hidden.operatorName}`, tone: "muted" });
   if (moderation.reports > 0)
     notes.push({
       text: `${formatNumber(moderation.reports)} ${moderation.reports === 1 ? "report" : "reports"}`,
@@ -212,7 +213,12 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   const reactions = LIVE_CHAT_REACTIONS.filter((reaction) => (message.reactions?.[reaction.id] ?? 0) > 0);
   const time = formatClockInZone(message.sentAt, timeZone);
   return (
-    <li ref={measure} class="pk-live-chat__row" data-mine={message.mine ? "" : undefined}>
+    <li
+      ref={measure}
+      class="pk-live-chat__row"
+      data-mine={message.mine ? "" : undefined}
+      data-removed={removedNote(message) ? "" : undefined}
+    >
       <Avatar name={message.authorName} src={message.authorPhotoUrl ?? undefined} size="sm" />
       <div class="pk-live-chat__body">
         {actionError && <Alert tone="danger">Could not complete the action. Please try again.</Alert>}
@@ -229,16 +235,13 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
           </time>
           <ModerationNote message={message} />
         </div>
-        <Markdown
-          markdown={message.text}
-          profile="chat"
-          className={
-            message.moderation?.hidden || message.removal
-              ? "pk-live-chat__text pk-live-removed-words"
-              : "pk-live-chat__text"
-          }
-        />
-        {message.removal && message.mine ? <LiveRemovedNote removal={message.removal} /> : null}
+        {removedNote(message) ? (
+          <LiveRemovedPost note={removedNote(message)!}>
+            <Markdown markdown={message.text} profile="chat" className="pk-live-chat__text" />
+          </LiveRemovedPost>
+        ) : (
+          <Markdown markdown={message.text} profile="chat" className="pk-live-chat__text" />
+        )}
         {reactions.length ? (
           <div class="pk-live-chat__reactions">
             {reactions.map((reaction) => {

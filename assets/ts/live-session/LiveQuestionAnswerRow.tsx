@@ -1,9 +1,5 @@
 import { formatNumber } from "../../shared/format-number";
-import {
-  liveModerationReasonLabel,
-  liveParticipationActions,
-  type LiveModerationReason,
-} from "../../shared/live-moderation-policy";
+import { liveParticipationActions, type LiveModerationReason } from "../../shared/live-moderation-policy";
 import type { LiveQuestionAnswer } from "../../shared/schemas/live-session-answer";
 import type { LiveRoomRole } from "../../shared/live-session-policy";
 import type { LiveRoomClientMessage } from "../../shared/schemas/live-session-room";
@@ -11,7 +7,7 @@ import { IconCheckmark } from "../components/icons";
 import { Button } from "../ui/Button";
 import { Menu, type MenuItem } from "../ui/Menu";
 import { LiveAuthorName } from "./LiveAuthor";
-import { LiveRemovedNote } from "./LiveRemovedNote";
+import { LiveRemovedPost, liveRemovalNote } from "./LiveRemovedPost";
 import { liveParticipationMenuItems, liveRemoveMenuItem } from "./live-moderation-menu";
 
 const ACCEPT = {
@@ -94,7 +90,10 @@ export function LiveQuestionAnswerRow({
   const votes = `${formatNumber(answer.votes)} ${answer.votes === 1 ? "vote" : "votes"}`;
   const voteLabel = answer.mine ? `Your answer: ${votes}` : `Upvote answer: ${votes}`;
   return (
-    <li class={`pk-live-answers__answer${answer.acceptance ? " pk-live-answers__answer--accepted" : ""}`}>
+    <li
+      class={`pk-live-answers__answer${answer.acceptance ? " pk-live-answers__answer--accepted" : ""}`}
+      data-removed={answer.removal ? "" : undefined}
+    >
       <button
         type="button"
         class="pk-live-question__vote"
@@ -111,19 +110,17 @@ export function LiveQuestionAnswerRow({
       </button>
       <div class="pk-live-answers__body">
         <LiveAuthorName name={answer.authorName} affiliation={answer.authorAffiliation} roles={answer.authorRoles} />
-        <p class={answer.removal ? "pk-live-answers__text pk-live-removed-words" : "pk-live-answers__text"}>
-          {answer.text}
-        </p>
+        {answer.removal ? (
+          <LiveRemovedPost note={liveRemovalNote(answer.removal)}>
+            <p class="pk-live-answers__text">{answer.text}</p>
+          </LiveRemovedPost>
+        ) : (
+          <p class="pk-live-answers__text">{answer.text}</p>
+        )}
         {answer.acceptance ? (
           <p class="pk-live-answers__acceptance">
             <strong>Accepted answer</strong> ·{" "}
             {answer.acceptance.byName === null ? "by the question author" : `by ${answer.acceptance.byName}`}
-          </p>
-        ) : null}
-        {answer.removal && answer.mine ? <LiveRemovedNote removal={answer.removal} /> : null}
-        {answer.removal && !answer.mine ? (
-          <p class="pk-live-answers__acceptance">
-            Removed by {answer.removal.byName ?? "a moderator"}: {liveModerationReasonLabel(answer.removal.reason)}
           </p>
         ) : null}
       </div>
