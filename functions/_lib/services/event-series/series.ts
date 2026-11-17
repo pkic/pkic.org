@@ -7,6 +7,7 @@ import {
   eventSeriesCreateSchema,
   eventSeriesListQuerySchema,
   eventSeriesUpdateSchema,
+  meetingLocationSchema,
   type EventSeries,
   type GroupEventSeries,
 } from "../../../../assets/shared/schemas/event-series";
@@ -273,6 +274,7 @@ export async function createGroupEventSeries(
   input: EventSeriesCreateInput,
   encryptionSecret = "",
 ): Promise<EventSeries> {
+  if (input.location !== undefined) input = { ...input, location: meetingLocationSchema.parse(input.location) };
   const group = await getGroup(db, groupIdOrSlug);
   if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
   if (!group.active) throw new AppError(409, "GROUP_INACTIVE", "Meetings cannot be created in an inactive group");
@@ -360,6 +362,7 @@ export async function updateGroupEventSeries(
   input: EventSeriesUpdateInput,
   encryptionSecret = "",
 ): Promise<EventSeries> {
+  if (input.location !== undefined) input = { ...input, location: meetingLocationSchema.parse(input.location) };
   const {
     series: existing,
     context,
@@ -400,6 +403,7 @@ export async function updateGroupEventSeries(
       : currentPolicy,
   );
   const auditChanges: Record<string, unknown> = { ...input };
+  if (input.location !== undefined) auditChanges.location = { from: existing.location, to: input.location };
   delete auditChanges.expectedUpdatedAt;
   delete auditChanges.providerJoinUrl;
   if (input.providerJoinUrl !== undefined) auditChanges.providerDestinationChanged = true;

@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { personDisplayName, personLegalName, type PersonNameParts } from "../assets/shared/person-display";
 import { personDisplayNameSql, personNameSql } from "../functions/_lib/services/people/person-name-sql";
 import type { Env } from "../functions/_lib/types";
+import { buildFindOrCreateUserStatement, prepareUserProfileStatements } from "../functions/_lib/services/users";
 
 const db = (env as unknown as Env).DB;
 
@@ -32,6 +33,22 @@ async function sqlName(parts: PersonNameParts, expression: (alias: string) => st
 }
 
 describe("person name", () => {
+  it("stores absent preferred names as NULL and preserves an omitted name during an update", async () => {
+    const email = `${crypto.randomUUID()}@example.test`;
+    const created = await buildFindOrCreateUserStatement(db, { email, preferredName: "   " });
+    await db.batch(created.statements);
+    const stored = () => db.prepare("SELECT preferred_name FROM users WHERE id=?").bind(created.user.id).first();
+    expect(await stored()).toEqual({ preferred_name: null });
+    await db.batch(prepareUserProfileStatements(db, created.user.id, { preferredName: "  Chosen  " }));
+    expect(await stored()).toEqual({ preferred_name: "Chosen" });
+    const omitted = await buildFindOrCreateUserStatement(db, { email, firstName: "Updated", allowProfileUpdate: true });
+    await db.batch(omitted.statements);
+    expect(await stored()).toEqual({ preferred_name: "Chosen" });
+    const cleared = await buildFindOrCreateUserStatement(db, { email, preferredName: "", allowProfileUpdate: true });
+    await db.batch(cleared.statements);
+    expect(await stored()).toEqual({ preferred_name: null });
+  });
+
   it.each(CASES)("names %j as %s in the portal and in D1", async (parts, expected) => {
     expect(personDisplayName(parts, "ada@example.test")).toBe(expected ?? "ada@example.test");
     expect(await sqlName(parts, personNameSql)).toBe(expected);

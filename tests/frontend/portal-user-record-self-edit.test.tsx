@@ -12,7 +12,7 @@ import { UserDetail } from "../../assets/ts/member-flows/portal/sections/system-
 import type { UserPermissions } from "../../assets/ts/member-flows/portal/sections/system-users/UserDetail";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
-import { myProfileSchema } from "../../assets/shared/schemas/me";
+import { myProfileSchema, myProfileUpdateSchema } from "../../assets/shared/schemas/me";
 import { identitiesListResponseSchema, currentUserIdentityCreateSchema } from "../../assets/shared/schemas/identity";
 import { identityAffiliationPreviewSchema } from "../../assets/shared/schemas/identity-affiliation";
 
@@ -322,7 +322,9 @@ describe("editing your own record", () => {
 
     const patch = requests.find((request) => request.method === "PATCH");
     expect(patch?.path).toBe("/api/v1/users/current");
-    expect(patch?.body).toEqual({ firstName: "Patricia", lastName: "Person", preferredName: "" });
+    const submitted = myProfileUpdateSchema.parse(patch?.body);
+    expect(submitted).toEqual({ firstName: "Patricia", lastName: "Person", preferredName: null });
+    expect(patch?.body).toEqual(submitted);
   });
 
   it("marks an empty first name on its field instead of sending it", async () => {

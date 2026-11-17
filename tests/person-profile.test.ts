@@ -65,6 +65,24 @@ async function createStaffSession(permissions: string[]): Promise<string> {
 describe("person profile", () => {
   beforeEach(resetDb);
 
+  it("saves a 200-character organization job title through the owner's profile contract", async () => {
+    const owner = await insertOrgRepresentative(env.DB, { email: "long-title@example.test" });
+    const token = await createMemberSession(env.DB, owner.userId, "long-title-owner");
+    const jobTitle = "R".repeat(200);
+    const response = await call(token, `/api/v1/users/current/identities/${owner.identityId}/profile`, {
+      method: "PATCH",
+      body: JSON.stringify(identityProfileUpdateSchema.parse({ jobTitle, biography: "Updated biography." })),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(ownIdentityProfileSchema.parse(await response.json())).toMatchObject({
+      jobTitle,
+      biography: "Updated biography.",
+    });
+    expect(
+      await env.DB.prepare("SELECT job_title FROM identities WHERE id=?").bind(owner.identityId).first("job_title"),
+    ).toBe(jobTitle);
+  });
+
   it("shows every identity publicly until staff hide it, and then only to its owner, marked", async () => {
     const owner = await insertIndividualMember(env.DB, "H6", "owner@example.test");
     const reader = await insertIndividualMember(env.DB, "H6", "reader@example.test");

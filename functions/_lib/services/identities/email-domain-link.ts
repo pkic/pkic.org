@@ -55,6 +55,7 @@ interface DomainOrganizationLinkInput {
   systemDecision?: { action: string; details: Record<string, unknown> };
   /** A claim's backfill never links a person somewhere else. */
   onlyOrganizationId?: string;
+  jobTitle?: string;
   /** Staff approves this person's reviews in one selected group using current mailbox proof. */
   reviewDecision?: { groupKey: string; staffId: string; decisionId: string };
 }
@@ -127,6 +128,7 @@ export async function prepareVerifiedAddressDomainOrganizationLink(
       emailId: input.emailId,
       organizationId,
       at,
+      profile: { jobTitle: input.jobTitle },
       proofEvidence: { sql: "SELECT 1 FROM users WHERE id = ? AND active = 1", bindings: [input.userId] },
     });
     const decision = input.reviewDecision;

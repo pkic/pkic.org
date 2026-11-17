@@ -22,7 +22,7 @@ import { prepareIdentityProfileEdit, type EditableIdentityProfile } from "./prof
 export interface OwnIdentityProfileUpdateInput {
   firstName?: string;
   lastName?: string;
-  preferredName?: string;
+  preferredName?: string | null;
   emailId?: string | null;
   jobTitle?: string;
   biography?: string;
@@ -42,7 +42,7 @@ const HELD_IDENTITY_SQL = `identity.id = ? AND identity.user_id = ?
 
 /** A field present in the patch whose value differs from the stored one, as an audit delta. */
 function nameChanges(current: EditableIdentityRow, input: OwnIdentityProfileUpdateInput) {
-  const changes: Record<string, { from: string | null; to: string }> = {};
+  const changes: Record<string, { from: string | null; to: string | null }> = {};
   if (input.firstName !== undefined && input.firstName !== current.first_name)
     changes.firstName = { from: current.first_name, to: input.firstName };
   if (input.lastName !== undefined && input.lastName !== current.last_name)

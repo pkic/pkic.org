@@ -33,6 +33,7 @@ export async function overrideAffiliationReviewVerification(
     groupKey: string;
     decisionId: string;
     activation: NonNullable<AffiliationReviewApprove["activation"]>;
+    jobTitle?: string;
   },
   actor: IdentityManagerActor,
 ): Promise<number> {
@@ -47,6 +48,7 @@ export async function overrideAffiliationReviewVerification(
   const created = await createOrganizationIdentity(db, actor, {
     organizationId: candidate.organization_id,
     userId: input.userId,
+    jobTitle: input.jobTitle,
     showOnOrganizationProfile: true,
     activation: input.activation,
     reviewApproval: {

@@ -103,6 +103,34 @@ it("saves the named identity through its own contract and returns to the profile
   expect(navigate).toHaveBeenCalledWith(`/users/${userId}/profile`);
 });
 
+it("saves other profile edits while retaining an existing 200-character job title", async () => {
+  const jobTitle = "R".repeat(200);
+  const current = { ...identity, jobTitle };
+  const writes: unknown[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PATCH") {
+        const body = identityProfileUpdateSchema.parse(JSON.parse(String(init.body)));
+        writes.push(body);
+        return Response.json({ ...current, ...body });
+      }
+      return Response.json(current);
+    }),
+  );
+  await act(async () => render(<IdentityProfileEditView userId={userId} identityId={identityId} />, container));
+  await settle();
+  await typeInto(container.querySelector<HTMLInputElement>('input[type="url"]')!, "https://example.org/profile");
+  await act(async () => {
+    container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  await settle();
+  expect(writes).toEqual([
+    expect.objectContaining({ jobTitle, links: [...identity.links, "https://example.org/profile"] }),
+  ]);
+  expect(navigate).toHaveBeenCalledWith(`/users/${userId}/profile`);
+});
+
 it.each(["not a link", "https://github.com/example"])(
   "refuses an invalid or duplicate pending profile link before saving: %s",
   async (pending) => {

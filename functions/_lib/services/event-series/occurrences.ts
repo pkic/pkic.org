@@ -8,6 +8,7 @@ import {
   eventOccurrenceCreateSchema,
   eventOccurrenceUpdateSchema,
   eventOccurrencesListQuerySchema,
+  meetingLocationSchema,
 } from "../../../../assets/shared/schemas/event-series";
 import {
   batchFirst,
@@ -242,6 +243,8 @@ export async function createSeriesOccurrence(
   input: OccurrenceCreateInput,
   encryptionSecret: string,
 ) {
+  if (input.locationOverride !== undefined)
+    input = { ...input, locationOverride: meetingLocationSchema.parse(input.locationOverride) };
   const { series, context } = await getManagedGroupEventSeries(db, actor, groupIdOrSlug, seriesId);
   const id = uuid();
   const now = nowIso();
@@ -316,6 +319,8 @@ export async function updateSeriesOccurrence(
   /** Where the change is announced from; without it the invited are not told. */
   notify?: OccurrenceNotificationOptions,
 ) {
+  if (input.locationOverride !== undefined)
+    input = { ...input, locationOverride: meetingLocationSchema.parse(input.locationOverride) };
   const current = await getManagedSeriesOccurrence(db, actor, groupIdOrSlug, seriesId, occurrenceId);
   if (current.occurrence.updatedAt !== input.expectedUpdatedAt) {
     throw new AppError(409, "EVENT_OCCURRENCE_CHANGED", "The meeting occurrence changed; reload before saving");
@@ -374,6 +379,8 @@ export async function updateSeriesOccurrence(
       ? null
       : undefined;
   const auditChanges: Record<string, unknown> = { ...input };
+  if (input.locationOverride !== undefined)
+    auditChanges.locationOverride = { from: current.occurrence.locationOverride, to: input.locationOverride };
   delete auditChanges.expectedUpdatedAt;
   delete auditChanges.providerJoinUrl;
   const auditDetails =
