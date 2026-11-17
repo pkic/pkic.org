@@ -13,11 +13,8 @@ export function IdentityCreateDialog({
   canActivate = false,
   preferImmediateActivation = false,
   onBusy,
-  verifiedEmail,
 }: {
   open: boolean;
-  /** An address the person already proved, used for the new identity without asking for it again. */
-  verifiedEmail?: string;
   targetUserId?: string;
   canActivate?: boolean;
   preferImmediateActivation?: boolean;
@@ -56,12 +53,7 @@ export function IdentityCreateDialog({
               onCreated={created}
             />
           ) : (
-            <SelfIdentityCreateForm
-              verifiedEmail={verifiedEmail}
-              onBusy={setBusy}
-              onActionLabel={setActionLabel}
-              onCreated={created}
-            />
+            <SelfIdentityCreateForm onBusy={setBusy} onActionLabel={setActionLabel} onCreated={created} />
           ))}
       </div>
     </Dialog>,

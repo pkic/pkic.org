@@ -54,18 +54,30 @@ async function readKnownPerson(session: Session): Promise<KnownPerson> {
   };
 }
 
+/**
+ * A work address registers for an organization: the identity the session acts as when it has one,
+ * otherwise the person's only organization identity. With none, or several to tell apart, the person selects one.
+ */
+function likelyOrganizationIdentity(person: KnownPerson): SessionActingIdentity | null {
+  if (person.identity?.organizationId) return person.identity;
+  const organizations = person.identities.filter((identity) => identity.organizationId);
+  return organizations.length === 1 ? organizations[0]! : null;
+}
+
 /** Where the session stands: signed out, or the details registration continues with. */
 async function readStage(): Promise<Stage> {
   const session = await readSession();
   if (!session) return { kind: "signed-out" };
-  const [person, domain] = await Promise.all([
+  const [known, domain] = await Promise.all([
     readKnownPerson(session),
     getJson(emailDomainUrl(emailDomainOf(session.identity.email)), emailDomainResponseSchema).catch(() => null),
   ]);
+  const workEmail = domain?.kind === "work";
+  const person = workEmail ? { ...known, identity: likelyOrganizationIdentity(known) } : known;
   return {
     kind: "known",
     person,
-    workEmail: domain?.kind === "work",
+    workEmail,
     step: { email: session.identity.email, unaffiliatedAttestation: person.identity?.organizationId === null },
   };
 }
@@ -201,7 +213,7 @@ export function RegistrationContactStep({
 
   if (stage.kind === "known") {
     const { person, step, workEmail } = stage;
-    // A new account holds only its personal identity, which a work address never registers as.
+    // A work address never registers as the personal identity a new account starts with.
     const representationMissing = workEmail && !person.identity?.organizationId;
     return (
       <div class="pk-stack">
@@ -232,7 +244,6 @@ export function RegistrationContactStep({
               preferred={representationMissing ? null : person.identity}
               available={person.identities}
               organizationOnly={workEmail}
-              representationEmail={workEmail ? step.email : undefined}
               userId={person.userId}
               onSelect={(identity) => {
                 setStage({

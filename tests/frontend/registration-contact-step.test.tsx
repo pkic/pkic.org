@@ -19,7 +19,9 @@ const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000044";
 const NOW = "2026-01-01T00:00:00.000Z";
 let host: HTMLDivElement | null = null;
 
-function session(organizationName?: string | null) {
+const PERSONAL_IDENTITY_ID = "00000000-0000-4000-8000-000000000099";
+
+function session(organizationName?: string | null, actingIdentityId: string = IDENTITY_ID) {
   // Event participation is an authenticated capacity without membership.
   return userAuthSessionResponseSchema.parse({
     success: true,
@@ -28,13 +30,13 @@ function session(organizationName?: string | null) {
     idleExpiresAt: "2099-12-31T23:59:59.000Z",
     identity: { id: USER_ID, email: "ada@example.test" },
     eventParticipation: true,
-    actingIdentityId: organizationName === undefined ? null : IDENTITY_ID,
+    actingIdentityId: organizationName === undefined ? null : actingIdentityId,
     actingIdentities:
       organizationName === undefined
         ? []
         : [
             {
-              id: "00000000-0000-4000-8000-000000000099",
+              id: PERSONAL_IDENTITY_ID,
               organizationId: null,
               organizationName: null,
               jobTitle: null,
@@ -90,7 +92,11 @@ interface Recorded {
 }
 
 /** `signedIn` false answers the session with 401; `organizationName` undefined holds no identity. */
-function installResponses(organizationName: string | null | undefined, signedIn = true): Recorded[] {
+function installResponses(
+  organizationName: string | null | undefined,
+  signedIn = true,
+  actingIdentityId: string = IDENTITY_ID,
+): Recorded[] {
   const recorded: Recorded[] = [];
   let saved = profile();
   vi.stubGlobal(
@@ -109,7 +115,9 @@ function installResponses(organizationName: string | null | undefined, signedIn 
       let body: unknown;
       let status = 200;
       if (url.pathname === "/api/v1/auth/session") {
-        body = signedIn ? session(organizationName) : { error: { code: "UNAUTHORIZED", message: "Sign in" } };
+        body = signedIn
+          ? session(organizationName, actingIdentityId)
+          : { error: { code: "UNAUTHORIZED", message: "Sign in" } };
         status = signedIn ? 200 : 401;
       } else if (url.pathname === "/api/v1/auth/sign-up") body = { success: true };
       else if (url.pathname === "/api/v1/users/current") {
@@ -119,9 +127,6 @@ function installResponses(organizationName: string | null | undefined, signedIn 
         // The server's lists; the browser only ever sees this answer.
         const domain = decodeURIComponent(url.pathname.slice("/api/v1/email/domains/".length));
         body = emailDomainResponseSchema.parse({ domain, kind: domain === "ziggo.nl" ? "free" : "work" });
-      } else if (url.pathname === "/api/v1/users/current/emails") {
-        // No other address yet: the add form asks for the registration address as usual.
-        body = { emails: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } };
       } else if (url.pathname === "/api/v1/users/current/identities") {
         const identities = organizationName === undefined ? [] : [identity(organizationName)];
         body = identitiesListResponseSchema.parse({
@@ -257,21 +262,29 @@ describe("registration contact step", () => {
 
   it("keeps a work address from registering as the personal identity a new account starts with", async () => {
     window.history.replaceState({}, "", "/events/2026/pqc/register/");
-    const requests = installResponses(null);
+    installResponses(null);
     const form = await mount(contactStep());
-    // Nothing is chosen for it, and the registration contract reads that the organization is still missing.
+    // Nothing is selected for it, and the registration contract reads that the organization is still missing.
     expect(value(form, "identityId")).toBe("");
     expect(value(form, "organizationRepresentationMissing")).toBe("true");
-    expect(form.textContent).toContain("No organization chosen");
+    expect(form.textContent).toContain("Select your organization");
     expect(form.textContent).not.toContain("Personal");
 
-    // With no organization identity to choose from, the step adds one at once.
-    await act(async () => buttonNamed(form, "Add your organization")!.click());
+    // The shared representation chooser is the one way to add the organization.
+    await act(async () => form.querySelector<HTMLButtonElement>('button[aria-label="Change representation"]')!.click());
     await settle();
-    const dialog = document.querySelector<HTMLDialogElement>("dialog[open]")!;
-    expect(dialog.querySelector("h2, h3")?.textContent).toBe("Add identity");
-    expect(form.contains(dialog)).toBe(false);
-    expect(requests.some((request) => request.path === "/api/v1/users/current/emails")).toBe(true);
+    const chooser = document.querySelector<HTMLDialogElement>("dialog[open]")!;
+    expect(form.contains(chooser)).toBe(false);
+    expect(chooser.querySelector('button[aria-label="Add identity"]')).not.toBeNull();
+  });
+
+  it("selects the organization a work address most likely registers for while the session acts personally", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    installResponses("Example Corp", true, PERSONAL_IDENTITY_ID);
+    const form = await mount(contactStep());
+    expect(value(form, "identityId")).toBe(IDENTITY_ID);
+    expect(value(form, "organizationRepresentationMissing")).toBe("false");
+    expect(form.textContent).toContain("Example Corp");
   });
 
   it("corrects a saved name through the shared editor on the signed-in person's own profile", async () => {
