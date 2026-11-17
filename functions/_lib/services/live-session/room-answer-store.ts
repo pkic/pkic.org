@@ -220,8 +220,16 @@ export class LiveRoomAnswerStore {
       userId,
       userId,
     );
-    // The durable copy's vote counts drop the person's votes on answers that stay.
-    for (const answerId of recount) this.changed(answerId);
-    return changed;
+    // The durable copy's vote counts drop the person's votes on answers that stay, and those threads re-sort.
+    const threads = new Set(changed);
+    for (const answerId of recount) {
+      this.changed(answerId);
+      const row = this.sql.rows<{ question_id: string }>(
+        "SELECT question_id FROM question_answers WHERE id=?",
+        answerId,
+      )[0];
+      if (row) threads.add(row.question_id);
+    }
+    return [...threads];
   }
 }

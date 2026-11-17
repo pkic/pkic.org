@@ -134,7 +134,10 @@ export class LiveRoomModerationStore {
     return this.restrictions([userId], now).get(userId) ?? null;
   }
 
-  /** A pause or a session block, kept in the room. An event block goes to D1 and reaches the room through `eventBlocked`. */
+  /**
+   * A pause or a session block, kept in the room; a later pause never weakens a session block.
+   * An event block goes to D1 and reaches the room through `eventBlocked`.
+   */
   block(
     userId: string,
     block: Exclude<LiveParticipationBlock, "event">,
@@ -145,7 +148,8 @@ export class LiveRoomModerationStore {
     this.sql.exec(
       `INSERT INTO room_participation_blocks(user_id, block, reason, until, by_user_id, by_name, at) VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(user_id) DO UPDATE SET block = excluded.block, reason = excluded.reason, until = excluded.until,
-         by_user_id = excluded.by_user_id, by_name = excluded.by_name, at = excluded.at`,
+         by_user_id = excluded.by_user_id, by_name = excluded.by_name, at = excluded.at
+       WHERE NOT (room_participation_blocks.block = 'session' AND excluded.block = 'paused')`,
       userId,
       block,
       reason,

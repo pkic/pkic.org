@@ -1,3 +1,4 @@
+import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
 import type { LiveRoomModerationStore } from "./room-moderation-store";
 import type { LiveModerationReason } from "../../../../assets/shared/live-moderation-policy";
 import {
@@ -99,6 +100,8 @@ export class LiveRoomQuestions {
     // Author resolution yields: another invocation may have accepted this request.
     const accepted = replay();
     if (accepted) return accepted;
+    if (viewer.role !== "operator" && this.decisions.restriction(actor.userId, Date.now()))
+      return LIVE_PARTICIPATION_REFUSAL;
     if (this.store.questionCount() >= LIVE_ROOM_POLICY.maxQuestionsPerRoom) return REFUSALS.full;
     if (!this.hooks.allowed(actor.userId)) return REFUSALS.tooFast;
     this.store.addQuestion({

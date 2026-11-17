@@ -74,10 +74,13 @@ export function liveParticipationMenuItems({
   onError: () => void;
 }): MenuItem[] {
   const items: MenuItem[] = [];
+  const sendOrReport = (message: LiveRoomClientMessage) => {
+    if (!send(message)) onError();
+  };
   const block = (kind: "session" | "event", title: string, body: string, confirmLabel: string) => () => {
     void askModerationReason({ title, body, confirmLabel, offerRemovePosts: true })
       .then((decision) => {
-        if (decision) send({ type: "participation.block", item, block: kind, ...decision });
+        if (decision) sendOrReport({ type: "participation.block", item, block: kind, ...decision });
       })
       .catch(onError);
   };
@@ -88,7 +91,7 @@ export function liveParticipationMenuItems({
       description: `${authorName} can't post, vote or react until ${formatClockInZone(livePauseEndsAt(new Date().toISOString()), timeZone)}. They can keep watching.`,
       separatorBefore: true,
       onSelect: () =>
-        send({ type: "participation.block", item, block: "paused", reason: "conduct", removePosts: false }),
+        sendOrReport({ type: "participation.block", item, block: "paused", reason: "conduct", removePosts: false }),
     });
   if (actions.has("block"))
     items.push({
@@ -124,7 +127,7 @@ export function liveParticipationMenuItems({
       label: "Lift block",
       description: `${authorName} can post again. Removed posts stay removed.`,
       separatorBefore: true,
-      onSelect: () => send({ type: "participation.lift", item }),
+      onSelect: () => sendOrReport({ type: "participation.lift", item }),
     });
   return items;
 }

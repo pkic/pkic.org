@@ -11,14 +11,14 @@ import { Alert } from "../ui/Alert";
 export function useLiveParticipation(
   restriction: LiveParticipationRestrictionView | null | undefined,
 ): LiveParticipationRestrictionView | null {
-  const [now, setNow] = useState(() => Date.now());
+  const [, rerender] = useState(0);
   const until = restriction?.until ? Date.parse(restriction.until) : null;
   useEffect(() => {
     if (until === null || until <= Date.now()) return;
-    const timer = setTimeout(() => setNow(Date.now()), until - Date.now() + 50);
+    const timer = setTimeout(() => rerender((tick) => tick + 1), until - Date.now() + 50);
     return () => clearTimeout(timer);
   }, [until]);
-  return restriction && liveRestrictionActive(restriction, now) ? restriction : null;
+  return restriction && liveRestrictionActive(restriction, Date.now()) ? restriction : null;
 }
 
 /** In place of every way to post: why this person can't, and that watching goes on. */

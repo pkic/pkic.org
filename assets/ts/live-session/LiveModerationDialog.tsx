@@ -8,7 +8,7 @@
  * first host to render a request claims it.
  */
 import { signal } from "@preact/signals";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { LIVE_MODERATION_REASONS, type LiveModerationReason } from "../../shared/live-moderation-policy";
 import { liveModerationReasonFormSchema } from "../../shared/schemas/live-session-moderation";
 import { useContractForm } from "../hooks/useContractForm";
@@ -54,6 +54,13 @@ function settle(decision: LiveModerationDecision | null): void {
 
 export function LiveModerationDialogHost() {
   const [host] = useState(() => Symbol("live-moderation-dialog-host"));
+  // A host that leaves the page backs out of the request it was showing.
+  useEffect(
+    () => () => {
+      if (active.value?.host === host) settle(null);
+    },
+    [host],
+  );
   const request = active.value;
   if (!request) return null;
   request.host ??= host;

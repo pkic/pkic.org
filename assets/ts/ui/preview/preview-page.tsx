@@ -8,7 +8,7 @@
 
 import { render } from "preact";
 
-import { PreviewShell } from "./PreviewShell";
+import { PreviewShell, type PreviewSection } from "./PreviewShell";
 import { badgeLabelDeskSection } from "./badge-label-desk";
 import { scannerPresentationSection, scannerDestinationsSection } from "./scanner-presentation";
 import { badgePrintingSection } from "./badge-printing";
@@ -29,13 +29,21 @@ import { eventScreenBrowserSections } from "./sections-event-screens-browser";
 async function main(): Promise<void> {
   const mount = document.getElementById("pk-preview");
   if (!mount) return;
-  const {
-    liveAnswerSections,
-    liveReactionsSections,
-    stageDisplaySections,
-    studioOnScreenSections,
-    studioTimerSections,
-  } = await import("./sections-live-room");
+  // If the live-room chunk fails to load, the rest of the gallery still renders, with a note in its place.
+  const live = await import("./sections-live-room").catch(() => null);
+  const unloaded: PreviewSection[] = [
+    {
+      id: "live-room-unavailable",
+      title: "Live-room sections",
+      note: "These sections did not load. Reload the page to try again.",
+      render: () => null,
+    },
+  ];
+  const liveAnswerSections = live?.liveAnswerSections ?? unloaded;
+  const liveReactionsSections = live?.liveReactionsSections ?? [];
+  const stageDisplaySections = live?.stageDisplaySections ?? [];
+  const studioOnScreenSections = live?.studioOnScreenSections ?? [];
+  const studioTimerSections = live?.studioTimerSections ?? [];
   const sections = [
     ...basicSections,
     ...dataSections,

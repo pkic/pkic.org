@@ -219,10 +219,11 @@ export class LiveRoomAnswers {
     if (!answer || answer.question_id !== input.questionId) return REFUSALS.missing;
     if (answer.revision !== input.expectedRevision) return REFUSALS.changed;
     const at = nowIso();
-    if (input.hidden && input.reason) this.removeWithReason(answer, input.reason, actor, at);
+    if (input.hidden && input.reason) await this.removeWithReason(answer, input.reason, actor, at);
     else {
       this.decisions.restore(answer.id);
       this.store.changed(answer.id);
+      await this.changed();
     }
     this.questions.recordStaffAction(
       actor.userId,
@@ -230,16 +231,16 @@ export class LiveRoomAnswers {
       { questionId: answer.question_id, answerId: answer.id, ...(input.hidden ? { reason: input.reason } : {}) },
       at,
     );
-    await this.changed();
     await this.publish(answer.question_id);
     return { answerId: answer.id };
   }
 
   /** Removes an answer from everyone but its author and moderators; a removed answer is no longer accepted. */
-  removeWithReason(answer: LiveAnswerRow, reason: LiveModerationReason, actor: Actor, at: string): void {
+  async removeWithReason(answer: LiveAnswerRow, reason: LiveModerationReason, actor: Actor, at: string): Promise<void> {
     this.decisions.remove("answer", answer.id, reason, actor, at);
     if (answer.accepted_at) this.store.accept(answer, actor, crypto.randomUUID(), false, at);
     this.store.changed(answer.id);
+    await this.changed();
   }
 
   /** Every answer one person wrote in this room. */

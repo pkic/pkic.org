@@ -56,6 +56,13 @@ export function LiveQuestionThread({
   const [pending, setPending] = useState<Pending | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState(false);
+  // Each new attempt clears the last failure; it shows again only if this one fails too.
+  const act = (message: LiveRoomClientMessage) => {
+    setActionError(false);
+    const sent = send(message);
+    if (!sent) setActionError(true);
+    return sent;
+  };
   const form = useContractForm(liveQuestionAnswerCreateSchema, { text }, { quietWhenEmpty: true });
   const field = form.of("text");
   const resetForm = form.reset;
@@ -116,7 +123,7 @@ export function LiveQuestionThread({
                         canModerate={thread.canModerate}
                         disabled={disabled}
                         accepting={mine ? "this" : pending ? "other" : null}
-                        send={send}
+                        send={act}
                         timeZone={timeZone}
                         onError={() => setActionError(true)}
                         onAccept={() =>

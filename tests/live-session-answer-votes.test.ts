@@ -107,6 +107,18 @@ describe("answer votes, acceptance and removal", () => {
     ).toBe(0);
   });
 
+  it("keeps a session block when a later pause arrives for the same person", async () => {
+    const { moderator, questionId } = await question();
+    const attendee = await f.connect({ person: "secondAttendee" });
+    const answerId = await reply(attendee, questionId, "First, the inventory.");
+    const item = { kind: "answer", questionId, answerId } as const;
+    moderator.send({ type: "participation.block", item, block: "session", reason: "abuse", removePosts: false });
+    expect((await attendee.next("participation.access")).restriction).toEqual({ block: "session", until: null });
+    moderator.send({ type: "participation.block", item, block: "paused", reason: "conduct", removePosts: false });
+    const after = await attendee.next("participation.access");
+    expect(after.restriction).toEqual({ block: "session", until: null });
+  });
+
   it("blocks a person for the whole event in D1 only when an organizer asks", async () => {
     const { moderator, questionId } = await question();
     const attendee = await f.connect({ person: "secondAttendee" });

@@ -153,6 +153,9 @@ export class LiveRoomChatActions {
     if (!liveChatCanSend(liveChatCapacity(viewer), restricted, channel))
       return restricted ? REFUSALS.blocked : REFUSALS.notAllowed;
     const stamp = await this.authors.writing(viewer);
+    // Author resolution yields: a moderator may have blocked this person meanwhile.
+    if (viewer.role !== "operator" && this.feed.decisions.restriction(actor.userId, Date.now()))
+      return REFUSALS.blocked;
     const row = this.chat.send(actor, text, Date.now(), channel);
     if (!row) return REFUSALS.tooFast;
     this.authors.recordMessage(row.id, stamp);

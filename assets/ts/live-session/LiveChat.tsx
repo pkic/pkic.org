@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { LIVE_CHAT_POLICY, liveChatCanSend, liveChatCapacity, liveChatPlainText } from "../../shared/live-chat-policy";
 import { liveChatSendSchema, type LiveRoomClientMessage } from "../../shared/schemas/live-session-room";
 import type { LiveChatChannel } from "../../shared/schemas/live-session-chat";
@@ -115,6 +115,8 @@ export function LiveChat({
   visible?: boolean;
 }) {
   const restriction = useLiveParticipation(state.viewer.participation);
+  // Rows read the block in force, so their actions come back when a pause ends, as the composer does.
+  const viewer = useMemo(() => ({ ...state.viewer, participation: restriction }), [state.viewer, restriction]);
   const messages = liveChatChannel(state, channel);
   const list = useWindowedList(messages, (message) => message.id, { estimate: 52, overscan: 400, initial: 40 });
   const following = useRef(true);
@@ -187,7 +189,7 @@ export function LiveChat({
                 <LiveChatMessageRow
                   key={message.id}
                   message={message}
-                  viewer={state.viewer}
+                  viewer={viewer}
                   send={send}
                   disabled={disabled}
                   measure={list.measure(message.id)}
