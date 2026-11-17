@@ -51,7 +51,7 @@ async function signUpToken(email: string): Promise<string> {
   expect((await call(jsonRequest("/api/v1/auth/sign-up", { email }))).status).toBe(200);
   const [outbox] = await queryAll<{ payload_json: string }>(
     env.DB,
-    "SELECT payload_json FROM email_outbox WHERE template_key = 'user_magic_link' ORDER BY rowid DESC LIMIT 1",
+    "SELECT payload_json FROM email_outbox WHERE template_key = 'user_sign_up_link' ORDER BY rowid DESC LIMIT 1",
   );
   const payload = await deliveredEmailPayload<{ magicLinkUrl: string }>(env.DB, env, outbox.payload_json);
   const query = new URL(payload.magicLinkUrl).hash.split("?", 2)[1] ?? "";
