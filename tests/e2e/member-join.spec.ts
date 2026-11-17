@@ -4,7 +4,8 @@
  * @covers join.1.0.b
  */
 import { EMAIL_FIRST_ADVISORY_COPY, EMAIL_FIRST_COPY, WORK_EMAIL_STEER } from "../../assets/shared/email-first-copy";
-import { chooseJoinPath, startJoinInBrowser } from "./helpers/member-join";
+import { startJoinInBrowser } from "./helpers/member-join";
+import { addMissingName, addRepresentationBio } from "./helpers/person-details";
 import { expect, test, type Locator } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 
@@ -42,30 +43,31 @@ test("starts from the sign-in card and steers a personal address to the explicit
 
 test("signs in with an organization email before submitting the D1-backed membership form", async ({
   page,
-  browser,
 }, testInfo) => {
   const unique = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const email = `membership-${unique}@organization-${unique}.test`;
+  const organizationName = `E2E Organization ${unique}`;
 
-  await startJoinInBrowser(page, email);
+  // The organization is added at account setup, so the page applies as the identity that represents it.
+  await startJoinInBrowser(page, email, { organization: { name: organizationName } });
 
   await expect(page.getByRole("heading", { name: "Membership Application", exact: true })).toBeVisible();
-  // The account's proved address stands for the applicant; it is shown, not typed again.
-  await expect(page.locator("[data-join-signed-in]")).toContainText(email);
+  // The account's proved address and its organization stand for the applicant; neither is typed again.
+  const applicant = page.locator("[data-join-signed-in]");
+  await expect(applicant).toContainText(email);
+  await expect(applicant).toContainText(organizationName);
   await expect(page.locator("[data-join-application-form] input[type='email']")).toHaveCount(0);
+  await expect(page.getByLabel("Organization name")).toHaveCount(0);
   await expect(page.getByLabel(/H6/)).toHaveCount(0);
   await expect(page.locator("[data-membership-legal-field]").first().getByRole("status")).toHaveText(
     "Agreement required",
   );
+  await addMissingName(page, applicant, { firstName: "Morgan", lastName: "Member" });
+  await addRepresentationBio(page, applicant, "I work on PKI interoperability.");
   await page.getByLabel(/F —/).check();
   // Checking the later agreements must not leave focus below earlier unanswered fields.
   await page.getByRole("button", { name: "Submit membership application", exact: true }).click();
-  await expect(page.getByLabel("First name", { exact: true })).toBeFocused();
-  await page.getByLabel("First name", { exact: true }).fill("Morgan");
-  await page.getByRole("button", { name: "Submit membership application", exact: true }).click();
-  await expect(page.getByLabel("Last name", { exact: true })).toBeFocused();
-  await page.getByLabel("Last name", { exact: true }).fill("Member");
-  await page.getByLabel("Organization name").fill(`E2E Organization ${unique}`);
+  await expect(page.getByLabel("About your organization", { exact: false })).toBeFocused();
   await page.locator('[name="custom.reason"]').fill("We want to contribute to the PKI community.");
 
   const legalFields = page.locator("[data-membership-legal-field]");
@@ -85,7 +87,7 @@ test("signs in with an organization email before submitting the D1-backed member
   // The field's border eases into its state, so compare once it has settled.
   const borderColor = (locator: Locator) => locator.evaluate((element) => getComputedStyle(element).borderTopColor);
   await expect
-    .poll(async () => borderColor(page.getByLabel("About yourself", { exact: false })))
+    .poll(async () => borderColor(page.getByLabel("About your organization", { exact: false })))
     .toBe(await borderColor(firstLegalCard));
   await firstDocument.evaluate((container) => {
     container.scrollTop = container.scrollHeight;
@@ -98,7 +100,7 @@ test("signs in with an organization email before submitting the D1-backed member
 
   await expect(headerStatus).toHaveText("Agreed");
   expect(await firstLegalCard.evaluate((card) => getComputedStyle(card).borderTopColor)).toBe(
-    await page.getByLabel("First name", { exact: true }).evaluate((input) => getComputedStyle(input).borderTopColor),
+    await page.locator('[name="custom.reason"]').evaluate((input) => getComputedStyle(input).borderTopColor),
   );
   for (const width of [1280, 375]) {
     await page.setViewportSize({ width, height: 900 });
@@ -116,23 +118,18 @@ test("signs in with an organization email before submitting the D1-backed member
   await page.setViewportSize({ width: 1280, height: 900 });
 
   const sinceConfirmation = await capturedEmailCount();
-  await page.locator('[name="custom.job_title"]').fill("Membership contact");
-  await page.getByLabel("About yourself", { exact: false }).fill("I work on PKI interoperability.");
   await page.getByLabel("About your organization", { exact: false }).fill("We build PKI services.");
   await page.reload();
-  await expect(page.getByLabel("First name", { exact: true })).toHaveValue("Morgan");
-  await expect(page.getByLabel("Last name", { exact: true })).toHaveValue("Member");
-  await expect(page.getByLabel("Organization name")).toHaveValue(`E2E Organization ${unique}`);
+  await expect(applicant).toContainText(organizationName);
   await expect(page.getByLabel(/F —/)).toBeChecked();
   await expect(page.locator('[name="custom.reason"]')).toHaveValue("We want to contribute to the PKI community.");
-  await expect(page.getByLabel("About yourself", { exact: false })).toHaveValue("I work on PKI interoperability.");
   await expect(page.getByLabel("About your organization", { exact: false })).toHaveValue("We build PKI services.");
   await expect(page.getByText(/We restored the answers/)).toBeVisible();
   for (const agreement of await page.locator("[data-membership-legal-input]").all())
     await expect(agreement).not.toBeChecked();
   for (const width of [1280, 375]) {
     await page.setViewportSize({ width, height: 900 });
-    await page.getByLabel("First name", { exact: true }).scrollIntoViewIfNeeded();
+    await page.locator('[name="custom.reason"]').scrollIntoViewIfNeeded();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`restored-application-${width}.png`) });
   }
@@ -178,51 +175,6 @@ test("signs in with an organization email before submitting the D1-backed member
   const confirmation = await waitForCapturedEmail(email, "membership application", { since: sinceConfirmation });
   expect(extractEmailUrl(confirmation, "/application-status/")).toContain("token=");
   expect(await page.evaluate(() => sessionStorage.getItem("pkic.join.verifiedApplication"))).toBeNull();
-  // Returning signed in, the same path leads to the application already made.
-  await page.goto("/join/");
-  await chooseJoinPath(page, "organization");
-  await expect(
-    page.getByRole("heading", { name: "Your application is already in progress", exact: true }),
-  ).toBeVisible();
-  await expect(page.locator("[data-join-application-form]")).toBeHidden();
-  for (const width of [1280, 375]) {
-    await page.setViewportSize({ width, height: 900 });
-    await page
-      .getByRole("heading", { name: "Your application is already in progress", exact: true })
-      .scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath(`application-in-progress-${width}.png`) });
-  }
-  await page.getByRole("link", { name: "Check application status", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Application status", exact: true })).toBeVisible();
-  // A colleague on the same domain arrives in a browser of their own.
-  const colleagueContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
-  try {
-    const colleague = await colleagueContext.newPage();
-    await startJoinInBrowser(colleague, `colleague@${email.split("@")[1]}`);
-    const organizationNotice = colleague.getByRole("heading", {
-      name: "An application for your organization is already in progress",
-      exact: true,
-    });
-    // The domain is held by that application, so they name their organization; naming the same one says so.
-    await colleague.getByRole("button", { name: "Add organization", exact: true }).click();
-    const adding = colleague.getByRole("dialog", { name: "Add organization", exact: true });
-    await adding.getByRole("textbox", { name: /^Organization name/ }).fill(`E2E Organization ${unique}`);
-    await adding.getByRole("button", { name: "Use organization", exact: true }).click();
-    await expect(organizationNotice).toBeVisible();
-    await expect(colleague.locator("[data-join-application-form]")).toBeHidden();
-    await expect(colleague.getByRole("link", { name: "Check application status", exact: true })).toHaveCount(0);
-    await expect(colleague.getByRole("link", { name: "Email the secretariat", exact: true })).toHaveAttribute(
-      "href",
-      "mailto:contact@pkic.org",
-    );
-    for (const width of [1280, 375]) {
-      await colleague.setViewportSize({ width, height: 900 });
-      await organizationNotice.scrollIntoViewIfNeeded();
-      await colleague.screenshot({ path: testInfo.outputPath(`organization-application-in-progress-${width}.png`) });
-    }
-  } finally {
-    await colleagueContext.close();
-  }
 });
 
 test("keeps the individual path an explicit policy exception for an institutional email", async ({ page }) => {

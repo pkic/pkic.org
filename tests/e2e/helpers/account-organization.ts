@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext, type Page, type Response } from "@playwright/test";
+import { expect, type APIRequestContext, type Locator, type Page, type Response } from "@playwright/test";
 import { ACCOUNT_ORGANIZATION_COPY } from "../../../assets/shared/account-organization-copy";
 import { EMAIL_FIRST_ADVISORY_COPY, ORGANIZATION_JOB_TITLE_COPY } from "../../../assets/shared/email-first-copy";
 import {
@@ -14,7 +14,17 @@ import {
  * organization has claimed allows.
  */
 export interface AccountOrganizationChoice {
-  organization?: { name: string; jobTitle?: string };
+  organization?: {
+    name: string;
+    jobTitle?: string;
+    /** The email domain the organization uses, when the address offers its parent or a subdomain. */
+    domain?: string;
+    /**
+     * Looks at the filled-in choice before it is confirmed: the step itself,
+     * or the "Add organization" dialog when the organization is new beside others.
+     */
+    inspect?: (scope: Locator) => Promise<void>;
+  };
 }
 
 const DEFAULT_JOB_TITLE = "Representative";
@@ -50,10 +60,33 @@ export async function answerAccountOrganizationStep(
     await step.getByRole("button", { name: EMAIL_FIRST_ADVISORY_COPY.usePersonal, exact: true }).click();
     return answered;
   }
-  const listed = result.organizationRequired.affiliation.organizations.find((item) => item.name === organization.name);
+  const { organizations } = result.organizationRequired.affiliation;
+  const listed = organizations.find((item) => item.name === organization.name);
   // A required field's label carries its marker, so labels are matched from their start.
-  if (listed) await step.getByLabel(/^Organization\b(?! name)/).selectOption(listed.id);
-  else await step.getByLabel(/^Organization name/).fill(organization.name);
+  const chooseDomain = async (scope: Locator) => {
+    const domain = scope.getByLabel(/^Email domain/);
+    if (organization.domain && (await domain.isVisible())) await domain.selectOption(organization.domain);
+  };
+  if (listed) {
+    await chooseDomain(step);
+    await step.getByLabel(/^Organization\b(?! name)/).selectOption(listed.id);
+    await organization.inspect?.(step);
+  } else if (organizations.length > 0) {
+    // Beside the organizations already known, a new one is added through its dialog.
+    await step.getByRole("button", { name: "Add organization", exact: true }).click();
+    const adding = page.getByRole("dialog", { name: "Add organization", exact: true });
+    const name = adding.getByLabel(/^Organization name/);
+    await expect(name).toBeVisible();
+    await chooseDomain(adding);
+    await name.fill(organization.name);
+    await organization.inspect?.(adding);
+    await adding.getByRole("button", { name: "Use organization", exact: true }).click();
+    await expect(adding).toBeHidden();
+  } else {
+    await chooseDomain(step);
+    await step.getByLabel(/^Organization name/).fill(organization.name);
+    await organization.inspect?.(step);
+  }
   const jobTitle = step.getByLabel(new RegExp(`^${ORGANIZATION_JOB_TITLE_COPY.label}`));
   if (await jobTitle.isVisible()) await jobTitle.fill(organization.jobTitle ?? DEFAULT_JOB_TITLE);
   const prepared = requestTo(page, "/api/v1/auth/verify-link");
@@ -90,6 +123,7 @@ export async function redeemSignInLink(
   const prepared = await verify({
     affiliation: {
       selection: {
+        ...(organization.domain ? { domain: organization.domain } : {}),
         organizationId: listed?.id ?? null,
         ...(listed ? {} : { organizationName: organization.name }),
         jobTitle: listed?.jobTitle ?? organization.jobTitle ?? DEFAULT_JOB_TITLE,
