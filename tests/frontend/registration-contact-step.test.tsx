@@ -193,9 +193,18 @@ afterEach(() => {
   expect(stray, "requests no stub answers").toEqual([]);
 });
 
-function contactStep(onReadyChange: (ready: boolean) => void = () => {}, onSignInChange?: (shown: boolean) => void) {
+function contactStep(
+  onReadyChange: (ready: boolean) => void = () => {},
+  onSignInChange?: (shown: boolean) => void,
+  onRepresentationMissingChange?: (missing: boolean) => void,
+) {
   return (
-    <RegistrationContactStep signInSlot={signInSlot} onReadyChange={onReadyChange} onSignInChange={onSignInChange} />
+    <RegistrationContactStep
+      signInSlot={signInSlot}
+      onReadyChange={onReadyChange}
+      onSignInChange={onSignInChange}
+      onRepresentationMissingChange={onRepresentationMissingChange}
+    />
   );
 }
 
@@ -263,8 +272,10 @@ describe("registration contact step", () => {
   it("keeps a work address from registering as the personal identity a new account starts with", async () => {
     window.history.replaceState({}, "", "/events/2026/pqc/register/");
     installResponses(null);
-    const form = await mount(contactStep());
-    // Nothing is selected for it, and the registration contract reads that the organization is still missing.
+    let missing = false;
+    const form = await mount(contactStep(undefined, undefined, (next) => (missing = next)));
+    // Nothing is selected for it, so the flow holds Continue until an organization is.
+    expect(missing).toBe(true);
     expect(value(form, "identityId")).toBe("");
     expect(value(form, "organizationRepresentationMissing")).toBe("true");
     expect(form.textContent).toContain("Select your organization");
@@ -281,7 +292,9 @@ describe("registration contact step", () => {
   it("selects the organization a work address most likely registers for while the session acts personally", async () => {
     window.history.replaceState({}, "", "/events/2026/pqc/register/");
     installResponses("Example Corp", true, PERSONAL_IDENTITY_ID);
-    const form = await mount(contactStep());
+    let missing = true;
+    const form = await mount(contactStep(undefined, undefined, (next) => (missing = next)));
+    expect(missing).toBe(false);
     expect(value(form, "identityId")).toBe(IDENTITY_ID);
     expect(value(form, "organizationRepresentationMissing")).toBe("false");
     expect(form.textContent).toContain("Example Corp");

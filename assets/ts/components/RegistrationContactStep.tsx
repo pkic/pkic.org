@@ -183,18 +183,27 @@ function Details({
 export function RegistrationContactStep({
   signInSlot,
   onReadyChange,
+  onRepresentationMissingChange,
   onSignInChange,
   presentationOf,
 }: {
   /** Where the sign-in card renders: outside the registration form, because the card has a form of its own. */
   signInSlot: RefObject<HTMLElement>;
   onReadyChange: (ready: boolean) => void;
+  /** Tells the flow whether a work address still has no organization, so Continue waits for one. */
+  onRepresentationMissingChange?: (missing: boolean) => void;
   /** Tells the flow whether the sign-in card stands in for the form. */
   onSignInChange?: (signingIn: boolean) => void;
   presentationOf?: (name: string) => FieldPresentation;
 }) {
   const [stage, setStage] = useState<Stage>({ kind: "loading" });
+  // A work address never registers as the personal identity a new account starts with.
+  const representationMissing = stage.kind === "known" && stage.workEmail && !stage.person.identity?.organizationId;
   useEffect(() => onReadyChange(stage.kind === "known"), [stage.kind, onReadyChange]);
+  useEffect(
+    () => onRepresentationMissingChange?.(representationMissing),
+    [representationMissing, onRepresentationMissingChange],
+  );
   useEffect(() => onSignInChange?.(stage.kind === "signed-out"), [stage.kind, onSignInChange]);
 
   const load = useCallback(async () => {
@@ -213,8 +222,6 @@ export function RegistrationContactStep({
 
   if (stage.kind === "known") {
     const { person, step, workEmail } = stage;
-    // A work address never registers as the personal identity a new account starts with.
-    const representationMissing = workEmail && !person.identity?.organizationId;
     return (
       <div class="pk-stack">
         {representationMissing && (

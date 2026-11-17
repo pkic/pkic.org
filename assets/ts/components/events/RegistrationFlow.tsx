@@ -161,6 +161,8 @@ export function RegistrationFlow(props: Props) {
     readBody,
   );
   const contactReady = useCallback((value: boolean) => setReady(value), []);
+  // Continue waits while a work address has no organization; the step's alert says why.
+  const [representationPending, setRepresentationPending] = useState(false);
 
   const setup = useRef({
     props,
@@ -351,6 +353,7 @@ export function RegistrationFlow(props: Props) {
                   <RegistrationContactStep
                     signInSlot={signInSlot}
                     onReadyChange={contactReady}
+                    onRepresentationMissingChange={setRepresentationPending}
                     onSignInChange={setSigningIn}
                     presentationOf={(name) => {
                       const current = contract.of(name);
@@ -460,7 +463,7 @@ export function RegistrationFlow(props: Props) {
                     Back
                   </Button>
                   <div class="event-flow-step-forward">
-                    <Button variant="primary" data-step-next disabled={!ready || !available}>
+                    <Button variant="primary" data-step-next disabled={!ready || representationPending || !available}>
                       Continue
                     </Button>
                     <Button type="submit" variant="primary" hidden loading={busy} disabled={!available}>
