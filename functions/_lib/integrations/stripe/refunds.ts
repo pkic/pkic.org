@@ -103,3 +103,36 @@ export async function readStripeRefundedTotal(
     throw new AppError(502, "STRIPE_ERROR", "Stripe returned an invalid payment");
   return { amountRefunded: charge.amount_refunded, refunded: charge.refunded === true };
 }
+
+/** One refund as Stripe holds it now. Read when its event may not have reached us. */
+export async function readStripeRefund(
+  secretKey: string,
+  refundId: string,
+  options: { fetcher?: typeof fetch; apiBase?: string } = {},
+): Promise<Record<string, unknown>> {
+  const endpoint = refundEndpoint(secretKey, `/v1/refunds/${encodeURIComponent(refundId)}`, options.apiBase);
+  let response: Response;
+  try {
+    response = await (options.fetcher ?? fetch)(endpoint.toString(), {
+      method: "GET",
+      headers: { Authorization: `Bearer ${secretKey}` },
+    });
+  } catch {
+    logError("STRIPE_REFUND_READ_FAILED", { status: null });
+    throw new AppError(502, "STRIPE_ERROR", "Failed to read the refund");
+  }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    logError("STRIPE_REFUND_READ_FAILED", { status: response.status });
+    throw new AppError(502, "STRIPE_ERROR", "Failed to read the refund");
+  }
+  const decoded: unknown = await response.json().catch(() => null);
+  if (
+    !decoded ||
+    typeof decoded !== "object" ||
+    Array.isArray(decoded) ||
+    (decoded as { id?: unknown }).id !== refundId
+  )
+    throw new AppError(502, "STRIPE_ERROR", "Stripe returned an invalid refund");
+  return decoded as Record<string, unknown>;
+}

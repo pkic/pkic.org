@@ -8,6 +8,7 @@ import { successResponseSchema } from "../../../../../../../shared/schemas/api-c
 import {
   registrationTicketRefundSchema,
   registrationTicketResponseSchema,
+  registrationTicketSyncResponseSchema,
   type RegistrationTicket,
 } from "../../../../../../../shared/schemas/event-tickets";
 import { TICKET_STATUS_LABELS, type TicketAssignmentSource } from "../../../../../../../shared/event-tickets";
@@ -123,6 +124,22 @@ export function RegistrationTicketPanel({
       toast(cause instanceof Error ? cause.message : "The ticket could not be changed. Try again.", "error");
     }
   }
+  async function sync() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const synced = await postJson(`${endpoint}/sync`, {}, registrationTicketSyncResponseSchema);
+      await changed(
+        synced.changed
+          ? "Ticket updated from the payment provider."
+          : "The ticket already matches the payment provider.",
+      );
+    } catch (cause) {
+      toast(cause instanceof Error ? cause.message : "The payment provider could not be read. Try again.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
   const actions: MenuItem[] = canManage
     ? [
         ...(ticket.disputed
@@ -133,6 +150,10 @@ export function RegistrationTicketPanel({
           : []),
         ...(ticket.status === "paid" && !ticket.refundPending && ticket.paidAmount > ticket.refundedAmount
           ? [{ id: "refund", label: "Refund ticket", onSelect: () => setRefunding(true) }]
+          : []),
+        // A ticket that never cost anything has no payment to read.
+        ...(ticket.amount > 0 || ticket.paidAmount > 0
+          ? [{ id: "sync", label: "Update from payment provider", onSelect: () => void sync() }]
           : []),
       ]
     : [];

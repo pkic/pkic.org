@@ -410,6 +410,8 @@ export const registrationTicketCheckoutResponseSchema = z.object({ checkoutUrl: 
 export const registrationTicketRefundSchema = z.object({
   reason: trimmedString(3, 500, "Say why the ticket is refunded."),
 });
+/** Whether reading the payment provider changed what the ticket says. */
+export const registrationTicketSyncResponseSchema = z.object({ success: z.literal(true), changed: z.boolean() });
 export const registrationTicketReviewSchema = z.object({
   /** Keep the ticket the person chose, or move them to the ticket decided for their organization. */
   decision: z.enum(["keep", "move"]),
@@ -564,6 +566,16 @@ export const registrationTicketRefundRouteSchema = {
   summary: "Refund a registration's ticket",
   request: { params: registrationParams, body: { required: true, content: json(registrationTicketRefundSchema) } },
   responses: { "200": { description: "Refund requested.", content: json(successResponseSchema) }, ...refusals },
+  ...organizer,
+};
+export const registrationTicketSyncRouteSchema = {
+  tags: ["Events"],
+  summary: "Bring a registration's ticket in line with the payment provider",
+  request: { params: registrationParams },
+  responses: {
+    "200": { description: "The ticket was checked.", content: json(registrationTicketSyncResponseSchema) },
+    ...refusals,
+  },
   ...organizer,
 };
 export const registrationTicketReviewRouteSchema = {

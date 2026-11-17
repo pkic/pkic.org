@@ -111,3 +111,43 @@ export async function expireStripeCheckoutSession(
     return false;
   }
 }
+
+/** A Checkout Session as Stripe holds it now. Read when its event may not have reached us. */
+export async function readStripeCheckoutSession(
+  secretKey: string,
+  sessionId: string,
+  options: { fetcher?: typeof fetch; apiBase?: string } = {},
+): Promise<Record<string, unknown>> {
+  const endpoint = checkoutEndpoint(
+    secretKey,
+    `/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
+    options.apiBase,
+  );
+  let response: Response;
+  try {
+    response = await (options.fetcher ?? fetch)(endpoint.toString(), {
+      method: "GET",
+      headers: { Authorization: `Bearer ${secretKey}` },
+    });
+  } catch {
+    logError("STRIPE_CHECKOUT_SESSION_READ_FAILED", providerFailureDetails("stripe", "fetch_checkout_session", null));
+    throw new AppError(502, "STRIPE_ERROR", "Failed to read the payment page");
+  }
+  if (!response.ok) {
+    logError(
+      "STRIPE_CHECKOUT_SESSION_READ_FAILED",
+      providerFailureDetails("stripe", "fetch_checkout_session", response.status),
+    );
+    await discardProviderResponseBody(response);
+    throw new AppError(502, "STRIPE_ERROR", "Failed to read the payment page");
+  }
+  const decoded: unknown = await response.json().catch(() => null);
+  if (
+    !decoded ||
+    typeof decoded !== "object" ||
+    Array.isArray(decoded) ||
+    (decoded as { id?: unknown }).id !== sessionId
+  )
+    throw new AppError(502, "STRIPE_ERROR", "Stripe returned an invalid payment page");
+  return decoded as Record<string, unknown>;
+}

@@ -41,6 +41,7 @@ import {
   reconcileTicketRefunds,
   requestTicketRefund,
 } from "../functions/_lib/services/event-tickets/refunds";
+import { syncRegistrationTicketWithProvider } from "../functions/_lib/services/event-tickets/provider-sync";
 import { listEventTicketCodes } from "../functions/_lib/services/event-tickets/code-list";
 import { reviewDisputedTicket } from "../functions/_lib/services/event-tickets/dispute";
 import { issueSponsorPassCodes, saveSponsorPasses } from "../functions/_lib/services/event-tickets/sponsor-passes";
@@ -1414,5 +1415,81 @@ describe("event tickets", () => {
       "SELECT recipient_email FROM email_outbox WHERE idempotency_key LIKE 'ticket-reminder:%'",
     ).all<{ recipient_email: string }>();
     expect(sent.results.map((row) => row.recipient_email)).toEqual([due.user.email]);
+  });
+
+  it("brings a ticket in line with the payment provider on request, when its events did not arrive", async () => {
+    const { event, admin } = await seedTickets();
+    const { registration, user } = await register(event, "sync@gmail.com");
+    const input = { eventId: event.id, registrationId: registration.id };
+    await openTicketCheckout(env.DB, paymentEnv, "https://example.test", { ...input, userId: user.id }, stripe);
+    const read = () => readRegistrationTicket(env.DB, input);
+    const ticketId = (await read())!.id;
+    const asked: string[] = [];
+    const provider = (held: { session?: object; refund?: object; charge?: object }) =>
+      (async (url: string) => {
+        const path = new URL(url).pathname;
+        asked.push(path);
+        const body = path.startsWith("/v1/checkout/sessions/")
+          ? held.session
+          : path.startsWith("/v1/refunds/")
+            ? held.refund
+            : { latest_charge: held.charge };
+        return new Response(JSON.stringify(body ?? {}), { status: body ? 200 : 404 });
+      }) as unknown as typeof fetch;
+    const sync = (held: Parameters<typeof provider>[0]) =>
+      syncRegistrationTicketWithProvider(env.DB, paymentEnv, admin, input, provider(held));
+
+    const unset = { ...env, STRIPE_SECRET_KEY: "" } as Env;
+    await expect(syncRegistrationTicketWithProvider(env.DB, unset, admin, input)).rejects.toMatchObject({
+      code: "NOT_CONFIGURED",
+    });
+    // The payment page is still open: nothing changes, and no payment is asked about.
+    const session = { id: "cs_test_ticket", status: "open", payment_status: "unpaid" };
+    expect(await sync({ session })).toEqual({ changed: false });
+    expect(asked).toEqual(["/v1/checkout/sessions/cs_test_ticket"]);
+    expect(await read()).toMatchObject({ status: "pending_payment" });
+
+    // It was paid and the event never arrived: the ticket is settled as the event would have settled it.
+    const paid = {
+      ...session,
+      status: "complete",
+      payment_status: "paid",
+      payment_intent: "pi_synthetic",
+      amount_total: 19500,
+      currency: "usd",
+      metadata: { pkic_payment_type: "event", registrationTicketId: ticketId },
+    };
+    const charge = { amount_refunded: 0, refunded: false };
+    expect(await sync({ session: paid, charge })).toEqual({ changed: true });
+    expect(await read()).toMatchObject({ status: "paid", paidAmount: 19500, refundedAmount: 0 });
+    // The event arriving afterwards, and asking again, change nothing.
+    expect(await paidEvent(ticketId, "cs_test_ticket", 19500)).toMatchObject({ outcome: "already_paid" });
+    asked.length = 0;
+    expect(await sync({ session: paid, charge })).toEqual({ changed: false });
+    expect(asked).toEqual(["/v1/payment_intents/pi_synthetic"]);
+
+    // A refund was sent and its confirmation never arrived.
+    await requestTicketRefund(env.DB, admin, { ...input, reason: "Visa refused" });
+    const pending = (async () =>
+      new Response(JSON.stringify({ id: "re_sync", status: "pending" }), { status: 200 })) as unknown as typeof fetch;
+    await processTicketRefunds(env.DB, paymentEnv, 5, pending);
+    expect(await read()).toMatchObject({ status: "paid", refundPending: true });
+    const refund = { id: "re_sync", status: "pending", payment_intent: "pi_synthetic", amount: 19500 };
+    expect(await sync({ refund, charge })).toEqual({ changed: false });
+    expect(await read()).toMatchObject({ status: "paid", refundPending: true });
+    expect(
+      await sync({ refund: { ...refund, status: "succeeded" }, charge: { amount_refunded: 19500, refunded: true } }),
+    ).toEqual({ changed: true });
+    expect(await read()).toMatchObject({ status: "refunded", refundedAmount: 19500, refundPending: false });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'registration_ticket_synced'").first(),
+    ).toEqual({ n: 2 });
+
+    // Only an organizer of the event may ask.
+    const path = `/api/v1/events/pqc-2026/registrations/${registration.id}/ticket/sync`;
+    expect((await callApi(paymentEnv, path, { method: "POST", body: "{}" })).status).toBe(401);
+    const token = await createMemberSession(env.DB, user.id, `session-${crypto.randomUUID()}`);
+    const own = { headers: { authorization: `Bearer ${token}`, "content-type": "application/json" } };
+    expect((await callApi(paymentEnv, path, { method: "POST", body: "{}", ...own })).status).toBe(403);
   });
 });

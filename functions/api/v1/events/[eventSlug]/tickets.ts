@@ -15,6 +15,7 @@ import {
   registrationTicketGetRouteSchema,
   registrationTicketRefundRouteSchema,
   registrationTicketReviewRouteSchema,
+  registrationTicketSyncRouteSchema,
 } from "../../../../../assets/shared/schemas/event-tickets";
 import { hasPermission } from "../../../../_lib/auth/permissions";
 import { getUserSessionToken, requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
@@ -41,6 +42,7 @@ import { openTicketCheckout } from "../../../../_lib/services/event-tickets/paym
 import { issueSponsorPassCodes, saveSponsorPasses } from "../../../../_lib/services/event-tickets/sponsor-passes";
 import { listEventTicketCodes } from "../../../../_lib/services/event-tickets/code-list";
 import { requestTicketRefund } from "../../../../_lib/services/event-tickets/refunds";
+import { syncRegistrationTicketWithProvider } from "../../../../_lib/services/event-tickets/provider-sync";
 import {
   readRegistrationOwner,
   readRegistrationTicket,
@@ -156,6 +158,15 @@ const RegistrationTicketRefundPost = openApiRoute(
   },
 );
 
+const RegistrationTicketSyncPost = openApiRoute(registrationTicketSyncRouteSchema, async (c: AdminContext, data) => {
+  const { actor, db, event } = await requireEventPermission(c, data.params.eventSlug, "events:write");
+  const synced = await syncRegistrationTicketWithProvider(db, c.env, actor, {
+    eventId: event.id,
+    registrationId: data.params.registrationId,
+  });
+  return json({ success: true, ...synced });
+});
+
 const RegistrationTicketReviewPost = openApiRoute(
   registrationTicketReviewRouteSchema,
   async (c: AdminContext, data) => {
@@ -208,4 +219,5 @@ export function registerTicketRoutes(openapi: TicketRouter): void {
   openapi.post("/registrations/:registrationId/ticket/checkout", RegistrationTicketCheckoutPost);
   openapi.post("/registrations/:registrationId/ticket/refunds", RegistrationTicketRefundPost);
   openapi.post("/registrations/:registrationId/ticket/review", RegistrationTicketReviewPost);
+  openapi.post("/registrations/:registrationId/ticket/sync", RegistrationTicketSyncPost);
 }

@@ -290,14 +290,17 @@ export async function reconcileTicketRefunds(
   env: Pick<Env, "STRIPE_SECRET_KEY" | "STRIPE_API_BASE">,
   limit = 5,
   fetcher?: typeof fetch,
+  /** Read this ticket's payment now, marked or not: an organizer asked for it. */
+  onlyTicketId?: string,
 ): Promise<{ reconciled: number; failed: number }> {
   if (!env.STRIPE_SECRET_KEY) return { reconciled: 0, failed: 0 };
   const due = await all<{ id: string; payment_intent_id: string; revision: number }>(
     db,
     `SELECT id, payment_intent_id, revision FROM registration_tickets
-     WHERE refund_reconcile_at IS NOT NULL AND payment_intent_id IS NOT NULL
-     ORDER BY refund_reconcile_at, id LIMIT ?`,
-    [limit],
+     WHERE payment_intent_id IS NOT NULL
+       AND CASE WHEN ?1 IS NULL THEN refund_reconcile_at IS NOT NULL ELSE id = ?1 END
+     ORDER BY refund_reconcile_at, id LIMIT ?2`,
+    [onlyTicketId ?? null, limit],
   );
   const returnedSql = "CASE WHEN ? = 1 THEN paid_amount ELSE MIN(paid_amount, ?) END";
   let reconciled = 0;
