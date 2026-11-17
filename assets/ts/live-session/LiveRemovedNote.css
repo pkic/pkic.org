@@ -1,0 +1,9 @@
+@layer components {
+  /* The author's own removed post: a quiet line under the words, never a banner. */
+  .pk-live-removed {
+    margin: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+    font-style: italic;
+  }
+}

@@ -238,14 +238,14 @@ describe("live session questions", () => {
   it("lets a credited speaker mark a question answered but never moderate the queue", async () => {
     const { questionId } = await askApproved();
     const speaker = await f.connect({ person: "speaker" });
-    speaker.send({ type: "question.moderate", questionId, status: "hidden" });
+    speaker.send({ type: "question.moderate", questionId, status: "hidden", reason: "spam" });
     expect((await speaker.next("room.refused")).code).toBe("LIVE_QUESTION_TRANSITION");
     speaker.send({ type: "question.moderate", questionId, status: "answered" });
     expect(
       (await speaker.next("question.changed", (message) => message.question.status === "answered")).question.answeredAt,
     ).not.toBeNull();
     const attendee = await f.connect({ person: "secondAttendee" });
-    attendee.send({ type: "question.moderate", questionId, status: "hidden" });
+    attendee.send({ type: "question.moderate", questionId, status: "hidden", reason: "spam" });
     expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
   });
 
@@ -255,7 +255,7 @@ describe("live session questions", () => {
     expect((await attendee.next("room.snapshot")).questions).toHaveLength(1);
     operator.send({ type: "stage.question", questionId });
     expect((await attendee.next("stage.changed")).stage.question).toMatchObject({ id: questionId, authorName: null });
-    operator.send({ type: "question.moderate", questionId, status: "hidden" });
+    operator.send({ type: "question.moderate", questionId, status: "hidden", reason: "spam" });
     expect((await attendee.next("question.removed")).questionId).toBe(questionId);
     expect(
       (await attendee.next("stage.changed", (message) => message.stage.question === null)).stage.questionChange
@@ -361,7 +361,7 @@ describe("live session control room", () => {
 
     const overlay = await f.connect({ overlay: access.token });
     const snapshot = await overlay.next("room.snapshot");
-    expect(snapshot.viewer).toEqual({ role: "overlay", name: null, organizer: false, chatRestriction: null });
+    expect(snapshot.viewer).toEqual({ role: "overlay", name: null, organizer: false, participation: null });
     expect(snapshot.questions).toEqual([]);
     overlay.send({ type: "reaction.send", reaction: "applause" });
     expect((await overlay.next("room.refused")).code).toBe("LIVE_ROOM_READ_ONLY");

@@ -2,6 +2,9 @@ import { AppError } from "../../errors";
 import { LiveRoomEngagement } from "./room-engagement";
 import { LiveRoomAnswers } from "./room-answers";
 import { LiveRoomAnswerStore } from "./room-answer-store";
+import { LiveRoomModerationStore } from "./room-moderation-store";
+import { LiveRoomParticipation } from "./room-participation";
+import { LIVE_PARTICIPATION_REFUSAL } from "./room-participation-refusal";
 import { advanceLiveStage } from "./room-stage-next";
 import { LiveRoomGraphics } from "./room-graphics";
 import { LiveRoomGraphicBasis } from "./room-graphic-basis";
@@ -55,6 +58,20 @@ import { refreshLiveCreditCopies } from "./room-credit-refresh";
 
 type Handled = LiveRefusal | void;
 type Actor = { userId: string; name: string };
+/** What a blocked person may no longer do; reading, watching and deleting their own messages stay open. */
+const LIVE_PARTICIPATING_COMMANDS = new Set<LiveRoomClientMessage["type"]>([
+  "chat.send",
+  "chat.react",
+  "chat.report",
+  "question.ask",
+  "question.edit",
+  "question.vote",
+  "question.answer",
+  "question.answer.vote",
+  "reaction.send",
+  "poll.vote",
+]);
+
 const REFUSALS = {
   closed: { code: "LIVE_ROOM_CLOSED", message: "Questions and reactions open shortly before the session starts." },
   readOnly: { code: "LIVE_ROOM_READ_ONLY", message: "This connection can only watch the room." },
@@ -86,6 +103,8 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   private readonly questions: LiveRoomQuestions;
   private readonly answers: LiveRoomAnswers;
   private readonly answerStore: LiveRoomAnswerStore;
+  private readonly decisions: LiveRoomModerationStore;
+  private readonly participation: LiveRoomParticipation;
   private readonly polls: LiveRoomPolls;
   private readonly broadcast: LiveRoomBroadcast;
   private readonly graphics: LiveRoomGraphics;
@@ -104,6 +123,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     this.program = new LiveRoomProgram(ctx, this.sessionEnv, (bookmark) => this.databaseSession.seedBookmark(bookmark));
     this.pollStore = new LivePollStore(this.sql);
     this.chat = new LiveRoomChat(this.sql);
+    this.decisions = new LiveRoomModerationStore(this.sql);
     this.access = new LiveRoomAccessLease(
       ctx,
       this.sessionEnv,
@@ -115,6 +135,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
         ...this.answerStore.authors(),
       ],
       (userId) => this.forgetParticipant(userId),
+      (checked, blocked, readAt) => this.participation.eventBlocksRead(checked, blocked, readAt),
     );
     this.authors = new LiveRoomAuthors(this.sql, new LiveRoomPeople(this.sql), this.sessionEnv, () => {
       const room = this.store.session();
@@ -125,6 +146,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       new LiveChatModerationStore(this.sql),
       new LiveChatReactionStore(this.sql),
       this.authors,
+      this.decisions,
     );
     this.outputs = new LiveRoomOutputs(this.store, this.pollStore);
     this.controls = new LiveRoomControls(this.store, this.pollStore, this.outputs);
@@ -166,7 +188,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
         audited: () => this.scheduleCopy(),
       },
     );
-    this.questions = new LiveRoomQuestions(this.store, this.broadcast, this.controls, this.authors, {
+    this.questions = new LiveRoomQuestions(this.store, this.broadcast, this.controls, this.authors, this.decisions, {
       allowed: (userId) => this.store.takeQuestionWriteAllowance(userId, nowIso()),
       changed: () => this.scheduleCopy(),
       listed: () => this.graphics.lists.due(),
@@ -179,7 +201,21 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.broadcast,
       this.authors,
       this.sessionEnv.DB,
+      this.decisions,
       () => this.scheduleCopy(),
+    );
+    this.participation = new LiveRoomParticipation(
+      ctx,
+      this.sessionEnv.DB,
+      this.store,
+      this.chat,
+      this.chatActions,
+      this.questions,
+      this.answers,
+      this.answerStore,
+      this.decisions,
+      this.authors.people,
+      this.broadcast,
     );
     this.presence = new LiveRoomPresence(ctx, (sockets) => this.access.eligible(sockets));
     this.addedCredits = new LiveRoomAddedCredits(this.sessionEnv.DB, this.store);
@@ -340,6 +376,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     const { removed, recounted } = this.store.forgetQuestions(userId);
     const polls = this.pollStore.forget(userId);
     const chat = this.chat.forget(userId);
+    this.decisions.forget(userId);
     this.authors.prune();
     for (const questionId of changedThreads) await this.answers.publish(questionId);
     for (const socket of this.ctx.getWebSockets()) {
@@ -414,6 +451,12 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     const operator = viewer.role === "operator";
     const session = this.session();
     const open = operator || liveRoomOpen(Date.now(), session.startAt, session.endAt);
+    if (
+      !operator &&
+      LIVE_PARTICIPATING_COMMANDS.has(message.type) &&
+      this.decisions.restriction(actor.userId, Date.now())
+    )
+      return LIVE_PARTICIPATION_REFUSAL;
     switch (message.type) {
       case "chat.send":
       case "chat.react":
@@ -425,7 +468,6 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       case "author.lookup":
         return this.chatActions.lookupAuthor(viewer, actor, message.handle, socket);
       case "chat.moderate":
-      case "chat.restrict":
       case "chat.convert":
         if (!operator) return REFUSALS.operatorOnly;
         return this.chatActions.handle(viewer, actor, message, socket);
@@ -443,6 +485,24 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       }
       case "question.answers.watch":
         return this.answers.watch(socket, message.questionId);
+      case "question.answer.vote":
+      case "question.answer.hide": {
+        const result =
+          message.type === "question.answer.vote"
+            ? await this.answers.vote(viewer, actor, message)
+            : await this.answers.hide(viewer, actor, message);
+        if ("answerId" in result) {
+          if (message.type === "question.answer.hide") await this.broadcast.question(message.questionId);
+          return;
+        }
+        return result;
+      }
+      case "moderation.done":
+        return this.participation.done(viewer, actor, message.item, message.done);
+      case "participation.block":
+        return this.participation.block(viewer, actor, message);
+      case "participation.lift":
+        return this.participation.lift(viewer, actor, message.item);
       case "question.answer":
       case "question.answer.accept": {
         const result =
@@ -450,6 +510,8 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
             ? await this.answers.send(viewer, actor, message)
             : await this.answers.accept(viewer, actor, message);
         if ("answerId" in result) {
+          // The question row carries the answer count and whether one is accepted.
+          await this.broadcast.question(message.questionId);
           socket.send(
             serializeLiveRoomMessage({
               type: "question.answer.result",
@@ -496,6 +558,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
           message.questionId,
           message.status,
           message.expectedRevision,
+          message.reason ?? null,
         );
         if (!refusal) await this.answers.publish(message.questionId);
         return refusal;

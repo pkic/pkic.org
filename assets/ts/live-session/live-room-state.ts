@@ -102,8 +102,9 @@ export function applyLiveRoomMessage(
     case "chat.removed":
     case "chat.reactions":
     case "chat.history":
-    case "chat.access":
       return applyLiveChatMessage(state, message);
+    case "participation.access":
+      return { ...state, viewer: { ...state.viewer, participation: message.restriction } };
     case "overlay.mode.changed":
       return { ...state, overlayMode: message.mode };
     case "overlay.layouts.changed":

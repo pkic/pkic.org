@@ -18,6 +18,7 @@ import { FieldStatus } from "../ui/FieldStatus";
 import { TabList } from "../ui/TabList";
 import { Textarea } from "../ui/TextControl";
 import { LiveQuestionList, LiveQuestionTransitions } from "./LiveQuestionList";
+import { LiveParticipationAlert, useLiveParticipation } from "./LiveParticipationAlert";
 import { LiveAuthorProvider } from "./LiveAuthor";
 import { LivePollCard } from "./LivePollCard";
 import { liveRoomOpenFailure } from "./live-room-copy";
@@ -140,6 +141,7 @@ function SessionQuestionsRoom({
   );
   const state = room.state;
   const live = room.status === "live";
+  const restriction = useLiveParticipation(state?.viewer.participation);
   if (!state)
     return room.admissionRefusal ? (
       <Alert tone="warn">{liveRoomOpenFailure(room.admissionRefusal, "attendee")}</Alert>
@@ -158,12 +160,20 @@ function SessionQuestionsRoom({
       {poll ? (
         <LivePollCard
           poll={poll}
-          disabled={!live}
+          disabled={!live || restriction !== null}
           refusal={state.refusal}
           onVote={(answer) => room.send({ type: "poll.vote", pollId: poll.id, answer })}
         />
       ) : null}
-      <AskQuestion key={occurrenceId} disabled={!live} onAsk={room.send} result={room.questionResult} />
+      {restriction ? (
+        <LiveParticipationAlert
+          restriction={restriction}
+          timeZone={state.session.timeZone}
+          eventName={state.session.eventName}
+        />
+      ) : (
+        <AskQuestion key={occurrenceId} disabled={!live} onAsk={room.send} result={room.questionResult} />
+      )}
       {/* A refused poll answer is said on the poll's question instead. */}
       <p class="pk-live-questions__notice" role="status">
         {state.refusal && state.refusal.code !== LIVE_POLL_ANSWER_REFUSAL ? state.refusal.message : ""}
@@ -181,7 +191,7 @@ function SessionQuestionsRoom({
           emptyText="No questions yet. Ask the first one."
           showStatus={(question) => question.mine || role !== "attendee"}
           onVote={
-            live
+            live && !restriction
               ? (question) => room.send({ type: "question.vote", questionId: question.id, voted: !question.votedByMe })
               : undefined
           }
@@ -194,6 +204,10 @@ function SessionQuestionsRoom({
               disabled={!live}
               send={room.send}
               result={room.answerResult}
+              viewer={state.viewer}
+              restriction={restriction}
+              timeZone={state.session.timeZone}
+              eventName={state.session.eventName}
             />
           )}
           actions={(question) => (
@@ -209,12 +223,13 @@ function SessionQuestionsRoom({
                   question={question}
                   role={role}
                   disabled={!live}
-                  onMove={(status) =>
+                  onMove={(status, reason) =>
                     room.send({
                       type: "question.moderate",
                       questionId: question.id,
                       expectedRevision: question.revision,
                       status,
+                      reason,
                     })
                   }
                 />

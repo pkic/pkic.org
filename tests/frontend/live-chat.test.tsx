@@ -182,6 +182,7 @@ describe("live chat", () => {
     expect(await menuLabels(own)).toEqual(["React", "Delete message"]);
     const moderation = {
       hidden: null,
+      done: null,
       held: false,
       reports: 2,
       reportReasons: { spam: 2 },
@@ -199,7 +200,15 @@ describe("live chat", () => {
         send={send}
       />,
     );
-    expect(await menuLabels(moderator)).toEqual(["React", "Turn into question", "Dismiss reports", "Hide message"]);
+    expect(await menuLabels(moderator)).toEqual([
+      "React",
+      "Done",
+      "Turn into question",
+      "Dismiss reports",
+      "Remove message…",
+      "Pause for 10 minutes",
+      "Block for this session…",
+    ]);
     expect(moderator.textContent).toContain("2 reports");
     const organizer = mount(
       <LiveChat
@@ -213,11 +222,13 @@ describe("live chat", () => {
     );
     expect(await menuLabels(organizer)).toEqual([
       "React",
+      "Done",
       "Turn into question",
       "Dismiss reports",
-      "Hide message",
-      "Mute in chat",
-      "Ban from chat",
+      "Remove message…",
+      "Pause for 10 minutes",
+      "Block for this session…",
+      "Block for this event…",
     ]);
   });
 
@@ -286,26 +297,33 @@ describe("live chat", () => {
     expect(sent(send)).toEqual([{ type: "chat.history", channel: "attendee", before: chat[0].id }]);
   });
 
-  it("tells a muted person they can read but not write, and a banned person nothing of the chat", () => {
-    const muted = mount(
+  it("shows a blocked person why they can't post, and keeps the chat readable", () => {
+    const paused = mount(
       <LiveChat
-        state={stateWith({ viewer: { role: "attendee", name: "Ada", chatRestriction: "muted" } })}
+        state={stateWith({
+          viewer: {
+            role: "attendee",
+            name: "Ada",
+            participation: { block: "paused", until: new Date(Date.now() + 600_000).toISOString() },
+          },
+        })}
         disabled={false}
         send={vi.fn(() => true)}
       />,
     );
-    expect(muted.querySelector("textarea")).toBeNull();
-    expect(muted.textContent).toContain("An organizer muted you");
-    expect(muted.textContent).toContain("Welcome to the session");
-    const banned = mount(
+    expect(paused.querySelector("textarea")).toBeNull();
+    expect(paused.textContent).toContain("You're paused until");
+    expect(paused.querySelector('a[href="/code-of-conduct/"]')).not.toBeNull();
+    expect(paused.textContent).toContain("Welcome to the session");
+    const blocked = mount(
       <LiveChat
-        state={stateWith({ viewer: { role: "attendee", name: "Ada", chatRestriction: "banned" } })}
+        state={stateWith({ viewer: { role: "attendee", name: "Ada", participation: { block: "event", until: null } } })}
         disabled={false}
         send={vi.fn(() => true)}
       />,
     );
-    expect(banned.textContent).not.toContain("Welcome to the session");
-    expect(banned.textContent).toContain("An organizer removed you");
+    expect(blocked.textContent).toContain("You can't post at this event.");
+    expect(blocked.textContent).toContain("Welcome to the session");
   });
 
   it("does not connect before the canonical live window", () => {
@@ -331,6 +349,7 @@ it("counts only new inactive-channel messages, lists reports and restores the se
     id: "40000000-0000-4000-8000-000000000009",
     moderation: {
       hidden: null,
+      done: null,
       held: false,
       reports: 1,
       reportReasons: { abuse: 1 },

@@ -190,7 +190,9 @@ export function prepareLiveRoomParticipants(
     statements,
     async decode(loaded: D1StatementResult[]): Promise<LiveParticipantReadResult[]> {
       const results: LiveParticipantReadResult[] = [];
-      const record = await roomRead.decode(batchFirst<{ payload_json: string; timezone: string }>(loaded[0]));
+      const record = await roomRead.decode(
+        batchFirst<{ payload_json: string; timezone: string; event_name: string }>(loaded[0]),
+      );
       const sessions = await sessionRead.decode(loaded.slice(1, 1 + sessionRead.statements.length));
       const people = batchRows<LiveRoomPerson & { id: string }>(loaded[loaded.length - 1]);
       const physicalRooms = [

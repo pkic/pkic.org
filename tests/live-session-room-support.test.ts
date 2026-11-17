@@ -76,12 +76,14 @@ describe("live room configured controls and participant chat", () => {
     expect((await joined.next("room.snapshot")).chat).toHaveLength(1);
     expect((await screen.next("room.snapshot")).chat).toEqual([]);
     expect(screen.received.some((message) => message.type === "chat.message")).toBe(false);
-    reader.send({ type: "chat.moderate", messageId: own.message.id, decision: "hide" });
+    reader.send({ type: "chat.moderate", messageId: own.message.id, decision: "remove", reason: "spam" });
     expect((await reader.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
-    operator.send({ type: "chat.moderate", messageId: own.message.id, decision: "hide" });
-    await author.next("chat.removed");
+    operator.send({ type: "chat.moderate", messageId: own.message.id, decision: "remove", reason: "spam" });
+    // The author keeps their removed message, with the reason and no moderator name.
+    const removed = await author.next("chat.message", (update) => update.message.removal !== null);
+    expect(removed.message.removal).toMatchObject({ reason: "spam", byName: null });
     const restored = await f.connect({ person: "attendee" });
-    expect((await restored.next("room.snapshot")).chat).toEqual([]);
+    expect((await restored.next("room.snapshot")).chat.map((entry) => entry.removal?.reason)).toEqual(["spam"]);
     const moderator = await f.connect({ person: "operator" });
     expect((await moderator.next("room.snapshot")).chat[0].moderation?.hidden?.operatorName).toBe("Olga Operator");
   });

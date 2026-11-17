@@ -1,3 +1,5 @@
+import type { LiveRoomModerationStore } from "./room-moderation-store";
+import type { LiveModerationReason } from "../../../../assets/shared/live-moderation-policy";
 import {
   LIVE_ROOM_POLICY,
   canEditOwnLiveQuestion,
@@ -37,6 +39,7 @@ export const LIVE_QUESTION_REFUSALS = {
   closed: { code: "LIVE_ROOM_CLOSED", message: "This session is not taking questions now." },
   missing: { code: "LIVE_QUESTION_NOT_FOUND", message: "That question is no longer available." },
   transition: { code: "LIVE_QUESTION_TRANSITION", message: "That question cannot move to this status." },
+  reason: { code: "LIVE_QUESTION_REASON_REQUIRED", message: "Choose why you remove this question." },
 } satisfies Record<string, LiveRefusal>;
 const REFUSALS = LIVE_QUESTION_REFUSALS;
 
@@ -51,6 +54,7 @@ export class LiveRoomQuestions {
     private readonly broadcast: LiveRoomBroadcast,
     private readonly controls: LiveRoomControls,
     private readonly authors: LiveRoomAuthors,
+    private readonly decisions: LiveRoomModerationStore,
     private readonly hooks: {
       /** Takes one of the person's questions from their sliding allowance, or refuses. */
       allowed: (userId: string) => boolean;
@@ -192,6 +196,8 @@ export class LiveRoomQuestions {
     questionId: string,
     status: LiveQuestionStatus,
     expectedRevision: number,
+    /** Why a moderator removes it; required when `status` is hidden. */
+    reason: LiveModerationReason | null = null,
   ): Promise<Handled> {
     const question = this.store.question(questionId);
     if (!question) return REFUSALS.missing;
@@ -200,12 +206,19 @@ export class LiveRoomQuestions {
     if (question.status === status) return;
     if (!liveQuestionTransitionAllowed(viewer.role, question.status, status))
       return viewer.role === "attendee" ? REFUSALS.operatorOnly : REFUSALS.transition;
+    if (status === "hidden" && !reason) return REFUSALS.reason;
     const at = nowIso();
     this.store.moderate(questionId, status, actor, at);
+    if (status === "hidden" && reason) this.decisions.remove("question", questionId, reason, actor, at);
+    else this.decisions.restore(questionId);
     this.store.recordStaffAction(
       actor.userId,
       "live_session.question.moderated",
-      { questionId, status: { from: question.status, to: status } },
+      {
+        questionId,
+        status: { from: question.status, to: status },
+        ...(reason && status === "hidden" ? { reason } : {}),
+      },
       at,
     );
     await this.broadcast.question(questionId);

@@ -121,6 +121,11 @@ const askedQuestion = (id: string, text: string, votes: number): LiveQuestion =>
   moderated: null,
   originalText: null,
   rewritten: null,
+  answerCount: 0,
+  acceptedAnswer: false,
+  removal: null,
+  done: null,
+  authorRestriction: null,
 });
 const onStage = (question: LiveQuestion): LiveStageQuestion => ({
   id: question.id,

@@ -86,12 +86,13 @@ export function LiveQuestionsPanel({
                   { id: "open", label: "Open question", onSelect: () => setInspected(question) },
                   { id: "edit", label: "Edit text", disabled, onSelect: () => setEditing(question) },
                 ]}
-                onMove={(next) =>
+                onMove={(next, reason) =>
                   send({
                     type: "question.moderate",
                     questionId: question.id,
                     expectedRevision: question.revision,
                     status: next,
+                    reason,
                   })
                 }
               />

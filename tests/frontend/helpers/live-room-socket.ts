@@ -180,6 +180,11 @@ export function liveQuestion(overrides: Record<string, unknown> = {}) {
     moderated: null,
     originalText: null,
     rewritten: null,
+    answerCount: 0,
+    acceptedAnswer: false,
+    removal: null,
+    done: null,
+    authorRestriction: null,
     ...overrides,
   };
 }

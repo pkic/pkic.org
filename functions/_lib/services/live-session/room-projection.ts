@@ -1,4 +1,8 @@
 import {
+  liveRestrictionActive,
+  type LiveParticipationRestriction,
+} from "../../../../assets/shared/live-moderation-policy";
+import {
   canEditOwnLiveQuestion,
   livePollResultsVisible,
   PUBLIC_LIVE_QUESTION_STATUSES,
@@ -79,7 +83,21 @@ export function projectLiveQuestion(
       operator && row.rewritten_by_name && row.rewritten_at
         ? { operatorName: row.rewritten_by_name, at: row.rewritten_at }
         : null,
+    answerCount: row.answer_count,
+    acceptedAnswer: row.accepted_answer === 1,
+    removal:
+      (operator || mine) && row.status === "hidden" && row.removal_reason && row.removal_at
+        ? { reason: row.removal_reason, at: row.removal_at, byName: operator ? row.removal_by_name : null }
+        : null,
+    done: operator && row.done_at && row.done_by_name ? { operatorName: row.done_by_name, at: row.done_at } : null,
+    authorRestriction: operator ? authorRestriction(row) : null,
   };
+}
+
+function authorRestriction(row: LiveQuestionRow): LiveParticipationRestriction | null {
+  if (!row.author_block) return null;
+  const restriction = { block: row.author_block, until: row.author_block_until };
+  return liveRestrictionActive(restriction, Date.now()) ? restriction : null;
 }
 
 /**

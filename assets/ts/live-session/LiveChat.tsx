@@ -12,6 +12,8 @@ import { Field } from "../ui/Field";
 import { FieldStatus } from "../ui/FieldStatus";
 import { Textarea } from "../ui/TextControl";
 import { Button } from "../ui/Button";
+import { LiveModerationDialogHost } from "./LiveModerationDialog";
+import { LiveParticipationAlert, useLiveParticipation } from "./LiveParticipationAlert";
 import "./LiveChat.css";
 
 /** How close to the end of the feed still counts as reading the latest message. */
@@ -112,7 +114,7 @@ export function LiveChat({
   channel?: LiveChatChannel;
   visible?: boolean;
 }) {
-  const restriction = state.viewer.chatRestriction ?? null;
+  const restriction = useLiveParticipation(state.viewer.participation);
   const messages = liveChatChannel(state, channel);
   const list = useWindowedList(messages, (message) => message.id, { estimate: 52, overscan: 400, initial: 40 });
   const following = useRef(true);
@@ -138,22 +140,8 @@ export function LiveChat({
     if (!following.current && latestId && !latestMine) setUnseen((count) => count + 1);
   }, [latestId, latestMine]);
 
-  // A lifted ban brings the chat back from the room.
-  const wasBanned = useRef(restriction === "banned");
-  useEffect(() => {
-    if (wasBanned.current && restriction !== "banned") send({ type: "chat.history", channel, before: null });
-    wasBanned.current = restriction === "banned";
-  }, [restriction, send, channel]);
-
-  if (restriction === "banned")
-    return (
-      <p class="pk-small pk-muted" role="status">
-        An organizer removed you from this session's chat.
-      </p>
-    );
-
   const canLoadEarlier = state.chatEarlier?.[channel] === true && messages.length < LIVE_CHAT_POLICY.clientWindow;
-  const canSend = liveChatCanSend(liveChatCapacity(state.viewer), restriction, channel);
+  const canSend = liveChatCanSend(liveChatCapacity(state.viewer), restriction !== null, channel);
   const refusal = state.refusal?.code.startsWith("LIVE_CHAT") ? state.refusal.message : null;
   const spoken = latest && !latest.mine ? `${latest.authorName}: ${liveChatPlainText(latest.text)}` : "";
   return (
@@ -237,13 +225,18 @@ export function LiveChat({
         </p>
         {canSend ? (
           <ChatComposer channel={channel} compact={compact} disabled={disabled} send={send} refusal={refusal} />
+        ) : restriction && channel === "attendee" ? (
+          <LiveParticipationAlert
+            restriction={restriction}
+            timeZone={state.session.timeZone}
+            eventName={state.session.eventName}
+          />
         ) : (
           <p class="pk-small pk-muted" role="status">
-            {restriction === "muted"
-              ? "An organizer muted you. You can still read the chat."
-              : "Only operators can write here."}
+            Only operators can write here.
           </p>
         )}
+        <LiveModerationDialogHost />
       </div>
     </LiveAuthorProvider>
   );

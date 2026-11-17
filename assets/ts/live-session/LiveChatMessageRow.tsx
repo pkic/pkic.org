@@ -5,7 +5,6 @@ import { formatClockInZone, formatTimeOfDay } from "../../shared/format-date";
 import { formatNumber } from "../../shared/format-number";
 import {
   LIVE_CHAT_REACTIONS,
-  LIVE_CHAT_REPORT_REASONS,
   liveChatActions,
   liveChatCapacity,
   type LiveChatAction,
@@ -20,6 +19,10 @@ import { Markdown } from "../ui/Markdown";
 import { StrokeIcon } from "../ui/MediaIcons";
 import { Menu, type MenuItem } from "../ui/Menu";
 import { ReactionPicker } from "./ReactionPicker";
+import { LIVE_MODERATION_REASONS, liveModerationReasonLabel } from "../../shared/live-moderation-policy";
+import { liveParticipationBlockLabel } from "../../shared/schemas/live-session-moderation";
+import { liveDoneMenuItem, liveParticipationMenuItems, liveRemoveMenuItem } from "./live-moderation-menu";
+import { LiveRemovedNote } from "./LiveRemovedNote";
 
 type Viewer = LiveRoomSnapshot["viewer"];
 type Send = (message: LiveRoomClientMessage) => boolean;
@@ -32,7 +35,7 @@ const EMOJI = Object.fromEntries(LIVE_CHAT_REACTIONS.map((reaction) => [reaction
 /** What the shared chat policy lets this viewer do with this message. */
 export function liveChatMessageActions(message: LiveChatMessage, viewer: Viewer): Set<LiveChatAction> {
   const moderation = message.moderation;
-  return liveChatActions(liveChatCapacity(viewer), viewer.chatRestriction ?? null, {
+  return liveChatActions(liveChatCapacity(viewer), viewer.participation != null, {
     channel: message.channel,
     mine: message.mine,
     hidden: moderation?.hidden != null,
@@ -40,8 +43,9 @@ export function liveChatMessageActions(message: LiveChatMessage, viewer: Viewer)
     reported: (moderation?.reports ?? 0) > 0,
     reportedByMe: message.reportedByMe ?? false,
     converted: moderation?.questionId != null,
+    done: moderation?.done != null,
     authorStaff: moderation?.authorStaff ?? false,
-    authorRestriction: moderation?.authorRestriction ?? null,
+    authorRestriction: moderation?.authorRestriction?.block ?? null,
   });
 }
 
@@ -55,26 +59,29 @@ function menuItems(
   message: LiveChatMessage,
   actions: Set<LiveChatAction>,
   send: Send,
+  timeZone: string,
   onError: () => void,
   onRetry: () => void,
 ): MenuItem[] {
   const messageId = message.id;
+  const item = { kind: "chat" as const, messageId };
   const items: MenuItem[] = [];
   if (actions.has("report"))
     items.push({
       id: "report",
       label: "Report",
-      children: LIVE_CHAT_REPORT_REASONS.map((reason) => ({
+      children: LIVE_MODERATION_REASONS.map((reason) => ({
         id: `report-${reason.id}`,
         label: reason.label,
         onSelect: () => send({ type: "chat.report", messageId, reason: reason.id }),
       })),
     });
+  if (actions.has("done")) items.push(liveDoneMenuItem(item, false, send));
   if (actions.has("convert"))
     items.push({
       id: "convert",
       label: "Turn into question",
-      separatorBefore: items.length > 0,
+      separatorBefore: items.length > 0 && !actions.has("done"),
       onSelect: () => send({ type: "chat.convert", messageId }),
     });
   if (actions.has("keep"))
@@ -83,46 +90,24 @@ function menuItems(
       label: keepLabel(message),
       onSelect: () => send({ type: "chat.moderate", messageId, decision: "keep" }),
     });
-  if (actions.has("hide"))
-    items.push({
-      id: "hide",
-      label: "Hide message",
-      onSelect: () => send({ type: "chat.moderate", messageId, decision: "hide" }),
-    });
-  const restriction = message.moderation?.authorRestriction ?? null;
-  if (actions.has("mute"))
-    items.push({
-      id: "mute",
-      label: "Mute in chat",
-      separatorBefore: true,
-      onSelect: () => send({ type: "chat.restrict", messageId, restriction: "muted" }),
-    });
-  if (actions.has("lift"))
-    items.push({
-      id: "lift",
-      label: restriction === "banned" ? "Lift ban" : "Unmute",
-      separatorBefore: !actions.has("mute"),
-      onSelect: () => send({ type: "chat.restrict", messageId, restriction: null }),
-    });
-  if (actions.has("ban"))
-    items.push({
-      id: "ban",
-      label: "Ban from chat",
-      danger: true,
-      onSelect: () => {
-        onRetry();
-        void confirmAction({
-          title: `Ban ${message.authorName} from this chat?`,
-          body: "They can't read or write in this session's chat, and their messages are hidden from everyone until you lift the ban.",
-          confirmLabel: "Ban from chat",
-          tone: "danger",
-        })
-          .then((confirmed) => {
-            if (confirmed) send({ type: "chat.restrict", messageId, restriction: "banned" });
-          })
-          .catch(onError);
-      },
-    });
+  if (actions.has("remove"))
+    items.push(
+      liveRemoveMenuItem(
+        "message",
+        (reason) => send({ type: "chat.moderate", messageId, decision: "remove", reason }),
+        onError,
+      ),
+    );
+  items.push(
+    ...liveParticipationMenuItems({
+      item,
+      authorName: message.authorName,
+      actions,
+      send,
+      timeZone,
+      onError,
+    }),
+  );
   if (actions.has("delete"))
     items.push({
       id: "delete",
@@ -161,6 +146,11 @@ function ModerationNote({ message }: { message: LiveChatMessage }) {
   if (!moderation) return null;
   const notes: Array<{ text: string; tone: "warn" | "muted" }> = [];
   if (moderation.held) notes.push({ text: "Held after reports", tone: "warn" });
+  else if (message.removal)
+    notes.push({
+      text: `Removed by ${message.removal.byName ?? "a moderator"}: ${liveModerationReasonLabel(message.removal.reason)}`,
+      tone: "muted",
+    });
   else if (moderation.hidden) notes.push({ text: `Hidden by ${moderation.hidden.operatorName}`, tone: "muted" });
   if (moderation.reports > 0)
     notes.push({
@@ -168,8 +158,12 @@ function ModerationNote({ message }: { message: LiveChatMessage }) {
       tone: "warn",
     });
   if (moderation.questionId) notes.push({ text: "Asked as a question", tone: "muted" });
+  if (moderation.done) notes.push({ text: "Done", tone: "muted" });
   if (moderation.authorRestriction)
-    notes.push({ text: moderation.authorRestriction === "banned" ? "Author banned" : "Author muted", tone: "muted" });
+    notes.push({
+      text: `Author ${liveParticipationBlockLabel(moderation.authorRestriction.block).toLowerCase()}`,
+      tone: "muted",
+    });
   return notes.length ? (
     <span class="pk-live-chat__notes">
       {notes.map((note) => (
@@ -210,6 +204,7 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
         message,
         actions,
         send,
+        timeZone,
         () => setActionError(true),
         () => setActionError(false),
       );
@@ -240,6 +235,7 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
           <ModerationNote message={message} />
         </div>
         <Markdown markdown={message.text} profile="chat" className="pk-live-chat__text" />
+        {message.removal && message.mine ? <LiveRemovedNote removal={message.removal} /> : null}
         {reactions.length ? (
           <div class="pk-live-chat__reactions">
             {reactions.map((reaction) => {

@@ -146,7 +146,7 @@ describe("live room auxiliary outputs", () => {
       (await operator.next("aux.changed", (m) => m.composition.question?.text === "When will RSA be retired?")).output,
     ).toBe("stage-display");
     await operator.next("preview.changed", (m) => m.composition.question?.text === "When will RSA be retired?");
-    operator.send({ type: "question.moderate", questionId: asked.question.id, status: "hidden" });
+    operator.send({ type: "question.moderate", questionId: asked.question.id, status: "hidden", reason: "spam" });
     const cleared = await operator.next("aux.changed", (m) => m.composition.question === null);
     expect(cleared.output).toBe("stage-display");
     await operator.next("preview.changed", (m) => m.composition.question === null);
