@@ -1,7 +1,20 @@
+-- A membership application no longer holds an email domain. A person's email
+-- challenge links an organization to its domain, and an organization applies
+-- through the identity of the person who represents it. Release the
+-- provisional claims applications held; organization claims are untouched.
+-- An open application approved later creates its organization without a
+-- claim; the domain is claimed at that organization's next email challenge.
+--
+-- Data only: the application_id column stays (dropping it needs a table
+-- rebuild) and the Worker no longer writes it.
+-- Recovery: an open application's claim can be recreated from
+-- member_applications.organization_domain, but nothing reads it any more.
+DELETE FROM organization_domain_claims WHERE application_id IS NOT NULL;
+
 -- Every verified address on an account signs in while it still speaks for the
 -- person; the separate opt-in goes away (see auth/email-sign-in-policy.ts).
 -- Applied before the code that uses it; old code keeps working: it still reads
--- user_email_sign_in_permissions, which 0050 drops after the new code is live.
+-- user_email_sign_in_permissions, which 0049 drops after the new code is live.
 
 -- The live session check replaces the opt-in's revocation triggers: a session
 -- made through an address lives only while that address still signs in.
