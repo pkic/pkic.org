@@ -212,12 +212,7 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
   const reactions = LIVE_CHAT_REACTIONS.filter((reaction) => (message.reactions?.[reaction.id] ?? 0) > 0);
   const time = formatClockInZone(message.sentAt, timeZone);
   return (
-    <li
-      ref={measure}
-      class="pk-live-chat__row"
-      data-mine={message.mine ? "" : undefined}
-      data-hidden={message.moderation?.hidden ? "" : undefined}
-    >
+    <li ref={measure} class="pk-live-chat__row" data-mine={message.mine ? "" : undefined}>
       <Avatar name={message.authorName} src={message.authorPhotoUrl ?? undefined} size="sm" />
       <div class="pk-live-chat__body">
         {actionError && <Alert tone="danger">Could not complete the action. Please try again.</Alert>}
@@ -234,7 +229,15 @@ export const LiveChatMessageRow = memo(function LiveChatMessageRow({
           </time>
           <ModerationNote message={message} />
         </div>
-        <Markdown markdown={message.text} profile="chat" className="pk-live-chat__text" />
+        <Markdown
+          markdown={message.text}
+          profile="chat"
+          className={
+            message.moderation?.hidden || message.removal
+              ? "pk-live-chat__text pk-live-removed-words"
+              : "pk-live-chat__text"
+          }
+        />
         {message.removal && message.mine ? <LiveRemovedNote removal={message.removal} /> : null}
         {reactions.length ? (
           <div class="pk-live-chat__reactions">

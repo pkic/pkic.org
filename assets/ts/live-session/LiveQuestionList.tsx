@@ -135,7 +135,15 @@ export function LiveQuestionList({
             ) : null}
 
             <div class="pk-live-question__body">
-              <p class={compact ? "pk-live-question__excerpt" : undefined}>{question.text}</p>
+              <p
+                class={
+                  [compact ? "pk-live-question__excerpt" : null, question.removal ? "pk-live-removed-words" : null]
+                    .filter(Boolean)
+                    .join(" ") || undefined
+                }
+              >
+                {question.text}
+              </p>
               {!compact && question.originalText !== null ? (
                 <p class="pk-live-question__original">
                   Asked as “{question.originalText}”

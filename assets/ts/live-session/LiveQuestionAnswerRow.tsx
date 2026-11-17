@@ -111,7 +111,9 @@ export function LiveQuestionAnswerRow({
       </button>
       <div class="pk-live-answers__body">
         <LiveAuthorName name={answer.authorName} affiliation={answer.authorAffiliation} roles={answer.authorRoles} />
-        <p class="pk-live-answers__text">{answer.text}</p>
+        <p class={answer.removal ? "pk-live-answers__text pk-live-removed-words" : "pk-live-answers__text"}>
+          {answer.text}
+        </p>
         {answer.acceptance ? (
           <p class="pk-live-answers__acceptance">
             <strong>Accepted answer</strong> ·{" "}

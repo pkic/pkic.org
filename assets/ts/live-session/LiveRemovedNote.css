@@ -6,4 +6,10 @@
     font-size: var(--pk-text-sm);
     font-style: italic;
   }
+  /* The removed words themselves, for the author and moderators: struck through and muted. */
+  .pk-live-removed-words {
+    color: var(--pk-ink-muted);
+    text-decoration: line-through;
+    text-decoration-color: var(--pk-line-strong);
+  }
 }
