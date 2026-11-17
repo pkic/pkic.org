@@ -142,6 +142,7 @@ export function liveSnapshot(overrides: Partial<Omit<LiveRoomSnapshot, "type">> 
       topQuestions: null,
       chatFeed: null,
       reactions: false,
+      reactionsGraphic: { showCount: false },
     },
     outputs: EMPTY_LIVE_OUTPUTS,
     speakerMessage: null,

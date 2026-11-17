@@ -194,7 +194,7 @@ function Reacting({ state, children }: { state: LiveRoomState; children: (state:
     { love: 1, applause: 1 },
     { thumbs_up: 2, mind_blown: 1 },
   ][sequence % 3]!;
-  return children({ ...state, burst: { sequence, counts } });
+  return children({ ...state, burst: { sequence, counts, people: counts } });
 }
 
 const LIVE_PANEL: StudioPanel = { id: "live-1", type: "monitor", x: 0, y: 0, w: 6, h: 9, outputs: ["livestream"] };

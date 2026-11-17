@@ -79,6 +79,7 @@ describe("continuous physical-room source", () => {
             topQuestions: null,
             chatFeed: null,
             reactions: false,
+            reactionsGraphic: { showCount: false },
           },
         }),
       );
