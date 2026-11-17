@@ -3,6 +3,7 @@
  * its price, and the organizer's ticket settings. Static until approved.
  */
 import type { PreviewSection } from "./PreviewShell";
+import { TicketAwaitingPayment } from "./sections-event-ticket-payment";
 import { DayAttendancePicker } from "../../components/DayAttendancePicker";
 import { TicketCard, TicketChoice } from "../../components/events/tickets/TicketCard";
 import {
@@ -566,6 +567,7 @@ function TicketPricesEdit() {
 }
 
 export const eventTicketSections: PreviewSection[] = [
+  { id: "ticket-payment", title: "Ticket: awaiting payment", render: () => <TicketAwaitingPayment /> },
   { id: "ticket-step", title: "Registration: choose a ticket", render: () => <AttendanceWithTicketChoice /> },
   { id: "ticket-step-assigned", title: "Registration: ticket known", render: () => <AttendanceWithAssignedTicket /> },
   {
