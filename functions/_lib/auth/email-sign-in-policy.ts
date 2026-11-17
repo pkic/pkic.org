@@ -133,6 +133,29 @@ export function signInEmailAuthorizationEvidence(input: {
   };
 }
 
+/**
+ * A redemption that proves the mailbox itself, such as a sponsor contact link,
+ * may sign in to the account holding the address unless the address is retired:
+ * the link stands in for the proof, but not for the representation behind it.
+ */
+export function provedMailboxSignInEvidence(input: { userId: string; normalizedEmail: string }): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1 FROM (SELECT ? AS normalized_email) signing CROSS JOIN users person
+      WHERE person.id = ? AND ${liveAccountSql("person")}
+      AND ((person.normalized_email = signing.normalized_email
+          AND ${addressNotRetiredSql("person.id", "signing.normalized_email")})
+        OR ${existsSql(
+          "user_emails",
+          "proved_address",
+          `(proved_address.user_id = person.id AND proved_address.normalized_email = signing.normalized_email)
+            AND CASE WHEN proved_address.identity_id IS NULL
+              THEN ${addressNotRetiredSql("person.id", "signing.normalized_email")}
+              ELSE ${ownedEmailRepresentationActiveSql("proved_address")} END`,
+        )})`,
+    bindings: [input.normalizedEmail, input.userId],
+  };
+}
+
 /** A session made through an address ends with that address; one without a marker (a passkey) is unaffected. */
 export function sessionEmailSignInAllowedSql(sessionId: string, userId: string): string {
   return `NOT ${existsSql(

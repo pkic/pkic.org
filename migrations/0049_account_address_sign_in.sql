@@ -28,3 +28,10 @@ CREATE INDEX idx_session_email_authentication_address ON session_email_authentic
 
 -- The first sign-in through an added address sends a security notice once.
 ALTER TABLE user_emails ADD COLUMN first_signed_in_at TEXT;
+
+-- Addresses that already signed in under the opt-in have had their first sign-in.
+UPDATE user_emails
+   SET first_signed_in_at = (
+     SELECT MIN(marker.created_at) FROM session_email_authentication marker WHERE marker.email_id = user_emails.id)
+ WHERE first_signed_in_at IS NULL
+   AND EXISTS (SELECT 1 FROM session_email_authentication marker WHERE marker.email_id = user_emails.id);

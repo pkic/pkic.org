@@ -23,7 +23,8 @@ import { createEstablishedUserSessionResult, type UserSessionResult } from "./us
 import { findActingIdentitiesForUser } from "./session-acting-identities";
 import { resolveSessionActingIdentityId } from "../../../assets/shared/session-acting-identity";
 import { recordAuditActingIdentity } from "../services/audit-actor";
-import { findActiveIdentity, prepareUserSession } from "./user-session";
+import { findActiveIdentity, prepareSessionEmailAuthenticationStatement, prepareUserSession } from "./user-session";
+import { provedMailboxSignInEvidence } from "./email-sign-in-policy";
 
 /** Redeem a sponsor-mailbox capability into the same user session used by the portal. */
 export async function redeemSponsorSignInCapability(
@@ -69,12 +70,7 @@ export async function redeemSponsorSignInCapability(
     authorizationEvidence: [
       sponsorSignInAuthorizationEvidence(verified.sponsorship.sponsorId, normalizedContactEmail),
       ...(!preparedUser.created
-        ? [
-            {
-              sql: "SELECT 1 FROM users WHERE id = ? AND active = 1",
-              bindings: [preparedUser.user.id],
-            },
-          ]
+        ? [provedMailboxSignInEvidence({ userId: preparedUser.user.id, normalizedEmail: normalizedContactEmail })]
         : []),
     ],
     statements: [
@@ -86,6 +82,12 @@ export async function redeemSponsorSignInCapability(
         verifiedAt,
       }),
       ...prepared.statements,
+      prepareSessionEmailAuthenticationStatement(db, {
+        sessionId: prepared.sessionId,
+        emailId: null,
+        normalizedEmail: normalizedContactEmail,
+        at: verifiedAt,
+      }),
     ],
   });
 

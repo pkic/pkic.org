@@ -5,14 +5,14 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ENDING_LAST_SIGN_IN_METHOD_MESSAGE, LAST_SIGN_IN_METHOD } from "../assets/shared/auth-errors";
-import { userAuthRequestSchema } from "../assets/shared/schemas/user-auth";
+import { userAuthRequestSchema, userAuthVerifySchema } from "../assets/shared/schemas/user-auth";
 import { queueUserSignInCapability } from "../functions/_lib/auth/user-session";
 import { makeOwnEmailAddressPrimary, removeOwnEmailAddress } from "../functions/_lib/services/own-email-addresses";
 import type { Env } from "../functions/_lib/types";
 import { nowIso } from "../functions/_lib/utils/time";
 import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
-import { createTestRateLimiter, queryAll } from "./helpers/context";
+import { createTestRateLimiter, deliveredEmailPayload, queryAll } from "./helpers/context";
 import { insertOrganization, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
@@ -99,6 +99,35 @@ describe("account addresses after a representation ends", () => {
 
     expect(await signInLink(WORK_EMAIL)).toBeNull();
     expect(await signInLink("ana@gmail.example")).toMatchObject({ identity: { id: userId } });
+  });
+
+  it("ends a session made through a work primary when its representation ends, and keeps one made otherwise", async () => {
+    const { userId, identityId, token: otherSession } = await workAccount();
+    await addVerifiedAddress(userId, "ana@gmail.example");
+    await requestLink(WORK_EMAIL);
+    const [link] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'user_magic_link'",
+    );
+    const payload = await deliveredEmailPayload<{ magicLinkUrl: string }>(env.DB, environment, link.payload_json);
+    const verified = await callApi(environment, "/api/v1/auth/verify-link", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(
+        userAuthVerifySchema.parse({
+          token: new URLSearchParams(new URL(payload.magicLinkUrl).hash.split("?", 2)[1]).get("token"),
+        }),
+      ),
+    });
+    expect(verified.status).toBe(200);
+    const cookie = verified.headers.get("set-cookie")!.split(";", 1)[0];
+    const session = (headers: HeadersInit) => callApi(environment, "/api/v1/auth/session", { headers });
+    expect((await session({ cookie })).status).toBe(200);
+
+    await env.DB.prepare("UPDATE identities SET ended_at = ? WHERE id = ?").bind(nowIso(), identityId).run();
+
+    expect((await session({ cookie })).status).toBe(401);
+    expect((await session({ authorization: `Bearer ${otherSession}` })).status).toBe(200);
   });
 
   it("emails a retired address why it gets no link, with the same answer on screen as any address", async () => {
