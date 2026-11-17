@@ -1,16 +1,14 @@
-import { prepareClaimDomainForOrganization } from "../membership/organization-domain-claims";
 import { prepareStateGuard } from "../../db/authorization-guard";
-import { prepareAuditLog } from "../audit";
+import { prepareOrganizationDomainClaim } from "./verified-email-domain";
 import type { StatementLike } from "../../types";
 import type { z } from "zod";
-import { workEmailDomain } from "../../email-domains/classification";
+import { organizationDomainCandidates, workEmailDomain } from "../../email-domains/classification";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import type { DatabaseLike } from "../../types";
 import { AppError } from "../../errors";
 import type { identityAffiliationPrepareSchema } from "../../../../assets/shared/schemas/identity-affiliation";
 import type { verifiedAffiliationBasisSchema } from "./verified-affiliation-basis";
 import { prepareVerifiedOrganizationAffiliation } from "./reconciliation";
-import { verifiedRepresentationDomainCandidates, verifiedRepresentationDomainEvidence } from "./verified-email-domain";
 export async function planVerifiedAffiliation(
   db: DatabaseLike,
   authority: {
@@ -22,11 +20,7 @@ export async function planVerifiedAffiliation(
   basis: z.infer<typeof verifiedAffiliationBasisSchema>,
   at: string,
 ) {
-  if (
-    !input.organizationId &&
-    !input.domain &&
-    verifiedRepresentationDomainCandidates(input.email, basis.claims).length > 1
-  )
+  if (!input.organizationId && !input.domain && organizationDomainCandidates(input.email).length > 1)
     throw new AppError(422, "IDENTITY_DOMAIN_REQUIRED", "Choose the email domain to link to your organization.", {
       formErrors: [],
       fieldErrors: { domain: ["Choose the email domain to link to your organization."] },
@@ -37,21 +31,9 @@ export async function planVerifiedAffiliation(
       "IDENTITY_ORGANIZATION_RESOLVED",
       "Choose an existing organization or enter a new organization name.",
     );
-  const owned =
-    input.organizationId &&
-    basis.identities.some(
-      (identity) =>
-        identity.organization_id === input.organizationId &&
-        identity.started_at &&
-        identity.ended_at === null &&
-        identity.blocked_at === null,
-    );
   const selectedNewSubdomain =
     input.domain && basis.domain !== workEmailDomain(input.email) && !basis.claim ? basis.domain : null;
-  if (
-    selectedNewSubdomain &&
-    !verifiedRepresentationDomainCandidates(input.email, basis.claims).includes(selectedNewSubdomain)
-  )
+  if (selectedNewSubdomain && !organizationDomainCandidates(input.email).includes(selectedNewSubdomain))
     throw new AppError(
       409,
       "IDENTITY_DOMAIN_UNAVAILABLE",
@@ -72,39 +54,40 @@ export async function planVerifiedAffiliation(
     },
     basis,
   );
-  const domainToLink = selectedNewSubdomain;
+  // A parent or subdomain organization chosen for this address keeps its own domain: it never claims this one.
+  const chosenRelated =
+    !plan.organizationWasCreated &&
+    (basis.facts?.related ?? []).some((related) => related.organizationId === plan.organizationId);
+  const domainToLink = chosenRelated ? null : selectedNewSubdomain;
+  // A chosen subdomain must still be unclaimed when the command commits.
+  const unclaimedGuard = domainToLink
+    ? [
+        prepareStateGuard(db, {
+          sql: "SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=?)",
+          bindings: [domainToLink],
+        }),
+      ]
+    : [];
   const domainStatements: StatementLike[] = [];
+  // The explicitly chosen subdomain is claimed, unless the email challenge already claimed it in this command.
   if (domainToLink) {
-    const domain = domainToLink;
     domainStatements.push(
       prepareStateGuard(db, {
-        sql: `SELECT 1 FROM organizations WHERE id=? AND merged_into_organization_id IS NULL
-          AND NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=?)`,
-        bindings: [plan.organizationId, domain],
+        sql: "SELECT 1 FROM organizations WHERE id=? AND merged_into_organization_id IS NULL",
+        bindings: [plan.organizationId],
       }),
-      (await prepareClaimDomainForOrganization(db, { domain, organizationId: plan.organizationId, now: at }, true))!,
-      prepareAuditLog(
-        db,
-        "user",
-        authority.userId,
-        "organization_domain_claimed",
-        "organization",
-        plan.organizationId,
-        { domain: { from: null, to: domain }, reason: "Confirmed through a verified work email address" },
-        at,
-      ),
+      ...prepareOrganizationDomainClaim(db, {
+        domain: domainToLink,
+        organizationId: plan.organizationId,
+        actorUserId: authority.userId,
+        now: at,
+      }),
     );
   }
 
   return {
     ...plan,
     domainToLink,
-    statements: [
-      ...(owned && domainToLink
-        ? [prepareStateGuard(db, verifiedRepresentationDomainEvidence(input.email, basis.domain))]
-        : []),
-      ...plan.statements,
-      ...domainStatements,
-    ],
+    statements: [...unclaimedGuard, ...plan.statements, ...domainStatements],
   };
 }

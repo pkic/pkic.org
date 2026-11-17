@@ -11,7 +11,6 @@ import {
   domainOwnershipFactMatchesSql,
   FACT_ORGANIZATION,
   requireWorkOrganizationDomain,
-  verifiedRepresentationDomainCandidates,
 } from "./verified-email-domain";
 import { boundedDomainClaimsRows, domainClaimsObservationSelection } from "./affiliation-evidence";
 import { verifiedAffiliationBasisSchema } from "./verified-affiliation-basis";
@@ -35,6 +34,8 @@ export function prepareVerifiedAffiliationRead(
   const matches = domainOwnershipFactMatchesSql("requested.value");
   const slug = slugifyOr(input.organizationName ?? "", "member");
   const claimRead = domainClaimsObservationSelection(input.email);
+  // Subdomains below the address's own host; a sibling such as parliament.europa.eu is never below council.europa.eu.
+  const below = `.${emailHost(input.email) ?? ""}`;
   const statements = [
     mailboxProof
       ? db
@@ -51,12 +52,11 @@ export function prepareVerifiedAffiliationRead(
         MAX(CASE WHEN fact.verified_email_domain IS NOT NULL AND fact.source='verified_email' AND fact.started_at IS NOT NULL
           AND fact.ended_at IS NULL AND fact.blocked_at IS NULL AND person.active=1 THEN 1 ELSE 0 END) AS active,
         MAX(CASE WHEN fact.blocked_at IS NOT NULL THEN 1 ELSE 0 END) AS disputed,
-        MAX(CASE WHEN fact.verified_email_domain IS NULL THEN 1 ELSE 0 END) AS unknown,
-        EXISTS(SELECT 1 FROM members member WHERE member.organization_id=${FACT_ORGANIZATION}) AS member
+        MAX(CASE WHEN fact.verified_email_domain IS NULL THEN 1 ELSE 0 END) AS unknown
       FROM json_each(?) requested JOIN identities fact ON ${matches} JOIN users person ON person.id=fact.user_id
       WHERE fact.organization_id IS NOT NULL GROUP BY requested.value,${FACT_ORGANIZATION}
-    ), ranked AS (SELECT domain,id,active,disputed,unknown,member,ROW_NUMBER() OVER(PARTITION BY domain ORDER BY id) AS position FROM facts)
-      SELECT domain,id,active,disputed,unknown,member FROM ranked WHERE position<=257`)
+    ), ranked AS (SELECT domain,id,active,disputed,unknown,ROW_NUMBER() OVER(PARTITION BY domain ORDER BY id) AS position FROM facts)
+      SELECT domain,id,active,disputed,unknown FROM ranked WHERE position<=257`)
       .bind(domains),
     db
       .prepare(`SELECT organization.id,organization.name,organization.normalized_name,organization.merged_into_organization_id,member.id AS member_id
@@ -66,8 +66,17 @@ export function prepareVerifiedAffiliationRead(
         UNION SELECT ${FACT_ORGANIZATION} FROM identities fact JOIN json_each(?) requested ON ${matches}
         UNION SELECT organization_id FROM identities WHERE user_id=(${subject.sql})
           AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
+        UNION SELECT organization_id FROM organization_domain_claims WHERE length(domain)>? AND substr(domain,-?)=?
       ) ORDER BY organization.name,organization.id LIMIT 257`)
-      .bind(normalizeOrgName(input.organizationName ?? ""), domains, domains, ...subject.bindings),
+      .bind(
+        normalizeOrgName(input.organizationName ?? ""),
+        domains,
+        domains,
+        ...subject.bindings,
+        below.length,
+        below.length,
+        below,
+      ),
     db
       .prepare(`SELECT id,organization_id,email_id,updated_at,invited_at,started_at,ended_at,blocked_at,job_title
       FROM identities WHERE user_id=(${subject.sql}) ORDER BY id LIMIT 501`)
@@ -78,6 +87,11 @@ export function prepareVerifiedAffiliationRead(
     db
       .prepare(`SELECT slug FROM organizations WHERE ?=1 AND (slug=? OR slug GLOB ?) ORDER BY slug LIMIT 1001`)
       .bind(input.organizationName ? 1 : 0, slug, `${slug}-[0-9]*`),
+    db
+      .prepare(`SELECT id,domain,organization_id AS organizationId FROM organization_domain_claims
+      WHERE organization_id IS NOT NULL AND length(domain)>? AND substr(domain,-?)=?
+      ORDER BY length(domain),domain,id LIMIT 129`)
+      .bind(below.length, below.length, below),
   ];
   return {
     statements,
@@ -92,13 +106,9 @@ export function prepareVerifiedAffiliationRead(
       const claims = boundedDomainClaimsRows<{
         id: string;
         domain: string;
-        applicationId: string | null;
-        organizationId: string | null;
-        applicationName: string | null;
-        applicationUpdatedAt: string | null;
-        member: number;
+        organizationId: string;
       }>(results[1]);
-      if (input.domain && !verifiedRepresentationDomainCandidates(address.email, claims).includes(input.domain))
+      if (input.domain && !organizationDomainCandidates(address.email).includes(input.domain))
         throw new AppError(422, "IDENTITY_DOMAIN_MISMATCH", "Choose a domain of your verified work email address.");
       const rootDomain = workEmailDomain(address.email);
       const knownRoot = batchRows<{ domain: string }>(results[2]).some((fact) => fact.domain === rootDomain);
@@ -113,23 +123,32 @@ export function prepareVerifiedAffiliationRead(
         active: number;
         disputed: number;
         unknown: number;
-        member: number;
       }>(results[2]).filter((fact) => fact.domain === domain);
+      const claimed = claims.filter((item) => item.domain === domain);
+      const related = [
+        ...claims.filter((item) => item.domain !== domain),
+        ...boundedDomainClaimsRows<{ id: string; domain: string; organizationId: string }>(results[7]),
+      ].filter(
+        (item, index, all) =>
+          !claimed.some((own) => own.organizationId === item.organizationId) &&
+          all.findIndex((other) => other.organizationId === item.organizationId) === index,
+      );
       const basis: Basis = verifiedAffiliationBasisSchema.parse({
         domain,
         claim,
         claims,
         facts: {
-          claimed: claims
-            .filter((item) => item.domain === domain && item.organizationId !== null)
-            .map((item) => ({ organizationId: item.organizationId!, isMember: Boolean(item.member) })),
-          heldByApplication: claims.some((item) => item.domain === domain && item.applicationId !== null),
+          claimed: claimed.map((item) => ({ organizationId: item.organizationId })),
           derived: derived.map((fact) => ({
             organizationId: fact.id,
-            isMember: Boolean(fact.member),
             active: Boolean(fact.active),
             disputed: Boolean(fact.disputed),
             unknownProvenance: Boolean(fact.unknown),
+          })),
+          related: related.map(({ id, domain: claimDomain, organizationId }) => ({
+            id,
+            domain: claimDomain,
+            organizationId,
           })),
         },
         organizations: batchRows(results[3]),

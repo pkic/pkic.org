@@ -119,16 +119,6 @@ export async function seedMemberApplication(options: SeedMemberApplicationOption
     )
     .run();
 
-  if (organizationDomain && !["approved", "declined", "withdrawn"].includes(stage)) {
-    await env.DB.prepare(
-      `INSERT INTO organization_domain_claims
-         (id, domain, application_id, organization_id, created_at, updated_at)
-       VALUES (?, ?, ?, NULL, datetime('now'), datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), organizationDomain, id)
-      .run();
-  }
-
   return id;
 }
 

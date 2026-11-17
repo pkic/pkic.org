@@ -5,27 +5,13 @@ import {
 } from "../../../../assets/shared/organization-domain";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { all, first } from "../../db/queries";
-import { organizationDomainCandidates } from "../../email-domains/classification";
+import { prepareAuditLogWhen } from "../audit";
 import { hostWithinDomainSql } from "../../email-domains/sql";
 import { AppError } from "../../errors";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, StatementLike } from "../../types";
+import { uuid } from "../../utils/ids";
 import { normalizeEmail } from "../../validation";
 import { organizationLinkDomain } from "../membership/organization-domain-claims";
-
-/** A verified address cannot broaden past an existing more specific organization mapping. */
-export function verifiedRepresentationDomainCandidates(email: string, claims: readonly { domain: string }[]): string[] {
-  const boundary = Math.max(0, ...claims.map((claim) => claim.domain.length));
-  return organizationDomainCandidates(email).filter((domain) => domain.length >= boundary);
-}
-
-/** Preserve the most-specific mapping boundary without pinning unrelated claimants. */
-export function verifiedRepresentationDomainEvidence(email: string, domain: string): AuthorizationEvidence {
-  return {
-    sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims
-      WHERE domain IN (SELECT value FROM json_each(?)) AND length(domain)>?)`,
-    bindings: [JSON.stringify(organizationDomainCandidates(email)), domain.length],
-  };
-}
 
 function ineligibleDomain(): AppError {
   return new AppError(422, "IDENTITY_DOMAIN_INELIGIBLE", "This email domain cannot establish an organization identity");
@@ -81,17 +67,16 @@ export function verifiedEmailDomainResolutionEvidence(
       };
     if (hasAuthoritativeClaim)
       return {
-        sql: "SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=? AND application_id IS NULL",
+        sql: "SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?",
         bindings: [domain, organizationId],
       };
     return {
-      sql: `SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM members WHERE organization_id=?)
-        AND EXISTS(SELECT 1 FROM identities fact JOIN users person ON person.id=fact.user_id
+      sql: `SELECT 1 WHERE EXISTS(SELECT 1 FROM identities fact JOIN users person ON person.id=fact.user_id
           WHERE fact.verified_email_domain=? AND fact.organization_id=? AND fact.source='verified_email'
             AND fact.started_at IS NOT NULL AND fact.ended_at IS NULL AND fact.blocked_at IS NULL AND person.active=1)
         AND NOT EXISTS(SELECT 1 FROM identities fact WHERE ${domainMatches} AND ${FACT_ORGANIZATION}=?
           AND (fact.verified_email_domain IS NULL OR fact.blocked_at IS NOT NULL))`,
-      bindings: [organizationId, domain, organizationId, domain, domain, organizationId],
+      bindings: [domain, organizationId, domain, domain, organizationId],
     };
   }
   if (!organizationId)
@@ -101,57 +86,39 @@ export function verifiedEmailDomainResolutionEvidence(
     };
   if (hasAuthoritativeClaim)
     return {
-      sql: `SELECT 1 WHERE EXISTS (SELECT 1 FROM organization_domain_claims
-          WHERE domain=? AND organization_id=? AND application_id IS NULL)
-        AND NOT EXISTS (SELECT 1 FROM organization_domain_claims
-          WHERE domain=? AND (organization_id IS NOT ? OR application_id IS NOT NULL))
-        AND NOT EXISTS (SELECT 1 FROM identities fact WHERE ${domainMatches} AND ${FACT_ORGANIZATION} IS NOT ?)`,
-      bindings: [domain, organizationId, domain, organizationId, domain, domain, organizationId],
+      sql: `SELECT 1 WHERE EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?)
+        AND NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id IS NOT ?)`,
+      bindings: [domain, organizationId, domain, organizationId],
     };
   return {
     sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=?)
-      AND NOT EXISTS (SELECT 1 FROM members WHERE organization_id=?)
       AND EXISTS (SELECT 1 FROM identities fact JOIN users person ON person.id=fact.user_id
         WHERE fact.verified_email_domain=? AND fact.organization_id=? AND fact.source='verified_email'
           AND fact.started_at IS NOT NULL AND fact.ended_at IS NULL AND fact.blocked_at IS NULL AND person.active=1)
       AND NOT EXISTS (SELECT 1 FROM identities fact WHERE ${domainMatches}
         AND (${FACT_ORGANIZATION} IS NOT ? OR fact.verified_email_domain IS NULL OR fact.blocked_at IS NOT NULL))`,
-    bindings: [domain, organizationId, domain, organizationId, domain, domain, organizationId],
-  };
-}
-
-/** A member's shared domain needs an invitation or review before granting access. */
-export function memberAffiliationApprovalEvidence(domain: string, organizationId: string): AuthorizationEvidence {
-  return {
-    sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM members WHERE organization_id=?) OR (
-      NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND (organization_id IS NOT ? OR application_id IS NOT NULL))
-      AND NOT EXISTS (SELECT 1 FROM identities fact JOIN users person ON person.id=fact.user_id
-        WHERE fact.verified_email_domain=? AND ${FACT_ORGANIZATION} IS NOT ? AND fact.organization_id IS NOT NULL
-          AND fact.source='verified_email' AND fact.started_at IS NOT NULL AND fact.ended_at IS NULL
-          AND fact.blocked_at IS NULL AND person.active=1))`,
-    bindings: [organizationId, domain, organizationId, domain, organizationId],
+    bindings: [domain, domain, organizationId, domain, domain, organizationId],
   };
 }
 
 /** Every fact the shared rule needs to decide who owns one domain. */
 export async function loadDomainOwnershipFacts(db: DatabaseLike, domain: string): Promise<DomainOwnershipFacts> {
   const [claims, derived] = await Promise.all([
-    all<{ organization_id: string | null; application_id: string | null; member: number }>(
+    all<{ organization_id: string }>(
       db,
-      `SELECT claim.organization_id, claim.application_id,
-        EXISTS(SELECT 1 FROM members WHERE organization_id=claim.organization_id) AS member
-       FROM organization_domain_claims claim WHERE claim.domain=? ORDER BY claim.organization_id LIMIT 129`,
+      `SELECT claim.organization_id
+       FROM organization_domain_claims claim WHERE claim.domain=? AND claim.organization_id IS NOT NULL
+       ORDER BY claim.organization_id LIMIT 129`,
       [domain],
     ),
-    all<{ id: string; active: number; disputed: number; unknown: number; member: number }>(
+    all<{ id: string; active: number; disputed: number; unknown: number }>(
       db,
       // A merged organization's facts count for the organization it was merged into.
       `SELECT COALESCE(organization.merged_into_organization_id, organization.id) AS id,
       MAX(CASE WHEN fact.verified_email_domain IS NOT NULL AND fact.source='verified_email' AND fact.started_at IS NOT NULL
         AND fact.ended_at IS NULL AND fact.blocked_at IS NULL AND person.active=1 THEN 1 ELSE 0 END) AS active,
       MAX(CASE WHEN fact.blocked_at IS NOT NULL THEN 1 ELSE 0 END) AS disputed,
-      MAX(CASE WHEN fact.verified_email_domain IS NULL THEN 1 ELSE 0 END) AS unknown,
-      EXISTS(SELECT 1 FROM members WHERE organization_id=COALESCE(organization.merged_into_organization_id, organization.id)) AS member
+      MAX(CASE WHEN fact.verified_email_domain IS NULL THEN 1 ELSE 0 END) AS unknown
       FROM identities fact JOIN organizations organization ON organization.id=fact.organization_id
       JOIN users person ON person.id=fact.user_id WHERE ${domainMatches}
       GROUP BY 1 ORDER BY 1 LIMIT 257`,
@@ -165,20 +132,15 @@ export async function loadDomainOwnershipFacts(db: DatabaseLike, domain: string)
       "Contact the PKI Consortium to choose your organization.",
     );
   return {
-    claimed: claims
-      .filter((claim) => claim.organization_id !== null)
-      .map((claim) => ({
-        organizationId: claim.organization_id!,
-        isMember: Boolean(claim.member),
-      })),
-    heldByApplication: claims.some((claim) => claim.application_id !== null),
+    claimed: claims.map((claim) => ({ organizationId: claim.organization_id })),
     derived: derived.map((fact) => ({
       organizationId: fact.id,
-      isMember: Boolean(fact.member),
       active: Boolean(fact.active),
       disputed: Boolean(fact.disputed),
       unknownProvenance: Boolean(fact.unknown),
     })),
+    // Without an address there is no parent or subdomain to choose from.
+    related: [],
   };
 }
 
@@ -213,12 +175,6 @@ export function verifiedDomainOrganizationId(
   resolution: DomainOrganizationResolution,
 ): string | null {
   requireWorkOrganizationDomain(domain);
-  if (resolution.kind === "held")
-    throw new AppError(
-      409,
-      "ORGANIZATION_DOMAIN_IN_USE",
-      "This organization domain requires review before affiliation",
-    );
   if (resolution.kind === "ambiguous")
     throw new AppError(
       409,
@@ -227,4 +183,39 @@ export function verifiedDomainOrganizationId(
     );
   if (resolution.kind === "none") return null;
   return resolution.organizationId;
+}
+
+/**
+ * Claims the domain a person's email challenge proved for the organization they
+ * confirmed. Several organizations can claim one domain; each claim stays until
+ * someone removes it, so an organization is still offered after its people leave.
+ */
+/** The audit reason for a domain an organization gains through a person's email challenge. */
+export const VERIFIED_EMAIL_DOMAIN_LINK_REASON = "Confirmed through a verified work email address";
+
+/** Claims the domain for the organization unless it already does; audited only when the claim is new. */
+export function prepareOrganizationDomainClaim(
+  db: DatabaseLike,
+  params: { domain: string; organizationId: string; actorUserId: string; now: string },
+): StatementLike[] {
+  return [
+    db
+      .prepare(
+        `INSERT INTO organization_domain_claims (id,domain,application_id,organization_id,created_at,updated_at)
+        SELECT ?,?,NULL,?,?,?
+         WHERE NOT EXISTS (SELECT 1 FROM organization_domain_claims WHERE domain=? AND organization_id=?)`,
+      )
+      .bind(uuid(), params.domain, params.organizationId, params.now, params.now, params.domain, params.organizationId),
+    prepareAuditLogWhen(db, {
+      actorType: "user",
+      actorId: params.actorUserId,
+      action: "organization_domain_claimed",
+      entityType: "organization",
+      entityId: params.organizationId,
+      details: { domain: { from: null, to: params.domain }, reason: VERIFIED_EMAIL_DOMAIN_LINK_REASON },
+      conditionSql: "SELECT 1 WHERE changes() = 1",
+      conditionBindings: [],
+      createdAt: params.now,
+    }),
+  ];
 }

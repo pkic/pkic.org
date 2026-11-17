@@ -292,10 +292,10 @@ describe("speaker mailbox proof", () => {
     expect(ready.consents).toEqual(consents);
   });
 
-  it("requires review for a differently named organization on a reserved domain", async () => {
+  it("lets a new organization be chosen on a domain with a pending membership application", async () => {
     await seedEventAndAdmin(env.DB);
     const link = await speakerLink("dana@gmail.com");
-    const pending = await seedMemberApplication({ applicantEmail: "pending@held-domain.example" });
+    await seedMemberApplication({ applicantEmail: "pending@held-domain.example" });
     const token = verifyToken(await start("dana@held-domain.example", link.token));
     const response = await request("/proof/verify", { token });
     expect(response.status).toBe(200);
@@ -304,7 +304,7 @@ describe("speaker mailbox proof", () => {
       status: "ready",
       email: "dana@held-domain.example",
       applicantKind: "organization",
-      affiliation: { reviewRequired: true, organization: null, organizations: [] },
+      affiliation: { organization: null, organizations: [] },
     });
     const selected = await request("/proof/verify", {
       token,
@@ -315,15 +315,12 @@ describe("speaker mailbox proof", () => {
         jobTitle: "Researcher",
       },
     });
-    expect(selected.status, await selected.clone().text()).toBe(409);
-    expect(await selected.json()).toMatchObject({ error: { code: "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED" } });
-    expect(
-      await queryAll(
-        env.DB,
-        "SELECT claim.application_id,claim.organization_id FROM organization_domain_claims claim WHERE domain=?",
-        ["held-domain.example"],
-      ),
-    ).toEqual([{ application_id: pending, organization_id: null }]);
+    expect(selected.status, await selected.clone().text()).toBe(200);
+    expect(eventProposalProofVerifyResponseSchema.parse(await selected.json())).toMatchObject({
+      status: "ready",
+      affiliation: { contextToken: expect.any(String) },
+    });
+    expect(await queryAll(env.DB, "SELECT id FROM organization_domain_claims")).toEqual([]);
     expect(
       await queryAll(env.DB, "SELECT id FROM user_emails WHERE normalized_email=?", ["dana@held-domain.example"]),
     ).toEqual([]);

@@ -5,7 +5,7 @@ import { TooltipPreview } from "./TooltipPreview";
 import { proposalSections } from "./sections-proposals";
 import { ServerSelectPreview } from "./ServerSelectPreview";
 import { RegistrationFieldsPreview } from "./RegistrationFieldsPreview";
-import { OrganizationReviewDomainPreview, VerifiedOrganizationPreview } from "./VerifiedOrganizationPreview";
+import { OrganizationBeforeDomainPreview, VerifiedOrganizationPreview } from "./VerifiedOrganizationPreview";
 import { ContentVersionNoticePreview } from "./ContentVersionNoticePreview";
 import { ModelNavigationPreview } from "./ModelNavigationPreview";
 import { contentContributionPreview } from "./ContentContributionPreview";
@@ -295,10 +295,10 @@ export const patternSections: PreviewSection[] = [
     render: () => <RegistrationFieldsPreview />,
   },
   {
-    id: "organization-review-domain",
+    id: "organization-before-domain",
     title: "Organization before domain selection",
-    note: "Review guidance waits until an email domain is selected.",
-    render: () => <OrganizationReviewDomainPreview />,
+    note: "The domain guidance waits until an email domain is selected.",
+    render: () => <OrganizationBeforeDomainPreview />,
   },
   {
     id: "verified-organization",

@@ -60,7 +60,7 @@ export function identityJobTitleSql(identityIdSql: string): string {
 export function identityOrganizationEmailDomainSql(identityIdSql: string): string {
   return `(SELECT COALESCE(domain_identity.verified_email_domain, (
       SELECT domain_claim.domain FROM organization_domain_claims domain_claim
-       WHERE domain_claim.organization_id = domain_identity.organization_id AND domain_claim.application_id IS NULL
+       WHERE domain_claim.organization_id = domain_identity.organization_id
          AND ${hostWithinDomainSql(
            "substr(COALESCE(domain_address.normalized_email, domain_person.normalized_email), instr(COALESCE(domain_address.normalized_email, domain_person.normalized_email), '@') + 1)",
            "domain_claim.domain",

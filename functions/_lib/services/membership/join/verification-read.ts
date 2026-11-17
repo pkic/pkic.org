@@ -42,12 +42,18 @@ export async function readJoinVerification(
 ) {
   const owner = provedMailboxUserIdSelection(email);
   const claim = organizationDomainClaimForEmailSelection(email);
+  // A chosen organization may claim any of the address's domains, such as the parent the person selected;
+  // without a choice, only the sole claimant of the most specific claimed domain.
   const organization = {
-    sql: `SELECT entry.organization_id FROM organization_domain_claims entry
-      WHERE entry.domain=(SELECT domain FROM (${claim.sql})) AND entry.organization_id IS NOT NULL
-        AND ((? IS NOT NULL AND entry.organization_id=?) OR (? IS NULL AND
-          (SELECT COUNT(*) FROM organization_domain_claims candidate WHERE candidate.domain=entry.domain)=1)) LIMIT 1`,
-    bindings: [...claim.bindings, organizationId ?? null, organizationId ?? null, organizationId ?? null],
+    sql: organizationId
+      ? `SELECT entry.organization_id FROM organization_domain_claims entry
+          WHERE entry.organization_id=? AND entry.domain IN (SELECT value FROM json_each(?))
+          ORDER BY length(entry.domain) DESC LIMIT 1`
+      : `SELECT entry.organization_id FROM organization_domain_claims entry
+          WHERE entry.domain=(SELECT domain FROM (${claim.sql})) AND entry.organization_id IS NOT NULL
+            AND (SELECT COUNT(*) FROM organization_domain_claims candidate WHERE candidate.domain=entry.domain)=1
+          LIMIT 1`,
+    bindings: organizationId ? [organizationId, JSON.stringify(organizationDomainCandidates(email))] : claim.bindings,
   };
   const creation = identityCreationSelections(owner, organization);
   const affiliation = prepareJoinAffiliationRead(db, email, selection);
@@ -75,12 +81,18 @@ export async function readJoinVerification(
     creation.latest,
     verifiedOwnedEmailSelection(owner, email),
     ownOpenApplicationSelection(email, owner),
-    organizationOpenApplicationSelection(claim),
+    organizationOpenApplicationSelection(organization),
     {
       sql: `SELECT organization_id FROM members WHERE status='active' AND organization_id IN (
         SELECT organization_id FROM organization_domain_claims WHERE domain IN (SELECT value FROM json_each(?))
       ) LIMIT 129`,
       bindings: [JSON.stringify(organizationDomainCandidates(email))],
+    },
+    // The domain the chosen organization claims, which the access guards check, not another organization's claim.
+    {
+      sql: `SELECT domain FROM organization_domain_claims
+        WHERE organization_id=? AND domain IN (SELECT value FROM json_each(?)) ORDER BY length(domain) DESC LIMIT 1`,
+      bindings: [organizationId ?? null, JSON.stringify(organizationDomainCandidates(email))],
     },
   ];
   const results = await db.batch([
@@ -92,7 +104,7 @@ export async function readJoinVerification(
     ownership: batchFirst<EmailOwnership>(results[0]),
     person: batchFirst<UserRecord>(results[1]),
     existingMembership: batchFirst<MemberEligibleUserRow>(results[2]),
-    claim: batchFirst<{ domain: string; application_id: string | null }>(results[3]),
+    claim: batchFirst<{ domain: string }>(results[3]),
     member: batchFirst<{ member_id: string; organization_id: string }>(results[4]),
     state: batchFirst<{ active: number; individual_conflict: number }>(results[5]),
     blocked: batchFirst<{ id: string }>(results[6]) !== null,
@@ -104,11 +116,12 @@ export async function readJoinVerification(
     },
     openApplication: {
       own: batchFirst<OwnOpenApplicationRow>(results[10]),
-      organizationHeld: batchFirst<{ id: string }>(results[11]) !== null,
+      organizationOpen: batchFirst<{ id: string }>(results[11]) !== null,
     },
     activeMemberOrganizationIds: new Set(
       batchRows<{ organization_id: string }>(results[12]).map((row) => row.organization_id),
     ),
+    selectedClaimDomain: batchFirst<{ domain: string }>(results[13])?.domain ?? null,
     affiliation: affiliation?.decode(results.slice(reads.length)) ?? null,
   };
 }

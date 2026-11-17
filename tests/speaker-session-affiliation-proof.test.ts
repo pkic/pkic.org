@@ -19,7 +19,7 @@ import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { insertOrganization, insertUser } from "./helpers/membership";
-import { prepareProposalProof } from "./helpers/proposal-proof";
+import { confirmedProposalAffiliation, prepareProposalProof } from "./helpers/proposal-proof";
 import { resetDb } from "./helpers/reset-db";
 
 beforeEach(resetDb);
@@ -129,6 +129,17 @@ async function state() {
   ];
   return Promise.all(tables.map((table) => queryAll(env.DB, `SELECT * FROM ${table} ORDER BY id`)));
 }
+/** The speaker confirms the organization the verified domain resolves to, as the speaker screen does. */
+function confirmed(f: Awaited<ReturnType<typeof fixture>>, jobTitle: string) {
+  return confirmedProposalAffiliation({
+    environment: env,
+    eventId: f.eventId,
+    email: "speaker@official.example",
+    userId: f.userId,
+    organizationId: f.organizationId,
+    jobTitle,
+  });
+}
 async function profile(f: Awaited<ReturnType<typeof fixture>>, continuationToken: string, db: DatabaseLike = env.DB) {
   return request(
     `/api/v1/proposals/${f.proposalId}/participation/profile`,
@@ -136,7 +147,7 @@ async function profile(f: Awaited<ReturnType<typeof fixture>>, continuationToken
       continuationToken,
       unaffiliatedAttestation: false,
       consents,
-      jobTitle: "Verified role",
+      ...(await confirmed(f, "Verified role")),
     }),
     f.session,
     db,
@@ -264,7 +275,7 @@ describe("authenticated speaker resource mailbox proof", () => {
         continuationToken: proof.continuationToken,
         unaffiliatedAttestation: false,
         consents,
-        jobTitle: "Invited role",
+        ...(await confirmed(f, "Invited role")),
       }),
       undefined,
       env.DB,
@@ -297,7 +308,7 @@ describe("authenticated speaker resource mailbox proof", () => {
         continuationToken: proof.continuationToken,
         unaffiliatedAttestation: false,
         consents,
-        jobTitle: "Invited role",
+        ...(await confirmed(f, "Invited role")),
       }),
       "expired-or-unknown-session",
       env.DB,
@@ -345,7 +356,7 @@ describe("authenticated speaker resource mailbox proof", () => {
           continuationToken: proof.continuationToken,
           unaffiliatedAttestation: false,
           consents,
-          jobTitle: "Invited role",
+          ...(await confirmed(f, "Invited role")),
         }),
       ),
     });

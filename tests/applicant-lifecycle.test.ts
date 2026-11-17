@@ -69,47 +69,49 @@ async function signIn(email: string) {
   return userAuthSessionResponseSchema.parse(await verified.json());
 }
 
-describe.each([
-  ["an organization", "applicant@lifecycle-org.test", "F", "Lifecycle Org"],
-  ["an individual", "applicant@lifecycle-person.test", "H6", undefined],
-] as const)("an applicant for %s", (_kind, email, category, organization) => {
-  let adminToken: string;
+// An organization applicant applies through the organization identity it already holds, so only an
+// individual follows an application before holding any identity.
+describe.each([["an individual", "applicant@lifecycle-person.test", "H6", undefined]] as const)(
+  "an applicant for %s",
+  (_kind, email, category, organization) => {
+    let adminToken: string;
 
-  beforeEach(async () => {
-    await resetDb();
-    await seedMembershipApplicationForm();
-    const { admin } = await seedEventAndAdmin(env.DB);
-    adminToken = await createAdminSession(env.DB, admin.id, "lifecycle-admin");
-  });
-
-  it("follows the application with no identity, then holds exactly the membership identity once approved", async () => {
-    const id = await apply(email, category, organization);
-
-    const pending = await signIn(email);
-    expect(pending.actingIdentities).toEqual([]);
-    expect(pending.member).toBeUndefined();
-
-    await env.DB.prepare("UPDATE member_applications SET stage = 'processing' WHERE id = ?").bind(id).run();
-    // Staff review is not under test: replace the pinned policy with a completed review.
-    await env.DB.batch([
-      env.DB.prepare("DELETE FROM membership_application_steps WHERE application_id = ?").bind(id),
-      env.DB.prepare("DELETE FROM membership_application_workflows WHERE application_id = ?").bind(id),
-    ]);
-    await pinReviewedStaffWorkflow(env.DB, id, category);
-    const approved = await callApi(apiEnv(), `/api/v1/members/applications/${id}/approve`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${adminToken}` },
+    beforeEach(async () => {
+      await resetDb();
+      await seedMembershipApplicationForm();
+      const { admin } = await seedEventAndAdmin(env.DB);
+      adminToken = await createAdminSession(env.DB, admin.id, "lifecycle-admin");
     });
-    expect(approved.status, await approved.clone().text()).toBe(200);
 
-    const member = await signIn(email);
-    // One identity, so the session acts as it without asking.
-    expect(member.actingIdentities).toHaveLength(1);
-    expect(member.actingIdentityId).toBe(member.actingIdentities[0].id);
-    expect(member.actingIdentities[0].membershipCategory).toBe(category);
-    expect(member.member).toBeDefined();
-    // The account they followed the application with is the account that became the member.
-    expect(member.identity.id).toBe(pending.identity.id);
-    expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [email])).toHaveLength(1);
-  });
-});
+    it("follows the application with no identity, then holds exactly the membership identity once approved", async () => {
+      const id = await apply(email, category, organization);
+
+      const pending = await signIn(email);
+      expect(pending.actingIdentities).toEqual([]);
+      expect(pending.member).toBeUndefined();
+
+      await env.DB.prepare("UPDATE member_applications SET stage = 'processing' WHERE id = ?").bind(id).run();
+      // Staff review is not under test: replace the pinned policy with a completed review.
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM membership_application_steps WHERE application_id = ?").bind(id),
+        env.DB.prepare("DELETE FROM membership_application_workflows WHERE application_id = ?").bind(id),
+      ]);
+      await pinReviewedStaffWorkflow(env.DB, id, category);
+      const approved = await callApi(apiEnv(), `/api/v1/members/applications/${id}/approve`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+      expect(approved.status, await approved.clone().text()).toBe(200);
+
+      const member = await signIn(email);
+      // One identity, so the session acts as it without asking.
+      expect(member.actingIdentities).toHaveLength(1);
+      expect(member.actingIdentityId).toBe(member.actingIdentities[0].id);
+      expect(member.actingIdentities[0].membershipCategory).toBe(category);
+      expect(member.member).toBeDefined();
+      // The account they followed the application with is the account that became the member.
+      expect(member.identity.id).toBe(pending.identity.id);
+      expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [email])).toHaveLength(1);
+    });
+  },
+);

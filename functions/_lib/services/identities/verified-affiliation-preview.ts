@@ -1,7 +1,6 @@
 import { resolveDomainOrganization } from "../../../../assets/shared/organization-domain";
 import { identityAffiliationPreviewResponseSchema } from "../../../../assets/shared/schemas/identity-affiliation";
-import { verifiedRepresentationDomainCandidates } from "./verified-email-domain";
-import { workEmailDomain } from "../../email-domains/classification";
+import { organizationDomainCandidates, workEmailDomain } from "../../email-domains/classification";
 import type { VerifiedAffiliationBasis } from "./verified-affiliation-basis";
 import { nowIso } from "../../utils/time";
 /** The single organization chooser projection for every verified-mailbox embedding. */
@@ -25,7 +24,6 @@ export function verifiedAffiliationPreview(
   );
   // The mapping supplies the chooser's default without excluding other proved organizations.
   const resolution = resolveDomainOrganization(basis.facts);
-  const pendingClaim = resolution.kind === "held" || basis.claims.some((claim) => claim.applicationId);
   const organizationId =
     resolution.kind === "organization"
       ? resolution.organizationId
@@ -41,11 +39,10 @@ export function verifiedAffiliationPreview(
   const organization = organizations.find((item) => item.id === organizationId) ?? null;
   const rootDomain = workEmailDomain(address.email);
   return identityAffiliationPreviewResponseSchema.parse({
-    reviewRequired: pendingClaim ? true : undefined,
     email: address.email,
     domain: basis.domain,
     organization: organization ? { id: organization.id, name: organization.name } : null,
-    domains: verifiedRepresentationDomainCandidates(address.email, basis.claims).map((domain) => {
+    domains: organizationDomainCandidates(address.email).map((domain) => {
       const claims = basis.claims.filter((item) => item.domain === domain);
       return {
         domain,
@@ -60,7 +57,14 @@ export function verifiedAffiliationPreview(
       const identity = basis.identities.find(
         (item) => item.organization_id === id && item.started_at && item.ended_at === null && item.blocked_at === null,
       );
-      return { id, name, identityId: identity?.id ?? null, jobTitle: identity?.job_title ?? null };
+      const related = basis.facts.related.find((item) => item.organizationId === id);
+      return {
+        id,
+        name,
+        identityId: identity?.id ?? null,
+        jobTitle: identity?.job_title ?? null,
+        domain: related?.domain ?? null,
+      };
     }),
     identityId: organizationId
       ? basis.identities.find(
