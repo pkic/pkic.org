@@ -26,6 +26,7 @@ import { studioOnScreenSections } from "./sections-studio-on-screen";
 import { studioTimerSections } from "./sections-studio-timers";
 import { eventScreenBrowserSections } from "./sections-event-screens-browser";
 import { stageDisplaySections } from "./sections-stage-display";
+import { liveReactionsSections } from "./sections-live-reactions";
 
 async function main(): Promise<void> {
   const mount = document.getElementById("pk-preview");
@@ -65,6 +66,7 @@ async function main(): Promise<void> {
     ...studioTimerSections,
     ...eventScreenBrowserSections,
     ...stageDisplaySections,
+    ...liveReactionsSections,
   ];
   // `?only=<id>` renders one section alone, for a tight screenshot of one control.
   const only = new URLSearchParams(window.location.search).get("only");

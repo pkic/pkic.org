@@ -174,9 +174,9 @@ describe("continuous scanner presentation", () => {
       />,
     );
     expect(html).toContain("Scanner operator controls");
-    expect(html).toContain("Using saved badge data");
+    expect(html).toContain("Badge data is more than a day old");
     expect(html).toContain("Last badge refresh");
-    expect(html).toContain("Badge data valid until");
+    expect(html).toContain("Offline access ends");
     expect(html).toContain(formatDateTime(snapshot.serverNow));
     expect(html).toContain(formatDateTime(snapshot.expiresAt));
     expect(html).not.toContain("Last sync");
@@ -400,7 +400,7 @@ it("shows compact setup feedback without a fullscreen mark while retaining actua
   expect(html).toContain("pk-event-scanner--compact");
   expect(html).not.toContain("pk-event-scanner__mark");
   expect(html).toContain("Unable to save scan. Retry.");
-  expect(html).toContain("2 scans awaiting upload");
+  expect(html).not.toContain("2 scans awaiting upload");
 });
 
 it.each([

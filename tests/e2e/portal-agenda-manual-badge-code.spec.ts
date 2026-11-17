@@ -428,7 +428,9 @@ test("the protected printed short code works through manual offline capture and 
     const queuedPrivacy = await expectNoStoredSponsorContacts(page, fixture.forbidden, await readConsole());
     await page.reload();
     await expect(page.getByRole("heading", { name: "Start scanning", exact: true })).toBeVisible();
-    await expect(page.getByText("Offline scanning", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("status", { name: "Scanner status", exact: true }).getByText("Offline", { exact: true }),
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "Sync now", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Export sponsor leads", exact: true })).toHaveCount(0);
     expect((await scannerStorage(page)).pending[0]!.scan).toEqual(queued);
@@ -508,7 +510,9 @@ test("the protected printed short code works through manual offline capture and 
     await page.context().setOffline(false);
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
     expect((await reauthenticated).status()).toBe(200);
-    await expect(page.getByText("Offline scanning", { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("status", { name: "Scanner status", exact: true }).getByText("Online", { exact: true }),
+    ).toBeVisible();
     const receipts = await Promise.all(uploads);
     for (const [index, original] of originals.entries())
       expect(receipts[index]).toMatchObject({

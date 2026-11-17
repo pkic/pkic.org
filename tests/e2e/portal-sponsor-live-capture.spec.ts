@@ -131,7 +131,11 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
         ).not.toBeChecked();
         await manual.getByRole("button", { name: "Cancel", exact: true }).click();
         await expect(manual).not.toBeVisible();
-        await expect(page.getByText(`${expectedCount} scans awaiting upload`, { exact: true })).toBeVisible();
+        await expect(
+          page
+            .getByRole("status", { name: "Scanner status", exact: true })
+            .getByText(new RegExp(`^${expectedCount} awaiting upload(?: · syncing…)?$`)),
+        ).toBeVisible();
         await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(expectedCount);
       }
       offlineRecords = (await scannerStorage(page)).pending
@@ -198,7 +202,9 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
       expect(replay.status()).toBe(200);
       expect(eventScanResponseSchema.parse(await replay.json())).toEqual(archived!.receipt);
     }
-    await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("status", { name: "Scanner status", exact: true }).getByText("All scans synced", { exact: true }),
+    ).toBeVisible();
     const attendanceAfterResponse = await staff.request.get(attendancePath);
     expect(attendanceAfterResponse.status()).toBe(200);
     expect(attendanceSummarySchema.parse(await attendanceAfterResponse.json()).observed).toEqual(attendanceBefore);

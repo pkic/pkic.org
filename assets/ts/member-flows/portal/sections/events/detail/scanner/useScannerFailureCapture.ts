@@ -45,6 +45,18 @@ export function useScannerFailureCapture(
   };
 }
 
+/** A caller may release capture state only after storage confirms the scan was not retained. */
+export class ScannerCapturePersistenceError extends Error {
+  constructor(
+    message: string,
+    readonly retryAllowed: boolean,
+    cause: unknown,
+  ) {
+    super(message, { cause });
+    this.name = "ScannerCapturePersistenceError";
+  }
+}
+
 /** A failed save does not prove that a normal operation is absent from durable storage. */
 export async function persistScannerCapture<T>(
   scan: EventScanRequest,
@@ -57,18 +69,20 @@ export async function persistScannerCapture<T>(
   } catch (error) {
     const retained = await scannerOperationRetained(scan.operationId, scan.operatorUserId, eventId).catch(() => null);
     if (retained !== false)
-      throw new Error(
+      throw new ScannerCapturePersistenceError(
         retained
           ? "This scan is already retained. Check Recent scans before retrying; no duplicate failure audit was added."
           : "The scan save could not be confirmed. The failure audit was not saved. Keep the scanned value and check recovery before retrying.",
-        { cause: error },
+        false,
+        error,
       );
     const saved = await auditFailure(scan, "storage_unavailable");
-    throw new Error(
+    throw new ScannerCapturePersistenceError(
       saved
         ? "Scan was not saved. The failure audit is saved for upload; retry the scan."
         : "The scan and its audit were not saved. Keep the scanned value and retry when device storage is available.",
-      { cause: error },
+      true,
+      error,
     );
   }
 }

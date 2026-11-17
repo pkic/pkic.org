@@ -22,6 +22,7 @@ export function ScannerSetup({
   allowedActions = ["attendance", "checkout", "check"],
   onAction,
   onStart,
+  onCollection,
   ...location
 }: ComponentProps<typeof ScannerLocationSelect> & {
   operatorUserId: string;
@@ -33,6 +34,7 @@ export function ScannerSetup({
   allowedActions?: readonly EventScanRequest["action"][];
   onAction?: (action: EventScanRequest["action"]) => void;
   onStart?: () => void;
+  onCollection?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useHashQueryParam("scannerSetup", "now", ["now", "next", "browse"]);
@@ -55,6 +57,7 @@ export function ScannerSetup({
         allowedActions={allowedActions}
         printHref={printHref}
         disabled={locked || !ready}
+        onCollection={onCollection}
         onVenue={(action) => {
           location.onTarget(null);
           onAction?.(action);

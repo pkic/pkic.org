@@ -2,6 +2,7 @@ import { createGenericBadgeTemplate } from "../../assets/shared/badge-generic-te
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { ScannerTaskNavigation } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerTaskNavigation";
 import { BadgeLabelDesk } from "../../assets/ts/member-flows/portal/sections/events/detail/badges/BadgeLabelDesk";
 import { clearAuth, savePortalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
@@ -120,6 +121,37 @@ afterEach(async () => {
 });
 
 describe("badge printing desk", () => {
+  it("prints a transferred badge once without starting the camera or issuing a new badge", async () => {
+    const credential = "ABCDEFGHJKLMNPQR";
+    const consumePrintBadge = vi.fn().mockReturnValueOnce(credential).mockReturnValue(null);
+    const consumed = vi.fn();
+    const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json(label));
+    vi.stubGlobal("fetch", fetch);
+    const navigation = {
+      launch: "print" as const,
+      tasks: [{ key: "print" as const, label: "Print", href: "#/print" }],
+      onLaunch: vi.fn(),
+      onConsumed: consumed,
+      consumePrintBadge,
+    };
+    const desk = () => (
+      <ScannerTaskNavigation.Provider value={navigation}>
+        <BadgeLabelDesk slug="workshop" />
+      </ScannerTaskNavigation.Provider>
+    );
+    await act(async () => render(desk(), host));
+    await settle(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(consumePrintBadge).toHaveBeenCalledOnce();
+    expect(consumed).toHaveBeenCalledOnce();
+    expect(capture.starts).toBe(0);
+    expect(String(fetch.mock.calls[0]?.[0])).toContain("/badges/labels");
+    const request = badgeLabelRequestSchema.parse(JSON.parse(fetch.mock.calls[0]?.[1]?.body as string));
+    expect(request).toMatchObject({ source: "scan", credential });
+    await act(async () => render(desk(), host));
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(consumePrintBadge).toHaveBeenCalledOnce();
+    expect(window.location.hash).not.toContain(credential);
+  });
   it("pauses QR capture during the tour and resumes the same camera afterward", async () => {
     const fetch = vi.fn(async () => json(label));
     vi.stubGlobal("fetch", fetch);

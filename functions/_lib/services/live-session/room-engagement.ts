@@ -4,6 +4,7 @@ import {
   takeLiveAllowance,
   type LiveReactionId,
 } from "../../../../assets/shared/live-session-policy";
+import { LIVE_REACTION_CROWD_POLICY } from "../../../../assets/shared/live-reaction-crowd";
 import { nowIso } from "../../utils/time";
 import type { LiveRoomBroadcast } from "./room-broadcast";
 import type { LiveRefusal } from "./room-controls";
@@ -11,13 +12,19 @@ import type { LiveRoomPolls } from "./room-polls";
 import type { LiveRoomStore } from "./room-store";
 
 type Handled = LiveRefusal | void;
+type ReactionCounts = Partial<Record<LiveReactionId, number>>;
 const TOO_FAST = { code: "LIVE_ROOM_RATE_LIMITED", message: "Please wait a moment before trying again." };
 
 /** Per-room reaction limits and batched reaction/poll broadcasts. */
 export class LiveRoomEngagement {
   /** Per-person sliding windows; a room woken from hibernation starts them afresh. */
   private readonly allowances = new Map<string, number[]>();
-  private burst: Partial<Record<LiveReactionId, number>> = {};
+  /** Per reaction, when each person in the people window last reacted. */
+  private readonly reactors = new Map<LiveReactionId, Map<string, number>>();
+  /** People whose first reaction in the window arrived since the last burst. */
+  private burst: ReactionCounts = {};
+  /** Reactions that arrived since the last burst, repeats included. */
+  private readonly burstReactions = new Set<LiveReactionId>();
   private burstTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly talliesDue = new Set<string>();
   private tallyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -32,6 +39,7 @@ export class LiveRoomEngagement {
 
   clear(): void {
     this.allowances.clear();
+    this.reactors.clear();
     this.talliesDue.clear();
   }
 
@@ -61,21 +69,41 @@ export class LiveRoomEngagement {
     for (const pollId of due) await this.broadcast.poll(pollId);
   }
 
+  /** A person's first reaction in the people window counts and floats; repeats only keep them in the window. */
   react(userId: string, reaction: LiveReactionId): Handled {
     if (!this.allowedReaction(userId)) return TOO_FAST;
-    this.store.addReaction(reaction);
-    this.burst[reaction] = (this.burst[reaction] ?? 0) + 1;
+    const now = Date.now();
+    const people = this.peopleReacting(reaction, now);
+    const joined = !people.has(userId);
+    people.set(userId, now);
+    this.burstReactions.add(reaction);
+    if (joined) {
+      this.store.addReaction(reaction);
+      this.burst[reaction] = (this.burst[reaction] ?? 0) + 1;
+    }
     this.burstTimer ??= setTimeout(
       () => this.ctx.waitUntil(this.flushBurst()),
       LIVE_ROOM_POLICY.reactionBurstMilliseconds,
     );
-    void this.changed();
+    if (joined) void this.changed();
+  }
+
+  /** The people in one reaction's window, with everyone whose latest reaction left it dropped. */
+  private peopleReacting(reaction: LiveReactionId, now: number): Map<string, number> {
+    const people = this.reactors.get(reaction) ?? new Map<string, number>();
+    this.reactors.set(reaction, people);
+    const since = now - LIVE_REACTION_CROWD_POLICY.peopleWindowSeconds * 1000;
+    for (const [userId, at] of people) if (at <= since) people.delete(userId);
+    return people;
   }
 
   private async flushBurst(): Promise<void> {
     const counts = this.burst;
+    const people: ReactionCounts = {};
+    for (const reaction of this.burstReactions) people[reaction] = this.peopleReacting(reaction, Date.now()).size;
     this.burst = {};
+    this.burstReactions.clear();
     this.burstTimer = null;
-    if (Object.keys(counts).length) await this.broadcast.all({ type: "reaction.burst", counts, at: nowIso() });
+    if (Object.keys(people).length) await this.broadcast.all({ type: "reaction.burst", counts, people, at: nowIso() });
   }
 }

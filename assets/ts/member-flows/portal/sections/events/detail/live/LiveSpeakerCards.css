@@ -109,6 +109,21 @@
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-xs);
   }
+  /* The identity truncates; the count of further identities after it always shows. */
+  .pk-live-person__text > .pk-live-person__affiliation {
+    display: flex;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+  }
+  .pk-live-person__affiliation > :first-child {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pk-live-person__more {
+    flex: none;
+    font-weight: 600;
+  }
   .pk-live-person__text > .pk-live-person__role {
     color: var(--pk-ink);
     font-weight: 600;

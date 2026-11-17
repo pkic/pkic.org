@@ -4,6 +4,7 @@ import { liveSpeakerCandidatesResponseSchema } from "../assets/shared/schemas/li
 import { callApi } from "./helpers/app";
 import { insertOrganization } from "./helpers/membership";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
+import { affiliationFixture, individualAppearanceFixture } from "./helpers/agenda-appearances";
 
 const f = createLiveRoomFixture();
 
@@ -206,6 +207,45 @@ describe("a speaker's capacity on the lower third", () => {
     const second = await f.connect({ person: "secondOperator" });
     expect((await second.next("room.snapshot")).stage.lowerThird?.identity?.title).toBe("Chair");
     await operator.next("stage.changed", (m) => m.stage.lowerThird?.identity?.title === "Chair");
+  });
+
+  it("credits every identity an approved appearance names, primary first, for the lower third to show in turn", async () => {
+    const at = new Date().toISOString();
+    const identities: string[] = [];
+    for (const [name, title] of [
+      ["Northwind Trust", "Chair"],
+      ["Lattice Labs", "Research Lead"],
+    ] as const) {
+      const id = crypto.randomUUID();
+      await env.DB.prepare(
+        `INSERT INTO identities (id, user_id, organization_id, job_title, source, is_default, invited_at, started_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'staff', 0, ?, ?, ?, ?)`,
+      )
+        .bind(id, f.users.speaker, await insertOrganization(env.DB, name), title, at, at, at, at)
+        .run();
+      identities.push(id);
+    }
+    const row = await env.DB.prepare(
+      "SELECT payload_json FROM event_agenda_published_occurrences WHERE event_id=? AND occurrence_id=?",
+    )
+      .bind(f.eventId, f.occurrenceId)
+      .first<{ payload_json: string }>();
+    const occurrence = JSON.parse(row!.payload_json);
+    const appearance = {
+      ...individualAppearanceFixture({ userId: f.users.speaker, displayName: "Sam Speaker", approvedAt: at }),
+      affiliations: identities.map((identityId) => affiliationFixture({ identityId })),
+    };
+    occurrence.history = { ...occurrence.history, appearances: [appearance] };
+    await env.DB.prepare(
+      "UPDATE event_agenda_published_occurrences SET payload_json=? WHERE event_id=? AND occurrence_id=?",
+    )
+      .bind(JSON.stringify(occurrence), f.eventId, f.occurrenceId)
+      .run();
+    const operator = await f.connect({ person: "operator" });
+    expect((await operator.next("room.snapshot")).session.credits[0]).toMatchObject({
+      identity: { title: "Chair", organization: "Northwind Trust" },
+      additionalIdentities: [{ title: "Research Lead", organization: "Lattice Labs" }],
+    });
   });
 });
 

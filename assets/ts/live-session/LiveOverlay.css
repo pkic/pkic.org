@@ -262,17 +262,37 @@
     inline-size: 65%;
     inset-block-end: 64px;
   }
+  /*
+   * The emblem rolls in from well left of the drawing; only the frame clips it,
+   * so it enters from the frame's edge rather than appearing out of its box.
+   */
   .pk-live-overlay__lower-third-bars {
     display: block;
     inline-size: 100%;
     block-size: auto;
+    overflow: visible;
   }
   .pk-live-overlay__name-background {
     fill: var(--pk-pqc-paper);
   }
-  .pk-live-overlay__title-background {
-    fill: var(--pk-pqc-paper);
-    opacity: 0.8;
+  /*
+   * The title bar is the conference field, as on the event app's hero: the
+   * field gradient under its soft light, with the fine dot grid fading in
+   * toward the right. Its units are the drawing's, half a pixel each on a
+   * 1080p frame, so the grid's pitch is doubled to the kit's 14px.
+   */
+  .pk-live-overlay__title-field {
+    position: relative;
+    inline-size: 100%;
+    block-size: 100%;
+    background: var(--pk-pqc-light), var(--pk-pqc-field);
+  }
+  .pk-live-overlay__title-field::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 0 40%;
+    background: var(--pk-pqc-dots-fine) 0 0 / 28px 28px repeat;
+    mask-image: linear-gradient(90deg, transparent, black 60%);
   }
   /*
    * Name and role are SVG text scaled down with the whole frame; without
@@ -294,7 +314,7 @@
     font-family: var(--pk-font);
   }
   /*
-   * The title line sits in the grey bar at the brand drawing's place (x 625,
+   * The title line sits in the title bar at the brand drawing's place (x 625,
    * y 250, 1800 x 150 of the 2500 x 417 drawing): set off to the right of the
    * name like its bar, left-aligned, its type at the drawing's scale.
    */
@@ -309,7 +329,7 @@
     block-size: calc(150 / 417 * 100%);
     text-align: start;
     overflow: hidden;
-    color: var(--pk-pqc-ink-muted);
+    color: var(--pk-pqc-on-field);
     font-size: calc(var(--pk-text-xl) * 3 * 1248 / 2500);
     font-weight: 500;
     line-height: 1.25;
@@ -354,13 +374,14 @@
     font-family: var(--pk-font-mono);
     font-weight: 700;
   }
-  .pk-live-overlay__countdown-green {
+  /* The conference stripe's stops, for SVG gradients: the countdown ring and the lower third's underline. */
+  .pk-live-overlay__stripe-green {
     stop-color: var(--pk-pqc-green);
   }
-  .pk-live-overlay__countdown-blue {
+  .pk-live-overlay__stripe-blue {
     stop-color: var(--pk-pqc-blue);
   }
-  .pk-live-overlay__countdown-orange {
+  .pk-live-overlay__stripe-orange {
     stop-color: var(--pk-pqc-orange);
   }
   .pk-live-overlay__countdown-ring {
@@ -455,41 +476,82 @@
     font-family: var(--pk-font);
   }
 
-  /* Reactions: each burst floats up the right edge in six lanes. */
+  /*
+   * Reactions: one quiet float per person, in a narrow lane at the edge. The
+   * lane grows fainter as it fills (data-load steps from 0 to 4),
+   * so a crowd never covers the picture; the optional count carries its size.
+   */
   .pk-live-overlay__reactions {
     position: absolute;
     inset-block: 0;
     inset-inline-end: 64px;
-    inline-size: 420px;
+    inline-size: 224px;
+  }
+  .pk-live-overlay__reaction-lane {
+    position: absolute;
+    inset: 0;
+    opacity: 0.55;
+    filter: saturate(0.6);
+    transition: opacity var(--pk-dur-slow) var(--pk-ease);
+  }
+  .pk-live-overlay__reaction-lane[data-load="2"] {
+    opacity: 0.5;
+  }
+  .pk-live-overlay__reaction-lane[data-load="3"] {
+    opacity: 0.42;
+  }
+  .pk-live-overlay__reaction-lane[data-load="4"] {
+    opacity: 0.35;
   }
   .pk-live-overlay__reaction {
     position: absolute;
-    inset-block-end: -96px;
-    font-size: calc(var(--pk-text-3xl) * var(--pk-live-overlay-scale));
+    inset-block-end: 22%;
+    font-size: calc(var(--pk-text-xl) * var(--pk-live-overlay-scale));
+    line-height: 1;
     animation: pk-live-overlay-float calc(var(--pk-dur-shimmer) * 2) var(--pk-ease) forwards;
   }
   .pk-live-overlay__reaction--lane-0 {
-    inset-inline-start: 0;
+    inset-inline-start: 50%;
   }
   .pk-live-overlay__reaction--lane-1 {
-    inset-inline-start: 64px;
-    animation-delay: 120ms;
+    inset-inline-start: 0;
+    animation-delay: 200ms;
   }
   .pk-live-overlay__reaction--lane-2 {
-    inset-inline-start: 128px;
-    animation-delay: 240ms;
+    inset-inline-start: 75%;
+    animation-delay: 400ms;
   }
   .pk-live-overlay__reaction--lane-3 {
-    inset-inline-start: 192px;
-    animation-delay: 60ms;
+    inset-inline-start: 25%;
+    animation-delay: 100ms;
   }
-  .pk-live-overlay__reaction--lane-4 {
-    inset-inline-start: 256px;
-    animation-delay: 180ms;
+  .pk-live-overlay__reaction-count {
+    position: absolute;
+    inset-block-end: 12%;
+    inset-inline-end: 0;
+    display: flex;
+    gap: calc(var(--pk-3) * var(--pk-live-overlay-scale));
+    padding-block: calc(var(--pk-1) * var(--pk-live-overlay-scale));
+    padding-inline: calc(var(--pk-3) * var(--pk-live-overlay-scale));
+    border-radius: var(--pk-radius-pill);
+    background: color-mix(in srgb, var(--pk-pqc-ink) 45%, transparent);
+    color: var(--pk-pqc-on-field);
+    font-size: calc(var(--pk-text-md) * var(--pk-live-overlay-scale));
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    animation: pk-live-overlay-count-in var(--pk-dur-slow) var(--pk-ease);
   }
-  .pk-live-overlay__reaction--lane-5 {
-    inset-inline-start: 320px;
-    animation-delay: 300ms;
+  .pk-live-overlay__reaction-total {
+    transition: opacity var(--pk-dur-slow) var(--pk-ease);
+  }
+  .pk-live-overlay__reaction-total[data-fading] {
+    opacity: 0;
+  }
+  @keyframes pk-live-overlay-count-in {
+    from {
+      opacity: 0;
+    }
   }
   @keyframes pk-live-overlay-rise {
     from {

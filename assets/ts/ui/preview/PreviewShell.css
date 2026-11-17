@@ -245,6 +245,11 @@
     max-width: 24rem;
   }
 
+  .pk-preview__intrinsic {
+    display: inline-block;
+    max-width: 100%;
+  }
+
   .pk-preview__grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));

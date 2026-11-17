@@ -16,14 +16,14 @@ describe("scanner snapshot status metadata", () => {
       />,
     );
     expect(html).toContain("could not be saved");
-    expect(html).not.toContain("Using saved badge data");
+    expect(html).not.toContain("Badge data is more than a day old");
   });
   it("shows the two server snapshot times through shared date formatting without claiming upload synchronization", () => {
     const html = render(
       <ScannerPreparationStatus action="attendance" preparing={false} ready error="" snapshot={snapshot} />,
     );
     expect(html).toContain("<dt>Last badge refresh</dt>");
-    expect(html).toContain("<dt>Badge data valid until</dt>");
+    expect(html).toContain("<dt>Offline access ends</dt>");
     expect(html).toContain(formatDateTime(snapshot.serverNow));
     expect(html).toContain(formatDateTime(snapshot.expiresAt));
     expect(html).not.toContain("Last upload");
@@ -61,12 +61,24 @@ describe("scanner snapshot status metadata", () => {
         snapshot={snapshot}
       />,
     );
-    expect(html).toContain("Saved badge data has expired");
+    expect(html).toContain("Saved badge data is more than a day old");
+    expect(html).toContain("Scans still save on this device");
+    expect(html).not.toContain("has expired");
     expect(html).not.toContain("original expiry still applies");
     expect(html).toContain("Refresh unavailable");
     expect(html).toContain('role="alert"');
     expect(html).toContain(formatDateTime(snapshot.serverNow));
     expect(html).toContain(formatDateTime(snapshot.expiresAt));
+  });
+  it("keeps fresh cached data ready and shows refresh details without a warning", () => {
+    for (const error of ["Refresh unavailable", "Badge data does not match the scanner room"]) {
+      const html = render(
+        <ScannerPreparationStatus action="attendance" preparing={false} ready error={error} snapshot={snapshot} />,
+      );
+      expect(html).toContain("Badge data ready");
+      expect(html).toContain(error);
+      expect(html).not.toContain('role="alert"');
+    }
   });
   it("reports bounded-page progress and successful completion without inventing a percentage", () => {
     const progress = render(
@@ -83,6 +95,6 @@ describe("scanner snapshot status metadata", () => {
     const html = render(<ScannerPreparationStatus action="check" preparing={false} ready={false} error="" />);
     expect(html).toContain("Prepare badge data before scanning");
     expect(html).not.toContain("Last badge refresh");
-    expect(html).not.toContain("Badge data valid until");
+    expect(html).not.toContain("Offline access ends");
   });
 });

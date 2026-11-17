@@ -23,7 +23,9 @@ import "./Content.css";
 import "./DescriptionList.css";
 
 export interface DescriptionListItem {
-  /** The label. Unique within one list — it is the row's key. */
+  /** Stable row identity. Required when labels repeat; defaults to the term. */
+  key?: string;
+  /** The label. */
   term: string;
   /** Anything renderable. Absent, empty or false renders as an em dash. */
   value?: ComponentChildren;
@@ -66,10 +68,21 @@ export function DescriptionList({
     .filter(Boolean)
     .join(" ");
 
+  if (import.meta.env.DEV) {
+    const keys = new Set<string>();
+    for (const item of items) {
+      const key = item.key ?? item.term;
+      if (keys.has(key)) {
+        console.warn(`DescriptionList: duplicate row key "${key}". Supply a unique, stable key for each item.`);
+      }
+      keys.add(key);
+    }
+  }
+
   return (
     <dl class={classes}>
       {items.map((item) => (
-        <Fragment key={item.term}>
+        <Fragment key={item.key ?? item.term}>
           <dt>{item.term}</dt>
           <dd>{isAbsent(item.value) ? <span class="pk-datalist__empty">—</span> : item.value}</dd>
         </Fragment>

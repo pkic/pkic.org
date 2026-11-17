@@ -2,6 +2,8 @@ import { badgeCode, mocks, host, mount, submit } from "./event-scanner-fixture";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { describe, expect, it, vi } from "vitest";
+import { EventScanner } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/EventScanner";
+import { ScannerTaskNavigation } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerTaskNavigation";
 import {
   eventScanCaptureIntentSchema,
   eventScanRequestSchema,
@@ -9,6 +11,102 @@ import {
   type EventScanRequest,
 } from "../../assets/shared/schemas/event-participation-scanning";
 describe("scanner foreground receipt and drain lifecycle", () => {
+  it.each(["manual", "hardware"] as const)("retries an unsaved collection scan through %s input", async (input) => {
+    const previousHash = window.location.hash;
+    try {
+      window.location.hash = "#/events/synthetic-event/scanner?scannerPurpose=collection";
+      await mount(true, ["attendance"]);
+      mocks.persist.mockRejectedValueOnce(new Error("Storage temporarily unavailable"));
+      mocks.persist.mockImplementation(async (scan) => ({
+        scan: eventScanCaptureIntentSchema.parse(scan),
+        local: { outcome: "eligible", reason: "eligible", message: "Saved on this device" },
+      }));
+      if (input === "manual") {
+        await submit();
+        expect(host.querySelector<HTMLInputElement>('input[name="badgeId"]')?.value).toBe(badgeCode);
+        expect(host.textContent).toContain("retry the scan");
+        await submit();
+      } else {
+        const start = Array.from(host.querySelectorAll("button")).find(
+          (button) => button.textContent?.trim() === "Start scanning",
+        )!;
+        await act(async () => start.click());
+        await act(async () => mocks.hardwareScan!(badgeCode));
+        await vi.waitFor(() => expect(host.textContent).toContain("retry the scan"));
+        await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Scan next now"]')!.click());
+        await act(async () => mocks.hardwareScan!(badgeCode));
+      }
+      await vi.waitFor(() => expect(mocks.persist).toHaveBeenCalledTimes(2));
+      expect(
+        Array.from(host.querySelectorAll("button")).some((button) => button.textContent?.trim() === "Next attendee"),
+      ).toBe(true);
+    } finally {
+      window.location.hash = previousHash;
+    }
+  });
+  it("keeps task switching and current-badge printing available after collection saves", async () => {
+    const previousHash = window.location.hash;
+    try {
+      window.location.hash = "#/events/synthetic-event/scanner?scannerPurpose=collection";
+      await mount(true, ["attendance", "checkout"]);
+      const onLaunch = vi.fn(),
+        onPrintBadge = vi.fn();
+      await act(() =>
+        render(
+          <ScannerTaskNavigation.Provider
+            value={{
+              launch: null,
+              onLaunch,
+              onPrintBadge,
+              onConsumed: vi.fn(),
+              tasks: [
+                { key: "entry", label: "Entry", href: "#/scanner" },
+                { key: "exit", label: "Exit", href: "#/scanner?scanAction=checkout" },
+                { key: "print", label: "Print", href: "#/scanner/print" },
+              ],
+            }}
+          >
+            <EventScanner
+              slug="synthetic-event"
+              operatorUserId="11111111-1111-4111-8111-111111111111"
+              allowedActions={["attendance", "checkout"]}
+              printHref="#/scanner/print"
+            />
+          </ScannerTaskNavigation.Provider>,
+          host,
+        ),
+      );
+      const start = () =>
+        Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Start scanning")!;
+      await vi.waitFor(() => expect(start().disabled).toBe(false));
+      await act(async () => {
+        start().click();
+      });
+      expect(host.querySelector(".pk-fast-scanner")).not.toBeNull();
+      await act(async () => {
+        mocks.hardwareScan!(badgeCode);
+      });
+      await vi.waitFor(() => {
+        const print = Array.from(host.querySelectorAll("button")).find(
+          (button) => button.textContent?.trim() === "Print this badge",
+        );
+        expect(print, host.textContent ?? "").toBeDefined();
+        expect(print!.disabled).toBe(false);
+      });
+      const exit = host.querySelector<HTMLButtonElement>('[aria-label="Switch to Exit"]')!;
+      await vi.waitFor(() => expect(exit.disabled).toBe(false));
+      await act(() => exit.click());
+      expect(onLaunch).toHaveBeenCalledWith("exit", "entry");
+      await act(() =>
+        Array.from(host.querySelectorAll("button"))
+          .find((button) => button.textContent?.trim() === "Print this badge")!
+          .click(),
+      );
+      expect(onPrintBadge).toHaveBeenCalledWith(badgeCode);
+    } finally {
+      window.location.hash = previousHash;
+    }
+  });
   it("retains the last result after scanning resumes and updates it from a late server receipt", async () => {
     const worker = new EventTarget();
     vi.stubGlobal("navigator", { serviceWorker: worker, onLine: false });

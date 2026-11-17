@@ -1,3 +1,4 @@
+import { ScannerCollectionAttendee } from "./ScannerCollectionAttendee";
 import { ScannerHelpTour } from "./ScannerHelpTour";
 import { IconScannerHelp, IconScannerSound } from "../../../../../../components/icons/scanner-controls";
 import type { ScannerSound } from "./scanner-audio-feedback";
@@ -66,7 +67,9 @@ export function FastScannerView({
   onSound,
   onTourSound,
   helpOnStart = false,
+  collection,
 }: {
+  collection?: ComponentProps<typeof ScannerCollectionAttendee> & { waiting: boolean; onNext: () => void };
   helpOnStart?: boolean;
   onTourSound?: (sound: ScannerSound) => void;
   presentation?: "embedded" | "fullscreen";
@@ -126,6 +129,8 @@ export function FastScannerView({
     purpose === "print" ? "print" : mode === "checkout" ? "exit" : "entry",
     visualRole,
   );
+  const taskSwitchBlocked =
+    taskSwitchDisabled || cooldown?.saving || (!collection?.waiting && Boolean(cooldown?.remainingMs));
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const trigger = useRef<HTMLButtonElement>(null),
     drawer = useRef<HTMLElement>(null);
@@ -152,20 +157,22 @@ export function FastScannerView({
   const visibleStatus = helpOpen ? tourDemo : feedback.visible;
   const detail = visibleStatus?.detail || (helpOpen ? "" : message);
   const outcome = visibleStatus?.tone ?? (helpOpen ? "unverified" : scanFeedbackOutcome(result, mode));
-  const readyLabel = {
-    entry:
-      mode === "check"
-        ? "Ready to check registration"
-        : mode === "admission"
-          ? "Ready for admission"
-          : mode === "exception"
-            ? "Ready to review admission"
-            : "Ready for entry",
-    exit: "Ready for exit",
-    session: "Ready for session check-in",
-    lead: "Ready to capture a lead",
-    print: "Ready to scan and print",
-  }[visualRole];
+  const readyLabel = collection
+    ? "Ready for badge collection"
+    : {
+        entry:
+          mode === "check"
+            ? "Ready to check registration"
+            : mode === "admission"
+              ? "Ready for admission"
+              : mode === "exception"
+                ? "Ready to review admission"
+                : "Ready for entry",
+        exit: "Ready for exit",
+        session: "Ready for session check-in",
+        lead: "Ready to capture a lead",
+        print: "Ready to scan and print",
+      }[visualRole];
   const visibleUploadStatus =
     pending > 0 && uploadStatus === "All pending scans uploaded." ? "Uploading scans in the background…" : uploadStatus;
   const label = result
@@ -175,11 +182,13 @@ export function FastScannerView({
       : cameraActive
         ? "Ready to scan"
         : "Camera unavailable";
-  const readiness = cooldown?.saving
-    ? "Checking badge…"
-    : cooldown && cooldown.remainingMs > 0
-      ? `Next badge in ${(cooldown.remainingMs / 1000).toFixed(1)} seconds`
-      : "Ready for the next badge";
+  const readiness = collection?.waiting
+    ? "Find this attendee’s badge, then choose Next attendee"
+    : cooldown?.saving
+      ? "Checking badge…"
+      : cooldown && cooldown.remainingMs > 0
+        ? `Next badge in ${(cooldown.remainingMs / 1000).toFixed(1)} seconds`
+        : "Ready for the next badge";
   return (
     <div
       ref={surface}
@@ -234,9 +243,7 @@ export function FastScannerView({
           (direction === "left" || direction === "right") &&
           presentation === "fullscreen" &&
           !operatorOpen &&
-          !taskSwitchDisabled &&
-          !cooldown?.saving &&
-          !cooldown?.remainingMs
+          !taskSwitchBlocked
         )
           taskSwipe.move(direction);
         else if (direction === "up") setOperatorOpen(true);
@@ -264,8 +271,13 @@ export function FastScannerView({
                 )}
               </span>
               <strong class="pk-fast-scanner__label" data-scanner-help="mode">
-                {visibleStatus?.title ?? (cameraStarting ? "Starting camera…" : readyLabel)}
+                {collection?.waiting && collection.loading
+                  ? "Finding attendee…"
+                  : (visibleStatus?.title ?? (cameraStarting ? "Starting camera…" : readyLabel))}
               </strong>
+              {collection?.waiting && !helpOpen && (
+                <ScannerCollectionAttendee {...collection} saving={collection.saving || cooldown?.saving} />
+              )}
               {detail && detail !== visibleStatus?.title && <p class="pk-fast-scanner__message">{detail}</p>}
             </div>
             {purpose === "print" && !helpOpen && <div class="pk-fast-scanner__print-status">{statusActions}</div>}
@@ -281,32 +293,53 @@ export function FastScannerView({
         {recentScans && <div class="pk-fast-scanner__manual">{recentScans}</div>}
         {!manualEntry && !recentScans && <ScannerResultTrail results={tourResults ?? feedback.history} />}
         {presentation === "fullscreen" && !manualEntry && !recentScans && taskSwipe.tasks.length > 1 && (
-          <p
+          <div
             class="pk-fast-scanner__task-swipe"
             data-scanner-help="switch"
             role="group"
-            aria-disabled={taskSwitchDisabled || cooldown?.saving || Boolean(cooldown?.remainingMs) || undefined}
+            aria-disabled={taskSwitchBlocked || undefined}
             tabIndex={0}
             aria-label="Swipe left or right, or use arrow keys, to switch scanner"
             onKeyDown={(event) => {
               if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
                 event.preventDefault();
-                if (!operatorOpen && !taskSwitchDisabled && !cooldown?.saving && !cooldown?.remainingMs)
-                  taskSwipe.move(event.key === "ArrowLeft" ? "left" : "right");
+                if (!operatorOpen && !taskSwitchBlocked) taskSwipe.move(event.key === "ArrowLeft" ? "left" : "right");
               }
             }}
           >
-            ← Swipe: {taskSwipe.tasks.map((task) => task.label).join(" · ")} →
-          </p>
+            {"← Swipe: "}
+            {taskSwipe.tasks.map((task, index) => (
+              <span key={task.key}>
+                {index > 0 && " · "}
+                <button
+                  type="button"
+                  class="pk-fast-scanner__task-link"
+                  disabled={operatorOpen || taskSwitchBlocked}
+                  aria-label={`Switch to ${task.label}`}
+                  onClick={() => navigation?.onLaunch(task.key, visualRole)}
+                >
+                  {task.label}
+                </button>
+              </span>
+            ))}
+            {" →"}
+          </div>
         )}
         <div class="pk-fast-scanner__actions">
+          {collection?.waiting && !helpOpen && (
+            <>
+              <Button onClick={collection.onNext} disabled={collection.saving || cooldown?.saving}>
+                Next attendee
+              </Button>
+            </>
+          )}
           {onPresentation && presentation === "embedded" && (
             <Button variant="secondary" onClick={onPresentation}>
               <IconFullscreen />
               Full screen
             </Button>
           )}
-          {cameraActive && !manualEntry && !recentScans && (
+          {cameraActive && !collection?.waiting && !manualEntry && !recentScans && (
             <Button
               variant="secondary"
               icon
@@ -388,6 +421,7 @@ export function FastScannerView({
         <div class="pk-fast-scanner__next">
           <span class="pk-sr-only">{readiness}</span>
           <progress
+            hidden={collection?.waiting}
             max={cooldown?.durationMs || 600}
             value={
               cooldown?.saving ? undefined : cooldown ? Math.max(0, cooldown.durationMs - cooldown.remainingMs) : 600
@@ -395,7 +429,7 @@ export function FastScannerView({
             aria-label="Next badge readiness"
           />
           <div class="pk-fast-scanner__tools">
-            {cooldown && cooldown.remainingMs > 0 && (
+            {!collection?.waiting && cooldown && cooldown.remainingMs > 0 && (
               <button
                 type="button"
                 class="pk-fast-scanner__tool"
@@ -541,7 +575,7 @@ export function FastScannerView({
                 {preview ? "Hide preview" : "Show preview"}
               </Button>
             )}
-            {cooldown && cooldown.remainingMs > 0 && (
+            {!collection?.waiting && cooldown && cooldown.remainingMs > 0 && (
               <Button variant="secondary" onClick={cooldown.skip}>
                 Scan next now
               </Button>
