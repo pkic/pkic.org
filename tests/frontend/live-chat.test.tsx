@@ -354,9 +354,10 @@ describe("live chat", () => {
     expect(blocked.textContent).toContain("Welcome to the session");
   });
 
-  it("gives a paused person their message actions back when the pause ends", () => {
+  it("gives a paused person their reactions and reporting back when the pause ends", async () => {
     vi.useFakeTimers();
     try {
+      const send = vi.fn(() => true);
       const host = mount(
         <LiveChat
           state={stateWith({
@@ -367,16 +368,15 @@ describe("live chat", () => {
             },
           })}
           disabled={false}
-          send={vi.fn(() => true)}
+          send={send}
         />,
       );
-      const reactions = () => host.querySelectorAll('button[aria-label^="React to message"]').length;
-      expect(reactions()).toBe(0);
+      expect(await menuEffects(host, send)).toEqual([]);
       void act(() => {
         vi.advanceTimersByTime(1_100);
       });
       expect(host.querySelector("textarea")).not.toBeNull();
-      expect(reactions()).toBeGreaterThan(0);
+      expect(await menuEffects(host, send)).toEqual(["chat.react", "chat.report"]);
     } finally {
       vi.useRealTimers();
     }
