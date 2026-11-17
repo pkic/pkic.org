@@ -107,6 +107,31 @@ describe("answer votes, acceptance and removal", () => {
     ).toBe(0);
   });
 
+  it("clears an accepted answer when its author is blocked with their posts removed", async () => {
+    const { owner, moderator, questionId } = await question();
+    const attendee = await f.connect({ person: "secondAttendee" });
+    await watch(owner, questionId);
+    const answerId = await reply(attendee, questionId, "Inventory every certificate first.");
+    owner.send({
+      type: "question.answer.accept",
+      questionId,
+      answerId,
+      operationId: crypto.randomUUID(),
+      expectedRevision: 0,
+      accepted: true,
+    });
+    await owner.next("question.changed", (message) => message.question.acceptedAnswer);
+    moderator.send({
+      type: "participation.block",
+      item: { kind: "answer", questionId, answerId },
+      block: "session",
+      reason: "spam",
+      removePosts: true,
+    });
+    const cleared = await owner.next("question.changed", (message) => message.question.answerCount === 0);
+    expect(cleared.question.acceptedAnswer).toBe(false);
+  });
+
   it("keeps a session block when a later pause arrives for the same person", async () => {
     const { moderator, questionId } = await question();
     const attendee = await f.connect({ person: "secondAttendee" });

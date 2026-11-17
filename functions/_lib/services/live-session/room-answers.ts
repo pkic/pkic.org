@@ -219,7 +219,7 @@ export class LiveRoomAnswers {
     if (!answer || answer.question_id !== input.questionId) return REFUSALS.missing;
     if (answer.revision !== input.expectedRevision) return REFUSALS.changed;
     const at = nowIso();
-    if (input.hidden && input.reason) await this.removeWithReason(answer, input.reason, actor, at);
+    if (input.hidden && input.reason) await this.removeWithReason(answer.id, input.reason, actor, at);
     else {
       this.decisions.restore(answer.id);
       this.store.changed(answer.id);
@@ -235,8 +235,13 @@ export class LiveRoomAnswers {
     return { answerId: answer.id };
   }
 
-  /** Removes an answer from everyone but its author and moderators; a removed answer is no longer accepted. */
-  async removeWithReason(answer: LiveAnswerRow, reason: LiveModerationReason, actor: Actor, at: string): Promise<void> {
+  /**
+   * Removes an answer from everyone but its author and moderators; a removed answer is no longer accepted.
+   * It reads the answer as it is now, so an acceptance made while an earlier removal awaited is cleared too.
+   */
+  async removeWithReason(answerId: string, reason: LiveModerationReason, actor: Actor, at: string): Promise<void> {
+    const answer = this.store.answer(answerId);
+    if (!answer) return;
     this.decisions.remove("answer", answer.id, reason, actor, at);
     if (answer.accepted_at) this.store.accept(answer, actor, crypto.randomUUID(), false, at);
     this.store.changed(answer.id);

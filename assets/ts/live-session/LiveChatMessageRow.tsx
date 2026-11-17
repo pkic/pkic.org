@@ -94,7 +94,9 @@ function menuItems(
     items.push(
       liveRemoveMenuItem(
         "message",
-        (reason) => send({ type: "chat.moderate", messageId, decision: "remove", reason }),
+        (reason) => {
+          if (!send({ type: "chat.moderate", messageId, decision: "remove", reason })) onError();
+        },
         onError,
       ),
     );

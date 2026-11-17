@@ -137,17 +137,11 @@ export function LiveQuestionList({
             <div class="pk-live-question__body">
               {question.removal ? (
                 <LiveRemovedPost note={liveRemovalNote(question.removal)}>
-                  <p class={compact ? "pk-live-question__excerpt" : undefined}>{question.text}</p>
+                  <QuestionWords question={question} compact={compact} />
                 </LiveRemovedPost>
               ) : (
-                <p class={compact ? "pk-live-question__excerpt" : undefined}>{question.text}</p>
+                <QuestionWords question={question} compact={compact} />
               )}
-              {!compact && question.originalText !== null ? (
-                <p class="pk-live-question__original">
-                  Asked as “{question.originalText}”
-                  {question.rewritten ? ` · edited by ${question.rewritten.operatorName}` : ""}
-                </p>
-              ) : null}
               <div class="pk-live-question__meta">
                 {photos && question.authorPhotoUrl && question.authorName ? (
                   <Avatar name={question.authorName} src={question.authorPhotoUrl} size="sm" alt="" />
@@ -174,6 +168,21 @@ export function LiveQuestionList({
           </li>
         ))}
       </ol>
+    </>
+  );
+}
+
+/** A question's words, and what the asker first wrote when a moderator edited them. */
+function QuestionWords({ question, compact }: { question: LiveQuestion; compact?: boolean }) {
+  return (
+    <>
+      <p class={compact ? "pk-live-question__excerpt" : undefined}>{question.text}</p>
+      {!compact && question.originalText !== null ? (
+        <p class="pk-live-question__original">
+          Asked as “{question.originalText}”
+          {question.rewritten ? ` · edited by ${question.rewritten.operatorName}` : ""}
+        </p>
+      ) : null}
     </>
   );
 }

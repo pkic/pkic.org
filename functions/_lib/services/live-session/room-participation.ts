@@ -164,7 +164,7 @@ export class LiveRoomParticipation {
     const threads = new Set<string>();
     for (const answer of this.answers.byAuthor(userId)) {
       if (this.decisions.removal(answer.id)) continue;
-      await this.answers.removeWithReason(answer, reason, actor, at);
+      await this.answers.removeWithReason(answer.id, reason, actor, at);
       threads.add(answer.question_id);
     }
     for (const questionId of threads) {
