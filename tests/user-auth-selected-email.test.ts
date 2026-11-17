@@ -147,6 +147,19 @@ describe("Selected sign-in email delivery", () => {
     },
   );
 
+  it("tells both mailboxes about the first sign-in through an added address, once", async () => {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await requestLink(aliasEmail);
+      expect((await verifyLink((await latestDelivery()).token)).status).toBe(200);
+    }
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT recipient_email FROM email_outbox WHERE template_key='account_security_notice' ORDER BY rowid",
+      ),
+    ).toEqual([{ recipient_email: aliasEmail }, { recipient_email: primaryEmail }]);
+  });
+
   it("keeps a session made through an address when that address becomes primary, and ends it once removed", async () => {
     await requestLink(aliasEmail);
     const response = await verifyLink((await latestDelivery()).token);
