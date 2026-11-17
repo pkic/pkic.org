@@ -62,7 +62,7 @@ export function EventTicketPayment({
         Your registration is saved. Your badge and check-in code appear here once the payment arrives, and we email your
         confirmation then.
       </p>
-      <p class="pk-small pk-muted">{ticketRefundNote(ticket.refundableUntil)}</p>
+      <p class="pk-small pk-muted">{ticketRefundNote(ticket)}</p>
       {error && <Alert tone="danger">{error}</Alert>}
       <div class="pk-cluster">
         <Button variant="primary" loading={opening} disabled={opening} onClick={() => void pay()}>

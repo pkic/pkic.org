@@ -186,13 +186,17 @@ describe("ticket price contract and display", () => {
 
 describe("the refund policy as a registrant reads it", () => {
   const now = Date.parse("2027-01-10T12:00:00.000Z");
-  it("says there are no refunds, that the period has ended, or until when", () => {
-    expect(ticketRefundNote(null, "Europe/Amsterdam", now)).toBe("Tickets for this event are not refunded.");
-    expect(ticketRefundNote("2027-01-01T08:00:00.000Z", "Europe/Amsterdam", now)).toBe(
+  const policy = (refundableUntil: string | null, refundFee = 0) => ({ refundableUntil, refundFee, currency: "usd" });
+  it("says there are no refunds, that the period has ended, or until when and less which fee", () => {
+    expect(ticketRefundNote(policy(null), "Europe/Amsterdam", now)).toBe("Tickets for this event are not refunded.");
+    expect(ticketRefundNote(policy("2027-01-01T08:00:00.000Z"), "Europe/Amsterdam", now)).toBe(
       "The refund period for this event has ended.",
     );
-    expect(ticketRefundNote("2027-02-01T08:00:00.000Z", "Europe/Amsterdam", now)).toMatch(
-      /^You get your money back if you cancel before .+, and the difference if you move to days that cost less\.$/,
+    expect(ticketRefundNote(policy("2027-02-01T08:00:00.000Z"), "Europe/Amsterdam", now)).toMatch(
+      /^Until .+ you get your money back if you cancel, and the difference if you move to days that cost less\.$/,
+    );
+    expect(ticketRefundNote(policy("2027-02-01T08:00:00.000Z", 1000), "Europe/Amsterdam", now)).toContain(
+      "An administration fee of $10 is kept from each refund.",
     );
   });
 });

@@ -385,7 +385,7 @@ export async function handleEventTicketStripeEvent(
         db
           .prepare(
             `UPDATE registration_tickets SET status = 'paid', paid_at = ?, payment_intent_id = ?, paid_amount = amount,
-               refunded_amount = 0,
+               kept_fee = 0, refunded_amount = 0,
                refunds_seen_at = NULL, refund_reconcile_at = NULL,
                next_reminder_at = NULL, revision = revision + 1, updated_at = ?
              WHERE id = ? AND status = 'pending_payment'`,

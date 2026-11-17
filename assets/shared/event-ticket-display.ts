@@ -57,9 +57,17 @@ export function ticketPeriodLabels(periods: ReadonlyArray<{ startsOn: string | n
  * money. The deadline is given on the event's clock when its zone is known,
  * otherwise on the reader's own.
  */
-export function ticketRefundNote(refundableUntil: string | null, timeZone?: string, now = Date.now()): string {
-  if (!refundableUntil) return "Tickets for this event are not refunded.";
-  if (Date.parse(refundableUntil) < now) return "The refund period for this event has ended.";
-  const until = timeZone ? formatDateTimeInZone(refundableUntil, timeZone) : formatDateTime(refundableUntil);
-  return `You get your money back if you cancel before ${until}, and the difference if you move to days that cost less.`;
+export function ticketRefundNote(
+  policy: { refundableUntil: string | null; refundFee: number; currency: string },
+  timeZone?: string,
+  now = Date.now(),
+): string {
+  if (!policy.refundableUntil) return "Tickets for this event are not refunded.";
+  if (Date.parse(policy.refundableUntil) < now) return "The refund period for this event has ended.";
+  const until = timeZone
+    ? formatDateTimeInZone(policy.refundableUntil, timeZone)
+    : formatDateTime(policy.refundableUntil);
+  return policy.refundFee > 0
+    ? `Until ${until} you get your money back if you cancel, and the difference if you move to days that cost less. An administration fee of ${formatTicketMoney(policy.refundFee, policy.currency)} is kept from each refund.`
+    : `Until ${until} you get your money back if you cancel, and the difference if you move to days that cost less.`;
 }

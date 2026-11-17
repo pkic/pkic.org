@@ -140,6 +140,8 @@ export const eventTicketSettingsSchema = z.object({
     .max(365, "Enter 365 or less.")
     .nullable()
     .default(null),
+  /** An administration fee kept from each refund the policy gives. An organizer's own refund returns everything. */
+  refundFee: amountSchema.default(0),
 });
 const stepTextSchema = z.string().trim().max(400, "Use 400 characters or fewer.");
 /** What registrants read above the tickets and above the days; empty shows nothing. */
@@ -147,7 +149,15 @@ export const eventTicketStepTextsSchema = z.object({ ticketIntro: stepTextSchema
 /** A text left out of an update keeps its saved value. */
 export const eventTicketSettingsUpdateSchema = eventTicketSettingsSchema
   .extend(eventTicketStepTextsSchema.partial().shape)
-  .extend({ expectedRevision: revisionSchema });
+  .extend({ expectedRevision: revisionSchema })
+  .superRefine((value, context) => {
+    if (value.refundFee > 0 && value.refundDaysBeforeEvent === null)
+      context.addIssue({
+        code: "custom",
+        path: ["refundDaysBeforeEvent"],
+        message: "Enter until when refunds are given.",
+      });
+  });
 export type EventTicketSettingsUpdate = z.infer<typeof eventTicketSettingsUpdateSchema>;
 
 export const eventTicketCodeSchema = z.object({
@@ -292,6 +302,8 @@ export const eventTicketOfferSchema = z.object({
   sendInvoice: z.boolean().default(false),
   /** Until when a paid ticket is refunded on cancellation or a move to cheaper days; null when it never is. */
   refundableUntil: utcInstantSchema.nullable().default(null),
+  /** The administration fee kept from such a refund. */
+  refundFee: amountSchema.default(0),
   ticketIntro: z.string().default(""),
   attendanceIntro: z.string().default(""),
   /** The person registers with a personal mailbox, so a ticket that is free only for work addresses costs them money. */
@@ -384,6 +396,8 @@ export const registrationTicketSchema = z.object({
   paymentReference: z.string().nullable(),
   /** Until when this ticket is refunded on cancellation or a move to cheaper days; null when it never is. */
   refundableUntil: utcInstantSchema.nullable().default(null),
+  /** The administration fee kept from such a refund. */
+  refundFee: amountSchema.default(0),
   refundedAmount: totalAmountSchema,
   /** What was paid for the ticket; more than `amount` after a move to days that cost less. */
   paidAmount: totalAmountSchema.default(0),

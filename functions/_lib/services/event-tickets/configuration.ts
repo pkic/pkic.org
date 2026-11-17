@@ -134,6 +134,7 @@ export async function readEventTicketsConfiguration(
       reminderPeriodDays: snapshot.settings?.reminder_period_days ?? DEFAULT_PAYMENT_REMINDER_PERIOD_DAYS,
       sendInvoice: (snapshot.settings?.send_invoice ?? 1) === 1,
       refundDaysBeforeEvent: snapshot.settings?.refund_days_before_event ?? null,
+      refundFee: snapshot.settings?.refund_fee ?? 0,
       ticketIntro: snapshot.settings?.ticket_intro ?? "",
       attendanceIntro: snapshot.settings?.attendance_intro ?? "",
     },
@@ -383,7 +384,7 @@ export async function updateEventTicketSettings(
     db
       .prepare(
         `UPDATE event_ticket_settings SET currency = ?, reminder_interval_days = ?, reminder_period_days = ?, send_invoice = ?,
-           refund_days_before_event = ?, ticket_intro = COALESCE(?, ticket_intro), attendance_intro = COALESCE(?, attendance_intro)
+           refund_days_before_event = ?, refund_fee = ?, ticket_intro = COALESCE(?, ticket_intro), attendance_intro = COALESCE(?, attendance_intro)
          WHERE event_id = ?`,
       )
       .bind(
@@ -392,6 +393,7 @@ export async function updateEventTicketSettings(
         input.reminderPeriodDays,
         input.sendInvoice ? 1 : 0,
         input.refundDaysBeforeEvent,
+        input.refundFee,
         input.ticketIntro ?? null,
         input.attendanceIntro ?? null,
         event.id,
@@ -401,6 +403,7 @@ export async function updateEventTicketSettings(
       reminderIntervalDays: input.reminderIntervalDays,
       reminderPeriodDays: input.reminderPeriodDays,
       refundDaysBeforeEvent: input.refundDaysBeforeEvent,
+      refundFee: input.refundFee,
     }),
   ]);
   return { revision: input.expectedRevision + 1 };

@@ -22,6 +22,8 @@ interface HeldRow {
   amount: number;
   paid_amount: number;
   refunded_amount: number;
+  kept_fee: number;
+  refund_fee: number | null;
   refund_unsettled: number;
   refund_deadline: string | null;
   currency: string;
@@ -50,7 +52,8 @@ export async function prepareRepriceTicketForDays(
 ): Promise<StatementLike[]> {
   const held = await first<HeldRow>(
     db,
-    `SELECT ticket.id, ticket.status, ticket.amount, ticket.paid_amount, ticket.refunded_amount, ticket.currency,
+    `SELECT ticket.id, ticket.status, ticket.amount, ticket.paid_amount, ticket.refunded_amount, ticket.kept_fee,
+            settings.refund_fee, ticket.currency,
             ticket.ticket_type_id,
             ticket.code_id, event.timezone, user.email, registration.registration_identity_id AS identity_id,
             (ticket.refund_reconcile_at IS NOT NULL
@@ -67,7 +70,8 @@ export async function prepareRepriceTicketForDays(
   );
   // A registration without a ticket was made before the event had any; nothing was priced for it.
   if (!held) return [];
-  const open = OPEN_STATUSES.includes(held.status) || (input.restoring && held.status === "canceled");
+  const open =
+    OPEN_STATUSES.includes(held.status) || (input.restoring && ["canceled", "refunded"].includes(held.status));
   // A refunded or canceled ticket admits nobody, whatever the days.
   if (!open && held.status !== "paid") return [];
   const snapshot = await readEventTicketSnapshot(db, { id: input.eventId, timezone: held.timezone });
@@ -88,9 +92,17 @@ export async function prepareRepriceTicketForDays(
   });
   const total = priceTicket(snapshot, { type, code }, person, input.dayAttendance).total;
   if (held.status === "paid") {
-    // What is left of the payment, and what the ticket stands for: its price now, or more if more is left.
-    const net = held.paid_amount - held.refunded_amount;
+    // What is left of the payment that still stands for something: fees kept from earlier refunds do not.
+    const net = held.paid_amount - held.refunded_amount - held.kept_fee;
+    // What the ticket stands for: its price now, or more if more of the payment is left.
     const covered = Math.max(held.amount, net);
+    // While money is on its way back, what the ticket stands for is not settled.
+    if (held.refund_unsettled)
+      throw new AppError(
+        409,
+        "TICKET_REFUND_PENDING",
+        "A refund for this ticket is still being processed. Try again in a few minutes.",
+      );
     if (total > covered) {
       // An organizer may give days the ticket did not pay for; the person may not take them.
       if (input.byOrganizer) return [];
@@ -100,27 +112,21 @@ export async function prepareRepriceTicketForDays(
         `These days cost ${formatCurrencyAmount(total, held.currency)} and your ticket covers ${formatCurrencyAmount(covered, held.currency)}. Ask the organizers to change your registration.`,
       );
     }
-    // Days that cost less return the difference while the event's refund period runs, and nothing after it.
-    const refund = total < net && held.refund_deadline !== null && held.refund_deadline >= input.now;
-    if (total === held.amount && !refund) return [];
-    if (refund && held.refund_unsettled)
-      throw new AppError(
-        409,
-        "TICKET_REFUND_PENDING",
-        "A refund for this ticket is still being processed. Try again in a few minutes.",
-      );
+    // Days that cost less return the difference, less the event's fee, while its refund period runs.
+    // After the period, or when the fee is all there is, nothing goes back.
+    const fee = held.refund_fee ?? 0;
+    const within = held.refund_deadline !== null && held.refund_deadline >= input.now;
+    const refund = within ? net - total - fee : 0;
+    if (total === held.amount && refund <= 0) return [];
     return [
       // The ticket is changed only as it was priced here; otherwise nothing of the change is written.
       prepareStateGuard(db, {
         sql: `SELECT 1 FROM registration_tickets ticket
               WHERE ticket.id = ? AND ticket.status = 'paid' AND ticket.amount = ?
-                AND ticket.paid_amount - ticket.refunded_amount = ?${
-                  refund
-                    ? ` AND ticket.refund_reconcile_at IS NULL
+                AND ticket.paid_amount - ticket.refunded_amount - ticket.kept_fee = ?
+                AND ticket.refund_reconcile_at IS NULL
                 AND NOT EXISTS (SELECT 1 FROM registration_ticket_refunds refund
-                                WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL})`
-                    : ""
-                }`,
+                                WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL})`,
         bindings: [held.id, held.amount, net],
       }),
       // The ticket costs what its days cost now. It stays paid: nothing more is owed for it.
@@ -129,7 +135,15 @@ export async function prepareRepriceTicketForDays(
           "UPDATE registration_tickets SET amount = ?, revision = revision + 1, updated_at = ? WHERE id = ? AND status = 'paid'",
         )
         .bind(total, input.now, held.id),
-      ...(refund ? [prepareRefundDifference(db, { ticketId: held.id, net, total, now: input.now })] : []),
+      ...(refund > 0
+        ? prepareRefundDifference(db, {
+            ticketId: held.id,
+            net: held.paid_amount - held.refunded_amount,
+            refund,
+            fee,
+            now: input.now,
+          })
+        : []),
     ];
   }
   const status = total > 0 ? "pending_payment" : "free";

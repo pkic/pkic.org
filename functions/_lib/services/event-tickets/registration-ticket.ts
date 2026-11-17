@@ -81,7 +81,9 @@ export async function planRegistrationTicket(
     db,
     `SELECT ticket.id, ticket.status, ticket.assignment_source, ticket.code_id, ticket.dispute_reason,
             ticket.amount, ticket.currency, type.ticket_key, type.name AS ticket_name,
-            ticket.refund_reconcile_at IS NOT NULL AS refund_unsettled
+            (ticket.refund_reconcile_at IS NOT NULL
+             OR EXISTS (SELECT 1 FROM registration_ticket_refunds refund
+                        WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL})) AS refund_unsettled
      FROM registration_tickets ticket JOIN event_ticket_types type ON type.id = ticket.ticket_type_id
      WHERE ticket.registration_id = ? AND ticket.status <> 'canceled'`,
     [input.registrationId],
@@ -196,7 +198,8 @@ export async function planRegistrationTicket(
            status = excluded.status, dispute_reason = excluded.dispute_reason, dispute_resolved_at = NULL,
            held_email_id = excluded.held_email_id, reminders_sent = 0,
            next_reminder_at = excluded.next_reminder_at, reminders_end_at = excluded.reminders_end_at,
-           paid_at = NULL, payment_intent_id = NULL, paid_amount = 0, refunded_amount = 0, refunds_seen_at = NULL,
+           paid_at = NULL, payment_intent_id = NULL, paid_amount = 0, kept_fee = 0, refunded_amount = 0,
+           refunds_seen_at = NULL,
            refund_reconcile_at = NULL,
            revision = registration_tickets.revision + 1, updated_at = excluded.updated_at
          WHERE registration_tickets.status NOT IN ('paid') AND registration_tickets.refund_reconcile_at IS NULL`,
@@ -291,6 +294,7 @@ interface TicketReadRow {
   refund_failed: number;
   payment_reference: string | null;
   refund_deadline: string | null;
+  refund_fee: number;
 }
 
 export const REGISTRATION_TICKET_READ_SQL = `
@@ -307,7 +311,7 @@ export const REGISTRATION_TICKET_READ_SQL = `
          (SELECT checkout.payment_intent_id FROM registration_ticket_checkouts checkout
           WHERE checkout.ticket_id = ticket.id AND checkout.payment_intent_id IS NOT NULL
           ORDER BY checkout.created_at DESC LIMIT 1) AS payment_reference,
-         ${refundDeadlineSql("settings", "event")} AS refund_deadline
+         ${refundDeadlineSql("settings", "event")} AS refund_deadline, COALESCE(settings.refund_fee, 0) AS refund_fee
   FROM registration_tickets ticket
   JOIN event_ticket_types type ON type.id = ticket.ticket_type_id
   JOIN events event ON event.id = ticket.event_id
@@ -334,6 +338,7 @@ export function decodeRegistrationTicket(row: TicketReadRow | null): Registratio
     paidAmount: row.paid_amount,
     paymentReference: row.payment_reference,
     refundableUntil: row.refund_deadline,
+    refundFee: row.refund_deadline ? row.refund_fee : 0,
   };
 }
 
@@ -367,8 +372,27 @@ const RESTORE_CODE_SPENT_SQL = `SELECT 1 FROM registration_tickets ticket JOIN e
   WHERE ticket.registration_id = ? AND ticket.status = 'canceled'
     AND (code.used_count >= code.max_uses OR code.revoked_at IS NOT NULL)`;
 
-/** Refuses the restore of a registration whose ticket came from a code that has no pass left for it. */
+/**
+ * Refuses the restore of a registration whose ticket came from a code that has no pass left for it, or whose
+ * ticket has money on its way back: until that is settled, what the ticket stands for is not known.
+ */
 export async function assertRegistrationTicketRestorable(db: DatabaseLike, registrationId: string): Promise<void> {
+  if (
+    await first(
+      db,
+      `SELECT 1 FROM registration_tickets ticket
+       WHERE ticket.registration_id = ?
+         AND (ticket.refund_reconcile_at IS NOT NULL
+              OR EXISTS (SELECT 1 FROM registration_ticket_refunds refund
+                         WHERE refund.ticket_id = ticket.id AND ${OPEN_REFUND_SQL}))`,
+      [registrationId],
+    )
+  )
+    throw new AppError(
+      409,
+      "TICKET_REFUND_PENDING",
+      "A refund for this ticket is still being processed. Try again in a few minutes.",
+    );
   if (await first(db, RESTORE_CODE_SPENT_SQL, [registrationId]))
     throw new AppError(
       409,
@@ -380,7 +404,8 @@ export async function assertRegistrationTicketRestorable(db: DatabaseLike, regis
 /**
  * What restoring a canceled registration does to its ticket: it holds the same
  * ticket again at the price it had, free or still to be paid, and takes its
- * code's pass back. Without a pass to take back nothing of the restore is
+ * code's pass back. A ticket that was refunded when the registration was
+ * canceled is to be paid again. Without a pass to take back nothing of the restore is
  * written. A ticket that was never canceled is untouched.
  */
 export function prepareRestoreRegistrationTicket(
@@ -404,9 +429,10 @@ export function prepareRestoreRegistrationTicket(
     db
       .prepare(
         `UPDATE registration_tickets SET status = CASE WHEN amount = 0 THEN 'free' ELSE 'pending_payment' END,
-           reminders_sent = 0, payment_intent_id = NULL, paid_amount = 0, refunded_amount = 0, refunds_seen_at = NULL,
+           reminders_sent = 0, payment_intent_id = NULL, paid_amount = 0, kept_fee = 0, refunded_amount = 0,
+           refunds_seen_at = NULL,
            refund_reconcile_at = NULL, revision = revision + 1, updated_at = ?
-         WHERE registration_id = ? AND status = 'canceled'`,
+         WHERE registration_id = ? AND status IN ('canceled', 'refunded') AND refund_reconcile_at IS NULL`,
       )
       .bind(now, registrationId),
   ];

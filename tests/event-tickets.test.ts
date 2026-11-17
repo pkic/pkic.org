@@ -6,6 +6,7 @@ import { createMemberSession } from "./helpers/auth";
 import { hmacSha256Hex } from "../functions/_lib/utils/crypto";
 import {
   eventTicketCodeListQuerySchema,
+  eventTicketSettingsUpdateSchema,
   registrationTicketCheckoutResponseSchema,
   registrationTicketResponseSchema,
 } from "../assets/shared/schemas/event-tickets";
@@ -449,6 +450,7 @@ describe("event tickets", () => {
         reminderPeriodDays: configuration.settings.reminderPeriodDays,
         sendInvoice: configuration.settings.sendInvoice,
         refundDaysBeforeEvent: null,
+        refundFee: 0,
       }),
     ).rejects.toMatchObject({ code: "TICKET_CURRENCY_FIXED" });
   });
@@ -910,7 +912,7 @@ describe("event tickets", () => {
       env.DB.prepare("UPDATE events SET starts_at = ? WHERE id = ?")
         .bind(new Date(Date.now() + days * 86_400_000).toISOString(), event.id)
         .run();
-    const policy = async (refundDaysBeforeEvent: number | null) => {
+    const policy = async (refundDaysBeforeEvent: number | null, refundFee = 0) => {
       const configuration = await readEventTicketsConfiguration(env.DB, event);
       await updateEventTicketSettings(env.DB, admin, event, {
         expectedRevision: configuration.revision,
@@ -919,6 +921,7 @@ describe("event tickets", () => {
         reminderPeriodDays: configuration.settings.reminderPeriodDays,
         sendInvoice: configuration.settings.sendInvoice,
         refundDaysBeforeEvent,
+        refundFee,
       });
     };
     const virtual = [{ dayDate: DAY, attendanceType: "virtual" }];
@@ -1007,6 +1010,56 @@ describe("event tickets", () => {
     await late.change({ action: "cancel" });
     expect((await late.refunds()).results).toEqual([]);
     expect(await late.read()).toMatchObject({ status: "paid", paidAmount: 19500, refundedAmount: 0 });
+
+    // With an administration fee, each refund the policy gives is that much less.
+    await startsIn(30);
+    await policy(7, 1000);
+    const charged = await paid("charged@gmail.com");
+    expect(await charged.read()).toMatchObject({ refundFee: 1000 });
+    await charged.change({ action: "cancel" });
+    expect((await charged.refunds()).results).toMatchObject([{ amount: 18500 }]);
+    // While the money is on its way back the registration is not restored on the old ticket.
+    await expect(charged.change({ action: "update", dayAttendance: inPerson })).rejects.toMatchObject({
+      code: "TICKET_REFUND_PENDING",
+    });
+    await processTicketRefunds(env.DB, paymentEnv, 5, provider({ id: "re_fee_cancel", status: "succeeded" }));
+    await reconcileTicketRefunds(
+      env.DB,
+      paymentEnv,
+      5,
+      provider({ latest_charge: { amount_refunded: 18500, refunded: false } }),
+    );
+    // All but the fee went back: the ticket is refunded, and a restored registration pays again.
+    expect(await charged.read()).toMatchObject({ status: "refunded", refundedAmount: 18500, refundPending: false });
+    await charged.change({ action: "update", dayAttendance: inPerson });
+    expect(await charged.read()).toMatchObject({ status: "pending_payment", amount: 19500, paidAmount: 0 });
+
+    const cheaper = await paid("cheaper@gmail.com");
+    await cheaper.change({ action: "update", dayAttendance: virtual });
+    expect((await cheaper.refunds()).results).toMatchObject([{ amount: 18500 }]);
+    await processTicketRefunds(env.DB, paymentEnv, 5, provider({ id: "re_fee_difference", status: "succeeded" }));
+    await reconcileTicketRefunds(
+      env.DB,
+      paymentEnv,
+      5,
+      provider({ latest_charge: { amount_refunded: 18500, refunded: false } }),
+    );
+    // The ticket costs nothing and stands; the fee that stayed behind does not buy the venue back.
+    expect(await cheaper.read()).toMatchObject({ status: "paid", amount: 0, refundedAmount: 18500 });
+    await expect(cheaper.change({ action: "update", dayAttendance: inPerson })).rejects.toMatchObject({
+      code: "TICKET_CHANGE_COSTS_MORE",
+    });
+    // A fee needs a period to apply in.
+    expect(
+      eventTicketSettingsUpdateSchema.safeParse({
+        expectedRevision: 1,
+        currency: "usd",
+        reminderIntervalDays: 3,
+        reminderPeriodDays: 14,
+        refundDaysBeforeEvent: null,
+        refundFee: 1000,
+      }).success,
+    ).toBe(false);
 
     // With no policy nothing goes back either, however far away the event is.
     await startsIn(30);

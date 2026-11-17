@@ -21,6 +21,7 @@ export interface TicketSettingsRow {
   reminder_period_days: number;
   send_invoice: number;
   refund_days_before_event: number | null;
+  refund_fee: number;
   ticket_intro: string | null;
   attendance_intro: string | null;
   revision: number;
@@ -72,7 +73,7 @@ export function prepareEventTicketSnapshot(db: DatabaseLike, eventId: string): S
   return [
     db
       .prepare(
-        "SELECT event_id, currency, reminder_interval_days, reminder_period_days, send_invoice, refund_days_before_event, ticket_intro, attendance_intro, revision FROM event_ticket_settings WHERE event_id = ?",
+        "SELECT event_id, currency, reminder_interval_days, reminder_period_days, send_invoice, refund_days_before_event, refund_fee, ticket_intro, attendance_intro, revision FROM event_ticket_settings WHERE event_id = ?",
       )
       .bind(eventId),
     db

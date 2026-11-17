@@ -14,6 +14,8 @@ CREATE TABLE event_ticket_settings (
   send_invoice           INTEGER NOT NULL DEFAULT 1 CHECK (send_invoice IN (0, 1)),
   -- The refund policy: empty for no refunds, otherwise refunds until this many days before the event starts.
   refund_days_before_event INTEGER CHECK (refund_days_before_event IS NULL OR refund_days_before_event >= 0),
+  -- An administration fee kept from each refund the policy gives; an organizer's own refund returns everything.
+  refund_fee             INTEGER NOT NULL DEFAULT 0 CHECK (refund_fee >= 0),
   -- Optional text shown to registrants above the tickets and above the days.
   ticket_intro           TEXT,
   attendance_intro       TEXT,
@@ -181,6 +183,8 @@ CREATE TABLE registration_tickets (
   -- `amount` is what the ticket costs for its days now; after a move to cheaper days it is less than was paid.
   payment_intent_id     TEXT,
   paid_amount           INTEGER NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
+  -- Fees kept from this ticket's refunds: that much of the payment stays here and stands for nothing.
+  kept_fee              INTEGER NOT NULL DEFAULT 0 CHECK (kept_fee >= 0),
   refunded_amount       INTEGER NOT NULL DEFAULT 0 CHECK (refunded_amount >= 0),
   -- The provider's time of the newest refund fact applied; an older one that arrives later is not applied over it.
   refunds_seen_at       TEXT,

@@ -157,7 +157,7 @@ export async function buildRegistrationUpdate(
       prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
       ...prepareCancelRegistrationTicket(db, registration.id, now),
       // A person who cancels within the event's refund period gets a paid ticket back.
-      ...(changedBy === "self" ? [prepareRefundOnCancellation(db, registration.id, now)] : []),
+      ...(changedBy === "self" ? prepareRefundOnCancellation(db, registration.id, now) : []),
     ];
     statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
     const audit = prepareRegistrationUpdateAudit(db, registration, cancelled, payload);
@@ -211,7 +211,7 @@ export async function buildRegistrationUpdate(
       prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
       ...prepareCancelRegistrationTicket(db, registration.id, now),
       // A person who cancels within the event's refund period gets a paid ticket back.
-      ...(changedBy === "self" ? [prepareRefundOnCancellation(db, registration.id, now)] : []),
+      ...(changedBy === "self" ? prepareRefundOnCancellation(db, registration.id, now) : []),
     ];
     statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
     statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
