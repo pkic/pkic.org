@@ -1,7 +1,10 @@
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { liveChatEraseResponseSchema } from "../assets/shared/schemas/event-live-chat-archive";
+import {
+  LIVE_CHAT_ARCHIVE_MAX_SESSIONS,
+  liveChatEraseResponseSchema,
+} from "../assets/shared/schemas/event-live-chat-archive";
 import { callApi } from "./helpers/app";
 import { queryAll } from "./helpers/context";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
@@ -111,6 +114,12 @@ describe("live chat retention", () => {
   it("keeps only the attendee chat after the week when the event keeps it for 90 days", async () => {
     await chatInRoom();
     await keepChatFor(90);
+    // Ada is banned after her messages, so attendees no longer saw the one a moderator left up.
+    await runInDurableObject(f.room(), (_room, state) =>
+      state.storage.sql.exec(
+        "INSERT INTO room_chat_restrictions(user_id,restriction,by_name,at) SELECT author_user_id,'banned','Moderator',sent_at FROM room_chat LIMIT 1",
+      ),
+    );
     await sessionEnded(8);
     await runDurableObjectAlarm(f.room());
     expect(await rowCount("room_chat")).toBe(2);
@@ -118,7 +127,7 @@ describe("live chat retention", () => {
     expect(await rowCount("questions")).toBe(0);
     const archive = await runInDurableObject(f.room(), (room) => room.chatArchive());
     expect(archive.map(({ author_name, body, status }) => ({ author_name, body, status }))).toEqual([
-      { author_name: "Ada Attendee", body: "Hello, everyone", status: "shown" },
+      { author_name: "Ada Attendee", body: "Hello, everyone", status: "banned" },
       { author_name: "Ada Attendee", body: "Buy cheap tokens", status: "hidden" },
     ]);
     // A shorter choice applies at the next daily check.
@@ -166,15 +175,36 @@ describe("event chat download and erasure", () => {
     expect((await (await request("GET")).text()).split("\r\n")).toHaveLength(1);
     const audit = await queryAll<{ action: string }>(
       env.DB,
-      "SELECT action FROM audit_log WHERE scope_id=? AND action LIKE 'live_session.chat.%ed' AND entity_type='event' ORDER BY created_at,action",
+      "SELECT action FROM audit_log WHERE scope_id=? AND action LIKE 'live_session.chat.%' AND entity_type='event' ORDER BY rowid",
       [f.eventId],
     );
     expect(audit.map((row) => row.action)).toEqual([
       "live_session.chat.exported",
+      "live_session.chat.erase_requested",
       "live_session.chat.erased",
+      "live_session.chat.erase_requested",
       "live_session.chat.erased",
       "live_session.chat.exported",
     ]);
+  });
+
+  it("refuses an event with more sessions than one request covers, rather than skip any", async () => {
+    const statements = Array.from({ length: LIVE_CHAT_ARCHIVE_MAX_SESSIONS + 1 }, () => crypto.randomUUID()).flatMap(
+      (id) => [
+        env.DB.prepare(
+          "INSERT INTO event_agenda_occurrences(id,event_id,title,start_at,end_at) VALUES(?,?,'Session',?,?)",
+        ).bind(id, f.eventId, "2026-12-01T09:00:00.000Z", "2026-12-01T10:00:00.000Z"),
+        env.DB.prepare(
+          "INSERT INTO event_session_chat_totals(event_id,occurrence_id,messages,people,copied_at) VALUES(?,?,1,1,?)",
+        ).bind(f.eventId, id, "2026-12-01T10:00:00.000Z"),
+      ],
+    );
+    await env.DB.batch(statements);
+    for (const method of ["GET", "DELETE"] as const) {
+      const response = await request(method);
+      expect(response.status).toBe(413);
+      expect(await response.json()).toMatchObject({ error: { code: "LIVE_CHAT_TOO_MANY_SESSIONS" } });
+    }
   });
 
   it("requires live moderation permission", async () => {

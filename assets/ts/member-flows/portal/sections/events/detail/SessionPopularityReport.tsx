@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import { clockForZone, type ClockZone } from "../../../../../../shared/event-clock";
-import { formatClockInZone, formatEventDayInZone } from "../../../../../../shared/format-date";
+import { formatDateTimeWithSchedule } from "../../../../../../shared/format-date";
 import { formatNumber } from "../../../../../../shared/format-number";
 import { LIVE_REACTIONS } from "../../../../../../shared/live-session-policy";
 import {
@@ -10,14 +10,8 @@ import {
 } from "../../../../../../shared/schemas/event-session-popularity-report";
 import { ApiDataTable } from "../../../../../components/ApiDataTable";
 import type { Column } from "../../../../../components/Table";
-import { SessionChatActions } from "./SessionChatActions";
 
 const REACTION_EMOJI = new Map<string, string>(LIVE_REACTIONS.map((reaction) => [reaction.id, reaction.emoji]));
-
-/** "Tue, Dec 1 · 09:00" on the event's clock. */
-function sessionStart(startAt: string, zone: ClockZone) {
-  return `${formatEventDayInZone(startAt, zone)} · ${formatClockInZone(startAt, zone)}`;
-}
 
 type CountKey = "reactionTotal" | "chatPeople" | "questions" | "questionVotes" | "pollAnswers";
 
@@ -38,16 +32,7 @@ function countColumn(header: string, key: CountKey): Column<SessionPopularityRep
  * event. Each reaction also has its own column, hidden until a reader wants
  * to sort by it.
  */
-export function SessionPopularityReport({
-  slug,
-  clock,
-  canModerateChat = false,
-}: {
-  slug: string;
-  clock?: ClockZone;
-  /** Moderators can download and erase the chat the live rooms still hold. */
-  canModerateChat?: boolean;
-}) {
+export function SessionPopularityReport({ slug, clock }: { slug: string; clock?: ClockZone }) {
   const [timeZone, setTimeZone] = useState<string | null>(null);
   return (
     <ApiDataTable<SessionPopularityReportRow, SessionPopularityReportResponse>
@@ -67,7 +52,6 @@ export function SessionPopularityReport({
           Reactions count each person once per reaction every 10 seconds, so they reflect people, not clicks.
         </p>
       }
-      toolbar={canModerateChat ? () => <SessionChatActions slug={slug} /> : undefined}
       rowKey={(row) => row.occurrenceId}
       columns={[
         {
@@ -78,7 +62,9 @@ export function SessionPopularityReport({
             <>
               <div>{row.title}</div>
               {row.startAt && timeZone && (
-                <div class="pk-small pk-muted">{sessionStart(row.startAt, clockForZone(clock, timeZone))}</div>
+                <div class="pk-small pk-muted">
+                  {formatDateTimeWithSchedule(row.startAt, clockForZone(clock, timeZone))}
+                </div>
               )}
             </>
           ),
@@ -88,7 +74,8 @@ export function SessionPopularityReport({
           header: "Starts",
           defaultHidden: true,
           width: "fit",
-          cell: (row) => (row.startAt && timeZone ? sessionStart(row.startAt, clockForZone(clock, timeZone)) : "—"),
+          cell: (row) =>
+            row.startAt && timeZone ? formatDateTimeWithSchedule(row.startAt, clockForZone(clock, timeZone)) : "—",
           sort: { asc: "startAt", desc: "-startAt" },
         },
         {

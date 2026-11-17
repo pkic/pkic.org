@@ -439,7 +439,6 @@ export function GroupEventWorkspace({
                     basePath={tabPath("stats")}
                     legacyAttendanceBasePath={tabPath("attendance")}
                     canViewAnalytics={event.capabilities.includes("manage_attendance")}
-                    canModerateChat={hasEventAgendaPermission(event.id, "agenda:live_moderate")}
                     attendance={{
                       timeZone: eventClock(event),
                       canRead: hasEventAgendaPermission(event.id, "agenda:attendance_read"),

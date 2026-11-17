@@ -99,7 +99,6 @@ export function EventStats({
   canViewAnalytics = true,
   attendance,
   legacyAttendanceBasePath,
-  canModerateChat = false,
 }: {
   slug: string;
   section?: string;
@@ -108,7 +107,6 @@ export function EventStats({
   canViewAnalytics?: boolean;
   attendance?: AttendanceAccess;
   legacyAttendanceBasePath?: string;
-  canModerateChat?: boolean;
 }) {
   const [location, navigate] = usePortalHashLocation();
   const canViewAttendance = Boolean(attendance?.canRead || attendance?.canImport);
@@ -158,7 +156,7 @@ export function EventStats({
       )}
       {active === "session-popularity" && (
         <Suspense fallback={<Spinner label="Loading session popularity…" />}>
-          <SessionPopularityReport slug={slug} clock={attendance?.timeZone} canModerateChat={canModerateChat} />
+          <SessionPopularityReport slug={slug} clock={attendance?.timeZone} />
         </Suspense>
       )}
       {active === "promoters" && (

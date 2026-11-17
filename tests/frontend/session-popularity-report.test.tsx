@@ -70,16 +70,18 @@ it("shows each session's interactions from the server, most reactions first, and
     expect(host?.querySelector("tbody")?.textContent).toContain("Keynote: the road ahead");
   });
   expect(queries[0]).toMatchObject({ sort: "-reactionTotal" });
-  const cells = [...host.querySelectorAll("tbody td")].map((cell) => cell.textContent?.trim());
-  expect(cells).toEqual(
-    expect.arrayContaining([
-      "Reactions1,258👏 1,240 · ❤️ 5 · 🤯 3 · 👍 10",
-      "Chat messages312from 48 people",
-      "Questions4",
-      "Question votes31",
-      "Poll answers87",
-    ]),
-  );
+  const headers = [...host.querySelectorAll("thead th")].map((cell) => cell.textContent ?? "");
+  const cell = (header: string) =>
+    host!.querySelectorAll("tbody td")[headers.findIndex((text) => text.includes(header))]?.textContent ?? "";
+  expect(cell("Reactions")).toContain("1,258");
+  for (const count of ["👏 1,240", "❤️ 5", "🤯 3", "👍 10"]) expect(cell("Reactions")).toContain(count);
+  expect(cell("Reactions")).not.toContain("😂");
+  expect(cell("Chat messages")).toContain("312");
+  expect(cell("Chat messages")).toContain("48 people");
+  expect(cell("Questions")).toContain("4");
+  expect(cell("Question votes")).toContain("31");
+  expect(cell("Poll answers")).toContain("87");
+  expect(cell("Session")).toContain("Scheduled:");
   const heads = [...host.querySelectorAll("thead th")].map((cell) => cell.textContent);
   expect(heads.join(" ")).not.toContain("Applause");
   expect(heads.join(" ")).toContain("Poll answers");
@@ -114,36 +116,4 @@ it("explains when no session has any interaction yet", async () => {
     await settle();
     expect(host?.textContent).toContain("No session has reactions, chat messages, questions, or poll answers yet.");
   });
-});
-
-it("offers moderators the event's chat download and a confirmed erase, and no one else", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(
-      async () =>
-        new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } }),
-    ),
-  );
-  host = document.createElement("div");
-  document.body.append(host);
-  await act(async () => {
-    render(<SessionPopularityReport slug="event-one" />, host!);
-  });
-  await vi.waitFor(async () => {
-    await settle();
-    expect(host?.querySelector("tbody")?.textContent).toContain("Keynote");
-  });
-  expect(host.querySelector('[aria-label="Download chat (CSV)"]')).toBeNull();
-  expect(host.textContent).not.toContain("Erase chat");
-
-  await act(async () => {
-    render(<SessionPopularityReport slug="event-one" canModerateChat />, host!);
-  });
-  await vi.waitFor(async () => {
-    await settle();
-    expect(host?.querySelector('[aria-label="Download chat (CSV)"]')?.getAttribute("href")).toBe(
-      "/api/v1/events/event-one/agenda/chat/exports",
-    );
-  });
-  expect(host.textContent).toContain("Erase chat…");
 });

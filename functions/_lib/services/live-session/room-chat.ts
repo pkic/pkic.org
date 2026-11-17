@@ -22,8 +22,8 @@ export interface LiveChatArchiveRow {
   sent_at: string;
   author_name: string;
   body: string;
-  /** Shown to attendees, hidden by a moderator, or held after reports. */
-  status: "shown" | "hidden" | "held";
+  /** Shown to attendees, hidden by a moderator, held after reports, or hidden with its banned author. */
+  status: "shown" | "hidden" | "held" | "banned";
 }
 const TABLES: Record<LiveChatChannel, string> = { attendee: "room_chat", operator: "room_operator_chat" };
 const CHANNELS = Object.keys(TABLES) as LiveChatChannel[];
@@ -193,8 +193,11 @@ export class LiveRoomChat {
   archive(): LiveChatArchiveRow[] {
     return this.sql.rows<LiveChatArchiveRow>(
       `SELECT c.sent_at, c.author_name, c.body,
-         CASE WHEN h.message_id IS NULL THEN 'shown' WHEN h.held = 1 THEN 'held' ELSE 'hidden' END AS status
-       FROM room_chat c LEFT JOIN room_chat_hidden h ON h.message_id = c.id ORDER BY c.sent_at, c.rowid`,
+         CASE WHEN h.held = 1 THEN 'held' WHEN h.message_id IS NOT NULL THEN 'hidden'
+           WHEN b.user_id IS NOT NULL THEN 'banned' ELSE 'shown' END AS status
+       FROM room_chat c LEFT JOIN room_chat_hidden h ON h.message_id = c.id
+       LEFT JOIN room_chat_restrictions b ON b.user_id = c.author_user_id AND b.restriction = 'banned'
+       ORDER BY c.sent_at, c.rowid`,
     );
   }
 

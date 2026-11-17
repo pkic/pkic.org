@@ -29,11 +29,20 @@ const CHOICES: Record<KeepDays, { label: string; hint: string }> = {
   7: { label: "1 week", hint: "The chat goes with the rest of the session's live room." },
   90: {
     label: "90 days",
-    hint: "Only the attendee chat stays, so you can download it from Analytics. Polls, questions, and the operator chat still go after a week.",
+    hint: "Only the attendee chat stays, so live moderators can download it from Studio settings. Polls, questions, and the operator chat still go after a week.",
   },
 };
 
-export function LiveChatRetentionSettings({ slug, groupId }: { slug: string; groupId?: string }) {
+export function LiveChatRetentionSettings({
+  slug,
+  groupId,
+  canEdit,
+}: {
+  slug: string;
+  groupId?: string;
+  /** Who may change the event's settings; everyone else reads the choice. */
+  canEdit: boolean;
+}) {
   const loaded = useData(() => readEventSettings(slug, groupId), [slug, groupId]);
   const [event, setEvent] = useState<EventDetail | null>(null);
   const current = event ?? loaded.data?.event ?? null;
@@ -43,6 +52,7 @@ export function LiveChatRetentionSettings({ slug, groupId }: { slug: string; gro
     <LiveChatRetentionPanel
       key={current.updatedAt}
       event={current}
+      canEdit={canEdit}
       onUpdated={setEvent}
       groupTarget={
         groupId
@@ -55,10 +65,12 @@ export function LiveChatRetentionSettings({ slug, groupId }: { slug: string; gro
 
 function LiveChatRetentionPanel({
   event,
+  canEdit,
   onUpdated,
   groupTarget,
 }: {
   event: EventDetail;
+  canEdit: boolean;
   onUpdated: (event: EventDetail) => void;
   groupTarget?: Parameters<typeof useEventSettingsSave>[3];
 }) {
@@ -83,29 +95,32 @@ function LiveChatRetentionPanel({
     <Panel aria-label="Live chat">
       <form noValidate {...form.handlers} onSubmit={(submitEvent) => void save(submitEvent)}>
         <PanelHeader title="Live chat">
-          <EditActions
-            label="Live chat settings actions"
-            editing={editing}
-            saving={saving}
-            saveLabel="Save chat settings"
-            onEdit={() => {
-              reset();
-              setEditing(true);
-            }}
-            onCancel={() => {
-              reset();
-              setEditing(false);
-            }}
-          />
+          {canEdit && (
+            <EditActions
+              label="Live chat settings actions"
+              editing={editing}
+              saving={saving}
+              saveLabel="Save chat settings"
+              onEdit={() => {
+                reset();
+                setEditing(true);
+              }}
+              onCancel={() => {
+                reset();
+                setEditing(false);
+              }}
+            />
+          )}
         </PanelHeader>
         <PanelBody class="pk-stack">
-          {editing ? (
+          {editing && canEdit ? (
             <Field
+              group
               {...form.of("liveChat.keepDays")}
               label="Keep the attendee chat after each session for"
               help="A shorter choice takes effect within a day, including for sessions that have already ended."
             >
-              {() => (
+              {(control) => (
                 <div class="pk-stack">
                   {LIVE_CHAT_KEEP_DAYS.map((days) => (
                     <Radio
@@ -115,6 +130,8 @@ function LiveChatRetentionPanel({
                       label={CHOICES[days].label}
                       hint={CHOICES[days].hint}
                       checked={keepDays === days}
+                      aria-describedby={control["aria-describedby"]}
+                      aria-invalid={control["aria-invalid"]}
                       onChange={() => setKeepDays(days)}
                     />
                   ))}

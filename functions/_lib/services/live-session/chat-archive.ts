@@ -3,7 +3,7 @@ import {
   LIVE_CHAT_ARCHIVE_MAX_SESSIONS,
   type LiveChatEraseResponse,
 } from "../../../../assets/shared/schemas/event-live-chat-archive";
-import { encodeBoundedCsv } from "../../csv";
+import { boundedCsvWriter } from "../../csv";
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, Env } from "../../types";
@@ -22,17 +22,29 @@ const STATUS_LABELS: Record<LiveChatArchiveRow["status"], string> = {
   shown: "Shown",
   hidden: "Hidden by a moderator",
   held: "Held after reports",
+  banned: "Hidden, author removed from the chat",
 };
 
-/** The sessions whose rooms received attendee chat, from the copied chat counts, in agenda order. */
-function chatSessions(db: DatabaseLike, eventId: string) {
-  return all<ChatSession>(
+/**
+ * The sessions whose rooms received attendee chat, from the copied chat
+ * counts, in agenda order. An event with more than one request handles is
+ * refused whole, so neither a download nor an erase silently skips a session.
+ */
+async function chatSessions(db: DatabaseLike, eventId: string) {
+  const sessions = await all<ChatSession>(
     db,
     `SELECT o.id,o.title,o.start_at FROM event_session_chat_totals c
      JOIN event_agenda_occurrences o ON o.id=c.occurrence_id AND o.event_id=c.event_id
      WHERE c.event_id=? AND c.messages>0 ORDER BY o.start_at,o.title,o.id LIMIT ?`,
-    [eventId, LIVE_CHAT_ARCHIVE_MAX_SESSIONS],
+    [eventId, LIVE_CHAT_ARCHIVE_MAX_SESSIONS + 1],
   );
+  if (sessions.length > LIVE_CHAT_ARCHIVE_MAX_SESSIONS)
+    throw new AppError(
+      413,
+      "LIVE_CHAT_TOO_MANY_SESSIONS",
+      `The chat covers more than ${LIVE_CHAT_ARCHIVE_MAX_SESSIONS} sessions, more than one request handles.`,
+    );
+  return sessions;
 }
 
 function rooms(env: Pick<Env, "LIVE_SESSION_ROOMS">) {
@@ -74,16 +86,12 @@ export async function exportEventChat(
   eventId: string,
 ): Promise<string> {
   const namespace = rooms(env);
-  const rows: string[][] = [["Session", "Session start (UTC)", "Sent (UTC)", "Author", "Message", "Status"]];
-  // Stops before the rows outgrow the download, so a huge event never fills the Worker's memory first.
-  let size = 0;
+  // Refuses the row that would outgrow the download, so a huge event never fills the Worker's memory first.
+  const csv = boundedCsvWriter(LIVE_CHAT_ARCHIVE_MAX_BYTES);
+  csv.push(["Session", "Session start (UTC)", "Sent (UTC)", "Author", "Message", "Status"]);
   for (const session of await chatSessions(db, eventId)) {
-    const messages = await namespace.getByName(liveRoomName(eventId, session.id)).chatArchive();
-    size += messages.reduce((total, message) => total + message.body.length + message.author_name.length, 0);
-    if (size > LIVE_CHAT_ARCHIVE_MAX_BYTES)
-      throw new AppError(413, "CSV_EXPORT_TOO_LARGE", "The chat is larger than one download allows.");
-    for (const message of messages)
-      rows.push([
+    for (const message of await namespace.getByName(liveRoomName(eventId, session.id)).chatArchive())
+      csv.push([
         session.title,
         session.start_at ?? "",
         message.sent_at,
@@ -92,15 +100,17 @@ export async function exportEventChat(
         STATUS_LABELS[message.status],
       ]);
   }
-  const csv = encodeBoundedCsv(rows, LIVE_CHAT_ARCHIVE_MAX_BYTES);
-  await audit(db, actor, eventId, "live_session.chat.exported", { messages: rows.length - 1 });
-  return csv;
+  await audit(db, actor, eventId, "live_session.chat.exported", { messages: csv.rows });
+  return csv.toString();
 }
 
 /**
  * Erases the chat of every session whose room has closed. A room still open
  * keeps its chat, so a running session never loses its conversation; the
- * chat counts in the popularity report stay either way.
+ * chat counts in the popularity report stay either way. The request is
+ * recorded before any room erases, so a failure part way leaves evidence of
+ * what was asked; erasing again finishes the rest, since an erased room has
+ * nothing left to remove.
  */
 export async function eraseEventChat(
   db: DatabaseLike,
@@ -109,8 +119,10 @@ export async function eraseEventChat(
   eventId: string,
 ): Promise<LiveChatEraseResponse> {
   const namespace = rooms(env);
+  const sessions = await chatSessions(db, eventId);
+  await audit(db, actor, eventId, "live_session.chat.erase_requested", { sessions: sessions.length });
   const result = { erasedSessions: 0, openSessions: 0 };
-  for (const session of await chatSessions(db, eventId)) {
+  for (const session of sessions) {
     if (await namespace.getByName(liveRoomName(eventId, session.id)).eraseChat()) result.erasedSessions += 1;
     else result.openSessions += 1;
   }

@@ -64,13 +64,14 @@ it("keeps the chat a week by default and saves 90 days through the settings cont
   );
   root = document.createElement("div");
   document.body.append(root);
-  await act(async () => render(<LiveChatRetentionSettings slug="summit" />, root));
+  await act(async () => render(<LiveChatRetentionSettings slug="summit" canEdit />, root));
   await vi.waitFor(async () => {
     await settle();
     expect(root.textContent).toContain("1 week after each session");
   });
 
   await beginRecordEdit(root, "Live chat settings actions");
+  expect(root.querySelector("fieldset legend")?.textContent).toContain("Keep the attendee chat after each session for");
   const ninety = [...root.querySelectorAll<HTMLInputElement>("input[type=radio]")].find(
     (input) => input.value === "90",
   )!;
@@ -87,4 +88,19 @@ it("keeps the chat a week by default and saves 90 days through the settings cont
   const patch = sent.find((request) => request.method === "PATCH")!;
   expect(patch.url).toBe("/api/v1/events/summit/settings");
   expect(eventSettingsUpdateSchema.parse(patch.body).liveChat).toEqual({ keepDays: 90 });
+});
+
+it("shows the choice without an edit action to those who cannot change the event's settings", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ event })),
+  );
+  root = document.createElement("div");
+  document.body.append(root);
+  await act(async () => render(<LiveChatRetentionSettings slug="summit" canEdit={false} />, root));
+  await vi.waitFor(async () => {
+    await settle();
+    expect(root.textContent).toContain("1 week after each session");
+  });
+  expect(root.querySelector('[aria-label="Live chat settings actions"]')).toBeNull();
 });
