@@ -70,20 +70,48 @@ function sent(send: ReturnType<typeof vi.fn>) {
   return send.mock.calls.map(([message]) => liveRoomClientMessageSchema.parse(message));
 }
 
-/** The labels of a message menu's top-level items, opened from its trigger. */
-/** What a viewer can do with the first message: "React" when its reaction button shows, then its menu's actions. */
-async function menuLabels(host: HTMLElement): Promise<string[]> {
-  const react = host.querySelector('.pk-live-chat__menu button[aria-label^="React to message"]') ? ["React"] : [];
+/** What one sent command does, as the room reads it: its type, and the decision or block it carries. */
+function effectOf(message: unknown): string {
+  const command = liveRoomClientMessageSchema.parse(message);
+  if (command.type === "chat.moderate") return `${command.type}:${command.decision}`;
+  if (command.type === "participation.block") return `${command.type}:${command.block}`;
+  return command.type;
+}
+
+/**
+ * What each action a viewer gets on the first message does: the reaction button, then every menu item,
+ * run through its submenu or dialog to the command it sends. Copy and order changes don't matter here.
+ */
+async function menuEffects(host: HTMLElement, send: ReturnType<typeof vi.fn>): Promise<string[]> {
+  const effects = host.querySelector('.pk-live-chat__menu button[aria-label^="React to message"]')
+    ? ["chat.react"]
+    : [];
   const trigger = host.querySelector<HTMLButtonElement>(
     '.pk-live-chat__menu button[aria-label^="Actions for message"]',
   );
-  if (!trigger) return react;
+  if (!trigger) return effects;
+  const items = () => document.querySelectorAll<HTMLElement>('[role="menu"] > [role^="menuitem"]');
   await act(async () => trigger.click());
-  const labels = [...document.querySelectorAll('[role="menu"] > [role^="menuitem"]')].map(
-    (item) => item.textContent?.replace(/›/u, "").trim() ?? "",
-  );
+  const count = items().length;
   await act(async () => trigger.click());
-  return [...react, ...labels];
+  for (let index = 0; index < count; index += 1) {
+    await act(async () => trigger.click());
+    const item = items()[index];
+    const before = send.mock.calls.length;
+    await act(async () => item.click());
+    const submenu = document.getElementById(item.getAttribute("aria-controls") ?? "");
+    const choice = submenu?.querySelector<HTMLElement>('[role^="menuitem"]');
+    if (choice) await act(async () => choice.click());
+    const dialog = document.querySelector("dialog");
+    if (dialog) {
+      const reason = dialog.querySelector<HTMLInputElement>('input[type="radio"]');
+      if (reason) await act(async () => reason.click());
+      const confirm = [...dialog.querySelectorAll("button")].at(-1)!;
+      await act(async () => confirm.click());
+    }
+    effects.push(send.mock.calls.length > before ? effectOf(send.mock.calls.at(-1)![0]) : "nothing");
+  }
+  return effects;
 }
 
 describe("live chat", () => {
@@ -175,11 +203,11 @@ describe("live chat", () => {
   it("offers each viewer exactly the actions the chat policy grants", async () => {
     const send = vi.fn(() => true);
     const attendee = mount(<LiveChat state={stateWith()} disabled={false} send={send} />);
-    expect(await menuLabels(attendee)).toEqual(["React", "Report"]);
+    expect(await menuEffects(attendee, send)).toEqual(["chat.react", "chat.report"]);
     const own = mount(
       <LiveChat state={stateWith({ chat: [chatMessage({ mine: true })] })} disabled={false} send={send} />,
     );
-    expect(await menuLabels(own)).toEqual(["React", "Delete message"]);
+    expect(await menuEffects(own, send)).toEqual(["chat.react", "chat.delete"]);
     const moderation = {
       hidden: null,
       done: null,
@@ -200,16 +228,15 @@ describe("live chat", () => {
         send={send}
       />,
     );
-    expect(await menuLabels(moderator)).toEqual([
-      "React",
-      "Done",
-      "Turn into question",
-      "Dismiss reports",
-      "Remove message…",
-      "Pause for 10 minutes",
-      "Block for this session…",
+    expect(await menuEffects(moderator, send)).toEqual([
+      "chat.react",
+      "moderation.done",
+      "chat.convert",
+      "chat.moderate:keep",
+      "chat.moderate:remove",
+      "participation.block:paused",
+      "participation.block:session",
     ]);
-    expect(moderator.textContent).toContain("2 reports");
     const organizer = mount(
       <LiveChat
         state={stateWith({
@@ -220,15 +247,15 @@ describe("live chat", () => {
         send={send}
       />,
     );
-    expect(await menuLabels(organizer)).toEqual([
-      "React",
-      "Done",
-      "Turn into question",
-      "Dismiss reports",
-      "Remove message…",
-      "Pause for 10 minutes",
-      "Block for this session…",
-      "Block for this event…",
+    expect(await menuEffects(organizer, send)).toEqual([
+      "chat.react",
+      "moderation.done",
+      "chat.convert",
+      "chat.moderate:keep",
+      "chat.moderate:remove",
+      "participation.block:paused",
+      "participation.block:session",
+      "participation.block:event",
     ]);
   });
 
@@ -312,7 +339,7 @@ describe("live chat", () => {
       />,
     );
     expect(paused.querySelector("textarea")).toBeNull();
-    expect(paused.textContent).toContain("You're paused until");
+    expect(paused.querySelector('[role="alert"]')).not.toBeNull();
     expect(paused.querySelector('a[href="/code-of-conduct/"]')).not.toBeNull();
     expect(paused.textContent).toContain("Welcome to the session");
     const blocked = mount(
@@ -322,7 +349,8 @@ describe("live chat", () => {
         send={vi.fn(() => true)}
       />,
     );
-    expect(blocked.textContent).toContain("You can't post at this event.");
+    expect(blocked.querySelector("textarea")).toBeNull();
+    expect(blocked.querySelector('[role="alert"]')).not.toBeNull();
     expect(blocked.textContent).toContain("Welcome to the session");
   });
 

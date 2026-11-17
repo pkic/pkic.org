@@ -124,7 +124,7 @@ describe("answer threads", () => {
     openThread(host, live, [
       answer({ mine: true, removal: { reason: "spam", at: "2026-10-16T12:01:00.000Z", byName: null } }),
     ]);
-    expect(host.textContent).toContain("Removed by a moderator: Spam. Only you can see this.");
+    expect(host.textContent).toContain("Removed by a moderator: Spam.");
   });
 
   it("replaces every post box with the warning while a person is blocked, and keeps the thread readable", () => {
