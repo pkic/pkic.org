@@ -164,6 +164,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
         tickerChanged: () => this.graphics.refreshLocal(),
         listed: () => this.graphics.lists.due(),
         audited: () => this.scheduleCopy(),
+        counted: () => this.scheduleCopy(),
       },
     );
     this.questions = new LiveRoomQuestions(this.store, this.broadcast, this.controls, this.authors, {
@@ -362,7 +363,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     for (const questionId of recounted) await this.broadcast.question(questionId);
     for (const pollId of polls) await this.broadcast.poll(pollId);
     if (removed.length || recounted.length || chat.length) this.graphics.lists.due();
-    if (removed.length || recounted.length || polls.length) await this.scheduleAlarm(this.copyDue(), true);
+    if (this.store.hasPendingCopy()) await this.scheduleAlarm(this.copyDue(), true);
   }
 
   private copyDue(): number {

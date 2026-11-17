@@ -32,6 +32,8 @@ const payload = sessionPopularityReportResponseSchema.parse({
         { reaction: "thumbs_up", total: 10 },
       ],
       reactionTotal: 1258,
+      chatMessages: 312,
+      chatPeople: 48,
       questions: 4,
       questionVotes: 31,
       pollAnswers: 87,
@@ -72,6 +74,7 @@ it("shows each session's interactions from the server, most reactions first, and
   expect(cells).toEqual(
     expect.arrayContaining([
       "Reactions1,258👏 1,240 · ❤️ 5 · 🤯 3 · 👍 10",
+      "Chat messages312from 48 people",
       "Questions4",
       "Question votes31",
       "Poll answers87",
@@ -109,6 +112,6 @@ it("explains when no session has any interaction yet", async () => {
   });
   await vi.waitFor(async () => {
     await settle();
-    expect(host?.textContent).toContain("No session has reactions, questions, or poll answers yet.");
+    expect(host?.textContent).toContain("No session has reactions, chat messages, questions, or poll answers yet.");
   });
 });

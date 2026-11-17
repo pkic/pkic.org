@@ -10,7 +10,8 @@ const countSchema = z.number().int().nonnegative();
 
 /**
  * How each session's audience took part, from the live sessions' durable
- * copies: reactions, questions and poll answers. A reaction total counts one
+ * copies: reactions, chat, questions and poll answers. Chat counts every
+ * attendee message sent and how many people sent one, never the messages. A reaction total counts one
  * per person per reaction in each counting window, so it reflects people
  * rather than clicks.
  */
@@ -24,6 +25,8 @@ export const sessionPopularityReportRowSchema = z
       .array(z.object({ reaction: liveReactionSchema, total: countSchema }).strict())
       .length(LIVE_REACTION_IDS.length),
     reactionTotal: countSchema,
+    chatMessages: countSchema,
+    chatPeople: countSchema,
     questions: countSchema,
     questionVotes: countSchema,
     pollAnswers: countSchema,
@@ -36,6 +39,8 @@ export const SESSION_POPULARITY_REPORT_SORTS = [
   "startAt",
   "reactionTotal",
   ...LIVE_REACTION_IDS,
+  "chatMessages",
+  "chatPeople",
   "questions",
   "questionVotes",
   "pollAnswers",
@@ -54,7 +59,7 @@ export type SessionPopularityReportResponse = z.infer<typeof sessionPopularityRe
 export const sessionPopularityReportRouteSchema = {
   ...requiresPermissions("agenda:read"),
   tags: ["Events"],
-  summary: "Compare how each session's audience reacted, asked questions and answered polls",
+  summary: "Compare how each session's audience reacted, chatted, asked questions and answered polls",
   request: { params: eventSlugParamsSchema, query: sessionPopularityReportQuerySchema },
   responses: {
     ...ok("Sessions with any audience interaction and their counts", sessionPopularityReportResponseSchema),

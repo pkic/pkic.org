@@ -79,6 +79,12 @@ describe("Session popularity report", () => {
       ...reactions(eventId, panel, { applause: 12, laugh: 30, mind_blown: 2 }),
       ...reactions(eventId, silent, { applause: 0 }),
       ...reactions(otherEvent, elsewhere, { applause: 500 }),
+      env.DB.prepare(
+        "INSERT INTO event_session_chat_totals(event_id,occurrence_id,messages,people,copied_at) VALUES(?,?,?,?,?)",
+      ).bind(eventId, workshop, 60, 9, at),
+      env.DB.prepare(
+        "INSERT INTO event_session_chat_totals(event_id,occurrence_id,messages,people,copied_at) VALUES(?,?,?,?,?)",
+      ).bind(otherEvent, elsewhere, 900, 90, at),
       question(panel, 7),
       question(panel, 3),
       question(workshop, 1),
@@ -87,7 +93,7 @@ describe("Session popularity report", () => {
     ]);
   });
 
-  it("combines reactions, questions and poll answers per session in one round trip", async () => {
+  it("combines reactions, chat, questions and poll answers per session in one round trip", async () => {
     const result = await report();
     expect(result.timeZone).toBe("Europe/Amsterdam");
     expect(result.page).toEqual({ limit: 50, offset: 0, total: 3, hasMore: false });
@@ -104,12 +110,21 @@ describe("Session popularity report", () => {
         { reaction: "thumbs_up", total: 10 },
       ],
       reactionTotal: 55,
+      chatMessages: 0,
+      chatPeople: 0,
       questions: 0,
       questionVotes: 0,
       pollAnswers: 0,
     });
     expect(result.sessions[1]).toMatchObject({ reactionTotal: 44, questions: 2, questionVotes: 10, pollAnswers: 0 });
-    expect(result.sessions[2]).toMatchObject({ reactionTotal: 0, questions: 1, questionVotes: 1, pollAnswers: 30 });
+    expect(result.sessions[2]).toMatchObject({
+      reactionTotal: 0,
+      chatMessages: 60,
+      chatPeople: 9,
+      questions: 1,
+      questionVotes: 1,
+      pollAnswers: 30,
+    });
   });
 
   it("sorts by any measure, searches titles, and pages on the server", async () => {
@@ -117,6 +132,7 @@ describe("Session popularity report", () => {
     expect(ids(await report("?sort=-laugh"))[0]).toBe(panel);
     expect(ids(await report("?sort=-questions"))).toEqual([panel, workshop, keynote]);
     expect(ids(await report("?sort=-pollAnswers"))[0]).toBe(workshop);
+    expect(ids(await report("?sort=-chatMessages"))[0]).toBe(workshop);
     expect(ids(await report("?sort=startAt"))).toEqual([keynote, panel, workshop]);
     expect(ids(await report("?q=agility"))).toEqual([panel]);
     const page = await report("?limit=1&offset=1");

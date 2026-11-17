@@ -18,7 +18,7 @@ function sessionStart(startAt: string, zone: ClockZone) {
   return `${formatEventDayInZone(startAt, zone)} · ${formatClockInZone(startAt, zone)}`;
 }
 
-type CountKey = "reactionTotal" | "questions" | "questionVotes" | "pollAnswers";
+type CountKey = "reactionTotal" | "chatPeople" | "questions" | "questionVotes" | "pollAnswers";
 
 function countColumn(header: string, key: CountKey): Column<SessionPopularityReportRow> {
   return {
@@ -32,7 +32,7 @@ function countColumn(header: string, key: CountKey): Column<SessionPopularityRep
 
 /**
  * How each session's audience took part, side by side: its reactions with
- * their breakdown, the questions asked and voted on, and the poll answers,
+ * their breakdown, the chat, the questions asked and voted on, and the poll answers,
  * sorted and paged by the server so organizers can compare sessions after the
  * event. Each reaction also has its own column, hidden until a reader wants
  * to sort by it.
@@ -51,7 +51,7 @@ export function SessionPopularityReport({ slug, clock }: { slug: string; clock?:
       caption="Session popularity"
       urlState="sessionPopularity"
       searchPlaceholder="Find a session…"
-      empty="No session has reactions, questions, or poll answers yet. They appear here shortly after a live session starts."
+      empty="No session has reactions, chat messages, questions, or poll answers yet. They appear here shortly after a live session starts."
       inset={
         <p class="pk-small pk-muted">
           Reactions count each person once per reaction every 10 seconds, so they reflect people, not clicks.
@@ -106,6 +106,23 @@ export function SessionPopularityReport({ slug, clock }: { slug: string; clock?:
           cell: (row) => formatNumber(row.reactions.find((count) => count.reaction === reaction.id)?.total ?? 0),
           sort: { asc: reaction.id, desc: `-${reaction.id}`, defaultDirection: "desc" },
         })),
+        {
+          header: "Chat messages",
+          align: "end",
+          width: "fit",
+          cell: (row) => (
+            <>
+              <div>{formatNumber(row.chatMessages)}</div>
+              {row.chatPeople > 0 && (
+                <div class="pk-small pk-muted">
+                  from {formatNumber(row.chatPeople)} {row.chatPeople === 1 ? "person" : "people"}
+                </div>
+              )}
+            </>
+          ),
+          sort: { asc: "chatMessages", desc: "-chatMessages", defaultDirection: "desc" },
+        },
+        { ...countColumn("People in chat", "chatPeople"), defaultHidden: true },
         countColumn("Questions", "questions"),
         countColumn("Question votes", "questionVotes"),
         countColumn("Poll answers", "pollAnswers"),

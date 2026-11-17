@@ -151,6 +151,13 @@ export class LiveRoomChat {
       text,
       sentAt,
     );
+    if (channel === "attendee") {
+      this.sql.exec(
+        "INSERT INTO room_chat_totals(id,messages,change_seq) VALUES(1,1,?) ON CONFLICT(id) DO UPDATE SET messages=messages+1,change_seq=excluded.change_seq",
+        this.sql.nextChange(),
+      );
+      this.sql.exec("INSERT OR IGNORE INTO room_chat_senders(user_id) VALUES(?)", actor.userId);
+    }
     const dropped = this.sql
       .rows<{ id: string }>(
         `SELECT id FROM ${TABLES[channel]} ORDER BY sent_at DESC, rowid DESC LIMIT -1 OFFSET ${LIVE_CHAT_POLICY.storedMessages}`,
@@ -196,6 +203,8 @@ export class LiveRoomChat {
       this.sql.exec(`DELETE FROM ${table} WHERE user_id = ?`, userId);
     for (const table of ["room_chat_limits", "room_chat_restrictions", "room_people"])
       this.sql.exec(`DELETE FROM ${table} WHERE user_id = ?`, userId);
+    if (this.sql.rows("DELETE FROM room_chat_senders WHERE user_id = ? RETURNING user_id", userId).length)
+      this.sql.exec("UPDATE room_chat_totals SET change_seq=? WHERE id=1", this.sql.nextChange());
     return removed;
   }
 }
