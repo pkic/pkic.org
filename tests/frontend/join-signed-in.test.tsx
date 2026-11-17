@@ -267,7 +267,11 @@ describe("signed-in membership application", () => {
 
   it("applies as the organization identity on /join/ without typed details or a path question", async () => {
     const requests = openJoinPage([representation], ({ path }) =>
-      path === "/api/v1/members/applications/form" ? Response.json(definition) : new Response(null, { status: 404 }),
+      path === "/api/v1/members/join/verify"
+        ? Response.json({ status: "representation_application_ready" })
+        : path === "/api/v1/members/applications/form"
+          ? Response.json(definition)
+          : new Response(null, { status: 404 }),
     );
 
     await import("../../assets/ts/member-flows/join-form");
@@ -282,8 +286,12 @@ describe("signed-in membership application", () => {
     expect(categories.map((input) => input.value)).toEqual(["A"]);
     expect(form.querySelector('[name="custom.about_yourself"]')).toBeNull();
     expect(form.querySelector('[name="custom.about_organization"]')).not.toBeNull();
-    // The membership path is only resolved for someone who represents no organization yet.
-    expect(requests.map(({ path }) => path)).toEqual(["/api/v1/members/applications/form"]);
+    // The server confirms the representation may apply before the form opens.
+    expect(requests.map(({ path }) => path)).toEqual([
+      "/api/v1/members/join/verify",
+      "/api/v1/members/applications/form",
+    ]);
+    expect(requests[0]!.body).toEqual({ identityId: REPRESENTATION_ID, unaffiliatedAttestation: false });
   });
 
   it("resolves the chosen path from the session and shows what the server decides", async () => {
