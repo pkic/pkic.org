@@ -100,7 +100,7 @@ export const stageTalkState: LiveRoomState = {
       { ...defaultLiveTimerGraphic(pitch.id), label: "Pitch 2 of 6", warningSeconds: 30 },
     ]),
   }),
-  burst: { sequence: 1, counts: { applause: 24, love: 6 } },
+  burst: { sequence: 1, counts: { applause: 24, love: 6 }, people: { applause: 24, love: 6 } },
 };
 
 const askedQuestion = (id: string, text: string, votes: number): LiveQuestion => ({

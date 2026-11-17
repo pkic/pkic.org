@@ -29,8 +29,13 @@ import { eventScreenBrowserSections } from "./sections-event-screens-browser";
 async function main(): Promise<void> {
   const mount = document.getElementById("pk-preview");
   if (!mount) return;
-  const { liveAnswerSections, stageDisplaySections, studioOnScreenSections, studioTimerSections } =
-    await import("./sections-live-room");
+  const {
+    liveAnswerSections,
+    liveReactionsSections,
+    stageDisplaySections,
+    studioOnScreenSections,
+    studioTimerSections,
+  } = await import("./sections-live-room");
   const sections = [
     ...basicSections,
     ...dataSections,
@@ -53,6 +58,7 @@ async function main(): Promise<void> {
     ...liveAnswerSections,
     ...eventScreenBrowserSections,
     ...stageDisplaySections,
+    ...liveReactionsSections,
   ];
   // `?only=<id>` renders one section alone, for a tight screenshot of one control.
   const only = new URLSearchParams(window.location.search).get("only");

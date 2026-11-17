@@ -161,6 +161,7 @@ export class LiveRoomGraphics {
       topQuestions: input.topQuestions && this.lists.topQuestions(input.topQuestions),
       chatFeed: input.chatFeed && (await this.lists.chatFeed(input.chatFeed)),
       reactions: input.reactions,
+      reactionsGraphic: input.reactionsGraphic,
       ticker: await resolveLiveTicker(
         this.db,
         room.eventId,

@@ -97,7 +97,7 @@ describe("reactions in the Graphics panel", () => {
 });
 
 describe("audience graphics on an output", () => {
-  const burst = { sequence: 1, counts: { applause: 2, thumbs_up: 1 } };
+  const burst = { sequence: 1, counts: { applause: 2, thumbs_up: 1 }, people: { applause: 2, thumbs_up: 1 } };
   const floating = () => host!.querySelectorAll(".pk-live-overlay__reaction").length;
 
   async function draw(state: LiveRoomState, view: "program" | "projector" = "program") {
