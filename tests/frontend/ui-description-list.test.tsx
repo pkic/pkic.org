@@ -8,7 +8,7 @@
  * there is stated rather than skipped.
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
@@ -99,6 +99,99 @@ describe("DescriptionList", () => {
 
     const compact = mount(<DescriptionList density="compact" items={[{ term: "Submitted", value: "2026-08-14" }]} />);
     expect(compact.querySelector("dl")?.className).toContain("pk-datalist--compact");
+  });
+
+  it("keeps repeated labels paired with their values after rows change", () => {
+    const container = mount(
+      <DescriptionList
+        items={[
+          { key: "identity:1", term: "Availability", value: "Listed on the organization page" },
+          { key: "identity:2", term: "Availability", value: "Not listed" },
+          { term: "Availability", value: "Only this person" },
+        ]}
+      />,
+    );
+    void act(() =>
+      render(
+        <DescriptionList
+          items={[
+            { key: "identity:2", term: "Availability", value: "Not listed" },
+            { term: "Availability", value: "Only this person" },
+          ]}
+        />,
+        container,
+      ),
+    );
+    expect(pairs(container)).toEqual([
+      ["Availability", "Not listed"],
+      ["Availability", "Only this person"],
+    ]);
+    void act(() =>
+      render(<DescriptionList items={[{ term: "Availability", value: "Signed-in members" }]} />, container),
+    );
+    expect(pairs(container)).toEqual([["Availability", "Signed-in members"]]);
+  });
+
+  it("preserves a focused action when a conditional row is inserted and removed above it", () => {
+    const email = { term: "Email", value: <button type="button">Change email</button> };
+    const container = mount(<DescriptionList items={[email]} />);
+    const value = container.querySelector("dd");
+    const button = container.querySelector("button");
+    expect(button).not.toBeNull();
+    button!.focus();
+
+    for (const items of [[{ term: "Name", value: "Example Participant" }, email], [email]]) {
+      void act(() => render(<DescriptionList items={items} />, container));
+      expect(container.querySelector("button")).toBe(button);
+      expect(button?.parentElement).toBe(value);
+      expect(document.activeElement).toBe(button);
+    }
+  });
+
+  it("preserves explicitly keyed rows through reorder, relabeling, and removal of duplicate terms", () => {
+    const first = { key: "identity:1", term: "Availability", value: "Not listed" };
+    const second = { key: "identity:2", term: "Availability", value: <button type="button">Change visibility</button> };
+    const availability = { term: "Availability", value: "Only this person" };
+    const container = mount(<DescriptionList items={[first, second, availability]} />);
+    const value = container.querySelectorAll("dd")[1];
+    const button = container.querySelector("button");
+    expect(button).not.toBeNull();
+    button!.focus();
+
+    for (const items of [
+      [second, first, availability],
+      [{ ...second, term: "Renamed organization" }, availability],
+    ]) {
+      void act(() => render(<DescriptionList items={items} />, container));
+      expect(container.querySelector("dd")).toBe(value);
+      expect(container.querySelector("button")).toBe(button);
+      expect(document.activeElement).toBe(button);
+    }
+  });
+
+  it("warns about duplicate effective keys only during development", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      vi.stubEnv("DEV", true);
+      mount(<DescriptionList items={[{ term: "Comments" }, { key: "Comments", term: "Other label" }]} />);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('duplicate row key "Comments"'));
+      warn.mockClear();
+      mount(
+        <DescriptionList
+          items={[
+            { key: "one", term: "Comments" },
+            { key: "two", term: "Comments" },
+          ]}
+        />,
+      );
+      expect(warn).not.toHaveBeenCalled();
+      vi.stubEnv("DEV", false);
+      mount(<DescriptionList items={[{ term: "Comments" }, { term: "Comments" }]} />);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+      warn.mockRestore();
+    }
   });
 
   it("renders nothing but an empty list when there is nothing to show", () => {
