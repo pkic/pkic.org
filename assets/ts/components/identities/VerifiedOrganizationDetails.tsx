@@ -35,7 +35,10 @@ export function VerifiedOrganizationDetails({
   prepare,
   controller,
   onDraftChange,
+  confirmSole = false,
 }: {
+  /** Selects the domain's only organization, for a step that confirms it rather than adds one. */
+  confirmSole?: boolean;
   initial: Resolved;
   emailId: string | null;
   resolve: (domain?: string) => Promise<Resolved>;
@@ -44,8 +47,12 @@ export function VerifiedOrganizationDetails({
   onDraftChange?: (draft: { organizationName: string; jobTitle: string }) => void;
 }) {
   const [resolved, setResolved] = useState(initial);
+  const soleOrganization = (value: Resolved) =>
+    confirmSole && value.organizations.length === 1 ? value.organizations[0]!.id : null;
   const [domainConfirmed, setDomainConfirmed] = useState(initial.domains.length <= 1);
-  const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [organizationId, setOrganizationId] = useState<string | null>(() =>
+    initial.domains.length <= 1 ? soleOrganization(initial) : null,
+  );
   const [organizationName, setOrganizationName] = useState("");
   const [adding, showAdding, closeAdding] = useDialogQueryState("organization");
   const [jobTitle, setJobTitle] = useState("");
@@ -108,7 +115,7 @@ export function VerifiedOrganizationDetails({
       const result = await resolve(domain);
       setResolved(result);
       setDomainConfirmed(true);
-      setOrganizationId(null);
+      setOrganizationId(soleOrganization(result));
     } catch (cause) {
       setError(detailsForm.refuse(cause));
     } finally {

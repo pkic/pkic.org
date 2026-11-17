@@ -2,7 +2,11 @@
 import { createRef, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { identitiesListResponseSchema } from "../../assets/shared/schemas/identity";
+import { identitiesListResponseSchema, identityMutationResponseSchema } from "../../assets/shared/schemas/identity";
+import {
+  identityAffiliationPreviewResponseSchema,
+  identityAffiliationPreviewSchema,
+} from "../../assets/shared/schemas/identity-affiliation";
 import { userAuthSessionResponseSchema, userSignUpRequestSchema } from "../../assets/shared/schemas/user-auth";
 import { myProfileUpdateSchema } from "../../assets/shared/schemas/me";
 import { portalProfileFixture, portalSessionFixture } from "../helpers/portal-session";
@@ -91,11 +95,31 @@ interface Recorded {
   body: unknown;
 }
 
-/** `signedIn` false answers the session with 401; `organizationName` undefined holds no identity. */
+const CONTEXT_TOKEN = "context-token-".padEnd(40, "x");
+
+/** The domain's organizations as the shared affiliation preview answers them; null fails the preview. */
+function affiliationPreview(organizations: { id: string; name: string }[] | null, prepare = false) {
+  return organizations
+    ? identityAffiliationPreviewResponseSchema.parse({
+        email: "ada@example.test",
+        domain: "example.test",
+        domains: [{ domain: "example.test", canLink: true, organizationName: null }],
+        organization: null,
+        organizations: organizations.map((item) => ({ ...item, identityId: null, jobTitle: null })),
+        contextToken: prepare ? CONTEXT_TOKEN : undefined,
+      })
+    : null;
+}
+
+/**
+ * `signedIn` false answers the session with 401; `organizationName` undefined holds no identity.
+ * `organizations` is what the domain resolves to for an account without an organization identity.
+ */
 function installResponses(
   organizationName: string | null | undefined,
   signedIn = true,
   actingIdentityId: string = IDENTITY_ID,
+  organizations: { id: string; name: string }[] | null = null,
 ): Recorded[] {
   const recorded: Recorded[] = [];
   let saved = profile();
@@ -114,7 +138,18 @@ function installResponses(
       });
       let body: unknown;
       let status = 200;
-      if (url.pathname === "/api/v1/auth/session") {
+      if (url.pathname === "/api/v1/users/current/identities/preview") {
+        const input = identityAffiliationPreviewSchema.parse(JSON.parse(String(init.body)));
+        body = affiliationPreview(organizations, input.phase === "prepare") ?? {
+          error: { code: "UNAVAILABLE", message: "Unavailable" },
+        };
+        status = organizations ? 200 : 503;
+      } else if (url.pathname === "/api/v1/users/current/identities" && method === "POST") {
+        // The confirmed organization becomes the account's organization identity.
+        organizationName = organizations?.[0]?.name ?? null;
+        actingIdentityId = IDENTITY_ID;
+        body = identityMutationResponseSchema.parse({ success: true, identityId: IDENTITY_ID, state: "active" });
+      } else if (url.pathname === "/api/v1/auth/session") {
         body = signedIn
           ? session(organizationName, actingIdentityId)
           : { error: { code: "UNAUTHORIZED", message: "Sign in" } };
@@ -197,6 +232,7 @@ function contactStep(
   onReadyChange: (ready: boolean) => void = () => {},
   onSignInChange?: (shown: boolean) => void,
   onRepresentationMissingChange?: (missing: boolean) => void,
+  confirmRepresentation?: { current: (() => Promise<boolean>) | null },
 ) {
   return (
     <RegistrationContactStep
@@ -204,6 +240,7 @@ function contactStep(
       onReadyChange={onReadyChange}
       onSignInChange={onSignInChange}
       onRepresentationMissingChange={onRepresentationMissingChange}
+      confirmRepresentation={confirmRepresentation}
     />
   );
 }
@@ -269,8 +306,52 @@ describe("registration contact step", () => {
     expect(form.querySelector('button[aria-label="Change representation"]')).not.toBeNull();
   });
 
+  it("confirms the domain's only organization in place for a work address with no organization yet", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    const recorded = installResponses(null, true, PERSONAL_IDENTITY_ID, [
+      { id: ORGANIZATION_ID, name: "Example Corp" },
+    ]);
+    let missing = true;
+    const confirm: { current: (() => Promise<boolean>) | null } = { current: null };
+    const form = await mount(contactStep(undefined, undefined, (next) => (missing = next), confirm));
+    // The shared organization details select the only organization; the job title is still asked.
+    expect(controlFor(form, "Organization").value).toBe(ORGANIZATION_ID);
+    expect(value(form, "organizationRepresentationMissing")).toBe("false");
+    expect(missing).toBe(false);
+    expect(confirm.current).not.toBeNull();
+
+    // Without a job title, nothing is created and the step stays put.
+    let confirmed: boolean | undefined;
+    await act(async () => {
+      confirmed = await confirm.current!();
+    });
+    expect(confirmed).toBe(false);
+    expect(
+      recorded.some((request) => request.method === "POST" && request.path === "/api/v1/users/current/identities"),
+    ).toBe(false);
+
+    await act(() => {
+      const control = controlFor(form, "Job title");
+      control.value = "Engineer";
+      control.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      confirmed = await confirm.current!();
+    });
+    await settle();
+    expect(confirmed).toBe(true);
+    const created = recorded.find(
+      (request) => request.method === "POST" && request.path === "/api/v1/users/current/identities",
+    );
+    expect(created?.body).toEqual({ contextToken: CONTEXT_TOKEN });
+    expect(confirm.current).toBeNull();
+    expect(value(form, "identityId")).toBe(IDENTITY_ID);
+    expect(form.textContent).toContain("Example Corp");
+  });
+
   it("keeps a work address from registering as the personal identity a new account starts with", async () => {
     window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    // The domain's organizations could not be read, so the shared chooser is the way to one.
     installResponses(null);
     let missing = false;
     const form = await mount(contactStep(undefined, undefined, (next) => (missing = next)));

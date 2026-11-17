@@ -1,7 +1,8 @@
 import type { PersonalNamePatch } from "./ParticipationPersonalDetails";
 import { PersonDetailsSummary } from "./PersonDetailsSummary";
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { ComponentChildren, RefObject } from "preact";
+import type { MutableRef } from "preact/hooks";
 import { createPortal } from "preact/compat";
 import type { z } from "zod";
 import type { FieldPresentation } from "../hooks/useContractForm";
@@ -10,7 +11,17 @@ import type { SessionActingIdentity } from "../../shared/session-acting-identity
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
 import { myProfileSchema, myProfileUpdateSchema } from "../../shared/schemas/me";
 import type { WorkEmailStep } from "../../shared/schemas/work-email";
-import { getJson, patchJson } from "../shared/api-client";
+import { getJson, patchJson, postJson } from "../shared/api-client";
+import {
+  identityAffiliationPreviewSchema,
+  identityAffiliationPreviewResponseSchema,
+} from "../../shared/schemas/identity-affiliation";
+import { currentUserIdentityCreateSchema, identityMutationResponseSchema } from "../../shared/schemas/identity";
+import {
+  VerifiedOrganizationDetails,
+  type VerifiedOrganizationController,
+} from "./identities/VerifiedOrganizationDetails";
+import { friendlyErrorMessage } from "./ErrorAlert";
 import { Alert } from "../ui/Alert";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
@@ -33,7 +44,19 @@ type Stage =
   /** No session in this browser: the person signs in or starts an account, then returns here. */
   | { kind: "signed-out" }
   /** Signed in: the account's address is verified already, and registration continues with saved details. */
-  | { kind: "known"; step: WorkEmailStep; person: KnownPerson; workEmail: boolean };
+  | {
+      kind: "known";
+      step: WorkEmailStep;
+      person: KnownPerson;
+      workEmail: boolean;
+      /** A work address with no organization identity yet confirms its organization in place. */
+      affiliation: Affiliation | null;
+    };
+
+type Affiliation = z.infer<typeof identityAffiliationPreviewResponseSchema>;
+const PREVIEW_ENDPOINT = "/api/v1/users/current/identities/preview";
+const previewAffiliation = (input: z.input<typeof identityAffiliationPreviewSchema>) =>
+  postJson(PREVIEW_ENDPOINT, identityAffiliationPreviewSchema.parse(input), identityAffiliationPreviewResponseSchema);
 
 type Session = z.infer<typeof userAuthSessionResponseSchema>;
 
@@ -74,10 +97,21 @@ async function readStage(): Promise<Stage> {
   ]);
   const workEmail = domain?.kind === "work";
   const person = workEmail ? { ...known, identity: likelyOrganizationIdentity(known) } : known;
+  // Without any organization identity, the shared organization details confirm one; otherwise the chooser picks.
+  const affiliation =
+    workEmail && !known.identities.some((identity) => identity.organizationId)
+      ? await previewAffiliation({
+          phase: "resolve",
+          email: session.identity.email,
+          emailId: null,
+          unaffiliatedAttestation: false,
+        }).catch(() => null)
+      : null;
   return {
     kind: "known",
     person,
     workEmail,
+    affiliation,
     step: { email: session.identity.email, unaffiliatedAttestation: person.identity?.organizationId === null },
   };
 }
@@ -186,7 +220,13 @@ export function RegistrationContactStep({
   onRepresentationMissingChange,
   onSignInChange,
   presentationOf,
+  confirmRepresentation,
 }: {
+  /**
+   * Set while the step confirms an organization in place: Continue awaits it, which adds the
+   * identity through the shared contract, and clears it once the identity exists.
+   */
+  confirmRepresentation?: MutableRef<(() => Promise<boolean>) | null>;
   /** Where the sign-in card renders: outside the registration form, because the card has a form of its own. */
   signInSlot: RefObject<HTMLElement>;
   onReadyChange: (ready: boolean) => void;
@@ -197,12 +237,17 @@ export function RegistrationContactStep({
   presentationOf?: (name: string) => FieldPresentation;
 }) {
   const [stage, setStage] = useState<Stage>({ kind: "loading" });
+  const organization = useRef<VerifiedOrganizationController>({});
+  const [organizationChosen, setOrganizationChosen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState("");
   // A work address never registers as the personal identity a new account starts with.
   const representationMissing = stage.kind === "known" && stage.workEmail && !stage.person.identity?.organizationId;
+  const confirmsInPlace = representationMissing && stage.kind === "known" && stage.affiliation !== null;
   useEffect(() => onReadyChange(stage.kind === "known"), [stage.kind, onReadyChange]);
   useEffect(
-    () => onRepresentationMissingChange?.(representationMissing),
-    [representationMissing, onRepresentationMissingChange],
+    () => onRepresentationMissingChange?.(confirmsInPlace ? !organizationChosen || confirming : representationMissing),
+    [confirmsInPlace, organizationChosen, confirming, representationMissing, onRepresentationMissingChange],
   );
   useEffect(() => onSignInChange?.(stage.kind === "signed-out"), [stage.kind, onSignInChange]);
 
@@ -216,21 +261,52 @@ export function RegistrationContactStep({
   useEffect(() => {
     void load();
   }, [load]);
+  if (confirmRepresentation)
+    confirmRepresentation.current = confirmsInPlace
+      ? async () => {
+          setConfirming(true);
+          setConfirmError("");
+          try {
+            if (!(await organization.current.prepare?.())) return false;
+            const checked = organization.current.read?.();
+            if (!checked || "refused" in checked) return false;
+            await postJson(
+              "/api/v1/users/current/identities",
+              currentUserIdentityCreateSchema.parse({ contextToken: checked.contextToken }),
+              identityMutationResponseSchema,
+            );
+            confirmRepresentation.current = null;
+            await load();
+            return true;
+          } catch (cause) {
+            setConfirmError(
+              friendlyErrorMessage(cause instanceof Error ? cause.message : "Could not add your organization."),
+            );
+            return false;
+          } finally {
+            setConfirming(false);
+          }
+        }
+      : null;
 
   if (stage.kind === "loading") return <p role="status">Loading your saved details…</p>;
   if (stage.kind === "unavailable") return <Alert tone="danger">{stage.message}</Alert>;
 
   if (stage.kind === "known") {
-    const { person, step, workEmail } = stage;
+    const { person, step, workEmail, affiliation } = stage;
     return (
       <div class="pk-stack">
-        {representationMissing && (
+        {representationMissing && !confirmsInPlace && (
           <Alert tone="info">
             This email address uses an organization domain. Choose or add the organization you represent for this
             registration.
           </Alert>
         )}
-        <input type="hidden" name="organizationRepresentationMissing" value={String(representationMissing)} />
+        <input
+          type="hidden"
+          name="organizationRepresentationMissing"
+          value={String(representationMissing && !confirmsInPlace)}
+        />
         <AddressFields step={step} />
         <Details
           email={step.email}
@@ -244,25 +320,49 @@ export function RegistrationContactStep({
               person: { ...person, firstName: saved.firstName ?? "", lastName: saved.lastName ?? "" },
               step,
               workEmail,
+              affiliation,
             });
           }}
           representation={
-            <RegistrationIdentityField
-              preferred={representationMissing ? null : person.identity}
-              available={person.identities}
-              organizationOnly={workEmail}
-              userId={person.userId}
-              onSelect={(identity) => {
-                setStage({
-                  kind: "known",
-                  person: { ...person, identity },
-                  step: { ...step, unaffiliatedAttestation: identity?.organizationId === null },
-                  workEmail,
-                });
-              }}
-            />
+            confirmsInPlace ? undefined : (
+              <RegistrationIdentityField
+                preferred={representationMissing ? null : person.identity}
+                available={person.identities}
+                organizationOnly={workEmail}
+                userId={person.userId}
+                onSelect={(identity) => {
+                  setStage({
+                    kind: "known",
+                    person: { ...person, identity },
+                    step: { ...step, unaffiliatedAttestation: identity?.organizationId === null },
+                    workEmail,
+                    affiliation,
+                  });
+                }}
+              />
+            )
           }
         />
+        {confirmsInPlace && affiliation && (
+          <VerifiedOrganizationDetails
+            confirmSole
+            initial={affiliation}
+            emailId={null}
+            controller={organization.current}
+            onDraftChange={(draft) => setOrganizationChosen(Boolean(draft.organizationName))}
+            resolve={(domain) =>
+              previewAffiliation({
+                phase: "resolve",
+                email: step.email,
+                emailId: null,
+                domain,
+                unaffiliatedAttestation: false,
+              })
+            }
+            prepare={(input) => previewAffiliation(input)}
+          />
+        )}
+        {confirmError && <Alert tone="danger">{confirmError}</Alert>}
       </div>
     );
   }

@@ -163,6 +163,7 @@ export function RegistrationFlow(props: Props) {
   const contactReady = useCallback((value: boolean) => setReady(value), []);
   // Continue waits while a work address has no organization; the step's alert says why.
   const [representationPending, setRepresentationPending] = useState(false);
+  const confirmRepresentation = useRef<(() => Promise<boolean>) | null>(null);
 
   const setup = useRef({
     props,
@@ -189,6 +190,12 @@ export function RegistrationFlow(props: Props) {
           const checked = contactContract.submit();
           if (!checked.data) {
             setError(checked.formMessage ?? "");
+            return false;
+          }
+          // An organization confirmed on this step becomes an identity first, then the step continues.
+          const confirm = confirmRepresentation.current;
+          if (confirm) {
+            void confirm().then((confirmed) => confirmed && navigation.continueFrom(1));
             return false;
           }
         }
@@ -354,6 +361,7 @@ export function RegistrationFlow(props: Props) {
                     signInSlot={signInSlot}
                     onReadyChange={contactReady}
                     onRepresentationMissingChange={setRepresentationPending}
+                    confirmRepresentation={confirmRepresentation}
                     onSignInChange={setSigningIn}
                     presentationOf={(name) => {
                       const current = contract.of(name);
