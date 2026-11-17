@@ -3,6 +3,7 @@ import { prepareIdentityEmailOwnershipStatements, requireIdentityEmailAssignable
 import { prepareOrganizationIdentityPublication } from "./lifecycle-publication";
 import {
   identityProfileChanges,
+  readOrganizationProfileListingApproval,
   prepareIdentityProfilePublication,
   prepareIdentityProfileUpdateStatement,
 } from "./profile-statement";
@@ -282,10 +283,9 @@ export async function transitionOrganizationIdentity(
       linksJson: identity.links_json,
       source: "staff",
       showOnOrganizationProfile: identity.show_on_organization_profile === 1,
-      organizationProfileListingApproved:
-        identity.organization_profile_listing_approved === null
-          ? null
-          : identity.organization_profile_listing_approved === 1,
+      organizationProfileListingApproved: readOrganizationProfileListingApproval(
+        identity.organization_profile_listing_approved,
+      ),
       startImmediately: true,
       predecessorIdentityId: identity.id,
       now: at,

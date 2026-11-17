@@ -18,7 +18,11 @@ import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../aud
 import { identityJobTitleSql } from "./affiliation-projection";
 import { prepareIdentityEmailOwnershipStatements, requireIdentityEmailAssignable } from "./email-ownership";
 import { prepareUserProfileStatements } from "../users";
-import { prepareIdentityProfileEdit, type EditableIdentityProfile } from "./profile-statement";
+import {
+  prepareIdentityProfileEdit,
+  readOrganizationProfileListingApproval,
+  type EditableIdentityProfile,
+} from "./profile-statement";
 
 export interface OwnIdentityProfileUpdateInput {
   firstName?: string;
@@ -120,11 +124,7 @@ export async function updateOwnIdentityProfile(
   if (
     input.showOnOrgProfile === true &&
     current.show_on_organization_profile === 0 &&
-    !identityOwnerCanList(
-      current.organization_profile_listing_approved === null
-        ? null
-        : current.organization_profile_listing_approved === 1,
-    )
+    !identityOwnerCanList(readOrganizationProfileListingApproval(current.organization_profile_listing_approved))
   ) {
     const message = "Ask PKI Consortium staff or an organization contact to list you on the organization profile.";
     throw new AppError(403, "ORGANIZATION_LISTING_REQUIRES_APPROVAL", message, {

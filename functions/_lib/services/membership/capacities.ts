@@ -160,6 +160,7 @@ export async function updateMembershipCapacity(
       .prepare(
         `UPDATE identities SET updated_at = updated_at
           WHERE id = ? AND user_id = ? AND updated_at = ?
+            AND organization_profile_listing_approved IS ?
             AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
             AND EXISTS (
               SELECT 1 FROM members member
@@ -175,6 +176,7 @@ export async function updateMembershipCapacity(
         identity.id,
         identity.user_id,
         identity.identity_updated_at,
+        identity.organization_profile_listing_approved,
         identity.member_id,
         identity.member_updated_at,
         identity.user_id,

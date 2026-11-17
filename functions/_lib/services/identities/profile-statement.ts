@@ -27,9 +27,14 @@ export interface IdentityProfileSnapshot {
 
 export type ProfileVisibilityAuthority = "owner" | "organization";
 
+/** Decode the nullable D1 approval flag without turning an undecided listing into a refusal. */
+export function readOrganizationProfileListingApproval(value: number | null): boolean | null {
+  return value === null ? null : value === 1;
+}
+
 /** Owner hiding retains an existing grant; an explicit organization decision replaces it. */
 function listingApproval(approved: number | null, requested: boolean, authority: ProfileVisibilityAuthority) {
-  return authority === "organization" ? requested : approved === 1;
+  return authority === "organization" ? requested : readOrganizationProfileListingApproval(approved) === true;
 }
 
 type ProfileChange = { from: unknown; to: unknown };
@@ -56,14 +61,20 @@ export function identityProfileChanges(
     record("showOnOrganizationProfile", current.show_on_organization_profile === 1, input.showOnOrganizationProfile);
     record(
       "organizationProfileListingApproved",
-      current.organization_profile_listing_approved === null
-        ? null
-        : current.organization_profile_listing_approved === 1,
+      readOrganizationProfileListingApproval(current.organization_profile_listing_approved),
       listingApproval(current.organization_profile_listing_approved, input.showOnOrganizationProfile, authority),
     );
   }
   return changes;
 }
+
+type IdentityProfileUpdateSnapshot = {
+  id: string;
+  updated_at: string;
+  organization_id: string | null;
+  job_title: string | null;
+  organization_profile_listing_approved?: number | null;
+};
 
 /**
  * Every identity profile edit is written here, so the job-title rule holds for
@@ -74,18 +85,30 @@ export function identityProfileChanges(
  */
 export function prepareIdentityProfileUpdateStatement(
   db: DatabaseLike,
-  identity: {
-    id: string;
-    updated_at: string;
-    organization_id: string | null;
-    job_title: string | null;
-    organization_profile_listing_approved?: number | null;
-  },
+  identity: IdentityProfileUpdateSnapshot,
+  input: IdentityProfileInput & { showOnOrganizationProfile?: undefined },
+  at: string,
+  jobTitleField?: string,
+  authority?: ProfileVisibilityAuthority,
+): StatementLike;
+export function prepareIdentityProfileUpdateStatement(
+  db: DatabaseLike,
+  identity: IdentityProfileUpdateSnapshot & { organization_profile_listing_approved: number | null },
+  input: IdentityProfileInput,
+  at: string,
+  jobTitleField?: string,
+  authority?: ProfileVisibilityAuthority,
+): StatementLike;
+export function prepareIdentityProfileUpdateStatement(
+  db: DatabaseLike,
+  identity: IdentityProfileUpdateSnapshot,
   input: IdentityProfileInput,
   at: string,
   jobTitleField = "jobTitle",
   authority: ProfileVisibilityAuthority = "organization",
 ) {
+  if (input.showOnOrganizationProfile !== undefined && identity.organization_profile_listing_approved === undefined)
+    throw new Error("A visibility edit requires the listing approval snapshot");
   // A names-only edit leaves the profile alone, so it is not held to the title rule.
   const editsProfile = Object.values(input).some((value) => value !== undefined);
   if (

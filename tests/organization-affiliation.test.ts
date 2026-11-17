@@ -434,6 +434,38 @@ describe("canonical organization affiliations", () => {
     }
   });
 
+  it("provisions membership without listing a reused affiliation when neither profile supplies a job title", async () => {
+    const person = await verifiedPerson();
+    const affiliation = await prepare(person, { organizationName: "Untitled affiliation organization" });
+    await env.DB.batch(affiliation.statements);
+    const provision = await buildProvisionOrganizationMembership(env.DB, {
+      organizationId: affiliation.organizationId,
+      organizationName: "Untitled affiliation organization",
+      membershipCategory: "A",
+      identitySource: "staff",
+      activateIdentities: true,
+      identities: [{ name: "Approved person", email: person.email }],
+      workingGroupSlugs: [],
+    });
+    await env.DB.batch(provision.statements);
+    expect(
+      await queryAll(env.DB, "SELECT member_id FROM identity_member_capacities WHERE identity_id=?", [
+        affiliation.identityId,
+      ]),
+    ).toEqual([{ member_id: provision.buildResult().identities[0].membershipId }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT job_title,show_on_organization_profile,organization_profile_listing_approved FROM identities WHERE id=?",
+        [affiliation.identityId],
+      ),
+    ).toEqual([{ job_title: null, show_on_organization_profile: 0, organization_profile_listing_approved: null }]);
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='identity_profile_updated'")).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM site_publication_requests WHERE resource_type='identity_profile'"),
+    ).toEqual([]);
+  });
+
   it.each(["audit_log", "site_publication_requests"] as const)(
     "rolls back reused listing approval when %s fails and permits retry",
     async (table) => {

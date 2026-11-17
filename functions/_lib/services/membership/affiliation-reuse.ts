@@ -1,3 +1,4 @@
+import { organizationJobTitleMissing } from "../../../../assets/shared/schemas/identity-job-title";
 import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -45,8 +46,14 @@ export async function prepareExistingOrganizationAffiliation(
   const selectedAddress = await resolveOwnedIdentityEmail(db, { user, email });
   const address = ownedIdentityEmailEvidence({ userId: user.id, ...selectedAddress });
   const profileStatements: StatementLike[] = [];
+  const titleContext = { organization: true, jobTitle: identity.job_title };
+  const jobTitle = organizationJobTitleMissing(titleContext, undefined) ? (listing.jobTitle ?? undefined) : undefined;
   // An unset decision is a self-join default, unlike an explicit owner/contact hide.
-  if (identity.organization_profile_listing_approved === null && identity.show_on_organization_profile === 0) {
+  if (
+    identity.organization_profile_listing_approved === null &&
+    identity.show_on_organization_profile === 0 &&
+    !organizationJobTitleMissing(titleContext, jobTitle)
+  ) {
     const edit = prepareIdentityProfileEdit(
       db,
       {
@@ -57,7 +64,7 @@ export async function prepareExistingOrganizationAffiliation(
       },
       {
         showOnOrganizationProfile: true,
-        ...(identity.job_title ? {} : { jobTitle: listing.jobTitle ?? undefined }),
+        jobTitle,
       },
       listing.at,
     );
