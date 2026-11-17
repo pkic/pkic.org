@@ -24,15 +24,13 @@ import { speakerProfileReviewSections } from "./sections-speaker-profile-review"
 import { eventScreenSections } from "./sections-event-screens";
 import { eventScreenStaffSections } from "./sections-event-screens-staff";
 import { eventScreenMonitorSections } from "./sections-event-screens-monitor";
-import { studioOnScreenSections } from "./sections-studio-on-screen";
-import { studioTimerSections } from "./sections-studio-timers";
-import { liveAnswerSections } from "./sections-live-answers";
 import { eventScreenBrowserSections } from "./sections-event-screens-browser";
-import { stageDisplaySections } from "./sections-stage-display";
 
-function main(): void {
+async function main(): Promise<void> {
   const mount = document.getElementById("pk-preview");
   if (!mount) return;
+  const { liveAnswerSections, stageDisplaySections, studioOnScreenSections, studioTimerSections } =
+    await import("./sections-live-room");
   const sections = [
     ...basicSections,
     ...dataSections,
@@ -62,4 +60,4 @@ function main(): void {
   render(<PreviewShell sections={shown} />, mount);
 }
 
-main();
+void main();
