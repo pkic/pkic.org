@@ -6,6 +6,9 @@ vi.mock("../../assets/ts/shared/pending-user-logout", () => ({
     operatorUserId: "00000000-0000-4000-8000-000000000002",
   })),
 }));
+import { scannerUploadSuspended } from "../../assets/ts/shared/pending-user-logout";
+import { encryptBadgeCollectionName } from "../../assets/shared/badge-collection-name";
+import { scannerOfflineContextSchema } from "../../assets/shared/schemas/event-scanner-offline-context";
 import { offlineEligibilityExpiresAt } from "../../assets/shared/event-offline-expiry";
 import { webcrypto } from "node:crypto";
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -15,6 +18,7 @@ import {
   buildEligibilityManifest,
   pruneExpiredEligibilityManifests,
   clearOperatorEligibilityManifests,
+  restoreEligibilityManifest,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-manifest";
 
 const badge = "ABCDEFGHJKLMNPQR";
@@ -384,14 +388,14 @@ describe("local scoped eligibility manifest", () => {
     vi.setSystemTime(new Date(snapshot.expiresAt));
     expect((await prepared.lookup(badge, "attendance")).outcome).toBe("unverified");
   });
-  it("rejects profile fields and lifetimes over the maximum local day before indexing/persistence", async () => {
+  it("rejects profile fields and lifetimes over the bounded event window before indexing/persistence", async () => {
     const snapshot = await fixture();
     expect(() => buildEligibilityManifest({ ...snapshot, email: "synthetic@example.test" })).toThrow();
     expect(() =>
       buildEligibilityManifest({ ...snapshot, entries: [{ ...snapshot.entries[0], name: "Synthetic attendee" }] }),
     ).toThrow();
     expect(() =>
-      buildEligibilityManifest({ ...snapshot, validUntil: snapshot.writtenAt + 26 * 60 * 60_000 + 1 }),
+      buildEligibilityManifest({ ...snapshot, validUntil: snapshot.writtenAt + 32 * 24 * 60 * 60_000 + 1 }),
     ).toThrow();
   });
   it("binds downloaded and cached manifests to the enrolled epoch and device", async () => {
@@ -575,6 +579,121 @@ describe("local scoped eligibility manifest", () => {
     expect(manifest.serverNow).toBe(snapshot.serverNow);
     expect(manifest.expiresAt).toBe(snapshot.expiresAt);
     expect(await manifest.lookup(badge)).toMatchObject({ outcome: "unverified", userId: snapshot.entries[0].userId });
+  });
+  it("retains a server-issued event snapshot through hours of transport failure and reload", async () => {
+    const snapshot = await fixture();
+    const duration = 3 * 24 * 60 * 60_000;
+    const prepared = {
+      ...snapshot,
+      expiresAt: new Date(snapshot.writtenAt + duration).toISOString(),
+      validUntil: snapshot.writtenAt + duration,
+      writtenAt: snapshot.writtenAt - 2 * 60 * 60_000,
+      serverNow: new Date(snapshot.writtenAt - 2 * 60 * 60_000).toISOString(),
+    };
+    const key = JSON.stringify([
+      snapshot.operatorUserId,
+      "synthetic-event",
+      null,
+      null,
+      snapshot.epochId,
+      snapshot.deviceId,
+    ]);
+    const saved = new Map<string, unknown>([[key, prepared]]);
+    stubManifestStorage(saved);
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Offline")));
+    const manifest = await prepareEligibilityManifest("synthetic-event", snapshot.operatorUserId, null, snapshot);
+    expect(saved.has(key)).toBe(true);
+    expect(await manifest.lookup(badge)).toMatchObject({ outcome: "eligible" });
+    expect(manifest.expiresAt).toBe(prepared.expiresAt);
+  });
+  it("keeps names usable while calendar-specific eligibility requires verification after midnight", async () => {
+    const snapshot = await fixture();
+    const expiredDay = new Date(snapshot.writtenAt - 1).toISOString();
+    const manifest = buildEligibilityManifest({ ...snapshot, eligibilityExpiresAt: expiredDay });
+    expect(await manifest.lookup(badge)).toMatchObject({ outcome: "unverified", userId: snapshot.entries[0].userId });
+  });
+  it("decrypts only the scanned attendee name and restores it within the same offline scope", async () => {
+    const snapshot = await fixture();
+    const entry = snapshot.entries[0];
+    const encryptedName = await encryptBadgeCollectionName(
+      badge,
+      { eventId: snapshot.eventId, badgeId: entry.badgeId, credentialHash: entry.credentialHash },
+      "Zoë 测试",
+    );
+    const savedSnapshot = {
+      ...snapshot,
+      complete: true,
+      badgeNamesPrepared: true,
+      entries: [{ ...entry, encryptedName }],
+    };
+    const key = JSON.stringify([
+      snapshot.operatorUserId,
+      "synthetic-event",
+      null,
+      null,
+      snapshot.epochId,
+      snapshot.deviceId,
+      true,
+    ]);
+    stubManifestStorage(new Map([[key, savedSnapshot]]));
+    const context = scannerOfflineContextSchema.parse({
+      eventId: snapshot.eventId,
+      operatorUserId: snapshot.operatorUserId,
+      deviceId: snapshot.deviceId,
+      epochId: snapshot.epochId,
+      occurrenceId: null,
+      roomId: null,
+      publishedRevision: snapshot.publishedRevision,
+      serverNow: snapshot.serverNow,
+      expiresAt: snapshot.expiresAt,
+      slug: "synthetic-event",
+      route: "/events/synthetic-event/scanner",
+      sessionId: "00000000-0000-4000-8000-000000000010",
+      action: "attendance",
+      savedAt: snapshot.serverNow,
+      lastObservedAt: snapshot.serverNow,
+    });
+    const manifest = await restoreEligibilityManifest(context, true);
+    expect(await manifest?.lookupName?.(badge)).toBe("Zoë 测试");
+    expect(await manifest?.lookupName?.("23456789ABCDEFGH")).toBeNull();
+    expect(await restoreEligibilityManifest(context, false)).toBeNull();
+    vi.mocked(scannerUploadSuspended).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    expect(await restoreEligibilityManifest(context, true)).toBeNull();
+  });
+  it("never reports hard-expired encrypted name preparation as ready", async () => {
+    const snapshot = await fixture();
+    const expired = {
+      ...snapshot,
+      complete: true,
+      badgeNamesPrepared: true,
+      writtenAt: snapshot.writtenAt - 900001,
+      validUntil: snapshot.writtenAt - 1,
+    };
+    expect(buildEligibilityManifest(expired).badgeNamesPrepared).toBe(false);
+    const key = JSON.stringify([
+      snapshot.operatorUserId,
+      "synthetic-event",
+      null,
+      null,
+      snapshot.epochId,
+      snapshot.deviceId,
+      true,
+    ]);
+    stubManifestStorage(new Map([[key, expired]]));
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Offline")));
+    await expect(
+      prepareEligibilityManifest(
+        "synthetic-event",
+        snapshot.operatorUserId,
+        null,
+        snapshot,
+        undefined,
+        null,
+        "refresh",
+        undefined,
+        true,
+      ),
+    ).rejects.toThrow("Offline");
   });
   it("projects the original server snapshot timestamps without substituting device time", async () => {
     const snapshot = await fixture();

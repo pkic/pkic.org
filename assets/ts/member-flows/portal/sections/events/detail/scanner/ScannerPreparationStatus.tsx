@@ -103,6 +103,7 @@ export function ScannerPreparationStatus({
   snapshot,
   lastSync,
   checkedBadges = null,
+  badgeCollection = false,
 }: {
   action: EventScanRequest["action"];
   occurrenceId?: string | null;
@@ -113,11 +114,15 @@ export function ScannerPreparationStatus({
   sessionOnly?: boolean;
   lastSync?: string | null;
   checkedBadges?: number | null;
-  snapshot?: Pick<EligibilityManifest, "serverNow" | "expiresAt"> | null;
+  badgeCollection?: boolean;
+  snapshot?: Pick<
+    EligibilityManifest,
+    "serverNow" | "expiresAt" | "badgeNamesPrepared" | "badgeNamesUnavailable"
+  > | null;
 }) {
   return (
     <>
-      {error && !preparing ? (
+      {error && !preparing && (!ready || sessionOnly || stale) ? (
         <Alert tone="warn">
           <p>{error}</p>
           {ready && !sessionOnly && (
@@ -130,19 +135,25 @@ export function ScannerPreparationStatus({
         </Alert>
       ) : (
         <p role="status">
-          {preparing
+          {preparing && !ready
             ? checkedBadges === null
-              ? "Refreshing badge data…"
+              ? badgeCollection
+                ? "Preparing badge names…"
+                : "Preparing scanner…"
               : `Refreshing badge data · ${formatNumber(checkedBadges)} badges checked…`
             : ready && stale
-              ? "Using saved badge data. Refresh resumes when connected; scans upload in the background."
-              : ready && checkedBadges !== null
-                ? `Badge data up to date · ${formatNumber(checkedBadges)} badges checked.`
-                : ready
-                  ? action === "checkout"
-                    ? "Badge data ready. Checkout saves locally and uploads in the background."
-                    : "Badge data ready. Checks run locally; attendance uploads in the background."
-                  : "Prepare badge data before scanning."}
+              ? "Badge data is more than a day old. Refresh when connected; scanning can continue."
+              : ready && badgeCollection
+                ? snapshot?.badgeNamesPrepared
+                  ? "Badge names prepared for offline collection."
+                  : "Check-in prepared. Some badge names are unavailable offline."
+                : ready && checkedBadges !== null
+                  ? `Badge data up to date · ${formatNumber(checkedBadges)} badges checked.`
+                  : ready
+                    ? action === "checkout"
+                      ? "Badge data ready. Checkout saves locally and uploads in the background."
+                      : "Badge data ready. Checks run locally; attendance uploads in the background."
+                    : "Prepare badge data before scanning."}
         </p>
       )}
       <DescriptionList
@@ -160,7 +171,7 @@ export function ScannerPreparationStatus({
           ...(snapshot
             ? [
                 { term: "Last badge refresh", value: formatDateTime(snapshot.serverNow) },
-                { term: "Badge data valid until", value: formatDateTime(snapshot.expiresAt) },
+                { term: "Offline access ends", value: formatDateTime(snapshot.expiresAt) },
               ]
             : []),
         ]}

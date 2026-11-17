@@ -33,6 +33,34 @@ const tasks = [
   { key: "print" as const, label: "Print", href: "#/events/example/scanner/print" },
 ];
 const baseProps = { ...props, context: "Venue entrance" };
+it("allows clicking and swiping between tasks while a collected attendee is held", async () => {
+  const onLaunch = vi.fn();
+  await act(() =>
+    render(
+      <ScannerTaskNavigation.Provider value={{ launch: null, onLaunch, onConsumed: vi.fn(), tasks }}>
+        <FastScannerView
+          {...baseProps}
+          mode="attendance"
+          collection={{ waiting: true, name: "Alex Example", loading: false, onNext: () => {} }}
+        />
+      </ScannerTaskNavigation.Provider>,
+      host,
+    ),
+  );
+  const print = host.querySelector<HTMLButtonElement>('[aria-label="Switch to Print"]')!;
+  expect(print.disabled).toBe(false);
+  expect(print.className).toBe("pk-fast-scanner__task-link");
+  expect(host.querySelector(".pk-fast-scanner__task-swipe")?.textContent).toBe("← Swipe: Entry · Exit · Print →");
+  await act(() => print.click());
+  expect(onLaunch).toHaveBeenCalledWith("print", "entry");
+  onLaunch.mockClear();
+  const root = host.querySelector('[aria-label="Continuous badge scanner"]')!;
+  await act(() => {
+    root.dispatchEvent(new MouseEvent("pointerdown", { clientX: 250, clientY: 300, bubbles: true }));
+    root.dispatchEvent(new MouseEvent("pointerup", { clientX: 80, clientY: 305, bubbles: true }));
+  });
+  expect(onLaunch).toHaveBeenCalledWith("exit", "entry");
+});
 it.each(["embedded", "fullscreen"] as const)("supports task swipes only in full screen: %s", async (presentation) => {
   const onLaunch = vi.fn();
   await act(() =>

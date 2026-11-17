@@ -25,6 +25,7 @@ export interface EligibilityManifestOptions {
   roomId?: string | null;
   epoch: ScannerEpoch | null;
   collector?: boolean;
+  includeBadgeNames?: boolean;
   onPreparationClosed?: (message: string, code: string) => void;
 }
 
@@ -38,9 +39,23 @@ export function useEligibilityManifest({
   roomId = null,
   epoch,
   collector = false,
+  includeBadgeNames = false,
   onPreparationClosed,
 }: EligibilityManifestOptions) {
   const eligibilityManifest = useRef<EligibilityManifest | null>(null);
+  const scopeKey = JSON.stringify([
+    slug,
+    operatorUserId,
+    occurrenceId,
+    action,
+    roomId,
+    epoch?.epochId,
+    epoch?.state,
+    epoch?.deviceId,
+    collector,
+    includeBadgeNames,
+  ]);
+  const [manifestScope, setManifestScope] = useState<string | null>(null);
   const refusals = useRef({ onPermissionChanged, onPreparationClosed });
   refusals.current = { onPermissionChanged, onPreparationClosed };
   const [manifestReady, setManifestReady] = useState(false);
@@ -56,6 +71,7 @@ export function useEligibilityManifest({
   const refreshRequest = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
     const controller = new AbortController();
+    setManifestScope(scopeKey);
     eligibilityManifest.current = null;
     setManifestReady(false);
     setManifestPreparing(false);
@@ -96,6 +112,7 @@ export function useEligibilityManifest({
           (checked) => {
             if (!controller.signal.aborted) setManifestProgress(checked);
           },
+          includeBadgeNames,
         );
         if (controller.signal.aborted) return;
         eligibilityManifest.current = manifest;
@@ -135,7 +152,7 @@ export function useEligibilityManifest({
     const visible = () => {
       if (document.visibilityState === "visible") reconnect();
     };
-    const refresh = window.setInterval(reconnect, SCANNER_ELIGIBILITY_REFRESH_MS);
+    const refresh = window.setInterval(reconnect, SCANNER_ELIGIBILITY_REFRESH_MS + Math.floor(Math.random() * 30_000));
     window.addEventListener("online", reconnect);
     window.addEventListener("focus", reconnect);
     document.addEventListener("visibilitychange", visible);
@@ -147,12 +164,31 @@ export function useEligibilityManifest({
       window.removeEventListener("focus", reconnect);
       document.removeEventListener("visibilitychange", visible);
     };
-  }, [slug, operatorUserId, occurrenceId, action, roomId, epoch?.epochId, epoch?.state, epoch?.deviceId, collector]);
+  }, [
+    slug,
+    operatorUserId,
+    occurrenceId,
+    action,
+    roomId,
+    epoch?.epochId,
+    epoch?.state,
+    epoch?.deviceId,
+    collector,
+    includeBadgeNames,
+    scopeKey,
+  ]);
+  const scopeMatches = scopeKey === manifestScope;
+  const namesExpired = Boolean(
+    includeBadgeNames && eligibilityManifest.current && Date.now() >= eligibilityManifest.current.validUntil,
+  );
   return {
     eligibilityManifest,
-    manifestReady,
-    manifestPreparing,
-    manifestError: closedMessage || manifestError,
+    manifestReady: scopeMatches && manifestReady && !namesExpired,
+    manifestPreparing: scopeMatches ? manifestPreparing : Boolean(epoch?.state === "open"),
+    manifestError: scopeMatches
+      ? closedMessage ||
+        (namesExpired ? "Offline badge names have expired. Reconnect to prepare this device." : manifestError)
+      : "",
     closedMessage,
     manifestProgress,
     refresh: () => refreshRequest.current(),
@@ -176,7 +212,6 @@ export function useScannerOfflinePreparation(
   const [, tick] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    setPrepared(null);
     setError("");
     setPreparing(false);
     if (prepareCode && session && epoch && manifest) {
@@ -184,7 +219,7 @@ export function useScannerOfflinePreparation(
       void saveScannerOfflineContext({ slug, session, epoch, manifest, action, signal: controller.signal, prepareCode })
         .then((context) => {
           if (!controller.signal.aborted) {
-            setPrepared(context);
+            if (context) setPrepared(context);
             if (!context) setError("Offline preparation is not ready. Reconnect, check sign-in, and retry.");
           }
         })
@@ -215,7 +250,6 @@ export function useScannerOfflinePreparation(
     prepared.deviceId === epoch.deviceId &&
     prepared.occurrenceId === manifest?.occurrenceId &&
     prepared.roomId === (manifest?.roomId ?? null) &&
-    prepared.serverNow === manifest?.serverNow &&
     scannerContextCurrent(prepared)
       ? prepared
       : null;

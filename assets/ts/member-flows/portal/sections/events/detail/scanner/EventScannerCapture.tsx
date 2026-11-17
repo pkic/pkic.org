@@ -1,8 +1,9 @@
+import { createScannerCaptureActions } from "./createScannerCaptureActions";
+import { useBadgeCollection } from "./useBadgeCollection";
 import { useScannerCapturePause } from "./useScannerCapturePause";
 import { useScannerManualEntry } from "./useScannerManualEntry";
 import { ScannerDiagnosticsView } from "./ScannerDiagnosticsView";
 import { useScannerFeedback } from "./useScannerFeedback";
-import { badgeCredentialSchema } from "../../../../../../../shared/schemas/badge-credential";
 import { boundedScannedValue } from "../../../../../../../shared/schemas/scanner-attempt-capture";
 import { useScannerFailureCapture, persistScannerCapture } from "./useScannerFailureCapture";
 import type { EventScannerProps } from "./EventScanner";
@@ -25,7 +26,8 @@ import { ScannerCaptureControls, ScannerManualControls, scannerStartMessage } fr
 import { useScannerPreparation } from "./useScannerPreparation";
 import { ScannerCamera } from "./ScannerCamera";
 import { ScannerRecentScans } from "./ScannerRecentScans";
-import { useRef, useState } from "preact/hooks";
+import { useContext, useRef, useState } from "preact/hooks";
+import { ScannerTaskNavigation } from "./ScannerTaskNavigation";
 import {
   scanActionSchema,
   eventScanCaptureIntentForRoomsSchema,
@@ -33,7 +35,6 @@ import {
 } from "../../../../../../../shared/schemas/event-participation-scanning";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { ScannerLaunchPanel } from "./ScannerLaunchPanel";
-import { receiptMatchesOperation, unknownScanResponse } from "./scan-stream";
 import { useScannerCamera } from "./useScannerCamera";
 import { useScannerOutboxSync } from "./useScannerOutboxSync";
 import "./EventScanner.css";
@@ -54,11 +55,20 @@ export function EventScannerCapture({
   collectorContext,
   onCheckSignIn,
 }: EventScannerProps) {
+  const taskNavigation = useContext(ScannerTaskNavigation);
   const refusePreparation = scannerPreparationRefusal(portalSession.value, operatorUserId);
   const [badgeId, setBadge] = useState("");
   const [action, setAction] = useScannerAction(allowedActions, collectorContext?.action, !!sponsorId);
   const [scannerTab, setScannerTab] = useHashQueryParam("scannerTab", "scan", ["scan", "recent", "diagnostics"]);
   const recentVisible = scannerTab === "recent" && !collectorContext;
+  const [purpose, setPurpose] = useHashQueryParam("scannerPurpose", "scan", ["scan", "collection"]);
+  const badgeCollection = purpose === "collection" && !sponsorId && action === "attendance";
+  const collectionManifest = useRef<import("./eligibility-manifest").EligibilityManifest | null>(null);
+  const collection = useBadgeCollection(
+    badgeCollection,
+    collectionManifest,
+    `${slug}:${operatorUserId}:${collectorContext?.sessionId ?? portalSession.value?.sessionId}:${action}`,
+  );
   const [consentConfirmed, setConsent] = useState(false);
   const lastOperation = useRef<string | null>(null);
   const lastCommittedOperation = useRef<string | null>(null);
@@ -83,7 +93,7 @@ export function EventScannerCapture({
     presentSavedEligibility,
     failure,
   } = useScannerFeedback({
-    enabled: fastMode,
+    enabled: fastMode && !badgeCollection,
     durationMs: preferences.feedbackPause,
     collector: Boolean(collectorContext),
     currentOperation: lastOperation,
@@ -105,6 +115,7 @@ export function EventScannerCapture({
     operatorUserId,
     occurrenceId,
     action,
+    badgeCollection,
     collectorContext,
     epoch: scannerDevice.epoch,
     session: portalSession.value,
@@ -133,6 +144,7 @@ export function EventScannerCapture({
     selectRoom,
   } = preparation.location;
   const { eligibilityManifest, manifestReady, manifestPreparing, closedMessage } = preparation.eligibility;
+  collectionManifest.current = eligibilityManifest.current;
   const captureReady = scannerDevice.ready && !closedMessage;
   const sound = useScannerSound(preferences.sound, result ?? lastResult, action, failed, Boolean(targetId));
   const screenAwake = useScannerImmersiveLifecycle(
@@ -207,6 +219,7 @@ export function EventScannerCapture({
   });
   function clearCurrentScan(message?: string) {
     badgeCamera.stop();
+    collection.clear();
     lastOperation.current = null;
     cancelVerification();
     cooldown.reset();
@@ -240,7 +253,7 @@ export function EventScannerCapture({
   const persistCapture = (scan: EventScanRequest) =>
     persistScannerCapture(scan, slug, preparation.offlineAdmission.persist, auditFailure);
   function captureAllowed() {
-    return scannerDevice.ready && !closedMessage && !authorityPaused.current;
+    return scannerDevice.ready && !closedMessage && !authorityPaused.current && (!badgeCollection || manifestReady);
   }
   /** User gestures report refusals; passive decoder checks stay silent. */
   function requestCapture() {
@@ -248,107 +261,40 @@ export function EventScannerCapture({
     if (closedMessage || authorityPaused.current) setMessage(closedMessage || "Sign in again to upload pending scans.");
     return false;
   }
-  async function capture() {
-    if (!requestCapture() || manualCapturePending.current) return;
-    const checked = form.submit();
-    if (!checked.data) {
-      if (
-        !(await auditFailure(
-          badgeId,
-          badgeCredentialSchema.safeParse(badgeId).success ? "capture_validation_failed" : "malformed_credential",
-        ))
-      )
-        return;
-      lastOperation.current = null;
-      setMessage(action === "lead" ? (checked.formMessage ?? "") : "Invalid QR code. Scan a PKI Consortium badge.");
-      setResult(action === "lead" ? null : unknownScanResponse(operationId));
-      return;
-    }
-    manualCapturePending.current = true;
-    setBusy(true);
-    setResult(null);
-    try {
-      lastOperation.current = checked.data.operationId;
-      const saved = await persistCapture(checked.data);
-      await scanSaved();
-      resetCaptureFields();
-      if (!(await presentSavedEligibility(saved, verifyQueuedScan))) return;
-      if (fastMode && manualOpen) {
-        cooldown.feedback();
-        void camera();
-      }
-    } catch (error) {
-      failure(error instanceof Error ? error.message : "Unable to save this scan. Keep the attendee here and retry.");
-    } finally {
-      manualCapturePending.current = false;
-      setBusy(false);
-    }
-  }
-  async function scanCredential(raw: string, fromCamera = false) {
-    if (!captureAllowed()) return;
-    if (operatorPaused.current || manualPaused.current || manualCapturePending.current) return;
-    const current = scannerContext.current;
-    if (current.action === "lead" || current.action === "exception") {
-      badgeCamera.stop();
-      if (fastMode) manualPaused.current = true;
-      setBadge(raw);
-      manual.setOpen(true);
-      manual.setFocusRequested(true);
-      setFastMode(false);
-      if (current.action === "lead") setConsent(false);
-      setMessage("Badge detected. Review and confirm before recording.");
-      return;
-    }
-    if (fastMode && !cooldown.ready()) return;
-    const parsed = eventScanCaptureIntentForRoomsSchema(current.rooms.map((room) => room.id)).safeParse({
-      operatorUserId: current.operatorUserId,
-      operationId: crypto.randomUUID(),
-      deviceId: current.deviceId,
-      badgeId: raw,
-      ...boundedScannedValue(raw),
-      occurrenceId: current.targetId,
-      roomId: current.roomId,
-      action: current.action,
-      observedAt: new Date().toISOString(),
-    });
-    if (!parsed.success) {
-      const locationError = parsed.error.issues.find((issue) => issue.path[0] === "roomId");
-      if (locationError) {
-        setMessage(locationError.message);
-        setFastMode(false);
-        badgeCamera.stop();
-        return;
-      }
-      if (fastMode && !cooldown.accept()) return;
-      lastOperation.current = null;
-      if (!(await auditFailure(raw, "unsupported_code"))) {
-        if (fastMode) cooldown.feedback();
-        return;
-      }
-      setResult(unknownScanResponse(crypto.randomUUID()));
-      setMessage("Invalid QR code. Scan a PKI Consortium badge.");
-      if (fastMode) cooldown.feedback();
-      return;
-    }
-    if (fromCamera && !badgeCamera.acceptsFrame(parsed.data.badgeId)) return;
-    if (fastMode && !cooldown.accept()) return;
-    const operation = parsed.data.operationId;
-    lastOperation.current = operation;
-    setResult(null);
-    showProvisionalMessage(operation, "Checking eligibility…");
-    try {
-      const saved = await persistCapture(parsed.data);
-      await scanSaved();
-      if (!(await presentSavedEligibility(saved, verifyQueuedScan))) return;
-      resetCaptureFields();
-      if (fastMode) cooldown.feedback();
-    } catch (error) {
-      setBadge(raw);
-      if (fastMode && receiptMatchesOperation(operation, lastOperation.current)) cooldown.feedback();
-      if (receiptMatchesOperation(operation, lastOperation.current))
-        failure(error instanceof Error ? error.message : "Unable to save scan. Retry.");
-    }
-  }
+  const { capture, scanCredential } = createScannerCaptureActions({
+    requestCapture,
+    captureAllowed,
+    manualCapturePending,
+    collection,
+    form,
+    auditFailure,
+    badgeId,
+    lastOperation,
+    setMessage,
+    action,
+    setResult,
+    operationId,
+    setBusy,
+    persistCapture,
+    scanSaved,
+    resetCaptureFields,
+    presentSavedEligibility,
+    verifyQueuedScan,
+    fastMode,
+    manualOpen,
+    cooldown,
+    camera,
+    failure,
+    operatorPaused,
+    manualPaused,
+    scannerContext,
+    badgeCamera,
+    manual,
+    setBadge,
+    setFastMode,
+    setConsent,
+    showProvisionalMessage,
+  });
   async function camera() {
     if (!requestCapture() || badgeCamera.starting) return;
     await badgeCamera.start();
@@ -376,7 +322,20 @@ export function EventScannerCapture({
     error: preparation.status.error,
   });
   const preparationStatus = { ...preparation.status, lastSync: syncHistory.lastSync };
+  function nextCollectionAttendee() {
+    if (busy || cooldown.saving) return;
+    collection.clear();
+    lastOperation.current = null;
+    cancelVerification();
+    clearFeedback();
+    setMessage("Ready to scan");
+    cooldown.reset();
+    manualPaused.current = false;
+    manual.setOpen(false);
+    if (!badgeCamera.active) void camera();
+  }
   function stopContinuousScanning() {
+    collection.clear();
     autoStart.cancel();
     cancelVerification();
     badgeCamera.stop();
@@ -392,7 +351,9 @@ export function EventScannerCapture({
     manual.setOpen(false);
     setScannerTab("recent");
   }
-  const contextLabel = scannerContextLabel({ ...preparation.location, action, sponsorName });
+  const contextLabel = badgeCollection
+    ? "Badge collection"
+    : scannerContextLabel({ ...preparation.location, action, sponsorName });
   const manualControls = {
     handlers: form.handlers,
     action,
@@ -433,6 +394,9 @@ export function EventScannerCapture({
       collector={Boolean(collectorContext)}
       uploadStatus={uploadStatus}
       error={failed ? message : scannerDevice.error}
+      lastSync={syncHistory.lastSync}
+      offlinePrepared={Boolean(collectorContext || preparation.offlinePreparation.context)}
+      preparation={{ ...preparation.status, badgeNamesPrepared: eligibilityManifest.current?.badgeNamesPrepared }}
     />
   );
   const mode = {
@@ -442,6 +406,7 @@ export function EventScannerCapture({
     actionField: form.of("action"),
     onAction: (value: EventScanRequest["action"]) => {
       clearCurrentScan();
+      setPurpose("scan");
       setAction(value);
     },
   };
@@ -482,6 +447,17 @@ export function EventScannerCapture({
                 setup={{
                   printHref,
                   operatorUserId,
+                  onCollection:
+                    !sponsorId && allowedActions.includes("attendance")
+                      ? () => {
+                          clearCurrentScan();
+                          selectTarget(null);
+                          setAction("attendance");
+                          setPurpose("collection");
+                          sound.unlock();
+                          autoStart.request();
+                        }
+                      : undefined,
                   sponsorOnly: action === "lead",
                   explicitTarget: Boolean(occurrenceId),
                   ready: captureReady && pendingReadyScope === `${slug}:${operatorUserId}`,
@@ -550,6 +526,22 @@ export function EventScannerCapture({
       />
       {fastMode && (
         <FastScannerView
+          collection={
+            badgeCollection
+              ? {
+                  waiting: collection.waiting,
+                  name: collection.name,
+                  loading: collection.loading,
+                  saving: busy || cooldown.saving,
+                  onNext: nextCollectionAttendee,
+                  onPrint:
+                    !collectorContext && printHref && collection.credential && taskNavigation?.onPrintBadge
+                      ? () => taskNavigation.onPrintBadge?.(collection.credential!)
+                      : undefined,
+                }
+              : undefined
+          }
+          taskSwitchDisabled={busy || cooldown.saving}
           presentation={presentation}
           onPresentation={togglePresentation}
           canRecordAttendance={!collectorContext && allowedActions.includes("attendance")}
@@ -572,10 +564,10 @@ export function EventScannerCapture({
           cameraActive={badgeCamera.active}
           cameraStarting={badgeCamera.starting}
           cameraError={badgeCamera.error}
-          onCameraRetry={() => void camera()}
-          onManual={manualControls.onOpen}
+          onCameraRetry={collection.waiting ? undefined : () => void camera()}
+          onManual={collection.waiting ? undefined : manualControls.onOpen}
           manualEntry={manualOpen ? <ScannerManualControls {...manualControls} inline /> : undefined}
-          onRecentScans={collectorContext ? undefined : showRecentScans}
+          onRecentScans={collectorContext || badgeCollection ? undefined : showRecentScans}
           recentScans={recentVisible ? recentScans : undefined}
           onReturnToScanning={() => {
             manualPaused.current = false;
