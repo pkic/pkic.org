@@ -1,4 +1,5 @@
 import type { RegistrationOrganizationOutcome } from "../../../../assets/shared/schemas/registration";
+import { isStateGuardFailure } from "../../db/authorization-guard";
 import { readEventAffiliationContext } from "../identities/event-affiliation-context";
 import {
   personalPromotionImagePath,
@@ -34,7 +35,7 @@ import { linkConfirmedRegistrationOrganization } from "./confirmation-organizati
 import { findRegistrationGroup, prepareGroupEventRegistrationGuard } from "./authorization";
 import { eventTakesRegistrations } from "./email-proof";
 import {
-  isTicketCodeExhausted,
+  isTicketCodeSpent,
   planRegistrationTicket,
   ticketCodeExhaustedError,
 } from "../event-tickets/registration-ticket";
@@ -384,7 +385,8 @@ export async function submitEventRegistration(
       ...ticketStatements,
     ]);
   } catch (error) {
-    if (isTicketCodeExhausted(error)) throw ticketCodeExhaustedError();
+    if (isStateGuardFailure(error) && (await isTicketCodeSpent(db, ticket?.claimedCodeId)))
+      throw ticketCodeExhaustedError();
     throw error;
   }
   const organizationOutcome = affiliationContext

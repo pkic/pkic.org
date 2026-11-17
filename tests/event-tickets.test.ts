@@ -23,7 +23,7 @@ import {
 } from "../functions/_lib/services/event-tickets/configuration";
 import { quoteEventTicket, readEventTicketOffer } from "../functions/_lib/services/event-tickets/offer";
 import {
-  isTicketCodeExhausted,
+  isTicketCodeSpent,
   planRegistrationTicket,
   assertRegistrationTicketRestorable,
   prepareCancelRegistrationTicket,
@@ -399,7 +399,54 @@ describe("event tickets", () => {
     expect(await env.DB.prepare("SELECT max_uses FROM event_ticket_codes WHERE id = ?").bind(code.id).first()).toEqual({
       max_uses: 21,
     });
-    expect(isTicketCodeExhausted(new Error("CHECK constraint failed: used_count <= max_uses"))).toBe(true);
+    // Two people hold the same quote for a code's last pass: the second plan is refused whole by its own
+    // guard, the count stays within the limit, and the refusal is recognized as the code being used up.
+    const last = await createEventTicketCode(env.DB, admin, event, {
+      ticketTypeId: vendor.id,
+      label: "Last pass",
+      discount: "amount",
+      amount: 0,
+      maxUses: 1,
+    });
+    const plan = async (email: string) => {
+      const person = await findOrCreateUser(env.DB, { email, firstName: "A", lastName: "B" });
+      await quoteEventTicket(
+        env.DB,
+        {},
+        event,
+        { userId: person.id, email },
+        { dayAttendance: inPerson, code: last.code, save: true },
+      );
+      const { registration } = await createScheduledRegistration(env.DB, {
+        event: { id: event.id },
+        userId: person.id,
+        sourceType: "direct",
+        mailboxVerified: true,
+      });
+      return (await planRegistrationTicket(
+        env.DB,
+        {},
+        {
+          event,
+          registrationId: registration.id,
+          userId: person.id,
+          email,
+          identityId: null,
+          organizationName: "Example Organization",
+          dayAttendance: inPerson,
+        },
+      ))!;
+    };
+    const [one, two] = [await plan("one@sponsor-example.test"), await plan("two@sponsor-example.test")];
+    await env.DB.batch(one.statements);
+    expect(await isTicketCodeSpent(env.DB, two.claimedCodeId)).toBe(true);
+    await expect(env.DB.batch(two.statements)).rejects.toBeTruthy();
+    expect(
+      await env.DB.prepare("SELECT used_count, max_uses FROM event_ticket_codes WHERE id = ?").bind(last.id).first(),
+    ).toEqual({
+      used_count: 1,
+      max_uses: 1,
+    });
   });
 
   it("marks a ticket paid only for a matching payment, once, and releases the held confirmation", async () => {

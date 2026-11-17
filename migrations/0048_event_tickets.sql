@@ -5,8 +5,8 @@
 -- vocabulary validated by the shared domain module, not by CHECK constraints.
 -- Formats and ranges (dates, amounts, currencies, flags) are validated by the
 -- shared Zod contracts as well: a CHECK can only be changed by rebuilding its
--- table. The one constraint kept is a code's uses never exceeding its limit,
--- which is what refuses a pass claimed twice at the same moment.
+-- table. That a code's uses never exceed its limit is kept by the write that
+-- claims a pass, which claims only while one is left.
 
 -- One row per event that sells tickets: its currency and how unpaid tickets are chased.
 CREATE TABLE event_ticket_settings (
@@ -97,7 +97,6 @@ CREATE TABLE event_ticket_codes (
   created_by_user_id TEXT REFERENCES users(id),
   created_at     TEXT    NOT NULL,
   updated_at     TEXT    NOT NULL,
-  CHECK (used_count <= max_uses),
   UNIQUE (event_id, code)
 );
 

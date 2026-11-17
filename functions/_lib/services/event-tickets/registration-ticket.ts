@@ -27,6 +27,8 @@ export interface IssuedRegistrationTicket {
   currency: string;
   status: Extract<RegistrationTicketStatus, "free" | "pending_payment" | "paid">;
   statements: StatementLike[];
+  /** The code this plan claims a pass of, when it claims one: its last pass may go to someone else first. */
+  claimedCodeId?: string | null;
 }
 
 interface SelectionRow {
@@ -174,14 +176,18 @@ export async function planRegistrationTicket(
         .bind(now, held.code_id),
     );
   if (resolved.code && resolved.code.id !== held?.code_id) {
-    // The CHECK on `used_count <= max_uses` aborts the batch when the last pass went to someone else meanwhile.
+    // A pass is claimed only while one is left: when the last one went to someone else meanwhile, or the
+    // code was revoked, the guard refuses the whole plan.
     statements.push(
       prepareStateGuard(db, {
-        sql: "SELECT 1 FROM event_ticket_codes WHERE id = ? AND revoked_at IS NULL",
+        sql: "SELECT 1 FROM event_ticket_codes WHERE id = ? AND revoked_at IS NULL AND used_count < max_uses",
         bindings: [resolved.code.id],
       }),
       db
-        .prepare("UPDATE event_ticket_codes SET used_count = used_count + 1, updated_at = ? WHERE id = ?")
+        .prepare(
+          `UPDATE event_ticket_codes SET used_count = used_count + 1, updated_at = ?
+           WHERE id = ? AND revoked_at IS NULL AND used_count < max_uses`,
+        )
         .bind(now, resolved.code.id),
     );
   }
@@ -223,7 +229,15 @@ export async function planRegistrationTicket(
       ),
     clearSelection,
   );
-  return { id, ticketName: resolved.type.name, amount: priced.total, currency: settings.currency, status, statements };
+  return {
+    id,
+    ticketName: resolved.type.name,
+    amount: priced.total,
+    currency: settings.currency,
+    status,
+    statements,
+    claimedCodeId: resolved.code && resolved.code.id !== held?.code_id ? resolved.code.id : null,
+  };
 }
 
 /**
@@ -260,11 +274,18 @@ export function prepareCancelRegistrationTicket(
   ];
 }
 
-export function isTicketCodeExhausted(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    /CHECK constraint failed/i.test(error.message) &&
-    /used_count|event_ticket_codes/i.test(error.message)
+/**
+ * Whether a refused plan lost its code's last pass: asked after the plan's write was refused, to tell the
+ * person that and not that something else changed.
+ */
+export async function isTicketCodeSpent(db: DatabaseLike, codeId: string | null | undefined): Promise<boolean> {
+  if (!codeId) return false;
+  return Boolean(
+    await first(
+      db,
+      "SELECT 1 FROM event_ticket_codes WHERE id = ? AND (used_count >= max_uses OR revoked_at IS NOT NULL)",
+      [codeId],
+    ),
   );
 }
 
