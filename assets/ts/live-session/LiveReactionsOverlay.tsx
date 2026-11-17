@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { LIVE_REACTIONS, type LiveReactionId } from "../../shared/live-session-policy";
 import { LIVE_REACTION_CROWD_POLICY } from "../../shared/live-reaction-crowd";
+import { formatNumber } from "../../shared/format-number";
 import type { LiveRoomState } from "./live-room-state";
 
 const EMOJI = Object.fromEntries(LIVE_REACTIONS.map((reaction) => [reaction.id, reaction.emoji])) as Record<
@@ -127,7 +128,7 @@ export function LiveReactionsOverlay({ burst, showCount }: { burst: Burst; showC
         <div class="pk-live-overlay__reaction-count">
           {counts.map((count) => (
             <span key={count.id} class="pk-live-overlay__reaction-total" data-fading={count.fading || undefined}>
-              {count.emoji} {count.people.toLocaleString("en-US")}
+              {count.emoji} {formatNumber(count.people)}
             </span>
           ))}
         </div>
