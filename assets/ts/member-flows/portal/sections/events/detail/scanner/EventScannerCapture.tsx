@@ -1,3 +1,4 @@
+import { ScannerCollectionAttendee } from "./ScannerCollectionAttendee";
 import { createScannerCaptureActions } from "./createScannerCaptureActions";
 import { useBadgeCollection } from "./useBadgeCollection";
 import { useScannerCapturePause } from "./useScannerCapturePause";
@@ -332,7 +333,7 @@ export function EventScannerCapture({
     cooldown.reset();
     manualPaused.current = false;
     manual.setOpen(false);
-    if (!badgeCamera.active) void camera();
+    if (fastMode && !badgeCamera.active) void camera();
   }
   function stopContinuousScanning() {
     collection.clear();
@@ -351,6 +352,19 @@ export function EventScannerCapture({
     manual.setOpen(false);
     setScannerTab("recent");
   }
+  const collectionDisplay = badgeCollection
+    ? {
+        waiting: collection.waiting,
+        name: collection.name,
+        loading: collection.loading,
+        saving: busy || cooldown.saving,
+        onNext: nextCollectionAttendee,
+        onPrint:
+          !collectorContext && printHref && collection.credential && taskNavigation?.onPrintBadge
+            ? () => taskNavigation.onPrintBadge?.(collection.credential!)
+            : undefined,
+      }
+    : undefined;
   const contextLabel = badgeCollection
     ? "Badge collection"
     : scannerContextLabel({ ...preparation.location, action, sponsorName });
@@ -489,10 +503,13 @@ export function EventScannerCapture({
                   else autoStart.request();
                 }}
               >
-                <ScannerManualControls {...manualControls} open={manualOpen && !fastMode} />
+                {!collection.waiting && <ScannerManualControls {...manualControls} open={manualOpen && !fastMode} />}
               </ScannerCaptureControls>
             }
           >
+            {!fastMode && collectionDisplay?.waiting && (
+              <ScannerCollectionAttendee {...collectionDisplay} onAdvance={nextCollectionAttendee} />
+            )}
             {!collectorContext && sponsorId && canExportLeads && (
               <ScannerLeadExport slug={slug} sponsorId={sponsorId} />
             )}
@@ -526,21 +543,7 @@ export function EventScannerCapture({
       />
       {fastMode && (
         <FastScannerView
-          collection={
-            badgeCollection
-              ? {
-                  waiting: collection.waiting,
-                  name: collection.name,
-                  loading: collection.loading,
-                  saving: busy || cooldown.saving,
-                  onNext: nextCollectionAttendee,
-                  onPrint:
-                    !collectorContext && printHref && collection.credential && taskNavigation?.onPrintBadge
-                      ? () => taskNavigation.onPrintBadge?.(collection.credential!)
-                      : undefined,
-                }
-              : undefined
-          }
+          collection={collectionDisplay}
           taskSwitchDisabled={busy || cooldown.saving}
           presentation={presentation}
           onPresentation={togglePresentation}

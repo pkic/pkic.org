@@ -49,7 +49,7 @@ describe("one complete D1 call for offline eligibility", () => {
     ).rejects.toThrow();
   });
 
-  it("reports partial offline name coverage and honors canonical redaction", async () => {
+  it("reports partial offline name coverage when a badge secret is unavailable", async () => {
     await env.DB.prepare("UPDATE users SET first_name='Synthetic',last_name='Attendee' WHERE id=?")
       .bind(fixture.userId)
       .run();
@@ -61,12 +61,31 @@ describe("one complete D1 call for offline eligibility", () => {
     );
     expect(partial).toMatchObject({ badgeNamesPrepared: false, badgeNamesUnavailable: 1 });
     expect(partial.entries[0]!.encryptedName).toBeUndefined();
+    expect((await manifest("", { includeBadgeNames: "true" })).status).toBe(401);
+  });
+
+  it("withholds previously available encrypted names after canonical redaction", async () => {
+    await env.DB.prepare("UPDATE users SET first_name='Synthetic',last_name='Attendee' WHERE id=?")
+      .bind(fixture.userId)
+      .run();
+    const available = enrolledOfflineEligibilityResponseSchema.parse(
+      await (await manifest(fixture.token, { includeBadgeNames: "true" })).json(),
+    );
+    const entry = available.entries[0]!;
+    expect(available).toMatchObject({ badgeNamesPrepared: true, badgeNamesUnavailable: 0 });
+    expect(
+      await decryptBadgeCollectionName(
+        fixture.badgeId,
+        { eventId: fixture.eventId, badgeId: entry.badgeId, credentialHash: entry.credentialHash },
+        entry.encryptedName!,
+      ),
+    ).toBe("Synthetic Attendee");
     await env.DB.prepare("UPDATE users SET pii_redacted_at=? WHERE id=?").bind(nowIso(), fixture.userId).run();
     const redacted = enrolledOfflineEligibilityResponseSchema.parse(
       await (await manifest(fixture.token, { includeBadgeNames: "true" })).json(),
     );
+    expect(redacted).toMatchObject({ badgeNamesPrepared: false, badgeNamesUnavailable: 1 });
     expect(redacted.entries[0]!.encryptedName).toBeUndefined();
-    expect((await manifest("", { includeBadgeNames: "true" })).status).toBe(401);
   });
 
   it("keeps encrypted name refreshes unchanged until the canonical name changes", async () => {

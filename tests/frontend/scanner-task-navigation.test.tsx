@@ -49,8 +49,6 @@ it("allows clicking and swiping between tasks while a collected attendee is held
   );
   const print = host.querySelector<HTMLButtonElement>('[aria-label="Switch to Print"]')!;
   expect(print.disabled).toBe(false);
-  expect(print.className).toBe("pk-fast-scanner__task-link");
-  expect(host.querySelector(".pk-fast-scanner__task-swipe")?.textContent).toBe("← Swipe: Entry · Exit · Print →");
   await act(() => print.click());
   expect(onLaunch).toHaveBeenCalledWith("print", "entry");
   onLaunch.mockClear();

@@ -177,6 +177,24 @@ export function useEligibilityManifest({
     includeBadgeNames,
     scopeKey,
   ]);
+  const [, updateExpiry] = useState(0);
+  const namesDeadline =
+    includeBadgeNames && manifestScope === scopeKey ? eligibilityManifest.current?.validUntil : undefined;
+  useEffect(() => {
+    if (namesDeadline === undefined || !Number.isFinite(namesDeadline) || namesDeadline <= Date.now()) return;
+    let timer: number;
+    const observeExpiry = () => {
+      const remaining = namesDeadline - Date.now();
+      if (remaining <= 0) {
+        updateExpiry((value) => value + 1);
+        return;
+      }
+      // Browser timers cannot represent the full event window in one signed 32-bit delay.
+      timer = window.setTimeout(observeExpiry, Math.min(remaining, 2_147_483_647));
+    };
+    observeExpiry();
+    return () => window.clearTimeout(timer);
+  }, [scopeKey, namesDeadline]);
   const scopeMatches = scopeKey === manifestScope;
   const namesExpired = Boolean(
     includeBadgeNames && eligibilityManifest.current && Date.now() >= eligibilityManifest.current.validUntil,

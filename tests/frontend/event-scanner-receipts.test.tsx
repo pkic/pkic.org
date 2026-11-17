@@ -11,6 +11,39 @@ import {
   type EventScanRequest,
 } from "../../assets/shared/schemas/event-participation-scanning";
 describe("scanner foreground receipt and drain lifecycle", () => {
+  it.each(["manual", "hardware"] as const)("retries an unsaved collection scan through %s input", async (input) => {
+    const previousHash = window.location.hash;
+    try {
+      window.location.hash = "#/events/synthetic-event/scanner?scannerPurpose=collection";
+      await mount(true, ["attendance"]);
+      mocks.persist.mockRejectedValueOnce(new Error("Storage temporarily unavailable"));
+      mocks.persist.mockImplementation(async (scan) => ({
+        scan: eventScanCaptureIntentSchema.parse(scan),
+        local: { outcome: "eligible", reason: "eligible", message: "Saved on this device" },
+      }));
+      if (input === "manual") {
+        await submit();
+        expect(host.querySelector<HTMLInputElement>('input[name="badgeId"]')?.value).toBe(badgeCode);
+        expect(host.textContent).toContain("retry the scan");
+        await submit();
+      } else {
+        const start = Array.from(host.querySelectorAll("button")).find(
+          (button) => button.textContent?.trim() === "Start scanning",
+        )!;
+        await act(async () => start.click());
+        await act(async () => mocks.hardwareScan!(badgeCode));
+        await vi.waitFor(() => expect(host.textContent).toContain("retry the scan"));
+        await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Scan next now"]')!.click());
+        await act(async () => mocks.hardwareScan!(badgeCode));
+      }
+      await vi.waitFor(() => expect(mocks.persist).toHaveBeenCalledTimes(2));
+      expect(
+        Array.from(host.querySelectorAll("button")).some((button) => button.textContent?.trim() === "Next attendee"),
+      ).toBe(true);
+    } finally {
+      window.location.hash = previousHash;
+    }
+  });
   it("keeps task switching and current-badge printing available after collection saves", async () => {
     const previousHash = window.location.hash;
     try {

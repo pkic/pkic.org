@@ -128,7 +128,7 @@ export function ScannerPreparationStatus({
           {ready && !sessionOnly && (
             <p>
               {stale
-                ? "Saved badge data has expired. Badge checks need online verification until a refresh succeeds."
+                ? "Saved badge data is more than a day old. Scans still save on this device; reconnect to refresh badge checks."
                 : "Using saved badge data; its original expiry still applies."}
             </p>
           )}
@@ -156,6 +156,7 @@ export function ScannerPreparationStatus({
                     : "Prepare badge data before scanning."}
         </p>
       )}
+      {error && ready && !preparing && !sessionOnly && !stale && <p class="pk-muted">{error}</p>}
       <DescriptionList
         density="compact"
         items={[

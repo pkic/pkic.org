@@ -6,7 +6,11 @@ import { useEligibilityManifest } from "../../assets/ts/member-flows/portal/sect
 import type { ScannerEpoch } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-device-ledger";
 import { SCANNER_ELIGIBILITY_REFRESH_MS } from "../../assets/shared/event-offline-expiry";
 import { ScannerSyncStatus } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/ScannerPreparationStatus";
-const mocks = vi.hoisted(() => ({ prepare: vi.fn(async (..._args: unknown[]) => ({ refreshError: "" })) }));
+const mocks = vi.hoisted(() => ({
+  prepare: vi.fn(async (..._args: unknown[]): Promise<{ refreshError: string; validUntil?: number }> => ({
+    refreshError: "",
+  })),
+}));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-manifest", () => ({
   prepareEligibilityManifest: mocks.prepare,
 }));
@@ -36,11 +40,13 @@ function Scanner({
   syncing = false,
   scannerEpoch = epoch,
   roomId = null,
+  includeBadgeNames = false,
 }: {
   collector?: boolean;
   syncing?: boolean;
   scannerEpoch?: ScannerEpoch;
   roomId?: string | null;
+  includeBadgeNames?: boolean;
 }) {
   const state = useEligibilityManifest({
     slug: "synthetic",
@@ -51,6 +57,7 @@ function Scanner({
     epoch: scannerEpoch,
     roomId,
     collector,
+    includeBadgeNames,
     onPreparationClosed: preparationClosed,
   });
   current = state;
@@ -307,4 +314,77 @@ it("offers closing recovery for a frozen local epoch", async () => {
   await act(async () => render(<Scanner scannerEpoch={{ ...epoch, state: "closing" }} />, host));
   expect(current.closedMessage).toMatch(/retry closing/i);
   expect(mocks.prepare).not.toHaveBeenCalled();
+});
+
+it("expires prepared badge names at their deadline without focus or refresh events", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("navigator", { onLine: false });
+  const deadline = Date.now() + 1000;
+  mocks.prepare.mockResolvedValueOnce({ refreshError: "", validUntil: deadline });
+  await act(async () => render(<Scanner collector includeBadgeNames />, host));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(current.manifestReady).toBe(true);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(999);
+  });
+  expect(current.manifestReady).toBe(true);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1);
+  });
+  expect(current.manifestReady).toBe(false);
+  expect(current.manifestError).toMatch(/names have expired/i);
+  expect(host.textContent).toMatch(/names have expired/i);
+  expect(mocks.prepare).toHaveBeenCalledOnce();
+});
+
+it("replaces expiry timers with the scanner scope and removes them on unmount", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("navigator", { onLine: false });
+  const startedAt = Date.now();
+  mocks.prepare.mockResolvedValueOnce({ refreshError: "", validUntil: startedAt + 1000 });
+  mocks.prepare.mockResolvedValueOnce({ refreshError: "", validUntil: startedAt + 2000 });
+  await act(async () => render(<Scanner collector includeBadgeNames />, host));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(vi.getTimerCount()).toBe(2);
+  await act(async () =>
+    render(<Scanner collector includeBadgeNames roomId="22222222-2222-4222-8222-222222222222" />, host),
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(vi.getTimerCount()).toBe(2);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(current.manifestReady).toBe(true);
+  expect(current.manifestError).toBe("");
+  await act(async () => render(null, host));
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it("bounds long event-window expiry timers and schedules the remaining duration", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("navigator", { onLine: false });
+  const startedAt = Date.now();
+  const duration = 32 * 24 * 60 * 60_000;
+  const setTimeout = vi.spyOn(window, "setTimeout");
+  mocks.prepare.mockResolvedValueOnce({ refreshError: "", validUntil: startedAt + duration });
+  await act(async () => render(<Scanner collector includeBadgeNames />, host));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  const first = setTimeout.mock.calls.find((call) => call[1] === 2_147_483_647);
+  expect(first).toBeDefined();
+  vi.setSystemTime(startedAt + 2_147_483_647);
+  await act(async () => (first![0] as () => void)());
+  expect(current.manifestReady).toBe(true);
+  const remaining = setTimeout.mock.calls.find((call) => call[1] === duration - 2_147_483_647);
+  expect(remaining).toBeDefined();
+  vi.setSystemTime(startedAt + duration);
+  await act(async () => (remaining![0] as () => void)());
+  expect(current.manifestReady).toBe(false);
 });

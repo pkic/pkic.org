@@ -43,6 +43,8 @@ function Harness({ names = false }: { names?: boolean }) {
 }
 describe("scanner background preparation", () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-12-01T12:00:00.000Z"));
     host = document.createElement("div");
     document.body.append(host);
   });
@@ -51,6 +53,7 @@ describe("scanner background preparation", () => {
     host.remove();
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
   it("does not overlap preparation when reconnect events arrive during a download", async () => {
     let finish!: (manifest: eligibility.EligibilityManifest) => void;

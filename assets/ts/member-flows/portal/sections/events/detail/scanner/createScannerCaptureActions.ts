@@ -10,7 +10,7 @@ import {
 import { receiptMatchesOperation, unknownScanResponse } from "./scan-stream";
 import type { useBadgeCollection } from "./useBadgeCollection";
 import type { useScannerFeedback } from "./useScannerFeedback";
-import type { useScannerFailureCapture } from "./useScannerFailureCapture";
+import { ScannerCapturePersistenceError, type useScannerFailureCapture } from "./useScannerFailureCapture";
 import type { useScannerOutboxSync } from "./useScannerOutboxSync";
 import type { useScannerManualEntry } from "./useScannerManualEntry";
 import type { useScannerCamera } from "./useScannerCamera";
@@ -116,9 +116,11 @@ export function createScannerCaptureActions({
     manualCapturePending.current = true;
     setBusy(true);
     setResult(null);
+    let persisted = false;
     try {
       lastOperation.current = checked.data.operationId;
       const saved = await persistCapture(checked.data);
+      persisted = true;
       await scanSaved();
       resetCaptureFields();
       if (!(await presentSavedEligibility(saved, verifyQueuedScan))) return;
@@ -127,6 +129,7 @@ export function createScannerCaptureActions({
         void camera();
       }
     } catch (error) {
+      if (!persisted && error instanceof ScannerCapturePersistenceError && error.retryAllowed) collection.clear();
       failure(error instanceof Error ? error.message : "Unable to save this scan. Keep the attendee here and retry.");
     } finally {
       manualCapturePending.current = false;
@@ -186,13 +189,16 @@ export function createScannerCaptureActions({
     lastOperation.current = operation;
     setResult(null);
     showProvisionalMessage(operation, "Checking eligibility…");
+    let persisted = false;
     try {
       const saved = await persistCapture(parsed.data);
+      persisted = true;
       await scanSaved();
       if (!(await presentSavedEligibility(saved, verifyQueuedScan))) return;
       resetCaptureFields();
       if (fastMode) cooldown.feedback();
     } catch (error) {
+      if (!persisted && error instanceof ScannerCapturePersistenceError && error.retryAllowed) collection.clear();
       setBadge(raw);
       if (fastMode && receiptMatchesOperation(operation, lastOperation.current)) cooldown.feedback();
       if (receiptMatchesOperation(operation, lastOperation.current))

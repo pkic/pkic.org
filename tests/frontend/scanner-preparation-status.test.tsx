@@ -61,12 +61,24 @@ describe("scanner snapshot status metadata", () => {
         snapshot={snapshot}
       />,
     );
-    expect(html).toContain("Saved badge data has expired");
+    expect(html).toContain("Saved badge data is more than a day old");
+    expect(html).toContain("Scans still save on this device");
+    expect(html).not.toContain("has expired");
     expect(html).not.toContain("original expiry still applies");
     expect(html).toContain("Refresh unavailable");
     expect(html).toContain('role="alert"');
     expect(html).toContain(formatDateTime(snapshot.serverNow));
     expect(html).toContain(formatDateTime(snapshot.expiresAt));
+  });
+  it("keeps fresh cached data ready and shows refresh details without a warning", () => {
+    for (const error of ["Refresh unavailable", "Badge data does not match the scanner room"]) {
+      const html = render(
+        <ScannerPreparationStatus action="attendance" preparing={false} ready error={error} snapshot={snapshot} />,
+      );
+      expect(html).toContain("Badge data ready");
+      expect(html).toContain(error);
+      expect(html).not.toContain('role="alert"');
+    }
   });
   it("reports bounded-page progress and successful completion without inventing a percentage", () => {
     const progress = render(

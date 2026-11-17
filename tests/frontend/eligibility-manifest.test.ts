@@ -607,10 +607,28 @@ describe("local scoped eligibility manifest", () => {
     expect(manifest.expiresAt).toBe(prepared.expiresAt);
   });
   it("keeps names usable while calendar-specific eligibility requires verification after midnight", async () => {
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-06T23:55:00.000Z"));
     const snapshot = await fixture();
-    const expiredDay = new Date(snapshot.writtenAt - 1).toISOString();
-    const manifest = buildEligibilityManifest({ ...snapshot, eligibilityExpiresAt: expiredDay });
+    const entry = snapshot.entries[0];
+    const encryptedName = await encryptBadgeCollectionName(
+      badge,
+      { eventId: snapshot.eventId, badgeId: entry.badgeId, credentialHash: entry.credentialHash },
+      "Zoë 测试",
+    );
+    const hardExpiry = snapshot.writtenAt + 3 * 24 * 60 * 60_000;
+    const manifest = buildEligibilityManifest({
+      ...snapshot,
+      eligibilityExpiresAt: "2026-11-07T00:00:00.000Z",
+      expiresAt: new Date(hardExpiry).toISOString(),
+      validUntil: hardExpiry,
+      entries: [{ ...entry, encryptedName }],
+    });
+    expect(await manifest.lookup(badge)).toMatchObject({ outcome: "eligible" });
+    expect(await manifest.lookupName?.(badge)).toBe("Zoë 测试");
+
+    clock.mockReturnValue(Date.parse("2026-11-07T00:00:00.001Z"));
     expect(await manifest.lookup(badge)).toMatchObject({ outcome: "unverified", userId: snapshot.entries[0].userId });
+    expect(await manifest.lookupName?.(badge)).toBe("Zoë 测试");
   });
   it("decrypts only the scanned attendee name and restores it within the same offline scope", async () => {
     const snapshot = await fixture();
