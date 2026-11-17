@@ -394,6 +394,7 @@ describe("scanner device enrollment and manual capture boundary", () => {
     )!;
     expect(normal.textContent).toContain("Last badge refresh");
     expect(normal.textContent).toContain(formatDateTime(mocks.snapshot.serverNow));
+    expect(normal.textContent).toContain(formatDateTime(mocks.snapshot.expiresAt));
     await closeDiagnostics();
     await act(async () => {
       Array.from(host.querySelectorAll("button"))
@@ -404,7 +405,9 @@ describe("scanner device enrollment and manual capture boundary", () => {
     expect(fast.textContent).toContain("Last badge refresh");
     expect(fast.textContent).toContain(formatDateTime(mocks.snapshot.serverNow));
     expect(fast.textContent).toContain(formatDateTime(mocks.snapshot.expiresAt));
-    expect(fast.textContent).toContain("Using saved badge data");
+    const readiness = fast.querySelector('[role="status"][aria-label="Scanner status"]');
+    expect(readiness).not.toBeNull();
+    expect(readiness?.textContent).toContain("Badge data ready");
   });
   it.each(["eligible", "unknown"] as const)(
     "resets the cleared entry field after capturing a %s badge while retaining feedback",

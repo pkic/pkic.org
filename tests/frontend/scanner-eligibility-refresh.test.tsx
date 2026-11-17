@@ -77,27 +77,36 @@ afterEach(async () => {
   permissionChanged.mockReset();
   preparationClosed.mockReset();
   vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   mocks.prepare.mockReset().mockResolvedValue({ refreshError: "" });
 });
-it("refreshes well before the day expires and immediately after reconnect or focus", async () => {
-  vi.useFakeTimers();
-  vi.stubGlobal("navigator", { onLine: true });
-  await act(async () => render(<Scanner />, host));
-  expect(mocks.prepare).toHaveBeenCalledOnce();
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(SCANNER_ELIGIBILITY_REFRESH_MS);
-  });
-  expect(mocks.prepare).toHaveBeenCalledTimes(2);
-  await act(async () => {
-    window.dispatchEvent(new Event("online"));
-  });
-  expect(mocks.prepare).toHaveBeenCalledTimes(3);
-  await act(async () => {
-    window.dispatchEvent(new Event("focus"));
-  });
-  expect(mocks.prepare).toHaveBeenCalledTimes(4);
-});
+it.each([0, 0.5, 0.999])(
+  "refreshes within the staggered interval and immediately after reconnect or focus (random: %s)",
+  async (random) => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(random);
+    vi.stubGlobal("navigator", { onLine: true });
+    await act(async () => render(<Scanner />, host));
+    expect(mocks.prepare).toHaveBeenCalledOnce();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SCANNER_ELIGIBILITY_REFRESH_MS - 1);
+    });
+    expect(mocks.prepare).toHaveBeenCalledOnce();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_001);
+    });
+    expect(mocks.prepare).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    expect(mocks.prepare).toHaveBeenCalledTimes(3);
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(mocks.prepare).toHaveBeenCalledTimes(4);
+  },
+);
 it("restores offline checks from storage without attempting a network refresh", async () => {
   vi.stubGlobal("navigator", { onLine: false });
   await act(async () => render(<Scanner collector />, host));
@@ -110,6 +119,7 @@ it("restores offline checks from storage without attempting a network refresh", 
     null,
     "cache",
     expect.any(Function),
+    false,
   );
   await act(async () => {
     window.dispatchEvent(new Event("focus"));
@@ -263,7 +273,7 @@ it("stops refreshing a closed session until the next epoch while allowing upload
   expect(current.manifestError).toBe(message);
   await act(async () => syncButton().click());
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(SCANNER_ELIGIBILITY_REFRESH_MS);
+    await vi.advanceTimersByTimeAsync(SCANNER_ELIGIBILITY_REFRESH_MS + 30_000);
     window.dispatchEvent(new Event("online"));
     window.dispatchEvent(new Event("focus"));
     document.dispatchEvent(new Event("visibilitychange"));
