@@ -4,7 +4,6 @@
  * Both the current-user profile and the per-identity edit write through
  * `updateOwnIdentityProfile`, so there is one rule, one audit and one batch.
  */
-import { identityOwnerCanList } from "../../../../assets/shared/schemas/identity";
 import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
@@ -18,11 +17,7 @@ import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../aud
 import { identityJobTitleSql } from "./affiliation-projection";
 import { prepareIdentityEmailOwnershipStatements, requireIdentityEmailAssignable } from "./email-ownership";
 import { prepareUserProfileStatements } from "../users";
-import {
-  prepareIdentityProfileEdit,
-  readOrganizationProfileListingApproval,
-  type EditableIdentityProfile,
-} from "./profile-statement";
+import { prepareIdentityProfileEdit, type EditableIdentityProfile } from "./profile-statement";
 
 export interface OwnIdentityProfileUpdateInput {
   firstName?: string;
@@ -105,7 +100,7 @@ export async function updateOwnIdentityProfile(
   const current = await first<EditableIdentityRow>(
     db,
     `SELECT identity.id, identity.user_id, identity.organization_id, identity.email_id, identity.job_title, identity.biography,
-            identity.links_json, identity.show_on_organization_profile, identity.organization_profile_listing_approved, identity.updated_at,
+            identity.links_json, identity.show_on_organization_profile, identity.updated_at,
             title.job_title AS individual_job_title, u.first_name, u.last_name, u.preferred_name
        FROM identities identity
        JOIN users u ON u.id = identity.user_id
@@ -121,17 +116,6 @@ export async function updateOwnIdentityProfile(
   if (input.emailId !== undefined && !isOrganizationIdentity) {
     throw new AppError(422, "NO_ORGANIZATION", "An individual identity uses the account's primary email");
   }
-  if (
-    input.showOnOrgProfile === true &&
-    current.show_on_organization_profile === 0 &&
-    !identityOwnerCanList(readOrganizationProfileListingApproval(current.organization_profile_listing_approved))
-  ) {
-    const message = "Ask PKI Consortium staff or an organization contact to list you on the organization profile.";
-    throw new AppError(403, "ORGANIZATION_LISTING_REQUIRES_APPROVAL", message, {
-      formErrors: [],
-      fieldErrors: { showOnOrgProfile: [message] },
-    });
-  }
   await requireIdentityEmailAssignable(db, { userId: account.userId, emailId: input.emailId, identityId: current.id });
 
   const edit = prepareIdentityProfileEdit(
@@ -145,7 +129,6 @@ export async function updateOwnIdentityProfile(
       showOnOrganizationProfile: input.showOnOrgProfile,
     },
     now,
-    "owner",
   );
   const names = nameChanges(current, input);
 

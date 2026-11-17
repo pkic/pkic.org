@@ -1,5 +1,6 @@
 /** Sparse approved Member identity persistence and lifecycle statement builders. */
-import type { IdentitySource } from "../../../../assets/shared/schemas/identity";
+import type { z } from "zod";
+import { identitySourceSchema } from "../../../../assets/shared/schemas/identity";
 import type { AuthorizationEvidence } from "../../db/authorization-guard";
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -9,7 +10,7 @@ import { nowIso } from "../../utils/time";
 import { prepareIdentityEmailOwnershipStatements, requireIdentityEmailAssignable } from "../identities/email-ownership";
 import { identityCreationSelections } from "../identities/creation-read";
 
-export type { IdentitySource } from "../../../../assets/shared/schemas/identity";
+export type IdentitySource = z.infer<typeof identitySourceSchema>;
 
 export interface MemberIdentity {
   id: string;
@@ -101,7 +102,6 @@ export async function buildCreateIdentityStatement(
     biography?: string | null;
     linksJson?: string | null;
     showOnOrganizationProfile?: boolean;
-    organizationProfileListingApproved?: boolean | null;
     startImmediately: boolean;
     predecessorIdentityId?: string | null;
     now?: string;
@@ -146,15 +146,8 @@ export async function buildCreateIdentityStatement(
     transferFromIdentityId: predecessorIdentityId,
   };
   await requireIdentityEmailAssignable(db, { ...ownership, identityId: null }, observed?.emailOwner);
-  // A person joining on their own is not listed: PKI Consortium staff or the
-  // organization's primary or secondary contact decide who the organization's page shows.
+  // New organization affiliations start hidden unless the caller explicitly lists them.
   const showOnOrganizationProfile = input.organizationId !== null && input.showOnOrganizationProfile === true ? 1 : 0;
-  const listingApproval =
-    input.organizationId === null
-      ? null
-      : input.organizationProfileListingApproved === undefined
-        ? (input.showOnOrganizationProfile ?? null)
-        : input.organizationProfileListingApproved;
   const values = [
     identityId,
     input.userId,
@@ -166,7 +159,6 @@ export async function buildCreateIdentityStatement(
     input.linksJson ?? null,
     input.source,
     showOnOrganizationProfile,
-    listingApproval === null ? null : Number(listingApproval),
     at,
     input.startImmediately ? at : null,
     predecessorIdentityId,
@@ -176,10 +168,10 @@ export async function buildCreateIdentityStatement(
     input.userId,
   ];
   const columns = `(id, user_id, organization_id, email_id, verified_email_domain, job_title, biography, links_json,
-    source, show_on_organization_profile, organization_profile_listing_approved, invited_at, started_at,
+    source, show_on_organization_profile, invited_at, started_at,
     predecessor_identity_id, created_at, updated_at, hidden_from_public_profile)`;
   // Read the flag in the committing INSERT, so a concurrent staff decision is preserved.
-  const valuesSql = `?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+  const valuesSql = `?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     COALESCE((SELECT predecessor.hidden_from_public_profile FROM identities predecessor
       WHERE predecessor.id = ? AND predecessor.user_id = ?), 0)`;
   const statement = input.condition

@@ -22,19 +22,6 @@ export interface IdentityProfileSnapshot {
   biography: string | null;
   links_json: string | null;
   show_on_organization_profile: number;
-  organization_profile_listing_approved: number | null;
-}
-
-export type ProfileVisibilityAuthority = "owner" | "organization";
-
-/** Decode the nullable D1 approval flag without turning an undecided listing into a refusal. */
-export function readOrganizationProfileListingApproval(value: number | null): boolean | null {
-  return value === null ? null : value === 1;
-}
-
-/** Owner hiding retains an existing grant; an explicit organization decision replaces it. */
-function listingApproval(approved: number | null, requested: boolean, authority: ProfileVisibilityAuthority) {
-  return authority === "organization" ? requested : readOrganizationProfileListingApproval(approved) === true;
 }
 
 type ProfileChange = { from: unknown; to: unknown };
@@ -47,7 +34,6 @@ type ProfileChange = { from: unknown; to: unknown };
 export function identityProfileChanges(
   current: IdentityProfileSnapshot,
   input: IdentityProfileInput,
-  authority: ProfileVisibilityAuthority = "organization",
 ): Record<string, ProfileChange> {
   const changes: Record<string, ProfileChange> = {};
   const record = (field: string, from: unknown, to: unknown) => {
@@ -57,24 +43,10 @@ export function identityProfileChanges(
   if (input.jobTitle !== undefined) record("jobTitle", current.job_title, input.jobTitle);
   if (input.biography !== undefined) record("biography", current.biography, input.biography);
   if (input.links !== undefined) record("links", parseLinksJson(current.links_json), input.links);
-  if (input.showOnOrganizationProfile !== undefined) {
+  if (input.showOnOrganizationProfile !== undefined)
     record("showOnOrganizationProfile", current.show_on_organization_profile === 1, input.showOnOrganizationProfile);
-    record(
-      "organizationProfileListingApproved",
-      readOrganizationProfileListingApproval(current.organization_profile_listing_approved),
-      listingApproval(current.organization_profile_listing_approved, input.showOnOrganizationProfile, authority),
-    );
-  }
   return changes;
 }
-
-type IdentityProfileUpdateSnapshot = {
-  id: string;
-  updated_at: string;
-  organization_id: string | null;
-  job_title: string | null;
-  organization_profile_listing_approved?: number | null;
-};
 
 /**
  * Every identity profile edit is written here, so the job-title rule holds for
@@ -85,30 +57,11 @@ type IdentityProfileUpdateSnapshot = {
  */
 export function prepareIdentityProfileUpdateStatement(
   db: DatabaseLike,
-  identity: IdentityProfileUpdateSnapshot,
-  input: IdentityProfileInput & { showOnOrganizationProfile?: undefined },
-  at: string,
-  jobTitleField?: string,
-  authority?: ProfileVisibilityAuthority,
-): StatementLike;
-export function prepareIdentityProfileUpdateStatement(
-  db: DatabaseLike,
-  identity: IdentityProfileUpdateSnapshot & { organization_profile_listing_approved: number | null },
-  input: IdentityProfileInput,
-  at: string,
-  jobTitleField?: string,
-  authority?: ProfileVisibilityAuthority,
-): StatementLike;
-export function prepareIdentityProfileUpdateStatement(
-  db: DatabaseLike,
-  identity: IdentityProfileUpdateSnapshot,
+  identity: { id: string; updated_at: string; organization_id: string | null; job_title: string | null },
   input: IdentityProfileInput,
   at: string,
   jobTitleField = "jobTitle",
-  authority: ProfileVisibilityAuthority = "organization",
 ) {
-  if (input.showOnOrganizationProfile !== undefined && identity.organization_profile_listing_approved === undefined)
-    throw new Error("A visibility edit requires the listing approval snapshot");
   // A names-only edit leaves the profile alone, so it is not held to the title rule.
   const editsProfile = Object.values(input).some((value) => value !== undefined);
   if (
@@ -129,11 +82,9 @@ export function prepareIdentityProfileUpdateStatement(
                 job_title = CASE WHEN ? = 1 THEN ? ELSE job_title END,
                 biography = CASE WHEN ? = 1 THEN ? ELSE biography END,
                 links_json = CASE WHEN ? = 1 THEN ? ELSE links_json END,
-                organization_profile_listing_approved = CASE WHEN ? = 1 THEN ? ELSE organization_profile_listing_approved END,
                 show_on_organization_profile = CASE WHEN ? = 1 THEN ? ELSE show_on_organization_profile END,
                 updated_at = ?
-          WHERE id = ? AND ended_at IS NULL AND blocked_at IS NULL AND updated_at = ?
-            AND (? = 0 OR organization_profile_listing_approved IS ?)`,
+          WHERE id = ? AND ended_at IS NULL AND blocked_at IS NULL AND updated_at = ?`,
     )
     .bind(
       input.emailId !== undefined ? 1 : 0,
@@ -145,20 +96,10 @@ export function prepareIdentityProfileUpdateStatement(
       input.links !== undefined ? 1 : 0,
       input.links === undefined ? null : serializeLinks(input.links),
       input.showOnOrganizationProfile !== undefined ? 1 : 0,
-      listingApproval(
-        identity.organization_profile_listing_approved ?? null,
-        input.showOnOrganizationProfile ?? false,
-        authority,
-      )
-        ? 1
-        : 0,
-      input.showOnOrganizationProfile !== undefined ? 1 : 0,
       input.showOnOrganizationProfile ? 1 : 0,
       at,
       identity.id,
       identity.updated_at,
-      input.showOnOrganizationProfile === undefined ? 0 : 1,
-      identity.organization_profile_listing_approved ?? null,
     );
 }
 
@@ -184,7 +125,6 @@ export function prepareIdentityProfileEdit(
   current: EditableIdentityProfile,
   input: Omit<IdentityProfileInput, "jobTitle"> & { jobTitle?: string },
   at: string,
-  authority: ProfileVisibilityAuthority = "organization",
 ): {
   update: StatementLike;
   individualJobTitle: StatementLike | null;
@@ -194,12 +134,12 @@ export function prepareIdentityProfileEdit(
   const organization = current.organization_id !== null;
   const jobTitle = input.jobTitle === undefined ? undefined : input.jobTitle || null;
   const identityInput: IdentityProfileInput = { ...input, jobTitle: organization ? jobTitle : undefined };
-  const changes = identityProfileChanges(current, identityInput, authority);
+  const changes = identityProfileChanges(current, identityInput);
   const individual = !organization && jobTitle !== undefined;
   if (individual && jobTitle !== current.individual_job_title)
     changes.jobTitle = { from: current.individual_job_title, to: jobTitle };
   return {
-    update: prepareIdentityProfileUpdateStatement(db, current, identityInput, at, "jobTitle", authority),
+    update: prepareIdentityProfileUpdateStatement(db, current, identityInput, at),
     individualJobTitle: individual ? prepareIndividualJobTitleStatement(db, current.user_id, jobTitle, at) : null,
     publication: prepareIdentityProfilePublication(db, current, input, changes, at),
     changes,
@@ -218,12 +158,9 @@ export function identityProfilePublicationCondition(
       ? ["biography", "links"]
       : ["jobTitle", "biography", "links", "showOnOrganizationProfile"];
   const memberChanged = fields.some((field) => field in changes);
-  const personChanged = [
-    "biography",
-    "links",
-    "showOnOrganizationProfile",
-    ...(current.organization_id === null ? [] : ["jobTitle"]),
-  ].some((field) => field in changes);
+  const personChanged = ["biography", "links", ...(current.organization_id === null ? [] : ["jobTitle"])].some(
+    (field) => field in changes,
+  );
   // Individual titles belong to the user and also appear on their other personal identities, including past ones.
   const individualTitleChanged = current.organization_id === null && "jobTitle" in changes;
   const linkChange = changes.links;

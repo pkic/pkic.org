@@ -9,8 +9,7 @@ import {
  * Application approval, staff provisioning, and imports use the same prepared
  * atomic command: organization, membership, identity, contact roles, and group
  * relationships commit together. Existing approved organization affiliations
- * retain their canonical profiles and are explicitly listed; membership is
- * projected through their canonical link.
+ * are reused unchanged; membership is projected through their canonical link.
  *
  * All build decisions use pre-batch reads. Guarded identity reuse, unique
  * constraints, and the caller's approval/permission evidence reject stale
@@ -452,11 +451,7 @@ async function buildProvisionOrganizationTiedMemberships(
     statements.push(...userStatements);
 
     const existingAffiliation = input.activateIdentities
-      ? await prepareExistingOrganizationAffiliation(db, user, organizationId, rep.email, {
-          at: now,
-          actorUserId: input.grantedByUserId ?? null,
-          jobTitle: rep.jobTitle,
-        })
+      ? await prepareExistingOrganizationAffiliation(db, user, organizationId, rep.email)
       : null;
     const prepared =
       existingAffiliation ??
@@ -473,10 +468,8 @@ async function buildProvisionOrganizationTiedMemberships(
         now,
       }));
     const identityId = prepared.identityId;
+    if (!existingAffiliation && input.activateIdentities) publicIdentityIds.push(identityId);
     statements.push(prepared.statement);
-    if (existingAffiliation) statements.push(...existingAffiliation.profileStatements);
-    // Only newly inserted identities need the membership creation publication below.
-    if (input.activateIdentities && !existingAffiliation) publicIdentityIds.push(identityId);
 
     if (input.activateIdentities) {
       for (const group of groups) {

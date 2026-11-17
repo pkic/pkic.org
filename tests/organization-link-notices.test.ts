@@ -60,7 +60,7 @@ async function linkedOrganization(email: string) {
   return { organizationId, identityId: linked!.identityId, ...person };
 }
 
-/** An automatic link starts unlisted; a primary or secondary contact or staff lists it on the member profile. */
+/** Automatic links start unlisted; make this fixture public for publication assertions. */
 async function listOnOrganizationProfile(identityId: string) {
   await env.DB.prepare("UPDATE identities SET show_on_organization_profile=1 WHERE id=?").bind(identityId).run();
 }

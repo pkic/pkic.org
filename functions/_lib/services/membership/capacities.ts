@@ -38,7 +38,7 @@ async function requireActiveIdentityCapacity(db: DatabaseLike, identityId: strin
   const identity = await first<IdentityCapacityRow>(
     db,
     `SELECT identity.id, identity.user_id, capacity.member_id, identity.organization_id,
-            member.status, category.category_code, identity.show_on_organization_profile, identity.organization_profile_listing_approved, identity.job_title,
+            member.status, category.category_code, identity.show_on_organization_profile, identity.job_title,
             identity.email_id, identity.biography, identity.links_json,
             identity.updated_at AS identity_updated_at, member.updated_at AS member_updated_at
        FROM identities identity
@@ -160,7 +160,6 @@ export async function updateMembershipCapacity(
       .prepare(
         `UPDATE identities SET updated_at = updated_at
           WHERE id = ? AND user_id = ? AND updated_at = ?
-            AND organization_profile_listing_approved IS ?
             AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
             AND EXISTS (
               SELECT 1 FROM members member
@@ -176,7 +175,6 @@ export async function updateMembershipCapacity(
         identity.id,
         identity.user_id,
         identity.identity_updated_at,
-        identity.organization_profile_listing_approved,
         identity.member_id,
         identity.member_updated_at,
         identity.user_id,
@@ -188,7 +186,7 @@ export async function updateMembershipCapacity(
       "identity_updated",
       "identity",
       identity.id,
-      { ...input, ...identityProfileChanges(identity, { showOnOrganizationProfile: input.showOnOrgProfile }) },
+      input,
       at,
     ),
     prepareCapacityUpdatePublication(authorizedDb, identity, input, at),

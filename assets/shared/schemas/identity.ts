@@ -27,13 +27,6 @@ export const IDENTITY_SOURCES = [
 ] as const;
 export const identitySourceSchema = z.enum(IDENTITY_SOURCES);
 
-export type IdentitySource = z.infer<typeof identitySourceSchema>;
-
-/** Listing authority is granted explicitly, independently of the identity's source. */
-export function identityOwnerCanList(approved: boolean | null): boolean {
-  return approved === true;
-}
-
 export const IDENTITY_STATES = ["pending", "active", "ended", "blocked"] as const;
 export const identityStateSchema = z.enum(IDENTITY_STATES);
 

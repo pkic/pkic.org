@@ -16,7 +16,6 @@ import {
 } from "../functions/_lib/services/membership/capacities";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { resetDb } from "./helpers/reset-db";
-import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { prepareIndividualIdentityStatement } from "../functions/_lib/services/users";
 import { nowIso } from "../functions/_lib/utils/time";
@@ -571,49 +570,6 @@ describe("admin user membership capacities", () => {
       );
     },
   );
-
-  it("rolls back a visibility edit when listing approval changes without advancing the timestamp", async () => {
-    const { actor } = await publicationStaff();
-    const userId = await insertUser(env.DB, "approval-race@example.test");
-    const organizationId = await insertOrganization(env.DB, "Approval race organization");
-    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
-    const identityId = await addRepresentative(env.DB, memberId, userId);
-    await env.DB.prepare(
-      "UPDATE identities SET job_title='Representative',organization_profile_listing_approved=1 WHERE id=?",
-    )
-      .bind(identityId)
-      .run();
-    const before = await env.DB.prepare("SELECT updated_at FROM identities WHERE id=?").bind(identityId).first();
-    const db = mutateBeforeMatchingQuery(
-      env.DB,
-      (sql) => sql.includes("UPDATE identities SET updated_at = updated_at"),
-      () =>
-        env.DB.prepare("UPDATE identities SET organization_profile_listing_approved=0 WHERE id=?")
-          .bind(identityId)
-          .run(),
-    );
-    await expect(updateMembershipCapacity(db, actor, identityId, { showOnOrgProfile: false })).rejects.toMatchObject({
-      status: 409,
-      code: "IDENTITY_CHANGED",
-    });
-    expect(await env.DB.prepare("SELECT updated_at FROM identities WHERE id=?").bind(identityId).first()).toEqual(
-      before,
-    );
-    expect(
-      await env.DB.prepare(
-        "SELECT show_on_organization_profile,organization_profile_listing_approved FROM identities WHERE id=?",
-      )
-        .bind(identityId)
-        .first(),
-    ).toEqual({
-      show_on_organization_profile: 1,
-      organization_profile_listing_approved: 0,
-    });
-    expect(await env.DB.prepare("SELECT id FROM audit_log WHERE entity_id=?").bind(identityId).all()).toMatchObject({
-      results: [],
-    });
-    expect(await publicationRequests()).toHaveLength(0);
-  });
 
   it("returns the organization aggregate category and status for a representative update", async () => {
     const actorId = await insertUser(env.DB, "representative-response-admin@example.test");

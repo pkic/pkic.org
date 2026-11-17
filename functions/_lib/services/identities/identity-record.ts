@@ -52,7 +52,7 @@ export async function updateIdentityProfileByStaff(
   const current = await first<EditableIdentityProfile & { inactive: number }>(
     db,
     `SELECT identity.id, identity.user_id, identity.organization_id, identity.email_id, identity.job_title,
-            identity.biography, identity.links_json, identity.show_on_organization_profile, identity.organization_profile_listing_approved, identity.updated_at,
+            identity.biography, identity.links_json, identity.show_on_organization_profile, identity.updated_at,
             title.job_title AS individual_job_title,
             (identity.ended_at IS NOT NULL OR identity.blocked_at IS NOT NULL) AS inactive
        FROM identities identity

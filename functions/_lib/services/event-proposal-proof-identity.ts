@@ -45,7 +45,7 @@ export async function updateEventProposalOwnIdentity(
     db,
     `
     SELECT identity.id,identity.user_id,identity.organization_id,identity.email_id,COALESCE(address.normalized_email,user.normalized_email) AS email,
-      identity.job_title,identity.biography,identity.links_json,identity.show_on_organization_profile,identity.organization_profile_listing_approved,identity.updated_at,
+      identity.job_title,identity.biography,identity.links_json,identity.show_on_organization_profile,identity.updated_at,
       title.job_title AS individual_job_title,identity.started_at,identity.ended_at,identity.blocked_at,
       CASE WHEN identity.email_id IS NULL THEN user.email_verified_at ELSE address.verified_at END AS verified_at
     FROM identities identity JOIN users user ON user.id=identity.user_id AND user.active=1 AND user.pii_redacted_at IS NULL AND user.merged_into_user_id IS NULL

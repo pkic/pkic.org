@@ -530,15 +530,12 @@ describe("proposal own representation role update", () => {
         listed ? [{ resource_id: input.identityId, reason_code: "identity_profile_changed" }] : [],
       );
       expect(
-        await env.DB.prepare(
-          "SELECT biography,show_on_organization_profile,organization_profile_listing_approved FROM identities WHERE id=?",
-        )
+        await env.DB.prepare("SELECT biography,show_on_organization_profile FROM identities WHERE id=?")
           .bind(input.identityId)
           .first(),
       ).toMatchObject({
         biography: body.biography,
         show_on_organization_profile: listed ? 1 : 0,
-        organization_profile_listing_approved: listed ? 1 : 0,
       });
       const repeated = await patch(input.identityId, body);
       expect(repeated.status, await repeated.clone().text()).toBe(200);
