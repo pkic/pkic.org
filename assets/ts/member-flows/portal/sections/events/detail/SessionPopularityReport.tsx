@@ -10,6 +10,7 @@ import {
 } from "../../../../../../shared/schemas/event-session-popularity-report";
 import { ApiDataTable } from "../../../../../components/ApiDataTable";
 import type { Column } from "../../../../../components/Table";
+import { SessionChatActions } from "./SessionChatActions";
 
 const REACTION_EMOJI = new Map<string, string>(LIVE_REACTIONS.map((reaction) => [reaction.id, reaction.emoji]));
 
@@ -37,7 +38,16 @@ function countColumn(header: string, key: CountKey): Column<SessionPopularityRep
  * event. Each reaction also has its own column, hidden until a reader wants
  * to sort by it.
  */
-export function SessionPopularityReport({ slug, clock }: { slug: string; clock?: ClockZone }) {
+export function SessionPopularityReport({
+  slug,
+  clock,
+  canModerateChat = false,
+}: {
+  slug: string;
+  clock?: ClockZone;
+  /** Moderators can download and erase the chat the live rooms still hold. */
+  canModerateChat?: boolean;
+}) {
   const [timeZone, setTimeZone] = useState<string | null>(null);
   return (
     <ApiDataTable<SessionPopularityReportRow, SessionPopularityReportResponse>
@@ -57,6 +67,7 @@ export function SessionPopularityReport({ slug, clock }: { slug: string; clock?:
           Reactions count each person once per reaction every 10 seconds, so they reflect people, not clicks.
         </p>
       }
+      toolbar={canModerateChat ? () => <SessionChatActions slug={slug} /> : undefined}
       rowKey={(row) => row.occurrenceId}
       columns={[
         {

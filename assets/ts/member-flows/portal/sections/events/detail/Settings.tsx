@@ -108,7 +108,9 @@ export function Settings({
       {tab === "sponsor-tiers" && (
         <LazySponsorTiersTab slug={event.slug} canWrite={event.capabilities.includes("write")} />
       )}
-      {tab === "live" && <EventLiveSettings slug={event.slug} />}
+      {tab === "live" && (
+        <EventLiveSettings slug={event.slug} canConfigureChat={event.capabilities.includes("write")} />
+      )}
       {tab === "team" && (
         <EventTeamSettings
           slug={event.slug}

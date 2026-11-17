@@ -115,3 +115,35 @@ it("explains when no session has any interaction yet", async () => {
     expect(host?.textContent).toContain("No session has reactions, chat messages, questions, or poll answers yet.");
   });
 });
+
+it("offers moderators the event's chat download and a confirmed erase, and no one else", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } }),
+    ),
+  );
+  host = document.createElement("div");
+  document.body.append(host);
+  await act(async () => {
+    render(<SessionPopularityReport slug="event-one" />, host!);
+  });
+  await vi.waitFor(async () => {
+    await settle();
+    expect(host?.querySelector("tbody")?.textContent).toContain("Keynote");
+  });
+  expect(host.querySelector('[aria-label="Download chat (CSV)"]')).toBeNull();
+  expect(host.textContent).not.toContain("Erase chat");
+
+  await act(async () => {
+    render(<SessionPopularityReport slug="event-one" canModerateChat />, host!);
+  });
+  await vi.waitFor(async () => {
+    await settle();
+    expect(host?.querySelector('[aria-label="Download chat (CSV)"]')?.getAttribute("href")).toBe(
+      "/api/v1/events/event-one/agenda/chat/exports",
+    );
+  });
+  expect(host.textContent).toContain("Erase chat…");
+});

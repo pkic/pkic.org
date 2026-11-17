@@ -17,6 +17,14 @@ export interface LiveChatRow extends LiveChatRemoval {
   /** Insertion order, the tie-break after the send time. */
   seq: number;
 }
+/** One attendee message as an organizer's archive keeps it. */
+export interface LiveChatArchiveRow {
+  sent_at: string;
+  author_name: string;
+  body: string;
+  /** Shown to attendees, hidden by a moderator, or held after reports. */
+  status: "shown" | "hidden" | "held";
+}
 const TABLES: Record<LiveChatChannel, string> = { attendee: "room_chat", operator: "room_operator_chat" };
 const CHANNELS = Object.keys(TABLES) as LiveChatChannel[];
 /** The tables that annotate a message; a message leaves with its annotations. */
@@ -175,6 +183,28 @@ export class LiveRoomChat {
       this.sql.exec(`DELETE FROM ${table} WHERE id IN (SELECT value FROM json_each(?))`, json);
     for (const table of ANNOTATIONS)
       this.sql.exec(`DELETE FROM ${table} WHERE message_id IN (SELECT value FROM json_each(?))`, json);
+  }
+
+  holdsMessages(): boolean {
+    return this.sql.rows("SELECT 1 FROM room_chat LIMIT 1").length > 0;
+  }
+
+  /** Every attendee message the room still holds, oldest first, with how moderation left it. */
+  archive(): LiveChatArchiveRow[] {
+    return this.sql.rows<LiveChatArchiveRow>(
+      `SELECT c.sent_at, c.author_name, c.body,
+         CASE WHEN h.message_id IS NULL THEN 'shown' WHEN h.held = 1 THEN 'held' ELSE 'hidden' END AS status
+       FROM room_chat c LEFT JOIN room_chat_hidden h ON h.message_id = c.id ORDER BY c.sent_at, c.rowid`,
+    );
+  }
+
+  /** Removes every message of both channels with their annotations; the chat counts stay. */
+  eraseAll(): LiveChatRemoval[] {
+    const removed = CHANNELS.flatMap((channel) =>
+      this.sql.rows<LiveChatRemoval>(`SELECT id, '${channel}' AS channel FROM ${TABLES[channel]}`),
+    );
+    this.remove(removed.map((row) => row.id));
+    return removed;
   }
 
   authors(): string[] {

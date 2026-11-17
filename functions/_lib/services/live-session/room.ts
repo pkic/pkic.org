@@ -15,7 +15,8 @@ import type {
 import type { UserSessionTokenClaims } from "../../auth/user-session-token";
 import type { z } from "zod";
 import type { liveProgramSelectSchema } from "../../../../assets/shared/schemas/live-room-program";
-import { LiveRoomChat } from "./room-chat";
+import { LiveRoomChat, type LiveChatArchiveRow } from "./room-chat";
+import { liveChatErasable, purgeLiveRoom } from "./room-purge";
 import { LiveRoomChatActions } from "./room-chat-actions";
 import { LiveChatFeed } from "./room-chat-feed";
 import { LiveChatModerationStore } from "./room-chat-moderation";
@@ -366,6 +367,21 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     if (this.store.hasPendingCopy()) await this.scheduleAlarm(this.copyDue(), true);
   }
 
+  /** The attendee chat the room still holds, oldest first, for the event's chat download. */
+  async chatArchive(): Promise<LiveChatArchiveRow[]> {
+    return this.sql.holdsData() ? this.chat.archive() : [];
+  }
+
+  /** Erases both chat channels, keeping the counts; false while the room is still open. */
+  async eraseChat(): Promise<boolean> {
+    if (!this.sql.holdsData()) return true;
+    if (!liveChatErasable(this.store.session())) return false;
+    for (const removed of this.chat.eraseAll())
+      await this.broadcast.all({ type: "chat.removed", messageId: removed.id, channel: removed.channel });
+    this.graphics.lists.due();
+    return true;
+  }
+
   private copyDue(): number {
     return Date.now() + LIVE_ROOM_POLICY.durableCopyDelaySeconds * 1000;
   }
@@ -380,19 +396,12 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     await this.scheduleAlarm(this.copyDue(), true);
   }
 
+  /** The session is a week over: erase the room, or all but the chat its event keeps longer. */
   private async purge(): Promise<void> {
-    for (const socket of this.ctx.getWebSockets()) {
-      try {
-        socket.close(1001, "This session's room has closed");
-      } catch {
-        // Already closed.
-      }
-    }
     this.engagement.clear();
     this.onScreenLists.stop();
-    await this.ctx.storage.deleteAll();
-    this.sql.erased();
-    this.databaseSession.reset();
+    const erased = await purgeLiveRoom(this.ctx, this.env.DB, this.store.session(), this.sql, this.chat);
+    if (erased) this.databaseSession.reset();
   }
 
   private async left(socket: WebSocket): Promise<void> {

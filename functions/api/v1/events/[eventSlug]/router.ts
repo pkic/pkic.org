@@ -10,6 +10,7 @@ import { LiveProgramGet, LiveProgramPost } from "./agenda/live-program";
 import { LiveOverlayAccessPost } from "./agenda/live-overlays";
 import { LivePollResultsGet } from "./agenda/live-poll-results";
 import { SessionPopularityReportGet } from "./agenda/session-popularity-report";
+import { LiveChatArchiveExportGet, LiveChatEraseDelete } from "./agenda/live-chat-archive";
 import { EventScreenPairingPost, EventScreensGet } from "./screens";
 import { AgendaSponsorChoicesGet } from "./agenda/sponsors";
 import { registerAgendaReadRoutes } from "./agenda/register-read-routes";
@@ -167,6 +168,8 @@ openapi.get("/agenda/occurrences/:occurrenceId/room-recommendations", SessionRoo
 openapi.get("/agenda/reports/demand", SessionDemandReportGet);
 openapi.get("/agenda/reports/demand/exports", SessionDemandReportExportGet);
 openapi.get("/agenda/reports/popularity", SessionPopularityReportGet);
+openapi.get("/agenda/chat/exports", LiveChatArchiveExportGet);
+openapi.delete("/agenda/chat", LiveChatEraseDelete);
 openapi.post("/agenda/rooms", AgendaRoomCreate);
 openapi.post("/agenda/rooms/order", AgendaRoomsOrderPost);
 openapi.put("/agenda/rooms/:roomId", AgendaRoomUpdate);

@@ -172,6 +172,14 @@ export class LiveRoomSql {
     );
   }
 
+  /** Empties every table but `kept`, leaving the schema in place. Table names come from the schema itself. */
+  emptyExcept(kept: readonly string[]): void {
+    const tables = this.rows<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND substr(name, 1, 7) <> 'sqlite_' AND substr(name, 1, 4) <> '_cf_'",
+    );
+    for (const { name } of tables) if (!kept.includes(name)) this.exec(`DELETE FROM "${name}"`);
+  }
+
   /** Forgets that the schema exists, after the room's storage was erased. */
   erased(): void {
     this.ready = false;

@@ -154,7 +154,7 @@ export function GroupEventSettingsTab({
       ) : (detailId === "live" || (!canManage && !detailId)) &&
         hasEventAgendaPermission(event.id, "agenda:live_moderate") ? (
         <Suspense fallback={<Spinner label="Loading live settings…" />}>
-          <EventLiveSettings slug={event.slug} />
+          <EventLiveSettings slug={event.slug} groupId={groupId} canConfigureChat={canManage} />
         </Suspense>
       ) : detailId === "scheduling" ? (
         <Suspense fallback={<Spinner />}>

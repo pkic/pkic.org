@@ -24,6 +24,7 @@ import { eventPromotionDesignSchema } from "./event-promotion-design";
 import { countryCodeSchema } from "../countries";
 import { eventCitySchema, eventPlaceSchema } from "../event-place";
 import { eventAttendanceSettingsSchema } from "../attendance-attribution";
+import { eventLiveChatSettingsSchema } from "../live-chat-retention";
 
 /**
  * D1-backed event profile catalog projection. The key remains a validated
@@ -55,6 +56,7 @@ export const EVENT_MANAGED_SETTING_KEYS = [
   "forms",
   "frontend",
   "heroImageUrl",
+  "liveChat",
   "proposal",
   "venue",
   "virtualUrl",
@@ -129,6 +131,8 @@ export const eventSettingsSchema = z.object({
   promotionDesign: eventPromotionDesignSchema.nullable().optional(),
   /** How self check-ins are attributed to sessions; stored under `attendance` in the event settings. */
   attendance: eventAttendanceSettingsSchema.optional(),
+  /** How long live rooms keep their attendee chat; stored under `liveChat` in the event settings. */
+  liveChat: eventLiveChatSettingsSchema.optional(),
   userRetentionDays: z.number().int().positive().max(3650).optional(),
 });
 export type EventSettingsInput = z.infer<typeof eventSettingsSchema>;
