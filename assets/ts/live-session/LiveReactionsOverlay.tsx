@@ -12,6 +12,8 @@ const FLOAT_MILLISECONDS = 3200;
 /** How long a fading count stays drawn while its fade runs. */
 const COUNT_FADE_MILLISECONDS = 600;
 const LANES = 4;
+/** The lane fades in these many steps between empty and full. */
+const LOAD_STEPS = 4;
 const { maxFloating, countFromPeople, countHoldSeconds } = LIVE_REACTION_CROWD_POLICY;
 
 type Burst = LiveRoomState["burst"];
@@ -23,6 +25,15 @@ function useFloats(burst: Burst): Float[] {
   const next = useRef(0);
   const latest = useRef(burst);
   latest.current = burst;
+  // Each batch keeps its own expiry, so a later burst never cancels an earlier one's.
+  const expiries = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const timers = expiries.current;
+    return () => {
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
   const sequence = burst?.sequence;
   useEffect(() => {
     const counts = latest.current?.counts;
@@ -35,11 +46,11 @@ function useFloats(burst: Burst): Float[] {
     // The newest stay: a crowd replaces older floats rather than stacking up.
     setFloating((current) => [...current, ...spawned].slice(-maxFloating));
     const ids = new Set(spawned.map((item) => item.id));
-    const clear = setTimeout(
-      () => setFloating((current) => current.filter((item) => !ids.has(item.id))),
-      FLOAT_MILLISECONDS,
-    );
-    return () => clearTimeout(clear);
+    const expiry = setTimeout(() => {
+      expiries.current.delete(expiry);
+      setFloating((current) => current.filter((item) => !ids.has(item.id)));
+    }, FLOAT_MILLISECONDS);
+    expiries.current.add(expiry);
   }, [sequence]);
   return floating;
 }
@@ -101,14 +112,11 @@ function useCrowdCounts(burst: Burst, enabled: boolean) {
 export function LiveReactionsOverlay({ burst, showCount }: { burst: Burst; showCount: boolean }) {
   const floating = useFloats(burst);
   const counts = useCrowdCounts(burst, showCount);
-  // Custom properties carry the lane's load to the stylesheet, which owns how faint that makes it.
-  const lane = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    lane.current?.style.setProperty("--pk-live-reaction-load", String(floating.length / maxFloating));
-  }, [floating.length]);
+  // A bounded step of how full the lane is; the stylesheet owns how faint each step draws it.
+  const load = Math.round((floating.length / maxFloating) * LOAD_STEPS);
   return (
     <div class="pk-live-overlay__reactions" aria-hidden="true">
-      <div class="pk-live-overlay__reaction-lane" ref={lane}>
+      <div class="pk-live-overlay__reaction-lane" data-load={load}>
         {floating.map((item) => (
           <span key={item.id} class={`pk-live-overlay__reaction pk-live-overlay__reaction--lane-${item.lane}`}>
             {item.emoji}

@@ -478,7 +478,7 @@
 
   /*
    * Reactions: one quiet float per person, in a narrow lane at the edge. The
-   * lane grows fainter as it fills (--pk-live-reaction-load runs from 0 to 1),
+   * lane grows fainter as it fills (data-load steps from 0 to 4),
    * so a crowd never covers the picture; the optional count carries its size.
    */
   .pk-live-overlay__reactions {
@@ -490,9 +490,18 @@
   .pk-live-overlay__reaction-lane {
     position: absolute;
     inset: 0;
-    opacity: calc(0.55 - 0.2 * var(--pk-live-reaction-load, 0));
+    opacity: 0.55;
     filter: saturate(0.6);
     transition: opacity var(--pk-dur-slow) var(--pk-ease);
+  }
+  .pk-live-overlay__reaction-lane[data-load="2"] {
+    opacity: 0.5;
+  }
+  .pk-live-overlay__reaction-lane[data-load="3"] {
+    opacity: 0.42;
+  }
+  .pk-live-overlay__reaction-lane[data-load="4"] {
+    opacity: 0.35;
   }
   .pk-live-overlay__reaction {
     position: absolute;

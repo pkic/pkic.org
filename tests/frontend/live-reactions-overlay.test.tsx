@@ -41,7 +41,20 @@ describe("live reactions overlay", () => {
     // The newest stay; the lane reports how full it is so the stylesheet can fade it.
     expect(floats().at(-1)).toBe("👍");
     const lane = host.querySelector<HTMLElement>(".pk-live-overlay__reaction-lane")!;
-    expect(lane.style.getPropertyValue("--pk-live-reaction-load")).toBe("1");
+    expect(lane.dataset.load).toBe("4");
+  });
+
+  it("clears every float once its rise ends, however many bursts follow", () => {
+    draw({ counts: { applause: 1 }, people: { applause: 1 } });
+    void act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    draw({ counts: { love: 1 }, people: { applause: 1, love: 1 } });
+    expect(floats()).toEqual(["👏", "❤️"]);
+    void act(() => {
+      vi.advanceTimersByTime(3200);
+    });
+    expect(floats()).toEqual([]);
   });
 
   it("adds nothing on air for a burst of repeat clicks", () => {
