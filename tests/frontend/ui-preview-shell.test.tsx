@@ -13,7 +13,7 @@ import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 
-import { PreviewShell, type PreviewSection } from "../../assets/ts/ui/preview/PreviewShell";
+import { PreviewShell, previewSectionsShown, type PreviewSection } from "../../assets/ts/ui/preview/PreviewShell";
 import { accentNeighbour, palette } from "../../assets/design/palette";
 
 const sections: PreviewSection[] = [
@@ -107,5 +107,18 @@ describe("PreviewShell", () => {
     const labels = [...(scope?.querySelectorAll("button") ?? [])].map((b) => b.getAttribute("aria-label"));
     expect(labels).toEqual(Object.keys(accentNeighbour));
     expect(labels).not.toContain("red");
+  });
+});
+
+describe("previewSectionsShown", () => {
+  const note: PreviewSection = { id: "unavailable", title: "Not loaded", render: () => null };
+
+  it("renders every section without ?only, and the matching one with it", () => {
+    expect(previewSectionsShown(sections, null, [note])).toBe(sections);
+    expect(previewSectionsShown(sections, "two", [note]).map((section) => section.id)).toEqual(["two"]);
+  });
+
+  it("shows the fallback note when ?only names a section that did not load", () => {
+    expect(previewSectionsShown(sections, "live-answer-thread", [note])).toEqual([note]);
   });
 });

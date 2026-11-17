@@ -326,6 +326,34 @@ describe("live chat", () => {
     expect(blocked.textContent).toContain("Welcome to the session");
   });
 
+  it("gives a paused person their message actions back when the pause ends", () => {
+    vi.useFakeTimers();
+    try {
+      const host = mount(
+        <LiveChat
+          state={stateWith({
+            viewer: {
+              role: "attendee",
+              name: "Ada",
+              participation: { block: "paused", until: new Date(Date.now() + 1_000).toISOString() },
+            },
+          })}
+          disabled={false}
+          send={vi.fn(() => true)}
+        />,
+      );
+      const reactions = () => host.querySelectorAll('button[aria-label^="React to message"]').length;
+      expect(reactions()).toBe(0);
+      void act(() => {
+        vi.advanceTimersByTime(1_100);
+      });
+      expect(host.querySelector("textarea")).not.toBeNull();
+      expect(reactions()).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not connect before the canonical live window", () => {
     const createSocket = vi.fn();
     const host = mount(

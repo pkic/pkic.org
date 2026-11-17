@@ -8,7 +8,7 @@
 
 import { render } from "preact";
 
-import { PreviewShell, type PreviewSection } from "./PreviewShell";
+import { PreviewShell, previewSectionsShown, type PreviewSection } from "./PreviewShell";
 import { badgeLabelDeskSection } from "./badge-label-desk";
 import { scannerPresentationSection, scannerDestinationsSection } from "./scanner-presentation";
 import { badgePrintingSection } from "./badge-printing";
@@ -70,7 +70,7 @@ async function main(): Promise<void> {
   ];
   // `?only=<id>` renders one section alone, for a tight screenshot of one control.
   const only = new URLSearchParams(window.location.search).get("only");
-  const shown = only ? sections.filter((section) => section.id === only) : sections;
+  const shown = previewSectionsShown(sections, only, live ? [] : unloaded);
   render(<PreviewShell sections={shown} />, mount);
 }
 
