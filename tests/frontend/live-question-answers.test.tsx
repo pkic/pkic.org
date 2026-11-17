@@ -71,7 +71,7 @@ function openThread(
   answers: LiveQuestionAnswer[],
   rights: { canAnswer?: boolean; canAccept?: boolean; canVote?: boolean; canModerate?: boolean } = {},
 ) {
-  void act(() => labelled(host, "Show answers").click());
+  void act(() => labeled(host, "Show answers").click());
   void act(() =>
     live.latest().deliver({
       type: "question.answers",
@@ -85,7 +85,7 @@ function openThread(
   );
 }
 
-function labelled(root: ParentNode, name: string): HTMLButtonElement {
+function labeled(root: ParentNode, name: string): HTMLButtonElement {
   const found = [...root.querySelectorAll("button")].find(
     (candidate) => candidate.getAttribute("aria-label") === name || candidate.textContent?.trim() === name,
   );
@@ -103,9 +103,9 @@ describe("answer threads", () => {
     const other = answer({ votes: 1 });
     const own = answer({ text: "Mine", mine: true });
     openThread(host, live, [other, own], { canAccept: true });
-    const upvote = labelled(host, "Upvote answer: 1 vote");
+    const upvote = labeled(host, "Upvote answer: 1 vote");
     expect(upvote.title).toBe("Moves helpful answers up. Others don't see who voted.");
-    expect(labelled(host, "Your answer: 0 votes").disabled).toBe(true);
+    expect(labeled(host, "Your answer: 0 votes").disabled).toBe(true);
     void act(() => upvote.click());
     expect(live.latest().messages().at(-1)).toEqual({
       type: "question.answer.vote",
@@ -140,7 +140,7 @@ describe("answer threads", () => {
     expect(host.textContent).toContain("Automate renewal first.");
     expect(host.querySelector("textarea")).toBeNull();
     expect(host.querySelectorAll('a[href="/code-of-conduct/"]')).toHaveLength(2);
-    expect(labelled(host, "Upvote answer: 0 votes").disabled).toBe(true);
+    expect(labeled(host, "Upvote answer: 0 votes").disabled).toBe(true);
   });
 
   it("asks a moderator why before removing an answer", async () => {
@@ -149,7 +149,7 @@ describe("answer threads", () => {
     );
     const spam = answer({ revision: 2 });
     openThread(host, live, [spam], { canModerate: true });
-    await act(async () => labelled(host, "Actions for answer from Alex Moreau").click());
+    await act(async () => labeled(host, "Actions for answer from Alex Moreau").click());
     const remove = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
       (item) => item.textContent?.trim() === "Remove answer…",
     )!;
@@ -158,10 +158,10 @@ describe("answer threads", () => {
     const dialog = document.querySelector("dialog")!;
     expect(dialog.textContent).toContain("Remove this answer?");
     const before = live.latest().messages().length;
-    await act(async () => labelled(dialog, "Remove answer").click());
+    await act(async () => labeled(dialog, "Remove answer").click());
     expect(live.latest().messages()).toHaveLength(before);
     await act(async () => dialog.querySelector<HTMLInputElement>('input[value="spam"]')!.click());
-    await act(async () => labelled(dialog, "Remove answer").click());
+    await act(async () => labeled(dialog, "Remove answer").click());
     expect(live.latest().messages().at(-1)).toEqual({
       type: "question.answer.hide",
       questionId: LIVE_QUESTION,

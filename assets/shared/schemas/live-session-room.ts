@@ -21,11 +21,7 @@ export {
   type LiveQuestion,
 } from "./live-session-question";
 import {
-  liveQuestionAnswerSendSchema,
-  liveQuestionAnswerAcceptSchema,
-  liveQuestionAnswerVoteSchema,
-  liveQuestionAnswerHideSchema,
-  liveQuestionAnswersWatchSchema,
+  liveQuestionAnswerClientMessageSchemas,
   liveQuestionAnswersSchema,
   liveQuestionAnswerResultSchema,
 } from "./live-session-answer";
@@ -536,11 +532,7 @@ export type LivePreviewPatch = z.infer<typeof livePreviewSetSchema>["composition
 export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
   liveQuestionEditSchema,
   liveQuestionWithdrawSchema,
-  liveQuestionAnswersWatchSchema,
-  liveQuestionAnswerSendSchema,
-  liveQuestionAnswerAcceptSchema,
-  liveQuestionAnswerVoteSchema,
-  liveQuestionAnswerHideSchema,
+  ...liveQuestionAnswerClientMessageSchemas,
   liveQuestionAskSchema.extend({ type: z.literal("question.ask"), operationId: z.uuid() }),
   z.object({ type: z.literal("question.vote"), questionId: databaseIdSchema, voted: z.boolean() }).strict(),
   z.object({ type: z.literal("reaction.send"), reaction: liveReactionSchema }).strict(),

@@ -88,6 +88,15 @@ export const liveQuestionAnswerHideSchema = z
       context.addIssue({ code: "custom", path: ["reason"], message: "Choose why you remove this answer." });
   });
 
+/** The answer commands in the room's client message union. */
+export const liveQuestionAnswerClientMessageSchemas = [
+  liveQuestionAnswersWatchSchema,
+  liveQuestionAnswerSendSchema,
+  liveQuestionAnswerAcceptSchema,
+  liveQuestionAnswerVoteSchema,
+  liveQuestionAnswerHideSchema,
+] as const;
+
 /** A sender-only receipt for either a reply or an acceptance decision. */
 export const liveQuestionAnswerResultSchema = z
   .object({
