@@ -290,7 +290,12 @@ const patch = (identityId: string, body: unknown, session?: string) =>
     headers: { "content-type": "application/json", ...(session ? { authorization: `Bearer ${session}` } : {}) },
     body: JSON.stringify(body),
   });
-async function identityFor(userId: string, name: string, jobTitle = "Original role") {
+async function identityFor(
+  userId: string,
+  name: string,
+  jobTitle = "Original role",
+  showOnOrganizationProfile?: boolean,
+) {
   const organizationId = await insertOrganization(env.DB, name);
   const created = await buildCreateIdentityStatement(env.DB, {
     userId,
@@ -298,11 +303,12 @@ async function identityFor(userId: string, name: string, jobTitle = "Original ro
     source: "staff",
     startImmediately: true,
     jobTitle,
+    showOnOrganizationProfile,
   });
   await env.DB.batch([created.statement]);
   return { identityId: created.identityId, organizationId };
 }
-async function fixture() {
+async function fixture(showOnOrganizationProfile?: boolean) {
   const { eventId } = await seedEventAndAdmin(env.DB);
   const userId = await insertUser(env.DB, "person@official.example");
   await env.DB.prepare(
@@ -310,7 +316,7 @@ async function fixture() {
   )
     .bind(userId)
     .run();
-  const own = await identityFor(userId, "Canonical nonmember organization");
+  const own = await identityFor(userId, "Canonical nonmember organization", undefined, showOnOrganizationProfile);
   // Staff-owned canonical claim, not a claim made by a mailbox-holder's profile edit.
   await env.DB.prepare(
     "INSERT INTO organization_domain_claims(id,domain,organization_id,created_at,updated_at) VALUES(?,?,?,?,?)",
@@ -512,19 +518,33 @@ describe("proposal own representation role update", () => {
     expect(JSON.stringify(await response.json())).toContain(JOB_TITLE_REQUIRED);
     expect((await state()).identities).toEqual(before.identities);
   });
-  it("queues a changed visible member profile through speaker proof, but not an identical repeat", async () => {
-    const input = await fixture();
-    await seedOrganizationAggregate(env.DB, input.organizationId);
-    const body = { biography: "Updated member biography", continuationToken: input.proof.continuationToken };
-    const first = await patch(input.identityId, body);
-    expect(first.status, await first.clone().text()).toBe(200);
-    expect(await queryAll(env.DB, "SELECT resource_id,reason_code FROM site_publication_requests")).toEqual([
-      { resource_id: input.identityId, reason_code: "identity_profile_changed" },
-    ]);
-    const repeated = await patch(input.identityId, body);
-    expect(repeated.status, await repeated.clone().text()).toBe(200);
-    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(1);
-  });
+  it.each([false, true])(
+    "publishes a changed member profile only when listed, without repeating publication (listed: %s)",
+    async (listed) => {
+      const input = await fixture(listed);
+      await seedOrganizationAggregate(env.DB, input.organizationId);
+      const body = { biography: "Updated member biography", continuationToken: input.proof.continuationToken };
+      const first = await patch(input.identityId, body);
+      expect(first.status, await first.clone().text()).toBe(200);
+      expect(await queryAll(env.DB, "SELECT resource_id,reason_code FROM site_publication_requests")).toEqual(
+        listed ? [{ resource_id: input.identityId, reason_code: "identity_profile_changed" }] : [],
+      );
+      expect(
+        await env.DB.prepare(
+          "SELECT biography,show_on_organization_profile,organization_profile_listing_approved FROM identities WHERE id=?",
+        )
+          .bind(input.identityId)
+          .first(),
+      ).toMatchObject({
+        biography: body.biography,
+        show_on_organization_profile: listed ? 1 : 0,
+        organization_profile_listing_approved: listed ? 1 : 0,
+      });
+      const repeated = await patch(input.identityId, body);
+      expect(repeated.status, await repeated.clone().text()).toBe(200);
+      expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(listed ? 1 : 0);
+    },
+  );
 
   it("accepts the current invited speaker's own capability without altering its selection", async () => {
     const input = await fixture();
