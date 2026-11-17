@@ -1,6 +1,6 @@
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { queueEmailAuthCapability } from "../auth/email-auth-capabilities";
-import { queueUserSignInCapability } from "../auth/user-session";
+import { findRetiredSignInAddress, queueUserSignInCapability } from "../auth/user-session";
 import { normalizeEmail } from "../validation";
 import { findUserEmailOwner } from "./user-emails";
 import { prepareQueueEmailStatement } from "../email/outbox-queue";
@@ -8,6 +8,8 @@ import type { DatabaseLike } from "../types";
 import { prepareAuditLog } from "./audit";
 import { first } from "../db/queries";
 import { signInPurpose } from "../../../assets/shared/sign-in-purpose";
+
+export const SIGN_IN_UNAVAILABLE_TEMPLATE = "user_sign_in_unavailable";
 
 /**
  * The verify route a sign-in link opens. A return path rides along as `next`
@@ -68,7 +70,7 @@ export async function requestUserSignInLink(
   message: LinkMessage = SIGN_IN_MESSAGE,
 ): Promise<{ outboxId: string | null; identityFound: boolean }> {
   const magic = await queueUserSignInCapability({ db, ...payload });
-  if (!magic) return { outboxId: null, identityFound: false };
+  if (!magic) return { outboxId: await queueSignInUnavailableNotice(db, payload.email), identityFound: false };
 
   const email = prepareQueueEmailStatement(db, {
     templateKey: message.templateKey,
@@ -114,7 +116,8 @@ export async function requestUserSignUpLink(
 ): Promise<{ outboxId: string | null }> {
   const message = await signUpMessage(db, payload.returnPath);
   const signIn = await requestUserSignInLink(db, payload, message);
-  if (signIn.identityFound) return { outboxId: signIn.outboxId };
+  // A retired address was told how to sign in instead; it does not start a second account.
+  if (signIn.identityFound || signIn.outboxId) return { outboxId: signIn.outboxId };
 
   const recipientEmail = normalizeEmail(payload.email);
   // An address an account has already proved cannot start another one. It did not get a sign-in link
@@ -152,4 +155,29 @@ export async function requestUserSignUpLink(
     prepareAuditLog(db, "system", null, "user_sign_up_link_requested", "email_outbox", email.id, {}),
   ]);
   return { outboxId: email.id };
+}
+
+/**
+ * A proved address that stopped signing in when its representation ended gets no link, but its mailbox
+ * learns why and how to sign in instead, so the person is not left waiting for
+ * a message that never comes. The screen says the same for every address, and
+ * nothing goes to any other mailbox, so the request reveals no account.
+ */
+async function queueSignInUnavailableNotice(db: DatabaseLike, email: string): Promise<string | null> {
+  const address = await findRetiredSignInAddress(db, email);
+  if (!address) return null;
+  const notice = prepareQueueEmailStatement(db, {
+    templateKey: SIGN_IN_UNAVAILABLE_TEMPLATE,
+    recipientEmail: address.email,
+    recipientUserId: address.userId,
+    eventId: null,
+    messageType: "transactional",
+    subject: "Sign in to the PKI Consortium another way",
+    data: { email: address.email },
+  });
+  await db.batch([
+    notice.statement,
+    prepareAuditLog(db, "system", null, "user_sign_in_unavailable_notified", "user", address.userId, {}),
+  ]);
+  return notice.id;
 }

@@ -1,3 +1,4 @@
+import { prepareAccountSecurityNoticeStatements } from "./account-security-notices";
 import { prepareAddressDeliveryTransfer } from "./email-address-delivery";
 import { readEmailOwnership, provedMailboxUserId, prepareEmailOwnershipClaim } from "./email-ownership";
 import { first } from "../db/queries";
@@ -127,6 +128,13 @@ export async function prepareProposalProofPerson(
                 "INSERT INTO user_emails (id,user_id,email,normalized_email,verified_at,verification_method,created_at) VALUES (?,?,?,?,?,'magic_link',?)",
               )
               .bind(resolved.emailId, prepared.user.id, payload.email, payload.email, at, at),
+            ...prepareAccountSecurityNoticeStatements(db, {
+              userId: prepared.user.id,
+              change: "address_added",
+              address: payload.email,
+              alsoTo: [prepared.user.email],
+              at,
+            }),
           ]
         : []),
       ...(ownership && resolved.emailId

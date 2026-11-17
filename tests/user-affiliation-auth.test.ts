@@ -1,4 +1,3 @@
-import { setOwnEmailSignInPermission } from "../functions/_lib/services/own-email-sign-in";
 import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
@@ -126,7 +125,7 @@ describe("affiliation-only account access", () => {
     expect((await call(`/api/v1/organizations/${f.organizationId}`, { headers })).status).toBe(403);
   });
 
-  it("allows a verified, explicitly enabled alias to authenticate the same canonical affiliated person", async () => {
+  it("allows a verified alias to authenticate the same canonical affiliated person", async () => {
     const f = await affiliation();
     const emailId = crypto.randomUUID();
     await env.DB.prepare(
@@ -134,7 +133,6 @@ describe("affiliation-only account access", () => {
     )
       .bind(emailId, f.userId, "work@employer.example", "work@employer.example", nowIso(), nowIso())
       .run();
-    await setOwnEmailSignInPermission(env.DB, { userId: f.userId, emailId, enabled: true });
     const signedIn = await signIn("work@employer.example");
     expect(signedIn.session).toMatchObject({ identity: { id: f.userId }, hasActiveIdentity: true });
     expect(signedIn.session.member).toBeUndefined();

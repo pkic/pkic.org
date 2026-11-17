@@ -10,6 +10,7 @@ import { resolveTemplateSet } from "./templates";
  */
 export const REQUIRED_EMAIL_TEMPLATE_KEYS = [
   EMAIL_LAYOUT_TEMPLATE_KEY,
+  "account_security_notice",
   "agenda_changed",
   "agenda_session_booking",
   "agenda_session_invitation",
@@ -75,6 +76,7 @@ export const REQUIRED_EMAIL_TEMPLATE_KEYS = [
   "user_email_verification",
   "user_magic_link",
   "user_sign_up_link",
+  "user_sign_in_unavailable",
   "vote-proposal-rejected",
   "wg-chair-membership-digest",
 ] as const;

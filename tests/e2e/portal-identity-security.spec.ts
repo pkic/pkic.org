@@ -14,7 +14,6 @@
 import { expect, test } from "@playwright/test";
 import {
   ownEmailVerificationRequestedResponseSchema,
-  ownEmailAddressUpdateSchema,
   ownEmailAddressesListResponseSchema,
 } from "../../assets/shared/schemas/own-email-addresses";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
@@ -111,15 +110,10 @@ test("sign-in capabilities require address permission, revoke with it, and canno
     await (await page.request.get("/api/v1/users/current/emails")).json(),
   );
   const added = addresses.emails.find((address) => address.email === aliasEmail)!;
-  expect(added).toMatchObject({
-    verifiedAt: expect.any(String),
-    signInEnabled: false,
-  });
+  expect(added).toMatchObject({ verifiedAt: expect.any(String), signIn: "signs_in" });
 
-  // The account owner separately enables sign-in through the canonical address update contract.
+  // A verified address signs in to the same account, and its session ends when the address is removed.
   const path = `/api/v1/users/current/emails/${added.id}`;
-  const enabled = await page.request.patch(path, { data: ownEmailAddressUpdateSchema.parse({ signInEnabled: true }) });
-  expect(enabled.status()).toBe(200);
   const aliasContext = await context.browser()!.newContext({ baseURL: new URL(page.url()).origin });
   try {
     const aliasPage = await aliasContext.newPage();
@@ -128,17 +122,13 @@ test("sign-in capabilities require address permission, revoke with it, and canno
       await (await aliasPage.request.get("/api/v1/auth/session")).json(),
     );
     expect(aliasSession.identity.id).toBe(owner.identity.id);
-    const disabled = await page.request.patch(path, {
-      data: ownEmailAddressUpdateSchema.parse({ signInEnabled: false }),
-    });
-    expect(disabled.status()).toBe(200);
+    const removed = await page.request.delete(path);
+    expect(removed.status(), await removed.text()).toBe(200);
     expect((await aliasPage.request.get("/api/v1/auth/session")).status()).toBe(401);
     expect((await page.request.get("/api/v1/auth/session")).status()).toBe(200);
   } finally {
     await aliasContext.close();
   }
-  const removed = await page.request.delete(path);
-  expect(removed.status(), await removed.text()).toBe(200);
 });
 
 test("the capability is removed from the address bar and not left in history", async ({ page }) => {

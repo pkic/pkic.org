@@ -151,7 +151,7 @@ describe("UserAffiliationsPanel", () => {
               identityId: null,
               verifiedAt: at,
               verificationMethod: "magic_link",
-              signInEnabled: false,
+              signIn: "signs_in",
               createdAt: at,
             },
           ],

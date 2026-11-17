@@ -1,4 +1,3 @@
-import { setOwnEmailSignInPermission } from "../functions/_lib/services/own-email-sign-in";
 import { administratorGrants } from "./helpers/administrator";
 /**
  * user-emails.test.ts
@@ -496,8 +495,6 @@ describe("secondary user emails", () => {
     )
       .bind(emailId, userId, "verified-alias@example.test", "verified-alias@example.test")
       .run();
-
-    await setOwnEmailSignInPermission(env.DB, { userId, emailId, enabled: true });
     const issued = await queueUserSignInCapability({
       db: env.DB,
       email: "verified-alias@example.test",
@@ -550,7 +547,6 @@ describe("secondary user emails", () => {
     )
       .bind(emailId, userId, "removed-alias@example.test", "removed-alias@example.test")
       .run();
-    await setOwnEmailSignInPermission(env.DB, { userId, emailId, enabled: true });
     const issued = await queueUserSignInCapability({
       db: env.DB,
       email: "removed-alias@example.test",
@@ -602,7 +598,6 @@ describe("secondary user emails", () => {
     )
       .bind(emailId, userId, "alias-race-verified@example.test", "alias-race-verified@example.test")
       .run();
-    await setOwnEmailSignInPermission(env.DB, { userId, emailId, enabled: true });
     const issued = await queueUserSignInCapability({
       db: env.DB,
       email: "alias-race-verified@example.test",
@@ -651,7 +646,6 @@ describe("secondary user emails", () => {
     )
       .bind(crypto.randomUUID(), userId, staffRole.id, adminId)
       .run();
-
     const issued = await queueUserSignInCapability({
       db: env.DB,
       email: "change-before-link@example.test",

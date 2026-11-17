@@ -39,7 +39,6 @@ const DEFAULT_MAX_RETURN_TO_LENGTH = 2048;
 const emailAuthCapabilityPayloadSchema = z
   .object({
     subjectId: z.string().min(1).max(128),
-    authorizationRevision: z.string().uuid().optional(),
     addressRequest: z
       .object({
         userId: databaseIdSchema,
@@ -81,7 +80,6 @@ export async function queueEmailAuthCapability(options: {
   purpose: EmailAuthCapabilityPurpose;
   subjectId: string;
   email: string;
-  authorizationRevision?: string;
   addressRequest?: { userId: string; email: string; purpose?: "representation" };
   signUpEmail?: string;
   signUpPersonal?: boolean;
@@ -95,7 +93,6 @@ export async function queueEmailAuthCapability(options: {
   const payload = emailAuthCapabilityPayloadSchema.parse({
     subjectId: options.subjectId,
     ...(options.addressRequest ? { addressRequest: options.addressRequest } : {}),
-    ...(options.authorizationRevision ? { authorizationRevision: options.authorizationRevision } : {}),
     ...(options.signUpEmail ? { signUpEmail: options.signUpEmail } : {}),
     ...(options.signUpPersonal ? { signUpPersonal: true } : {}),
     capabilityId,

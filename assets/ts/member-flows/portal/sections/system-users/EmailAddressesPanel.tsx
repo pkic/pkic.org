@@ -19,6 +19,7 @@ import { Badge } from "../../../../ui/Badge";
 import { useState } from "preact/hooks";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import {
+  type OwnEmailSignIn,
   ownEmailAddressResponseSchema,
   ownEmailAddressUpdateSchema,
   ownEmailAddressesListResponseSchema,
@@ -56,13 +57,14 @@ interface AddressRow {
   verified: boolean | null;
   /** Organizations whose active identity uses the address; it cannot be removed while any does. */
   usedBy: string[];
-  /** Whether the address may sign in; null where the list does not say. */
-  signInEnabled: boolean | null;
+  /** Whether the address signs in, or why not; null where the list does not say. */
+  signIn: OwnEmailSignIn | null;
 }
 
 function rowMeta(address: AddressRow): string | undefined {
   const parts = [
     ...(address.primary ? ["Primary"] : address.verified === false ? ["Not verified yet"] : []),
+    ...(address.signIn === "representation_ended" ? ["Stopped signing in when its representation ended"] : []),
     ...(address.usedBy.length ? [`Used by ${formatConjunction(address.usedBy, undefined)}`] : []),
   ];
   return parts.length ? parts.join(" · ") : undefined;
@@ -97,7 +99,7 @@ export function EmailAddressesPanel({
         primary: address.primary,
         verified: Boolean(address.verifiedAt),
         usedBy: address.usedBy.map((organization) => organization.name),
-        signInEnabled: address.signInEnabled,
+        signIn: address.signIn,
       }));
     }
     const response = await getJson(endpoint, userEmailsListResponseSchema);
@@ -109,7 +111,7 @@ export function EmailAddressesPanel({
         primary: true,
         verified: null,
         usedBy: [],
-        signInEnabled: null,
+        signIn: null,
       },
       ...response.emails.map((address) => ({
         delivery: address.delivery,
@@ -118,7 +120,7 @@ export function EmailAddressesPanel({
         primary: false,
         verified: null,
         usedBy: [],
-        signInEnabled: null,
+        signIn: null,
       })),
     ];
   }, [endpoint, isSelf, primaryEmail, primaryEmailDelivery]);
@@ -175,7 +177,7 @@ export function EmailAddressesPanel({
       title: `Remove ${address.email}?`,
       body: !isSelf
         ? "This address will no longer be associated with this account."
-        : address.signInEnabled
+        : address.signIn === "signs_in"
           ? "You will no longer be able to sign in with this address."
           : "This address will no longer be part of your account.",
       confirmLabel: "Remove address",

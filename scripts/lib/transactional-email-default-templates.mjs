@@ -50,6 +50,23 @@ Speaker participation does not accept the proposal or guarantee inclusion in the
     messageType: "transactional",
   },
   {
+    key: "account_security_notice",
+    subjectTemplate:
+      "{{#if address_added}}An email address was added to your PKI Consortium account{{/if}}{{#if address_removed}}An email address was removed from your PKI Consortium account{{/if}}{{#if primary_changed}}Your PKI Consortium primary email address changed{{/if}}{{#if first_sign_in}}New sign-in with an email address on your PKI Consortium account{{/if}}",
+    content:
+      '{{#if address_added}}**{{address}}** was added to your PKI Consortium account. You can now sign in with it.{{/if}}{{#if address_removed}}**{{address}}** was removed from your PKI Consortium account. It no longer signs in.{{/if}}{{#if primary_changed}}**{{address}}** is now the primary email address of your PKI Consortium account. Account email goes there from now on.{{/if}}{{#if first_sign_in}}Someone signed in to your PKI Consortium account with **{{address}}** for the first time.{{/if}}\n\nIf this was you, there is nothing to do.\n\nIf it was not, sign in with another address or your passkey and review your email addresses and passkeys.\n\n<div class="cta-navy"><a href="{{baseUrl}}/portal/#/users/{{userId}}">Review your account &rarr;</a></div>',
+    contentType: "markdown",
+    messageType: "transactional",
+  },
+  {
+    key: "user_sign_in_unavailable",
+    subjectTemplate: "Sign in to the PKI Consortium another way",
+    content:
+      'Someone asked for a sign-in link for **{{email}}**. This address stopped signing in when the organization representation it belongs to ended, so we did not send a link.\n\nSign in with your passkey or with another email address on your account instead.\n\n<div class="cta-navy"><a href="{{baseUrl}}/portal/">Go to sign-in &rarr;</a></div>\n\nIf you did not ask for a link, you can ignore this email.',
+    contentType: "markdown",
+    messageType: "transactional",
+  },
+  {
     key: "agenda_session_invitation",
     subjectTemplate: "Session invitation: {{sessionTitle}}",
     content:

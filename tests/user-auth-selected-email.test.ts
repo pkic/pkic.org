@@ -14,7 +14,6 @@ import { callApi } from "./helpers/app";
 import { createTestRateLimiter, deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
-import { setOwnEmailSignInPermission } from "../functions/_lib/services/own-email-sign-in";
 import { insertUser, insertOrganization } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
@@ -24,7 +23,7 @@ let userId: string;
 let aliasId: string;
 let environment: Env;
 
-async function addEmail(ownerId: string, email: string, verified = true, signInEnabled = true) {
+async function addEmail(ownerId: string, email: string, verified = true) {
   const id = crypto.randomUUID();
   const now = nowIso();
   await env.DB.prepare(
@@ -34,8 +33,6 @@ async function addEmail(ownerId: string, email: string, verified = true, signInE
   )
     .bind(id, ownerId, email, email, verified ? now : null, verified ? "staff_verified" : null, now)
     .run();
-  if (verified && signInEnabled)
-    await setOwnEmailSignInPermission(env.DB, { userId: ownerId, emailId: id, enabled: true });
   return id;
 }
 
@@ -52,7 +49,7 @@ async function requestLink(email: string) {
 async function latestDelivery() {
   const [outbox] = await queryAll<{ recipient_email: string; recipient_user_id: string; payload_json: string }>(
     env.DB,
-    "SELECT recipient_email,recipient_user_id,payload_json FROM email_outbox ORDER BY rowid DESC LIMIT 1",
+    "SELECT recipient_email,recipient_user_id,payload_json FROM email_outbox WHERE template_key='user_magic_link' ORDER BY rowid DESC LIMIT 1",
   );
   expect(outbox).toBeDefined();
   const payload = await deliveredEmailPayload<{ email: string; magicLinkUrl: string }>(
@@ -93,77 +90,27 @@ describe("Selected sign-in email delivery", () => {
     expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toEqual([]);
   });
 
-  it("keeps a verified delivery-only address out of sign-in until the account owner explicitly enables it", async () => {
-    const deliveryEmail = "archive-only@example.test";
-    const deliveryAliasId = await addEmail(userId, deliveryEmail, true, false);
-    await requestLink(deliveryEmail);
-    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toEqual([]);
+  it("lets every verified address sign in, with no separate switch to turn on", async () => {
+    const otherEmail = "archive@example.test";
+    const otherAliasId = await addEmail(userId, otherEmail);
+    await requestLink(otherEmail);
+    expect((await latestDelivery()).recipient_email).toBe(otherEmail);
     const ownerSession = await createAdminSession(env.DB, userId, crypto.randomUUID());
     const otherUser = await insertUser(env.DB, "other@example.test");
     const otherSession = await createAdminSession(env.DB, otherUser, crypto.randomUUID());
     const patch = (token: string, body: unknown) =>
-      callApi(environment, `/api/v1/users/current/emails/${deliveryAliasId}`, {
+      callApi(environment, `/api/v1/users/current/emails/${otherAliasId}`, {
         method: "PATCH",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-    expect((await patch(otherSession, { signInEnabled: true })).status).toBe(404);
-    expect((await patch(ownerSession, { signInEnabled: true, primary: true })).status).toBe(400);
-    const enabled = await patch(ownerSession, { signInEnabled: true });
-    expect(enabled.status).toBe(200);
-    expect(await enabled.json()).toMatchObject({ email: { signInEnabled: true, primary: false } });
-    await requestLink(deliveryEmail);
-    expect((await latestDelivery()).recipient_email).toBe(deliveryEmail);
+    expect((await patch(otherSession, { primary: true })).status).toBe(404);
+    expect((await patch(ownerSession, { signInEnabled: false })).status).toBe(400);
   });
 
-  it("refuses permission changes for unverified addresses and rolls back lost proof races", async () => {
-    const unverified = await addEmail(userId, "unproved@example.test", false);
-    await expect(
-      setOwnEmailSignInPermission(env.DB, { userId, emailId: unverified, enabled: true }),
-    ).rejects.toMatchObject({ code: "EMAIL_SIGN_IN_INELIGIBLE" });
-    await setOwnEmailSignInPermission(env.DB, { userId, emailId: aliasId, enabled: false });
-    const auditBefore = await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='user_email_sign_in_changed'");
+  it("does not queue a sign-in email when the address loses its proof after the pre-read", async () => {
     const racing = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE user_emails SET verified_at=NULL WHERE id=?").bind(aliasId).run(),
-    );
-    await expect(
-      setOwnEmailSignInPermission(racing, { userId, emailId: aliasId, enabled: true }),
-    ).rejects.toMatchObject({ code: "EMAIL_SIGN_IN_CHANGED" });
-    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='user_email_sign_in_changed'")).toEqual(
-      auditBefore,
-    );
-  });
-
-  it("never resurrects an old sign-in link or session when address access is disabled and enabled again", async () => {
-    await requestLink(aliasEmail);
-    const delivery = await latestDelivery();
-    const established = await verifyLink(delivery.token);
-    expect(established.status).toBe(200);
-    const cookie = established.headers.get("set-cookie")!.split(";", 1)[0];
-    await requestLink(aliasEmail);
-    const outstanding = await latestDelivery();
-    const consent = await env.DB.prepare("SELECT enabled_at FROM user_email_sign_in_permissions WHERE email_id=?")
-      .bind(aliasId)
-      .first();
-    await setOwnEmailSignInPermission(env.DB, { userId, emailId: aliasId, enabled: false });
-    expect(
-      await env.DB.prepare("SELECT enabled_at FROM user_email_sign_in_permissions WHERE email_id=?")
-        .bind(aliasId)
-        .first(),
-    ).toEqual(consent);
-    expect((await callApi(environment, "/api/v1/auth/session", { headers: { cookie } })).status).toBe(401);
-    await setOwnEmailSignInPermission(env.DB, { userId, emailId: aliasId, enabled: true });
-    expect((await verifyLink(outstanding.token)).status).toBe(404);
-    expect((await callApi(environment, "/api/v1/auth/session", { headers: { cookie } })).status).toBe(401);
-    await requestLink(aliasEmail);
-    expect((await verifyLink((await latestDelivery()).token)).status).toBe(200);
-  });
-
-  it("does not queue a sign-in email when permission is revoked after the pre-read", async () => {
-    const racing = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE user_email_sign_in_permissions SET revoked_at=? WHERE email_id=?")
-        .bind(nowIso(), aliasId)
-        .run(),
     );
     expect(
       await requestUserSignInLink(racing, {
@@ -179,7 +126,7 @@ describe("Selected sign-in email delivery", () => {
     expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='user_magic_link_requested'")).toEqual([]);
   });
 
-  it.each(["removed", "proof_lost", "primary_swap", "disabled"] as const)(
+  it.each(["removed", "proof_lost", "disabled"] as const)(
     "revokes an established alias session when its address is %s",
     async (change) => {
       await requestLink(aliasEmail);
@@ -191,24 +138,38 @@ describe("Selected sign-in email delivery", () => {
       if (change === "proof_lost")
         await env.DB.prepare("UPDATE user_emails SET verified_at=NULL WHERE id=?").bind(aliasId).run();
       if (change === "disabled") await env.DB.prepare("UPDATE users SET active=0 WHERE id=?").bind(userId).run();
-      if (change === "primary_swap") {
-        const ownerSession = await createAdminSession(env.DB, userId, crypto.randomUUID());
-        expect(
-          (
-            await callApi(environment, `/api/v1/users/current/emails/${aliasId}`, {
-              method: "PATCH",
-              headers: { authorization: `Bearer ${ownerSession}`, "content-type": "application/json" },
-              body: JSON.stringify({ primary: true }),
-            })
-          ).status,
-        ).toBe(200);
-      }
       expect((await callApi(environment, "/api/v1/auth/session", { headers: { cookie } })).status).toBe(401);
-      expect(await queryAll(env.DB, "SELECT revoked_at FROM sessions ORDER BY rowid LIMIT 1")).toEqual([
-        { revoked_at: expect.any(String) },
-      ]);
+      // Removing the address revokes the session row; the other changes end it through the live check.
+      if (change === "removed")
+        expect(await queryAll(env.DB, "SELECT revoked_at FROM sessions ORDER BY rowid LIMIT 1")).toEqual([
+          { revoked_at: expect.any(String) },
+        ]);
     },
   );
+
+  it("keeps a session made through an address when that address becomes primary, and ends it once removed", async () => {
+    await requestLink(aliasEmail);
+    const response = await verifyLink((await latestDelivery()).token);
+    expect(response.status).toBe(200);
+    const cookie = response.headers.get("set-cookie")!.split(";", 1)[0];
+    const ownerSession = await createAdminSession(env.DB, userId, crypto.randomUUID());
+    const swapped = await callApi(environment, `/api/v1/users/current/emails/${aliasId}`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${ownerSession}`, "content-type": "application/json" },
+      body: JSON.stringify({ primary: true }),
+    });
+    expect(swapped.status, await swapped.clone().text()).toBe(200);
+    expect((await callApi(environment, "/api/v1/auth/session", { headers: { cookie } })).status).toBe(200);
+    // The former primary now sits in the added row; making it primary again moves the address back.
+    const back = await callApi(environment, `/api/v1/users/current/emails/${aliasId}`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${ownerSession}`, "content-type": "application/json" },
+      body: JSON.stringify({ primary: true }),
+    });
+    expect(back.status, await back.clone().text()).toBe(200);
+    await env.DB.prepare("DELETE FROM user_emails WHERE id=?").bind(aliasId).run();
+    expect((await callApi(environment, "/api/v1/auth/session", { headers: { cookie } })).status).toBe(401);
+  });
 
   it.each(["ended_at", "blocked_at"] as const)(
     "revokes only the owning representation's alias when its %s changes",
@@ -228,10 +189,9 @@ describe("Selected sign-in email delivery", () => {
           .run();
       }
       const secondEmail = "second-org@example.test";
-      const secondAlias = await addEmail(userId, secondEmail, true, false);
+      const secondAlias = await addEmail(userId, secondEmail);
       await env.DB.prepare("UPDATE user_emails SET identity_id=? WHERE id=?").bind(identityOne, aliasId).run();
       await env.DB.prepare("UPDATE user_emails SET identity_id=? WHERE id=?").bind(identityTwo, secondAlias).run();
-      await setOwnEmailSignInPermission(env.DB, { userId, emailId: secondAlias, enabled: true });
       await requestLink(aliasEmail);
       const firstLink = await latestDelivery();
       const firstSession = await verifyLink(firstLink.token);
@@ -249,9 +209,11 @@ describe("Selected sign-in email delivery", () => {
       expect((await callApi(environment, "/api/v1/auth/session", { headers: { cookie: firstCookie } })).status).toBe(
         401,
       );
-      await expect(
-        setOwnEmailSignInPermission(env.DB, { userId, emailId: aliasId, enabled: true }),
-      ).rejects.toMatchObject({ code: "EMAIL_SIGN_IN_INELIGIBLE" });
+      // The retired address gets no link, only word of why and how to sign in instead.
+      await requestLink(aliasEmail);
+      expect(
+        await queryAll(env.DB, "SELECT template_key, recipient_email FROM email_outbox ORDER BY rowid DESC LIMIT 1"),
+      ).toEqual([{ template_key: "user_sign_in_unavailable", recipient_email: aliasEmail }]);
       await requestLink(secondEmail);
       const secondDelivery = await latestDelivery();
       expect(secondDelivery.recipient_email).toBe(secondEmail);
