@@ -6,8 +6,12 @@ import {
   rememberJoinApplicant,
   rememberJoinChoice,
   rememberedJoinChoice,
+  restoreJoinAnswers,
+  saveJoinAnswers,
 } from "../../assets/ts/member-flows/join-draft";
 import { JOIN_USER_ID, openJoinPage, personalIdentity } from "./helpers/join-page";
+import { renderMembershipApplicationQuestions } from "../../assets/ts/member-flows/join-application-fields";
+import { readCustomFieldValues } from "../../assets/ts/shared/widgets/custom-fields";
 const organizationContext = {
   status: "application_ready",
   applicantEmail: "ada@example-corp.test",
@@ -44,6 +48,100 @@ describe("a membership path kept for this tab", () => {
       expect(rememberedJoinChoice(JOIN_USER_ID)).toBeUndefined();
     },
   );
+
+  const IDENTITY_ID = "00000000-0000-4000-8000-000000000051";
+  const OTHER_IDENTITY_ID = "00000000-0000-4000-8000-000000000052";
+
+  function applicationForm(): HTMLFormElement {
+    const form = document.createElement("form");
+    form.innerHTML = `
+      <input type="radio" name="membershipCategory" value="A" />
+      <input type="radio" name="membershipCategory" value="B" />
+      <div data-custom-fields></div>
+      <div data-membership-legal-field="bylaws">
+        <input name="custom.agrees_bylaws" type="checkbox" data-membership-legal-input />
+      </div>
+    `;
+    document.body.append(form);
+    return form;
+  }
+
+  it("restores the category and answers for the same identity, never an agreement", () => {
+    rememberJoinApplicant(JOIN_USER_ID);
+    const before = applicationForm();
+    const reason = document.createElement("textarea");
+    reason.name = "custom.reason";
+    // An unfinished answer is kept even beyond the submission limit.
+    reason.value = "unfinished ".repeat(1001);
+    before.querySelector("[data-custom-fields]")!.append(reason);
+    before.querySelector<HTMLInputElement>('input[value="B"]')!.checked = true;
+    before.querySelector<HTMLInputElement>('[name="custom.agrees_bylaws"]')!.checked = true;
+    saveJoinAnswers(before, IDENTITY_ID);
+    expect(JSON.parse(sessionStorage.getItem(STORAGE_KEY)!).application.answers).not.toHaveProperty("agrees_bylaws");
+    before.remove();
+
+    const after = applicationForm();
+    const categoryChanges: string[] = [];
+    after.addEventListener("change", (event) => categoryChanges.push((event.target as HTMLInputElement).value));
+    const restored: Record<string, unknown>[] = [];
+    expect(restoreJoinAnswers(after, IDENTITY_ID, (answers) => restored.push(answers))).toBe(true);
+    expect(categoryChanges).toEqual(["B"]);
+    expect(restored[0]!.reason).toBe(reason.value.trim());
+    expect(after.querySelector<HTMLInputElement>('[name="custom.agrees_bylaws"]')!.checked).toBe(false);
+  });
+
+  it("keeps one identity's answers from an application made as another", () => {
+    rememberJoinApplicant(JOIN_USER_ID);
+    const before = applicationForm();
+    before.querySelector<HTMLInputElement>('input[value="A"]')!.checked = true;
+    saveJoinAnswers(before, IDENTITY_ID);
+    expect(restoreJoinAnswers(applicationForm(), OTHER_IDENTITY_ID, () => undefined)).toBe(false);
+    rememberJoinApplicant(OTHER_USER_ID);
+    expect(restoreJoinAnswers(applicationForm(), IDENTITY_ID, () => undefined)).toBe(false);
+  });
+
+  it("keeps and restores every question widget, including the stateful ones", async () => {
+    const fields = [
+      { key: "topics", fieldType: "multi_select", options: [{ value: "pqc", label: "PQC", active: true }] },
+      { key: "score", fieldType: "number", validation: { uiWidget: "rating_stars", min: 1, max: 5 } },
+      { key: "reason", fieldType: "textarea" },
+      { key: "authority", fieldType: "boolean" },
+    ].map((field, sortOrder) => ({ label: field.key, required: false, sortOrder, ...field })) as never;
+    rememberJoinApplicant(JOIN_USER_ID);
+
+    const before = applicationForm();
+    const beforeQuestions = before.querySelector<HTMLElement>("[data-custom-fields]")!;
+    renderMembershipApplicationQuestions(beforeQuestions, fields);
+    const saves: unknown[] = [];
+    before.addEventListener("change", () => {
+      saveJoinAnswers(before, IDENTITY_ID);
+      saves.push(JSON.parse(sessionStorage.getItem(STORAGE_KEY)!).application.answers);
+    });
+    beforeQuestions.querySelector<HTMLButtonElement>('[data-tag-chip][data-value="pqc"]')!.click();
+    await vi.waitFor(() => expect(saves.at(-1)).toMatchObject({ topics: ["pqc"] }));
+    beforeQuestions.querySelector<HTMLButtonElement>('button[data-value="4"]')!.click();
+    expect(saves.at(-1)).toMatchObject({ topics: ["pqc"], score: 4 });
+    beforeQuestions.querySelector<HTMLTextAreaElement>('[name="custom.reason"]')!.value = "We run a CA.";
+    beforeQuestions.querySelector<HTMLInputElement>('[name="custom.authority"]')!.checked = true;
+    saveJoinAnswers(before, IDENTITY_ID);
+    before.remove();
+
+    const after = applicationForm();
+    const afterQuestions = after.querySelector<HTMLElement>("[data-custom-fields]")!;
+    const restored = restoreJoinAnswers(after, IDENTITY_ID, (answers) =>
+      renderMembershipApplicationQuestions(afterQuestions, fields, answers),
+    );
+    expect(restored).toBe(true);
+    await vi.waitFor(() =>
+      expect(readCustomFieldValues(after)).toEqual({
+        topics: ["pqc"],
+        score: 4,
+        reason: "We run a CA.",
+        authority: true,
+        agrees_bylaws: false,
+      }),
+    );
+  });
 
   it("starts a fresh draft for another account and forgets everything after submitting", () => {
     rememberJoinApplicant(JOIN_USER_ID);

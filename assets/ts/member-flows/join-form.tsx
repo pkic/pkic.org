@@ -12,6 +12,8 @@ import {
   rememberJoinApplicant,
   rememberJoinChoice,
   rememberedJoinChoice,
+  restoreJoinAnswers,
+  saveJoinAnswers,
   type JoinChoice,
 } from "./join-draft";
 import { ApiClientError, getJson, postJson } from "../shared/api-client";
@@ -210,6 +212,36 @@ async function main(): Promise<void> {
     renderMembershipApplicationQuestions(customFieldsContainer, fields, eligibleAnswers);
   };
 
+  let restoringAnswers = false;
+  // Unsent answers are kept for this tab, so a reload or a change to the representation does not lose them.
+  for (const type of ["input", "change"])
+    applicationForm.addEventListener(type, () => {
+      if (signedInIdentity && !restoringAnswers) saveJoinAnswers(applicationForm, signedInIdentity.id);
+    });
+
+  /** Shows the application for `identity` with the answers kept for it, unless a later choice replaced it. */
+  const openApplication = async (
+    identity: SessionActingIdentity,
+    applicantKind: JoinApplicantKind,
+    turn: number,
+    recoveryMessage?: string,
+  ): Promise<void> => {
+    // Rendering the form must not overwrite the kept answers before they are put back.
+    restoringAnswers = true;
+    try {
+      if (!(await loadApplication(applicantKind)) || turn !== chosen) return;
+      const restored = restoreJoinAnswers(applicationForm, identity.id, (answers) => {
+        const selected = categories.find((category) => category.code === readSelectedCategory(applicationForm));
+        renderQuestionsFor(selected ?? categories[0], answers);
+      });
+      if (recoveryMessage) setStatus(statusEl, recoveryMessage, true);
+      else if (restored)
+        setStatus(statusEl, "We restored the answers you entered earlier. Agreements need accepting again.");
+    } finally {
+      restoringAnswers = false;
+    }
+  };
+
   const applicationValidation = installJoinApplicationValidation(
     applicationForm,
     () => {
@@ -329,8 +361,7 @@ async function main(): Promise<void> {
         rememberJoinChoice(choice);
         // Only an individual is given a continuation: they apply as the identity they already hold.
         signedInIdentity = identity;
-        if (!(await loadApplication(result.applicantKind)) || turn !== chosen) return;
-        if (recoveryMessage) setStatus(statusEl, recoveryMessage, true);
+        await openApplication(identity, result.applicantKind, turn, recoveryMessage);
         return;
       }
       forgetJoinDraft();
@@ -384,7 +415,8 @@ async function main(): Promise<void> {
     if (refusal) return;
     if (identity.organizationId) {
       signedInIdentity = identity;
-      void loadApplication("organization");
+      if (applicant) rememberJoinApplicant(applicant.userId);
+      void openApplication(identity, "organization", chosen);
       return;
     }
     if (!path || !applicant) return;
