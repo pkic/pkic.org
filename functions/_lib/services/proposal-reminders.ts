@@ -10,7 +10,11 @@ import { buildEventEmailVariables, getEventById, type EventRecord } from "./even
 import { eventSessionTypeRequiresPresentation } from "./event-presentation";
 import { speakerParticipationPageUrl } from "./frontend-links";
 import { buildProposalInviteEmailContext, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
-import { proposalSpeakerProfileColumns, queuedSpeakerManageToken } from "./proposal-speakers";
+import {
+  proposalSpeakerProfileColumns,
+  proposalSpeakerRecipientEmailSql,
+  queuedSpeakerManageToken,
+} from "./proposal-speakers";
 import type { ProposalRecord } from "./proposals";
 import { isProposalInactiveStatus } from "./proposal-status-policy";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
@@ -37,6 +41,7 @@ interface ReminderSpeaker {
   proposal_speaker_id: string;
   user_id: string;
   status: string;
+  /** Where the reminder goes: the address of the identity the speaker speaks as, else the primary. */
   email: string;
   first_name: string | null;
   last_name: string | null;
@@ -65,7 +70,7 @@ async function loadReminderSpeakers(db: DatabaseLike, proposalId: string, userId
   const rows = await all<ReminderSpeaker>(
     db,
     `SELECT ps.id AS proposal_speaker_id, ps.user_id, ps.status, ps.manage_link_secret, ps.invite_expires_at,
-            u.email, ${proposalSpeakerProfileColumns("u", "ps")},
+            ${proposalSpeakerRecipientEmailSql("ps", "u")} AS email, ${proposalSpeakerProfileColumns("u", "ps")},
             u.headshot_r2_key AS headshot_r2_key,
             pv.id AS presentation_id
      FROM proposal_speakers ps
@@ -96,7 +101,7 @@ function prepareReminderSnapshotGuard(
       SELECT 1 FROM proposal_speakers ps
       JOIN users u ON u.id = ps.user_id
       JOIN events e ON e.id = sp.event_id
-      WHERE ps.id = ? AND ps.proposal_id = sp.id AND ps.user_id = ? AND ps.status = ? AND u.email = ?
+      WHERE ps.id = ? AND ps.proposal_id = sp.id AND ps.user_id = ? AND ps.status = ? AND ${proposalSpeakerRecipientEmailSql("ps", "u")} = ?
         AND ps.invite_expires_at IS ?
         AND (
           ps.status <> 'invited'
@@ -366,7 +371,7 @@ export async function remindProposalSpeakerByProposer(
                      )}
                    )
                  )
-                 AND u.id = ? AND u.email = ?
+                 AND u.id = ? AND ${proposalSpeakerRecipientEmailSql("proposal_speakers", "u")} = ?
              )`,
         )
         .bind(

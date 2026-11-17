@@ -13,7 +13,8 @@ import { buildSpeakerTemplateData, buildAttendeeCampaignRecipients } from "./tem
 import { projectAttendeeDayState } from "./attendance-projection";
 import { resolveEventFormResponses, type EventFormResponse } from "../forms";
 import type { DatabaseLike } from "../../types";
-import { proposalSpeakerProfileValueSql } from "../proposal-speakers";
+import { proposalSpeakerProfileValueSql, proposalSpeakerRecipientEmailSql } from "../proposal-speakers";
+import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "../registrations/recipient-email";
 import { agendaDayWindow, publishedSpeakerSessionsSql } from "../event-agenda/published-speaker-sessions";
 import type {
   AttendeeCampaignRow,
@@ -77,15 +78,15 @@ export function attendeeCampaignSelection(
   return {
     sql: `WITH ranked_recipients AS (
            SELECT r.id AS registration_id, r.manage_link_secret, u.id AS user_id,
-                  u.email, u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
+                  ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email, u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
                   r.status, r.custom_answers_json, r.form_placement_id,
                   ROW_NUMBER() OVER (
-                    PARTITION BY lower(trim(u.email))
+                    PARTITION BY u.id
                     ORDER BY datetime(r.created_at) DESC, r.id ASC
                   ) AS recipient_rank
            ${population.fromSql}
              AND u.email IS NOT NULL
-             AND (? IS NULL OR lower(trim(u.email)) IN (SELECT value FROM json_each(?)))
+             AND (? IS NULL OR lower(trim(${REGISTRATION_RECIPIENT_EMAIL_SQL})) IN (SELECT value FROM json_each(?)))
              AND (? IS NULL OR u.id IN (SELECT value FROM json_each(?)))
          )
          SELECT registration_id, manage_link_secret, user_id, email, first_name, last_name, organization_name,
@@ -198,7 +199,7 @@ export function speakerCampaignSelection(
   return {
     sql: `WITH ranked_recipients AS (
        SELECT sp.id AS proposal_id, sp.form_placement_id,
-              u.email,
+              ${proposalSpeakerRecipientEmailSql("ps", "u")} AS email,
               ${proposalSpeakerProfileValueSql("u", "ps", "firstName")} AS first_name,
               ${proposalSpeakerProfileValueSql("u", "ps", "lastName")} AS last_name,
               ${selectedOrAffiliationOrganizationNameSql("ps.acting_identity_id", "ps.user_id")} AS organization_name,
@@ -211,7 +212,7 @@ export function speakerCampaignSelection(
               sp.updated_at AS proposal_updated_at,
               ps.confirmed_at AS speaker_confirmed_at,
               ROW_NUMBER() OVER (
-                PARTITION BY lower(trim(u.email))
+                PARTITION BY u.id
                 ORDER BY
                   CASE ps.status WHEN 'confirmed' THEN 0 WHEN 'invited' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END ASC,
                   datetime(COALESCE(ps.confirmed_at, sp.updated_at)) DESC,
@@ -225,7 +226,7 @@ export function speakerCampaignSelection(
          AND (? = 'all' OR ps.status = ?)
          ${onDay}
          AND u.email IS NOT NULL
-         AND (? IS NULL OR lower(trim(u.email)) IN (SELECT value FROM json_each(?)))
+         AND (? IS NULL OR lower(trim(${proposalSpeakerRecipientEmailSql("ps", "u")})) IN (SELECT value FROM json_each(?)))
          AND (? IS NULL OR u.id IN (SELECT value FROM json_each(?)))
      )
      SELECT proposal_id, form_placement_id, email, first_name, last_name, organization_name, job_title,
