@@ -284,24 +284,28 @@ describe("live session questions", () => {
 describe("live session reactions", () => {
   beforeEach(() => f.setup());
 
-  it("broadcasts exact reaction totals across scheduled bursts and limits each person", async () => {
+  it("counts each person once per reaction within the window and limits each person", async () => {
     const watcher = await f.connect({ person: "secondAttendee" });
     const reactor = await f.connect({ person: "attendee" });
     reactor.send({ type: "reaction.send", reaction: "applause" });
-    expect((await watcher.next("reaction.burst")).counts).toEqual({ applause: 1 });
+    expect(await watcher.next("reaction.burst")).toMatchObject({ counts: { applause: 1 }, people: { applause: 1 } });
     reactor.send({ type: "reaction.send", reaction: "applause" });
     reactor.send({ type: "reaction.send", reaction: "love" });
+    watcher.send({ type: "reaction.send", reaction: "applause" });
     // Worker scheduling can put these messages in different broadcast windows.
-    // The delivered total must still contain every reaction exactly once.
+    // Repeat clicks keep the person in the window but add no one: totals count people.
     await vi.waitFor(
       () => {
         const totals: Record<string, number> = {};
+        let people: Record<string, number> = {};
         for (const message of watcher.received) {
           if (message.type !== "reaction.burst") continue;
           for (const [reaction, count] of Object.entries(message.counts))
             totals[reaction] = (totals[reaction] ?? 0) + count;
+          people = { ...people, ...message.people };
         }
         expect(totals).toEqual({ applause: 2, love: 1 });
+        expect(people).toEqual({ applause: 2, love: 1 });
       },
       { timeout: 3000 },
     );

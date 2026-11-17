@@ -27,6 +27,7 @@ export type ResolvedComposition = {
   topQuestions: LiveStage["topQuestions"];
   chatFeed: LiveStage["chatFeed"];
   reactions: boolean;
+  reactionsGraphic: LiveStage["reactionsGraphic"];
 };
 
 export const LIVE_CREDIT_NOT_FOUND: LiveRefusal = {
@@ -110,5 +111,6 @@ export function composeLiveStage(
     topQuestions: input.topQuestions,
     chatFeed: input.chatFeed,
     reactions: input.reactions,
+    reactionsGraphic: input.reactionsGraphic,
   };
 }
