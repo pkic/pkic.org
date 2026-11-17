@@ -1,5 +1,4 @@
 import type { ScannerStatus } from "./ScannerStatus";
-import { formatNumber } from "../../../../../../../shared/format-number";
 import type {
   EventScanRequest,
   EventScanResponse,
@@ -10,7 +9,6 @@ export function ScannerFeedback({
   result,
   action,
   message,
-  pending,
   compact = false,
   status,
 }: {
@@ -41,7 +39,6 @@ export function ScannerFeedback({
         </p>
       )}
       {message !== status?.title && <p>{message}</p>}
-      <p>{formatNumber(pending)} scans awaiting upload</p>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import {
   enrolledOfflineEligibilityResponseSchema,
 } from "../../../../../../../shared/schemas/event-offline-eligibility";
 import { eligibilityPageDigest, eligibilityScopeKey } from "../../../../../../../shared/event-eligibility-digest";
-import { SCANNER_OFFLINE_MAXIMUM_MS } from "../../../../../../../shared/event-offline-expiry";
+import { SCANNER_EVENT_OFFLINE_MAXIMUM_MS } from "../../../../../../../shared/event-offline-expiry";
 import {
   sameSnapshotEnrollment,
   sameSnapshotScope,
@@ -24,6 +24,7 @@ export async function downloadEligibilitySnapshot(
   signal?: AbortSignal,
   saved?: CachedManifest,
   onProgress?: (checkedBadges: number) => void,
+  includeBadgeNames = false,
 ): Promise<CachedManifest> {
   const matching = saved && sameSnapshotScope(saved, { operatorUserId, occurrenceId, roomId, ...enrollment });
   let previous = matching
@@ -47,6 +48,7 @@ export async function downloadEligibilitySnapshot(
         ? await eligibilityPageDigest({ ...saved, entries: knownEntries, nextBadgeId: knownNext })
         : undefined;
     const query = new URLSearchParams({ epochId: enrollment.epochId, deviceId: enrollment.deviceId });
+    if (includeBadgeNames) query.set("includeBadgeNames", "true");
     if (occurrenceId) query.set("occurrenceId", occurrenceId);
     if (roomId) query.set("roomId", roomId);
     if (cursor) query.set("afterBadgeId", cursor);
@@ -114,7 +116,10 @@ export async function downloadEligibilitySnapshot(
     const validUntil = Math.max(
       now,
       requestedAt +
-        Math.min(SCANNER_OFFLINE_MAXIMUM_MS, Math.max(0, Date.parse(page.expiresAt) - Date.parse(page.serverNow))),
+        Math.min(
+          SCANNER_EVENT_OFFLINE_MAXIMUM_MS,
+          Math.max(0, Date.parse(page.expiresAt) - Date.parse(page.serverNow)),
+        ),
     );
     if (!snapshot) {
       const { nextBadgeId: _, pageDigest: __, unchanged: ___, ...metadata } = page;
@@ -126,7 +131,13 @@ export async function downloadEligibilitySnapshot(
         writtenAt: now,
         validUntil,
       };
-    } else snapshot.validUntil = Math.min(snapshot.validUntil, validUntil);
+    } else {
+      snapshot.validUntil = Math.min(snapshot.validUntil, validUntil);
+      if (includeBadgeNames) {
+        snapshot.badgeNamesPrepared = snapshot.badgeNamesPrepared === true && page.badgeNamesPrepared === true;
+        snapshot.badgeNamesUnavailable = (snapshot.badgeNamesUnavailable ?? 0) + (page.badgeNamesUnavailable ?? 0);
+      }
+    }
     snapshot.entries.push(...entries);
     onProgress?.(snapshot.entries.length);
     if (snapshot.entries.length > 100000)

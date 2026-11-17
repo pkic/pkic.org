@@ -380,7 +380,11 @@ test("one recurring meeting and conference retain the same actors through organi
     try {
       await door.getByLabel("Badge code", { exact: true }).fill(fixture.consenting.badgeId);
       await door.getByRole("button", { name: "Record attendance", exact: true }).click();
-      await expect(door.getByText("1 scans awaiting upload", { exact: true })).toBeVisible();
+      await expect(
+        door
+          .getByRole("status", { name: "Scanner status", exact: true })
+          .getByText(/^1 awaiting upload(?: · syncing…)?$/),
+      ).toBeVisible();
       stored = await scannerStorage(door);
       expect(stored.pending).toHaveLength(1);
       const scan = enrolledEventScanRequestSchema.parse(stored.pending[0]!.scan);
@@ -400,7 +404,9 @@ test("one recurring meeting and conference retain the same actors through organi
     }
     if (!stored) throw new Error("The original offline capture must survive to reconciliation");
     const originalScan = enrolledEventScanRequestSchema.parse(stored.pending[0]!.scan);
-    await expect(door.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
+    await expect(
+      door.getByRole("status", { name: "Scanner status", exact: true }).getByText("All scans synced", { exact: true }),
+    ).toBeVisible();
     const reconciled = await scannerStorage(door);
     expect(reconciled.pending).toHaveLength(0);
     const acknowledgment = reconciled.history.find((row) => row.scan.operationId === originalScan.operationId);
