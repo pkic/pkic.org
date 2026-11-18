@@ -148,7 +148,8 @@ export function LiveSessionDesk({
   /** Sends a command; the other operators briefly see who changed the control it came from. */
   const sendProgram = (message: LiveRoomClientMessage): boolean => {
     const sent = sendToRoom([message]);
-    if (sent && message.type !== "chat.send") presence.changed();
+    // Chatting and reading a question's answers change no control.
+    if (sent && message.type !== "chat.send" && message.type !== "question.answers.watch") presence.changed();
     return sent;
   };
   /** Sends commands in order; those that change what is on air go out as one broadcast, so none is refused. */
@@ -347,7 +348,12 @@ export function LiveSessionDesk({
           ],
           body: (
             <>
-              <LiveQuestionsPanel targets={targets} clock={clock ?? state.session.timeZone} send={sendProgram} />
+              <LiveQuestionsPanel
+                targets={targets}
+                clock={clock ?? state.session.timeZone}
+                send={sendProgram}
+                answers={{ connected: live, result: room.answerResult }}
+              />
               {releaseTimes ? (
                 <LivePreparedQuestionTimes
                   targets={targets}

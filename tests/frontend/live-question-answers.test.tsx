@@ -104,7 +104,7 @@ describe("answer threads", () => {
     const own = answer({ text: "Mine", mine: true });
     openThread(host, live, [other, own], { canAccept: true });
     const upvote = labeled(host, "Upvote answer: 1 vote");
-    expect(upvote.title).toBe("Moves helpful answers up. Others don't see who voted.");
+    expect(upvote.title).toBe("Upvote answer: 1 vote\nMoves helpful answers up. Others don't see who voted.");
     expect(labeled(host, "Your answer: 0 votes").disabled).toBe(true);
     void act(() => upvote.click());
     expect(live.latest().messages().at(-1)).toEqual({
@@ -115,7 +115,8 @@ describe("answer threads", () => {
     });
     const accept = host.querySelectorAll<HTMLButtonElement>('button[aria-label="Accept answer"]')[0];
     expect(accept.getAttribute("aria-pressed")).toBe("false");
-    expect(accept.title).toBe("Marks this as the answer to your question. Everyone sees it first.");
+    // The hint names the icon, then says what a click does; only the asker reads "your question".
+    expect(accept.title).toBe("Accept answer\nMarks this as the answer to your question. Everyone sees it first.");
     expect(accept.querySelector("svg")).not.toBeNull();
   });
 

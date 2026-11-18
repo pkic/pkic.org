@@ -436,12 +436,13 @@ describe("live control room panels", () => {
     void act(() => labeled(host, "Question actions").click());
     void act(() => button(host, "Open question").click());
     expect(host.textContent).toContain("Asked as “so like hybrid certs??” · edited by Remote Rita");
-    void act(() => button(host, "Done").click());
+    void act(() => labeled(host, "Close question").click());
     void act(() => labeled(host, "Question actions").click());
     void act(() => button(host, "Edit text").click());
     type(host.querySelector<HTMLTextAreaElement>("textarea[name=text]")!, "Should we deploy hybrid certificates?");
     void act(() => button(host, "Save text").click());
-    expect(commands(live)).toEqual([
+    // Opening the question followed its answers for as long as it was open.
+    expect(commands(live).filter((command) => command.type !== "question.answers.watch")).toEqual([
       { type: "question.rewrite", questionId: LIVE_QUESTION, text: "Should we deploy hybrid certificates?" },
     ]);
   });

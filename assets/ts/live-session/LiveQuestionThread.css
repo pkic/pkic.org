@@ -2,7 +2,8 @@
   .pk-live-answers {
     margin-block-start: var(--pk-2);
   }
-  .pk-live-answers__thread {
+  /* The thread stands off its summary line; a thread shown without one starts where it stands. */
+  .pk-live-answers__summary + .pk-live-answers__thread {
     padding-block-start: var(--pk-3);
   }
   .pk-live-answers__list {

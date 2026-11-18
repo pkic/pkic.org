@@ -62,7 +62,8 @@ const answer = (id: string, overrides: Partial<LiveQuestionAnswer>): LiveQuestio
   ...overrides,
 });
 
-const answers = [
+/** A thread with an accepted answer and votes, as the event app and the studio's open question both draw it. */
+export const sampleLiveAnswers = [
   answer("b1", {
     authorName: "Alex Moreau",
     authorRoles: ["speaker"],
@@ -140,7 +141,7 @@ export const liveAnswerSections: PreviewSection[] = [
     render: () => (
       <Thread
         q={question()}
-        list={answers}
+        list={sampleLiveAnswers}
         rights={{ canAnswer: true, canAccept: true, canVote: true, canModerate: false }}
       />
     ),
@@ -172,7 +173,7 @@ export const liveAnswerSections: PreviewSection[] = [
       <Thread
         blocked
         q={question({ mine: false })}
-        list={answers}
+        list={sampleLiveAnswers}
         rights={{ canAnswer: false, canAccept: false, canVote: false, canModerate: false }}
       />
     ),
@@ -185,7 +186,7 @@ export const liveAnswerSections: PreviewSection[] = [
       <div data-gallery-open>
         <Thread
           q={question({ mine: false })}
-          list={[answers[1]]}
+          list={[sampleLiveAnswers[1]]}
           viewer={{ role: "operator", organizer: true }}
           rights={{ canAnswer: true, canAccept: true, canVote: false, canModerate: true }}
         />

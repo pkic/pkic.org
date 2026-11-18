@@ -1,7 +1,8 @@
 /**
  * The studio's Questions panel with prepared questions waiting under the
- * open ones, and the two dialogs its header opens: preparing a question and
- * setting the times prepared questions come in.
+ * open ones, the two dialogs its header opens (preparing a question and
+ * setting the times prepared questions come in), and an open question with
+ * its answers.
  */
 import type { PreviewSection } from "./PreviewShell";
 import type { LivePreparedQuestion } from "../../../shared/schemas/live-session-prepared-question";
@@ -18,6 +19,7 @@ import {
   LivePreparedQuestionDialog,
   LivePreparedQuestionWindowDialog,
 } from "../../member-flows/portal/sections/events/detail/live/LivePreparedQuestionDialogs";
+import { LiveQuestionDialog } from "../../member-flows/portal/sections/events/detail/live/LiveQuestionDialog";
 import {
   LiveQuestionsHeader,
   LiveQuestionsPanel,
@@ -28,6 +30,7 @@ import { sampleOverlayRoom } from "../../member-flows/portal/sections/events/det
 import "../../member-flows/portal/sections/events/detail/live/studio/StudioGrid.css";
 import { SCREEN_FIXTURE_NOW } from "./event-screens-fixtures";
 import "./event-screens-preview.css";
+import { sampleLiveAnswers } from "./sections-live-answers";
 
 const at = (minutes: number) => new Date(SCREEN_FIXTURE_NOW + minutes * 60_000).toISOString();
 const send = () => true;
@@ -97,6 +100,8 @@ const ROOM: LiveRoomState = {
     asked("40000000-0000-4000-8000-000000000031", "Is hybrid signing worth the extra certificate size?", {
       votes: 12,
       addressedTo: "sample:speaker",
+      answerCount: sampleLiveAnswers.length,
+      acceptedAnswer: true,
     }),
     asked("40000000-0000-4000-8000-000000000032", "What about firmware signing keys?", {
       status: "pending",
@@ -108,6 +113,21 @@ const ROOM: LiveRoomState = {
   preparedQuestionWindow: { from: at(-15), until: at(20) },
 };
 const TARGETS = { state: ROOM, programActive: true, disabled: false, sendProgram: send };
+const ANSWERS = { connected: true, result: null };
+/** The room as an operator has it with the first question open: its thread, and a moderator's rights on it. */
+const ANSWERED_ROOM: LiveRoomState = {
+  ...ROOM,
+  viewer: { ...ROOM.viewer, role: "operator" },
+  thread: {
+    type: "question.answers",
+    questionId: ROOM.questions[0]!.id,
+    answers: sampleLiveAnswers,
+    canAnswer: true,
+    canAccept: true,
+    canVote: true,
+    canModerate: true,
+  },
+};
 const PANEL: StudioPanel = { id: "questions-1", type: "questions", x: 0, y: 0, w: 5, h: 14 };
 
 /** One question on Program, which the stage display follows, and one put on the projector directly. */
@@ -143,7 +163,7 @@ function QuestionsPanelSpecimen({ targets = TARGETS }: { targets?: typeof TARGET
           dragHandle={noHandlers}
           resizeHandle={() => noHandlers}
         >
-          <LiveQuestionsPanel targets={targets} clock="UTC" send={send} />
+          <LiveQuestionsPanel targets={targets} clock="UTC" send={send} answers={ANSWERS} />
         </StudioPanelFrame>
       </div>
     </div>
@@ -164,8 +184,24 @@ export const studioQuestionSections: PreviewSection[] = [
   {
     id: "studio-questions-prepared",
     title: "Studio: Questions with prepared questions",
-    note: "Prepared questions wait under the open ones in the same rows: when each comes in and whom it is for, Release now, and Edit or Delete in the menu.",
+    note: "An open question says how many answers it has and whether one is accepted, in plain text beside its votes. Prepared questions wait under the open ones in the same rows: when each comes in and whom it is for, Release now, and Edit or Delete in the menu.",
     render: () => <QuestionsPanelSpecimen />,
+  },
+  {
+    id: "studio-question-answers",
+    title: "Studio: an open question with its answers",
+    note: "From a question's row: its text, who asked it, and the event app's own answer thread, open from the start. An operator upvotes, accepts with the icon, removes from the answer's menu and writes an answer.",
+    render: () => (
+      <div data-density="compact">
+        <LiveQuestionDialog
+          question={ANSWERED_ROOM.questions[0]!}
+          state={ANSWERED_ROOM}
+          answers={ANSWERS}
+          send={send}
+          onClose={noCommand}
+        />
+      </div>
+    ),
   },
   {
     id: "studio-question-prepare",

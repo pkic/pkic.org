@@ -25,6 +25,7 @@ import { LiveAuthorProvider } from "./LiveAuthor";
 import { LivePollCard } from "./LivePollCard";
 import { liveRoomOpenFailure } from "./live-room-copy";
 import { currentLivePoll, orderLiveQuestions } from "./live-room-state";
+import { useLiveQuestionThread } from "./useLiveQuestionThread";
 import { useLiveRoom, type LiveSocketFactory } from "./useLiveRoom";
 import "./SessionQuestions.css";
 import { SectionHeading } from "../ui/SectionHeading";
@@ -150,16 +151,9 @@ function SessionQuestionsRoom({
   createSocket?: LiveSocketFactory;
 }) {
   const room = useLiveRoom({ slug, occurrenceId, createSocket });
-  const send = room.send;
   const [threadId, setThreadId] = useState<string | null>(null);
   const threadVisible = threadId !== null && room.state?.questions.some((question) => question.id === threadId);
-  useEffect(() => {
-    if (!threadId || !threadVisible || room.status !== "live") return;
-    send({ type: "question.answers.watch", questionId: threadId });
-    return () => {
-      send({ type: "question.answers.watch", questionId: null });
-    };
-  }, [threadId, threadVisible, room.status, send]);
+  useLiveQuestionThread(threadVisible ? threadId : null, room.status === "live", room.send);
   useEffect(() => {
     setThreadId(null);
   }, [occurrenceId]);

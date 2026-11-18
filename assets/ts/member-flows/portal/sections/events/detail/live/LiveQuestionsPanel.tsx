@@ -13,10 +13,10 @@ import type { LivePreparedQuestion } from "../../../../../../../shared/schemas/l
 import type { LiveQuestion, LiveRoomClientMessage } from "../../../../../../../shared/schemas/live-session-room";
 import { confirmAction } from "../../../../../../components/ConfirmDialog";
 import { LiveQuestionTransitions } from "../../../../../../live-session/LiveQuestionList";
+import { liveAnswerCountLabel } from "../../../../../../live-session/LiveQuestionThread";
 import { LiveModerationDialogHost } from "../../../../../../live-session/LiveModerationDialog";
 import { Avatar } from "../../../../../../ui/Avatar";
 import { Button } from "../../../../../../ui/Button";
-import { Dialog } from "../../../../../../ui/Dialog";
 import { StrokeIcon } from "../../../../../../ui/MediaIcons";
 import { Menu } from "../../../../../../ui/Menu";
 import { toast } from "../../../../ui";
@@ -30,6 +30,7 @@ import {
   withScreenItems,
 } from "./LiveRowMenu";
 import { LivePreparedQuestionDialog, LivePreparedQuestionWindowDialog } from "./LivePreparedQuestionDialogs";
+import { LiveQuestionDialog, type LiveAnswerConnection } from "./LiveQuestionDialog";
 import { LiveQuestionRewrite } from "./LiveQuestionRewrite";
 import type { LiveTargets } from "./live-output-targets";
 import { livePresenceItem } from "./presence/live-presence";
@@ -144,7 +145,7 @@ function RowAction({
   );
 }
 
-/** One open question: its votes, asker, addressee and state, Approve or its outputs and Answered, and the menu. */
+/** One open question: its votes, answers, asker, addressee and state, Approve or its outputs and Answered, and the menu. */
 function OpenQuestionRow({
   question,
   targets,
@@ -181,12 +182,18 @@ function OpenQuestionRow({
   return (
     <StudioItemRow
       text={question.text}
-      open={{ title: "Open question\nRead it in full, with who asked it.", onOpen }}
+      open={{ title: "Open question\nRead it in full, with who asked it and its answers.", onOpen }}
       presenceItem={pending ? item : undefined}
       summary={
         <>
           {pending ? <span class="pk-live-desk__question-state">Pending</span> : null}
           <span>▲ {formatNumber(question.votes)}</span>
+          {question.answerCount ? (
+            <span>
+              {liveAnswerCountLabel(question.answerCount)}
+              {question.acceptedAnswer ? " · 1 accepted" : ""}
+            </span>
+          ) : null}
           {question.authorPhotoUrl && asker ? (
             <Avatar name={asker} src={question.authorPhotoUrl} size="sm" alt="" />
           ) : null}
@@ -325,8 +332,20 @@ function PreparedQuestionRow({
  * open ones first, then prepared ones in the order they come in. Every
  * action is in a row's menu; the row shows only the one used most.
  */
-export function LiveQuestionsPanel({ targets, clock, send }: { targets: LiveTargets; clock: ClockZone; send: Send }) {
-  const [inspected, setInspected] = useState<LiveQuestion | null>(null);
+export function LiveQuestionsPanel({
+  targets,
+  clock,
+  send,
+  answers,
+}: {
+  targets: LiveTargets;
+  clock: ClockZone;
+  send: Send;
+  answers: LiveAnswerConnection;
+}) {
+  // The open question is read from the room each time, so its answers and their count stay current.
+  const [inspectedId, setInspectedId] = useState<string | null>(null);
+  const inspected = targets.state.questions.find((question) => question.id === inspectedId) ?? null;
   const [editing, setEditing] = useState<LiveQuestion | null>(null);
   const [editingPrepared, setEditingPrepared] = useState<LivePreparedQuestion | null>(null);
   const open = openLiveQuestions(targets.state.questions);
@@ -342,7 +361,7 @@ export function LiveQuestionsPanel({ targets, clock, send }: { targets: LiveTarg
               question={question}
               targets={targets}
               send={send}
-              onOpen={() => setInspected(question)}
+              onOpen={() => setInspectedId(question.id)}
               onEdit={() => setEditing(question)}
             />
           ))}
@@ -369,24 +388,13 @@ export function LiveQuestionsPanel({ targets, clock, send }: { targets: LiveTarg
         />
       ) : null}
       {inspected ? (
-        <Dialog
-          open
-          title="Audience question"
-          meta={liveQuestionAskerName(inspected) ?? "Anonymous"}
-          closeLabel="Close question"
-          confirmLabel="Done"
-          cancelLabel="Back to studio"
-          onConfirm={() => setInspected(null)}
-          onCancel={() => setInspected(null)}
-        >
-          <p>{inspected.text}</p>
-          {inspected.originalText ? (
-            <p>
-              Asked as “{inspected.originalText}”
-              {inspected.rewritten ? ` · edited by ${inspected.rewritten.operatorName}` : ""}
-            </p>
-          ) : null}
-        </Dialog>
+        <LiveQuestionDialog
+          question={inspected}
+          state={targets.state}
+          answers={answers}
+          send={send}
+          onClose={() => setInspectedId(null)}
+        />
       ) : null}
       {editing ? (
         <LiveQuestionRewrite

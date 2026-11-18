@@ -22,9 +22,18 @@ import { LiveQuestionAnswerRow, type LiveAnswerViewer } from "./LiveQuestionAnsw
 import "./LiveQuestionThread.css";
 
 type Pending = Extract<LiveRoomClientMessage, { type: "question.answer" | "question.answer.accept" }>;
-type Receipt = Extract<LiveRoomServerMessage, { type: "question.answer.result" | "room.refused" }>;
+/** The room's answer to this viewer's own reply or acceptance: its receipt, or why it refused. */
+export type LiveAnswerReceipt = Extract<LiveRoomServerMessage, { type: "question.answer.result" | "room.refused" }>;
 
-/** One question's replies, with acceptance authority supplied by the room rather than inferred from speaker duties. */
+/** How many answers a question has, as its list row and its thread both say it. */
+export function liveAnswerCountLabel(count: number): string {
+  return `${formatNumber(count)} ${count === 1 ? "answer" : "answers"}`;
+}
+
+/**
+ * One question's replies, with acceptance authority supplied by the room rather than inferred from speaker duties.
+ * A list folds each thread behind `toggle`; a view of one question leaves it out and keeps the thread open.
+ */
 export function LiveQuestionThread({
   question,
   expanded,
@@ -45,11 +54,11 @@ export function LiveQuestionThread({
   eventName?: string;
   question: LiveQuestion;
   expanded: boolean;
-  toggle: () => void;
+  toggle?: () => void;
   thread: z.infer<typeof liveQuestionAnswersSchema> | null;
   disabled: boolean;
   send: (message: LiveRoomClientMessage) => boolean;
-  result: Receipt | null;
+  result: LiveAnswerReceipt | null;
 }) {
   const id = useId();
   const [text, setText] = useState("");
@@ -90,17 +99,17 @@ export function LiveQuestionThread({
 
   return (
     <div class="pk-live-answers">
-      <div class="pk-live-answers__summary">
-        {question.answerCount ? (
-          <span>
-            {formatNumber(question.answerCount)} {question.answerCount === 1 ? "answer" : "answers"}
-          </span>
-        ) : null}
-        {question.acceptedAnswer ? <span class="pk-live-answers__accepted-note">Accepted answer</span> : null}
-        <Button variant="ghost" aria-expanded={expanded} aria-controls={expanded ? id : undefined} onClick={toggle}>
-          {expanded ? "Hide answers" : "Show answers"}
-        </Button>
-      </div>
+      {toggle || question.answerCount || question.acceptedAnswer ? (
+        <div class="pk-live-answers__summary">
+          {question.answerCount ? <span>{liveAnswerCountLabel(question.answerCount)}</span> : null}
+          {question.acceptedAnswer ? <span class="pk-live-answers__accepted-note">Accepted answer</span> : null}
+          {toggle ? (
+            <Button variant="ghost" aria-expanded={expanded} aria-controls={expanded ? id : undefined} onClick={toggle}>
+              {expanded ? "Hide answers" : "Show answers"}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {expanded ? (
         <section id={id} class="pk-live-answers__thread pk-stack pk-stack--snug" aria-label="Answers to this question">
           {!thread ? (
@@ -117,6 +126,7 @@ export function LiveQuestionThread({
                         key={answer.id}
                         answer={answer}
                         questionId={question.id}
+                        ownQuestion={question.mine}
                         viewer={viewer}
                         canVote={thread.canVote && !restriction}
                         canAccept={thread.canAccept}

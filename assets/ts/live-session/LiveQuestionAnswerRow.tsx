@@ -10,10 +10,15 @@ import { LiveAuthorName } from "./LiveAuthor";
 import { LiveRemovedPost, liveRemovalNote } from "./LiveRemovedPost";
 import { liveParticipationMenuItems, liveRemoveMenuItem } from "./live-moderation-menu";
 
-const ACCEPT = {
-  on: { label: "Remove acceptance", tip: "This answer is no longer marked as the answer." },
-  off: { label: "Accept answer", tip: "Marks this as the answer to your question. Everyone sees it first." },
-};
+/** The accept control's name and what a click does; only the asker reads "your question". */
+function acceptHint(accepted: boolean, ownQuestion: boolean) {
+  return accepted
+    ? { label: "Remove acceptance", tip: "This answer is no longer marked as the answer." }
+    : {
+        label: "Accept answer",
+        tip: `Marks this as the answer to ${ownQuestion ? "your" : "this"} question. Everyone sees it first.`,
+      };
+}
 export type LiveAnswerViewer = { role: LiveRoomRole; organizer?: boolean };
 const UPVOTE_TIP = "Moves helpful answers up. Others don't see who voted.";
 
@@ -61,6 +66,7 @@ function answerMenu(
 export function LiveQuestionAnswerRow({
   answer,
   questionId,
+  ownQuestion,
   viewer,
   canVote,
   canAccept,
@@ -74,6 +80,8 @@ export function LiveQuestionAnswerRow({
 }: {
   answer: LiveQuestionAnswer;
   questionId: string;
+  /** This viewer asked the question, so accepting marks the answer to their own. */
+  ownQuestion: boolean;
   viewer: LiveAnswerViewer;
   canVote: boolean;
   canAccept: boolean;
@@ -86,7 +94,7 @@ export function LiveQuestionAnswerRow({
   timeZone: string;
   onError: () => void;
 }) {
-  const accept = answer.acceptance ? ACCEPT.on : ACCEPT.off;
+  const accept = acceptHint(answer.acceptance !== null, ownQuestion);
   const votes = `${formatNumber(answer.votes)} ${answer.votes === 1 ? "vote" : "votes"}`;
   const voteLabel = answer.mine ? `Your answer: ${votes}` : `Upvote answer: ${votes}`;
   return (
@@ -99,7 +107,7 @@ export function LiveQuestionAnswerRow({
         class="pk-live-question__vote"
         aria-pressed={answer.votedByMe}
         aria-label={voteLabel}
-        title={answer.mine ? undefined : UPVOTE_TIP}
+        title={answer.mine ? undefined : `${voteLabel}\n${UPVOTE_TIP}`}
         disabled={disabled || !canVote || answer.mine || answer.removal !== null}
         onClick={() =>
           send({ type: "question.answer.vote", questionId, answerId: answer.id, voted: !answer.votedByMe })
@@ -131,7 +139,7 @@ export function LiveQuestionAnswerRow({
             icon
             aria-pressed={answer.acceptance !== null}
             aria-label={accepting === "this" ? `Retry: ${accept.label}` : accept.label}
-            title={accept.tip}
+            title={`${accept.label}\n${accept.tip}`}
             disabled={disabled || accepting === "other"}
             onClick={onAccept}
           >
