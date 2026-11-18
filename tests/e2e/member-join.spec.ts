@@ -212,6 +212,25 @@ test("signs in with an organization email before submitting the D1-backed member
       "href",
       "mailto:contact@pkic.org",
     );
+    // The portal says who applied, so the colleague can reach them, and what approval brings.
+    await colleague.setViewportSize({ width: 1280, height: 900 });
+    await colleague.getByRole("link", { name: "Go to the member portal", exact: true }).click();
+    const pending = colleague
+      .locator(".pk-panel")
+      .filter({ has: colleague.getByRole("heading", { name: `Membership application for ${organizationName}` }) });
+    await expect(pending).toBeVisible({ timeout: 30_000 });
+    await expect(pending).toContainText("Morgan Member");
+    await expect(pending.getByRole("link", { name: "Email Morgan Member", exact: true })).toHaveAttribute(
+      "href",
+      `mailto:${email}`,
+    );
+    await expect(colleague.getByRole("link", { name: "Explore membership", exact: true })).toHaveCount(0);
+    for (const width of [1280, 375]) {
+      await colleague.setViewportSize({ width, height: 900 });
+      await pending.scrollIntoViewIfNeeded();
+      expect(await colleague.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await colleague.screenshot({ path: testInfo.outputPath(`portal-organization-application-${width}.png`) });
+    }
   } finally {
     await colleagueContext.close();
   }

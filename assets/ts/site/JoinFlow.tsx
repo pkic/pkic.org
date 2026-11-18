@@ -105,11 +105,16 @@ export function JoinFlow({ documents }: { documents: MembershipDocument[] }) {
         </h2>
         <p>
           You do not need to apply. Once the application is approved, you are admitted automatically as one of the
-          organization&rsquo;s representatives. If you think this is a mistake, contact the secretariat.
+          organization&rsquo;s representatives. The portal shows who applied and where the application stands.
         </p>
-        <ButtonLink href={CONSORTIUM_CONTACT_HREF} external={false}>
-          Email the secretariat
-        </ButtonLink>
+        <div class="pk-cluster">
+          <ButtonLink variant="primary" href="/portal/#/home">
+            Go to the member portal
+          </ButtonLink>
+          <ButtonLink href={CONSORTIUM_CONTACT_HREF} external={false}>
+            Email the secretariat
+          </ButtonLink>
+        </div>
       </section>
       <section data-join-support-required hidden tabIndex={-1}>
         <h2>We need to review this request</h2>

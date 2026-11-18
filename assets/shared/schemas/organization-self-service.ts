@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { successResponseSchema } from "./api-common";
+import { successResponseSchema, utcInstantSchema } from "./api-common";
 import { actingIdentitySchema } from "./identity";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { applicationStageSchema } from "./member-applications";
 import {
   contentReviewStatusSchema,
   organizationContentReviewSchema,
@@ -159,6 +160,36 @@ export const organizationSecondaryContactNominationDeleteRouteSchema = {
       content: { "application/json": { schema: organizationSecondaryContactNominationResponseSchema } },
     },
     "403": { description: "The active primary contact is required." },
+  },
+};
+
+/**
+ * The organization's membership application still under review, as its
+ * representatives see it: where it stands and who applied, so a colleague can
+ * reach that person instead of applying again. The applicant is read from
+ * their identity at the organization; it is null when they no longer hold one.
+ */
+export const organizationCurrentApplicationSchema = z.object({
+  stage: applicationStageSchema,
+  createdAt: utcInstantSchema,
+  applicant: actingIdentitySchema
+    .pick({ id: true, userId: true, userName: true, email: true, jobTitle: true, headshotUrl: true })
+    .nullable(),
+});
+export const organizationCurrentApplicationResponseSchema = z.object({
+  application: organizationCurrentApplicationSchema.nullable(),
+});
+export const organizationCurrentApplicationGetRouteSchema = {
+  tags: ["Organizations", "Members"],
+  "x-pkic-auth": { required: true },
+  summary: "Get the organization's open membership application",
+  request: { params: organizationSelfServiceParamsSchema },
+  responses: {
+    "200": {
+      description: "The open application, or null when the organization has none.",
+      content: { "application/json": { schema: organizationCurrentApplicationResponseSchema } },
+    },
+    "404": { description: "The session holds no active identity at this organization." },
   },
 };
 
