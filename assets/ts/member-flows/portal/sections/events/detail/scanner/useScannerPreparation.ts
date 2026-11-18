@@ -12,6 +12,7 @@ export function useScannerPreparation({
   operatorUserId,
   occurrenceId,
   action,
+  allowedActions,
   collectorContext,
   badgeCollection = false,
   epoch,
@@ -24,6 +25,7 @@ export function useScannerPreparation({
   operatorUserId: string;
   occurrenceId: string | null;
   action: EventScanRequest["action"];
+  allowedActions: readonly EventScanRequest["action"][];
   collectorContext?: ScannerOfflineContext;
   badgeCollection?: boolean;
   epoch: ScannerEpoch | null;
@@ -42,7 +44,8 @@ export function useScannerPreparation({
     roomId: location.roomId,
     epoch,
     collector: Boolean(collectorContext),
-    includeBadgeNames: badgeCollection && action !== "lead",
+    includeBadgeNames:
+      badgeCollection || (location.targetId === null && allowedActions.includes("attendance") && action !== "lead"),
     onPreparationClosed: (message, code) => {
       onContextChange(message);
       onPreparationClosed(code);
@@ -58,6 +61,7 @@ export function useScannerPreparation({
     location.targetLabel,
     location.rooms.find((room) => room.id === location.roomId)?.name,
     { occurrenceId: location.targetId, roomId: location.roomId },
+    allowedActions,
   );
   const status = {
     occurrenceId: location.targetId,
@@ -68,6 +72,7 @@ export function useScannerPreparation({
     ),
     action,
     badgeCollection,
+    badgeNamesPrepared: eligibility.eligibilityManifest.current?.badgeNamesPrepared,
     preparing: eligibility.manifestPreparing,
     ready: eligibility.manifestReady,
     error: eligibility.manifestError,

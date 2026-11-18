@@ -5,7 +5,7 @@ import { scannerCollectorPath, scannerContextCurrent } from "./scanner-offline-c
 import type { EventScanRequest } from "../../../../../../../shared/schemas/event-participation-scanning";
 import type { PortalSession } from "../../../../types";
 import type { ScannerEpoch } from "./scanner-device-ledger";
-import { useContext, useEffect, useRef, useState } from "preact/hooks";
+import { useContext, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { ScannerCodePreparation, useScannerCodePreparationRetry } from "./scanner-code-preparation";
 import { prepareEligibilityManifest, type EligibilityManifest } from "./eligibility-manifest";
 import {
@@ -228,7 +228,9 @@ export function useScannerOfflinePreparation(
   targetLabel?: string,
   roomLabel?: string,
   expectedScope?: { occurrenceId: string | null; roomId: string | null },
+  allowedActions?: readonly EventScanRequest["action"][],
 ) {
+  const preparedActions = useMemo(() => allowedActions ?? [action], [allowedActions, action]);
   const prepareCode = useContext(ScannerCodePreparation);
   const route = scannerCollectorPath(window.location.hash);
   const hasExpectedScope = expectedScope !== undefined;
@@ -258,6 +260,7 @@ export function useScannerOfflinePreparation(
         epoch,
         manifest,
         action,
+        allowedActions: preparedActions,
         targetLabel,
         roomLabel,
         signal: controller.signal,
@@ -280,6 +283,7 @@ export function useScannerOfflinePreparation(
   }, [
     slug,
     action,
+    preparedActions,
     targetLabel,
     roomLabel,
     hasExpectedScope,

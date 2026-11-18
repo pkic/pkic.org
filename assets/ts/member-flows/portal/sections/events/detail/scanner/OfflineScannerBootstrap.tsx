@@ -7,10 +7,14 @@ import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/
 import { listPreparedScannerContexts, restoreScannerOfflineContext } from "./scanner-offline-context";
 import { EventScanner } from "./EventScanner";
 import { LoginFrame } from "../../../../shell/LoginFrame";
+import { scannerActionLabel } from "./ScannerModeSelect";
 
 function preparedTaskLabel(context: ScannerOfflineContext): string {
   if (context.purpose === "collection") return "Badge collection";
-  if (context.occurrenceId) return ["Sessions", context.targetLabel, context.roomLabel].filter(Boolean).join(" · ");
+  if (context.occurrenceId)
+    return ["Sessions", context.targetLabel, context.roomLabel, scannerActionLabel(context.action)]
+      .filter(Boolean)
+      .join(" · ");
   if (context.action === "checkout") return "Venue exit";
   if (context.action === "check") return "Venue entrance · Check registration";
   if (context.action === "admission") return "Venue entrance · Check admission";

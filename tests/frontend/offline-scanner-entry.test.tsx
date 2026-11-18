@@ -99,6 +99,6 @@ it("lists each prepared scanner task with its own link", async () => {
     "Venue entrance",
     "Venue entrance · Check registration",
     "Venue exit",
-    "Sessions · Opening session · Main hall",
+    "Sessions · Opening session · Main hall · Admission decision",
   ]);
 });

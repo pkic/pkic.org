@@ -172,6 +172,7 @@ export async function saveScannerOfflineContext(input: {
   epoch: ScannerEpoch;
   manifest: EligibilityManifest;
   action: EventScanRequest["action"];
+  allowedActions?: readonly EventScanRequest["action"][];
   targetLabel?: string;
   roomLabel?: string;
   signal?: AbortSignal;
@@ -265,28 +266,40 @@ export async function saveScannerOfflineContext(input: {
       const contexts = storedContexts.filter(
         (item) => item.sessionId === session.sessionId && scannerContextCurrent(item),
       );
-      const previous = storedContexts.find((item) => samePreparedTask(item, context.data));
-      const saved = keepPreparedDeadline(context.data, previous);
-      if (!saved) {
-        await done;
-        return null;
-      }
-      const next = contexts.filter((item) => !samePreparedTask(item, saved));
-      next.push(saved);
-      if (saved.purpose === "collection" && saved.action === "attendance") {
-        const entranceTask = { ...saved, purpose: "scan" as const, contextId: crypto.randomUUID() };
-        const previousEntrance = storedContexts.find((item) => samePreparedTask(item, entranceTask));
-        const entrance = keepPreparedDeadline(entranceTask, previousEntrance);
-        if (!entrance) {
+      const actions = [...new Set([input.action, ...(input.allowedActions ?? [])])].flatMap((action) =>
+        ["check", "attendance", "checkout", "admission"].includes(action)
+          ? [action as ScannerOfflineContext["action"]]
+          : [],
+      );
+      const tasks: ScannerOfflineContext[] = actions.map((action) => ({
+        ...context.data,
+        action,
+        purpose: "scan",
+        contextId: crypto.randomUUID(),
+      }));
+      if (
+        actions.includes("attendance") &&
+        (context.data.purpose === "collection" || context.data.occurrenceId === null)
+      )
+        tasks.unshift({ ...context.data, action: "attendance", purpose: "collection", contextId: crypto.randomUUID() });
+      const savedTasks: ScannerOfflineContext[] = [];
+      for (const task of tasks) {
+        const previous = storedContexts.find((item) => samePreparedTask(item, task));
+        const saved = keepPreparedDeadline(task, previous);
+        if (!saved) {
           await done;
           return null;
         }
-        const priorIndex = next.findIndex((item) => samePreparedTask(item, entrance));
-        next.splice(priorIndex < 0 ? next.length : priorIndex, priorIndex < 0 ? 0 : 1, entrance);
+        savedTasks.push(saved);
       }
+      const next = contexts.filter((item) => !savedTasks.some((saved) => samePreparedTask(item, saved)));
+      next.push(...savedTasks);
       if (next.length <= SCANNER_PREPARED_CONTEXT_LIMIT) {
-        store.put({ ...current, collectorContext: saved, collectorContexts: next });
-        committed = saved;
+        const selected = savedTasks.find((item) => samePreparedTask(item, context.data));
+        if (selected) {
+          store.put({ ...current, collectorContext: selected, collectorContexts: next });
+          committed = selected;
+        }
       }
     }
     await done;

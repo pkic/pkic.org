@@ -108,11 +108,6 @@ test("badge collection opens for an upcoming event after daily preparation", asy
   await scanner.getByRole("button", { name: "Close scanner", exact: true }).click();
   await expect(scanner).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
-  await page.getByRole("button", { name: "Venue exit Check people out", exact: true }).click();
-  await expect(scanner).toBeVisible();
-  await scanner.getByRole("button", { name: "Close scanner", exact: true }).click();
-  await expect(scanner).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
   await page.setViewportSize({ width: 375, height: 812 });
   await collection.click();
   await expect(scanner).toBeVisible();

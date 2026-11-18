@@ -42,6 +42,103 @@ afterEach(() => {
 });
 
 describe("multiple prepared scanner tasks", () => {
+  it.each([true, false])(
+    "prepares every authorized event-wide task from one badge roster (names: %s)",
+    async (names) => {
+      vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+      window.location.hash = `#${route}?scanAction=attendance`;
+      const eventManifest = {
+        ...manifest(),
+        occurrenceId: null,
+        roomId: null,
+        publishedRevision: null,
+        badgeNamesPrepared: names,
+      };
+      await saveScannerOfflineContext({
+        prepareCode: mocks.warm,
+        slug,
+        session,
+        epoch: epoch(),
+        manifest: eventManifest,
+        action: "attendance",
+        allowedActions: ["attendance", "checkout", "check", "admission"],
+      });
+      expect((await listPreparedScannerContexts()).map((item) => [item.action, item.purpose])).toEqual([
+        ["attendance", "collection"],
+        ["attendance", "scan"],
+        ["checkout", "scan"],
+        ["check", "scan"],
+        ["admission", "scan"],
+      ]);
+      expect(mocks.warm).toHaveBeenCalledOnce();
+    },
+  );
+  it("shares one prepared session and room scope across its authorized actions", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    window.location.hash = `#${route}?scanAction=attendance`;
+    await saveScannerOfflineContext({
+      prepareCode: mocks.warm,
+      slug,
+      session,
+      epoch: epoch(),
+      manifest: manifest(),
+      action: "attendance",
+      allowedActions: ["attendance", "checkout"],
+      targetLabel: "Opening session",
+      roomLabel: "Main hall",
+    });
+    const choices = await listPreparedScannerContexts();
+    expect(choices.map((item) => [item.action, item.occurrenceId, item.roomId, item.targetLabel])).toEqual([
+      ["attendance", manifest().occurrenceId, manifest().roomId, "Opening session"],
+      ["checkout", manifest().occurrenceId, manifest().roomId, "Opening session"],
+    ]);
+  });
+  it("keeps prepared tasks on separate scanner devices independent", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    const otherDeviceId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const otherEpochId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const otherEpoch = {
+      ...epoch(),
+      key: JSON.stringify([slug, operator, otherDeviceId]),
+      deviceId: otherDeviceId,
+      epochId: otherEpochId,
+    };
+    mocks.rows = [epoch(), otherEpoch];
+    const first = await saveScannerOfflineContext({
+      prepareCode: mocks.warm,
+      slug,
+      session,
+      epoch: epoch(),
+      manifest: manifest(),
+      action: "attendance",
+      allowedActions: ["attendance", "checkout"],
+    });
+    const second = await saveScannerOfflineContext({
+      prepareCode: mocks.warm,
+      slug,
+      session,
+      epoch: otherEpoch,
+      manifest: {
+        ...manifest(),
+        enrollment: { ...manifest().enrollment!, deviceId: otherDeviceId, epochId: otherEpochId },
+      },
+      action: "attendance",
+      allowedActions: ["attendance", "checkout"],
+    });
+    expect(first?.deviceId).toBe(epoch().deviceId);
+    expect(second?.deviceId).toBe(otherDeviceId);
+    expect((await listPreparedScannerContexts()).map((item) => item.deviceId)).toEqual([
+      epoch().deviceId,
+      epoch().deviceId,
+      otherDeviceId,
+      otherDeviceId,
+    ]);
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    for (const selected of [first!, second!]) {
+      window.location.hash = `#${route}?offlineContext=${selected.contextId}`;
+      expect(await restoreScannerOfflineContext(route)).toMatchObject({ deviceId: selected.deviceId });
+    }
+  });
   it("retains independent prepared tasks for one event and restores the selected task", async () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
     window.location.hash = `#${route}?scanAction=attendance&scannerPurpose=collection`;

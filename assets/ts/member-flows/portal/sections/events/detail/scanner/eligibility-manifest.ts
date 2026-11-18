@@ -14,6 +14,8 @@ import type {
 } from "../../../../../../../shared/schemas/event-participation-scanning";
 
 export type LocalEligibility = Pick<EventScanResponse, "outcome" | "reason"> & { message: string; userId?: string };
+const containsBadgeNameResponse = (snapshot: CachedManifest) =>
+  snapshot.badgeNamesPrepared !== undefined || snapshot.badgeNamesUnavailable !== undefined;
 export interface EligibilityManifest {
   refreshError?: string;
   retryAfterMs?: number;
@@ -279,12 +281,16 @@ export async function prepareEligibilityManifest(
   try {
     // Retain IDs for qualified feedback in this foreground session, then remove expired persisted copies.
     fallback = await cached(key);
-    if (!includeBadgeNames) {
-      const regular = cachedManifestSchema.safeParse(fallback);
-      if (!regular.success || !snapshotCurrent(regular.data)) {
-        const named = cachedManifestSchema.safeParse(await cached(JSON.stringify([...scope, true])));
-        if (named.success && named.data.complete && snapshotCurrent(named.data)) fallback = named.data;
-      }
+    const preferred = cachedManifestSchema.safeParse(fallback);
+    if (
+      !preferred.success ||
+      !snapshotCurrent(preferred.data) ||
+      (includeBadgeNames && (!preferred.data.complete || !containsBadgeNameResponse(preferred.data)))
+    ) {
+      const alternate = cachedManifestSchema.safeParse(
+        await cached(JSON.stringify(includeBadgeNames ? scope : [...scope, true])),
+      );
+      if (alternate.success && alternate.data.complete && snapshotCurrent(alternate.data)) fallback = alternate.data;
     }
     await pruneExpiredEligibilityManifests();
   } catch {
@@ -303,6 +309,8 @@ export async function prepareEligibilityManifest(
   if (source === "cache") return restore();
   try {
     const saved = cachedManifestSchema.safeParse(fallback);
+    const reusable =
+      saved.success && saved.data.complete && (!includeBadgeNames || containsBadgeNameResponse(saved.data));
     const downloaded = await downloadEligibilitySnapshot(
       slug,
       operatorUserId,
@@ -310,7 +318,7 @@ export async function prepareEligibilityManifest(
       roomId,
       enrollment,
       signal,
-      saved.success && saved.data.complete ? saved.data : undefined,
+      reusable ? saved.data : undefined,
       onProgress,
       includeBadgeNames,
     );
@@ -320,7 +328,7 @@ export async function prepareEligibilityManifest(
     let storageError: string | undefined;
     try {
       snapshot = cachedManifestSchema.parse(
-        await cached(key, downloaded, saved.success ? saved.data.snapshotId : undefined),
+        await cached(key, downloaded, reusable ? saved.data.snapshotId : undefined),
       );
     } catch {
       storageError =
@@ -359,9 +367,15 @@ export async function restoreEligibilityManifest(
     if (!scannerContextCurrent(context) || (await scannerUploadSuspended(context.operatorUserId, context.sessionId)))
       return null;
     let saved = cachedManifestSchema.safeParse(await cached(key));
-    if (!includeBadgeNames && (!saved.success || !snapshotCurrent(saved.data))) {
-      const named = cachedManifestSchema.safeParse(await cached(JSON.stringify([...scope, true])));
-      if (named.success && named.data.complete && snapshotCurrent(named.data)) saved = named;
+    if (
+      !saved.success ||
+      !snapshotCurrent(saved.data) ||
+      (includeBadgeNames && (!saved.data.complete || !containsBadgeNameResponse(saved.data)))
+    ) {
+      const alternate = cachedManifestSchema.safeParse(
+        await cached(JSON.stringify(includeBadgeNames ? scope : [...scope, true])),
+      );
+      if (alternate.success && alternate.data.complete && snapshotCurrent(alternate.data)) saved = alternate;
     }
     if (
       !saved.success ||

@@ -116,6 +116,7 @@ export function EventScannerCapture({
     operatorUserId,
     occurrenceId,
     action,
+    allowedActions,
     badgeCollection,
     collectorContext,
     epoch: scannerDevice.epoch,
@@ -323,8 +324,7 @@ export function EventScannerCapture({
     error: preparation.status.error,
     allowUnverified: !badgeCollection,
   });
-  const badgeNamesPrepared = eligibilityManifest.current?.badgeNamesPrepared;
-  const preparationStatus = { ...preparation.status, lastSync: syncHistory.lastSync, badgeNamesPrepared };
+  const preparationStatus = { ...preparation.status, lastSync: syncHistory.lastSync };
   function nextCollectionAttendee() {
     if (busy || cooldown.saving) return;
     collection.clear();
