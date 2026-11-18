@@ -12,7 +12,7 @@ export const openapi = fromHono(app);
 openapi.get("/", EventFormGet);
 openapi.patch("/", EventFormPatch);
 openapi.delete("/", EventFormDelete);
-openapi.get("/exports", EventFormResponsesExportGet);
+openapi.get("/submissions/exports", EventFormResponsesExportGet);
 openapi.get("/submissions", EventFormSubmissionsGet);
 openapi.get("/submissions/stats", EventFormSubmissionStatsGet);
 export default openapi;

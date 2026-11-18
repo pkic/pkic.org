@@ -18,21 +18,41 @@ import {
 
 export const FORM_SUBMISSIONS_SORT_COLUMNS = ["submitter", "status", "submitted_at"] as const;
 export const formAnswerKeySchema = formFieldInputSchema.shape.key;
+/** Decode the canonical answer-column sort token for contracts and SQL. */
+export function parseAnswerSort(value?: string): { key: string; desc: boolean } | null {
+  if (!value) return null;
+  const desc = value.startsWith("-");
+  const column = desc ? value.slice(1) : value;
+  if (!column.startsWith("answer:")) return null;
+  const key = formAnswerKeySchema.safeParse(column.slice(7));
+  return key.success ? { key: key.data, desc } : null;
+}
+
 export const formSubmissionsSortValueSchema = z
   .union([
     sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS),
     z
       .string()
       .max(88)
-      .refine(
-        (value) => {
-          const column = value.startsWith("-") ? value.slice(1) : value;
-          return column.startsWith("answer:") && formAnswerKeySchema.safeParse(column.slice(7)).success;
-        },
-        { message: "Unknown answer sort column" },
-      ),
+      .refine((value) => parseAnswerSort(value) !== null, {
+        message: "Unknown answer sort column",
+      }),
   ])
   .optional();
+
+export const formSubmissionExportColumnSchema = z.union([
+  z.enum(FORM_SUBMISSIONS_SORT_COLUMNS),
+  z
+    .string()
+    .max(87)
+    .refine(
+      (value) => {
+        const answer = parseAnswerSort(value);
+        return answer !== null && !answer.desc;
+      },
+      { message: "Unknown export column" },
+    ),
+]);
 
 export const FORMS_SORT_COLUMNS = [
   "key",
@@ -140,7 +160,15 @@ export const formSubmissionsExportQuerySchema = formSubmissionsQuerySchema
     offset: true,
     responseId: true,
   })
-  .extend({ field: formAnswerKeySchema.optional() });
+  .extend({
+    field: formAnswerKeySchema.optional(),
+    columns: z
+      .string()
+      .max(20000)
+      .transform((value) => value.split(","))
+      .pipe(z.array(formSubmissionExportColumnSchema).min(1).max(203))
+      .optional(),
+  });
 export type FormSubmissionsExportQuery = z.infer<typeof formSubmissionsExportQuerySchema>;
 export type FormSubmissionsQuery = z.infer<typeof formSubmissionsQuerySchema>;
 

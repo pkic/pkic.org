@@ -1,4 +1,4 @@
-import { submissionAnswerFilter } from "./answer-query";
+import { NORMALIZED_SUBMISSION_ANSWERS_CTE, submissionAnswerFilter } from "./answer-query";
 import { selectedAttendanceTypeSql } from "../registrations/day-states";
 import { REGISTRATION_ORGANIZATION_SQL, registrationOrganizationSql } from "../registrations/selected-identity";
 /**
@@ -437,7 +437,7 @@ export async function resolveFormSubmissionPopulation(
   return {
     form,
     placement,
-    cte: `${population.cte}, merged AS (SELECT ${MERGED_SUBMISSION_COLUMNS}, submitter FROM response_candidates ${answer.sql})`,
+    cte: `${population.cte}, ${NORMALIZED_SUBMISSION_ANSWERS_CTE}, merged AS (SELECT ${MERGED_SUBMISSION_COLUMNS}, submitter FROM response_candidates ${answer.sql})`,
     bindings: [...population.bindings, ...answer.bindings],
   };
 }

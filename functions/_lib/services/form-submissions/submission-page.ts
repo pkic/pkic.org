@@ -1,10 +1,14 @@
-import { submissionAnswerSql } from "./answer-query";
+import { resolveAnswerSortOptions, submissionAnswerSortSql } from "./answer-sort";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { all } from "../../db/queries";
 import { resolveOrderBy } from "../../db/sort";
 import { parseJsonSafe } from "../../utils/json";
-import { formSubmissionSchema, FORM_SUBMISSIONS_SORT_COLUMNS } from "../../../../assets/shared/schemas/form-management";
+import {
+  formSubmissionSchema,
+  parseAnswerSort,
+  FORM_SUBMISSIONS_SORT_COLUMNS,
+} from "../../../../assets/shared/schemas/form-management";
 import type { DatabaseLike } from "../../types";
 import type { SubmissionPayload, ListFormSubmissionsParams, ListFormSubmissionsResult } from "./types";
 import {
@@ -33,20 +37,26 @@ function submitterFromRow(row: MergedSubmissionRow): SubmissionPayload["submitte
 }
 
 /** Loads native form answers for only the already bounded page of rows. */
-async function attachSubmissionAnswers(db: DatabaseLike, rows: MergedSubmissionRow[]): Promise<SubmissionPayload[]> {
+async function attachSubmissionAnswers(
+  db: DatabaseLike,
+  rows: MergedSubmissionRow[],
+  answerKeys?: string[],
+): Promise<SubmissionPayload[]> {
   const submissionIds = rows.filter((row) => row.source === "submission").map((row) => row.source_id);
   const submissionFilter = buildD1JsonMembershipFilter("a.submission_id", submissionIds);
-  const answerRows = submissionIds.length
-    ? await all<AnswerRow>(
-        db,
-        `SELECT a.submission_id, COALESCE(ff.key, a.field_key) AS field_key, a.data_json
+  const fieldFilter = answerKeys ? buildD1JsonMembershipFilter("COALESCE(ff.key, a.field_key)", answerKeys) : null;
+  const answerRows =
+    submissionIds.length && (!answerKeys || answerKeys.length > 0)
+      ? await all<AnswerRow>(
+          db,
+          `SELECT a.submission_id, COALESCE(ff.key, a.field_key) AS field_key, a.data_json
          FROM form_submission_answers a
          LEFT JOIN form_fields ff ON ff.id = a.field_id
-         WHERE ${submissionFilter.sql}
+         WHERE ${submissionFilter.sql}${fieldFilter ? ` AND ${fieldFilter.sql}` : ""}
          ORDER BY a.submission_id, COALESCE(ff.key, a.field_key)`,
-        submissionFilter.bindings,
-      )
-    : [];
+          [...submissionFilter.bindings, ...(fieldFilter?.bindings ?? [])],
+        )
+      : [];
 
   const answersBySubmission = new Map<string, Record<string, unknown>>();
   for (const answer of answerRows) {
@@ -65,7 +75,11 @@ async function attachSubmissionAnswers(db: DatabaseLike, rows: MergedSubmissionR
     answers:
       row.source === "submission"
         ? (answersBySubmission.get(row.source_id) ?? {})
-        : parseJsonSafe<Record<string, unknown>>(row.answers_json, {}),
+        : Object.fromEntries(
+            Object.entries(parseJsonSafe<Record<string, unknown>>(row.answers_json, {})).filter(
+              ([key]) => !answerKeys || answerKeys.includes(key),
+            ),
+          ),
   }));
 }
 
@@ -73,6 +87,8 @@ async function attachSubmissionAnswers(db: DatabaseLike, rows: MergedSubmissionR
 export function buildFormSubmissionsPageQuery(
   population: FormSubmissionPopulation,
   params: Pick<ListFormSubmissionsParams, "sort" | "limit" | "offset" | "responseId">,
+  options: { value: string; label: string }[] = [],
+  answerKeys?: string[],
 ): OffsetPageQuery {
   let orderBy = resolveOrderBy(
     params.sort,
@@ -80,16 +96,27 @@ export function buildFormSubmissionsPageQuery(
     "ORDER BY submitted_at DESC",
     "source ASC, source_id ASC",
   );
-  const answerSort = params.sort?.replace(/^-/, "").startsWith("answer:")
-    ? submissionAnswerSql(params.sort.replace(/^-/, "").slice(7))
-    : null;
+  const parsedSort = parseAnswerSort(params.sort);
+  const answerSort = parsedSort ? submissionAnswerSortSql(parsedSort.key, options) : null;
   if (answerSort) {
-    orderBy = `ORDER BY answer_sort ${params.sort?.startsWith("-") ? "DESC" : "ASC"}, source ASC, source_id ASC`;
+    orderBy = `ORDER BY answer_sort IS NULL ASC, answer_sort ${parsedSort?.desc ? "DESC" : "ASC"}, source ASC, source_id ASC`;
   }
+  const fieldFilter = answerKeys ? buildD1JsonMembershipFilter("a.field_key", answerKeys) : null;
+  const projection = fieldFilter
+    ? MERGED_SUBMISSION_COLUMNS.replace(
+        "answers_json",
+        `(SELECT json_group_object(a.field_key, json(a.data_json))
+        FROM normalized_answers a WHERE a.submission_id = merged.id AND ${fieldFilter.sql}) AS answers_json`,
+      )
+    : MERGED_SUBMISSION_COLUMNS;
   const pageQuery = selectFromSubmissionPopulation(
     population,
-    `SELECT ${MERGED_SUBMISSION_COLUMNS}${answerSort ? `, LOWER((SELECT group_concat(CAST(value AS TEXT), ', ') FROM json_each((${answerSort.sql})))) AS answer_sort` : ""} FROM merged${params.responseId ? " WHERE id = ?" : ""}`,
-    [...(answerSort?.bindings ?? []), ...(params.responseId ? [params.responseId] : [])],
+    `SELECT ${projection}${answerSort ? `, ${answerSort.sql} AS answer_sort` : ""} FROM merged${params.responseId ? " WHERE id = ?" : ""}`,
+    [
+      ...(fieldFilter?.bindings ?? []),
+      ...(answerSort?.bindings ?? []),
+      ...(params.responseId ? [params.responseId] : []),
+    ],
   );
   return {
     ...pageQuery,
@@ -104,9 +131,25 @@ export async function listFormSubmissions(
   params: ListFormSubmissionsParams,
 ): Promise<ListFormSubmissionsResult> {
   const population = await resolveFormSubmissionPopulation(db, params);
-  const page = await queryPage<MergedSubmissionRow>(db, buildFormSubmissionsPageQuery(population, params));
+  return readFormSubmissionsPage(db, population, params);
+}
+
+/** The export checks its population count before reading or hydrating any rows. */
+export async function readFormSubmissionsPage(
+  db: DatabaseLike,
+  population: FormSubmissionPopulation,
+  params: ListFormSubmissionsParams,
+  answerKeys?: string[],
+): Promise<ListFormSubmissionsResult> {
+  const options = await resolveAnswerSortOptions(db, population.form.id, params.sort);
+  const page = await queryPage<MergedSubmissionRow>(
+    db,
+    buildFormSubmissionsPageQuery(population, params, options, answerKeys),
+  );
   const submissions = page.rows.length
-    ? (await attachSubmissionAnswers(db, page.rows)).map((submission) => formSubmissionSchema.parse(submission))
+    ? (await attachSubmissionAnswers(db, page.rows, answerKeys)).map((submission) =>
+        formSubmissionSchema.parse(submission),
+      )
     : [];
 
   return {

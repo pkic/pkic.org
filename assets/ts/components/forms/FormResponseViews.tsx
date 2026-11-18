@@ -123,11 +123,19 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
       paginate
       initialSort="-submitted_at"
       params={params}
-      toolbar={(actions, query) => {
+      toolbar={(actions, query, _sorting, { hidden }) => {
         const selected = fields.find((field) => field.key === query.answerField);
         const options = selected?.options ?? [];
         const exportQuery = formSubmissionsExportQuerySchema.safeParse({
           ...query,
+          columns: [
+            "submitter",
+            ...fields
+              .filter((field) => !hidden.has(field.label) && (!selected || field.key === selected.key))
+              .map((field) => `answer:${field.key}`),
+            ...(!selected && !hidden.has("Submitted") ? ["submitted_at"] : []),
+            ...(!selected && !hidden.has("Status") ? ["status"] : []),
+          ].join(","),
           ...(selected ? { field: selected.key } : {}),
         });
         const exportParams = new URLSearchParams(
@@ -164,7 +172,16 @@ export function FormSubmissionsTable<Response extends { submissions: FormSubmiss
           </>
         );
       }}
-      empty={<EmptyState title="No responses found" body="Try changing your search or filters." />}
+      empty={(query) => (
+        <EmptyState
+          title="No responses found"
+          body={
+            Object.entries(query).some(([key, value]) => !["limit", "offset", "sort"].includes(key) && Boolean(value))
+              ? "Try changing your search or filters."
+              : "Nothing has been submitted through this form yet."
+          }
+        />
+      )}
       rowKey={(submission) => submission.id}
       columns={[
         {

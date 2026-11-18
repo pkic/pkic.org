@@ -106,6 +106,7 @@ test("response answer filters, keyboard sorting, and venue CSV links work at des
     answerField: "dietary_restrictions",
     answerValue: "vegan",
     field: "dietary_restrictions",
+    columns: ["submitter", "answer:dietary_restrictions"],
   });
   const options = responses.getByRole("button", { name: "Dietary restrictions column options", exact: true });
   await options.focus();
@@ -121,6 +122,15 @@ test("response answer filters, keyboard sorting, and venue CSV links work at des
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: testInfo.outputPath(`form-responses-${width}.png`) });
   }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await options.click();
+  await page.getByRole("menuitem", { name: "Hide column", exact: true }).click();
+  await expect(options).toHaveCount(0);
+  const hiddenQuery = formSubmissionsExportQuerySchema.parse(
+    Object.fromEntries(new URL((await download.getAttribute("href"))!, page.url()).searchParams),
+  );
+  expect(hiddenQuery.columns).toEqual(["submitter"]);
+  await page.screenshot({ path: testInfo.outputPath("form-responses-hidden-column.png") });
   await page.reload();
   await expect(responses.getByLabel("Filter Dietary restrictions", { exact: true })).toHaveValue("vegan");
 });

@@ -153,6 +153,7 @@ export function FormManagementDetail({
   notify,
   submissionParams,
   formEndpoint,
+  exportEndpoint,
   showBack = true,
   responseTabLabel = "Responses",
 }: {
@@ -163,6 +164,7 @@ export function FormManagementDetail({
   notify?: (message: string, kind: "success" | "error") => void;
   submissionParams?: Record<string, string>;
   formEndpoint?: string;
+  exportEndpoint?: string;
   showBack?: boolean;
   responseTabLabel?: string;
 }) {
@@ -326,7 +328,7 @@ export function FormManagementDetail({
                 <FormSubmissionsTable
                   fields={detail.fields}
                   endpoint={`${base}/submissions`}
-                  exportEndpoint={formEndpoint?.startsWith("/api/v1/events/") ? `${base}/exports` : undefined}
+                  exportEndpoint={exportEndpoint}
                   responseSchema={formSubmissionsResponseSchema}
                   params={submissionParams}
                   onOpen={(submission) => setResponseId(submission.id)}
@@ -526,6 +528,7 @@ export function EventFormResponses({ eventSlug, purpose }: { eventSlug: string; 
         onBack={() => undefined}
         submissionParams={submissionParams}
         formEndpoint={`/api/v1/events/${encodeURIComponent(eventSlug)}/forms/${encodeURIComponent(formKey)}`}
+        exportEndpoint={`/api/v1/events/${encodeURIComponent(eventSlug)}/forms/${encodeURIComponent(formKey)}/submissions/exports`}
       />
     </div>
   );

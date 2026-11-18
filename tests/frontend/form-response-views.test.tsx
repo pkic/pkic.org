@@ -215,7 +215,7 @@ describe("the submissions table", () => {
       <FormSubmissionsTable
         fields={[field()]}
         endpoint="/api/v1/events/pqc/forms/f/submissions"
-        exportEndpoint="/api/v1/events/pqc/forms/f/exports"
+        exportEndpoint="/api/v1/events/pqc/forms/f/submissions/exports"
         params={{ status: "registered", attendanceType: "in_person" }}
         responseSchema={submissionsSchema}
         onOpen={vi.fn()}
@@ -240,7 +240,7 @@ describe("the submissions table", () => {
     const link = page.querySelector<HTMLAnchorElement>('a[aria-label="Download Priority (CSV)"]')!;
     expect(link).toBeTruthy();
     const url = new URL(link.href);
-    expect(url.pathname).toBe("/api/v1/events/pqc/forms/f/exports");
+    expect(url.pathname).toBe("/api/v1/events/pqc/forms/f/submissions/exports");
     const exported = formSubmissionsExportQuerySchema.parse(Object.fromEntries(url.searchParams));
     expect(exported.answerField).toBe(query.answerField);
     expect(exported.answerValue).toBe(query.answerValue);
@@ -251,6 +251,26 @@ describe("the submissions table", () => {
     await choose("Filter answer field", "");
     const cleared = formSubmissionsQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams));
     expect(cleared.answerValue).toBeUndefined();
+  });
+
+  it.each([false, true])("explains empty responses with active filters: %s", async (filtered) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ submissions: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
+    );
+    const page = mount(
+      <FormSubmissionsTable
+        fields={[field()]}
+        endpoint="/api/v1/forms/f/submissions"
+        params={filtered ? { status: "submitted" } : undefined}
+        responseSchema={submissionsSchema}
+        onOpen={vi.fn()}
+      />,
+    );
+    await settle();
+    expect(page.textContent).toContain(
+      filtered ? "Try changing your search or filters." : "Nothing has been submitted through this form yet.",
+    );
   });
 
   it("keeps a refused bookmarked query visible and disables its CSV download", async () => {
@@ -265,7 +285,7 @@ describe("the submissions table", () => {
         <FormSubmissionsTable
           fields={[field()]}
           endpoint="/api/v1/events/pqc/forms/f/submissions"
-          exportEndpoint="/api/v1/events/pqc/forms/f/exports"
+          exportEndpoint="/api/v1/events/pqc/forms/f/submissions/exports"
           responseSchema={submissionsSchema}
           onOpen={vi.fn()}
         />,
