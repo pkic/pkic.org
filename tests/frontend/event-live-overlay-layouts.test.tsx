@@ -357,7 +357,9 @@ describe("scene editor", () => {
     await act(async () => {
       [...document.querySelectorAll("button")].find((b) => b.textContent === "Rename")!.click();
     });
-    expect(root!.querySelector(".pk-scenes__editor > .pk-panel:first-child .pk-panel__title")!.textContent).toBe("Keynote");
+    expect(root!.querySelector(".pk-scenes__editor > .pk-panel:first-child .pk-panel__title")!.textContent).toBe(
+      "Keynote",
+    );
     await save();
     expect(written[0]!.url).toBe("/api/v1/events/conference/settings/live/layouts/talk");
     expect(written[0]!.body.name).toBe("Keynote");
