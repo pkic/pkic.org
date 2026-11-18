@@ -3,7 +3,7 @@ import { LIVE_SPEAKER_MESSAGE_MAX_LENGTH } from "../../assets/shared/live-room-o
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
-import { LIVE_OVERLAY_PRESET_LAYOUTS } from "../../assets/shared/live-overlay-layout-presets";
+import { LIVE_OVERLAY_STANDARD_ELEMENTS } from "../../assets/shared/live-overlay-layout-presets";
 import {
   LIVE_OVERLAY_ELEMENTS,
   type LiveOverlayElement,
@@ -64,7 +64,7 @@ const ON_STAGE = {
   scene: null,
 };
 const SESSION_TIMER = liveSnapshot().timers[0]!;
-const FULL_FRAME = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
+const FULL_FRAME = LIVE_OVERLAY_STANDARD_ELEMENTS;
 
 /** A saved layout that shows only the given elements, the first of them in the given box. */
 function savedLayout(
@@ -84,9 +84,12 @@ function savedLayout(
   };
 }
 
+/** A saved scene that shows only the speaker's name, in the standard box. */
+const NAME_ONLY = savedLayout("name-only", ["lowerThird"], FULL_FRAME.lowerThird);
+
 function mountOverlay(
   view: LiveOverlayView,
-  layout = "full-frame",
+  layout = "talk",
   overlayLayouts: LiveOverlayLayoutGeometry[] = [],
   graphics: LiveOverlayGraphics = ALL_LIVE_OVERLAY_GRAPHICS,
 ) {
@@ -163,7 +166,7 @@ describe("broadcast overlays", () => {
   });
 
   it("names a host's or moderator's role above the name, and no role for a speaker", () => {
-    const { host, live } = mountOverlay("program", "lower-third");
+    const { host, live } = mountOverlay("program", "name-only", [NAME_ONLY]);
     expect(host.querySelector(".pk-live-overlay__role")).toBeNull();
     void act(() =>
       live.latest().deliver({
@@ -176,7 +179,7 @@ describe("broadcast overlays", () => {
   });
 
   it("renders the lower third from the approved credit", () => {
-    const { host } = mountOverlay("program", "lower-third");
+    const { host } = mountOverlay("program", "name-only", [NAME_ONLY]);
     expect(host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
     const title = host.querySelector(".pk-live-overlay__title")!;
     // One line: the title and organization of the identity the speaker acts as.
@@ -189,7 +192,7 @@ describe("broadcast overlays", () => {
     expect(host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
     expect(host.querySelector(".pk-live-overlay__lower-third-bars")?.getAttribute("viewBox")).toBe("0 0 2500 417");
     expect(host.querySelector(".pk-live-overlay__timer")).toBeNull();
-    const scene = mountOverlay("program", "lower-third");
+    const scene = mountOverlay("program", "name-only", [NAME_ONLY]);
     expect(scene.host.querySelector(".pk-live-overlay__question-text")).toBeNull();
     expect(scene.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
     void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, lowerThird: null } }));
@@ -198,10 +201,10 @@ describe("broadcast overlays", () => {
   });
 
   it("draws only the graphics a source shows, or all but those it hides", () => {
-    const only = mountOverlay("program", "full-frame", [], { show: ["question"], hide: null, crop: false });
+    const only = mountOverlay("program", "talk", [], { show: ["question"], hide: null, crop: false });
     expect(only.host.querySelector(".pk-live-overlay__question-text")).not.toBeNull();
     expect(only.host.querySelector(".pk-live-overlay__name")).toBeNull();
-    const except = mountOverlay("program", "full-frame", [], { show: null, hide: ["question"], crop: false });
+    const except = mountOverlay("program", "talk", [], { show: null, hide: ["question"], crop: false });
     expect(except.host.querySelector(".pk-live-overlay__question-text")).toBeNull();
     expect(except.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
     expect(except.host.querySelector(".pk-live-overlay__frame")?.hasAttribute("data-crop")).toBe(false);
@@ -209,13 +212,13 @@ describe("broadcast overlays", () => {
 
   it("crops the page to the one graphic left, and ignores crop while several are", () => {
     const box = FULL_FRAME.lowerThird;
-    const cropped = mountOverlay("program", "full-frame", [], { show: ["lowerThird"], hide: null, crop: true });
+    const cropped = mountOverlay("program", "talk", [], { show: ["lowerThird"], hide: null, crop: true });
     const frame = cropped.host.querySelector<HTMLElement>(".pk-live-overlay__frame")!;
     expect(frame.hasAttribute("data-crop")).toBe(true);
     expect(frame.style.getPropertyValue("--crop-w")).toBe(String(box.w));
     expect(frame.style.getPropertyValue("--crop-y")).toBe(String(box.y));
     expect(cropped.host.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
-    const several = mountOverlay("program", "full-frame", [], {
+    const several = mountOverlay("program", "talk", [], {
       show: ["lowerThird", "question"],
       hide: null,
       crop: true,
@@ -228,7 +231,7 @@ describe("broadcast overlays", () => {
       scope.querySelector('[data-overlay-element="background"] .pk-live-board--ground');
     const onGround = (scope: HTMLElement) =>
       scope.querySelector('[data-overlay-element="question"]')?.hasAttribute("data-on-ground");
-    // Full frame leaves the background out, so the camera shows and a board keeps its own field.
+    // Talk leaves the background out, so the camera shows and a board keeps its own field.
     const plain = mountOverlay("program");
     expect(ground(plain.host)).toBeNull();
     expect(onGround(plain.host)).toBe(false);
@@ -376,7 +379,7 @@ describe("broadcast overlays", () => {
   });
 
   it("clears the lower third when the operator takes it down", () => {
-    const { host, live } = mountOverlay("program", "lower-third");
+    const { host, live } = mountOverlay("program", "name-only", [NAME_ONLY]);
     void act(() => live.latest().deliver({ type: "stage.changed", stage: { ...ON_STAGE, lowerThird: null } }));
     expect(host.querySelector(".pk-live-overlay__name")).toBeNull();
   });

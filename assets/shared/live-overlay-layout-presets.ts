@@ -14,12 +14,11 @@ import {
 } from "./schemas/live-overlay-layout";
 
 /**
- * The built-in layouts, as shared reference data. Boxes are authored in
- * pixels of the 1920 × 1080 frame and stored as fractions of it. Full frame's
- * boxes are the event's shared positions until organizers move them, and a
- * built-in layout shares every element it places where Full frame does; an
- * element a preset places differently (side by side, close-up, panel) is the
- * preset's own.
+ * The built-in scenes, as shared reference data. Boxes are authored in
+ * pixels of the 1920 × 1080 frame and stored as fractions of it. The standard
+ * boxes below are the event's shared positions until organizers move them,
+ * and a built-in scene shares every element it places there; an element a
+ * scene places differently (a column, the panel) is the scene's own.
  */
 
 type Anchor = Pick<LiveOverlayElementPlacement, "horizontal" | "vertical">;
@@ -128,35 +127,70 @@ function sharing(elements: LiveOverlayLayoutElements): LiveOverlayLayoutElements
   ) as LiveOverlayLayoutElements;
 }
 
+/** Puts the listed graphics on the conference field, each in its own box. */
+function grounded(
+  elements: LiveOverlayLayoutElements,
+  onField: readonly LiveOverlayElement[],
+): LiveOverlayLayoutElements {
+  return Object.fromEntries(
+    LIVE_OVERLAY_ELEMENTS.map((element) => [
+      element,
+      onField.includes(element) ? { ...elements[element], background: true } : elements[element],
+    ]),
+  ) as LiveOverlayLayoutElements;
+}
+
+/** What every scene keeps for the speaker: the stage display and its messages, never on the stream. */
+const STAGE: readonly LiveOverlayElement[] = ["stageDisplay", "stageMessage"];
+/** The boards a question round shows, one at a time in the same place. */
+const QUESTION_BOARDS: readonly LiveOverlayElement[] = ["question", "topQuestions", "poll"];
+/**
+ * A column of boards at one side, the camera beside it. The ticker keeps the
+ * full width and the boards keep clear of it; there is no scene-wide
+ * background, each board carries its own.
+ */
+const column = (side: "left" | "right"): LiveOverlayLayoutElements => ({
+  ...FULL_FRAME,
+  ...boardColumn(side),
+  background: FULL_FRAME.background,
+  ticker: FULL_FRAME.ticker,
+});
+
+/**
+ * The scenes every event starts with, in the studio's order. Talk shows every
+ * graphic; the others show only their own, the boards on the conference field.
+ */
 const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLayoutElements }> = {
-  "full-frame": { name: "Full frame", elements: FULL_FRAME },
-  "lower-third": { name: "Lower third only", elements: only(FULL_FRAME, ["lowerThird"]) },
-  /** The boards in a column on the left, the camera or slides beside them. */
-  "side-by-side": { name: "Graphics on the left", elements: { ...FULL_FRAME, ...boardColumn("left") } },
-  /** The boards in a column on the right, the camera or slides beside them. */
-  "side-by-side-right": { name: "Graphics on the right", elements: { ...FULL_FRAME, ...boardColumn("right") } },
-  /** A speaker close-up: the name and the time, nothing over the face. */
-  "close-up": {
-    name: "Close-up",
-    elements: only(
-      { ...FULL_FRAME, lowerThird: box(48, 824, 1056, 176, LEFT_BOTTOM), timer: box(1512, 48, 360, 128, RIGHT_TOP) },
-      ["lowerThird", "timer", "stageDisplay", "stageMessage"],
+  /**
+   * A talk, and the event's default: every graphic at its standard box, so
+   * whatever an operator puts on shows. Loading it puts the speaker's name,
+   * the time and the ticker on.
+   */
+  talk: { name: "Talk", elements: FULL_FRAME },
+  /** Questions in a column on the right, the camera beside them. */
+  questions: {
+    name: "Q&A",
+    elements: grounded(
+      only(column("right"), [...QUESTION_BOARDS, "lowerThird", "timer", "ticker", ...STAGE]),
+      QUESTION_BOARDS,
     ),
   },
   /** A panel on stage: the panelists across the lower half, the question in the upper half, edge to edge. */
   panel: {
     name: "Panel",
-    elements: only(
-      {
-        ...FULL_FRAME,
-        panelists: box(0, 540, 1920, 540, CENTER_BOTTOM),
-        question: box(0, 0, 1920, 540, { horizontal: "center", vertical: "top" }),
-        timer: box(1512, 48, 360, 128, RIGHT_TOP),
-      },
-      ["background", "panelists", "question", "timer", "ticker", "stageDisplay", "stageMessage"],
+    elements: grounded(
+      only(
+        {
+          ...FULL_FRAME,
+          panelists: box(0, 540, 1920, 540, CENTER_BOTTOM),
+          question: box(0, 0, 1920, 540, { horizontal: "center", vertical: "top" }),
+          timer: box(1512, 48, 360, 128, RIGHT_TOP),
+        },
+        ["panelists", "question", "timer", "ticker", ...STAGE],
+      ),
+      ["panelists", "question"],
     ),
   },
-  "ticker-only": { name: "Ticker only", elements: only(FULL_FRAME, ["ticker"]) },
   /**
    * A break, over the sponsors' clips or a holding slide: only the time until
    * the program is back, large in the bottom-right corner above the ticker,
@@ -164,9 +198,36 @@ const PRESETS: Record<LiveOverlayPreset, { name: string; elements: LiveOverlayLa
    */
   break: {
     name: "Break",
-    elements: only({ ...FULL_FRAME, timer: box(1392, 758, 480, 172, RIGHT_BOTTOM) }, ["timer", "ticker"]),
+    elements: only({ ...FULL_FRAME, timer: box(1392, 758, 480, 172, RIGHT_BOTTOM) }, ["timer", "ticker", ...STAGE]),
+  },
+  /** The check-in code in a column on the left, large enough to scan from the room. */
+  "check-in": {
+    name: "Check-in",
+    elements: grounded(only(column("left"), ["checkIn", "timer", "ticker", ...STAGE]), ["checkIn"]),
+  },
+  /** One board over the whole frame on the conference field: a question, the poll, the panel or the schedule. */
+  "full-board": {
+    name: "Full board",
+    elements: grounded(
+      only({ ...FULL_FRAME, schedule: FILL }, [
+        ...QUESTION_BOARDS,
+        "panelists",
+        "chat",
+        "schedule",
+        "timer",
+        "ticker",
+        ...STAGE,
+      ]),
+      [...QUESTION_BOARDS, "panelists", "chat", "schedule"],
+    ),
   },
 };
+
+/**
+ * Every graphic at its standard box, all shown: the base a scene starts
+ * from, and what previews and tests place a graphic in on its own.
+ */
+export const LIVE_OVERLAY_STANDARD_ELEMENTS: LiveOverlayLayoutElements = sharing(FULL_FRAME);
 
 export const LIVE_OVERLAY_PRESET_LAYOUTS = Object.fromEntries(
   LIVE_OVERLAY_PRESETS.map((preset) => [preset, { ...PRESETS[preset], elements: sharing(PRESETS[preset].elements) }]),

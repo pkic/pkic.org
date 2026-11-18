@@ -32,7 +32,7 @@ import { layoutSlugFor } from "../assets/ts/member-flows/portal/sections/events/
 import { layoutLabelSides } from "../assets/ts/member-flows/portal/sections/events/detail/settings/live-layouts/overlay-layout-labels";
 import { LIVE_OVERLAY_ELEMENT_LABELS } from "../assets/shared/schemas/live-overlay-layout";
 
-const FULL_FRAME = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
+const TALK = LIVE_OVERLAY_PRESET_LAYOUTS["talk"].elements;
 const placement = (box: Box, anchor: Partial<LiveOverlayElementPlacement> = {}): LiveOverlayElementPlacement => ({
   visible: true,
   shared: false,
@@ -97,15 +97,16 @@ describe("built-in layouts", () => {
       expect(liveOverlayLayoutElementsSchema.safeParse(LIVE_OVERLAY_PRESET_LAYOUTS[preset].elements).success).toBe(
         true,
       );
-    expect(resolveLiveOverlayLayout([], "no-such-layout")).toBe(FULL_FRAME);
-    const saved = { slug: "keynote", name: "Keynote", elements: LIVE_OVERLAY_PRESET_LAYOUTS["ticker-only"].elements };
+    expect(resolveLiveOverlayLayout([], "no-such-layout")).toBe(TALK);
+    const saved = { slug: "keynote", name: "Keynote", elements: LIVE_OVERLAY_PRESET_LAYOUTS["break"].elements };
     expect(resolveLiveOverlayLayout([saved], "keynote")).toBe(saved.elements);
-    expect(resolveLiveOverlayLayout([saved], "lower-third").lowerThird.visible).toBe(true);
-    expect(resolveLiveOverlayLayout([saved], "lower-third").question.visible).toBe(false);
-    expect(liveOverlayLayoutChoices([saved, { ...saved, slug: "panel", name: "Our panel" }]).slice(-4)).toEqual([
+    expect(resolveLiveOverlayLayout([saved], "check-in").checkIn.visible).toBe(true);
+    expect(resolveLiveOverlayLayout([saved], "check-in").question.visible).toBe(false);
+    expect(liveOverlayLayoutChoices([saved, { ...saved, slug: "panel", name: "Our panel" }]).slice(-5)).toEqual([
       { slug: "panel", name: "Our panel" },
-      { slug: "ticker-only", name: "Ticker only" },
       { slug: "break", name: "Break" },
+      { slug: "check-in", name: "Check-in" },
+      { slug: "full-board", name: "Full board" },
       { slug: "keynote", name: "Keynote" },
     ]);
   });
@@ -163,53 +164,53 @@ describe("editing a box", () => {
   });
 
   it("moves a box's label to its bottom edge when it would cover another box's label", () => {
-    const sides = layoutLabelSides(FULL_FRAME, ["reactions", "timer", "ticker"], LIVE_OVERLAY_ELEMENT_LABELS);
+    const sides = layoutLabelSides(TALK, ["reactions", "timer", "ticker"], LIVE_OVERLAY_ELEMENT_LABELS);
     expect(sides).toEqual({ reactions: "top", timer: "bottom", ticker: "top" });
   });
 
   it("names a new layout for source links, numbered when the name is taken", () => {
     expect(layoutSlugFor("Keynote — Main Hall", new Set())).toBe("keynote-main-hall");
-    expect(layoutSlugFor("Full frame", new Set(["full-frame"]))).toBe("full-frame-2");
+    expect(layoutSlugFor("Talk", new Set(["talk"]))).toBe("talk-2");
     expect(layoutSlugFor("!!!", new Set())).toBe("layout");
   });
 });
 
 describe("a graphic a board covers", () => {
-  const fullFrame = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
+  const talk = LIVE_OVERLAY_PRESET_LAYOUTS["talk"].elements;
   const onAir = (stage: Partial<LiveStage>): LiveStage => ({ ...EMPTY_LIVE_STAGE, ...stage }) as LiveStage;
   const schedule = { config: {} } as unknown as LiveStage["schedule"];
   const question = { id: "q1" } as unknown as LiveStage["question"];
 
   it("names the full-screen question that hides Up next, and nothing once the question is off", () => {
-    expect(liveOverlayCoveredBy(onAir({ schedule, question }), fullFrame, "schedule")).toBe("question");
-    expect(liveOverlayCoveredBy(onAir({ schedule }), fullFrame, "schedule")).toBeNull();
+    expect(liveOverlayCoveredBy(onAir({ schedule, question }), talk, "schedule")).toBe("question");
+    expect(liveOverlayCoveredBy(onAir({ schedule }), talk, "schedule")).toBeNull();
   });
 
   it("never reports a graphic drawn above the board, such as a timer over a question", () => {
     const timerGraphics = [{ timerId: "t1" }] as unknown as LiveStage["timerGraphics"];
-    expect(liveOverlayCoveredBy(onAir({ question, timerGraphics }), fullFrame, "timer")).toBeNull();
+    expect(liveOverlayCoveredBy(onAir({ question, timerGraphics }), talk, "timer")).toBeNull();
   });
 
-  it("keeps Up next and the check-in code clear of each other in Full frame", () => {
+  it("keeps Up next and the check-in code clear of each other in Talk", () => {
     const checkIn = { selection: {} } as unknown as LiveStage["checkIn"];
-    expect(liveOverlayCoveredBy(onAir({ schedule, checkIn }), fullFrame, "schedule")).toBeNull();
+    expect(liveOverlayCoveredBy(onAir({ schedule, checkIn }), talk, "schedule")).toBeNull();
   });
 });
 
 describe("stacking a scene's graphics", () => {
   it("keeps the built-in order until a scene orders them, and saves a move as the scene's own stack", () => {
-    expect(liveProgramLayers(FULL_FRAME)).toEqual([...LIVE_PROGRAM_LAYER_ORDER]);
+    expect(liveProgramLayers(TALK)).toEqual([...LIVE_PROGRAM_LAYER_ORDER]);
     // Up in the editor's front-first list: Up next draws in front of the check-in code.
-    const moved = moveLiveProgramLayer(FULL_FRAME, "schedule", -1);
+    const moved = moveLiveProgramLayer(TALK, "schedule", -1);
     const stack = liveProgramLayers(moved);
     expect(stack.indexOf("schedule")).toBe(stack.indexOf("checkIn") + 1);
     expect(liveOverlayLayoutElementsSchema.parse(moved).schedule.layer).toBe(stack.indexOf("schedule"));
     // The front of the list cannot move further up.
-    expect(moveLiveProgramLayer(FULL_FRAME, "reactions", -1)).toBe(FULL_FRAME);
+    expect(moveLiveProgramLayer(TALK, "reactions", -1)).toBe(TALK);
   });
 
   it("reads a scene saved before backgrounds with the background hidden, so it looks as it did", () => {
-    const { background: _added, ...saved } = FULL_FRAME;
+    const { background: _added, ...saved } = TALK;
     const read = liveOverlayLayoutElementsSchema.parse(saved);
     expect(read.background.visible).toBe(false);
     expect(liveProgramLayers(read)[0]).toBe("background");
@@ -218,14 +219,14 @@ describe("stacking a scene's graphics", () => {
 
   it("lets a board drawn in front hide a graphic only from where the scene stacks it", () => {
     const onAir = { ...EMPTY_LIVE_STAGE, schedule: { config: {} }, question: { id: "q1" } } as unknown as LiveStage;
-    const scheduleInFront = moveLiveProgramLayer(moveLiveProgramLayer(FULL_FRAME, "schedule", -1), "schedule", -1);
-    expect(liveOverlayCoveredBy(onAir, FULL_FRAME, "schedule")).toBe("question");
+    const scheduleInFront = moveLiveProgramLayer(moveLiveProgramLayer(TALK, "schedule", -1), "schedule", -1);
+    expect(liveOverlayCoveredBy(onAir, TALK, "schedule")).toBe("question");
     expect(liveOverlayCoveredBy(onAir, scheduleInFront, "schedule")).toBeNull();
   });
 
   it("keeps every graphic clear of the ticker while it is on air, boards flush and floating graphics with a gap, and gives the full height back once it is off", () => {
     const scene = {
-      ...FULL_FRAME,
+      ...TALK,
       topQuestions: placement(px(0, 0, 1920, 1080)),
       reactions: placement(px(0, 0, 1920, 1080)),
     };

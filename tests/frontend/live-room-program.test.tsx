@@ -23,7 +23,7 @@ describe("continuous physical-room source", () => {
       render(
         <LiveProgramOverlay
           view="program"
-          layout="lower-third"
+          layout="talk"
           slug="synthetic"
           roomId={roomId}
           token="signed-synthetic"

@@ -165,6 +165,8 @@ export const liveOverlayElementPlacementSchema = insideFrame(
         .min(0)
         .max(LIVE_OVERLAY_ELEMENTS.length - 1)
         .optional(),
+      /** The graphic sits on the conference field, drawn behind it in its box; off or absent, it draws over the picture. */
+      background: z.boolean().optional(),
       ...boxShape,
     })
     .strict(),
@@ -198,19 +200,10 @@ export const liveOverlaySharedPositionsSchema = z.preprocess(
 export type LiveOverlaySharedPositions = z.infer<typeof liveOverlaySharedPositionsSchema>;
 
 /** The built-in layouts every event starts with; their data lives in `live-overlay-layout-presets.ts`. */
-export const LIVE_OVERLAY_PRESETS = [
-  "full-frame",
-  "lower-third",
-  "side-by-side",
-  "side-by-side-right",
-  "close-up",
-  "panel",
-  "ticker-only",
-  "break",
-] as const;
+export const LIVE_OVERLAY_PRESETS = ["talk", "questions", "panel", "break", "check-in", "full-board"] as const;
 export type LiveOverlayPreset = (typeof LIVE_OVERLAY_PRESETS)[number];
 /** The layout a browser source uses when it names none, or one the event does not have. */
-export const LIVE_OVERLAY_DEFAULT_LAYOUT: LiveOverlayPreset = "full-frame";
+export const LIVE_OVERLAY_DEFAULT_LAYOUT: LiveOverlayPreset = "talk";
 /** Saved layouts per event, built-in ones the organizers changed included. */
 export const LIVE_OVERLAY_MAX_SAVED_LAYOUTS = 24;
 
@@ -228,6 +221,8 @@ export const liveOverlayLayoutGeometrySchema = z
   .object({
     slug: liveOverlayLayoutSlugSchema,
     name: liveOverlayLayoutNameSchema,
+    /** The built-in scene it started from, so loading it brings on what that one does; absent for one of the event's own. */
+    preset: z.enum(LIVE_OVERLAY_PRESETS).nullable().optional(),
     elements: liveOverlayLayoutElementsSchema,
   })
   .strict();

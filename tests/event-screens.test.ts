@@ -144,7 +144,7 @@ async function auditCount(action: string) {
   return row!.total;
 }
 
-const assignment = { roomId: EVENT.roomId, output: "projector", layout: "lower-third" };
+const assignment = { roomId: EVENT.roomId, output: "projector", layout: "check-in" };
 
 describe("event screen pairing", () => {
   beforeEach(seed);
@@ -190,7 +190,7 @@ describe("event screen pairing", () => {
       roomId: EVENT.roomId,
       roomName: "Main hall",
       output: "projector",
-      layout: "lower-third",
+      layout: "check-in",
     });
     expect(Math.abs(Date.parse(view.serverNow) - Date.now())).toBeLessThan(60_000);
     const claims = await verifyLiveOverlayToken(SECRET, view.overlay!.token, {
@@ -642,7 +642,7 @@ describe("screen staff permissions", () => {
     ).toHaveProperty(["assignment.roomId"]);
     const livestreamLayout = await patch("manager", {
       expectedRevision: 1,
-      assignment: { roomId: EVENT.roomId, output: "livestream", layout: "lower-third" },
+      assignment: { roomId: EVENT.roomId, output: "livestream", layout: "check-in" },
     });
     expect(livestreamLayout.status).toBe(400);
   });
@@ -757,7 +757,7 @@ describe("replacing a screen's device", () => {
       id: NEW_SCREEN,
       name: "Foyer",
       eventId: EVENT.id,
-      assignment: { roomId: EVENT.roomId, output: "projector", layout: "lower-third" },
+      assignment: { roomId: EVENT.roomId, output: "projector", layout: "check-in" },
       revision: 1,
       session: { state: "pending" },
     });

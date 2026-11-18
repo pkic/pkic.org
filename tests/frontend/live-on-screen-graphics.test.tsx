@@ -156,14 +156,14 @@ describe("audience graphics on an output", () => {
     const panel = LIVE_OVERLAY_PRESET_LAYOUTS.panel.elements;
     expect(stackedPanelBox(panel)).toMatchObject({ x: 0, y: 0, w: 1, h: 1 });
     expect(stackedPanelBox({ ...panel, question: { ...panel.question, visible: false } })).toBeNull();
-    // Full frame lays both over the whole frame: they overlap rather than stack.
-    expect(stackedPanelBox(LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements)).toBeNull();
+    // Talk lays both over the whole frame: they overlap rather than stack.
+    expect(stackedPanelBox(LIVE_OVERLAY_PRESET_LAYOUTS["talk"].elements)).toBeNull();
   });
 
   it("reads a layout saved before the audience lists existed, with the lists at their usual place", () => {
-    const { topQuestions: _questions, chat: _chat, ...saved } = LIVE_OVERLAY_PRESET_LAYOUTS["side-by-side"].elements;
+    const { topQuestions: _questions, chat: _chat, ...saved } = LIVE_OVERLAY_PRESET_LAYOUTS["check-in"].elements;
     const read = liveOverlayLayoutElementsSchema.parse(saved);
-    expect(read.topQuestions).toEqual(LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements.topQuestions);
+    expect(read.topQuestions).toEqual(LIVE_OVERLAY_PRESET_LAYOUTS["talk"].elements.topQuestions);
     expect(read.chat).toMatchObject({ visible: true, shared: true });
   });
 });
@@ -183,11 +183,11 @@ describe("timers over a board", () => {
 
   async function draw(state: LiveRoomState) {
     host ??= document.body.appendChild(document.createElement("div"));
-    const elements = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements;
+    const elements = LIVE_OVERLAY_PRESET_LAYOUTS["talk"].elements;
     await act(() => render(<LiveOverlayPresentation view="program" elements={elements} projection={state} />, host!));
   }
 
-  it("keeps the timers' column clear on a full-frame board, and the whole board without them", async () => {
+  it("keeps the timers' column clear on a Talk board, and the whole board without them", async () => {
     const shown = { ...stageClockState, stage: { ...stageClockState.stage, topQuestions: questions } };
     await draw(shown);
     expect(board().hasAttribute("data-logo-covered")).toBe(true);
@@ -219,7 +219,7 @@ describe("timers over a board", () => {
     const tab = timers()[0]!;
     expect(tab.dataset.look).toBe("tab");
     expect(tab.dataset.edge).toBe("top");
-    // The full-frame timer box sits 48 px below the top: the tab runs those 48 px on to the edge.
+    // The Talk timer box sits 48 px below the top: the tab runs those 48 px on to the edge.
     const rule = document.adoptedStyleSheets
       .flatMap((sheet) => [...sheet.cssRules].map((entry) => entry.cssText))
       .find((entry) => entry.includes(tab.dataset.numericCssProperties!));

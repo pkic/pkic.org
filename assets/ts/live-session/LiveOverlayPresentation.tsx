@@ -492,6 +492,12 @@ export function LiveOverlayPresentation({
   // A board inside the scene's background draws on it; one outside keeps a field of its own.
   const ground = view !== "stage-display" && elements.background.visible ? elements.background : null;
   const onGround = (box: LiveOverlayElementPlacement) => ground !== null && within(box, ground);
+  // A graphic the scene puts on the conference field carries it in its own box, with or without content on it.
+  const fielded = (element: LiveOverlayElement) =>
+    view !== "stage-display" &&
+    element !== "background" &&
+    elements[element].visible &&
+    elements[element].background === true;
   const cardBoxes = drawnBoards(CARD_BOARDS);
   const timers =
     state && view !== "stage-display" && elements.timer.visible
@@ -533,18 +539,29 @@ export function LiveOverlayPresentation({
               onGround(box) &&
               liveOverlayCoveredBy(state.stage, elements, element) !== null;
             const content = placement.visible && !hidden ? draw(state, { placement, animate, panel, eventSlug }) : null;
-            return content ? (
+            const field = fielded(element) ? (
+              <LiveOverlayLayer
+                key={`${element}:field`}
+                element="background"
+                dimmed={focus !== null && focus !== element}
+                placement={box}
+              >
+                <LiveBoardGround box={overlayBoxPixels(box)} />
+              </LiveOverlayLayer>
+            ) : null;
+            const graphic = content ? (
               <LiveOverlayLayer
                 key={joined ? "panel" : element}
                 element={element}
                 dimmed={focus !== null && focus !== element && !(joined && focus === "question")}
                 timerReserve={BOARDS.has(element) ? timerReserve(box, timerBoxes) : 0}
-                onGround={isLiveFieldBoard(element) && onGround(box)}
+                onGround={isLiveFieldBoard(element) && (onGround(box) || fielded(element))}
                 placement={box}
               >
                 {content}
               </LiveOverlayLayer>
             ) : null;
+            return field ? [field, graphic] : graphic;
           })
         : null}
       {children}

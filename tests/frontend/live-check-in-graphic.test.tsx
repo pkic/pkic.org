@@ -59,7 +59,7 @@ function mount(view: LiveOverlayView) {
     render(
       <LiveOverlay
         view={view}
-        layout="full-frame"
+        layout="talk"
         slug="pqc-2026"
         occurrenceId={LIVE_OCCURRENCE}
         token="signed.overlay.access"
