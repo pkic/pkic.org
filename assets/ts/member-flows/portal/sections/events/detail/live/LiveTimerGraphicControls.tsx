@@ -15,7 +15,6 @@ import { ChoiceCard, ChoiceCards } from "../../../../../../ui/ChoiceCard";
 import { LiveTimerLookSample } from "../../../../../../live-session/LiveTimerLookSample";
 import { Field } from "../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../ui/TextControl";
-import { LIVE_AUX_OUTPUTS } from "../../../../../../../shared/live-room-outputs";
 import { liveTimerGraphicReplacements, sendLivePrograms, type LiveTargets } from "./live-output-targets";
 
 const FORMAT_LABELS: Record<LiveTimerGraphic["format"], string> = {
@@ -241,7 +240,9 @@ export function useLiveTimerGraphic(targets: LiveTargets, timerId: string) {
     on(state.preview.timerGraphics) ??
     (targets.programActive
       ? (on(state.stage.timerGraphics) ??
-        LIVE_AUX_OUTPUTS.map((output) => on(state.outputs[output].timerGraphics)).find(Boolean))
+        Object.values(state.outputs)
+          .map((composition) => on(composition.timerGraphics))
+          .find(Boolean))
       : undefined);
   const [graphic, setGraphic] = useState<LiveTimerGraphic>(shown ?? defaultLiveTimerGraphic(timerId));
   // When another operator changes what an output shows, this desk follows it.

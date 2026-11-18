@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LIVE_AUX_OUTPUTS } from "../live-room-outputs";
+import { LIVE_HELD_OUTPUTS_MAX, liveAuxOutputSchema } from "./live-session-stage";
 
 /**
  * How many read-only sources draw each output of a room now: a browser
@@ -7,22 +7,18 @@ import { LIVE_AUX_OUTPUTS } from "../live-room-outputs";
  * so the studio can tell a feed that dropped from one that is connected.
  */
 
-export const LIVE_SOURCE_OUTPUTS = ["program", ...LIVE_AUX_OUTPUTS] as const;
-export type LiveSourceOutput = (typeof LIVE_SOURCE_OUTPUTS)[number];
+/** Program, or one of the room's outputs by its key. */
+export type LiveSourceOutput = string;
 
 const count = z.number().int().nonnegative().max(10_000);
 
+/** Sources by output; an output no source draws now is left out. */
 export const liveRoomSourcesSchema = z
-  .object({ program: count, projector: count, "stage-preview": count, "stage-display": count })
-  .strict() satisfies z.ZodType<Record<LiveSourceOutput, number>>;
+  .record(z.union([z.literal("program"), liveAuxOutputSchema]), count)
+  .refine((sources) => Object.keys(sources).length <= LIVE_HELD_OUTPUTS_MAX + 1, "Too many outputs.");
 export type LiveRoomSources = z.infer<typeof liveRoomSourcesSchema>;
 
-export const NO_LIVE_ROOM_SOURCES: LiveRoomSources = {
-  program: 0,
-  projector: 0,
-  "stage-preview": 0,
-  "stage-display": 0,
-};
+export const NO_LIVE_ROOM_SOURCES: LiveRoomSources = {};
 
 /** The room snapshot's copy: zeros for everyone but operators. */
 export const liveRoomSourcesSnapshotSchema = liveRoomSourcesSchema.default(NO_LIVE_ROOM_SOURCES);

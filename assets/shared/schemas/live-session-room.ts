@@ -43,12 +43,13 @@ import {
   liveChatSnapshotFields,
 } from "./live-session-chat";
 import { databaseIdSchema } from "./identifiers";
+import { liveRoomOutputKeySchema, liveRoomOutputsSchema } from "./live-room-output-setup";
 import { eventSlugParamsSchema, utcInstantSchema } from "./api-common";
 import { LIVE_ROOM_POLICY, LIVE_STAGE_VIEWS } from "../live-session-policy";
 import { liveChangeSchema, livePersonNameSchema } from "./live-session-change";
 import { liveReactionBurstSchema, liveReactionCountsSchema, liveReactionSendSchema } from "./live-session-reaction";
 import { liveChatFeedConfigSchema, liveTopQuestionsConfigSchema } from "./live-session-on-screen";
-import { LIVE_AUX_OUTPUTS, LIVE_SPEAKER_MESSAGE_MAX_LENGTH, LIVE_SPEAKER_MESSAGE_TONES } from "../live-room-outputs";
+import { LIVE_SPEAKER_MESSAGE_MAX_LENGTH, LIVE_SPEAKER_MESSAGE_TONES } from "../live-room-outputs";
 import { livePollClientMessageSchemas, livePollSchema, livePollServerMessageSchemas } from "./live-session-poll";
 import {
   livePreparedQuestionClientMessageSchemas,
@@ -119,7 +120,11 @@ export const liveRoomParamsSchema = eventSlugParamsSchema.extend({ occurrenceId:
 
 export const liveRoomRoleSchema = z.enum(["attendee", "speaker", "operator", "overlay"]);
 /** The outputs a browser source can show; which of an output's elements it draws, and where, is its layout's. */
-export const liveOverlayViewSchema = z.enum(["program", ...LIVE_AUX_OUTPUTS]);
+export const liveOverlayViewSchema = z.union([
+  z.literal("program"),
+  liveRoomOutputKeySchema,
+  z.literal("stage-preview"),
+]);
 export type LiveOverlayView = z.infer<typeof liveOverlayViewSchema>;
 /**
  * The live room socket's query. A broadcast source names the output it draws,
@@ -177,6 +182,7 @@ export {
   EMPTY_LIVE_AUX_COMPOSITION,
   liveOutputsSchema,
   EMPTY_LIVE_OUTPUTS,
+  liveOutputComposition,
   type LivePanelists,
   type LiveStageQuestion,
   type LiveStage,
@@ -256,6 +262,8 @@ export const liveRoomSessionSchema = z
     endAt: utcInstantSchema,
     timeZone: z.string().min(1),
     credits: z.array(liveCreditSchema).max(50),
+    /** The outputs its physical room sets up beside Program; a room admitted before this field reads the built-in ones. */
+    roomOutputs: liveRoomOutputsSchema.optional(),
   })
   .strict();
 export type LiveRoomSession = z.infer<typeof liveRoomSessionSchema>;

@@ -5,7 +5,6 @@ import {
   liveCreditAlreadyListed,
   isAddedLiveCreditKey,
 } from "../../../../assets/shared/live-room-credits";
-import { LIVE_AUX_OUTPUTS } from "../../../../assets/shared/live-room-outputs";
 import type {
   LiveAddedCreditInput,
   LiveCredit,
@@ -85,7 +84,7 @@ export class LiveRoomAddedCredits {
     const outputs = this.store.outputs();
     if (
       this.store.stage().lowerThird?.key === creditKey ||
-      LIVE_AUX_OUTPUTS.some((output) => outputs[output].lowerThird?.key === creditKey)
+      Object.values(outputs).some((composition) => composition.lowerThird?.key === creditKey)
     )
       return { code: "LIVE_CREDIT_ON_AIR", message: "Take this lower third off air before removing the person." };
     const next = current.filter((credit) => credit.key !== creditKey);

@@ -218,12 +218,13 @@ export class LiveRoomBroadcast {
 
   /** How many read-only sources draw each output now; `leaving` is a socket that is closing. */
   sources(leaving?: WebSocket): LiveRoomSources {
-    const sources = { ...NO_LIVE_ROOM_SOURCES };
+    const sources: Record<string, number> = { ...NO_LIVE_ROOM_SOURCES };
     for (const socket of this.ctx.getWebSockets("overlay")) {
       if (socket === leaving || socket.readyState !== WebSocket.OPEN) continue;
       const viewer = socket.deserializeAttachment() as LiveRoomParticipant;
       if (viewer.role !== "overlay") continue;
-      sources[viewer.overlayOutput ?? "program"] += 1;
+      const output = viewer.overlayOutput ?? "program";
+      sources[output] = (sources[output] ?? 0) + 1;
     }
     return sources;
   }

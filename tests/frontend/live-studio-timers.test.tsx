@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "preact/test-utils";
+import { liveOutputComposition } from "../../assets/shared/schemas/live-session-stage";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { liveRoomClientMessageSchema } from "../../assets/shared/schemas/live-session-room";
 import { defaultLiveTimerGraphic } from "../../assets/shared/schemas/live-session-timer";
@@ -195,7 +196,7 @@ describe("studio timers", () => {
         ...snapshot,
         outputs: {
           ...snapshot.outputs,
-          "stage-display": { ...snapshot.outputs["stage-display"], timerGraphics: [shown] },
+          "stage-display": { ...liveOutputComposition(snapshot.outputs, "stage-display"), timerGraphics: [shown] },
         },
       },
       "stage",
@@ -221,7 +222,7 @@ describe("studio timers", () => {
         stage: { ...snapshot.stage, timerGraphics: [shown] },
         outputs: {
           ...snapshot.outputs,
-          "stage-display": { ...snapshot.outputs["stage-display"], timerGraphics: [shown] },
+          "stage-display": { ...liveOutputComposition(snapshot.outputs, "stage-display"), timerGraphics: [shown] },
         },
       },
       "stage",
@@ -266,7 +267,10 @@ describe("studio timers", () => {
         stage: { ...snapshot.stage, timerGraphics: [shown] },
         outputs: {
           ...snapshot.outputs,
-          "stage-display": { ...snapshot.outputs["stage-display"], timerGraphics: [{ ...shown, size: "small" }] },
+          "stage-display": {
+            ...liveOutputComposition(snapshot.outputs, "stage-display"),
+            timerGraphics: [{ ...shown, size: "small" }],
+          },
         },
       },
       "stage",

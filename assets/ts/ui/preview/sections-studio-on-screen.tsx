@@ -27,7 +27,17 @@ import { SCREEN_FIXTURE, SCREEN_FIXTURE_NOW } from "./event-screens-fixtures";
 import { DialogSpecimen } from "./sections-event-screens-staff";
 import { LiveOverlayGraphicsDialog } from "../../member-flows/portal/sections/events/detail/live/LiveOverlayGraphicsDialog";
 import { liveOverlayAddress } from "../../live-session/live-overlay-address";
-import { LivestreamOverlay, presetWith, ProjectorScreen, QA_LAYOUT, ROOM, roomWith } from "./studio-on-screen-fixtures";
+import {
+  GALLERY_ROOM_SCREENS,
+  LivestreamOverlay,
+  presetWith,
+  ProjectorScreen,
+  QA_LAYOUT,
+  ROOM,
+  ROOM_WITH_SCREENS,
+  roomWith,
+} from "./studio-on-screen-fixtures";
+import { DEFAULT_LIVE_ROOM_OUTPUTS } from "../../../shared/schemas/live-room-output-setup";
 
 const noCommand = () => undefined;
 const noHandlers = {
@@ -206,9 +216,26 @@ const MULTIVIEW_PANEL: StudioPanel = {
   outputs: ["preview", "program", "projector", "stage-display"],
 };
 
+/** The default multiview in a room set up with its own screens: the room's screens stand in for the projector. */
+const ROOM_SCREENS_PANEL: StudioPanel = {
+  ...MULTIVIEW_PANEL,
+  id: "multiview-2",
+  outputs: ["program", "livestream", "stage-display", "projector"],
+};
+const ROOM_SCREENS_SOURCES = { ...MONITOR_SOURCES, preview: ROOM_WITH_SCREENS, program: ROOM_WITH_SCREENS };
+
 /** A multiview of Preview, Program and the room's screens, each edged in its own tally color. */
-function Multiview() {
-  const view = monitorPanelView(MULTIVIEW_PANEL, MONITOR_SOURCES, noCommand, {
+function Multiview({
+  panel = MULTIVIEW_PANEL,
+  sources = MONITOR_SOURCES,
+  width = 8,
+}: {
+  panel?: StudioPanel;
+  sources?: typeof MONITOR_SOURCES;
+  /** Columns of the studio grid the panel spans; a wide one has room for each screen's tag. */
+  width?: number;
+}) {
+  const view = monitorPanelView(panel, sources, noCommand, {
     clear: noCommand,
     screenSync: DEFAULT_LIVE_SCREEN_SYNC,
     sync: noCommand,
@@ -219,13 +246,13 @@ function Multiview() {
     <div class="pk-studio-grid-frame" data-density="compact">
       <div class="pk-studio-grid">
         <StudioPanelFrame
-          panel={MULTIVIEW_PANEL}
-          panels={[MULTIVIEW_PANEL]}
+          panel={panel}
+          panels={[panel]}
           title={view.title}
           heading={view.heading}
           actions={view.actions}
           change={noCommand}
-          defaultSize={{ w: 8, h: 14 }}
+          defaultSize={{ w: width, h: 14 }}
           cell={noCommand}
           dragHandle={noHandlers}
           resizeHandle={() => noHandlers}
@@ -461,6 +488,12 @@ export const studioOnScreenSections: PreviewSection[] = [
     render: () => <Multiview />,
   },
   {
+    id: "studio-multiview-room-screens",
+    title: "Multiview in a room with its own screens",
+    note: "Each screen the room sets up, colored by its place in the room's list. The tag says what it shows: Follows PGM, Speaker, or the scene of a screen you take to.",
+    render: () => <Multiview panel={ROOM_SCREENS_PANEL} sources={ROOM_SCREENS_SOURCES} width={12} />,
+  },
+  {
     id: "studio-preview-scenes",
     title: "Preview with its scenes",
     note: "Shown from the Preview panel's menu. Each scene is drawn live with Preview's graphics; the current one is edged in Preview's color. Choosing one loads it into Preview.",
@@ -520,12 +553,34 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "studio-transition",
     title: "Transition to Program or to a screen",
-    note: "One take button per output, stacked, each in its tally color. Program is first and runs on Space. Labeled, the buttons spell out the output.",
+    note: "One take button per screen that shows what you take to it, stacked, each in its tally color. Program is first and runs on Space. A room with only screens that follow Program has Program's button alone. Labeled, the buttons spell out the screen.",
     render: () => (
       <div class="pk-cluster">
-        <TransitionControl disabled={false} transitioning={null} onTransition={() => undefined} />
-        <TransitionControl disabled={false} transitioning="projector" labeled onTransition={() => undefined} />
-        <TransitionControl disabled transitioning={null} onTransition={() => undefined} />
+        <TransitionControl
+          outputs={GALLERY_ROOM_SCREENS}
+          disabled={false}
+          transitioning={null}
+          onTransition={() => undefined}
+        />
+        <TransitionControl
+          outputs={GALLERY_ROOM_SCREENS}
+          disabled={false}
+          transitioning="foy"
+          labeled
+          onTransition={() => undefined}
+        />
+        <TransitionControl
+          outputs={GALLERY_ROOM_SCREENS}
+          disabled
+          transitioning={null}
+          onTransition={() => undefined}
+        />
+        <TransitionControl
+          outputs={DEFAULT_LIVE_ROOM_OUTPUTS}
+          disabled={false}
+          transitioning={null}
+          onTransition={() => undefined}
+        />
       </div>
     ),
   },

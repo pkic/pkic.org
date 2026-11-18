@@ -366,8 +366,16 @@ export class LiveRoomStore {
     this.saveControl(`aux:${output}`, liveAuxCompositionSchema.parse(composition));
   }
 
+  /** Every output the room holds a composition for: the ones it always holds, then any an operator composed. */
+  auxOutputs(): LiveAuxOutput[] {
+    const stored = this.sql
+      .rows<{ name: string }>("SELECT name FROM room_controls WHERE name LIKE 'aux:%' ORDER BY name")
+      .map((row) => row.name.slice("aux:".length));
+    return [...new Set<string>([...LIVE_AUX_OUTPUTS, ...stored])];
+  }
+
   outputs(): LiveOutputs {
-    return Object.fromEntries(LIVE_AUX_OUTPUTS.map((output) => [output, this.aux(output)])) as LiveOutputs;
+    return Object.fromEntries(this.auxOutputs().map((output) => [output, this.aux(output)]));
   }
 
   /**
@@ -386,7 +394,7 @@ export class LiveRoomStore {
 
   /** Whether Program or any auxiliary output shows this poll's results; Preview is not on air. */
   pollOnAir(pollId: string): boolean {
-    return this.stage().poll?.id === pollId || LIVE_AUX_OUTPUTS.some((output) => this.aux(output).poll?.id === pollId);
+    return this.stage().poll?.id === pollId || this.auxOutputs().some((output) => this.aux(output).poll?.id === pollId);
   }
 
   speakerMessage(): LiveSpeakerMessage | null {

@@ -8,6 +8,7 @@ import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-o
 import { defaultLiveTimerGraphic } from "../assets/shared/schemas/live-session-timer";
 import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../assets/shared/schemas/live-stage-display-settings";
 import { DEFAULT_LIVE_SCREEN_SYNC } from "../assets/shared/schemas/live-screen-sync";
+import { liveRoomRefusalCloseCode } from "../assets/shared/schemas/live-session-room";
 import { parseCapabilityToken } from "../functions/_lib/auth/capability-token";
 import { callApi } from "./helpers/app";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
@@ -76,7 +77,8 @@ describe("live room auxiliary outputs", () => {
     expect(snapshot.speakerMessage).toMatchObject({ text: "Please wrap up", flash: true });
     const late = await f.connect({ person: "secondAttendee" });
     const attendeeSnapshot = await late.next("room.snapshot");
-    expect(attendeeSnapshot.outputs.projector.lowerThird).toBeNull();
+    // An attendee's snapshot holds no screen's composition.
+    expect(attendeeSnapshot.outputs.projector?.lowerThird ?? null).toBeNull();
     expect(attendeeSnapshot.speakerMessage).toBeNull();
 
     operator.send({ type: "speaker.message", text: null, tone: "neutral", flash: false });
@@ -104,7 +106,8 @@ describe("live room auxiliary outputs", () => {
     const overlay = await f.connect({ overlay: await overlayToken() });
     expect((await overlay.next("room.snapshot")).screenSync).toEqual(DEFAULT_LIVE_SCREEN_SYNC);
     operator.send({ type: "screen.sync", output: "projector", sync: false });
-    const changed = { projector: false, "stage-display": true };
+    // Only the screens an operator set apart are listed; every other one follows Program.
+    const changed = { projector: false };
     expect((await overlay.next("screen.sync.changed")).screenSync).toEqual(changed);
     attendee.send({ type: "screen.sync", output: "stage-display", sync: false });
     expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
@@ -384,7 +387,12 @@ describe("live room auxiliary outputs", () => {
   });
 
   it("refuses a source that names an output the room does not draw", async () => {
-    const response = await f.upgrade({ overlay: await overlayToken(), output: "lobby" });
+    const response = await f.upgrade({ overlay: await overlayToken(), output: "Lobby!" });
     expect(response.status).toBe(400);
+    // A screen the room does not set up, such as one since removed, is refused by the room.
+    expect(await f.refusal({ overlay: await overlayToken(), output: "lobby" })).toMatchObject({
+      code: liveRoomRefusalCloseCode(400),
+      reason: "LIVE_ROOM_INVALID_OUTPUT",
+    });
   });
 });

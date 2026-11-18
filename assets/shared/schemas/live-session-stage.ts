@@ -11,9 +11,9 @@ import { liveCreditSchema } from "./live-session-credit";
 import { publicSessionPortraitUrlSchema } from "./event-session-history";
 import { liveAuthorAffiliationSchema } from "./live-session-author";
 import { databaseIdSchema } from "./identifiers";
+import { liveRoomOutputKeySchema } from "./live-room-output-setup";
 import { liveChangeSchema, livePersonNameSchema } from "./live-session-change";
 import { liveChatFeedOnAirSchema, liveTopQuestionsOnAirSchema } from "./live-session-on-screen";
-import { LIVE_AUX_OUTPUTS } from "../live-room-outputs";
 import { liveTimerGraphicsSchema } from "./live-session-timer";
 import { DEFAULT_LIVE_LOWER_THIRD_MOTION } from "../live-lower-third";
 import {
@@ -106,21 +106,21 @@ export const EMPTY_LIVE_STAGE: LiveStage = {
   scene: null,
 };
 
-export const liveAuxOutputSchema = z.enum(LIVE_AUX_OUTPUTS);
+/** One of the room's outputs besides Program, by its key. */
+export const liveAuxOutputSchema = z.union([liveRoomOutputKeySchema, z.literal("stage-preview")]);
 /** An auxiliary output, like the shared Preview, holds the same kind of composition as Program. */
 export const liveAuxCompositionSchema = liveStageSchema;
 export type LiveAuxComposition = LiveStage;
 export const EMPTY_LIVE_AUX_COMPOSITION: LiveAuxComposition = EMPTY_LIVE_STAGE;
+/** At most every output a room sets up, the ones it always holds, and a few it removed since. */
+export const LIVE_HELD_OUTPUTS_MAX = 16;
+/** Each output's composition by key; an output nobody composed yet is missing and shows nothing. */
 export const liveOutputsSchema = z
-  .object({
-    projector: liveAuxCompositionSchema,
-    "stage-preview": liveAuxCompositionSchema,
-    "stage-display": liveAuxCompositionSchema,
-  })
-  .strict();
+  .record(liveAuxOutputSchema, liveAuxCompositionSchema)
+  .refine((outputs) => Object.keys(outputs).length <= LIVE_HELD_OUTPUTS_MAX, "Too many outputs.");
 export type LiveOutputs = z.infer<typeof liveOutputsSchema>;
-export const EMPTY_LIVE_OUTPUTS: LiveOutputs = {
-  projector: EMPTY_LIVE_AUX_COMPOSITION,
-  "stage-preview": EMPTY_LIVE_AUX_COMPOSITION,
-  "stage-display": EMPTY_LIVE_AUX_COMPOSITION,
-};
+export const EMPTY_LIVE_OUTPUTS: LiveOutputs = {};
+/** The composition an output holds now; one nobody composed yet shows nothing. */
+export function liveOutputComposition(outputs: LiveOutputs, output: string): LiveAuxComposition {
+  return outputs[output] ?? EMPTY_LIVE_AUX_COMPOSITION;
+}

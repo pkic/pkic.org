@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render } from "preact";
+import { liveOutputComposition } from "../../assets/shared/schemas/live-session-stage";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { defaultLiveTimerGraphic } from "../../assets/shared/schemas/live-session-timer";
@@ -84,6 +85,9 @@ const timersOn = (state: LiveRoomState, ids: string[]): LiveRoomState => ({
   ...state,
   outputs: {
     ...state.outputs,
-    "stage-display": { ...state.outputs["stage-display"], timerGraphics: ids.map(defaultLiveTimerGraphic) },
+    "stage-display": {
+      ...liveOutputComposition(state.outputs, "stage-display"),
+      timerGraphics: ids.map(defaultLiveTimerGraphic),
+    },
   },
 });

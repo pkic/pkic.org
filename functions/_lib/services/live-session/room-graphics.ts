@@ -15,7 +15,6 @@ import type {
   LiveCompositionInput,
   LiveStage,
 } from "../../../../assets/shared/schemas/live-session-room";
-import { LIVE_AUX_OUTPUTS } from "../../../../assets/shared/live-room-outputs";
 import type { LiveRoomControls, LiveControlOutcome } from "./room-controls";
 import type { LiveRoomOutputs } from "./room-outputs";
 import type { LiveRoomPreview } from "./room-preview";
@@ -79,7 +78,7 @@ export class LiveRoomGraphics {
     // Background refresh still resolves its point and signing key canonically.
     if (!fresh) {
       const outputs = this.store.outputs();
-      const existing = [this.store.stage(), this.store.preview(), ...LIVE_AUX_OUTPUTS.map((output) => outputs[output])]
+      const existing = [this.store.stage(), this.store.preview(), ...Object.values(outputs)]
         .map((composition) => composition.checkIn)
         .find((graphic) => graphic && JSON.stringify(graphic.selection) === JSON.stringify(selection));
       if (existing) return { ...existing, theme, text };
@@ -230,7 +229,7 @@ export class LiveRoomGraphics {
     const stage = this.store.stage();
     const outputs = this.store.outputs();
     const preview = this.store.preview();
-    const dynamic = [stage, preview, ...LIVE_AUX_OUTPUTS.map((output) => outputs[output])];
+    const dynamic = [stage, preview, ...Object.values(outputs)];
     if (!dynamic.some((composition) => composition.ticker || composition.schedule || composition.checkIn)) return;
     const approved = this.basis.read().agenda;
     const now = Date.now();
@@ -269,9 +268,9 @@ export class LiveRoomGraphics {
       this.store.saveStage(program);
       await this.broadcast.all({ type: "stage.changed", stage: this.store.stage() });
     }
-    for (const output of LIVE_AUX_OUTPUTS) {
-      const composition = await refreshed(outputs[output]);
-      if (!composition || JSON.stringify(this.store.aux(output)) !== JSON.stringify(outputs[output])) continue;
+    for (const [output, held] of Object.entries(outputs)) {
+      const composition = await refreshed(held);
+      if (!composition || JSON.stringify(this.store.aux(output)) !== JSON.stringify(held)) continue;
       this.store.saveAux(output, composition);
       await this.broadcast.all({ type: "aux.changed", output, composition: this.store.aux(output) });
     }

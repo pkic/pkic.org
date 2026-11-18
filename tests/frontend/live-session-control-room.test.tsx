@@ -1,4 +1,5 @@
 import { DEFAULT_LIVE_CHECK_IN_TEXT } from "../../assets/shared/schemas/live-session-graphic-settings";
+import { DEFAULT_LIVE_ROOM_OUTPUTS } from "../../assets/shared/schemas/live-room-output-setup";
 import { LIVE_GRAPHIC_THEME_DEFAULTS } from "../../assets/shared/live-graphic-theme";
 // @vitest-environment jsdom
 import { act } from "preact/test-utils";
@@ -60,15 +61,27 @@ describe("live control room Transition", () => {
   });
 
   it("transitions Preview to a screen from that screen's own take button", () => {
-    const { host, live } = mountDesk();
-    const snapshot = liveSnapshot({ viewer: OPERATOR });
+    const base = liveSnapshot({ viewer: OPERATOR });
+    // Only a screen that shows what you take to it gets a take button; the projector follows Program.
+    const snapshot = liveSnapshot({
+      viewer: OPERATOR,
+      session: {
+        ...base.session,
+        roomOutputs: [
+          ...DEFAULT_LIVE_ROOM_OUTPUTS,
+          { key: "foy", name: "Foyer", code: "FOY", role: "exact", scene: null },
+        ],
+      },
+    });
+    const { host, live } = mountDesk(snapshot);
     const credit = snapshot.session.credits[0]!;
+    expect(host.querySelector('.pk-studio-transition button[aria-label="Transition to Projector"]')).toBeNull();
     void act(() =>
       live.latest().deliver({ type: "preview.changed", composition: { ...snapshot.preview, lowerThird: credit } }),
     );
-    void act(() => take(host, "Projector").click());
+    void act(() => take(host, "Foyer").click());
     const sent = liveRoomClientMessageSchema.parse(commands(live).at(-1));
-    expect(sent).toMatchObject({ type: "aux.set", output: "projector", composition: { creditKey: credit.key } });
+    expect(sent).toMatchObject({ type: "aux.set", output: "foy", composition: { creditKey: credit.key } });
   });
 
   it("clears the shared Preview from its monitor and keeps its scene", () => {

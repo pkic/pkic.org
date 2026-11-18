@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import {
-  LIVE_AUX_OUTPUT_DETAILS,
   LIVE_PROGRAM_OUTPUT_DETAILS,
-  LIVE_TAKE_TARGETS,
+  liveOutputDetails,
+  liveTakeTargets,
   type LiveTakeTarget,
 } from "../../../../../../../../shared/live-room-outputs";
+import type { LiveRoomOutput } from "../../../../../../../../shared/schemas/live-room-output-setup";
 import { Button } from "../../../../../../../ui/Button";
 import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
 import { Toast } from "../../../../../../../ui/Toast";
+import { liveTallyAttributes } from "../live-tally";
 import "../live-tally.css";
 import "./StudioSwitcher.css";
 
@@ -19,23 +21,24 @@ export const TAKE_SHORTCUT = "Space";
 export const TRANSITION_HINT = "Replace Program with Preview. This changes the overlay output, not the stream.";
 
 /** What a Transition to a screen does: the screen shows Preview; Program stays as it is. */
-const SCREEN_TRANSITION_HINT = (screen: string) => `Show Preview on the ${screen}. Program stays as it is.`;
-
-const outputName = (target: LiveTakeTarget) =>
-  target === "program" ? LIVE_PROGRAM_OUTPUT_DETAILS : LIVE_AUX_OUTPUT_DETAILS[target];
+const SCREEN_TRANSITION_HINT = (screen: string) => `Show Preview on ${screen}. Program stays as it is.`;
 
 /**
- * The switcher's Transition: one take button per output, stacked, each an
- * arrow and that output's code in its tally color. Program first; Space is
- * its shortcut. In its own small panel on the desk and between the two
- * pictures on a phone. Labeled, the buttons say the output's full name.
+ * The switcher's Transition: one take button per output that shows what you
+ * take to it, stacked, each an arrow and that output's code in its tally
+ * color. Program first; Space is its shortcut. In its own small panel on the
+ * desk and between the two pictures on a phone. Labeled, the buttons say the
+ * output's full name.
  */
 export function TransitionControl({
+  outputs,
   disabled,
   transitioning,
   labeled = false,
   onTransition,
 }: {
+  /** The room's outputs; each one that shows what you take to it gets a button after Program's. */
+  outputs: readonly LiveRoomOutput[];
   disabled: boolean;
   /** The output a take is on its way to, while it is. */
   transitioning: LiveTakeTarget | null;
@@ -44,17 +47,15 @@ export function TransitionControl({
 }) {
   return (
     <span class="pk-studio-transition">
-      {LIVE_TAKE_TARGETS.map((target) => {
-        const details = outputName(target);
+      {liveTakeTargets(outputs).map((target) => {
         const program = target === "program";
-        const hint = program
-          ? `${TRANSITION_HINT} Shortcut: ${TAKE_SHORTCUT}.`
-          : SCREEN_TRANSITION_HINT(details.label.toLowerCase());
+        const details = program ? LIVE_PROGRAM_OUTPUT_DETAILS : liveOutputDetails(outputs, target);
+        const hint = program ? `${TRANSITION_HINT} Shortcut: ${TAKE_SHORTCUT}.` : SCREEN_TRANSITION_HINT(details.label);
         return (
           <Button
             key={target}
             class="pk-studio-transition__take"
-            data-tally={target}
+            {...liveTallyAttributes(outputs, target)}
             disabled={disabled}
             loading={transitioning === target}
             aria-label={`Transition to ${details.label}`}

@@ -14,7 +14,7 @@ import { LIVE_OVERLAY_DEFAULT_LAYOUT } from "../../../../../../../../shared/sche
 import { ClearIcon, ExpandIcon, StudioOutputScreen, type MonitorSources } from "./MonitorPanel";
 import type { StudioPanelView } from "./StudioGrid";
 import { SessionTiming, StudioNotice, type StudioNoticeContent } from "./StudioHeader";
-import { STUDIO_OUTPUT_DETAILS, STUDIO_PANEL_LABELS, type StudioPanelType } from "./studio-layout";
+import { STUDIO_PANEL_LABELS, studioOutputDetails, type StudioPanelType } from "./studio-layout";
 import "../live-tally.css";
 import "./StudioPhone.css";
 
@@ -115,7 +115,7 @@ function Thumbnail({
         {tools ? (
           <div id={toolsId} class="pk-studio-phone__thumb-tools">
             <abbr class="pk-studio-phone__thumb-tag" title={label}>
-              {STUDIO_OUTPUT_DETAILS[tally].short}
+              {studioOutputDetails([], tally).short}
             </abbr>
             <Button
               icon

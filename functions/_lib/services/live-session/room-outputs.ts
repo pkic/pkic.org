@@ -1,9 +1,6 @@
 import { withoutLiveTimerGraphic } from "../../../../assets/shared/live-timer-policy";
-import {
-  LIVE_AUX_OUTPUTS,
-  type LiveAuxOutput,
-  type LiveSpeakerMessageTone,
-} from "../../../../assets/shared/live-room-outputs";
+import { type LiveAuxOutput, type LiveSpeakerMessageTone } from "../../../../assets/shared/live-room-outputs";
+import { LIVE_HELD_OUTPUTS_MAX } from "../../../../assets/shared/schemas/live-session-stage";
 import type {
   LiveAuxComposition,
   LiveRoomClientMessage,
@@ -38,6 +35,9 @@ export class LiveRoomOutputs {
     input: ResolvedComposition,
     at: string,
   ): LiveControlOutcome {
+    const held = this.store.auxOutputs();
+    if (!held.includes(output) && held.length >= LIVE_HELD_OUTPUTS_MAX)
+      return { code: "LIVE_OUTPUTS_FULL", message: "This room holds as many outputs as it can. Reload the studio." };
     const stage = composeLiveStage(this.store, this.polls, session, input, { operatorName: operator.name, at });
     if ("code" in stage) return stage;
     const previous = this.store.aux(output);
@@ -129,7 +129,7 @@ export class LiveRoomOutputs {
   /** Applies one change to every auxiliary output and to the shared Preview, which hold the same kind of composition. */
   private each(update: (composition: LiveAuxComposition) => LiveAuxComposition | null): LiveRoomServerMessage[] {
     const messages: LiveRoomServerMessage[] = [];
-    for (const output of LIVE_AUX_OUTPUTS) {
+    for (const output of this.store.auxOutputs()) {
       const next = update(this.store.aux(output));
       if (!next) continue;
       this.store.saveAux(output, next);

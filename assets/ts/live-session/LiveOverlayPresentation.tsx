@@ -37,7 +37,7 @@ import { LiveTimerPlate } from "./LiveTimerPlate";
 import { formatLiveTimerMark } from "../../shared/live-timer-format";
 import { LiveLowerThird } from "./LiveLowerThird";
 import { LiveStageDisplay, LiveStageDisplayBanner } from "./LiveStageDisplay";
-import { isLiveAuxOutput, liveOutputProjection, liveOutputView } from "./live-output-projection";
+import { isLiveAuxOutput, liveOutputProjection, liveOutputScene, liveOutputView } from "./live-output-projection";
 import "../../design/tokens.event.generated.css";
 import {
   LIVE_FIELD_BOARDS,
@@ -460,7 +460,7 @@ export function LiveOverlayPresentation({
   const view = liveOutputView(requested);
   // A source drawing only some graphics leaves the others out; while the ticker is on air, every other graphic keeps clear of it.
   const allowed = liveOverlayAllowedElements(
-    draft ?? resolveLiveOverlayLayout(state?.overlayLayouts ?? [], layout ?? state?.stage.scene),
+    draft ?? resolveLiveOverlayLayout(state?.overlayLayouts ?? [], layout ?? liveOutputScene(state, requested)),
     graphics,
   );
   const elements = liveOverlayClearOfTicker(

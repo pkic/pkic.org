@@ -9,6 +9,7 @@ import {
   type LiveStage,
 } from "../../../shared/schemas/live-session-room";
 import { LIVE_OVERLAY_PRESET_LAYOUTS } from "../../../shared/live-overlay-layout-presets";
+import type { LiveRoomOutput } from "../../../shared/schemas/live-room-output-setup";
 import {
   LIVE_OVERLAY_ELEMENTS,
   liveOverlayPixelBox,
@@ -23,6 +24,20 @@ import { SCREEN_FIXTURE, SCREEN_FIXTURE_NOW } from "./event-screens-fixtures";
 import "./event-screens-preview.css";
 
 export const ROOM = sampleOverlayRoom(SCREEN_FIXTURE_NOW);
+
+/** A room set up with its own screens: two that follow Program, the speaker's, and a foyer screen you take to. */
+export const GALLERY_ROOM_SCREENS: readonly LiveRoomOutput[] = [
+  { key: "prj-l", name: "Screen left", code: "PRJ L", role: "follow", scene: null },
+  { key: "prj-r", name: "Screen right", code: "PRJ R", role: "follow", scene: null },
+  { key: "stage-display", name: "Speaker", code: "DSP", role: "speaker", scene: null },
+  { key: "foy", name: "Foyer", code: "FOY", role: "exact", scene: "break" },
+];
+
+/** The sample room with its own screens set up. */
+export const ROOM_WITH_SCREENS: LiveRoomState = {
+  ...ROOM,
+  session: { ...ROOM.session, roomOutputs: [...GALLERY_ROOM_SCREENS] },
+};
 
 /**
  * An organizer's layout for the room's projector during Q&A: top questions

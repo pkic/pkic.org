@@ -1,6 +1,8 @@
 import {
-  LIVE_AUX_OUTPUT_DETAILS,
-  LIVE_STUDIO_AUX_OUTPUTS,
+  liveOutputDetails,
+  liveOutputRole,
+  liveRoomOutputs,
+  liveStudioOutputs,
   type LiveAuxOutput,
 } from "../../../../../../../shared/live-room-outputs";
 import { liveStageDisplayGraphics } from "../../../../../../../shared/live-stage-display-plan";
@@ -11,8 +13,12 @@ import {
   liveScreenSyncs,
   type LiveScreenGraphic,
 } from "../../../../../../../shared/live-screen-sync";
-import type { LiveStage } from "../../../../../../../shared/schemas/live-session-room";
-import type { LiveSyncedScreen } from "../../../../../../../shared/schemas/live-screen-sync";
+import {
+  DEFAULT_LIVE_ROOM_OUTPUTS,
+  type LiveRoomOutput,
+  type LiveRoomOutputRole,
+} from "../../../../../../../shared/schemas/live-room-output-setup";
+import { liveOutputComposition, type LiveStage } from "../../../../../../../shared/schemas/live-session-room";
 import { Menu, type MenuItem } from "../../../../../../ui/Menu";
 import {
   liveLayerShown,
@@ -21,6 +27,7 @@ import {
   type LiveLayer,
   type LiveTargets,
 } from "./live-output-targets";
+import { liveTallyAttributes } from "./live-tally";
 import "./live-tally.css";
 import "./LiveRowMenu.css";
 
@@ -34,10 +41,12 @@ export interface LiveScreens {
   on: readonly LiveAuxOutput[];
   /** Screens that show it from Program, not because it was put on them. */
   following: readonly LiveAuxOutput[];
+  /** The room's outputs, which name and color them. */
+  outputs: readonly LiveRoomOutput[];
 }
 
 /** A graphic that goes nowhere yet, such as a pending question or a draft poll. */
-export const NO_LIVE_SCREENS: LiveScreens = { on: [], following: [] };
+export const NO_LIVE_SCREENS: LiveScreens = { on: [], following: [], outputs: DEFAULT_LIVE_ROOM_OUTPUTS };
 
 /** The graphic of a composition a row's layer is. */
 const graphicOf = (layer: LiveLayer): LiveScreenGraphic => (layer.kind === "timer" ? "timerGraphics" : layer.kind);
@@ -47,14 +56,19 @@ const graphicOf = (layer: LiveLayer): LiveScreenGraphic => (layer.kind === "time
  * graphics it follows that it draws. The stage display reads Program's
  * agenda only for its footer, so an agenda graphic is not shown there.
  */
-function followsKind(output: LiveSyncedScreen, layer: LiveLayer): boolean {
-  return liveScreenFollows(output, graphicOf(layer)) && !(output === "stage-display" && layer.kind === "schedule");
+function followsKind(role: LiveRoomOutputRole | null, layer: LiveLayer): boolean {
+  return liveScreenFollows(role, graphicOf(layer)) && !(role === "speaker" && layer.kind === "schedule");
 }
 
 /** Whether a screen draws a graphic of its composition: the stage display only a question in place of a poll, and only countdowns. */
-function draws(output: LiveSyncedScreen, shown: LiveStage, layer: LiveLayer, timers: LiveTargets["state"]["timers"]) {
-  if (output === "stage-display" && layer.kind === "poll" && shown.question) return false;
-  if (output === "stage-display" && layer.kind === "timer")
+function draws(
+  role: LiveRoomOutputRole | null,
+  shown: LiveStage,
+  layer: LiveLayer,
+  timers: LiveTargets["state"]["timers"],
+) {
+  if (role === "speaker" && layer.kind === "poll" && shown.question) return false;
+  if (role === "speaker" && layer.kind === "timer")
     return liveStageDisplayGraphics(shown, timers).some((graphic) => graphic.timerId === layer.graphic.timerId);
   return liveLayerShown(shown, layer);
 }
@@ -64,38 +78,38 @@ function followsProgram(
   targets: LiveTargets,
   layer: LiveLayer,
   where: ReturnType<typeof liveLayerTargets>,
-  output: LiveSyncedScreen,
+  output: LiveAuxOutput,
 ): boolean {
   const { state } = targets;
-  if (!where.program || where.aux(output) || !liveScreenSyncs(state.screenSync, output)) return false;
-  if (!followsKind(output, layer)) return false;
+  const outputs = liveRoomOutputs(state.session);
+  const role = liveOutputRole(outputs, output);
+  if (!where.program || where.aux(output) || !liveScreenSyncs(state.screenSync, outputs, output)) return false;
+  if (!followsKind(role, layer)) return false;
   const shown = liveScreenComposition(output, {
-    own: state.outputs[output],
+    own: liveOutputComposition(state.outputs, output),
     program: state.stage,
     sync: state.screenSync,
     timers: state.timers,
+    outputs,
   });
-  return draws(output, shown, layer, state.timers);
+  return draws(role, shown, layer, state.timers);
 }
 
 /** The room's screens a graphic is on now. */
 export function liveScreens(targets: LiveTargets, layer: LiveLayer): LiveScreens {
   const where = liveLayerTargets(targets, layer);
+  const outputs = liveRoomOutputs(targets.state.session);
+  const keys = liveStudioOutputs(outputs);
   return {
-    on: LIVE_STUDIO_AUX_OUTPUTS.filter((output) => where.aux(output)),
-    following: LIVE_STUDIO_AUX_OUTPUTS.filter((output) => followsProgram(targets, layer, where, output)),
+    on: keys.filter((output) => where.aux(output)),
+    following: keys.filter((output) => followsProgram(targets, layer, where, output)),
+    outputs,
   };
 }
 
-/** Each screen as the room calls it: the audience's screen and the speaker's. */
-const SCREEN_NAMES: Record<LiveSyncedScreen, string> = {
-  projector: "the audience screen",
-  "stage-display": "the speaker’s screen",
-};
-
 /** What a click on a screen's item does, in the words of the room. */
-function screenDescription(output: LiveSyncedScreen, on: boolean, following: boolean, keptWhileLive: boolean): string {
-  const screen = SCREEN_NAMES[output];
+function screenDescription(name: string, on: boolean, following: boolean, keptWhileLive: boolean): string {
+  const screen = name;
   if (keptWhileLive) return `Kept on ${screen}. Click to show it there only while it is live.`;
   if (on) return `On ${screen}. Click to take it off.`;
   if (following) return `On ${screen} because it is live. Click to keep it there after it goes off air.`;
@@ -106,19 +120,22 @@ function screenDescription(output: LiveSyncedScreen, on: boolean, following: boo
 export function liveScreenItems(targets: LiveTargets, layer: LiveLayer): MenuItem[] {
   const { on, following } = liveScreens(targets, layer);
   const live = liveLayerTargets(targets, layer).program;
+  const outputs = liveRoomOutputs(targets.state.session);
   // A screen that cannot draw the graphic is left out, unless it holds one already and needs a way to take it off.
-  const offered = LIVE_STUDIO_AUX_OUTPUTS.filter(
-    (output) => liveScreenDraws(output, graphicOf(layer)) || on.includes(output),
+  const offered = liveStudioOutputs(outputs).filter(
+    (output) => liveScreenDraws(liveOutputRole(outputs, output), graphicOf(layer)) || on.includes(output),
   );
   return offered.map((output) => {
     const put = on.includes(output);
-    const kept = put && live && liveScreenSyncs(targets.state.screenSync, output) && followsKind(output, layer);
+    const role = liveOutputRole(outputs, output);
+    const kept = put && live && liveScreenSyncs(targets.state.screenSync, outputs, output) && followsKind(role, layer);
+    const { label } = liveOutputDetails(outputs, output);
     return {
       id: `screen-${output}`,
-      label: LIVE_AUX_OUTPUT_DETAILS[output].label,
+      label,
       // The screen's tally dot, so its name matches the monitor's color without looking up.
-      icon: <span class="pk-live-screen-dot" data-tally={output} />,
-      description: screenDescription(output, put, following.includes(output), kept),
+      icon: <span class="pk-live-screen-dot" {...liveTallyAttributes(outputs, output)} />,
+      description: screenDescription(label, put, following.includes(output), kept),
       checked: put,
       multiple: true,
       keepOpen: true,
@@ -134,9 +151,9 @@ export function withScreenItems(screens: readonly MenuItem[], items: readonly Me
 }
 
 /** The trigger's tooltip: what the menu holds, then the screens the graphic is on. */
-export function liveScreensTitle({ on, following }: LiveScreens): string {
-  const names = (outputs: readonly LiveAuxOutput[]) =>
-    outputs.map((output) => LIVE_AUX_OUTPUT_DETAILS[output].label).join(" and ");
+export function liveScreensTitle({ on, following, outputs }: LiveScreens): string {
+  const names = (keys: readonly LiveAuxOutput[]) =>
+    keys.map((output) => liveOutputDetails(outputs, output).label).join(" and ");
   const parts = [
     on.length ? `On ${names(on)}.` : null,
     following.length ? `On ${names(following)} because it is live.` : null,
@@ -150,17 +167,17 @@ export function liveScreensTitle({ on, following }: LiveScreens): string {
  * from Program.
  */
 export function LiveScreenTrigger({ screens }: { screens: LiveScreens }) {
-  const { on, following } = screens;
+  const { on, following, outputs } = screens;
   return (
     <>
       <span aria-hidden="true">⋯</span>
       {on.length || following.length ? (
         <span class="pk-live-screen-dots" aria-hidden="true">
           {on.map((output) => (
-            <span key={output} data-tally={output} />
+            <span key={output} {...liveTallyAttributes(outputs, output)} />
           ))}
           {following.map((output) => (
-            <span key={`${output}-following`} data-tally={output} data-following="" />
+            <span key={`${output}-following`} {...liveTallyAttributes(outputs, output)} data-following="" />
           ))}
         </span>
       ) : null}

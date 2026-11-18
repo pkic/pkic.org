@@ -29,12 +29,15 @@ export function CopyLinkRow({
   label,
   help,
   compact = false,
+  labelHidden = false,
   actions,
 }: {
   url: string;
   label: string;
   help?: string;
   compact?: boolean;
+  /** A compact row in a table whose row already names the link: the name stays for screen readers only. */
+  labelHidden?: boolean;
   /** A compact row's other actions on this link, before its copy control. */
   actions?: ComponentChildren;
 }) {
@@ -68,7 +71,7 @@ export function CopyLinkRow({
     return (
       <div class="pk-stack pk-stack--snug" data-copy-link-row>
         <div class="pk-cluster pk-cluster--between">
-          <span>{label}</span>
+          <span class={labelHidden ? "pk-sr-only" : undefined}>{label}</span>
           <div class="pk-cluster">
             <p class="pk-small" role="status">
               {copyStatus}

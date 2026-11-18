@@ -8,6 +8,7 @@ import { LocationLiveStreamGet, LocationLiveStreamPut, VirtualRoomGet } from "./
 import { AgendaBreaksPost } from "./agenda/breaks";
 import { LiveProgramGet, LiveProgramPost } from "./agenda/live-program";
 import { LiveOverlayAccessPost } from "./agenda/live-overlays";
+import { LiveRoomOutputsGet, LiveRoomOutputsPut } from "./agenda/live-room-outputs";
 import { LivePollResultsGet } from "./agenda/live-poll-results";
 import { SessionPopularityReportGet } from "./agenda/session-popularity-report";
 import { LiveChatArchiveExportGet, LiveChatEraseDelete } from "./agenda/live-chat-archive";
@@ -237,6 +238,8 @@ openapi.get("/agenda/participation/program", PersonalAgendaProgramGet);
 openapi.get("/agenda/occurrences/:occurrenceId/virtual-room", SessionVirtualRoomGet);
 // The room's socket itself (GET …/live with Upgrade: websocket) is dispatched before this router; see live-session-socket.
 openapi.post("/agenda/rooms/:roomId/live/overlays", LiveOverlayAccessPost);
+openapi.get("/agenda/rooms/:roomId/live/outputs", LiveRoomOutputsGet);
+openapi.put("/agenda/rooms/:roomId/live/outputs", LiveRoomOutputsPut);
 openapi.get("/agenda/rooms/:roomId/live/program", LiveProgramGet);
 openapi.post("/agenda/rooms/:roomId/live/program", LiveProgramPost);
 openapi.get("/agenda/occurrences/:occurrenceId/live/polls", LivePollResultsGet);

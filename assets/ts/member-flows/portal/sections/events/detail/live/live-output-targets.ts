@@ -1,7 +1,8 @@
 import { updateLiveTimerGraphics } from "../../../../../../../shared/live-timer-policy";
 import { liveOverlayCoveredBy } from "../../../../../../../shared/live-overlay-cover";
 import { resolveLiveOverlayLayout } from "../../../../../../../shared/live-overlay-layout-presets";
-import { LIVE_AUX_OUTPUTS, type LiveAuxOutput } from "../../../../../../../shared/live-room-outputs";
+import { liveRoomOutputs, liveStudioOutputs, type LiveAuxOutput } from "../../../../../../../shared/live-room-outputs";
+import { liveOutputComposition } from "../../../../../../../shared/schemas/live-session-stage";
 import type { LivePollPresentation } from "../../../../../../../shared/schemas/live-session-poll";
 import {
   type LivePanelists,
@@ -140,7 +141,7 @@ export function liveLayerToggle(
 
 /** The complete composition an auxiliary output takes when one graphic is toggled on it. */
 export function liveAuxToggle(state: LiveRoomState, output: LiveAuxOutput, layer: LiveLayer): LiveRoomClientMessage {
-  const current = state.outputs[output];
+  const current = liveOutputComposition(state.outputs, output);
   const next = previewLiveStage(
     state,
     current,
@@ -202,7 +203,8 @@ export function liveLayerTargets(targets: LiveTargets, layer: LiveLayer) {
           layer.kind === "chatFeed" ? "chat" : layer.kind,
         )
       : null,
-    aux: (output: LiveAuxOutput) => programActive && liveLayerShown(state.outputs[output], layer),
+    aux: (output: LiveAuxOutput) =>
+      programActive && liveLayerShown(liveOutputComposition(state.outputs, output), layer),
   };
 }
 
@@ -227,6 +229,11 @@ export function sendLayerToggle(
  * timer, on every destination that shows it now, so what is on air changes
  * with the save. A destination that does not show it is left alone.
  */
+/** Every output the room holds a composition for, or lists: a timer replaced anywhere is replaced on each. */
+function heldOutputs(state: LiveRoomState): LiveAuxOutput[] {
+  return [...new Set([...Object.keys(state.outputs), ...liveStudioOutputs(liveRoomOutputs(state.session))])];
+}
+
 export function liveTimerGraphicReplacements(
   targets: LiveTargets,
   previous: LiveTimerGraphic,
@@ -245,13 +252,17 @@ export function liveTimerGraphicReplacements(
         ]
       : []),
     ...(where.program ? [replace] : []),
-    ...LIVE_AUX_OUTPUTS.filter((output) => where.aux(output)).map(
-      (output) =>
-        ({
-          type: "aux.set",
-          output,
-          composition: liveCompositionInput(previewLiveStage(state, state.outputs[output], replace)),
-        }) as const,
-    ),
+    ...heldOutputs(state)
+      .filter((output) => where.aux(output))
+      .map(
+        (output) =>
+          ({
+            type: "aux.set",
+            output,
+            composition: liveCompositionInput(
+              previewLiveStage(state, liveOutputComposition(state.outputs, output), replace),
+            ),
+          }) as const,
+      ),
   ];
 }

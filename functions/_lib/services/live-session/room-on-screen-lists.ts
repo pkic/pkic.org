@@ -1,4 +1,3 @@
-import { LIVE_AUX_OUTPUTS } from "../../../../assets/shared/live-room-outputs";
 import { selectLiveTopQuestions } from "../../../../assets/shared/live-on-screen-lists";
 import { LIVE_INTERACTION_BROADCAST_MILLISECONDS } from "../../../../assets/shared/live-session-policy";
 import type {
@@ -87,7 +86,7 @@ export class LiveRoomOnScreenLists {
       this.store.saveStage(program);
       await this.broadcast.all({ type: "stage.changed", stage: this.store.stage() });
     }
-    for (const output of LIVE_AUX_OUTPUTS) {
+    for (const output of this.store.auxOutputs()) {
       const composition = await this.refilled(this.store.aux(output), now);
       if (!composition) continue;
       this.store.saveAux(output, composition);
@@ -108,11 +107,7 @@ export class LiveRoomOnScreenLists {
    */
   private wakeForWaitingChat(now: number): void {
     const outputs = this.store.outputs();
-    const delays = [
-      this.store.stage(),
-      this.store.preview(),
-      ...LIVE_AUX_OUTPUTS.map((output) => outputs[output]),
-    ].flatMap((composition) =>
+    const delays = [this.store.stage(), this.store.preview(), ...Object.values(outputs)].flatMap((composition) =>
       composition.chatFeed?.config.delaySeconds ? [composition.chatFeed.config.delaySeconds] : [],
     );
     const waits = delays.flatMap((delay) => {

@@ -32,7 +32,9 @@ describe("a browser source's address", () => {
     expect(
       new URL(liveOverlayAddress("https://pkic.org", { ...parseLiveOverlayAddress(url)!, layout: "full-frame" })).hash,
     ).toContain("layout=full-frame");
-    expect(parseLiveOverlayAddress({ hash: url.hash.replace("view=program", "view=lower-third") })).toBeNull();
+    // A view must be an output's key; a room checks that it sets that output up when the source connects.
+    expect(parseLiveOverlayAddress({ hash: url.hash.replace("view=program", "view=Lower%20third") })).toBeNull();
+    expect(parseLiveOverlayAddress({ hash: url.hash.replace("view=program", "view=foy") })?.view).toBe("foy");
     expect(parseLiveOverlayAddress({ hash: "#view=program" })).toBeNull();
   });
 

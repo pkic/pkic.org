@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LIVE_STUDIO_AUX_OUTPUTS } from "../live-room-outputs";
+import { liveRoomOutputKeySchema } from "./live-room-output-setup";
 
 /**
  * Whether each of the room's screens follows Program: shows what is live,
@@ -8,15 +8,18 @@ import { LIVE_STUDIO_AUX_OUTPUTS } from "../live-room-outputs";
  * off, a screen shows only what was put on it. The room keeps one copy.
  */
 
-export const liveSyncedScreenSchema = z.enum(LIVE_STUDIO_AUX_OUTPUTS);
+export const liveSyncedScreenSchema = liveRoomOutputKeySchema;
 export type LiveSyncedScreen = z.infer<typeof liveSyncedScreenSchema>;
 
+/** At most one entry per output a room can hold, with room for outputs it removed since. */
+const SYNC_ENTRIES_MAX = 16;
+/** An output an operator never switched follows Program as its role says (see live-screen-sync). */
 export const liveScreenSyncSchema = z
-  .object({ projector: z.boolean(), "stage-display": z.boolean() })
-  .strict() satisfies z.ZodType<Record<LiveSyncedScreen, boolean>>;
+  .record(liveSyncedScreenSchema, z.boolean())
+  .refine((sync) => Object.keys(sync).length <= SYNC_ENTRIES_MAX, "Too many outputs.");
 export type LiveScreenSync = z.infer<typeof liveScreenSyncSchema>;
 
-export const DEFAULT_LIVE_SCREEN_SYNC: LiveScreenSync = { projector: true, "stage-display": true };
+export const DEFAULT_LIVE_SCREEN_SYNC: LiveScreenSync = {};
 
 /** The room snapshot's copy, the defaults until an operator changes one. */
 export const liveScreenSyncSnapshotSchema = liveScreenSyncSchema.default(DEFAULT_LIVE_SCREEN_SYNC);

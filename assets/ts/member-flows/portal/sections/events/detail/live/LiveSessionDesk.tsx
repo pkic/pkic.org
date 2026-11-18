@@ -2,9 +2,13 @@ import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { ClockZone } from "../../../../../../../shared/event-clock";
 import { liveCompositionInput } from "../../../../../../../shared/live-room-preview";
-import type { LiveTakeTarget } from "../../../../../../../shared/live-room-outputs";
+import { liveRoomOutputs, type LiveTakeTarget } from "../../../../../../../shared/live-room-outputs";
 import type { AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
-import { EMPTY_LIVE_STAGE, type LiveRoomClientMessage } from "../../../../../../../shared/schemas/live-session-room";
+import {
+  EMPTY_LIVE_STAGE,
+  liveOutputComposition,
+  type LiveRoomClientMessage,
+} from "../../../../../../../shared/schemas/live-session-room";
 import type { LiveSyncedScreen } from "../../../../../../../shared/schemas/live-screen-sync";
 import { useBoundaryClock } from "../../../../../../hooks/useBoundaryClock";
 import { liveRoomOpenFailure } from "../../../../../../live-session/live-room-copy";
@@ -187,8 +191,14 @@ export function LiveSessionDesk({
   const targets: LiveTargets = { state, programActive, disabled, sendProgram, sendPrograms };
   const agenda = approvedAgenda ?? null;
   const preview = previewProjection(state);
+  const outputs = liveRoomOutputs(state.session);
   const transition = (
-    <TransitionControl disabled={disabled} transitioning={broadcasting ? takenTo : null} onTransition={take} />
+    <TransitionControl
+      outputs={outputs}
+      disabled={disabled}
+      transitioning={broadcasting ? takenTo : null}
+      onTransition={take}
+    />
   );
   const clearProgram = () => sendProgram({ type: "program.clear" });
   const empty = liveCompositionInput(EMPTY_LIVE_STAGE);
@@ -201,7 +211,11 @@ export function LiveSessionDesk({
           ? sendProgram({ type: "preview.set", composition: { ...empty, scene: preview.stage.scene } })
           : output === "livestream"
             ? undefined
-            : sendProgram({ type: "aux.set", output, composition: { ...empty, scene: state.outputs[output].scene } }),
+            : sendProgram({
+                type: "aux.set",
+                output,
+                composition: { ...empty, scene: liveOutputComposition(state.outputs, output).scene },
+              }),
     screenSync: state.screenSync,
     sync: (output: LiveSyncedScreen, sync: boolean) => sendProgram({ type: "screen.sync", output, sync }),
     previewScene: (scene: string) => sendProgram({ type: "preview.set", composition: { scene } }),
@@ -246,6 +260,7 @@ export function LiveSessionDesk({
           ],
           body: (
             <TransitionControl
+              outputs={outputs}
               disabled={disabled}
               transitioning={broadcasting ? takenTo : null}
               labeled={panel.labeled}

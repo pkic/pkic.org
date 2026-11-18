@@ -1,11 +1,14 @@
-import { LIVE_AUX_OUTPUTS, type LiveAuxOutput } from "../../shared/live-room-outputs";
+import { liveRoomOutputs, type LiveAuxOutput } from "../../shared/live-room-outputs";
+import { LIVE_SPEAKER_OUTPUT_KEY } from "../../shared/schemas/live-room-output-setup";
+import { liveOutputComposition } from "../../shared/schemas/live-session-stage";
 import type { LiveOverlayView } from "../../shared/schemas/live-session-room";
 import type { LiveRoomState } from "./live-room-state";
 import { liveStageDisplayQuestions } from "../../shared/live-stage-display";
 import { liveScreenComposition, liveScreenSyncs } from "../../shared/live-screen-sync";
 
+/** Every overlay view but Program draws one of the room's other outputs. */
 export function isLiveAuxOutput(view: string): view is LiveAuxOutput {
-  return (LIVE_AUX_OUTPUTS as readonly string[]).includes(view);
+  return view !== "program";
 }
 
 /**
@@ -15,21 +18,33 @@ export function isLiveAuxOutput(view: string): view is LiveAuxOutput {
  * while it syncs.
  */
 export function liveOutputProjection(state: LiveRoomState, output: LiveAuxOutput): LiveRoomState {
+  const outputs = liveRoomOutputs(state.session);
   const stage = liveScreenComposition(output, {
-    own: state.outputs[output],
+    own: liveOutputComposition(state.outputs, output),
     program: state.stage,
     sync: state.screenSync,
     timers: state.timers,
+    outputs,
   });
-  if (output !== "stage-display") return { ...state, stage, stageDisplayNext: null };
+  if (output !== LIVE_SPEAKER_OUTPUT_KEY) return { ...state, stage, stageDisplayNext: null };
   const questions = liveStageDisplayQuestions(
     stage,
-    liveScreenSyncs(state.screenSync, output) ? state.stageDisplayNext : null,
+    liveScreenSyncs(state.screenSync, outputs, output) ? state.stageDisplayNext : null,
   );
   return { ...state, stage, stageDisplayNext: questions.next };
 }
 
-/** The overlay view an auxiliary output renders through: its own layout for the stage display, else Program's. */
+/** The overlay view an auxiliary output renders through: its own layout for the speaker's screen, else Program's. */
 export function liveOutputView(view: LiveOverlayView): LiveOverlayView {
-  return isLiveAuxOutput(view) && view !== "stage-display" ? "program" : view;
+  return isLiveAuxOutput(view) && view !== LIVE_SPEAKER_OUTPUT_KEY ? "program" : view;
+}
+
+/**
+ * The scene an output draws when its link names none: the one its room set
+ * for it, else the one its composition was given (from Preview, or Program's).
+ */
+export function liveOutputScene(state: LiveRoomState | null, view: LiveOverlayView): string | null {
+  if (!state) return null;
+  const fixed = view === "program" ? null : liveRoomOutputs(state.session).find((output) => output.key === view)?.scene;
+  return fixed ?? state.stage.scene;
 }

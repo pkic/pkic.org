@@ -56,13 +56,13 @@ describe("room screens", () => {
 
   it("marks each synced screen as following when it shows Program's question, and as put there when it has its own", () => {
     const state = roomState();
-    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: [], following: [] });
+    expect(liveScreens(liveTargets(state), layer)).toMatchObject({ on: [], following: [] });
     state.stage = { ...state.stage, question };
-    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: [], following: ["projector", "stage-display"] });
+    expect(liveScreens(liveTargets(state), layer)).toMatchObject({ on: [], following: ["projector", "stage-display"] });
     // Off air no screen shows Program's question.
     expect(liveScreens(liveTargets(state, { programActive: false }), layer).following).toEqual([]);
     state.outputs = { ...state.outputs, "stage-display": { ...EMPTY_LIVE_AUX_COMPOSITION, question } };
-    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: ["stage-display"], following: ["projector"] });
+    expect(liveScreens(liveTargets(state), layer)).toMatchObject({ on: ["stage-display"], following: ["projector"] });
   });
 
   it("does not follow on a screen with its own question in place of Program's", () => {

@@ -5,6 +5,7 @@ import {
 } from "./room-command-read-scope";
 import { prepareUserSessionClaimsBatch } from "../../auth/user-session-live-data";
 import type { LiveRoomRole } from "../../../../assets/shared/live-session-policy";
+import { liveRoomOutputs } from "../../../../assets/shared/live-room-outputs";
 import { LIVE_OVERLAY_PROTOCOL_PREFIX } from "../../../../assets/shared/schemas/live-session-room";
 import { verifyLiveOverlayToken } from "../../auth/live-session-overlay-token";
 import { hasPermission } from "../../auth/permissions";
@@ -21,7 +22,12 @@ import { sessionAccessEligibleSql } from "../event-participation/session-access"
 import { getEventBySlug } from "../events";
 import { liveProgramName } from "./room-program";
 import { publicUserHeadshotPath } from "../user-headshot";
-import { readLiveRoomSession, prepareLiveRoomSessionRead, type LiveRoomSessionRecord } from "./room-session";
+import {
+  readLiveRoomSession,
+  prepareLiveRoomSessionRead,
+  type LiveRoomSessionRecord,
+  type LiveRoomSessionRow,
+} from "./room-session";
 import type { LiveRoomParticipant } from "./room-admission";
 import { livePersonHeadshotSql } from "./live-person-photo";
 import type { LiveOverlayView } from "../../../../assets/shared/schemas/live-session-room";
@@ -130,6 +136,9 @@ export async function admitLiveRoomParticipant(
     });
     if (!access || !record.roomIds.includes(access.room))
       throw new AppError(401, "LIVE_OVERLAY_ACCESS_INVALID", "This overlay link is invalid or expired.");
+    // A link to a screen the room no longer sets up shows nothing, rather than a screen no one controls.
+    if (params.output && !liveOverlayViewDrawn(record.session, params.output))
+      throw new AppError(400, "LIVE_ROOM_INVALID_OUTPUT", "This output is not one this room draws.");
     if (!env.LIVE_SESSION_ROOMS) throw new AppError(503, "LIVE_ROOMS_UNAVAILABLE", "Live rooms are not available.");
     const selection = await env.LIVE_SESSION_ROOMS.getByName(liveProgramName(event.id, access.room)).readProgram(
       event.id,
@@ -190,9 +199,7 @@ export function prepareLiveRoomParticipants(
     statements,
     async decode(loaded: D1StatementResult[]): Promise<LiveParticipantReadResult[]> {
       const results: LiveParticipantReadResult[] = [];
-      const record = await roomRead.decode(
-        batchFirst<{ payload_json: string; timezone: string; event_name: string }>(loaded[0]),
-      );
+      const record = await roomRead.decode(batchFirst<LiveRoomSessionRow>(loaded[0]));
       const sessions = await sessionRead.decode(loaded.slice(1, 1 + sessionRead.statements.length));
       const people = batchRows<LiveRoomPerson & { id: string }>(loaded[loaded.length - 1]);
       const physicalRooms = [
@@ -314,4 +321,12 @@ export async function revalidateLiveRoomParticipants(
     results.push(...(await read.decode(await db.batch(read.statements))));
   }
   return results;
+}
+
+/** Program, each output the room sets up, and the speaker's lineup beside its screen. */
+function liveOverlayViewDrawn(session: Parameters<typeof liveRoomOutputs>[0], view: LiveOverlayView): boolean {
+  if (view === "program") return true;
+  const outputs = liveRoomOutputs(session);
+  if (view === "stage-preview") return outputs.some((output) => output.role === "speaker");
+  return outputs.some((output) => output.key === view);
 }

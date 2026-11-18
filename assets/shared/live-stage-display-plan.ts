@@ -1,6 +1,6 @@
 import { format24HourClockInZone } from "./format-date";
 import { liveQuestionAddresseeName } from "./live-room-credits";
-import { liveSpeakerMessageFit, type LiveSpeakerMessageFit } from "./live-room-outputs";
+import { liveRoomOutputs, liveSpeakerMessageFit, type LiveSpeakerMessageFit } from "./live-room-outputs";
 import {
   liveStageDisplayQuestions,
   liveStageSpeakers,
@@ -28,6 +28,7 @@ import type {
 } from "./schemas/live-session-room";
 import type { LiveScreenSync } from "./schemas/live-screen-sync";
 import { liveScreenComposition, liveScreenSyncs } from "./live-screen-sync";
+import { LIVE_SPEAKER_OUTPUT_KEY } from "./schemas/live-room-output-setup";
 import type { LiveScheduleRoom } from "./schemas/live-session-schedule";
 import type { LiveStageDisplaySettings } from "./schemas/live-stage-display-settings";
 
@@ -169,7 +170,7 @@ export interface LiveStageDisplayPlan {
 }
 
 export interface LiveStageDisplayInput {
-  session: Pick<LiveRoomSession, "title" | "startAt" | "endAt" | "timeZone" | "credits">;
+  session: Pick<LiveRoomSession, "title" | "startAt" | "endAt" | "timeZone" | "credits" | "roomOutputs">;
   /** The stage display's own composition: what operators pinned to it. */
   own: LiveStage;
   /** What is on air. */
@@ -195,11 +196,12 @@ const endsBefore = (left: LiveTimerGraphicText, right: LiveTimerGraphicText) =>
 
 /** The stage display's composition: its own, with Program's where it syncs. */
 const stageDisplayShown = (input: LiveStageDisplayInput): LiveStage =>
-  liveScreenComposition("stage-display", {
+  liveScreenComposition(LIVE_SPEAKER_OUTPUT_KEY, {
     own: input.own,
     program: input.program,
     sync: input.screenSync,
     timers: input.timers,
+    outputs: liveRoomOutputs(input.session),
   });
 
 function content(input: LiveStageDisplayInput): LiveStageContent | null {
@@ -207,7 +209,7 @@ function content(input: LiveStageDisplayInput): LiveStageContent | null {
   const shown = stageDisplayShown(input);
   const { current: question, next: lined } = liveStageDisplayQuestions(
     shown,
-    liveScreenSyncs(input.screenSync, "stage-display") ? input.next : null,
+    liveScreenSyncs(input.screenSync, liveRoomOutputs(input.session), LIVE_SPEAKER_OUTPUT_KEY) ? input.next : null,
   );
   const next = lined ? { question: lined, votes: input.nextVotes } : null;
   if (question)

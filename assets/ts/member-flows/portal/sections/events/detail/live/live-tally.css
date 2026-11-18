@@ -13,6 +13,13 @@
     /* The stage display's lineup before it goes on: its own color, drawn dashed where it is a line. */
     --live-tally-stage-preview: var(--live-tally-stage-display);
     --live-tally-livestream: var(--pk-line-strong);
+    /* The tones a room's own outputs take: the speaker's screen always the stage display's, the rest by their place, the first the projector's. */
+    --live-tally-tone-1: var(--live-tally-projector);
+    --live-tally-tone-2: var(--live-tally-stage-display);
+    --live-tally-tone-3: var(--pk-palette-purple);
+    --live-tally-tone-4: var(--pk-palette-cyan);
+    --live-tally-tone-5: var(--pk-palette-violet);
+    --live-tally-tone-6: var(--pk-palette-indigo);
   }
   /*
    * Any element naming one output by data-tally reads its color as --tally,
@@ -41,5 +48,40 @@
   }
   [data-tally="livestream"] {
     --tally: var(--live-tally-livestream);
+  }
+  /* An output the room lists takes its tone after its key, so a set-up room colors by place. */
+  [data-tally-tone="1"] {
+    --tally: var(--live-tally-tone-1);
+  }
+  [data-tally-tone="2"] {
+    --tally: var(--live-tally-tone-2);
+  }
+  [data-tally-tone="3"] {
+    --tally: var(--live-tally-tone-3);
+  }
+  [data-tally-tone="4"] {
+    --tally: var(--live-tally-tone-4);
+  }
+  [data-tally-tone="5"] {
+    --tally: var(--live-tally-tone-5);
+  }
+  [data-tally-tone="6"] {
+    --tally: var(--live-tally-tone-6);
+  }
+  /* An output's tally dot, the color its monitor wears: in a screen's menu item and beside its code. */
+  .pk-live-screen-dot {
+    display: inline-block;
+    inline-size: 0.6rem;
+    block-size: 0.6rem;
+    border-radius: 50%;
+    background: var(--tally);
+  }
+  /* An output's code with its tally dot in front, as the room's screens list it. */
+  .pk-live-screen-code {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-1);
+    font-weight: 600;
+    white-space: nowrap;
   }
 }

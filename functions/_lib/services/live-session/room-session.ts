@@ -9,6 +9,7 @@ import {
   publicSessionCreditRole,
 } from "../../../../assets/shared/session-public-credits";
 import { first } from "../../db/queries";
+import { decodeLiveRoomOutputs, liveRoomOutputsJsonSql } from "./room-output-setup";
 import { z } from "zod";
 import { agendaDisplayRoleShiftSchema } from "../../../../assets/shared/schemas/event-agenda";
 import {
@@ -33,6 +34,16 @@ export interface LiveRoomSessionRecord {
 
 /** The session's credits a room carries, speakers first. */
 const LIVE_ROOM_SESSION_CREDITS_MAX = 50;
+
+export type LiveRoomSessionRow = {
+  payload_json: string;
+  timezone: string;
+  event_name: string;
+  room_outputs_json: string | null;
+};
+
+/** The outputs the session's own physical room sets up, in order, read with the session. */
+const ROOM_OUTPUTS_JSON = liveRoomOutputsJsonSql("json_extract(approved.payload_json,'$.roomId')");
 
 function unavailable() {
   return new AppError(404, "LIVE_SESSION_NOT_FOUND", "This session is not on the approved agenda.");
@@ -69,7 +80,7 @@ export function prepareLiveRoomSessionRead(
 ) {
   const statement = db
     .prepare(
-      `SELECT approved.payload_json,event.timezone,event.name AS event_name FROM event_agenda_state state
+      `SELECT approved.payload_json,event.timezone,event.name AS event_name,(${ROOM_OUTPUTS_JSON}) AS room_outputs_json FROM event_agenda_state state
      JOIN event_agenda_published_occurrences approved ON approved.event_id=state.event_id AND approved.revision=state.published_revision
      JOIN events event ON event.id=state.event_id
      WHERE state.event_id=? AND approved.occurrence_id=?`,
@@ -78,9 +89,7 @@ export function prepareLiveRoomSessionRead(
 
   return {
     statement,
-    async decode(
-      row: { payload_json: string; timezone: string; event_name: string } | null,
-    ): Promise<LiveRoomSessionRecord> {
+    async decode(row: LiveRoomSessionRow | null): Promise<LiveRoomSessionRecord> {
       if (!row) throw unavailable();
       const parsed = agendaOccurrenceSchema.safeParse(JSON.parse(row.payload_json));
       if (!parsed.success) throw unavailable();
@@ -152,6 +161,7 @@ export function prepareLiveRoomSessionRead(
           endAt: occurrence.endAt,
           timeZone: row.timezone,
           credits: [...credits, ...hosts].slice(0, LIVE_ROOM_SESSION_CREDITS_MAX),
+          roomOutputs: decodeLiveRoomOutputs(row.room_outputs_json),
         }),
         roomIds: [occurrence.roomId, ...(occurrence.additionalRoomIds ?? [])].filter((id): id is string => id !== null),
         speakerUserIds: canonicalSessionCredits(occurrence).flatMap((credit) =>
@@ -169,5 +179,5 @@ export async function readLiveRoomSession(
   options: { people?: boolean } = {},
 ) {
   const read = prepareLiveRoomSessionRead(db, eventId, occurrenceId, options);
-  return read.decode(await read.statement.first<{ payload_json: string; timezone: string; event_name: string }>());
+  return read.decode(await read.statement.first<LiveRoomSessionRow>());
 }
