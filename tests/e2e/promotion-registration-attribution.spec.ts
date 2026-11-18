@@ -1,9 +1,9 @@
 import { promotionCompositionSaveSchema } from "../../assets/shared/schemas/event-promotion-design";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import sharp from "sharp";
 import { PDFDocument } from "pdf-lib";
 import jsQR from "jsqr";
-import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { apiErrorPayloadSchema } from "../../assets/shared/schemas/api-common";
 import {
@@ -21,7 +21,6 @@ import { userUpdateSchema } from "../../assets/shared/schemas/user-management";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { registerInBrowser } from "./helpers/registration";
-import { runScheduledWork } from "./helpers/scheduled-work";
 
 const slug = "pqc-conference-amsterdam-nl";
 const eventApi = `/api/v1/events/${slug}`;
@@ -80,11 +79,13 @@ async function capture(page: Page, info: TestInfo, label: string) {
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     if (device === "phone" && label === "attendee-recovery")
-      await page.getByRole("alert").filter({ hasText: "Unavailable sessions" }).scrollIntoViewIfNeeded();
+      await page
+        .getByText("Some sessions in your materials are no longer on the agenda.", { exact: false })
+        .scrollIntoViewIfNeeded();
     if (device === "phone" && label === "attendee-promotion-menu")
       await page
         .getByRole("list", { name: "More event pages" })
-        .getByRole("link", { name: "Share", exact: true })
+        .getByRole("link", { name: "Share & Invite", exact: true })
         .scrollIntoViewIfNeeded();
     await page.screenshot({
       path: info.outputPath(`${label}-${device}.png`),
@@ -167,33 +168,23 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
   const row = page.getByRole("row").filter({ hasText: title });
   await row.getByRole("button", { name: /actions/i }).click();
   await page.getByRole("menuitem", { name: "Speaker promotion kit", exact: true }).click();
-  await page.getByRole("button", { name: "Personalize promotion materials", exact: true }).click();
+  // Each file's own Customize action opens the one editor for the person's materials.
+  await page.getByRole("button", { name: "Customize tall post", exact: true }).click();
   await page
     .getByRole("checkbox", { name: "Print option Include a QR code for print or a second screen", exact: true })
     .check();
   await page.getByRole("button", { name: "Save my materials", exact: true }).click();
-  await page.getByRole("button", { name: "Prepare downloads", exact: true }).click();
-  await runScheduledWork(page);
-  const preview = page.getByRole("img", { name: "Preview of your promotion materials", exact: true });
-  await expect
-    .poll(
-      async () => {
-        if (await preview.isVisible()) return true;
-        await runScheduledWork(page);
-        return preview.isVisible();
-      },
-      { timeout: 120_000, intervals: [1000, 2000, 5000] },
-    )
-    .toBe(true);
+  await expect(page.getByRole("dialog", { name: "Personalize promotion materials", exact: true })).toHaveCount(0);
+  // The gallery renders each file's cover in the browser once the saved materials load.
+  const preview = page.getByRole("img", { name: "Preview of your tall post", exact: true });
+  await expect(preview).toBeVisible({ timeout: 60_000 });
   await expect
     .poll(() => preview.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0))
     .toBe(true);
   const previewUrl = await preview.getAttribute("src");
-  if (!previewUrl) throw new Error("The rendered promotion card has no image source");
-  const imageResponse = await page.request.get(previewUrl);
-  expect(imageResponse.status()).toBe(200);
-  expect(imageResponse.headers()["content-type"]).toBe("image/png");
-  const pixels = await sharp(await imageResponse.body())
+  if (!previewUrl?.startsWith("data:image/svg+xml;base64,"))
+    throw new Error("The rendered promotion card has no inline artwork");
+  const pixels = await sharp(Buffer.from(previewUrl.slice(previewUrl.indexOf(",") + 1), "base64"))
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
@@ -205,38 +196,36 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
     return promotionKitSchema.parse(await response.json());
   };
   const kit = await readKit();
-  const pdfResponse = await page.request.get(
-    `${kitApi}/artifact?format=carousel&revision=${kit.publishedRevision}&fingerprint=${kit.fingerprint}`,
-  );
-  expect(pdfResponse.status()).toBe(200);
-  expect(pdfResponse.headers()["content-type"]).toBe("application/pdf");
-  const pdf = await PDFDocument.load(await pdfResponse.body());
+  // The carousel is the one file the server renders, through the same download the gallery offers.
+  const downloading = page.waitForEvent("download", { timeout: 120_000 });
+  await page.getByRole("button", { name: "Download carousel (PDF)", exact: true }).click();
+  const downloaded = await downloading;
+  expect(downloaded.suggestedFilename()).toBe("promotion-carousel.pdf");
+  const pdfBytes = await readFile(await downloaded.path());
+  const pdf = await PDFDocument.load(pdfBytes);
   expect(pdf.getPageCount()).toBeGreaterThan(1);
-  await info.attach("downloaded-carousel.pdf", { body: await pdfResponse.body(), contentType: "application/pdf" });
+  await info.attach("downloaded-carousel.pdf", { body: pdfBytes, contentType: "application/pdf" });
   expect(kit.copy.campaign).toBe(campaign);
   const baseline = kit.metrics;
   expect(decoded.data).toBe(kit.registrationUrl);
   const destination = new URL(decoded.data);
   expect(destination.pathname).toMatch(/^\/r\/[A-Za-z0-9]+$/);
   expect(destination.search).toBe("");
-  await expect(page.getByRole("link", { name: "Your registration referral link", exact: true })).toHaveAttribute(
-    "href",
-    decoded.data,
-  );
-  await page.getByRole("button", { name: "Personalize promotion materials", exact: true }).click();
+  await page.getByRole("button", { name: "Customize tall post", exact: true }).click();
   await capture(page, info, "promotion-editor-layout");
   await page
     .getByLabel("Your short description", { exact: true })
     .fill("My reviewed description for sharing this session with my network.");
   await capture(page, info, "promotion-adjustments");
   await page.getByRole("button", { name: "Save my materials", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Personalize promotion materials", exact: true })).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Personalize promotion materials", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Customize tall post", exact: true })).toBeVisible();
   const personalized = await readKit();
   expect(personalized.composition?.summary).toBe("My reviewed description for sharing this session with my network.");
   expect(personalized.registrationUrl).toBe(kit.registrationUrl);
   await capture(page, info, "promotion-qr");
-  await page.getByRole("button", { name: "Prepare kits for all speakers", exact: true }).click();
+  await page.getByRole("button", { name: "Sharing actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Prepare kits for all speakers", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Prepare speaker promotion kits", exact: true })).toBeVisible();
   await capture(page, info, "bulk-promotion-dialog");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -251,7 +240,10 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
     const code = destination.pathname.slice("/r/".length);
     await expect(visitor).toHaveURL(new RegExp(`/events/2026/${slug}/register/\\?`));
     expect(new URL(visitor.url()).searchParams.get("ref")).toBe(code);
-    await expect(visitor.getByLabel(EMAIL_FIRST_COPY.registration.work.label)).toBeEditable();
+    // Registration asks a signed-out visitor to sign in or start an account first.
+    await expect(
+      visitor.getByRole("region", { name: "Sign in", exact: true }).getByRole("button", { name: "Start registration" }),
+    ).toBeVisible();
     await expect.poll(() => visitor.evaluate(() => sessionStorage.getItem("pkic_ref"))).toBe(code);
     await expect.poll(async () => (await readKit()).metrics.clicks).toBe(baseline.clicks + 1);
     await capture(visitor, info, "attributed-guest-entry");
@@ -288,11 +280,9 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
     });
     expect(detail.registration.id).not.toBe(ownerRegistrationId);
     await visitor.goto(`/portal/#/events/${slug}/promotion`);
-    await visitor.getByRole("button", { name: "Create promotion materials", exact: true }).click();
-    await expect(
-      visitor.getByRole("heading", { name: "Your attendee promotion materials", exact: true }),
-    ).toBeVisible();
-    await visitor.getByRole("button", { name: "Personalize promotion materials", exact: true }).click();
+    // A registered attendee's materials open with the page; their first referral link is made as it loads.
+    const attendeeMaterials = visitor.getByRole("region", { name: "Your attendee materials", exact: true });
+    await attendeeMaterials.getByRole("button", { name: "Customize tall post", exact: true }).click();
     await expect(visitor.getByRole("dialog", { name: "Personalize promotion materials", exact: true })).toBeVisible();
     await expect(visitor.getByRole("button", { name: "Move cover down", exact: true })).toBeVisible();
     await capture(visitor, info, "attendee-promotion");
@@ -372,22 +362,26 @@ test("attendees can recover promotion materials after a selected session is with
   await page.goto(`/portal/#/events/${slug}/more`);
   const promotionLink = page
     .getByRole("list", { name: "More event pages" })
-    .getByRole("link", { name: "Share", exact: true });
+    .getByRole("link", { name: "Share & Invite", exact: true });
   await expect(promotionLink).toBeVisible();
   await capture(page, info, "attendee-promotion-menu");
   await promotionLink.click();
-  await page.getByRole("button", { name: "Create promotion materials", exact: true }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "Unavailable sessions" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Prepare downloads", exact: true })).toBeDisabled();
+  const materials = page.getByRole("region", { name: "Your attendee materials", exact: true });
+  const unavailable = materials.getByText("Some sessions in your materials are no longer on the agenda.", {
+    exact: false,
+  });
+  const download = materials.getByRole("button", { name: "Download tall post (JPEG)", exact: true });
+  await expect(unavailable).toBeVisible();
+  await expect(download).toBeDisabled();
   await capture(page, info, "attendee-recovery");
-  await page.getByRole("button", { name: "Personalize promotion materials", exact: true }).click();
+  await materials.getByRole("button", { name: "Customize tall post", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Personalize promotion materials", exact: true });
   await expect(dialog).toBeVisible();
   await capture(page, info, "attendee-recovery-editor");
   await dialog.getByRole("button", { name: "Save my materials", exact: true }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByRole("alert").filter({ hasText: "Unavailable sessions" })).toBeHidden();
-  await expect(page.getByRole("button", { name: "Prepare downloads", exact: true })).toBeEnabled();
+  await expect(unavailable).toBeHidden();
+  await expect(download).toBeEnabled({ timeout: 60_000 });
   const fresh = promotionKitSchema.parse(await (await page.request.get(base)).json());
   expect(fresh.stale).toBe(false);
   expect(fresh.composition?.sessionIds).toEqual([]);

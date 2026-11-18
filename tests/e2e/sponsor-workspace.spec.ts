@@ -162,7 +162,15 @@ test.describe("portal sponsor workspace", () => {
     // fragment change does not remount the portal application.
     await page.context().clearCookies();
     await page.goto("/");
+    const firstVerified = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/v1/auth/verify-link" && response.request().method() === "POST",
+    );
     await page.goto(portalUrl);
+    // The contact's work address names the organization they represent before the link signs them in.
+    await answerAccountOrganizationStep(page, await firstVerified, {
+      organization: { name: `Synthetic Sponsor Contact ${stamp}`, jobTitle: "Partnerships lead" },
+    });
     await declinePasskeyOffer(page);
     await expect(page).toHaveURL(/\/portal\/#\/sponsors$/);
     // The page header names the section once ("Sponsors"); the event is the
@@ -271,9 +279,13 @@ test.describe("portal sponsor workspace", () => {
         new URL(response.url()).pathname === "/api/v1/auth/verify-link" && response.request().method() === "POST",
     );
     await page.goto(resendUrl);
-    await answerAccountOrganizationStep(page, await verified, {
-      organization: { name: `Synthetic Sponsor Contact ${stamp}`, jobTitle: "Partnerships lead" },
-    });
+    // The organization was named on the first link, so this one does not ask again.
+    await answerAccountOrganizationStep(page, await verified);
+    // The contact now holds that organization beside their personal capacity, and continues for the organization.
+    await page
+      .getByRole("region", { name: "Choose how you take part", exact: true })
+      .getByRole("button", { name: new RegExp(`^Synthetic Sponsor Contact ${stamp}`) })
+      .click();
     await declinePasskeyOffer(page);
     await expect(page.getByText(attendeeEmail)).toBeVisible({ timeout: 15_000 });
   });

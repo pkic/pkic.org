@@ -146,6 +146,15 @@ export async function signInRequestContext(
   email: string,
   options: { individual?: boolean } & AccountOrganizationChoice = {},
 ): Promise<void> {
+  await redeemSignInLink(context, await startAccountLinkToken(context, email, options), options);
+}
+
+/** Starts an account for `email` on `context` and returns the token its emailed link carries, unredeemed. */
+export async function startAccountLinkToken(
+  context: APIRequestContext,
+  email: string,
+  options: { individual?: boolean } = {},
+): Promise<string> {
   const since = await capturedEmailCount();
   const start = () =>
     context.post("/api/v1/auth/sign-up", {
@@ -159,5 +168,5 @@ export async function signInRequestContext(
   const link = new URL(extractEmailUrl(message, "/portal/#/verify"));
   const token = new URLSearchParams(link.hash.slice(link.hash.indexOf("?") + 1)).get("token");
   expect(token, "the emailed link must carry a sign-in token").toBeTruthy();
-  await redeemSignInLink(context, token!, options);
+  return token!;
 }
