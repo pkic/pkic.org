@@ -28,7 +28,7 @@ import { fmtDate, toast } from "../../ui";
 import { Badge } from "../../../../ui/Badge";
 import { ButtonLink } from "../../../../ui/Button";
 import { Chip } from "../../../../ui/Chip";
-import { DescriptionList } from "../../../../ui/DescriptionList";
+import { DescriptionList, type DescriptionListItem } from "../../../../ui/DescriptionList";
 import { Menu } from "../../../../ui/Menu";
 import { Meter } from "../../../../ui/Meter";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
@@ -428,7 +428,8 @@ export function MemberPrivacyPanel({
   if (!canWrite) return null;
   if (onOrgProfiles.length === 0 && !availability) return null;
 
-  const items = onOrgProfiles.map((identity) => ({
+  const items: DescriptionListItem[] = onOrgProfiles.map((identity) => ({
+    key: `identity:${identity.identityId}`,
     term: identity.organizationName ?? "Organization",
     value: identity.showOnOrgProfile ? "Listed on the organization page" : "Not listed",
   }));

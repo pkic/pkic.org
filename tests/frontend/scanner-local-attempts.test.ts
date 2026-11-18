@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eventScanRequestSchema } from "../../assets/shared/schemas/event-participation-scanning";
-import { persistScannerCapture } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useScannerFailureCapture";
+import {
+  persistScannerCapture,
+  ScannerCapturePersistenceError,
+} from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/useScannerFailureCapture";
 import { boundedScannedValue } from "../../assets/shared/schemas/scanner-attempt-capture";
 import { scannerQueueRecordSchema } from "../../assets/shared/schemas/event-scanner-offline-queue";
 const mocks = vi.hoisted(() => ({ open: vi.fn(), suspended: vi.fn(async () => false), active: vi.fn() }));
@@ -280,18 +283,55 @@ describe("durable rejected scanner attempts", () => {
     const scan = eventScanRequestSchema.parse({ ...capture, badgeId: "ABCDEFGHJKLMNPQR" });
     rows.set(scan.operationId, { eventId: attempt.eventId, kind: "scan", scan });
     const audit = vi.fn(async () => true);
-    await expect(
-      persistScannerCapture(
-        scan,
-        attempt.eventId,
-        async () => {
-          throw new Error("Save result interrupted");
-        },
-        audit,
-      ),
-    ).rejects.toThrow("already retained");
+    const result = persistScannerCapture(
+      scan,
+      attempt.eventId,
+      async () => {
+        throw new Error("Save result interrupted");
+      },
+      audit,
+    );
+    await expect(result).rejects.toThrow("already retained");
+    await expect(result).rejects.toMatchObject({ retryAllowed: false });
     expect(audit).not.toHaveBeenCalled();
     expect(rows.size).toBe(1);
+  });
+  it.each([false, true])("marks a confirmed absent scan retryable, audit saved=%s", async (auditSaved) => {
+    const attempt = failure();
+    const capture = { ...attempt.scan };
+    Reflect.deleteProperty(capture, "reason");
+    const scan = eventScanRequestSchema.parse({ ...capture, badgeId: "ABCDEFGHJKLMNPQR" });
+    const audit = vi.fn(async () => auditSaved);
+    const error = await persistScannerCapture(
+      scan,
+      attempt.eventId,
+      async () => {
+        throw new Error("Storage failed before save");
+      },
+      audit,
+    ).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(ScannerCapturePersistenceError);
+    expect(error).toMatchObject({ retryAllowed: true });
+    expect(audit).toHaveBeenCalledOnce();
+  });
+  it("does not permit retry when the saved operation cannot be inspected", async () => {
+    const attempt = failure();
+    const capture = { ...attempt.scan };
+    Reflect.deleteProperty(capture, "reason");
+    const scan = eventScanRequestSchema.parse({ ...capture, badgeId: "ABCDEFGHJKLMNPQR" });
+    mocks.open.mockRejectedValueOnce(new Error("Storage unavailable"));
+    const audit = vi.fn(async () => true);
+    const error = await persistScannerCapture(
+      scan,
+      attempt.eventId,
+      async () => {
+        throw new Error("Save interrupted");
+      },
+      audit,
+    ).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(ScannerCapturePersistenceError);
+    expect(error).toMatchObject({ retryAllowed: false });
+    expect(audit).not.toHaveBeenCalled();
   });
   it("does not claim persistence when storage is unavailable", async () => {
     mocks.open.mockRejectedValue(new Error("Quota exceeded"));

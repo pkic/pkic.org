@@ -55,6 +55,20 @@ export function liveCreditAffiliation(credit: {
   return [credit.identity?.title, credit.identity?.organization].filter(Boolean).join(", ");
 }
 
+/**
+ * Every capacity a lower third shows for a person, primary first, each as its
+ * title line; a person who speaks for more than one identity has several.
+ */
+export function liveCreditAffiliations(credit: {
+  identity: { title: string | null; organization: string | null } | null;
+  additionalIdentities?: readonly { title: string | null; organization: string | null }[];
+}): string[] {
+  const lines = [credit.identity, ...(credit.additionalIdentities ?? [])].map((identity) =>
+    liveCreditAffiliation({ identity }),
+  );
+  return [...new Set(lines.filter(Boolean))];
+}
+
 /** A credit that names its role, a host's or the moderator's: shown compact, under the speakers. */
 export function liveCreditHasRole(credit: { roleLabel: string | null }): boolean {
   return credit.roleLabel !== null;

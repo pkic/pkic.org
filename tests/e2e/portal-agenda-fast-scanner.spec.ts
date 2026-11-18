@@ -48,7 +48,9 @@ test("phone scanner guides staff through venue, search, offline entry and diagno
   await page.screenshot({ animations: "disabled", path: testInfo.outputPath("scanner-search-phone.png") });
   await context.setOffline(true);
   await expect(scanner.getByLabel("Badge code", { exact: true })).toBeVisible();
-  await expect(scanner.getByText("Offline · no pending scans", { exact: true })).toBeVisible();
+  const status = scanner.getByRole("status", { name: "Scanner status", exact: true });
+  await expect(status.getByText("Offline", { exact: true })).toBeVisible();
+  await expect(status.getByText("All scans synced", { exact: true })).toBeVisible();
   await expect(scanner.getByText(/Offline: use a badge code/)).toBeVisible();
   await context.setOffline(false);
   await scanner.getByRole("button", { name: "Return to scanning", exact: true }).click();

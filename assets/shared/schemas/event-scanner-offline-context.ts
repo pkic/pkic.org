@@ -1,4 +1,4 @@
-import { SCANNER_OFFLINE_MAXIMUM_MS } from "../event-offline-expiry";
+import { SCANNER_EVENT_OFFLINE_MAXIMUM_MS } from "../event-offline-expiry";
 import { z } from "zod";
 import { eventSlugParamsSchema, utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
@@ -57,7 +57,7 @@ export const scannerOfflineContextSchema = enrolledOfflineEligibilityResponseSch
     const lifetime = Date.parse(value.expiresAt) - Date.parse(value.serverNow);
     return (
       lifetime > 0 &&
-      lifetime <= SCANNER_OFFLINE_MAXIMUM_MS &&
+      lifetime <= SCANNER_EVENT_OFFLINE_MAXIMUM_MS &&
       Date.parse(value.lastObservedAt) >= Date.parse(value.savedAt)
     );
   }, "Scanner preparation must retain its bounded original deadline.");

@@ -14,9 +14,9 @@ export function LiveCountdownEmblem({ text, running, over }: { text: string; run
     >
       <defs>
         <linearGradient id={gradient} x1="0%" y1="0%" x2="100%">
-          <stop offset="0%" class="pk-live-overlay__countdown-green" />
-          <stop offset="50%" class="pk-live-overlay__countdown-blue" />
-          <stop offset="100%" class="pk-live-overlay__countdown-orange" />
+          <stop offset="0%" class="pk-live-overlay__stripe-green" />
+          <stop offset="50%" class="pk-live-overlay__stripe-blue" />
+          <stop offset="100%" class="pk-live-overlay__stripe-orange" />
         </linearGradient>
       </defs>
       <g class="pk-live-overlay__countdown-ring" fill={`url(#${gradient})`}>

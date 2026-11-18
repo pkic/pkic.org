@@ -300,7 +300,11 @@ export async function captureOfflineSponsorBadge(
         message: "The real offline sponsor capture must commit exactly one durable pending scan before upload",
       })
       .toBe(1);
-    await expect(page.getByText("1 scans awaiting upload", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("status", { name: "Scanner status", exact: true })
+        .getByText(/^1 awaiting upload(?: · syncing…)?$/),
+    ).toBeVisible();
     const pending = await scannerStorage(page);
     expect(pending.pending).toHaveLength(1);
     pendingLead = enrolledEventScanRequestSchema.parse(pending.pending[0]!.scan);

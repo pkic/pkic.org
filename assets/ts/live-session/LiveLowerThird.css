@@ -2,11 +2,12 @@
  * The lower third's motion. Each phase is one orchestrated sequence of
  * transforms and opacity only, so it composites smoothly at broadcast frame
  * rates; the graphic's own phase animation spans the whole sequence, and its
- * end tells the lower third to move on. In: the emblem rolls in, turning about
- * its exact center as far as it travels; the white name bar then extends from
- * the orange seat, its curved end held in the seat while it is revealed to the
- * right; the grey title bar follows from under it. Out is the
- * reverse. Replacing a speaker retracts and extends the bars only.
+ * end tells the lower third to move on. In: the emblem rolls in, its seats
+ * turning about its exact center as far as it travels while the keyhole stays
+ * upright; the white name bar then extends from the orange seat, its curved
+ * end held in the seat while it is revealed to the right; the title bar
+ * follows from under it. Out is the reverse. Replacing a speaker retracts and
+ * extends the bars only.
  */
 @layer components {
   .pk-live-overlay__lower-third-graphic {
@@ -164,5 +165,10 @@
       opacity: 0;
       transform: translateY(-44%);
     }
+  }
+
+  /* The title bar is about two and a half lines tall: a rolling title travels 180% to clear it. */
+  .pk-live-overlay__title .pk-live-credit-titles {
+    --pk-live-credit-titles-travel: 180%;
   }
 }

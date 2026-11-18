@@ -4,7 +4,11 @@ import { preactAlias, preactEsbuild } from "../lib/preact-vite.mjs";
 
 export const GALLERY_PORT = 8796;
 
-/** Start the component gallery: the design-system preview with fixture data, served by Vite alone. */
+/**
+ * Start the component gallery with fixture data, served by Vite alone.
+ * @param {{ port?: number; host?: string }} [options]
+ * @returns {Promise<import("vite").ViteDevServer>}
+ */
 export function startGallery({ port = GALLERY_PORT, host = "127.0.0.1" } = {}) {
   return createServer({
     configFile: false,

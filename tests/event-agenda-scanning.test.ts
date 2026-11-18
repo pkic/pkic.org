@@ -84,7 +84,8 @@ describe("Event agenda scan evidence", () => {
       revoked: false,
     });
     expect(Date.parse(ready.expiresAt) - Date.parse(ready.serverNow)).toBeGreaterThan(0);
-    expect(Date.parse(ready.expiresAt) - Date.parse(ready.serverNow)).toBeLessThanOrEqual(26 * 60 * 60_000);
+    expect(Date.parse(ready.expiresAt) - Date.parse(ready.serverNow)).toBe(48 * 60 * 60_000);
+    expect(Date.parse(ready.eligibilityExpiresAt!) - Date.parse(ready.serverNow)).toBeLessThanOrEqual(26 * 60 * 60_000);
     expect(JSON.stringify(ready)).not.toContain("example.test");
     expect(JSON.stringify(ready)).not.toContain(fixture.badgeId);
     await env.DB.prepare("UPDATE event_badge_credentials SET revoked_at=? WHERE event_id=?")

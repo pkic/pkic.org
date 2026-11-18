@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, it } from "vitest";
 import { eventDayReadModelSchema } from "../../assets/shared/schemas/event-read-models";
+import { FORMS } from "./helpers/participant-registration-fixtures";
 import { DayAttendancePicker } from "../../assets/ts/components/DayAttendancePicker";
 import { updateRegistrationReview } from "../../assets/ts/components/events/registration-review";
 
@@ -46,4 +47,35 @@ it("reviews every configured day, including unselected days, and updates when a 
   await act(() => form.querySelector<HTMLInputElement>('input[name="dayAttendance.2027-09-02"]')!.click());
   await act(refresh);
   expect(review.textContent?.match(/Not attending/g)).toHaveLength(1);
+});
+
+it("preserves duplicate-label custom answer rows when a question is removed", async () => {
+  host = document.createElement("div");
+  document.body.append(host);
+  const fields = ["first", "second"].map((key, sortOrder) => ({
+    ...FORMS.form!.fields[0],
+    key,
+    label: "Comments",
+    sortOrder,
+  }));
+  await act(() =>
+    render(
+      <form>
+        {fields.map((field) => (
+          <div key={field.key} data-custom-field-key={field.key}>
+            <input name={`custom.${field.key}`} value={field.key} />
+          </div>
+        ))}
+        <div data-registration-review />
+      </form>,
+      host,
+    ),
+  );
+  const form = host.querySelector("form")!;
+  await act(() => updateRegistrationReview(host, form, fields, "Ada Lovelace"));
+  const values = [...host.querySelectorAll("[data-registration-review] dd")];
+  const second = values.find((value) => value.textContent === "second");
+  expect(second).toBeDefined();
+  await act(() => updateRegistrationReview(host, form, [fields[1]], "Ada Lovelace"));
+  expect([...host.querySelectorAll("dd")].find((value) => value.textContent === "second")).toBe(second);
 });

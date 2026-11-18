@@ -14,6 +14,12 @@ minimumReleaseAgeExclude:
   - wrangler@4.96.0
   - ws@8.20.1
   - "@cloudflare/vitest-plugin@1.4.3"
+packageExtensions:
+  # astro2tsx imports this runtime but declares it only as a dev dependency.
+  # Match its pinned core; auto-resolving the peer can select an incompatible beta.
+  "@astrojs/astro2tsx@0.1.2":
+    dependencies:
+      "@emnapi/runtime": 1.11.3
 overrides:
   # The inspected Cloudflare entrypoint uses a remote browser binding, not the
   # Node browser installer. Omit its unused, unpatched extract-zip dependency chain.

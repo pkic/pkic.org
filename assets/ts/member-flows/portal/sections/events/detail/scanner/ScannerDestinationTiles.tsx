@@ -12,18 +12,31 @@ export function ScannerDestinationTiles({
   disabled,
   onVenue,
   onSessions,
+  onCollection,
 }: {
   allowedActions: readonly EventScanRequest["action"][];
   disabled: boolean;
   printHref?: string;
   onVenue: (action: EventScanRequest["action"]) => void;
   onSessions: () => void;
+  onCollection?: () => void;
 }) {
   const entrance = scannerEntranceAction(allowedActions);
   return (
     <div class="pk-scanner-destinations">
       <p>What would you like to do?</p>
       <ActionTiles label="Choose a scanner task">
+        {onCollection && allowedActions.includes("attendance") && (
+          <li>
+            <ActionTile
+              icon={<ScannerModeIcon action="attendance" />}
+              label="Badge collection"
+              hint="Check in and find a badge"
+              disabled={disabled}
+              onClick={onCollection}
+            />
+          </li>
+        )}
         {allowedActions.includes(entrance) && (
           <li>
             <ActionTile

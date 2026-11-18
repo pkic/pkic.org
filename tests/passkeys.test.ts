@@ -326,14 +326,14 @@ describe("passkeys (WebAuthn)", () => {
     expect(body.challengeToken).toBeTruthy();
   });
 
-  it("registers and signs in on a branch preview with the shared preview RP ID", async () => {
-    const rpId = "pkic.workers.dev";
-    const origin = "https://agent-public-upstream-curated-20260923-pkic-org.pkic.workers.dev";
+  it.each([
+    ["preview.pkic.org", "https://feature.preview.pkic.org"],
+    ["pkic.workers.dev", "https://feature-pkic-org.pkic.workers.dev"],
+  ])("registers and signs in on a preview using RP ID %s", async (rpId, origin) => {
     const previewEnv = {
       ...env,
-      WEBAUTHN_RP_ID: rpId,
-      WEBAUTHN_ORIGIN: "https://feature-workers-previews-pkic-org.pkic.workers.dev",
-      WEBAUTHN_PREVIEW_WORKER_NAME: "pkic-org",
+      WEBAUTHN_RP_ID: "preview.pkic.org",
+      WEBAUTHN_ORIGIN: "https://main.preview.pkic.org",
     };
     const previewCall = (url: string, path: string, init: RequestInit = {}, bearer?: string) => {
       const headers = new Headers(init.headers);
@@ -349,16 +349,18 @@ describe("passkeys (WebAuthn)", () => {
       );
     };
 
-    // Workers Previews serve <preview>-pkic-org and <deployment-id>-pkic-org on the
-    // account subdomain. The production Worker's own host and other shapes stay out.
+    // Branches and immutable deployment URLs are direct preview subdomains.
+    // Production, other Workers, nested names, and lookalikes stay out.
     for (const lookalike of [
       "https://other-worker.pkic.workers.dev",
       "https://pkic-org.pkic.workers.dev",
-      "https://nested.branch-pkic-org.pkic.workers.dev",
-      "https://branch-pkic-org.pkic.workers.dev.evil.example",
-      "https://branch--pkic-org.pkic.workers.dev",
-      "http://branch-pkic-org.pkic.workers.dev",
-      "https://branch-pkic-org.pkic.workers.dev:8443",
+      "https://nested.branch.preview.pkic.org",
+      "https://pkic.org",
+      "https://other.pkic.org",
+      "https://branch.preview.pkic.org.evil.example",
+      "https://branch-.preview.pkic.org",
+      "http://branch.preview.pkic.org",
+      "https://branch.preview.pkic.org:8443",
     ]) {
       const unsupportedBegin = await previewCall(lookalike, "/api/v1/auth/passkeys/authenticate/begin");
       expect(unsupportedBegin.status, lookalike).toBe(400);
@@ -366,17 +368,14 @@ describe("passkeys (WebAuthn)", () => {
     }
 
     const deploymentBegin = await previewCall(
-      "https://3f2a9c1e-pkic-org.pkic.workers.dev",
+      "https://3f2a9c1e-feature.preview.pkic.org",
       "/api/v1/auth/passkeys/authenticate/begin",
     );
     expect(deploymentBegin.status).toBe(200);
 
-    const stableBegin = await previewCall(
-      "https://feature-workers-previews-pkic-org.pkic.workers.dev",
-      "/api/v1/auth/passkeys/authenticate/begin",
-    );
+    const stableBegin = await previewCall("https://main.preview.pkic.org", "/api/v1/auth/passkeys/authenticate/begin");
     expect(stableBegin.status).toBe(200);
-    expect(((await stableBegin.json()) as BeginResponse).options.rpId).toBe(rpId);
+    expect(((await stableBegin.json()) as BeginResponse).options.rpId).toBe("preview.pkic.org");
 
     const registrationBeginResponse = await previewCall(
       origin,
@@ -406,6 +405,16 @@ describe("passkeys (WebAuthn)", () => {
     );
     expect(otherWorker.status).toBe(400);
     await expect(otherWorker.json()).resolves.toMatchObject({ error: { code: "PASSKEY_ORIGIN_INVALID" } });
+
+    const otherOrigin =
+      rpId === "preview.pkic.org" ? "https://feature-pkic-org.pkic.workers.dev" : "https://feature.preview.pkic.org";
+    const wrongOrigin = await previewCall(
+      otherOrigin,
+      "/api/v1/auth/passkeys/register/complete",
+      { method: "POST", body: registrationBody },
+      token,
+    );
+    expect(wrongOrigin.status).toBe(400);
 
     const registrationComplete = await previewCall(
       origin,

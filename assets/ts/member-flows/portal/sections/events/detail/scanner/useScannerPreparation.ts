@@ -13,6 +13,7 @@ export function useScannerPreparation({
   occurrenceId,
   action,
   collectorContext,
+  badgeCollection = false,
   epoch,
   session,
   onContextChange,
@@ -24,6 +25,7 @@ export function useScannerPreparation({
   occurrenceId: string | null;
   action: EventScanRequest["action"];
   collectorContext?: ScannerOfflineContext;
+  badgeCollection?: boolean;
   epoch: ScannerEpoch | null;
   session: PortalSession | null;
   onContextChange: (message?: string) => void;
@@ -40,6 +42,7 @@ export function useScannerPreparation({
     roomId: location.roomId,
     epoch,
     collector: Boolean(collectorContext),
+    includeBadgeNames: badgeCollection && action !== "lead",
     onPreparationClosed: (message, code) => {
       onContextChange(message);
       onPreparationClosed(code);
@@ -57,9 +60,11 @@ export function useScannerPreparation({
     occurrenceId: location.targetId,
     snapshot: eligibility.eligibilityManifest.current,
     stale: Boolean(
-      eligibility.eligibilityManifest.current && Date.now() >= eligibility.eligibilityManifest.current.validUntil,
+      eligibility.eligibilityManifest.current &&
+      Date.now() - Date.parse(eligibility.eligibilityManifest.current.serverNow) >= 24 * 60 * 60_000,
     ),
     action,
+    badgeCollection,
     preparing: eligibility.manifestPreparing,
     ready: eligibility.manifestReady,
     error: eligibility.manifestError,

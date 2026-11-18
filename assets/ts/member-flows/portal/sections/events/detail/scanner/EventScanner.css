@@ -16,6 +16,10 @@
     height: var(--pk-7);
   }
   .pk-scanner-connection {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: var(--pk-4);
+    row-gap: var(--pk-1);
     font-size: var(--pk-text-sm);
     margin-block: var(--pk-2) var(--pk-4);
   }

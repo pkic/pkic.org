@@ -81,6 +81,27 @@ afterEach(() => {
 });
 
 describe("scanner-only offline preparation", () => {
+  it("prepares and restores badge collection with its canonical query state during an outage", async () => {
+    window.location.hash = `#${route}?scanAction=attendance&scannerPurpose=collection&scannerTab=scan`;
+    expect(scannerCollectorPath(window.location.hash)).toBe(route);
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    const prepared = await saveScannerOfflineContext({
+      prepareCode: mocks.warm,
+      slug,
+      session,
+      epoch: epoch(),
+      manifest: manifest(),
+      action: "attendance",
+    });
+    expect(prepared).not.toBeNull();
+    expect(prepared?.route).toBe(route);
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    expect(await restoreScannerOfflineContext(route)).toMatchObject({ action: "attendance", route });
+    await expect(assertScannerOfflineContext(prepared!)).resolves.toBeUndefined();
+    expect(portalSession.value).toBeNull();
+    expect(scannerCollectorPath(`#${route}?scannerPurpose=lead`)).toBeNull();
+    expect(scannerCollectorPath(`#${route}?scannerPurpose=collection&attendee=private`)).toBeNull();
+  });
   it("refuses offline preparation when current badge data exists only in memory", async () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
     const prepared = await saveScannerOfflineContext({
@@ -95,10 +116,10 @@ describe("scanner-only offline preparation", () => {
     expect(mocks.warm).not.toHaveBeenCalled();
     expect(mocks.rows[0]).not.toHaveProperty("collectorContext");
   });
-  it("prepares through the local day independently of portal idle expiry", async () => {
+  it("prepares through the event window independently of portal idle expiry", async () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
     mocks.warm.mockResolvedValue(true);
-    const expiresAt = "2026-10-08T00:00:00.000Z";
+    const expiresAt = "2026-10-09T23:00:00.000Z";
     const prepared = await saveScannerOfflineContext({
       prepareCode: mocks.warm,
       slug,
@@ -108,7 +129,7 @@ describe("scanner-only offline preparation", () => {
       action: "attendance",
     });
     expect(prepared?.expiresAt).toBe(expiresAt);
-    vi.setSystemTime(new Date("2026-10-07T20:00:00.000Z"));
+    vi.setSystemTime(new Date("2026-10-08T20:00:00.000Z"));
     scannerTransportUnavailable.value = true;
     expect(await restoreScannerOfflineContext(route)).not.toBeNull();
     vi.setSystemTime(new Date(expiresAt));
@@ -399,7 +420,9 @@ describe("scanner-only offline preparation", () => {
         host!,
       ),
     );
-    await vi.waitFor(() => expect(host?.textContent).toContain("Offline scanning"));
+    await vi.waitFor(() =>
+      expect(host?.querySelector('[aria-label="Scanner status"]')?.textContent).toContain("Offline"),
+    );
     expect(host.textContent).not.toContain("Recovery and diagnostics");
     expect(host.textContent).not.toContain("Recent scans");
     expect(host.textContent).not.toContain("Prepare badge data");
