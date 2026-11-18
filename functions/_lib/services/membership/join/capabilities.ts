@@ -14,8 +14,10 @@ const memberJoinCapabilityPayloadSchema = z.object({
 });
 export type MemberJoinCapabilityPayload = z.infer<typeof memberJoinCapabilityPayloadSchema>;
 
+/** The continuation of one signed-in person's individual application; an organization applies as its identity. */
 const memberJoinApplicationCapabilityPayloadSchema = memberJoinCapabilityPayloadSchema.extend({
-  applicantUserId: databaseIdSchema.nullable(),
+  applicantKind: z.literal("individual"),
+  applicantUserId: databaseIdSchema,
 });
 export type MemberJoinApplicationCapabilityPayload = z.infer<typeof memberJoinApplicationCapabilityPayloadSchema>;
 

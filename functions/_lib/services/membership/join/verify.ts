@@ -36,8 +36,12 @@ async function issueApplicationContinuation(
   return {
     status: "application_ready",
     applicantEmail: payload.email,
-    applicantKind: payload.applicantKind,
-    joinToken: await issueMemberJoinApplicationToken(signingSecret, { ...payload, applicantUserId }, ttlSeconds),
+    applicantKind: "individual",
+    joinToken: await issueMemberJoinApplicationToken(
+      signingSecret,
+      { email: payload.email, capabilityId: payload.capabilityId, applicantKind: "individual", applicantUserId },
+      ttlSeconds,
+    ),
   };
 }
 

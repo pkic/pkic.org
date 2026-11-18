@@ -467,23 +467,22 @@ describe("confirmed organizations sharing a work domain", () => {
     expect(claimed.results.map((item) => item.organization_id).sort()).toEqual([parentId, subsidiary.id].sort());
     expect((await env.DB.prepare("SELECT id FROM members").all()).results).toHaveLength(0);
   });
-  it("allows another named organization beside a claimed domain without changing its owner", async () => {
+  it("adds another named organization beside a claimed domain and keeps the owner's claim", async () => {
     const p = await person();
     const owner = await insertOrganization(env.DB, "Domain Owner");
     await claim("northstar-work.test", owner);
     const result = await create(p, await prepare(p, false, "Shared-domain subsidiary"));
     expect(result.status, await result.clone().text()).toBe(201);
     const { identityId } = identityMutationResponseSchema.parse(await result.json());
-    expect(
-      await env.DB.prepare("SELECT organization_id FROM identities WHERE id=?")
-        .bind(identityId)
-        .first("organization_id"),
-    ).not.toBe(owner);
-    expect(
-      await env.DB.prepare(
-        "SELECT organization_id FROM organization_domain_claims WHERE domain='northstar-work.test'",
-      ).first("organization_id"),
-    ).toBe(owner);
+    const created = await env.DB.prepare("SELECT organization_id FROM identities WHERE id=?")
+      .bind(identityId)
+      .first<string>("organization_id");
+    expect(created).not.toBe(owner);
+    const claims = await env.DB.prepare(
+      "SELECT organization_id FROM organization_domain_claims WHERE domain='northstar-work.test' ORDER BY organization_id",
+    ).all<{ organization_id: string }>();
+    // Several organizations may share a domain: both claim it, so neither becomes the default.
+    expect(claims.results.map((row) => row.organization_id).sort()).toEqual([owner, created].sort());
     expect(
       (await env.DB.prepare("SELECT id FROM user_roles WHERE user_id=?").bind(p.userId).all()).results,
     ).toHaveLength(0);

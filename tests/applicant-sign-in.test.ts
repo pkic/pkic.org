@@ -22,7 +22,7 @@ async function apply(
   email: string,
   category: string,
   organizationName?: string,
-  applicantUserId: string | null = null,
+  applicantUserId?: string,
   applicantName = "Alice Applicant",
 ) {
   const response = await callApi(apiEnv(), "/api/v1/members/applications", {
@@ -118,19 +118,21 @@ describe("sign-in for someone whose membership application is pending", () => {
     expect(response.status).toBe(200);
   });
 
-  it("still accepts a name the account rules refuse, without creating an account", async () => {
-    await apply("odd-name@individual.test", "H6", undefined, null, "Dr. Alice+Test: Applicant");
+  it("still accepts a name the account rules refuse, without saving it on the account", async () => {
+    await apply("odd-name@individual.test", "H6", undefined, undefined, "Dr. Alice+Test: Applicant");
     expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toHaveLength(1);
     expect(
-      await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", ["odd-name@individual.test"]),
-    ).toEqual([]);
+      await queryAll(env.DB, "SELECT first_name, last_name FROM users WHERE normalized_email = ?", [
+        "odd-name@individual.test",
+      ]),
+    ).toEqual([{ first_name: null, last_name: null }]);
   });
 
-  it("gives an applicant with a single name an account too", async () => {
-    await apply("single@individual.test", "H6", undefined, null, "Madonna");
+  it("saves a single name on the applicant's account", async () => {
+    await apply("single@individual.test", "H6", undefined, undefined, "Madonna");
     expect(
-      await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", ["single@individual.test"]),
-    ).toHaveLength(1);
+      await queryAll(env.DB, "SELECT first_name FROM users WHERE normalized_email = ?", ["single@individual.test"]),
+    ).toEqual([{ first_name: "Madonna" }]);
   });
 
   it("redacts an applicant's application, and kills its status link, when the account is anonymized", async () => {

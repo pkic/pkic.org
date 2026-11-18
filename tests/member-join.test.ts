@@ -600,6 +600,15 @@ describe("signed-in membership join", () => {
       body: { status: "representation_application_in_progress" },
     });
 
+    // An older application that only names the organization counts the same way the submission counts it.
+    await testEnv.DB.prepare("UPDATE member_applications SET organization_id=NULL WHERE id=?")
+      .bind(colleagueApplication)
+      .run();
+    await expect(pathFor({ identityId })).resolves.toEqual({
+      status: 200,
+      body: { status: "representation_application_in_progress" },
+    });
+
     // The person's own open application is followed through its status link instead.
     await testEnv.DB.prepare("UPDATE member_applications SET stage='withdrawn' WHERE id=?")
       .bind(colleagueApplication)

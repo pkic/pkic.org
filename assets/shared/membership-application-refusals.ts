@@ -17,6 +17,8 @@ export const INDIVIDUAL_WHILE_REPRESENTING = "INDIVIDUAL_WHILE_REPRESENTING";
 export const APPLICATION_ALREADY_PENDING = "APPLICATION_ALREADY_PENDING";
 /** An organization applies only through the organization identity of the person who represents it. */
 export const ORGANIZATION_IDENTITY_REQUIRED = "ORGANIZATION_IDENTITY_REQUIRED";
+/** Something the application relied on changed while it was sent, and no other refusal explains it. */
+export const APPLICATION_CHANGED = "APPLICATION_CHANGED";
 /** The identity an application is made as lacks a detail the application needs. */
 export const APPLICANT_PROFILE_INCOMPLETE = "APPLICANT_PROFILE_INCOMPLETE";
 
@@ -40,6 +42,9 @@ export function individualWhileRepresentingMessage(organizationName: string): st
 
 export const ORGANIZATION_IDENTITY_REQUIRED_MESSAGE =
   "To apply on behalf of an organization, first add it to your account with your work email address.";
+
+export const APPLICATION_CHANGED_MESSAGE =
+  "Something on the application form changed while you were sending it. Reload the page and try again.";
 
 export const APPLICATION_ALREADY_PENDING_MESSAGE =
   "You already have a membership application in progress. Follow it in the member portal or from the link in your confirmation email.";

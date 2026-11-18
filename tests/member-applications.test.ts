@@ -1,5 +1,11 @@
 import { membershipApplicationFields } from "../assets/shared/schemas/membership-application-form";
-import { ORGANIZATION_IDENTITY_REQUIRED } from "../assets/shared/membership-application-refusals";
+import { APPLICATION_CHANGED, ORGANIZATION_IDENTITY_REQUIRED } from "../assets/shared/membership-application-refusals";
+import { createMemberApplicationAsIdentity } from "../functions/_lib/services/membership/applications/create-as-identity";
+import {
+  issueMemberJoinApplicationToken,
+  newMemberJoinCapabilityPayload,
+} from "../functions/_lib/services/membership/join/capabilities";
+import type { DatabaseLike, StatementLike } from "../functions/_lib/types";
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -17,6 +23,7 @@ import {
   membershipApplicationDescriptionAnswers,
   requiredMembershipApplicationAnswers,
   seedMembershipApplicationForm,
+  seedMemberApplication,
   verifiedMemberApplicationPayload,
 } from "./helpers/member-applications";
 import { callApi } from "./helpers/app";
@@ -116,6 +123,36 @@ async function organizationApplicationRequest(
       }),
     ),
   });
+}
+
+/** Runs `race` around the submission batch, recognized by its application insert. */
+function aroundSubmission(db: DatabaseLike, race: { before(): Promise<void>; after(): Promise<void> }): DatabaseLike {
+  const raw = new WeakMap<object, { statement: StatementLike; sql: string }>();
+  const tracked = (statement: StatementLike, sql: string): StatementLike => {
+    const proxy = new Proxy(statement, {
+      get(target, property) {
+        if (property === "bind") return (...values: unknown[]) => tracked(target.bind(...values), sql);
+        const value = Reflect.get(target, property);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    raw.set(proxy, { statement, sql });
+    return proxy;
+  };
+  return {
+    prepare: (sql) => tracked(db.prepare(sql), sql),
+    async batch(statements) {
+      const unwrapped = statements.map((statement) => raw.get(statement)!);
+      const run = () => db.batch(unwrapped.map((item) => item.statement));
+      if (!unwrapped.some((item) => item.sql.includes("INSERT INTO member_applications"))) return run();
+      await race.before();
+      try {
+        return await run();
+      } finally {
+        await race.after();
+      }
+    },
+  };
 }
 
 describe("POST /api/v1/members/applications", () => {
@@ -453,6 +490,50 @@ describe("POST /api/v1/members/applications", () => {
     ).toHaveLength(1);
   });
 
+  it("says the application changed when a guard fails and nothing stands in its way any more", async () => {
+    const organizationId = await insertOrganization(env.DB, "Race Corp");
+    const applicant = await organizationApplicant("alice@race-domain.test", organizationId);
+    let competing = "";
+    const racing = aroundSubmission(env.DB, {
+      // Another application opens while this one is sent, then closes before the refusal is explained.
+      async before() {
+        competing = await seedMemberApplication({ applicantEmail: "bob@race-domain.test", stage: "submitted" });
+        await env.DB.prepare("UPDATE member_applications SET organization_id=? WHERE id=?")
+          .bind(organizationId, competing)
+          .run();
+      },
+      async after() {
+        await env.DB.prepare("DELETE FROM member_applications WHERE id=?").bind(competing).run();
+      },
+    });
+    await expect(
+      createMemberApplicationAsIdentity(racing, {
+        userId: applicant.userId,
+        identityId: applicant.identityId,
+        membershipCategory: "A",
+        answers: { ...validPayload.answers, ...membershipApplicationDescriptionAnswers("A") },
+        appBaseUrl: "https://pkic.org",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: APPLICATION_CHANGED });
+    expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toEqual([]);
+  });
+
+  it("refuses a continuation that names no signed-in account", async () => {
+    const joinToken = await issueMemberJoinApplicationToken(
+      env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
+      { ...newMemberJoinCapabilityPayload("visitor@gmail.com", "individual"), applicantUserId: null } as never,
+      15 * 60,
+    );
+    const response = await callApi(makeEnv(), "/api/v1/members/applications", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...individualPayload, applicantEmail: "visitor@gmail.com", joinToken }),
+    });
+    expect(response.status).toBe(401);
+    expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = 'visitor@gmail.com'")).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toEqual([]);
+  });
+
   /**
    * Issue #27: nothing checked whether the consortium already had the
    * organization being applied for, so a person at an unrelated address could
@@ -484,9 +565,17 @@ describe("POST /api/v1/members/applications", () => {
       // those organizations out of applying.
       await seedMemberOrganization("Example Corp", "");
       const applicant = await organizationApplicant(validPayload.applicantEmail, "org-existing");
-      const response = await callApi(makeEnv(), await organizationApplicationRequest(applicant));
+      // The session, the identity applied as, the form and policy, and the atomic submission; then four for
+      // delivering the confirmation in the background.
+      const response = await callApi(makeEnv(), await organizationApplicationRequest(applicant), undefined, {
+        maxRoundTrips: 8,
+      });
 
       expect(response.status).toBe(201);
+      // The domain the address links through is read with the form, not in a round trip of its own.
+      expect(await queryAll(env.DB, "SELECT organization_domain FROM member_applications")).toEqual([
+        { organization_domain: "example-corp.test" },
+      ]);
     });
 
     it("accepts one for an organization whose membership has lapsed", async () => {

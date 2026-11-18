@@ -31,16 +31,18 @@ import {
 } from "../../../../../assets/shared/schemas/membership-application-form";
 import { prepareApplicationWorkingGroups, type ApplicationWorkingGroupRow } from "../application-groups";
 import { prepareGlobalFormDefinition } from "../../forms/read";
-import { batchRows } from "../../../db/pagination";
+import { batchFirst, batchRows } from "../../../db/pagination";
 import { requireMembershipApplicationPolicyFields } from "../application-form";
-import { organizationLinkDomain } from "../organization-domain-claims";
+import { organizationDomainClaimForEmailSelection } from "../organization-domain-claims";
 import { prepareMembershipCategoryRead, requireMembershipCategoryResult } from "../categories";
 import { prepareMembershipWorkflowVersionRead } from "../workflows/catalog";
 import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
-import { mailboxKind } from "../../../email-domains/classification";
+import { mailboxKind, workEmailDomain } from "../../../email-domains/classification";
 import {
   APPLICATION_ALREADY_PENDING,
   APPLICATION_ALREADY_PENDING_MESSAGE,
+  APPLICATION_CHANGED,
+  APPLICATION_CHANGED_MESSAGE,
   INDIVIDUAL_ALREADY_MEMBER,
   INDIVIDUAL_ALREADY_MEMBER_MESSAGE,
   INDIVIDUAL_WHILE_REPRESENTING,
@@ -56,9 +58,7 @@ import {
   prepareMembershipApplicationConflictGuards,
   type MembershipApplicationConflictInput,
 } from "./conflicts";
-import { buildFindOrCreateUserStatement, findUserByEmail, splitPersonName } from "../../users";
-import { prepareVerifyOwnedEmailStatements } from "../../email-verification";
-import { normalizeEmail } from "../../../validation";
+import { splitPersonName } from "../../users";
 import { firstNameSchema, lastNameSchema } from "../../../../../assets/shared/schemas/api-common";
 import type { DatabaseLike, StatementLike } from "../../../types";
 import {
@@ -73,13 +73,12 @@ import {
  * represents an organization, or an application for the same person or
  * organization is still open (issue #27 and its follow-ups).
  *
- * The organization is matched by its id when the applicant applies as an
- * organization identity, and otherwise by its name, compared the way every
- * other surface compares it. The person is matched by their account, never by
- * a typed name or address; a submission without an account (a verified
- * mailbox nobody holds yet) is matched by that verified address only for an
- * open application. Being an `organizations` row is not enough: the refusal
- * is about membership, and an organization can exist without one.
+ * The organization is matched by its id, and an older application that only
+ * names it by that name, the same way readiness and the organization's current
+ * application match it. The person is matched by their account, never by a
+ * typed name; their verified address also matches an open application. Being
+ * an `organizations` row is not enough: the refusal is about membership, and
+ * an organization can exist without one.
  */
 async function refuseConflictingApplication(
   db: DatabaseLike,
@@ -121,11 +120,6 @@ async function refuseConflictingApplication(
   }
 }
 
-/**
- * The account a verified applicant signs in with to follow their application. The join link proved the
- * mailbox, so an address nobody holds yet gets its account now rather than at approval; an address that
- * already belongs to a person keeps its existing path.
- */
 /** The applicant's typed name, split for the account; null when the account rules refuse a part. */
 function accountNamesFromApplicant(applicantName: string) {
   const { firstName, lastName } = splitPersonName(applicantName);
@@ -155,37 +149,6 @@ function prepareApplicantAccountNames(db: DatabaseLike, userId: string, applican
   ];
 }
 
-async function prepareApplicantAccount(
-  db: DatabaseLike,
-  input: Pick<CreateMemberApplicationInput, "applicantEmail" | "applicantName" | "applicantUserId">,
-) {
-  if (input.applicantUserId || (await findUserByEmail(db, input.applicantEmail))) return null;
-  const names = accountNamesFromApplicant(input.applicantName);
-  if (!names) return null;
-  const { firstName, lastName } = names;
-  const account = await buildFindOrCreateUserStatement(
-    db,
-    {
-      email: input.applicantEmail,
-      firstName: firstName ?? undefined,
-      lastName: lastName ?? undefined,
-      mailboxVerified: true,
-      // The membership identity is created at approval; until then the account only follows the application.
-      identityInBatch: true,
-    },
-    // The absence observed above is guarded again inside the atomic write.
-    { ownership: null, existing: null },
-  );
-  account.statements.push(
-    ...prepareVerifyOwnedEmailStatements(db, {
-      userId: account.user.id,
-      normalizedEmail: normalizeEmail(input.applicantEmail),
-      method: "magic_link",
-    }),
-  );
-  return account;
-}
-
 export interface CreateMemberApplicationInput {
   applicantEmail: string;
   applicantName: string;
@@ -196,7 +159,8 @@ export interface CreateMemberApplicationInput {
   /** The verified-email link the application was made through; null when a signed-in identity applies. */
   joinCapabilityId: string | null;
   applicantKind: "organization" | "individual";
-  applicantUserId: string | null;
+  /** The signed-in account that applies; the application never creates one. */
+  applicantUserId: string;
   /**
    * The identity a signed-in applicant applies as; its holding is rechecked when the application commits.
    * An organization application requires one.
@@ -248,11 +212,14 @@ export async function createMemberApplication(
     sql: "SELECT ? AS code",
     bindings: [input.membershipCategory],
   });
+  // The domain the applicant's address links through, kept so staff edits of the address stay on it.
+  const domainRead = organizationDomainClaimForEmailSelection(input.applicantEmail);
   const results = await db.batch([
     categoryRead.statement,
     workflowRead.statement,
     ...formRead.statements,
     groupsRead.statement,
+    db.prepare(domainRead.sql).bind(...domainRead.bindings),
   ]);
   const category = requireMembershipCategoryResult(categoryRead.decode(results[0]), input.membershipCategory);
   const workflow = await requireCategoryWorkflow(
@@ -325,35 +292,31 @@ export async function createMemberApplication(
     applicantEmail: input.applicantEmail,
   };
   // A record of the domain the applicant's address links through; the application never claims it.
-  const organizationDomain = isIndividual ? null : await organizationLinkDomain(db, input.applicantEmail);
+  const organizationDomain = isIndividual
+    ? null
+    : (batchFirst<{ domain: string }>(results[3 + formRead.statements.length])?.domain ??
+      workEmailDomain(input.applicantEmail));
   const statusUrl = `${input.appBaseUrl}/application-status/?id=${encodeURIComponent(id)}&token=${encodeURIComponent(manageToken)}`;
 
-  const applicantAccount = await prepareApplicantAccount(db, input);
-  const applicantUserId = input.applicantUserId ?? applicantAccount?.user.id ?? null;
   const statements: StatementLike[] = [
-    ...(applicantAccount?.statements ?? []),
     ...prepareMembershipApplicationConflictGuards(db, conflictInput),
-    ...(input.applicantUserId
-      ? [
-          prepareAuthorizationGuard(db, {
-            sql: `SELECT 1 FROM users user
-                   WHERE user.id = ? AND user.active = 1
-                     AND user.pii_redacted_at IS NULL AND user.merged_into_user_id IS NULL
-                     AND (
-                       user.normalized_email = ?
-                       OR EXISTS (
-                         SELECT 1 FROM user_emails alias
-                          WHERE alias.user_id = user.id
-                            AND alias.normalized_email = ?
-                            AND alias.verified_at IS NOT NULL
-                       )
-                     )`,
-            bindings: [input.applicantUserId, input.applicantEmail, input.applicantEmail],
-          }),
-          ...prepareApplicantAccountNames(db, input.applicantUserId, input.applicantName, now),
-        ]
-      : []),
-    ...(input.applicantIdentityId && input.applicantUserId
+    prepareAuthorizationGuard(db, {
+      sql: `SELECT 1 FROM users user
+             WHERE user.id = ? AND user.active = 1
+               AND user.pii_redacted_at IS NULL AND user.merged_into_user_id IS NULL
+               AND (
+                 user.normalized_email = ?
+                 OR EXISTS (
+                   SELECT 1 FROM user_emails alias
+                    WHERE alias.user_id = user.id
+                      AND alias.normalized_email = ?
+                      AND alias.verified_at IS NOT NULL
+                 )
+               )`,
+      bindings: [input.applicantUserId, input.applicantEmail, input.applicantEmail],
+    }),
+    ...prepareApplicantAccountNames(db, input.applicantUserId, input.applicantName, now),
+    ...(input.applicantIdentityId
       ? [
           prepareAuthorizationGuard(db, {
             sql: `SELECT 1 FROM identities
@@ -374,7 +337,7 @@ export async function createMemberApplication(
       )
       .bind(
         id,
-        applicantUserId,
+        input.applicantUserId,
         input.applicantEmail,
         input.applicantName,
         isIndividual ? null : (input.organizationName ?? null),
@@ -422,11 +385,7 @@ export async function createMemberApplication(
       "member_application_submitted",
       "member_application",
       id,
-      {
-        applicantEmail: input.applicantEmail,
-        membershipCategory: input.membershipCategory,
-        ...(applicantAccount ? { accountCreated: true, userId: applicantAccount.user.id } : {}),
-      },
+      { applicantEmail: input.applicantEmail, membershipCategory: input.membershipCategory },
       now,
     ),
   );
@@ -436,7 +395,10 @@ export async function createMemberApplication(
   } catch (error) {
     if (isStateGuardFailure(error)) {
       await refuseConflictingApplication(db, conflictInput);
-      throw new AppError(409, "ORGANIZATION_AFFILIATION_CHANGED", "Confirm your organization again before applying.");
+      throw new AppError(409, APPLICATION_CHANGED, APPLICATION_CHANGED_MESSAGE, {
+        formErrors: [APPLICATION_CHANGED_MESSAGE],
+        fieldErrors: {},
+      });
     }
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(

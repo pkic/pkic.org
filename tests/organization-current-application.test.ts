@@ -23,7 +23,13 @@ async function represent(organizationId: string, email: string, jobTitle: string
 }
 
 function currentApplication(organizationId: string, cookie: string) {
-  return callApi(env, `/api/v1/organizations/${organizationId}/applications/current`, { headers: { cookie } });
+  // The representative check, then the application with its applicant's identity.
+  return callApi(
+    env,
+    `/api/v1/organizations/${organizationId}/applications/current`,
+    { headers: { cookie } },
+    { maxRoundTrips: 2 },
+  );
 }
 
 describe("an organization's current membership application", () => {
@@ -78,5 +84,20 @@ describe("an organization's current membership application", () => {
     ).toEqual({
       application: null,
     });
+  });
+
+  it("shows an older application that only names the organization", async () => {
+    const organizationId = await insertOrganization(env.DB, "Named Org");
+    const colleague = await represent(organizationId, "colleague@named.example", "Engineer");
+    await seedMemberApplication({
+      applicantEmail: "earlier@named.example",
+      organizationName: " Named Org ",
+      stage: "submitted",
+    });
+    expect(
+      organizationCurrentApplicationResponseSchema.parse(
+        await (await currentApplication(organizationId, colleague.cookie)).json(),
+      ),
+    ).toMatchObject({ application: { stage: "submitted", applicant: null } });
   });
 });

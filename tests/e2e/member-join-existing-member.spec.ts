@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { ACCOUNT_ORGANIZATION_COPY } from "../../assets/shared/account-organization-copy";
 import { memberApplicationCreateAsIdentitySchema } from "../../assets/shared/schemas/member-applications";
 import { ORGANIZATION_JOB_TITLE_COPY } from "../../assets/shared/email-first-copy";
+import { APPLICATION_CHANGED, APPLICATION_CHANGED_MESSAGE } from "../../assets/shared/membership-application-refusals";
 import {
   organizationCreateSchema,
   organizationCreateResponseSchema,
@@ -228,10 +229,7 @@ test("a verified address can apply for a nonmember organization on a shared doma
         status: 409,
         contentType: "application/json",
         body: JSON.stringify({
-          error: {
-            code: "ORGANIZATION_AFFILIATION_CHANGED",
-            message: "Confirm your organization again before applying.",
-          },
+          error: { code: APPLICATION_CHANGED, message: APPLICATION_CHANGED_MESSAGE },
         }),
       });
     },
@@ -239,7 +237,7 @@ test("a verified address can apply for a nonmember organization on a shared doma
   );
   await page.getByRole("button", { name: "Submit membership application", exact: true }).click();
   // The refusal is said and the answers stay, so the application can be sent again.
-  await expect(page.getByText("Confirm your organization again before applying.", { exact: true })).toBeVisible();
+  await expect(page.getByText(APPLICATION_CHANGED_MESSAGE, { exact: true })).toBeVisible();
   await expect(page.getByLabel(/^Why do you want to join/)).toHaveValue("Contribute to PKI interoperability.");
   for (const agreement of await agreements.all()) await agreement.check();
   await page.getByRole("button", { name: "Submit membership application", exact: true }).click();

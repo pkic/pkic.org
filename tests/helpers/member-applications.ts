@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { queryAll } from "./context";
 import { isIndividualMembershipCategory } from "../../assets/shared/schemas/membership-categories";
 import { MEMBERSHIP_APPLICATION_FORM_KEY } from "../../assets/shared/schemas/membership-application-form";
+import { findOrCreateUser } from "../../functions/_lib/services/users";
 import {
   issueMemberJoinApplicationToken,
   newMemberJoinCapabilityPayload,
@@ -47,20 +48,27 @@ export function membershipApplicationDescriptionAnswers(membershipCategory: stri
 export async function verifiedMemberApplicationPayload<T extends Record<string, unknown>>(
   payload: T,
   signingSecret = env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
-  /** The existing account the join step resolved for the verified mailbox, if any. */
-  applicantUserId: string | null = null,
+  /** The signed-in account the join step continued; by default the verified mailbox's own account. */
+  applicantUserId?: string,
 ): Promise<T & { joinToken: string }> {
   const membershipCategory = String(payload.membershipCategory ?? "");
-  const capability = newMemberJoinCapabilityPayload(
-    String(payload.applicantEmail ?? ""),
-    isIndividualMembershipCategory(membershipCategory) ? "individual" : "organization",
-  );
+  const applicantEmail = String(payload.applicantEmail ?? "");
+  // Only an individual applies through a continuation; a test of an organization category sees it refused.
+  const capability = newMemberJoinCapabilityPayload(applicantEmail, "individual");
+  const userId =
+    applicantUserId ??
+    // An account that holds no identity yet, so approval's membership identity stays the only one.
+    (await findOrCreateUser(env.DB, { email: applicantEmail, mailboxVerified: true, identityInBatch: true })).id;
   // Supply synthetic descriptions unless a test explicitly exercises missing/blank answers.
   const answers = (payload.answers ?? {}) as Record<string, unknown>;
   return {
     ...payload,
     answers: { ...membershipApplicationDescriptionAnswers(membershipCategory), ...answers },
-    joinToken: await issueMemberJoinApplicationToken(signingSecret, { ...capability, applicantUserId }, 15 * 60),
+    joinToken: await issueMemberJoinApplicationToken(
+      signingSecret,
+      { ...capability, applicantKind: "individual", applicantUserId: userId },
+      15 * 60,
+    ),
   };
 }
 
