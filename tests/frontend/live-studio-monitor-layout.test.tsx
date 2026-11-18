@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LIVE_OVERLAY_PRESET_LAYOUTS } from "../../assets/shared/live-overlay-layout-presets";
 import { DEFAULT_LIVE_SCREEN_SYNC } from "../../assets/shared/schemas/live-screen-sync";
+import { EMPTY_LIVE_STAGE } from "../../assets/shared/schemas/live-session-stage";
 import { applyLiveRoomMessage } from "../../assets/ts/live-session/live-room-state";
 import { monitorPanelView } from "../../assets/ts/member-flows/portal/sections/events/detail/live/studio/MonitorPanel";
 import {
@@ -49,6 +50,7 @@ const room = applyLiveRoomMessage(
 const sources = {
   preview: room,
   program: room,
+  agenda: null,
   connected: true,
   slug: "pqc-2026",
   roomId: "room",
@@ -63,9 +65,17 @@ const switcher = {
   disabled: false,
 };
 
-function Harness({ panel = 0, preview = room }: { panel?: number; preview?: typeof room }) {
+function Harness({
+  panel = 0,
+  preview = room,
+  program = room,
+}: {
+  panel?: number;
+  preview?: typeof room;
+  program?: typeof room | null;
+}) {
   const layout = useStudioLayout();
-  const view = monitorPanelView(layout.panels[panel]!, { ...sources, preview }, layout.change, switcher);
+  const view = monitorPanelView(layout.panels[panel]!, { ...sources, preview, program }, layout.change, switcher);
   return (
     <>
       {view.heading}
@@ -145,6 +155,65 @@ describe("studio monitor layouts", () => {
     expect(screen().querySelector(".pk-live-overlay__question-text")).not.toBeNull();
     expect(screen().querySelector(".pk-live-overlay__name")).toBeNull();
     expect(host.querySelector('button[aria-label="Scene in Preview: Panel"]')).not.toBeNull();
+  });
+
+  it("marks each scene with a dot for every output showing it now, in that output's tally color", () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    // Program is on Q&A, the projector on Panel and Preview on Break; the speaker's screen draws no scene.
+    const onAir = {
+      ...room,
+      stage: { ...room.stage, scene: "questions" },
+      outputs: { ...room.outputs, projector: { ...EMPTY_LIVE_STAGE, scene: "panel" } },
+    };
+    const preview = { ...room, stage: { ...room.stage, scene: "break" } };
+    void act(() => render(<Harness preview={preview} program={onAir} />, host!));
+    const scenes = () => [...host!.querySelectorAll<HTMLButtonElement>(".pk-studio-scenes .pk-studio-scene")];
+    const marked = () =>
+      Object.fromEntries(
+        scenes().map((scene) => [
+          scene.querySelector(".pk-studio-scene__name")!.textContent,
+          [...scene.querySelectorAll<HTMLElement>(".pk-studio-scene__marker")].map((marker) => [
+            marker.getAttribute("aria-label"),
+            marker.dataset.tally,
+          ]),
+        ]),
+      );
+    expect(marked()).toEqual({
+      Default: [],
+      "Q&A": [["On Program", "program"]],
+      Panel: [["On Projector", "projector"]],
+      Break: [["In Preview", "preview"]],
+      "Check-in": [],
+      "Full board": [],
+      Keynote: [],
+    });
+    // A marker names its output as its hint too, in the studio's tooltip; it is a picture, not a control.
+    const marker = scenes()[1]!.querySelector<HTMLElement>(".pk-studio-scene__marker")!;
+    expect(marker.getAttribute("role")).toBe("img");
+    expect(marker.dataset.tooltip ?? marker.getAttribute("title")).toBe("On Program");
+    expect(scenes()[1]!.querySelector("button")).toBeNull();
+    // The picture stays aside for assistive technology; the scene reads as its name and where it shows.
+    expect(scenes()[1]!.querySelector(".pk-studio-scene__picture")!.getAttribute("aria-hidden")).toBe("true");
+    const hint = (scene: HTMLButtonElement) => scene.dataset.tooltip ?? scene.getAttribute("title");
+    expect(hint(scenes()[1]!)).toBe("Q&A · on Program\nLoad it into Preview. Transition puts it on Program.");
+    expect(hint(scenes()[3]!)).toBe("Break · in Preview\nTransition puts it on Program.");
+    // A click on a marked scene still only loads it into Preview.
+    void act(() => scenes()[1]!.click());
+    expect(switcher.previewScene).toHaveBeenLastCalledWith("questions");
+
+    // Every output on one scene: Program first, then Preview, then the room's screens in their order.
+    const together = { ...onAir, outputs: { ...room.outputs, projector: { ...EMPTY_LIVE_STAGE, scene: "questions" } } };
+    void act(() => render(<Harness preview={{ ...room, stage: together.stage }} program={together} />, host!));
+    expect(marked()["Q&A"]).toEqual([
+      ["On Program", "program"],
+      ["In Preview", "preview"],
+      ["On Projector", "projector"],
+    ]);
+    expect(hint(scenes()[1]!)).toBe("Q&A · on Program, in Preview, and on Projector\nTransition puts it on Program.");
+    // Nothing on air: only Preview's scene is marked.
+    void act(() => render(<Harness preview={preview} program={null} />, host!));
+    expect(Object.values(marked()).flat()).toEqual([["In Preview", "preview"]]);
   });
 
   it("names Program's scene, and keeps a room screen's tile in the layout an operator picks", () => {

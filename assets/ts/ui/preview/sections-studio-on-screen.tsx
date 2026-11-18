@@ -10,7 +10,11 @@ import { useEffect, useState } from "preact/hooks";
 import type { PreviewSection } from "./PreviewShell";
 import type { LiveStage } from "../../../shared/schemas/live-session-room";
 import { DEFAULT_LIVE_SCREEN_SYNC } from "../../../shared/schemas/live-screen-sync";
-import { LIVE_OVERLAY_DEFAULT_POSITIONS } from "../../../shared/live-overlay-layout-presets";
+import {
+  LIVE_OVERLAY_DEFAULT_POSITIONS,
+  LIVE_OVERLAY_PRESET_LAYOUTS,
+} from "../../../shared/live-overlay-layout-presets";
+import type { LiveOverlayLayout } from "../../../shared/schemas/live-overlay-layout";
 import { OverlayLayoutEditor } from "../../member-flows/portal/sections/events/detail/settings/live-layouts/OverlayLayoutEditor";
 import { LiveReactionBar } from "../../live-session/LiveReactionBar";
 import type { LiveRoomState } from "../../live-session/live-room-state";
@@ -34,8 +38,18 @@ import {
   ROOM_WITH_SCREENS,
   roomWith,
 } from "./studio-on-screen-fixtures";
+import { SCENE_SOURCES } from "./studio-scenes-fixtures";
 
 const noCommand = () => undefined;
+/** The built-in Q&A scene as an event that never changed it lists it: one graphic comes on, others are picked or switched. */
+const BUILT_IN_QA: LiveOverlayLayout = {
+  slug: "questions",
+  ...LIVE_OVERLAY_PRESET_LAYOUTS.questions,
+  preset: "questions",
+  builtIn: true,
+  saved: false,
+  updatedAt: null,
+};
 const noHandlers = {
   onPointerDown: noCommand,
   onPointerMove: noCommand,
@@ -159,6 +173,7 @@ const LIVE_PANEL: StudioPanel = { id: "live-1", type: "monitor", x: 0, y: 0, w: 
 const MONITOR_SOURCES = {
   preview: ROOM,
   program: ROOM,
+  agenda: null,
   connected: true,
   slug: "pqc-conference-2026",
   roomId: SCREEN_FIXTURE.roomId,
@@ -270,9 +285,9 @@ const PREVIEW_PANEL: StudioPanel = {
   outputs: ["preview"],
 };
 
-/** Preview with the event's scenes under it, each drawn with the room's real content. */
+/** Preview with the event's scenes under it, each drawn as Preview shows it once the scene is loaded. */
 function PreviewScenes() {
-  const view = monitorPanelView(PREVIEW_PANEL, MONITOR_SOURCES, noCommand, {
+  const view = monitorPanelView(PREVIEW_PANEL, SCENE_SOURCES, noCommand, {
     clear: noCommand,
     screenSync: DEFAULT_LIVE_SCREEN_SYNC,
     sync: noCommand,
@@ -401,7 +416,7 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "layout-editor-audience",
     title: "Sizing Top questions in the layout settings",
-    note: "Top questions, Chat and Reactions are elements like the other cards: shown or hidden, moved and sized per layout, and each screen or browser source names its layout.",
+    note: "Top questions, Chat and Reactions are graphics like the others: placed and sized per scene. Each fills itself from the room, so its row carries the scene's choice: Comes on with the scene, or Switched in the studio. The background has no switch and says so.",
     render: () => (
       <OverlayLayoutEditor
         endpoint="/api/v1/events/pqc-conference-2026/overlays/layouts/projector-qa"
@@ -419,13 +434,13 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "layout-editor-read-only",
     title: "A scene shown to someone who may not change it",
-    note: "Room operators load the event's scenes but only the people who set up the live studio change them: the scene is drawn with sample content, with nothing to move, add, save or delete.",
+    note: "Room operators load the event's scenes but only the people who set up the live studio change them: the built-in Q&A scene drawn with sample content, and its graphics listed with where each sits and what puts it on, with nothing to move, add, choose, save or delete.",
     render: () => (
       <OverlayLayoutEditor
-        endpoint="/api/v1/events/pqc-conference-2026/overlays/layouts/projector-qa"
+        endpoint="/api/v1/events/pqc-conference-2026/overlays/layouts/questions"
         positionsEndpoint="/api/v1/events/pqc-conference-2026/overlays/positions"
-        layout={QA_LAYOUT}
-        layouts={[QA_LAYOUT]}
+        layout={BUILT_IN_QA}
+        layouts={[BUILT_IN_QA]}
         positions={{ elements: LIVE_OVERLAY_DEFAULT_POSITIONS, saved: false, updatedAt: null }}
         canEdit={false}
         onSaved={noCommand}
@@ -511,7 +526,7 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "studio-preview-scenes",
     title: "Preview with its scenes",
-    note: "Shown under Preview unless hidden from its panel menu. Each scene is drawn with the room's real content: Preview's graphics, else Program's, the session's first speaker and the top questions. The scene in Preview is edged in Preview's color. The scene button beside PVW opens the same scenes, three to a row. Choosing one loads it into Preview.",
+    note: "Shown under Preview unless hidden from its panel menu. Each scene is drawn as Preview shows it once the scene is loaded: what Preview holds now, here a lower third, plus the graphics that come on with the scene, filled from the room: its top questions in Q&A, its panel in Panel, Up next in Break. A dot leads the name of a scene for every output showing it now, in that output's tally color: Program on Q&A, the projector on Panel, Preview on Default, which is edged in Preview's color too. The scene button beside PVW opens the same scenes, three to a row. Choosing one loads it into Preview.",
     render: () => <PreviewScenes />,
   },
   {
