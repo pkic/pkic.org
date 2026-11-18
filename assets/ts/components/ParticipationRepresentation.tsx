@@ -88,7 +88,7 @@ export function ParticipationRepresentation({
           <>
             <Field
               label={ORGANIZATION_JOB_TITLE_COPY.label}
-              help={`${ORGANIZATION_JOB_TITLE_COPY.help} The organization and email address stay unchanged.`}
+              help={`${ORGANIZATION_JOB_TITLE_COPY.help(person.organizationName)} The organization and email address stay unchanged.`}
               required
               {...form.of("jobTitle")}
             >

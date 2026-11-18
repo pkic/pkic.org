@@ -171,11 +171,9 @@ export function VerifiedOrganizationDetails({
           label="Organization"
           required
           help={
-            !domainConfirmed
-              ? "Choose an email domain first, or use + to add your organization."
-              : resolved.domain
-                ? `Organizations on your email address's domain, its parent domains and its subdomains are listed, as are organizations you already represent. Use + to add your organization if it is missing.`
-                : "Use + to add your organization."
+            domainConfirmed
+              ? "Not listed? Use + to add your organization."
+              : "Choose an email domain first, or use + to add your organization."
           }
           {...detailsForm.of(organizationId ? "organizationId" : "organizationName")}
         >
@@ -233,7 +231,9 @@ export function VerifiedOrganizationDetails({
         <Field
           id={`${formId}-title`}
           label={ORGANIZATION_JOB_TITLE_COPY.label}
-          help={ORGANIZATION_JOB_TITLE_COPY.help}
+          help={ORGANIZATION_JOB_TITLE_COPY.help(
+            resolved.organizations.find((item) => item.id === organizationId)?.name ?? organizationName,
+          )}
           required
           {...detailsForm.of("jobTitle")}
         >

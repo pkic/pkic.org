@@ -167,7 +167,11 @@ export const EMAIL_FIRST_COPY: Readonly<Record<EmailFirstFlow, EmailFirstCopy>> 
 /** The job title asked wherever someone takes part on behalf of an organization: always required there. */
 export const ORGANIZATION_JOB_TITLE_COPY = {
   label: "Job title",
-  help: "Your role at the organization you represent, shown with your name.",
+  /** Names the organization the title is held at, once one is chosen. */
+  help: (organizationName?: string | null) =>
+    organizationName
+      ? `Your job title at ${organizationName}, shown next to your name.`
+      : "Your job title at the organization above, shown next to your name.",
 } as const;
 
 /** The organization a verified work address names when its domain resolves to none. */
