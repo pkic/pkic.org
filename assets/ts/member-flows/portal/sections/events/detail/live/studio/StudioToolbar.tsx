@@ -14,7 +14,7 @@ import {
 } from "./studio-layout";
 import type { StudioChange } from "./useStudioLayout";
 
-/** The layout row: switch workspace, add or reset panels, and take the whole screen. */
+/** The layout row: switch workspace, add or reset panels, open the tour, and take the whole screen. */
 export function StudioToolbar({
   workspace,
   selectWorkspace,
@@ -23,6 +23,8 @@ export function StudioToolbar({
   reset,
   expanded,
   toggleExpanded,
+  touring,
+  toggleTour,
 }: {
   workspace: StudioWorkspace;
   selectWorkspace: (workspace: StudioWorkspace) => void;
@@ -31,6 +33,8 @@ export function StudioToolbar({
   reset: () => void;
   expanded: boolean;
   toggleExpanded: () => void;
+  touring: boolean;
+  toggleTour: () => void;
 }) {
   const present = new Set(panels.map((panel) => panel.type));
   return (
@@ -61,6 +65,15 @@ export function StudioToolbar({
         </Menu>
         <Button variant="ghost" onClick={reset}>
           Reset layout
+        </Button>
+        <Button
+          variant="ghost"
+          data-tour-trigger
+          aria-expanded={touring}
+          title="A short tour of how the studio works"
+          onClick={toggleTour}
+        >
+          Studio tour
         </Button>
         <Button
           icon

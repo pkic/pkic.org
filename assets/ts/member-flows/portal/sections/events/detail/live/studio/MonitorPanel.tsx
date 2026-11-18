@@ -2,18 +2,21 @@ import { signal } from "@preact/signals";
 import { memo } from "preact/compat";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import type { LiveAuxOutput } from "../../../../../../../../shared/live-room-outputs";
+import type { LiveScreenSync, LiveSyncedScreen } from "../../../../../../../../shared/schemas/live-screen-sync";
+import { liveOutputProjection } from "../../../../../../../live-session/live-output-projection";
 import { liveOverlayLayoutChoices } from "../../../../../../../../shared/live-overlay-layout-presets";
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
 import { Button } from "../../../../../../../ui/Button";
 import { Dialog } from "../../../../../../../ui/Dialog";
-import { StrokeIcon } from "../../../../../../../ui/MediaIcons";
+import { IconMonitor, StrokeIcon } from "../../../../../../../ui/MediaIcons";
+import { formatNumber } from "../../../../../../../../shared/format-number";
 import { Menu } from "../../../../../../../ui/Menu";
 import { SectionHeading } from "../../../../../../../ui/SectionHeading";
 import { LiveDeskStream } from "../LiveDeskStream";
 import { LiveMonitorPointers, useLivePointerReport } from "../presence/LiveMonitorPointers";
 import {
-  STUDIO_OUTPUTS,
   STUDIO_OUTPUT_DETAILS,
+  studioMonitorChoices,
   setStudioOutputLayout,
   studioOutputLayout,
   toggleStudioOutput,
@@ -30,6 +33,9 @@ import "./MonitorPanel.css";
 export interface MonitorSwitcher {
   /** Takes every graphic off one output at once; Program's clear the desk offers to undo. */
   clear: (output: StudioOutput) => void;
+  /** Whether the projector and the stage display follow Program, and the switch for each. */
+  screenSync: LiveScreenSync;
+  sync: (output: LiveSyncedScreen, sync: boolean) => void;
   disabled: boolean;
 }
 
@@ -38,13 +44,15 @@ export interface MonitorSources {
   preview: LiveRoomState;
   /** The session the physical room has on air, which may be another session; null when none is. */
   program: LiveRoomState | null;
+  /** Whether the studio reaches the room now; while it does not, the monitors hold their last picture. */
+  connected: boolean;
   slug: string;
   roomId: string;
   startAt: string;
 }
 
-const tally = (output: StudioOutput) =>
-  output === "preview" || output === "program" ? output : output === "livestream" ? "stream" : "aux";
+/** Each output's tally color, which its border and dot take; see live-tally.css. */
+const tally = (output: StudioOutput) => output;
 
 /** The room as one output composes it: Preview from the shared Preview, every other output from the room on air. */
 const projectionOf = (output: StudioOutput, sources: MonitorSources) =>
@@ -57,7 +65,9 @@ const GRAPHIC_SETTINGS: ReadonlySet<string> = new Set(["lowerThirdMotion", "reac
 function showsGraphics(output: StudioOutput, state: LiveRoomState): boolean {
   if (output === "stage-display" || output === "stage-preview") return true;
   const composition: Record<string, unknown> =
-    output === "preview" || output === "program" ? state.stage : state.outputs[output as LiveAuxOutput];
+    output === "preview" || output === "program"
+      ? state.stage
+      : liveOutputProjection(state, output as LiveAuxOutput).stage;
   return Object.entries(composition).some(
     ([key, value]) =>
       value !== null &&
@@ -81,7 +91,14 @@ function samePicture(output: StudioOutput, left: LiveRoomState | null, right: Li
     left.session === right.session &&
     left.overlayLayouts === right.overlayLayouts &&
     left.burst === right.burst &&
-    left.speakerMessage === right.speakerMessage
+    left.speakerMessage === right.speakerMessage &&
+    // A room screen that syncs also draws what is on Program, and the question lined up next.
+    (output === "preview" ||
+      output === "program" ||
+      output === "livestream" ||
+      (left.stage === right.stage &&
+        left.screenSync === right.screenSync &&
+        left.stageDisplayNext === right.stageDisplayNext))
   );
 }
 
@@ -194,7 +211,7 @@ function LayoutPicker({ output, context }: { output: StudioOutput; context: Moni
     <Menu
       variant="plain"
       label={`Layout on ${details.label}: ${current.name}`}
-      title="Choose layout"
+      title={`Layout: ${current.name}`}
       triggerClass="pk-studio-monitor__picker pk-studio-monitor__layout"
       heading="Show as the layout"
       items={choices.map((choice) => ({
@@ -204,18 +221,96 @@ function LayoutPicker({ output, context }: { output: StudioOutput; context: Moni
         onSelect: () => change((panels) => setStudioOutputLayout(panels, panel.id, output, choice.slug)),
       }))}
     >
-      {current.name}
-      <span aria-hidden="true"> ▾</span>
+      <LayoutIcon />
     </Menu>
   );
 }
 
-/** What an operator does with one monitor's output, as icons at the end of its header: clear it, and full screen. */
+/** A frame with its graphics' boxes: the layout an output is drawn in, named in its tooltip. */
+function LayoutIcon() {
+  return (
+    <StrokeIcon>
+      <rect x="1.5" y="3" width="13" height="10" rx="1" />
+      <path d="M4 10.5h5M10.5 5.5h2" />
+    </StrokeIcon>
+  );
+}
+
+/** A chain link, broken while the screen does not sync. */
+function SyncIcon({ synced }: { synced: boolean }) {
+  return (
+    <StrokeIcon>
+      <path d="M7 4.5l1.3-1.3a2.6 2.6 0 0 1 3.7 3.7L10.7 8.2M9 11.5l-1.3 1.3a2.6 2.6 0 0 1-3.7-3.7L5.3 7.8" />
+      <path d={synced ? "M6.5 9.5 9.5 6.5" : "M2 2l12 12"} />
+    </StrokeIcon>
+  );
+}
+
+/** What a room screen shows besides its own graphics, said for an operator who is unsure mid-show. */
+const SYNC_HINTS = {
+  on: "Sync on: shows what is live on Program, plus anything you put here. Click to show only what you put here.",
+  off: "Sync off: shows only what you put here. Click to also show what is live on Program.",
+} as const;
+
+/** Whether a room screen follows Program: on by default, a red PGM chip while on. */
+function SyncToggle({ output, switcher }: { output: LiveSyncedScreen; switcher: MonitorSwitcher }) {
+  const synced = switcher.screenSync[output];
+  return (
+    <Button
+      variant="ghost"
+      class="pk-studio-monitor__sync"
+      data-tally="program"
+      aria-pressed={synced}
+      aria-label={`Sync ${STUDIO_OUTPUT_DETAILS[output].label} with Program`}
+      title={synced ? SYNC_HINTS.on : SYNC_HINTS.off}
+      disabled={switcher.disabled}
+      onClick={() => switcher.sync(output, !synced)}
+    >
+      <SyncIcon synced={synced} />
+      <span class="pk-studio-monitor__sync-text" aria-hidden="true">
+        PGM
+      </span>
+    </Button>
+  );
+}
+
+/**
+ * How many browser sources and room screens draw this output now, so an
+ * operator sees a feed that dropped. Program with none is the one to act on.
+ */
+function SourceCount({ output, sources }: { output: StudioOutput; sources: MonitorSources }) {
+  // Away from the room, the studio cannot know who is still connected, so it claims nothing.
+  if (output === "preview" || output === "livestream" || !sources.program || !sources.connected) return null;
+  const count = sources.program.sources[output];
+  const label = STUDIO_OUTPUT_DETAILS[output].label;
+  const sentence =
+    count === 0
+      ? `Nothing shows ${label} now. Check the browser source in your production software, or the screen in the room.`
+      : `${formatNumber(count)} ${count === 1 ? "browser source or screen shows" : "browser sources and screens show"} ${label} now.`;
+  // An icon and the number, as the header is narrow; the sentence is its name and tooltip.
+  return (
+    <span
+      class="pk-studio-monitor__sources"
+      role="img"
+      aria-label={sentence}
+      title={sentence}
+      data-tone={count === 0 && output === "program" ? "warn" : undefined}
+    >
+      <IconMonitor class="pk-studio-monitor__sources-icon" />
+      {formatNumber(count)}
+    </span>
+  );
+}
+
+/** What an operator does with one monitor's output, at the end of its header: its sync chip, then clear it, and full screen. */
 function MonitorActions({ output, context }: { output: StudioOutput; context: MonitorContext }) {
   const { panel, switcher } = context;
   const details = STUDIO_OUTPUT_DETAILS[output];
   return (
     <span class="pk-studio-monitor__controls">
+      {/* The sync chip leads, so the count and the icons keep the same place on every monitor. */}
+      {output === "projector" || output === "stage-display" ? <SyncToggle output={output} switcher={switcher} /> : null}
+      <SourceCount output={output} sources={context.sources} />
       {output === "livestream" ? (
         <LivestreamSoundToggle />
       ) : (
@@ -369,7 +464,7 @@ export function monitorPanelView(
         title="Choose outputs"
         triggerClass="pk-studio-monitor__picker pk-studio-monitor__output"
         heading="Show one or more"
-        items={STUDIO_OUTPUTS.map((output) => ({
+        items={studioMonitorChoices(outputs).map((output) => ({
           id: output,
           label: STUDIO_OUTPUT_DETAILS[output].label,
           checked: outputs.includes(output),
@@ -403,7 +498,7 @@ export function monitorPanelView(
       ),
     };
   const { columns, rows } = multiviewGrid(outputs.length);
-  const missing = STUDIO_OUTPUTS.filter((output) => !outputs.includes(output));
+  const missing = studioMonitorChoices(outputs).filter((output) => !outputs.includes(output));
   const free = missing.length ? Math.min(columns * rows - outputs.length, missing.length) : 0;
   return {
     title,

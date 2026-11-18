@@ -37,6 +37,8 @@ import "./Menu.css";
 interface MenuItemBase {
   id: string;
   label: string;
+  /** A short second line under the label: what choosing the item does, when the label alone cannot say it. */
+  description?: string;
   icon?: ComponentChildren;
   /** A command; omit for link items with `href`. */
   onSelect?: () => void;
@@ -63,6 +65,8 @@ interface MenuItemBase {
   multiple?: boolean;
   /** Draws a rule above the item: the start of a new group of choices. */
   separatorBefore?: boolean;
+  /** What the action does, in one sentence: the item's tooltip, and its description for assistive technology. */
+  tooltip?: string;
 }
 
 export type MenuItem = MenuItemBase;

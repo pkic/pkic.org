@@ -5,6 +5,7 @@ import type { LiveRoomParticipant } from "./room-admission";
 import { prepareLiveRoomParticipants } from "./room-access";
 import { prepareLiveAuthorStampCandidates, decodeLiveAuthorStamp, type StampRow } from "./room-author-stamp";
 import { prepareAnonymizedLiveParticipantIds } from "./room-erasure";
+import { prepareEventParticipationBlocked } from "./event-participation-blocks";
 import {
   liveParticipantReadKey,
   runWithLiveRoomCommandRead,
@@ -33,6 +34,8 @@ export async function loadLiveRoomCommandRead(
   if (authorIds.length) statements.push(prepareLiveAuthorStampCandidates(db, eventId, authorIds));
   const erasureIndex = statements.length;
   statements.push(prepareAnonymizedLiveParticipantIds(db, erasureCandidates));
+  const blockIndex = statements.length;
+  statements.push(prepareEventParticipationBlocked(db, eventId, erasureCandidates));
   const loaded = await db.batch(statements);
   const snapshot: LiveRoomCommandRead = {
     active: true,
@@ -42,6 +45,7 @@ export async function loadLiveRoomCommandRead(
     authors: new Map(),
     erasureCandidates: new Set(erasureCandidates),
     erased: new Set(batchRows<{ id: string }>(loaded[erasureIndex]).map((row) => row.id)),
+    eventBlocked: new Set(batchRows<{ user_id: string }>(loaded[blockIndex]).map((row) => row.user_id)),
   };
   let offset = 0;
   for (let index = 0; index < reads.length; index++) {

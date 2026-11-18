@@ -139,7 +139,7 @@ describe("attendee answer threads", () => {
     const other = await f.connect({ person: "secondAttendee" });
     await reply(owner, questionId);
     await watch(other, questionId);
-    moderator.send({ type: "question.moderate", questionId, status: "hidden" });
+    moderator.send({ type: "question.moderate", questionId, status: "hidden", reason: "spam" });
     expect(await other.next("question.answers", (message) => message.answers.length === 0)).toMatchObject({
       canAnswer: false,
       canAccept: false,

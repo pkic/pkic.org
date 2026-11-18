@@ -88,16 +88,20 @@ describe("session questions", () => {
     expect(live.latest().protocols).toEqual([LIVE_ROOM_PROTOCOL]);
   });
 
-  it("asks through the shared contract, optionally anonymous", () => {
+  it("asks through the shared contract, optionally anonymous and for a speaker", () => {
     const { host, live } = mount();
     connect(live);
     const text = host.querySelector<HTMLTextAreaElement>("textarea[name=text]")!;
     const anonymous = host.querySelector<HTMLInputElement>("input[name=anonymous]")!;
+    const addressee = host.querySelector<HTMLSelectElement>("select[name=addressedTo]")!;
+    expect([...addressee.options].map((option) => option.text)).toEqual(["Anyone", "Sam Speaker"]);
     void act(() => {
       text.value = "Which algorithms should we migrate first?";
       text.dispatchEvent(new Event("input", { bubbles: true }));
       anonymous.checked = true;
       anonymous.dispatchEvent(new Event("input", { bubbles: true }));
+      addressee.value = "user:speaker";
+      addressee.dispatchEvent(new Event("change", { bubbles: true }));
     });
     void act(() => {
       host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -107,6 +111,7 @@ describe("session questions", () => {
       type: "question.ask",
       text: "Which algorithms should we migrate first?",
       anonymous: true,
+      addressedTo: "user:speaker",
     });
     if (request.type !== "question.ask") throw new Error("Expected question request");
     expect(text.value).toBe(request.text);
@@ -119,6 +124,7 @@ describe("session questions", () => {
       live.latest().deliver({ type: "question.accepted", operationId: request.operationId, questionId: LIVE_QUESTION }),
     );
     expect(text.value).toBe("");
+    expect(addressee.value).toBe("");
     expect(text.disabled).toBe(false);
   });
 
@@ -170,6 +176,8 @@ describe("session questions", () => {
         answers: [],
         canAnswer: true,
         canAccept: false,
+        canVote: true,
+        canModerate: false,
       }),
     );
     const thread = host.querySelector<HTMLElement>('section[aria-label="Answers to this question"]')!;
@@ -213,6 +221,11 @@ describe("session questions", () => {
       createdAt: "2026-10-16T12:00:00.000Z",
       revision: 3,
       acceptance: null,
+      votes: 0,
+      votedByMe: false,
+      removal: null,
+      authorRestriction: null,
+      authorStaff: false,
     };
     void act(() =>
       live.latest().deliver({
@@ -221,6 +234,8 @@ describe("session questions", () => {
         answers: [answer],
         canAnswer: true,
         canAccept: true,
+        canVote: true,
+        canModerate: false,
       }),
     );
     void act(() => button(host, "Accept answer").click());
@@ -239,6 +254,8 @@ describe("session questions", () => {
         answers: [{ ...answer, revision: 4, acceptance: { byName: null, at: "2026-10-16T12:01:00.000Z" } }],
         canAnswer: true,
         canAccept: true,
+        canVote: true,
+        canModerate: false,
       }),
     );
     if (request.type !== "question.answer.accept") throw new Error("Expected acceptance request");
@@ -250,7 +267,7 @@ describe("session questions", () => {
         answerId: answer.id,
       }),
     );
-    expect(host.textContent).toContain("Accepted by the question author");
+    expect(host.textContent).toContain("Accepted answer · by the question author");
     expect(button(host, "Remove acceptance").getAttribute("aria-pressed")).toBe("true");
   });
 

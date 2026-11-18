@@ -26,9 +26,8 @@ function base64url(bytes: Uint8Array): string {
     .replace(/=+$/u, "");
 }
 
-/** A message still shown: not hidden or held, and not written by someone banned from the chat. */
-const SHOWN_CHAT = `chat.id NOT IN (SELECT message_id FROM room_chat_hidden)
-  AND chat.author_user_id NOT IN (SELECT user_id FROM room_chat_restrictions WHERE restriction = 'banned')`;
+/** A message still shown: not removed or held. */
+const SHOWN_CHAT = `chat.id NOT IN (SELECT message_id FROM room_chat_hidden)`;
 
 export function parseLiveAuthorStamp(json: string | null | undefined): LiveAuthorStamp {
   if (!json) return NO_STAMP;

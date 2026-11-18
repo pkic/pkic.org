@@ -8,7 +8,9 @@ import { applyLiveRoomMessage } from "../../assets/ts/live-session/live-room-sta
 import { OutputTargetControl } from "../../assets/ts/member-flows/portal/sections/events/detail/live/OutputTargetControl";
 import { liveAuxToggle } from "../../assets/ts/member-flows/portal/sections/events/detail/live/live-output-targets";
 import { livePreviewDifferences } from "../../assets/ts/member-flows/portal/sections/events/detail/live/live-stage-preview";
-import { liveSnapshot } from "./helpers/live-room-socket";
+import { liveScreens } from "../../assets/ts/member-flows/portal/sections/events/detail/live/LiveRowMenu";
+import { liveStageQuestionSchema } from "../../assets/shared/schemas/live-session-room";
+import { LIVE_QUESTION, liveSnapshot, liveTargets } from "./helpers/live-room-socket";
 
 let host: HTMLElement | undefined;
 afterEach(() => {
@@ -25,45 +27,63 @@ function roomState() {
 }
 
 describe("output target control", () => {
-  it("presses each bus that shows the graphic, names the aux outputs and toggles each destination", () => {
+  it("presses each bus that shows the graphic and toggles Preview and Program, with no screens button", () => {
     const onToggle = vi.fn();
     host = document.body.appendChild(document.createElement("div"));
-    const mount = (aux: string[]) =>
-      act(() =>
-        render(
-          <OutputTargetControl
-            subject="timer"
-            preview
-            program={false}
-            aux={(output) => aux.includes(output)}
-            disabled={false}
-            onToggle={onToggle}
-          />,
-          host!,
-        ),
-      );
-    void mount([]);
-    expect(host.querySelector('[aria-label="Show timer in preview"]')?.getAttribute("aria-pressed")).toBe("true");
-    expect(host.querySelector('[aria-label="Show timer on air"]')?.getAttribute("aria-pressed")).toBe("false");
-    const aux = () => host!.querySelector<HTMLButtonElement>(`[aria-label="Send timer to the room's screens"]`)!;
-    expect(aux().textContent).toContain("Screens");
-    void mount(["projector"]);
-    expect(aux().textContent).toContain("Projector");
-    expect(host.querySelector(".pk-output-target")?.getAttribute("data-aux-active")).toBe("true");
-    void mount(["projector", "stage-display"]);
-    expect(aux().textContent).toContain("2 screens");
-    void act(() => aux().click());
-    const items = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]')];
-    expect(items.map((item) => [item.textContent?.trim(), item.getAttribute("aria-checked")])).toEqual([
-      ["✓Projector", "true"],
-      ["Stage preview", "false"],
-      ["✓Stage display", "true"],
-    ]);
-    void act(() => items[1]!.click());
-    // The menu stays open so several outputs can be chosen together.
-    expect(document.querySelector('[role="menu"]')).not.toBeNull();
-    void act(() => host!.querySelector<HTMLButtonElement>('[aria-label="Show timer on air"]')!.click());
-    expect(onToggle.mock.calls).toEqual([["stage-preview"], ["program"]]);
+    void act(() =>
+      render(
+        <OutputTargetControl subject="timer" preview program={false} disabled={false} onToggle={onToggle} />,
+        host!,
+      ),
+    );
+    const preview = host.querySelector<HTMLButtonElement>('[aria-label="Show timer in preview"]')!;
+    const program = host.querySelector<HTMLButtonElement>('[aria-label="Show timer on air"]')!;
+    expect([preview.textContent, preview.getAttribute("aria-pressed")]).toEqual(["PVW", "true"]);
+    expect([program.textContent, program.getAttribute("aria-pressed")]).toEqual(["PGM", "false"]);
+    // The room's screens are in the row's menu, so the control is two buttons wide.
+    expect(host.querySelectorAll("button")).toHaveLength(2);
+    void act(() => program.click());
+    expect(onToggle.mock.calls).toEqual([["program"]]);
+    // Each says what it does: Preview is an optional check, Program goes on air at once.
+    expect(preview.title).toMatch(/^In Preview\./);
+    expect(program.title).toMatch(/^Program: put it on air now/);
+  });
+});
+
+describe("room screens", () => {
+  const question = liveStageQuestionSchema.parse({ id: LIVE_QUESTION, text: "How do we migrate?", authorName: null });
+  const layer = { kind: "question", id: LIVE_QUESTION } as const;
+
+  it("marks each synced screen as following when it shows Program's question, and as put there when it has its own", () => {
+    const state = roomState();
+    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: [], following: [] });
+    state.stage = { ...state.stage, question };
+    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: [], following: ["projector", "stage-display"] });
+    // Off air no screen shows Program's question.
+    expect(liveScreens(liveTargets(state, { programActive: false }), layer).following).toEqual([]);
+    state.outputs = { ...state.outputs, "stage-display": { ...EMPTY_LIVE_AUX_COMPOSITION, question } };
+    expect(liveScreens(liveTargets(state), layer)).toEqual({ on: ["stage-display"], following: ["projector"] });
+  });
+
+  it("does not follow on a screen with its own question in place of Program's", () => {
+    const state = roomState();
+    const own = { ...question, id: "20000000-0000-4000-8000-0000000000c1", text: "Pinned" };
+    state.stage = { ...state.stage, question };
+    state.outputs = {
+      ...state.outputs,
+      projector: { ...EMPTY_LIVE_AUX_COMPOSITION, question: own },
+      "stage-display": { ...EMPTY_LIVE_AUX_COMPOSITION, question: own },
+    };
+    expect(liveScreens(liveTargets(state), layer).following).toEqual([]);
+  });
+
+  it("does not follow on a screen whose sync is off", () => {
+    const state = roomState();
+    state.stage = { ...state.stage, question };
+    state.screenSync = { projector: false, "stage-display": true };
+    expect(liveScreens(liveTargets(state), layer).following).toEqual(["stage-display"]);
+    state.screenSync = { projector: false, "stage-display": false };
+    expect(liveScreens(liveTargets(state), layer).following).toEqual([]);
   });
 });
 

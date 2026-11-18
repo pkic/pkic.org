@@ -95,11 +95,5 @@ export function applyLiveChatMessage<State extends ChatState>(state: State, mess
       const merged = [...message.messages.filter((entry) => !known.has(entry.id)), ...held].sort(byTime);
       return replaceChannel(state, message.channel, merged, message.hasEarlier);
     }
-    case "chat.access":
-      return {
-        ...state,
-        viewer: { ...state.viewer, chatRestriction: message.restriction },
-        ...(message.restriction === "banned" ? { chat: [], chatEarlier: {} } : {}),
-      };
   }
 }

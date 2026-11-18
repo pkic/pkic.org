@@ -22,8 +22,11 @@ async function chatInRoom() {
   await attendee.next("chat.message", (message) => message.message.text === "Hello, everyone");
   attendee.send({ type: "chat.send", text: "Buy cheap tokens" });
   const spam = await operator.next("chat.message", (message) => message.message.text === "Buy cheap tokens");
-  operator.send({ type: "chat.moderate", messageId: spam.message.id, decision: "hide" });
-  await attendee.next("chat.removed");
+  operator.send({ type: "chat.moderate", messageId: spam.message.id, decision: "remove", reason: "spam" });
+  await operator.next(
+    "chat.message",
+    (message) => message.message.id === spam.message.id && message.message.moderation?.hidden != null,
+  );
   operator.send({ type: "chat.send", text: "Staff only", channel: "operator" });
   await operator.next("chat.message", (message) => message.message.text === "Staff only");
   attendee.send({ type: "question.ask", text: "What comes next?", anonymous: false });
@@ -114,12 +117,6 @@ describe("live chat retention", () => {
   it("keeps only the attendee chat after the week when the event keeps it for 90 days", async () => {
     await chatInRoom();
     await keepChatFor(90);
-    // Ada is banned after her messages, so attendees no longer saw the one a moderator left up.
-    await runInDurableObject(f.room(), (_room, state) =>
-      state.storage.sql.exec(
-        "INSERT INTO room_chat_restrictions(user_id,restriction,by_name,at) SELECT author_user_id,'banned','Moderator',sent_at FROM room_chat LIMIT 1",
-      ),
-    );
     await sessionEnded(8);
     await runDurableObjectAlarm(f.room());
     expect(await rowCount("room_chat")).toBe(2);
@@ -127,7 +124,7 @@ describe("live chat retention", () => {
     expect(await rowCount("questions")).toBe(0);
     const archive = await runInDurableObject(f.room(), (room) => room.chatArchive());
     expect(archive.map(({ author_name, body, status }) => ({ author_name, body, status }))).toEqual([
-      { author_name: "Ada Attendee", body: "Hello, everyone", status: "banned" },
+      { author_name: "Ada Attendee", body: "Hello, everyone", status: "shown" },
       { author_name: "Ada Attendee", body: "Buy cheap tokens", status: "hidden" },
     ]);
     // A shorter choice applies at the next daily check.
@@ -158,7 +155,7 @@ describe("event chat download and erasure", () => {
     expect(lines[0]).toBe("Session,Session start (UTC),Sent (UTC),Author,Message,Status");
     expect(lines.slice(1).map((line) => line.split(",").slice(3).join(","))).toEqual([
       'Ada Attendee,"Hello, everyone",Shown',
-      "Ada Attendee,Buy cheap tokens,Hidden by a moderator",
+      "Ada Attendee,Buy cheap tokens,Removed by a moderator",
     ]);
     expect(lines.join("\n")).not.toContain("Staff only");
 

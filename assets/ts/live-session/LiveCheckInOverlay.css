@@ -10,14 +10,41 @@
    * picture behind it must stay calm and dark (or light) enough to scan.
    */
   .pk-live-check-in .pk-check-in-qr {
-    background: var(--graphic-ground);
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--graphic-radius);
+    background: var(--graphic-plate);
     color: var(--graphic-ink);
     text-shadow: var(--graphic-halo);
+  }
+  /* The event theme's stripe along the card's foot, as under the lower third's name. */
+  .pk-live-check-in .pk-check-in-qr::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    block-size: 8px;
+    background: var(--graphic-stripe);
   }
   .pk-live-check-in .pk-check-in-qr__ground {
     fill: var(--graphic-ground);
   }
   .pk-live-check-in .pk-check-in-qr__modules {
     fill: var(--graphic-ink);
+  }
+  /* The words under the code read from across a room and on a corner of the stream. */
+  .pk-live-check-in .pk-check-in-qr__note {
+    font-size: 6cqi;
+    font-weight: 500;
+  }
+  /*
+   * In the event's colors the card is the event's field and the code stays
+   * black on white, its quiet zone included, so any phone camera reads it.
+   */
+  .pk-live-check-in[data-graphic-theme="event"] .pk-check-in-qr__ground {
+    fill: var(--pk-pqc-paper);
+  }
+  .pk-live-check-in[data-graphic-theme="event"] .pk-check-in-qr__modules {
+    fill: var(--pk-pqc-ink);
   }
 }

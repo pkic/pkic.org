@@ -15,17 +15,7 @@ import "./TimePanel.css";
 type Send = (message: LiveRoomClientMessage) => boolean;
 
 /** The Time panel's create action: a timer of its own for this room. */
-export function LiveAddTimerAction({
-  state,
-  clock,
-  send,
-  disabled,
-}: {
-  state: LiveRoomState;
-  clock: ClockZone;
-  send: Send;
-  disabled: boolean;
-}) {
+export function LiveAddTimerAction({ clock, send, disabled }: { clock: ClockZone; send: Send; disabled: boolean }) {
   return (
     <StudioCreateAction label="Add timer" disabled={disabled}>
       {(close) => (
@@ -38,7 +28,7 @@ export function LiveAddTimerAction({
           onConfirm={close}
           confirmLabel="Close"
         >
-          <LiveTimerAddForm session={state.session} clock={clock} disabled={disabled} send={send} onAdded={close} />
+          <LiveTimerAddForm clock={clock} disabled={disabled} send={send} onAdded={close} />
         </Dialog>
       )}
     </StudioCreateAction>

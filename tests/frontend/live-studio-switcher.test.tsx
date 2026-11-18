@@ -56,7 +56,7 @@ describe("the studio's switcher, session bar and phone layout", () => {
         tone: "warning",
         flash: false,
       });
-      expect(home.textContent).not.toMatch(/Take off air|Nothing on the stage display/);
+      expect(home.textContent).not.toMatch(/Take off air|No message on the stage display/);
 
       // A touch on Program shows its tag, Clear and Full screen on the picture.
       const program = bar.querySelector<HTMLButtonElement>('button[aria-label="Program"]')!;
@@ -86,7 +86,9 @@ describe("the studio's switcher, session bar and phone layout", () => {
       expect(location.hash).toContain("panel=questions");
       expect(host.querySelector('section[aria-label="Questions"]')).not.toBeNull();
       void act(() =>
-        bar.querySelector<HTMLButtonElement>('.pk-studio-transition button[aria-label="Transition"]')!.click(),
+        bar
+          .querySelector<HTMLButtonElement>('.pk-studio-transition button[aria-label="Transition to Program"]')!
+          .click(),
       );
       expect(commands(live).at(-1)).toEqual({ type: "preview.take" });
     } finally {

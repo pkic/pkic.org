@@ -52,9 +52,11 @@ export function SelectedSessionDesk({
 }) {
   const program = useLiveRoomProgram({ slug, roomId });
   const [failure, setFailure] = useState<string | null>(null);
-  const active = program.status === "live" && program.selection?.occurrenceId === occurrenceId;
+  // A dropped connection keeps the last session on air: the header still reads Loaded and the
+  // monitors hold their picture while it reconnects, and the desk pauses the controls meanwhile.
+  const activeId = program.selection?.occurrenceId ?? null;
+  const active = activeId === occurrenceId;
   const now = useBoundaryClock(useCallback((at: number) => at + 30_000, []));
-  const activeId = program.status === "live" ? (program.selection?.occurrenceId ?? null) : null;
   const activeSession = sessions.find((choice) => choice.id === activeId) ?? null;
   const drift = liveAgendaDrift(
     activeSession ? { startAt: activeSession.startsAt, endAt: activeSession.endsAt } : null,
@@ -87,6 +89,9 @@ export function SelectedSessionDesk({
             ) : undefined,
         }
       : null;
+  // The panels open on the graphics already on air, so they wait for the room to say what that is:
+  // a studio reloaded mid-show then lights what is on Program instead of offering to replace it.
+  if (program.status === "connecting" && !program.selection) return <Spinner label="Joining the live room…" />;
   return (
     <div class="pk-stack pk-stack--snug" data-density="compact">
       <LiveSessionDesk
@@ -121,7 +126,7 @@ export function SelectedSessionDesk({
         roomControl={roomControl}
         clock={clock}
         broadcast={broadcast}
-        activeOccurrenceId={program.status === "live" ? (program.selection?.occurrenceId ?? null) : null}
+        activeOccurrenceId={activeId}
       />
     </div>
   );

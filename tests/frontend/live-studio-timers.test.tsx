@@ -9,6 +9,7 @@ import {
   button,
   commands,
   labeled,
+  menuItem,
   mountDesk,
   panel,
   resetDeskStorage,
@@ -240,14 +241,14 @@ describe("studio timers", () => {
     });
     // The menu switches each output with one tap and stays open for the next.
     void act(() => labeled(host, "Session timer").click());
-    void act(() => button(document.body, "Projector").click());
+    void act(() => menuItem(document.body, "Projector").click());
     expect(liveRoomClientMessageSchema.parse(commands(live).at(-1))).toMatchObject({
       type: "aux.set",
       output: "projector",
       composition: { timerGraphics: [saved] },
     });
     // The stage display shows the session timer, so its switch is on.
-    expect(button(document.body, "✓Stage display")).toBeTruthy();
+    expect(menuItem(document.body, "Stage display").getAttribute("aria-checked")).toBe("true");
   });
 
   it("saves a timer graphic onto Program and a screen as one broadcast, so neither is refused", async () => {

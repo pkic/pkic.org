@@ -29,6 +29,9 @@ export function screenOfflineMarker(link: ScreenLink, now: number): ScreenMarker
   return { kind: "offline-badge", minutes: Math.floor((now - link.lastUpdateAt) / 60_000) };
 }
 
+/** The outputs that follow the agenda on their own while the studio cannot be reached. */
+const AUTO_OUTPUTS: ReadonlySet<string> = new Set(["stage-display", "projector"]);
+
 export interface ScreenSituation {
   now: number;
   /** The screen must pair: it has no sign-in, or the server refused it. */
@@ -60,9 +63,9 @@ export type ScreenDisplay =
 /**
  * What the screen shows now. While connected the studio is always in charge.
  * While offline the last state stays, its timers counting. A stage display
- * whose studio session has passed its scheduled end follows its copy of the
- * room's agenda (auto mode) until the studio is back; every other output
- * holds its last frame. A livestream keeps playing its last known stream,
+ * or a projector whose studio session has passed its scheduled end follows
+ * its copy of the room's agenda (auto mode) until the studio is back; every
+ * other output holds its last frame. A livestream keeps playing its last known stream,
  * which only YouTube serves.
  */
 export function screenDisplay(situation: ScreenSituation): ScreenDisplay {
@@ -85,7 +88,7 @@ export function screenDisplay(situation: ScreenSituation): ScreenDisplay {
     roomId: assignment.roomId,
   };
   const ended = live.state !== null && Date.parse(live.state.session.endAt) <= now;
-  if (assignment.output === "stage-display" && !live.connected && ended && situation.agenda) {
+  if (AUTO_OUTPUTS.has(assignment.output) && !live.connected && ended && situation.agenda) {
     const auto = screenAutoState(situation.agenda, { id: assignment.roomId, name: assignment.roomName }, now);
     if (auto) return { ...shown, state: auto, marker: { kind: "auto" } };
   }

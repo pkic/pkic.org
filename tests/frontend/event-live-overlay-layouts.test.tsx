@@ -30,7 +30,7 @@ const LAYOUTS = eventLiveOverlayLayoutsResponseSchema.parse({
   positions: { elements: LIVE_OVERLAY_DEFAULT_POSITIONS, saved: false, updatedAt: null },
 });
 const POSITIONS_URL = "/api/v1/events/conference/settings/live/positions";
-const QUESTION = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements.question;
+const LOWER_THIRD = LIVE_OVERLAY_PRESET_LAYOUTS["full-frame"].elements.lowerThird;
 
 let root: HTMLElement | null = null;
 let written: Array<{ url: string; body: EventLiveOverlayLayoutPut }> = [];
@@ -131,30 +131,30 @@ async function save() {
 describe("overlay layout editor", () => {
   it("moves a shared box by dragging it and saves the shared position through its contract", async () => {
     await mount();
-    const question = box("question");
-    pointer(question, "pointerdown", 100, 200);
-    pointer(question, "pointermove", 160, 200);
-    pointer(question, "pointermove", 340, 200, { altKey: true });
+    const lowerThird = box("lowerThird");
+    pointer(lowerThird, "pointerdown", 100, 200);
+    pointer(lowerThird, "pointermove", 160, 200);
+    pointer(lowerThird, "pointermove", 340, 200, { altKey: true });
     // While dragging, the box and the graphic drawn for it move by a transform; nothing is committed yet.
-    expect(Number(/translate\(([\d.]+)px, 0px\)/.exec(question.style.transform)?.[1])).toBeCloseTo(240, 6);
-    pointer(question, "pointerup", 340, 200);
-    expect(question.style.transform).toBe("");
-    expect(controlFor(root!, "From left").value).toBe(String(Math.round((QUESTION.x + 0.25) * 10_000) / 100));
+    expect(Number(/translate\(([\d.]+)px, 0px\)/.exec(lowerThird.style.transform)?.[1])).toBeCloseTo(240, 6);
+    pointer(lowerThird, "pointerup", 340, 200);
+    expect(lowerThird.style.transform).toBe("");
+    expect(controlFor(root!, "From left").value).toBe(String(Math.round((LOWER_THIRD.x + 0.25) * 10_000) / 100));
     await save();
-    // The question shares its position, so the move is the event's shared position; the layout itself is unchanged.
+    // The lower third shares its position, so the move is the event's shared position; the layout itself is unchanged.
     expect(written).toHaveLength(0);
     expect(positioned).toHaveLength(1);
     const saved = positioned[0]!;
     expect(saved.expectedUpdatedAt).toBeNull();
-    expect(saved.elements.question.x).toBeCloseTo(QUESTION.x + 0.25, 4);
-    expect(saved.elements.question.y).toBeCloseTo(QUESTION.y, 4);
-    expect(saved.elements.lowerThird).toEqual(LIVE_OVERLAY_DEFAULT_POSITIONS.lowerThird);
+    expect(saved.elements.lowerThird.x).toBeCloseTo(LOWER_THIRD.x + 0.25, 4);
+    expect(saved.elements.lowerThird.y).toBeCloseTo(LOWER_THIRD.y, 4);
+    expect(saved.elements.question).toEqual(LIVE_OVERLAY_DEFAULT_POSITIONS.question);
   });
 
   it("places an element for this layout only, then applies it to all layouts or uses the shared one again", async () => {
     await mount();
     const link = (state: string) =>
-      root!.querySelector<HTMLButtonElement>(`button[aria-label="Question position: ${state}"]`)!;
+      root!.querySelector<HTMLButtonElement>(`button[aria-label="Lower third position: ${state}"]`)!;
     const choose = async (trigger: HTMLButtonElement, item: string) => {
       await act(() => trigger.click());
       await act(() =>
@@ -164,41 +164,41 @@ describe("overlay layout editor", () => {
       );
     };
     await choose(link("Shared position"), "Place differently on this layout");
-    const question = box("question");
-    pointer(question, "pointerdown", 100, 200);
-    pointer(question, "pointermove", 340, 200, { altKey: true });
-    pointer(question, "pointerup", 340, 200, { altKey: true });
+    const lowerThird = box("lowerThird");
+    pointer(lowerThird, "pointerdown", 100, 200);
+    pointer(lowerThird, "pointermove", 340, 200, { altKey: true });
+    pointer(lowerThird, "pointerup", 340, 200, { altKey: true });
     await save();
     // Unlinked, the move is this layout's own: only the layout is saved.
     expect(positioned).toHaveLength(0);
-    expect(written[0]!.body.elements.question).toMatchObject({ shared: false });
-    expect(written[0]!.body.elements.question.x).toBeCloseTo(QUESTION.x + 0.25, 4);
+    expect(written[0]!.body.elements.lowerThird).toMatchObject({ shared: false });
+    expect(written[0]!.body.elements.lowerThird.x).toBeCloseTo(LOWER_THIRD.x + 0.25, 4);
 
     await choose(link("This layout only"), "Apply this position to all layouts");
     await save();
-    expect(positioned[0]!.elements.question.x).toBeCloseTo(QUESTION.x + 0.25, 4);
-    expect(written[1]!.body.elements.question.shared).toBe(true);
+    expect(positioned[0]!.elements.lowerThird.x).toBeCloseTo(LOWER_THIRD.x + 0.25, 4);
+    expect(written[1]!.body.elements.lowerThird.shared).toBe(true);
 
     // Placed elsewhere again, "Use shared position" brings it back to the shared one.
     await choose(link("Shared position"), "Place differently on this layout");
-    pointer(box("question"), "pointerdown", 100, 200);
-    pointer(box("question"), "pointermove", 200, 260, { altKey: true });
-    pointer(box("question"), "pointerup", 200, 260, { altKey: true });
+    pointer(box("lowerThird"), "pointerdown", 100, 200);
+    pointer(box("lowerThird"), "pointermove", 200, 260, { altKey: true });
+    pointer(box("lowerThird"), "pointerup", 200, 260, { altKey: true });
     await choose(link("This layout only"), "Use shared position");
-    expect(Number(controlFor(root!, "From left").value)).toBeCloseTo((QUESTION.x + 0.25) * 100, 1);
-    expect(Number(controlFor(root!, "From top").value)).toBeCloseTo(QUESTION.y * 100, 1);
+    expect(Number(controlFor(root!, "From left").value)).toBeCloseTo((LOWER_THIRD.x + 0.25) * 100, 1);
+    expect(Number(controlFor(root!, "From top").value)).toBeCloseTo(LOWER_THIRD.y * 100, 1);
   });
 
   it("resizes from a handle, snapping its edge to the title-safe line", async () => {
     await mount();
-    void act(() => box("question").click());
-    const handle = box("question").querySelector('[data-handle="e"]')!;
-    // The right edge starts at 888 px of the frame; dropped at 1816, it lands on the 1824 px safe line.
-    pointer(handle, "pointerdown", 444, 270);
+    void act(() => box("lowerThird").click());
+    const handle = box("lowerThird").querySelector('[data-handle="e"]')!;
+    // The right edge starts at 1296 px of the frame; dropped at 1816, it lands on the 1824 px safe line.
+    pointer(handle, "pointerdown", 648, 270);
     pointer(handle, "pointermove", 908, 270);
     pointer(handle, "pointerup", 908, 270);
-    expect(Number(controlFor(root!, "Width").value)).toBeCloseTo((0.95 - QUESTION.x) * 100, 1);
-    expect(Number(controlFor(root!, "From left").value)).toBeCloseTo(QUESTION.x * 100, 1);
+    expect(Number(controlFor(root!, "Width").value)).toBeCloseTo((0.95 - LOWER_THIRD.x) * 100, 1);
+    expect(Number(controlFor(root!, "From left").value)).toBeCloseTo(LOWER_THIRD.x * 100, 1);
   });
 
   it("scales and moves the drawn graphic with its box, while resizing and once the box is set", async () => {
@@ -253,18 +253,20 @@ describe("overlay layout editor", () => {
 
   it("nudges with the arrow keys and edits the exact box, alignment and visibility", async () => {
     await mount();
-    const question = box("question");
-    void act(() => question.focus());
-    void act(() => void question.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
+    const lowerThird = box("lowerThird");
+    void act(() => lowerThird.focus());
+    void act(() => void lowerThird.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
     void act(
       () =>
-        void question.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", shiftKey: true, bubbles: true })),
+        void lowerThird.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "ArrowDown", shiftKey: true, bubbles: true }),
+        ),
     );
-    expect(Number(controlFor(root!, "From left").value)).toBeCloseTo((QUESTION.x + 1 / 1920) * 100, 2);
-    expect(Number(controlFor(root!, "From top").value)).toBeCloseTo((QUESTION.y + 24 / 1080) * 100, 2);
+    expect(Number(controlFor(root!, "From left").value)).toBeCloseTo((LOWER_THIRD.x + 1 / 1920) * 100, 2);
+    expect(Number(controlFor(root!, "From top").value)).toBeCloseTo((LOWER_THIRD.y + 24 / 1080) * 100, 2);
     await act(() => controlFor(root!, "Pixels (1920 × 1080)").click());
     await typeInto(controlFor(root!, "Width"), "600");
-    const visible = root!.querySelector<HTMLInputElement>('input[name="elements.question.visible"]')!;
+    const visible = root!.querySelector<HTMLInputElement>('input[name="elements.lowerThird.visible"]')!;
     await act(() => visible.click());
     const horizontal = controlFor<HTMLSelectElement>(root!, "Horizontal alignment");
     await act(() => {
@@ -273,12 +275,12 @@ describe("overlay layout editor", () => {
     });
     await save();
     // Showing it is the layout's; where it sits is the shared position's.
-    expect(written[0]!.body.elements.question.visible).toBe(false);
-    const shared = positioned[0]!.elements.question;
+    expect(written[0]!.body.elements.lowerThird.visible).toBe(false);
+    const shared = positioned[0]!.elements.lowerThird;
     expect(shared.w).toBeCloseTo(600 / 1920, 4);
     expect(shared.horizontal).toBe("right");
-    expect(shared.x).toBeCloseTo(QUESTION.x + 1 / 1920, 4);
-    expect(liveOverlayBoxOf(written[0]!.body.elements.question)).toEqual(shared);
+    expect(shared.x).toBeCloseTo(LOWER_THIRD.x + 1 / 1920, 4);
+    expect(liveOverlayBoxOf(written[0]!.body.elements.lowerThird)).toEqual(shared);
   });
 
   it("refuses a box that leaves the frame without sending it", async () => {

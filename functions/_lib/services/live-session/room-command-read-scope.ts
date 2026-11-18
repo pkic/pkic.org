@@ -14,6 +14,8 @@ export interface LiveRoomCommandRead {
   erasureCandidates: Set<string>;
   erased: Set<string>;
   authors: Map<string, LiveAuthorStamp>;
+  /** Which erasure candidates an organizer blocked for the whole event. */
+  eventBlocked?: Set<string>;
 }
 
 const commandRead = new AsyncLocalStorage<LiveRoomCommandRead>();

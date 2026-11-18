@@ -16,7 +16,6 @@ const LIVE_CHAT_KEPT_TABLES = [
   "copy_state",
   "room_chat",
   "room_chat_hidden",
-  "room_chat_restrictions",
   "room_chat_totals",
   "room_chat_senders",
 ] as const;

@@ -1,4 +1,5 @@
 import { DEFAULT_LIVE_CHECK_IN_TEXT } from "../assets/shared/schemas/live-session-graphic-settings";
+import { LIVE_GRAPHIC_THEME_DEFAULTS } from "../assets/shared/live-graphic-theme";
 import { env } from "cloudflare:workers";
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -6,6 +7,7 @@ import { decodeAttendancePointResource } from "../assets/shared/attendance-point
 import { liveOverlayAccessResponseSchema } from "../assets/shared/schemas/live-overlay-access";
 import { defaultLiveTimerGraphic } from "../assets/shared/schemas/live-session-timer";
 import { DEFAULT_LIVE_STAGE_DISPLAY_SETTINGS } from "../assets/shared/schemas/live-stage-display-settings";
+import { DEFAULT_LIVE_SCREEN_SYNC } from "../assets/shared/schemas/live-screen-sync";
 import { parseCapabilityToken } from "../functions/_lib/auth/capability-token";
 import { callApi } from "./helpers/app";
 import { createLiveRoomFixture } from "./helpers/live-session-room";
@@ -96,6 +98,21 @@ describe("live room auxiliary outputs", () => {
     expect((await rejoined.next("room.snapshot")).stageDisplaySettings).toEqual(settings);
   });
 
+  it("keeps each screen's sync with Program for the session, on by default and set by operators only", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const attendee = await f.connect({ person: "attendee" });
+    const overlay = await f.connect({ overlay: await overlayToken() });
+    expect((await overlay.next("room.snapshot")).screenSync).toEqual(DEFAULT_LIVE_SCREEN_SYNC);
+    operator.send({ type: "screen.sync", output: "projector", sync: false });
+    const changed = { projector: false, "stage-display": true };
+    expect((await overlay.next("screen.sync.changed")).screenSync).toEqual(changed);
+    attendee.send({ type: "screen.sync", output: "stage-display", sync: false });
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    expect(attendee.received.some((m) => m.type === "screen.sync.changed")).toBe(false);
+    const rejoined = await f.connect({ person: "operator" });
+    expect((await rejoined.next("room.snapshot")).screenSync).toEqual(changed);
+  });
+
   it("merges each stage display change into the room's copy, so quick changes never undo each other", async () => {
     const operator = await f.connect({ person: "operator" });
     const overlay = await f.connect({ overlay: await overlayToken() });
@@ -146,7 +163,7 @@ describe("live room auxiliary outputs", () => {
       (await operator.next("aux.changed", (m) => m.composition.question?.text === "When will RSA be retired?")).output,
     ).toBe("stage-display");
     await operator.next("preview.changed", (m) => m.composition.question?.text === "When will RSA be retired?");
-    operator.send({ type: "question.moderate", questionId: asked.question.id, status: "hidden" });
+    operator.send({ type: "question.moderate", questionId: asked.question.id, status: "hidden", reason: "spam" });
     const cleared = await operator.next("aux.changed", (m) => m.composition.question === null);
     expect(cleared.output).toBe("stage-display");
     await operator.next("preview.changed", (m) => m.composition.question === null);
@@ -170,7 +187,7 @@ describe("live room auxiliary outputs", () => {
     expect(projector.composition.checkIn?.path).toMatch(/^\/portal\/#\/events\/[^/]+\/check-in\/pkc1_/);
     operator.send({ type: "stage.set", ...EMPTY_COMPOSITION, checkIn });
     const stage = await operator.next("stage.changed", (m) => m.stage.checkIn !== null);
-    expect(stage.stage.checkIn?.theme).toBe("black-on-white");
+    expect(stage.stage.checkIn?.theme).toBe(LIVE_GRAPHIC_THEME_DEFAULTS.checkIn);
     expect(stage.stage.checkIn?.text).toEqual(DEFAULT_LIVE_CHECK_IN_TEXT);
     // Every output shows the session's own fixed code.
     expect(stage.stage.checkIn!.path).toBe(projector.composition.checkIn!.path);

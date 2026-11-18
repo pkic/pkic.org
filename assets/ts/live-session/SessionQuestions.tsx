@@ -6,6 +6,7 @@ import { useEffect, useId, useState } from "preact/hooks";
 import { type LiveQuestionOrder } from "../../shared/live-session-policy";
 import {
   liveQuestionAskSchema,
+  type LiveCredit,
   type LiveRoomClientMessage,
   type LiveRoomServerMessage,
 } from "../../shared/schemas/live-session-room";
@@ -16,8 +17,10 @@ import { Checkbox } from "../ui/Checkbox";
 import { Field } from "../ui/Field";
 import { FieldStatus } from "../ui/FieldStatus";
 import { TabList } from "../ui/TabList";
-import { Textarea } from "../ui/TextControl";
+import { Select, Textarea } from "../ui/TextControl";
+import { liveQuestionAddressees } from "../../shared/live-room-credits";
 import { LiveQuestionList, LiveQuestionTransitions } from "./LiveQuestionList";
+import { LiveParticipationAlert, useLiveParticipation } from "./LiveParticipationAlert";
 import { LiveAuthorProvider } from "./LiveAuthor";
 import { LivePollCard } from "./LivePollCard";
 import { liveRoomOpenFailure } from "./live-room-copy";
@@ -35,25 +38,31 @@ import { SessionInteractionWindow, type SessionInteractionProps } from "./Sessio
 
 function AskQuestion({
   disabled,
+  credits,
   onAsk,
   result,
 }: {
   disabled: boolean;
+  /** The session's credits; its speakers and moderator are whom a question may be for. */
+  credits: readonly LiveCredit[];
   onAsk: (message: Extract<LiveRoomClientMessage, { type: "question.ask" }>) => boolean;
   result: Extract<LiveRoomServerMessage, { type: "question.accepted" | "room.refused" }> | null;
 }) {
   const [text, setText] = useState("");
   const [anonymous, setAnonymous] = useState(false);
+  const [addressedTo, setAddressedTo] = useState<string | null>(null);
+  const addressees = liveQuestionAddressees(credits);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Extract<LiveRoomClientMessage, { type: "question.ask" }> | null>(null);
   const statusId = useId();
-  const form = useContractForm(liveQuestionAskSchema, { text, anonymous }, { quietWhenEmpty: true });
+  const form = useContractForm(liveQuestionAskSchema, { text, anonymous, addressedTo }, { quietWhenEmpty: true });
   const field = form.of("text");
   const resetForm = form.reset;
   useEffect(() => {
     if (!pending || result?.operationId !== pending.operationId) return;
     if (result.type === "question.accepted") {
       setText("");
+      setAddressedTo(null);
       resetForm();
       setError(null);
     } else setError(result.message);
@@ -88,14 +97,36 @@ function AskQuestion({
           />
         )}
       </Field>
-      <Checkbox
-        name="anonymous"
-        disabled={disabled || Boolean(pending)}
-        checked={anonymous}
-        onChange={(event) => setAnonymous(event.currentTarget.checked)}
-        label="Ask anonymously"
-        hint="Other attendees will not see your name. Moderators always can."
-      />
+      <div class="pk-live-questions__ask-options">
+        {addressees.length ? (
+          <Field label="For" {...form.of("addressedTo")}>
+            {(control) => (
+              <Select
+                {...control}
+                name="addressedTo"
+                disabled={disabled || Boolean(pending)}
+                value={addressedTo ?? ""}
+                onChange={(event) => setAddressedTo(event.currentTarget.value || null)}
+              >
+                <option value="">Anyone</option>
+                {addressees.map((credit) => (
+                  <option key={credit.key} value={credit.key}>
+                    {credit.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        ) : null}
+        <Checkbox
+          name="anonymous"
+          disabled={disabled || Boolean(pending)}
+          checked={anonymous}
+          onChange={(event) => setAnonymous(event.currentTarget.checked)}
+          label="Ask anonymously"
+          hint="Other attendees will not see your name. Moderators always can."
+        />
+      </div>
       <FieldStatus id={statusId} state={field.state} message={field.message}>
         {error ?? ""}
       </FieldStatus>
@@ -140,6 +171,7 @@ function SessionQuestionsRoom({
   );
   const state = room.state;
   const live = room.status === "live";
+  const restriction = useLiveParticipation(state?.viewer.participation);
   if (!state)
     return room.admissionRefusal ? (
       <Alert tone="warn">{liveRoomOpenFailure(room.admissionRefusal, "attendee")}</Alert>
@@ -158,12 +190,26 @@ function SessionQuestionsRoom({
       {poll ? (
         <LivePollCard
           poll={poll}
-          disabled={!live}
+          disabled={!live || restriction !== null}
           refusal={state.refusal}
           onVote={(answer) => room.send({ type: "poll.vote", pollId: poll.id, answer })}
         />
       ) : null}
-      <AskQuestion key={occurrenceId} disabled={!live} onAsk={room.send} result={room.questionResult} />
+      {restriction ? (
+        <LiveParticipationAlert
+          restriction={restriction}
+          timeZone={state.session.timeZone}
+          eventName={state.session.eventName}
+        />
+      ) : (
+        <AskQuestion
+          key={occurrenceId}
+          disabled={!live}
+          credits={state.session.credits}
+          onAsk={room.send}
+          result={room.questionResult}
+        />
+      )}
       {/* A refused poll answer is said on the poll's question instead. */}
       <p class="pk-live-questions__notice" role="status">
         {state.refusal && state.refusal.code !== LIVE_POLL_ANSWER_REFUSAL ? state.refusal.message : ""}
@@ -177,11 +223,12 @@ function SessionQuestionsRoom({
       <LiveAuthorProvider authors={state.authors} send={room.send}>
         <LiveQuestionList
           photos
+          credits={state.session.credits}
           questions={orderLiveQuestions(state.questions, order)}
           emptyText="No questions yet. Ask the first one."
           showStatus={(question) => question.mine || role !== "attendee"}
           onVote={
-            live
+            live && !restriction
               ? (question) => room.send({ type: "question.vote", questionId: question.id, voted: !question.votedByMe })
               : undefined
           }
@@ -194,6 +241,10 @@ function SessionQuestionsRoom({
               disabled={!live}
               send={room.send}
               result={room.answerResult}
+              viewer={state.viewer}
+              restriction={restriction}
+              timeZone={state.session.timeZone}
+              eventName={state.session.eventName}
             />
           )}
           actions={(question) => (
@@ -209,12 +260,13 @@ function SessionQuestionsRoom({
                   question={question}
                   role={role}
                   disabled={!live}
-                  onMove={(status) =>
+                  onMove={(status, reason) =>
                     room.send({
                       type: "question.moderate",
                       questionId: question.id,
                       expectedRevision: question.revision,
                       status,
+                      reason,
                     })
                   }
                 />
@@ -234,7 +286,10 @@ function SessionQuestionsRoom({
 export function SessionQuestions(props: SessionInteractionProps) {
   const { slug, occurrenceId, createSocket, labelledBy } = props;
   return (
-    <SessionInteractionWindow {...props} disabledControls={<AskQuestion disabled onAsk={() => false} result={null} />}>
+    <SessionInteractionWindow
+      {...props}
+      disabledControls={<AskQuestion disabled credits={[]} onAsk={() => false} result={null} />}
+    >
       <section class="pk-stack pk-stack--snug" aria-labelledby={labelledBy ?? `${occurrenceId}-questions`}>
         {!labelledBy && (
           <SectionHeading level={3} id={`${occurrenceId}-questions`}>

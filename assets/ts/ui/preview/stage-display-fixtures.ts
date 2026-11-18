@@ -121,6 +121,13 @@ const askedQuestion = (id: string, text: string, votes: number): LiveQuestion =>
   moderated: null,
   originalText: null,
   rewritten: null,
+  answerCount: 0,
+  acceptedAnswer: false,
+  removal: null,
+  done: null,
+  authorRestriction: null,
+  addressedTo: null,
+  prepared: false,
 });
 const onStage = (question: LiveQuestion): LiveStageQuestion => ({
   id: question.id,
@@ -128,12 +135,16 @@ const onStage = (question: LiveQuestion): LiveStageQuestion => ({
   authorName: question.authorName,
   authorPhotoUrl: null,
   authorAffiliation: null,
+  addressedTo: question.addressedTo,
 });
-const answering = askedQuestion(
-  "20000000-0000-4000-8000-0000000000c1",
-  "How will hybrid certificates affect chain validation in today's browsers?",
-  44,
-);
+const answering: LiveQuestion = {
+  ...askedQuestion(
+    "20000000-0000-4000-8000-0000000000c1",
+    "How will hybrid certificates affect chain validation in today's browsers?",
+    44,
+  ),
+  addressedTo: "sam",
+};
 const lined = askedQuestion("20000000-0000-4000-8000-0000000000c2", "ML-DSA support in HSMs?", 31);
 
 /** Questions near the end: 4:12 left, the operators' banner, one question on air and the next one lined up. */

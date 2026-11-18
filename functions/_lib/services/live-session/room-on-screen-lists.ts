@@ -60,7 +60,7 @@ export class LiveRoomOnScreenLists {
    */
   async chatFeed(config: LiveChatFeedConfig, now = Date.now()): Promise<LiveChatFeedOnAir> {
     const sentBy = config.delaySeconds ? new Date(now - config.delaySeconds * 1000).toISOString() : null;
-    return { config, messages: await liveChatOnAirMessages(this.chat, config.count, sentBy) };
+    return { config, messages: await liveChatOnAirMessages(this.chat, config.count, { sentBy }) };
   }
 
   /** The room's storage is being erased: no refill may run afterwards and recreate it. */

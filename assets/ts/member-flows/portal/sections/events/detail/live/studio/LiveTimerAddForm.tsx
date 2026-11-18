@@ -17,7 +17,7 @@ import { DurationInput, durationFieldOf } from "../../../../../../../ui/Duration
 import { Field } from "../../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../../ui/TextControl";
 
-/** A time of day on the event's clock, on the session's own day, as the UTC instant the room keeps. */
+/** A time of day on the event's clock, on the day of the given instant, as the UTC instant the room keeps. */
 export function liveTimerTargetInstant(
   time: string,
   session: Pick<LiveRoomSession, "startAt">,
@@ -32,9 +32,30 @@ export function liveTimerTargetInstant(
   }
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The next time the event's clock reads this time: later today, or tomorrow
+ * once today's has passed. "Doors close at 22:00" means the coming 22:00,
+ * whether the studio runs a rehearsal days early or the show itself.
+ */
+export function liveTimerNextInstant(time: string, now: number, zone: string): string | null {
+  for (const day of [now, now + DAY_MS]) {
+    const instant = liveTimerTargetInstant(time, { startAt: new Date(day).toISOString() }, zone);
+    if (instant !== null && Date.parse(instant) > now) return instant;
+  }
+  return null;
+}
+
+/** "today" or "tomorrow": which day a countdown to a time ends, on the event's clock. */
+export function liveTimerTargetDay(targetAt: string, now: number, zone: string): "today" | "tomorrow" {
+  return instantToCalendarDate(targetAt, zone) === instantToCalendarDate(new Date(now).toISOString(), zone)
+    ? "today"
+    : "tomorrow";
+}
+
 /** The short form that adds a timer: a name, its kind and the one value that kind needs. */
 export function LiveTimerAddForm({
-  session,
   clock,
   disabled,
   send,
@@ -42,7 +63,6 @@ export function LiveTimerAddForm({
 }: {
   /** Called once the timer was sent, so a dialog around the form can close. */
   onAdded?: () => void;
-  session: Pick<LiveRoomSession, "startAt">;
   clock: ClockZone;
   disabled: boolean;
   send: (message: LiveRoomClientMessage) => boolean;
@@ -53,10 +73,12 @@ export function LiveTimerAddForm({
   const [length, setLength] = useState<number | null>(300);
   const [error, setError] = useState<string | null>(null);
   const zone = clockTimeZone(clock);
+  // Read once per render: the time picked counts to its next coming occurrence.
+  const now = Date.now();
   const draft = {
     name,
     kind,
-    targetAt: kind === "until" ? liveTimerTargetInstant(time, session, zone) : null,
+    targetAt: kind === "until" ? liveTimerNextInstant(time, now, zone) : null,
     durationSeconds: kind === "duration" ? length : null,
   };
   const form = useContractForm(liveTimerDraftSchema, draft, { fieldOf: durationFieldOf });
@@ -111,7 +133,11 @@ export function LiveTimerAddForm({
         )}
       </Field>
       {kind === "until" ? (
-        <Field label={`Ends at (${formatClockName(clock)})`} {...form.of("targetAt")}>
+        <Field
+          label={`Ends at (${formatClockName(clock)})`}
+          help={draft.targetAt ? `Ends ${liveTimerTargetDay(draft.targetAt, now, zone)} at ${time}.` : undefined}
+          {...form.of("targetAt")}
+        >
           {(control) => (
             <TextInput
               {...control}

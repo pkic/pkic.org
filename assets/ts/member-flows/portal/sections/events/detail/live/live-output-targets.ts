@@ -1,4 +1,6 @@
 import { updateLiveTimerGraphics } from "../../../../../../../shared/live-timer-policy";
+import { liveOverlayCoveredBy } from "../../../../../../../shared/live-overlay-cover";
+import { resolveLiveOverlayLayout } from "../../../../../../../shared/live-overlay-layout-presets";
 import { LIVE_AUX_OUTPUTS, type LiveAuxOutput } from "../../../../../../../shared/live-room-outputs";
 import type { LivePollPresentation } from "../../../../../../../shared/schemas/live-session-poll";
 import {
@@ -188,9 +190,18 @@ export function livePreviewToggle(state: LiveRoomState, layer: LiveLayer): LiveR
 /** Where a graphic is now: Preview, Program and each auxiliary output. */
 export function liveLayerTargets(targets: LiveTargets, layer: LiveLayer) {
   const { state, programActive } = targets;
+  const program = programActive && liveLayerShown(state.stage, layer);
   return {
     preview: liveLayerShown(state.preview, layer),
-    program: programActive && liveLayerShown(state.stage, layer),
+    program,
+    /** The board that hides it on air in the event's default layout, the one a source draws unless it names another. */
+    coveredBy: program
+      ? liveOverlayCoveredBy(
+          state.stage,
+          resolveLiveOverlayLayout(state.overlayLayouts, null),
+          layer.kind === "chatFeed" ? "chat" : layer.kind,
+        )
+      : null,
     aux: (output: LiveAuxOutput) => programActive && liveLayerShown(state.outputs[output], layer),
   };
 }

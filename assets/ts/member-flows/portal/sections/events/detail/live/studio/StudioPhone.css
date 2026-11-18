@@ -61,18 +61,11 @@
     gap: var(--pk-2);
   }
   .pk-studio-phone__thumb {
-    --tally: var(--live-tally-stream);
     position: relative;
     min-inline-size: 0;
-    border: 2px solid var(--tally);
+    border: 2px solid var(--tally, var(--pk-line));
     border-radius: var(--pk-radius);
     background: var(--pk-chrome-deep);
-  }
-  .pk-studio-phone__thumb[data-tally="preview"] {
-    --tally: var(--live-tally-preview);
-  }
-  .pk-studio-phone__thumb[data-tally="program"] {
-    --tally: var(--live-tally-program);
   }
   /* The picture is the button that shows the output's tools. */
   .pk-studio-phone__thumb-screen {

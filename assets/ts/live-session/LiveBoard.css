@@ -1,0 +1,101 @@
+/*
+ * The conference board: white type on the conference field, with its dots,
+ * soft light and a faint mark. It is drawn at its own size in pixels of the
+ * 1080p frame and its layout box scales it whole. Everything that must be
+ * read sits from the top down, so a seated panel in front of the projector
+ * covers only the bottom of it. Its margins are set in pixels of the frame,
+ * whatever the board's scale: 64 from the top and bottom and 96 from the
+ * sides, inside the broadcast graphics-safe area. The graphic keeps a clear
+ * band under the logo, the same on every board.
+ */
+@layer components {
+  .pk-live-board {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    inline-size: calc(var(--board-width) * 1px);
+    block-size: calc(var(--board-height) * 1px);
+    padding: calc(64px * var(--board-frame-px, 1)) calc(96px * var(--board-frame-px, 1));
+    overflow: hidden;
+    isolation: isolate;
+    background: var(--pk-pqc-light), var(--pk-pqc-field);
+    color: var(--pk-pqc-on-field);
+    text-align: start;
+    animation: pk-live-board-in var(--pk-dur-slow) var(--pk-ease) both;
+  }
+  /* The dots fade out toward the bottom, where the field carries the board on its own. */
+  .pk-live-board::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--pk-pqc-dots);
+    opacity: 0.6;
+    mask-image: linear-gradient(180deg, var(--pk-pqc-on-field) 0%, transparent 75%);
+  }
+  .pk-live-board__watermark {
+    position: absolute;
+    z-index: -1;
+    inset-block-end: -28%;
+    inset-inline-end: -8%;
+    inline-size: auto;
+    block-size: 72%;
+    color: var(--pk-pqc-on-field);
+    opacity: 0.06;
+  }
+  .pk-live-board__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+    margin-block-end: 28px;
+  }
+  .pk-live-board__eyebrow {
+    margin: 0;
+    color: var(--pk-pqc-on-field-muted);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-live-board-eyebrow-type);
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+  /* The full logo in white in the corner, as on the event's banners. */
+  .pk-live-board__logo {
+    flex: none;
+    inline-size: auto;
+    block-size: 72px;
+  }
+  /* The event stripe under a board's headline, as under the lower third's name. */
+  .pk-live-board__stripe {
+    flex: none;
+    inline-size: 200px;
+    block-size: 8px;
+    background: var(--pk-pqc-stripe);
+  }
+  .pk-live-board__headline {
+    margin: 0;
+    color: var(--pk-pqc-on-field);
+    font-size: var(--pk-live-board-headline-type);
+    font-weight: 900;
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+  @keyframes pk-live-board-in {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :root:not(:has([data-live-broadcast-source])) .pk-live-board {
+      animation: none;
+    }
+  }
+}

@@ -172,6 +172,8 @@ export function MenuLevel({
           "aria-expanded": item.children ? child === item.id : undefined,
           "aria-controls": item.children && child === item.id ? childId : undefined,
           "aria-checked": item.checked === undefined ? undefined : item.checked,
+          title: item.tooltip,
+          "aria-description": item.tooltip,
           tabIndex: index === active && !childItem ? 0 : -1,
           class: [
             "pk-menu__item",
@@ -194,7 +196,14 @@ export function MenuLevel({
                 {item.icon}
               </span>
             )}
-            {item.label}
+            {item.description ? (
+              <span class="pk-menu__text">
+                <span>{item.label}</span>
+                <span class="pk-menu__description">{item.description}</span>
+              </span>
+            ) : (
+              item.label
+            )}
             {item.children && <span aria-hidden="true"> ›</span>}
           </>
         );

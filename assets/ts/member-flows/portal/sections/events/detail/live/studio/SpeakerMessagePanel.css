@@ -33,16 +33,24 @@
     border-radius: 50%;
     background: var(--speaker-tone);
   }
-  /* Ready-made messages as compact chips, each edged in its tone. */
+  /* Ready-made messages as compact buttons, each with its tone's swatch, the same dot as the tone options. */
   .pk-studio-message__presets {
     display: flex;
     flex-wrap: wrap;
     gap: var(--pk-1);
   }
   .pk-studio-message__preset {
+    gap: var(--pk-1);
     border: 1px solid var(--pk-line);
-    border-inline-start: 4px solid var(--speaker-tone);
-    border-radius: var(--pk-radius-pill, var(--pk-radius));
+  }
+  .pk-studio-message__preset::before {
+    content: "";
+    flex: none;
+    inline-size: 0.6rem;
+    block-size: 0.6rem;
+    border: 1px solid var(--pk-line-strong);
+    border-radius: 50%;
+    background: var(--speaker-tone);
   }
   /* The words with Send or Update beside them: the one action that reaches the stage, always in view. */
   .pk-studio-message__group {
