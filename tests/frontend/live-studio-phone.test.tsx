@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyLiveRoomMessage } from "../../assets/ts/live-session/live-room-state";
 import {
   STUDIO_PHONE_VIEWS,
@@ -68,6 +68,15 @@ const drawn = (root: ParentNode) =>
 const button = (name: string) =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find((each) => each.getAttribute("aria-label") === name)!;
 
+beforeEach(() => {
+  // jsdom has no modal dialogs; the More sheet opens one.
+  HTMLDialogElement.prototype.showModal = function () {
+    this.setAttribute("open", "");
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.removeAttribute("open");
+  };
+});
 afterEach(() => {
   for (const host of hosts.splice(0)) {
     void act(() => render(null, host));
@@ -106,7 +115,23 @@ describe("the studio on a phone", () => {
     expect(onScene).toHaveBeenCalledWith("break");
   });
 
-  it("reaches polls and chat as views of their own", () => {
+  it("opens More as the app's sheet of tiles, with polls and chat among the views behind it", () => {
     expect(STUDIO_PHONE_VIEWS).toEqual(expect.arrayContaining(["polls", "chat"]));
+    const { host } = mount();
+    const tabs = [...host.querySelectorAll<HTMLElement>(".pk-app-tabbar__link")];
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Home", "Speakers", "Graphics", "Questions", "More"]);
+    void act(() => {
+      tabs.at(-1)!.click();
+    });
+    const tiles = [...document.querySelectorAll<HTMLAnchorElement>(".pk-action-tiles .pk-action-tile")];
+    expect(tiles.map((tile) => tile.textContent)).toEqual(["Polls", "Chat", "Monitors", "Time", "Message"]);
+    // A tile switches the panel in place and closes the sheet; its link carries the view for a new tab.
+    expect(tiles[0]!.getAttribute("href")).toContain("panel=polls");
+    void act(() => {
+      tiles[0]!.click();
+    });
+    expect(host.querySelector('section[aria-label="polls"]')).not.toBeNull();
+    expect(document.querySelector(".pk-action-tiles")).toBeNull();
+    expect(tabs.at(-1)!.getAttribute("aria-current")).toBe("page");
   });
 });

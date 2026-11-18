@@ -39,7 +39,7 @@ describe("the studio's switcher, session bar and phone layout", () => {
       // Preview and Program are the pictures alone until one is touched.
       expect(bar.querySelector(".pk-studio-phone__thumb-tag")).toBeNull();
       expect(host.querySelector(".pk-studio-grid")).toBeNull();
-      const tabs = [...host.querySelectorAll<HTMLButtonElement>(".pk-studio-phone__tab")];
+      const tabs = [...host.querySelectorAll<HTMLElement>(".pk-app-tabbar__link")];
       // Five tabs, each a glyph over a short label; the label is the tab's name.
       expect(tabs.map((tab) => tab.textContent)).toEqual(["Home", "Speakers", "Graphics", "Questions", "More"]);
       expect(tabs.every((tab) => tab.querySelector("svg[aria-hidden='true']"))).toBe(true);
@@ -73,13 +73,13 @@ describe("the studio's switcher, session bar and phone layout", () => {
       );
       void act(() => document.querySelector<HTMLButtonElement>('dialog[open] [aria-label="Close Program"]')!.click());
 
-      // The views without a tab of their own are behind More, which says which one is open.
+      // The views without a tab of their own are behind More, the app's sheet of tiles; More is marked while one is open.
       await act(async () => tabs[4]!.click());
-      const more = [...document.querySelectorAll('[role="menuitemradio"]')];
-      expect(more.map((item) => item.textContent)).toEqual(["Monitors", "Time", "Message"]);
-      void act(() => (more[1] as HTMLElement).click());
+      const more = [...document.querySelectorAll<HTMLElement>(".pk-action-tiles .pk-action-tile")];
+      expect(more.map((item) => item.textContent)).toEqual(["Polls", "Chat", "Monitors", "Time", "Message"]);
+      void act(() => more[3]!.click());
       expect(location.hash).toContain("panel=time");
-      expect(host.querySelector('[aria-label="More, showing Time"]')).not.toBeNull();
+      expect(tabs[4]!.getAttribute("aria-current")).toBe("page");
 
       expect(host.querySelectorAll("section[aria-label]").length).toBeGreaterThan(0);
       void act(() => tabs[3]!.click());

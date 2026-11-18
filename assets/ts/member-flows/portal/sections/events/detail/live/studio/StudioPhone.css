@@ -9,8 +9,6 @@
     flex-direction: column;
     gap: var(--pk-1);
     min-inline-size: 0;
-    /* Room for the tab bar, so the panel's end is never under it. */
-    padding-block-end: calc(3.5rem + env(safe-area-inset-bottom, 0px));
   }
   .pk-studio-phone__bar {
     position: sticky;
@@ -204,75 +202,5 @@
   }
   .pk-studio-phone .pk-studio-monitor__tile > .pk-studio-monitor__screen {
     inline-size: 100%;
-  }
-  .pk-studio-phone__tabs {
-    position: fixed;
-    z-index: 6;
-    inset-inline: 0;
-    /* On the visible bottom edge even when the browser leaves it offset (see visual-viewport-shift.ts). */
-    inset-block-end: var(--pk-viewport-shift-bottom, 0px);
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    padding-block-end: env(safe-area-inset-bottom, 0px);
-    border-block-start: 1px solid var(--pk-line);
-    background: var(--pk-surface);
-  }
-  /* Icon over a short label, as the portal's own tab bar draws its tabs. */
-  .pk-studio-phone__tabs > * {
-    display: flex;
-    min-inline-size: 0;
-  }
-  /* More is a menu's trigger; it wears the tabs' face, not the menu trigger's own. */
-  .pk-studio-phone__tabs .pk-menu__trigger.pk-studio-phone__tab {
-    block-size: 100%;
-    border-width: 3px 0 0;
-    border-style: solid;
-    border-color: transparent;
-    border-radius: 0;
-    background: none;
-    color: var(--pk-ink-muted);
-  }
-  .pk-studio-phone__tabs .pk-menu__trigger.pk-studio-phone__tab--current {
-    border-block-start-color: var(--pk-accent);
-    color: var(--pk-accent-ink);
-  }
-  .pk-studio-phone__tab {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    inline-size: 100%;
-    min-inline-size: 0;
-    min-block-size: 3.5rem;
-    padding: var(--pk-1) 2px;
-    border: 0;
-    border-block-start: 3px solid transparent;
-    background: none;
-    color: var(--pk-ink-muted);
-    font: inherit;
-    font-size: var(--pk-text-xs);
-    font-weight: 500;
-    line-height: 1.2;
-    overflow-wrap: anywhere;
-    cursor: pointer;
-  }
-  .pk-studio-phone__tab-icon {
-    flex: none;
-  }
-  .pk-studio-phone__tab:is([aria-current="page"], .pk-studio-phone__tab--current) {
-    border-block-start-color: var(--pk-accent);
-    color: var(--pk-accent-ink);
-    font-weight: 700;
-  }
-  /* The open tab's glyph is filled and heavier, so it is not told by color alone. */
-  .pk-studio-phone__tab:is([aria-current="page"], .pk-studio-phone__tab--current) .pk-studio-phone__tab-icon {
-    fill: currentColor;
-    fill-opacity: 0.22;
-    stroke-width: var(--pk-icon-stroke-strong);
-  }
-  .pk-studio-phone__tab:focus-visible {
-    outline: 2px solid var(--pk-focus);
-    outline-offset: -2px;
   }
 }

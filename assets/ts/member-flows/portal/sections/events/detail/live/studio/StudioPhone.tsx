@@ -1,14 +1,18 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useId, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useId, useRef, useState } from "preact/hooks";
 import { useMediaQuery } from "../../../../../../../hooks/useMediaQuery";
 import { useHashQueryParam } from "../../../../../../../hooks/useHashQueryParam";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
 import { APP_ICONS, type AppIcon } from "../../../../../../../components/icons/app-navigation";
+import { ActionTile, ActionTiles } from "../../../../../../../ui/ActionTile";
+import { BottomSheet } from "../../../../../../../ui/BottomSheet";
 import { Button } from "../../../../../../../ui/Button";
 import { Dialog } from "../../../../../../../ui/Dialog";
 import { Menu } from "../../../../../../../ui/Menu";
 import { SectionHeading } from "../../../../../../../ui/SectionHeading";
+import { splitHash } from "../../../../../../../ui/url-query";
+import { AppTabBar, isPlainPress } from "../../../../../shell/AppTabBar";
 import type { ClockZone } from "../../../../../../../../shared/event-clock";
 import { ClearIcon, ExpandIcon, StudioOutputScreen, type MonitorSources } from "./MonitorPanel";
 import { ScenePicker } from "./ScenePicker";
@@ -48,15 +52,13 @@ const PHONE_TABS: Record<StudioPhoneView, { label: string; icon: AppIcon }> = {
   message: { label: "Message", icon: "message" },
 };
 
-/** A tab's glyph over its short label; the label is the tab's name. */
-function TabFace({ icon, label }: { icon: AppIcon; label: string }) {
-  const Icon = APP_ICONS[icon];
-  return (
-    <>
-      <Icon class="pk-studio-phone__tab-icon" width="22" height="22" />
-      <span>{label}</span>
-    </>
-  );
+/** The address of one view of this studio, so a tab is a link that also opens in a new tab. */
+function viewHref(view: StudioPhoneView): string {
+  const { path, params } = splitHash();
+  if (view === "home") params.delete("panel");
+  else params.set("panel", view);
+  const query = params.toString();
+  return `#${path}${query ? `?${query}` : ""}`;
 }
 
 /** Below this viewport width the studio is the one-handed phone layout. */
@@ -132,7 +134,10 @@ function Thumbnail({
         </button>
         {tools ? (
           <div id={toolsId} class="pk-studio-phone__thumb-tools">
-            <abbr class="pk-studio-phone__thumb-tag" title={label}>
+            <abbr
+              class="pk-studio-phone__thumb-tag"
+              title={`${studioOutputDetails([], tally).short} · ${label}\n${studioOutputDetails([], tally).purpose}`}
+            >
               {studioOutputDetails([], tally).short}
             </abbr>
             <Button
@@ -149,7 +154,7 @@ function Thumbnail({
               icon
               variant="ghost"
               aria-label={`Full screen ${label}`}
-              title="Full screen"
+              title={`Full screen ${label}\nShow this monitor large.`}
               onClick={() => {
                 setTools(false);
                 setEnlarged(true);
@@ -188,8 +193,9 @@ function Thumbnail({
  * The control room on a phone, run with one hand: a compact header that
  * stays put with the room, the session and its time on one row, then Preview,
  * the Transition and Program as pictures; one view at a time below, opening
- * on the quick actions; and a tab bar at the thumb, its last tab a menu of the
- * views without a tab of their own. The view in sight follows the address.
+ * on the quick actions; and the app's tab bar at the thumb, its last tab the
+ * More sheet with the views that have no tab of their own, as on an event's
+ * pages. The view in sight follows the address.
  */
 export function StudioPhone({
   state,
@@ -230,6 +236,9 @@ export function StudioPhone({
   const [shown, show] = useHashQueryParam("panel", "home", STUDIO_PHONE_VIEWS);
   const view = shown === "home" ? null : panel(shown);
   const sessionTimer = state.timers.find((timer) => timer.kind === "session");
+  const [more, setMore] = useState(false);
+  const sheetId = `${useId()}-more`;
+  const closeMore = useCallback(() => setMore(false), []);
   return (
     <div class="pk-studio-phone">
       <header class="pk-studio-phone__bar">
@@ -272,7 +281,14 @@ export function StudioPhone({
             )}
             {view.actions || view.menu?.length ? (
               <span class="pk-studio-phone__panel-actions">
-                {view.menu?.length ? <Menu label={`${view.title} panel`} align="end" items={view.menu} /> : null}
+                {view.menu?.length ? (
+                  <Menu
+                    label={`${view.title} panel`}
+                    title={`${view.title} panel\nThis panel's settings.`}
+                    align="end"
+                    items={view.menu}
+                  />
+                ) : null}
                 {view.actions}
               </span>
             ) : null}
@@ -284,34 +300,53 @@ export function StudioPhone({
           {home}
         </section>
       )}
-      {/* The studio's own bottom bar: the app's tab bar steps aside for it (AppTabBar.css). */}
-      <nav class="pk-studio-phone__tabs" aria-label="Studio panels" data-app-bottom-bar="">
-        {TABBED.map((type) => (
-          <button
-            key={type}
-            type="button"
-            class="pk-studio-phone__tab"
-            aria-current={type === shown ? "page" : undefined}
-            onClick={() => show(type)}
-          >
-            <TabFace {...PHONE_TABS[type]} />
-          </button>
-        ))}
-        <Menu
-          variant="plain"
-          label={MORE.includes(shown) ? `More, showing ${PHONE_TABS[shown].label}` : "More"}
-          triggerClass={`pk-studio-phone__tab${MORE.includes(shown) ? " pk-studio-phone__tab--current" : ""}`}
-          align="end"
-          items={MORE.map((type) => ({
-            id: type,
-            label: PHONE_TABS[type].label,
-            checked: type === shown,
-            onSelect: () => show(type),
-          }))}
-        >
-          <TabFace icon="more" label="More" />
-        </Menu>
-      </nav>
+      <AppTabBar
+        scope="event"
+        label="Studio panels"
+        items={TABBED.map((type) => ({
+          id: type,
+          label: PHONE_TABS[type].label,
+          icon: PHONE_TABS[type].icon,
+          href: viewHref(type),
+          onSelect: () => show(type),
+        }))}
+        activeId={MORE.includes(shown) ? "more" : shown}
+        menu={{
+          id: "more",
+          label: "More",
+          icon: "more",
+          controls: sheetId,
+          expanded: more,
+          onOpen: () => setMore(true),
+        }}
+      />
+      <BottomSheet id={sheetId} open={more} title="More" closeLabel="Close more options" onClose={closeMore}>
+        {/* Rendered only while open, so the page holds one copy of each view's link. */}
+        {more ? (
+          <ActionTiles label="More studio panels">
+            {MORE.map((type) => {
+              const Icon = APP_ICONS[PHONE_TABS[type].icon];
+              return (
+                <li key={type}>
+                  <ActionTile
+                    href={viewHref(type)}
+                    aria-current={type === shown ? "page" : undefined}
+                    icon={<Icon width="26" height="26" />}
+                    label={PHONE_TABS[type].label}
+                    onClick={(event: MouseEvent) => {
+                      if (isPlainPress(event)) {
+                        event.preventDefault();
+                        show(type);
+                      }
+                      closeMore();
+                    }}
+                  />
+                </li>
+              );
+            })}
+          </ActionTiles>
+        ) : null}
+      </BottomSheet>
     </div>
   );
 }
