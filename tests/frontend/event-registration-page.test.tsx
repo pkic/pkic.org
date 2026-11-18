@@ -60,7 +60,7 @@ function installApi(scheduled = true, person: SavedNames | null = null): Capture
                 termKey: "privacy-policy",
                 version: "v1",
                 required: true,
-                contentRef: null,
+                contentRef: "/privacy/",
                 displayText: "I accept the privacy policy",
                 helpText: null,
               },
@@ -234,8 +234,6 @@ describe("registration entry", () => {
     await loadPage(true, { firstName: "Ada", lastName: "Lovelace" });
     expect(document.querySelector('[data-term-key="privacy-policy"]')).toBeNull();
     expect(document.body.textContent).not.toContain("No required consents");
-    expect(document.body.textContent).toContain(
-      "You agreed to follow the Code of Conduct (opens in a new tab) and read the Privacy Policy (opens in a new tab) when you started your account.",
-    );
+    expect(document.body.textContent).toContain("You've already read the Privacy Policy (opens in a new tab).");
   });
 });

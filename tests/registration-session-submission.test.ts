@@ -170,6 +170,36 @@ describe("registration continues with the signed-in session", () => {
     ).toEqual([{ term_key: "code-of-conduct" }, { term_key: "privacy-policy" }]);
   });
 
+  it("asks for an event's own term under a policy's key, and records no account acceptance for it", async () => {
+    // The event links its Code of Conduct to its own on-site rules, not to the consortium's policy.
+    await env.DB.prepare(
+      "UPDATE event_terms SET content_ref='/events/pqc-2026/rules/' WHERE term_key='code-of-conduct'",
+    ).run();
+    const person = await signInRegistrant(env.DB, "own.rules@gmail.com", { firstName: "Cy", lastName: "Fixture" });
+    await env.DB.batch(
+      prepareAccountPolicyAcceptanceStatements(env.DB, {
+        userId: person.userId,
+        accepted: ACCOUNT_POLICIES.map(({ termKey, version }) => ({ termKey, version })),
+        at: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+    const refused = await submit(
+      registration("own.rules@gmail.com", { unaffiliatedAttestation: true, consents: [] }),
+      person.session,
+    );
+    expect(refused.status).toBe(400);
+
+    const other = await signInRegistrant(env.DB, "fresh.rules@gmail.com", { firstName: "Di", lastName: "Fixture" });
+    const registered = await submit(
+      registration("fresh.rules@gmail.com", { unaffiliatedAttestation: true }),
+      other.session,
+    );
+    expect(registered.status, await registered.clone().text()).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT term_key FROM account_policy_acceptances WHERE user_id=?", other.userId),
+    ).toEqual([{ term_key: "privacy-policy" }]);
+  });
+
   it("binds an invite-only invitation link to the invited person's account", async () => {
     await env.DB.prepare("UPDATE events SET registration_mode='invite_only' WHERE slug='pqc-2026'").run();
     const [{ id: eventId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM events WHERE slug='pqc-2026'");

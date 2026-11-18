@@ -75,7 +75,7 @@ terms:
     - termKey: privacy-policy
       version: v1
       required: true
-      contentRef: /privacy-policy/
+      contentRef: /privacy/
       displayText: I have read and accept the privacy policy.
     - termKey: code-of-conduct
       version: v1

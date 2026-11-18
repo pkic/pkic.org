@@ -466,7 +466,7 @@ export function RegistrationFlow(props: Props) {
                   <div data-consents>
                     <ConsentList
                       terms={terms.remaining}
-                      coveredByAccount={terms.covered.length > 0}
+                      coveredTerms={terms.covered}
                       presentationOf={(key) => contract.of(`consents.${key}`)}
                     />
                   </div>

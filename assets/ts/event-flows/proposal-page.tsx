@@ -289,8 +289,13 @@ async function main(): Promise<void> {
   async function renderTerms(): Promise<void> {
     if (!consentsContainer) return;
     const accepted = asksAccountPolicy(requiredTerms) ? await readAcceptedAccountPolicies() : [];
-    const remaining = termsNotCoveredByAccount(requiredTerms, (term) => term.termKey, accepted);
-    renderConsentInputs(consentsContainer, remaining, undefined, remaining.length < requiredTerms.length);
+    const remaining = termsNotCoveredByAccount(requiredTerms, (term) => term, accepted);
+    renderConsentInputs(
+      consentsContainer,
+      remaining,
+      undefined,
+      requiredTerms.filter((term) => !remaining.includes(term)),
+    );
   }
   const updateEntry = (selection: ProposalEntrySelection | null): void => {
     const signedIn = !entry && selection;

@@ -226,7 +226,7 @@ export function ParticipantSpeaker({
                   {newTerms.map((term) => (
                     <ConsentCard term={term} key={term.termKey} recorded={isTermAccepted(term, consents)} />
                   ))}
-                  {accountTerms.covered.length > 0 && <AccountCoveredTermsNote />}
+                  <AccountCoveredTermsNote terms={accountTerms.covered} />
                   {!data.currentRepresentation && (
                     <p class="pk-small pk-muted">
                       Accept the terms, then choose and save your speaker identity before confirming.

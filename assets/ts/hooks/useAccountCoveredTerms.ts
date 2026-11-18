@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
-import { isAccountPolicyKey, termsNotCoveredByAccount } from "../../shared/account-policies";
+import { accountPolicyOfTerm, termsNotCoveredByAccount } from "../../shared/account-policies";
 import { accountPoliciesResponseSchema } from "../../shared/schemas/account-policies";
 import { getJson } from "../shared/api-client";
 import type { RequiredTerm } from "../shared/types";
 
 /** Whether any of the event's terms is one an account accepts when it is started. */
 export function asksAccountPolicy(terms: readonly RequiredTerm[]): boolean {
-  return terms.some((term) => isAccountPolicyKey(term.termKey));
+  return terms.some((term) => accountPolicyOfTerm(term) !== null);
 }
 
 /** The account policies the signed-in account accepted; none while signed out or unread. */
@@ -41,7 +41,7 @@ export function useAccountCoveredTerms(terms: readonly RequiredTerm[]): {
     };
   }, [asks]);
   return useMemo(() => {
-    const remaining = termsNotCoveredByAccount(terms, (term) => term.termKey, accepted);
+    const remaining = termsNotCoveredByAccount(terms, (term) => term, accepted);
     return { remaining, covered: terms.filter((term) => !remaining.includes(term)) };
   }, [terms, accepted]);
 }

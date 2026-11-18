@@ -93,14 +93,14 @@ export function ConsentList({
   recorded = [],
   lockRecorded = false,
   presentationOf,
-  coveredByAccount = false,
+  coveredTerms = [],
 }: {
   terms: RequiredTerm[];
   recorded?: readonly { termKey: string; version: string }[];
   lockRecorded?: boolean;
   presentationOf?: (termKey: string) => FieldPresentation;
-  /** Some of the event's terms were left out because the account accepted them when it was started. */
-  coveredByAccount?: boolean;
+  /** The event's terms left out because the account already accepted them as account policies. */
+  coveredTerms?: readonly RequiredTerm[];
 }) {
   return (
     <div class="pk pk-stack pk-stack--snug">
@@ -117,8 +117,8 @@ export function ConsentList({
               />
             );
           })
-        : !coveredByAccount && <p>No required consents for this flow.</p>}
-      {coveredByAccount && <AccountCoveredTermsNote />}
+        : coveredTerms.length === 0 && <p>No required consents for this flow.</p>}
+      {coveredTerms.length > 0 && <AccountCoveredTermsNote terms={coveredTerms} />}
     </div>
   );
 }

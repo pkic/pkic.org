@@ -4,6 +4,7 @@ import { env } from "cloudflare:workers";
 import app from "./helpers/app";
 import { deliveredEmailPayload, queryAll } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
+import { nowIso } from "../functions/_lib/utils/time";
 import { insertOrganization, insertUser } from "./helpers/membership";
 import { userAuthEstablishedResponseSchema, userAuthVerifyResponseSchema } from "../assets/shared/schemas/user-auth";
 import { accountOrganizationRequiredSchema } from "../assets/shared/schemas/account-organization";
@@ -209,9 +210,9 @@ describe("account setup's organization step", () => {
     const userId = await insertUser(env.DB, "eve@inviting.example");
     await env.DB.prepare(
       `INSERT INTO identities (id, user_id, organization_id, source, invited_at, created_at, updated_at)
-       VALUES (?, ?, ?, 'staff', datetime('now'), datetime('now'), datetime('now'))`,
+       VALUES (?, ?, ?, 'staff', ?, ?, ?)`,
     )
-      .bind(crypto.randomUUID(), userId, organizationId)
+      .bind(crypto.randomUUID(), userId, organizationId, nowIso(), nowIso(), nowIso())
       .run();
 
     const established = await verify(await signInLink("eve@inviting.example"));

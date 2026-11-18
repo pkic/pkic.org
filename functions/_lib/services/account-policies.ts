@@ -1,6 +1,7 @@
 /** The account policies a person accepted, and the event terms they therefore need not accept again. */
 import {
   ACCOUNT_POLICIES,
+  accountPolicyOfTerm,
   isAccountPolicyKey,
   termsNotCoveredByAccount,
   type AccountPolicyKey,
@@ -50,10 +51,11 @@ export async function readAcceptedAccountPolicies(db: DatabaseLike, userId: stri
 }
 
 /**
- * Event terms the account's accepted policies already cover count as accepted:
- * the form does not ask for them, and the event still records them. A covered
- * policy accepted on the form is recorded on the account, so the next form
- * does not ask either.
+ * An event term that is an account policy (`accountPolicyOfTerm`) the account
+ * already accepted counts as accepted: the form does not ask for it, and the
+ * event still records it. Such a term accepted on the form is recorded on the
+ * account, so the next form does not ask either. Any other term, including an
+ * event's own wording under a policy's key, is asked and recorded as given.
  */
 export async function resolveAccountCoveredConsents(
   db: DatabaseLike,
@@ -72,14 +74,21 @@ export async function resolveAccountCoveredConsents(
   statements: StatementLike[];
 }> {
   const acceptedPolicies = await readAcceptedAccountPolicies(db, input.userId);
-  const remainingTerms = termsNotCoveredByAccount(input.terms, (term) => term.term_key, acceptedPolicies);
+  const factsOf = (term: EventTermRecord) => ({
+    termKey: term.term_key,
+    contentRef: term.content_ref,
+    required: Boolean(term.required),
+  });
+  const remainingTerms = termsNotCoveredByAccount(input.terms, factsOf, acceptedPolicies);
   const covered = input.terms
     .filter((term) => !remainingTerms.includes(term))
     .map((term) => ({ termKey: term.term_key, version: term.version }));
-  const newlyAccepted = ACCOUNT_POLICIES.filter(
-    (policy) =>
-      !acceptedPolicies.includes(policy.termKey) && input.accepted.some((item) => item.termKey === policy.termKey),
-  );
+  // Only a term that is the account policy itself, accepted on this form, is recorded on the account.
+  const newlyAccepted = input.terms.flatMap((term) => {
+    const policy = accountPolicyOfTerm(factsOf(term));
+    const accepted = input.accepted.some((item) => item.termKey === term.term_key && item.version === term.version);
+    return policy && accepted && !acceptedPolicies.includes(policy.termKey) ? [policy] : [];
+  });
   return {
     consents: [...input.accepted.filter((item) => !covered.some((c) => c.termKey === item.termKey)), ...covered],
     remainingTerms,

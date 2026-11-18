@@ -81,5 +81,5 @@ export async function prepareValidatedAttendeeRegistration(
     verifiedIdentity: options.verifiedIdentity,
   });
   prepared.statements.push(...coverage.statements);
-  return { prepared, requiredTerms, formResponse: validatedForm };
+  return { prepared, requiredTerms, consents: coverage.consents, formResponse: validatedForm };
 }

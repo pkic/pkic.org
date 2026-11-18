@@ -3,8 +3,9 @@ import { batchFirst } from "../../db/pagination";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { UserRecord } from "../users";
-import { INVITE_COLUMNS, type InviteRecord } from "../invite-types";
+import { inviteColumnProjection, type InviteRecord } from "../invite-types";
 import { nowIso } from "../../utils/time";
+import { accountAddressSignsInSql } from "../../auth/email-sign-in-policy";
 import { userProfileSchema } from "../../../../assets/shared/schemas/registration";
 import { z } from "zod";
 
@@ -40,15 +41,18 @@ export function prepareVerifiedRegistrationUserGuard(db: DatabaseLike, user: Use
   });
 }
 
-/** The account's primary address and every verified added address; bind the user id twice. */
-const ACCOUNT_ADDRESSES_SQL = `SELECT normalized_email FROM users WHERE id = ?
-  UNION SELECT normalized_email FROM user_emails WHERE user_id = ? AND verified_at IS NOT NULL`;
-
-/** Whether an invitation was sent to one of this account's own addresses. */
+/**
+ * Whether an invitation was sent to one of this account's own addresses: one
+ * that still signs the person in, so a work address retired when their
+ * representation ended no longer counts.
+ */
 export async function inviteSentToAccount(db: DatabaseLike, userId: string, inviteeEmail: string): Promise<boolean> {
   const row = await db
-    .prepare(`SELECT 1 AS owned WHERE ? IN (${ACCOUNT_ADDRESSES_SQL})`)
-    .bind(inviteeEmail, userId, userId)
+    .prepare(
+      `SELECT 1 AS owned FROM (SELECT ? AS id, ? AS email) account
+        WHERE ${accountAddressSignsInSql("account.id", "account.email")}`,
+    )
+    .bind(userId, inviteeEmail)
     .first<{ owned: number }>();
   return Boolean(row);
 }
@@ -101,13 +105,13 @@ export async function readRegistrationAccessEvidence(
   const [inviteResult, groupResult] = await db.batch([
     db
       .prepare(
-        `SELECT ${INVITE_COLUMNS} FROM invites
-          WHERE event_id = ? AND invite_type = 'attendee' AND status = 'sent'
-            AND invitee_email IN (${ACCOUNT_ADDRESSES_SQL})
-            AND (expires_at IS NULL OR expires_at > ?)
-          ORDER BY created_at ASC LIMIT 1`,
+        `SELECT ${inviteColumnProjection("invites")} FROM invites, (SELECT ? AS id) account
+          WHERE invites.event_id = ? AND invites.invite_type = 'attendee' AND invites.status = 'sent'
+            AND ${accountAddressSignsInSql("account.id", "invites.invitee_email")}
+            AND (invites.expires_at IS NULL OR invites.expires_at > ?)
+          ORDER BY invites.created_at ASC LIMIT 1`,
       )
-      .bind(input.eventId, input.userId, input.userId, nowIso()),
+      .bind(input.userId, input.eventId, nowIso()),
     ...(input.discoverGroup ? [db.prepare(group.sql).bind(...group.bindings)] : []),
   ]);
   return {

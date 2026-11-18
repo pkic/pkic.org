@@ -25,15 +25,39 @@ export function isAccountPolicyKey(termKey: string): termKey is AccountPolicyKey
   return ACCOUNT_POLICIES.some((policy) => policy.termKey === termKey);
 }
 
+/** What an event term says about itself that decides whether it is an account policy. */
+export type AccountPolicyTermFacts = { termKey: string; contentRef: string | null | undefined; required: boolean };
+
+function sitePath(ref: string): string | null {
+  try {
+    const url = new URL(ref, "https://pkic.org");
+    if (url.origin !== "https://pkic.org") return null;
+    return url.pathname.endsWith("/") ? url.pathname : `${url.pathname}/`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The account policy an event term is, or null. A term is the policy only when
+ * it is required, has the policy's key and links to the policy's own page: an
+ * event's own wording under the same key, or an optional term, is asked as is.
+ */
+export function accountPolicyOfTerm(term: AccountPolicyTermFacts): AccountPolicy | null {
+  if (!term.required || !term.contentRef) return null;
+  const path = sitePath(term.contentRef);
+  return ACCOUNT_POLICIES.find((policy) => policy.termKey === term.termKey && policy.href === path) ?? null;
+}
+
 /** The event terms a person still has to accept, given the account policies their account accepted. */
 export function termsNotCoveredByAccount<Term>(
   terms: readonly Term[],
-  termKeyOf: (term: Term) => string,
+  factsOf: (term: Term) => AccountPolicyTermFacts,
   acceptedPolicies: readonly string[],
 ): Term[] {
   return terms.filter((term) => {
-    const key = termKeyOf(term);
-    return !(isAccountPolicyKey(key) && acceptedPolicies.includes(key));
+    const policy = accountPolicyOfTerm(factsOf(term));
+    return !(policy && acceptedPolicies.includes(policy.termKey));
   });
 }
 

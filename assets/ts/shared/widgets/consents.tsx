@@ -7,20 +7,20 @@ const mountedConsentLists = new WeakSet<HTMLElement>();
 /**
  * Renders the terms. `recorded` are the terms the person already agreed to in
  * this flow (a confirmed email carries them back), drawn as agreed;
- * `coveredByAccount` says that terms the account already accepted were left
- * out. Calling again updates the mounted list in place.
+ * `coveredTerms` are the terms left out because the account already
+ * accepted them. Calling again updates the mounted list in place.
  */
 export function renderConsentInputs(
   container: HTMLElement,
   terms: RequiredTerm[],
   recorded?: readonly { termKey: string; version: string }[],
-  coveredByAccount = false,
+  coveredTerms: readonly RequiredTerm[] = [],
 ): void {
   // Clear any server-rendered placeholder (e.g. "Loading…") before Preact
   // takes over, as Preact's first diff may not remove pre-existing children.
   if (!mountedConsentLists.has(container)) container.textContent = "";
   mountedConsentLists.add(container);
-  render(<ConsentList terms={terms} recorded={recorded} coveredByAccount={coveredByAccount} />, container);
+  render(<ConsentList terms={terms} recorded={recorded} coveredTerms={coveredTerms} />, container);
 }
 
 /**

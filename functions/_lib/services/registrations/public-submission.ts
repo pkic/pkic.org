@@ -114,7 +114,7 @@ export async function submitEventRegistration(
     authorizedByGroup: Boolean(verifiedIdentity.registrationGroupId),
   });
 
-  const { prepared, requiredTerms, formResponse } = await prepareValidatedAttendeeRegistration(db, body, {
+  const { prepared, requiredTerms, consents, formResponse } = await prepareValidatedAttendeeRegistration(db, body, {
     sourceType: linkedInvite ? "invite" : body.sourceType,
     sourceRef: body.sourceRef,
     referredByCode: body.referralCode,
@@ -140,7 +140,7 @@ export async function submitEventRegistration(
   const attendanceData = buildAttendanceEmailData(prepared.dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const customAnswerRows = buildCustomAnswerRows(formResponse.answers, formResponse.form?.fields);
-  const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
+  const acceptedTermsText = buildAcceptedTermsText(consents, requiredTerms);
   const affiliation = await readRegistrationAffiliation(db, {
     identityId: registration.registration_identity_id,
     userId: user.id,
