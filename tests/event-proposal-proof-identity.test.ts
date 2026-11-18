@@ -16,7 +16,7 @@ import { callApi } from "./helpers/app";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { seedOrganizationAggregate, insertOrganization, insertUser } from "./helpers/membership";
-import { prepareProposalProof, signInProposer } from "./helpers/proposal-proof";
+import { signInProposer } from "./helpers/proposal-proof";
 import { resetDb } from "./helpers/reset-db";
 import { seedMemberApplication } from "./helpers/member-applications";
 
@@ -99,22 +99,6 @@ async function speakerLink(input: Awaited<ReturnType<typeof fixture>>) {
   });
   return { speakerId: speakerId!, token };
 }
-/** The speaker's own address confirmed on their speaker link: the authority a mailbox confirmation edits with. */
-async function confirmedMailbox(input: Awaited<ReturnType<typeof fixture>>) {
-  const link = await speakerLink(input);
-  const proof = await prepareProposalProof({
-    environment: env,
-    eventSlug: "pqc-2026",
-    email: "person@official.example",
-    consents,
-    unaffiliatedAttestation: false,
-    speakerManagementToken: link.token,
-  });
-  return {
-    continuationToken: proof.continuationToken,
-    speakerManagementToken: proof.speakerManagementToken ?? link.token,
-  };
-}
 async function state() {
   return {
     users: await queryAll(env.DB, "SELECT id,first_name,last_name,email_verified_at FROM users ORDER BY id"),
@@ -183,15 +167,18 @@ describe("an organization representation chosen for a proposal", () => {
         consents,
         speakerManagementToken: link.token,
       }),
+      input.headers,
     );
     expect(started.status, await started.clone().text()).toBe(200);
     const row = await env.DB.prepare(
       "SELECT payload_json FROM email_outbox WHERE template_key='event_proposal_verify' AND recipient_email='person@official.example'",
     ).first<{ payload_json: string }>();
     const mail = await deliveredEmailPayload<{ verificationUrl: string }>(env.DB, env, row!.payload_json);
-    const verified = await post("/proof/verify", {
-      token: new URLSearchParams(new URL(mail.verificationUrl).hash.slice(1)).get("verify"),
-    });
+    const verified = await post(
+      "/proof/verify",
+      { token: new URLSearchParams(new URL(mail.verificationUrl).hash.slice(1)).get("verify") },
+      input.headers,
+    );
     expect(verified.status, await verified.clone().text()).toBe(200);
     const ready = eventProposalProofVerifyResponseSchema.parse(await verified.json());
     if (ready.status !== "ready") throw new Error("Expected a ready confirmation");
@@ -203,11 +190,11 @@ describe("proposal own representation role update", () => {
   it("changes only the owned current role while preserving parallel identities and frozen proposal appearances", async () => {
     const input = await fixture();
     const parallel = await identityFor(input.userId, "Parallel organization", "Parallel role");
-    const authority = await confirmedMailbox(input);
     const before = await state();
     const response = await patch(
       input.identityId,
-      eventProposalProofIdentityPatchSchema.parse({ jobTitle: "Updated own role", ...authority }),
+      eventProposalProofIdentityPatchSchema.parse({ jobTitle: "Updated own role" }),
+      input.headers,
     );
     expect(response.status, await response.clone().text()).toBe(200);
     expect(response.headers.get("cache-control")).toContain("no-store");
@@ -242,19 +229,19 @@ describe("proposal own representation role update", () => {
     expect(JSON.stringify(await response.json())).toContain(JOB_TITLE_REQUIRED);
     expect((await state()).identities).toEqual(before.identities);
   });
-  it("queues a changed visible member profile through speaker proof, but not an identical repeat", async () => {
+  it("queues a changed visible member profile through the speaker link, but not an identical repeat", async () => {
     const input = await fixture();
     await seedOrganizationAggregate(env.DB, input.organizationId);
     const body = eventProposalProofIdentityPatchSchema.parse({
       biography: "Updated member biography",
-      ...(await confirmedMailbox(input)),
+      speakerManagementToken: (await speakerLink(input)).token,
     });
-    const first = await patch(input.identityId, body);
+    const first = await patch(input.identityId, body, input.headers);
     expect(first.status, await first.clone().text()).toBe(200);
     expect(await queryAll(env.DB, "SELECT resource_id,reason_code FROM site_publication_requests")).toEqual([
       { resource_id: input.identityId, reason_code: "identity_profile_changed" },
     ]);
-    const repeated = await patch(input.identityId, body);
+    const repeated = await patch(input.identityId, body, input.headers);
     expect(repeated.status, await repeated.clone().text()).toBe(200);
     expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(1);
   });
@@ -263,30 +250,49 @@ describe("proposal own representation role update", () => {
     const input = await fixture();
     const { token } = await speakerLink(input);
     const before = await state();
-    const response = await patch(input.identityId, { jobTitle: "Invited own role", speakerManagementToken: token });
+    const response = await patch(
+      input.identityId,
+      { jobTitle: "Invited own role", speakerManagementToken: token },
+      input.headers,
+    );
     expect(response.status, await response.clone().text()).toBe(200);
     expect((await state()).selections).toEqual(before.selections);
   });
-  it("refuses a mailbox confirmation without its speaker authority", async () => {
+  it("refuses a speaker link without a session, before any read or write", async () => {
     const input = await fixture();
-    const { continuationToken } = await confirmedMailbox(input);
+    const { token } = await speakerLink(input);
     const before = await state();
-    const response = await patch(input.identityId, { jobTitle: "Rejected", continuationToken });
+    const response = await patch(input.identityId, { jobTitle: "Rejected", speakerManagementToken: token });
+    expect(response.status).toBe(401);
+    expect(await state()).toEqual(before);
+  });
+  it("refuses another signed-in account holding the speaker link", async () => {
+    const input = await fixture();
+    const { token } = await speakerLink(input);
+    const other = await signInProposer({ environment: env, email: "co-speaker@another.example" });
+    const before = await state();
+    const response = await patch(
+      input.identityId,
+      { jobTitle: "Rejected", speakerManagementToken: token },
+      other.headers,
+    );
     expect(response.status).toBe(403);
     expect(await state()).toEqual(before);
   });
   it("refuses foreign ownership and extra organization or mailbox fields without effects", async () => {
     const input = await fixture();
-    const authority = await confirmedMailbox(input);
+    const authority = { speakerManagementToken: (await speakerLink(input)).token };
     const foreign = await identityFor(await insertUser(env.DB, "foreign@another.example"), "Foreign organization");
     const before = await state();
-    expect((await patch(foreign.identityId, { jobTitle: "Foreign", ...authority })).status).toBe(404);
+    expect((await patch(foreign.identityId, { jobTitle: "Foreign", ...authority }, input.headers)).status).toBe(404);
     for (const extra of [
       { organizationId: input.organizationId },
       { emailId: null },
       { organizationName: "Renamed shared organization" },
     ])
-      expect((await patch(input.identityId, { jobTitle: "Rejected", ...authority, ...extra })).status).toBe(400);
+      expect(
+        (await patch(input.identityId, { jobTitle: "Rejected", ...authority, ...extra }, input.headers)).status,
+      ).toBe(400);
     expect(await state()).toEqual(before);
   });
   it.each(["pending", "ended", "blocked"] as const)(
@@ -353,6 +359,9 @@ describe("proposal own representation role update", () => {
   it("rechecks a revoked speaker capability in the actual role-write batch", async () => {
     const input = await fixture();
     const { speakerId, token } = await speakerLink(input);
+    const session = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM sessions WHERE user_id=?", input.userId)
+    )[0];
     let concurrent: Awaited<ReturnType<typeof state>>;
     const db = mutateBeforeNextBatch(env.DB, async () => {
       await env.DB.prepare("UPDATE proposal_speakers SET manage_link_secret=? WHERE id=?")
@@ -365,6 +374,7 @@ describe("proposal own representation role update", () => {
         eventId: input.eventId,
         identityId: input.identityId,
         signingSecret: env.INTERNAL_SIGNING_SECRET!,
+        actor: { userId: input.userId, sessionId: session.id },
         body: { jobTitle: "Rejected", speakerManagementToken: token },
       }),
     ).rejects.toMatchObject({ status: 409, code: "IDENTITY_CHANGED" });

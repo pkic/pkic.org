@@ -29,8 +29,6 @@ describe("engagement events", () => {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify({
-        firstName: "Jamie",
-        lastName: "Example",
         email: "jamie@pkic.org",
         identityId,
         dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],

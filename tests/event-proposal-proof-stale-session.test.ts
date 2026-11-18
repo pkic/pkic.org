@@ -1,16 +1,13 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  eventProposalProofStartSchema,
-  eventProposalProofVerifyResponseSchema,
-} from "../assets/shared/schemas/event-proposal-proof";
+import { eventProposalProofStartSchema } from "../assets/shared/schemas/event-proposal-proof";
 import { proposalCreateResponseSchema, proposalCreateSchema } from "../assets/shared/schemas/proposal-management";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import { signUserSessionToken, USER_SESSION_COOKIE_NAME } from "../functions/_lib/auth/user-session";
 import { addHours, nowIso } from "../functions/_lib/utils/time";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
-import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { withIndependentCapacity } from "./helpers/independent-capacity";
 import { signInProposer } from "./helpers/proposal-proof";
 import { resetDb } from "./helpers/reset-db";
@@ -30,7 +27,7 @@ const sessionStatus = async (sessionToken: string) =>
     })
   ).status;
 
-/** A browser that still carries a cookie the session endpoint refuses, so the page shows the anonymous form. */
+/** A browser that still carries a cookie the session endpoint refuses, so the page shows the sign-in card. */
 async function staleSessions(adminId: string): Promise<Record<string, string>> {
   const removed = await createAdminSession(env.DB, adminId, "removed-session");
   await env.DB.prepare("DELETE FROM sessions WHERE token_hash IS NOT NULL").run();
@@ -82,7 +79,7 @@ async function speakerLink(): Promise<string> {
 }
 
 describe("speaker mailbox proof from a browser with an unusable session", () => {
-  it("continues on the speaker link instead of refusing with the session error the page already ignored", async () => {
+  it("asks the speaker to sign in, as the page does, and queues no email", async () => {
     const { admin } = await seedEventAndAdmin(env.DB);
     const speakerManagementToken = await speakerLink();
     for (const [label, sessionToken] of Object.entries(await staleSessions(admin.id))) {
@@ -93,22 +90,10 @@ describe("speaker mailbox proof from a browser with an unusable session", () => 
         eventProposalProofStartSchema.parse({ email, consents, speakerManagementToken }),
         sessionToken,
       );
-      expect(started.status, `${label}: ${await started.clone().text()}`).toBe(200);
-      const row = (
-        await queryAll<{ payload_json: string }>(
-          env.DB,
-          "SELECT payload_json FROM email_outbox WHERE template_key='event_proposal_verify' AND recipient_email=?",
-          email,
-        )
-      )[0];
-      const mail = await deliveredEmailPayload<{ verificationUrl: string }>(env.DB, env, row.payload_json);
-      const token = new URLSearchParams(new URL(mail.verificationUrl).hash.slice(1)).get("verify");
-      const verified = await post("/proof/verify", { token }, sessionToken);
-      expect(verified.status, `${label}: ${await verified.clone().text()}`).toBe(200);
-      expect(eventProposalProofVerifyResponseSchema.parse(await verified.json())).toMatchObject({
-        status: "ready",
-        email,
-      });
+      expect(started.status, `${label}: ${await started.clone().text()}`).toBe(401);
+      expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email=?", email), label).toHaveLength(
+        0,
+      );
     }
   });
 });

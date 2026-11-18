@@ -2,13 +2,12 @@ import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import {
-  eventProposalProofPersonPatchSchema,
-  eventProposalProofPersonPatchResponseSchema,
   eventProposalProofStartSchema,
   eventProposalProofStartResponseSchema,
   eventProposalProofVerifyResponseSchema,
 } from "../../assets/shared/schemas/event-proposal-proof";
 import { identitiesListResponseSchema } from "../../assets/shared/schemas/identity";
+import { myProfileSchema, myProfileUpdateSchema } from "../../assets/shared/schemas/me";
 import {
   proposalAccessReadResponseSchema,
   proposalCreateSchema,
@@ -332,15 +331,15 @@ test("a new proposer signs in, adds a nonmember affiliation, and an invited know
     const detailsDialog = guest.getByRole("dialog", { name: "Edit my details", exact: true });
     await detailsDialog.getByRole("textbox", { name: /^First name/ }).fill("Renamed");
     await detailsDialog.getByRole("textbox", { name: /^Last name/ }).fill("Participant");
-    const savedNames = responseFor(guest, `${endpoint}/proof/person`, "PATCH");
+    const savedNames = responseFor(guest, "/api/v1/users/current", "PATCH");
     await detailsDialog.getByRole("button", { name: "Save my details", exact: true }).click();
     const namesResponse = await savedNames;
     expect(namesResponse.status(), await namesResponse.text()).toBe(200);
-    expect(eventProposalProofPersonPatchSchema.parse(namesResponse.request().postDataJSON())).toEqual({
+    expect(myProfileUpdateSchema.parse(namesResponse.request().postDataJSON())).toEqual({
       firstName: "Renamed",
       lastName: "Participant",
     });
-    expect(eventProposalProofPersonPatchResponseSchema.parse(await namesResponse.json()).person).toMatchObject({
+    expect(myProfileSchema.parse(await namesResponse.json())).toMatchObject({
       firstName: "Renamed",
       lastName: "Participant",
     });

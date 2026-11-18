@@ -8,6 +8,7 @@ import type { EventRegistrationPolicy } from "../../../shared/schemas/event-seri
 import { parseEventFlowPath } from "../../../shared/event-flow-paths";
 import { ApiClientError, getJson, postJson } from "../../shared/api-client";
 import { readField } from "../../shared/form/helpers";
+import { clearRememberedInvitation } from "../../shared/query-context";
 import { clearStatus } from "../../shared/form/validation";
 import { useContractForm } from "../../hooks/useContractForm";
 import { Alert } from "../../ui/Alert";
@@ -158,6 +159,7 @@ export function registrationInvitation(boot: FlowBoot) {
   if (!allowed) render(<Spinner label="Checking invitation…" />, mount);
 
   function proceed() {
+    clearRememberedInvitation(boot.query.inviteId);
     boot.query.inviteToken = null;
     boot.query.inviteId = null;
     if (boot.query.sourceType === "invite" || boot.query.sourceType === "speaker_invite")
@@ -173,6 +175,8 @@ export function registrationInvitation(boot: FlowBoot) {
     boot.form.querySelector<HTMLElement>("[data-step].is-active input:not([type='hidden'])")?.focus();
   }
   function recover(state: InviteState) {
+    // A refused invitation is not offered again from this browser.
+    clearRememberedInvitation(boot.query.inviteId);
     allowed = false;
     visible(false);
     render(

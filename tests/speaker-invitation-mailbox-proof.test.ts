@@ -27,6 +27,7 @@ import { resetDb } from "./helpers/reset-db";
 beforeEach(resetDb);
 const consents = [{ termKey: "speaker-terms", version: "v1" }];
 const invited = "invited@speaker.example";
+const speakerSessions = new Map<string, string>();
 
 async function invitedSpeaker(invitedEmail = invited) {
   const { eventId } = await seedEventAndAdmin(env.DB);
@@ -67,6 +68,8 @@ async function inviteSpeaker(proposalId: string, accountEmail: string, invitedEm
     purpose: "speaker_manage",
     resourceId: speakerId,
   });
+  // The speaker opens their link signed in to the invited account: no proof step runs without a session.
+  speakerSessions.set(token, await createMemberSession(env.DB, userId, crypto.randomUUID()));
   return { userId, token, speakerId };
 }
 
@@ -76,10 +79,11 @@ async function addAlias(userId: string, alias: string) {
     .run();
 }
 
-function proof(path: string, body: unknown) {
+function proof(path: string, body: { speakerManagementToken: string } & Record<string, unknown>) {
+  const session = speakerSessions.get(body.speakerManagementToken);
   return callApi(env, `/api/v1/events/pqc-2026/proposals/proof${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(session ? { authorization: `Bearer ${session}` } : {}) },
     body: JSON.stringify(body),
   });
 }

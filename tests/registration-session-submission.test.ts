@@ -9,6 +9,7 @@ import { signInRegistrant } from "./helpers/auth";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { registrationCreateSchema, registrationSubmissionResponseSchema } from "../assets/shared/schemas/registration";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
+import { createPendingRegistration } from "./helpers/registration-confirmation";
 
 const API = "/api/v1/events/pqc-2026/registrations";
 const consents = [
@@ -20,8 +21,6 @@ let sequence = 0;
 
 function registration(email: string, extra: Record<string, unknown> = {}) {
   return registrationCreateSchema.parse({
-    firstName: "Casey",
-    lastName: "Attendee",
     email,
     unaffiliatedAttestation: false,
     dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
@@ -94,6 +93,46 @@ describe("registration continues with the signed-in session", () => {
       ).toEqual([{ action_type: "registration_confirmed" }, { action_type: "registration_created" }]);
     },
   );
+
+  it("admits an invite-only registration through the invitation sent to the signed-in address, without its link", async () => {
+    await env.DB.prepare("UPDATE events SET registration_mode='invite_only' WHERE slug='pqc-2026'").run();
+    const email = "invite.only@gmail.com";
+    const { session } = await signInRegistrant(env.DB, email, { firstName: "Casey", lastName: "Fixture" });
+    const uninvited = await signInRegistrant(env.DB, "uninvited@gmail.com", { firstName: "Uma", lastName: "Fixture" });
+    const inviteId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO invites (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)
+       SELECT ?, id, ?, 'attendee', ?, 'sent', 'direct', '2026-01-01T00:00:00.000Z' FROM events WHERE slug='pqc-2026'`,
+    )
+      .bind(inviteId, email, `sent-${inviteId}`)
+      .run();
+    const refused = await submit(
+      registration("uninvited@gmail.com", { unaffiliatedAttestation: true }),
+      uninvited.session,
+    );
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ error: { code: "EVENT_REGISTRATION_ACCESS_REQUIRED" } });
+    const response = await submit(registration(email, { unaffiliatedAttestation: true }), session);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const { registrationId } = registrationSubmissionResponseSchema.parse(await response.json());
+    expect(await queryAll(env.DB, "SELECT invite_id,status FROM registrations WHERE id=?", registrationId)).toEqual([
+      { invite_id: inviteId, status: "registered" },
+    ]);
+    expect(await queryAll(env.DB, "SELECT status FROM invites WHERE id=?", inviteId)).toEqual([{ status: "accepted" }]);
+  });
+
+  it("confirms the signed-in person's earlier unconfirmed registration instead of refusing it", async () => {
+    const email = "earlier.pending@gmail.com";
+    const pending = await createPendingRegistration(env.DB, { email });
+    const { session } = await signInRegistrant(env.DB, email);
+    const response = await submit(registration(email, { unaffiliatedAttestation: true }), session);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const result = registrationSubmissionResponseSchema.parse(await response.json());
+    expect(result).toMatchObject({ registrationId: pending.registrationId, status: "registered" });
+    expect(await queryAll(env.DB, "SELECT id,status FROM registrations WHERE user_id=?", pending.userId)).toEqual([
+      { id: pending.registrationId, status: "registered" },
+    ]);
+  });
 
   it.each([
     [null, "Fixture"],

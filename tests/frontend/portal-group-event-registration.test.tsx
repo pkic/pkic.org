@@ -12,15 +12,17 @@ import { GroupEventRegistrationPanel } from "../../assets/ts/member-flows/portal
 vi.mock("../../assets/ts/components/RegistrationContactStep", async () => {
   const { useEffect } = await import("preact/hooks");
   return {
-    RegistrationContactStep: ({ onReadyChange }: { onReadyChange: (ready: boolean) => void }) => {
+    RegistrationContactStep: ({
+      onReadyChange,
+      onNamesChange,
+    }: {
+      onReadyChange: (ready: boolean) => void;
+      onNamesChange?: (names: { firstName: string; lastName: string }) => void;
+    }) => {
       useEffect(() => onReadyChange(true), [onReadyChange]);
-      return (
-        <>
-          <input type="hidden" name="email" value="person@example.test" />
-          <input type="hidden" name="firstName" value="Ada" />
-          <input type="hidden" name="lastName" value="Example" />
-        </>
-      );
+      // The account's names reach the flow through the step, never as registration fields.
+      useEffect(() => onNamesChange?.({ firstName: "Ada", lastName: "Example" }), [onNamesChange]);
+      return <input type="hidden" name="email" value="person@example.test" />;
     },
   };
 });

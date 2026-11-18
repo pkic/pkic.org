@@ -188,7 +188,7 @@ describe("registration entry", () => {
       await settle();
       const correction = requests.filter(({ path, body }) => path === "/api/v1/users/current" && body).at(-1)!;
       expect(myProfileUpdateSchema.parse(correction.body)).toMatchObject({ firstName: "Zoë", lastName: "Fixture" });
-      expect(document.querySelector<HTMLInputElement>('input[type="hidden"][name="firstName"]')!.value).toBe("Zoë");
+      expect(document.querySelector('input[type="hidden"][name="firstName"]')).toBeNull();
       await act(() => next.click());
       await settle();
       expect(document.querySelector<HTMLElement>('[data-step="2"]')!.hidden).toBe(false);
@@ -211,13 +211,12 @@ describe("registration entry", () => {
     expect(submitted, document.querySelector("[data-flow-status]")?.textContent ?? "").toBeDefined();
     expect(registrationCreateSchema.parse(submitted!.body)).toMatchObject({
       email: SESSION.identity.email,
-      firstName: "Ada",
-      lastName: "Lovelace",
       identityId: SESSION.actingIdentityId,
       unaffiliatedAttestation: true,
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
     });
     expect(submitted!.body).not.toHaveProperty("attendanceType");
+    expect(submitted!.body).not.toHaveProperty("firstName");
     expect(
       registrationCreateSchema.safeParse({ ...registrationCreateSchema.parse(submitted!.body), dayAttendance: [] })
         .success,

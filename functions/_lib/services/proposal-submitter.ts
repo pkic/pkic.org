@@ -44,13 +44,12 @@ export async function prepareProposalSubmitter(
   input: {
     eventId: string;
     body: Input;
-    actor?: AuthenticatedIdentity;
+    actor: AuthenticatedIdentity;
     at: string;
   },
 ) {
   const statements: StatementLike[] = [];
   const kind = input.body.unaffiliatedAttestation ? "individual" : "organization";
-  if (!input.actor) throw new AppError(401, "AUTH_REQUIRED", "Sign in to submit a proposal.");
   const selected = input.body.proposer.actingIdentityId;
   if (
     selected === undefined ||

@@ -23,8 +23,6 @@ import {
 } from "./identities/VerifiedOrganizationDetails";
 import { friendlyErrorMessage } from "./ErrorAlert";
 import { Alert } from "../ui/Alert";
-import { Field } from "../ui/Field";
-import { TextInput } from "../ui/TextControl";
 import { SignInCard } from "./sign-in/SignInCard";
 import { signInReturnPath } from "../shared/query-context";
 import { RegistrationIdentityField } from "./RegistrationIdentitySelect";
@@ -116,51 +114,6 @@ async function readStage(): Promise<Stage> {
   };
 }
 
-/** Saved names are shown, not asked again; a missing one is asked for. */
-function NameFields({
-  firstName = "",
-  lastName = "",
-  presentationOf,
-}: {
-  firstName?: string | null;
-  lastName?: string | null;
-  presentationOf?: (name: string) => FieldPresentation;
-}) {
-  if (firstName && lastName)
-    return (
-      <>
-        <input type="hidden" name="firstName" value={firstName} />
-        <input type="hidden" name="lastName" value={lastName} />
-      </>
-    );
-  return (
-    <div class="pk-split">
-      <Field
-        id="registration-first-name"
-        label="First name"
-        errorSlot="firstName"
-        required
-        {...presentationOf?.("firstName")}
-      >
-        {(control) => (
-          <TextInput {...control} name="firstName" required autoComplete="given-name" defaultValue={firstName ?? ""} />
-        )}
-      </Field>
-      <Field
-        id="registration-last-name"
-        label="Last name"
-        errorSlot="lastName"
-        required
-        {...presentationOf?.("lastName")}
-      >
-        {(control) => (
-          <TextInput {...control} name="lastName" required autoComplete="family-name" defaultValue={lastName ?? ""} />
-        )}
-      </Field>
-    </div>
-  );
-}
-
 function AddressFields({ step }: { step: WorkEmailStep }) {
   return (
     <>
@@ -182,29 +135,20 @@ function Details({
   firstName?: string | null;
   lastName?: string | null;
   representation?: ComponentChildren;
-  saveNames?: (names: PersonalNamePatch) => Promise<void>;
+  saveNames: (names: PersonalNamePatch) => Promise<void>;
   presentationOf?: (name: string) => FieldPresentation;
 }) {
+  // The names are the account's own: edited and saved on the account, never posted with the registration.
   const refusal = presentationOf?.("firstName").message ?? presentationOf?.("lastName").message;
   return (
-    <>
-      <PersonDetailsSummary
-        email={email}
-        firstName={firstName}
-        lastName={lastName}
-        representation={representation}
-        saveNames={saveNames}
-        refusal={refusal}
-      />
-      {saveNames ? (
-        <>
-          <input type="hidden" name="firstName" value={firstName ?? ""} />
-          <input type="hidden" name="lastName" value={lastName ?? ""} />
-        </>
-      ) : (
-        <NameFields firstName={firstName} lastName={lastName} presentationOf={presentationOf} />
-      )}
-    </>
+    <PersonDetailsSummary
+      email={email}
+      firstName={firstName}
+      lastName={lastName}
+      representation={representation}
+      saveNames={saveNames}
+      refusal={refusal}
+    />
   );
 }
 
@@ -217,6 +161,7 @@ function Details({
 export function RegistrationContactStep({
   signInSlot,
   onReadyChange,
+  onNamesChange,
   onRepresentationMissingChange,
   onSignInChange,
   presentationOf,
@@ -230,6 +175,8 @@ export function RegistrationContactStep({
   /** Where the sign-in card renders: outside the registration form, because the card has a form of its own. */
   signInSlot: RefObject<HTMLElement>;
   onReadyChange: (ready: boolean) => void;
+  /** Tells the flow the account's saved names, which the step checks and the review shows. */
+  onNamesChange?: (names: { firstName: string; lastName: string }) => void;
   /** Tells the flow whether a work address still has no organization, so Continue waits for one. */
   onRepresentationMissingChange?: (missing: boolean) => void;
   /** Tells the flow whether the sign-in card stands in for the form. */
@@ -245,6 +192,12 @@ export function RegistrationContactStep({
   const representationMissing = stage.kind === "known" && stage.workEmail && !stage.person.identity?.organizationId;
   const confirmsInPlace = representationMissing && stage.kind === "known" && stage.affiliation !== null;
   useEffect(() => onReadyChange(stage.kind === "known"), [stage.kind, onReadyChange]);
+  const knownFirstName = stage.kind === "known" ? stage.person.firstName : "";
+  const knownLastName = stage.kind === "known" ? stage.person.lastName : "";
+  useEffect(
+    () => onNamesChange?.({ firstName: knownFirstName, lastName: knownLastName }),
+    [knownFirstName, knownLastName, onNamesChange],
+  );
   useEffect(
     () => onRepresentationMissingChange?.(confirmsInPlace ? !organizationChosen || confirming : representationMissing),
     [confirmsInPlace, organizationChosen, confirming, representationMissing, onRepresentationMissingChange],

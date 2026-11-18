@@ -21,13 +21,13 @@ async function main() {
         mode="create"
         forms={forms}
         context={context}
-        onRegistered={(result, body, form) => {
+        onRegistered={(result, body, form, names) => {
           showRegistrationSuccess(
             context.root,
             form,
             result,
-            body.firstName,
-            body.lastName,
+            names.firstName,
+            names.lastName,
             body.email,
             forms.event.name,
             context.eventSlug,

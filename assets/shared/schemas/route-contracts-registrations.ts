@@ -20,7 +20,7 @@ import {
   registrationEmailProofVerifySchema,
 } from "./registration-email-proof";
 import { jsonResponse, requiredJsonBody } from "./openapi";
-import { publicOperation } from "./route-contract";
+import { publicOperation, requiresSession } from "./route-contract";
 import { screensWorkEmailDomain } from "./work-email";
 
 export const registrationResendManageLinkRouteSchema = {
@@ -47,7 +47,7 @@ export const registrationResendManageLinkRouteSchema = {
 
 export const eventRegistrationCreateRouteSchema = {
   ...protectsPublicAction("event_registration", "events:manage"),
-  ...publicOperation(),
+  ...requiresSession(),
   ...screensWorkEmailDomain(),
   tags: ["Registrations"],
   summary: "Register for an event",
@@ -60,6 +60,7 @@ export const eventRegistrationCreateRouteSchema = {
   responses: {
     "200": jsonResponse("Registration submitted.", registrationSubmissionResponseSchema),
     "400": { description: "Invalid registration, form answers, attendance, invite, or consent." },
+    "401": { description: "Sign in to register." },
     "404": { description: "Event not found." },
     "409": { description: "Registration state or capacity changed concurrently." },
   },

@@ -1,8 +1,10 @@
 import { guardAuthorizedDatabase, prepareAuthorizationGuard } from "../../db/authorization-guard";
-import { first } from "../../db/queries";
+import { batchFirst } from "../../db/pagination";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { UserRecord } from "../users";
+import { INVITE_COLUMNS, type InviteRecord } from "../invite-types";
+import { nowIso } from "../../utils/time";
 import { userProfileSchema } from "../../../../assets/shared/schemas/registration";
 import { z } from "zod";
 
@@ -72,13 +74,33 @@ function groupEventRegistrationEvidence(input: { eventId: string; groupId?: stri
   };
 }
 
-/** Discover access from live memberships and event grants, never request-supplied group IDs. */
-export async function findRegistrationGroup(
+/**
+ * The access a signed-in person brings without an invitation link, read in one batch: an attendee
+ * invitation sent to the account's address (its session proved that mailbox, so a link opened in
+ * another browser still counts), and group access from live memberships and event grants, never
+ * request-supplied group IDs.
+ */
+export async function readRegistrationAccessEvidence(
   db: DatabaseLike,
-  input: { eventId: string; userId: string },
-): Promise<string | undefined> {
-  const evidence = groupEventRegistrationEvidence(input);
-  return (await first<{ groupId: string }>(db, evidence.sql, evidence.bindings))?.groupId;
+  input: { eventId: string; userId: string; discoverGroup: boolean },
+): Promise<{ invite: InviteRecord | null; registrationGroupId: string | undefined }> {
+  const group = groupEventRegistrationEvidence(input);
+  const [inviteResult, groupResult] = await db.batch([
+    db
+      .prepare(
+        `SELECT ${INVITE_COLUMNS} FROM invites
+          WHERE event_id = ? AND invite_type = 'attendee' AND status = 'sent'
+            AND invitee_email = (SELECT normalized_email FROM users WHERE id = ?)
+            AND (expires_at IS NULL OR expires_at > ?)
+          ORDER BY created_at ASC LIMIT 1`,
+      )
+      .bind(input.eventId, input.userId, nowIso()),
+    ...(input.discoverGroup ? [db.prepare(group.sql).bind(...group.bindings)] : []),
+  ]);
+  return {
+    invite: batchFirst<InviteRecord>(inviteResult) ?? null,
+    registrationGroupId: groupResult ? batchFirst<{ groupId: string }>(groupResult)?.groupId : undefined,
+  };
 }
 
 export function prepareGroupEventRegistrationGuard(

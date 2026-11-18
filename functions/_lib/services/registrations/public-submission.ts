@@ -26,8 +26,12 @@ import { registrationManageCapability } from "./capability-urls";
 import { readRegistrationAffiliation } from "./selected-identity";
 import type { VerifiedRegistrationIdentityContext } from "./types";
 import { persistedUtcInstant } from "../../utils/time";
-import { findRegistrationGroup, prepareGroupEventRegistrationGuard } from "./authorization";
-import { eventTakesRegistrations } from "./email-proof";
+import { prepareGroupEventRegistrationGuard, readRegistrationAccessEvidence } from "./authorization";
+import {
+  eventTakesRegistrations,
+  registrationAllowsPublicAccess,
+  requireRegistrationPolicy,
+} from "./registration-policy";
 
 /** The individual capacity only gates the public contract's work-email policy; the use case does not read it. */
 type RegistrationCreateInput = Omit<z.infer<typeof registrationCreateSchema>, "unaffiliatedAttestation">;
@@ -50,33 +54,7 @@ export interface EventRegistrationSubmissionMetadata {
   authorizationGuards?: readonly StatementLike[];
 }
 
-function registrationAllowsPublicAccess(registrationMode: string): boolean {
-  return registrationMode === "public" || registrationMode === "open" || registrationMode === "invite_or_open";
-}
-
-function requireRegistrationPolicy(
-  registrationMode: string,
-  access: { invited: boolean; authorizedByGroup: boolean },
-): void {
-  // An automatic meeting invites its group's members itself (#103); like a
-  // meeting without registration, it takes no registrations.
-  if (!eventTakesRegistrations(registrationMode)) {
-    throw new AppError(403, "EVENT_REGISTRATION_DISABLED", "This event does not use registration");
-  }
-  if (registrationAllowsPublicAccess(registrationMode)) return;
-  if (
-    (registrationMode === "optional" ||
-      registrationMode === "required" ||
-      registrationMode === "invitation_only" ||
-      registrationMode === "invite_only") &&
-    (access.invited || access.authorizedByGroup)
-  ) {
-    return;
-  }
-  throw new AppError(403, "EVENT_REGISTRATION_ACCESS_REQUIRED", "Registration requires an invitation or group access");
-}
-
-/** Canonical registration use case shared by public and authenticated group adapters. */
+/** Canonical registration use case shared by the event and group registration routes. */
 export async function submitEventRegistration(
   db: DatabaseLike,
   env: Env,
@@ -87,26 +65,30 @@ export async function submitEventRegistration(
   const startsAt = persistedUtcInstant(event.starts_at);
   await recordHugoEventBasePath(db, event, metadata.eventBasePath);
 
-  let invite: InviteRecord | null = null;
+  let linkedInvite: InviteRecord | null = null;
   if (body.inviteToken) {
-    invite = await findInviteByToken(db, body.inviteToken, metadata.signingSecret, body.inviteId);
-    if (invite.event_id !== event.id || invite.invite_type !== "attendee") {
+    linkedInvite = await findInviteByToken(db, body.inviteToken, metadata.signingSecret, body.inviteId);
+    if (linkedInvite.event_id !== event.id || linkedInvite.invite_type !== "attendee") {
       throw new AppError(400, "INVITE_INVALID", "Invite token is not valid for attendee registration for this event");
     }
   }
   let verifiedIdentity = metadata.verifiedIdentity;
   const authorizationGuards = [...(metadata.authorizationGuards ?? [])];
-  if (!verifiedIdentity.registrationGroupId && !invite && !registrationAllowsPublicAccess(event.registration_mode)) {
-    const registrationGroupId = await findRegistrationGroup(db, {
+  let invite = linkedInvite;
+  if (!invite && eventTakesRegistrations(event.registration_mode)) {
+    // The session proved the account's mailbox, so an invitation sent to it counts without its link.
+    const access = await readRegistrationAccessEvidence(db, {
       eventId: event.id,
       userId: verifiedIdentity.userId,
+      discoverGroup: !verifiedIdentity.registrationGroupId && !registrationAllowsPublicAccess(event.registration_mode),
     });
-    if (registrationGroupId) {
-      verifiedIdentity = { ...verifiedIdentity, registrationGroupId };
+    invite = access.invite;
+    if (access.registrationGroupId && !invite) {
+      verifiedIdentity = { ...verifiedIdentity, registrationGroupId: access.registrationGroupId };
       authorizationGuards.push(
         prepareGroupEventRegistrationGuard(db, {
           eventId: event.id,
-          groupId: registrationGroupId,
+          groupId: access.registrationGroupId,
           userId: verifiedIdentity.userId,
         }),
       );
@@ -118,7 +100,7 @@ export async function submitEventRegistration(
   });
 
   const { prepared, requiredTerms, formResponse } = await prepareValidatedAttendeeRegistration(db, body, {
-    sourceType: invite ? "invite" : body.sourceType,
+    sourceType: linkedInvite ? "invite" : body.sourceType,
     sourceRef: body.sourceRef,
     referredByCode: body.referralCode,
     invite,
@@ -238,6 +220,3 @@ export async function submitEventRegistration(
     ],
   };
 }
-
-/** Public adapter name retained for the existing public route. */
-export const submitPublicRegistration = submitEventRegistration;

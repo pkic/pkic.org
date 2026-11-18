@@ -226,9 +226,8 @@ export const inviteeSchema = z.object({
   lastName: lastNameSchema.optional(),
 });
 
+/** The registrant's names come from their signed-in account, never from the registration request. */
 export const attendeeRegistrationFieldsSchema = z.object({
-  firstName: firstNameSchema,
-  lastName: lastNameSchema,
   email: normalizedEmailSchema,
   identityId: databaseIdSchema.optional(),
   dayAttendance: z
@@ -240,12 +239,8 @@ export const attendeeRegistrationFieldsSchema = z.object({
   consents: z.array(consentItemSchema).max(20),
 });
 export type AttendeeRegistrationFields = z.infer<typeof attendeeRegistrationFieldsSchema>;
-/** Wizard steps use the same fields and attendance policy as the registration request. */
-export const registrationContactFieldsSchema = attendeeRegistrationFieldsSchema.pick({
-  firstName: true,
-  lastName: true,
-  email: true,
-});
+/** The "You" step checks the signed-in account's saved details before the person continues. */
+export const registrationContactFieldsSchema = userProfileSchema;
 /** A rendered day must be answered explicitly; Not attending is an answer but creates no attendance row. */
 export function withRequiredDayAttendanceChoices<Schema extends z.ZodType>(
   schema: Schema,

@@ -208,8 +208,6 @@ describe("historical event form response attribution", () => {
         method: "POST",
         headers: { "content-type": "application/json", ...headers },
         body: JSON.stringify({
-          firstName: "Submitted",
-          lastName: "Attendee",
           email: "submitted@example.test",
           identityId,
           dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],

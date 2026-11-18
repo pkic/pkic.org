@@ -189,8 +189,6 @@ export async function registerStateAttendee(
     fixture.slug,
     registrationCreateSchema.parse({
       email,
-      firstName: "Synthetic",
-      lastName: "Attendee",
       dayAttendance: placement.eventDays.map((day) => ({ dayDate: day.dayDate, attendanceType: "in_person" })),
       customAnswers: answers,
       consents: placement.requiredTerms.map(({ termKey, version }) => ({ termKey, version })),

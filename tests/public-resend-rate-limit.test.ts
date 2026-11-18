@@ -112,8 +112,6 @@ describe("public resend rate limits", () => {
         method: "POST",
         headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.42", ...headers },
         body: JSON.stringify({
-          firstName: "Rate",
-          lastName: "Limited",
           email,
           identityId,
           dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],

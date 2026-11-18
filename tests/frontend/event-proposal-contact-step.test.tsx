@@ -27,22 +27,24 @@ function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 /**
- * Mounts the step for a signed-in proposer, or, with `speaker`, for a speaker on their own link: only a
- * speaker confirms a mailbox here, so the email step is reached through one.
+ * Mounts the step for a signed-in proposer, or, with `speaker`, for the signed-in speaker on their own link
+ * adding another mailbox: only a speaker confirms a mailbox here, so the email step is reached through one.
  */
 async function mount(respond: (path: string, init?: RequestInit) => Response, speaker = false) {
+  const account = signedInProposer();
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
-      respond(new URL(String(input), location.origin).pathname, init),
-    ),
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input), location.origin).pathname;
+      return (speaker && path !== endpoint ? account(path) : undefined) ?? respond(path, init);
+    }),
   );
   host = await mountProposalIdentityStep({
     enabled: true,
     onChange: (value) => {
       selection = value;
     },
-    ...(speaker ? SPEAKER_LINK : {}),
+    ...(speaker ? { ...SPEAKER_LINK, startWithEmailProof: true } : {}),
   });
   const copy = EMAIL_FIRST_COPY[speaker ? "speaker" : "proposal"];
   await vi.waitFor(() =>
@@ -139,6 +141,29 @@ describe("proposal and speaker contact capacity", () => {
       unaffiliatedAttestation: true,
       independentCapacity: { organizationConnection: "no", currentPosition: "Independent consultant" },
     });
+  });
+
+  it("asks a signed-out speaker on their link to sign in, and never starts a mailbox proof", async () => {
+    const paths: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        paths.push(new URL(String(input), location.origin).pathname);
+        return signedOut();
+      }),
+    );
+    host = await mountProposalIdentityStep({
+      enabled: true,
+      onChange: (value) => {
+        selection = value;
+      },
+      ...SPEAKER_LINK,
+    });
+    await vi.waitFor(() => expect(host!.querySelector('section[aria-label="Sign in"]')).not.toBeNull());
+    expect(host!.querySelector('input[name="email"][type="hidden"]')).toBeNull();
+    expect(host!.textContent).not.toContain(copy.work.action);
+    expect(paths.filter((path) => path.startsWith(endpoint))).toEqual([]);
+    expect(selection).toBeNull();
   });
 
   it("tells a speaker to sign in with a confirmed work address that belongs to another account", async () => {

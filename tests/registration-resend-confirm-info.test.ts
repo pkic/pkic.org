@@ -582,8 +582,6 @@ describe("resend-confirmation endpoint", () => {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify({
-        firstName: "Test",
-        lastName: "User",
         email: "resendtest@pkic.org",
         identityId,
         dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],

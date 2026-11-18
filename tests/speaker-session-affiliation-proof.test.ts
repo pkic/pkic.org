@@ -233,7 +233,6 @@ describe("authenticated speaker resource mailbox proof", () => {
     const role = await request(
       `${base}/identities/${result.currentRepresentation!.actingIdentityId}`,
       eventProposalProofIdentityPatchSchema.parse({
-        continuationToken: fresh.continuationToken,
         speakerProposalId: f.proposalId,
         jobTitle: "Updated own role",
       }),
@@ -267,6 +266,7 @@ describe("authenticated speaker resource mailbox proof", () => {
       consents,
       unaffiliatedAttestation: false,
       speakerManagementToken: token,
+      session: f.session,
     });
     expect(proof.speakerManagementToken).toBeTruthy();
     const response = await request(
@@ -301,6 +301,7 @@ describe("authenticated speaker resource mailbox proof", () => {
       consents,
       unaffiliatedAttestation: false,
       speakerManagementToken: token,
+      session: f.session,
     });
     const response = await request(
       `/api/v1/proposals/speakers/access/${proof.speakerManagementToken}/profile`,
@@ -347,6 +348,7 @@ describe("authenticated speaker resource mailbox proof", () => {
       consents,
       unaffiliatedAttestation: false,
       speakerManagementToken: token,
+      session: f.session,
     });
     const response = await callApi(env, `/api/v1/proposals/speakers/access/${proof.speakerManagementToken}/profile`, {
       method: "PATCH",

@@ -3,7 +3,7 @@ import { mountMarkdownField } from "../components/markdown-editor/mount-markdown
 import { render, createRef } from "preact";
 import type { z } from "zod";
 import { getJson, postJson } from "../shared/api-client";
-import { clearReferralSession } from "../shared/query-context";
+import { clearReferralSession, clearRememberedInvitation } from "../shared/query-context";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
 import { renderCustomFields, readCustomFieldValues } from "../shared/widgets/custom-fields";
 import { installStepNavigation } from "../shared/form/step-navigation";
@@ -495,6 +495,7 @@ async function main(): Promise<void> {
           );
 
           clearReferralSession();
+          clearRememberedInvitation(query.inviteId);
           showSuccessPanel(boot.root, form, result, firstName, eventName, eventSlug);
         } catch (error) {
           await handleFormInviteSubmitError({

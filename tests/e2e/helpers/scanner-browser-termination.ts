@@ -69,8 +69,6 @@ export async function prepareScannerTermination(page: Page) {
       slug,
       registrationCreateSchema.parse({
         email,
-        firstName: "Synthetic",
-        lastName: "Termination attendee",
         dayAttendance: placement.eventDays.map((day, index) => ({
           dayDate: day.dayDate,
           attendanceType: index === 0 ? "in_person" : "on_demand",

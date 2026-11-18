@@ -310,8 +310,6 @@ describe("full workflow", () => {
           method: "POST",
           headers: { "content-type": "application/json", ...attendeeOne.headers },
           body: JSON.stringify({
-            firstName: "Attendee",
-            lastName: "One",
             email: "attendee1@pkic.org",
             identityId: attendeeOne.identityId,
             dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
@@ -362,8 +360,6 @@ describe("full workflow", () => {
           method: "POST",
           headers: { "content-type": "application/json", ...attendeeTwo.headers },
           body: JSON.stringify({
-            firstName: "Attendee",
-            lastName: "Two",
             email: "attendee2@pkic.org",
             identityId: attendeeTwo.identityId,
             dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],

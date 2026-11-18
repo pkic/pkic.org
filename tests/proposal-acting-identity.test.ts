@@ -381,7 +381,7 @@ describe("proposal speaker acting identity", () => {
     const speakerManagementToken = decodeURIComponent(path.split("/").pop()!);
     const edit = await callApi(env, `/api/v1/events/pqc-2026/proposals/proof/identities/${f.identityId}`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: `Bearer ${f.token}` },
       body: JSON.stringify(
         eventProposalProofIdentityPatchSchema.parse({
           biography: "Updated identity biography",
@@ -420,7 +420,7 @@ describe("proposal speaker acting identity", () => {
     const strangerIdentity = await addRepresentative(env.DB, strangerMember, stranger, { jobTitle: "Their role" });
     const foreign = await callApi(env, `/api/v1/events/pqc-2026/proposals/proof/identities/${strangerIdentity}`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: `Bearer ${f.token}` },
       body: JSON.stringify({ biography: "Hijacked biography", speakerManagementToken }),
     });
     expect(foreign.status).toBe(404);

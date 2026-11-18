@@ -3,7 +3,6 @@ import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
 import { prepareAuditLog } from "./audit";
 import { prepareEngagementStatement } from "./engagement";
-import { INVITE_COLUMNS } from "./invite-types";
 import { prepareConsentStatements } from "./consent";
 import { prepareAcceptInviteStatements, prepareRevokeDuplicateInvitesStatement, type InviteRecord } from "./invites";
 import { prepareReferralCodeStatement } from "./referrals";
@@ -75,17 +74,8 @@ export async function prepareRegistrationSubmission(
   // Registration uses the canonical account, not the submitted name fields.
   // Existing accounts must correct invalid saved names through an owned profile write.
   requireRegistrationUserProfile(preparedUser.user);
-  // The session proved the mailbox, so an invitation sent to it is accepted without its link.
-  const invite =
-    payload.invite ??
-    (await first<InviteRecord>(
-      db,
-      `SELECT ${INVITE_COLUMNS} FROM invites
-       WHERE event_id = ? AND invitee_email = ? AND invite_type = 'attendee' AND status = 'sent'
-         AND (expires_at IS NULL OR expires_at > ?)
-       ORDER BY created_at ASC LIMIT 1`,
-      [payload.eventId, preparedUser.user.normalized_email, new Date().toISOString()],
-    ));
+  // The caller resolved the invitation, by its link or sent to the session's address, before applying the event policy.
+  const invite = payload.invite ?? null;
   const builtRegistration = await buildCreateRegistration(db, {
     event: { id: payload.eventId },
     userId: preparedUser.user.id,

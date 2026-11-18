@@ -107,10 +107,12 @@ function RegistrationReview({
   );
 }
 
-export function updateRegistrationReview(root: HTMLElement, form: HTMLFormElement, customFieldDefs: FormField[]): void {
-  const firstName = readField(form, "firstName");
-  const lastName = readField(form, "lastName");
-  const fullName = [firstName, lastName].filter(Boolean).join(" ");
+export function updateRegistrationReview(
+  root: HTMLElement,
+  form: HTMLFormElement,
+  customFieldDefs: FormField[],
+  fullName: string,
+): void {
   const email = readField(form, "email");
 
   const reviewEl = root.querySelector<HTMLElement>("[data-registration-review]");

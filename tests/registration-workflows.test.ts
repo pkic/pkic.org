@@ -60,16 +60,18 @@ async function postRegistration(
 ): Promise<Response> {
   const [event] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM events WHERE slug='pqc-2026'");
   if (event) await ensureRegistrationFixtureDay(event.id);
+  const { firstName, lastName, ...registration } = body;
   const domain = workEmailDomain(body.email);
+  // The names belong to the account, never to the registration request.
   const registrant = await signInRegistrant(env.DB, body.email, {
-    firstName: body.firstName,
-    lastName: body.lastName,
+    firstName,
+    lastName,
     ...(domain ? { organization: `Organization for ${domain}` } : {}),
   });
   return callApi(env, "/api/v1/events/pqc-2026/registrations", {
     method: "POST",
     headers: { "content-type": "application/json", ...registrant.headers, ...(ip ? { "cf-connecting-ip": ip } : {}) },
-    body: JSON.stringify(domain ? { identityId: registrant.identityId, ...body } : body),
+    body: JSON.stringify(domain ? { identityId: registrant.identityId, ...registration } : registration),
   });
 }
 

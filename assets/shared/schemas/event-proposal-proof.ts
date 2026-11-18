@@ -1,4 +1,3 @@
-import { personNamePatchSchema } from "./api-common";
 import { z } from "zod";
 import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../constants/email-auth";
 import { eventSlugParamsSchema, normalizedEmailSchema, jobTitleSchema } from "./api-common";
@@ -11,7 +10,7 @@ import {
   ownIdentityProfileSchema,
 } from "./own-identity-profile";
 import { protectsPublicAction } from "./abuse-protection";
-import { publicOperation } from "./route-contract";
+import { requiresSession } from "./route-contract";
 import { jsonResponse, requiredJsonBody } from "./openapi";
 import { databaseIdSchema } from "./identifiers";
 import { httpCapabilityUrlSchema } from "./urls";
@@ -71,15 +70,6 @@ export const eventProposalProofPersonSchema = z.object({
   bio: z.string().nullable(),
   links: linksSchema,
 });
-export const eventProposalProofPersonPatchSchema = personNamePatchSchema;
-export const eventProposalProofPersonPatchResponseSchema = z.object({ person: eventProposalProofPersonSchema });
-export const eventProposalProofPersonPatchRouteSchema = {
-  ...publicOperation(),
-  tags: ["Proposals"],
-  summary: "Update the signed-in proposer's own name",
-  request: { params: eventSlugParamsSchema, body: requiredJsonBody(eventProposalProofPersonPatchSchema) },
-  responses: { "200": jsonResponse("Saved canonical personal details.", eventProposalProofPersonPatchResponseSchema) },
-};
 /** A representation is on behalf of an organization, so its job title stays required. */
 export const eventProposalIdentityJobTitlePatchSchema = z
   .object({
@@ -89,13 +79,12 @@ export const eventProposalIdentityJobTitlePatchSchema = z
 /**
  * A speaker's edit of an identity they hold — the same profile fields and
  * rules as every other identity edit (`ownIdentityProfileUpdateSchema`) —
- * with the authority they edit it through: their speaker link, an email
- * confirmation, or their session on one proposal. The identity itself is
- * edited, so every record made as it shows the change.
+ * by the signed-in person, optionally through their speaker link on one
+ * proposal. The identity itself is edited, so every record made as it shows
+ * the change.
  */
 export const eventProposalProofIdentityPatchSchema = ownIdentityProfileUpdateSchema
   .extend({
-    continuationToken: eventProposalContinuationTokenSchema.optional(),
     speakerManagementToken: eventProposalContinuationTokenSchema.optional(),
     speakerProposalId: databaseIdSchema.optional(),
   })
@@ -104,7 +93,7 @@ export const eventProposalProofIdentityPatchResponseSchema = ownIdentityProfileS
   organizationName: true,
 });
 export const eventProposalProofIdentityPatchRouteSchema = {
-  ...publicOperation(),
+  ...requiresSession(),
   tags: ["Proposals"],
   summary: "Update the profile of an identity you speak as",
   request: {
@@ -113,6 +102,7 @@ export const eventProposalProofIdentityPatchRouteSchema = {
   },
   responses: {
     "200": jsonResponse("The identity's saved profile.", eventProposalProofIdentityPatchResponseSchema),
+    "401": { description: "Sign in to continue." },
   },
 };
 /**
@@ -164,23 +154,29 @@ export const eventProposalProofIdentitiesSchema = z
   .strict();
 
 export const eventProposalProofStartRouteSchema = {
-  ...publicOperation(),
+  ...requiresSession(),
   ...protectsPublicAction("proposal_proof", "proposals:manage"),
   ...screensWorkEmailDomain(),
   tags: ["Proposals"],
   summary: "Confirm a speaker's mailbox",
   request: { params: eventSlugParamsSchema, body: requiredJsonBody(eventProposalProofStartSchema) },
-  responses: { "200": jsonResponse("Mailbox confirmation next step.", eventProposalProofStartResponseSchema) },
+  responses: {
+    "200": jsonResponse("Mailbox confirmation next step.", eventProposalProofStartResponseSchema),
+    "401": { description: "Sign in to continue." },
+  },
 };
 export const eventProposalProofVerifyRouteSchema = {
-  ...publicOperation(),
+  ...requiresSession(),
   tags: ["Proposals"],
   summary: "Continue as a speaker after mailbox confirmation",
   request: { params: eventSlugParamsSchema, body: requiredJsonBody(eventProposalProofVerifySchema) },
-  responses: { "200": jsonResponse("Confirmed speaker context.", eventProposalProofVerifyResponseSchema) },
+  responses: {
+    "200": jsonResponse("Confirmed speaker context.", eventProposalProofVerifyResponseSchema),
+    "401": { description: "Sign in to continue." },
+  },
 };
 export const eventProposalProofIdentitiesRouteSchema = {
-  ...publicOperation(),
+  ...requiresSession(),
   tags: ["Proposals"],
   summary: "List the confirmed speaker's own affiliations",
   request: {
@@ -188,5 +184,8 @@ export const eventProposalProofIdentitiesRouteSchema = {
     query: identitiesListQuerySchema,
     body: requiredJsonBody(eventProposalProofIdentitiesSchema),
   },
-  responses: { "200": jsonResponse("Confirmed speaker affiliations.", identitiesListResponseSchema) },
+  responses: {
+    "200": jsonResponse("Confirmed speaker affiliations.", identitiesListResponseSchema),
+    "401": { description: "Sign in to continue." },
+  },
 };

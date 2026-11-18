@@ -76,18 +76,23 @@ export function attendeeCampaignSelection(
   );
 
   return {
-    sql: `WITH ranked_recipients AS (
-           SELECT r.id AS registration_id, r.manage_link_secret, u.id AS user_id,
+    // The recipient address is resolved once per registration, then both selected and filtered on.
+    sql: `WITH candidate_recipients AS (
+           SELECT r.id AS registration_id, r.manage_link_secret, u.id AS user_id, r.created_at,
                   ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email, u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
-                  r.status, r.custom_answers_json, r.form_placement_id,
-                  ROW_NUMBER() OVER (
-                    PARTITION BY u.id
-                    ORDER BY datetime(r.created_at) DESC, r.id ASC
-                  ) AS recipient_rank
+                  r.status, r.custom_answers_json, r.form_placement_id
            ${population.fromSql}
              AND u.email IS NOT NULL
-             AND (? IS NULL OR lower(trim(${REGISTRATION_RECIPIENT_EMAIL_SQL})) IN (SELECT value FROM json_each(?)))
-             AND (? IS NULL OR u.id IN (SELECT value FROM json_each(?)))
+         ),
+         ranked_recipients AS (
+           SELECT candidate.*,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY candidate.user_id
+                    ORDER BY datetime(candidate.created_at) DESC, candidate.registration_id ASC
+                  ) AS recipient_rank
+           FROM candidate_recipients candidate
+           WHERE (? IS NULL OR lower(trim(candidate.email)) IN (SELECT value FROM json_each(?)))
+             AND (? IS NULL OR candidate.user_id IN (SELECT value FROM json_each(?)))
          )
          SELECT registration_id, manage_link_secret, user_id, email, first_name, last_name, organization_name,
                 job_title, status, custom_answers_json, form_placement_id

@@ -59,7 +59,7 @@ export async function signInProposer(input: {
   return { userId, headers: { authorization: `Bearer ${token}` } };
 }
 
-/** Explicit positive-fixture speaker mailbox authorization through the mounted email API. */
+/** Explicit positive-fixture speaker mailbox authorization through the mounted email API, signed in as the speaker. */
 export async function prepareProposalProof(input: {
   environment: Env;
   eventSlug: string;
@@ -67,6 +67,8 @@ export async function prepareProposalProof(input: {
   consents: Array<{ termKey: string; version: string }>;
   unaffiliatedAttestation: boolean;
   speakerManagementToken: string;
+  /** The speaker's own session; without one, the helper signs in a new account for the address. */
+  session?: string;
 }) {
   const body = eventProposalProofStartSchema.parse({
     email: input.email,
@@ -77,11 +79,14 @@ export async function prepareProposalProof(input: {
   const environment = input.environment;
   if (!environment.INTERNAL_SIGNING_SECRET)
     throw new Error("Proposal proof requires the exact environment signing secret.");
+  const headers = input.session
+    ? { authorization: `Bearer ${input.session}` }
+    : (await signInProposer({ environment, email: input.email })).headers;
   const previous = await queryAll<{ id: string }>(environment.DB, "SELECT id FROM email_outbox");
   const request = (suffix: string, payload: unknown) =>
     callApi(environment, `/api/v1/events/${input.eventSlug}/proposals/proof${suffix}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(payload),
     });
   const started = await request("", body);

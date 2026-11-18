@@ -15,10 +15,7 @@ export const PROPOSER_IDENTITY_ID = "00000000-0000-4000-8000-000000000042";
 const PROPOSER_ORGANIZATION_ID = "00000000-0000-4000-8000-000000000044";
 const NOW = "2026-01-01T00:00:00.000Z";
 
-/**
- * A speaker's own link: the step then confirms a mailbox instead of asking for a session.
- * The mailbox paths a proposer no longer has stay covered through it.
- */
+/** A speaker's own link, opened by the signed-in speaker; only they confirm another mailbox through it. */
 export const SPEAKER_LINK = {
   speakerManagementToken: "s".repeat(40),
   expectedSpeakerUserId: PROPOSER_USER_ID,
@@ -161,7 +158,7 @@ export async function mountProposalIdentityStep(
     Partial<
       Pick<
         ComponentProps<typeof EventProposalIdentityStep>,
-        "speakerManagementToken" | "expectedSpeakerUserId" | "invitedEmail"
+        "speakerManagementToken" | "expectedSpeakerUserId" | "invitedEmail" | "startWithEmailProof"
       >
     >,
 ) {

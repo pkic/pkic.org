@@ -49,11 +49,8 @@ export async function prepareValidatedAttendeeRegistration(
 
   const prepared = await prepareRegistrationSubmission(db, {
     eventId: event.id,
-    user: {
-      email: input.email,
-      firstName: input.firstName,
-      lastName: input.lastName,
-    },
+    // The signed-in account supplies the names; the request carries only its address.
+    user: { email: input.email },
     dayAttendance: input.dayAttendance,
     sourceType: options.sourceType,
     sourceRef: options.sourceRef,

@@ -297,9 +297,9 @@ describe("registration contact step", () => {
     expect(signingIn).toBe(false);
     expect(ready).toBe(true);
     expect(value(form, "email")).toBe("ada@example.test");
-    expect(form.querySelector('input[name="firstName"]')?.getAttribute("type")).toBe("hidden");
-    expect(value(form, "firstName")).toBe("Ada");
-    expect(value(form, "lastName")).toBe("Lovelace");
+    // The names are the account's own: shown, never posted with the registration.
+    expect(form.querySelector('input[name="firstName"], input[name="lastName"]')).toBeNull();
+    expect(form.textContent).toContain("Ada Lovelace");
     expect(form.textContent).toContain("Example Corp");
     expect(value(form, "identityId")).toBe(IDENTITY_ID);
     expect(form.querySelector('[role="combobox"]')).toBeNull();
@@ -396,7 +396,6 @@ describe("registration contact step", () => {
     });
     await act(async () => buttonNamed(dialog, "Save my details")!.click());
     await settle();
-    expect(value(form, "firstName")).toBe("Zoë");
     expect(form.textContent).toContain("Zoë Lovelace");
     const patch = requests.find((request) => request.path === "/api/v1/users/current" && request.method === "PATCH");
     expect(myProfileUpdateSchema.parse(patch!.body)).toMatchObject({ firstName: "Zoë", lastName: "Lovelace" });

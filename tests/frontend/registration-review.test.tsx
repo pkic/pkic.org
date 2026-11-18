@@ -34,7 +34,7 @@ it("reviews every configured day, including unselected days, and updates when a 
     ),
   );
   const form = host.querySelector("form")!;
-  const refresh = () => updateRegistrationReview(host, form, []);
+  const refresh = () => updateRegistrationReview(host, form, [], "Ada Lovelace");
   await act(refresh);
   const review = host.querySelector("[data-registration-review]")!;
   expect(review.textContent?.match(/Not attending/g)).toHaveLength(3);

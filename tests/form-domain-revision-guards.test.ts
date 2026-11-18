@@ -74,8 +74,6 @@ async function prepareRegistration(eventId: string, answer: string) {
   return prepareValidatedAttendeeRegistration(
     env.DB as unknown as DatabaseLike,
     {
-      firstName: "Form",
-      lastName: "Attendee",
       email: "form-attendee@example.test",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
       customAnswers: { answer },

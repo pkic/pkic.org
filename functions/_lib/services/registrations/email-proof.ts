@@ -59,11 +59,6 @@ function registrationProofOwner(proof: RegistrationEmailProof) {
   };
 }
 
-/** Whether an event takes registrations at all; an automatic meeting invites its group itself. */
-export function eventTakesRegistrations(registrationMode: string): boolean {
-  return registrationMode !== "no_registration" && registrationMode !== "automatic";
-}
-
 /** The confirmed address a proof names; refuses one that expired or was not issued here. */
 async function readRegistrationEmailProof(signingSecret: string, token: string): Promise<RegistrationEmailProof> {
   const verified = await verifyStatelessCapabilityToken({ signingSecret, purpose: PURPOSE, token });

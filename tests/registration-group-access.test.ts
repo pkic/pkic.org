@@ -55,8 +55,6 @@ async function fixture(delegated = false) {
   const token = await createMemberSession(env.DB, member.userId, crypto.randomUUID());
   const body = registrationCreateSchema.parse({
     identityId: member.identityId,
-    firstName: "Test",
-    lastName: "Attendee",
     email,
     dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
     consents: [

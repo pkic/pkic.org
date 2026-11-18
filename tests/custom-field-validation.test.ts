@@ -128,8 +128,6 @@ describe("custom field validation", () => {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify({
-        firstName: "Alex",
-        lastName: "Tester",
         email: "alex@pkic.org",
         identityId,
         dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "virtual" }],
@@ -172,8 +170,6 @@ describe("custom field validation", () => {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify({
-        firstName: "Jamie",
-        lastName: "Valid",
         email: "jamie@pkic.org",
         identityId,
         dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "in_person" }],
@@ -221,8 +217,6 @@ describe("custom field validation", () => {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify({
-        firstName: "Morgan",
-        lastName: "Updater",
         email: "morgan@pkic.org",
         identityId,
         dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "in_person" }],

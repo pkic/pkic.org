@@ -4,6 +4,7 @@ import { assertRegistrationRestorationAllowed } from "./restoration";
 import type { EventParticipantRole } from "../../../../assets/shared/schemas/participant-roles";
 import { prepareRoleBasedCapacityExemption } from "./day-waitlist-capacity";
 import { prepareRegistrationTransitionGuard } from "./transition-guard";
+import { prepareClearRegistrationEmailChangeStatement } from "./change-email";
 import { AppError } from "../../errors";
 import { dayAttendanceRequiredError, eventDaysNotScheduledError } from "../event-day-refusals";
 import { batchFirst, batchRows } from "../../db/pagination";
@@ -128,9 +129,11 @@ export async function buildCreateRegistration(
   if (!existing && !payload.dayAttendance?.length) throw dayAttendanceRequiredError();
   const capacitySnapshot = capacity.decode(details.slice(0, capacity.statements.length));
   const previousAttendance = batchRows<PreviousRegistrationDayAttendanceRow>(details[capacity.statements.length]);
+  // A session proves the account's mailbox, so it confirms a registration still waiting for that proof.
+  const confirmsPending = existing?.status === "pending_email_confirmation" && Boolean(payload.verifiedIdentity);
   if (existing) {
     if (payload.acceptedProposalRoles) assertRegistrationRestorationAllowed(existing);
-    if (existing.status !== "cancelled") {
+    if (existing.status !== "cancelled" && !confirmsPending) {
       throw new AppError(409, "REGISTRATION_EXISTS", "This user is already registered for the event");
     }
   }
@@ -213,6 +216,9 @@ export async function buildCreateRegistration(
           registration.id,
         ),
     );
+    // An address change still waiting on this registration's confirmation link ends: the session's address registers.
+    if (confirmsPending)
+      statements.push(prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now));
   } else {
     statements.push(
       db

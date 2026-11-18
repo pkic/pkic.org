@@ -25,7 +25,7 @@ import {
   speakerProfileUpdateResponseSchema,
   speakerSelfServiceReadResponseSchema,
 } from "./speaker-self-service";
-import { publicOperation } from "./route-contract";
+import { publicOperation, requiresSession } from "./route-contract";
 
 const genericAcceptedResponse = jsonResponse(
   "Request accepted. The response is intentionally generic to prevent account enumeration.",
@@ -34,7 +34,7 @@ const genericAcceptedResponse = jsonResponse(
 
 export const eventProposalCreateRouteSchema = {
   ...protectsPublicAction("proposal_submission", "proposals:manage"),
-  ...publicOperation(),
+  ...requiresSession(),
   tags: ["Proposals"],
   summary: "Submit an event proposal",
   description:
@@ -46,6 +46,7 @@ export const eventProposalCreateRouteSchema = {
   responses: {
     "200": jsonResponse("Proposal submitted successfully.", proposalCreateResponseSchema),
     "400": { description: "Invalid proposal payload, invite, form answers, or required consent." },
+    "401": { description: "Sign in to submit a proposal." },
     "404": { description: "Event not found." },
   },
 };

@@ -2885,8 +2885,6 @@ describe("speaker nomination by attendees", () => {
           method: "POST",
           headers: { "content-type": "application/json", ...attendee.headers },
           body: JSON.stringify({
-            firstName: "Attendee",
-            lastName: "Nominator",
             email: "nominator@pkic.org",
             identityId: attendee.identityId,
             dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],

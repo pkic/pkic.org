@@ -11,7 +11,7 @@ import { eventRegistrationCreateRouteSchema } from "../../../../../assets/shared
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { json } from "../../../../_lib/http";
 import { getClientIp, getUserAgent, requireInternalSecret } from "../../../../_lib/request";
-import { submitPublicRegistration } from "../../../../_lib/services/registrations/public-submission";
+import { submitEventRegistration } from "../../../../_lib/services/registrations/public-submission";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { enforceEmailTriggerRateLimits } from "../../../../_lib/rate-limit";
 
@@ -45,7 +45,7 @@ async function handlePublicRegistration(
     verified: true,
     organizationId: selectedIdentity?.organizationId,
   });
-  const result = await submitPublicRegistration(c.env.DB, c.env, data.body, {
+  const result = await submitEventRegistration(c.env.DB, c.env, data.body, {
     eventSlug: data.params.eventSlug,
     verifiedIdentity: selectedIdentity
       ? { userId: selectedIdentity.userId, selectedIdentity }

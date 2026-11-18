@@ -48,7 +48,7 @@ type ProposalCreateInput = z.infer<typeof proposalCreateSchema>;
 export interface ProposalSubmissionInput {
   event: EventRecord;
   body: ProposalCreateInput;
-  actor?: AuthenticatedIdentity;
+  actor: AuthenticatedIdentity;
   appBaseUrl: string;
   signingSecret: string;
   referralCodeLength: number;

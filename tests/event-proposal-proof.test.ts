@@ -77,10 +77,11 @@ const verifyEmails = (email: string) =>
     email,
   );
 /** Starts a speaker's mailbox confirmation and reads its link from the delivered email. */
-async function start(email: string, speakerManagementToken: string) {
+async function start(email: string, speakerManagementToken: string, headers: Record<string, string>) {
   const response = await request(
     "/proof",
     eventProposalProofStartSchema.parse({ email, consents, speakerManagementToken }),
+    headers,
   );
   expect(response.status, await response.clone().text()).toBe(200);
   const mail = await deliveredEmailPayload<{ verificationUrl: string }>(
@@ -103,6 +104,18 @@ describe("proposal submission by a signed-in person", () => {
     expect(await queryAll(env.DB, "SELECT id FROM users")).toEqual(users);
     expect(await queryAll(env.DB, "SELECT id FROM consent_acceptances")).toHaveLength(0);
     expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+  });
+
+  it("asks for a session before it checks the terms or an invitation", async () => {
+    await seedEventAndAdmin(env.DB);
+    const body = {
+      ...proposal({}, []),
+      inviteToken: "synthetic-invite-token-0123456789",
+      inviteId: crypto.randomUUID(),
+    };
+    const response = await request("", body);
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: { code: "AUTH_REQUIRED" } });
   });
 
   it("stores private notes for the program committee apart from the published abstract", async () => {
@@ -233,11 +246,12 @@ describe("speaker mailbox proof", () => {
     await seedEventAndAdmin(env.DB);
     const person = await signInProposer({ environment: env, email: "person@official.example" });
     const body = eventProposalProofStartSchema.parse({ email: "new@official.example", consents });
-    for (const headers of [{}, person.headers]) {
-      const response = await request("/proof", body, headers);
-      expect(response.status).toBe(403);
-      expect(await response.json()).toMatchObject({ error: { code: "PROPOSAL_PROOF_CONTEXT_MISMATCH" } });
-    }
+    const anonymous = await request("/proof", body);
+    expect(anonymous.status).toBe(401);
+    expect(await anonymous.json()).toMatchObject({ error: { code: "AUTH_REQUIRED" } });
+    const response = await request("/proof", body, person.headers);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: { code: "PROPOSAL_PROOF_CONTEXT_MISMATCH" } });
     expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
   });
 
@@ -254,6 +268,7 @@ describe("speaker mailbox proof", () => {
         consents,
         speakerManagementToken: link.token,
       }),
+      link.headers,
     );
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({ error: { code: "EMAIL_TEMPLATE_UNAVAILABLE" } });
@@ -265,13 +280,14 @@ describe("speaker mailbox proof", () => {
     const link = await speakerLink("speaker@gmail.com");
     await insertUser(env.DB, "known@official.example");
     for (const body of [{ email: "known@official.example" }, { email: "known@official.example", consents: [] }]) {
-      expect((await request("/proof", { ...body, speakerManagementToken: link.token })).status).toBe(400);
+      expect((await request("/proof", { ...body, speakerManagementToken: link.token }, link.headers)).status).toBe(400);
     }
     expect(await verifyEmails("known@official.example")).toHaveLength(0);
     for (const email of ["known@official.example", "new@official.example"]) {
       const response = await request(
         "/proof",
         eventProposalProofStartSchema.parse({ email, consents, speakerManagementToken: link.token }),
+        link.headers,
       );
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ status: "verification_sent" });
@@ -284,8 +300,8 @@ describe("speaker mailbox proof", () => {
   it("records the terms agreed before the email step and returns them with the confirmation", async () => {
     await seedEventAndAdmin(env.DB);
     const link = await speakerLink("speaker@gmail.com");
-    const token = verifyToken(await start("new@official.example", link.token));
-    const response = await request("/proof/verify", { token });
+    const token = verifyToken(await start("new@official.example", link.token, link.headers));
+    const response = await request("/proof/verify", { token }, link.headers);
     expect(response.status, await response.clone().text()).toBe(200);
     const ready = eventProposalProofVerifyResponseSchema.parse(await response.json());
     if (ready.status !== "ready") throw new Error("Expected a ready confirmation");
@@ -296,8 +312,8 @@ describe("speaker mailbox proof", () => {
     await seedEventAndAdmin(env.DB);
     const link = await speakerLink("dana@gmail.com");
     await seedMemberApplication({ applicantEmail: "pending@held-domain.example" });
-    const token = verifyToken(await start("dana@held-domain.example", link.token));
-    const response = await request("/proof/verify", { token });
+    const token = verifyToken(await start("dana@held-domain.example", link.token, link.headers));
+    const response = await request("/proof/verify", { token }, link.headers);
     expect(response.status).toBe(200);
     const proof = eventProposalProofVerifyResponseSchema.parse(await response.json());
     expect(proof).toMatchObject({
@@ -306,15 +322,19 @@ describe("speaker mailbox proof", () => {
       applicantKind: "organization",
       affiliation: { organization: null, organizations: [] },
     });
-    const selected = await request("/proof/verify", {
-      token,
-      affiliation: {
-        organizationId: null,
-        organizationName: "Different Organization",
-        domain: "held-domain.example",
-        jobTitle: "Researcher",
+    const selected = await request(
+      "/proof/verify",
+      {
+        token,
+        affiliation: {
+          organizationId: null,
+          organizationName: "Different Organization",
+          domain: "held-domain.example",
+          jobTitle: "Researcher",
+        },
       },
-    });
+      link.headers,
+    );
     expect(selected.status, await selected.clone().text()).toBe(200);
     expect(eventProposalProofVerifyResponseSchema.parse(await selected.json())).toMatchObject({
       status: "ready",
@@ -355,6 +375,7 @@ describe("speaker mailbox proof", () => {
               continuationToken: proof.continuationToken,
               speakerManagementToken: proof.speakerManagementToken ?? link.token,
             }),
+            link.headers,
           )
         ).json(),
       );
@@ -369,13 +390,13 @@ describe("speaker mailbox proof", () => {
   it("delivers a new work-mailbox proof without a stored speaker token and resumes only the original live speaker scope", async () => {
     await seedEventAndAdmin(env.DB);
     const link = await speakerLink("invited@gmail.com");
-    const url = await start("invited@official.example", link.token);
+    const url = await start("invited@official.example", link.token, link.headers);
     expect((await verifyEmails("invited@official.example"))[0].payload_json).not.toContain(link.token);
     expect(url.searchParams.has("token")).toBe(false);
     expect(url.pathname).toContain("speaker");
     expect(url.pathname).not.toMatch(/\/propose\/?$/);
     const token = verifyToken(url);
-    const response = await request("/proof/verify", { token });
+    const response = await request("/proof/verify", { token }, link.headers);
     expect(response.status, await response.clone().text()).toBe(200);
     const ready = eventProposalProofVerifyResponseSchema.parse(await response.json());
     if (ready.status !== "ready" || !ready.speakerManagementToken || !ready.speakerManageUrl)
@@ -384,13 +405,13 @@ describe("speaker mailbox proof", () => {
       (await getSpeakerByManageToken(env.DB, ready.speakerManagementToken, env.INTERNAL_SIGNING_SECRET!)).speaker
         .user_id,
     ).toBe(link.speaker.user_id);
-    expect((await request("/proof/verify", { token })).status).toBe(200);
+    expect((await request("/proof/verify", { token }, link.headers)).status).toBe(200);
     expect(
       await queryAll(env.DB, "SELECT id FROM user_emails WHERE normalized_email='invited@official.example'"),
     ).toHaveLength(0);
     await env.DB.prepare("UPDATE proposal_speakers SET manage_link_secret='revoked' WHERE id=?")
       .bind(link.speaker.id)
       .run();
-    expect((await request("/proof/verify", { token })).status).toBe(403);
+    expect((await request("/proof/verify", { token }, link.headers)).status).toBe(403);
   });
 });

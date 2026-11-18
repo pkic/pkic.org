@@ -20,7 +20,7 @@ import type { FlowBoot } from "../../event-flows/boot";
 import { registrationEntry } from "./registration-entry";
 import { registrationInvitation } from "./registration-invitation";
 import { updateRegistrationReview } from "./registration-review";
-import { clearReferralSession } from "../../shared/query-context";
+import { clearReferralSession, clearRememberedInvitation } from "../../shared/query-context";
 import { useContractForm } from "../../hooks/useContractForm";
 import { postJson } from "../../shared/api-client";
 import { readField } from "../../shared/form/helpers";
@@ -53,6 +53,8 @@ type Create = {
     result: RegistrationSubmissionResponse,
     body: RegistrationInput,
     form: HTMLFormElement,
+    /** The account's names, which the registration itself never carries. */
+    names: { firstName: string; lastName: string },
   ) => void | Promise<void>;
 };
 type Update = {
@@ -91,6 +93,8 @@ export function RegistrationFlow(props: Props) {
   const [error, setError] = useState("");
   const [attendance, setAttendance] = useState(initial?.dayAttendance ?? []);
   const savedIdentityId = useRef(initial?.identityId ?? null);
+  /** The signed-in account's saved names: the "You" step checks them, and the review shows them; the request never carries them. */
+  const accountNames = useRef({ firstName: "", lastName: "" });
   const [identityId, setIdentityId] = useState(savedIdentityId.current);
   const fields = useMemo(
     () => forms.form?.fields.filter((field) => !isIdentityOwnedFormKey(field.key)) ?? [],
@@ -105,14 +109,14 @@ export function RegistrationFlow(props: Props) {
     if (!form) return {};
     const dayAttendance = readDayAttendance(form);
     const shared = {
-      firstName: readField(form, "firstName"),
-      lastName: readField(form, "lastName"),
       dayAttendance,
       customAnswers: forms.form ? readCustomFieldValues(form) : undefined,
     };
     if (props.mode === "update")
       return {
         ...shared,
+        firstName: readField(form, "firstName"),
+        lastName: readField(form, "lastName"),
         action: "update",
         identityChange:
           identityId && identityId !== savedIdentityId.current
@@ -154,13 +158,16 @@ export function RegistrationFlow(props: Props) {
   });
   const contactContract = useContractForm(
     withRequiredOrganizationRepresentation(registrationContactFieldsSchema, representationMissing),
-    readBody,
+    () => ({ ...readBody(), ...accountNames.current }),
   );
   const attendanceContract = useContractForm(
     withRequiredDayAttendanceChoices(registrationAttendanceFieldsSchema, choices),
     readBody,
   );
   const contactReady = useCallback((value: boolean) => setReady(value), []);
+  const rememberAccountNames = useCallback((names: { firstName: string; lastName: string }) => {
+    accountNames.current = names;
+  }, []);
   // Continue waits while a work address has no organization; the step's alert says why.
   const [representationPending, setRepresentationPending] = useState(false);
   const confirmRepresentation = useRef<(() => Promise<boolean>) | null>(null);
@@ -212,7 +219,8 @@ export function RegistrationFlow(props: Props) {
             setError(answered.formMessage ?? "");
             return false;
           }
-          updateRegistrationReview(boot.root, boot.form, fields);
+          const { firstName, lastName } = accountNames.current;
+          updateRegistrationReview(boot.root, boot.form, fields, [firstName, lastName].filter(Boolean).join(" "));
         }
       },
       (step) => {
@@ -325,7 +333,8 @@ export function RegistrationFlow(props: Props) {
                       props.context.eventPagePath ? { "x-event-base-path": props.context.eventPagePath } : undefined,
                     );
                 clearReferralSession();
-                await props.onRegistered(result, body, element.current!);
+                clearRememberedInvitation(props.context.query.inviteId);
+                await props.onRegistered(result, body, element.current!, accountNames.current);
               }
             } catch (cause) {
               if (!invitation.current?.handleError(cause)) {
@@ -360,6 +369,7 @@ export function RegistrationFlow(props: Props) {
                   <RegistrationContactStep
                     signInSlot={signInSlot}
                     onReadyChange={contactReady}
+                    onNamesChange={rememberAccountNames}
                     onRepresentationMissingChange={setRepresentationPending}
                     confirmRepresentation={confirmRepresentation}
                     onSignInChange={setSigningIn}

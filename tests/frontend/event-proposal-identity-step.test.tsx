@@ -7,9 +7,9 @@ import { JOB_TITLE_REQUIRED } from "../../assets/shared/schemas/api-common";
 import {
   eventProposalProofVerifySchema,
   eventProposalProofStartSchema,
-  eventProposalProofPersonPatchSchema,
   eventProposalProofIdentityPatchSchema,
 } from "../../assets/shared/schemas/event-proposal-proof";
+import { myProfileSchema, myProfileUpdateSchema } from "../../assets/shared/schemas/me";
 import type { ProposalEntrySelection } from "../../assets/ts/components/useProposalEntryIdentity";
 
 import {
@@ -165,21 +165,34 @@ describe("proposal and speaker identity step", () => {
   it("saves a signed-in proposer's corrected name, keeping the entry when the first save is refused", async () => {
     const nameRequests: unknown[] = [];
     stubAccount(signedInProposer({ identities: [proposerIdentity()] }), (url, init) => {
-      if (url.pathname !== `${endpoint}/person` || init.method !== "PATCH") throw new Error("Unexpected request");
+      if (url.pathname !== "/api/v1/users/current" || init.method !== "PATCH") throw new Error("Unexpected request");
       nameRequests.push(JSON.parse(String(init.body)));
       if (nameRequests.length === 1)
         return response({ error: { code: "SAVE_REFUSED", message: "Please retry saving your name." } }, 500);
-      return response({
-        person: {
+      return response(
+        myProfileSchema.parse({
+          userId: "00000000-0000-4000-8000-000000000071",
+          identityId: null,
+          emailId: null,
           email: "ada@example.test",
+          emailAddresses: [],
           firstName: "Augusta Ada",
           lastName: "Lovelace",
-          organizationName: null,
+          preferredName: null,
           jobTitle: null,
-          bio: null,
+          biography: null,
           links: [],
-        },
-      });
+          membershipCategory: null,
+          organizationId: null,
+          organizationName: null,
+          memberSince: null,
+          showOnOrgProfile: false,
+          headshotUrl: null,
+          isOrgContact: false,
+          organizationIdentities: null,
+          activeIdentities: [],
+        }),
+      );
     });
     await mount();
     await chooseProposerIdentity(host!, identityId);
@@ -192,10 +205,8 @@ describe("proposal and speaker identity step", () => {
     await clickButton(document, "Save my details");
     await vi.waitFor(() => expect(host!.querySelector(".pk-datalist")?.textContent).toContain("Augusta Ada Lovelace"));
     expect(nameRequests).toHaveLength(2);
-    expect(eventProposalProofPersonPatchSchema.parse(nameRequests[1])).toEqual(
-      eventProposalProofPersonPatchSchema.parse(nameRequests[0]),
-    );
-    expect(eventProposalProofPersonPatchSchema.parse(nameRequests[0])).toEqual({
+    expect(myProfileUpdateSchema.parse(nameRequests[1])).toEqual(myProfileUpdateSchema.parse(nameRequests[0]));
+    expect(myProfileUpdateSchema.parse(nameRequests[0])).toEqual({
       firstName: "Augusta",
       lastName: "Lovelace",
     });

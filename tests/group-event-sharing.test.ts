@@ -1243,8 +1243,6 @@ describe("group event sharing", () => {
       method: "POST",
       headers: { "content-type": "application/json", ...visitor.headers },
       body: JSON.stringify({
-        firstName: "Public",
-        lastName: "Visitor",
         email: "visitor@example.test",
         identityId: visitor.identityId,
         ...payload,
@@ -1259,8 +1257,6 @@ describe("group event sharing", () => {
     const prepared = await prepareValidatedAttendeeRegistration(
       env.DB,
       {
-        firstName: "Test",
-        lastName: "Member",
         email: fixture.memberEmail,
         ...payload,
       },
@@ -1423,8 +1419,6 @@ describe("group event sharing", () => {
       capability: "register",
     });
     const payload = {
-      firstName: "Test",
-      lastName: "Member",
       email: fixture.memberEmail,
       dayAttendance: [{ dayDate: "2027-01-10", attendanceType: "virtual" }],
       consents: [{ termKey: "meeting-terms", version: "1" }],
@@ -1461,11 +1455,7 @@ describe("group event sharing", () => {
       code: "EVENT_REGISTRATION_CONTEXT_CHANGED",
     });
 
-    const termsPrepared = await prepareValidatedAttendeeRegistration(
-      env.DB,
-      { ...payload, firstName: "Changed" },
-      await buildOptions(),
-    );
+    const termsPrepared = await prepareValidatedAttendeeRegistration(env.DB, payload, await buildOptions());
     await env.DB.prepare("UPDATE event_terms SET version = '2' WHERE event_id = ? AND term_key = 'meeting-terms'")
       .bind(fixture.eventId)
       .run();

@@ -4,7 +4,6 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventProposalIdentityStep } from "../../assets/ts/components/EventProposalIdentityStep";
 import {
-  eventProposalProofStartResponseSchema,
   eventProposalProofVerifySchema,
   eventProposalProofVerifyResponseSchema,
 } from "../../assets/shared/schemas/event-proposal-proof";
@@ -175,17 +174,13 @@ describe("speaker mailbox proof lifecycle", () => {
     expect(host!.textContent).toBe("");
   });
 
-  it("offers the invited address and continues at once when the speaker link already proved it", async () => {
-    const requests: Array<{ url: string; body: unknown }> = [];
+  it("asks a signed-out invited speaker to sign in instead of confirming the invited address", async () => {
+    const requests: string[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url, init) => {
-        if (String(url) === "/api/v1/auth/session")
-          return Response.json({ error: { code: "AUTH_REQUIRED", message: "Sign in" } }, { status: 401 });
-        requests.push({ url: String(url), body: JSON.parse(init.body) });
-        return String(url).endsWith("/verify")
-          ? ready("invited@speaker.example")
-          : Response.json(eventProposalProofStartResponseSchema.parse({ status: "verified", token: "v".repeat(40) }));
+      vi.fn(async (url) => {
+        requests.push(String(url));
+        return Response.json({ error: { code: "AUTH_REQUIRED", message: "Sign in" } }, { status: 401 });
       }),
     );
     host = document.createElement("div");
@@ -205,19 +200,9 @@ describe("speaker mailbox proof lifecycle", () => {
         host!,
       );
     });
-    await vi.waitFor(() =>
-      expect(host!.querySelector<HTMLInputElement>('input[name="email"]')?.value).toBe("invited@speaker.example"),
-    );
-    await act(async () => {
-      [...host!.querySelectorAll("button")].find((button) => button.textContent === "Verify your work email")!.click();
-    });
-    await vi.waitFor(() => expect(selection?.person.email).toBe("invited@speaker.example"));
-    expect(requests.map((request) => request.url)).toEqual([
-      "/api/v1/events/proof-lifecycle/proposals/proof",
-      "/api/v1/events/proof-lifecycle/proposals/proof/verify",
-    ]);
-    expect(eventProposalProofVerifySchema.parse(requests[1].body).token).toBe("v".repeat(40));
-    expect(host!.textContent).not.toContain("Check your email");
+    await vi.waitFor(() => expect(host!.querySelector('section[aria-label="Sign in"]')).not.toBeNull());
+    expect(requests.filter((url) => url.includes("/proposals/proof"))).toEqual([]);
+    expect(selection).toBeNull();
   });
 
   it("brings a proof error into view and clears it once an address is confirmed", async () => {

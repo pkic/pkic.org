@@ -93,8 +93,6 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
     registrationCreateSchema.parse({
       ...template.request,
       email,
-      firstName,
-      lastName,
       consents: terms
         .filter((term) => term.required || term.termKey === "sponsor-data-sharing")
         .map(({ termKey, version }) => ({ termKey, version })),

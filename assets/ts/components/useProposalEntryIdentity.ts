@@ -8,13 +8,12 @@ import {
   eventProposalProofPersonSchema,
   eventProposalProofVerifySchema,
   eventProposalProofVerifyResponseSchema,
-  eventProposalProofPersonPatchSchema,
   type EventProposalProofSupportReason,
   eventProposalIdentityJobTitlePatchSchema,
   eventProposalProofIdentityPatchSchema,
   eventProposalProofIdentityPatchResponseSchema,
-  eventProposalProofPersonPatchResponseSchema,
 } from "../../shared/schemas/event-proposal-proof";
+import { myProfileSchema, myProfileUpdateSchema } from "../../shared/schemas/me";
 import type { proposalCreateSchema, speakerSelfProfilePatchSchema } from "../../shared/schemas/proposal-management";
 import type { ConsentItem } from "../../shared/schemas/registration";
 import type { identityAffiliationPreviewResponseSchema } from "../../shared/schemas/identity-affiliation";
@@ -91,6 +90,8 @@ export function useProposalEntryIdentity(
   const [authenticated, setAuthenticated] = useState(false);
   const [storedPerson, setStoredPerson] = useState(false);
   const [continuationToken, setContinuationToken] = useState<string>();
+  /** No session, or a session for another account than this speaker's: every step here needs the right sign-in. */
+  const [needsSignIn, setNeedsSignIn] = useState(false);
   /** Counts the sign-ins completed in place, so the session is read again after each. */
   const [sessionRevision, setSessionRevision] = useState(0);
   const proposer = !speakerManagementToken && !speakerProposalId;
@@ -194,7 +195,6 @@ export function useProposalEntryIdentity(
       `${endpoint}/identities/${encodeURIComponent(selected.id)}`,
       eventProposalProofIdentityPatchSchema.parse({
         ...role,
-        continuationToken,
         speakerManagementToken,
         speakerProposalId,
       }),
@@ -206,15 +206,10 @@ export function useProposalEntryIdentity(
   }
   async function savePersonalDetails(names: z.infer<typeof personNamePatchSchema>): Promise<void> {
     const currentGeneration = generation.current;
+    // Names belong to the account: saved through the same profile edit as everywhere else.
     const savedPerson = saveNames
       ? await saveNames(names)
-      : (
-          await patchJson(
-            `${endpoint}/person`,
-            eventProposalProofPersonPatchSchema.parse(names),
-            eventProposalProofPersonPatchResponseSchema,
-          )
-        ).person;
+      : await patchJson("/api/v1/users/current", myProfileUpdateSchema.parse(names), myProfileSchema);
     if (currentGeneration !== generation.current) return;
     const savedNames = { firstName: savedPerson.firstName, lastName: savedPerson.lastName };
     setKnownPerson((current) => (current ? { ...current, ...savedNames } : current));
@@ -273,6 +268,7 @@ export function useProposalEntryIdentity(
         resolved.jobTitle = result.organization.jobTitle;
       }
       proofAttempt.current = { scope: proofScope, token, state: "verified" };
+      setNeedsSignIn(false);
       // A confirmed address answers whatever went wrong before it.
       setError(undefined);
       setKindState(result.applicantKind);
@@ -288,7 +284,10 @@ export function useProposalEntryIdentity(
       setVerificationToken(token);
     } catch (caught) {
       if (proofAttempt.current === attempt) proofAttempt.current = null;
-      if (currentGeneration === generation.current)
+      // Signed out: the sign-in card takes this step, and the link is confirmed again once signed in.
+      if (currentGeneration === generation.current && caught instanceof ApiClientError && caught.status === 401)
+        setNeedsSignIn(true);
+      else if (currentGeneration === generation.current)
         setError(caught instanceof Error ? caught.message : "We could not verify this email. Please try again.");
     } finally {
       if (currentGeneration === generation.current) setLoading(false);
@@ -331,7 +330,10 @@ export function useProposalEntryIdentity(
           try {
             const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
             if (!active || currentGeneration !== generation.current) return;
-            if ((speakerManagementToken || speakerProposalId) && session.identity.id !== expectedSpeakerUserId) return;
+            if ((speakerManagementToken || speakerProposalId) && session.identity.id !== expectedSpeakerUserId) {
+              setNeedsSignIn(true);
+              return;
+            }
             const detail = await getJson(
               `/api/v1/users/${encodeURIComponent(session.identity.id)}`,
               userDetailResponseSchema,
@@ -347,16 +349,15 @@ export function useProposalEntryIdentity(
               bio: null,
               links: [],
             });
+            setNeedsSignIn(false);
             setAuthenticated(!startWithEmailProof);
             setStoredPerson(true);
             setPerson(resolved);
             setKnownPerson(resolved);
           } catch (caught) {
-            if (
-              active &&
-              currentGeneration === generation.current &&
-              !(caught instanceof ApiClientError && caught.status === 401)
-            )
+            if (!active || currentGeneration !== generation.current) return;
+            if (caught instanceof ApiClientError && caught.status === 401) setNeedsSignIn(true);
+            else
               setError(
                 proposer
                   ? "We could not load your account. Reload the page to try again."
@@ -438,11 +439,12 @@ export function useProposalEntryIdentity(
     knownPerson,
     authenticated,
     storedPerson,
-    /** Nobody is signed in on a proposal: the person signs in or starts an account before continuing. */
-    signInRequired: proposer && enabled && initialized.current && !loading && !authenticated && !error,
+    /** Nobody, or another account, is signed in: the person signs in or starts an account before continuing. */
+    signInRequired: enabled && initialized.current && !loading && needsSignIn && !error,
     /** Reads the session again after a sign-in completed on this page. */
     reloadSession: () => {
       initialized.current = false;
+      setNeedsSignIn(false);
       setSessionRevision((revision) => revision + 1);
     },
     savePersonalDetails,
