@@ -195,6 +195,25 @@ describe("account setup's organization step", () => {
     expect(response.status, await response.clone().text()).toBe(200);
   });
 
+  it("asks again, without a session, when a new organization's name already exists", async () => {
+    await claimDomain("claimed.example", "Claimed Organization");
+    await insertOrganization(env.DB, "Another Organization");
+    const token = await signUpLink("omar@claimed.example");
+    expect(accountOrganizationRequiredSchema.parse(await verify(token)).organizationRequired.personalAllowed).toBe(
+      false,
+    );
+
+    for (const organizationName of ["Claimed Organization", "another  organization"]) {
+      const refused = await call("/api/v1/auth/verify-link", {
+        token,
+        affiliation: { selection: { organizationId: null, organizationName, jobTitle: "Security architect" } },
+      });
+      expect(refused.status, await refused.clone().text()).toBe(422);
+      expect(await refused.json()).toMatchObject({ error: { code: "ORGANIZATION_NAME_EXISTS" } });
+    }
+    expect(await sessions()).toBe(0);
+  });
+
   it("opens the session without the organization when only a reviewer can add it", async () => {
     const organizationId = await claimDomain("blocked.example", "Blocking Organization");
     const person = await signInJoinApplicant(env, "bo@blocked.example");

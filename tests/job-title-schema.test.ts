@@ -39,6 +39,26 @@ describe("a job title", () => {
     expect(message(title)).toBe(expected);
   });
 
+  it.each([
+    ["one long word", "a".repeat(100_000)],
+    ["a long domain-like run", `${"a-".repeat(50_000)}.`],
+    ["a long run of digits", "1 ".repeat(50_000)],
+  ])("refuses an overlong title (%s) quickly, at the length rule", (_shape, title) => {
+    const started = performance.now();
+    expect(message(title)).toBe("Keep your job title to 100 characters or fewer.");
+    expect(jobTitleSchema.safeParse(title).error?.issues).toHaveLength(1);
+    expect(performance.now() - started).toBeLessThan(50);
+  });
+
+  it("finds a web address in linear time within the length limit", () => {
+    const started = performance.now();
+    for (let index = 0; index < 1_000; index += 1) jobTitleTextSchema.safeParse("a".repeat(100));
+    expect(performance.now() - started).toBeLessThan(250);
+    expect(message("Lead at sub.acme.example")).toBe(
+      "Enter only your job title, without web addresses or phone numbers.",
+    );
+  });
+
   it("holds every place a title is written to the same rule, while an edit may still clear it", () => {
     expect(organizationIdentityJobTitleSchema).toBe(jobTitleSchema);
     expect(jobTitleTextSchema.parse("")).toBe("");

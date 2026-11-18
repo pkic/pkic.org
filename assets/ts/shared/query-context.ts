@@ -52,7 +52,9 @@ export function clearReferralSession(): void {
  * page keeps the token in this browser under the invitation id instead, so a
  * person who signs in from the emailed link lands back on their invitation.
  * It is kept only as long as that round trip takes, and cleared once the
- * invitation is used or refused.
+ * invitation is used or refused, or the person signs out. localStorage, not
+ * sessionStorage: the emailed link opens a new tab, which starts with an empty
+ * sessionStorage.
  */
 const INVITATION_STORAGE_PREFIX = "pkic_invite:";
 
@@ -80,14 +82,18 @@ function readStoredInvitation(key: string, now: number): string | null {
   return null;
 }
 
-/** Drops every remembered invitation that has expired. */
-function discardExpiredInvitations(now: number): void {
+function rememberedInvitationKeys(): string[] {
   const keys: string[] = [];
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
     if (key?.startsWith(INVITATION_STORAGE_PREFIX)) keys.push(key);
   }
-  for (const key of keys) readStoredInvitation(key, now);
+  return keys;
+}
+
+/** Drops every remembered invitation that has expired. */
+function discardExpiredInvitations(now: number): void {
+  for (const key of rememberedInvitationKeys()) readStoredInvitation(key, now);
 }
 
 function rememberInvitation(inviteId: string | null, inviteToken: string | null): string | null {
@@ -96,8 +102,11 @@ function rememberInvitation(inviteId: string | null, inviteToken: string | null)
     const now = Date.now();
     discardExpiredInvitations(now);
     const key = `${INVITATION_STORAGE_PREFIX}${inviteId}`;
-    if (!inviteToken) return readStoredInvitation(key, now);
-    localStorage.setItem(key, JSON.stringify({ token: inviteToken, expiresAt: now + INVITATION_STORAGE_TTL_MS }));
+    const stored = readStoredInvitation(key, now);
+    if (!inviteToken) return stored;
+    // The first token kept for an invitation stays: a later link must not swap it for another.
+    if (!stored)
+      localStorage.setItem(key, JSON.stringify({ token: inviteToken, expiresAt: now + INVITATION_STORAGE_TTL_MS }));
   } catch {
     // localStorage may be restricted; the token then stays in this page only.
   }
@@ -112,6 +121,15 @@ export function clearRememberedInvitation(inviteId: string | null): void {
   if (!inviteId) return;
   try {
     localStorage.removeItem(`${INVITATION_STORAGE_PREFIX}${inviteId}`);
+  } catch {
+    // localStorage may be restricted; nothing was kept then.
+  }
+}
+
+/** Forgets every invitation token kept in this browser. Call it on sign-out, so a shared computer keeps none. */
+export function clearRememberedInvitations(): void {
+  try {
+    for (const key of rememberedInvitationKeys()) localStorage.removeItem(key);
   } catch {
     // localStorage may be restricted; nothing was kept then.
   }

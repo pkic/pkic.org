@@ -15,14 +15,14 @@ import type { DatabaseLike } from "../functions/_lib/types";
 /** Background work a request starts (outbox delivery); awaited so it never runs into the next test. */
 const background: Promise<unknown>[] = [];
 
-async function call(path: string, body: unknown): Promise<Response> {
+async function call(path: string, body: unknown, environment: object = env): Promise<Response> {
   return app.fetch(
     new Request(`https://app.test${path}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     }),
-    env as never,
+    environment as never,
     {
       passThroughOnException() {},
       waitUntil(work: Promise<unknown>) {
@@ -105,13 +105,48 @@ describe("account sign-up", () => {
 
   it("refuses a return path that carries an invitation token, so no token reaches the outbox", async () => {
     await seedEventAndAdmin(env.DB);
-    const returnPath = "/events/pqc-2027/register?invite=secret-invitation-token&id=1";
-    for (const [path, email] of [
-      ["/api/v1/auth/sign-up", "ada@organization.example"],
-      ["/api/v1/auth/request-link", "admin@pkic.org"],
-    ] as const)
-      expect((await call(path, { email, returnPath })).status, path).toBe(400);
+    const limited = {
+      ...env,
+      EMAIL_RATE_LIMITER: createTestRateLimiter(50),
+      IP_RATE_LIMITER: createTestRateLimiter(50),
+    };
+    // However the key is written: percent-encoded, or as another token the page reads.
+    for (const query of [
+      "invite=secret-invitation-token&id=1",
+      "id=1&%69nvite=secret",
+      "token=secret",
+      "verify=secret",
+    ])
+      for (const [path, email] of [
+        ["/api/v1/auth/sign-up", "ada@organization.example"],
+        ["/api/v1/auth/request-link", "admin@pkic.org"],
+      ] as const) {
+        const returnPath = `/events/pqc-2027/register?${query}`;
+        expect((await call(path, { email, returnPath }, limited)).status, query).toBe(400);
+      }
     expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+  });
+
+  it("keeps page state in the return path, and starts an account from a malformed event path", async () => {
+    await seedEventAndAdmin(env.DB);
+    const limited = {
+      ...env,
+      EMAIL_RATE_LIMITER: createTestRateLimiter(50),
+      IP_RATE_LIMITER: createTestRateLimiter(50),
+    };
+    const kept = await call(
+      "/api/v1/auth/sign-up",
+      { email: "ada@organization.example", returnPath: "/events/pqc-2027/register?id=1&ref=ABC123&tab=details" },
+      limited,
+    );
+    expect(kept.status, await kept.clone().text()).toBe(200);
+    const malformed = await call(
+      "/api/v1/auth/sign-up",
+      { email: "bea@organization.example", returnPath: "/events/%E0/register/" },
+      limited,
+    );
+    expect(malformed.status, await malformed.clone().text()).toBe(200);
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(2);
   });
 
   it("claims an unverified alias for a new account without adopting the account that added it", async () => {

@@ -32,6 +32,7 @@ import { accountAddressSignsInSql } from "../../auth/email-sign-in-policy";
 import { prepareStateGuard } from "../../db/authorization-guard";
 import { batchFirst } from "../../db/pagination";
 import { mailboxKind, organizationDomainCandidates } from "../../email-domains/classification";
+import { normalizeOrgName } from "../../../../assets/shared/organization-name";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
@@ -148,14 +149,34 @@ export async function accountOrganizationRequired(
         "IDENTITY_DOMAIN_MISMATCH",
         "Choose an organization confirmed by your verified work domain.",
       );
+    // A new name that an organization already has is the person's own choice to correct, not a reviewer's.
+    const typed = prepared.organizationName === undefined ? null : normalizeOrgName(prepared.organizationName);
+    if (typed !== null && step.basis.organizations.some((item) => item.normalized_name === typed))
+      throw new AppError(
+        422,
+        "ORGANIZATION_NAME_EXISTS",
+        "An organization with this name already exists. Choose your organization from the list.",
+      );
     // Refuses now what the commit would refuse, on the field the person can correct.
-    await planVerifiedAffiliation(
-      db,
-      { userId: crypto.randomUUID(), proofEvidence: { sql: "SELECT 1", bindings: [] } },
-      prepared,
-      { ...step.basis, identities: [], emailOwner: null },
-      nowIso(),
-    );
+    try {
+      await planVerifiedAffiliation(
+        db,
+        { userId: crypto.randomUUID(), proofEvidence: { sql: "SELECT 1", bindings: [] } },
+        prepared,
+        { ...step.basis, identities: [], emailOwner: null },
+        nowIso(),
+      );
+    } catch (error) {
+      // A typed name that belongs to an organization this address does not reach is the person's choice
+      // to correct; it never opens the session through the reviewer fallback.
+      if (typed !== null && error instanceof AppError && error.code === "ORGANIZATION_AFFILIATION_REVIEW_REQUIRED")
+        throw new AppError(
+          422,
+          "ORGANIZATION_NAME_EXISTS",
+          "An organization with this name already exists and does not use your email domain. Choose your organization from the list.",
+        );
+      throw error;
+    }
     preview.contextToken = await signJwt(
       signingSecret,
       contextSchema.parse({

@@ -20,7 +20,16 @@ export function signInEventSlug(returnPath: string, flow: SignInEventFlow): stri
   const page = parseEventFlowPath(path);
   if (page) return page.flow === flow ? page.eventSlug : null;
   const portal = new RegExp(`^/events/([^/?]+)/${EVENT_FLOW_SUFFIXES[flow]}/?$`).exec(path);
-  return portal?.[1] ? decodeURIComponent(portal[1]) : null;
+  return portal?.[1] ? decodedSegment(portal[1]) : null;
+}
+
+/** A path segment as text, or null when its percent-encoding is malformed. */
+function decodedSegment(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
 }
 
 /** The purpose a return path names, or null for a plain sign-in. */

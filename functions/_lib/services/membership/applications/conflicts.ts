@@ -84,14 +84,19 @@ function membershipApplicationConflictSelections(input: MembershipApplicationCon
 }
 
 /**
- * An application for the organization: one linked to it, or an older one that
- * only names it or the name given. Readiness, submission and the organization's
- * current application all match an organization this way.
+ * An application for the organization: one linked to it, or an older unlinked
+ * one that only names it or the name given. An application linked to another
+ * organization never matches by its name; for a new organization (no id), one
+ * linked to an organization of the given name does. Readiness, submission and
+ * the organization's current application all match an organization this way.
  */
 function organizationApplicationMatch(organizationId: string | null, normalizedName: string | null): SqlSelection {
   return {
-    sql: `(organization_id = ? OR lower(trim(organization_name)) IN (?, (SELECT normalized_name FROM organizations WHERE id = ?)))`,
-    bindings: [organizationId, normalizedName, organizationId],
+    sql: `(organization_id = ?
+      OR (organization_id IS NULL
+        AND lower(trim(organization_name)) IN (?, (SELECT normalized_name FROM organizations WHERE id = ?)))
+      OR (? IS NULL AND organization_id IN (SELECT id FROM organizations WHERE normalized_name = ?)))`,
+    bindings: [organizationId, normalizedName, organizationId, organizationId, normalizedName],
   };
 }
 

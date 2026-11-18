@@ -498,7 +498,8 @@ async function main(): Promise<void> {
     const { SignInCard } = await import("../components/sign-in/SignInCard");
     render(
       <SignInCard
-        embedded={{ returnPath: `${MEMBERSHIP_JOIN_PATH}${window.location.search}`, emailFlow: "join" }}
+        // The join page reads nothing from its query, so the emailed link carries none of it.
+        embedded={{ returnPath: MEMBERSHIP_JOIN_PATH, emailFlow: "join" }}
         onSignedIn={start}
       />,
       signInCard,

@@ -31,14 +31,22 @@ export const portalReturnPathSchema = z
   .regex(/^\/(?!\/)[A-Za-z0-9\-._~!$&'()*+,;=:@/%?]*$/, "Must be a portal path");
 
 /**
+ * Query keys that carry a capability: an invitation, a sign-in or a
+ * verification token. Read after decoding, so `%69nvite` is still `invite`.
+ */
+const capabilityQueryKey = /^(?:invite|token|verify)$|token$|secret$/i;
+
+/**
  * Where an emailed sign-in link returns. The link is stored in the email
  * outbox, and D1 holds no usable capability token, so the path never carries
- * an invitation token: the page keeps it in the browser under the invitation id.
+ * one: the page keeps an invitation token in the browser under the invitation
+ * id. Other query keys are page state, such as `id`, `ref`, a tab or a list
+ * filter, and stay.
  */
-const signInReturnPathSchema = portalReturnPathSchema.refine(
-  (path) => !/[?&]invite=/.test(path),
-  "Leave the invitation token out of the return path",
-);
+const signInReturnPathSchema = portalReturnPathSchema.refine((path) => {
+  const query = path.includes("?") ? path.slice(path.indexOf("?") + 1) : "";
+  return ![...new URLSearchParams(query).keys()].some((key) => capabilityQueryKey.test(key.trim()));
+}, "Leave the invitation token out of the return path");
 
 export const userAuthRequestSchema = emailRecoveryRequestSchema.extend({
   returnPath: signInReturnPathSchema.optional(),

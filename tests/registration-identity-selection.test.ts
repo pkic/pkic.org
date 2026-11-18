@@ -39,6 +39,7 @@ import type { DatabaseLike, Env } from "../functions/_lib/types";
 import { signAdminManageJwt } from "../functions/_lib/utils/jwt";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { outboxIdForOperation, prepareQueueEmailStatement } from "../functions/_lib/email/outbox-queue";
+import { emailPlainText, resolveEmailTemplateData } from "../functions/_lib/email/plain-text";
 import { registrationIdentityChangeSchema } from "../assets/shared/schemas/registration-identity";
 
 let registrationEnvironment: Env;
@@ -549,7 +550,10 @@ async function emailAttribution(userId: string, templateKey: string) {
   );
   return rows.map((row) => {
     const payload = JSON.parse(row.payload_json);
-    return { organizationName: payload.organizationName, jobTitle: payload.jobTitle };
+    const { organizationName } = resolveEmailTemplateData(payload, "text");
+    // The organization name is the person's own text: the email renders it as plain text.
+    expect(payload.organizationName).toEqual(emailPlainText(String(organizationName)));
+    return { organizationName, jobTitle: payload.jobTitle };
   });
 }
 

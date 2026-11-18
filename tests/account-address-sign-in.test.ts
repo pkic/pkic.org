@@ -180,7 +180,7 @@ describe("account addresses after a representation ends", () => {
     await addVerifiedAddress(userId, "ana@gmail.example");
     const at = nowIso();
     const expires = new Date(Date.now() + 86_400_000).toISOString();
-    const session = (action: string) => {
+    const session = (action: string, entity: "identity_session" | "member" = "identity_session") => {
       const id = crypto.randomUUID();
       return {
         id,
@@ -190,15 +190,22 @@ describe("account addresses after a representation ends", () => {
           ).bind(id, userId, crypto.randomUUID(), expires, at),
           env.DB.prepare(
             `INSERT INTO audit_log (id, actor_type, actor_id, action, entity_type, entity_id, created_at)
-             VALUES (?, 'user', ?, ?, 'identity_session', ?, ?)`,
-          ).bind(crypto.randomUUID(), userId, action, id, at),
+             VALUES (?, 'user', ?, ?, ?, ?, ?)`,
+          ).bind(crypto.randomUUID(), userId, action, entity, entity === "member" ? crypto.randomUUID() : id, at),
         ],
       };
     };
-    // Made before the deploy: no address marker on either.
+    // Made before the deploy: no address marker on any. A join link audits the member, not the session.
     const byLink = session("user_magic_link_verified");
+    const bySponsorLink = session("sponsor_magic_link_verified");
+    const byJoinLink = session("membership_join_email_verified", "member");
     const byPasskey = session("passkey_authenticated");
-    await env.DB.batch([...byLink.statements, ...byPasskey.statements]);
+    await env.DB.batch([
+      ...byLink.statements,
+      ...bySponsorLink.statements,
+      ...byJoinLink.statements,
+      ...byPasskey.statements,
+    ]);
     await env.DB.prepare("UPDATE identities SET ended_at = ? WHERE id = ?").bind(nowIso(), identityId).run();
 
     const migration = env.TEST_MIGRATIONS.find((candidate) => candidate.name.startsWith("0049_"))!;
@@ -206,7 +213,7 @@ describe("account addresses after a representation ends", () => {
     await env.DB.prepare(revoke).run();
 
     const revoked = await queryAll<{ id: string }>(env.DB, "SELECT id FROM sessions WHERE revoked_at IS NOT NULL");
-    expect(revoked.map(({ id }) => id)).toEqual([byLink.id]);
+    expect(revoked.map(({ id }) => id).sort()).toEqual([byLink.id, bySponsorLink.id, byJoinLink.id].sort());
   });
 
   it("refuses ending your own representation when it would leave no way to sign in", async () => {

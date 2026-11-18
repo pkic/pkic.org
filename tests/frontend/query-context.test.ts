@@ -4,6 +4,7 @@ import {
   parseQueryContext,
   clearReferralSession,
   clearRememberedInvitation,
+  clearRememberedInvitations,
   signInReturnPath,
 } from "../../assets/ts/shared/query-context";
 
@@ -80,6 +81,26 @@ describe("query context", () => {
     expect(localStorage.getItem("pkic_invite:inv-legacy")).toBeNull();
     expect(parseQueryContext("?id=inv-old").inviteToken).toBeNull();
     expect(parseQueryContext("?id=inv-new").inviteToken).toBe("new-token");
+  });
+
+  it("keeps the first token for an invitation, so a later link cannot swap it", () => {
+    signInReturnPath("/events/toronto-2027/register?invite=first-token&id=inv-1");
+    // A link someone else made for the same invitation is used on that page only and never replaces what is kept.
+    expect(parseQueryContext("?id=inv-1&invite=other-token").inviteToken).toBe("other-token");
+    expect(signInReturnPath("/events/toronto-2027/register?invite=other-token&id=inv-1")).toBe(
+      "/events/toronto-2027/register?id=inv-1",
+    );
+    expect(parseQueryContext("?id=inv-1").inviteToken).toBe("first-token");
+  });
+
+  it("forgets every remembered invitation on sign-out and nothing else", () => {
+    signInReturnPath("/events/toronto-2027/register?invite=token-1&id=inv-1");
+    signInReturnPath("/events/toronto-2027/propose?invite=token-2&id=inv-2");
+    localStorage.setItem("unrelated", "kept");
+    clearRememberedInvitations();
+    expect(parseQueryContext("?id=inv-1").inviteToken).toBeNull();
+    expect(parseQueryContext("?id=inv-2").inviteToken).toBeNull();
+    expect(localStorage.getItem("unrelated")).toBe("kept");
   });
 
   it("forgets a remembered invitation once it is cleared", () => {

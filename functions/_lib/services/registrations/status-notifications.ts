@@ -10,6 +10,7 @@ import type { CountryCode } from "../../../../assets/shared/countries";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
 import { prepareQueueEmailStatement } from "../../email/outbox";
+import { emailPlainText } from "../../email/plain-text";
 import { buildBadgeAttachment } from "../../email/attachments";
 import { buildEventEmailVariables } from "../events";
 import {
@@ -161,7 +162,7 @@ export async function prepareRegistrationStatusEmail(
       firstName: user.first_name ?? "",
       lastName: user.last_name ?? "",
       email: recipientEmail,
-      organizationName: user.organization_name ?? "",
+      organizationName: emailPlainText(user.organization_name ?? ""),
       jobTitle: user.job_title ?? "",
       attendanceLabel: attendanceData.attendanceLabel,
       attendanceSummary: attendanceData.dayAttendance.length
@@ -262,7 +263,7 @@ export async function prepareRegistrationConfirmedEmail(
       firstName: user.first_name ?? "",
       lastName: user.last_name ?? "",
       email: recipientEmail,
-      organizationName: user.organization_name ?? "",
+      organizationName: emailPlainText(user.organization_name ?? ""),
       jobTitle: user.job_title ?? "",
       attendanceLabel: attendanceData.attendanceLabel,
       dayAttendance: attendanceData.dayAttendance,
@@ -346,7 +347,7 @@ export async function prepareRegistrationConfirmationEmail(
       firstName: user.first_name ?? "",
       lastName: user.last_name ?? "",
       email: recipientEmail,
-      organizationName: user.organization_name ?? "",
+      organizationName: emailPlainText(user.organization_name ?? ""),
       jobTitle: user.job_title ?? "",
       attendanceLabel: attendanceData.attendanceLabel,
       dayAttendance: attendanceData.dayAttendance,

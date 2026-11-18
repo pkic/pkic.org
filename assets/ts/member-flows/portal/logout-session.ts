@@ -2,6 +2,7 @@ import { captureLogoutPushCleanup } from "./logout-push-cleanup";
 import { beginUserLogout, readPendingUserLogout, readActiveUserSession } from "../../shared/pending-user-logout";
 import { finishUserLogout } from "../../shared/finish-user-logout";
 import { clearOperatorEligibilityManifests } from "./sections/events/detail/scanner/eligibility-manifest";
+import { clearRememberedInvitations } from "../../shared/query-context";
 import { clearAuth, clearSignOutReturnPath, logoutNotice, portalSession } from "./state";
 import type { PortalSession } from "./types";
 
@@ -33,6 +34,7 @@ export async function signOutPortalSession(session: PortalSession): Promise<void
     operatorUserId: session.identity.id,
     expiresAt: session.expiresAt,
   });
+  clearRememberedInvitations();
   // Never clear a different session established while storage was opening.
   if (portalSession.value?.sessionId === session.sessionId) {
     clearSignOutReturnPath();

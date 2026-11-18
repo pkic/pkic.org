@@ -103,6 +103,13 @@ export function prepareVerifiedAffiliationRead(
           "IDENTITY_EMAIL_UNVERIFIED",
           "Verify this representation email address before continuing.",
         );
+      // A representation that ended retired this address: only a fresh proof of the mailbox speaks for it again.
+      if (!mailboxProof && address.sign_in === "representation_ended")
+        throw new AppError(
+          422,
+          "IDENTITY_EMAIL_UNVERIFIED",
+          "Your representation through this address ended. Verify the address again before continuing.",
+        );
       const claims = boundedDomainClaimsRows<{
         id: string;
         domain: string;

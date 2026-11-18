@@ -326,6 +326,36 @@ describe("email-first own representation", () => {
     ).toEqual({ organization_id: organizationId, job_title: "Security engineer" });
     expect((await env.DB.prepare("SELECT id FROM organizations").all()).results).toHaveLength(1);
   });
+  it("refuses a work address retired by an ended representation as evidence for a new one", async () => {
+    const p = await person();
+    const organizationId = await insertOrganization(env.DB, "Northstar Trust Association");
+    await claim("northstar-work.test", organizationId);
+    const at = nowIso();
+    await env.DB.prepare(
+      `INSERT INTO identities (id, user_id, organization_id, source, verified_email_domain, invited_at, started_at,
+         ended_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'verified_email', 'northstar-work.test', ?, ?, ?, ?, ?)`,
+    )
+      .bind(crypto.randomUUID(), p.userId, organizationId, at, at, at, at, at)
+      .run();
+    // The session outlives the representation, as one made with a passkey does.
+    const response = await preview(p, {
+      phase: "prepare",
+      email: p.email,
+      emailId: null,
+      organizationId,
+      jobTitle: "Security engineer",
+    });
+    expect(response.status, await response.clone().text()).toBe(422);
+    expect(await response.json()).toMatchObject({ error: { code: "IDENTITY_EMAIL_UNVERIFIED" } });
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM identities WHERE user_id=? AND ended_at IS NULL AND organization_id IS NOT NULL",
+      )
+        .bind(p.userId)
+        .first("count"),
+    ).toBe(0);
+  });
   it("creates an organization only for an unclaimed verified work domain, then reuses it for a colleague", async () => {
     const p = await person();
     const unresolved = await preview(p, { phase: "resolve", email: p.email, emailId: null });

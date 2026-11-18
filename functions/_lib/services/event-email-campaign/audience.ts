@@ -85,7 +85,9 @@ export function attendeeCampaignSelection(
              AND u.email IS NOT NULL
          ),
          ranked_recipients AS (
-           SELECT candidate.*,
+           SELECT candidate.registration_id, candidate.manage_link_secret, candidate.user_id, candidate.email,
+                  candidate.first_name, candidate.last_name, candidate.organization_name, candidate.job_title,
+                  candidate.status, candidate.custom_answers_json, candidate.form_placement_id,
                   ROW_NUMBER() OVER (
                     PARTITION BY candidate.user_id
                     ORDER BY datetime(candidate.created_at) DESC, candidate.registration_id ASC

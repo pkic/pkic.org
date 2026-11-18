@@ -12,6 +12,7 @@ import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { buildBadgeAttachment } from "../../email/attachments";
 import { prepareQueueEmailStatement, processOutboxByIdBackground } from "../../email/outbox";
 import { generateSignedRsvpAddress } from "../../email/rsvp";
+import { emailPlainText } from "../../email/plain-text";
 import { buildRegistrationIcs, calendarConfirmedDays } from "../../utils/calendar";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
 import { buildAcceptedTermsText, buildCustomAnswerRows } from "../../utils/registration-email";
@@ -135,7 +136,7 @@ export async function submitEventRegistration(
     firstName: user.first_name ?? "",
     lastName: user.last_name ?? "",
     email: user.email,
-    organizationName: affiliation.organizationName ?? "",
+    organizationName: emailPlainText(affiliation.organizationName ?? ""),
     jobTitle: affiliation.jobTitle ?? "",
     attendanceLabel: attendanceData.attendanceLabel,
     dayAttendance: attendanceData.dayAttendance,

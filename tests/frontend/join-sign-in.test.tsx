@@ -3,7 +3,7 @@
  * The join page's first step for a visitor: the shared sign-in card, embedded.
  * Joining proves no address of its own any more, so what matters here is that
  * the card is the same one the portal uses, that its links bring the person
- * back to this page with their query intact, and that nothing of the
+ * back to this page and carry none of its query, and that nothing of the
  * application is shown or asked before they are signed in.
  */
 import { act } from "preact/test-utils";
@@ -31,7 +31,7 @@ afterEach(() => {
 
 describe("joining without a session", () => {
   it("starts with the shared sign-in card and shows nothing of the application", async () => {
-    history.replaceState({}, "", "/join/?category=A");
+    history.replaceState({}, "", "/join/?category=A&invite=secret-token&next=https://elsewhere.test");
     const requests = openJoinPage(null, () => Response.json({ success: true }));
     await import("../../assets/ts/member-flows/join-form");
 
@@ -51,7 +51,7 @@ describe("joining without a session", () => {
     // Nothing is asked about a membership path before someone is signed in.
     expect(requests).toEqual([]);
 
-    // An email link returns to this page, query included.
+    // An email link returns to this page; nothing of the query rides along in the emailed link.
     await act(async () => button("Sign in with an email link").click());
     const email = card.querySelector<HTMLInputElement>('input[type="email"]')!;
     await act(async () => {
@@ -66,12 +66,12 @@ describe("joining without a session", () => {
     expect(requests[0]!.path).toBe("/api/v1/auth/request-link");
     expect(userAuthRequestSchema.parse(requests[0]!.body)).toEqual({
       email: "ada@example-corp.test",
-      returnPath: "/join/?category=A",
+      returnPath: "/join/",
     });
   });
 
   it("starts a new account with the membership wording, returning to this page", async () => {
-    history.replaceState({}, "", "/join/?category=A");
+    history.replaceState({}, "", "/join/?category=A&invite=secret-token&next=https://elsewhere.test");
     const requests = openJoinPage(null, () => Response.json({ success: true }));
     await import("../../assets/ts/member-flows/join-form");
     const card = document.querySelector<HTMLElement>("[data-join-sign-in-card]")!;
@@ -91,7 +91,7 @@ describe("joining without a session", () => {
     expect(userSignUpRequestSchema.parse(sent[0]!.body)).toEqual({
       email: "ada@example-corp.test",
       unaffiliatedAttestation: false,
-      returnPath: "/join/?category=A",
+      returnPath: "/join/",
     });
   });
 });
