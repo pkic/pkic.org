@@ -38,6 +38,11 @@ import {
   liveScreenSyncSnapshotSchema,
   type LiveScreenSync,
 } from "../../../../assets/shared/schemas/live-screen-sync";
+import {
+  liveLockedGraphicsSchema,
+  liveLockedGraphicsSnapshotSchema,
+  type LiveLockedGraphics,
+} from "../../../../assets/shared/schemas/live-graphic-locks";
 import { copyableLivePolls, type LivePollCopy } from "./room-poll-store";
 import type { LiveRoomSql } from "./room-sql";
 import {
@@ -424,6 +429,16 @@ export class LiveRoomStore {
 
   saveScreenSync(sync: LiveScreenSync): void {
     this.saveControl("screenSync", liveScreenSyncSchema.parse(sync));
+  }
+
+  /** The graphics kept in every scene; a stored value that no longer parses reads as none. */
+  lockedGraphics(): LiveLockedGraphics {
+    const saved = liveLockedGraphicsSnapshotSchema.safeParse(this.control("lockedGraphics") ?? undefined);
+    return saved.success ? saved.data : [];
+  }
+
+  saveLockedGraphics(graphics: LiveLockedGraphics): void {
+    this.saveControl("lockedGraphics", liveLockedGraphicsSchema.parse(graphics));
   }
 
   queue(): LiveQueue {

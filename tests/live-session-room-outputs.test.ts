@@ -117,6 +117,29 @@ describe("live room auxiliary outputs", () => {
     expect((await rejoined.next("room.snapshot")).screenSync).toEqual(changed);
   });
 
+  it("keeps graphics in every scene for the session, for every viewer, set by operators only and never on air by itself", async () => {
+    const operator = await f.connect({ person: "operator" });
+    const attendee = await f.connect({ person: "attendee" });
+    const overlay = await f.connect({ overlay: await overlayToken() });
+    expect((await overlay.next("room.snapshot")).lockedGraphics).toEqual([]);
+    operator.send({ type: "graphic.lock", graphic: "reactions", locked: true });
+    operator.send({ type: "graphic.lock", graphic: "ticker", locked: true });
+    for (const viewer of [overlay, attendee])
+      expect((await viewer.next("graphic.lock.changed", (m) => m.lockedGraphics.length === 2)).lockedGraphics).toEqual([
+        "reactions",
+        "ticker",
+      ]);
+    // Keeping a graphic in every scene leaves what is on air as it was.
+    expect(operator.received.some((message) => message.type === "stage.changed")).toBe(false);
+    attendee.send({ type: "graphic.lock", graphic: "reactions", locked: false });
+    expect((await attendee.next("room.refused")).code).toBe("LIVE_ROOM_OPERATOR_REQUIRED");
+    operator.send({ type: "graphic.lock", graphic: "reactions", locked: false });
+    const released = await overlay.next("graphic.lock.changed", (m) => !m.lockedGraphics.includes("reactions"));
+    expect(released.lockedGraphics).toEqual(["ticker"]);
+    const rejoined = await f.connect({ person: "operator" });
+    expect((await rejoined.next("room.snapshot")).lockedGraphics).toEqual(["ticker"]);
+  });
+
   it("merges each stage display change into the room's copy, so quick changes never undo each other", async () => {
     const operator = await f.connect({ person: "operator" });
     const overlay = await f.connect({ overlay: await overlayToken() });

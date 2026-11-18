@@ -72,6 +72,8 @@ export async function operateLiveDesk(
       return desk.outputs.setStageDisplay(actor, message, at);
     case "screen.sync":
       return desk.outputs.setScreenSync(actor, message.output, message.sync, at);
+    case "graphic.lock":
+      return desk.outputs.setGraphicLock(actor, message.graphic, message.locked, at);
     case "program.clear":
       return desk.controls.clearProgram(actor, at);
     case "program.restore":

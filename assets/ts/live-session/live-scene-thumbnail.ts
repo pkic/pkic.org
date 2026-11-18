@@ -1,6 +1,6 @@
 import { liveOverlayDrawn } from "../../shared/live-overlay-cover";
-import { resolveLiveOverlayLayout } from "../../shared/live-overlay-layout-presets";
-import type { LiveProgramLayer } from "../../shared/live-overlay-stacking";
+import { resolveLiveSceneElements } from "../../shared/live-scene-elements";
+import { LIVE_LOCKABLE_GRAPHICS } from "../../shared/schemas/live-graphic-locks";
 import type { LiveOverlayElement, LiveOverlayElementPlacement } from "../../shared/schemas/live-overlay-layout";
 import type { LiveStage } from "../../shared/schemas/live-session-stage";
 import type { LiveRoomState } from "./live-room-state";
@@ -22,24 +22,13 @@ export function sameLiveSceneThumbnailSource(previous: LiveRoomState, next: Live
     previous.timers === next.timers &&
     previous.polls === next.polls &&
     previous.overlayLayouts === next.overlayLayouts &&
+    previous.lockedGraphics === next.lockedGraphics &&
     previous.speakerMessage === next.speakerMessage
   );
 }
 
 /** The graphics an operator puts on Preview; the background and the QR code come with the scene itself. */
-const OPERATOR_GRAPHICS = [
-  "lowerThird",
-  "question",
-  "poll",
-  "timer",
-  "ticker",
-  "schedule",
-  "panelists",
-  "checkIn",
-  "topQuestions",
-  "chat",
-  "reactions",
-] as const satisfies readonly LiveProgramLayer[];
+const OPERATOR_GRAPHICS = LIVE_LOCKABLE_GRAPHICS;
 
 /** The scene's own boxes, outside the stage display's: an empty Preview outlines them so each scene stays recognizable. */
 const OUTLINED: readonly LiveOverlayElement[] = [...OPERATOR_GRAPHICS, "qrCode"];
@@ -51,9 +40,9 @@ export function liveSceneThumbnailEmpty(stage: LiveStage): boolean {
 
 /** The boxes one scene shows its graphics in, for the faint outline on an empty Preview's thumbnail. */
 export function liveSceneOutline(
-  state: Pick<LiveRoomState, "overlayLayouts">,
+  state: Pick<LiveRoomState, "overlayLayouts" | "lockedGraphics">,
   scene: string,
 ): LiveOverlayElementPlacement[] {
-  const elements = resolveLiveOverlayLayout(state.overlayLayouts, scene);
+  const elements = resolveLiveSceneElements(state, scene);
   return OUTLINED.map((element) => elements[element]).filter((placement) => placement.visible);
 }

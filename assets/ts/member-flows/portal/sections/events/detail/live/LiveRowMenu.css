@@ -45,4 +45,15 @@
     line-height: 1.2;
     text-decoration: none;
   }
+
+  /* A graphic kept in every scene: a quiet lock beside the screens' codes. */
+  .pk-live-scene-lock {
+    display: inline-flex;
+    flex: none;
+    color: var(--pk-ink-muted);
+  }
+  .pk-live-scene-lock > svg {
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+  }
 }

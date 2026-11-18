@@ -55,9 +55,15 @@ it("shows one compact row per poll with its state, answers and leading answer, o
   expect(rows[0].querySelector(".pk-studio-row__actions button")).not.toBeNull();
   expect(rows[1].textContent).toContain("Prepared");
   const items = await menu(rows[0]);
-  // The room's screens come first in the row's menu, then the poll's own actions.
-  expect(items.map(menuItemLabel)).toEqual(["Projector", "Stage display", "Results and settings", "Reopen voting"]);
-  await act(async () => items[3].click());
+  // The room's screens come first in the row's menu, then keeping it in every scene, then the poll's own actions.
+  expect(items.map(menuItemLabel)).toEqual([
+    "Projector",
+    "Stage display",
+    "Keep in every scene",
+    "Results and settings",
+    "Reopen voting",
+  ]);
+  await act(async () => items[4].click());
   expect(send.mock.calls.map(([message]) => liveRoomClientMessageSchema.parse(message))).toEqual([
     { type: "poll.status", pollId: closed.id, status: "open" },
   ]);

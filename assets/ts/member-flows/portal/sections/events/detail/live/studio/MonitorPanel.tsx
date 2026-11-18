@@ -108,6 +108,7 @@ function samePicture(output: StudioOutput, left: LiveRoomState | null, right: Li
     left.polls === right.polls &&
     left.session === right.session &&
     left.overlayLayouts === right.overlayLayouts &&
+    left.lockedGraphics === right.lockedGraphics &&
     left.burst === right.burst &&
     left.speakerMessage === right.speakerMessage &&
     // A room screen that syncs also draws what is on Program, and the question lined up next.

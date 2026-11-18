@@ -32,7 +32,7 @@ import type {
   LiveOverlayLayoutElements,
 } from "../../shared/schemas/live-overlay-layout";
 import { overlayBoxPixels } from "../../shared/live-overlay-geometry";
-import { resolveLiveOverlayLayout } from "../../shared/live-overlay-layout-presets";
+import { resolveLiveSceneElements } from "../../shared/live-scene-elements";
 import { LiveTimerMark } from "./LiveTimerMark";
 import { LiveTimerPlate } from "./LiveTimerPlate";
 import { formatLiveTimerMark } from "../../shared/live-timer-format";
@@ -399,9 +399,10 @@ export function LiveOverlayPresentation({
   const animate = broadcast || !prefersReducedMotion();
   const state = projection && isLiveAuxOutput(requested) ? liveOutputProjection(projection, requested) : projection;
   const view = liveOutputView(requested);
-  // A source drawing only some graphics leaves the others out; while the ticker is on air, every other graphic keeps clear of it.
+  // The scene with the graphics kept in every scene; a source drawing only some graphics leaves the others out,
+  // and while the ticker is on air, every other graphic keeps clear of it.
   const allowed = liveOverlayAllowedElements(
-    draft ?? resolveLiveOverlayLayout(state?.overlayLayouts ?? [], layout ?? liveOutputScene(state, requested)),
+    draft ?? resolveLiveSceneElements(state, layout ?? liveOutputScene(state, requested)),
     graphics,
   );
   const elements = liveOverlayClearOfTicker(

@@ -17,6 +17,7 @@ import type {
   LiveTopQuestionsConfig,
 } from "../../../../../../../shared/schemas/live-session-on-screen";
 import type { LiveRoomState } from "../../../../../../live-session/live-room-state";
+import type { LiveLockedGraphic } from "../../../../../../../shared/schemas/live-graphic-locks";
 import { liveLayerUnseen } from "./live-layer-unseen";
 import { liveCompositionInput, previewLiveStage, takeLiveStage } from "./live-stage-preview";
 
@@ -187,12 +188,20 @@ export function livePreviewToggle(state: LiveRoomState, layer: LiveLayer): LiveR
   return { type: "preview.set", composition };
 }
 
+/** The scene element a graphic draws as, which a scene places and the room can keep in every scene. */
+export const liveLayerElement = (layer: LiveLayer): LiveLockedGraphic =>
+  layer.kind === "chatFeed" ? "chat" : layer.kind;
+
+/** Whether the room keeps this graphic in every scene. */
+export const liveLayerLocked = (state: Pick<LiveRoomState, "lockedGraphics">, layer: LiveLayer): boolean =>
+  state.lockedGraphics.includes(liveLayerElement(layer));
+
 /** Where a graphic is now: Preview, Program and each auxiliary output. */
 export function liveLayerTargets(targets: LiveTargets, layer: LiveLayer) {
   const { state, programActive } = targets;
   const preview = liveLayerShown(state.preview, layer);
   const program = programActive && liveLayerShown(state.stage, layer);
-  const drawn = layer.kind === "chatFeed" ? "chat" : layer.kind;
+  const drawn = liveLayerElement(layer);
   return {
     preview,
     program,

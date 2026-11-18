@@ -1,8 +1,6 @@
 import { liveOverlayCoveredBy } from "../../../../../../../shared/live-overlay-cover";
-import {
-  liveOverlayLayoutChoices,
-  resolveLiveOverlayLayout,
-} from "../../../../../../../shared/live-overlay-layout-presets";
+import { liveOverlayLayoutChoices } from "../../../../../../../shared/live-overlay-layout-presets";
+import { resolveLiveSceneElements } from "../../../../../../../shared/live-scene-elements";
 import type { LiveProgramLayer } from "../../../../../../../shared/live-overlay-stacking";
 import { LIVE_OVERLAY_ELEMENT_LABELS } from "../../../../../../../shared/schemas/live-overlay-layout";
 import type { LiveStage } from "../../../../../../../shared/schemas/live-session-room";
@@ -11,7 +9,8 @@ import type { LiveRoomState } from "../../../../../../live-session/live-room-sta
 /**
  * Why a composition that holds a graphic does not show it: a board drawn
  * over it, such as Up next under a full-screen question, or a scene that
- * leaves it out. Named as the studio names them.
+ * leaves it out. A graphic kept in every scene is never left out by one.
+ * Named as the studio names them.
  */
 export type LiveLayerUnseen = { reason: "covered"; by: string } | { reason: "scene"; scene: string };
 
@@ -23,11 +22,11 @@ export function liveSceneName(state: Pick<LiveRoomState, "overlayLayouts">, slug
 
 /** Why this composition, which holds the graphic, does not show it, as its scene draws it; null when it shows. */
 export function liveLayerUnseen(
-  state: Pick<LiveRoomState, "overlayLayouts">,
+  state: Pick<LiveRoomState, "overlayLayouts" | "lockedGraphics">,
   stage: LiveStage,
   layer: LiveProgramLayer,
 ): LiveLayerUnseen | null {
-  const elements = resolveLiveOverlayLayout(state.overlayLayouts, stage.scene);
+  const elements = resolveLiveSceneElements(state, stage.scene);
   if (!elements[layer].visible) return { reason: "scene", scene: liveSceneName(state, stage.scene) };
   const board = liveOverlayCoveredBy(stage, elements, layer);
   return board ? { reason: "covered", by: LIVE_OVERLAY_ELEMENT_LABELS[board] } : null;
