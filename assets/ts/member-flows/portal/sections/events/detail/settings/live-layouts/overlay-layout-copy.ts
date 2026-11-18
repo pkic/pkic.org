@@ -1,24 +1,11 @@
-import type {
-  LiveOverlayComposition,
-  LiveOverlayElementPlacement,
-} from "../../../../../../../../shared/schemas/live-overlay-layout";
+import type { LiveOverlayElementPlacement } from "../../../../../../../../shared/schemas/live-overlay-layout";
 import type { LayoutUnit } from "./overlay-layout-editing";
 import { formatNumber } from "../../../../../../../../shared/format-number";
 
-/** The layout editor's words, kept together so the canvas, the list and the inspector name things alike. */
+/** The scene editor's words, kept together so the canvas, the list and the exact position name things alike. */
 
-export const LAYOUT_COMPOSITION_LABEL: Record<LiveOverlayComposition, string> = {
-  program: "Program, projector and stage preview",
-  "stage-display": "Stage display",
-};
-
-export const LAYOUT_LAYER_LABEL: Record<LiveOverlayComposition, string> = {
-  program: "Program elements",
-  "stage-display": "Stage display elements",
-};
-
-/** Whether an element takes the event's shared position or this layout's own. */
-export const LAYOUT_SHARING_LABEL = { shared: "Shared position", own: "This scene only" } as const;
+/** The canvas's boxes, as one group. */
+export const LAYOUT_CANVAS_LABEL = "Graphics on the canvas";
 
 /** The inspector's note on a shared element: moving it here moves it wherever it is shared. */
 export function layoutSharingNote(layouts: number): string {

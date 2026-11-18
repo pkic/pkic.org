@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useId, useState } from "preact/hooks";
 import {
   LIVE_OVERLAY_DEFAULT_LAYOUT,
   eventLiveOverlayLayoutsResponseSchema,
@@ -12,23 +12,18 @@ import { useData } from "../../../../../../../hooks/useData";
 import { useHashQueryParam } from "../../../../../../../hooks/useHashQueryParam";
 import { getJson } from "../../../../../../../shared/api-client";
 import { Button } from "../../../../../../../ui/Button";
+import { IconPlus } from "../../../../../../../components/icons";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../../ui/Panel";
+import { SectionHeading } from "../../../../../../../ui/SectionHeading";
 import { EventLiveOverlaySources } from "./EventLiveOverlaySources";
 import { OverlayLayoutCreateDialog } from "./OverlayLayoutCreateDialog";
 import { OverlayLayoutEditor } from "./OverlayLayoutEditor";
 import "./OverlayLayouts.css";
 
-/** What a layout is in the list, in a few plain words. */
-function describe(layout: LiveOverlayLayout): string {
-  if (layout.slug === LIVE_OVERLAY_DEFAULT_LAYOUT) return layout.saved ? "Default, changed" : "Default";
-  if (layout.builtIn) return layout.saved ? "Built-in, changed" : "Built-in";
-  return "Custom";
-}
-
 /**
- * The event's scenes: the list, the selected scene's editor, and the
- * rooms' browser sources. The selected layout follows the
- * address, so a bookmark opens the same one.
+ * The event's scenes in three columns: the list, the selected scene's
+ * canvas, and its graphics; then the rooms' browser sources. The selected
+ * scene follows the address, so a bookmark opens the same one.
  */
 export function EventLiveOverlayLayouts({ slug }: { slug: string }) {
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/settings/live/layouts`;
@@ -38,6 +33,7 @@ export function EventLiveOverlayLayouts({ slug }: { slug: string }) {
   const [chosen, choose] = useHashQueryParam("layout", LIVE_OVERLAY_DEFAULT_LAYOUT);
   const [creating, setCreating] = useState<{ from: LiveOverlayLayout; duplicate: boolean } | null>(null);
   const [dirty, setDirty] = useState(false);
+  const heading = useId();
   useEffect(() => {
     if (loaded.data) setSaved(loaded.data);
   }, [loaded.data]);
@@ -70,52 +66,54 @@ export function EventLiveOverlayLayouts({ slug }: { slug: string }) {
   }
   return (
     <div class="pk-stack">
-      <Panel>
-        <PanelHeader title="Scenes">
-          <Button onClick={() => setCreating({ from: current, duplicate: false })}>New scene</Button>
-        </PanelHeader>
-        <PanelBody class="pk-stack">
-          <p class="pk-muted">
-            A scene decides which graphics show and where. Take in the studio puts Preview's scene on Program, and a
-            browser source draws the scene on air unless its link names one.
-          </p>
-          <div class="pk-layout-shell">
-            <div class="pk-layout-workspace">
-              <nav class="pk-layout-list" aria-label="Scenes">
-                <ul>
+      <section class="pk-scenes" aria-labelledby={heading}>
+        <SectionHeading level={3} id={heading} class="pk-scenes__title">
+          Scenes
+        </SectionHeading>
+        <div class="pk-scenes__columns">
+          <Panel class="pk-scenes__list">
+            <PanelHeader title="Scenes" headingLevel={4}>
+              <Button onClick={() => setCreating({ from: current, duplicate: false })}>
+                <IconPlus />
+                New scene
+              </Button>
+            </PanelHeader>
+            <PanelBody flush>
+              <nav aria-label="Scenes">
+                <ul class="pk-scenes__rows">
                   {layouts.map((layout) => (
-                    <li key={layout.slug}>
+                    <li key={layout.slug} class="pk-scenes__row">
                       <button
                         type="button"
-                        class="pk-layout-list__item"
+                        class="pk-scenes__pick"
                         aria-current={layout.slug === current.slug ? "true" : undefined}
                         onClick={() => void open(layout.slug)}
                       >
-                        <span class="pk-layout-list__name">{layout.name}</span>
-                        <span class="pk-layout-list__kind">{describe(layout)}</span>
+                        <span class="pk-scenes__name">{layout.name}</span>
                       </button>
                     </li>
                   ))}
                 </ul>
               </nav>
-              <OverlayLayoutEditor
-                key={current.slug}
-                endpoint={endpoint}
-                positionsEndpoint={`/api/v1/events/${encodeURIComponent(slug)}/settings/live/positions`}
-                layout={current}
-                layouts={layouts}
-                positions={saved.positions}
-                onDirty={setDirty}
-                onDuplicate={() => setCreating({ from: current, duplicate: true })}
-                onSaved={(next, select) => {
-                  setSaved(next);
-                  if (select) choose(select);
-                }}
-              />
-            </div>
-          </div>
-        </PanelBody>
-      </Panel>
+              <p class="pk-scenes__note">Every room in this event uses these scenes.</p>
+            </PanelBody>
+          </Panel>
+          <OverlayLayoutEditor
+            key={current.slug}
+            endpoint={endpoint}
+            positionsEndpoint={`/api/v1/events/${encodeURIComponent(slug)}/settings/live/positions`}
+            layout={current}
+            layouts={layouts}
+            positions={saved.positions}
+            onDirty={setDirty}
+            onDuplicate={() => setCreating({ from: current, duplicate: true })}
+            onSaved={(next, select) => {
+              setSaved(next);
+              if (select) choose(select);
+            }}
+          />
+        </div>
+      </section>
       <Panel>
         <PanelHeader title="Browser sources" />
         <PanelBody>

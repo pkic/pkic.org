@@ -1,8 +1,8 @@
 /*
- * The layout editor's canvas: the real overlay drawn at 16:9 with each
- * element's box over it. A box sits at its fractions of the frame through
+ * The scene editor's canvas: the camera at 16:9 with a labeled box for each
+ * graphic the scene shows. A box sits at its fractions of the frame through
  * custom properties; a drag moves it with a transform and the box settles on
- * release. Handles are drawn small but each takes a 24px target.
+ * release. Corner handles are drawn small but each takes a 24px target.
  */
 @layer components {
   .pk-layout-canvas-figure {
@@ -22,16 +22,19 @@
     touch-action: none;
     user-select: none;
   }
-  .pk-layout-canvas > .pk-live-overlay__frame {
-    grid-area: 1 / 1;
-    inline-size: 100%;
-    block-size: 100%;
-    pointer-events: none;
-  }
-  .pk-layout-canvas__options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--pk-2) var(--pk-4);
+  /* The camera under every graphic: quiet stripes and its name in the middle. */
+  .pk-layout-canvas__camera {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: repeating-linear-gradient(
+      135deg,
+      transparent 0 0.875rem,
+      color-mix(in srgb, var(--pk-on-solid) 4%, transparent) 0.875rem 1.75rem
+    );
+    color: color-mix(in srgb, var(--pk-on-solid) 70%, transparent);
+    font-size: var(--pk-text-sm);
   }
   /*
    * The safe areas, as quiet labeled guides: action safe (3.5% in) keeps
@@ -71,6 +74,7 @@
     --box-y: 0;
     --box-w: 0;
     --box-h: 0;
+    --label-shift: 0;
     position: absolute;
     inset-inline-start: calc(var(--box-x) * 100%);
     inset-block-start: calc(var(--box-y) * 100%);
@@ -80,16 +84,16 @@
     min-inline-size: 0;
     margin: 0;
     padding: 0;
-    border: 1px dashed color-mix(in srgb, var(--pk-on-solid) 55%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--pk-on-solid) 35%, transparent);
     border-radius: 0;
-    background: transparent;
+    background: color-mix(in srgb, var(--pk-on-solid) 16%, var(--pk-chrome-deep));
     color: var(--pk-on-solid);
     font: inherit;
     cursor: grab;
   }
   .pk-layout-canvas__box:hover {
     border-style: solid;
-    background: color-mix(in srgb, var(--pk-accent) 10%, transparent);
+    border-color: color-mix(in srgb, var(--pk-on-solid) 60%, transparent);
   }
   .pk-layout-canvas__box:focus-visible {
     outline: 2px solid var(--pk-focus);
@@ -98,44 +102,42 @@
   .pk-layout-canvas__box[data-selected] {
     z-index: 1;
     border: 2px solid var(--pk-accent);
-    background: color-mix(in srgb, var(--pk-accent) 14%, transparent);
-  }
-  .pk-layout-canvas__box[data-hidden] {
-    border-color: color-mix(in srgb, var(--pk-on-solid) 30%, transparent);
-    background: repeating-linear-gradient(
-      135deg,
-      transparent 0 6px,
-      color-mix(in srgb, var(--pk-on-solid) 8%, transparent) 6px 12px
+    background: color-mix(
+      in srgb,
+      var(--pk-accent) 12%,
+      color-mix(in srgb, var(--pk-on-solid) 16%, var(--pk-chrome-deep))
     );
   }
   .pk-layout-canvas__box[data-gesture] {
     cursor: grabbing;
     transition: none;
   }
+  /*
+   * The graphic's name in the middle of its box, moved a line or more when it
+   * would cover another box's name. Names draw above every box, so a graphic
+   * that shares its place with others still shows its name.
+   */
   .pk-layout-canvas__label {
     position: absolute;
-    inset-block-start: 0;
-    inset-inline-start: 0;
+    z-index: 2;
+    inset-inline: 0;
+    inset-block-start: calc(50% - 0.8em + var(--label-shift) * 1.6em);
+    display: grid;
+    justify-items: center;
+    overflow: hidden;
+    padding-inline: var(--pk-1);
+    font-size: var(--pk-text-xs);
+    line-height: 1.6;
+    pointer-events: none;
+  }
+  .pk-layout-canvas__name,
+  .pk-layout-canvas__detail {
     max-inline-size: 100%;
     overflow: hidden;
-    padding: 0 var(--pk-1);
-    /* Solid, so the tag reads on light and dark samples alike. */
-    background: var(--pk-chrome-deep);
-    color: var(--pk-on-solid);
-    font-size: var(--pk-text-2xs);
-    line-height: 1.6;
     white-space: nowrap;
     text-overflow: ellipsis;
   }
-  .pk-layout-canvas__box[data-label="bottom"] .pk-layout-canvas__label {
-    inset-block-start: auto;
-    inset-block-end: 0;
-  }
-  .pk-layout-canvas__box[data-selected] .pk-layout-canvas__label {
-    background: var(--pk-accent);
-    color: var(--pk-accent-on);
-  }
-  .pk-layout-canvas__box[data-hidden] .pk-layout-canvas__label {
+  .pk-layout-canvas__detail {
     color: color-mix(in srgb, var(--pk-on-solid) 70%, transparent);
   }
   /* A 24px target around a small visible square, centered on the box's corner or side. */
@@ -150,49 +152,28 @@
     content: "";
     position: absolute;
     inset: 0.4375rem;
-    border: 2px solid var(--pk-accent);
-    border-radius: var(--pk-radius-sm);
-    background: var(--pk-surface);
+    border-radius: 1px;
+    background: var(--pk-accent);
   }
   .pk-layout-canvas__handle[data-handle="nw"] {
     inset-inline-start: 0;
     inset-block-start: 0;
     cursor: nwse-resize;
   }
-  .pk-layout-canvas__handle[data-handle="n"] {
-    inset-inline-start: 50%;
-    inset-block-start: 0;
-    cursor: ns-resize;
-  }
   .pk-layout-canvas__handle[data-handle="ne"] {
     inset-inline-start: 100%;
     inset-block-start: 0;
     cursor: nesw-resize;
-  }
-  .pk-layout-canvas__handle[data-handle="e"] {
-    inset-inline-start: 100%;
-    inset-block-start: 50%;
-    cursor: ew-resize;
   }
   .pk-layout-canvas__handle[data-handle="se"] {
     inset-inline-start: 100%;
     inset-block-start: 100%;
     cursor: nwse-resize;
   }
-  .pk-layout-canvas__handle[data-handle="s"] {
-    inset-inline-start: 50%;
-    inset-block-start: 100%;
-    cursor: ns-resize;
-  }
   .pk-layout-canvas__handle[data-handle="sw"] {
     inset-inline-start: 0;
     inset-block-start: 100%;
     cursor: nesw-resize;
-  }
-  .pk-layout-canvas__handle[data-handle="w"] {
-    inset-inline-start: 0;
-    inset-block-start: 50%;
-    cursor: ew-resize;
   }
   /* The line a dragged box snapped to, shown only while it holds there. */
   .pk-layout-canvas__guide {
