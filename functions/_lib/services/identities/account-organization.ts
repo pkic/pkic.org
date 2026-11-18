@@ -105,8 +105,9 @@ export async function readAccountOrganizationStep(
   const results = await db.batch([
     db
       .prepare(`SELECT
+        -- An open invitation counts: the organization already named this person, who accepts it instead.
         EXISTS (SELECT 1 FROM identities WHERE user_id=subject.id AND organization_id IS NOT NULL
-          AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL) AS has_organization,
+          AND ended_at IS NULL AND blocked_at IS NULL) AS has_organization,
         EXISTS (SELECT 1 FROM affiliation_offer_dismissals WHERE user_id=subject.id AND organization_id IS NULL) AS said_personal,
         EXISTS (${claimed.sql}) AS claimed,
         (subject.id IS NULL OR ${accountAddressSignsInSql("subject.id", "subject.email")}) AS signs_in

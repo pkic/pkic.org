@@ -4,7 +4,7 @@ import { env } from "cloudflare:workers";
 import app from "./helpers/app";
 import { deliveredEmailPayload, queryAll } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
-import { insertOrganization } from "./helpers/membership";
+import { insertOrganization, insertUser } from "./helpers/membership";
 import { userAuthEstablishedResponseSchema, userAuthVerifyResponseSchema } from "../assets/shared/schemas/user-auth";
 import { accountOrganizationRequiredSchema } from "../assets/shared/schemas/account-organization";
 import { ACCOUNT_ORGANIZATION_COPY } from "../assets/shared/account-organization-copy";
@@ -18,12 +18,15 @@ import { authenticateWithPasskey, registerSyntheticPasskey } from "./helpers/pas
  * organization has claimed, uses the address as a personal one.
  */
 const background: Promise<unknown>[] = [];
+// Each test is its own client, so the per-address rate limit counts one test's requests, never the file's.
+let clientIp = "";
+let clientCount = 0;
 
 async function call(path: string, body: unknown): Promise<Response> {
   return app.fetch(
     new Request(`https://app.test${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "cf-connecting-ip": clientIp },
       body: JSON.stringify(body),
     }),
     env as never,
@@ -78,7 +81,11 @@ async function claimDomain(domain: string, name: string): Promise<string> {
 }
 
 describe("account setup's organization step", () => {
-  beforeEach(resetDb);
+  beforeEach(async () => {
+    clientCount += 1;
+    clientIp = `198.51.100.${clientCount}`;
+    await resetDb();
+  });
   afterEach(async () => {
     await Promise.allSettled(background.splice(0));
   });
@@ -195,6 +202,21 @@ describe("account setup's organization step", () => {
     // The address no longer signs in, so it asks for no organization either.
     const response = await authenticateWithPasskey(env, authenticator);
     expect(response.status, await response.clone().text()).toBe(200);
+  });
+
+  it("does not ask a person the organization already invited", async () => {
+    const organizationId = await claimDomain("inviting.example", "Inviting Organization");
+    const userId = await insertUser(env.DB, "eve@inviting.example");
+    await env.DB.prepare(
+      `INSERT INTO identities (id, user_id, organization_id, source, invited_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'staff', datetime('now'), datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), userId, organizationId)
+      .run();
+
+    const established = await verify(await signInLink("eve@inviting.example"));
+    expect("organizationRequired" in established).toBe(false);
+    expect(await sessions()).toBe(1);
   });
 
   it("asks again, without a session, when a new organization's name already exists", async () => {
