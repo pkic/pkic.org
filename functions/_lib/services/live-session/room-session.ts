@@ -69,7 +69,7 @@ export function prepareLiveRoomSessionRead(
 ) {
   const statement = db
     .prepare(
-      `SELECT approved.payload_json,event.timezone FROM event_agenda_state state
+      `SELECT approved.payload_json,event.timezone,event.name AS event_name FROM event_agenda_state state
      JOIN event_agenda_published_occurrences approved ON approved.event_id=state.event_id AND approved.revision=state.published_revision
      JOIN events event ON event.id=state.event_id
      WHERE state.event_id=? AND approved.occurrence_id=?`,
@@ -78,7 +78,9 @@ export function prepareLiveRoomSessionRead(
 
   return {
     statement,
-    async decode(row: { payload_json: string; timezone: string } | null): Promise<LiveRoomSessionRecord> {
+    async decode(
+      row: { payload_json: string; timezone: string; event_name: string } | null,
+    ): Promise<LiveRoomSessionRecord> {
       if (!row) throw unavailable();
       const parsed = agendaOccurrenceSchema.safeParse(JSON.parse(row.payload_json));
       if (!parsed.success) throw unavailable();
@@ -145,6 +147,7 @@ export function prepareLiveRoomSessionRead(
         session: liveRoomSessionSchema.parse({
           occurrenceId: occurrence.id,
           title: occurrence.title,
+          eventName: row.event_name,
           startAt: occurrence.startAt,
           endAt: occurrence.endAt,
           timeZone: row.timezone,
@@ -166,5 +169,5 @@ export async function readLiveRoomSession(
   options: { people?: boolean } = {},
 ) {
   const read = prepareLiveRoomSessionRead(db, eventId, occurrenceId, options);
-  return read.decode(await read.statement.first<{ payload_json: string; timezone: string }>());
+  return read.decode(await read.statement.first<{ payload_json: string; timezone: string; event_name: string }>());
 }

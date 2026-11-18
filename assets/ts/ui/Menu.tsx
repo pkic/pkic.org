@@ -65,6 +65,8 @@ interface MenuItemBase {
   multiple?: boolean;
   /** Draws a rule above the item: the start of a new group of choices. */
   separatorBefore?: boolean;
+  /** What the action does, in one sentence: the item's tooltip, and its description for assistive technology. */
+  tooltip?: string;
 }
 
 export type MenuItem = MenuItemBase;

@@ -104,7 +104,7 @@ describe("live room authors", () => {
     // The author holds a handle (they wrote here) but nothing under their name: it resolves to nothing.
     author.send({ type: "chat.send", text: "Now under my name" });
     const { message } = await reader.next("chat.message");
-    operator.send({ type: "chat.moderate", messageId: message.id, decision: "hide" });
+    operator.send({ type: "chat.moderate", messageId: message.id, decision: "remove", reason: "spam" });
     await reader.next("chat.removed");
     expect(await lookup(reader, message.authorHandle!)).toBeNull();
   });

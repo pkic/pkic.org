@@ -176,6 +176,8 @@ describe("session questions", () => {
         answers: [],
         canAnswer: true,
         canAccept: false,
+        canVote: true,
+        canModerate: false,
       }),
     );
     const thread = host.querySelector<HTMLElement>('section[aria-label="Answers to this question"]')!;
@@ -219,6 +221,11 @@ describe("session questions", () => {
       createdAt: "2026-10-16T12:00:00.000Z",
       revision: 3,
       acceptance: null,
+      votes: 0,
+      votedByMe: false,
+      removal: null,
+      authorRestriction: null,
+      authorStaff: false,
     };
     void act(() =>
       live.latest().deliver({
@@ -227,6 +234,8 @@ describe("session questions", () => {
         answers: [answer],
         canAnswer: true,
         canAccept: true,
+        canVote: true,
+        canModerate: false,
       }),
     );
     void act(() => button(host, "Accept answer").click());
@@ -245,6 +254,8 @@ describe("session questions", () => {
         answers: [{ ...answer, revision: 4, acceptance: { byName: null, at: "2026-10-16T12:01:00.000Z" } }],
         canAnswer: true,
         canAccept: true,
+        canVote: true,
+        canModerate: false,
       }),
     );
     if (request.type !== "question.answer.accept") throw new Error("Expected acceptance request");
@@ -256,7 +267,7 @@ describe("session questions", () => {
         answerId: answer.id,
       }),
     );
-    expect(host.textContent).toContain("Accepted by the question author");
+    expect(host.textContent).toContain("Accepted answer · by the question author");
     expect(button(host, "Remove acceptance").getAttribute("aria-pressed")).toBe("true");
   });
 

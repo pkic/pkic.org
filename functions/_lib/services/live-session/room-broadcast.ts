@@ -19,7 +19,8 @@ import {
   serializeLiveRoomMessage,
   type LiveQuestionAuthor,
 } from "./room-projection";
-import type { LiveQuestionRow, LiveRoomStore } from "./room-store";
+import type { LiveQuestionRow } from "./room-question-rows";
+import type { LiveRoomStore } from "./room-store";
 import { seesStageDisplayNext } from "../../../../assets/shared/live-stage-display";
 import { NO_LIVE_ROOM_SOURCES, type LiveRoomSources } from "../../../../assets/shared/schemas/live-room-sources";
 
@@ -81,7 +82,7 @@ export class LiveRoomBroadcast {
         role: viewer.role,
         name: viewer.name,
         organizer: viewer.organizer ?? false,
-        chatRestriction: this.chat.moderation.restriction(viewer.userId),
+        participation: viewer.role === "operator" ? null : this.chat.decisions.restriction(viewer.userId, Date.now()),
       },
       questions: this.questionsFor(viewer, voted),
       polls: this.polls
@@ -255,20 +256,14 @@ export class LiveRoomBroadcast {
       message.type === "question.prepared.changed" ||
       message.type === "program.cleared";
     const roomOutput = roomOutputMessage(message);
-    const banned = message.type === "chat.removed" ? this.chat.banned() : new Set<string>();
     await this.send(
       (viewer) =>
         (operatorsOnly && viewer.role !== "operator") ||
         (roomOutput && !seesRoomOutputs(viewer)) ||
-        (message.type === "chat.removed" && !liveChatChannelVisible(message.channel, viewer, banned))
+        (message.type === "chat.removed" && !liveChatChannelVisible(message.channel, viewer))
           ? null
           : message,
-      (viewer) =>
-        message.type === "chat.removed"
-          ? `${viewer.role}:${viewer.userId !== null && banned.has(viewer.userId)}`
-          : operatorsOnly || roomOutput
-            ? viewer.role
-            : "all",
+      (viewer) => (message.type === "chat.removed" || operatorsOnly || roomOutput ? viewer.role : "all"),
     );
     // Preview's question also reaches the stage display, as the speaker's next one; operators read it from Preview.
     if (message.type === "preview.changed") await this.stageDisplayNext();
@@ -276,7 +271,6 @@ export class LiveRoomBroadcast {
 
   private sendChatRemovals(removed: readonly LiveChatRemoval[], sockets: WebSocket[]): void {
     if (!removed.length) return;
-    const banned = this.chat.banned();
     for (const socket of sockets) {
       if (
         socket.readyState !== WebSocket.OPEN ||
@@ -285,7 +279,7 @@ export class LiveRoomBroadcast {
         continue;
       for (const removal of removed) {
         const viewer = socket.deserializeAttachment() as LiveRoomParticipant;
-        if (!liveChatChannelVisible(removal.channel, viewer, banned)) continue;
+        if (!liveChatChannelVisible(removal.channel, viewer)) continue;
         try {
           socket.send(
             serializeLiveRoomMessage({ type: "chat.removed", messageId: removal.id, channel: removal.channel }),

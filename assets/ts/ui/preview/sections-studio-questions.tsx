@@ -64,6 +64,11 @@ function asked(id: string, text: string, overrides: Partial<LiveQuestion> = {}):
     rewritten: null,
     addressedTo: null,
     prepared: false,
+    answerCount: 0,
+    acceptedAnswer: false,
+    removal: null,
+    done: null,
+    authorRestriction: null,
     ...overrides,
   };
 }

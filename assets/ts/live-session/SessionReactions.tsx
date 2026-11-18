@@ -1,5 +1,6 @@
 import { LiveReactionBar } from "./LiveReactionBar";
 import { SessionInteractionWindow, type SessionInteractionProps } from "./SessionInteractionWindow";
+import { useLiveParticipation } from "./LiveParticipationAlert";
 import { useLiveRoom } from "./useLiveRoom";
 
 /**
@@ -17,6 +18,8 @@ export function SessionReactions(props: Omit<SessionInteractionProps, "closed" |
 
 function SessionReactionsRoom({ slug, occurrenceId, createSocket }: SessionInteractionProps) {
   const room = useLiveRoom({ slug, occurrenceId, createSocket });
-  if (!room.state) return null;
+  // A blocked person keeps watching; the questions and chat say why they can't react.
+  const restriction = useLiveParticipation(room.state?.viewer.participation);
+  if (!room.state || restriction) return null;
   return <LiveReactionBar send={room.send} refusal={room.state.refusal} disabled={room.status !== "live"} />;
 }

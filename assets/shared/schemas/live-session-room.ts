@@ -1,11 +1,16 @@
 import {
   liveQuestionSchema,
-  liveQuestionStatusSchema,
   liveQuestionAskSchema,
   liveQuestionRewriteSchema,
   liveQuestionEditSchema,
   liveQuestionWithdrawSchema,
+  liveQuestionModerateSchema,
 } from "./live-session-question";
+import {
+  liveModerationClientMessageSchemas,
+  liveModerationServerMessageSchemas,
+  liveParticipationRestrictionSchema,
+} from "./live-session-moderation";
 export {
   liveQuestionSchema,
   liveQuestionStatusSchema,
@@ -16,9 +21,7 @@ export {
   type LiveQuestion,
 } from "./live-session-question";
 import {
-  liveQuestionAnswerSendSchema,
-  liveQuestionAnswerAcceptSchema,
-  liveQuestionAnswersWatchSchema,
+  liveQuestionAnswerClientMessageSchemas,
   liveQuestionAnswersSchema,
   liveQuestionAnswerResultSchema,
 } from "./live-session-answer";
@@ -36,7 +39,6 @@ import { z } from "zod";
 import { liveAuthorClientMessageSchemas, liveAuthorServerMessageSchemas } from "./live-session-author";
 import {
   liveChatClientMessageSchemas,
-  liveChatRestrictionSchema,
   liveChatServerMessageSchemas,
   liveChatSnapshotFields,
 } from "./live-session-chat";
@@ -136,8 +138,6 @@ export {
   liveChatSendSchema,
   liveChatReportSchema,
   liveChatReactionSchema,
-  liveChatReportReasonSchema,
-  liveChatRestrictionSchema,
   type LiveChatMessage,
   type LiveChatChannel,
   type LiveChatModeration,
@@ -250,6 +250,8 @@ export const liveRoomSessionSchema = z
   .object({
     occurrenceId: databaseIdSchema,
     title: z.string().min(1),
+    /** The event the session belongs to; a room admitted before this field reads without it. */
+    eventName: z.string().min(1).optional(),
     startAt: utcInstantSchema,
     endAt: utcInstantSchema,
     timeZone: z.string().min(1),
@@ -262,10 +264,10 @@ export const liveRoomViewerSchema = z
   .object({
     role: liveRoomRoleSchema,
     name: livePersonNameSchema.nullable(),
-    /** An operator who also organizes the event; the chat policy lets them restrict people. */
+    /** An operator who also organizes the event; the moderation policy lets them block for the event. */
     organizer: z.boolean().optional(),
-    /** This viewer's own chat restriction for the session. */
-    chatRestriction: liveChatRestrictionSchema.nullable().optional(),
+    /** This viewer's own block from posting, voting and reacting; null while they may take part. */
+    participation: liveParticipationRestrictionSchema.nullable().optional(),
   })
   .strict();
 
@@ -387,6 +389,7 @@ export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("overlay.layouts.changed"), layouts: liveOverlayLayoutGeometriesSchema }).strict(),
   z.object({ type: z.literal("ticker.context.changed"), context: liveTickerContextSchema }).strict(),
   ...liveChatServerMessageSchemas,
+  ...liveModerationServerMessageSchemas,
   ...liveAuthorServerMessageSchemas,
   liveReactionBurstSchema,
   /** A refused action; the socket stays open. */
@@ -462,20 +465,11 @@ export type LivePreviewPatch = z.infer<typeof livePreviewSetSchema>["composition
 export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
   liveQuestionEditSchema,
   liveQuestionWithdrawSchema,
-  liveQuestionAnswersWatchSchema,
-  liveQuestionAnswerSendSchema,
-  liveQuestionAnswerAcceptSchema,
+  ...liveQuestionAnswerClientMessageSchemas,
   liveQuestionAskSchema.extend({ type: z.literal("question.ask"), operationId: z.uuid() }),
   z.object({ type: z.literal("question.vote"), questionId: databaseIdSchema, voted: z.boolean() }).strict(),
   liveReactionSendSchema,
-  z
-    .object({
-      type: z.literal("question.moderate"),
-      questionId: databaseIdSchema,
-      status: liveQuestionStatusSchema,
-      expectedRevision: z.number().int().nonnegative(),
-    })
-    .strict(),
+  liveQuestionModerateSchema,
   liveQuestionRewriteSchema.extend({ type: z.literal("question.rewrite"), questionId: databaseIdSchema }),
   ...livePollClientMessageSchemas,
   ...livePreparedQuestionClientMessageSchemas,
@@ -529,6 +523,7 @@ export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
   stageDisplaySettings.liveStageDisplaySettingsCommandSchema,
   screenSync.liveScreenSyncCommandSchema,
   ...liveChatClientMessageSchemas,
+  ...liveModerationClientMessageSchemas,
   ...liveAuthorClientMessageSchemas,
 ]);
 export type LiveRoomClientMessage = z.infer<typeof liveRoomClientMessageSchema>;

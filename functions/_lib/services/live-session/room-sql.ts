@@ -53,6 +53,16 @@ CREATE TABLE IF NOT EXISTS question_answers (
   last_decision_basis_revision INTEGER);
 CREATE INDEX IF NOT EXISTS question_answers_question ON question_answers(question_id,created_at,id);
 CREATE INDEX IF NOT EXISTS question_answers_author ON question_answers(author_user_id,created_at);
+CREATE TABLE IF NOT EXISTS question_answer_votes (answer_id TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY(answer_id, user_id));
+CREATE INDEX IF NOT EXISTS question_answer_votes_user ON question_answer_votes(user_id);
+CREATE TABLE IF NOT EXISTS question_answer_changes (answer_id TEXT PRIMARY KEY, change_seq INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS question_answer_changes_seq ON question_answer_changes(change_seq);
+CREATE TABLE IF NOT EXISTS room_removals (
+  item_id TEXT PRIMARY KEY, kind TEXT NOT NULL, reason TEXT NOT NULL, by_user_id TEXT NOT NULL, by_name TEXT NOT NULL, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS room_done (item_id TEXT PRIMARY KEY, kind TEXT NOT NULL, by_name TEXT NOT NULL, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS room_participation_blocks (
+  user_id TEXT PRIMARY KEY, block TEXT NOT NULL, reason TEXT NOT NULL, until TEXT, by_user_id TEXT NOT NULL, by_name TEXT NOT NULL, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS room_event_blocks (user_id TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS question_votes (question_id TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY(question_id, user_id));
 CREATE INDEX IF NOT EXISTS question_votes_user ON question_votes(user_id);
 CREATE TABLE IF NOT EXISTS question_author_photos (question_id TEXT PRIMARY KEY, photo_url TEXT NOT NULL);
@@ -148,6 +158,12 @@ export class LiveRoomSql {
            SELECT 1 FROM json_each(room_controls.value_json)
            WHERE json_extract(value, '$.kind') = 'session' AND json_type(value, '$.followsAgenda') IS NULL)`,
       );
+      // Chat mutes and bans became session blocks; a ban no longer keeps anyone from reading.
+      this.sql.exec(
+        `INSERT OR IGNORE INTO room_participation_blocks(user_id, block, reason, until, by_user_id, by_name, at)
+         SELECT user_id, 'session', 'conduct', NULL, '', by_name, at FROM room_chat_restrictions`,
+      );
+      this.sql.exec("DELETE FROM room_chat_restrictions");
       this.ready = true;
     }
     return this.sql;

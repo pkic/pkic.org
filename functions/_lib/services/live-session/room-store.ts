@@ -1,3 +1,4 @@
+import type { LiveModerationReason } from "../../../../assets/shared/live-moderation-policy";
 import { readStoredLiveTicker } from "../../../../assets/shared/schemas/live-session-ticker";
 import {
   LIVE_ROOM_POLICY,
@@ -39,56 +40,12 @@ import {
 } from "../../../../assets/shared/schemas/live-screen-sync";
 import { copyableLivePolls, type LivePollCopy } from "./room-poll-store";
 import type { LiveRoomSql } from "./room-sql";
-
-export interface LiveQuestionAuthorChangeRow {
-  question_id: string;
-  text: string;
-  revision: number;
-  withdrawn: number;
-  operation_id: string;
-  operation_type: "question.edit" | "question.withdraw";
-  basis_revision: number;
-  changed_at: string;
-}
-
-export interface LiveQuestionRow {
-  id: string;
-  author_user_id: string;
-  author_name: string;
-  anonymous: number;
-  body: string;
-  submitted_body: string;
-  author_revision: number;
-  author_withdrawn: number;
-  status: LiveQuestionStatus;
-  votes: number;
-  asked_at: string;
-  answered_at: string | null;
-  moderated_by_user_id: string | null;
-  moderated_by_name: string | null;
-  moderated_at: string | null;
-  rewrite_text: string | null;
-  rewritten_by_user_id: string | null;
-  rewritten_by_name: string | null;
-  rewritten_at: string | null;
-  /** The author's profile photo as they asked; the projection withholds it from an anonymous question. */
-  author_photo_url: string | null;
-  /** Who the author was as they asked (`LiveAuthorStamp` JSON); withheld like the photo from an anonymous question. */
-  author_json: string | null;
-  /** The credit key of the person the question is for; null when it is for everyone. */
-  addressed_to: string | null;
-  /** The account of that person, when their credit has one; reporting reads it. */
-  addressed_to_user_id: string | null;
-  /** 1 when operators prepared the question; only operators are told. */
-  prepared: number;
-  change_seq: number;
-}
-
-/** The person a question is for: a session credit's key and, when the credit names one, their account. */
-export interface LiveQuestionAddressee {
-  creditKey: string;
-  userId: string | null;
-}
+import {
+  LIVE_QUESTION_SELECT,
+  type LiveQuestionAddressee,
+  type LiveQuestionAuthorChangeRow,
+  type LiveQuestionRow,
+} from "./room-question-rows";
 
 export interface LiveStaffActionRow {
   seq: number;
@@ -106,21 +63,24 @@ export interface LiveRoomPendingCopy {
   questions: LiveQuestionRow[];
   polls: LivePollCopy[];
   reactions: Array<{ reaction: string; total: number }>;
+  answers: LiveAnswerCopyRow[];
   staffActions: LiveStaffActionRow[];
 }
 
-const QUESTION_SELECT = `SELECT q.id, q.author_user_id, q.author_name, q.anonymous, COALESCE(author_change.text,q.body) AS body, q.body AS submitted_body,
-  COALESCE(author_change.revision,0) AS author_revision, COALESCE(author_change.withdrawn,0) AS author_withdrawn, q.status, q.votes, q.asked_at,
-  q.answered_at, q.moderated_by_user_id, q.moderated_by_name, q.moderated_at, r.text AS rewrite_text,
-  r.by_user_id AS rewritten_by_user_id, r.by_name AS rewritten_by_name, r.at AS rewritten_at,
-  photo.photo_url AS author_photo_url, authorship.author_json, addressee.credit_key AS addressed_to,
-  addressee.user_id AS addressed_to_user_id, CASE WHEN prepared.question_id IS NULL THEN 0 ELSE 1 END AS prepared, q.change_seq
-  FROM questions q LEFT JOIN question_rewrites r ON r.question_id = q.id
-  LEFT JOIN question_addressees addressee ON addressee.question_id = q.id
-  LEFT JOIN question_prepared prepared ON prepared.question_id = q.id
-  LEFT JOIN question_author_photos photo ON photo.question_id = q.id
-  LEFT JOIN question_authorship authorship ON authorship.question_id = q.id
-  LEFT JOIN question_author_changes author_change ON author_change.question_id = q.id`;
+/** An answer as reporting reads it: who wrote and accepted it, its votes, and whether a moderator removed it. */
+export interface LiveAnswerCopyRow {
+  id: string;
+  question_id: string;
+  author_user_id: string;
+  body: string;
+  created_at: string;
+  vote_count: number;
+  accepted_by_user_id: string | null;
+  accepted_at: string | null;
+  hidden_by: string | null;
+  hidden_at: string | null;
+  removed_reason: LiveModerationReason | null;
+}
 
 const EMPTY_QUEUE: LiveQueue = { question: [], "lower-third": [], poll: [], change: null };
 
@@ -157,7 +117,7 @@ export class LiveRoomStore {
   }
 
   question(id: string): LiveQuestionRow | null {
-    return this.sql.rows<LiveQuestionRow>(`${QUESTION_SELECT} WHERE q.id = ?`, id)[0] ?? null;
+    return this.sql.rows<LiveQuestionRow>(`${LIVE_QUESTION_SELECT} WHERE q.id = ?`, id)[0] ?? null;
   }
 
   /** A rolling question-write allowance survives room hibernation/restarts; expired times have no history role. */
@@ -213,7 +173,7 @@ export class LiveRoomStore {
 
   /** All questions, most voted first, newest first on a tie (the shared `top` order). */
   questions(): LiveQuestionRow[] {
-    return this.sql.rows<LiveQuestionRow>(`${QUESTION_SELECT} ORDER BY q.votes DESC, q.asked_at DESC, q.id`);
+    return this.sql.rows<LiveQuestionRow>(`${LIVE_QUESTION_SELECT} ORDER BY q.votes DESC, q.asked_at DESC, q.id`);
   }
 
   questionCount(): number {
@@ -541,11 +501,21 @@ export class LiveRoomStore {
       occurrenceId: room.session.occurrenceId,
       throughSeq,
       questions: this.sql.rows<LiveQuestionRow>(
-        `${QUESTION_SELECT} WHERE q.change_seq > ? ORDER BY q.change_seq`,
+        `${LIVE_QUESTION_SELECT} WHERE q.change_seq > ? ORDER BY q.change_seq`,
         copiedSeq,
       ),
       polls: copyableLivePolls(this.sql, copiedSeq),
       reactions: this.sql.rows("SELECT reaction, total FROM reaction_totals WHERE change_seq > ?", copiedSeq),
+      answers: this.sql.rows<LiveAnswerCopyRow>(
+        `SELECT a.id, a.question_id, a.author_user_id, a.body, a.created_at,
+           (SELECT COUNT(*) FROM question_answer_votes v WHERE v.answer_id = a.id) AS vote_count,
+           a.accepted_by_user_id, a.accepted_at, removal.by_user_id AS hidden_by, removal.at AS hidden_at,
+           removal.reason AS removed_reason
+         FROM question_answer_changes change JOIN question_answers a ON a.id = change.answer_id
+         LEFT JOIN room_removals removal ON removal.item_id = a.id
+         WHERE change.change_seq > ? ORDER BY change.change_seq`,
+        copiedSeq,
+      ),
       staffActions,
     };
   }

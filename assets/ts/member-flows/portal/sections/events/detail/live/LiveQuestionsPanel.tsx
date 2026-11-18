@@ -4,6 +4,7 @@ import type { ClockZone } from "../../../../../../../shared/event-clock";
 import { format24HourClockInZone } from "../../../../../../../shared/format-date";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import { liveQuestionAddresseeName, liveQuestionAskerName } from "../../../../../../../shared/live-room-credits";
+import type { LiveModerationReason } from "../../../../../../../shared/live-moderation-policy";
 import {
   defaultLivePreparedQuestionWindow,
   type LiveQuestionStatus,
@@ -12,6 +13,7 @@ import type { LivePreparedQuestion } from "../../../../../../../shared/schemas/l
 import type { LiveQuestion, LiveRoomClientMessage } from "../../../../../../../shared/schemas/live-session-room";
 import { confirmAction } from "../../../../../../components/ConfirmDialog";
 import { LiveQuestionTransitions } from "../../../../../../live-session/LiveQuestionList";
+import { LiveModerationDialogHost } from "../../../../../../live-session/LiveModerationDialog";
 import { Avatar } from "../../../../../../ui/Avatar";
 import { Button } from "../../../../../../ui/Button";
 import { Dialog } from "../../../../../../ui/Dialog";
@@ -152,8 +154,8 @@ function OpenQuestionRow({
   const { state, disabled } = targets;
   const addressee = liveQuestionAddresseeName(state.session.credits, question.addressedTo);
   const asker = liveQuestionAskerName(question);
-  const moderate = (status: LiveQuestionStatus) =>
-    send({ type: "question.moderate", questionId: question.id, expectedRevision: question.revision, status });
+  const moderate = (status: LiveQuestionStatus, reason?: LiveModerationReason) =>
+    send({ type: "question.moderate", questionId: question.id, expectedRevision: question.revision, status, reason });
   const pending = question.status === "pending";
   const item = livePresenceItem({ kind: "question", id: question.id });
   const layer = { kind: "question", id: question.id } as const;
@@ -305,6 +307,7 @@ export function LiveQuestionsPanel({ targets, clock, send }: { targets: LiveTarg
   const prepared = waitingPreparedQuestions(targets.state.preparedQuestions);
   return (
     <div class="pk-live-desk__questions">
+      <LiveModerationDialogHost />
       {open.length || prepared.length ? (
         <ol class="pk-studio-rows">
           {open.map((question) => (

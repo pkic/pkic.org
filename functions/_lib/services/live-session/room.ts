@@ -2,6 +2,10 @@ import { AppError } from "../../errors";
 import { LiveRoomEngagement } from "./room-engagement";
 import { LiveRoomAnswers } from "./room-answers";
 import { LiveRoomAnswerStore } from "./room-answer-store";
+import { LiveRoomModerationStore } from "./room-moderation-store";
+import { LiveRoomParticipation } from "./room-participation";
+import { LIVE_PARTICIPATION_REFUSAL, liveCommandParticipates } from "./room-participation-refusal";
+import { LiveRoomQuestionCommands } from "./room-question-commands";
 import { operateLiveDesk, type LiveDesk } from "./room-desk";
 import { LiveRoomGraphics } from "./room-graphics";
 import { LiveRoomGraphicBasis } from "./room-graphic-basis";
@@ -88,6 +92,9 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
   private readonly preparedQuestions: LiveRoomPreparedQuestions;
   private readonly answers: LiveRoomAnswers;
   private readonly answerStore: LiveRoomAnswerStore;
+  private readonly questionCommands: LiveRoomQuestionCommands;
+  private readonly decisions: LiveRoomModerationStore;
+  private readonly participation: LiveRoomParticipation;
   private readonly polls: LiveRoomPolls;
   private readonly broadcast: LiveRoomBroadcast;
   private readonly graphics: LiveRoomGraphics;
@@ -108,6 +115,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     this.pollStore = new LivePollStore(this.sql);
     const preparedStore = new LivePreparedQuestionStore(this.sql);
     this.chat = new LiveRoomChat(this.sql);
+    this.decisions = new LiveRoomModerationStore(this.sql);
     this.access = new LiveRoomAccessLease(
       ctx,
       this.sessionEnv,
@@ -119,6 +127,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
         ...this.answerStore.authors(),
       ],
       (userId) => this.forgetParticipant(userId),
+      (checked, blocked, readAt) => this.participation.eventBlocksRead(checked, blocked, readAt),
     );
     this.authors = new LiveRoomAuthors(this.sql, new LiveRoomPeople(this.sql), this.sessionEnv, () => {
       const room = this.store.session();
@@ -129,6 +138,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       new LiveChatModerationStore(this.sql),
       new LiveChatReactionStore(this.sql),
       this.authors,
+      this.decisions,
     );
     this.outputs = new LiveRoomOutputs(this.store, this.pollStore);
     this.controls = new LiveRoomControls(this.store, this.pollStore, this.outputs);
@@ -171,7 +181,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
         audited: () => this.scheduleCopy(),
       },
     );
-    this.questions = new LiveRoomQuestions(this.store, this.broadcast, this.controls, this.authors, {
+    this.questions = new LiveRoomQuestions(this.store, this.broadcast, this.controls, this.authors, this.decisions, {
       allowed: (userId) => this.store.takeQuestionWriteAllowance(userId, nowIso()),
       changed: () => this.scheduleCopy(),
       listed: () => this.graphics.lists.due(),
@@ -189,7 +199,22 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       this.broadcast,
       this.authors,
       this.sessionEnv.DB,
+      this.decisions,
       () => this.scheduleCopy(),
+    );
+    this.questionCommands = new LiveRoomQuestionCommands(this.questions, this.answers, this.broadcast);
+    this.participation = new LiveRoomParticipation(
+      ctx,
+      this.sessionEnv.DB,
+      this.store,
+      this.chat,
+      this.chatActions,
+      this.questions,
+      this.answers,
+      this.answerStore,
+      this.decisions,
+      this.authors.people,
+      this.broadcast,
     );
     this.presence = new LiveRoomPresence(ctx, (sockets) => this.access.eligible(sockets));
     this.addedCredits = new LiveRoomAddedCredits(this.sessionEnv.DB, this.store);
@@ -365,6 +390,7 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     const room = this.store.session();
     if (room) await this.preparedQuestions.forget(room.session, userId);
     const chat = this.chat.forget(userId);
+    this.decisions.forget(userId);
     this.authors.prune();
     for (const questionId of changedThreads) await this.answers.publish(questionId);
     for (const socket of this.ctx.getWebSockets()) {
@@ -441,6 +467,8 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
     const operator = viewer.role === "operator";
     const session = this.session();
     const open = operator || liveRoomOpen(Date.now(), session.startAt, session.endAt);
+    if (!operator && liveCommandParticipates(message.type) && this.decisions.restriction(actor.userId, Date.now()))
+      return LIVE_PARTICIPATION_REFUSAL;
     switch (message.type) {
       case "chat.send":
       case "chat.react":
@@ -452,74 +480,31 @@ export class LiveSessionRoom extends DurableObject<Env> implements LiveSessionRo
       case "author.lookup":
         return this.chatActions.lookupAuthor(viewer, actor, message.handle, socket);
       case "chat.moderate":
-      case "chat.restrict":
       case "chat.convert":
         if (!operator) return REFUSALS.operatorOnly;
         return this.chatActions.handle(viewer, actor, message, socket);
+      case "moderation.done":
+        return this.participation.done(viewer, actor, message.item, message.done);
+      case "participation.block":
+        return this.participation.block(viewer, actor, message);
+      case "participation.lift":
+        return this.participation.lift(viewer, actor, message.item);
+      case "question.ask":
       case "question.edit":
-      case "question.withdraw": {
-        const result = await this.questions.changeAuthorQuestion(actor, message, open);
-        if ("questionId" in result) {
-          await this.answers.publish(result.questionId);
-          socket.send(
-            serializeLiveRoomMessage({ type: "question.updated", operationId: message.operationId, ...result }),
-          );
-          return;
-        }
-        return result;
-      }
+      case "question.withdraw":
+      case "question.moderate":
       case "question.answers.watch":
-        return this.answers.watch(socket, message.questionId);
       case "question.answer":
-      case "question.answer.accept": {
-        const result =
-          message.type === "question.answer"
-            ? await this.answers.send(viewer, actor, message)
-            : await this.answers.accept(viewer, actor, message);
-        if ("answerId" in result) {
-          socket.send(
-            serializeLiveRoomMessage({
-              type: "question.answer.result",
-              operationId: message.operationId,
-              questionId: message.questionId,
-              answerId: result.answerId,
-            }),
-          );
-          return;
-        }
-        return result;
-      }
-      case "question.ask": {
-        const result = await this.questions.ask(viewer, actor, message, message.operationId, open);
-        if ("questionId" in result) {
-          socket.send(
-            serializeLiveRoomMessage({
-              type: "question.accepted",
-              operationId: message.operationId,
-              questionId: result.questionId,
-            }),
-          );
-          return;
-        }
-        return result;
-      }
+      case "question.answer.accept":
+      case "question.answer.vote":
+      case "question.answer.hide":
+        return this.questionCommands.handle(viewer, actor, message, socket, open);
       case "question.vote":
         return open ? this.questions.vote(actor.userId, message.questionId, message.voted) : REFUSALS.closed;
       case "reaction.send":
         return open ? this.engagement.react(actor.userId, message.reaction) : REFUSALS.closed;
       case "poll.vote":
         return open ? this.engagement.votePoll(actor.userId, message.pollId, message.answer, socket) : REFUSALS.closed;
-      case "question.moderate": {
-        const refusal = await this.questions.moderate(
-          viewer,
-          actor,
-          message.questionId,
-          message.status,
-          message.expectedRevision,
-        );
-        if (!refusal) await this.answers.publish(message.questionId);
-        return refusal;
-      }
       case "presence.update":
         if (!operator) return REFUSALS.operatorOnly;
         this.presence.update(actor, message);

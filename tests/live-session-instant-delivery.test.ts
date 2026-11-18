@@ -117,6 +117,7 @@ describe("live interaction stays local to its Durable Object", () => {
         () => store.session(),
         () => [],
         async () => {},
+        async () => {},
       );
       await restored.run(async () => {
         expect([...currentLiveRoomCommandRead()!.participants.values()].every((result) => result.ok)).toBe(true);

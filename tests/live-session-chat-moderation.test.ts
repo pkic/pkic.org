@@ -161,7 +161,6 @@ describe("live chat reactions, reports and moderation", () => {
 
     const crowd = await extraAttendees(LIVE_CHAT_POLICY.reportHoldThreshold - 1);
     for (const person of crowd) person.send({ type: "chat.report", messageId: message.id, reason: "spam" });
-    await author.next("chat.removed", (update) => update.messageId === message.id);
     const held = await operator.next("chat.message", (update) => update.message.moderation?.held === true);
     expect(held.message.moderation?.hidden?.operatorName).toBe("Held after reports");
     const fresh = await f.connect({ person: "secondAttendee" });
@@ -174,11 +173,11 @@ describe("live chat reactions, reports and moderation", () => {
       (update) => update.message.id === message.id && update.message.moderation?.reports === 0,
       { after: beforeKeep },
     );
-    // The author saw it held away, then back.
+    // The author kept their message throughout: a held message is not a moderator's removal.
     await vi.waitFor(() =>
       expect(
-        author.received.filter((update) => update.type === "chat.message" && update.message.id === message.id),
-      ).toHaveLength(2),
+        author.received.filter((update) => update.type === "chat.message" && update.message.id === message.id).at(-1),
+      ).toMatchObject({ message: { removal: null } }),
     );
     for (const viewer of [author, reporter, fresh, ...crowd]) expectNoModerationData(viewer);
     // The pending staff-action queue may already have been copied and drained by an alarm.
@@ -202,50 +201,58 @@ describe("live chat reactions, reports and moderation", () => {
     await demoteSecondOperator();
     const moderator = await f.connect({ person: "secondOperator" });
     const second = await say(author, "Hide me", reader);
-    moderator.send({ type: "chat.moderate", messageId: second.id, decision: "hide" });
+    moderator.send({ type: "chat.moderate", messageId: second.id, decision: "remove", reason: "spam" });
     await reader.next("chat.removed", (update) => update.messageId === second.id);
     const update = await moderator.next("chat.message", (message) => message.message.moderation?.hidden !== null);
     expect(update.message.moderation?.hidden?.operatorName).toBe("Remote Rita");
     expectNoModerationData(reader);
   });
 
-  it("lets organizers, and not moderators, mute and ban a participant for the session", async () => {
+  it("pauses, blocks and lifts a participant while they keep reading, and keeps event blocks for organizers", async () => {
     const author = await f.connect({ person: "attendee" });
     const reader = await f.connect({ person: "secondAttendee" });
-    const message = await say(author, "Before the mute", reader);
+    const message = await say(author, "Before the pause", reader);
     await demoteSecondOperator();
     const moderator = await f.connect({ person: "secondOperator" });
     expect((moderator.received[0] as Extract<LiveRoomServerMessage, { type: "room.snapshot" }>).viewer.organizer).toBe(
       false,
     );
-    moderator.send({ type: "chat.restrict", messageId: message.id, restriction: "muted" });
-    expect((await moderator.next("room.refused")).code).toBe("LIVE_CHAT_NOT_ALLOWED");
+    const item = { kind: "chat", messageId: message.id } as const;
+    moderator.send({ type: "participation.block", item, block: "event", reason: "spam", removePosts: false });
+    expect((await moderator.next("room.refused")).code).toBe("LIVE_MODERATION_FORBIDDEN");
 
-    const organizer = await f.connect({ person: "operator" });
-    organizer.send({ type: "chat.restrict", messageId: message.id, restriction: "muted" });
-    expect((await author.next("chat.access")).restriction).toBe("muted");
-    author.send({ type: "chat.send", text: "Muted words" });
-    expect((await author.next("room.refused")).code).toBe("LIVE_CHAT_MUTED");
+    moderator.send({ type: "participation.block", item, block: "paused", reason: "conduct", removePosts: false });
+    const paused = (await author.next("participation.access")).restriction;
+    expect(paused?.block).toBe("paused");
+    expect(Date.parse(paused!.until!)).toBeGreaterThan(Date.now());
+    author.send({ type: "chat.send", text: "Paused words" });
+    expect((await author.next("room.refused")).code).toBe("LIVE_PARTICIPATION_BLOCKED");
     const beforeReact = author.received.length;
     author.send({ type: "chat.react", messageId: message.id, reaction: "love", on: true });
-    expect((await author.next("room.refused", () => true, { after: beforeReact })).code).toBe("LIVE_CHAT_MUTED");
+    expect((await author.next("room.refused", () => true, { after: beforeReact })).code).toBe(
+      "LIVE_PARTICIPATION_BLOCKED",
+    );
 
-    organizer.send({ type: "chat.restrict", messageId: message.id, restriction: "banned" });
-    expect((await author.next("chat.access", (update) => update.restriction === "banned")).restriction).toBe("banned");
-    await reader.next("chat.removed", (update) => update.messageId === message.id);
-    const banned = await f.connect({ person: "attendee" });
-    const snapshot = banned.received[0] as Extract<LiveRoomServerMessage, { type: "room.snapshot" }>;
-    expect(snapshot.chat).toEqual([]);
-    expect(snapshot.viewer.chatRestriction).toBe("banned");
-    await say(reader, "Not for banned eyes");
+    moderator.send({ type: "participation.block", item, block: "session", reason: "spam", removePosts: true });
     expect(
-      banned.received.some((update) => update.type === "chat.message" && update.message.text === "Not for banned eyes"),
-    ).toBe(false);
+      (await author.next("participation.access", (update) => update.restriction?.block === "session")).restriction,
+    ).toMatchObject({ block: "session", until: null });
+    await reader.next("chat.removed", (update) => update.messageId === message.id);
+    const blocked = await f.connect({ person: "attendee" });
+    const snapshot = blocked.received[0] as Extract<LiveRoomServerMessage, { type: "room.snapshot" }>;
+    expect(snapshot.viewer.participation?.block).toBe("session");
+    // Blocked people keep reading: the room still delivers others' messages.
+    await say(reader, "Still readable", blocked);
+    // Their own removed message comes back to them with the reason only they see.
+    const own = snapshot.chat.find((entry) => entry.id === message.id);
+    expect(own?.removal?.reason).toBe("spam");
 
-    const beforeLift = reader.received.length;
-    organizer.send({ type: "chat.restrict", messageId: message.id, restriction: null });
-    expect((await author.next("chat.access", (update) => update.restriction === null)).restriction).toBeNull();
-    await reader.next("chat.message", (update) => update.message.id === message.id, { after: beforeLift });
+    const beforeLift = author.received.length;
+    moderator.send({ type: "participation.lift", item });
+    expect(
+      (await author.next("participation.access", (update) => update.restriction === null, { after: beforeLift }))
+        .restriction,
+    ).toBeNull();
     expectNoModerationData(reader);
   });
 

@@ -12,9 +12,36 @@
     margin: 0;
     list-style: none;
   }
+  .pk-live-answers__summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+  }
+  .pk-live-answers__accepted-note {
+    font-weight: 600;
+    color: var(--pk-ink);
+  }
+  /* Vote toggle, then the answer, then its accept control and menu in their own column. */
   .pk-live-answers__answer {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--pk-3);
     padding-block-end: var(--pk-3);
     border-block-end: 1px solid var(--pk-line);
+  }
+  .pk-live-answers__body {
+    display: grid;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+  }
+  .pk-live-answers__tools {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-1);
   }
   .pk-live-answers__text {
     margin: 0;

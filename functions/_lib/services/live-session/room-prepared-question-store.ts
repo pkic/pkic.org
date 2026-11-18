@@ -8,7 +8,7 @@ import {
 } from "../../../../assets/shared/schemas/live-session-prepared-question";
 import type { LiveRoomSession } from "../../../../assets/shared/schemas/live-session-room";
 import type { LiveRoomSql } from "./room-sql";
-import type { LiveQuestionAddressee } from "./room-store";
+import type { LiveQuestionAddressee } from "./room-question-rows";
 
 export interface LivePreparedQuestionRow {
   id: string;

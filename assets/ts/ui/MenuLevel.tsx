@@ -172,6 +172,8 @@ export function MenuLevel({
           "aria-expanded": item.children ? child === item.id : undefined,
           "aria-controls": item.children && child === item.id ? childId : undefined,
           "aria-checked": item.checked === undefined ? undefined : item.checked,
+          title: item.tooltip,
+          "aria-description": item.tooltip,
           tabIndex: index === active && !childItem ? 0 : -1,
           class: [
             "pk-menu__item",
