@@ -65,6 +65,8 @@
   }
   .pk-studio-phone__thumb {
     position: relative;
+    display: flex;
+    flex-direction: column;
     min-inline-size: 0;
     border: 2px solid var(--tally, var(--pk-line));
     border-radius: var(--pk-radius);
@@ -90,6 +92,28 @@
     grid-area: 1 / 1;
     inline-size: 100%;
     block-size: 100%;
+  }
+  /* The output's scene under its picture, filling the height the Transition's buttons give the row. */
+  .pk-studio-phone__thumb-scene {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 0;
+    min-block-size: 2.75rem;
+    padding-inline: var(--pk-1);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+  }
+  .pk-studio-phone__thumb-scene .pk-studio-scene-picker,
+  .pk-studio-phone__thumb-scene .pk-studio-scene-picker > .pk-btn.pk-studio-scene-picker__trigger {
+    inline-size: 100%;
+    min-block-size: 2.75rem;
+    justify-content: center;
+  }
+  /* Program's scene is a name, centered where Preview has its button. */
+  .pk-studio-phone__thumb-scene .pk-studio-monitor__purpose {
+    text-align: center;
   }
   /* Tag at the start, Clear and Full screen at the end, over the picture's top edge. */
   .pk-studio-phone__thumb-tools {

@@ -435,8 +435,9 @@ export function LiveSessionDesk({
             sessionStatus={sessionStatus}
             roomControl={roomControl}
             transition={transition}
-            clearDisabled={disabled}
+            disabled={disabled}
             onClear={switcher.clear}
+            onScene={switcher.previewScene}
             notice={notice}
             home={<StudioPhoneHome key={shownId} targets={targets} send={sendProgram} />}
             panel={(type) =>

@@ -10,8 +10,8 @@ import { Dialog } from "../../../../../../../ui/Dialog";
 import { Menu } from "../../../../../../../ui/Menu";
 import { SectionHeading } from "../../../../../../../ui/SectionHeading";
 import type { ClockZone } from "../../../../../../../../shared/event-clock";
-import { LIVE_OVERLAY_DEFAULT_LAYOUT } from "../../../../../../../../shared/schemas/live-overlay-layout";
 import { ClearIcon, ExpandIcon, StudioOutputScreen, type MonitorSources } from "./MonitorPanel";
+import { ScenePicker } from "./ScenePicker";
 import type { StudioPanelView } from "./StudioGrid";
 import { SessionTiming, StudioNotice, type StudioNoticeContent } from "./StudioHeader";
 import { liveSceneName } from "../live-layer-unseen";
@@ -21,7 +21,17 @@ import "../live-tally.css";
 import "./StudioPhone.css";
 
 /** The views a phone shows one at a time: the quick actions first, then the panels. */
-export const STUDIO_PHONE_VIEWS = ["home", "speakers", "graphics", "questions", "monitor", "time", "message"] as const;
+export const STUDIO_PHONE_VIEWS = [
+  "home",
+  "speakers",
+  "graphics",
+  "questions",
+  "polls",
+  "chat",
+  "monitor",
+  "time",
+  "message",
+] as const;
 export type StudioPhoneView = (typeof STUDIO_PHONE_VIEWS)[number];
 /** The views with a tab of their own; the rest sit behind More, so the bar keeps five tabs. */
 const TABBED: readonly StudioPhoneView[] = ["home", "speakers", "graphics", "questions"];
@@ -31,6 +41,8 @@ const PHONE_TABS: Record<StudioPhoneView, { label: string; icon: AppIcon }> = {
   speakers: { label: STUDIO_PANEL_LABELS.speakers, icon: "speakers" },
   graphics: { label: STUDIO_PANEL_LABELS.graphics, icon: "graphics" },
   questions: { label: STUDIO_PANEL_LABELS.questions, icon: "questions" },
+  polls: { label: STUDIO_PANEL_LABELS.polls, icon: "polls" },
+  chat: { label: STUDIO_PANEL_LABELS.chat, icon: "chat" },
   monitor: { label: "Monitors", icon: "monitors" },
   time: { label: STUDIO_PANEL_LABELS.time, icon: "time" },
   message: { label: "Message", icon: "message" },
@@ -61,21 +73,25 @@ const THUMB_TOOLS_MS = 4000;
 type PhoneOutput = "preview" | "program";
 
 /**
- * Preview or Program as the picture alone. A tap shows the output's tag, Clear
- * and Full screen on the picture itself; they hide again on their own.
+ * Preview or Program as the picture, with its scene under it: Preview's opens
+ * the scenes to load another, Program names the one on air. A tap on the
+ * picture shows the output's tag, Clear and Full screen on the picture
+ * itself; they hide again on their own.
  */
 function Thumbnail({
   label,
   tally,
   sources,
-  clearDisabled,
+  disabled,
   onClear,
+  onScene,
 }: {
   label: "Preview" | "Program";
   tally: PhoneOutput;
   sources: MonitorSources;
-  clearDisabled: boolean;
+  disabled: boolean;
   onClear: (output: PhoneOutput) => void;
+  onScene: (scene: string) => void;
 }) {
   const [enlarged, setEnlarged] = useState(false);
   const [tools, setTools] = useState(false);
@@ -122,7 +138,7 @@ function Thumbnail({
             <Button
               icon
               variant="ghost"
-              disabled={clearDisabled}
+              disabled={disabled}
               aria-label={`Clear ${label}`}
               title={clearHint(tally, label, liveSceneName(sources.preview, null))}
               onClick={() => onClear(tally)}
@@ -143,6 +159,9 @@ function Thumbnail({
             </Button>
           </div>
         ) : null}
+        <div class="pk-studio-phone__thumb-scene">
+          <ScenePicker output={tally} sources={sources} disabled={disabled} onScene={onScene} />
+        </div>
       </div>
       {enlarged ? (
         <Dialog
@@ -156,7 +175,8 @@ function Thumbnail({
           onCancel={() => setEnlarged(false)}
         >
           <div class="pk-studio-monitor__screen" data-tally={tally}>
-            <StudioOutputScreen output={tally} layout={LIVE_OVERLAY_DEFAULT_LAYOUT} sources={sources} />
+            {/* The scene the output is in, as its thumbnail draws it. */}
+            <StudioOutputScreen output={tally} layout={null} sources={sources} />
           </div>
         </Dialog>
       ) : null}
@@ -179,8 +199,9 @@ export function StudioPhone({
   sessionStatus,
   roomControl,
   transition,
-  clearDisabled,
+  disabled,
   onClear,
+  onScene,
   panel,
   home,
   notice,
@@ -197,9 +218,12 @@ export function StudioPhone({
   roomControl?: ComponentChildren;
   /** The switcher's Transition, on the Preview thumbnail's edge beside Program. */
   transition: ComponentChildren;
-  clearDisabled: boolean;
+  /** The room takes no changes now: Clear and the scenes wait. */
+  disabled: boolean;
   /** Clears one output; Program's clear is the room's undoable one. */
   onClear: (output: PhoneOutput) => void;
+  /** Loads a scene into Preview. */
+  onScene: (scene: string) => void;
   /** Draws one panel: its title, actions, menu and body. */
   panel: (type: StudioPanelType) => StudioPanelView;
 }) {
@@ -223,16 +247,18 @@ export function StudioPhone({
             label="Preview"
             tally="preview"
             sources={sources}
-            clearDisabled={clearDisabled}
+            disabled={disabled}
             onClear={onClear}
+            onScene={onScene}
           />
           {transition}
           <Thumbnail
             label="Program"
             tally="program"
             sources={sources}
-            clearDisabled={clearDisabled}
+            disabled={disabled}
             onClear={onClear}
+            onScene={onScene}
           />
         </div>
       </header>
