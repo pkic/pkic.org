@@ -24,8 +24,7 @@ export const TRANSITION_HINT = "Replace Program with Preview. This changes the o
 const SCREEN_TRANSITION_HINT = (screen: string) => `Show Preview on ${screen}. Program stays as it is.`;
 
 /**
- * The switcher's Transition: one take button per output that shows what you
- * take to it, stacked, each an arrow and that output's code in its tally
+ * The switcher's Transition: one take button per output, stacked, each an arrow and that output's code in its tally
  * color. Program first; Space is its shortcut. In its own small panel on the
  * desk and between the two pictures on a phone. Labeled, the buttons say the
  * output's full name.
@@ -37,7 +36,7 @@ export function TransitionControl({
   labeled = false,
   onTransition,
 }: {
-  /** The room's outputs; each one that shows what you take to it gets a button after Program's. */
+  /** The room's outputs; each one gets a button after Program's. */
   outputs: readonly LiveRoomOutput[];
   disabled: boolean;
   /** The output a take is on its way to, while it is. */

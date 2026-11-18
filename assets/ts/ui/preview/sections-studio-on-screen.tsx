@@ -550,7 +550,7 @@ export const studioOnScreenSections: PreviewSection[] = [
   {
     id: "studio-transition",
     title: "Transition to Program or to a screen",
-    note: "One take button per screen that shows what you take to it, stacked, each in its tally color. Program is first and runs on Space. A room with only screens that follow Program has Program's button alone. Labeled, the buttons spell out the screen.",
+    note: "One take button per screen, stacked, each in its tally color. Program is first and runs on Space. A screen that follows Program takes a shot too and keeps Program's graphics where the shot has none. Labeled, the buttons spell out the screen.",
     render: () => (
       <div class="pk-cluster">
         <TransitionControl

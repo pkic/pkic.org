@@ -40,12 +40,12 @@ export const LIVE_ROOM_OUTPUT_ROLE_COPY: Record<LiveRoomOutputRole, { label: str
   exact: {
     label: "Exact",
     shows: "Shows what you take to it",
-    hint: "Gets its own take button in the Transition.",
+    hint: "Nothing from Program appears on it.",
   },
   follow: {
     label: "Follow Program",
     shows: "Same question and timer as Program",
-    hint: "Also shows the poll, and anything you send to it.",
+    hint: "Also shows the poll, and anything you send or take to it.",
   },
   speaker: {
     label: "Speaker",
@@ -93,10 +93,14 @@ export function liveOutputRole(outputs: readonly LiveRoomOutput[], key: LiveAuxO
   return key === LIVE_SPEAKER_OUTPUT_KEY ? "speaker" : "follow";
 }
 
-/** Where the studio's Transition puts Preview: Program, then each output that shows what you take to it. */
+/**
+ * Where the studio's Transition puts Preview: Program, then each of the
+ * room's screens in order. A screen that follows Program takes a shot too,
+ * with its own layout, and keeps Program's graphics wherever the shot has none.
+ */
 export type LiveTakeTarget = "program" | LiveAuxOutput;
 export function liveTakeTargets(outputs: readonly LiveRoomOutput[]): LiveTakeTarget[] {
-  return ["program", ...outputs.filter((output) => output.role === "exact").map((output) => output.key)];
+  return ["program", ...outputs.map((output) => output.key)];
 }
 
 /** The outputs the studio sends graphics to: every one the room lists. */

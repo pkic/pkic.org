@@ -62,7 +62,7 @@ describe("live control room Transition", () => {
 
   it("transitions Preview to a screen from that screen's own take button", () => {
     const base = liveSnapshot({ viewer: OPERATOR });
-    // Only a screen that shows what you take to it gets a take button; the projector follows Program.
+    // Every screen gets a take button, the projector that follows Program too.
     const snapshot = liveSnapshot({
       viewer: OPERATOR,
       session: {
@@ -75,7 +75,14 @@ describe("live control room Transition", () => {
     });
     const { host, live } = mountDesk(snapshot);
     const credit = snapshot.session.credits[0]!;
-    expect(host.querySelector('.pk-studio-transition button[aria-label="Transition to Projector"]')).toBeNull();
+    expect(
+      [...host.querySelectorAll(".pk-studio-transition button")].map((button) => button.getAttribute("aria-label")),
+    ).toEqual([
+      "Transition to Program",
+      "Transition to Projector",
+      "Transition to Stage display",
+      "Transition to Foyer",
+    ]);
     void act(() =>
       live.latest().deliver({ type: "preview.changed", composition: { ...snapshot.preview, lowerThird: credit } }),
     );
