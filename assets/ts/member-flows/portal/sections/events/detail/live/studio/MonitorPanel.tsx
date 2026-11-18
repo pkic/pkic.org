@@ -536,6 +536,8 @@ export function monitorPanelView(
       </Menu>
     </SectionHeading>
   );
+  // Preview shows the scenes under its picture unless the operator hid them.
+  const scenesShown = panel.scenes !== false;
   if (single)
     return {
       title,
@@ -546,14 +548,14 @@ export function monitorPanelView(
         </span>
       ),
       actions: <MonitorActions output={single} context={context} />,
-      // Preview can show the scenes under its picture, as the operator chose.
+      // Preview shows the scenes under its picture; the operator can hide them.
       menu:
         single === "preview"
           ? [
               {
                 id: "scenes",
-                label: panel.scenes ? "Hide scenes" : "Show scenes",
-                onSelect: () => change((panels) => setStudioPanelScenes(panels, panel.id, !panel.scenes)),
+                label: scenesShown ? "Hide scenes" : "Show scenes",
+                onSelect: () => change((panels) => setStudioPanelScenes(panels, panel.id, !scenesShown)),
               },
             ]
           : undefined,
@@ -564,7 +566,7 @@ export function monitorPanelView(
               <MonitorScreen output={single} context={context} />
             </div>
           </div>
-          {single === "preview" && panel.scenes ? (
+          {single === "preview" && scenesShown ? (
             <SceneStrip
               preview={sources.preview}
               roomId={sources.roomId}

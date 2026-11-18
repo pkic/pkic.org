@@ -112,11 +112,13 @@ describe("live control room Transition", () => {
     ]);
   });
 
-  it("shows the scenes under Preview from its panel menu and loads one into Preview", () => {
+  it("shows the scenes under Preview, hides them from its panel menu, and loads one into Preview", () => {
     const { host, live } = mountDesk();
-    const preview = panel(host, "Preview");
-    expect(preview.querySelector(".pk-studio-scenes")).toBeNull();
-    void act(() => labeled(preview, "Preview panel").click());
+    expect(panel(host, "Preview").querySelector(".pk-studio-scenes")).not.toBeNull();
+    void act(() => labeled(panel(host, "Preview"), "Preview panel").click());
+    void act(() => menuItem(document.body, "Hide scenes").click());
+    expect(panel(host, "Preview").querySelector(".pk-studio-scenes")).toBeNull();
+    void act(() => labeled(panel(host, "Preview"), "Preview panel").click());
     void act(() => menuItem(document.body, "Show scenes").click());
     const strip = panel(host, "Preview").querySelector<HTMLElement>(
       '[role="group"][aria-label="Load a scene into Preview"]',

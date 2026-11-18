@@ -60,6 +60,9 @@
     align-items: stretch;
     gap: var(--pk-2);
   }
+  .pk-studio-phone__switcher .pk-studio-transition {
+    padding: 0;
+  }
   .pk-studio-phone__thumb {
     position: relative;
     min-inline-size: 0;

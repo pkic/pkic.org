@@ -245,7 +245,6 @@ const PREVIEW_PANEL: StudioPanel = {
   w: 6,
   h: 12,
   outputs: ["preview"],
-  scenes: true,
 };
 
 /** Preview with the event's scenes under it, each drawn live with what Preview holds. */

@@ -6,6 +6,10 @@
     gap: var(--pk-3);
     padding-block: var(--pk-2) var(--pk-3);
   }
+  /* A list with no heading above it starts right under the panel's header, like every other studio list. */
+  .pk-live-speakers:has(> :first-child > .pk-live-people:first-child) {
+    padding-block-start: 0;
+  }
   .pk-live-speakers__empty {
     margin: 0;
     color: var(--pk-ink-muted);
