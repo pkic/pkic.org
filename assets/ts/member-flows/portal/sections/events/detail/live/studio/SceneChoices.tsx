@@ -2,10 +2,14 @@ import { memo } from "preact/compat";
 import { useRef } from "preact/hooks";
 import type { LiveRoomState } from "../../../../../../../live-session/live-room-state";
 import {
+  liveSceneOutline,
+  liveSceneThumbnailEmpty,
   liveSceneThumbnailState,
   sameLiveSceneThumbnailSource,
 } from "../../../../../../../live-session/live-scene-thumbnail";
+import { overlayBoxPixels } from "../../../../../../../../shared/live-overlay-geometry";
 import { liveOverlayLayoutChoices } from "../../../../../../../../shared/live-overlay-layout-presets";
+import { LIVE_OVERLAY_FRAME } from "../../../../../../../../shared/schemas/live-overlay-layout";
 import { LiveOverlayPresentation } from "../../../../../../../live-session/LiveOverlayPresentation";
 import "../live-tally.css";
 import "./SceneChoices.css";
@@ -18,22 +22,35 @@ export interface SceneSources {
   slug: string;
 }
 
-/** The room state the thumbnails draw, made again only when what they show changes. */
+/** The Preview the thumbnails draw, made again only when what they show changes. */
 function useSceneThumbnailState(sources: SceneSources): LiveRoomState {
-  const last = useRef<{ preview: LiveRoomState; program: LiveRoomState | null; state: LiveRoomState } | null>(null);
-  if (!last.current || !sameLiveSceneThumbnailSource(last.current, sources))
-    last.current = {
-      preview: sources.preview,
-      program: sources.program,
-      state: liveSceneThumbnailState(sources.preview, sources.program),
-    };
+  const last = useRef<{ preview: LiveRoomState; state: LiveRoomState } | null>(null);
+  if (!last.current || !sameLiveSceneThumbnailSource(last.current.preview, sources.preview))
+    last.current = { preview: sources.preview, state: liveSceneThumbnailState(sources.preview) };
   return last.current.state;
 }
 
+/** The scene's boxes, faintly outlined over an empty Preview's thumbnail so each scene stays recognizable. */
+function SceneOutline({ scene, state }: { scene: string; state: LiveRoomState }) {
+  return (
+    <svg
+      class="pk-studio-scene__outline"
+      viewBox={`0 0 ${LIVE_OVERLAY_FRAME.width} ${LIVE_OVERLAY_FRAME.height}`}
+      preserveAspectRatio="none"
+    >
+      {liveSceneOutline(state, scene).map((placement, index) => {
+        const box = overlayBoxPixels(placement);
+        return <rect key={index} x={box.x} y={box.y} width={box.width} height={box.height} />;
+      })}
+    </svg>
+  );
+}
+
 /**
- * One scene drawn with the room's real content, by the same renderer as the
- * monitors and scaled down by its box. Its state changes only when what it
- * shows does, so chat and presence leave it alone.
+ * One scene drawn with what Preview holds, by the same renderer as the
+ * monitors and scaled down by its box: exactly what Preview shows once the
+ * scene is loaded. Its state changes only when Preview's picture does, so
+ * chat and presence leave it alone.
  */
 const SceneThumbnail = memo(function SceneThumbnail({
   scene,
@@ -49,6 +66,7 @@ const SceneThumbnail = memo(function SceneThumbnail({
   return (
     <span class="pk-studio-scene__picture" aria-hidden="true">
       <LiveOverlayPresentation view="program" layout={scene} projection={state} roomId={roomId} eventSlug={eventSlug} />
+      {liveSceneThumbnailEmpty(state.stage) ? <SceneOutline scene={scene} state={state} /> : null}
     </span>
   );
 });
@@ -57,6 +75,14 @@ const SceneThumbnail = memo(function SceneThumbnail({
 export function previewSceneOf(preview: LiveRoomState) {
   const choices = liveOverlayLayoutChoices(preview.overlayLayouts);
   return { choices, current: choices.find((choice) => choice.slug === preview.stage.scene) ?? choices[0]! };
+}
+
+/** A scene's name and where it is now, then what choosing it does. */
+function sceneHint(name: string, inPreview: boolean, onProgram: boolean): string {
+  const where = [inPreview ? "in Preview" : null, onProgram ? "on Program" : null].filter(Boolean).join(" and ");
+  return `${name}${where ? ` · ${where}` : ""}\n${
+    inPreview ? "Transition puts it on Program." : "Load it into Preview. Transition puts it on Program."
+  }`;
 }
 
 /**
@@ -75,6 +101,7 @@ export function SceneChoices({
 }) {
   const state = useSceneThumbnailState(sources);
   const { choices, current } = previewSceneOf(sources.preview);
+  const onProgram = sources.program ? previewSceneOf(sources.program).current.slug : null;
   return (
     <>
       {choices.map((choice) => {
@@ -86,7 +113,7 @@ export function SceneChoices({
             class="pk-studio-scene"
             data-tally={on ? "preview" : undefined}
             aria-pressed={on}
-            title={`Load ${choice.name} into Preview. Take puts it on Program.`}
+            title={sceneHint(choice.name, on, choice.slug === onProgram)}
             disabled={disabled}
             onClick={() => onScene(choice.slug)}
           >

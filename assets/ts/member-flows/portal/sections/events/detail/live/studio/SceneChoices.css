@@ -51,6 +51,13 @@
     inline-size: 100%;
     block-size: 100%;
   }
+  /* An empty Preview's thumbnail: the scene's boxes as faint hairlines, so each scene still reads as itself. */
+  .pk-studio-scene__outline {
+    fill: none;
+    stroke: color-mix(in srgb, var(--pk-on-solid) 28%, transparent);
+    stroke-width: 1px;
+    vector-effect: non-scaling-stroke;
+  }
   .pk-studio-scene__name {
     overflow: hidden;
     text-overflow: ellipsis;

@@ -98,7 +98,7 @@ function PreviewScenePicker({
       <Button
         class="pk-studio-scene-picker__trigger"
         aria-label={`Scene in Preview: ${current.name}`}
-        title={`Scene in Preview: ${current.name}. Choose one to load it into Preview; Take puts it on Program.`}
+        title={`Scene in Preview: ${current.name}\nChoose another to load it into Preview. Transition puts it on Program.`}
         aria-haspopup="dialog"
         aria-expanded={open ? "true" : "false"}
         disabled={disabled}
@@ -133,7 +133,10 @@ export function ScenePicker({
   const choices = liveOverlayLayoutChoices(sources.preview.overlayLayouts);
   const name = (choices.find((choice) => choice.slug === sources.program!.stage.scene) ?? choices[0]!).name;
   return (
-    <span class="pk-studio-monitor__purpose" title={`Scene on Program: ${name}`}>
+    <span
+      class="pk-studio-monitor__purpose"
+      title={`Scene on Program: ${name}\nLoad another into Preview and transition to change it.`}
+    >
       {name}
     </span>
   );

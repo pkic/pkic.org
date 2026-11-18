@@ -32,7 +32,16 @@ vi.mock("../../assets/ts/live-session/useLiveRoomProgram", () => ({
 }));
 const state = applyLiveRoomMessage(null, liveSnapshot({ viewer: { role: "operator", name: "Operator" } }));
 vi.mock("../../assets/ts/live-session/useLiveRoom", () => ({
-  useLiveRoom: () => ({ state, status: "live", admissionRefusal: null, send: mocks.send }),
+  // Each session's room answers with that session.
+  useLiveRoom: ({ occurrenceId }: { occurrenceId: string }) => ({
+    state:
+      state && state.session.occurrenceId !== occurrenceId
+        ? { ...state, session: { ...state.session, occurrenceId } }
+        : state,
+    status: "live",
+    admissionRefusal: null,
+    send: mocks.send,
+  }),
 }));
 /** The session on air in most tests. */
 const RUNNING_ID = "20000000-0000-4000-8000-000000000099";
@@ -83,7 +92,7 @@ it("makes the browsed session active without sending anything to Program", async
   const make = Array.from(host.querySelectorAll("button")).find(
     (button) => button.textContent?.trim() === "Load session",
   )!;
-  expect(make.title).toBe(
+  expect(make.dataset.tooltip).toBe(
     "Load this session into the studio and Preview. Program does not change until you transition.",
   );
   await act(async () => make.click());

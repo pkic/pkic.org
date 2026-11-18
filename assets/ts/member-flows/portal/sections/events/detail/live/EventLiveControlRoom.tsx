@@ -52,6 +52,8 @@ export function SelectedSessionDesk({
 }) {
   const program = useLiveRoomProgram({ slug, roomId });
   const [failure, setFailure] = useState<string | null>(null);
+  // A refusal belongs to the session it happened in.
+  useEffect(() => setFailure(null), [occurrenceId]);
   // A dropped connection keeps the last session on air: the header still reads Loaded and the
   // monitors hold their picture while it reconnects, and the desk pauses the controls meanwhile.
   const activeId = program.selection?.occurrenceId ?? null;
@@ -344,8 +346,9 @@ export function EventLiveControlRoom({
           {renderSession(selected.id, roomId)}
         </>
       ) : selected ? (
+        // One studio for the room: moving to another session keeps its frame, controls and connection to the
+        // room's program, and the desk holds the last session's picture until the next one's room answers.
         <SelectedSessionDesk
-          key={selected.id}
           slug={slug}
           occurrenceId={selected.id}
           roomId={roomId}

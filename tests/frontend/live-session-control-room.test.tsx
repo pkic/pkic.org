@@ -186,6 +186,7 @@ describe("live control room Transition", () => {
     expect(strip).not.toBeNull();
     const scenes = [...strip!.querySelectorAll<HTMLButtonElement>("button")];
     expect(scenes.map((scene) => scene.querySelector(".pk-studio-scene__name")?.textContent)).toEqual([
+      "Default",
       "Talk",
       "Q&A",
       "Panel",
@@ -196,14 +197,16 @@ describe("live control room Transition", () => {
     expect(scenes.filter((scene) => scene.getAttribute("aria-pressed") === "true")).toHaveLength(1);
     // Each scene is drawn live, with the same renderer as the monitors.
     expect(scenes.every((scene) => scene.querySelector(".pk-studio-scene__picture .pk-live-overlay"))).toBe(true);
-    // Preview is empty, so Talk shows the room's real content instead: the session's first credit.
-    expect(scenes[0]!.querySelector(".pk-live-overlay__name")?.textContent).toBe("Sam Speaker");
+    // A scene only lays out what Preview holds: an empty Preview draws no graphic, only the scene's faint boxes.
+    expect(scenes.some((scene) => scene.querySelector(".pk-live-overlay__name"))).toBe(false);
+    expect(scenes[0]!.querySelector(".pk-studio-scene__outline rect")).not.toBeNull();
     expect(panel(host, "Preview").querySelector(".pk-studio-monitor__screen .pk-live-overlay__name")).toBeNull();
     const next = scenes.find((scene) => scene.getAttribute("aria-pressed") === "false")!;
     void act(() => next.click());
     const sent = liveRoomClientMessageSchema.parse(commands(live).at(-1));
     expect(sent).toMatchObject({ type: "preview.set", composition: { scene: expect.any(String) } });
-    expect(next.title).toContain("into Preview");
+    // The hint names the scene and its state, then what choosing it does; the studio's tooltip shows it.
+    expect(next.dataset.tooltip ?? next.getAttribute("title")).toContain("into Preview");
   });
 
   it("puts the timer on the shared Preview and toggles it on Program directly", () => {

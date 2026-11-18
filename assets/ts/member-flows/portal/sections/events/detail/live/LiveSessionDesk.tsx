@@ -1,4 +1,4 @@
-import type { ComponentChildren } from "preact";
+import { Fragment, type ComponentChildren } from "preact";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { ClockZone } from "../../../../../../../shared/event-clock";
 import { liveCompositionInput } from "../../../../../../../shared/live-room-preview";
@@ -135,6 +135,8 @@ export function LiveSessionDesk({
   // The output this operator's last take went to, for the spinner on its button.
   const [takenTo, setTakenTo] = useState<LiveTakeTarget>("program");
   const runningBroadcast = useRef(false);
+  // The picture Program showed last, held while the session it shows is still on its way.
+  const lastProgram = useRef<LiveRoomState | null>(null);
   const state = room.state;
   // Where the others were is unknown after a reconnect; they appear again as they move.
   useEffect(() => {
@@ -189,8 +191,11 @@ export function LiveSessionDesk({
     ) : (
       <Spinner label="Joining the live room…" />
     );
-  const programActive = activeOccurrenceId === occurrenceId;
-  const disabled = !live || broadcasting;
+  // Moving to another session keeps the last one on screen, paused, until the next one's room answers.
+  const shownId = state.session.occurrenceId;
+  const switching = shownId !== occurrenceId;
+  const programActive = activeOccurrenceId === shownId;
+  const disabled = !live || broadcasting || switching;
   const targets: LiveTargets = { state, programActive, disabled, sendProgram, sendPrograms };
   const agenda = approvedAgenda ?? null;
   const preview = previewProjection(state);
@@ -200,6 +205,7 @@ export function LiveSessionDesk({
       outputs={outputs}
       disabled={disabled}
       transitioning={broadcasting ? takenTo : null}
+      screenSync={state.screenSync}
       onTransition={take}
     />
   );
@@ -224,9 +230,17 @@ export function LiveSessionDesk({
     previewScene: (scene: string) => sendProgram({ type: "preview.set", composition: { scene } }),
     disabled,
   };
+  /** A room's state when it is of the session on air. */
+  const onAirState = (candidate: LiveRoomState | null) =>
+    candidate && candidate.session.occurrenceId === activeOccurrenceId ? candidate : null;
+  const program =
+    onAirState(state) ??
+    (otherProgram && onAir.status === "live" ? onAirState(onAir.state) : null) ??
+    (switching || onAir.status === "connecting" ? onAirState(lastProgram.current) : null);
+  lastProgram.current = program;
   const sources = {
     preview,
-    program: programActive ? state : otherProgram && onAir.status === "live" ? onAir.state : null,
+    program,
     connected: live,
     slug,
     roomId,
@@ -235,13 +249,17 @@ export function LiveSessionDesk({
   /** Each panel's view, with the other operators working in it named in its header. */
   const render = (panel: StudioPanel): StudioPanelView => {
     const view = renderPanel(panel);
+    // A panel's controls start afresh with each session's own room; the monitors keep their picture across the move.
+    const ofSession = (children: ComponentChildren) =>
+      panel.type === "monitor" ? children : <Fragment key={shownId}>{children}</Fragment>;
     return {
       ...view,
-      actions: (
+      body: ofSession(view.body),
+      actions: ofSession(
         <>
           <LivePanelPresence panel={panel.type} />
           {view.actions}
-        </>
+        </>,
       ),
     };
   };
@@ -267,6 +285,7 @@ export function LiveSessionDesk({
               disabled={disabled}
               transitioning={broadcasting ? takenTo : null}
               labeled={panel.labeled}
+              screenSync={state.screenSync}
               onTransition={take}
             />
           ),
@@ -300,7 +319,7 @@ export function LiveSessionDesk({
               targets={targets}
               slug={slug}
               approvedAgenda={agenda}
-              occurrenceId={occurrenceId}
+              occurrenceId={shownId}
               roomId={roomId}
               now={now}
             />
@@ -338,7 +357,7 @@ export function LiveSessionDesk({
               clock={clock ?? state.session.timeZone}
               send={sendProgram}
               disabled={disabled}
-              next={nextInRoom(agenda, occurrenceId, roomId, now)}
+              next={nextInRoom(agenda, shownId, roomId, now)}
             />
           ),
         };
@@ -375,11 +394,17 @@ export function LiveSessionDesk({
     }
   };
   // Room status lives in the session bar's one status line; nothing is inserted above the panels.
-  const notice: StudioNoticeContent | null = state.refusal
-    ? { tone: "danger", text: state.refusal.message }
-    : !live
-      ? { tone: "warn", text: "Reconnecting to the live room. Controls are paused until it is back." }
-      : agendaNotice;
+  const notice: StudioNoticeContent | null = switching
+    ? room.admissionRefusal
+      ? { tone: "danger", text: liveRoomOpenFailure(room.admissionRefusal, "operator") }
+      : room.status === "offline"
+        ? { tone: "warn", text: liveRoomOpenFailure(null, "operator") }
+        : { tone: "warn", text: "Opening the session. Controls are paused until it is ready." }
+    : state.refusal
+      ? { tone: "danger", text: state.refusal.message }
+      : !live
+        ? { tone: "warn", text: "Reconnecting to the live room. Controls are paused until it is back." }
+        : agendaNotice;
   const reportFocus = (event: Event) => presence.focus(livePresenceFocusAt(event.target as Element | null));
   return (
     <LivePresenceContext.Provider value={presence}>
@@ -408,7 +433,7 @@ export function LiveSessionDesk({
             clearDisabled={disabled}
             onClear={switcher.clear}
             notice={notice}
-            home={<StudioPhoneHome targets={targets} send={sendProgram} />}
+            home={<StudioPhoneHome key={shownId} targets={targets} send={sendProgram} />}
             panel={(type) =>
               render({
                 id: `phone-${type}`,

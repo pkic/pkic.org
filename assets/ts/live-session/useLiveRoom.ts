@@ -161,7 +161,8 @@ export function useLiveRoom({
           attempt = 0;
           setStatus("live");
         }
-        setState((previous) => applyLiveRoomMessage(previous, message));
+        // Moving to another session keeps the last one's state on screen; nothing of the new room lands on it before its snapshot.
+        if (admitted) setState((previous) => applyLiveRoomMessage(previous, message));
       });
       current.addEventListener("close", (event) => closed(current, mine, event));
     }
