@@ -58,6 +58,9 @@ const tally = (output: StudioOutput) => output;
 const projectionOf = (output: StudioOutput, sources: MonitorSources) =>
   output === "preview" ? sources.preview : sources.program;
 
+/** Composition keys that only say how a graphic looks, never that one is on. */
+const GRAPHIC_SETTINGS: ReadonlySet<string> = new Set(["lowerThirdMotion", "reactionsGraphic"]);
+
 /** Whether an output's composition holds any graphic; stage screens always draw their own clock and notes. */
 function showsGraphics(output: StudioOutput, state: LiveRoomState): boolean {
   if (output === "stage-display" || output === "stage-preview") return true;
@@ -71,7 +74,7 @@ function showsGraphics(output: StudioOutput, state: LiveRoomState): boolean {
       value !== false &&
       !(Array.isArray(value) && value.length === 0) &&
       !key.endsWith("Change") &&
-      key !== "lowerThirdMotion",
+      !GRAPHIC_SETTINGS.has(key),
   );
 }
 

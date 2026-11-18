@@ -16,7 +16,12 @@ import { liveChatFeedOnAirSchema, liveTopQuestionsOnAirSchema } from "./live-ses
 import { LIVE_AUX_OUTPUTS } from "../live-room-outputs";
 import { liveTimerGraphicsSchema } from "./live-session-timer";
 import { DEFAULT_LIVE_LOWER_THIRD_MOTION } from "../live-lower-third";
-import { liveCheckInOnAirSchema, liveLowerThirdMotionSchema } from "./live-session-graphic-settings";
+import {
+  liveCheckInOnAirSchema,
+  liveLowerThirdMotionSchema,
+  liveReactionsGraphicSchema,
+  DEFAULT_LIVE_REACTIONS_GRAPHIC,
+} from "./live-session-graphic-settings";
 
 export const livePanelistsSchema = z.object({ layout: z.enum(["panel", "list", "columns"]) }).strict();
 export type LivePanelists = z.infer<typeof livePanelistsSchema>;
@@ -69,6 +74,7 @@ export const liveStageSchema = z
     chatFeed: liveChatFeedOnAirSchema.nullable().default(null),
     /** Viewers' reactions float up over the output while this is on. */
     reactions: z.boolean().default(false),
+    reactionsGraphic: liveReactionsGraphicSchema.default(DEFAULT_LIVE_REACTIONS_GRAPHIC),
   })
   .strict();
 export type LiveStage = z.infer<typeof liveStageSchema>;
@@ -90,6 +96,7 @@ export const EMPTY_LIVE_STAGE: LiveStage = {
   topQuestions: null,
   chatFeed: null,
   reactions: false,
+  reactionsGraphic: DEFAULT_LIVE_REACTIONS_GRAPHIC,
 };
 
 export const liveAuxOutputSchema = z.enum(LIVE_AUX_OUTPUTS);

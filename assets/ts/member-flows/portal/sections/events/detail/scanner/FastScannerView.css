@@ -28,6 +28,17 @@
     margin: var(--pk-3) 0;
     font-size: var(--pk-text-sm);
   }
+  .pk-fast-scanner__task-link {
+    all: unset;
+    cursor: pointer;
+  }
+  .pk-fast-scanner__task-link:disabled {
+    cursor: default;
+  }
+  .pk-fast-scanner__task-link:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: var(--pk-1);
+  }
   .pk-fast-scanner__task-swipe:focus-visible {
     outline: 2px solid currentColor;
     outline-offset: var(--pk-1);
@@ -454,5 +465,13 @@
     .pk-fast-scanner__drawer {
       animation: none;
     }
+  }
+  .pk-fast-scanner__attendee {
+    margin: var(--pk-3) 0;
+    max-width: 100%;
+    font-size: var(--pk-text-display);
+    font-weight: 700;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
   }
 }

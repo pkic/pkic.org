@@ -5,7 +5,6 @@ import { Button } from "../../../../../../ui/Button";
 import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Field } from "../../../../../../ui/Field";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
-import { Alert } from "../../../../../../ui/Alert";
 import { ScannerSetup } from "./ScannerSetup";
 import { ScannerManualEntry } from "./ScannerManualEntry";
 import { ScannerModeSelect, scannerActionLabel } from "./ScannerModeSelect";
@@ -85,18 +84,11 @@ export function ScannerCaptureControls({
   return (
     <>
       {collector ? (
-        <Alert tone="info" title="Offline scanning">
-          <div class="pk-stack pk-stack--snug">
-            <p>Badge checks use prepared data. Scans save on this device and upload when connected.</p>
-            {onCheckSignIn && (
-              <div class="pk-cluster">
-                <Button type="button" variant="secondary" onClick={onCheckSignIn}>
-                  Check sign-in again
-                </Button>
-              </div>
-            )}
-          </div>
-        </Alert>
+        onCheckSignIn && (
+          <Button type="button" variant="secondary" onClick={onCheckSignIn}>
+            Check sign-in again
+          </Button>
+        )
       ) : (
         <>
           <ScannerSetup {...setup} allowedActions={mode.allowedActions} onAction={mode.onAction} onStart={start} />

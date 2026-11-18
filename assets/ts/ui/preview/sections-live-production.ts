@@ -13,6 +13,7 @@ import { studioQuestionSections } from "./sections-studio-questions";
 import { studioTimerSections } from "./sections-studio-timers";
 import { eventScreenBrowserSections } from "./sections-event-screens-browser";
 import { stageDisplaySections } from "./sections-stage-display";
+import { liveReactionsSections } from "./sections-live-reactions";
 
 export const liveProductionSections: PreviewSection[] = [
   ...eventScreenSections,
@@ -24,4 +25,5 @@ export const liveProductionSections: PreviewSection[] = [
   ...studioTimerSections,
   ...eventScreenBrowserSections,
   ...stageDisplaySections,
+  ...liveReactionsSections,
 ];

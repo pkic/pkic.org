@@ -11,7 +11,13 @@ export interface LiveRoomState extends Omit<LiveRoomSnapshot, "type"> {
   /** Only the question the viewer currently expanded; replaced after each reconnect. */
   thread?: z.infer<typeof liveQuestionAnswersSchema> | null;
   /** The latest reaction burst, numbered so a view can replay it once. */
-  burst: { sequence: number; counts: Partial<Record<LiveReactionId, number>> } | null;
+  burst: {
+    sequence: number;
+    /** People whose first reaction in the window arrived in this burst. */
+    counts: Partial<Record<LiveReactionId, number>>;
+    /** Distinct people per reaction within the window, for the reactions in this burst. */
+    people: Partial<Record<LiveReactionId, number>>;
+  } | null;
   /** The latest clear of Program this desk can undo. */
   programUndo?: { snapshotId: string; change: { operatorName: string; at: string } } | null;
   /** The latest refused action, numbered so a view can announce it once. */
@@ -125,7 +131,7 @@ export function applyLiveRoomMessage(
       return {
         ...state,
         reactionTotals: totals,
-        burst: { sequence: (state.burst?.sequence ?? 0) + 1, counts: message.counts },
+        burst: { sequence: (state.burst?.sequence ?? 0) + 1, counts: message.counts, people: message.people },
       };
     }
     case "author.details":

@@ -5,6 +5,7 @@ import { sessionParticipationStatusSchema } from "./event-participation-scanning
 import { databaseIdSchema } from "./identifiers";
 import { nativeEventCaptureContextSchema } from "./event-attendance-capture";
 import { agendaAdmissionPolicySchema } from "./event-agenda";
+import { encryptedBadgeCollectionNameSchema } from "../badge-collection-name";
 
 export const OFFLINE_ELIGIBILITY_PAGE_SIZE = 250;
 
@@ -16,6 +17,7 @@ export const offlineEligibilityQuerySchema = z
     roomId: z.string().uuid().optional(),
     afterBadgeId: z.string().uuid().optional(),
     knownDigest: eligibilityPageDigestSchema.optional(),
+    includeBadgeNames: z.literal("true").optional(),
     scopeDate: eventDayDateSchema.optional(),
     publishedRevision: z.coerce.number().int().nonnegative().optional(),
   })
@@ -34,6 +36,9 @@ export const offlineEligibilityResponseSchema = z
     nativeEventContext: nativeEventCaptureContextSchema.optional(),
     serverNow: z.string().datetime(),
     expiresAt: z.string().datetime(),
+    eligibilityExpiresAt: utcInstantSchema.optional(),
+    badgeNamesPrepared: z.boolean().optional(),
+    badgeNamesUnavailable: z.number().int().nonnegative().optional(),
     session: z
       .object({
         admissionPolicy: agendaAdmissionPolicySchema,
@@ -48,6 +53,8 @@ export const offlineEligibilityResponseSchema = z
             badgeId: z.string().uuid(),
             userId: z.string().uuid(),
             credentialHash: z.string().regex(/^[a-f0-9]{64}$/),
+            encryptedName: encryptedBadgeCollectionNameSchema.optional(),
+            badgeNameDigest: eligibilityPageDigestSchema.optional(),
             revoked: z.boolean(),
             expiresAt: utcInstantSchema.nullable().optional(),
             eventRegistered: z.boolean(),

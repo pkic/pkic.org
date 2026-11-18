@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { LIVE_REACTIONS, LIVE_ROOM_POLICY, takeLiveAllowance } from "../../shared/live-session-policy";
-import { liveReactionSchema, type LiveRoomClientMessage } from "../../shared/schemas/live-session-room";
+import type { LiveRoomClientMessage } from "../../shared/schemas/live-session-room";
+import { liveReactionSchema } from "../../shared/schemas/live-session-reaction";
 import type { LiveRoomState } from "./live-room-state";
 import { ReactionToolbar } from "./ReactionToolbar";
 import "./LiveReactionBar.css";

@@ -16,6 +16,8 @@ interface ScannerTaskNavigation {
   tasks: readonly ScannerTaskDestination[];
   onLaunch: (task: ScannerTask, from?: ScannerRole) => void;
   onConsumed: () => void;
+  onPrintBadge?: (credential: string) => void;
+  consumePrintBadge?: () => string | null;
 }
 /** Routes own tasks; a swipe carries only a transient request to start full screen. */
 export const ScannerTaskNavigation = createContext<ScannerTaskNavigation | null>(null);

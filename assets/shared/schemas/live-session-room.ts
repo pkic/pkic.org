@@ -42,8 +42,9 @@ import {
 } from "./live-session-chat";
 import { databaseIdSchema } from "./identifiers";
 import { eventSlugParamsSchema, utcInstantSchema } from "./api-common";
-import { LIVE_REACTION_IDS, LIVE_ROOM_POLICY, LIVE_STAGE_VIEWS } from "../live-session-policy";
+import { LIVE_ROOM_POLICY, LIVE_STAGE_VIEWS } from "../live-session-policy";
 import { liveChangeSchema, livePersonNameSchema } from "./live-session-change";
+import { liveReactionBurstSchema, liveReactionCountsSchema, liveReactionSendSchema } from "./live-session-reaction";
 import { liveChatFeedConfigSchema, liveTopQuestionsConfigSchema } from "./live-session-on-screen";
 import { LIVE_AUX_OUTPUTS, LIVE_SPEAKER_MESSAGE_MAX_LENGTH, LIVE_SPEAKER_MESSAGE_TONES } from "../live-room-outputs";
 import { livePollClientMessageSchemas, livePollSchema, livePollServerMessageSchemas } from "./live-session-poll";
@@ -68,11 +69,15 @@ import { DEFAULT_LIVE_LOWER_THIRD_MOTION } from "../live-lower-third";
 import {
   liveLowerThirdMotionSchema,
   liveCheckInTextSchema,
+  liveReactionsGraphicSchema,
   DEFAULT_LIVE_CHECK_IN_TEXT,
+  DEFAULT_LIVE_REACTIONS_GRAPHIC,
 } from "./live-session-graphic-settings";
 export {
+  liveCheckInChoiceSchema,
   liveCheckInOnAirSchema,
   liveLowerThirdMotionSchema,
+  type LiveCheckInChoice,
   type LiveCheckInOnAir,
 } from "./live-session-graphic-settings";
 
@@ -111,7 +116,6 @@ export function liveRoomRefusalFromClose(code: number, reason: string): string |
 export const liveRoomParamsSchema = eventSlugParamsSchema.extend({ occurrenceId: databaseIdSchema });
 
 export const liveRoomRoleSchema = z.enum(["attendee", "speaker", "operator", "overlay"]);
-export const liveReactionSchema = z.enum(LIVE_REACTION_IDS);
 /** The outputs a browser source can show; which of an output's elements it draws, and where, is its layout's. */
 export const liveOverlayViewSchema = z.enum(["program", ...LIVE_AUX_OUTPUTS]);
 export type LiveOverlayView = z.infer<typeof liveOverlayViewSchema>;
@@ -265,8 +269,6 @@ export const liveRoomViewerSchema = z
   })
   .strict();
 
-const reactionCountsSchema = z.partialRecord(liveReactionSchema, z.number().int().positive());
-
 export {
   livePresenceFocusSchema,
   livePresencePointerSchema,
@@ -310,7 +312,7 @@ export const liveRoomSnapshotSchema = z
     preview: liveAuxCompositionSchema.default(EMPTY_LIVE_AUX_COMPOSITION),
     /** The room's timers, the session's first. */
     timers: liveTimersSchema,
-    reactionTotals: reactionCountsSchema,
+    reactionTotals: liveReactionCountsSchema,
     /** Operators only; empty for everyone else. */
     queue: liveQueueSchema,
     /** Operators only; empty for everyone else. */
@@ -386,7 +388,7 @@ export const liveRoomServerMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("ticker.context.changed"), context: liveTickerContextSchema }).strict(),
   ...liveChatServerMessageSchemas,
   ...liveAuthorServerMessageSchemas,
-  z.object({ type: z.literal("reaction.burst"), counts: reactionCountsSchema, at: utcInstantSchema }).strict(),
+  liveReactionBurstSchema,
   /** A refused action; the socket stays open. */
   z
     .object({
@@ -424,18 +426,10 @@ export const liveCompositionInputSchema = z
     topQuestions: liveTopQuestionsConfigSchema.nullable().default(null),
     chatFeed: liveChatFeedConfigSchema.nullable().default(null),
     reactions: z.boolean().default(false),
+    reactionsGraphic: liveReactionsGraphicSchema.default(DEFAULT_LIVE_REACTIONS_GRAPHIC),
   })
   .strict();
 export type LiveCompositionInput = z.infer<typeof liveCompositionInputSchema>;
-/** The check-in code's settings in the Graphics panel: which code, and its colors. */
-export const liveCheckInChoiceSchema = z
-  .object({
-    checkIn: attendancePointSelectionSchema,
-    checkInTheme: liveGraphicThemeSchema,
-    checkInText: liveCheckInTextSchema,
-  })
-  .strict();
-export type LiveCheckInChoice = z.infer<typeof liveCheckInChoiceSchema>;
 export const liveAuxSetSchema = z
   .object({ type: z.literal("aux.set"), output: liveAuxOutputSchema, composition: liveCompositionInputSchema })
   .strict();
@@ -458,6 +452,7 @@ export const livePreviewSetSchema = z
         topQuestions: liveTopQuestionsConfigSchema.nullable(),
         chatFeed: liveChatFeedConfigSchema.nullable(),
         reactions: z.boolean(),
+        reactionsGraphic: liveReactionsGraphicSchema,
       })
       .partial()
       .strict(),
@@ -472,7 +467,7 @@ export const liveRoomClientMessageSchema = z.discriminatedUnion("type", [
   liveQuestionAnswerAcceptSchema,
   liveQuestionAskSchema.extend({ type: z.literal("question.ask"), operationId: z.uuid() }),
   z.object({ type: z.literal("question.vote"), questionId: databaseIdSchema, voted: z.boolean() }).strict(),
-  z.object({ type: z.literal("reaction.send"), reaction: liveReactionSchema }).strict(),
+  liveReactionSendSchema,
   z
     .object({
       type: z.literal("question.moderate"),

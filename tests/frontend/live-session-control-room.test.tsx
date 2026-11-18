@@ -109,6 +109,7 @@ describe("live control room Transition", () => {
           topQuestions: null,
           chatFeed: null,
           reactions: false,
+          reactionsGraphic: { showCount: false },
         },
       },
     ]);

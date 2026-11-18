@@ -16,7 +16,11 @@ const pageBasisSchema = offlineEligibilityResponseSchema
     entries: true,
     nextBadgeId: true,
   })
-  .extend({ roomId: offlineEligibilityResponseSchema.shape.roomId.default(null) })
+  .extend({
+    roomId: offlineEligibilityResponseSchema.shape.roomId.default(null),
+    // Randomized encrypted envelopes are transport data; their keyed content revision is stable.
+    entries: offlineEligibilityResponseSchema.shape.entries.element.omit({ encryptedName: true }).strip().array(),
+  })
   .strip();
 
 const scopeBasisSchema = pageBasisSchema.omit({ entries: true, nextBadgeId: true });

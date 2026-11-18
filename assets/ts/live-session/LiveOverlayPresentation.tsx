@@ -1,7 +1,5 @@
 import { LiveScheduleOverlay } from "./LiveScheduleOverlay";
 import { LiveTickerOverlay } from "./LiveTickerOverlay";
-import { useEffect, useRef, useState } from "preact/hooks";
-import { LIVE_REACTIONS, type LiveReactionId } from "../../shared/live-session-policy";
 import type { LiveOverlayView, LiveTimerGraphic } from "../../shared/schemas/live-session-room";
 import type { ComponentChildren } from "preact";
 import { liveTimerLayout } from "../../shared/live-timer-policy";
@@ -17,6 +15,7 @@ import { LivePanelQuestionOverlay } from "./LivePanelQuestionOverlay";
 import { LivePollOverlay } from "./LivePollOverlay";
 import { LiveQuestionOverlay } from "./LiveQuestionOverlay";
 import { LiveCheckInOverlay } from "./LiveCheckInOverlay";
+import { LiveReactionsOverlay } from "./LiveReactionsOverlay";
 import { LiveChatFeedOverlay, LiveTopQuestionsOverlay } from "./LiveAudienceListsOverlay";
 import type {
   LiveOverlayElement,
@@ -226,42 +225,6 @@ function timerReserve(board: LiveOverlayElementPlacement, timers: readonly LiveO
   return Math.min(0.4, Math.max(...covering.map((timer) => (end - timer.x) / board.w)));
 }
 
-const EMOJI = Object.fromEntries(LIVE_REACTIONS.map((reaction) => [reaction.id, reaction.emoji])) as Record<
-  LiveReactionId,
-  string
->;
-/** A burst shows at most this many floating reactions, however large it was. */
-const MAX_FLOATING_PER_BURST = 24;
-
-function ReactionsOverlay({ burst }: { burst: LiveRoomState["burst"] }) {
-  const [floating, setFloating] = useState<Array<{ id: number; emoji: string; lane: number }>>([]);
-  const next = useRef(0);
-  const latestBurst = useRef(burst);
-  latestBurst.current = burst;
-  const burstSequence = burst?.sequence;
-  useEffect(() => {
-    const burst = latestBurst.current;
-    if (!burst) return;
-    const spawned = (Object.entries(burst.counts) as Array<[LiveReactionId, number]>)
-      .flatMap(([reaction, count]) => Array.from({ length: count }, () => EMOJI[reaction]))
-      .slice(0, MAX_FLOATING_PER_BURST)
-      .map((emoji) => ({ id: (next.current += 1), emoji, lane: next.current % 6 }));
-    setFloating((current) => [...current, ...spawned]);
-    const ids = new Set(spawned.map((item) => item.id));
-    const clear = setTimeout(() => setFloating((current) => current.filter((item) => !ids.has(item.id))), 3200);
-    return () => clearTimeout(clear);
-  }, [burstSequence]);
-  return (
-    <div class="pk-live-overlay__reactions" aria-hidden="true">
-      {floating.map((item) => (
-        <span key={item.id} class={`pk-live-overlay__reaction pk-live-overlay__reaction--lane-${item.lane}`}>
-          {item.emoji}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 /** How an output is being watched: a browser source on air plays motion even where a monitor would not. */
 type DrawContext = {
   placement: LiveOverlayElementPlacement;
@@ -374,7 +337,10 @@ const PROGRAM_LAYERS: readonly Layer[] = (
     // Reactions float only while an operator has them on for this output.
     {
       element: "reactions",
-      draw: (state) => (state.stage.reactions ? <ReactionsOverlay burst={state.burst} /> : null),
+      draw: (state) =>
+        state.stage.reactions ? (
+          <LiveReactionsOverlay burst={state.burst} showCount={state.stage.reactionsGraphic.showCount} />
+        ) : null,
     },
   ] satisfies Array<Layer & { element: LiveProgramLayer }>
 ).sort((a, b) => LIVE_PROGRAM_LAYER_ORDER.indexOf(a.element) - LIVE_PROGRAM_LAYER_ORDER.indexOf(b.element));
