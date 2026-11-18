@@ -18,16 +18,18 @@ import { portalSessionFixture } from "../helpers/portal-session";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 
 describe("portal capability-derived navigation", () => {
-  it("opens the own user record for an affiliation without granting membership or workspace navigation", () => {
+  it("opens Home for an affiliation without granting membership or workspace navigation", () => {
     const session = userAuthSessionResponseSchema.parse({ ...portalSessionFixture({}), hasActiveIdentity: true });
-    const ownRecord = `/users/${session.identity.id}`;
-    expect(portalDefaultPath(session)).toBe(ownRecord);
+    // Home is where a representative learns what their organization's membership stands at.
+    expect(portalDefaultPath(session)).toBe("/home");
+    const pending = userAuthSessionResponseSchema.parse({ ...portalSessionFixture({ pendingIdentityCount: 1 }) });
+    expect(portalDefaultPath(pending)).toBe(`/users/${pending.identity.id}`);
     expect(portalSectionEnabled(session, "users")).toBe(true);
     expect(portalNavigationItems(session).map((item) => item.label)).toEqual(["Home"]);
     for (const section of ["groups", "organizations", "members", "sponsors", "settings"] as const) {
       expect(portalSectionEnabled(session, section)).toBe(false);
     }
-    expect(portalCapacityFallbackPath(session, "/organizations/unrelated")).toBe(ownRecord);
+    expect(portalCapacityFallbackPath(session, "/organizations/unrelated")).toBe("/home");
   });
 
   it("opens the event pages Home links to for a signed-in person without event participation", () => {

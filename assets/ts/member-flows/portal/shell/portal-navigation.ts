@@ -493,7 +493,8 @@ export function portalDefaultPath(session: PortalSession | null): string {
   if (session?.member || session?.staff) return "/home";
   if (session?.eventParticipation) return "/events";
   if (session?.sponsors.length) return "/sponsors";
-  if (session?.pendingIdentityCount || session?.hasActiveIdentity) return portalOwnUserRecordPath(session) ?? "/";
+  // A representation waiting for confirmation is confirmed on the person's own record.
+  if (session?.pendingIdentityCount) return portalOwnUserRecordPath(session) ?? "/";
   return session?.identity.id ? "/home" : "/";
 }
 
