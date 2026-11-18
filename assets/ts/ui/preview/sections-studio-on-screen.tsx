@@ -24,6 +24,9 @@ import type { StudioPanel } from "../../member-flows/portal/sections/events/deta
 import "../../member-flows/portal/sections/events/detail/live/studio/StudioGrid.css";
 import "../../member-flows/portal/sections/events/detail/settings/live-layouts/OverlayLayouts.css";
 import { SCREEN_FIXTURE, SCREEN_FIXTURE_NOW } from "./event-screens-fixtures";
+import { DialogSpecimen } from "./sections-event-screens-staff";
+import { LiveOverlayGraphicsDialog } from "../../member-flows/portal/sections/events/detail/live/LiveOverlayGraphicsDialog";
+import { liveOverlayAddress } from "../../live-session/live-overlay-address";
 import { LivestreamOverlay, presetWith, ProjectorScreen, QA_LAYOUT, ROOM, roomWith } from "./studio-on-screen-fixtures";
 
 const noCommand = () => undefined;
@@ -234,6 +237,49 @@ function Multiview() {
   );
 }
 
+const PREVIEW_PANEL: StudioPanel = {
+  id: "preview-1",
+  type: "monitor",
+  x: 0,
+  y: 0,
+  w: 6,
+  h: 12,
+  outputs: ["preview"],
+  scenes: true,
+};
+
+/** Preview with the event's scenes under it, each drawn live with what Preview holds. */
+function PreviewScenes() {
+  const view = monitorPanelView(PREVIEW_PANEL, MONITOR_SOURCES, noCommand, {
+    clear: noCommand,
+    screenSync: DEFAULT_LIVE_SCREEN_SYNC,
+    sync: noCommand,
+    previewScene: noCommand,
+    disabled: false,
+  });
+  return (
+    <div class="pk-studio-grid-frame" data-density="compact">
+      <div class="pk-studio-grid">
+        <StudioPanelFrame
+          panel={PREVIEW_PANEL}
+          panels={[PREVIEW_PANEL]}
+          title={view.title}
+          heading={view.heading}
+          actions={view.actions}
+          menu={view.menu}
+          change={noCommand}
+          defaultSize={{ w: 6, h: 12 }}
+          cell={noCommand}
+          dragHandle={noHandlers}
+          resizeHandle={() => noHandlers}
+        >
+          {view.body}
+        </StudioPanelFrame>
+      </div>
+    </div>
+  );
+}
+
 const GRAPHICS_PANEL: StudioPanel = { id: "graphics-1", type: "graphics", x: 0, y: 0, w: 6, h: 14 };
 
 function Graphics() {
@@ -414,6 +460,38 @@ export const studioOnScreenSections: PreviewSection[] = [
     title: "Multiview with each output in its own color",
     note: "Program red, Preview green, the projector blue and the stage display amber, on the border and the dot.",
     render: () => <Multiview />,
+  },
+  {
+    id: "studio-preview-scenes",
+    title: "Preview with its scenes",
+    note: "Shown from the Preview panel's menu. Each scene is drawn live with Preview's graphics; the current one is edged in Preview's color. Choosing one loads it into Preview.",
+    render: () => <PreviewScenes />,
+  },
+  {
+    id: "live-overlay-graphics-dialog",
+    title: "A browser-source link with only some graphics",
+    note: "From Show only some graphics… on an output's link: all graphics, only these, or all except these, and crop when one graphic is left.",
+    render: () => (
+      <DialogSpecimen
+        label="Show only some graphics…"
+        dialog={(close) => (
+          <LiveOverlayGraphicsDialog
+            label="Program"
+            link={(graphics) =>
+              liveOverlayAddress("https://pkic.org", {
+                view: "program",
+                layout: null,
+                slug: "pqc-conference-2026",
+                roomId: "33333333-3333-4333-8333-333333333333",
+                token: "signed.overlay.access",
+                graphics,
+              })
+            }
+            onClose={close}
+          />
+        )}
+      />
+    ),
   },
   {
     id: "studio-output-target-covered",

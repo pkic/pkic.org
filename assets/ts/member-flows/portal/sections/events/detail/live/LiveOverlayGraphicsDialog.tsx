@@ -105,7 +105,7 @@ export function LiveOverlayGraphicsDialog({
           <Checkbox
             name="crop"
             label="Crop to the graphic"
-            hint="Fits the page to the one graphic left, so you can place it yourself. Leave exactly one graphic to crop."
+            hint="Fits the page to the graphic, so you can place it yourself in your production software. Works when exactly one graphic is left."
             checked={croppable && crop}
             disabled={!croppable}
             onChange={(event) => setCrop(event.currentTarget.checked)}
